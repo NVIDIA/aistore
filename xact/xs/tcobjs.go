@@ -322,7 +322,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 	slab.Free(buf)
 
 	if err != nil {
-		if !cos.IsNotExist(err) || lrit.lrp != lrpList {
+		if !cos.IsNotExist(err, 0) || lrit.lrp == lrpList {
 			wi.r.addErr(err, wi.msg.ContinueOnError)
 		}
 	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {

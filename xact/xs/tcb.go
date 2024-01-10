@@ -252,7 +252,7 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 			r.AddErr(err)
 		}
 		if cmn.Rom.FastV(5, cos.SmoduleMirror) {
-			nlog.Infof("Error: %v", err)
+			nlog.Infoln("Error:", err)
 		}
 	}
 	return

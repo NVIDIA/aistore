@@ -298,7 +298,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	err = lom.Load(true /*cache it*/, false /*locked*/)
 	if err != nil {
 		exists = false
-		if !cos.IsNotExist(err) {
+		if !cos.IsNotExist(err, 0) {
 			s3.WriteErr(w, r, err, 0)
 			return
 		}

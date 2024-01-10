@@ -645,13 +645,12 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-				if cos.IsNotExist(err) {
-					if cmn.Rom.FastV(4, cos.SmoduleReb) {
-						nlog.Infof("%s: %s not found", loghdr, lom)
+				if cos.IsNotExist(err, 0) {
+					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+						nlog.Infoln(loghdr, lom.Cname(), "not found")
 					}
 				} else {
-					err = fmt.Errorf("%s: failed loading %s: %w", loghdr, lom, err)
-					nlog.Errorln(err)
+					err = cmn.NewErrFailedTo(core.T, "load", lom.Cname(), err)
 					rj.xreb.AddErr(err)
 				}
 				delete(lomAck.q, uname)

@@ -744,15 +744,16 @@ func IsErrBucketNought(err error) bool {
 	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) || isErrRemoteBucketOffline(err)
 }
 
+// lom.Load
 func IsErrObjNought(err error) bool {
-	return cos.IsNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
+	return cos.IsNotExist(err, 0) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)
-func isErrNotFoundExtended(err error) bool {
+func isErrNotFoundExtended(err error, status int) bool {
 	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
 		IsErrMountpathNotFound(err) || IsErrXactNotFound(err) ||
-		cos.IsNotExist(err)
+		cos.IsNotExist(err, status)
 }
 
 func IsFileAlreadyClosed(err error) bool {
@@ -994,7 +995,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 		status = opts[0]
 	} else if errf, ok := err.(*ErrFailedTo); ok {
 		status = errf.status
-	} else if isErrNotFoundExtended(err) {
+	} else if isErrNotFoundExtended(err, status) {
 		status = http.StatusNotFound
 	}
 

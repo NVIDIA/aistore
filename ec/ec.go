@@ -369,7 +369,7 @@ func freeSlices(slices []*slice) {
 }
 
 // RequestECMeta returns an EC metadata found on a remote target.
-func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Client) (md *Metadata, err error) {
+func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Client) (*Metadata, error) {
 	path := apc.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = bck.AddToQuery(query)
@@ -383,11 +383,13 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 	if err != nil {
 		return nil, err
 	}
+
 	defer cos.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, cos.NewErrNotFound(core.T, bck.Cname(objName))
-	} else if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to read %s GET request: %v", objName, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, cmn.NewErrFailedTo(core.T, "request ec md", bck.Cname(objName), err)
 	}
 	return MetaFromReader(resp.Body)
 }

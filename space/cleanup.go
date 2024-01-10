@@ -482,7 +482,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	defer lom.Unlock(true)
 	// reload under lock and check atime - again
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cos.IsNotExist(err) {
+		if !cos.IsNotExist(err, 0) {
 			j.ini.Xaction.AddErr(err)
 		}
 		return

@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"net/http"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -81,7 +80,7 @@ func (r *evictDelete) do(lom *core.LOM, lrit *lriterator) {
 		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
 	}
-	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
+	if cos.IsNotExist(err, errCode) || cmn.IsErrObjNought(err) {
 		if lrit.lrp == lrpList {
 			goto eret // unlike range and prefix
 		}
@@ -90,7 +89,7 @@ func (r *evictDelete) do(lom *core.LOM, lrit *lriterator) {
 eret:
 	r.AddErr(err)
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Warningln(err)
+		nlog.Infoln("Warning:", err)
 	}
 }
 

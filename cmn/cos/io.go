@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -470,7 +470,7 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 		return
 	}
 	if dstFile, err = CreateFile(dst); err != nil {
-		nlog.Errorf("Failed to create %s: %v", dst, err)
+		nlog.Errorln("Failed to create", dst+":", err)
 		Close(srcFile)
 		return
 	}
@@ -485,12 +485,12 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 		}
 	}()
 	if err != nil {
-		nlog.Errorf("Failed to copy %s => %s: %v", src, dst, err)
+		nlog.Errorln("Failed to copy", src, "=>", dst+":", err)
 		Close(dstFile)
 		return
 	}
 	if err = FlushClose(dstFile); err != nil {
-		nlog.Errorf("Failed to flush and close %s: %v", dst, err)
+		nlog.Errorln("Failed to flush and close", dst+":", err)
 	}
 	return
 }

@@ -137,7 +137,11 @@ func (r *streamingX) TxnAbort(err error) {
 
 func (r *streamingX) addErr(err error, contOnErr bool, errCode ...int) {
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.InfoDepth(1, "Error: ", err, errCode)
+		if len(errCode) > 0 && errCode[0] != 0 {
+			nlog.InfoDepth(1, "Warning: ", err, errCode)
+		} else {
+			nlog.InfoDepth(1, "Warning: ", err)
+		}
 	}
 	if contOnErr {
 		// TODO -- FIXME: niy

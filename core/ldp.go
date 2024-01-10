@@ -62,9 +62,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 			eq, errCode, err := lom.CheckRemoteMD(true /* rlocked*/, sync)
 			if err != nil {
 				lom.Unlock(false)
-				if errCode == http.StatusNotFound {
-					err = cos.NewErrNotFound(T, lom.Cname())
-				} else if !cos.IsNotExist(err) {
+				if !cos.IsNotExist(err, errCode) {
 					err = cmn.NewErrFailedTo(T.String()+ldpact, "head-latest", lom, err)
 				}
 				return nil, nil, err
@@ -81,7 +79,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 	}
 
 	lom.Unlock(false)
-	if !cos.IsNotExist(loadErr) {
+	if !cos.IsNotExist(loadErr, 0) {
 		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "load", lom, loadErr)
 	}
 	if !lom.Bck().IsRemote() {
@@ -126,7 +124,12 @@ func (lom *LOM) CheckRemoteMD(rlocked, sync bool) (bool, int, error) {
 		return lom.Equal(oa), errCode, nil
 	}
 
-	if errCode == http.StatusNotFound && (lom.VersionConf().Sync || sync) {
+	if errCode == http.StatusNotFound {
+		err = cos.NewErrNotFound(T, lom.Cname())
+	}
+
+	// rm remotely-deleted
+	if cos.IsNotExist(err, errCode) && (lom.VersionConf().Sync || sync) {
 		errDel := lom.Remove(rlocked /*force through rlock*/)
 		if errDel != nil {
 			errCode, err = 0, errDel

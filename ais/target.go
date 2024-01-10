@@ -1086,7 +1086,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if cos.IsNotExist(err) {
+		if cos.IsNotExist(err, 0) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErr(w, r, err)
@@ -1267,7 +1267,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	delFromBackend = lom.Bck().IsRemote() && !evict
 	err := lom.Load(false /*cache it*/, true /*locked*/)
 	if err != nil {
-		if !cos.IsNotExist(err) {
+		if !cos.IsNotExist(err, 0) {
 			return 0, err, false
 		}
 		if !delFromBackend {

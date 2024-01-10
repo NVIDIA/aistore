@@ -148,7 +148,7 @@ func Walk(opts *WalkOpts) error {
 			}
 			continue
 		}
-		if err1 != context.Canceled && !cos.IsNotExist(err1) {
+		if err1 != context.Canceled && !cos.IsNotExist(err1, 0) {
 			nlog.Errorln(err1)
 		}
 		err = err1

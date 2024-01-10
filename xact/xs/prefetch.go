@@ -8,7 +8,6 @@ package xs
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -111,7 +110,10 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 		}
 		if err != nil {
 			lom.Unlock(false)
-			goto emaybe
+			if cos.IsNotExist(err, errCode) && lrit.lrp != lrpList {
+				return // not found, prefix or range
+			}
+			goto eret
 		}
 	}
 	lom.Unlock(false)
@@ -122,28 +124,20 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see core/lcache.go).                                             ==========================
-
 	lom.SetAtimeUnix(-time.Now().UnixNano())
+
 	errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes())
 		return
 	}
-
-emaybe:
-	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
-		if lrit.lrp == lrpList {
-			goto eret // listing is explicit
-		}
-		return
-	}
-	if err == cmn.ErrSkip {
-		return
+	if cos.IsNotExist(err, errCode) && lrit.lrp != lrpList {
+		return // not found, prefix or range
 	}
 eret:
 	r.AddErr(err)
-	if cmn.Rom.FastV(4, cos.SmoduleXs) {
-		nlog.Warningln(err)
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln("Warning:", err)
 	}
 }
 

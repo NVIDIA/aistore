@@ -477,7 +477,7 @@ roll:
 func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		if !cos.IsNotExist(err) {
+		if !cos.IsNotExist(err, 0) {
 			wi.r.addErr(err, wi.msg.ContinueOnError)
 			return
 		}
@@ -493,8 +493,8 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	if coldGet {
 		// cold
 		if errCode, err := core.T.GetCold(context.Background(), lom, cmn.OwtGetLock); err != nil {
-			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cos.IsNotExist(err)) {
-				return
+			if lrit.lrp != lrpList && cos.IsNotExist(err, errCode) {
+				return // range or prefix, not found
 			}
 			wi.r.addErr(err, wi.msg.ContinueOnError)
 			return

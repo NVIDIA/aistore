@@ -1,14 +1,17 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
 import (
+	"net/http"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -140,10 +143,15 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 			break
 		}
 		if bremote {
+			var errCode int
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			_, err = core.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
+			errCode, err = core.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
+				if errCode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
+					debug.Assert(false, err, errCode) // TODO: remove
+					err = cos.NewErrNotFound(nil, err.Error())
+				}
 			}
 		} else {
 			npg.page.Entries = allocLsoEntries()

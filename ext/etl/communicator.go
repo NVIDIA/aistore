@@ -196,27 +196,28 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 //////////////
 
 func (pc *pushComm) doRequest(bck *meta.Bck, lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+	var errCode int
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
 
 	lom.Lock(false)
-	r, err = pc.do(lom, timeout)
+	r, errCode, err = pc.do(lom, timeout)
 	lom.Unlock(false)
 
-	if err != nil && cos.IsNotExist(err) && bck.IsRemote() {
+	if err != nil && cos.IsNotExist(err, errCode) && bck.IsRemote() {
 		_, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
 		}
 		lom.Lock(false)
-		r, err = pc.do(lom, timeout)
+		r, _, err = pc.do(lom, timeout)
 		lom.Unlock(false)
 	}
 	return
 }
 
-func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, err error) {
+func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, errCode int, err error) {
 	var (
 		body   io.ReadCloser
 		cancel func()
@@ -225,10 +226,10 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSiz
 		u      string
 	)
 	if err := pc.boot.xctn.AbortErr(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	size := lom.SizeBytes()
 
@@ -242,14 +243,14 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSiz
 
 		fh, err := cos.NewFileHandle(lom.FQN)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		body = fh
 	case ArgTypeFQN:
 		body = http.NoBody
 		u = cos.JoinPath(pc.boot.uri, url.PathEscape(lom.FQN)) // compare w/ rc.redirectURL()
 	default:
-		cos.Assert(false) // is validated at construction time
+		debug.Assert(false, "unexpected msg type:", pc.boot.msg.ArgTypeX) // is validated at construction time
 	}
 
 	if timeout != 0 {
@@ -283,10 +284,12 @@ finish:
 		if cancel != nil {
 			cancel()
 		}
-		return nil, err
+		if resp != nil {
+			errCode = resp.StatusCode
+		}
+		return nil, errCode, err
 	}
-
-	return cos.NewReaderWithArgs(cos.ReaderArgs{
+	args := cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
 		ReadCb: func(n int, err error) { pc.boot.xctn.InObjsAdd(0, int64(n)) },
@@ -297,7 +300,8 @@ finish:
 			pc.boot.xctn.InObjsAdd(1, 0)
 			pc.boot.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
-	}), nil
+	}
+	return cos.NewReaderWithArgs(args), 0, nil
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck *meta.Bck, objName string) error {
@@ -472,7 +476,7 @@ func lomLoad(lom *core.LOM, bck *meta.Bck) (size int64, err error) {
 		return
 	}
 	if err = lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
-		if cos.IsNotExist(err) && bck.IsRemote() {
+		if cos.IsNotExist(err, 0) && bck.IsRemote() {
 			err = nil // NOTE: size == 0
 		}
 	} else {

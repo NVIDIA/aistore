@@ -227,11 +227,11 @@ ex:
 	if err == nil || cmn.IsErrBucketNought(err) || cmn.IsErrObjNought(err) {
 		return
 	}
-	nlog.Errorf("%s: exited with err %v", j, err)
+	nlog.Errorln(j.String()+":", "exited with err:", err)
 }
 
 func (j *lruJ) jog(providers []string) (err error) {
-	nlog.Infof("%s: freeing-up %s", j, cos.ToSizeIEC(j.totalSize, 2))
+	nlog.Infoln(j.String()+":", "freeing-up", cos.ToSizeIEC(j.totalSize, 2))
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck

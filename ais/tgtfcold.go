@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-const ftcg = "failed to cold-GET"
+const ftcg = "Warning: failed to cold-GET"
 
 func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	var (
@@ -128,20 +128,20 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	cos.Close(lmfh)
 	if revert != "" {
 		if errV := cos.RemoveFile(revert); errV != nil {
-			nlog.Errorln(ftcg+"(rm-revert)", lom, err)
+			nlog.Infoln(ftcg+"(rm-revert)", lom, err)
 		}
 	}
 
 	// make copies and slices (async)
 	if err = ec.ECM.EncodeObject(lom, nil); err != nil && err != ec.ErrorECDisabled {
-		nlog.Errorln(ftcg+"(ec)", lom, err)
+		nlog.Infoln(ftcg+"(ec)", lom, err)
 	}
 	t.putMirror(lom)
 
 	// load; inc stats
 	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		goi.lom.Unlock(true)
-		nlog.Errorln(ftcg+"(load)", lom, err) // (unlikely)
+		nlog.Infoln(ftcg+"(load)", lom, err) // (unlikely)
 		return errSendingResp
 	}
 	goi.lom.Unlock(true)
@@ -161,10 +161,10 @@ func (goi *getOI) _cleanup(revert string, fh *os.File, buf []byte, slab *memsys.
 		goi.lom.Remove()
 		if revert != "" {
 			if errV := os.Rename(revert, goi.lom.FQN); errV != nil {
-				nlog.Errorln(ftcg+tag+"(revert)", errV)
+				nlog.Infoln(ftcg+tag+"(revert)", errV)
 			}
 		}
-		nlog.ErrorDepth(1, ftcg+tag, err)
+		nlog.InfoDepth(1, ftcg+tag, err)
 	}
 	goi.lom.Unlock(true)
 }

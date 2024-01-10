@@ -512,7 +512,7 @@ func (goi *getOI) get() (errCode int, err error) {
 do:
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
-		cold = cos.IsNotExist(err)
+		cold = cos.IsNotExist(err, 0)
 		if !cold {
 			return http.StatusInternalServerError, err
 		}
@@ -602,7 +602,7 @@ do:
 		if res.Err != nil {
 			goi.lom.Unlock(true)
 			goi.unlocked = true
-			if res.ErrCode != http.StatusNotFound && !cos.IsNotExist(res.Err) {
+			if !cos.IsNotExist(res.Err, res.ErrCode) {
 				nlog.Infoln(ftcg+"(read)", goi.lom.Cname(), res.Err, res.ErrCode)
 			}
 			return res.ErrCode, res.Err
@@ -1315,7 +1315,9 @@ func (coi *copyOI) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int6
 		return 0, err
 	}
 	if coi.DP != nil {
-		size, err = coi._reader(t, dm, lom, dst)
+		var errCode int
+		size, errCode, err = coi._reader(t, dm, lom, dst)
+		debug.Assert(errCode != http.StatusNotFound || cos.IsNotExist(err, 0), err, errCode)
 	} else {
 		size, err = coi._regular(t, lom, dst)
 	}
@@ -1335,9 +1337,6 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 	// discard the reader and be done
 	var reader io.ReadCloser
 	if reader, _, err = coi.DP.Reader(lom, false, false); err != nil {
-		if err == cmn.ErrSkip {
-			err = nil
-		}
 		return 0, err
 	}
 	size, err = io.Copy(io.Discard, reader)
@@ -1357,10 +1356,10 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 // - PUT to the relevant backend
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ error) {
+func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ int, _ error) {
 	reader, oah, errN := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 	if errN != nil {
-		return 0, errN
+		return 0, 0, errN
 	}
 	if lom.Bck().Equal(coi.BckTo, true, true) {
 		dst.SetVersion(oah.Version())
@@ -1385,13 +1384,13 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 	default:
 		poi.owt = cmn.OwtMigrateRepl
 	}
-	_, err := poi.putObject()
+	errCode, err := poi.putObject()
 	freePOI(poi)
 	if err == nil {
 		// xaction stats: inc locally processed (and see data mover for in and out objs)
 		size = oah.SizeBytes()
 	}
-	return size, err
+	return size, errCode, err
 }
 
 func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
@@ -1403,7 +1402,7 @@ func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error)
 	defer lom.Unlock(lcopy)
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cos.IsNotExist(err) {
+		if !cos.IsNotExist(err, 0) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom, err)
 		}
 		return 0, err

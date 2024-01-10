@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -130,6 +130,11 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if msg.Action == apc.ActETLObjects {
+			cs := fs.Cap()
+			if err := cs.Err(); err != nil {
+				t.writeErr(w, r, err, http.StatusInsufficientStorage)
+				return
+			}
 			var err error
 			if dp, err = etlDP(&tcomsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
@@ -224,6 +229,10 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 		}
 		curCopies, newCopies, err := t.validateMakeNCopies(c.bck, c.msg)
 		if err != nil {
+			return "", err
+		}
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
 			return "", err
 		}
 		nlp := newBckNLP(c.bck)
@@ -718,6 +727,10 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 		if err := t.validateECEncode(c.bck, c.msg); err != nil {
 			return "", err
 		}
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			return "", err
+		}
 		nlp := newBckNLP(c.bck)
 
 		if !nlp.TryLock(c.timeout.netw / 4) {
@@ -895,6 +908,10 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
 			return "", err
 		}
 		prmMsg := &apc.PromoteArgs{}

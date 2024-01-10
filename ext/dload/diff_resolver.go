@@ -284,7 +284,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *core.LOM, dst *DstElement) (b
 	src.Lock(false)
 	defer src.Unlock(false)
 	if err := src.Load(true /*cache it*/, true /*locked*/); err != nil {
-		if cos.IsNotExist(err) {
+		if cos.IsNotExist(err, 0) {
 			return false, nil
 		}
 		return false, err
@@ -294,7 +294,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *core.LOM, dst *DstElement) (b
 
 func (*defaultDiffResolverCtx) IsObjFromRemote(src *core.LOM) (bool, error) {
 	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if cos.IsNotExist(err) {
+		if cos.IsNotExist(err, 0) {
 			return false, nil
 		}
 		return false, err

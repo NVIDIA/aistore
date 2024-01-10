@@ -67,8 +67,8 @@ func IsErrNotFound(err error) bool {
 // gen-purpose not-finding-anything: objects, directories, xactions, nodes, ...
 //
 
-func IsNotExist(err error) bool {
-	if IsErrNotFound(err) {
+func IsNotExist(err error, errCode int) bool {
+	if errCode == http.StatusNotFound || IsErrNotFound(err) {
 		return true
 	}
 	return os.IsNotExist(err) // unwraps for fs.ErrNotExist

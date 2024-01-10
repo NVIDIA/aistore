@@ -230,7 +230,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 				return tsi, nil
 			}
 		}
-		if err != nil && cos.IsNotExist(err) {
+		if err != nil && cos.IsNotExist(err, 0) {
 			return tsi, nil
 		}
 		if err != nil {
