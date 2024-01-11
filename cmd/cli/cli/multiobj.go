@@ -65,6 +65,8 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		if flagIsSet(c, etlBucketRequestTimeout) {
 			msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
 		}
+		msg.LatestVer = flagIsSet(c, latestVerFlag)
+		msg.Sync = flagIsSet(c, syncFlag)
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 	}
 	// 3. start copying/transforming
