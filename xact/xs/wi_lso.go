@@ -97,7 +97,7 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEntry) {
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
 	}
-	setWanted(e, lom, wi.msg.TimeFormat, wi.wanted)
+	wi.setWanted(e, lom)
 	wi.lomVisitedCb(lom)
 	return
 }

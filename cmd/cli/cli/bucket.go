@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -431,35 +430,4 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.Cname(""))
 	actionDone(c, msg+toMonitorMsg(c, xid, ""))
 	return
-}
-
-func printObjProps(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, addCachedCol bool) error {
-	var (
-		hideHeader     = flagIsSet(c, noHeaderFlag)
-		hideFooter     = flagIsSet(c, noFooterFlag)
-		matched, other = lstFilter.apply(entries)
-		units, errU    = parseUnitsFlag(c, unitsFlag)
-	)
-	if errU != nil {
-		return errU
-	}
-
-	propsList := splitCsv(props)
-	tmpl := teb.ObjPropsTemplate(propsList, hideHeader, addCachedCol)
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
-	if err := teb.Print(matched, tmpl, opts); err != nil {
-		return err
-	}
-	if !hideFooter && len(matched) > 10 {
-		listed := fblue("Listed:")
-		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names")
-	}
-	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
-		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))
-		tmpl = unmatched + "\n" + tmpl
-		if err := teb.Print(other, tmpl, opts); err != nil {
-			return err
-		}
-	}
-	return nil
 }

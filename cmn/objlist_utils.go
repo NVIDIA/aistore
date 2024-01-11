@@ -53,10 +53,14 @@ func appSorted(entries LsoEntries, ne *LsoEntry) LsoEntries {
 // LsoEntry //
 //////////////
 
-// NOTE: the terms "cached" and "present" are interchangeable:
+// The terms "cached" and "present" are interchangeable:
 // "object is cached" and "is present" is actually the same thing
 func (be *LsoEntry) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
 func (be *LsoEntry) SetPresent()     { be.Flags |= apc.EntryIsCached }
+
+// see also: "latest-ver", QparamLatestVer, et al.
+func (be *LsoEntry) SetVerChanged()     { be.Flags |= apc.EntryVerChanged }
+func (be *LsoEntry) IsVerChanged() bool { return be.Flags&apc.EntryVerChanged != 0 }
 
 func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }

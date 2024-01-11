@@ -37,9 +37,9 @@ func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 	return
 }
 
-func setWanted(e *cmn.LsoEntry, lom *core.LOM, tmformat string, wanted cos.BitFlags) {
+func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
 	for name, fl := range allmap {
-		if !wanted.IsSet(fl) {
+		if !wi.wanted.IsSet(fl) {
 			continue
 		}
 		switch name {
@@ -48,13 +48,18 @@ func setWanted(e *cmn.LsoEntry, lom *core.LOM, tmformat string, wanted cos.BitFl
 		case apc.GetPropsCached: // via obj.SetPresent()
 
 		case apc.GetPropsSize:
+			if lom.Bucket().IsRemote() && e.Size > 0 && lom.SizeBytes() != e.Size {
+				e.SetVerChanged()
+			} else if wi.msg.IsFlagSet(apc.LsVerChanged) {
+				debug.Assert(false, "'LsVerChanged' not implemented yet") // TODO -- FIXME
+			}
 			e.Size = lom.SizeBytes()
 		case apc.GetPropsVersion:
 			e.Version = lom.Version()
 		case apc.GetPropsChecksum:
 			e.Checksum = lom.Checksum().Value()
 		case apc.GetPropsAtime:
-			e.Atime = cos.FormatNanoTime(lom.AtimeUnix(), tmformat)
+			e.Atime = cos.FormatNanoTime(lom.AtimeUnix(), wi.msg.TimeFormat)
 		case apc.GetPropsLocation:
 			e.Location = lom.Location()
 		case apc.GetPropsCopies:

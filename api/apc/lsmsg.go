@@ -71,6 +71,9 @@ const (
 	// - update AIS CLI to support non-recursive list-objects operation
 	// - when listing remote bucket, call backend (`Backend()`) to list non-recursively
 	LsNoRecursion
+
+	// For remote buckets: check for 'version-changed'
+	LsVerChanged
 )
 
 // List objects default page size
@@ -88,10 +91,11 @@ const (
 	LocIsCopyMissingObj
 
 	// LsoEntry Flags
-	EntryIsCached  = 1 << (EntryStatusBits + 1)
-	EntryInArch    = 1 << (EntryStatusBits + 2)
-	EntryIsDir     = 1 << (EntryStatusBits + 3)
-	EntryIsArchive = 1 << (EntryStatusBits + 4)
+	EntryIsCached   = 1 << (EntryStatusBits + 1)
+	EntryInArch     = 1 << (EntryStatusBits + 2)
+	EntryIsDir      = 1 << (EntryStatusBits + 3)
+	EntryIsArchive  = 1 << (EntryStatusBits + 4)
+	EntryVerChanged = 1 << (EntryStatusBits + 5) // (see also: QparamLatestVer, et al.)
 )
 
 // ObjEntry.Flags field

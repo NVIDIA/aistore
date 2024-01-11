@@ -118,7 +118,7 @@ func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 			continue
 		}
 
-		setWanted(obj, lom, npg.wi.msg.TimeFormat, npg.wi.wanted)
+		npg.wi.setWanted(obj, lom)
 		obj.SetPresent()
 
 		if post != nil {

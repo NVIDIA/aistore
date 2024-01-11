@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -259,6 +260,9 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 			entry = lst.Entries[idx]
 		)
 		entry.Name = blob.Name
+
+		debug.Assert(blob.Properties.ContentLength != nil) // NOTE: always expecting the size
+
 		if blob.Properties.ContentLength != nil {
 			entry.Size = *blob.Properties.ContentLength
 		}

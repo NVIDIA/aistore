@@ -21,32 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-// low-level formatting routines and misc.
-
-func fmtObjStatus(obj *cmn.LsoEntry) string {
-	switch obj.Status() {
-	case apc.LocOK:
-		if obj.IsPresent() {
-			return "ok"
-		}
-		return UnknownStatusVal
-	case apc.LocMisplacedNode:
-		return "misplaced(cluster)"
-	case apc.LocMisplacedMountpath:
-		return "misplaced(mountpath)"
-	case apc.LocIsCopy:
-		return "replica"
-	case apc.LocIsCopyMissingObj:
-		return "replica(object-is-missing)"
-	default:
-		debug.Assertf(false, "%#v", obj)
-		return "invalid"
-	}
-}
-
-func fmtObjIsCached(obj *cmn.LsoEntry) string {
-	return FmtBool(obj.IsPresent())
-}
+// this file: low-level formatting routines and misc.
 
 // FmtBool returns "yes" if true, else "no"
 func FmtBool(t bool) string {

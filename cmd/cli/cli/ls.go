@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -358,7 +359,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printObjProps(c, toPrint, lstFilter, msg.Props, addCachedCol)
+			err = printLso(c, toPrint, lstFilter, msg.Props, addCachedCol)
 			if err != nil {
 				return err
 			}
@@ -396,7 +397,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	return printObjProps(c, objList.Entries, lstFilter, msg.Props, addCachedCol)
+	return printLso(c, objList.Entries, lstFilter, msg.Props, addCachedCol)
 }
 
 func lsoErr(msg *apc.LsoMsg, err error) error {
@@ -432,6 +433,48 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
 		pageSize = limit
 	}
 	return
+}
+
+// NOTE: in addition to CACHED, may also dynamically add STATUS column
+func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, addCachedCol bool) error {
+	var (
+		hideHeader     = flagIsSet(c, noHeaderFlag)
+		hideFooter     = flagIsSet(c, noFooterFlag)
+		matched, other = lstFilter.apply(entries)
+		units, errU    = parseUnitsFlag(c, unitsFlag)
+		addStatusCol   bool
+	)
+	if errU != nil {
+		return errU
+	}
+
+	propsList := splitCsv(props)
+	if addCachedCol && !cos.StringInSlice(apc.GetPropsStatus, propsList) {
+		for _, e := range entries {
+			if e.IsVerChanged() {
+				addStatusCol = true
+				break
+			}
+		}
+	}
+
+	tmpl := teb.LsoTemplate(propsList, hideHeader, addCachedCol, addStatusCol)
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
+	if err := teb.Print(matched, tmpl, opts); err != nil {
+		return err
+	}
+	if !hideFooter && len(matched) > 10 {
+		listed := fblue("Listed:")
+		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names")
+	}
+	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
+		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))
+		tmpl = unmatched + "\n" + tmpl
+		if err := teb.Print(other, tmpl, opts); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 ///////////////
