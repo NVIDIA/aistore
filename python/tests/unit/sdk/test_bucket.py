@@ -208,7 +208,14 @@ class TestBucket(unittest.TestCase):
             namespace=Namespace(uuid="namespace-id", name="ns-name"),
             provider="any-provider",
         )
-        action_value = {"prefix": "", "prepend": "", "dry_run": False, "force": False}
+        action_value = {
+            "prefix": "",
+            "prepend": "",
+            "dry_run": False,
+            "force": False,
+            "latest-ver": False,
+            "synchronize": False,
+        }
         self._copy_exec_assert(dest_bck, action_value)
 
     def test_copy(self):
@@ -216,11 +223,15 @@ class TestBucket(unittest.TestCase):
         prepend_val = "prefix-"
         dry_run = True
         force = True
+        latest = False
+        sync = False
         action_value = {
             "prefix": prefix_filter,
             "prepend": prepend_val,
             "dry_run": dry_run,
             "force": force,
+            "latest-ver": latest,
+            "synchronize": sync,
         }
 
         self._copy_exec_assert(
@@ -441,7 +452,12 @@ class TestBucket(unittest.TestCase):
             ext=ext,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
             copy_msg=CopyBckMsg(
-                prefix=prefix_filter, prepend=prepend_val, force=force, dry_run=dry_run
+                prefix=prefix_filter,
+                prepend=prepend_val,
+                force=force,
+                dry_run=dry_run,
+                latest=False,
+                sync=False,
             ),
         ).as_dict()
 
@@ -465,6 +481,8 @@ class TestBucket(unittest.TestCase):
             "force": False,
             "dry_run": False,
             "request_timeout": DEFAULT_ETL_TIMEOUT,
+            "latest-ver": False,
+            "synchronize": False,
         }
 
         self._transform_exec_assert(etl_name, action_value)

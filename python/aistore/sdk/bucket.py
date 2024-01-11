@@ -426,6 +426,8 @@ class Bucket(AISSource):
         prepend: str = "",
         dry_run: bool = False,
         force: bool = False,
+        latest: bool = False,
+        sync: bool = False,
     ) -> str:
         """
         Returns job ID that can be used later to check the status of the asynchronous operation.
@@ -437,6 +439,8 @@ class Bucket(AISSource):
             dry_run (bool, optional): Determines if the copy should actually
                 happen or not
             force (bool, optional): Override existing destination bucket
+            latest (bool, optional): GET the latest object version from the associated remote bucket
+            sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -450,7 +454,12 @@ class Bucket(AISSource):
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
         value = CopyBckMsg(
-            prefix=prefix_filter, prepend=prepend, dry_run=dry_run, force=force
+            prefix=prefix_filter,
+            prepend=prepend,
+            dry_run=dry_run,
+            force=force,
+            latest=latest,
+            sync=sync,
         ).as_dict()
         params = self.qparam.copy()
         params[QPARAM_BCK_TO] = to_bck.get_path()
@@ -646,6 +655,8 @@ class Bucket(AISSource):
         ext: Dict[str, str] = None,
         force: bool = False,
         dry_run: bool = False,
+        latest: bool = False,
+        sync: bool = False,
     ) -> str:
         """
         Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -661,6 +672,8 @@ class Bucket(AISSource):
                 (i.e. {"jpg": "txt"})
             dry_run (bool, optional): determines if the copy should actually happen or not
             force (bool, optional): override existing destination bucket
+            latest (bool, optional): GET the latest object version from the associated remote bucket
+            sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -669,7 +682,12 @@ class Bucket(AISSource):
             ext=ext,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
             copy_msg=CopyBckMsg(
-                prefix=prefix_filter, prepend=prepend, force=force, dry_run=dry_run
+                prefix=prefix_filter,
+                prepend=prepend,
+                force=force,
+                dry_run=dry_run,
+                latest=latest,
+                sync=sync,
             ),
         ).as_dict()
 

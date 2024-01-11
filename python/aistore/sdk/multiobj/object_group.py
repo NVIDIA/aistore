@@ -26,6 +26,7 @@ from aistore.sdk.types import (
     TransformBckMsg,
     TCBckMsg,
     ArchiveMultiObj,
+    PrefetchMsg,
 )
 
 
@@ -127,10 +128,14 @@ class ObjectGroup(AISSource):
             value=self._obj_collection.get_value(),
         ).text
 
-    def prefetch(self):
+    def prefetch(self, latest: bool = False, continue_on_error: bool = False):
         """
         Prefetches a list or range of objects in a bucket so that they are cached in AIS
         NOTE: only Cloud buckets can be prefetched.
+
+        Args:
+            latest (bool, optional): GET the latest object version from the associated remote bucket
+            continue_on_error (bool, optional): Whether to continue if there is an error prefetching a single object
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -145,10 +150,17 @@ class ObjectGroup(AISSource):
 
         """
         self.bck.verify_cloud_bucket()
+
+        value = PrefetchMsg(
+            object_selection=self._obj_collection.get_value(),
+            continue_on_err=continue_on_error,
+            latest=latest,
+        ).as_dict()
+
         return self.bck.make_request(
             HTTP_METHOD_POST,
             ACT_PREFETCH_OBJECTS,
-            value=self._obj_collection.get_value(),
+            value=value,
         ).text
 
     # pylint: disable=too-many-arguments
@@ -159,6 +171,8 @@ class ObjectGroup(AISSource):
         continue_on_error: bool = False,
         dry_run: bool = False,
         force: bool = False,
+        latest: bool = False,
+        sync: bool = False,
     ):
         """
         Copies a list or range of objects in a bucket
@@ -170,6 +184,8 @@ class ObjectGroup(AISSource):
             dry_run (bool, optional): Skip performing the copy and just log the intended actions
             force (bool, optional): Force this job to run over others in case it conflicts
                 (see "limited coexistence" and xact/xreg/xreg.go)
+            latest (bool, optional): GET the latest object version from the associated remote bucket
+            sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -191,7 +207,9 @@ class ObjectGroup(AISSource):
                 f"{to_bck.get_path()}",
                 list(self._obj_collection),
             )
-        copy_msg = CopyBckMsg(prepend=prepend, dry_run=dry_run, force=force)
+        copy_msg = CopyBckMsg(
+            prepend=prepend, dry_run=dry_run, force=force, latest=latest, sync=sync
+        )
 
         value = TCMultiObj(
             to_bck=to_bck.as_model(),
@@ -199,8 +217,11 @@ class ObjectGroup(AISSource):
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
         ).as_dict()
+
         return self.bck.make_request(
-            HTTP_METHOD_POST, ACT_COPY_OBJECTS, value=value
+            HTTP_METHOD_POST,
+            ACT_COPY_OBJECTS,
+            value=value,
         ).text
 
     # pylint: disable=too-many-arguments
@@ -213,6 +234,8 @@ class ObjectGroup(AISSource):
         continue_on_error: bool = False,
         dry_run: bool = False,
         force: bool = False,
+        latest: bool = False,
+        sync: bool = False,
     ):
         """
         Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
@@ -226,6 +249,8 @@ class ObjectGroup(AISSource):
             dry_run (bool, optional): Skip performing the transform and just log the intended actions
             force (bool, optional): Force this job to run over others in case it conflicts
                 (see "limited coexistence" and xact/xreg/xreg.go)
+            latest (bool, optional): GET the latest object version from the associated remote bucket
+            sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -247,7 +272,9 @@ class ObjectGroup(AISSource):
                 list(self._obj_collection),
             )
 
-        copy_msg = CopyBckMsg(prepend=prepend, dry_run=dry_run, force=force)
+        copy_msg = CopyBckMsg(
+            prepend=prepend, dry_run=dry_run, force=force, latest=latest, sync=sync
+        )
         transform_msg = TransformBckMsg(etl_name=etl_name, timeout=timeout)
         value = TCMultiObj(
             to_bck=to_bck.as_model(),

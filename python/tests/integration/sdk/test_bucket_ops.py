@@ -9,7 +9,7 @@ import boto3
 import requests
 
 from aistore.sdk import ListObjectFlag
-from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING
+from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING, LOREM, DUIS
 from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
@@ -130,19 +130,6 @@ class TestBucketOps(RemoteEnabledTest):
         obj_name = random_string()
         self.cloud_objects.append(obj_name)
 
-        lorem = (
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod"
-            " tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim"
-            " veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea"
-            " commodo consequat."
-        )
-        duis = (
-            "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum"
-            " dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non"
-            " proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
-            " Et harum quidem.."
-        )
-
         s3_client = boto3.client(
             "s3",
             region_name=AWS_REGION,
@@ -152,29 +139,29 @@ class TestBucketOps(RemoteEnabledTest):
         )
 
         # out-of-band PUT: first version
-        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=lorem)
+        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=LOREM)
 
         # cold GET, and check
         content = self.bucket.object(obj_name).get().read_all()
-        self.assertEqual(lorem, content.decode("utf-8"))
+        self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band PUT: 2nd version (overwrite)
-        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=duis)
+        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=DUIS)
 
         # warm GET and check (expecting the first version's content)
         content = self.bucket.object(obj_name).get().read_all()
-        self.assertEqual(lorem, content.decode("utf-8"))
+        self.assertEqual(LOREM, content.decode("utf-8"))
 
         # warm GET with `--latest` flag, content should be updated
         content = self.bucket.object(obj_name).get(latest=True).read_all()
-        self.assertEqual(duis, content.decode("utf-8"))
+        self.assertEqual(DUIS, content.decode("utf-8"))
 
         # out-of-band DELETE
         s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
         # warm GET must be fine
         content = self.bucket.object(obj_name).get().read_all()
-        self.assertEqual(duis, content.decode("utf-8"))
+        self.assertEqual(DUIS, content.decode("utf-8"))
 
         # cold GET must result in Error
         with self.assertRaises(AISError):

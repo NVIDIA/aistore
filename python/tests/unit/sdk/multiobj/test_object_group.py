@@ -41,7 +41,8 @@ class TestObjectGroup(unittest.TestCase):
 
         self.obj_names = ["obj-1", "obj-2"]
         self.object_group = ObjectGroup(self.mock_bck, obj_names=self.obj_names)
-        self.expected_value = {"objnames": self.obj_names}
+        self.expected_value = {}
+        self.expected_value["objnames"] = self.obj_names
 
     def test_object_group_parameters(self):
         obj_names = ["list", "of", "names"]
@@ -94,11 +95,14 @@ class TestObjectGroup(unittest.TestCase):
         )
 
     def test_prefetch(self):
+        prefetch_expected_val = self.expected_value.copy()
+        prefetch_expected_val["coer"] = False
+        prefetch_expected_val["latest-ver"] = False
         self.object_group_test_helper(
             self.object_group.prefetch,
             HTTP_METHOD_POST,
             ACT_PREFETCH_OBJECTS,
-            self.expected_value,
+            prefetch_expected_val,
         )
 
     def test_copy(self):
@@ -108,6 +112,8 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["force"] = False
         self.expected_value["tobck"] = self.dest_bucket.as_model()
         self.expected_value["coer"] = False
+        self.expected_value["latest-ver"] = False
+        self.expected_value["synchronize"] = False
         # Test default args
         self.object_group_test_helper(
             self.object_group.copy,
@@ -122,6 +128,9 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["force"] = True
         self.expected_value["dry_run"] = True
         self.expected_value["coer"] = True
+        self.expected_value["latest-ver"] = False
+        self.expected_value["synchronize"] = False
+
         self.object_group_test_helper(
             self.object_group.copy,
             HTTP_METHOD_POST,
@@ -153,6 +162,9 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["request_timeout"] = DEFAULT_ETL_TIMEOUT
         self.expected_value["tobck"] = self.dest_bucket.as_model()
         self.expected_value["coer"] = False
+        self.expected_value["latest-ver"] = False
+        self.expected_value["synchronize"] = False
+
         # Test default args
         self.object_group_test_helper(
             self.object_group.transform,

@@ -389,6 +389,8 @@ class CopyBckMsg(BaseModel):
     prepend: str
     dry_run: bool
     force: bool
+    latest: bool
+    sync: bool
 
     def as_dict(self):
         return {
@@ -396,6 +398,8 @@ class CopyBckMsg(BaseModel):
             "prepend": self.prepend,
             "dry_run": self.dry_run,
             "force": self.force,
+            "latest-ver": self.latest,
+            "synchronize": self.sync,
         }
 
 
@@ -456,6 +460,22 @@ class TCBckMsg(BaseModel):
         if self.transform_msg:
             for key, val in self.transform_msg.as_dict().items():
                 dict_rep[key] = val
+        return dict_rep
+
+
+class PrefetchMsg(BaseModel):
+    """
+    API message structure for prefetching objects from remote buckets.
+    """
+
+    object_selection: dict
+    continue_on_err: bool
+    latest: bool
+
+    def as_dict(self):
+        dict_rep = self.object_selection
+        dict_rep["coer"] = self.continue_on_err
+        dict_rep["latest-ver"] = self.latest
         return dict_rep
 
 
