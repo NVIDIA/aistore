@@ -93,6 +93,31 @@ func (oa *ObjAttrs) SetSize(size int64) {
 
 func CustomMD2S(md cos.StrKVs) string { return fmt.Sprintf("%+v", md) }
 
+func S2CustomMD(custom string) (md cos.StrKVs) {
+	if len(custom) < 8 || !strings.HasPrefix(custom, "map[") { // Sprintf above
+		return nil
+	}
+	s := custom[4 : len(custom)-1]
+	lst := strings.Split(s, " ")
+	md = make(cos.StrKVs, len(lst))
+	parseCustom(md, lst, VersionObjMD)
+	parseCustom(md, lst, SourceObjMD)
+	parseCustom(md, lst, CRC32CObjMD)
+	parseCustom(md, lst, MD5ObjMD)
+	parseCustom(md, lst, ETag)
+	return md
+}
+
+func parseCustom(md cos.StrKVs, lst []string, key string) {
+	keyX := key + ":"
+	for _, kv := range lst {
+		if strings.HasPrefix(kv, keyX) {
+			md[key] = kv[len(keyX):]
+			return
+		}
+	}
+}
+
 func (oa *ObjAttrs) GetCustomMD() cos.StrKVs   { return oa.CustomMD }
 func (oa *ObjAttrs) SetCustomMD(md cos.StrKVs) { oa.CustomMD = md }
 
@@ -181,6 +206,14 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 		oa.SetCustomKey(entry[0], entry[1])
 	}
 	return
+}
+
+func (oa *ObjAttrs) FromLsoEntry(e *LsoEntry) {
+	oa.Size = e.Size
+	oa.Ver = e.Version
+
+	// entry.Custom = cmn.CustomMD2S(custom)
+	_ = CustomMD2S(nil)
 }
 
 // local <=> remote equality in the context of cold-GET and download. This function

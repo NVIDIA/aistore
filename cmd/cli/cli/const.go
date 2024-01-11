@@ -497,7 +497,7 @@ var (
 			indent4 + "\traw - do not convert to (or from) human-readable format",
 	}
 
-	// Bucket
+	// list-objects
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
 		Usage: "list bucket's content alphabetically starting with the first name _after_ the specified",
@@ -523,7 +523,16 @@ var (
 		Name:  "paged",
 		Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')",
 	}
-	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list also objects that were _not_ matched by regex and/or template (range)"}
+	showUnmatchedFlag = cli.BoolFlag{
+		Name:  "show-unmatched",
+		Usage: "list also objects that were _not_ matched by regex and/or template (range)",
+	}
+	verChangedFlag = cli.BoolFlag{
+		Name: "check-version",
+		Usage: "check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions\n" +
+			indent4 + "\t- applies to remote buckets only\n" +
+			indent4 + "\t- see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'",
+	}
 
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}

@@ -101,6 +101,7 @@ var (
 			unitsFlag,
 			silentFlag,
 			dontWaitFlag,
+			verChangedFlag,
 		},
 
 		cmdLRU: {

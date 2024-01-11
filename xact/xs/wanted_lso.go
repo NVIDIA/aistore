@@ -48,10 +48,10 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
 		case apc.GetPropsCached: // via obj.SetPresent()
 
 		case apc.GetPropsSize:
-			if lom.Bucket().IsRemote() && e.Size > 0 && lom.SizeBytes() != e.Size {
-				e.SetVerChanged()
-			} else if wi.msg.IsFlagSet(apc.LsVerChanged) {
-				debug.Assert(false, "'LsVerChanged' not implemented yet") // TODO -- FIXME
+			if lom.Bucket().IsRemote() { // TODO: micro-optimize
+				if e.Size > 0 && lom.SizeBytes() != e.Size {
+					e.SetVerChanged()
+				}
 			}
 			e.Size = lom.SizeBytes()
 		case apc.GetPropsVersion:
@@ -73,6 +73,21 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
 			}
 		default:
 			debug.Assert(false, name)
+		}
+	}
+	if !wi.msg.IsFlagSet(apc.LsVerChanged) || e.IsVerChanged() || !lom.Bucket().IsRemote() /*ditto*/ {
+		return
+	}
+	//
+	// extensive version-changed check
+	//
+	md := cmn.S2CustomMD(e.Custom)
+	if len(md) > 0 {
+		var oa cmn.ObjAttrs
+		oa.CustomMD = md
+		oa.Size = e.Size
+		if !lom.Equal(&oa) {
+			e.SetVerChanged()
 		}
 	}
 }

@@ -271,8 +271,17 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if bck.IsRemote() {
 		addCachedCol = true
 		msg.SetFlag(apc.LsBckPresent) // default
+		if flagIsSet(c, verChangedFlag) {
+			msg.SetFlag(apc.LsVerChanged)
+		}
+	} else if flagIsSet(c, verChangedFlag) {
+		return fmt.Errorf("flag %s applies to remote buckets only (have: %s)", qflprn(verChangedFlag), bck)
 	}
+
 	if flagIsSet(c, listObjCachedFlag) {
+		if flagIsSet(c, verChangedFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(verChangedFlag), qflprn(listObjCachedFlag))
+		}
 		msg.SetFlag(apc.LsObjCached)
 		addCachedCol = false // redundant
 	}
@@ -302,11 +311,13 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
 		props = splitCsv(propsStr) // split apc.LsPropsSepa
 	}
-	// NOTE: compare w/ `showObjProps()`
+
 	if flagIsSet(c, nameOnlyFlag) {
+		if flagIsSet(c, verChangedFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(verChangedFlag), qflprn(nameOnlyFlag))
+		}
 		if len(props) > 2 {
-			warn := fmt.Sprintf("flag %s is incompatible with the value of %s",
-				qflprn(nameOnlyFlag), qflprn(objPropsFlag))
+			warn := fmt.Sprintf("flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
 			actionWarn(c, warn)
 		}
 		msg.SetFlag(apc.LsNameOnly)
@@ -316,6 +327,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			msg.AddProps(apc.GetPropsName)
 			msg.AddProps(apc.GetPropsSize)
 			msg.SetFlag(apc.LsNameSize)
+		} else if flagIsSet(c, verChangedFlag) {
+			msg.AddProps(apc.GetPropsDefaultCloud...) // TODO: maybe too crude
 		} else {
 			msg.AddProps(apc.GetPropsMinimal...)
 		}
@@ -359,7 +372,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printLso(c, toPrint, lstFilter, msg.Props, addCachedCol)
+			err = printLso(c, toPrint, lstFilter, msg.Props,
+				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 			if err != nil {
 				return err
 			}
@@ -397,7 +411,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	return printLso(c, objList.Entries, lstFilter, msg.Props, addCachedCol)
+	return printLso(c, objList.Entries, lstFilter, msg.Props,
+		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 }
 
 func lsoErr(msg *apc.LsoMsg, err error) error {
@@ -436,24 +451,26 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
 }
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column
-func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, addCachedCol bool) error {
+func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string,
+	addCachedCol, isRemote, addStatusCol bool) error {
 	var (
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		hideFooter     = flagIsSet(c, noFooterFlag)
 		matched, other = lstFilter.apply(entries)
 		units, errU    = parseUnitsFlag(c, unitsFlag)
-		addStatusCol   bool
 	)
 	if errU != nil {
 		return errU
 	}
 
 	propsList := splitCsv(props)
-	if addCachedCol && !cos.StringInSlice(apc.GetPropsStatus, propsList) {
-		for _, e := range entries {
-			if e.IsVerChanged() {
-				addStatusCol = true
-				break
+	if isRemote && !addStatusCol {
+		if addCachedCol && !cos.StringInSlice(apc.GetPropsStatus, propsList) {
+			for _, e := range entries {
+				if e.IsVerChanged() {
+					addStatusCol = true
+					break
+				}
 			}
 		}
 	}
