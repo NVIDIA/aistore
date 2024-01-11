@@ -249,10 +249,7 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 		if cos.IsErrOOS(err) {
 			r.Abort(err)
 		} else {
-			r.AddErr(err)
-		}
-		if cmn.Rom.FastV(5, cos.SmoduleMirror) {
-			nlog.Infoln("Error:", err)
+			r.AddErr(err, 5, cos.SmoduleMirror)
 		}
 	}
 	return
@@ -281,8 +278,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 
 func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
-		r.AddErr(err)
-		nlog.Errorln(err)
+		r.AddErr(err, 0)
 		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
@@ -309,8 +305,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	erp := core.T.PutObject(lom, params)
 	core.FreePutParams(params)
 	if erp != nil {
-		r.AddErr(erp)
-		nlog.Errorln(erp)
+		r.AddErr(erp, 0)
 		return erp // NOTE: non-nil signals transport to terminate
 	}
 	r.rxlast.Store(mono.NanoTime())

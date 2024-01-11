@@ -455,16 +455,20 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 		return
 	}
-	if err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
-		t.writeErr(w, r, err)
+	if errCode, err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
+		t.writeErr(w, r, err, errCode)
 	}
 }
 
 // handle apc.ActPrefetchObjects <-- via api.Prefetch* and api.StartX*
-func (t *target) runPrefetch(xactID string, bck *meta.Bck, prfMsg *apc.PrefetchMsg) error {
+func (t *target) runPrefetch(xactID string, bck *meta.Bck, prfMsg *apc.PrefetchMsg) (int, error) {
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
+		return http.StatusInsufficientStorage, err
+	}
 	rns := xreg.RenewPrefetch(xactID, bck, prfMsg)
 	if rns.Err != nil {
-		return rns.Err
+		return http.StatusBadRequest, rns.Err
 	}
 
 	xctn := rns.Entry.Get()
@@ -475,7 +479,7 @@ func (t *target) runPrefetch(xactID string, bck *meta.Bck, prfMsg *apc.PrefetchM
 	xctn.AddNotif(notif)
 
 	xact.GoRunW(xctn)
-	return nil
+	return 0, nil
 }
 
 // HEAD /v1/buckets/bucket-name

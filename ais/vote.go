@@ -238,8 +238,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 		} else {
 			errV := fmt.Errorf("%s: current primary(?) %s responds but does not consider itself primary",
 				p, curPrimary.StringEx())
-			nlog.Errorln(errV)
-			xele.AddErr(errV)
+			xele.AddErr(errV, 0)
 		}
 		return
 	}
@@ -251,8 +250,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 	if !elected {
 		errV := fmt.Errorf("%s: election phase 1 (prepare) failed: primary still %s w/ status unknown",
 			p, curPrimary.StringEx())
-		nlog.Errorln(errV)
-		xele.AddErr(errV)
+		xele.AddErr(errV, 0)
 
 		smap = p.owner.smap.get()
 		if smap.version() > vr.Smap.version() {
@@ -286,8 +284,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 	for sid := range confirmationErrors {
 		if !votingErrors.Contains(sid) {
 			errV := fmt.Errorf("%s: error confirming the election: %s was healthy when voting", p, sid)
-			nlog.Errorln(errV)
-			xele.AddErr(errV)
+			xele.AddErr(errV, 0)
 		}
 	}
 

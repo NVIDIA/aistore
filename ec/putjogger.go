@@ -133,9 +133,8 @@ func (c *putJogger) processRequest(req *request) {
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		err = fmt.Errorf("%s: failed to %s %s: %w", core.T, req.Action, lom, err)
-		nlog.Errorln(err)
-		c.parent.AddErr(err)
+		err = cmn.NewErrFailedTo(core.T, req.Action, lom, err)
+		c.parent.AddErr(err, 0)
 	}
 }
 

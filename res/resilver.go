@@ -129,8 +129,9 @@ func (res *Res) RunResilver(args Args) {
 	res.end.Store(0)
 	jg.Run()
 	err = wait(jg, xres)
-	xres.AddErr(err)
-
+	if err != nil {
+		xres.AddErr(err)
+	}
 	// callback to, finally, detach-disable
 	if args.PostDD != nil {
 		args.PostDD(args.Rmi, args.Action, xres, err)
@@ -140,20 +141,18 @@ func (res *Res) RunResilver(args Args) {
 
 // Wait for an abort or for resilvering joggers to finish.
 func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
-	tsi := core.T.Snode()
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
 			if err = jg.Stop(); err != nil {
-				nlog.Errorf("%s: %s aborted (cause %v), traversal err %v", tsi, xres, errCause, err)
-				xres.AddErr(err)
+				xres.AddErr(err, 0)
 			} else {
-				nlog.Infof("%s: %s aborted (cause %v)", tsi, xres, errCause)
+				nlog.Infoln(core.T.String()+":", xres.Name(), "aborted, cause:", errCause)
 			}
 			return cmn.NewErrAborted(xres.Name(), "", errCause)
 		case <-jg.ListenFinished():
 			if err = fs.RemoveMarker(fname.ResilverMarker); err == nil {
-				nlog.Infof("%s: %s removed marker ok", tsi, xres)
+				nlog.Infoln(core.T.String()+":", xres.Name(), "removed marker ok")
 			}
 			return
 		}
@@ -168,7 +167,7 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	destMpath, _, err := fs.Hrw(uname)
 	if err != nil {
 		jg.xres.AddErr(err)
-		nlog.Warningln(err)
+		nlog.Infoln("Warning:", err)
 		return
 	}
 	if destMpath.Path == ct.Mountpath().Path {
@@ -190,11 +189,10 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
-		nlog.Errorln(errV)
-		jg.xres.AddErr(errV)
+		jg.xres.AddErr(errV, 0)
 		if err = os.Remove(destMetaFQN); err != nil {
 			errV := fmt.Errorf("failed to cleanup metafile %q: %v", destMetaFQN, err)
-			nlog.Warningln(errV)
+			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)
 		}
 	}
@@ -292,15 +290,14 @@ redo:
 		if errHrw != nil {
 			if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
 				errV := fmt.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
-				nlog.Errorln(errV)
-				jg.xres.AddErr(errV)
+				jg.xres.AddErr(errV, 0)
 			}
 			// EC cleanup and return
 			if metaNewPath != "" {
 				if errHrw = os.Remove(metaNewPath); errHrw != nil {
 					errV := fmt.Errorf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
-					nlog.Warningln(errV)
-					jg.xres.AddErr(errV)
+					nlog.Infoln("Warning:", errV)
+					jg.xres.AddErr(errV, 0)
 				}
 			}
 			return
@@ -325,8 +322,7 @@ redo:
 				}
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
 					xname, orig, orig.Mountpath(), hmi, mi)
-				nlog.Errorln(errHrw)
-				jg.xres.AddErr(errHrw)
+				jg.xres.AddErr(errHrw, 0)
 				return
 			}
 			copied = false
@@ -341,11 +337,11 @@ redo:
 		}
 		if cos.IsErrOOS(err) {
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
-			jg.xres.AddErr(errV)
+			jg.xres.AddErr(errV, 0)
 			err = cmn.NewErrAborted(xname, "", errV)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
-			nlog.Warningln(errV)
+			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)
 		}
 		break

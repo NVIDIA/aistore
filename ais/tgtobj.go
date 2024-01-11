@@ -251,19 +251,22 @@ func (poi *putOI) finalize() (errCode int, err error) {
 			}
 		}
 		poi.lom.Uncache()
-		return
+		if errCode != http.StatusInsufficientStorage && cmn.IsErrCapExceeded(err) {
+			errCode = http.StatusInsufficientStorage
+		}
+		return errCode, err
 	}
 	if !poi.skipEC {
 		if ecErr := ec.ECM.EncodeObject(poi.lom, nil); ecErr != nil && ecErr != ec.ErrorECDisabled {
 			err = ecErr
-			if cmn.IsErrCapExceeded(err) {
+			if errCode != http.StatusInsufficientStorage && cmn.IsErrCapExceeded(err) {
 				errCode = http.StatusInsufficientStorage
 			}
-			return
+			return errCode, err
 		}
 	}
 	poi.t.putMirror(poi.lom)
-	return
+	return 0, nil
 }
 
 // poi.workFQN => LOM
@@ -803,9 +806,8 @@ validate:
 // 4) Cloud
 func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode int, err error) {
 	var (
-		tsi   *meta.Snode
-		smap  = goi.t.owner.smap.get()
-		tname = goi.t.String()
+		tsi  *meta.Snode
+		smap = goi.t.owner.smap.get()
 	)
 	// NOTE: including targets 'in maintenance mode'
 	tsi, err = smap.HrwHash2Tall(goi.lom.Digest())
@@ -866,12 +868,12 @@ gfn:
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
-			nlog.Infof("%s: EC-recovered %s", tname, goi.lom)
+			nlog.Infoln(goi.t.String(), "EC-recovered", goi.lom.String())
 			return
 		}
-		err = cmn.NewErrFailedTo(tname, "load EC-recovered", goi.lom, ecErr)
+		err = cmn.NewErrFailedTo(goi.t, "load EC-recovered", goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
-		err = cmn.NewErrFailedTo(tname, "EC-recover", goi.lom, ecErr)
+		err = cmn.NewErrFailedTo(goi.t, "EC-recover", goi.lom, ecErr)
 		if cmn.IsErrCapExceeded(ecErr) {
 			errCode = http.StatusInsufficientStorage
 		}

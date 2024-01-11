@@ -135,22 +135,6 @@ func (r *streamingX) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func (r *streamingX) addErr(err error, contOnErr bool, errCode ...int) {
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		if len(errCode) > 0 && errCode[0] != 0 {
-			nlog.InfoDepth(1, "Warning: ", err, errCode)
-		} else {
-			nlog.InfoDepth(1, "Warning: ", err)
-		}
-	}
-	if contOnErr {
-		// TODO -- FIXME: niy
-		debug.Assert(!cmn.IsErrAborted(err))
-	} else {
-		r.AddErr(err)
-	}
-}
-
 func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 	if r.p.dm == nil { // single target
 		return

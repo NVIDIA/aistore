@@ -77,11 +77,11 @@ type (
 	}
 
 	ErrFailedTo struct {
-		actor  any    // most of the time it's this (target|proxy) node but may also be some other "actor"
-		what   any    // not necessarily LOM
-		err    error  // original error that can be Unwrap-ed
-		action string // not necessarily msg.Action
-		status int    // http status, if available
+		actor  fmt.Stringer // most of the time it's this (target|proxy) node but may also be some other "actor"
+		what   any          // not necessarily LOM
+		err    error        // original error that can be Unwrap-ed
+		action string       // not necessarily msg.Action
+		status int          // http status, if available
 	}
 	ErrUnsupp struct {
 		action, what string
@@ -215,7 +215,7 @@ var (
 
 // ErrFailedTo
 
-func NewErrFailedTo(actor any, action string, what any, err error, errCode ...int) *ErrFailedTo {
+func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, errCode ...int) *ErrFailedTo {
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
@@ -223,9 +223,6 @@ func NewErrFailedTo(actor any, action string, what any, err error, errCode ...in
 	_clean(err)
 
 	e := &ErrFailedTo{actor: actor, action: action, what: what, err: err, status: 0}
-	if actor == nil {
-		e.actor = thisNodeName
-	}
 	if len(errCode) > 0 {
 		e.status = errCode[0]
 	}
@@ -233,7 +230,12 @@ func NewErrFailedTo(actor any, action string, what any, err error, errCode ...in
 }
 
 func (e *ErrFailedTo) Error() string {
-	err := fmt.Errorf(fmtErrFailedTo, e.actor, e.action, e.what, e.err)
+	var err error
+	if e.actor == nil {
+		err = fmt.Errorf(fmtErrFailedTo, thisNodeName, e.action, e.what, e.err)
+	} else {
+		err = fmt.Errorf(fmtErrFailedTo, e.actor, e.action, e.what, e.err)
+	}
 	return err.Error()
 }
 

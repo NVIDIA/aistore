@@ -119,10 +119,7 @@ func (r *XactPut) do(lom *core.LOM, buf []byte) {
 	lom.Unlock(true)
 
 	if err != nil {
-		r.AddErr(err)
-		if cmn.Rom.FastV(5, cos.SmoduleMirror) {
-			nlog.Infof("Error: %v", err)
-		}
+		r.AddErr(err, 5, cos.SmoduleMirror)
 	} else {
 		r.ObjsAdd(1, size)
 	}
@@ -149,7 +146,9 @@ loop:
 	}
 
 	err = r.stop()
-	r.AddErr(err)
+	if err != nil {
+		r.AddErr(err)
+	}
 	r.Finish()
 }
 

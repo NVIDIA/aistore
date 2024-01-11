@@ -165,15 +165,13 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
-			err = fmt.Errorf("%s: failed to delete %s: %w", core.T, bck.Cname(hdr.ObjName), err)
-			nlog.Errorln(err)
-			r.AddErr(err)
+			err = cmn.NewErrFailedTo(core.T, "delete", bck.Cname(hdr.ObjName), err)
+			r.AddErr(err, 0)
 		}
 	case reqGet:
 		err := r.trySendCT(iReq, hdr, bck)
 		if err != nil {
-			r.AddErr(err)
-			nlog.Errorln(err)
+			r.AddErr(err, 0)
 		}
 	default:
 		debug.Assert(false, "opcode", hdr.Opcode)
@@ -225,8 +223,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			core.FreeLOM(lom)
 		}
 		if err != nil {
-			r.AddErr(err)
-			nlog.Errorln(err)
+			r.AddErr(err, 0)
 			return
 		}
 		r.ObjsAdd(1, hdr.ObjAttrs.Size)

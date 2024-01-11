@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -16,6 +16,7 @@ import (
 	"io"
 	"sort"
 
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -189,7 +190,10 @@ func (ck *Cksum) Value() string {
 	return ck.value
 }
 
-func (ck *Cksum) Clone() *Cksum { return &Cksum{ty: ck.ty, value: ck.value} }
+func (ck *Cksum) Clone() *Cksum {
+	debug.Assert(ck != nil)
+	return &Cksum{ty: ck.ty, value: ck.value}
+}
 
 func (ck *Cksum) String() string {
 	if ck == nil {

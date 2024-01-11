@@ -132,9 +132,8 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		}
 	}()
 	if num == 0 {
-		xcln.AddErr(cmn.ErrNoMountpaths)
+		xcln.AddErr(cmn.ErrNoMountpaths, 0)
 		xcln.Finish()
-		nlog.Errorln(cmn.ErrNoMountpaths)
 		return fs.CapStatus{}
 	}
 	for mpath, mi := range availablePaths {
@@ -171,8 +170,12 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 
 	var err, errCap error
 	parent.cs.c, err, errCap = fs.CapRefresh(config, nil /*tcdf*/)
-	xcln.AddErr(err)
-	xcln.AddErr(errCap)
+	if err != nil {
+		xcln.AddErr(err)
+	}
+	if errCap != nil {
+		xcln.AddErr(errCap)
+	}
 	xcln.Finish()
 	nlog.Infoln(xcln.Name(), "finished:", errCap)
 
@@ -323,7 +326,9 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 
 func (j *clnJ) removeDeleted() (err error) {
 	err = j.mi.RemoveDeleted(j.String())
-	j.ini.Xaction.AddErr(err)
+	if err != nil {
+		j.ini.Xaction.AddErr(err)
+	}
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
 		return
 	}
@@ -495,10 +500,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	}
 	if _, err := lom.DelExtraCopies(); err != nil {
 		err = fmt.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
-		j.ini.Xaction.AddErr(err)
-		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-			nlog.Infoln("Error: ", err)
-		}
+		j.ini.Xaction.AddErr(err, 5, cos.SmoduleSpace)
 	}
 }
 

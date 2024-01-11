@@ -187,9 +187,8 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 func (r *xactECBase) sendCb(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	g.smm.Free(hdr.Opaque)
 	if err != nil {
-		err = fmt.Errorf("failed to send %s: %w", hdr.Cname(), err)
-		nlog.Errorln(err)
-		r.AddErr(err)
+		err = cmn.NewErrFailedTo(core.T, "ec-send", hdr.Cname(), err)
+		r.AddErr(err, 0)
 	}
 	r.DecPending()
 }
@@ -258,7 +257,7 @@ func (r *xactECBase) readRemote(lom *core.LOM, daemonID, uname string, request [
 	}
 	if sw.twg.WaitTimeout(r.config.Timeout.SendFile.D()) {
 		r.unregWriter(uname)
-		err := fmt.Errorf("timed out waiting for %s is read", uname)
+		err := fmt.Errorf("read-remote(%s): timeout %v", uname, r.config.Timeout.SendFile.D())
 		r.AddErr(err)
 		return 0, err
 	}

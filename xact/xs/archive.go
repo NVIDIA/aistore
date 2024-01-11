@@ -119,8 +119,8 @@ func (p *archFactory) Start() (err error) {
 
 func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) {
 	if err = archlom.InitBck(&msg.ToBck); err != nil {
-		r.addErr(err, false)
-		return
+		r.AddErr(err, 4, cos.SmoduleXs)
+		return err
 	}
 	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
 
@@ -138,7 +138,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 
 	wi.tsi, err = smap.HrwName2T(msg.ToBck.MakeUname(msg.ArchName))
 	if err != nil {
-		r.addErr(err, false)
+		r.AddErr(err, 4, cos.SmoduleXs)
 		return
 	}
 
@@ -221,7 +221,9 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 			} else {
 				err = lrit.rangeOrPref(wi, smap)
 			}
-			r.AddErr(err)
+			if err != nil {
+				r.AddErr(err)
+			}
 			if r.Err() != nil {
 				wi.cleanup()
 				goto fin
@@ -275,7 +277,7 @@ func (r *XactArch) doSend(lom *core.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 
 func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
-		r.addErr(err, false /*contOnErr*/)
+		r.AddErr(err, 5, cos.SmoduleXs)
 		return err
 	}
 
@@ -313,7 +315,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		r.addErr(err, wi.msg.ContinueOnError)
+		r.AddErr(err, 5, cos.SmoduleXs)
 	}
 	return nil
 }
@@ -323,7 +325,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	q := wi.quiesce()
 	if q == core.QuiTimeout {
 		err := fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
-		r.addErr(err, wi.msg.ContinueOnError)
+		r.AddErr(err, 4, cos.SmoduleXs)
 	}
 
 	r.pending.Lock()
@@ -346,7 +348,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	debug.Assert(q != core.QuiAborted)
 
 	wi.cleanup()
-	r.addErr(err, wi.msg.ContinueOnError, errCode)
+	r.AddErr(err, 5, cos.SmoduleXs)
 }
 
 func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
@@ -478,13 +480,13 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {
-			wi.r.addErr(err, wi.msg.ContinueOnError)
+			wi.r.AddErr(err, 5, cos.SmoduleXs)
 			return
 		}
 		if coldGet = lom.Bck().IsRemote(); !coldGet {
 			if lrit.lrp == lrpList {
 				// listed, not found
-				wi.r.addErr(err, wi.msg.ContinueOnError)
+				wi.r.AddErr(err, 5, cos.SmoduleXs)
 			}
 			return
 		}
@@ -496,14 +498,14 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 			if lrit.lrp != lrpList && cos.IsNotExist(err, errCode) {
 				return // range or prefix, not found
 			}
-			wi.r.addErr(err, wi.msg.ContinueOnError)
+			wi.r.AddErr(err, 5, cos.SmoduleXs)
 			return
 		}
 	}
 
 	fh, err := cos.NewFileHandle(lom.FQN)
 	if err != nil {
-		wi.r.addErr(err, wi.msg.ContinueOnError)
+		wi.r.AddErr(err, 5, cos.SmoduleXs)
 		return
 	}
 	if core.T.SID() != wi.tsi.ID() {
@@ -516,7 +518,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		wi.r.addErr(err, wi.msg.ContinueOnError)
+		wi.r.AddErr(err, 5, cos.SmoduleXs)
 	}
 }
 

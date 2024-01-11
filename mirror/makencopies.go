@@ -98,7 +98,9 @@ func (r *mncXact) Run(wg *sync.WaitGroup) {
 	r.BckJog.Run()
 	nlog.Infoln(r.Name())
 	err := r.BckJog.Wait()
-	r.AddErr(err)
+	if err != nil {
+		r.AddErr(err)
+	}
 	r.Finish()
 }
 

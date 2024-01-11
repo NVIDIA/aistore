@@ -16,8 +16,6 @@ import (
 
 // NOTE: compare with ext/etl/dp.go
 
-const ldpact = ".LDP.Reader"
-
 type (
 	// data provider
 	DP interface {
@@ -63,7 +61,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 			if err != nil {
 				lom.Unlock(false)
 				if !cos.IsNotExist(err, errCode) {
-					err = cmn.NewErrFailedTo(T.String()+ldpact, "head-latest", lom, err)
+					err = cmn.NewErrFailedTo(T, "head-latest", lom, err)
 				}
 				return nil, nil, err
 			}
@@ -80,7 +78,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 
 	lom.Unlock(false)
 	if !cos.IsNotExist(loadErr, 0) {
-		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "load", lom, loadErr)
+		return nil, nil, cmn.NewErrFailedTo(T, "ldp-load", lom, loadErr)
 	}
 	if !lom.Bck().IsRemote() {
 		return nil, nil, cos.NewErrNotFound(T, lom.Cname())

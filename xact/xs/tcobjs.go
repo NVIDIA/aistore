@@ -280,10 +280,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 	core.FreePutParams(params)
 
 	if err != nil {
-		r.AddErr(err)
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infoln("Error: ", err)
-		}
+		r.AddErr(err, 5, cos.SmoduleXs)
 	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
@@ -323,7 +320,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 
 	if err != nil {
 		if !cos.IsNotExist(err, 0) || lrit.lrp == lrpList {
-			wi.r.addErr(err, wi.msg.ContinueOnError)
+			wi.r.AddErr(err, 5, cos.SmoduleXs)
 		}
 	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))

@@ -117,6 +117,15 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case apc.ActXactStart:
 		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())
+		if xargs.Kind == apc.ActPrefetchObjects {
+			// TODO: consider adding `Value any` to generic `xact.ArgsMsg`
+			errCode, err := t.runPrefetch(xargs.ID, bck, &apc.PrefetchMsg{})
+			if err != nil {
+				t.writeErr(w, r, err, errCode)
+			}
+			return
+		}
+		// the rest startable
 		if err := t.xstart(&xargs, bck); err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -209,10 +218,6 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck) error {
 		wg.Add(1)
 		go t.runResilver(res.Args{UUID: args.ID, Notif: notif}, wg)
 		wg.Wait()
-	// 2. with bucket
-	case apc.ActPrefetchObjects:
-		// TODO: consider adding `Value any` to generic `xact.ArgsMsg`
-		return t.runPrefetch(args.ID, bck, &apc.PrefetchMsg{})
 	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(args.ID, bck)
 		return rns.Err

@@ -126,14 +126,12 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 
 		if !ok {
 			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", core.T, bck.Cname(objName), uname)
-			nlog.Errorln(err)
-			r.AddErr(err)
+			r.AddErr(err, 0)
 			return
 		}
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
 			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", core.T, bck.Cname(objName), err, uname)
-			nlog.Errorln(err)
-			r.AddErr(err)
+			r.AddErr(err, 0)
 		}
 	default:
 		debug.Assert(false, "opcode", hdr.Opcode)

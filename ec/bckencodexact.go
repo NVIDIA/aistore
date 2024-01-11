@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -89,7 +89,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		return
 	}
 	if !bck.Props.EC.Enabled {
-		r.AddErr(fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name))
+		r.AddErr(fmt.Errorf("%s does not have EC enabled", r.bck.Cname("")))
 		r.Finish()
 		return
 	}
@@ -108,7 +108,9 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		jg.Stop()
 	case <-jg.ListenFinished():
 		err := jg.Stop()
-		r.AddErr(err)
+		if err != nil {
+			r.AddErr(err)
+		}
 	}
 	r.wg.Wait() // Need to wait for all async actions to finish.
 

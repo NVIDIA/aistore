@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
@@ -135,10 +134,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 		return // not found, prefix or range
 	}
 eret:
-	r.AddErr(err)
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln("Warning:", err)
-	}
+	r.AddErr(err, 5, cos.SmoduleXs)
 }
 
 func (r *prefetch) Snap() (snap *core.Snap) {

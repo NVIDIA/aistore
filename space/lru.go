@@ -147,8 +147,7 @@ func RunLRU(ini *IniLRU) {
 		}
 	}()
 	if num == 0 {
-		nlog.Warningln(cmn.ErrNoMountpaths)
-		xlru.AddErr(cmn.ErrNoMountpaths)
+		xlru.AddErr(cmn.ErrNoMountpaths, 0)
 		xlru.Finish()
 		return
 	}

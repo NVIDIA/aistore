@@ -164,10 +164,27 @@ func (xctn *Base) Abort(err error) bool {
 // multi-error
 //
 
-func (xctn *Base) AddErr(err error) {
-	if err != nil && !xctn.IsAborted() { // no more errors once aborted
-		fs.CleanPathErr(err)
-		xctn.err.Add(err)
+func (xctn *Base) AddErr(err error, logExtra ...int) {
+	if xctn.IsAborted() { // no more errors once aborted
+		return
+	}
+	debug.Assert(err != nil)
+	fs.CleanPathErr(err)
+	xctn.err.Add(err)
+	// just add
+	if len(logExtra) == 0 {
+		return
+	}
+	// log error
+	level := logExtra[0]
+	if level == 0 {
+		nlog.ErrorDepth(1, err)
+		return
+	}
+	// finally, FastV
+	module := logExtra[1]
+	if cmn.Rom.FastV(level, module) {
+		nlog.InfoDepth(1, "Warning:", err)
 	}
 }
 

@@ -192,9 +192,11 @@ func newXact(p *factory) (xld *Xact) {
 }
 
 func (xld *Xact) Run(*sync.WaitGroup) {
-	nlog.Infof("starting %s", xld.Name())
+	nlog.Infoln("starting", xld.Name())
 	err := xld.dispatcher.run()
-	xld.AddErr(err)
+	if err != nil {
+		xld.AddErr(err)
+	}
 	xld.stop()
 }
 
