@@ -1,7 +1,7 @@
 // Package xs contains most of the supported eXtended actions (xactions) with some
 // exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -38,6 +38,10 @@ func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 }
 
 func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
+	var (
+		custom  = e.Custom
+		version = e.Version
+	)
 	for name, fl := range allmap {
 		if !wi.wanted.IsSet(fl) {
 			continue
@@ -81,7 +85,7 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
 	//
 	// extensive version-changed check
 	//
-	md := cmn.S2CustomMD(e.Custom)
+	md := cmn.S2CustomMD(custom, version)
 	if len(md) > 0 {
 		var oa cmn.ObjAttrs
 		oa.CustomMD = md

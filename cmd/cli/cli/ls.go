@@ -312,6 +312,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		props = splitCsv(propsStr) // split apc.LsPropsSepa
 	}
 
+	// add _implied_ props into control lsmsg
 	if flagIsSet(c, nameOnlyFlag) {
 		if flagIsSet(c, verChangedFlag) {
 			return fmt.Errorf(errFmtExclusive, qflprn(verChangedFlag), qflprn(nameOnlyFlag))
@@ -327,8 +328,6 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			msg.AddProps(apc.GetPropsName)
 			msg.AddProps(apc.GetPropsSize)
 			msg.SetFlag(apc.LsNameSize)
-		} else if flagIsSet(c, verChangedFlag) {
-			msg.AddProps(apc.GetPropsDefaultCloud...) // TODO: maybe too crude
 		} else {
 			msg.AddProps(apc.GetPropsMinimal...)
 		}
@@ -345,10 +344,21 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		// (due to mirroring, EC). The status helps to tell an object from its replica(s).
 		msg.AddProps(apc.GetPropsStatus)
 	}
+	propsStr = msg.Props // show these and only these props
+	// and finally:
+	if flagIsSet(c, verChangedFlag) {
+		if !msg.WantProp(apc.GetPropsCustom) {
+			msg.AddProps(apc.GetPropsCustom)
+		}
+		if !msg.WantProp(apc.GetPropsVersion) {
+			msg.AddProps(apc.GetPropsVersion)
+		}
+	}
+
+	// set page
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}
-
 	pageSize, limit, err := _setPage(c, bck)
 	if err != nil {
 		return err
@@ -372,7 +382,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printLso(c, toPrint, lstFilter, msg.Props,
+			err = printLso(c, toPrint, lstFilter, propsStr,
 				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 			if err != nil {
 				return err
@@ -411,7 +421,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	return printLso(c, objList.Entries, lstFilter, msg.Props,
+	return printLso(c, objList.Entries, lstFilter, propsStr,
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 }
 

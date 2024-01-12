@@ -528,7 +528,7 @@ var (
 		Usage: "list also objects that were _not_ matched by regex and/or template (range)",
 	}
 	verChangedFlag = cli.BoolFlag{
-		Name: "check-version",
+		Name: "check-versions",
 		Usage: "check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions\n" +
 			indent4 + "\t- applies to remote buckets only\n" +
 			indent4 + "\t- see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'",
@@ -592,8 +592,9 @@ var (
 		Name: "latest",
 		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
 			indent1 + "\tprovides operation-level control over object versioning (and version synchronization)\n" +
-			indent1 + "\t_without_ requiring to change bucket configuration\n" +
-			indent1 + "\t(the latter can be done using 'ais bucket props set BUCKET versioning')",
+			indent1 + "\twithout requiring to change bucket configuration\n" +
+			indent1 + "\t- the latter can be done using 'ais bucket props set BUCKET versioning'\n" +
+			indent1 + "\t- see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'",
 	}
 	syncFlag = cli.BoolFlag{
 		Name: "sync",

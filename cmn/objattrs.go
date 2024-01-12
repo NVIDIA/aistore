@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -93,14 +93,14 @@ func (oa *ObjAttrs) SetSize(size int64) {
 
 func CustomMD2S(md cos.StrKVs) string { return fmt.Sprintf("%+v", md) }
 
-func S2CustomMD(custom string) (md cos.StrKVs) {
+func S2CustomMD(custom, version string) (md cos.StrKVs) {
 	if len(custom) < 8 || !strings.HasPrefix(custom, "map[") { // Sprintf above
 		return nil
 	}
 	s := custom[4 : len(custom)-1]
 	lst := strings.Split(s, " ")
 	md = make(cos.StrKVs, len(lst))
-	parseCustom(md, lst, VersionObjMD)
+	md[VersionObjMD] = version
 	parseCustom(md, lst, SourceObjMD)
 	parseCustom(md, lst, CRC32CObjMD)
 	parseCustom(md, lst, MD5ObjMD)
