@@ -271,16 +271,22 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if bck.IsRemote() {
 		addCachedCol = true
 		msg.SetFlag(apc.LsBckPresent) // default
-		if flagIsSet(c, verChangedFlag) {
-			msg.SetFlag(apc.LsVerChanged)
+	}
+	if flagIsSet(c, verChangedFlag) {
+		if bck.IsAIS() {
+			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(verChangedFlag), bck)
 		}
-	} else if flagIsSet(c, verChangedFlag) {
-		return fmt.Errorf("flag %s applies to remote buckets only (have: %s)", qflprn(verChangedFlag), bck)
+		if !bck.HasVersioningMD() {
+			return fmt.Errorf("flag %s only applies to remote backends that maintain at least some form of versioning information (have: %s)",
+				qflprn(verChangedFlag), bck)
+		}
+		msg.SetFlag(apc.LsVerChanged)
 	}
 
 	if flagIsSet(c, listObjCachedFlag) {
 		if flagIsSet(c, verChangedFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(verChangedFlag), qflprn(listObjCachedFlag))
+			actionWarn(c, "checking remote versions may take some time...\n")
+			briefPause(1)
 		}
 		msg.SetFlag(apc.LsObjCached)
 		addCachedCol = false // redundant
@@ -344,8 +350,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		// (due to mirroring, EC). The status helps to tell an object from its replica(s).
 		msg.AddProps(apc.GetPropsStatus)
 	}
-	propsStr = msg.Props // show these and only these props
-	// and finally:
+	propsStr = msg.Props // show these and _only_ these props
+	// finally:
 	if flagIsSet(c, verChangedFlag) {
 		if !msg.WantProp(apc.GetPropsCustom) {
 			msg.AddProps(apc.GetPropsCustom)
@@ -355,7 +361,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		}
 	}
 
-	// set page
+	// set page size, limit
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}
@@ -629,6 +635,6 @@ func (u *_listed) cb(ctx *api.LsoCounter) {
 	} else if !flagIsSet(u.c, noFooterFlag) {
 		elapsed := teb.FormatDuration(ctx.Elapsed())
 		fmt.Fprintf(u.c.App.Writer, "\rListed %s objects in %v\n", cos.FormatBigNum(ctx.Count()), elapsed)
-		time.Sleep(time.Second)
+		briefPause(1)
 	}
 }

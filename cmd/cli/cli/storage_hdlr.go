@@ -504,7 +504,7 @@ func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
 
 		if len(results) > 1 {
 			if i < len(results)-1 {
-				time.Sleep(3 * time.Second)
+				briefPause(3)
 			}
 		}
 	}

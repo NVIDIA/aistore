@@ -530,7 +530,7 @@ var (
 	verChangedFlag = cli.BoolFlag{
 		Name: "check-versions",
 		Usage: "check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions\n" +
-			indent4 + "\t- applies to remote buckets only\n" +
+			indent4 + "\t- applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag)\n" +
 			indent4 + "\t- see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'",
 	}
 

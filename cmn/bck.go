@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -389,6 +389,11 @@ func (b *Bck) IsCloud() bool {
 	}
 	return apc.IsCloudProvider(backend.Provider)
 }
+
+// A subset of remote backends that maintain assorted items of versioning information -
+// the items including ETag, checksum, etc. - that, in turn, can be used to populate `ObjAttrs`
+// * see related: `ObjAttrs.Equal`
+func (b *Bck) HasVersioningMD() bool { return b.IsCloud() || b.IsRemoteAIS() }
 
 func (b *Bck) HasProvider() bool { return b.Provider != "" }
 

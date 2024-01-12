@@ -83,13 +83,17 @@ func LsoTemplate(propsList []string, hideHeader, addCachedCol, addStatusCol bool
 func fmtLsObjStatus(e *cmn.LsoEntry) string {
 	switch e.Status() {
 	case apc.LocOK:
-		if e.IsPresent() {
-			if e.IsVerChanged() {
-				return "version-changed"
-			}
+		if !e.IsPresent() {
+			return UnknownStatusVal
+		}
+		switch {
+		case e.IsVerChanged():
+			return fcyan("version-changed")
+		case e.IsVerRemoved():
+			return fred("deleted")
+		default:
 			return "ok"
 		}
-		return UnknownStatusVal
 	case apc.LocMisplacedNode:
 		return "misplaced(cluster)"
 	case apc.LocMisplacedMountpath:

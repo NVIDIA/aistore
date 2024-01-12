@@ -324,7 +324,7 @@ func (r *LsoXact) findToken(token string) uint {
 	if r.listRemote() && r.token == token {
 		return 0
 	}
-	return uint(sort.Search(len(r.lastPage), func(i int) bool { // TODO -- FIXME: revisit
+	return uint(sort.Search(len(r.lastPage), func(i int) bool { // TODO: revisit
 		return !cmn.TokenGreaterEQ(token, r.lastPage[i].Name)
 	}))
 }

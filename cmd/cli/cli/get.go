@@ -68,7 +68,7 @@ func getHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	if flagIsSet(c, latestVerFlag) && !bck.IsCloud() && !bck.IsRemoteAIS() {
+	if flagIsSet(c, latestVerFlag) && !bck.HasVersioningMD() {
 		return fmt.Errorf("option %s is incompatible with the specified bucket %s\n"+
 			"(tip: can only GET latest object's version from a bucket with Cloud or remote AIS backend)",
 			qflprn(latestVerFlag), bck.String())

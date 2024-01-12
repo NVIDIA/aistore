@@ -119,7 +119,7 @@ func (a *acli) runOnce(args []string) error {
 	}
 	if isStartingUp(err) {
 		for i := 0; i < 4; i++ {
-			time.Sleep(2 * time.Second)
+			briefPause(2)
 			fmt.Fprint(a.app.Writer, ". ")
 			if err = a.app.Run(args); err == nil {
 				fmt.Fprintln(a.app.Writer)
@@ -311,7 +311,7 @@ func (p *longRun) init(c *cli.Context, runOnce bool) {
 			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
 				n, p.count, n, countDefault)
 			actionWarn(c, warn)
-			time.Sleep(2 * time.Second)
+			briefPause(2)
 			p.count = countDefault
 		}
 	}

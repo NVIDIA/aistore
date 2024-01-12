@@ -61,6 +61,8 @@ func (be *LsoEntry) SetPresent()     { be.Flags |= apc.EntryIsCached }
 // see also: "latest-ver", QparamLatestVer, et al.
 func (be *LsoEntry) SetVerChanged()     { be.Flags |= apc.EntryVerChanged }
 func (be *LsoEntry) IsVerChanged() bool { return be.Flags&apc.EntryVerChanged != 0 }
+func (be *LsoEntry) SetVerRemoved()     { be.Flags |= apc.EntryVerRemoved }
+func (be *LsoEntry) IsVerRemoved() bool { return be.Flags&apc.EntryVerRemoved != 0 }
 
 func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }

@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -85,21 +86,38 @@ func (wi *walkInfo) match(lom *core.LOM) bool {
 	if !cmn.ObjHasPrefix(lom.ObjName, wi.msg.Prefix) {
 		return false
 	}
-	if wi.msg.ContinuationToken != "" && cmn.TokenGreaterEQ(wi.msg.ContinuationToken, lom.ObjName) {
-		return false
-	}
-	return true
+	return wi.msg.ContinuationToken == "" || !cmn.TokenGreaterEQ(wi.msg.ContinuationToken, lom.ObjName)
 }
 
-// new entry to be added to the listed page
+// new entry to be added to the listed page (note: slow path)
 func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEntry) {
 	e = &cmn.LsoEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+	if wi.msg.IsFlagSet(apc.LsVerChanged) {
+		checkRemoteMD(lom, e)
+	}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
 	}
 	wi.setWanted(e, lom)
 	wi.lomVisitedCb(lom)
 	return
+}
+
+// NOTE: slow path
+func checkRemoteMD(lom *core.LOM, e *cmn.LsoEntry) {
+	if !lom.Bucket().HasVersioningMD() {
+		debug.Assert(false, lom.Cname())
+		return
+	}
+	eq, errCode, err := lom.CheckRemoteMD(false /*locked*/, false /*sync*/)
+	switch {
+	case eq:
+		debug.AssertNoErr(err)
+	case cos.IsNotExist(err, errCode):
+		e.SetVerRemoved()
+	default:
+		e.SetVerChanged()
+	}
 }
 
 // Performs a number of syscalls to load object metadata.

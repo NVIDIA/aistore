@@ -1247,7 +1247,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			lstcx.tcomsg.TCBMsg = *tcbmsg
 			xid, err = lstcx.do()
 		} else {
-			nlog.Infoln("x-tcb:", bckFrom.String(), bckTo.String())
+			nlog.Infoln("x-tcb:", bckFrom.String(), "=>", bckTo.String())
 			xid, err = p.tcb(bckFrom, bckTo, msg, tcbmsg.DryRun)
 		}
 		if err != nil {

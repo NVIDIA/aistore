@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -263,7 +262,7 @@ func _currentLog(c *cli.Context) error {
 			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",
 				sname, nodeLogFlushName, config.Log.FlushTime)
 			actionWarn(c, warn)
-			time.Sleep(2 * time.Second)
+			briefPause(2)
 			fmt.Fprintln(c.App.Writer)
 		}
 	}

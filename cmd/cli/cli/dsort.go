@@ -203,7 +203,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 				_ = teb.Print(config, teb.PropValTmpl)
 			}
 		}
-		time.Sleep(time.Second / 2)
+		briefPause(1)
 		fmt.Fprintln(c.App.Writer)
 	}
 

@@ -106,11 +106,11 @@ remote:
 
 // NOTE:
 // - [PRECONDITION]: `versioning.validate_warm_get` || QparamLatestVer
-// - caller must take wlock _or_ rlock
+// - [Sync] when Sync option is used (both, via bucket configuration and/or `sync` argument) caller MUST take wlock or rlock
 // - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
-func (lom *LOM) CheckRemoteMD(rlocked, sync bool) (bool, int, error) {
+func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
 	bck := lom.Bck()
-	if !bck.IsCloud() && !bck.IsRemoteAIS() {
+	if !bck.HasVersioningMD() {
 		// nothing to do with: in-cluster ais:// bucket, or a remote one
 		// that doesn't provide any versioning metadata
 		return true, 0, nil
@@ -125,10 +125,14 @@ func (lom *LOM) CheckRemoteMD(rlocked, sync bool) (bool, int, error) {
 	if errCode == http.StatusNotFound {
 		err = cos.NewErrNotFound(T, lom.Cname())
 	}
+	if !locked {
+		// return info (neq and, possibly, not-found), and be done
+		return false, errCode, err
+	}
 
 	// rm remotely-deleted
 	if cos.IsNotExist(err, errCode) && (lom.VersionConf().Sync || sync) {
-		errDel := lom.Remove(rlocked /*force through rlock*/)
+		errDel := lom.Remove(locked /*force through rlock*/)
 		if errDel != nil {
 			errCode, err = 0, errDel
 		} else {

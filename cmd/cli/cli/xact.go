@@ -87,7 +87,7 @@ func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr
 	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 		// 2nd attempt assuming xaction in question `IdlesBeforeFinishing`
-		time.Sleep(time.Second)
+		briefPause(1)
 		xs, err := queryXactions(&xargs)
 		if err != nil {
 			rerr = err

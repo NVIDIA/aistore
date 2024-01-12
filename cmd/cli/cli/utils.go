@@ -134,6 +134,10 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 	return closestName, minDist
 }
 
+func briefPause(seconds time.Duration) {
+	time.Sleep(seconds * time.Second) //nolint:durationcheck // false positive
+}
+
 // Get config from a random target.
 func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
 	smap, err := getClusterMap(c)

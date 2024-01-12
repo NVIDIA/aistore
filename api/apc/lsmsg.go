@@ -1,6 +1,6 @@
 // Package apc: API messages and constants
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -72,7 +72,10 @@ const (
 	// - when listing remote bucket, call backend (`Backend()`) to list non-recursively
 	LsNoRecursion
 
-	// For remote buckets: check for 'version-changed'
+	// For remote metadata-capable buckets (ie., bck.HasVersioningMD() == true):
+	// - check whether remote version exists,
+	// and if it does:
+	// - check whether remote version differs from its in-cluster copy
 	LsVerChanged
 )
 
@@ -95,7 +98,8 @@ const (
 	EntryInArch     = 1 << (EntryStatusBits + 2)
 	EntryIsDir      = 1 << (EntryStatusBits + 3)
 	EntryIsArchive  = 1 << (EntryStatusBits + 4)
-	EntryVerChanged = 1 << (EntryStatusBits + 5) // (see also: QparamLatestVer, et al.)
+	EntryVerChanged = 1 << (EntryStatusBits + 5) // see also: QparamLatestVer, et al.
+	EntryVerRemoved = 1 << (EntryStatusBits + 6) // ditto
 )
 
 // ObjEntry.Flags field
