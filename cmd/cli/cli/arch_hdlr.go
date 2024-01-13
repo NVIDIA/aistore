@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS objects.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -51,7 +51,7 @@ var (
 		commandBucket: {
 			archAppendOrPutFlag,
 			continueOnErrorFlag,
-			dontHeadBucketFlag,
+			dontHeadSrcDstBucketsFlag,
 			dryRunFlag,
 			listFlag,
 			templateFlag,
@@ -215,7 +215,7 @@ func archMultiObjHandler(c *cli.Context) error {
 	if err := a.parse(c); err != nil {
 		return err
 	}
-	// api msg
+	// control msg
 	msg := cmn.ArchiveBckMsg{ToBck: a.dst.bck}
 	{
 		msg.ArchName = a.dst.oname
@@ -234,7 +234,7 @@ func archMultiObjHandler(c *cli.Context) error {
 		fmt.Fprintf(c.App.Writer, "archive %s/{%s} as %q\n", a.rsrc.bck, what, a.dest())
 		return nil
 	}
-	if !flagIsSet(c, dontHeadBucketFlag) {
+	if !flagIsSet(c, dontHeadSrcDstBucketsFlag) {
 		if _, err := headBucket(a.rsrc.bck, false /* don't add */); err != nil {
 			return err
 		}

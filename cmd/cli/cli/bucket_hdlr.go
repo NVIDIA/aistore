@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS buckets.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -21,7 +21,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var examplesBckSetProps = `
+const examplesBckSetProps = `
 Usage examples:
 - ais bucket props set BUCKET checksum.type=xxhash
 - ais bucket props set BUCKET checksum.type=md5 checksum.validate_warm_get=true
@@ -30,6 +30,30 @@ Usage examples:
 - ais bucket props set BUCKET backend_bck=none	# to reset
   (see docs/cli for details)
 `
+
+var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
+	indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
+	indent1 + "\t* ais ls ais://abc -props all \t- same as above but include all properties;\n" +
+	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list a very large bucket (20 items in each page), report progress every 3s;\n" +
+	indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
+	indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in the cluster;\n" +
+	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets, both in-cluster and remote;\n" +
+	indent1 + "with template, regex, and/or prefix:\n" +
+	indent1 + "\t* ais ls gs: --regex \"^abc\" --all \t- list all accessible GCP buckets with names starting with \"abc\";\n" +
+	indent1 + "\t* ais ls ais://abc --regex \".md\" --props size,checksum \t- list *.md objects with their respective sizes and checksums;\n" +
+	indent1 + "\t* ais ls gs://abc --template images/\t- list all objects from the virtual subdirectory called \"images\";\n" +
+	indent1 + "\t* ais ls gs://abc --prefix images/\t- same as above (for more examples, see '--template' below);\n" +
+	indent1 + "with in-cluster vs remote content comparison (diff):\n" +
+	indent1 + "\t* ais ls s3://abc --check-versions         \t- for each remote object in s3://abc: check whether it has identical in-cluster copy\n" +
+	indent1 + "\t                                           \t  and show missing objects\n" +
+	indent1 + "\t* ais ls s3://abc --check-versions --cached\t- for each in-cluster object in s3://abc: check whether it has identical remote copy\n" +
+	indent1 + "\t                                           \t  and show deleted objects\n" +
+	indent1 + "with summary (stats):\n" +
+	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket in the cluster: print object numbers and total size(s);\n" +
+	indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_\n" +
+	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to cluster's BMD"
 
 var (
 	// flags
@@ -114,24 +138,8 @@ var (
 
 	// commands
 	bucketsObjectsCmdList = cli.Command{
-		Name: commandList,
-		Usage: "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
-			indent1 + "e.g.:\n" +
-			indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
-			indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
-			indent1 + "\t* ais ls ais://abc -props all \t- same as above but include all properties;\n" +
-			indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list a very large bucket (20 items in each page), report progress every 3s;\n" +
-			indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
-			indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in the cluster;\n" +
-			indent1 + "with template, regex, and/or prefix:\n" +
-			indent1 + "\t* ais ls gs: --regex \"^abc\" --all \t- list all accessible GCP buckets with names starting with \"abc\";\n" +
-			indent1 + "\t* ais ls ais://abc --regex \".md\" --props size,checksum \t- list *.md objects with their respective sizes and checksums;\n" +
-			indent1 + "\t* ais ls gs://abc --template images/\t- list all objects from the virtual subdirectory called \"images\";\n" +
-			indent1 + "\t* ais ls gs://abc --prefix images/\t- same as above (for more examples, see '--template' below);\n" +
-			indent1 + "and more:\n" +
-			indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket in the cluster: print object numbers and total size(s);\n" +
-			indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_\n" +
-			indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to cluster's BMD",
+		Name:         commandList,
+		Usage:        listAnyUsage,
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
 		Action:       listAnyHandler,
@@ -171,8 +179,15 @@ var (
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
 	bucketCmdCopy = cli.Command{
-		Name:         commandCopy,
-		Usage:        "copy entire bucket or selected objects (to select multiple, use '--list', '--template', or '--prefix')",
+		Name: commandCopy,
+		Usage: "copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'), e.g.:\n" +
+			indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
+			indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy entire Cloud bucket that may not be _present_ in the cluster;\n" +
+			indent1 + "\t- 'ais cp s3://abc gs://xyz --all'\t- copy Cloud bucket to another Cloud;\n" +
+			indent1 + "\t- 'ais cp s3://abc ais://nnn --latest'\t- copy Cloud bucket, and make sure that already present in-cluster copies are updated to the latest (remote) versions;\n" +
+			indent1 + "\t- 'ais cp s3://abc ais://nnn --sync'\t- same as above, but in addition delete in-cluster copies that do not exist (any longer) in the source bucket\n" +
+			indent1 + "with template, prefix, and/or progress bar:\n" +
+			indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens'",
 		ArgsUsage:    bucketObjectSrcArgument + " " + bucketDstArgument,
 		Flags:        bucketCmdsFlags[commandCopy],
 		Action:       copyBucketHandler,

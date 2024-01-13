@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 
 // AIS loader (aisloader) is a tool to measure storage performance. It's a load

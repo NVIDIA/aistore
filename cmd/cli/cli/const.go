@@ -707,9 +707,9 @@ var (
 		Usage: "show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
 	}
 
-	dontHeadBucketFlag = cli.BoolFlag{
+	dontHeadSrcDstBucketsFlag = cli.BoolFlag{
 		Name:  "skip-lookup",
-		Usage: "skip checking bucket(s) existence (trading off extra lookup for performance)\n",
+		Usage: "skip checking source and destination buckets' existence (trading off extra lookup for performance)\n",
 	}
 	dontHeadRemoteFlag = cli.BoolFlag{
 		Name: "skip-lookup",
