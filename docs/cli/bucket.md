@@ -644,7 +644,9 @@ NAME:
      - 'ais cp s3://abc ais://nnn --latest'   - copy Cloud bucket, and make sure that already present in-cluster copies are updated to the latest (remote) versions;
      - 'ais cp s3://abc ais://nnn --sync'     - same as above, but in addition delete in-cluster copies that do not exist (any longer) in the source bucket
    with template, prefix, and/or progress bar:
-     - 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'  - show progress while copying virtual subdirectory 'd-tokens'
+     - 'ais cp ais://nnn/111 ais://mmm'                                                           - copy a single object (assuming, prefix '111' corresponds to a single object);
+     - 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'  - copy up to 1000 objects that share the specified prefix;
+     - 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'                 - show progress while copying virtual subdirectory 'd-tokens'
 
 USAGE:
    ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET
