@@ -27,7 +27,7 @@ import (
 // walk all or selected buckets, one at a time
 
 const (
-	throttleNumObjects = 16 // unit of self-throttling
+	throttleNumObjects = 64 // unit of self-throttling
 )
 
 type LoadType int

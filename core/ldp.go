@@ -106,7 +106,7 @@ remote:
 
 // NOTE:
 // - [PRECONDITION]: `versioning.validate_warm_get` || QparamLatestVer
-// - [Sync] when Sync option is used (both, via bucket configuration and/or `sync` argument) caller MUST take wlock or rlock
+// - [Sync] when Sync option is used (via bucket config and/or `sync` argument) caller MUST take wlock or rlock
 // - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
 func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
 	bck := lom.Bck()

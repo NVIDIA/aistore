@@ -1107,7 +1107,10 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bucket string) {
-	const warn = "%s: destination %s doesn't exist and will be created with the %s (source bucket) props"
+	const (
+		warnDstNotExist = "%s: destination %s doesn't exist and will be created with the %s (source bucket) props"
+		errPrependSync  = "prepend option (%q) is incompatible with the request to synchronize buckets"
+	)
 	var (
 		query    = r.URL.Query()
 		bck, err = newBckFromQ(bucket, query, nil)
@@ -1204,6 +1207,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				return
 			}
 		}
+		if tcbmsg.Sync && tcbmsg.Prepend != "" {
+			p.writeErrf(w, r, errPrependSync, tcbmsg.Prepend)
+			return
+		}
 		bckTo, err = newBckFromQuname(query, true /*required*/)
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -1228,7 +1235,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 				return
 			}
-			nlog.Infof(warn, p, bckTo, bckFrom)
+			nlog.Infof(warnDstNotExist, p, bckTo, bckFrom)
 		}
 
 		// start x-tcb or x-tco
@@ -1265,6 +1272,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
+		if tcomsg.Sync && tcomsg.Prepend != "" {
+			p.writeErrf(w, r, errPrependSync, tcomsg.Prepend)
+			return
+		}
 		bckTo = meta.CloneBck(&tcomsg.ToBck)
 
 		if bck.Equal(bckTo, true, true) {
@@ -1287,7 +1298,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 					return
 				}
-				nlog.Infof(warn, p, bckTo, bck)
+				nlog.Infof(warnDstNotExist, p, bckTo, bck)
 			}
 		}
 

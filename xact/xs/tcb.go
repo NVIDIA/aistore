@@ -5,6 +5,7 @@
 package xs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -41,8 +42,13 @@ type (
 		dm     *bundle.DataMover
 		rxlast atomic.Int64 // finishing
 		xact.BckJog
-		wg   sync.WaitGroup // starting up
-		refc atomic.Int32   // finishing
+		sync struct {
+			jgroup *mpather.Jgroup
+			same   bool
+		}
+		nam, str string
+		wg       sync.WaitGroup // starting up
+		refc     atomic.Int32   // finishing
 	}
 )
 
@@ -147,22 +153,46 @@ func (r *XactTCB) TxnAbort(err error) {
 }
 
 func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
-	var parallel int
 	r = &XactTCB{p: p}
+
+	s1, s2 := r._str(), r.p.args.BckFrom.String()
+	r.nam = r.Base.Name() + " <= " + s2 + s1
+	r.str = r.Base.String() + " <= " + s2 + s1
+
+	var parallel int
 	if p.kind == apc.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
-		VisitObj: r.copyObject,
+		VisitObj: r.do,
 		Prefix:   p.args.Msg.Prefix,
 		Slab:     slab,
 		Parallel: parallel,
 		DoLoad:   mpather.Load,
-		Throttle: true, // NOTE: always trottling
+		Throttle: true, // always trottling
 	}
 	mpopts.Bck.Copy(p.args.BckFrom.Bucket())
 	r.BckJog.Init(p.UUID(), p.kind, p.args.BckTo, mpopts, config)
+
+	if !p.args.Msg.Sync {
+		return
+	}
+	// sync
+	debug.Assert(p.args.BckFrom.HasVersioningMD(), p.args.BckFrom.String())
+	debug.Assert(p.args.Msg.Prepend == "", p.args.Msg.Prepend) // validated @(cli, p)
+	rmopts := &mpather.JgroupOpts{
+		CTs:      []string{fs.ObjectType},
+		VisitObj: r.rmDeleted,
+		Prefix:   p.args.Msg.Prefix,
+		Parallel: parallel,
+		// DoLoad:  noLoad
+	}
+	rmopts.Bck.Copy(p.args.BckTo.Bucket())
+	{
+		r.sync.jgroup = mpather.NewJoggerGroup(rmopts, r.BckJog.Config, "")
+		r.sync.same = p.args.BckTo.Equal(p.args.BckFrom, true, true)
+	}
 	return
 }
 
@@ -178,6 +208,9 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.wg.Done()
 
 	r.BckJog.Run()
+	if r.p.args.Msg.Sync {
+		r.sync.jgroup.Run() // NOTE the 2nd jgroup
+	}
 	nlog.Infoln(r.Name())
 
 	err := r.BckJog.Wait()
@@ -196,7 +229,32 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.dm.Close(err)
 		r.dm.UnregRecv()
 	}
+	if r.p.args.Msg.Sync {
+		if err := r.AbortErr(); err != nil {
+			r.sync.jgroup.Stop()
+		} else {
+			// wait for: r.sync.jgroup || aborted
+			ticker := time.NewTicker(cmn.Rom.MaxKeepalive())
+			r.waitSync(ticker)
+			ticker.Stop()
+		}
+	}
 	r.Finish()
+}
+
+func (r *XactTCB) waitSync(ticker *time.Ticker) {
+	for {
+		select {
+		case <-ticker.C:
+			if r.IsAborted() {
+				r.sync.jgroup.Stop()
+				return
+			}
+		case <-r.sync.jgroup.ListenFinished():
+			r.sync.jgroup.Stop()
+			return
+		}
+	}
 }
 
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
@@ -222,13 +280,13 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	return core.QuiInactiveCB
 }
 
-func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
+func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 	var (
 		args   = r.p.args // TCBArgs
 		toName = args.Msg.ToName(lom.ObjName)
 	)
-	if cmn.Rom.FastV(5, cos.SmoduleMirror) {
-		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
 	}
 	coiParams := core.AllocCOI()
 	{
@@ -245,12 +303,15 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 	}
 	_, err = core.T.CopyObject(lom, r.dm, coiParams)
 	core.FreeCOI(coiParams)
-	if err != nil {
-		if cos.IsErrOOS(err) {
-			r.Abort(err)
-		} else {
-			r.AddErr(err, 5, cos.SmoduleMirror)
-		}
+	switch {
+	case err == nil:
+		// do nothing
+	case cos.IsNotExist(err, 0):
+		// ditto
+	case cos.IsErrOOS(err):
+		r.Abort(err)
+	default:
+		r.AddErr(err, 5, cos.SmoduleXs)
 	}
 	return
 }
@@ -331,15 +392,8 @@ func (r *XactTCB) _str() (s string) {
 	return s
 }
 
-func (r *XactTCB) String() string {
-	s := r._str()
-	return fmt.Sprintf("%s <= %s%s", r.Base.String(), r.p.args.BckFrom.String(), s)
-}
-
-func (r *XactTCB) Name() string {
-	s := r._str()
-	return fmt.Sprintf("%s <= %s%s", r.Base.Name(), r.p.args.BckFrom.String(), s)
-}
+func (r *XactTCB) String() string { return r.str }
+func (r *XactTCB) Name() string   { return r.nam }
 
 func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.p.args.BckFrom, r.p.args.BckTo
@@ -353,4 +407,47 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return
+}
+
+// TODO -- FIXME: use probabilistic filtering to skip received and locally copied obj-s (see `reb.FilterAdd` et al)
+
+func (r *XactTCB) rmDeleted(dst *core.LOM, _ []byte) error {
+	var src *core.LOM
+	debug.Assert(r.p.args.Msg.Sync)
+
+	// construct src lom
+	if r.sync.same {
+		src = dst
+	} else {
+		src = core.AllocLOM(dst.ObjName)
+		if src.InitBck(r.p.args.BckFrom.Bucket()) != nil {
+			core.FreeLOM(src)
+			return nil
+		}
+	}
+	_, errCode, err := core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
+	if !r.sync.same {
+		core.FreeLOM(src)
+	}
+	if err == nil || !cos.IsNotExist(err, errCode) {
+		return nil
+	}
+	// source does not exist: try to remove the destination (as per Msg.Sync)
+	if !dst.TryLock(true) {
+		return nil
+	}
+	err = dst.Load(false, true)
+	if err == nil {
+		err = dst.Remove()
+	}
+	dst.Unlock(true)
+
+	if err == nil {
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			nlog.Infoln(r.Base.Name()+": Sync: removed-deleted", dst.Cname())
+		}
+	} else if !cmn.IsErrObjNought(err) && !cmn.IsErrBucketNought(err) {
+		r.AddErr(err, 4, cos.SmoduleXs)
+	}
+	return nil
 }

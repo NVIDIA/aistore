@@ -120,7 +120,7 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 		}
 		if dryRun {
-			// TODO -- FIXME: show object names with destinations, make the output consistent with etl dry-run
+			// TODO: show object names with destinations, make the output consistent with etl dry-run
 			dryRunCptn(c)
 			actionDone(c, text2+" the entire bucket")
 		}
@@ -135,20 +135,37 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		listObjs = objName // NOTE: "pure" prefix comment in parseObjListTemplate (above)
 	}
 	if dryRun {
-		var msg string
+		var prompt string
 		if listObjs != "" {
-			msg = fmt.Sprintf("%s %q ...\n", text2, listObjs)
+			prompt = fmt.Sprintf("%s %q ...\n", text2, listObjs)
 		} else {
-			msg = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, tmplObjs)
+			prompt = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, tmplObjs)
 		}
-		dryRunCptn(c) // TODO -- FIXME: ditto
-		actionDone(c, msg)
+		dryRunCptn(c) // TODO: ditto
+		actionDone(c, prompt)
 	}
 	return runTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
 }
 
+func _iniCopyBckMsg(c *cli.Context, msg *apc.CopyBckMsg) (err error) {
+	{
+		msg.Prepend = parseStrFlag(c, copyPrependFlag)
+		msg.Prefix = parseStrFlag(c, verbObjPrefixFlag)
+		msg.DryRun = flagIsSet(c, copyDryRunFlag)
+		msg.Force = flagIsSet(c, forceFlag)
+		msg.LatestVer = flagIsSet(c, latestVerFlag)
+		msg.Sync = flagIsSet(c, syncFlag)
+	}
+	if msg.Sync && msg.Prepend != "" {
+		err = fmt.Errorf("prepend option (%q) is incompatible with %s (the latter requires identical source/destination naming)",
+			msg.Prepend, qflprn(progressFlag))
+	}
+	return err
+}
+
 func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
 	var (
+		msg          apc.CopyBckMsg
 		showProgress = flagIsSet(c, progressFlag)
 		from, to     = bckFrom.Cname(""), bckTo.Cname("")
 	)
@@ -158,13 +175,8 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 		showProgress = false
 	}
 	// copy: with/wo progress/wait
-	msg := &apc.CopyBckMsg{
-		Prepend:   parseStrFlag(c, copyPrependFlag),
-		Prefix:    parseStrFlag(c, verbObjPrefixFlag),
-		DryRun:    flagIsSet(c, copyDryRunFlag),
-		Force:     flagIsSet(c, forceFlag),
-		LatestVer: flagIsSet(c, latestVerFlag),
-		Sync:      flagIsSet(c, syncFlag),
+	if err := _iniCopyBckMsg(c, &msg); err != nil {
+		return err
 	}
 
 	// by default, copying objects in the cluster, with an option to override
@@ -178,10 +190,10 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 		var cpr cprCtx
 		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
 		cpr.from, cpr.to = bckFrom.Cname(""), bckTo.Cname("")
-		return cpr.copyBucket(c, bckFrom, bckTo, msg, fltPresence)
+		return cpr.copyBucket(c, bckFrom, bckTo, &msg, fltPresence)
 	}
 
-	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, msg, fltPresence)
+	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, &msg, fltPresence)
 	if err != nil {
 		return V(err)
 	}
@@ -240,16 +252,11 @@ func etlBucketHandler(c *cli.Context) error {
 }
 
 func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
-	msg := &apc.TCBMsg{
+	var msg = apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
-		CopyBckMsg: apc.CopyBckMsg{
-			Prepend:   parseStrFlag(c, copyPrependFlag),
-			Prefix:    parseStrFlag(c, verbObjPrefixFlag),
-			DryRun:    flagIsSet(c, copyDryRunFlag),
-			Force:     flagIsSet(c, forceFlag),
-			LatestVer: flagIsSet(c, latestVerFlag),
-			Sync:      flagIsSet(c, syncFlag),
-		},
+	}
+	if err := _iniCopyBckMsg(c, &msg.CopyBckMsg); err != nil {
+		return err
 	}
 	if flagIsSet(c, etlExtFlag) {
 		mapStr := parseStrFlag(c, etlExtFlag)
@@ -280,7 +287,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 		fltPresence = apc.FltExists
 	}
 
-	xid, err := api.ETLBucket(apiBP, bckFrom, bckTo, msg, fltPresence)
+	xid, err := api.ETLBucket(apiBP, bckFrom, bckTo, &msg, fltPresence)
 	if errV := handleETLHTTPError(err, etlName); errV != nil {
 		return errV
 	}

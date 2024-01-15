@@ -391,7 +391,7 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error)
 // otherwise, try Rlock temporarily _if and only when_ reading from fs
 //
 // (compare w/ LoadUnsafe() below)
-func (lom *LOM) Load(cacheit, locked bool) (err error) {
+func (lom *LOM) Load(cacheit, locked bool) error {
 	var (
 		lcache, lmd = lom.fromCache()
 		bmd         = T.Bowner().Get()
@@ -399,32 +399,30 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	// fast path
 	if lmd != nil {
 		lom.md = *lmd
-		err = lom._checkBucket(bmd)
-		return
+		return lom._checkBucket(bmd)
 	}
+
 	// slow path
 	if !locked && lom.TryLock(false) {
 		defer lom.Unlock(false)
 	}
-	err = lom.FromFS()
-	if err != nil {
-		return
+	if err := lom.FromFS(); err != nil {
+		return err
 	}
 	bid := lom.Bprops().BID
 	debug.Assert(bid != 0, lom.Cname())
 	if bid == 0 {
-		return
+		return nil
 	}
 	lom.md.bckID = bid
-	err = lom._checkBucket(bmd)
-	if err != nil {
-		return
+	if err := lom._checkBucket(bmd); err != nil {
+		return err
 	}
 	if cacheit && lcache != nil {
 		md := lom.md
 		lcache.Store(lom.digest, &md)
 	}
-	return
+	return nil
 }
 
 func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {

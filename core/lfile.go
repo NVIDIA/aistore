@@ -62,7 +62,7 @@ func (lom *LOM) Remove(force ...bool) (err error) {
 		}
 	}
 	lom.md.bckID = 0
-	return
+	return err
 }
 
 // (compare with cos.Rename)
