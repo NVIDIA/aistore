@@ -25,13 +25,14 @@ func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts, 
 func (r *BckJog) Run() { r.joggers.Run() }
 
 func (r *BckJog) Wait() error {
-	for {
-		select {
-		case errCause := <-r.ChanAbort():
-			r.joggers.Stop()
-			return cmn.NewErrAborted(r.Name(), "x-bck-jog", errCause)
-		case <-r.joggers.ListenFinished():
-			return r.joggers.Stop()
+	select {
+	case errCause := <-r.ChanAbort():
+		r.joggers.Stop()
+		if cmn.IsErrAborted(errCause) {
+			return errCause
 		}
+		return cmn.NewErrAborted(r.Name(), "x-bck-jog", errCause)
+	case <-r.joggers.ListenFinished():
+		return r.joggers.Stop()
 	}
 }

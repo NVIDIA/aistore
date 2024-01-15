@@ -105,9 +105,9 @@ func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
 
 func (xctn *Base) IsAborted() bool { return xctn.abort.done.Load() }
 
-func (xctn *Base) AbortErr() (err error) {
+func (xctn *Base) AbortErr() error {
 	if !xctn.IsAborted() {
-		return
+		return nil
 	}
 	// (is aborted)
 	// normally, is expected to return `abort.err` without any sleep
@@ -121,7 +121,7 @@ func (xctn *Base) AbortErr() (err error) {
 		}
 		time.Sleep(sleep)
 	}
-	return
+	return cmn.NewErrAborted(xctn.Name(), "base.abort-err.timeout", nil)
 }
 
 func (xctn *Base) AbortedAfter(d time.Duration) (err error) {

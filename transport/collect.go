@@ -9,6 +9,7 @@ import (
 	"container/heap"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -25,6 +26,7 @@ type (
 		stopCh  cos.StopCh
 		ctrlCh  chan ctrl
 		heap    []*streamBase
+		none    atomic.Bool // no streams
 	}
 )
 
@@ -42,21 +44,24 @@ var _ cos.Runner = (*StreamCollector)(nil)
 // 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
 // 3. deactivates idle streams
 
-func (*StreamCollector) Name() string { return "stream_collector" }
+func (*StreamCollector) Name() string { return "stream-collector" }
 
-func (sc *StreamCollector) Run() (err error) {
+func (sc *StreamCollector) Run() error {
 	cos.Infof("Intra-cluster networking: %s client", whichClient())
 	cos.Infof("Starting %s", sc.Name())
-	return gc.run()
+	gc.ticker = time.NewTicker(dfltTickIdle)
+	gc.none.Store(true)
+	gc.run()
+	gc.ticker.Stop()
+	return nil
 }
 
 func (sc *StreamCollector) Stop(err error) {
-	nlog.Infof("Stopping %s, err: %v", sc.Name(), err)
+	nlog.Infoln("Stopping", sc.Name(), "err:", err)
 	gc.stop()
 }
 
-func (gc *collector) run() (err error) {
-	gc.ticker = time.NewTicker(dfltTick)
+func (gc *collector) run() {
 	for {
 		select {
 		case <-gc.ticker.C:
@@ -71,6 +76,9 @@ func (gc *collector) run() (err error) {
 				debug.Assert(!ok, s.lid)
 				gc.streams[s.lid] = s
 				heap.Push(gc, s)
+				if gc.none.CAS(true, false) {
+					gc.ticker.Reset(dfltTick)
+				}
 			} else if ok {
 				heap.Remove(gc, s.time.index)
 				s.time.ticks = 1
@@ -144,6 +152,11 @@ func (gc *collector) do() {
 			s.time.ticks--
 			if s.time.ticks <= 0 {
 				delete(gc.streams, lid)
+				if len(gc.streams) == 0 {
+					gc.ticker.Reset(dfltTickIdle)
+					debug.Assert(gc.none.Load())
+					gc.none.Store(true)
+				}
 				s.streamer.closeAndFree()
 				s.streamer.abortPending(err, true /*completions*/)
 			}

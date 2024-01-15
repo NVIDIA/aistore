@@ -21,6 +21,7 @@ import (
 const (
 	dfltBurstNum     = 128 // burst size (see: config.Transport.Burst)
 	dfltTick         = time.Second
+	dfltTickIdle     = dfltTick << 8   // (when there are no streams to _collect_)
 	dfltIdleTeardown = 4 * time.Second // (see config.Transport.IdleTeardown)
 )
 
