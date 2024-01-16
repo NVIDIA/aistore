@@ -485,7 +485,7 @@ func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 		v = c.ValidateColdGet
 	case cmn.OwtGetPrefetchLock:
 	default:
-		debug.Assert(false)
+		debug.Assert(false, poi.owt)
 	}
 	return
 }
@@ -1379,9 +1379,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 		poi.cksumToUse = oah.Checksum()
 	}
 	switch {
-	case coi.Sync:
-		poi.owt = cmn.OwtSyncRemote
-	case dm != nil:
+	case dm != nil && dm.OWT() != cmn.OwtNone:
 		poi.owt = dm.OWT()
 	default:
 		poi.owt = cmn.OwtMigrateRepl

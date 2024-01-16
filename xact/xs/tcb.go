@@ -1,11 +1,11 @@
-// Package mirror provides local mirroring and replica management
+// Package xs is a collection of eXtended actions (xactions), including multi-object
+// operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -42,10 +42,7 @@ type (
 		dm     *bundle.DataMover
 		rxlast atomic.Int64 // finishing
 		xact.BckJog
-		sync struct {
-			jgroup *mpather.Jgroup
-			same   bool
-		}
+		prune    prune
 		nam, str string
 		wg       sync.WaitGroup // starting up
 		refc     atomic.Int32   // finishing
@@ -107,7 +104,7 @@ func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, cmn.OwtPut, dmExtra)
+	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, cmn.OwtNone /* pass via coi */, dmExtra)
 	if err != nil {
 		return err
 	}
@@ -175,23 +172,15 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
 	mpopts.Bck.Copy(p.args.BckFrom.Bucket())
 	r.BckJog.Init(p.UUID(), p.kind, p.args.BckTo, mpopts, config)
 
-	if !p.args.Msg.Sync {
-		return
-	}
-	// sync
-	debug.Assert(p.args.BckFrom.HasVersioningMD(), p.args.BckFrom.String())
-	debug.Assert(p.args.Msg.Prepend == "", p.args.Msg.Prepend) // validated @(cli, p)
-	rmopts := &mpather.JgroupOpts{
-		CTs:      []string{fs.ObjectType},
-		VisitObj: r.rmDeleted,
-		Prefix:   p.args.Msg.Prefix,
-		Parallel: parallel,
-		// DoLoad:  noLoad
-	}
-	rmopts.Bck.Copy(p.args.BckTo.Bucket())
-	{
-		r.sync.jgroup = mpather.NewJoggerGroup(rmopts, r.BckJog.Config, "")
-		r.sync.same = p.args.BckTo.Equal(p.args.BckFrom, true, true)
+	if p.args.Msg.Sync {
+		debug.Assert(p.args.Msg.Prepend == "", p.args.Msg.Prepend) // validated (cli, P)
+		{
+			r.prune.parent = r
+			r.prune.bckFrom = p.args.BckFrom
+			r.prune.bckTo = p.args.BckTo
+			r.prune.prefix = p.args.Msg.Prefix
+		}
+		r.prune.init(config)
 	}
 	return
 }
@@ -209,7 +198,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 	r.BckJog.Run()
 	if r.p.args.Msg.Sync {
-		r.sync.jgroup.Run() // NOTE the 2nd jgroup
+		r.prune.run() // the 2nd jgroup
 	}
 	nlog.Infoln(r.Name())
 
@@ -230,31 +219,9 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.dm.UnregRecv()
 	}
 	if r.p.args.Msg.Sync {
-		if err := r.AbortErr(); err != nil {
-			r.sync.jgroup.Stop()
-		} else {
-			// wait for: r.sync.jgroup || aborted
-			ticker := time.NewTicker(cmn.Rom.MaxKeepalive())
-			r.waitSync(ticker)
-			ticker.Stop()
-		}
+		r.prune.wait()
 	}
 	r.Finish()
-}
-
-func (r *XactTCB) waitSync(ticker *time.Ticker) {
-	for {
-		select {
-		case <-ticker.C:
-			if r.IsAborted() {
-				r.sync.jgroup.Stop()
-				return
-			}
-		case <-r.sync.jgroup.ListenFinished():
-			r.sync.jgroup.Stop()
-			return
-		}
-	}
 }
 
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
@@ -407,47 +374,4 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return
-}
-
-// TODO -- FIXME: use probabilistic filtering to skip received and locally copied obj-s (see `reb.FilterAdd` et al)
-
-func (r *XactTCB) rmDeleted(dst *core.LOM, _ []byte) error {
-	var src *core.LOM
-	debug.Assert(r.p.args.Msg.Sync)
-
-	// construct src lom
-	if r.sync.same {
-		src = dst
-	} else {
-		src = core.AllocLOM(dst.ObjName)
-		if src.InitBck(r.p.args.BckFrom.Bucket()) != nil {
-			core.FreeLOM(src)
-			return nil
-		}
-	}
-	_, errCode, err := core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
-	if !r.sync.same {
-		core.FreeLOM(src)
-	}
-	if err == nil || !cos.IsNotExist(err, errCode) {
-		return nil
-	}
-	// source does not exist: try to remove the destination (as per Msg.Sync)
-	if !dst.TryLock(true) {
-		return nil
-	}
-	err = dst.Load(false, true)
-	if err == nil {
-		err = dst.Remove()
-	}
-	dst.Unlock(true)
-
-	if err == nil {
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infoln(r.Base.Name()+": Sync: removed-deleted", dst.Cname())
-		}
-	} else if !cmn.IsErrObjNought(err) && !cmn.IsErrBucketNought(err) {
-		r.AddErr(err, 4, cos.SmoduleXs)
-	}
-	return nil
 }

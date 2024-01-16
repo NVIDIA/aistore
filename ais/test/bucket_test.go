@@ -2583,6 +2583,91 @@ func TestCopyBucket(t *testing.T) {
 	}
 }
 
+func TestCopyBucketSync(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long:                  true,
+		RemoteBck:             true,
+		Bck:                   cliBck,
+		RequiresRemoteCluster: true, // NOTE: utilizing remote cluster to simulate out-of-band delete
+	})
+	var (
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      500,
+			fileSize: 128,
+			prefix:   trand.String(6) + "-",
+		}
+		baseParams = tools.BaseAPIParams()
+	)
+
+	m.init(true /*cleanup*/)
+
+	// 1. PUT(num-objs) => cliBck
+	m.puts()
+	tassert.Errorf(t, len(m.objNames) == m.num, "expected %d in the source bucket, got %d", m.num, len(m.objNames))
+
+	tlog.Logf("list source %s objects\n", cliBck.Cname(""))
+	msg := &apc.LsoMsg{Prefix: m.prefix, Flags: apc.LsObjCached}
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(lst.Entries) == m.num, "expected %d present (cached) in the source bucket, got %d", m.num, len(lst.Entries))
+
+	// 2. copy cliBck => dstBck
+	dstBck := cmn.Bck{Name: "dst-" + cos.GenTie(), Provider: apc.AIS}
+	tlog.Logf("first copy %s => %s\n", m.bck.Cname(""), dstBck.Cname(""))
+	xid, err := api.CopyBucket(baseParams, m.bck, dstBck, &apc.CopyBckMsg{})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	tlog.Logf("list destination %s objects\n", dstBck.Cname(""))
+	lst, err = api.ListObjects(baseParams, dstBck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(lst.Entries) == m.num, "expected %d in the destination bucket, got %d", m.num, len(lst.Entries))
+
+	// 3. select random 10% to delete
+	num2del := max(m.num/10, 1)
+	nam2del := make([]string, 0, num2del)
+	strtpos := rand.Intn(m.num)
+	for i := 0; i < num2del; i++ {
+		pos := (strtpos + i*3) % m.num
+		name := m.objNames[pos]
+		for cos.StringInSlice(name, nam2del) {
+			pos++
+			name = m.objNames[pos%m.num]
+		}
+		nam2del = append(nam2del, name)
+	}
+
+	// 4. use remais to out-of-band delete nam2del...
+	tlog.Logf("use remote cluster '%s' to out-of-band delete %d objects from %s (source)\n",
+		tools.RemoteCluster.Alias, len(nam2del), m.bck.Cname(""))
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+	for _, name := range nam2del {
+		err := api.DeleteObject(remoteBP, cliBck, name)
+		tassert.CheckFatal(t, err)
+	}
+
+	// 5. copy --sync (and note that prior to this step destination has all m.num)
+	tlog.Logf("second copy %s => %s with '--sync' option\n", m.bck.Cname(""), dstBck.Cname(""))
+	xid, err = api.CopyBucket(baseParams, m.bck, dstBck, &apc.CopyBckMsg{Sync: true})
+	tassert.CheckFatal(t, err)
+	args.ID = xid
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	tlog.Logf("list post-sync destination %s\n", dstBck.Cname(""))
+	lst, err = api.ListObjects(baseParams, dstBck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(lst.Entries) == m.num-len(nam2del), "expected %d objects in the (sync-ed) destination, got %d",
+		m.num-len(nam2del), len(lst.Entries))
+}
+
 func TestCopyBucketSimple(t *testing.T) {
 	var (
 		srcBck = cmn.Bck{Name: "cpybck_src" + cos.GenTie(), Provider: apc.AIS}

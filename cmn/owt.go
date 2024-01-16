@@ -27,8 +27,9 @@ const (
 	OwtGetLock                    // lock(exclusive); read from remote; ...
 	OwtGet                        // GET (with upgrading read-lock in the local-write path)
 	OwtGetPrefetchLock            // (used for maximum parallelism when prefetching)
-	OwtSyncRemote                 // as in: gs://abc => gs://abc
 )
+
+const OwtNone = OWT(-1)
 
 func (owt *OWT) FromS(s string) {
 	n, err := strconv.Atoi(s)
