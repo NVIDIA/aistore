@@ -3,6 +3,7 @@
 #
 
 import unittest
+import boto3
 
 from aistore.sdk.const import PROVIDER_AIS
 
@@ -15,6 +16,8 @@ from tests.integration import (
     TEST_TIMEOUT_LONG,
 )
 from tests.utils import random_string, destroy_bucket, create_and_put_objects
+from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+from tests.integration.boto3 import AWS_REGION
 
 
 class RemoteEnabledTest(unittest.TestCase):
@@ -137,3 +140,11 @@ class RemoteEnabledTest(unittest.TestCase):
                 evicted_objs.append(obj)
         self._validate_objects_cached(cached_objs, True)
         self._validate_objects_cached(evicted_objs, False)
+
+    def _get_boto3_client(self):
+        return boto3.client(
+            "s3",
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        )

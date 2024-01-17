@@ -3,12 +3,9 @@
 #
 import unittest
 import random
-import boto3
 
 from tests.integration import REMOTE_SET, TEST_TIMEOUT, STRESS_TEST_OBJECT_COUNT
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
-from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-from tests.integration.boto3 import AWS_REGION
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -16,12 +13,7 @@ class TestBucketOpsStress(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
         if REMOTE_SET:
-            self.s3_client = boto3.client(
-                "s3",
-                region_name=AWS_REGION,
-                aws_access_key_id=AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            )
+            self.s3_client = self._get_boto3_client()
 
     @unittest.skipIf(
         not REMOTE_SET,
