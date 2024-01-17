@@ -1379,7 +1379,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 		poi.cksumToUse = oah.Checksum()
 	}
 	switch {
-	case dm != nil && dm.OWT() != cmn.OwtNone:
+	case dm != nil:
 		poi.owt = dm.OWT()
 	default:
 		poi.owt = cmn.OwtMigrateRepl

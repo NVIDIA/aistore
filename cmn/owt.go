@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -28,8 +28,6 @@ const (
 	OwtGet                        // GET (with upgrading read-lock in the local-write path)
 	OwtGetPrefetchLock            // (used for maximum parallelism when prefetching)
 )
-
-const OwtNone = OWT(-1)
 
 func (owt *OWT) FromS(s string) {
 	n, err := strconv.Atoi(s)

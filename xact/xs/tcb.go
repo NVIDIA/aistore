@@ -104,7 +104,7 @@ func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, cmn.OwtNone /* pass via coi */, dmExtra)
+	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, cmn.OwtPut /* pass via coi */, dmExtra)
 	if err != nil {
 		return err
 	}

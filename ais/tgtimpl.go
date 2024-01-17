@@ -169,8 +169,8 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 		}
 	default:
 		// for cmn.OwtGet, see goi.getCold
-		debug.Assert(false, "owt", owt)
-		return http.StatusInternalServerError, errors.New("invalid OWT")
+		debug.Assert(false, owt.String())
+		return http.StatusInternalServerError, errors.New("invalid " + owt.String())
 	}
 
 	// 2. GET remote object and store it
