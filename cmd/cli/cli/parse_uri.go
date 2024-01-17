@@ -43,7 +43,7 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 	// src
 	var uri string
 	if optionalSrcObjname {
-		uri = c.Args().Get(0)
+		uri = c.Args().Get(shift)
 		bckFrom, objFrom, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
 	} else {
 		uri = c.Args().Get(shift)
