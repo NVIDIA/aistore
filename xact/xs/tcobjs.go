@@ -43,6 +43,7 @@ type (
 		workCh   chan *cmn.TCObjsMsg
 		chanFull atomic.Int64
 		streamingX
+		owt cmn.OWT
 	}
 	tcowi struct {
 		r   *XactTCObjs
@@ -83,6 +84,10 @@ func (p *tcoFactory) Start() error {
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
 	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
+	r.owt = cmn.OwtCopy
+	if p.kind == apc.ActETLObjects {
+		r.owt = cmn.OwtTransform
+	}
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, xact.IdleDefault)
 
@@ -92,9 +97,11 @@ func (p *tcoFactory) Start() error {
 		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
 		sizePDU = memsys.DefaultBufSize
 	}
-	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, cmn.OwtPut, sizePDU); err != nil {
+
+	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, r.owt, sizePDU); err != nil {
 		return err
 	}
+
 	if r.p.dm != nil {
 		p.dm.SetXact(r)
 		p.dm.Open()
@@ -264,12 +271,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Xact = r
 		params.Size = hdr.ObjAttrs.Size
-
-		// Transaction is used only by CopyBucket and ETL. In both cases, new objects
-		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`
-		// that it must PUT the object to the remote backend as well
-		// (but only after the local transaction is done and finalized).
-		params.OWT = cmn.OwtPut
+		params.OWT = r.owt
 	}
 	if lom.AtimeUnix() == 0 {
 		// TODO: sender must be setting it, remove this `if` when fixed
@@ -309,7 +311,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 		coiParams.BckTo = wi.r.args.BckTo
 		coiParams.ObjnameTo = objNameTo
 		coiParams.Buf = buf
-		coiParams.OWT = cmn.OwtMigrateRepl
+		coiParams.OWT = wi.r.owt
 		coiParams.DryRun = wi.msg.DryRun
 		coiParams.LatestVer = wi.msg.LatestVer
 		coiParams.Sync = wi.msg.Sync

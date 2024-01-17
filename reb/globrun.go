@@ -134,7 +134,7 @@ func New(config *cmn.Config) *Reb {
 		Compression: config.Rebalance.Compression,
 		Multiplier:  config.Rebalance.SbundleMult,
 	}
-	dm, err := bundle.NewDataMover(trname, reb.recvObj, cmn.OwtMigrateRepl, dmExtra)
+	dm, err := bundle.NewDataMover(trname, reb.recvObj, cmn.OwtRebalance, dmExtra)
 	if err != nil {
 		cos.ExitLog(err)
 	}

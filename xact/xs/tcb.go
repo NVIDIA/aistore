@@ -36,6 +36,7 @@ type (
 		kind  string
 		phase string // (see "transition")
 		args  *xreg.TCBArgs
+		owt   cmn.OWT
 	}
 	XactTCB struct {
 		p      *tcbFactory
@@ -74,6 +75,12 @@ func (p *tcbFactory) Start() error {
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	)
 	debug.AssertNoErr(err)
+
+	p.owt = cmn.OwtCopy
+	if p.kind == apc.ActETLBck {
+		p.owt = cmn.OwtTransform
+	}
+
 	p.xctn = newTCB(p, slab, config)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
@@ -104,7 +111,8 @@ func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, cmn.OwtPut /* pass via coi */, dmExtra)
+	// in re cmn.OwtPut: see comment inside _recv()
+	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, p.owt, dmExtra)
 	if err != nil {
 		return err
 	}
@@ -263,7 +271,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 		coiParams.BckTo = args.BckTo
 		coiParams.ObjnameTo = toName
 		coiParams.Buf = buf
-		coiParams.OWT = cmn.OwtMigrateRepl
+		coiParams.OWT = r.p.owt
 		coiParams.DryRun = args.Msg.DryRun
 		coiParams.LatestVer = args.Msg.LatestVer
 		coiParams.Sync = args.Msg.Sync
@@ -317,12 +325,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Xact = r
 		params.Size = hdr.ObjAttrs.Size
-
-		// Transaction is used only by CopyBucket and ETL. In both cases new objects
-		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`
-		// that it must PUT the object to the remote backend as well
-		// (but only after the local transaction is done and finalized).
-		params.OWT = cmn.OwtPut
+		params.OWT = r.p.owt
 	}
 	if lom.AtimeUnix() == 0 {
 		// TODO: sender must be setting it, remove this `if` when fixed

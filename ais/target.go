@@ -1326,7 +1326,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 		coiParams.ObjnameTo = msg.Name /* new object name */
 		coiParams.Buf = buf
 		coiParams.Config = cmn.GCO.Get()
-		coiParams.OWT = cmn.OwtMigrateRepl
+		coiParams.OWT = cmn.OwtCopy
 		coiParams.Finalize = true
 	}
 	coi := (*copyOI)(coiParams)

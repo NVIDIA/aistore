@@ -276,7 +276,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 		bck = lom.Bck()
 	)
 	// put remote
-	if bck.IsRemote() && (poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote) {
+	if bck.IsRemote() && poi.owt < cmn.OwtRebalance {
 		errCode, err = poi.putRemote()
 		if err != nil {
 			loghdr := poi.loghdr()
@@ -317,7 +317,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		if poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote {
+		if poi.owt < cmn.OwtRebalance {
 			if poi.skipVC {
 				err = lom.IncVersion()
 				debug.AssertNoErr(err)
@@ -335,7 +335,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 	}
 	if lom.HasCopies() {
 		if errdc := lom.DelAllCopies(); errdc != nil {
-			nlog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
+			nlog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding anyway...", poi.loghdr(), errdc)
 		}
 	}
 	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster; prefetch special case)
@@ -477,7 +477,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 
 func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 	switch poi.owt {
-	case cmn.OwtMigrateRepl, cmn.OwtPromote, cmn.OwtFinalize:
+	case cmn.OwtRebalance, cmn.OwtCopy:
 		v = c.ValidateObjMove
 	case cmn.OwtPut:
 		v = true
@@ -926,7 +926,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 		poi.lom = lom
 		poi.config = config
 		poi.r = resp.Body
-		poi.owt = cmn.OwtMigrateRepl
+		poi.owt = cmn.OwtRebalance
 		poi.workFQN = workFQN
 		poi.atime = lom.ObjAttrs().Atime
 		poi.cksumToUse = cksumToUse
@@ -1373,16 +1373,14 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 		poi.lom = dst
 		poi.config = coi.Config
 		poi.r = reader
+		poi.owt = coi.OWT
 		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
 		poi.atime = oah.AtimeUnix()
 		poi.cksumToUse = oah.Checksum()
 	}
-	switch {
-	case dm != nil:
-		poi.owt = dm.OWT()
-	default:
-		poi.owt = cmn.OwtMigrateRepl
+	if dm != nil {
+		poi.owt = dm.OWT() // (compare with _send)
 	}
 	errCode, err := poi.putObject()
 	freePOI(poi)
@@ -1443,11 +1441,10 @@ func (coi *copyOI) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameT
 		sargs.objNameTo = objNameTo
 		sargs.tsi = tsi
 		sargs.dm = dm
-		if dm != nil {
-			sargs.owt = dm.OWT() // takes precedence
-		} else {
-			sargs.owt = coi.OWT
-		}
+		sargs.owt = coi.OWT
+	}
+	if dm != nil {
+		sargs.owt = dm.OWT() // takes precedence
 	}
 	size, err = coi._send(t, lom, sargs)
 	freeSnda(sargs)

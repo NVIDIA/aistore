@@ -169,7 +169,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
-		params.OWT = cmn.OwtMigrateRepl
+		params.OWT = cmn.OwtRebalance
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Atime = lom.Atime()
 		params.Xact = xreb

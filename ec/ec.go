@@ -408,8 +408,7 @@ func writeObject(lom *core.LOM, reader io.Reader, size int64, xctn core.Xact) er
 		params.Atime = time.Now()
 		params.Size = size
 		params.Xact = xctn
-		// to avoid changing version; TODO: introduce cmn.OwtEC
-		params.OWT = cmn.OwtMigrateRepl
+		params.OWT = cmn.OwtCopy
 	}
 	err := core.T.PutObject(lom, params)
 	core.FreePutParams(params)

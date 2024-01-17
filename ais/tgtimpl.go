@@ -136,7 +136,7 @@ func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
 func (t *target) CopyObject(lom *core.LOM, dm core.DM, params *core.CopyParams) (size int64, err error) {
 	coi := (*copyOI)(params)
 	// defaults
-	coi.OWT = cmn.OwtMigrateRepl
+	coi.OWT = cmn.OwtCopy
 	coi.Finalize = false
 	if coi.ObjnameTo == "" {
 		coi.ObjnameTo = lom.ObjName
