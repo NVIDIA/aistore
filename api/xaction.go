@@ -158,21 +158,30 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 //
 
 type consIdle struct {
-	xid string
-	cnt int
+	xid     string
+	cnt     int
+	delayed bool
 }
 
 func (ci *consIdle) check(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
-	found, idle := snaps.IsIdle(ci.xid)
-	if idle || !found {
-		ci.cnt++
-		// TODO: !found may mean "hasn't started yet" unless it's a "won't start"
-		// situation; resetting frequency only if found
-		done, resetProbeFreq = ci.cnt >= xact.NumConsecutiveIdle, found
-		return
+	aborted, running, notstarted := snaps.IsIdle(ci.xid)
+	if aborted {
+		return true, false
 	}
-	ci.cnt = 0
-	return
+	if running {
+		ci.cnt = 0
+		return false, false
+	}
+	if notstarted && ci.cnt == 0 {
+		if !ci.delayed {
+			time.Sleep(min(2*xact.MinPollTime, 4*time.Second))
+			ci.delayed = true
+		}
+		return false, false
+	}
+	// is idle
+	ci.cnt++
+	return ci.cnt >= xact.NumConsecutiveIdle, true
 }
 
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.

@@ -477,35 +477,45 @@ func (xs MultiSnap) IsAborted(xid string) (bool, error) {
 }
 
 // (all targets, all xactions)
-func (xs MultiSnap) IsIdle(xid string) (found, idle bool) {
+func (xs MultiSnap) IsIdle(xid string) (aborted, running, notstarted bool) {
 	if xid != "" {
 		debug.Assert(IsValidUUID(xid), xid)
-		return xs._idle(xid)
+		return xs._get(xid)
 	}
 	uuids := xs.GetUUIDs()
-	idle = true
 	for _, xid = range uuids {
-		f, i := xs._idle(xid)
-		found = found || f
-		idle = idle && i
+		a, r, ns := xs._get(xid)
+		aborted = aborted || a
+		notstarted = notstarted || ns
+		running = running || r
 	}
-	return
+	return aborted, running, notstarted
 }
 
 // (all targets, given xaction)
-func (xs MultiSnap) _idle(xid string) (found, idle bool) {
+func (xs MultiSnap) _get(xid string) (aborted, running, notstarted bool) {
+	var nt, nr, ns, nf int
 	for _, snaps := range xs {
+		nt++
 		for _, xsnap := range snaps {
-			if xid == xsnap.ID {
-				found = true
-				// (one target, one xaction)
-				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.IsIdle() {
-					return true, false
-				}
+			if xid != xsnap.ID {
+				continue
 			}
+			nf++
+			// (one target, one xaction)
+			switch {
+			case xsnap.IsAborted():
+				return true, false, false
+			case !xsnap.Started():
+				ns++
+			case !xsnap.IsIdle():
+				nr++
+			}
+			break
 		}
 	}
-	idle = true // (read: not-idle not found)
+	running = nr > 0
+	notstarted = ns > 0 || nf == 0
 	return
 }
 
