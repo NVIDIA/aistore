@@ -1072,11 +1072,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 		// return special code to indicate just that
 		return errSendingResp
 	}
-	// Update objects which were sent during GFN. Thanks to this we will not
+	// Update objects sent during GFN. Thanks to this we will not
 	// have to resend them in rebalance. In case of a race between rebalance
-	// and GFN, the former wins and it will result in double send.
+	// and GFN the former wins, resulting in duplicated transmission.
 	if goi.isGFN {
-		goi.t.reb.FilterAdd([]byte(goi.lom.Uname()))
+		goi.t.reb.FilterAdd(cos.UnsafeB(goi.lom.Uname()))
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
 		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			nlog.Errorf("%s: GET post-transmission failure: %v", goi.t, err)

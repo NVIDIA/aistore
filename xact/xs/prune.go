@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -31,6 +32,7 @@ type prune struct {
 	prefix         string
 	// run
 	joggers *mpather.Jgroup
+	filter  *prob.Filter
 	same    bool
 }
 
@@ -45,6 +47,7 @@ func (rp *prune) init(config *cmn.Config) {
 	}
 	rmopts.Bck.Copy(rp.bckTo.Bucket())
 	rp.joggers = mpather.NewJoggerGroup(rmopts, config, "")
+	rp.filter = prob.NewDefaultFilter()
 	rp.same = rp.bckTo.Equal(rp.bckFrom, true, true)
 }
 
@@ -61,7 +64,10 @@ func (rp *prune) wait() {
 	// wait for: joggers || parent-aborted
 	ticker := time.NewTicker(cmn.Rom.MaxKeepalive())
 	rp._wait(ticker)
+
+	// cleanup
 	ticker.Stop()
+	rp.filter.Reset()
 }
 
 func (rp *prune) _wait(ticker *time.Ticker) {
@@ -80,25 +86,31 @@ func (rp *prune) _wait(ticker *time.Ticker) {
 }
 
 func (rp *prune) do(dst *core.LOM, _ []byte) error {
-	var src *core.LOM
-
 	// construct src lom
+	var src *core.LOM
 	if rp.same {
 		src = dst
 	} else {
 		src = core.AllocLOM(dst.ObjName)
+		defer core.FreeLOM(src)
 		if src.InitBck(rp.bckFrom.Bucket()) != nil {
-			core.FreeLOM(src)
 			return nil
 		}
 	}
-	_, errCode, err := core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
-	if !rp.same {
-		core.FreeLOM(src)
+
+	// skip objects already copied by rp.parent (compare w/ reb)
+	uname := cos.UnsafeB(src.Uname())
+	if rp.filter.Lookup(uname) {
+		rp.filter.Delete(uname)
+		return nil
 	}
+
+	// head
+	_, errCode, err := core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
 	if err == nil || !cos.IsNotExist(err, errCode) {
 		return nil
 	}
+
 	// source does not exist: try to remove the destination (NOTE: best effort)
 	if !dst.TryLock(true) {
 		return nil

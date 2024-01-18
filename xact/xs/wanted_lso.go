@@ -52,10 +52,8 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
 		case apc.GetPropsCached: // via obj.SetPresent()
 
 		case apc.GetPropsSize:
-			if lom.Bucket().IsRemote() { // TODO: micro-optimize
-				if e.Size > 0 && lom.SizeBytes() != e.Size {
-					e.SetVerChanged()
-				}
+			if e.Size > 0 && lom.SizeBytes() != e.Size {
+				e.SetVerChanged()
 			}
 			e.Size = lom.SizeBytes()
 		case apc.GetPropsVersion:
@@ -79,19 +77,16 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
 			debug.Assert(false, name)
 		}
 	}
-	if !wi.msg.IsFlagSet(apc.LsVerChanged) || e.IsVerChanged() || !lom.Bucket().IsRemote() /*ditto*/ {
-		return
-	}
-	//
-	// extensive version-changed check
-	//
-	md := cmn.S2CustomMD(custom, version)
-	if len(md) > 0 {
-		var oa cmn.ObjAttrs
-		oa.CustomMD = md
-		oa.Size = e.Size
-		if !lom.Equal(&oa) {
-			e.SetVerChanged()
+	if wi.msg.IsFlagSet(apc.LsVerChanged) && !e.IsVerChanged() {
+		// slow path: extensive version-changed check
+		md := cmn.S2CustomMD(custom, version)
+		if len(md) > 0 {
+			var oa cmn.ObjAttrs
+			oa.CustomMD = md
+			oa.Size = e.Size
+			if !lom.Equal(&oa) {
+				e.SetVerChanged()
+			}
 		}
 	}
 }

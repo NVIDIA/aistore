@@ -97,8 +97,8 @@ func (f *Filter) Reset() {
 	f.mtx.Lock()
 	for idx := 0; idx < len(f.filters); idx++ {
 		f.filters[idx].Reset()
-		f.filters[idx] = nil
 	}
-	f.filters = nil
+	clear(f.filters)
+	f.filters = f.filters[:0]
 	f.mtx.Unlock()
 }

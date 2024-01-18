@@ -280,9 +280,11 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 	core.FreeCOI(coiParams)
 	switch {
 	case err == nil:
-		// do nothing
+		if args.Msg.Sync {
+			r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+		}
 	case cos.IsNotExist(err, 0):
-		// ditto
+		// do nothing
 	case cos.IsErrOOS(err):
 		r.Abort(err)
 	default:

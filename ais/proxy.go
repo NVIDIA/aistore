@@ -1494,6 +1494,22 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target, smap.CountTargets()))
 		return
 	}
+	// enforce '--check-versions' limitations
+	if lsmsg.IsFlagSet(apc.LsVerChanged) {
+		const a = "cannot perform remote versions check"
+		if !bck.HasVersioningMD() {
+			p.writeErrMsg(w, r, a+": bucket "+bck.Cname("")+" does not provide (remote) versioning info")
+			return
+		}
+		if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) {
+			p.writeErrMsg(w, r, a+": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
+			return
+		}
+		if !lsmsg.WantProp(apc.GetPropsCustom) {
+			p.writeErrf(w, r, a+" without listing %q (object property)", apc.GetPropsCustom)
+			return
+		}
+	}
 
 	// default props & flags => user-provided message
 	switch {

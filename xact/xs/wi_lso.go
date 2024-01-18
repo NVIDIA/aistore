@@ -26,8 +26,8 @@ type (
 	// context used to `list` objects in local filesystems
 	walkInfo struct {
 		smap         *meta.Smap
-		lomVisitedCb lomVisitedCb
 		msg          *apc.LsoMsg
+		lomVisitedCb lomVisitedCb
 		markerDir    string
 		wanted       cos.BitFlags
 	}
