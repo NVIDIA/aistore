@@ -40,15 +40,17 @@ type (
 	// a strict subset of core.Xact, includes only the methods
 	// lriterator needs for itself
 	lrxact interface {
-		Bck() *meta.Bck
 		IsAborted() bool
 		Finished() bool
 	}
 	// common multi-obj operation context and iterList()/iterRangeOrPref() logic
 	lriterator struct {
-		xctn lrxact
-		msg  *apc.ListRange
-		lrp  int // { lrpList, ... } enum
+		parent lrxact
+		msg    *apc.ListRange
+		bck    *meta.Bck
+		pt     *cos.ParsedTemplate
+		prefix string
+		lrp    int // { lrpList, ... } enum
 	}
 )
 
@@ -73,16 +75,19 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, msg *apc.ListRange) {
-	r.xctn = xctn
+func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck) error {
+	r.parent = xctn
 	r.msg = msg
-}
+	r.bck = bck
+	if msg.IsList() {
+		r.lrp = lrpList
+		return nil
+	}
 
-func (r *lriterator) rangeOrPref(wi lrwi, smap *meta.Smap) error {
-	pt, err := cos.NewParsedTemplate(r.msg.Template)
+	pt, err := cos.NewParsedTemplate(msg.Template)
 	if err != nil {
-		// NOTE: [making an exception] treating an empty or '*' template
-		// as an empty prefix to facilitate scope 'all-objects'
+		// [Making Exception] treating an empty or '*' template
+		// as an empty prefix, to facilitate all-objects scope
 		// (e.g., "archive entire bucket as a single shard (caution!)
 		if err == cos.ErrEmptyTemplate {
 			pt.Prefix = ""
@@ -95,18 +100,50 @@ func (r *lriterator) rangeOrPref(wi lrwi, smap *meta.Smap) error {
 		return err
 	}
 	if len(pt.Ranges) != 0 {
+		r.pt = &pt
 		r.lrp = lrpRange
-		return r.iterRange(smap, &pt, wi)
+		return nil
 	}
 pref:
+	r.prefix = pt.Prefix
 	r.lrp = lrpPrefix
-	return r.iteratePrefix(smap, pt.Prefix, wi)
+	return nil
 }
 
-func (r *lriterator) iterRange(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
-	pt.InitIter()
-	for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
-		if r.xctn.IsAborted() || r.xctn.Finished() {
+func (r *lriterator) run(wi lrwi, smap *meta.Smap) (err error) {
+	switch r.lrp {
+	case lrpList:
+		err = r._list(wi, smap)
+	case lrpRange:
+		err = r._range(wi, smap)
+	case lrpPrefix:
+		err = r._prefix(wi, smap)
+	}
+	return err
+}
+
+func (r *lriterator) done() bool { return r.parent.IsAborted() || r.parent.Finished() }
+
+func (r *lriterator) _list(wi lrwi, smap *meta.Smap) error {
+	r.lrp = lrpList
+	for _, objName := range r.msg.ObjNames {
+		if r.done() {
+			break
+		}
+		lom := core.AllocLOM(objName)
+		err := r.do(lom, wi, smap)
+		core.FreeLOM(lom)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *lriterator) _range(wi lrwi, smap *meta.Smap) error {
+	r.pt.InitIter()
+	for objName, hasNext := r.pt.Next(); hasNext; objName, hasNext = r.pt.Next() {
+		if r.done() {
 			return nil
 		}
 		lom := core.AllocLOM(objName)
@@ -119,33 +156,29 @@ func (r *lriterator) iterRange(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi)
 	return nil
 }
 
-// compare with ais/plstcx.go (TODO: unify)
-func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) error {
-	if err := cmn.ValidatePrefix(prefix); err != nil {
-		return err
-	}
+// (compare with ais/plstcx)
+func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
 		err     error
 		lst     *cmn.LsoResult
-		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
-		bck     = r.xctn.Bck()
-		npg     = newNpgCtx(bck, msg, noopCb)
-		bremote = bck.IsRemote()
+		msg     = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
+		npg     = newNpgCtx(r.bck, msg, noopCb)
+		bremote = r.bck.IsRemote()
 	)
-	if err := bck.Init(core.T.Bowner()); err != nil {
+	if err := r.bck.Init(core.T.Bowner()); err != nil {
 		return err
 	}
 	if !bremote {
 		smap = nil // not needed
 	}
 	for {
-		if r.xctn.IsAborted() || r.xctn.Finished() {
+		if r.done() {
 			break
 		}
 		if bremote {
 			var errCode int
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			errCode, err = core.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
+			errCode, err = core.T.Backend(r.bck).ListObjects(r.bck, msg, lst) // (TODO comment above)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
 				if errCode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
@@ -165,7 +198,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 			if !be.IsStatusOK() {
 				continue
 			}
-			if r.xctn.IsAborted() || r.xctn.Finished() {
+			if r.done() {
 				freeLsoEntries(lst.Entries)
 				return nil
 			}
@@ -188,24 +221,8 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 	return nil
 }
 
-func (r *lriterator) iterList(wi lrwi, smap *meta.Smap) error {
-	r.lrp = lrpList
-	for _, objName := range r.msg.ObjNames {
-		if r.xctn.IsAborted() || r.xctn.Finished() {
-			break
-		}
-		lom := core.AllocLOM(objName)
-		err := r.do(lom, wi, smap)
-		core.FreeLOM(lom)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) error {
-	if err := lom.InitBck(r.xctn.Bck().Bucket()); err != nil {
+	if err := lom.InitBck(r.bck.Bucket()); err != nil {
 		return err
 	}
 	if smap != nil {

@@ -45,16 +45,16 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return np
 }
 
-func (p *prfFactory) Start() error {
+func (p *prfFactory) Start() (err error) {
 	b := p.Bck
-	if err := b.Init(core.T.Bowner()); err != nil {
+	if err = b.Init(core.T.Bowner()); err != nil {
 		return err
 	}
 	if b.IsAIS() {
 		return fmt.Errorf("bucket %s is not _remote_ (can only prefetch remote buckets)", b)
 	}
-	p.xctn = newPrefetch(&p.Args, p.Kind(), b, p.msg)
-	return nil
+	p.xctn, err = newPrefetch(&p.Args, p.Kind(), b, p.msg)
+	return err
 }
 
 func (*prfFactory) Kind() string     { return apc.ActPrefetchObjects }
@@ -64,24 +64,23 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.PrefetchMsg) *prefetch {
-	r := &prefetch{config: cmn.GCO.Get(), msg: msg}
+func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.PrefetchMsg) (r *prefetch, err error) {
+	r = &prefetch{config: cmn.GCO.Get(), msg: msg}
 
-	r.lriterator.init(r, &msg.ListRange)
+	err = r.lriterator.init(r, &msg.ListRange, bck)
+	if err != nil {
+		return nil, err
+	}
 	r.InitBase(xargs.UUID, kind, bck)
-	r.lriterator.xctn = r
-
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
-	return r
+	return r, nil
 }
 
 func (r *prefetch) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	smap := core.T.Sowner().Get()
-	if r.msg.IsList() {
-		_ = r.iterList(r, smap)
-	} else {
-		_ = r.rangeOrPref(r, smap)
+	err := r.lriterator.run(r, core.T.Sowner().Get())
+	if err != nil {
+		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
 	}
 	r.Finish()
 }

@@ -169,11 +169,8 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			nat := smap.CountActiveTs()
 			wi.refc.Store(int32(nat - 1))
 
-			lrit.init(r, &msg.ListRange)
-			if msg.IsList() {
-				err = lrit.iterList(wi, smap)
-			} else {
-				err = lrit.rangeOrPref(wi, smap)
+			if err = lrit.init(r, &msg.ListRange, r.Bck()); err == nil {
+				err = lrit.run(wi, smap)
 			}
 			if r.IsAborted() || err != nil {
 				goto fin

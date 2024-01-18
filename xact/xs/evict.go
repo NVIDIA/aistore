@@ -43,9 +43,9 @@ func (p *evdFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return np
 }
 
-func (p *evdFactory) Start() error {
-	p.xctn = newEvictDelete(&p.Args, p.kind, p.Bck, p.msg)
-	return nil
+func (p *evdFactory) Start() (err error) {
+	p.xctn, err = newEvictDelete(&p.Args, p.kind, p.Bck, p.msg)
+	return err
 }
 
 func (p *evdFactory) Kind() string   { return p.kind }
@@ -55,20 +55,20 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete) {
+func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete, err error) {
 	ed = &evictDelete{config: cmn.GCO.Get()}
-	ed.lriterator.init(ed, msg)
+	if err = ed.lriterator.init(ed, msg, bck); err != nil {
+		return nil, err
+	}
 	ed.InitBase(xargs.UUID, kind, bck)
-	return
+	return ed, nil
 }
 
 func (r *evictDelete) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	smap := core.T.Sowner().Get()
-	if r.msg.IsList() {
-		_ = r.iterList(r, smap)
-	} else {
-		_ = r.rangeOrPref(r, smap)
+	err := r.lriterator.run(r, core.T.Sowner().Get())
+	if err != nil {
+		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
 	}
 	r.Finish()
 }

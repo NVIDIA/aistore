@@ -215,12 +215,12 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				smap = core.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
-			lrit.init(r, &msg.ListRange)
-			if msg.IsList() {
-				err = lrit.iterList(wi, smap)
-			} else {
-				err = lrit.rangeOrPref(wi, smap)
+			err = lrit.init(r, &msg.ListRange, r.Bck())
+			if err != nil {
+				r.Abort(err)
+				goto fin
 			}
+			err = lrit.run(wi, smap)
 			if err != nil {
 				r.AddErr(err)
 			}
