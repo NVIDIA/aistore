@@ -159,7 +159,7 @@ func (t *target) _initBuiltin() error {
 	}
 	switch {
 	case len(notlinked) > 0:
-		nlog.Errorf("%s backends: enabled %v, disabled %v, missing in the build %v", t, enabled, disabled, notlinked)
+		return fmt.Errorf("%s backends: enabled %v, disabled %v, missing in the build %v", t, enabled, disabled, notlinked)
 	case len(disabled) > 0:
 		nlog.Warningf("%s backends: enabled %v, disabled %v", t, enabled, disabled)
 	default:
