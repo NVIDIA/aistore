@@ -588,6 +588,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
 		return
 	}
+
+	// lsmsg
 	var (
 		lsmsg apc.LsoMsg
 		bck   = meta.CloneBck((*cmn.Bck)(qbck))
@@ -611,9 +613,9 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		bckArgs.dontAddRemote = lsmsg.IsFlagSet(apc.LsDontAddRemote)
 	}
 
+	// do
 	if bck, err = bckArgs.initAndTry(); err == nil {
-		begin := mono.NanoTime()
-		p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg, begin)
+		p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
 	}
 }
 
@@ -1488,26 +1490,56 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, beg int64) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) {
+	beg := mono.NanoTime()
+	lst, err := p._listObjects(bck, amsg, lsmsg)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+
+	var ok bool
+	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
+		ok = p.writeMsgPack(w, lst, lsotag)
+	} else {
+		ok = p.writeJS(w, r, lst, lsotag)
+	}
+	if !ok {
+		// TODO -- FIXME: abort x-lso (e.g., `ls very-large-cloud-bucket` followed by Ctrl-C)
+		if false {
+			p._lstop(amsg, lst)
+		}
+		return
+	}
+
+	// GC
+	clear(lst.Entries)
+	lst.Entries = lst.Entries[:0]
+	lst.Entries = nil
+	lst = nil
+
+	p.statsT.AddMany(
+		cos.NamedVal64{Name: stats.ListCount, Value: 1},
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+	)
+}
+
+func (p *proxy) _listObjects(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) (*cmn.LsoResult, error) {
 	smap := p.owner.smap.get()
 	if cnt := smap.CountActiveTs(); cnt < 1 {
-		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target, smap.CountTargets()))
-		return
+		return nil, cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 	// enforce '--check-versions' limitations
 	if lsmsg.IsFlagSet(apc.LsVerChanged) {
 		const a = "cannot perform remote versions check"
 		if !bck.HasVersioningMD() {
-			p.writeErrMsg(w, r, a+": bucket "+bck.Cname("")+" does not provide (remote) versioning info")
-			return
+			return nil, errors.New(a + ": bucket " + bck.Cname("") + " does not provide (remote) versioning info")
 		}
 		if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) {
-			p.writeErrMsg(w, r, a+": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
-			return
+			return nil, errors.New(a + ": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
 		}
 		if !lsmsg.WantProp(apc.GetPropsCustom) {
-			p.writeErrf(w, r, a+" without listing %q (object property)", apc.GetPropsCustom)
-			return
+			return nil, fmt.Errorf(a+" without listing %q (object property)", apc.GetPropsCustom)
 		}
 	}
 
@@ -1546,8 +1578,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 	tsi, listRemote, wantOnlyRemote, err = p._lsofc(bck, lsmsg, smap)
 	if err != nil {
-		p.writeErr(w, r, err)
-		return
+		return nil, err
 	}
 	if newls {
 		if wantOnlyRemote {
@@ -1561,22 +1592,11 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}
 
-	if p.ic.reverseToOwner(w, r, lsmsg.UUID, amsg) {
-		debug.Assert(p.SID() != smap.Primary.ID())
-		if newls {
-			// cleanup right away
-			p.notifs.del(nl, false)
-		}
-		return
-	}
-
 	if listRemote {
 		if lsmsg.StartAfter != "" {
 			// TODO: remote AIS first, then Cloud
-			err = fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
+			return nil, fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
 				lsotag, lsmsg.StartAfter, bck)
-			p.writeErr(w, r, err, http.StatusNotImplemented)
-			return
 		}
 		// verbose log
 		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
@@ -1600,35 +1620,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	} else {
 		lst, err = p.lsObjsA(bck, lsmsg)
 	}
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	debug.Assert(lst != nil)
 
-	var ok bool
-	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		ok = p.writeMsgPack(w, lst, lsotag)
-	} else {
-		ok = p.writeJS(w, r, lst, lsotag)
-	}
-	if !ok {
-		// TODO -- FIXME: abort x-lso (e.g., `ls very-large-cloud-bucket` followed by Ctrl-C)
-		if false {
-			p._lstop(amsg, lst)
-		}
-		return
-	}
-
-	// Free the memory allocated for temp slice as it can take up to a few GBs
-	lst.Entries = lst.Entries[:0]
-	lst.Entries = nil
-	lst = nil
-
-	p.statsT.AddMany(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
-	)
+	return lst, err
 }
 
 func (p *proxy) _lstop(amsg *apc.ActMsg, lst *cmn.LsoResult) {

@@ -17,8 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -78,9 +80,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				p.getBckVersioningS3(w, r, apiItems[0])
 				return
 			}
-			// only bucket name - list objects in the bucket
-			config := cmn.GCO.Get()
-			p.listObjectsS3(w, r, config, apiItems[0])
+			p.listObjectsS3(w, r, apiItems[0])
 			return
 		}
 		// object data otherwise
@@ -310,36 +310,41 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 
 // GET /s3/<bucket-name>
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
-func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, bucket string) {
+func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
+	amsg := &apc.ActMsg{Action: apc.ActList}
+
+	// currently, always forwarding
+	if p.forwardCP(w, r, amsg, lsotag+" "+bck.String()) {
+		return
+	}
+
 	// e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
 	// (compare w/ `t.headObjS3()`
 	lsmsg := &apc.LsoMsg{UUID: cos.GenUUID(), TimeFormat: cos.ISO8601}
 
 	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion)
+	amsg.Value = lsmsg
+
 	s3.FillMsgFromS3Query(r.URL.Query(), lsmsg)
 
-	var (
-		lst        *cmn.LsoResult
-		listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
-	)
-	if listRemote {
-		lst, err = p.lsObjsR(bck, lsmsg, p.owner.smap.get(), nil /*designated target*/, config, false)
-	} else {
-		lst, err = p.lsObjsA(bck, lsmsg)
-	}
+	beg := mono.NanoTime()
+	lst, err := p._listObjects(bck, amsg, lsmsg)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("lso", bck.String(), lsmsg, len(lst.Entries), err)
 	}
+	p.statsT.AddMany(
+		cos.NamedVal64{Name: stats.ListCount, Value: 1},
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+	)
 
 	resp := s3.NewListObjectResult(bucket)
 	resp.ContinuationToken = lsmsg.ContinuationToken
@@ -349,6 +354,12 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, config *cm
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	sgl.WriteTo(w)
 	sgl.Free()
+
+	// GC
+	clear(lst.Entries)
+	lst.Entries = lst.Entries[:0]
+	lst.Entries = nil
+	lst = nil
 }
 
 // PUT /s3/<bucket-name>/<object-name>
