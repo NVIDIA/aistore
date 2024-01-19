@@ -7,6 +7,8 @@ package xs
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -37,7 +39,7 @@ type prune struct {
 }
 
 func (rp *prune) init(config *cmn.Config) {
-	debug.Assert(rp.bckFrom.HasVersioningMD(), rp.bckFrom.String())
+	debug.Assert(rp.bckFrom.IsAIS() || rp.bckFrom.HasVersioningMD(), rp.bckFrom.String())
 	rmopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: rp.do,
@@ -100,18 +102,37 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 
 	// skip objects already copied by rp.parent (compare w/ reb)
 	uname := cos.UnsafeB(src.Uname())
-	if rp.filter.Lookup(uname) {
+	if rp.filter != nil && rp.filter.Lookup(uname) { // TODO -- FIXME: rm filter nil check once x-tco supports prob. filtering
 		rp.filter.Delete(uname)
 		return nil
 	}
 
-	// head
-	_, errCode, err := core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
-	if err == nil || !cos.IsNotExist(err, errCode) {
+	// check whether src lom exists
+	var (
+		err     error
+		errCode int
+	)
+	if src.Bck().IsAIS() {
+		smap := core.T.Sowner().Get()
+		tsi, errV := smap.HrwHash2T(src.Digest())
+		if errV != nil {
+			return fmt.Errorf("prune %s: fatal err: %w", rp.parent.Name(), errV)
+		}
+		if tsi.ID() == core.T.SID() {
+			err = src.Load(false, false)
+		} else {
+			if present := core.T.HeadObjT2T(src, tsi); !present {
+				errCode = http.StatusNotFound
+			}
+		}
+	} else {
+		_, errCode, err = core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
+	}
+	if err == nil || !cos.IsNotExist(err, errCode) /*not complaining*/ {
 		return nil
 	}
 
-	// source does not exist: try to remove the destination (NOTE: best effort)
+	// source does not exist: try to remove the destination (NOTE best effort)
 	if !dst.TryLock(true) {
 		return nil
 	}

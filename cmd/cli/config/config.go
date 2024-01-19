@@ -70,6 +70,7 @@ var (
 		// object
 		"get":      "object get",
 		"put":      "object put",
+		"rmo":      "object rm",
 		"prefetch": "object prefetch", // same as "job start prefetch"
 		// bucket
 		"ls":     "bucket ls",

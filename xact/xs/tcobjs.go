@@ -169,9 +169,23 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			nat := smap.CountActiveTs()
 			wi.refc.Store(int32(nat - 1))
 
+			// run
+			var wg *sync.WaitGroup
 			if err = lrit.init(r, &msg.ListRange, r.Bck()); err == nil {
+				if msg.Sync && lrit.lrp != lrpList {
+					wg = &sync.WaitGroup{}
+					wg.Add(1)
+					go func() {
+						r.prune(lrit, smap)
+						wg.Done()
+					}()
+				}
 				err = lrit.run(wi, smap)
 			}
+			if wg != nil {
+				wg.Wait()
+			}
+
 			if r.IsAborted() || err != nil {
 				goto fin
 			}
@@ -322,6 +336,43 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 			wi.r.AddErr(err, 5, cos.SmoduleXs)
 		}
 	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
+		nlog.Infoln(wi.r.Name()+":", lom.Cname(), "=>", wi.r.args.BckTo.Cname(objNameTo))
 	}
+}
+
+//
+// remove objects not present at the source (when synchronizing bckFrom => bckTo)
+// TODO: probabilistic filtering
+//
+
+type syncwi struct {
+	rp *prune
+}
+
+// interface guard
+var _ lrwi = (*syncwi)(nil)
+
+func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap) {
+	rp := prune{parent: r}
+	rp.bckFrom, rp.bckTo = r.FromTo()
+
+	// tcb use case
+	if lrit.lrp == lrpPrefix {
+		rp.prefix = lrit.pt.Prefix
+		rp.init(r.config)
+		rp.run()
+		rp.wait()
+		return
+	}
+
+	// same range iterator but different bucket
+	debug.Assert(lrit.lrp == lrpRange)
+	syncit := *lrit
+	syncit.bck = rp.bckTo
+	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
+	syncit.run(syncwi, smap)
+}
+
+func (syncwi *syncwi) do(lom *core.LOM, _ *lriterator) {
+	syncwi.rp.do(lom, nil)
 }

@@ -442,6 +442,8 @@ until:
 		goto until // repeat
 	}
 
+	// TODO: skip when there's a single target (benign)
+
 	// do
 	var (
 		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
