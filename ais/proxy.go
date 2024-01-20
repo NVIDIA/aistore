@@ -1490,13 +1490,54 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
+// one page => msgpack rsp
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) {
+	// LsVerChanged a.k.a. '--check-versions' limitations
+	if lsmsg.IsFlagSet(apc.LsVerChanged) {
+		const a = "cannot perform remote versions check"
+		if !bck.HasVersioningMD() {
+			p.writeErrMsg(w, r, a+": bucket "+bck.Cname("")+" does not provide (remote) versioning info")
+			return
+		}
+		if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) {
+			p.writeErrMsg(w, r, a+": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
+			return
+		}
+		if !lsmsg.WantProp(apc.GetPropsCustom) {
+			p.writeErrf(w, r, a+" without listing %q (object property)", apc.GetPropsCustom)
+			return
+		}
+	}
+
+	// default props & flags => user-provided message
+	switch {
+	case lsmsg.Props == "":
+		if lsmsg.IsFlagSet(apc.LsObjCached) {
+			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
+		} else {
+			lsmsg.AddProps(apc.GetPropsMinimal...)
+			lsmsg.SetFlag(apc.LsNameSize)
+		}
+	case lsmsg.Props == apc.GetPropsName:
+		lsmsg.SetFlag(apc.LsNameOnly)
+	case lsmsg.Props == apc.GetPropsNameSize:
+		lsmsg.SetFlag(apc.LsNameSize)
+	}
+	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
+		lsmsg.SetFlag(apc.LsObjCached)
+	}
+
+	// do page
 	beg := mono.NanoTime()
-	lst, err := p._listObjects(bck, amsg, lsmsg)
+	lst, err := p.lsPage(bck, amsg, lsmsg, p.owner.smap.get())
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+	p.statsT.AddMany(
+		cos.NamedVal64{Name: stats.ListCount, Value: 1},
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+	)
 
 	var ok bool
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
@@ -1517,52 +1558,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	lst.Entries = lst.Entries[:0]
 	lst.Entries = nil
 	lst = nil
-
-	p.statsT.AddMany(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
-	)
 }
 
-func (p *proxy) _listObjects(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) (*cmn.LsoResult, error) {
-	smap := p.owner.smap.get()
-	if cnt := smap.CountActiveTs(); cnt < 1 {
-		return nil, cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
-	}
-	// enforce '--check-versions' limitations
-	if lsmsg.IsFlagSet(apc.LsVerChanged) {
-		const a = "cannot perform remote versions check"
-		if !bck.HasVersioningMD() {
-			return nil, errors.New(a + ": bucket " + bck.Cname("") + " does not provide (remote) versioning info")
-		}
-		if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) {
-			return nil, errors.New(a + ": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
-		}
-		if !lsmsg.WantProp(apc.GetPropsCustom) {
-			return nil, fmt.Errorf(a+" without listing %q (object property)", apc.GetPropsCustom)
-		}
-	}
-
-	// default props & flags => user-provided message
-	switch {
-	case lsmsg.Props == "":
-		if lsmsg.IsFlagSet(apc.LsObjCached) {
-			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
-		} else {
-			lsmsg.AddProps(apc.GetPropsMinimal...)
-			lsmsg.SetFlag(apc.LsNameSize)
-		}
-	case lsmsg.Props == apc.GetPropsName:
-		lsmsg.SetFlag(apc.LsNameOnly)
-	case lsmsg.Props == apc.GetPropsNameSize:
-		lsmsg.SetFlag(apc.LsNameSize)
-	}
-
-	// ht:// backend doesn't have `ListObjects`; can only locally list archived content
-	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
-		lsmsg.SetFlag(apc.LsObjCached)
-	}
-
+// one page; common code (native, s3 api)
+func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, smap *smapX) (*cmn.LsoResult, error) {
 	var (
 		nl             nl.Listener
 		err            error

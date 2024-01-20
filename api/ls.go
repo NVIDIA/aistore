@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	maxListPageRetries = 4
+	maxListPageRetries = 3
 
 	msgpBufSize = 16 * cos.KiB
 )
@@ -141,13 +141,11 @@ func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (
 // the entire bucket). Each iteration lists a page of objects and reduces `toRead`
 // accordingly. When the latter gets below page size, we perform the final
 // iteration for the reduced page.
-func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
+func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (lst *cmn.LsoResult, _ error) {
 	var (
-		ctx      *LsoCounter
-		lst      = &cmn.LsoResult{}
-		nextPage = &cmn.LsoResult{}
-		toRead   = args.Limit
-		listAll  = args.Limit == 0
+		ctx     *LsoCounter
+		toRead  = args.Limit
+		listAll = args.Limit == 0
 	)
 	if args.Callback != nil {
 		ctx = &LsoCounter{startTime: mono.NanoTime(), callback: args.Callback, count: -1}
@@ -159,33 +157,20 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult
 		}
 		actMsg := apc.ActMsg{Action: apc.ActList, Value: lsmsg}
 		reqParams.Body = cos.MustMarshal(actMsg)
-		page := nextPage
-		if pageNum == 1 {
-			page = lst
-		} else {
-			page.Entries = nil
-		}
 
-		// w/ limited retry and increasing timeout
-		for i := 0; i < maxListPageRetries; i++ {
-			_, err := reqParams.DoReqAny(page)
-			if err == nil {
-				break
-			}
-			if errors.Is(err, context.DeadlineExceeded) && i < maxListPageRetries-1 {
-				client := *reqParams.BaseParams.Client
-				client.Timeout = 2 * client.Timeout
-				reqParams.BaseParams.Client = &client
-				continue
-			}
+		page, err := lsoPage(reqParams)
+		if err != nil {
 			return nil, err
 		}
-
-		lst.Flags |= page.Flags
-		// first page appends to an empty `lst`, otherwise:
-		if pageNum > 1 {
+		if pageNum == 1 {
+			lst = page
+			lsmsg.UUID = page.UUID
+			debug.Assert(cos.IsValidUUID(lst.UUID), lst.UUID)
+		} else {
 			lst.Entries = append(lst.Entries, page.Entries...)
 			lst.ContinuationToken = page.ContinuationToken
+			lst.Flags |= page.Flags
+			debug.Assert(lst.UUID == page.UUID, lst.UUID, page.UUID)
 		}
 		if ctx != nil && ctx.mustCall() {
 			ctx.count = len(lst.Entries)
@@ -195,15 +180,29 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult
 			ctx.callback(ctx)
 		}
 		if page.ContinuationToken == "" { // listed all pages
-			lsmsg.ContinuationToken = ""
 			break
 		}
 		toRead = uint(max(int(toRead)-len(page.Entries), 0))
-		debug.Assert(cos.IsValidUUID(page.UUID))
-		lsmsg.UUID = page.UUID
 		lsmsg.ContinuationToken = page.ContinuationToken
 	}
 	return lst, nil
+}
+
+// w/ limited retry and increasing timeout
+func lsoPage(reqParams *ReqParams) (_ *cmn.LsoResult, err error) {
+	for i := 0; i < maxListPageRetries; i++ {
+		page := &cmn.LsoResult{}
+		if _, err = reqParams.DoReqAny(page); err == nil {
+			return page, nil
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			break
+		}
+		client := *reqParams.BaseParams.Client
+		client.Timeout += client.Timeout >> 1
+		reqParams.BaseParams.Client = &client
+	}
+	return nil, err
 }
 
 // ListObjectsPage returns the first page of bucket objects.

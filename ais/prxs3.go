@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -80,7 +81,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				p.getBckVersioningS3(w, r, apiItems[0])
 				return
 			}
-			p.listObjectsS3(w, r, apiItems[0])
+			p.listObjectsS3(w, r, apiItems[0], q)
 			return
 		}
 		// object data otherwise
@@ -310,7 +311,7 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 
 // GET /s3/<bucket-name>
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
-func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string, q url.Values) {
 	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
@@ -324,31 +325,35 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	}
 
 	// e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
-	// (compare w/ `t.headObjS3()`
-	lsmsg := &apc.LsoMsg{UUID: cos.GenUUID(), TimeFormat: cos.ISO8601}
+	lsmsg := &apc.LsoMsg{TimeFormat: cos.ISO8601}
 
-	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion)
+	// NOTE: hard-coded props as per FromLsoResult (see below)
+	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime)
 	amsg.Value = lsmsg
 
-	s3.FillMsgFromS3Query(r.URL.Query(), lsmsg)
+	// as per API_ListObjectsV2.html, optional:
+	// - "max-keys"
+	// - "prefix"
+	// - "start-after"
+	// - "delimiter" (TODO: limited support: no recursion)
+	// - "continuation-token" (NOTE: base64 encoded, as in: base64.StdEncoding.DecodeString(token)
+	// TODO:
+	// - "fetch-owner"
+	// - "encoding-type"
+	s3.FillLsoMsg(q, lsmsg)
 
-	beg := mono.NanoTime()
-	lst, err := p._listObjects(bck, amsg, lsmsg)
+	lst, err := p.lsAllPagesS3(bck, amsg, lsmsg)
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		nlog.Infoln("lsoS3", bck.Cname(""), len(lst.Entries), err)
+	}
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln("lso", bck.String(), lsmsg, len(lst.Entries), err)
-	}
-	p.statsT.AddMany(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
-	)
 
 	resp := s3.NewListObjectResult(bucket)
 	resp.ContinuationToken = lsmsg.ContinuationToken
-	resp.FillFromAisBckList(lst, lsmsg)
+	resp.FromLsoResult(lst, lsmsg)
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -360,6 +365,37 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	lst.Entries = lst.Entries[:0]
 	lst.Entries = nil
 	lst = nil
+}
+
+func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) (lst *cmn.LsoResult, _ error) {
+	smap := p.owner.smap.get()
+	for pageNum := 1; ; pageNum++ {
+		beg := mono.NanoTime()
+		page, err := p.lsPage(bck, amsg, lsmsg, smap)
+		if err != nil {
+			return lst, err
+		}
+		p.statsT.AddMany(
+			cos.NamedVal64{Name: stats.ListCount, Value: 1},
+			cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+		)
+		if pageNum == 1 {
+			lst = page
+			lsmsg.UUID = page.UUID
+			debug.Assert(cos.IsValidUUID(lst.UUID), lst.UUID)
+		} else {
+			lst.Entries = append(lst.Entries, page.Entries...)
+			lst.ContinuationToken = page.ContinuationToken
+			debug.Assert(lst.UUID == page.UUID, lst.UUID, page.UUID)
+			lst.Flags |= page.Flags
+		}
+		if page.ContinuationToken == "" { // listed all pages
+			break
+		}
+		lsmsg.ContinuationToken = page.ContinuationToken
+		amsg.Value = lsmsg
+	}
+	return lst, nil
 }
 
 // PUT /s3/<bucket-name>/<object-name>
