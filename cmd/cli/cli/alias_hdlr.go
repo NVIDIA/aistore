@@ -19,7 +19,25 @@ import (
 
 // NOTE: for built-in aliases, see `DefaultAliasConfig` (cmd/cli/config/config.go)
 
-const invalidAlias = "alias must start with a letter and can only contain letters, numbers, hyphens (-), and underscores (_)"
+const (
+	aliasForPrefix = "(alias for "
+	aliasForRegex  = `\s+\(alias for ".+"\)`
+
+	invalidAlias = "alias must start with a letter and can only contain letters, numbers, hyphens (-), and underscores (_)"
+)
+
+func isAlias(c *cli.Context) bool {
+	return strings.Contains(c.Command.Usage, aliasForPrefix)
+}
+
+func lastAliasedWord(c *cli.Context) string {
+	alias, ok := cfg.Aliases[c.Command.Name]
+	if !ok {
+		return ""
+	}
+	words := strings.Split(alias, " ")
+	return words[len(words)-1]
+}
 
 func (a *acli) getAliasCmd() cli.Command {
 	aliasCmd := cli.Command{
@@ -117,7 +135,7 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 		cmd.Name = newName[0]
 	}
 	if !silentAlias {
-		cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
+		cmd.Usage = fmt.Sprintf(aliasForPrefix+"%q) %s", aliasFor, cmd.Usage)
 	}
 
 	// help is already added to the original, remove from cmd and all cmds

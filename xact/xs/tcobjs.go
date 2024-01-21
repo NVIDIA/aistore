@@ -175,10 +175,10 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 				if msg.Sync && lrit.lrp != lrpList {
 					wg = &sync.WaitGroup{}
 					wg.Add(1)
-					go func() {
-						r.prune(lrit, smap)
+					go func(pt *cos.ParsedTemplate) {
+						r.prune(lrit, smap, pt)
 						wg.Done()
-					}()
+					}(lrit.pt.Clone())
 				}
 				err = lrit.run(wi, smap)
 			}
@@ -352,13 +352,13 @@ type syncwi struct {
 // interface guard
 var _ lrwi = (*syncwi)(nil)
 
-func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap) {
-	rp := prune{parent: r}
+func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap, pt *cos.ParsedTemplate) {
+	rp := prune{parent: r, smap: smap}
 	rp.bckFrom, rp.bckTo = r.FromTo()
 
 	// tcb use case
 	if lrit.lrp == lrpPrefix {
-		rp.prefix = lrit.pt.Prefix
+		rp.prefix = lrit.prefix
 		rp.init(r.config)
 		rp.run()
 		rp.wait()
@@ -368,6 +368,7 @@ func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap) {
 	// same range iterator but different bucket
 	debug.Assert(lrit.lrp == lrpRange)
 	syncit := *lrit
+	syncit.pt = pt
 	syncit.bck = rp.bckTo
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
 	syncit.run(syncwi, smap)

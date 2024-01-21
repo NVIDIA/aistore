@@ -221,6 +221,7 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
+// NOTE: (smap != nil) to filter non-locals
 func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) error {
 	if err := lom.InitBck(r.bck.Bucket()); err != nil {
 		return err

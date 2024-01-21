@@ -1,0 +1,16 @@
+ais archive gen-shards "ais://$BUCKET_1/prune/shard-{001..500}.tar" // IGNORE
+
+ais cp ais://$BUCKET_1 ais://$BUCKET_2 --sync --wait // IGNORE
+ais ls ais://$BUCKET_2 --prefix prune | grep Listed
+
+ais rmo "ais://$BUCKET_1/prune/shard-{251..260}.tar" --wait // IGNORE
+ais ls ais://$BUCKET_1 --prefix prune | grep Listed
+
+ais cp ais://$BUCKET_1 ais://$BUCKET_2 --sync --wait // IGNORE
+ais ls ais://$BUCKET_2 --prefix prune | grep Listed
+
+ais rmo "ais://$BUCKET_1/prune/shard-{351..360}.tar" --wait // IGNORE
+ais ls ais://$BUCKET_1 --prefix prune | grep Listed
+
+ais cp "ais://$BUCKET_1/prune/shard-{001..500}.tar" ais://$BUCKET_2 --sync --wait // IGNORE
+ais ls ais://$BUCKET_2 --prefix prune | grep Listed

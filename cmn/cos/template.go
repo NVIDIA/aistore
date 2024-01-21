@@ -98,6 +98,14 @@ func NewParsedTemplate(template string) (parsed ParsedTemplate, err error) {
 	return ParsedTemplate{Prefix: template}, nil
 }
 
+func (pt *ParsedTemplate) Clone() *ParsedTemplate {
+	if pt == nil {
+		return nil
+	}
+	clone := *pt
+	return &clone
+}
+
 func (pt *ParsedTemplate) Count() int64 {
 	count := int64(1)
 	for _, tr := range pt.Ranges {

@@ -81,10 +81,10 @@ func (p *tcbFactory) Start() error {
 		p.owt = cmn.OwtTransform
 	}
 
-	p.xctn = newTCB(p, slab, config)
+	smap := core.T.Sowner().Get()
+	p.xctn = newTCB(p, slab, config, smap)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
-	smap := core.T.Sowner().Get()
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
+func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap) (r *XactTCB) {
 	r = &XactTCB{p: p}
 
 	s1, s2 := r._str(), r.p.args.BckFrom.String()
@@ -184,6 +184,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
 		debug.Assert(p.args.Msg.Prepend == "", p.args.Msg.Prepend) // validated (cli, P)
 		{
 			r.prune.parent = r
+			r.prune.smap = smap
 			r.prune.bckFrom = p.args.BckFrom
 			r.prune.bckTo = p.args.BckTo
 			r.prune.prefix = p.args.Msg.Prefix

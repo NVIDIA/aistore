@@ -31,6 +31,7 @@ import (
 type prune struct {
 	parent         core.Xact
 	bckFrom, bckTo *meta.Bck
+	smap           *meta.Smap
 	prefix         string
 	// run
 	joggers *mpather.Jgroup
@@ -88,6 +89,10 @@ func (rp *prune) _wait(ticker *time.Ticker) {
 }
 
 func (rp *prune) do(dst *core.LOM, _ []byte) error {
+	debug.Func(func() {
+		_, local, err := dst.HrwTarget(rp.smap)
+		debug.Assertf(local, "local %t, err: %v", local, err)
+	})
 	// construct src lom
 	var src *core.LOM
 	if rp.same {
@@ -113,8 +118,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 		errCode int
 	)
 	if src.Bck().IsAIS() {
-		smap := core.T.Sowner().Get()
-		tsi, errV := smap.HrwHash2T(src.Digest())
+		tsi, errV := rp.smap.HrwHash2T(src.Digest())
 		if errV != nil {
 			return fmt.Errorf("prune %s: fatal err: %w", rp.parent.Name(), errV)
 		}
@@ -128,7 +132,8 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	} else {
 		_, errCode, err = core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
 	}
-	if err == nil || !cos.IsNotExist(err, errCode) /*not complaining*/ {
+
+	if (err == nil && errCode == 0) || !cos.IsNotExist(err, errCode) /*not complaining*/ {
 		return nil
 	}
 

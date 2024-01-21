@@ -53,7 +53,7 @@ func (e *errUsage) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
 
 	// remove "alias for" (simplify)
-	reg := regexp.MustCompile(`\s+\(alias for ".+"\)`)
+	reg := regexp.MustCompile(aliasForRegex)
 	if loc := reg.FindStringIndex(msg); loc != nil {
 		msg = msg[:loc[0]] + msg[loc[1]:]
 	}

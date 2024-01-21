@@ -412,7 +412,11 @@ func (lr *lrCtx) dry(c *cli.Context, fileList []string, pt *cos.ParsedTemplate) 
 }
 
 func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action string, err error) {
-	switch c.Command.Name {
+	verb := c.Command.Name
+	if isAlias(c) {
+		verb = lastAliasedWord(c)
+	}
+	switch verb {
 	case commandRemove:
 		xid, err = api.DeleteMultiObj(apiBP, lr.bck, fileList, lr.tmplObjs)
 		kind = apc.ActDeleteObjects
@@ -438,7 +442,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 		kind = apc.ActEvictObjects
 		action = "evict"
 	default:
-		debug.Assert(false, c.Command.Name)
+		debug.Assert(false, verb)
 	}
 	return xid, kind, action, err
 }
