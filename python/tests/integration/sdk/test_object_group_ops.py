@@ -19,7 +19,8 @@ from tests.utils import random_string
 class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
-        self.obj_names = self._create_objects(suffix="-suffix")
+        self.suffix = "-suffix"
+        self.obj_names = self._create_objects(suffix=self.suffix)
         if REMOTE_SET:
             self.s3_client = self._get_boto3_client()
 
@@ -126,7 +127,37 @@ class TestObjectGroupOps(RemoteEnabledTest):
         with self.assertRaises(AISError):
             self.bucket.object(obj_name).get()
 
-        # TODO: add check for different dst bucket (after delete)
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_copy_objects_sync_flag(self):
+        to_bck_name = "dst-bck-cp-sync"
+        to_bck = self._create_bucket(to_bck_name)
+
+        # run copy with '--sync' on different dst, and make sure the object "disappears"
+        # multi-obj --sync currently only supports templates
+        # TODO: add test for multi-obj list --sync once api is ready
+        template = self.obj_prefix + "{0..10}" + self.suffix
+        copy_job = self.bucket.objects(obj_template=template).copy(to_bck)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertEqual(
+            len(to_bck.list_all_objects(prefix=self.obj_prefix)), OBJECT_COUNT
+        )
+
+        prefetch_job = self.bucket.objects(obj_template=template).prefetch()
+        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
+        # out of band delete all objects
+        for obj_name in self.obj_names:
+            self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
+
+        copy_job = self.bucket.objects(obj_template=template).copy(to_bck, sync=True)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        # check to see if all the objects in dst disapear after cp multi-obj sync
+        self.assertEqual(len(to_bck.list_all_objects(prefix=self.obj_prefix)), 0)
+        # objects also disapear from src bck
+        self.assertEqual(len(self.bucket.list_all_objects(prefix=self.obj_prefix)), 0)
 
     @unittest.skipIf(
         not REMOTE_SET,
