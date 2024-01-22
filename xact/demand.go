@@ -56,11 +56,11 @@ func (r *DemandBase) IsIdle() bool {
 	return last != 0 && mono.Since(last) >= max(cmn.Rom.MaxKeepalive(), 2*time.Second)
 }
 
-func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idle time.Duration) {
+func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duration) {
 	r.hkName = kind + "/" + uuid
 	r.idle.d = IdleDefault
-	if idle > 0 {
-		r.idle.d = idle
+	if idleDur > 0 {
+		r.idle.d = idleDur
 	}
 	r.idle.ticks.Init()
 	r.InitBase(uuid, kind, bck)
@@ -70,11 +70,13 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idle time.Duration) 
 	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, 0 /*time.Duration*/)
 }
 
+// (e.g. usage: listed last page)
+func (r *DemandBase) Reset(idleTime time.Duration) { r.idle.d = idleTime }
+
 func (r *DemandBase) hkcb() time.Duration {
 	last := r.idle.last.Load()
 	if last != 0 && mono.Since(last) >= r.idle.d {
-		// signal parent xaction via IdleTimer() chan
-		// to finish and exit
+		// signal parent xaction to finish and exit (via `IdleTimer` chan)
 		r.idle.ticks.Close()
 	}
 	return r.idle.d

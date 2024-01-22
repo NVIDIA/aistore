@@ -41,7 +41,12 @@ const (
 	MinPollTime      = 2 * time.Second    // ditto
 	MaxPollTime      = 2 * time.Minute    // can grow up to
 
-	NumConsecutiveIdle = 3 // number of consecutive 'idle' states (to exclude false-positive "is idle")
+	// number of consecutive 'idle' xaction states, with possible numeric
+	// values translating as follows:
+	// 1: fully rely on xact.IsIdle() logic with no extra checks whatsoever
+	// 2: one additional IsIdle() call after MinPollTime
+	// 3: two additional IsIdle() calls spaced at MinPollTime interval, and so on.
+	NumConsecutiveIdle = 2
 )
 
 type (

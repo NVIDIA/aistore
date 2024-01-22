@@ -7,6 +7,7 @@ package xact
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -29,6 +30,7 @@ type (
 		bck    meta.Bck
 		id     string
 		kind   string
+		_nam   string
 		sutime atomic.Int64
 		eutime atomic.Int64
 		abort  struct {
@@ -78,6 +80,12 @@ func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
 		xctn.bck = *bck
 	}
 	xctn.setStartTime(time.Now())
+
+	// name never changes
+	xctn._nam = "x-" + xctn.Kind() + LeftID + xctn.ID() + RightID
+	if !xctn.bck.IsEmpty() {
+		xctn._nam += "-" + xctn.bck.Cname("")
+	}
 }
 
 func (xctn *Base) ID() string   { return xctn.id }
@@ -234,28 +242,28 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 // see also: xact.ParseCname (api.go)
 func (xctn *Base) Cname() string { return xctn.Kind() + LeftID + xctn.ID() + RightID }
 
-func (xctn *Base) Name() (s string) {
-	var b string
-	if !xctn.bck.IsEmpty() {
-		b = "-" + xctn.bck.String()
-	}
-	s = "x-" + xctn.Kind() + LeftID + xctn.ID() + RightID + b
-	return
-}
+func (xctn *Base) Name() (s string) { return xctn._nam }
 
-func (xctn *Base) String() string {
-	var (
-		name = xctn.Name()
-		s    = name + "-" + cos.FormatTime(xctn.StartTime(), cos.StampMicro)
-	)
+func (xctn *Base) _sb() (sb strings.Builder) {
+	sb.WriteString(xctn._nam)
+	sb.WriteByte('-')
+	sb.WriteString(cos.FormatTime(xctn.StartTime(), cos.StampMicro))
+
 	if !xctn.Finished() { // ok to (rarely) miss _aborted_ state as this is purely informational
-		return s
+		return sb
 	}
 	etime := cos.FormatTime(xctn.EndTime(), cos.StampMicro)
 	if xctn.IsAborted() {
-		s = fmt.Sprintf("%s-[abrt: %v]", s, xctn.AbortErr())
+		sb.WriteString(fmt.Sprintf("-[abrt: %v]", xctn.AbortErr()))
 	}
-	return s + "-" + etime
+	sb.WriteByte('-')
+	sb.WriteString(etime)
+	return sb
+}
+
+func (xctn *Base) String() string {
+	sb := xctn._sb()
+	return sb.String()
 }
 
 func (xctn *Base) StartTime() time.Time {

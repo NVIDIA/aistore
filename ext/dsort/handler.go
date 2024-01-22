@@ -412,7 +412,7 @@ func TargetHandler(w http.ResponseWriter, r *http.Request) {
 		tabortHandler(w, r)
 	case apc.Remove:
 		tremoveHandler(w, r)
-	case apc.List:
+	case apc.UList:
 		tlistHandler(w, r)
 	case apc.Metrics:
 		tmetricsHandler(w, r)

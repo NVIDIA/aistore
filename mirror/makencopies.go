@@ -34,6 +34,7 @@ type (
 	mncXact struct {
 		p *mncFactory
 		xact.BckJog
+		_nam, _str string
 	}
 )
 
@@ -84,7 +85,12 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 	}
 	mpopts.Bck.Copy(p.Bck.Bucket())
 	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, p.Bck, mpopts, cmn.GCO.Get())
-	return
+
+	// name
+	s := fmt.Sprintf("-%s-copies-%d", r.p.args.Tag, r.p.args.Copies)
+	r._nam = r.Base.Name() + s
+	r._str = r.Base.String() + s
+	return r
 }
 
 func (r *mncXact) Run(wg *sync.WaitGroup) {
@@ -153,12 +159,8 @@ func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 	return
 }
 
-func (r *mncXact) str(s string) string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", s, r.p.args.Tag, r.p.args.Copies)
-}
-
-func (r *mncXact) String() string { return r.str(r.Base.String()) }
-func (r *mncXact) Name() string   { return r.str(r.Base.Name()) }
+func (r *mncXact) String() string { return r._str }
+func (r *mncXact) Name() string   { return r._nam }
 
 func (r *mncXact) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}

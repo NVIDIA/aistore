@@ -104,7 +104,8 @@ func (p *lsoFactory) Start() (err error) {
 	r.lastPage = allocLsoEntries()
 	r.stopCh.Init()
 
-	// NOTE: idle timeout vs delayed next-page request
+	// idle timeout vs delayed next-page request
+	// see also: resetIdle()
 	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
 	// NOTE: is set by the first message, never changes
@@ -235,6 +236,11 @@ func (r *LsoXact) lastmsg() {
 		break
 	}
 	close(r.respCh)
+}
+
+// upon listing last page
+func (r *LsoXact) resetIdle() {
+	r.DemandBase.Reset(max(r.config.Timeout.MaxKeepalive.D(), 2*time.Second))
 }
 
 func (r *LsoXact) fcleanup() (d time.Duration) {
@@ -390,6 +396,7 @@ ex:
 	}
 	if page.ContinuationToken == "" {
 		r.walk.done = true
+		r.resetIdle()
 	}
 	freeLsoEntries(r.lastPage)
 	r.lastPage = page.Entries
@@ -473,6 +480,7 @@ func (r *LsoXact) nextPageA() {
 		obj, ok := <-r.walk.pageCh
 		if !ok {
 			r.walk.done = true
+			r.resetIdle()
 			break
 		}
 		// Skip until the requested continuation token (TODO: revisit)

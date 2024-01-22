@@ -62,7 +62,7 @@ const (
 	Records     = "records"
 	Shards      = "shards"
 	FinishedAck = "finished_ack"
-	List        = "list"
+	UList       = "list"
 	Remove      = "remove"
 	Next        = "next"
 	Peek        = "peek"
@@ -72,7 +72,7 @@ const (
 	// ETL
 	ETL        = "etl"
 	ETLInfo    = "info"
-	ETLList    = List
+	ETLList    = UList
 	ETLLogs    = "logs"
 	ETLObject  = "_object"
 	ETLStop    = Stop
@@ -136,7 +136,7 @@ var (
 	URLPathdSort        = urlpath(Version, Sort)
 	URLPathdSortInit    = urlpath(Version, Sort, Init)
 	URLPathdSortStart   = urlpath(Version, Sort, Start)
-	URLPathdSortList    = urlpath(Version, Sort, List)
+	URLPathdSortList    = urlpath(Version, Sort, UList)
 	URLPathdSortAbort   = urlpath(Version, Sort, Abort)
 	URLPathdSortShards  = urlpath(Version, Sort, Shards)
 	URLPathdSortRecords = urlpath(Version, Sort, Records)

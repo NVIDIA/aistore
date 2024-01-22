@@ -36,6 +36,7 @@ type (
 		oneRes        cmn.BsummResult
 		mapRes        map[uint64]*cmn.BsummResult
 		buckets       []*meta.Bck
+		_nam, _str    string
 		totalDiskSize uint64
 		xact.BckJog
 		single     bool
@@ -86,7 +87,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 			tsi  *meta.Snode
 		)
 		if tsi, err = smap.HrwTargetTask(p.UUID()); err != nil {
-			return
+			return r, err
 		}
 		r.listRemote = listRemote && tsi.ID() == core.T.SID() // this target
 	}
@@ -106,7 +107,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		nb := len(opts.Buckets)
 		switch nb {
 		case 0:
-			return r, fmt.Errorf("no %q matching buckets", p.Bck)
+			return r, fmt.Errorf("no buckets matching %q", p.Bck.Bucket())
 		case 1:
 			// change of mind: single even though spec-ed as qbck
 			p.Bck = single
@@ -129,6 +130,10 @@ single:
 	opts.Bck = p.Bck.Clone()
 ini:
 	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, opts, cmn.GCO.Get())
+
+	s := fmt.Sprintf("-msg-%+v", r.p.msg)
+	r._nam = r.Base.Name() + s
+	r._str = r.Base.String() + s
 	return r, nil
 }
 
@@ -217,9 +222,8 @@ func (r *XactNsumm) initRes(res *cmn.BsummResult, bck *meta.Bck) {
 	res.TotalSize.OnDisk = fs.OnDiskSize(bck.Bucket(), r.p.msg.Prefix)
 }
 
-func (r *XactNsumm) _str(s string) string { return fmt.Sprintf("%s %+v", s, r.p.msg) }
-func (r *XactNsumm) String() string       { return r._str(r.Base.String()) }
-func (r *XactNsumm) Name() string         { return r._str(r.Base.Name()) }
+func (r *XactNsumm) String() string { return r._str }
+func (r *XactNsumm) Name() string   { return r._nam }
 
 func (r *XactNsumm) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
