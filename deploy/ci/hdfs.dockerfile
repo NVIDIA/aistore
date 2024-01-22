@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:/usr/local/go/bin:${PATH}"
 ENV GOLANG_VERSION="1.21.1"
-ENV HADOOP_VERSION="3.3.2"
+ENV HADOOP_VERSION="3.3.5"
 
 RUN apt-get update -yq
 RUN apt-get --no-install-recommends -y install lsb-release sudo default-jre default-jdk
