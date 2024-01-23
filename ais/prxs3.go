@@ -211,6 +211,10 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	}
 	smap := p.owner.smap.get()
 	objName := s3.ObjName(parts)
+	if err := cmn.ValidateObjName(objName); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
@@ -478,6 +482,10 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 	objName := s3.ObjName(items)
+	if err := cmn.ValidateObjName(objName); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
@@ -517,6 +525,10 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	objName := s3.ObjName(items)
+	if err := cmn.ValidateObjName(objName); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
@@ -584,6 +596,10 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	bucket, objName := items[0], s3.ObjName(items)
+	if err := cmn.ValidateObjName(objName); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
@@ -627,6 +643,10 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		return
 	}
 	objName := s3.ObjName(items)
+	if err := cmn.ValidateObjName(objName); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	si, err = smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)

@@ -1267,8 +1267,8 @@ func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action stri
 
 // also, validatePrefix
 func (h *htrun) isValidObjname(w http.ResponseWriter, r *http.Request, name string) bool {
-	if cos.IsLastB(name, filepath.Separator) || strings.Contains(name, "../") {
-		h.writeErrf(w, r, "invalid object name %q", name)
+	if err := cmn.ValidateObjName(name); err != nil {
+		h.writeErr(w, r, err)
 		return false
 	}
 	return true

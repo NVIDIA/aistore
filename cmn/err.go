@@ -191,6 +191,10 @@ type (
 		reason string
 		detail string
 	}
+
+	ErrInvalidObjName struct {
+		name string
+	}
 )
 
 var (
@@ -722,6 +726,21 @@ func (e *ErrXactUsePrev) Error() string {
 func IsErrXactUsePrev(err error) bool {
 	_, ok := err.(*ErrXactUsePrev)
 	return ok
+}
+
+//
+// ErrInvalidObjName
+//
+
+func ValidateObjName(name string) (err *ErrInvalidObjName) {
+	if cos.IsLastB(name, filepath.Separator) || strings.Contains(name, "../") {
+		err = &ErrInvalidObjName{name}
+	}
+	return err
+}
+
+func (e *ErrInvalidObjName) Error() string {
+	return fmt.Sprintf("invalid object name %q", e.name)
 }
 
 ///////////////////////
