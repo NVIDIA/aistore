@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
@@ -81,6 +82,7 @@ type (
 		retry      bool            // once
 		cold       bool            // true if executed backend.Get
 		latestVer  bool            // QparamLatestVer || 'versioning.*_warm_get'
+		isS3       bool            // calling via /s3 API
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -185,7 +187,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 		goto rerr
 	}
 
-	// stats
+	// resp. header & stats
 	if !poi.t2t {
 		// NOTE: counting only user PUTs; ignoring EC and copies, on the one hand, and
 		// same-checksum-skip-writing, on the other
@@ -993,7 +995,9 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 		reader io.Reader = lmfh
 	)
 	cmn.ToHeader(goi.lom.ObjAttrs(), hdr) // (defaults)
-
+	if goi.isS3 {
+		s3.SetEtag(hdr, goi.lom)
+	}
 	switch {
 	case goi.archive.filename != "": // archive
 		var (
@@ -1055,9 +1059,11 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
+
 	buf, slab := goi.t.gmm.AllocSize(min(size, 64*cos.KiB))
 	err = goi.transmit(reader, buf, fqn)
 	slab.Free(buf)
+
 	return
 }
 

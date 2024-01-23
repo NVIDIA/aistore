@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -188,21 +189,16 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoResult, lsmsg *apc.LsoMsg) 
 	}
 }
 
-func lomMD5(lom *core.LOM) string {
-	if v, exists := lom.GetCustomKey(cmn.SourceObjMD); exists && v == apc.AWS {
-		if v, exists := lom.GetCustomKey(cmn.MD5ObjMD); exists {
-			return v
-		}
+func SetEtag(hdr http.Header, lom *core.LOM) {
+	if hdr.Get(cos.S3CksumHeader) != "" {
+		return
+	}
+	if v, exists := lom.GetCustomKey(cmn.ETag); exists && !strings.Contains(v, cmn.AwsMultipartDelim) {
+		hdr.Set(cos.S3CksumHeader, v)
+		return
 	}
 	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
-		return cksum.Value()
-	}
-	return ""
-}
-
-func SetETag(header http.Header, lom *core.LOM) {
-	if md5val := lomMD5(lom); md5val != "" {
-		header.Set(cos.S3CksumHeader, md5val)
+		hdr.Set(cos.S3CksumHeader, cksum.Value())
 	}
 }
 

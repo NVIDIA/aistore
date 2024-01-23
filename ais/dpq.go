@@ -32,6 +32,8 @@ type dpq struct {
 	etlName             string // QparamETLName
 	silent              string // QparamSilent
 	latestVer           string // QparamLatestVer
+	// special use: s3 only
+	isS3 string
 }
 
 var (

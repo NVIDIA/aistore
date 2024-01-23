@@ -219,7 +219,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	s3.SetETag(w.Header(), lom)
+	s3.SetEtag(w.Header(), lom)
 }
 
 // GET s3/<bucket-name[/<object-name>]
@@ -266,11 +266,9 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	lom := core.AllocLOM(objName)
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln("getObject", lom.String(), dpq)
-	}
+	dpq.isS3 = "true"
 	t.getObject(w, r, dpq, bck, lom)
-	s3.SetETag(w.Header(), lom) // add etag/md5
+
 	core.FreeLOM(lom)
 	dpqFree(dpq)
 }
@@ -329,7 +327,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	if v, ok := custom[cos.HdrETag]; ok {
 		hdr.Set(cos.HdrETag, v)
 	}
-	s3.SetETag(hdr, lom)
+	s3.SetEtag(hdr, lom)
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))
 	if v, ok := custom[cos.HdrContentType]; ok {
 		hdr.Set(cos.HdrContentType, v)

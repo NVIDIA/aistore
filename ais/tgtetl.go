@@ -286,7 +286,7 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom := core.AllocLOM(objName)
-	errCode, err := t.objhead(w.Header(), r.URL.Query(), bck, lom)
+	errCode, err := t.objHead(w.Header(), r.URL.Query(), bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
 		// always silent (compare w/ httpobjhead)

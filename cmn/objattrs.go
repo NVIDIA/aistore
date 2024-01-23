@@ -174,8 +174,11 @@ func ToHeader(oah cos.OAH, hdr http.Header) {
 	}
 	custom := oah.GetCustomMD()
 	for k, v := range custom {
-		debug.Assert(k != "")
 		hdr.Add(apc.HdrObjCustomMD, k+"="+v)
+		if k == ETag {
+			// TODO: redundant vs CustomMD - maybe extend cos.OAH to include get/set(ETag)
+			hdr.Set(cos.HdrETag, v)
+		}
 	}
 }
 

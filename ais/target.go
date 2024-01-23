@@ -707,6 +707,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 		goi.isGFN = cos.IsParseBool(dpq.isGFN)                 // query.Get(apc.QparamIsGFNRequest)
 		goi.latestVer = goi.lom.ValidateWarmGet(dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
+		goi.isS3 = dpq.isS3 != ""
 	}
 	if bck.IsHTTP() {
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
@@ -925,14 +926,14 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	}
 	lom := core.AllocLOM(objName)
-	errCode, err := t.objhead(w.Header(), query, bck, lom)
+	errCode, err := t.objHead(w.Header(), query, bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
 		t._erris(w, r, query.Get(apc.QparamSilent), err, errCode)
 	}
 }
 
-func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (errCode int, err error) {
+func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (errCode int, err error) {
 	var (
 		fltPresence int
 		exists      = true

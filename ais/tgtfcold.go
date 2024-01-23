@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -116,6 +117,9 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	// transmit
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr)
+	if goi.isS3 {
+		s3.SetEtag(whdr, goi.lom)
+	}
 
 	written, err = cos.CopyBuffer(goi.w, reader, buf)
 	if err != nil {

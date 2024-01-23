@@ -39,7 +39,7 @@ const (
 	HdrAccept    = "Accept"
 	HdrLocation  = "Location"
 	HdrServer    = "Server"
-	HdrETag      = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/ETag
+	HdrETag      = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 )
 
 // provider-specific headers (=> custom props, and more)
@@ -50,7 +50,7 @@ const (
 
 	// https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
-	S3CksumHeader   = "ETag"
+	S3CksumHeader   = HdrETag
 	S3VersionHeader = "x-amz-version-id"
 
 	// s3 api request headers
@@ -70,7 +70,7 @@ const (
 
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob-properties#response-headers
 	AzCksumHeader   = "Content-MD5"
-	AzVersionHeader = "ETag"
+	AzVersionHeader = HdrETag
 )
 
 // For AIS headers, see: api/apc/headers.go
