@@ -43,79 +43,81 @@ prf="prefix-$RANDOM"    ## source prefix
 ## cleanup
 cleanup() {
   rc=$?
-  ais rmo $src --prefix $prf --wait
+  ais rmo $src --prefix $prf --wait 1>/dev/null
+  ais rmb $dst --yes 1>/dev/null
   exit $rc
 }
 
 trap cleanup EXIT INT TERM
 
+echo " 1. generate and write 500 random shards => $src"
 ais archive gen-shards "$src/$prf/shard-{001..500}.tar" 1>/dev/null 2>&1
 cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 
-echo "1. initial"
+echo " 2. copy $src => $dst"
 ais cp $src $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
 [[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
-echo "2. remove 10 from the source"
+echo " 3. remove 10 shards from the source"
 ais rmo "$src/$prf/shard-{51..60}.tar" --wait 1>/dev/null 2>&1
 cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 
-echo "3. copy bucket w/ --sync"
+echo " 4. copy $src => $dst w/ synchronization ('--sync' option)"
 ais cp $src $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
 [[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
-echo "4. remove another 10"
+echo " 5. remove another 10 shards"
 ais rmo "$src/$prf/shard-{151..160}.tar" --wait 1>/dev/null 2>&1
 cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 
-echo "5. copy --sync (bash-expansion defined) range, and compare"
+echo " 6. copy multiple objects using bash-expansion defined range and '--sync'"
 ais cp "$src/$prf/shard-{001..500}.tar" $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
 [[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
+echo " #"
+echo " # out of band DELETE using remote AIS (remais)"
+echo " #"
 
-#
-# out of band DELETE using remais
-#
-
-echo "6. use remais to out-of-band remove 10 more from the source"
+echo " 7. use remote AIS cluster (\"remais\") to out-of-band remove 10 shards from the source"
 AIS_ENDPOINT=$rendpoint ais rmo "$src/$prf/shard-{251..260}.tar" --wait 1>/dev/null 2>&1
 cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 
-echo "7. copy bucket w/ --sync"
+echo " 8. copy $src => $dst w/ --sync"
 ais cp $src $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
 [[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
-echo "7.1. currently, when copying we always synchronize content of the in-cluster source as well"
+echo " 9. when copying, we always synchronize content of the in-cluster source as well"
 cnt_src_cached=$(ais ls $src --prefix $prf --cached | grep Listed)
 [[ $cnt_src_cached == $cnt_src ]] || { echo "FAIL: '$cnt_src_cached' != '$cnt_src'"; exit 1; }
 
-echo "8. use remais to out-of-band remove the last 10 from the source"
+echo "10. use remais to out-of-band remove 10 more shards from $src source"
 AIS_ENDPOINT=$rendpoint ais rmo "$src/$prf/shard-{351..360}.tar" --wait 1>/dev/null 2>&1
 cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 
-echo "9. copy --sync (bash-expansion defined) range, and compare"
+echo "11. copy a range of shards from $src to $dst, and compare"
 ais cp "$src/$prf/shard-{001..500}.tar" $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
 [[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
-echo "9.1. currently, when copying we always synchronize content of the in-cluster source as well"
+echo "12. and again: when copying, we always synchronize content of the in-cluster source as well"
 cnt_src_cached=$(ais ls $src --prefix $prf --cached | grep Listed)
 [[ $cnt_src_cached == $cnt_src ]] || { echo "FAIL: '$cnt_src_cached' != '$cnt_src'"; exit 1; }
 
-#
-# out of band ADD using remais
-#
+echo " #"
+echo " # out of band ADD using remote AIS (remais)"
+echo " #"
 
-echo "10. use remais to out-of-band add 17 new shards"
+echo "13. use remais to out-of-band add (i.e., PUT) 17 new shards"
 AIS_ENDPOINT=$rendpoint ais archive gen-shards "$src/$prf/shard-{501..517}.tar" 1>/dev/null 2>&1
 cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 
-echo "10.1. copy --sync (bash-expansion defined) range, and compare"
-echo "NOTE: currently, this part requires template-based copy !!!!!!!!!!!!!!!!!!!!" ## TODO -- FIXME
+echo "14. copy a range of shards from $src to $dst, and check whether the destination has new shards"
 ais cp "$src/$prf/shard-{001..600}.tar" $dst --sync --wait 1>/dev/null 2>&1
+
+echo "15. compare the contents but NOTE: as of v3.22, this part requires multi-object copy (using '--list' or '--template')"
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
 [[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }

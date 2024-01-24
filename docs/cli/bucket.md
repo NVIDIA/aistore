@@ -37,6 +37,7 @@ rmb             bucket rm
 - [Move or Rename a bucket](#move-or-rename-a-bucket)
 - [Copy bucket](#copy-bucket)
 - [Copy multiple objects](#copy-multiple-objects)
+- [Example copying buckets and multi-objects with simultaneous synchronization](#example-copying-buckets-and-multi-objects-with-simultaneous-synchronization)
 - [Show bucket summary](#show-bucket-summary)
 - [Start N-way Mirroring](#start-n-way-mirroring)
 - [Start Erasure Coding](#start-erasure-coding)
@@ -808,6 +809,46 @@ In particular, the option will make sure that aistore has the **latest** version
 ### See also
 
 * [Out of band updates](/docs/out_of_band.md)
+
+## Example copying buckets and multi-objects with simultaneous synchronization
+
+There's a [script](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-sync-remais-out-of-band.sh) that we use for testing. When run, it produces the following output:
+
+```console
+$ ./ais/test/scripts/cp-sync-remais-out-of-band.sh --bucket gs://abc
+
+ 1. generate and write 500 random shards => gs://abc
+ 2. copy gs://abc => ais://dst-9408
+ 3. remove 10 shards from the source
+ 4. copy gs://abc => ais://dst-9408 w/ synchronization ('--sync' option)
+ 5. remove another 10 shards
+ 6. copy multiple objects using bash-expansion defined range and '--sync'
+ #
+ # out of band DELETE using remote AIS (remais)
+ #
+ 7. use remote AIS cluster ("remais") to out-of-band remove 10 shards from the source
+ 8. copy gs://abc => ais://dst-9408 w/ --sync
+ 9. when copying, we always synchronize content of the in-cluster source as well
+10. use remais to out-of-band remove 10 more shards from gs://abc source
+11. copy a range of shards from gs://abc to ais://dst-9408, and compare
+12. and again: when copying, we always synchronize content of the in-cluster source as well
+ #
+ # out of band ADD using remote AIS (remais)
+ #
+13. use remais to out-of-band add (i.e., PUT) 17 new shards
+14. copy a range of shards from gs://abc to ais://dst-9408, and check whether the destination has new shards
+15. compare the contents but NOTE: as of v3.22, this part requires multi-object copy (using '--list' or '--template')
+```
+
+The [script](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-sync-remais-out-of-band.sh) executes 15 steps (see above).
+
+Notice a certain limitation (that also shows up as the last step 15 above):
+
+* As of the version 3.22, aistore `cp` commands will always synchronize _deleted_ and _updated_ remote content.
+
+* However, to see an out-of-band added content, you currently need to run [multi-object copy](#copy-multiple-objects), with multiple source objects specified using `--list` or `--template`.
+
+* See `ais cp --help` for details.
 
 ## Show bucket summary
 
