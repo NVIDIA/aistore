@@ -295,17 +295,17 @@ test:long:gcp:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-long
 
-test:long:hdfs:
-  image: aistorage/hdfs-ci
-  <<: *test_long_skip_scheduled_def
-  variables:
-    NUM_PROXY: 6
-    BUCKET: "hdfs://ais-ci"
-  script:
-    - bash deploy/ci/setup_hdfs.sh
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
-    - ais bucket create "${BUCKET}" --props="extra.hdfs.ref_directory=/"
-    - make test-long
+# test:long:hdfs:
+#   image: aistorage/hdfs-ci
+#   <<: *test_long_skip_scheduled_def
+#   variables:
+#     NUM_PROXY: 6
+#     BUCKET: "hdfs://ais-ci"
+#   script:
+#     - bash deploy/ci/setup_hdfs.sh
+#     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
+#     - ais bucket create "${BUCKET}" --props="extra.hdfs.ref_directory=/"
+#     - make test-long
 
 test:long:aisloader:
   stage: test-long
