@@ -1545,12 +1545,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	} else {
 		ok = p.writeJS(w, r, lst, lsotag)
 	}
-	if !ok {
-		// TODO -- FIXME: abort x-lso (e.g., `ls very-large-cloud-bucket` followed by Ctrl-C)
-		if false {
-			p._lstop(amsg, lst)
-		}
-		return
+	if !ok && cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		nlog.Errorln("failed to transmit list-objects page (TCP RST?)")
 	}
 
 	// GC
@@ -1621,27 +1617,6 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, smap 
 	}
 
 	return lst, err
-}
-
-func (p *proxy) _lstop(amsg *apc.ActMsg, lst *cmn.LsoResult) {
-	body := cos.MustMarshal(apc.ActMsg{Action: apc.ActXactStop, Value: xact.ArgsMsg{ID: lst.UUID, Kind: amsg.Action}})
-	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
-	args.to = core.Targets
-	results := p.bcastGroup(args)
-	freeBcArgs(args)
-	ok := true
-	for _, res := range results {
-		if res.err != nil {
-			ok = false
-			nlog.Warningf("failed to stop %s[%s]: %v", amsg.Action, lst.UUID, res.toErr())
-			break
-		}
-	}
-	freeBcastRes(results)
-	if ok {
-		nlog.Infof("stopped %s[%s]", amsg.Action, lst.UUID)
-	}
 }
 
 // list-objects flow control helper

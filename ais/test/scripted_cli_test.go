@@ -111,3 +111,22 @@ func TestPrefetchLatestRemaisUsingScript(t *testing.T) {
 	}
 	tassert.CheckFatal(t, err)
 }
+
+func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long:                  true,
+		RequiresRemoteCluster: true,
+	})
+
+	bck := cliBck
+	var (
+		bucketName = bck.Cname("")
+		cmd        = exec.Command("./scripts/cp-sync-remais-out-of-band.sh", "--bucket", bucketName)
+	)
+	tlog.Logln("note: this will take a while...")
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
