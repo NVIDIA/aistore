@@ -55,7 +55,7 @@ type (
 
 var (
 	clients    map[string]*s3.S3 // one s3.Client aka "svc" per (profile, region, endpoint) triplet
-	cmu        sync.RWMutex
+	cmu        sync.Mutex
 	s3Endpoint string
 	awsProfile string
 )
@@ -526,14 +526,14 @@ func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error)
 	cid := _cid(profile, region, endpoint)
 
 	// reuse
-	cmu.RLock()
+	cmu.Lock()
 	svc = clients[cid]
-	cmu.RUnlock()
+	cmu.Unlock()
 	if svc != nil {
 		return
 	}
 
-	// create
+	// slow path
 	sess, config := _session(endpoint, profile)
 	if region == "" {
 		if tag != "" {
