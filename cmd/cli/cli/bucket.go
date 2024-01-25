@@ -166,11 +166,21 @@ func listOrSummBuckets(c *cli.Context, qbck cmn.QueryBcks, lsb lsbCtx) error {
 	// an exception - extending ais queries to include remote ais
 
 	if lsb.all && qbck.Ns.IsGlobal() && (qbck.Provider == apc.AIS || qbck.Provider == "") {
-		if _, err := api.GetRemoteAIS(apiBP); err == nil {
+		if remais, err := api.GetRemoteAIS(apiBP); err == nil && len(remais.A) > 0 {
 			qrais := qbck
 			qrais.Ns = cmn.NsAnyRemote
 			if brais, err := api.ListBuckets(apiBP, qrais, lsb.fltPresence); err == nil && len(brais) > 0 {
-				bcks = append(bcks, brais...)
+			outer:
+				for i := range brais {
+					bn := brais[i]
+					for j := range bcks {
+						bo := bcks[j]
+						if bn.Equal(&bo) {
+							continue outer
+						}
+					}
+					bcks = append(bcks, bn)
+				}
 			}
 		}
 	}
