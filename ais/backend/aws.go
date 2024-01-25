@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 
+	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -432,15 +433,26 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err error) {
+func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, extraArgs *core.ExtraArgsPut) (errCode int, err error) {
 	var (
 		svc                   *s3.Client
+		uploader              *s3manager.Uploader
 		uploadOutput          *s3manager.UploadOutput
 		h                     = cmn.BackendHelpers.Amazon
 		cksumType, cksumValue = lom.Checksum().Get()
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]string, 2)
 	)
+
+	resp, err := aiss3.PassThroughSignedReq(extraArgs.DataClient, extraArgs.Req, lom, r)
+	if err != nil {
+		return resp.StatusCode, err
+	} else if resp != nil {
+		uploadOutput = &s3manager.UploadOutput{
+			ETag: aws.String(resp.Header.Get(cos.HdrETag)),
+		}
+		goto exit
+	}
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
 	if err != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
@@ -450,7 +462,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err err
 	md[cos.S3MetadataChecksumType] = cksumType
 	md[cos.S3MetadataChecksumVal] = cksumValue
 
-	uploader := s3manager.NewUploader(svc)
+	uploader = s3manager.NewUploader(svc)
 	uploadOutput, err = uploader.Upload(context.Background(), &s3.PutObjectInput{
 		Bucket:   aws.String(cloudBck.Name),
 		Key:      aws.String(lom.ObjName),
@@ -462,6 +474,8 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err err
 		cos.Close(r)
 		return
 	}
+
+exit:
 	// compare with setCustomS3() above
 	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)

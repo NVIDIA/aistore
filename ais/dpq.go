@@ -5,13 +5,14 @@
 package ais
 
 import (
-	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // RESTful API parse context
@@ -125,11 +126,20 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		case apc.QparamLatestVer:
 			dpq.latestVer = value
 
-		case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo:
-			// TODO: ignore for now
 		default:
-			err = errors.New("failed to fast-parse [" + rawQuery + "]")
-			return
+			debug.Func(func() {
+				// Currently, those datapaths that utilize these particular keys
+				// perform conventional query parsing `r.URL.Query()`.
+				switch key {
+				case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo,
+					s3.QparamAccessKeyID, s3.QparamExpires, s3.QparamSignature,
+					s3.HeaderAlgorithm, s3.HeaderCredentials, s3.HeaderDate,
+					s3.HeaderExpires, s3.HeaderSignedHeaders, s3.HeaderSignature, s3.QparamXID:
+				default:
+					err = fmt.Errorf("failed to fast-parse [%s], unknown key: %q", rawQuery, key)
+					debug.AssertNoErr(err)
+				}
+			})
 		}
 	}
 	return

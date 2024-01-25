@@ -3,6 +3,8 @@
 *.csv
 *.svg
 .*.swp
+*.key
+*.crt
 
 ## PYTHON ##
 

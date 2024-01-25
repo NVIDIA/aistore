@@ -47,6 +47,7 @@ import (
 
 type (
 	putOI struct {
+		req        *http.Request
 		r          io.ReadCloser // content reader
 		xctn       core.Xact     // xaction that puts
 		t          *target       // this
@@ -67,6 +68,7 @@ type (
 	}
 
 	getOI struct {
+		req        *http.Request
 		w          http.ResponseWriter
 		ctx        context.Context // context used when getting object from remote backend (access creds)
 		t          *target         // this
@@ -135,6 +137,7 @@ type (
 // poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
 	{
+		poi.req = r
 		poi.r = r.Body
 		poi.resphdr = resphdr
 		poi.workFQN = fs.CSM.Gen(poi.lom, fs.WorkfileType, fs.WorkfilePut)
@@ -362,7 +365,11 @@ func (poi *putOI) putRemote() (errCode int, err error) {
 		// some/all of those are set by the backend.PutObj()
 		lom.ObjAttrs().DelCustomKeys(cmn.SourceObjMD, cmn.CRC32CObjMD, cmn.ETag, cmn.MD5ObjMD, cmn.VersionObjMD)
 	}
-	errCode, err = backend.PutObj(lmfh, lom)
+
+	errCode, err = backend.PutObj(lmfh, lom, &core.ExtraArgsPut{
+		DataClient: g.client.data,
+		Req:        poi.req,
+	})
 	if err == nil && !lom.Bck().IsRemoteAIS() {
 		lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
 	}
@@ -564,6 +571,19 @@ do:
 			cold, goi.verchanged = true, true
 		}
 		// TODO: utilize res.ObjAttrs
+	} else if cmn.Rom.Features().IsSet(feat.PassThroughSignedS3Req) {
+		cold = false
+
+		resp, err := s3.PassThroughSignedReq(g.client.control, goi.req, goi.lom, nil)
+		if err != nil {
+			return resp.StatusCode, err
+		} else if resp != nil {
+			cksum := strings.Trim(resp.Header.Get(cos.HdrETag), `"`)
+			objCustomMD := map[string]string{cmn.SourceObjMD: apc.AWS, cmn.ETag: cksum, cmn.MD5ObjMD: cksum}
+			if !goi.lom.Equal(&cmn.ObjAttrs{CustomMD: objCustomMD}) {
+				return http.StatusGone, fmt.Errorf("checksum doesn't match, object should be retrieved from S3")
+			}
+		}
 	}
 
 	if !cold && goi.lom.CksumConf().ValidateWarmGet { // validate checksums and recover (self-heal) if corrupted
