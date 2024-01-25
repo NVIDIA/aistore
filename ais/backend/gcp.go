@@ -446,17 +446,25 @@ func readCredFile() (projectID string) {
 }
 
 func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
-	switch {
-	case gcpError == storage.ErrBucketNotExist:
+	if gcpError == storage.ErrBucketNotExist {
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
-	case gcpError == storage.ErrObjectNotExist:
-		return http.StatusNotFound, _gcpErr(gcpError)
-	default:
-		if apiErr, ok := gcpError.(*googleapi.Error); ok {
-			return apiErr.Code, _gcpErr(gcpError)
-		}
-		return http.StatusInternalServerError, _gcpErr(gcpError)
 	}
+	err := _gcpErr(gcpError)
+	if gcpError == storage.ErrObjectNotExist {
+		return http.StatusNotFound, err
+	}
+	apiErr, ok := gcpError.(*googleapi.Error)
+	if !ok {
+		return http.StatusInternalServerError, err
+	}
+	if apiErr.Code == http.StatusForbidden && strings.Contains(apiErr.Error(), "may not exist") {
+		// HACK: "not found or misspelled" vs  "service not paid for" (the latter less likely)
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Infoln(err)
+		}
+		return http.StatusNotFound, err
+	}
+	return apiErr.Code, err
 }
 
 // (compare w/ _awsErr)

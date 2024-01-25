@@ -625,6 +625,13 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 	case awsCode == s3.ErrCodeNoSuchKey || (status == http.StatusNotFound && objName != ""):
 		debug.Assert(status == http.StatusNotFound, status) // expected
 		return status, errors.New("aws-error[NotFound: " + bck.Cname(objName) + "]")
+	case status == http.StatusForbidden && strings.Contains(awsCode, "AllAccessDisabled"):
+		// HACK: "not found or misspelled" vs  "service not paid for" (the latter less likely)
+		err := _awsErr(awsError)
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Infoln(err)
+		}
+		return http.StatusNotFound, err
 	default:
 		return status, _awsErr(awsError)
 	}
