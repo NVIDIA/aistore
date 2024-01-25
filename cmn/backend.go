@@ -66,33 +66,6 @@ var BackendHelpers = struct {
 			}
 		},
 	},
-	Azure: backendFuncs{
-		EncodeVersion: func(v any) (string, bool) {
-			switch x := v.(type) {
-			case string:
-				x = strings.Trim(x, "\"")
-				return x, x != ""
-			default:
-				debug.FailTypeCast(v)
-				return "", false
-			}
-		},
-		EncodeCksum: func(v any) (string, bool) {
-			switch x := v.(type) {
-			case string:
-				decoded, err := base64.StdEncoding.DecodeString(x)
-				if err != nil {
-					return "", false
-				}
-				return hex.EncodeToString(decoded), true
-			case []byte:
-				return hex.EncodeToString(x), true
-			default:
-				debug.FailTypeCast(v)
-				return "", false
-			}
-		},
-	},
 	Google: backendFuncs{
 		EncodeVersion: func(v any) (string, bool) {
 			switch x := v.(type) {

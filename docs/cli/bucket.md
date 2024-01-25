@@ -840,9 +840,9 @@ $ ./ais/test/scripts/cp-sync-remais-out-of-band.sh --bucket gs://abc
 15. compare the contents but NOTE: as of v3.22, this part requires multi-object copy (using '--list' or '--template')
 ```
 
-The [script](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-sync-remais-out-of-band.sh) executes 15 steps (see above).
+The [script](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-sync-remais-out-of-band.sh) executes a sequence of steps (above).
 
-Notice a certain limitation (that also shows up as the last step 15 above):
+Notice a certain limitation (that also shows up as the last step #15):
 
 * As of the version 3.22, aistore `cp` commands will always synchronize _deleted_ and _updated_ remote content.
 
