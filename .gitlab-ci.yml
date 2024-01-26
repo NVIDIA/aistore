@@ -266,6 +266,32 @@ test:short:s3rproxy:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - make test-short
 
+test:short:aws:
+  <<: *test_short_skip_scheduled_def
+  variables:
+    BUCKET: "aws://ais-cicd"
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
+    - make test-short
+
+test:short:gcp:
+  <<: *test_short_skip_scheduled_def
+  variables:
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    BUCKET: "gs://ais-ci"
+  script:
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - make test-short
+
+test:short:azure:
+  <<: *test_short_skip_scheduled_def
+  variables:
+    BUCKET: "az://ais-ci"
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
+    - make test-short
+
 test:long:
   <<: *test_long_skip_scheduled_def
   variables:
@@ -293,6 +319,15 @@ test:long:gcp:
   script:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - make test-long
+
+test:long:azure:
+  <<: *test_long_def
+  variables:
+    NUM_PROXY: 6
+    BUCKET: "az://ais-ci"
+  script:
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-long
 
 # test:long:hdfs:
