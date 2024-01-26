@@ -242,12 +242,12 @@ func doGet(wo *workOrder) {
 			wo.size, wo.err = s3getDiscard(wo.bck, wo.objName)
 		} else {
 			wo.size, wo.err = getDiscard(url, wo.bck,
-				wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
+				wo.objName, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
 		}
 	} else {
 		debug.Assert(!isDirectS3())
 		wo.size, wo.latencies, wo.err = getTraceDiscard(url, wo.bck,
-			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
+			wo.objName, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
 	}
 }
 

@@ -132,13 +132,14 @@ type (
 		randomObjName bool
 		randomProxy   bool
 		uniqueGETs    bool
-		skipList      bool // true: skip listing objects before running 100% PUT workload (see also fileList)
+		skipList      bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
 		verifyHash    bool // verify xxhash during get
-		getConfig     bool // true: load control plane (read proxy config)
+		getConfig     bool // when true, load control plane (read proxy config)
 		jsonFormat    bool
-		stoppable     bool // true: terminate by Ctrl-C
-		dryRun        bool // true: print configuration and parameters that aisloader will use at runtime
-		traceHTTP     bool // true: trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+		stoppable     bool // when true, terminate by Ctrl-C
+		dryRun        bool // when true, print configuration and parameters that aisloader will use at runtime
+		traceHTTP     bool // when true, trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+		latest        bool // when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
 	}
 
 	// sts records accumulated puts/gets information.
@@ -312,7 +313,11 @@ func Start(version, buildtime string) (err error) {
 	}
 
 	if runParams.cleanUp.Val {
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed upon termination!\n", runParams.bck)
+		v := "destroyed"
+		if !runParams.bck.IsAIS() {
+			v = "emptied"
+		}
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be %s upon termination!\n", runParams.bck, v)
 		time.Sleep(time.Second)
 	}
 
@@ -497,12 +502,12 @@ Done:
 }
 
 func addCmdLine(f *flag.FlagSet, p *params) {
-	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
-	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
-	f.BoolVar(&flagQuiet, "quiet", false, "When starting to run, do not print command line arguments, default settings, and usage examples")
-	f.DurationVar(&cargs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
-	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
-	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
+	f.BoolVar(&flagUsage, "usage", false, "show command-line options, usage, and examples")
+	f.BoolVar(&flagVersion, "version", false, "show aisloader version")
+	f.BoolVar(&flagQuiet, "quiet", false, "when starting to run, do not print command line arguments, default settings, and usage examples")
+	f.DurationVar(&cargs.Timeout, "timeout", 10*time.Minute, "client HTTP timeout - used in LIST/GET/PUT/DELETE")
+	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "interval in seconds to print performance counters; 0 - disabled")
+	f.StringVar(&p.bck.Name, "bucket", "", "bucket name or bucket URI. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", apc.AIS,
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 
@@ -513,41 +518,41 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	// s3 direct (NOTE: with no aistore in-between)
 	//
 	f.StringVar(&s3Endpoint, "s3endpoint", "", "S3 endpoint to read/write s3 bucket directly (with no aistore)")
-	f.StringVar(&s3Profile, "s3profile", "", "Other then default S3 config profile referencing alternative credentials")
+	f.StringVar(&s3Profile, "s3profile", "", "other then default S3 config profile referencing alternative credentials")
 
 	DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). \n"+
 			"If not specified and totalputsize > 0, aisloader runs until totalputsize reached. Otherwise aisloader runs until first of duration and "+
 			"totalputsize reached")
 
-	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of goroutine workers operating on AIS in parallel")
-	f.IntVar(&p.putPct, "pctput", 0, "Percentage of PUTs in the aisloader-generated workload")
-	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
+	f.IntVar(&p.numWorkers, "numworkers", 10, "number of goroutine workers operating on AIS in parallel")
+	f.IntVar(&p.putPct, "pctput", 0, "percentage of PUTs in the aisloader-generated workload")
+	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
-		"Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (must be specified for aistore buckets)")
+		"stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
+	BoolExtVar(f, &p.cleanUp, "cleanup", "when true, remove bucket upon benchmark termination (must be specified for aistore buckets)")
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
-		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
+		"when true, checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 
-	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
-	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.minSizeStr, "minsize", "", "minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.maxSizeStr, "maxsize", "", "maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readerType, "readertype", readers.TypeSG,
-		fmt.Sprintf("Type of reader: %s(default) | %s | %s | %s", readers.TypeSG, readers.TypeFile, readers.TypeRand, readers.TypeTar))
+		fmt.Sprintf("[advanced usage only] type of reader: %s(default) | %s | %s | %s", readers.TypeSG, readers.TypeFile, readers.TypeRand, readers.TypeTar))
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
 	f.StringVar(&p.tokenFile, "tokenfile", "", "authentication token (FQN)") // see also: AIS_AUTHN_TOKEN_FILE
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
 	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running")
-	f.IntVar(&p.batchSize, "batchsize", 100, "Batch size to list and delete")
+	f.IntVar(&p.batchSize, "batchsize", 100, "batch size to list and delete")
 	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketProps API and containing bucket properties to apply")
-	f.Int64Var(&p.seed, "seed", 0, "Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
-	f.BoolVar(&p.jsonFormat, "json", false, "Defines whether to print output in JSON format")
-	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
-	f.StringVar(&p.readLenStr, "readlen", "", "Read range length (can contain multiplicative suffix; 0 - GET full object)")
-	f.Uint64Var(&p.maxputs, "maxputs", 0, "Maximum number of objects to PUT")
-	f.UintVar(&p.numEpochs, "epochs", 0, "Number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
-	f.BoolVar(&p.skipList, "skiplist", false, "Whether to skip listing objects in a bucket before running 100% PUT workload")
-	f.StringVar(&p.fileList, "filelist", "", "Local or locally accessible text file file containing object names (for subsequent reading)")
+	f.Int64Var(&p.seed, "seed", 0, "random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
+	f.BoolVar(&p.jsonFormat, "json", false, "when true, print output in JSON format")
+	f.StringVar(&p.readOffStr, "readoff", "", "read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.readLenStr, "readlen", "", "read range length (can contain multiplicative suffix; 0 - GET full object)")
+	f.Uint64Var(&p.maxputs, "maxputs", 0, "maximum number of objects to PUT")
+	f.UintVar(&p.numEpochs, "epochs", 0, "number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
+	f.BoolVar(&p.skipList, "skiplist", false, "when true, skip listing objects in a bucket before running 100% PUT workload")
+	f.StringVar(&p.fileList, "filelist", "", "local or locally accessible text file file containing object names (for subsequent reading)")
 
 	//
 	// object naming
@@ -555,28 +560,29 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.Uint64Var(&p.loaderCnt, "loadernum", 0,
 		"total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen")
 	f.BoolVar(&p.getLoaderID, "getloaderid", false,
-		"true: print stored/computed unique loaderID aka aisloader identifier and exit")
+		"when true, print stored/computed unique loaderID aka aisloader identifier and exit")
 	f.UintVar(&p.loaderIDHashLen, "loaderidhashlen", 0,
 		"Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum")
 	f.BoolVar(&p.randomObjName, "randomname", true,
-		"true: generate object names of 32 random characters. This option is ignored when loadernum is defined")
+		"when true, generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.BoolVar(&p.randomProxy, "randomproxy", false,
-		"true: select random gateway (\"proxy\") to execute I/O request")
-	f.StringVar(&p.subDir, "subdir", "", "Virtual destination directory for all aisloader-generated objects")
-	f.Uint64Var(&p.putShards, "putshards", 0, "Spread generated objects over this many subdirectories (max 100k)")
+		"when true, select random gateway (\"proxy\") to execute I/O request")
+	f.StringVar(&p.subDir, "subdir", "", "virtual destination directory for all aisloader-generated objects")
+	f.Uint64Var(&p.putShards, "putshards", 0, "spread generated objects over this many subdirectories (max 100k)")
 	f.BoolVar(&p.uniqueGETs, "uniquegets", true,
-		"true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
+		"when true, GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
 
 	//
 	// advanced usage
 	//
 	f.BoolVar(&p.getConfig, "getconfig", false,
-		"true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path)")
+		"when true, generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path)")
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
-	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
-	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
-	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see httpLatencies
+	f.BoolVar(&p.stoppable, "stoppable", false, "when true, stop upon CTRL-C")
+	f.BoolVar(&p.dryRun, "dry-run", false, "when true, show the configuration and parameters that aisloader will use for benchmark")
+	f.BoolVar(&p.traceHTTP, "trace-http", false, "when true, trace HTTP latencies") // see httpLatencies
 	f.StringVar(&p.cksumType, "cksum-type", cos.ChecksumXXHash, "cksum type to use for put object requests")
+	f.BoolVar(&p.latest, "latest", false, "when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket")
 
 	// ETL
 	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
@@ -586,7 +592,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	// too many flags with actual parsing error quickly disappearing from view
 	orig := f.Usage
 	f.Usage = func() {
-		fmt.Println("Run `aisloader` or `aisloader version`, or see 'docs/aisloader.md' for details and usage examples.")
+		fmt.Println("Run `aisloader` (for inline help), `aisloader version` (for version), or see 'docs/aisloader.md' for details and usage examples.")
 	}
 	f.Parse(os.Args[1:])
 	f.Usage = orig
@@ -599,7 +605,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	os.Args = []string{os.Args[0]}
 	flag.Parse() // Called so that imported packages don't complain
 
-	if flagUsage || (f.NArg() != 0 && f.Arg(0) == "usage") {
+	if flagUsage || (f.NArg() != 0 && (f.Arg(0) == "usage" || f.Arg(0) == "help")) {
 		printUsage(f)
 		os.Exit(0)
 	}

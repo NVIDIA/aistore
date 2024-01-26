@@ -590,7 +590,7 @@ var (
 	// sync
 	latestVerFlag = cli.BoolFlag{
 		Name: "latest",
-		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
+		Usage: "check in-cluster metadata and, possibly, GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
 			indent1 + "\tprovides operation-level control over object versioning (and version synchronization)\n" +
 			indent1 + "\twithout requiring to change bucket configuration\n" +
 			indent1 + "\t- the latter can be done using 'ais bucket props set BUCKET versioning'\n" +

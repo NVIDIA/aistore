@@ -275,7 +275,7 @@ func newTraceCtx(proxyURL string) *traceCtx {
 	return tctx
 }
 
-func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length int64) (*http.Request, error) {
+func newGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length int64, latest bool) (*http.Request, error) {
 	var (
 		hdr   http.Header
 		query = url.Values{}
@@ -283,6 +283,9 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	query = bck.AddToQuery(query)
 	if etlName != "" {
 		query.Add(apc.QparamETLName, etlName)
+	}
+	if latest {
+		query.Add(apc.QparamLatestVer, "true")
 	}
 	if length > 0 {
 		hdr = cmn.MakeRangeHdr(offset, length)
@@ -325,8 +328,8 @@ func s3getDiscard(bck cmn.Bck, objName string) (int64, error) {
 }
 
 // getDiscard sends a GET request and discards returned data.
-func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
-	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
+func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int64, validate, latest bool) (int64, error) {
+	req, err := newGetRequest(proxyURL, bck, objName, offset, length, latest)
 	if err != nil {
 		return 0, err
 	}
@@ -340,7 +343,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
-	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
+	src := fmt.Sprintf("GET %s", bck.Cname(objName))
 	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 
 	resp.Body.Close()
@@ -354,10 +357,12 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 }
 
 // Same as above, but with HTTP trace.
-func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, httpLatencies, error) {
-	var hdrCksumValue, hdrCksumType string
-
-	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
+func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int64, validate, latest bool) (int64, httpLatencies, error) {
+	var (
+		hdrCksumValue string
+		hdrCksumType  string
+	)
+	req, err := newGetRequest(proxyURL, bck, objName, offset, length, latest)
 	if err != nil {
 		return 0, httpLatencies{}, err
 	}
@@ -377,7 +382,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 
-	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
+	src := fmt.Sprintf("GET %s", bck.Cname(objName))
 	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 	if err != nil {
 		return 0, httpLatencies{}, err

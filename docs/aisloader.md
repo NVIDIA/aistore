@@ -60,16 +60,16 @@ For the most recently updated command-line options and examples, please run `ais
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
 | -bucket | `string` | Bucket name. Bucket will be created if doesn't exist. If empty, aisloader generates a new random bucket name | `""` |
 | -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash`|
-| -cleanup | `bool` | true: remove bucket upon benchmark termination | `n/a` (required) |
+| -cleanup | `bool` | when true, remove bucket upon benchmark termination | `n/a` (required) |
 | -dry-run | `bool` | show the entire set of parameters that aisloader will use when actually running | `false` |
 | -duration | `string`, `int` | Benchmark duration (0 - run forever or until Ctrl-C, default 1m). Note that if both duration and totalputsize are zeros, aisloader will have nothing to do | `1m` |
 | -epochs | `int` |  Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `1`|
 | -etl | `string` | Built-in ETL, one-of: `tar2tf`, `md5`, or `echo`. Each object that `aisloader` GETs undergoes the selected transformation. See also: `-etl-spec` option. | `""` |
 | -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification. Each object that `aisloader` GETs will undergo this user-defined transformation. See also: `-etl` option. | `""` |
-| -getconfig | `bool` | true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) | `false` |
-| -getloaderid | `bool` | true: print stored/computed unique loaderID aka aisloader identifier and exit | `false` |
+| -getconfig | `bool` | when true, generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) | `false` |
+| -getloaderid | `bool` | when true, print stored/computed unique loaderID aka aisloader identifier and exit | `false` |
 | -ip | `string` | AIS proxy/gateway IP address or hostname | `localhost` |
-| -json | `bool` | true: print the output in JSON | `false` |
+| -json | `bool` | when true, print the output in JSON | `false` |
 | -loaderid | `string` | ID to identify a loader among multiple concurrent instances | `0` |
 | -loaderidhashlen | `int` | Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum | `0` |
 | -loadernum | `int` | total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen | `0` |
@@ -78,11 +78,12 @@ For the most recently updated command-line options and examples, please run `ais
 | -minsize | `int` | Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1MiB` |
 | -numworkers | `int` | Number of goroutine workers operating on AIS in parallel | `10` |
 | -pctput | `int` | Percentage of PUTs in the aisloader-generated workload | `0` |
+| -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
 | -port | `int` | Port number for proxy server | `8080` |
 | -provider | `string` | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively | `ais` |
 | -putshards | `int` | Spread generated objects over this many subdirectories (max 100k) | `0` |
 | -quiet | `bool` | When starting to run, do not print command line arguments, default settings, and usage examples | `false` |
-| -randomname | `bool` | true: generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
+| -randomname | `bool` | when true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
 | -readertype | `string` | Type of reader: sg(default). Available: `sg`, `file`, `rand`, `tar` | `sg` |
 | -readlen | `string`, `int` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -readoff | `string`, `int` | Read range offset (can contain multiplicative suffix K, MB, GiB, etc.) | `""` |
@@ -103,7 +104,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -tokenfile | `string` | Authentication token (FQN) | `""`|
 | -totalputsize | `string`, `int` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit | `0` |
 | -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false` |
-| -uniquegets | `bool` | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
+| -uniquegets | `bool` | when true, GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
 | -verifyhash | `bool` | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata | `true` |
 
@@ -251,7 +252,7 @@ In addition, environment can be used to specify client-side TLS (aka, HTTPS) con
 | `AIS_CRT`             | X509 certificate |
 | `AIS_CRT_KEY`         | X509 certificate's private key |
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate |
-| `AIS_SKIP_VERIFY_CRT` | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+| `AIS_SKIP_VERIFY_CRT` | when true, skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
 
 * See also: [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
 
