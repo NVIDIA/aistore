@@ -2017,9 +2017,9 @@ def main():
             test_fput_object_small_file: {"sse": ssec} if ssec else None,
             test_fput_object_large_file: {"sse": ssec} if ssec else None,
             test_fput_object_with_content_type: None,
-            test_copy_object_no_copy_condition: {"ssec_copy": ssec, "ssec": ssec}
-            if ssec
-            else None,
+            test_copy_object_no_copy_condition: (
+                {"ssec_copy": ssec, "ssec": ssec} if ssec else None
+            ),
             test_copy_object_etag_match: None,
             test_copy_object_with_metadata: None,
             test_copy_object_negative_etag_match: None,
@@ -2068,9 +2068,9 @@ def main():
             test_presigned_get_object_default_expiry: None,
             test_presigned_put_object_default_expiry: None,
             test_presigned_post_policy: None,
-            test_copy_object_no_copy_condition: {"ssec_copy": ssec, "ssec": ssec}
-            if ssec
-            else None,
+            test_copy_object_no_copy_condition: (
+                {"ssec_copy": ssec, "ssec": ssec} if ssec else None
+            ),
             test_select_object_content: None,
             test_get_bucket_policy: None,
             test_set_bucket_policy_readonly: None,

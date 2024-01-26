@@ -48,9 +48,11 @@ class BenchmarkStats:
             "ops": self.total_ops,
             "bytes": self.total_op_bytes,
             "time": self.total_op_time,
-            "throughput": self.total_op_bytes / self.total_op_time
-            if self.total_op_time != 0
-            else 0,
+            "throughput": (
+                self.total_op_bytes / self.total_op_time
+                if self.total_op_time != 0
+                else 0
+            ),
             "latency_min": min(self.latencies),
             "latency_avg": sum(self.latencies) / len(self.latencies),
             "latency_max": max(self.latencies),

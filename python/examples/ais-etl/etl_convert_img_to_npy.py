@@ -4,6 +4,7 @@ Communication Type: hpush://
 
 Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
+
 from aistore import Client
 import numpy as np
 import cv2

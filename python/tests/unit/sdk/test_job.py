@@ -104,7 +104,7 @@ class TestJob(unittest.TestCase):
         mock_sleep,
         expected_status_calls,
         expected_sleep_calls,
-        **kwargs
+        **kwargs,
     ):
         mock_status.side_effect = [
             JobStatus(end_time=0),
