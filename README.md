@@ -21,10 +21,19 @@ AIS consistently shows balanced I/O distribution and **linear scalability** acro
 * **Write-through**. In presence of any [remote backend](/docs/providers.md), AIS executes remote write (e.g., using vendor's SDK) as part of the [transaction](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#read-after-write-consistency) that places and _finalizes_ the first replica.
 * **Small file datasets.** To serialize small files and facilitate batch processing, AIS supports TAR, TAR.GZ (or TGZ), ZIP, and TAR.LZ4 formatted objects (often called _shards_). Resharding (for optimal sorting and sizing), listing contained files (samples), appending to existing shards, and generating new ones from existing objects and/or client-side files - is also fully supported.
 * **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator).
-* **Command line management**. Integrated powerful [CLI](/docs/cli.md) for easy management and monitoring.
 * **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.
 * **Distributed shuffle** extension for massively parallel resharding of very large datasets.
 * **Batch jobs**. APIs and CLI to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
+
+For easy usage, management, and monitoring, there's also:
+* **Integrated and powerful [CLI](/docs/cli.md)**. As of early 2024, top-level CLI commands include:
+```console
+$ ais
+bucket       etl          help             log               get             dsort         rmo         ls
+object       job          advanced         performance       prefetch        evict         stop        put
+cluster      auth         storage          remote-cluster    start           wait          rmb         search
+config       show         archive          alias             create          download      cp
+```
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 

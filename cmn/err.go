@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -39,8 +40,7 @@ const (
 	FmtErrUnknown        = "%s: unknown %s %q"
 	FmtErrBackwardCompat = "%v (backward compatibility is supported only one version back, e.g. 3.9 => 3.10)"
 
-	// (see ErrFailedTo)
-	fmtErrFailedTo = "%s: failed to %s %s, err: %w"
+	fmtErrFailedTo = "%s: failed to %s %s, err: %v" // (ErrFailedTo)
 
 	BadSmapPrefix = "[bad cluster map]"
 
@@ -77,11 +77,11 @@ type (
 	}
 
 	ErrFailedTo struct {
-		actor  fmt.Stringer // most of the time it's this (target|proxy) node but may also be some other "actor"
-		what   any          // not necessarily LOM
-		err    error        // original error that can be Unwrap-ed
-		action string       // not necessarily msg.Action
-		status int          // http status, if available
+		actor  string // most of the time it's this (target|proxy) node but may also be some other "actor"
+		what   any    // not necessarily LOM
+		err    error  // original error that can be Unwrap-ed
+		action string // not necessarily msg.Action
+		status int    // http status, if available
 	}
 	ErrUnsupp struct {
 		action, what string
@@ -223,24 +223,24 @@ func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, errC
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
-
 	_clean(err)
 
-	e := &ErrFailedTo{actor: actor, action: action, what: what, err: err, status: 0}
+	e := &ErrFailedTo{action: action, what: what, err: err}
+	e.actor = thisNodeName
+	if actor != nil {
+		e.actor = actor.String()
+	}
 	if len(errCode) > 0 {
 		e.status = errCode[0]
+		if err == nil && e.status > 0 {
+			e.err = errors.New("error code: " + strconv.Itoa(e.status) + "(\"" + http.StatusText(e.status) + "\")")
+		}
 	}
 	return e
 }
 
 func (e *ErrFailedTo) Error() string {
-	var err error
-	if e.actor == nil {
-		err = fmt.Errorf(fmtErrFailedTo, thisNodeName, e.action, e.what, e.err)
-	} else {
-		err = fmt.Errorf(fmtErrFailedTo, e.actor, e.action, e.what, e.err)
-	}
-	return err.Error()
+	return fmt.Sprintf(fmtErrFailedTo, e.actor, e.action, e.what, e.err)
 }
 
 func (e *ErrFailedTo) Unwrap() (err error) { return e.err }

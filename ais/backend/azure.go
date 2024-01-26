@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -38,26 +38,22 @@ type (
 
 const (
 	azDefaultProto = "https://"
-	azBackend      = "azure-backend"
+	azHost         = ".blob.core.windows.net"
 
-	// Azure server constants
-	azHost = ".blob.core.windows.net"
-	// AZ CLI compatible env vars
 	azAccNameEnvVar = "AZURE_STORAGE_ACCOUNT"
 	azAccKeyEnvVar  = "AZURE_STORAGE_KEY"
 
-	// AZ AIS internal env vars
+	// ais
 	azURLEnvVar   = "AIS_AZURE_URL"
 	azProtoEnvVar = "AIS_AZURE_PROTO"
-	// Object lease time for PUT/DEL operations, in seconds.
-	// Must be within 15..60 range or -1(infinity).
-	leaseTime = 60
 )
 
 // used to parse azure errors
 const (
 	azErrDesc = "Description"
 	azErrCode = "Code: "
+
+	azErrPrefix = "azure-error["
 )
 
 var (
@@ -80,21 +76,6 @@ func azProto() string {
 
 func azUserName() string { return os.Getenv(azAccNameEnvVar) }
 func azUserKey() string  { return os.Getenv(azAccKeyEnvVar) }
-
-func azErrStatus(status int) error { return fmt.Errorf("http-status=%d", status) }
-
-// NOTE: not using cmn/backend helpers foir azure
-func azEncodeChecksum(v []byte) string {
-	if len(v) == 0 {
-		return ""
-	}
-	return hex.EncodeToString(v)
-}
-
-// NOTE: ditto
-func azEncodeEtag(etag azblob.ETag) string {
-	return strings.Trim(string(etag), "\"")
-}
 
 // 1. URL is empty: http://<account_name>.blob.core.windows.net
 // 2. URL is not empty, starts with protocol: URL
@@ -120,13 +101,13 @@ func NewAzure(t core.TargetPut) (core.BackendProvider, error) {
 	path := azURL()
 	u, err := url.Parse(path)
 	if err != nil {
-		return nil, cmn.NewErrFailedTo(nil, azBackend+": parse", "URL", err)
+		return nil, cmn.NewErrFailedTo(core.T, azErrPrefix+": parse]", "URL", err)
 	}
 	name := azUserName()
 	key := azUserKey()
 	creds, err := azblob.NewSharedKeyCredential(name, key)
 	if err != nil {
-		return nil, cmn.NewErrFailedTo(nil, azBackend+": init", "credentials", err)
+		return nil, cmn.NewErrFailedTo(nil, azErrPrefix+": init]", "credentials", err)
 	}
 
 	azctx = context.Background()
@@ -139,47 +120,56 @@ func NewAzure(t core.TargetPut) (core.BackendProvider, error) {
 	}, nil
 }
 
-func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, error) {
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Infoln("azureError:", bck.Cname(objName))
-		nlog.Infoln(azureError)
+// custom metadata helpers (note: not using cmn/backend)
+func azEncodeEtag(etag azblob.ETag) string { return strings.Trim(string(etag), "\"") }
+
+func azEncodeChecksum(v []byte) string {
+	if len(v) == 0 {
+		return ""
 	}
-	bckNotFound, status, err := _toErr(azureError, bck, objName)
-	if bckNotFound {
-		return status, err
-	}
-	return status, errors.New("azure-error[" + err.Error() + "]")
+	return hex.EncodeToString(v)
 }
 
-func _toErr(azureError error, bck *cmn.Bck, objName string) (bool, int, error) {
+//
+// format and parse errors
+//
+
+func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, error) {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+		nlog.Infoln("begin azure error =========================")
+		nlog.Infoln(azureError)
+		nlog.Infoln("end azure error ===========================")
+	}
+
 	stgErr, ok := azureError.(azblob.StorageError)
 	if !ok {
-		return false, http.StatusInternalServerError, azureError
+		return http.StatusInternalServerError, azureError
 	}
+
 	switch stgErr.ServiceCode() {
 	case azblob.ServiceCodeContainerNotFound:
-		return true, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case azblob.ServiceCodeBlobNotFound:
-		err := fmt.Errorf("%s not found", bck.Cname(objName))
-		return false, http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
+		return http.StatusNotFound, errors.New(azErrPrefix + "NotFound: " + bck.Cname(objName) + "]")
 	case azblob.ServiceCodeInvalidResourceName:
-		err := fmt.Errorf("%s not found", bck.Cname(objName))
-		return false, http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
+		if objName != "" {
+			return http.StatusNotFound, errors.New(azErrPrefix + "NotFound: " + bck.Cname(objName) + "]")
+		}
 	}
 
-	status := http.StatusInternalServerError
-	if resp := stgErr.Response(); resp != nil {
-		resp.Body.Close()
-		status = resp.StatusCode
-	}
+	// azure error is usually a sizeable multi-line text with items including:
+	// request ID, authorization, variery of x-ms-* headers, server and user agent, and more
 
-	// azure error is usually a multi-line text with items including
-	// request ID, authorization, variery of x-ms-* headers, server and user agent, etc. etc.
 	var (
+		status      = http.StatusInternalServerError
 		code        string
 		description string
 		lines       = strings.Split(azureError.Error(), "\n")
 	)
+	if resp := stgErr.Response(); resp != nil {
+		resp.Body.Close()
+		status = resp.StatusCode
+	}
 	for _, line := range lines {
 		if strings.HasPrefix(line, azErrDesc) {
 			description = azCleanErrRegex.ReplaceAllString(line[len(azErrDesc):], "")
@@ -188,19 +178,24 @@ func _toErr(azureError error, bck *cmn.Bck, objName string) (bool, int, error) {
 		}
 	}
 	if code != "" && description != "" {
-		return false, status, errors.New(code + ": " + description)
+		return status, errors.New(azErrPrefix + code + ": " + description + "]")
 	}
-	return false, status, azureError
+	debug.Assert(false, azureError) // expecting to parse
+	return status, azureError
 }
+
+///////////////////
+// azure as core.BackendProvider
+///////////////////
 
 func (*azureProvider) Provider() string { return apc.Azure }
 
-// https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
+// ref: https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
 func (*azureProvider) MaxPageSize() uint { return 5000 }
 
-///////////////////
-// CREATE BUCKET //
-///////////////////
+//
+// CREATE BUCKET
+//
 
 func (*azureProvider) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "azure:// bucket")
@@ -222,7 +217,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProp
 		return bckProps, status, err
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		err := cmn.NewErrFailedTo(nil, azBackend+": read bucket", cloudBck.Name, azErrStatus(resp.StatusCode()))
+		err := cmn.NewErrFailedTo(core.T, azErrPrefix+": get bucket props]", cloudBck.Name, nil, resp.StatusCode())
 		return bckProps, resp.StatusCode(), err
 	}
 	bckProps = make(cos.StrKVs, 2)
@@ -255,7 +250,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		return azureErrorToAISError(err, cloudBck, "")
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		err := cmn.NewErrFailedTo(nil, azBackend+": list objects of", cloudBck.Name, azErrStatus(resp.StatusCode()))
+		err := cmn.NewErrFailedTo(core.T, azErrPrefix+": list objects]", cloudBck.Name, nil, resp.StatusCode())
 		return resp.StatusCode(), err
 	}
 
@@ -351,8 +346,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Ob
 		return
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		err = cmn.NewErrFailedTo(nil, azBackend+": get object props of", cloudBck.Cname(lom.ObjName),
-			azErrStatus(resp.StatusCode()))
+		err = cmn.NewErrFailedTo(core.T, azErrPrefix+": get object props]", cloudBck.Cname(lom.ObjName), nil, resp.StatusCode())
 		errCode = resp.StatusCode()
 		return
 	}
@@ -418,8 +412,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res c
 		return
 	}
 	if respProps.StatusCode() >= http.StatusBadRequest {
-		res.Err = cmn.NewErrFailedTo(nil, azBackend+": get object props of", cloudBck.Cname(lom.ObjName),
-			azErrStatus(respProps.StatusCode()))
+		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": get blob props]", cloudBck.Cname(lom.ObjName), nil, respProps.StatusCode())
 		res.ErrCode = respProps.StatusCode()
 		return
 	}
@@ -430,8 +423,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res c
 		return
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		res.Err = cmn.NewErrFailedTo(nil, azBackend+": get object", cloudBck.Cname(lom.ObjName),
-			azErrStatus(respProps.StatusCode()))
+		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": GET]", cloudBck.Cname(lom.ObjName), nil, respProps.StatusCode())
 		res.ErrCode = resp.StatusCode()
 		return
 	}
@@ -466,36 +458,16 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM) (int, error) {
 	defer cos.Close(r)
 
 	var (
-		leaseID  string
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlockBlobURL(lom.ObjName)
-		cond     = azblob.ModifiedAccessConditions{}
 	)
-	// Try to lease: if object does not exist, leasing fails with NotFound
-	acqResp, err := blobURL.AcquireLease(azctx, "", leaseTime, cond)
-	if err == nil {
-		leaseID = acqResp.LeaseID()
-		defer blobURL.ReleaseLease(azctx, acqResp.LeaseID(), cond)
-	}
-	if err != nil {
-		code, errLease := azureErrorToAISError(err, cloudBck, lom.ObjName)
-		if code != http.StatusNotFound {
-			return code, errLease
-		}
-	}
-
 	// NOTE:
-	// - use BlockBlob instead of PageBlob because the latter requires object size to be divisible by 512.
+	// - use BlockBlob instead of PageBlob - the latter requires size to be a multiple of 512
 	// - without buffer options(with 0's) UploadStreamToBlockBlob appears to hang
 	opts := azblob.UploadStreamToBlockBlobOptions{
 		BufferSize: 64 * 1024,
 		MaxBuffers: 3,
-	}
-	if leaseID != "" {
-		opts.AccessConditions = azblob.BlobAccessConditions{
-			LeaseAccessConditions: azblob.LeaseAccessConditions{LeaseID: leaseID},
-		}
 	}
 	putResp, err := azblob.UploadStreamToBlockBlob(azctx, r, blobURL, opts)
 	if err != nil {
@@ -506,8 +478,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM) (int, error) {
 	resp := putResp.Response()
 	resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
-		err := cmn.NewErrFailedTo(nil, azBackend+": PUT", cloudBck.Cname(lom.ObjName),
-			azErrStatus(resp.StatusCode))
+		err := cmn.NewErrFailedTo(core.T, azErrPrefix+": PUT]", cloudBck.Cname(lom.ObjName), nil, resp.StatusCode)
 		return resp.StatusCode, err
 	}
 
@@ -537,17 +508,13 @@ func (ap *azureProvider) DeleteObj(lom *core.LOM) (int, error) {
 		cntURL   = ap.s.NewContainerURL(lom.Bck().Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
-	delCond := azblob.BlobAccessConditions{
-		LeaseAccessConditions: azblob.LeaseAccessConditions{},
-	}
-	delResp, err := blobURL.Delete(azctx, azblob.DeleteSnapshotsOptionInclude, delCond)
-
+	rsp, err := blobURL.Delete(azctx, azblob.DeleteSnapshotsOptionInclude, azblob.BlobAccessConditions{})
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
-	if delResp.StatusCode() >= http.StatusBadRequest {
-		err := cmn.NewErrFailedTo(nil, azBackend+": delete object", cloudBck.Cname(lom.ObjName), azErrStatus(delResp.StatusCode()))
-		return delResp.StatusCode(), err
+	if status := rsp.StatusCode(); status >= http.StatusBadRequest {
+		err := cmn.NewErrFailedTo(core.T, azErrPrefix+": delete object]", cloudBck.Cname(lom.ObjName), nil, status)
+		return rsp.StatusCode(), err
 	}
 	return http.StatusOK, nil
 }
