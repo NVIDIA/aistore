@@ -22,6 +22,7 @@ import (
 type (
 	MptPart struct {
 		MD5  string // MD5 of the part (*)
+		Etag string // returned by s3
 		FQN  string // FQN of the corresponding workfile
 		Size int64  // part size in bytes (*)
 		Num  int64  // part number (*)
@@ -120,7 +121,7 @@ func ObjSize(id string) (size int64, err error) {
 
 // remove all temp files and delete from the map
 // if completed (i.e., not aborted): store xattr
-func FinishUpload(id, fqn string, aborted bool) (exists bool) {
+func CleanupUpload(id, fqn string, aborted bool) (exists bool) {
 	mu.Lock()
 	mpt, ok := ups[id]
 	if !ok {
@@ -175,7 +176,7 @@ func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploa
 	return
 }
 
-func ListParts(id string, lom *core.LOM) (parts []*PartInfo, err error, errCode int) {
+func ListParts(id string, lom *core.LOM) (parts []*PartInfo, errCode int, err error) {
 	mu.RLock()
 	mpt, ok := ups[id]
 	if !ok {
@@ -183,7 +184,7 @@ func ListParts(id string, lom *core.LOM) (parts []*PartInfo, err error, errCode 
 		mpt, err = loadMptXattr(lom.FQN)
 		if err != nil || mpt == nil {
 			mu.RUnlock()
-			return
+			return nil, errCode, err
 		}
 		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
 		mpt.ctime = lom.Atime()
@@ -193,5 +194,5 @@ func ListParts(id string, lom *core.LOM) (parts []*PartInfo, err error, errCode 
 		parts = append(parts, &PartInfo{ETag: part.MD5, PartNumber: part.Num, Size: part.Size})
 	}
 	mu.RUnlock()
-	return
+	return parts, errCode, err
 }

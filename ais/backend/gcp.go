@@ -112,6 +112,8 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 	return client, nil
 }
 
+// as core.BackendProvider --------------------------------------------------------------
+
 func (*gcpProvider) Provider() string { return apc.GCP }
 
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters

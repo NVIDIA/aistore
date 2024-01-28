@@ -45,7 +45,7 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		q := r.URL.Query()
 		if q.Has(s3.QparamMptUploadID) {
-			t.abortMptUpload(w, r, apiItems, q)
+			t.abortMpt(w, r, apiItems, q)
 		} else {
 			t.delObjS3(w, r, apiItems)
 		}

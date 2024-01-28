@@ -184,9 +184,7 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 	return status, azureError
 }
 
-///////////////////
-// azure as core.BackendProvider
-///////////////////
+// as core.BackendProvider --------------------------------------------------------------
 
 func (*azureProvider) Provider() string { return apc.Azure }
 

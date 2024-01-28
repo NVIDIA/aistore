@@ -22,7 +22,7 @@ const (
 	// PUT and PUT-like transactions
 	OwtPut       OWT = iota // PUT
 	OwtPromote              // promote target-accessible files and directories
-	OwtFinalize             // finalize object archives and S3 multipart
+	OwtFinalize             // finalize object archives
 	OwtTransform            // ETL
 	OwtCopy                 // copy and move objects within cluster
 	OwtRebalance            // NOTE: must be the last in PUT* group
@@ -33,6 +33,10 @@ const (
 	OwtGetLock         // lock(exclusive); read from remote; ...
 	OwtGet             // GET (with upgrading read-lock in the local-write path)
 	OwtGetPrefetchLock // (used for maximum parallelism when prefetching)
+	//
+	// None of the above
+	//
+	OwtNone
 )
 
 func (owt *OWT) FromS(s string) {
