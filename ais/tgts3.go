@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +25,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+const fmtErrBckObj = "invalid %s request: expecting bucket and object (names) in the URL, have %v"
+
 // [METHOD] /s3
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
@@ -31,6 +34,11 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 	apiItems, err := t.parseURL(w, r, apc.URLPathS3.L, 0, true)
 	if err != nil {
+		return
+	}
+	if l := len(apiItems); (l == 0 && r.Method == http.MethodGet) || l < 2 {
+		err := fmt.Errorf(fmtErrBckObj, r.Method, apiItems)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 
@@ -73,18 +81,20 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 	switch {
 	case q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID):
 		if r.Header.Get(cos.S3HdrObjSrc) != "" {
-			if cmn.Rom.FastV(5, cos.SmoduleS3) {
-				nlog.Infoln("putMptCopy", items)
-			}
-			t.putMptCopy(w, r, items)
-		} else {
-			if cmn.Rom.FastV(5, cos.SmoduleS3) {
-				nlog.Infoln("putMptPart", bck.String(), items, q)
-			}
-			t.putMptPart(w, r, items, q, bck)
+			// TODO: copy another object (or its range) => part of the specified multipart upload.
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html
+			s3.WriteErr(w, r, errors.New("UploadPartCopy not implemented yet"), http.StatusNotImplemented)
+			return
 		}
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+			nlog.Infoln("putMptPart", bck.String(), items, q)
+		}
+		t.putMptPart(w, r, items, q, bck)
 	case r.Header.Get(cos.S3HdrObjSrc) == "":
-		t.putObjS3(w, r, bck, config, items)
+		objName := s3.ObjName(items)
+		lom := core.AllocLOM(objName)
+		t.putObjS3(w, r, bck, config, lom)
+		core.FreeLOM(lom)
 	default:
 		t.copyObjS3(w, r, config, items)
 	}
@@ -93,10 +103,6 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 // Copy object (maybe from another bucket)
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
-	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
-		return
-	}
 	src := r.Header.Get(cos.S3HdrObjSrc)
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
@@ -174,14 +180,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	sgl.Free()
 }
 
-func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, config *cmn.Config, items []string) {
-	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
-		return
-	}
-	objName := s3.ObjName(items)
-	lom := core.AllocLOM(objName)
-	defer core.FreeLOM(lom)
+func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, config *cmn.Config, lom *core.LOM) {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -239,7 +238,8 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
+		err := fmt.Errorf(fmtErrBckObj, r.Method, items)
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -276,10 +276,6 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 // HEAD /s3/<bucket-name>/<object-name> (TODO: s3.HdrMptCnt)
 // See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
-		return
-	}
 	bucket, objName := items[0], s3.ObjName(items)
 	bck, err, errCode := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
@@ -348,10 +344,6 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
-		return
-	}
 	objName := s3.ObjName(items)
 	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
@@ -382,11 +374,6 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	q := r.URL.Query()
 	if q.Has(s3.QparamMptUploads) {
-		if len(items) < 2 {
-			err := fmt.Errorf(fmtErrBO, items)
-			s3.WriteErr(w, r, err, 0)
-			return
-		}
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("startMpt", bck.String(), items, q)
 		}
@@ -394,11 +381,6 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	if q.Has(s3.QparamMptUploadID) {
-		if len(items) < 2 {
-			err := fmt.Errorf(fmtErrBO, items)
-			s3.WriteErr(w, r, err, 0)
-			return
-		}
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("completeMpt", bck.String(), items, q)
 		}

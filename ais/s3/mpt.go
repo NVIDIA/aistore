@@ -22,7 +22,6 @@ import (
 type (
 	MptPart struct {
 		MD5  string // MD5 of the part (*)
-		Etag string // returned by s3
 		FQN  string // FQN of the corresponding workfile
 		Size int64  // part size in bytes (*)
 		Num  int64  // part number (*)
