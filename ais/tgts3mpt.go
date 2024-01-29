@@ -125,7 +125,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
 	partFh, errC := lom.CreateFileRW(wfqn)
 	if errC != nil {
-		s3.WriteErr(w, r, errC, 0)
+		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		if nerr := cos.RemoveFile(wfqn); nerr != nil {
 			nlog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
 		}
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteMptErr(w, r, err, errCode, lom, uploadID)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		if !cksumSHA.Equal(recvSHA) {
 			detail := fmt.Sprintf("upload %q, %s, part %d", uploadID, lom, partNum)
 			err = cos.NewErrDataCksum(&cksumSHA.Cksum, recvSHA, detail)
-			s3.WriteErr(w, r, err, http.StatusInternalServerError)
+			s3.WriteMptErr(w, r, err, http.StatusInternalServerError, lom, uploadID)
 			return
 		}
 	}
@@ -190,7 +190,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		Num:  partNum,
 	}
 	if err := s3.AddPart(uploadID, npart); err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 		return
 	}
 	w.Header().Set(cos.S3CksumHeader, md5) // s3cmd checks this one
@@ -227,7 +227,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	}
 	size, errN := s3.ObjSize(uploadID)
 	if errN != nil {
-		s3.WriteErr(w, r, errN, 0)
+		s3.WriteMptErr(w, r, errN, 0, lom, uploadID)
 		return
 	}
 
@@ -240,7 +240,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	if remote {
 		v, errCode, err := backend.CompleteMpt(lom, uploadID, partList)
 		if err != nil {
-			s3.WriteErr(w, r, err, errCode)
+			s3.WriteMptErr(w, r, err, errCode, lom, uploadID)
 			return
 		}
 		etag = v
@@ -258,7 +258,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	})
 	nparts, err := s3.CheckParts(uploadID, partList.Parts)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 		return
 	}
 	// 2. <upload-id>.complete.<obj-name>
@@ -266,7 +266,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
 	wfh, errC := lom.CreateFile(wfqn)
 	if errC != nil {
-		s3.WriteErr(w, r, errC, 0)
+		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
 		return
 	}
 	if remote && lom.CksumConf().Type != cos.ChecksumNone {
@@ -288,7 +288,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		if nerr := cos.RemoveFile(wfqn); nerr != nil {
 			nlog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
 		}
-		s3.WriteErr(w, r, errA, 0)
+		s3.WriteMptErr(w, r, errA, 0, lom, uploadID)
 		return
 	}
 
@@ -329,7 +329,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	if errF != nil {
 		// NOTE: not failing if remote op. succeeded
 		if !isRemoteS3(bck) {
-			s3.WriteErr(w, r, errF, errCode)
+			s3.WriteMptErr(w, r, errF, errCode, lom, uploadID)
 			return
 		}
 		nlog.Errorf("upload %q: failed to complete %s locally: %v(%d)", uploadID, lom.Cname(), err, errCode)

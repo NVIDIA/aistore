@@ -28,6 +28,11 @@ while (( "$#" )); do
   esac
 done
 
+if ! [ -x "$(command -v s3cmd)" ]; then
+  echo "Error: s3cmd not installed" >&2
+  exit 1
+fi
+
 ## uncomment for verbose output
 ## set -x
 

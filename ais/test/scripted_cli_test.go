@@ -5,7 +5,9 @@
 package integration_test
 
 import (
+	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -31,6 +33,7 @@ func TestGetWarmValidateS3UsingScript(t *testing.T) {
 		bucketName = cliBck.Cname("")
 		cmd        = exec.Command("./scripts/s3-get-validate.sh", "--bucket", bucketName)
 	)
+	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -57,6 +60,7 @@ func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-get-validate.sh", "--bucket", bucketName)
 	)
+	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -79,6 +83,7 @@ func TestPrefetchLatestS3UsingScript(t *testing.T) {
 		bucketName = cliBck.Cname("")
 		cmd        = exec.Command("./scripts/s3-prefetch-latest-prefix.sh", "--bucket", bucketName)
 	)
+	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -105,6 +110,7 @@ func TestPrefetchLatestRemaisUsingScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-prefetch-latest.sh", "--bucket", bucketName)
 	)
+	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -123,7 +129,34 @@ func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/cp-sync-remais-out-of-band.sh", "--bucket", bucketName)
 	)
-	tlog.Logln("note: this will take a while...")
+	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
+	tlog.Logln("Note: this may take a while...")
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
+// NOTE: not running with remote `cliBck` (because it could take hours)
+func TestMultipartUploadLargeFilesScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long: true,
+	})
+
+	tempdir, err := os.MkdirTemp("", "s3-mpt")
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tempdir)
+	})
+
+	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	cmd := exec.Command("./scripts/s3-mpt-large-files.sh", tempdir, apc.S3Scheme+apc.BckProviderSeparator+bck.Name, "1", "true")
+
+	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
+	tlog.Logln("Note: this may take a while...")
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
