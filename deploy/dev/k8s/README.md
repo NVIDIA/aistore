@@ -264,7 +264,7 @@ NAME           READY   STATUS    RESTARTS   AGE
 ais-proxy-0    1/1     Running   0          7m59s
 ais-target-0   1/1     Running   0          6m48s
 $ # ais is running
-$ ais create test-bucket
+$ ais create ais://test-bucket
 "test-bucket" bucket created
 $ cat > sample
 This is a sample data
@@ -273,8 +273,8 @@ This is a sample data
 4. Putting sample object
 
 ```console
-$ ais put sample test-bucket/test-obj
-PUT "test-obj" into bucket "test-bucket"
+$ ais put sample ais://test-bucket
+PUT "sample" => ais://test-bucket/test-obj
 ```
 
 5. Creating sample spec for transformer
@@ -286,24 +286,28 @@ kind: Pod
 metadata:
   name: transformer-echo
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
-    communication_type: "hrev://"
-    wait_timeout: 15s
+    communication_type: "hpull://"
+    wait_timeout: 5m
 spec:
   containers:
     - name: server
-      image: aistore/transformer_echo:latest
+      image: aistorage/transformer_echo:latest
       imagePullPolicy: Always
       ports:
-        - containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+        - name: default
+          containerPort: 8000
+      command: ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
 ```
 
 6. Initiating ETL
 
 ```console
-$ ais etl init spec spec.yaml
-veSC9rvQQ
+$ ais etl init spec --name test-etl --from-file spec.yaml --comm-type hpull
+ETL[test-etl]: job "etl-d3KIiNQ1-e"
 ```
 
 7. Transforming an object
