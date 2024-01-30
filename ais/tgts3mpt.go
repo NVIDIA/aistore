@@ -131,15 +131,16 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 
 	// 3. write
 	var (
-		etag      string
-		partSHA   string
-		errCode   int
-		buf, slab = t.gmm.Alloc()
-		cksumSHA  = &cos.CksumHash{}
-		cksumMD5  = &cos.CksumHash{}
-		remote    = isRemoteS3(bck)
+		etag         string
+		errCode      int
+		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
+		checkPartSHA = partSHA != "" && partSHA != "UNSIGNED-PAYLOAD" // See: https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+		buf, slab    = t.gmm.Alloc()
+		cksumSHA     = &cos.CksumHash{}
+		cksumMD5     = &cos.CksumHash{}
+		remote       = isRemoteS3(bck)
 	)
-	if partSHA = r.Header.Get(cos.S3HdrContentSHA256); partSHA != "" {
+	if checkPartSHA {
 		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
 	}
 	if !remote {
@@ -173,7 +174,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		cksumMD5.Finalize()
 		md5 = cksumMD5.Value()
 	}
-	if partSHA != "" {
+	if checkPartSHA {
 		cksumSHA.Finalize()
 		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
 		if !cksumSHA.Equal(recvSHA) {
