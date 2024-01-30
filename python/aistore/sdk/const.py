@@ -22,6 +22,8 @@ HEADER_PREFIX = "ais-"
 HEADER_BUCKET_PROPS = HEADER_PREFIX + "bucket-props"
 HEADER_BUCKET_SUMM = HEADER_PREFIX + "bucket-summ"
 HEADER_XACTION_ID = HEADER_PREFIX + "xaction-id"
+# Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
+HEADER_RANGE = "Range"
 
 # URL Params
 # See api/apc/query.go

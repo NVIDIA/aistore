@@ -19,6 +19,7 @@ from aistore.sdk.const import (
     ACT_PROMOTE,
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
+    HEADER_RANGE,
 )
 from aistore.sdk.object_reader import ObjectReader
 
@@ -88,6 +89,7 @@ class Object(AISSource):
         etl_name: str = None,
         writer: BufferedWriter = None,
         latest: bool = False,
+        byte_range: str = None,
     ) -> ObjectReader:
         """
         Reads an object
@@ -100,7 +102,8 @@ class Object(AISSource):
             writer (BufferedWriter, optional): User-provided writer for writing content output
                 User is responsible for closing the writer
             latest (bool, optional): GET the latest object version from the associated remote bucket
-
+            byte_range (str, optional): Specify a specific data segment of the object for transfer, including
+                both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
         Returns:
             The stream of bytes to read an object or a file inside an archive.
 
@@ -116,11 +119,19 @@ class Object(AISSource):
             params[QPARAM_ETL_NAME] = etl_name
         if latest:
             params[QPARAM_LATEST] = "true"
+
+        headers = {}
+        if byte_range:
+            # For range formatting, see the spec:
+            # https://www.rfc-editor.org/rfc/rfc7233#section-2.1
+            headers = {HEADER_RANGE: byte_range}
+
         resp = self._client.request(
             HTTP_METHOD_GET,
             path=self._object_path,
             params=params,
             stream=True,
+            headers=headers,
         )
         obj_reader = ObjectReader(
             stream=resp,

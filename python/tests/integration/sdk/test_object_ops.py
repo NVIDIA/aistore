@@ -119,6 +119,12 @@ class TestObjectOps(unittest.TestCase):
             self.assertEqual(all_content, output)
         filename.unlink()
 
+    def test_get_range(self):
+        objects = self._put_objects(5)
+        for obj_name, content in objects.items():
+            resp = self.bucket.object(obj_name).get(byte_range="bytes=5-100").read_all()
+            self.assertEqual(content[5:101], resp)
+
     @unittest.skipIf(
         "localhost" not in CLUSTER_ENDPOINT and "127.0.0.1" not in CLUSTER_ENDPOINT,
         "Cannot test promote without access to AIS cluster file storage",

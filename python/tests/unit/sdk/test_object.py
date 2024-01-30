@@ -121,6 +121,7 @@ class TestObject(unittest.TestCase):
             path=REQUEST_PATH,
             params=self.expected_params,
             stream=True,
+            headers={},
         )
 
         # Use the object reader iterator to call the stream with the chunk size
