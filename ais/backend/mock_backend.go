@@ -56,7 +56,7 @@ func (*mockBP) GetObj(_ ctx, lom *core.LOM, _ cmn.OWT) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) GetObjReader(context.Context, *core.LOM) (res core.GetReaderResult) {
+func (*mockBP) GetObjReader(context.Context, *core.LOM, int64, int64) (res core.GetReaderResult) {
 	return
 }
 

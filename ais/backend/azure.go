@@ -384,7 +384,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Ob
 //
 
 func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
-	res := ap.GetObjReader(ctx, lom)
+	res := ap.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
@@ -397,7 +397,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	return 0, err
 }
 
-func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
+func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
@@ -415,7 +415,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res c
 		return
 	}
 	// (0, 0) read range: whole object
-	resp, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false, azKeyOptions)
+	resp, err := blobURL.Download(ctx, offset, length, azblob.BlobAccessConditions{}, false, azKeyOptions)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return

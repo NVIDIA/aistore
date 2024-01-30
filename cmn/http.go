@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
@@ -78,14 +79,11 @@ func PrependProtocol(url string, protocol ...string) string {
 	return proto + "://" + url // rfc2396.txt
 }
 
+// Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 // (compare w/ htrange.contentRange)
-func MakeRangeHdr(start, length int64) (hdr http.Header) {
-	if start == 0 && length == 0 {
-		return hdr
-	}
-	hdr = make(http.Header, 1)
-	hdr.Set(cos.HdrRange, fmt.Sprintf("%s%d-%d", cos.HdrRangeValPrefix, start, start+length-1))
-	return
+func MakeRangeHdr(start, length int64) string {
+	debug.Assert(start != 0 || length != 0)
+	return fmt.Sprintf("%s%d-%d", cos.HdrRangeValPrefix, start, start+length-1)
 }
 
 // ParseURL splits URL path at "/" and matches resulting items against the specified, if any.

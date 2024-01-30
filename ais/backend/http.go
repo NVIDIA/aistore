@@ -144,7 +144,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Obj
 }
 
 func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
-	res := hp.GetObjReader(ctx, lom)
+	res := hp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
@@ -160,8 +160,9 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) 
 	return 0, nil
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
+		req  *http.Request
 		resp *http.Response
 		h    = cmn.BackendHelpers.HTTP
 		bck  = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -174,15 +175,23 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res co
 		nlog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
-	resp, res.Err = hp.client(origURL).Get(origURL) //nolint:bodyclose // is closed by the caller
-	if res.Err != nil {
+	req, res.Err = http.NewRequest(http.MethodGet, origURL, http.NoBody)
+	if err != nil {
 		res.ErrCode = http.StatusInternalServerError
-		return
+		return res
+	}
+	if length > 0 {
+		rng := cmn.MakeRangeHdr(offset, length)
+		req.Header = http.Header{cos.HdrRange: []string{rng}}
+	}
+	resp, res.Err = hp.client(origURL).Do(req) //nolint:bodyclose // is closed by the caller
+	if res.Err != nil {
+		return res
 	}
 	if resp.StatusCode != http.StatusOK {
 		res.ErrCode = resp.StatusCode
 		res.Err = fmt.Errorf("error occurred: %v", resp.StatusCode)
-		return
+		return res
 	}
 
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
@@ -196,7 +205,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res co
 	}
 	res.Size = resp.ContentLength
 	res.R = resp.Body
-	return
+	return res
 }
 
 func (*httpProvider) PutObj(io.ReadCloser, *core.LOM) (int, error) {

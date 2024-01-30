@@ -603,7 +603,7 @@ do:
 		goi.lom.SetCustomMD(nil)
 
 		// get remote reader (compare w/ t.GetCold)
-		res = goi.t.Backend(goi.lom.Bck()).GetObjReader(goi.ctx, goi.lom)
+		res = goi.t.Backend(goi.lom.Bck()).GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
 			goi.unlocked = true

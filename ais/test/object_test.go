@@ -1180,11 +1180,13 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 	offset, length, expectedLength int64, checkEntireObjCksum bool) {
 	var (
 		w          = bytes.NewBuffer(nil)
-		hdr        = cmn.MakeRangeHdr(offset, length)
+		rng        = cmn.MakeRangeHdr(offset, length)
+		hdr        = http.Header{cos.HdrRange: []string{rng}}
 		baseParams = tools.BaseAPIParams(proxyURL)
 		fqn        = findObjOnDisk(bck, objName)
 		args       = api.GetArgs{Writer: w, Header: hdr}
 	)
+
 	oah, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
 	if err != nil {
 		if !checkEntireObjCksum {

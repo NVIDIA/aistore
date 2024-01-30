@@ -134,7 +134,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		etag         string
 		errCode      int
 		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
-		checkPartSHA = partSHA != "" && partSHA != "UNSIGNED-PAYLOAD" // See: https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
 		buf, slab    = t.gmm.Alloc()
 		cksumSHA     = &cos.CksumHash{}
 		cksumMD5     = &cos.CksumHash{}

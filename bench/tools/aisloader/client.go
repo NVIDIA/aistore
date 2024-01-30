@@ -288,7 +288,8 @@ func newGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length 
 		query.Add(apc.QparamLatestVer, "true")
 	}
 	if length > 0 {
-		hdr = cmn.MakeRangeHdr(offset, length)
+		rng := cmn.MakeRangeHdr(offset, length)
+		hdr = http.Header{cos.HdrRange: []string{rng}}
 	}
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,

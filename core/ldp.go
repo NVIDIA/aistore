@@ -93,7 +93,7 @@ remote:
 		Cksum: cos.NoneCksum, // will likely reassign (below)
 		Atime: lom.AtimeUnix(),
 	}
-	res := T.Backend(lom.Bck()).GetObjReader(context.Background(), lom)
+	res := T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, 0, 0)
 
 	if lom.Checksum() != nil {
 		oah.Cksum = lom.Checksum()

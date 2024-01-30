@@ -306,7 +306,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttr
 //
 
 func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
-	res := gcpp.GetObjReader(ctx, lom)
+	res := gcpp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
@@ -319,7 +319,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	return 0, err
 }
 
-func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
+func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		attrs    *storage.ObjectAttrs
 		rc       *storage.Reader
@@ -331,7 +331,11 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.G
 		res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
 		return
 	}
-	rc, res.Err = o.NewReader(ctx)
+	if length > 0 {
+		rc, res.Err = o.NewRangeReader(ctx, offset, length)
+	} else {
+		rc, res.Err = o.NewReader(ctx)
+	}
 	if res.Err != nil {
 		return
 	}

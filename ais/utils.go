@@ -249,6 +249,7 @@ func parseOrResolve(hostname string) (err error) {
 // htrange //
 /////////////
 
+// (compare w/ cmn.MakeRangeHdr)
 func (r htrange) contentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", cos.HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }

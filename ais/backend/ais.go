@@ -557,10 +557,11 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *core.LOM, owt cmn.OWT) (errCode 
 	return extractErrCode(err, remAis.uuid)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ ctx, lom *core.LOM) (res core.GetReaderResult) {
+func (m *AISBackendProvider) GetObjReader(_ ctx, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
+		args      *api.GetArgs
 		remoteBck = lom.Bck().Clone()
 	)
 	if remAis, res.Err = m.getRemAis(remoteBck.Ns.UUID); res.Err != nil {
@@ -577,8 +578,13 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *core.LOM) (res core.GetRea
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	res.ExpCksum = oa.Cksum
 	lom.SetCksum(nil)
+
 	// reader
-	res.R, res.Err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/)
+	if length > 0 {
+		rng := cmn.MakeRangeHdr(offset, length)
+		args = &api.GetArgs{Header: http.Header{cos.HdrRange: []string{rng}}}
+	}
+	res.R, res.Err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, args)
 	res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
 	return
 }

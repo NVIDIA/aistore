@@ -348,7 +348,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int
 //
 
 func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
-	res := awsp.GetObjReader(ctx, lom)
+	res := awsp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
@@ -361,19 +361,24 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	return 0, err
 }
 
-func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
+func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		obj      *s3.GetObjectOutput
 		cloudBck = lom.Bck().RemoteBck()
+		input    = s3.GetObjectInput{
+			Bucket: aws.String(cloudBck.Name),
+			Key:    aws.String(lom.ObjName),
+		}
 	)
 	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(err)
 	}
-	obj, err = svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(cloudBck.Name),
-		Key:    aws.String(lom.ObjName),
-	})
+	if length > 0 {
+		rng := cmn.MakeRangeHdr(offset, length)
+		input.Range = aws.String(rng)
+	}
+	obj, err = svc.GetObjectWithContext(ctx, &input)
 	if err != nil {
 		res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
