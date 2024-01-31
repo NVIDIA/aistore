@@ -1563,7 +1563,7 @@ func TestRenewRebalance(t *testing.T) {
 
 		<-m.controlCh // wait for half the GETs to complete
 
-		rebID, err = api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActRebalance})
+		rebID, err = api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActRebalance}, "")
 		tassert.CheckFatal(t, err)
 		tlog.Logf("manually initiated rebalance\n")
 	}()
@@ -1812,7 +1812,7 @@ func TestICRebalance(t *testing.T) {
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	tlog.Logf("Manually initiated rebalance\n")
-	rebID, err = api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActRebalance})
+	rebID, err = api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActRebalance}, "")
 	tassert.CheckFatal(t, err)
 
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
@@ -1925,7 +1925,7 @@ func TestSingleResilver(t *testing.T) {
 
 	// Start resilvering just on the target
 	args := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: target.ID()}
-	id, err := api.StartXaction(baseParams, &args)
+	id, err := api.StartXaction(baseParams, &args, "")
 	tassert.CheckFatal(t, err)
 
 	// Wait for specific resilvering x[id]

@@ -28,9 +28,12 @@ if ! [ -x "$(command -v s3cmd)" ]; then
 fi
 
 if [ $# -le 1 ]; then
-    echo "Usage: $0 DIR BUCKET [NUM-ITERATIONS], where:"
-    echo "  DIR:    source directory containing (large) files"
+    echo "Usage: $0 DIR BUCKET [NUM-ITERATIONS [GENERATE]], where:"
+    echo "  DIR: source directory containing (large) files"
     echo "  BUCKET: destination aistore bucket, e.g., s3://abc (where 's3://abc' may, in fact, be 'ais://abc' etc.)"
+    echo "and optionally:"
+    echo "  ITERATIONS: number of iterations to run (default: 4)"
+    echo "  GENERATE: generate large files (default: false)"
     exit 1
 fi
 

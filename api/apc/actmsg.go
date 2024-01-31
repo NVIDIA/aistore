@@ -34,6 +34,8 @@ const (
 	ActDsort    = "dsort"
 	ActDownload = "download"
 
+	ActBlobDl = "blob-download"
+
 	ActMakeNCopies = "make-n-copies"
 	ActPutCopies   = "put-copies"
 

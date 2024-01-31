@@ -754,8 +754,11 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 		if present {
 			args.nodeCount--
 		}
+	case core.SelectedNodes:
+		args.nodeCount = len(args.nodes)
+		debug.Assert(args.nodeCount > 0)
 	default:
-		debug.Assert(false)
+		debug.Assert(false, args.to)
 	}
 	return h.bcastNodes(args)
 }

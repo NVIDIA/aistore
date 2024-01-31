@@ -20,7 +20,7 @@ import (
 )
 
 // Start xaction
-func StartXaction(bp BaseParams, args *xact.ArgsMsg) (xid string, err error) {
+func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string) (xid string, err error) {
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
@@ -28,7 +28,7 @@ func StartXaction(bp BaseParams, args *xact.ArgsMsg) (xid string, err error) {
 	if args.Force {
 		q.Set(apc.QparamForce, "true")
 	}
-	msg := apc.ActMsg{Action: apc.ActXactStart, Value: args}
+	msg := apc.ActMsg{Action: apc.ActXactStart, Value: args, Name: extra}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{

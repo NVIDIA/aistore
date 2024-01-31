@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -71,7 +72,8 @@ func loadLomCacheHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return startXaction(c, apc.ActLoadLomCache, bck, "")
+	xargs := xact.ArgsMsg{Kind: apc.ActLoadLomCache, Bck: bck}
+	return startXaction(c, &xargs, "")
 }
 
 func removeNodeFromSmap(c *cli.Context) error {

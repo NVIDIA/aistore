@@ -126,7 +126,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// the rest startable
-		if err := t.xstart(&xargs, bck); err != nil {
+		if err := t.xstart(&xargs, bck, msg); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -178,7 +178,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 // PUT
 //
 
-func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck) error {
+func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
@@ -220,6 +220,19 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck) error {
 		wg.Wait()
 	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(args.ID, bck)
+		return rns.Err
+	case apc.ActBlobDl:
+		debug.Assert(msg.Name != "")
+		lom := core.AllocLOM(msg.Name)
+		if err := lom.InitBck(&args.Bck); err != nil {
+			core.FreeLOM(lom)
+			return err
+		}
+		rns := xs.RenewBlobDl(args.ID, lom, 0 /*default tunables*/)
+		if rns.Err == nil {
+			xblob := rns.Entry.Get().(*xs.XactBlobDl)
+			go xblob.Run(nil)
+		}
 		return rns.Err
 	// 3. cannot start
 	case apc.ActPutCopies:

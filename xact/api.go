@@ -56,13 +56,13 @@ type (
 		ID   string // xaction UUID
 		Kind string // xaction kind _or_ name (see `xact.Table`)
 
-		// optional parameters to further narrow down or filter-out xactions in question
+		// optional parameters
 		DaemonID    string        // node that runs this xaction
 		Bck         cmn.Bck       // bucket
 		Buckets     []cmn.Bck     // list of buckets (e.g., copy-bucket, lru-evict, etc.)
-		Timeout     time.Duration // max time to wait and other "non-filters"
+		Timeout     time.Duration // max time to wait
 		Force       bool          // force
-		OnlyRunning bool          // look only for running xactions
+		OnlyRunning bool          // only for running xactions
 	}
 
 	// simplified JSON-tagged version of the above
@@ -166,6 +166,8 @@ var Table = map[string]Descriptor{
 		Idles:       true,
 		AbortRebRes: true,
 	},
+
+	apc.ActBlobDl: {Access: apc.AccessRW, Scope: ScopeB, Startable: true, AbortRebRes: true},
 
 	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Mountpath: true, Idles: true, AbortRebRes: true},
 
@@ -276,8 +278,6 @@ var Table = map[string]Descriptor{
 	apc.ActLoadLomCache:   {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true, Mountpath: true},
 	apc.ActInvalListCache: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false},
 }
-
-func IsMountpath(kind string) bool { return Table[kind].Mountpath }
 
 func IsValidKind(kind string) bool {
 	_, ok := Table[kind]

@@ -13,6 +13,7 @@ const (
 	Targets = iota // 0 (core.Targets) used as default value for NewStreamBundle
 	Proxies
 	AllNodes
+	SelectedNodes
 )
 
 type (

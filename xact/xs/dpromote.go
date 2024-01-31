@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// XactDirPromote copies a bucket locally within the same cluster
+// promotes (i.e., copies) locally accessible (within the cluster) directory => bucket
 
 type (
 	proFactory struct {

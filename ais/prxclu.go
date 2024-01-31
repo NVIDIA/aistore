@@ -1148,7 +1148,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 
-	xargs.ID = cos.GenUUID() // common for all targets
+	xargs.ID = cos.GenUUID() // common for all
 
 	// cluster-wide resilver
 	if xargs.Kind == apc.ActResilver && xargs.DaemonID != "" {
@@ -1157,10 +1157,20 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 
 	// all the rest `startable` (see xaction/api.go)
-	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
+	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs, Name: msg.Name})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
 	args.to = core.Targets
+
+	if xargs.Kind == apc.ActBlobDl {
+		// validate; select one target
+		if err := p.blobdl(args, &xargs, msg); err != nil {
+			freeBcArgs(args)
+			p.writeErr(w, r, err)
+			return
+		}
+	}
+
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -1178,6 +1188,27 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
 	w.Write([]byte(xargs.ID))
+}
+
+func (p *proxy) blobdl(args *bcastArgs, xargs *xact.ArgsMsg, msg *apc.ActMsg) error {
+	bck := meta.CloneBck(&xargs.Bck)
+	if err := bck.Init(p.owner.bmd); err != nil {
+		return err
+	}
+	if !bck.IsRemote() {
+		return fmt.Errorf("%s: expecting remote bucket (have %s)", apc.ActBlobDl, bck.Cname(""))
+	}
+	args.smap = p.owner.smap.get()
+	objName := msg.Name
+	tsi, _, err := args.smap.HrwMultiHome(xargs.Bck.MakeUname(objName))
+	if err != nil {
+		return err
+	}
+	nmap := make(meta.NodeMap, 1)
+	nmap[tsi.ID()] = tsi
+	args.nodes = []meta.NodeMap{nmap}
+	args.to = core.SelectedNodes
+	return nil
 }
 
 func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {

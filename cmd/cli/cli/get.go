@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -357,11 +358,12 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		return isObjPresent(c, bck, objName)
 	}
 
-	var offset, length int64
 	units, err = parseUnitsFlag(c, unitsFlag)
 	if err != nil {
 		return err
 	}
+
+	var offset, length int64
 	if offset, err = parseSizeFlag(c, offsetFlag, units); err != nil {
 		return err
 	}
@@ -401,7 +403,11 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		}
 	}
 
-	hdr := cmn.MakeRangeHdr(offset, length)
+	var hdr http.Header
+	if length > 0 {
+		rng := cmn.MakeRangeHdr(offset, length)
+		hdr = http.Header{cos.HdrRange: []string{rng}}
+	}
 	if outFile == fileStdIO {
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		quiet = true

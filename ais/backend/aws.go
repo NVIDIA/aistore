@@ -381,6 +381,10 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 	obj, err = svc.GetObjectWithContext(ctx, &input)
 	if err != nil {
 		res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+			debug.Assert(length > 0)
+			res.Err = io.EOF // TODO -- FIXME: loosely sp
+		}
 		return
 	}
 

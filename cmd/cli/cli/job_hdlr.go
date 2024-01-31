@@ -294,17 +294,26 @@ func startXactionHandler(c *cli.Context) (err error) {
 }
 
 func startXactionKind(c *cli.Context, xname string) (err error) {
-	var bck cmn.Bck
+	var (
+		bck   cmn.Bck
+		extra string
+	)
 	if c.NArg() == 0 && xact.IsSameScope(xname, xact.ScopeB) {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if c.NArg() > 0 && xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
-		bck, err = parseBckURI(c, c.Args().Get(0), false)
+		uri := c.Args().Get(0)
+		if xname == apc.ActBlobDl {
+			bck, extra /*objName*/, err = parseBckObjURI(c, uri, false)
+		} else {
+			bck, err = parseBckURI(c, uri, false)
+		}
 		if err != nil {
 			return err
 		}
 	}
-	return startXaction(c, xname, bck, "" /*sid*/)
+	xargs := xact.ArgsMsg{Kind: xname, Bck: bck}
+	return startXaction(c, &xargs, extra)
 }
 
 func startResilverHandler(c *cli.Context) error {
@@ -316,20 +325,20 @@ func startResilverHandler(c *cli.Context) error {
 		}
 		tid = tsi.ID()
 	}
-	return startXaction(c, apc.ActResilver, cmn.Bck{}, tid)
+	xargs := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: tid}
+	return startXaction(c, &xargs, "")
 }
 
-func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
-	if !bck.IsQuery() {
-		if _, err := headBucket(bck, false /* don't add */); err != nil {
+func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
+	if !xargs.Bck.IsQuery() {
+		if _, err := headBucket(xargs.Bck, false /* don't add */); err != nil {
 			return err
 		}
-	} else if xact.IsSameScope(xname, xact.ScopeB) {
-		return fmt.Errorf("%q requires bucket to run", xname)
+	} else if xact.IsSameScope(xargs.Kind, xact.ScopeB) {
+		return fmt.Errorf("%q requires bucket to run", xargs.Kind)
 	}
 
-	xargs := xact.ArgsMsg{Kind: xname, Bck: bck, DaemonID: sid}
-	xid, err := api.StartXaction(apiBP, &xargs)
+	xid, err := api.StartXaction(apiBP, xargs, extra)
 	if err != nil {
 		return V(err)
 	}
@@ -342,15 +351,15 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 
 	debug.Assert(xact.IsValidUUID(xid), xid)
 	msg := "Started global rebalance. To monitor the progress, run 'ais show rebalance'"
-	if xname != apc.ActRebalance {
-		msg = fmt.Sprintf("Started %s[%s]. %s", xname, xid, toMonitorMsg(c, xid, ""))
+	if xargs.Kind != apc.ActRebalance {
+		msg = fmt.Sprintf("Started %s[%s]. %s", xargs.Kind, xid, toMonitorMsg(c, xid, ""))
 	}
 	actionDone(c, msg)
 
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		return nil
 	}
-	return waitJob(c, xname, xid, bck)
+	return waitJob(c, xargs.Kind, xid, xargs.Bck)
 }
 
 func startDownloadHandler(c *cli.Context) error {
@@ -655,7 +664,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		id    string
 		xargs = xact.ArgsMsg{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
 	)
-	if id, err = api.StartXaction(apiBP, &xargs); err != nil {
+	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
 		return
 	}
 
