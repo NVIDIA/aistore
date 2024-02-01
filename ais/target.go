@@ -47,6 +47,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const dbName = "ais.db"
@@ -882,9 +883,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if err != nil {
 		return
 	}
-	if msg.Action != apc.ActRenameObject {
-		t.writeErrAct(w, r, msg.Action)
-		return
+	if msg.Action == apc.ActBlobDl {
+		apireq.after = 1
 	}
 	if t.parseReq(w, r, apireq) != nil {
 		return
@@ -893,22 +893,47 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 		return
 	}
-
-	lom := core.AllocLOM(apireq.items[1])
-	if !t.isValidObjname(w, r, lom.ObjName) {
+	var lom *core.LOM
+	switch msg.Action {
+	case apc.ActRenameObject:
+		lom = core.AllocLOM(apireq.items[1])
+		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+			break
+		}
+		if err = t.objMv(lom, msg); err == nil {
+			t.statsT.Inc(stats.RenameCount)
+			core.FreeLOM(lom)
+			lom = nil
+		} else {
+			t.statsT.IncErr(stats.RenameCount)
+		}
+	case apc.ActBlobDl:
+		var (
+			args    apc.BlobMsg
+			xid     string
+			objName = msg.Name
+		)
+		if err = cos.MorphMarshal(msg.Value, &args); err != nil {
+			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
+			break
+		}
+		lom = core.AllocLOM(objName)
+		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+			break
+		}
+		if xid, err = _blobdl(lom, &args); err == nil {
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
+			w.Write([]byte(xid))
+			// lom is eventually freed by x-blob
+		}
+	default:
+		t.writeErrAct(w, r, msg.Action)
 		return
 	}
-	err = lom.InitBck(apireq.bck.Bucket())
-	if err == nil {
-		err = t.objMv(lom, msg)
-	}
-	if err == nil {
-		t.statsT.Inc(stats.RenameCount)
-	} else {
-		t.statsT.IncErr(stats.RenameCount)
+	if err != nil {
+		core.FreeLOM(lom)
 		t.writeErr(w, r, err)
 	}
-	core.FreeLOM(lom)
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
@@ -1311,7 +1336,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 // rename obj
 func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 	if lom.Bck().IsRemote() {
-		return fmt.Errorf("%s: cannot rename object %s from a remote bucket", t.si, lom)
+		return fmt.Errorf("%s: cannot rename object %s from remote bucket", t.si, lom)
 	}
 	if lom.Bck().Props.EC.Enabled {
 		return fmt.Errorf("%s: cannot rename erasure-coded object %s", t.si, lom)
@@ -1345,6 +1370,18 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 	}
 	lom.Unlock(true)
 	return nil
+}
+
+// compare running the same via (generic) t.xstart
+func _blobdl(lom *core.LOM, args *apc.BlobMsg) (string /*xid*/, error) {
+	uuid := cos.GenUUID()
+	rns := xs.RenewBlobDl(uuid, lom, args)
+	if rns.Err != nil {
+		return "", rns.Err
+	}
+	xblob := rns.Entry.Get().(*xs.XactBlobDl)
+	go xblob.Run(nil)
+	return uuid, nil
 }
 
 func (t *target) fsErr(err error, filepath string) {

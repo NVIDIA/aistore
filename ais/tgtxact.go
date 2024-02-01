@@ -125,7 +125,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		// the rest startable
+		// the rest "startables"
 		if err := t.xstart(&xargs, bck, msg); err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -228,12 +228,15 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) erro
 			core.FreeLOM(lom)
 			return err
 		}
-		rns := xs.RenewBlobDl(args.ID, lom, 0 /*default tunables*/)
-		if rns.Err == nil {
-			xblob := rns.Entry.Get().(*xs.XactBlobDl)
-			go xblob.Run(nil)
+		// (compare w/ alternative t.blobdl path via dedicated api.BlobDownload)
+		rns := xs.RenewBlobDl(args.ID, lom, &apc.BlobMsg{})
+		if rns.Err != nil {
+			core.FreeLOM(lom)
+			return rns.Err
 		}
-		return rns.Err
+		xblob := rns.Entry.Get().(*xs.XactBlobDl)
+		go xblob.Run(nil)
+		return nil
 	// 3. cannot start
 	case apc.ActPutCopies:
 		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", args)

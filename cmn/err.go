@@ -184,16 +184,18 @@ type (
 		xaction string
 		tname   string
 	}
-
 	ErrStreamTerminated struct {
 		err    error
 		stream string
 		reason string
 		detail string
 	}
-
 	ErrInvalidObjName struct {
 		name string
+	}
+	ErrNotRemoteBck struct {
+		act string
+		bck *Bck
 	}
 )
 
@@ -741,6 +743,21 @@ func ValidateObjName(name string) (err *ErrInvalidObjName) {
 
 func (e *ErrInvalidObjName) Error() string {
 	return fmt.Sprintf("invalid object name %q", e.name)
+}
+
+//
+// ErrNotRemoteBck
+//
+
+func ValidateRemoteBck(act string, bck *Bck) (err *ErrNotRemoteBck) {
+	if !bck.IsRemote() {
+		err = &ErrNotRemoteBck{act, bck}
+	}
+	return err
+}
+
+func (e *ErrNotRemoteBck) Error() string {
+	return fmt.Sprintf("%s: expecting remote bucket (have %s)", e.act, e.bck)
 }
 
 ///////////////////////

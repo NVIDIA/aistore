@@ -88,13 +88,14 @@ const (
 	commandEvict    = "evict"    // apc.ActEvictRemoteBck or apc.ActEvictObjects
 	commandPrefetch = "prefetch" // apc.ActPrefetchObjects
 
-	cmdDownload    = apc.ActDownload
-	cmdDsort       = apc.ActDsort
-	cmdRebalance   = apc.ActRebalance
-	cmdLRU         = apc.ActLRU
-	cmdStgCleanup  = "cleanup" // display name for apc.ActStoreCleanup
-	cmdStgValidate = "validate"
-	cmdSummary     = "summary" // ditto apc.ActSummaryBck
+	cmdBlobDownload = apc.ActBlobDl
+	cmdDownload     = apc.ActDownload
+	cmdDsort        = apc.ActDsort
+	cmdRebalance    = apc.ActRebalance
+	cmdLRU          = apc.ActLRU
+	cmdStgCleanup   = "cleanup" // display name for apc.ActStoreCleanup
+	cmdStgValidate  = "validate"
+	cmdSummary      = "summary" // ditto apc.ActSummaryBck
 
 	cmdCluster    = commandCluster
 	cmdNode       = "node"
@@ -590,7 +591,7 @@ var (
 	// sync
 	latestVerFlag = cli.BoolFlag{
 		Name: "latest",
-		Usage: "check in-cluster metadata and, possibly, GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
+		Usage: "check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version from the associated remote bucket;\n" +
 			indent1 + "\tprovides operation-level control over object versioning (and version synchronization)\n" +
 			indent1 + "\twithout requiring to change bucket configuration\n" +
 			indent1 + "\t- the latter can be done using 'ais bucket props set BUCKET versioning'\n" +
@@ -753,7 +754,12 @@ var (
 
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 1MiB or 1048576; see '--units')",
+		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
+	}
+
+	numWorkersFlag = cli.IntFlag{
+		Name:  "num-workers",
+		Usage: "number of blob-downloading workers (threads)",
 	}
 
 	cksumFlag = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}

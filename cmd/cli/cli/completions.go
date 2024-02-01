@@ -358,13 +358,13 @@ func (opts *bcmplop) buckets(c *cli.Context) {
 		return
 	}
 
-	query := cmn.QueryBcks{Provider: opts.provider}
-	buckets, err := api.ListBuckets(apiBP, query, apc.FltPresent) // NOTE: `present` only
+	qbck := cmn.QueryBcks{Provider: opts.provider}
+	buckets, err := api.ListBuckets(apiBP, qbck, apc.FltPresent) // NOTE: `present` only
 	if err != nil {
 		completionErr(c, err)
 		return
 	}
-	if query.Provider == "" {
+	if qbck.Provider == "" {
 		config, err := api.GetClusterConfig(apiBP)
 		if err != nil {
 			completionErr(c, err)
@@ -382,11 +382,43 @@ func (opts *bcmplop) buckets(c *cli.Context) {
 	printNotUsedBuckets(c, buckets, opts.separator, opts.multiple)
 }
 
+func (opts *bcmplop) remoteBuckets(c *cli.Context) {
+	var (
+		buckets []cmn.Bck
+	)
+	for _, provider := range []string{apc.AWS, apc.GCP, apc.Azure} {
+		qbck := cmn.QueryBcks{Provider: provider}
+		bcks, err := api.ListBuckets(apiBP, qbck, apc.FltPresent) // NOTE: `present` only
+		if err != nil {
+			completionErr(c, err)
+			return
+		}
+		if len(bcks) == 0 {
+			continue
+		}
+		if len(buckets) == 0 {
+			buckets = bcks
+			continue
+		}
+		buckets = append(buckets, bcks...)
+	}
+	qbck := cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
+	if bcks, err := api.ListBuckets(apiBP, qbck, apc.FltPresent); err == nil && len(bcks) > 0 {
+		buckets = append(buckets, bcks...)
+	}
+
+	printNotUsedBuckets(c, buckets, opts.separator, opts.multiple)
+}
+
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
 // Multiple buckets will also be listed if 'multiple'
 // Printed names will end with '/' if 'separator'
 func bucketCompletions(opts bcmplop) cli.BashCompleteFunc {
 	return opts.buckets
+}
+
+func remoteBucketCompletions(opts bcmplop) cli.BashCompleteFunc {
+	return opts.remoteBuckets
 }
 
 func printNotUsedBuckets(c *cli.Context, bcks cmn.Bcks, separator, multiple bool) {

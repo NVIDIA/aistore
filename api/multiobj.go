@@ -14,6 +14,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+//
+// In this file: APIs to start multi-object xactions
+// See also: xaction.go (generic part)
+//
+
 // Archive multiple objects from the specified source bucket.
 // The option to append multiple objects to an existing archive is also supported.
 // The source and the destination buckets are defined as `bckFrom` and `bckTo`, respectively
@@ -79,5 +84,5 @@ func dolr(bp BaseParams, bck cmn.Bck, action string, msg any, q url.Values) (xid
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
-	return
+	return xid, err
 }

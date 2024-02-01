@@ -153,8 +153,8 @@ func (oah *ObjAttrs) RespHeader() http.Header {
 	return oah.wrespHeader
 }
 
-// Writes the response body if GetArgs.Writer is specified;
-// otherwise, uses `io.Discard` to read all and discard
+// If GetArgs.Writer is specified GetObject will use it to write the response body;
+// otherwise, it'll `io.Discard` the latter.
 //
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 //

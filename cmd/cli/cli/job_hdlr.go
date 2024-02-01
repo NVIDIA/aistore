@@ -83,6 +83,15 @@ var (
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			latestVerFlag,
 		),
+		cmdBlobDownload: append(
+			longRunFlags,
+			chunkSizeFlag,
+			numWorkersFlag,
+			waitFlag,
+			waitJobXactFinishedFlag,
+			progressFlag,
+			latestVerFlag,
+		),
 		cmdLRU: {
 			lruBucketsFlag,
 			forceFlag,
@@ -107,12 +116,21 @@ var (
 		Action:       startPrefetchHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
+	blobDownloadCmd = cli.Command{
+		Name:         cmdBlobDownload,
+		Usage:        "download very large objects (blobs) from remote storage",
+		ArgsUsage:    objectArgument,
+		Flags:        startSpecialFlags[cmdBlobDownload],
+		Action:       blobDownloadHandler,
+		BashComplete: remoteBucketCompletions(bcmplop{multiple: true}),
+	}
 
 	jobStartSub = cli.Command{
 		Name:  commandStart,
 		Usage: "run batch job",
 		Subcommands: []cli.Command{
 			prefetchStartCmd,
+			blobDownloadCmd,
 			{
 				Name:      cmdDownload,
 				Usage:     "download files and objects from remote sources",
@@ -249,6 +267,7 @@ outer:
 				// - lru
 				// - make-n-copies
 				// - prefetch-listrange
+				// - blob-download
 				// - rebalance
 				// - resilver
 				continue outer

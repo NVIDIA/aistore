@@ -23,8 +23,8 @@ import (
 
 // tunables
 const (
-	blobChunkSize   = 16 * cos.MiB
-	numChunkReaders = 3
+	dfltChunkSize  = 4 * cos.MiB
+	dfltNumReaders = 4
 )
 
 type (
@@ -71,23 +71,28 @@ var (
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
-func RenewBlobDl(uuid string, lom *core.LOM, chunkSize int64, numReaders ...int) xreg.RenewRes {
-	oa, errCode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom)
-	if err != nil {
-		return xreg.RenewRes{Err: err}
+func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
+	fullSize := msg.FullSize
+	if fullSize == 0 {
+		// TODO -- FIXME: eliminate extra call
+		oa, errCode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		if err != nil {
+			return xreg.RenewRes{Err: err}
+		}
+		debug.Assert(errCode == 0)
+		fullSize = oa.Size
 	}
-	debug.Assert(errCode == 0)
 	args := &blobArgs{
 		lom:        lom,
-		chunkSize:  chunkSize,
-		fullSize:   oa.Size,
-		numReaders: numChunkReaders,
+		chunkSize:  msg.ChunkSize,
+		fullSize:   fullSize,
+		numReaders: msg.NumWorkers,
 	}
-	if chunkSize == 0 {
-		args.chunkSize = blobChunkSize
+	if args.chunkSize == 0 {
+		args.chunkSize = dfltChunkSize
 	}
-	if len(numReaders) > 0 {
-		args.numReaders = numReaders[0]
+	if args.numReaders == 0 {
+		args.numReaders = dfltNumReaders
 	}
 	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: uuid, Custom: args})
 }

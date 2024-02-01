@@ -1195,8 +1195,8 @@ func (p *proxy) blobdl(args *bcastArgs, xargs *xact.ArgsMsg, msg *apc.ActMsg) er
 	if err := bck.Init(p.owner.bmd); err != nil {
 		return err
 	}
-	if !bck.IsRemote() {
-		return fmt.Errorf("%s: expecting remote bucket (have %s)", apc.ActBlobDl, bck.Cname(""))
+	if err := cmn.ValidateRemoteBck(apc.ActBlobDl, &xargs.Bck); err != nil {
+		return err
 	}
 	args.smap = p.owner.smap.get()
 	objName := msg.Name
