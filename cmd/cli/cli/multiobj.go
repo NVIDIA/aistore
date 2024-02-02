@@ -300,57 +300,6 @@ func _prefetchOne(c *cli.Context, shift int) error {
 	return lrCtx.do(c)
 }
 
-func blobDownloadHandler(c *cli.Context) error {
-	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjURI(c, uri, false /*emptyObjnameOK*/)
-	if err != nil {
-		return err
-	}
-	if bck.Props, err = headBucket(bck, true /* add */); err != nil {
-		return err
-	}
-	if !bck.IsRemote() {
-		return fmt.Errorf("expecting remote bucket (have %s)", bck.Cname(""))
-	}
-
-	var msg apc.BlobMsg
-	if flagIsSet(c, chunkSizeFlag) {
-		msg.ChunkSize, err = parseSizeFlag(c, chunkSizeFlag)
-		if err != nil {
-			return err
-		}
-	}
-	if flagIsSet(c, numWorkersFlag) {
-		msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
-	}
-	msg.LatestVer = flagIsSet(c, latestVerFlag)
-
-	// do
-	xid, err := api.BlobDownload(apiBP, bck, objName, &msg)
-	if err != nil {
-		return V(err)
-	}
-	text := fmt.Sprintf("%s[%s] %s", apc.ActBlobDl, xid, bck.Cname(objName))
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
-		return nil
-	}
-
-	// wait
-	var timeout time.Duration
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	fmt.Fprintln(c.App.Writer, text+" ...")
-	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: timeout}
-	if err := waitXact(apiBP, &xargs); err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Failed to download blob %s\n", bck.Cname(objName))
-		return err
-	}
-	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
-	return nil
-}
-
 //
 // lrCtx: evict, rm, prefetch
 //

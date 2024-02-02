@@ -107,11 +107,12 @@ func (z *SGL) grow(toSize int64) {
 
 func (z *SGL) ReadFrom(r io.Reader) (n int64, err error) {
 	for {
-		if z.woff-z.Cap() == 0 {
-			z.grow(z.Cap() + z.slab.Size())
+		if z.woff > z.Cap()-128 {
+			z.grow(z.Cap() + max(2*z.slab.Size(), DefaultBufSize))
 		}
 
 		idx := z.woff / z.slab.Size()
+		debug.Assertf(idx < int64(len(z.sgl)), "%d %d %d %d", idx, len(z.sgl), z.Cap(), z.woff)
 		off := z.woff % z.slab.Size()
 		buf := z.sgl[idx][off:]
 

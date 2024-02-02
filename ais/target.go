@@ -910,7 +910,6 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	case apc.ActBlobDl:
 		var (
 			args    apc.BlobMsg
-			xid     string
 			objName = msg.Name
 		)
 		if err = cos.MorphMarshal(msg.Value, &args); err != nil {
@@ -921,7 +920,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
-		if xid, err = _blobdl(lom, &args); err == nil {
+		xid := cos.GenUUID()
+		if err = _blobdl(xid, lom, &args); err == nil {
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 			// lom is eventually freed by x-blob
@@ -1373,15 +1373,16 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func _blobdl(lom *core.LOM, args *apc.BlobMsg) (string /*xid*/, error) {
-	uuid := cos.GenUUID()
+func _blobdl(uuid string, lom *core.LOM, args *apc.BlobMsg) error {
 	rns := xs.RenewBlobDl(uuid, lom, args)
-	if rns.Err != nil {
-		return "", rns.Err
+	if rns.Err != nil || rns.IsRunning() {
+		// cmn.IsErrXactUsePrev(rns.Err): single download per blob
+		return rns.Err
 	}
+
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
 	go xblob.Run(nil)
-	return uuid, nil
+	return nil
 }
 
 func (t *target) fsErr(err error, filepath string) {

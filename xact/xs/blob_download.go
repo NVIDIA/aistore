@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
@@ -139,7 +140,7 @@ func (p *blobFactory) Get() core.Xact { return p.xctn }
 func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	xprev := prev.Get().(*XactBlobDl)
 	if xprev.p.args.lom.Bucket().Equal(p.args.lom.Bucket()) && xprev.p.args.lom.ObjName == p.args.lom.ObjName {
-		return xreg.WprUse, nil
+		return xreg.WprUse, cmn.NewErrXactUsePrev(prev.Get().String())
 	}
 	return xreg.WprKeepAndStartNew, nil
 }
@@ -223,7 +224,7 @@ outer:
 				sgl.Reset()
 
 				if !r.eof {
-					debug.Assert(r.nextRoff <= r.p.args.fullSize)
+					debug.Assert(r.nextRoff < r.p.args.fullSize+r.p.args.chunkSize)
 					r.workCh <- blobWork{sgl, r.nextRoff}
 					r.nextRoff += r.p.args.chunkSize
 				}
@@ -307,6 +308,5 @@ func (reader *blobReader) run() {
 func (r *XactBlobDl) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
-	snap.IdleX = r.IsIdle()
 	return
 }

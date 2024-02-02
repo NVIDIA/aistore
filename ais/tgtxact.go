@@ -224,19 +224,15 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) erro
 	case apc.ActBlobDl:
 		debug.Assert(msg.Name != "")
 		lom := core.AllocLOM(msg.Name)
-		if err := lom.InitBck(&args.Bck); err != nil {
-			core.FreeLOM(lom)
-			return err
+		err := lom.InitBck(&args.Bck)
+		if err == nil {
+			// (compare w/ alternative t.blobdl path via dedicated api.BlobDownload)
+			err = _blobdl(args.ID, lom, &apc.BlobMsg{})
 		}
-		// (compare w/ alternative t.blobdl path via dedicated api.BlobDownload)
-		rns := xs.RenewBlobDl(args.ID, lom, &apc.BlobMsg{})
-		if rns.Err != nil {
+		if err != nil {
 			core.FreeLOM(lom)
-			return rns.Err
 		}
-		xblob := rns.Entry.Get().(*xs.XactBlobDl)
-		go xblob.Run(nil)
-		return nil
+		return err
 	// 3. cannot start
 	case apc.ActPutCopies:
 		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", args)

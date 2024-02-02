@@ -365,7 +365,6 @@ func a2aRegular(c *cli.Context, a *archput) error {
 	var (
 		reader   cos.ReadOpenCloser
 		progress *mpb.Progress
-		bars     []*mpb.Bar
 	)
 	if flagIsSet(c, dryRunFlag) {
 		// resulting message printed upon return
@@ -382,7 +381,10 @@ func a2aRegular(c *cli.Context, a *archput) error {
 			return err
 		}
 		// setup progress bar
-		args := barArgs{barType: sizeArg, barText: a.dst.oname, total: fi.Size()}
+		var (
+			bars []*mpb.Bar
+			args = barArgs{barType: sizeArg, barText: a.dst.oname, total: fi.Size()}
+		)
 		progress, bars = simpleBar(args)
 		cb := func(n int, _ error) { bars[0].IncrBy(n) }
 		reader = cos.NewCallbackReadOpenCloser(fh, cb)

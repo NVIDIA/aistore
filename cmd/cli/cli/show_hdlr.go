@@ -249,6 +249,7 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 
 	var (
 		ll  int
+		cnt int
 		err error
 	)
 	names := xact.ListDisplayNames(false /*only-startable*/)
@@ -258,6 +259,10 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		if errV != nil {
 			actionWarn(c, errV.Error())
 			err = errV
+			cnt++
+			if cnt > 1 {
+				break
+			}
 		}
 		ll += l
 	}

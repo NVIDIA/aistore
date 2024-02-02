@@ -576,8 +576,10 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (string, error) {
 		custom.Phase = apc.ActCommit
 		rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
-			txnTcb.xtcb.TxnAbort(rns.Err)
-			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
+			if !cmn.IsErrXactUsePrev(rns.Err) {
+				txnTcb.xtcb.TxnAbort(rns.Err)
+				nlog.Errorf("%s: %s %v", t, txn, rns.Err)
+			}
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()

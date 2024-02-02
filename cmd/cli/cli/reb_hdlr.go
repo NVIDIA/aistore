@@ -82,7 +82,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		xargs.OnlyRunning = true
 	}
 
-	// run until rebalance is completed
+	// run until rebalance completes
 	var (
 		longRun = &longRun{}
 		printed bool

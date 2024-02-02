@@ -494,7 +494,6 @@ func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
 				if wpr != WprUse {
 					nlog.Errorf("%v - not starting a new one of the same kind", err)
 				}
-				err = nil
 			}
 			xctn := prevEntry.Get()
 			return RenewRes{Entry: prevEntry, Err: err, UUID: xctn.ID()}
