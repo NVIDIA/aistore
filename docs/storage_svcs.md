@@ -43,30 +43,22 @@ For more examples, please to refer to [supported checksums and brief theory of o
 
 ## LRU
 
-Overriding the global configuration can be achieved by specifying the fields of the `LRU` instance of the `LRUConf` struct that encompasses all LRU configuration fields.
+The LRU (Least Recently Used) configuration is for managing storage space across the entire cluster, not just individual buckets. It helps keep the cluster running smoothly by making sure it doesn't run out of storage. The settings are split into two parts: `space` and `lru`.
 
-* `lru.lowwm`: integer in the range [0, 100], representing the capacity usage low watermark
-* `lru.highwm`: integer in the range [0, 100], representing the capacity usage high watermark
-* `lru.atime_cache_max`: positive integer representing the maximum number of entries
+> Note: The LRU watermarks (`space.lowwm`, `space.highwm`, and `space.out_of_space`) apply to the entire cluster, not to individual buckets. Therefore, all settings starting with `space.*` must be configured at the cluster level.
+
+* `space.lowwm`: integer in the range [0, 100], if filesystem usage exceeds `highwm` (high water mark %) LRU tries to evict objects so the filesystem usage drops to `lowwm` (low water mark %)
+* `space.highwm`: integer in the range [0, 100], LRU starts immediately if a filesystem usage exceeds the value representing `highwm` (high water mark %)
+* `space.out_of_space`: integer in the range [0, 100], `out_of_space` (%) if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`
 * `lru.dont_evict_time`: string that indicates eviction-free period [atime, atime + dont]
 * `lru.capacity_upd_time`: string indicating the minimum time to update capacity
 * `lru.enabled`: bool that determines whether LRU is run or not; only runs when true
 
-**NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified defaults to the data type's zero value.
-
-Example of setting bucket properties:
+Example of setting lru/space properties:
 
 ```console
-$ ais bucket props <bucket-name> lru.lowwm=1 lru.highwm=100 lru.enabled=true
+$ ais config cluster space.cleanupwm=40 lru.enabled=true space.lowwm=45 space.highwm=47.15 lru.dont_evict_time=1s
 ```
-
-To revert bucket's entire configuration back to global (configurable) defaults, use `"action":"reset-bprops"` with the same PATCH endpoint, e.g.:
-
-```console
-$ ais bucket props <bucket-name> --reset
-```
-
-In effect, resetting bucket properties is equivalent to populating all properties with the values from the corresponding sections of the [global configuration](/deploy/dev/local/aisnode_config.sh).
 
 ## Erasure coding
 

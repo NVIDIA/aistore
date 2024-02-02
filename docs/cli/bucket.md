@@ -1004,27 +1004,27 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 Show only `lru` section of bucket props for `bucket_name` bucket.
 
 ```console
-$ ais bucket props show ais://bucket_name --compact
+$ ais bucket props show s3://bucket-name --compact
 PROPERTY	 VALUE
-access		 GET,PUT,DELETE,HEAD,ColdGET
-checksum	 Type: xxhash | Validate: ColdGET
-created		 2020-04-08T16:20:12-08:00
+access		 GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
+checksum	 Type: xxhash | Validate: Nothing
+created		 2024-01-31T15:42:59-08:00
 ec		 Disabled
-lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+lru		 lru.dont_evict_time=2h0m, lru.capacity_upd_time=10m
 mirror		 Disabled
-provider	 ais
-versioning	 Enabled | Validate on WarmGET: no
-$ ais bucket props show ais://bucket_name lru --compact
+present		 yes
+provider	 aws
+versioning	 Disabled
+
+$ ais bucket props show s3://bucket_name lru --compact
 PROPERTY	 VALUE
-lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
-$ ais bucket props show bucket_name lru
+lru		 lru.dont_evict_time=2h0m, lru.capacity_upd_time=10m
+
+$ ais bucket props show s3://ais-abhishek lru
 PROPERTY		 VALUE
 lru.capacity_upd_time	 10m
-lru.dont_evict_time	 120m
+lru.dont_evict_time	 2h0m
 lru.enabled		 true
-lru.highwm		 90
-lru.lowwm		 75
-lru.out_of_space	 95
 ```
 
 ## Set bucket properties
@@ -1217,9 +1217,6 @@ $ ais bucket props set ais://bucket_name '{
       "enable_read_range": false
     },
     "lru": {
-      "lowwm": 20,
-      "highwm": 80,
-      "out_of_space": 90,
       "dont_evict_time": "20m",
       "capacity_upd_time": "1m",
       "enabled": true
@@ -1237,18 +1234,27 @@ $ ais bucket props set ais://bucket_name '{
     },
     "access": "255"
 }'
-Bucket props successfully updated
+"access" set to: "GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT" (was: "GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN")
+"ec.enabled" set to: "true" (was: "false")
+"ec.objsize_limit" set to: "256000" (was: "262144")
+"lru.capacity_upd_time" set to: "1m" (was: "10m")
+"lru.dont_evict_time" set to: "20m" (was: "1s")
+"lru.enabled" set to: "true" (was: "false")
+"mirror.enabled" set to: "false" (was: "true")
+
+Bucket props successfully updated.
 ```
 
 ```console
 $ ais show bucket ais://bucket_name --compact
 PROPERTY	 VALUE
-access		 GET,PUT,DELETE,HEAD,ColdGET
+access		 GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT
 checksum	 Type: xxhash | Validate: ColdGET
-created		2020-04-08T16:20:12-08:00
+created		 2024-02-02T12:57:17-08:00
 ec		 2:2 (250KiB)
-lru		 Watermarks: 20%/80% | Do not evict time: 120m | OOS: 90%
+lru		 lru.dont_evict_time=20m, lru.capacity_upd_time=1m
 mirror		 Disabled
+present		 yes
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
 ```
@@ -1256,9 +1262,7 @@ versioning	 Enabled | Validate on WarmGET: no
 If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 
 ```bash
-$ ais bucket props reset ais://bucket_name
-Bucket props successfully reset
-$ ais bucket props set ais://bucket_name '{
+$ ais bucket props set ais://bucket-name '{
   "mirror": {
     "enabled": true,
     "copies": 2
@@ -1268,19 +1272,22 @@ $ ais bucket props set ais://bucket_name '{
     "validate_warm_get": true
   }
 }'
-Bucket props successfully updated
-"versioning.validate_warm_get" set to: "true" (was: "false")
 "mirror.enabled" set to: "true" (was: "false")
-$ ais show bucket bucket_name --compact
+"versioning.validate_warm_get" set to: "true" (was: "false")
+
+Bucket props successfully updated.
+
+$ ais show bucket ais://bucket-name --compact
 PROPERTY	 VALUE
-access		 GET,PUT,DELETE,HEAD,ColdGET
-checksum	 Type: xxhash | Validate: ColdGET
-created		2020-04-08T16:20:12-08:00
-ec		 Disabled
-lru		 Watermarks: 75%/90% | Do not evict time: 120m | OOS: 95%
+access		 GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
+checksum	 Type: xxhash | Validate: Nothing
+created		 2024-02-02T12:52:30-08:00
+ec		     Disabled
+lru   		 lru.dont_evict_time=2h0m, lru.capacity_upd_time=10m
 mirror		 2 copies
+present		 yes
 provider	 ais
-versioning	 Enabled | Validate on WarmGET: yes
+versioning Enabled | Validate on WarmGET: yes
 ```
 
 ## Show and set AWS-specific properties
