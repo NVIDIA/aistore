@@ -101,7 +101,8 @@ $ ais put text.txt ais://src
 $ curl -s https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml -o md5_spec.yaml
 
 # Step 5: Initialize the ETL process
-$ ais etl init spec --from-file md5_spec.yaml --name etl-md5
+$ export COMMUNICATION_TYPE="hpull://"
+$ ais etl init spec --from-file md5_spec.yaml --name etl-md5 --comm-type $COMMUNICATION_TYPE
 
 # Step 6: Check if the ETL is running
 $ ais etl show
@@ -160,7 +161,7 @@ $ cat deps.txt
 torch==2.0.1
 torchvision==0.15.2
 
-$ ais etl init code --name etl-torchvision --from-file code.py --deps-file deps.txt --runtime python3.11v2
+$ ais etl init code --name etl-torchvision --from-file code.py --deps-file deps.txt --runtime python3.11v2 --comm-type hpull
 
 $ # Perform an offline transformation 
 $ ais etl bucket etl-torchvision ais://imagenet ais://imagenet-transformed --ext="{JPEG:JPEG}" 
@@ -371,9 +372,9 @@ metadata:
 When initializing ETL from spec/code, a valid and unique user-defined `ETL_NAME` should be assigned using the `--name` CLI parameter as shown below.
 
 ```console
-$ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3 --deps-file=deps.txt
+$ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3 --deps-file=deps.txt --comm-type hpull
 or
-$ ais etl init spec --name=etl-md5 --from-file=spec.yaml
+$ ais etl init spec --name=etl-md5 --from-file=spec.yaml --comm-type hpull
 ```
 
 Below are specifications for a valid `ETL_NAME`:

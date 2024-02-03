@@ -45,7 +45,7 @@ There are three ways of approaching this problem:
 
     Once we have the `transform` function defined, we can use CLI to build and initialize ETL:
     ```console
-    $ ais etl init code --from-file=code.py --runtime=python3.11v2 --name=transformer-md5
+    $ ais etl init code --from-file=code.py --runtime=python3.11v2 --name=transformer-md5 --comm-type hpull
     transformer-md5
     ```
 
