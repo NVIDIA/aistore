@@ -921,7 +921,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			break
 		}
 		xid := cos.GenUUID()
-		if err = _blobdl(xid, lom, &args); err == nil {
+		if err = t._blobdl(xid, lom, &args); err == nil {
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 			// lom is eventually freed by x-blob
@@ -1373,7 +1373,14 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func _blobdl(uuid string, lom *core.LOM, args *apc.BlobMsg) error {
+func (t *target) _blobdl(uuid string, lom *core.LOM, args *apc.BlobMsg) error {
+	cs := fs.Cap()
+	if errCap := cs.Err(); errCap != nil {
+		cs = t.OOS(nil)
+		if err := cs.Err(); err != nil {
+			return err
+		}
+	}
 	rns := xs.RenewBlobDl(uuid, lom, args)
 	if rns.Err != nil || rns.IsRunning() {
 		// cmn.IsErrXactUsePrev(rns.Err): single download per blob

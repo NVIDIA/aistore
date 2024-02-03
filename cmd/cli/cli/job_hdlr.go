@@ -83,15 +83,16 @@ var (
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			latestVerFlag,
 		),
-		cmdBlobDownload: append(
-			longRunFlags,
+		cmdBlobDownload: {
+			refreshFlag,
+			progressFlag,
+			listFlag,
 			chunkSizeFlag,
 			numWorkersFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
-			progressFlag,
 			latestVerFlag,
-		),
+		},
 		cmdLRU: {
 			lruBucketsFlag,
 			forceFlag,
@@ -117,8 +118,11 @@ var (
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
 	blobDownloadCmd = cli.Command{
-		Name:         cmdBlobDownload,
-		Usage:        "download very large objects (blobs) from remote storage",
+		Name: cmdBlobDownload,
+		Usage: "run a job to download very large object(s) (blobs) from remote storage to aistore cluster, e.g.:\n" +
+			indent1 + "\t- 'blob-download s3://abc/largefile --chunk-size=2mb --progress'\t- download one blob\n" +
+			indent1 + "\t- 'blob-download s3://abc --list \"f1, f2, f3\" --progress'\t- download multiple blobs\n" +
+			indent1 + "Note: when not using '--progress' option, run 'ais show job' to monitor.",
 		ArgsUsage:    objectArgument,
 		Flags:        startSpecialFlags[cmdBlobDownload],
 		Action:       blobDownloadHandler,
@@ -787,7 +791,7 @@ func stopJobHandler(c *cli.Context) error {
 	// query
 	msg := formatXactMsg(xactID, xname, bck)
 	xargs := xact.ArgsMsg{ID: xactID, Kind: xactKind}
-	snap, err := getXactSnap(&xargs)
+	_, snap, err := getXactSnap(&xargs)
 	if err != nil {
 		return fmt.Errorf("cannot stop %s: %v", msg, err)
 	}
