@@ -79,11 +79,12 @@ var (
 		"rmb":    "bucket rm",
 		"evict":  "bucket evict",
 		// job
-		"start":    "job start",
-		"stop":     "job stop",
-		"wait":     "job wait",
-		"dsort":    "job start dsort",
-		"download": "job start download",
+		"start":         "job start",
+		"stop":          "job stop",
+		"wait":          "job wait",
+		apc.ActDsort:    "job start " + apc.ActDsort,
+		apc.ActDownload: "job start " + apc.ActDownload,
+		apc.ActBlobDl:   "job start " + apc.ActBlobDl,
 	}
 )
 

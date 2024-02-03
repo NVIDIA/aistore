@@ -333,24 +333,27 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 	}
 	if length > 0 {
 		rc, res.Err = o.NewRangeReader(ctx, offset, length)
+		if res.Err != nil {
+			return
+		}
 	} else {
 		rc, res.Err = o.NewReader(ctx)
-	}
-	if res.Err != nil {
-		return
+		if res.Err != nil {
+			return
+		}
+		// custom metadata
+		lom.SetCustomKey(cmn.SourceObjMD, apc.GCP)
+		if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
+			if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
+				lom.SetCksum(cos.NewCksum(cksumType, cksumValue))
+			}
+		}
+		res.ExpCksum = setCustomGs(lom, attrs)
 	}
 
-	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, apc.GCP)
-	if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
-		if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
-			lom.SetCksum(cos.NewCksum(cksumType, cksumValue))
-		}
-	}
-	res.ExpCksum = setCustomGs(lom, attrs)
 	res.Size = rc.Attrs.Size
 	res.R = rc
-	return
+	return res
 }
 
 func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum) {

@@ -227,7 +227,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) erro
 		err := lom.InitBck(&args.Bck)
 		if err == nil {
 			// (compare w/ alternative t.blobdl path via dedicated api.BlobDownload)
-			err = _blobdl(args.ID, lom, &apc.BlobMsg{})
+			err = t._blobdl(args.ID, lom, &apc.BlobMsg{})
 		}
 		if err != nil {
 			core.FreeLOM(lom)
