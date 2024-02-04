@@ -335,4 +335,4 @@ func (u *HreqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context
 // number of intra-cluster broadcasting goroutines
 //
 
-func MaxBcastParallel() int { return max(sys.NumCPU(), 4) }
+func MaxParallelism() int { return max(sys.NumCPU(), 4) }

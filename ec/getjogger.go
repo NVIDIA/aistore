@@ -817,7 +817,7 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 // nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
-		wg     = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), 8)
+		wg     = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 8)
 		mtx    = &sync.Mutex{}
 		tmap   = core.T.Sowner().Get().Tmap
 		ctMeta = core.NewCTFromLOM(ctx.lom, fs.ECMetaType)

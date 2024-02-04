@@ -153,7 +153,7 @@ func TestMultipartUploadLargeFilesScript(t *testing.T) {
 
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 
-	// NOTE: to satisfy `s3cmd` have to set MD5 - see docs/s3cmd.md & docs/s3compat.md for details
+	// NOTE: need to set MD5 to satisfy `s3cmd` (for details, see docs/s3cmd.md & docs/s3compat.md)
 	bprops := &cmn.BpropsToSet{
 		Cksum: &cmn.CksumConfToSet{Type: apc.String(cos.ChecksumMD5)},
 	}
