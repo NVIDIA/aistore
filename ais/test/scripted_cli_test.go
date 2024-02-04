@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -151,9 +152,18 @@ func TestMultipartUploadLargeFilesScript(t *testing.T) {
 	})
 
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
-	cmd := exec.Command("./scripts/s3-mpt-large-files.sh", tempdir, apc.S3Scheme+apc.BckProviderSeparator+bck.Name, "1", "true")
+	// NOTE: to satisfy `s3cmd` have to set MD5 - see docs/s3cmd.md & docs/s3compat.md for details
+	bprops := &cmn.BpropsToSet{
+		Cksum: &cmn.CksumConfToSet{Type: apc.String(cos.ChecksumMD5)},
+	}
+	tools.CreateBucket(t, proxyURL, bck, bprops, true /*cleanup*/)
+
+	cmd := exec.Command("./scripts/s3-mpt-large-files.sh", tempdir, apc.S3Scheme+apc.BckProviderSeparator+bck.Name,
+		"1",    // number of iterations
+		"true", // generate large files
+		"2",    // number of large files
+	)
 
 	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
 	tlog.Logln("Note: this may take a while...")
