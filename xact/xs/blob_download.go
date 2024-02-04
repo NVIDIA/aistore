@@ -28,14 +28,15 @@ import (
 // 1. load, latest-ver, checksum, write, finalize
 // 2. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
 // 3. tune-up: (chunk size, slab size, full size) vs memory pressure
-// 4. currently always making extra call to get full size - make it optional
 
-// tunables
+// tunables (via apc.BlobMsg)
 const (
-	dfltChunkSize  = 4 * cos.MiB
+	dfltChunkSize  = 2 * cos.MiB
 	minChunkSize   = memsys.DefaultBufSize
-	maxChunkSize   = 64 * cos.MiB
+	maxChunkSize   = 16 * cos.MiB
 	dfltNumReaders = 4
+
+	maxInitialSizeSGL = 128
 )
 
 type (
@@ -97,13 +98,17 @@ func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
 		fullSize:   fullSize,
 		numReaders: msg.NumWorkers,
 	}
+
+	// validate, assign defaults (tune-up below)
 	if args.chunkSize == 0 {
 		args.chunkSize = dfltChunkSize
 	} else if args.chunkSize < minChunkSize {
-		nlog.Infoln("Warning: chunk size", args.chunkSize, "is below permitted minimum", minChunkSize)
+		nlog.Infoln("Warning: chunk size", cos.ToSizeIEC(args.chunkSize, 1), "is below permitted minimum",
+			cos.ToSizeIEC(minChunkSize, 0))
 		args.chunkSize = minChunkSize
 	} else if args.chunkSize > maxChunkSize {
-		nlog.Infoln("Warning: chunk size", args.chunkSize, "exceeds permitted maximum", maxChunkSize)
+		nlog.Infoln("Warning: chunk size", cos.ToSizeIEC(args.chunkSize, 1), "exceeds permitted maximum",
+			cos.ToSizeIEC(maxChunkSize, 0))
 		args.chunkSize = maxChunkSize
 	}
 	if args.numReaders == 0 {
@@ -112,7 +117,7 @@ func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
 	if int64(args.numReaders)*args.chunkSize > fullSize {
 		args.numReaders = int((fullSize + args.chunkSize - 1) / args.chunkSize)
 	}
-	if a := cmn.MaxBcastParallel(); a < args.numReaders {
+	if a := cmn.MaxParallelism(); a < args.numReaders {
 		args.numReaders = a
 	}
 
@@ -140,7 +145,7 @@ func (p *blobFactory) Start() error {
 	}
 	r.InitBase(p.Args.UUID, p.Kind(), p.args.lom.Bck())
 
-	// tune-up
+	// tune-up & readjust
 	var (
 		mm       = core.T.PageMM()
 		slabSize = int64(memsys.MaxPageSlabSize)
@@ -160,8 +165,11 @@ func (p *blobFactory) Start() error {
 	}
 
 	cnt := (p.args.chunkSize + slabSize - 1) / slabSize
-	if cnt > 128 {
-		cnt = 128
+	if cnt > maxInitialSizeSGL {
+		cnt = maxInitialSizeSGL
+	}
+	if p.args.numReaders < cmn.MaxParallelism()-2 && cnt*slabSize < p.args.chunkSize {
+		p.args.numReaders++
 	}
 
 	r.readers = make([]*blobReader, p.args.numReaders)
@@ -200,7 +208,8 @@ func (r *XactBlobDl) Run(*sync.WaitGroup) {
 		pending []blobDone
 		eof     bool
 	)
-	nlog.Infoln(r.Name())
+	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.p.args.chunkSize, 0)+
+		", num-concurrent-readers", r.p.args.numReaders)
 	r.start()
 outer:
 	for {
@@ -268,7 +277,8 @@ outer:
 				goto fin
 			}
 			if eof && cmn.Rom.FastV(5, cos.SmoduleXs) {
-				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d", r.Name(), r.woff, r.nextRoff, r.p.args.fullSize)
+				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d",
+					r.Name(), r.woff, r.nextRoff, r.p.args.fullSize)
 				for i := len(pending) - 1; i >= 0; i-- {
 					nlog.Errorf("   roff %d", pending[i].roff)
 				}

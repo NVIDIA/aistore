@@ -1035,6 +1035,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 		status = errf.status
 	} else if isErrNotFoundExtended(err, status) {
 		status = http.StatusNotFound
+	} else if IsErrCapExceeded(err) {
+		status = http.StatusInsufficientStorage
 	}
 
 	herr.init(r, err, status)
