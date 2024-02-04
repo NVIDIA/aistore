@@ -159,7 +159,22 @@ For example: given AIS gateway at `10.10.0.1:51080` (where `51080` would be the 
 
 ### 2. How to have `s3cmd` calling AIS endpoint
 
-But then the question is, how to transfer AIS endpoint into `s3cmd` commands. There are several ways; the one we show here is probably the easiest, exemplified by the `diff` below:
+But then the question is, how to transfer AIS endpoint into `s3cmd` commands. There are essentially two ways:
+1. `s3cmd` command line
+2. `s3cmd` configuration
+
+For command line (related) examples, see, for instance, this [multipart upload test](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/s3-mpt-large-files.sh). In particular, the following settings:
+
+```bash
+s3endpoint="localhost:8080/s3"
+host="--host=$s3endpoint"
+host_bucket="--host-bucket=$s3endpoint/%(bucket)"
+```
+
+> Separately, note that by default aistore handles S3 API at its `AIS_ENDPOINT/s3` endpoint (e.g., `localhost:8080/s3`).
+> However, any aistore cluster is configurable to accept S3 API at its root as well. That is, without the "/s3" suffix shown above. 
+
+Back to running `s3cmd` though - the second, and arguably the easiest, way is exemplified by the `diff` below:
 
 ```sh
 # diff -uN .s3cfg.orig $HOME/.s3cfg

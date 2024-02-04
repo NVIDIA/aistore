@@ -7,6 +7,7 @@ package xs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
@@ -22,10 +24,19 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// tunables
+// TODO:
+// 1. load, latest-ver, checksum, write, finalize
+// 2. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
+// 3. tune-up: (chunk size, slab size, full size) vs memory pressure
+
+// tunables (via apc.BlobMsg)
 const (
-	dfltChunkSize  = 4 * cos.MiB
+	dfltChunkSize  = 2 * cos.MiB
+	minChunkSize   = memsys.DefaultBufSize
+	maxChunkSize   = 16 * cos.MiB
 	dfltNumReaders = 4
+
+	maxInitialSizeSGL = 128
 )
 
 type (
@@ -62,7 +73,6 @@ type (
 		woff     int64
 		sgls     []*memsys.SGL
 		wg       *sync.WaitGroup
-		eof      bool
 	}
 )
 
@@ -75,7 +85,6 @@ var (
 func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
 	fullSize := msg.FullSize
 	if fullSize == 0 {
-		// TODO -- FIXME: eliminate extra call
 		oa, errCode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			return xreg.RenewRes{Err: err}
@@ -89,12 +98,29 @@ func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
 		fullSize:   fullSize,
 		numReaders: msg.NumWorkers,
 	}
+
+	// validate, assign defaults (tune-up below)
 	if args.chunkSize == 0 {
 		args.chunkSize = dfltChunkSize
+	} else if args.chunkSize < minChunkSize {
+		nlog.Infoln("Warning: chunk size", cos.ToSizeIEC(args.chunkSize, 1), "is below permitted minimum",
+			cos.ToSizeIEC(minChunkSize, 0))
+		args.chunkSize = minChunkSize
+	} else if args.chunkSize > maxChunkSize {
+		nlog.Infoln("Warning: chunk size", cos.ToSizeIEC(args.chunkSize, 1), "exceeds permitted maximum",
+			cos.ToSizeIEC(maxChunkSize, 0))
+		args.chunkSize = maxChunkSize
 	}
 	if args.numReaders == 0 {
 		args.numReaders = dfltNumReaders
 	}
+	if int64(args.numReaders)*args.chunkSize > fullSize {
+		args.numReaders = int((fullSize + args.chunkSize - 1) / args.chunkSize)
+	}
+	if a := cmn.MaxParallelism(); a < args.numReaders {
+		args.numReaders = a
+	}
+
 	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: uuid, Custom: args})
 }
 
@@ -119,15 +145,40 @@ func (p *blobFactory) Start() error {
 	}
 	r.InitBase(p.Args.UUID, p.Kind(), p.args.lom.Bck())
 
-	mm := core.T.PageMM()
-	cnt := min(p.args.chunkSize/memsys.MaxPageSlabSize, 16)
+	// tune-up & readjust
+	var (
+		mm       = core.T.PageMM()
+		slabSize = int64(memsys.MaxPageSlabSize)
+		pre      = mm.Pressure()
+	)
+	if pre >= memsys.PressureExtreme {
+		return errors.New(r.Name() + ": extreme memory pressure - not starting")
+	}
+	switch pre {
+	case memsys.PressureHigh:
+		slabSize = memsys.DefaultBufSize
+		p.args.numReaders = 1
+		nlog.Warningln(r.Name() + ": high memory pressure detected...")
+	case memsys.PressureModerate:
+		slabSize >>= 1
+		p.args.numReaders = min(3, p.args.numReaders)
+	}
+
+	cnt := (p.args.chunkSize + slabSize - 1) / slabSize
+	if cnt > maxInitialSizeSGL {
+		cnt = maxInitialSizeSGL
+	}
+	if p.args.numReaders < cmn.MaxParallelism()-2 && cnt*slabSize < p.args.chunkSize {
+		p.args.numReaders++
+	}
+
 	r.readers = make([]*blobReader, p.args.numReaders)
 	r.sgls = make([]*memsys.SGL, p.args.numReaders)
 	for i := range r.readers {
 		r.readers[i] = &blobReader{
 			parent: r,
 		}
-		r.sgls[i] = mm.NewSGL(cnt*memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
+		r.sgls[i] = mm.NewSGL(cnt*slabSize, slabSize)
 	}
 	r.wg = &sync.WaitGroup{}
 	p.xctn = r
@@ -149,11 +200,16 @@ func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 // XactBlobDl
 //
 
+func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.p.args.lom.ObjName }
+
 func (r *XactBlobDl) Run(*sync.WaitGroup) {
 	var (
 		err     error
 		pending []blobDone
+		eof     bool
 	)
+	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.p.args.chunkSize, 0)+
+		", num-concurrent-readers", r.p.args.numReaders)
 	r.start()
 outer:
 	for {
@@ -161,48 +217,38 @@ outer:
 		case done := <-r.doneCh:
 			sgl := done.sgl
 			if r.p.args.fullSize == done.roff+sgl.Size() || done.err == io.EOF {
-				r.eof = true
+				eof = true
 				if r.p.args.fullSize > done.roff+sgl.Size() {
-					err = fmt.Errorf("%s: premature EOF downloading %s: %d > %d", r, r.p.args.lom.Cname(),
-						r.p.args.fullSize, done.roff+sgl.Size())
+					err = fmt.Errorf("%s: premature EOF: expected size %d, have %d",
+						r.Name(), r.p.args.fullSize, done.roff+sgl.Size())
+					goto fin
 				}
 			} else if done.err != nil {
 				err = done.err
 				goto fin
 			}
 			debug.Assert(sgl.Size() > 0)
+			debug.Assertf(eof == (r.nextRoff >= r.p.args.fullSize), "%t, %d, %d", eof, r.nextRoff, r.p.args.fullSize)
 
 			// add pending in offset-descending order
 			if done.roff != r.woff {
 				debug.Assert(done.roff > r.woff)
 				debug.Assert((done.roff-r.woff)%r.p.args.chunkSize == 0)
 				pending = append(pending, blobDone{roff: -1})
-				var inserted bool
 				for i := range pending {
-					if pending[i].roff >= 0 && pending[i].roff < done.roff {
+					if i == len(pending)-1 || (pending[i].roff >= 0 && pending[i].roff < done.roff) {
 						copy(pending[i+1:], pending[i:])
 						pending[i] = done
-						inserted = true
-						break
+						continue outer
 					}
 				}
-				if !inserted {
-					pending[len(pending)-1] = done
-				}
-				break
 			}
-
-			// TODO -- FIXME: write here...
 
 			r.woff += sgl.Size()
 			r.ObjsAdd(0, sgl.Size())
 			sgl.Reset()
 
-			if r.eof {
-				if len(pending) == 0 {
-					goto fin
-				}
-			} else if r.nextRoff < r.p.args.fullSize {
+			if r.nextRoff < r.p.args.fullSize {
 				r.workCh <- blobWork{sgl, r.nextRoff}
 				r.nextRoff += r.p.args.chunkSize
 			}
@@ -210,27 +256,32 @@ outer:
 			// walk backwards and plug any holes
 			for i := len(pending) - 1; i >= 0; i-- {
 				done := pending[i]
-				debug.Assert(done.roff > 0)
 				if done.roff > r.woff {
-					continue outer
+					break
 				}
+				debug.Assert(done.roff == r.woff)
 				pending = pending[:i]
-
-				// TODO -- FIXME: and here...
 
 				sgl := done.sgl
 				r.woff += sgl.Size()
 				r.ObjsAdd(0, sgl.Size())
 				sgl.Reset()
 
-				if !r.eof {
-					debug.Assert(r.nextRoff < r.p.args.fullSize+r.p.args.chunkSize)
+				if r.nextRoff < r.p.args.fullSize {
 					r.workCh <- blobWork{sgl, r.nextRoff}
 					r.nextRoff += r.p.args.chunkSize
 				}
 			}
-			if r.eof && len(pending) == 0 {
+			if r.woff >= r.p.args.fullSize {
+				debug.Assertf(r.woff == r.p.args.fullSize, "%d > %d", r.woff, r.p.args.fullSize)
 				goto fin
+			}
+			if eof && cmn.Rom.FastV(5, cos.SmoduleXs) {
+				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d",
+					r.Name(), r.woff, r.nextRoff, r.p.args.fullSize)
+				for i := len(pending) - 1; i >= 0; i-- {
+					nlog.Errorf("   roff %d", pending[i].roff)
+				}
 			}
 		case <-r.ChanAbort():
 			goto fin
@@ -289,7 +340,6 @@ func (reader *blobReader) run() {
 			break
 		}
 		if err = res.Err; err == nil {
-			// TODO -- FIXME: checksum(s)
 			written, err = io.Copy(sgl, res.R)
 		}
 		if err != nil {
@@ -308,5 +358,8 @@ func (reader *blobReader) run() {
 func (r *XactBlobDl) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
+
+	// HACK shortcut to support progress bar
+	snap.Stats.InBytes = r.p.args.fullSize
 	return
 }

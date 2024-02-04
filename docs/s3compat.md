@@ -220,6 +220,8 @@ $ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(b
 1969-12-31 16:00     71671   s3://test/obj-aws
 ```
 
+> See related: [multipart upload](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/s3-mpt-large-files.sh) test and usage comments inline.
+
 ## Multipart Upload using `aws`
 
 Example below reproduces the following [Amazon Knowledge-Center instruction](https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli/).

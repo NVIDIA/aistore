@@ -377,34 +377,35 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
 		input.Range = aws.String(rng)
-	}
-	obj, err = svc.GetObjectWithContext(ctx, &input)
-	if err != nil {
-		res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
-			debug.Assert(length > 0)
-			res.Err = io.EOF // TODO -- FIXME: loosely sp
+		obj, err = svc.GetObjectWithContext(ctx, &input)
+		if err != nil {
+			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+			return
 		}
-		return
-	}
+	} else {
+		obj, err = svc.GetObjectWithContext(ctx, &input)
+		if err != nil {
+			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+			return
+		}
+		// custom metadata
+		lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
 
-	// custom metadata
-	lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
+		res.ExpCksum = _getCustom(lom, obj)
 
-	res.ExpCksum = _getCustom(lom, obj)
-
-	md := obj.Metadata
-	if cksumType, ok := md[cos.S3MetadataChecksumType]; ok {
-		if cksumValue, ok := md[cos.S3MetadataChecksumVal]; ok {
-			cksum := cos.NewCksum(*cksumType, *cksumValue)
-			lom.SetCksum(cksum)
-			res.ExpCksum = cksum // precedence over md5 (<= ETag)
+		md := obj.Metadata
+		if cksumType, ok := md[cos.S3MetadataChecksumType]; ok {
+			if cksumValue, ok := md[cos.S3MetadataChecksumVal]; ok {
+				cksum := cos.NewCksum(*cksumType, *cksumValue)
+				lom.SetCksum(cksum)
+				res.ExpCksum = cksum // precedence over md5 (<= ETag)
+			}
 		}
 	}
 
 	res.R = obj.Body
 	res.Size = *obj.ContentLength
-	return
+	return res
 }
 
 func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {

@@ -44,7 +44,7 @@ type (
 func bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 	var (
 		cnt atomic.Int32
-		wg  = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), len(rargs.smap.Tmap))
+		wg  = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), len(rargs.smap.Tmap))
 	)
 	for _, tsi := range rargs.smap.Tmap {
 		if tsi.ID() == core.T.SID() {
