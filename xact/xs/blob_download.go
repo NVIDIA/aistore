@@ -36,7 +36,8 @@ const (
 	maxChunkSize   = 16 * cos.MiB
 	dfltNumReaders = 4
 
-	maxInitialSizeSGL = 128
+	maxInitialSizeSGL = 128 // vec length
+	maxTotalChunks    = 128 * cos.MiB
 )
 
 type (
@@ -145,7 +146,7 @@ func (p *blobFactory) Start() error {
 	}
 	r.InitBase(p.Args.UUID, p.Kind(), p.args.lom.Bck())
 
-	// tune-up & readjust
+	// tune-up
 	var (
 		mm       = core.T.PageMM()
 		slabSize = int64(memsys.MaxPageSlabSize)
@@ -168,10 +169,16 @@ func (p *blobFactory) Start() error {
 	if cnt > maxInitialSizeSGL {
 		cnt = maxInitialSizeSGL
 	}
-	if p.args.numReaders < cmn.MaxParallelism()-2 && cnt*slabSize < p.args.chunkSize {
+
+	// add a reader if possible
+	nr := int64(p.args.numReaders)
+	if pre == memsys.PressureLow && p.args.numReaders < cmn.MaxParallelism() &&
+		nr < (p.args.fullSize+p.args.chunkSize-1)/p.args.chunkSize &&
+		nr*p.args.chunkSize < maxTotalChunks-p.args.chunkSize {
 		p.args.numReaders++
 	}
 
+	// init and allocate
 	r.readers = make([]*blobReader, p.args.numReaders)
 	r.sgls = make([]*memsys.SGL, p.args.numReaders)
 	for i := range r.readers {

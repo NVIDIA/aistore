@@ -28,6 +28,11 @@ const (
 	fmtXactSucceeded = "Done.\n"
 )
 
+// TODO: move to xact/api
+func xactCname(kind, uuid string) string {
+	return kind + xact.LeftID + uuid + xact.RightID
+}
+
 func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {
 	out = toShowMsg(c, xjid, "To monitor the progress", false)
 	if suffix != "" && out != "" {
@@ -73,7 +78,7 @@ func waitXact(apiBP api.BaseParams, args *xact.ArgsMsg) error {
 		return V(err)
 	}
 	if status.Aborted() {
-		return fmt.Errorf("%s[%s] aborted", xname, status.UUID)
+		return fmt.Errorf("%s aborted", xactCname(xname, status.UUID))
 	}
 	return nil
 }
