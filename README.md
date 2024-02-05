@@ -182,10 +182,11 @@ With a little effort, they all could be extracted and used outside.
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xact/README.md)
   - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md), including:
-    - [prefetch](/docs/cli/object.md#prefetch-objects)
-    - [copy remote bucket](/docs/cli/bucket.md#copy-bucket)
-    - [copy multiple remote objects](/docs/cli/bucket.md#copy-multiple-objects)
-    - [download blobs](/docs/cli/blob-downloader.md), and more
+    - [prefetch remote datasets](/docs/cli/object.md#prefetch-objects)
+    - [copy bucket](/docs/cli/bucket.md#copy-bucket)
+    - [copy multiple objects](/docs/cli/bucket.md#copy-multiple-objects)
+    - [download remote BLOBs](/docs/cli/blob-downloader.md)
+    - [promote NFS or SMB share](https://aiatscale.org/blog/2022/03/17/promote), and more
 - Assorted Topics
   - [System files](/docs/sysfiles.md)
   - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
@@ -198,7 +199,7 @@ With a little effort, they all could be extracted and used outside.
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket)
-  - [Out of band updates](/docs/out_of_band.md)
+  - [Out-of-band updates](/docs/out_of_band.md)
 
 ## License
 
