@@ -263,6 +263,13 @@ func (s *coreStats) initProm(node *meta.Snode) {
 	}
 	id := strings.ReplaceAll(node.ID(), ".", "_")
 	for name, v := range s.Tracker {
+		var variableLabels []string
+		if isDiskMetric(name) {
+			// obtain prometheus specific disk-metric name from tracker name
+			// e.g. `disk.nvme0.read.bps` -> `disk.read.bps`.
+			_, name = extractPromDiskMetricName(name)
+			variableLabels = []string{diskMetricLabel}
+		}
 		label := strings.ReplaceAll(name, ".", "_")
 		v.label.prom = strings.ReplaceAll(label, ":", "_")
 
@@ -291,8 +298,9 @@ func (s *coreStats) initProm(node *meta.Snode) {
 			help = "throughput (MB/s)"
 		}
 
-		fullqn := prometheus.BuildFQName("ais", node.Type(), id+"_"+v.label.prom)
-		s.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, nil /*constLabels*/)
+		fullqn := prometheus.BuildFQName("ais", node.Type(), v.label.prom)
+		// e.g. metric: ais_target_disk_avg_wsize{disk="nvme0n1",node_id="fqWt8081"}
+		s.promDesc[name] = prometheus.NewDesc(fullqn, help, variableLabels, prometheus.Labels{"node_id": id})
 	}
 }
 
@@ -704,6 +712,8 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		var (
 			val int64
 			fv  float64
+
+			variableLabels []string
 		)
 		copyV, okc := r.ctracker[name]
 		if !okc {
@@ -733,10 +743,15 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		if v.kind == KindCounter || v.kind == KindSize {
 			promMetricType = prometheus.CounterValue
 		}
+		if isDiskMetric(name) {
+			var diskName string
+			diskName, name = extractPromDiskMetricName(name)
+			variableLabels = []string{diskName}
+		}
 		// 3. publish
 		desc, ok := r.core.promDesc[name]
 		debug.Assert(ok, name)
-		m, err := prometheus.NewConstMetric(desc, promMetricType, fv)
+		m, err := prometheus.NewConstMetric(desc, promMetricType, fv, variableLabels...)
 		debug.AssertNoErr(err)
 		ch <- m
 	}
