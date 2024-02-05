@@ -43,7 +43,7 @@ OPTIONS:
                         or, when listing files and/or directories:
                         --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
    --chunk-size value   chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
-   --num-workers value  number of blob-downloading workers (threads) (default: 0)
+   --num-workers value  number of concurrent blob-downloading workers (readers); system default when omitted or zero
    --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                         valid time units: ns, us (or µs), ms, s (default), m, h
@@ -59,9 +59,10 @@ OPTIONS:
 ## Usage example
 
 ```console
-$ ais blob-download s3://ais-blossom --list "aisloader, arkloader" --chunk-size=2mb --progress
+$ ais blob-download s3://abc --list "file-2gb, file-100mb" --chunk-size=2mb --progress
+
 blob-download[Qxz3EClVN]
 blob-download[xvC3nClSF]
-s3://ais-blossom/aisloader  9.54 MiB / 39.30 MiB [==============>-----------------------------------------------] 24 %
-s3://ais-blossom/arkloader 17.17 MiB / 39.30 MiB [==========================>-----------------------------------] 44 %
+s3://abc/file-2gb  513 MiB / 2 GiB      [==============>-----------------------------------------------] 24 %
+s3://abc/file-100mb 44.17 MiB / 100 MiB [==========================>-----------------------------------] 44 %
 ```
