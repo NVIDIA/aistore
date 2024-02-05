@@ -760,7 +760,7 @@ var (
 
 	numWorkersFlag = cli.IntFlag{
 		Name:  "num-workers",
-		Usage: "number of blob-downloading workers (threads)",
+		Usage: "number of concurrent blob-downloading workers (readers); system default when omitted or zero",
 	}
 
 	cksumFlag = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
