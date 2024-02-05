@@ -29,10 +29,11 @@ For easy usage, management, and monitoring, there's also:
 * **Integrated and powerful [CLI](/docs/cli.md)**. As of early 2024, top-level CLI commands include:
 ```console
 $ ais
-bucket       etl          help             log               get             dsort         rmo         ls
-object       job          advanced         performance       prefetch        evict         stop        put
-cluster      auth         storage          remote-cluster    start           wait          rmb         search
-config       show         archive          alias             create          download      cp
+
+bucket        etl         help           log              create        dsort        stop         blob-download
+object        job         advanced       performance      download      evict        cp           rmo
+cluster       auth        storage        remote-cluster   prefetch      get          rmb          wait
+config        show        archive        alias            put           ls           start        search
 ```
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
@@ -180,7 +181,11 @@ With a little effort, they all could be extracted and used outside.
 - Batch jobs
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xact/README.md)
-  - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
+  - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md), including:
+    - [prefetch](/docs/cli/object.md#prefetch-objects)
+    - [copy remote bucket](/docs/cli/bucket.md#copy-bucket)
+    - [copy multiple remote objects](/docs/cli/bucket.md#copy-multiple-objects)
+    - [download blobs](/docs/cli/blob-downloader.md), and more
 - Assorted Topics
   - [System files](/docs/sysfiles.md)
   - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)

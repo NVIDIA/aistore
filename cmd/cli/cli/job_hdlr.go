@@ -119,10 +119,10 @@ var (
 	}
 	blobDownloadCmd = cli.Command{
 		Name: cmdBlobDownload,
-		Usage: "run a job to download very large object(s) (blobs) from remote storage to aistore cluster, e.g.:\n" +
-			indent1 + "\t- 'blob-download s3://abc/largefile --chunk-size=2mb --progress'\t- download one blob\n" +
-			indent1 + "\t- 'blob-download s3://abc --list \"f1, f2, f3\" --progress'\t- download multiple blobs\n" +
-			indent1 + "Note: when not using '--progress' option, run 'ais show job' to monitor.",
+		Usage: "run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
+			indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
+			indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- use 4 concurrent readers to download each of the 2 blobs\n" +
+			indent1 + "Note: when _not_ using '--progress' option, run 'ais show job' to monitor.",
 		ArgsUsage:    objectArgument,
 		Flags:        startSpecialFlags[cmdBlobDownload],
 		Action:       blobDownloadHandler,

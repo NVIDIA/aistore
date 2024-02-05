@@ -155,6 +155,7 @@ It is worth emphasizing that the same rules of data protection and consistency a
 * copy bucket; transform bucket;
 * multi-object copy; multi-object transform; multi-object archive;
 * prefetch remote bucket;
+* download very large remote objects (blobs);
 * rename bucket;
 * promote NFS share
 
@@ -186,6 +187,9 @@ To this end, AIS provides 6 (six) easy ways ranging from the conventional on-dem
 4. [HTTP(S) Datasets](#existing-datasets-https-datasets)
 5. [Promote local or shared files](#promote-local-or-shared-files)
 6. [Backend Bucket](bucket.md#backend-bucket)
+7. [Download very large objects (BLOBs)](/docs/cli/blob-downloader.md)
+8. [Copy remote bucket](/docs/cli/bucket.md#copy-bucket)
+9. [Copy multiple remote objects](/docs/cli/bucket.md#copy-multiple-objects)
 
 In particular:
 
@@ -202,6 +206,10 @@ In all other cases, AIS will service the GET request without going to Cloud.
 ### Existing Datasets: Batch Prefetch
 
 Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* or *range* of objects from any given remote bucket, as described in [this readme](batch.md).
+
+For CLI usage, see:
+
+* [CLI: prefetch](/docs/cli/object.md#prefetch-objects)
 
 ### Existing Datasets: integrated Downloader
 
