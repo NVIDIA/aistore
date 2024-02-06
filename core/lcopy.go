@@ -18,8 +18,6 @@ import (
 // LOM copy management
 //
 
-const fmtNestedErr = "nested err: %v"
-
 func (lom *LOM) whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
 		return
@@ -245,8 +243,8 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
 		return
 	}
 	if err = cos.Rename(workFQN, copyFQN); err != nil {
-		if errRemove := cos.RemoveFile(workFQN); errRemove != nil {
-			nlog.Errorf(fmtNestedErr, errRemove)
+		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !os.IsNotExist(errRemove) {
+			nlog.Errorln("nested err:", errRemove)
 		}
 		return
 	}
@@ -306,8 +304,8 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	}
 
 	if err = cos.Rename(workFQN, dstFQN); err != nil {
-		if errRemove := cos.RemoveFile(workFQN); errRemove != nil {
-			nlog.Errorf(fmtNestedErr, errRemove)
+		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !os.IsNotExist(errRemove) {
+			nlog.Errorln("nested err:", errRemove)
 		}
 		return
 	}
@@ -329,20 +327,20 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mi, lom.mi
 		if err = lom.syncMetaWithCopies(); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
-				if errRemove := os.Remove(dst.FQN); errRemove != nil {
-					nlog.Errorf("nested err: %v", errRemove)
+				if errRemove := os.Remove(dst.FQN); errRemove != nil && !os.IsNotExist(errRemove) {
+					nlog.Errorln("nested err:", errRemove)
 				}
 			}
 			// `lom.syncMetaWithCopies()` may have made changes notwithstanding
 			if errPersist := lom.Persist(); errPersist != nil {
-				nlog.Errorf("nested err: %v", errPersist)
+				nlog.Errorln("nested err:", errPersist)
 			}
 			return
 		}
 		err = lom.Persist()
 	} else if err = dst.Persist(); err != nil {
-		if errRemove := os.Remove(dst.FQN); errRemove != nil {
-			nlog.Errorf("nested err: %v", errRemove)
+		if errRemove := os.Remove(dst.FQN); errRemove != nil && !os.IsNotExist(errRemove) {
+			nlog.Errorln("nested err:", errRemove)
 		}
 	}
 	return

@@ -248,7 +248,7 @@ func (poi *putOI) finalize() (errCode int, err error) {
 				err1 = err
 			}
 			poi.t.fsErr(err1, poi.workFQN)
-			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil {
+			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil && !os.IsNotExist(err2) {
 				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
 		}
@@ -472,7 +472,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 	if nerr := lmfh.Close(); nerr != nil {
 		nlog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
 	}
-	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil {
+	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil && !os.IsNotExist(nerr) {
 		nlog.Errorf(fmtNested, poi.t, err, "remove", poi.workFQN, nerr)
 	}
 }
