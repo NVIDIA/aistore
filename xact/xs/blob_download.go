@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -43,6 +44,8 @@ const (
 type (
 	blobArgs struct {
 		lom        *core.LOM
+		lmfh       *os.File
+		wfqn       string
 		chunkSize  int64
 		fullSize   int64
 		numReaders int
@@ -83,7 +86,7 @@ var (
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
-func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
+func RenewBlobDl(uuid string, lom *core.LOM, wfqn string, lmfh *os.File, msg *apc.BlobMsg) xreg.RenewRes {
 	fullSize := msg.FullSize
 	if fullSize == 0 {
 		oa, errCode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom)
@@ -95,6 +98,8 @@ func RenewBlobDl(uuid string, lom *core.LOM, msg *apc.BlobMsg) xreg.RenewRes {
 	}
 	args := &blobArgs{
 		lom:        lom,
+		lmfh:       lmfh,
+		wfqn:       wfqn,
 		chunkSize:  msg.ChunkSize,
 		fullSize:   fullSize,
 		numReaders: msg.NumWorkers,
@@ -170,7 +175,7 @@ func (p *blobFactory) Start() error {
 		cnt = maxInitialSizeSGL
 	}
 
-	// add a reader if possible
+	// add a reader, if possible
 	nr := int64(p.args.numReaders)
 	if pre == memsys.PressureLow && p.args.numReaders < cmn.MaxParallelism() &&
 		nr < (p.args.fullSize+p.args.chunkSize-1)/p.args.chunkSize &&
@@ -237,7 +242,7 @@ outer:
 			debug.Assert(sgl.Size() > 0)
 			debug.Assertf(eof == (r.nextRoff >= r.p.args.fullSize), "%t, %d, %d", eof, r.nextRoff, r.p.args.fullSize)
 
-			// add pending in offset-descending order
+			// add pending in the offset-descending order
 			if done.roff != r.woff {
 				debug.Assert(done.roff > r.woff)
 				debug.Assert((done.roff-r.woff)%r.p.args.chunkSize == 0)
@@ -250,10 +255,10 @@ outer:
 					}
 				}
 			}
-
-			r.woff += sgl.Size()
-			r.ObjsAdd(0, sgl.Size())
-			sgl.Reset()
+			// write (type 1)
+			if err = r.write(sgl); err != nil {
+				goto fin
+			}
 
 			if r.nextRoff < r.p.args.fullSize {
 				r.workCh <- blobWork{sgl, r.nextRoff}
@@ -267,13 +272,13 @@ outer:
 					break
 				}
 				debug.Assert(done.roff == r.woff)
-				pending = pending[:i]
 
+				// remove from pending and write (type 2)
 				sgl := done.sgl
-				r.woff += sgl.Size()
-				r.ObjsAdd(0, sgl.Size())
-				sgl.Reset()
-
+				pending = pending[:i]
+				if err = r.write(sgl); err != nil {
+					goto fin
+				}
 				if r.nextRoff < r.p.args.fullSize {
 					r.workCh <- blobWork{sgl, r.nextRoff}
 					r.nextRoff += r.p.args.chunkSize
@@ -296,10 +301,21 @@ outer:
 	}
 fin:
 	close(r.workCh)
-	if err != nil {
+	r.p.args.lom.SetSize(r.woff)
+	cos.Close(r.p.args.lmfh)
+
+	if err == nil {
+		_, err = core.T.FinalizeObj(r.p.args.lom, r.p.args.wfqn, r, cmn.OwtGetPrefetchLock)
+	}
+	if err == nil {
+		r.ObjsAdd(1, 0)
+	} else {
+		if errRemove := cos.RemoveFile(r.p.args.wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
+			nlog.Errorln("nested err:", errRemove)
+		}
 		r.Abort(err)
 	}
-	r.ObjsAdd(1, 0)
+
 	r.wg.Wait()
 	close(r.doneCh)
 	r.cleanup()
@@ -317,11 +333,31 @@ func (r *XactBlobDl) start() {
 	}
 }
 
+func (r *XactBlobDl) write(sgl *memsys.SGL) error {
+	size := sgl.Size()
+
+	written, err := io.Copy(r.p.args.lmfh, sgl)
+	if err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleXs) {
+			nlog.Errorf("%s: failed to write (woff=%d, next=%d, sgl-size=%d): %v",
+				r.Name(), r.woff, r.nextRoff, size, err)
+		}
+		return err
+	}
+	debug.Assertf(written == size, "%s: expected written size=%d, got %d (at woff %d)", r.Name(), size, written, r.woff)
+
+	r.woff += size
+	r.ObjsAdd(0, size)
+	sgl.Reset()
+	return nil
+}
+
 func (r *XactBlobDl) cleanup() {
 	for i := range r.readers {
 		r.sgls[i].Free()
 	}
 	clear(r.sgls)
+
 	core.FreeLOM(r.p.args.lom)
 }
 

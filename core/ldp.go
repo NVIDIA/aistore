@@ -108,6 +108,8 @@ remote:
 // - [PRECONDITION]: `versioning.validate_warm_get` || QparamLatestVer
 // - [Sync] when Sync option is used (via bucket config and/or `sync` argument) caller MUST take wlock or rlock
 // - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
+//
+// Returns NotFound also after having removed local replica (the Sync option)
 func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
 	bck := lom.Bck()
 	if !bck.HasVersioningMD() {
@@ -138,6 +140,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
 		} else {
 			g.tstats.Inc(RemoteDeletedDelCount)
 		}
+		debug.Assert(err != nil)
 		return false, errCode, err
 	}
 

@@ -93,14 +93,19 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 	return err
 }
 
-func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact) (errCode int, err error) {
+func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact, owt cmn.OWT) (errCode int, err error) {
+	debug.Func(func() {
+		size := lom.SizeBytes(true)
+		finfo, err := os.Stat(workFQN)
+		debug.Assertf(err == nil && finfo.Size() == size, "err=%v, finfo=%d, size=%d", err, finfo.Size(), size)
+	})
 	poi := allocPOI()
 	{
 		poi.t = t
 		poi.atime = time.Now().UnixNano()
 		poi.lom = lom
 		poi.workFQN = workFQN
-		poi.owt = cmn.OwtFinalize
+		poi.owt = owt
 		poi.xctn = xctn
 	}
 	errCode, err = poi.finalize()

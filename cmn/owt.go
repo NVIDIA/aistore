@@ -22,7 +22,7 @@ const (
 	// PUT and PUT-like transactions
 	OwtPut       OWT = iota // PUT
 	OwtPromote              // promote target-accessible files and directories
-	OwtFinalize             // finalize object archives
+	OwtArchive              // multi-obj arch
 	OwtTransform            // ETL
 	OwtCopy                 // copy and move objects within cluster
 	OwtRebalance            // NOTE: must be the last in PUT* group
@@ -53,8 +53,8 @@ func (owt OWT) String() (s string) {
 		s = "owt-put"
 	case OwtPromote:
 		s = "owt-promote"
-	case OwtFinalize:
-		s = "owt-finalize"
+	case OwtArchive:
+		s = "owt-archive"
 	case OwtTransform:
 		s = "owt-transform"
 	case OwtCopy:
@@ -69,6 +69,8 @@ func (owt OWT) String() (s string) {
 		s = "owt-get"
 	case OwtGetPrefetchLock:
 		s = "owt-prefetch-lock"
+	case OwtNone:
+		s = "owt-none"
 	default:
 		debug.Assert(false)
 	}
