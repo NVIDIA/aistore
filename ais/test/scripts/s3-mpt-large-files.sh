@@ -24,7 +24,7 @@ iterations=4
 generate="false"
 numfiles=3
 
-prefix="mpt-$RANDOM"
+dstdir="mpt-$RANDOM"
 
 # NOTE: to have s3cmd working directly with ais:// bucket
 # overriding AWS defaults (incl. "--host=s3.amazonaws.com")
@@ -66,14 +66,14 @@ fi
 ## uncomment for verbose output
 ## set -x
 
-s3cmd info $bucket  $host $host_bucket --no-ssl 1> /dev/null | exit $?
+s3cmd info $bucket $host $host_bucket --no-ssl 1> /dev/null | exit $?
 
 cleanup() {
   rc=$?
   if [[ "$generate" == "true" ]]; then
     rm -f $srcdir/mpt-*
   fi
-  s3cmd del "$bucket/$prefix/mpt*"  $host $host_bucket --no-ssl 2> /dev/null
+  s3cmd del "$bucket/$dstdir/mpt*" $host $host_bucket --no-ssl 2> /dev/null
   exit $rc
 }
 
@@ -89,7 +89,7 @@ if [[ "$generate" == "true" ]]; then  ## generate
 fi
 
 files=`ls $srcdir`
-for i in {1..$iterations}; do
+for i in $(seq 1 1 $iterations); do
   echo "Iteration #$i -------------------------------------------------------------------------"
   for f in $files; do
     filesize=$(stat --printf="%s" $srcdir/$f)
@@ -100,12 +100,14 @@ for i in {1..$iterations}; do
     if [ $partsize -le 5 ]; then
       partsize=$(shuf -i 5-10 -n 1)
     fi
-    cmd="s3cmd put $srcdir/$f $bucket/$prefix/$f --multipart-chunk-size-mb=$partsize $host $host_bucket --no-ssl"
+    cmd="s3cmd put $srcdir/$f $bucket/$dstdir/$f --multipart-chunk-size-mb=$partsize $host $host_bucket --no-ssl"
     echo "Running '$cmd' ..."
     $cmd || exit $?
   done
-    # cleanup
-    s3cmd ls $bucket/$prefix/* $host $host_bucket --no-ssl || exit $?
-    echo "Cleaning up ..."
-    s3cmd del $bucket/$prefix/* $host $host_bucket --no-ssl || exit $?
+  # cleanup
+  s3cmd ls $bucket/$dstdir/* $host $host_bucket --no-ssl || exit $?
+  echo "Cleaning up ..."
+  for f in $files; do
+    s3cmd del $bucket/$dstdir/$f $host $host_bucket --no-ssl
+  done
 done
