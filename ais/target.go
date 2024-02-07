@@ -1400,16 +1400,19 @@ func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, err error
 
 // returns empty xid ("") if nothing to do
 func _blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, _ error) {
+	var oa *cmn.ObjAttrs
+
 	// exists; latest
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {
 			return xid, err
 		}
 	} else if args.LatestVer {
-		eq, _, err := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/)
-		if eq || err != nil {
-			return xid, err
+		res := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/)
+		if res.Eq || res.Err != nil {
+			return xid, res.Err
 		}
+		oa = res.ObjAttrs
 	} else {
 		return xid, nil
 	}
@@ -1423,7 +1426,7 @@ func _blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, _ error) {
 
 	// new
 	xid = cos.GenUUID()
-	rns := xs.RenewBlobDl(xid, lom, wfqn, lmfh, args)
+	rns := xs.RenewBlobDl(xid, lom, oa, wfqn, lmfh, args)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
 		if errRemove := cos.RemoveFile(wfqn); errRemove != nil {
 			nlog.Errorln("nested err", errRemove)

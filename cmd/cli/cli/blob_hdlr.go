@@ -76,7 +76,7 @@ func blobDownloadHandler(c *cli.Context) error {
 		err = blobAllProgress(c, bck, objNames, xids)
 	case len(objNames) == 1:
 		xid, objName := xids[0], objNames[0]
-		cname := xactCname(apc.ActBlobDl, xid)
+		cname := xact.Cname(apc.ActBlobDl, xid)
 		text := cname + " " + bck.Cname(objName)
 		if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 			actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
@@ -100,7 +100,7 @@ func blobDownloadHandler(c *cli.Context) error {
 			if xid == "" {
 				continue // nothing to do
 			}
-			cname := xactCname(apc.ActBlobDl, xid)
+			cname := xact.Cname(apc.ActBlobDl, xid)
 			fmt.Fprintln(c.App.Writer, fcyan(cname))
 			go func(objName, xid, cname string) {
 				text := cname + " " + bck.Cname(objName)
@@ -164,7 +164,7 @@ func blobAllProgress(c *cli.Context, bck cmn.Bck, objNames, xids []string) (err 
 	for i := range objNames {
 		if xids[i] != "" {
 			xid, bar := xids[i], bars[i]
-			cname := xactCname(apc.ActBlobDl, xid)
+			cname := xact.Cname(apc.ActBlobDl, xid)
 			fmt.Fprintln(c.App.Writer, fcyan(cname))
 			go _blobOneProgress(xid, bar, errCh, refreshRate)
 		}

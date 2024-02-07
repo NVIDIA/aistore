@@ -291,6 +291,8 @@ func GetKindName(kindOrName string) (kind, name string) {
 	return
 }
 
+func Cname(kind, uuid string) string { return kind + LeftID + uuid + RightID }
+
 func ParseCname(cname string) (xactKind, xactID string, _ error) {
 	const efmt = "invalid name %q"
 	l := len(cname)
