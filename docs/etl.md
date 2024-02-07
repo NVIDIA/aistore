@@ -101,7 +101,8 @@ $ ais put text.txt ais://src
 $ curl -s https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml -o md5_spec.yaml
 
 # Step 5: Initialize the ETL process
-$ ais etl init spec --from-file md5_spec.yaml --name etl-md5 --comm-type hpull
+$ export COMMUNICATION_TYPE="hpull://"
+$ ais etl init spec --from-file md5_spec.yaml --name etl-md5 --comm-type $COMMUNICATION_TYPE
 
 # Step 6: Check if the ETL is running
 $ ais etl show
@@ -132,7 +133,7 @@ $ ais ls ais://imagenet | head -5
 
 $ # Create a custom transformation using torchvision
 $ # The `code.py` file contains the Python code for the transformation function, and `deps.txt` lists the dependencies required to run `code.py`
-$ cat > code.py
+$ cat code.py
 import io
 from PIL import Image
 from torchvision import transforms as T
@@ -156,7 +157,7 @@ def transform(data: bytes) -> bytes:
     byte_im = buf.getvalue()
     return byte_im
 
-$ cat > deps.txt
+$ cat deps.txt
 torch==2.0.1
 torchvision==0.15.2
 
