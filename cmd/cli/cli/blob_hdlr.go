@@ -61,9 +61,12 @@ func blobDownloadHandler(c *cli.Context) error {
 	msg.LatestVer = flagIsSet(c, latestVerFlag)
 
 	// start
-	var xids []string
-	xids, err = blobStartAll(c, bck, objNames, &msg)
-	if err != nil {
+	var (
+		xids []string
+		cnt  int
+	)
+	xids, cnt, err = blobStartAll(c, bck, objNames, &msg)
+	if err != nil || cnt == 0 /* nothing to do */ {
 		return err
 	}
 
@@ -94,6 +97,9 @@ func blobDownloadHandler(c *cli.Context) error {
 		wg.Add(len(objNames))
 		for i := range objNames {
 			objName, xid := objNames[i], xids[i]
+			if xid == "" {
+				continue // nothing to do
+			}
 			cname := xactCname(apc.ActBlobDl, xid)
 			fmt.Fprintln(c.App.Writer, fcyan(cname))
 			go func(objName, xid, cname string) {
@@ -118,7 +124,7 @@ func blobDownloadHandler(c *cli.Context) error {
 	return err
 }
 
-func blobStartAll(c *cli.Context, bck cmn.Bck, objNames []string, msg *apc.BlobMsg) (xids []string, err error) {
+func blobStartAll(c *cli.Context, bck cmn.Bck, objNames []string, msg *apc.BlobMsg) (xids []string, cnt int, err error) {
 	var xid string
 	xids = make([]string, 0, len(objNames))
 	for _, objName := range objNames {
@@ -130,11 +136,16 @@ func blobStartAll(c *cli.Context, bck cmn.Bck, objNames []string, msg *apc.BlobM
 					actionWarn(c, errN.Error())
 				}
 			}
-			return nil, V(err)
+			return nil, 0, V(err)
+		}
+		if xid == "" {
+			actionDone(c, bck.Cname(objName)+" already downloaded, nothing to do")
+		} else {
+			cnt++
 		}
 		xids = append(xids, xid)
 	}
-	return xids, nil
+	return xids, cnt, nil
 }
 
 func blobAllProgress(c *cli.Context, bck cmn.Bck, objNames, xids []string) (err error) {
@@ -145,14 +156,18 @@ func blobAllProgress(c *cli.Context, bck cmn.Bck, objNames, xids []string) (err 
 	)
 	debug.Assert(len(xids) == len(objNames)) // xid <=1:1=> objName
 	for i := range xids {
-		bargs = append(bargs, barArgs{barType: sizeArg, barText: bck.Cname(objNames[i]), total: 0})
+		if xids[i] != "" {
+			bargs = append(bargs, barArgs{barType: sizeArg, barText: bck.Cname(objNames[i]), total: 0})
+		}
 	}
 	progress, bars := simpleBar(bargs...)
 	for i := range objNames {
-		xid, bar := xids[i], bars[i]
-		cname := xactCname(apc.ActBlobDl, xid)
-		fmt.Fprintln(c.App.Writer, fcyan(cname))
-		go _blobOneProgress(xid, bar, errCh, refreshRate)
+		if xids[i] != "" {
+			xid, bar := xids[i], bars[i]
+			cname := xactCname(apc.ActBlobDl, xid)
+			fmt.Fprintln(c.App.Writer, fcyan(cname))
+			go _blobOneProgress(xid, bar, errCh, refreshRate)
+		}
 	}
 	progress.Wait()
 	select {

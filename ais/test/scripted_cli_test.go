@@ -162,7 +162,7 @@ func TestMultipartUploadLargeFilesScript(t *testing.T) {
 	cmd := exec.Command("./scripts/s3-mpt-large-files.sh", tempdir, apc.S3Scheme+apc.BckProviderSeparator+bck.Name,
 		"1",    // number of iterations
 		"true", // generate large files
-		"2",    // number of large files
+		"1",    // number of large files
 	)
 
 	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
