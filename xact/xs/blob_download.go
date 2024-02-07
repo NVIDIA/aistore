@@ -170,7 +170,9 @@ func (p *blobFactory) Start() error {
 		p.args.numReaders = min(3, p.args.numReaders)
 	}
 
-	cnt := (p.args.chunkSize + slabSize - 1) / slabSize
+	cnt := max((p.args.chunkSize+slabSize-1)/slabSize, 1)
+	p.args.chunkSize = min(cnt*slabSize, p.args.fullSize)
+
 	if cnt > maxInitialSizeSGL {
 		cnt = maxInitialSizeSGL
 	}
@@ -240,7 +242,6 @@ outer:
 				goto fin
 			}
 			debug.Assert(sgl.Size() > 0)
-			debug.Assertf(eof == (r.nextRoff >= r.p.args.fullSize), "%t, %d, %d", eof, r.nextRoff, r.p.args.fullSize)
 
 			// add pending in the offset-descending order
 			if done.roff != r.woff {

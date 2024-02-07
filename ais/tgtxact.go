@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -125,10 +126,15 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		// the rest "startables"
-		if err := t.xstart(&xargs, bck, msg); err != nil {
+		// all other "startables"
+		xid, err := t.xstart(&xargs, bck, msg)
+		if err != nil {
 			t.writeErr(w, r, err)
 			return
+		}
+		if l := len(xid); l > 0 {
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(l))
+			w.Write([]byte(xid))
 		}
 	case apc.ActXactStop:
 		debug.Assert(xact.IsValidKind(xargs.Kind) || xact.IsValidUUID(xargs.ID), xargs.String())
@@ -178,15 +184,15 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 // PUT
 //
 
-func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) error {
+func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid string, _ error) {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
 	if !xact.IsValidKind(args.Kind) {
-		return fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", args.Kind)
+		return xid, fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", args.Kind)
 	}
 	if dtor := xact.Table[args.Kind]; dtor.Scope == xact.ScopeB && bck == nil {
-		return fmt.Errorf(erfmn, args.Kind)
+		return xid, fmt.Errorf(erfmn, args.Kind)
 	}
 	switch args.Kind {
 	// 1. global x-s
@@ -216,35 +222,39 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) erro
 		}
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
+		if args.ID == "" {
+			args.ID = cos.GenUUID()
+			xid = args.ID
+		}
 		go t.runResilver(res.Args{UUID: args.ID, Notif: notif}, wg)
 		wg.Wait()
 	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(args.ID, bck)
-		return rns.Err
+		return xid, rns.Err
 	case apc.ActBlobDl:
 		debug.Assert(msg.Name != "")
 		lom := core.AllocLOM(msg.Name)
 		err := lom.InitBck(&args.Bck)
 		if err == nil {
-			// (compare w/ alternative t.blobdl path via dedicated api.BlobDownload)
-			err = t._blobdl(args.ID, lom, &apc.BlobMsg{})
+			// empty control message when executed via x-start API
+			xid, err = t.blobdl(lom, &apc.BlobMsg{})
 		}
 		if err != nil {
 			core.FreeLOM(lom)
 		}
-		return err
+		return xid, err
 	// 3. cannot start
 	case apc.ActPutCopies:
-		return fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", args)
+		return xid, fmt.Errorf("cannot start %q (is driven by PUTs into a mirrored bucket)", args)
 	case apc.ActDownload, apc.ActEvictObjects, apc.ActDeleteObjects, apc.ActMakeNCopies, apc.ActECEncode:
-		return fmt.Errorf("initiating %q must be done via a separate documented API", args)
+		return xid, fmt.Errorf("initiating %q must be done via a separate documented API", args)
 	// 4. unknown
 	case "":
-		return fmt.Errorf("%q: unspecified (empty) xaction kind", args)
+		return xid, fmt.Errorf("%q: unspecified (empty) xaction kind", args)
 	default:
-		return cmn.NewErrUnsupp("start xaction", args.Kind)
+		return xid, cmn.NewErrUnsupp("start xaction", args.Kind)
 	}
-	return nil
+	return xid, nil
 }
 
 //
