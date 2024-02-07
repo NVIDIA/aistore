@@ -556,13 +556,14 @@ do:
 			goto fin
 		}
 	} else if goi.latestVer { // apc.QparamLatestVer or 'versioning.validate_warm_get'
-		eq, errCodeSync, errSync := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/)
-		if errSync != nil {
-			return errCodeSync, errSync
+		res := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/)
+		if res.Err != nil {
+			return res.ErrCode, res.Err
 		}
-		if !eq {
+		if !res.Eq {
 			cold, goi.verchanged = true, true
 		}
+		// TODO: utilize res.ObjAttrs
 	}
 
 	if !cold && goi.lom.CksumConf().ValidateWarmGet { // validate checksums and recover (self-heal) if corrupted
