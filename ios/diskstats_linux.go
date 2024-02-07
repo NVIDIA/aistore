@@ -8,6 +8,7 @@ package ios
 import (
 	"bufio"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -15,9 +16,35 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// Based on:
+// - https://www.kernel.org/doc/Documentation/iostats.txt
+// - https://www.kernel.org/doc/Documentation/block/stat.txt
+type blockStats struct {
+	readComplete  int64 // 1 - # of reads completed
+	readMerged    int64 // 2 - # of reads merged
+	readSectors   int64 // 3 - # of sectors read
+	readMs        int64 // 4 - # ms spent reading
+	writeComplete int64 // 5 - # writes completed
+	writeMerged   int64 // 6 - # writes merged
+	writeSectors  int64 // 7 - # of sectors written
+	writeMs       int64 // 8 - # of milliseconds spent writing
+	ioPending     int64 // 9 - # of I/Os currently in progress
+	ioMs          int64 // 10 - # of milliseconds spent doing I/Os
+	ioMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
+	// 12 - 15: discard I/Os, discard merges, discard sectors, discard ticks
+	// 16, 17:  flash I/Os, flash ticks, as per https://github.com/sysstat/sysstat/blob/master/iostat.c
+}
+
+type allBlockStats map[string]*blockStats
+
 // The "sectors" in question are the standard UNIX 512-byte sectors, not any device- or filesystem-specific block size
 // (from https://www.kernel.org/doc/Documentation/block/stat.txt)
 const sectorSize = int64(512)
+
+var (
+	regex  = regexp.MustCompile(`nvme(\d+)n(\d+)`)
+	cregex = regexp.MustCompile(`nvme(\d+)c(\d+)n(\d+)`)
+)
 
 func readStats(disks, sysfnames cos.StrKVs, all allBlockStats) {
 	for disk := range disks {
