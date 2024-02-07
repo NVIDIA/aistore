@@ -39,7 +39,7 @@ classifiers = [
 dependencies = [
     "requests",
     "packaging",
-    "pydantic==1.9.0",
+    "pydantic==1.10.14",
     "cloudpickle==2.2.0",
     "humanize>=4.6.0",
     "braceexpand>=0.1.7",
