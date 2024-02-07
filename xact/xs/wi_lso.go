@@ -109,11 +109,11 @@ func checkRemoteMD(lom *core.LOM, e *cmn.LsoEntry) {
 		debug.Assert(false, lom.Cname())
 		return
 	}
-	eq, errCode, err := lom.CheckRemoteMD(false /*locked*/, false /*sync*/)
+	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/)
 	switch {
-	case eq:
-		debug.AssertNoErr(err)
-	case cos.IsNotExist(err, errCode):
+	case res.Eq:
+		debug.AssertNoErr(res.Err)
+	case cos.IsNotExist(res.Err, res.ErrCode):
 		e.SetVerRemoved()
 	default:
 		e.SetVerChanged()

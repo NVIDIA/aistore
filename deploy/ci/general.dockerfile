@@ -4,7 +4,7 @@ ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
 
 RUN apt-get update -yq
-RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof coreutils python3-pip python3-setuptools s3cmd docker.io uuid-runtime
+RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof coreutils python3-pip python3-setuptools s3cmd docker.io uuid-runtime bc
 # Python source-build requirements
 RUN apt-get --no-install-recommends -y install wget libbz2-dev libncursesw5-dev unzip libreadline-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libffi-dev zlib1g-dev xz-utils lzma liblzma-dev
 

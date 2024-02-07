@@ -1133,48 +1133,63 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	}
 }
 
+// xstart: rebalance, resilver, other "startables" (see xaction/api.go)
 func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	var (
-		xargs = xact.ArgsMsg{}
-	)
+	var xargs xact.ArgsMsg
 	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
+
 	// rebalance
 	if xargs.Kind == apc.ActRebalance {
 		p.rebalanceCluster(w, r, msg)
 		return
 	}
 
-	xargs.ID = cos.GenUUID() // common for all
-
-	// cluster-wide resilver
-	if xargs.Kind == apc.ActResilver && xargs.DaemonID != "" {
-		p.resilverOne(w, r, msg, &xargs)
-		return
-	}
-
-	// all the rest `startable` (see xaction/api.go)
-	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs, Name: msg.Name})
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
-	args.to = core.Targets
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S}
 
-	if xargs.Kind == apc.ActBlobDl {
+	switch {
+	case xargs.Kind == apc.ActBlobDl:
 		// validate; select one target
-		if err := p.blobdl(args, &xargs, msg); err != nil {
+		args.smap = p.owner.smap.get()
+		tsi, err := p.blobdl(args.smap, &xargs, msg)
+		if err != nil {
 			freeBcArgs(args)
 			p.writeErr(w, r, err)
 			return
 		}
+		args._selected(tsi)
+		args.req.Body = cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs, Name: msg.Name})
+	case xargs.Kind == apc.ActResilver && xargs.DaemonID != "":
+		args.smap = p.owner.smap.get()
+		tsi := args.smap.GetTarget(xargs.DaemonID)
+		if tsi == nil {
+			err := &errNodeNotFound{"cannot resilver", xargs.DaemonID, p.si, args.smap}
+			p.writeErr(w, r, err)
+			return
+		}
+		args._selected(tsi)
+		args.req.Body = cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
+	default:
+		// all targets, one common UUID for all
+		args.to = core.Targets
+		xargs.ID = cos.GenUUID()
+		args.req.Body = cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
 	}
 
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
+
 	for _, res := range results {
 		if res.err == nil {
+			if xargs.Kind == apc.ActResilver && xargs.DaemonID != "" {
+				// - UUID assigned by the selected target (see above)
+				// - not running notif listener for blob downloads - may reconsider
+				xargs.ID = string(res.bytes)
+			}
 			continue
 		}
 		p.writeErr(w, r, res.toErr())
@@ -1182,33 +1197,35 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 	freeBcastRes(results)
-	smap := p.owner.smap.get()
-	nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
-	p.ic.registerEqual(regIC{smap: smap, nl: nl})
 
-	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
-	w.Write([]byte(xargs.ID))
+	if len(xargs.ID) > 0 {
+		smap := p.owner.smap.get()
+		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
+		p.ic.registerEqual(regIC{smap: smap, nl: nl})
+
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
+		w.Write([]byte(xargs.ID))
+	}
 }
 
-func (p *proxy) blobdl(args *bcastArgs, xargs *xact.ArgsMsg, msg *apc.ActMsg) error {
-	bck := meta.CloneBck(&xargs.Bck)
-	if err := bck.Init(p.owner.bmd); err != nil {
-		return err
-	}
-	if err := cmn.ValidateRemoteBck(apc.ActBlobDl, &xargs.Bck); err != nil {
-		return err
-	}
-	args.smap = p.owner.smap.get()
-	objName := msg.Name
-	tsi, _, err := args.smap.HrwMultiHome(xargs.Bck.MakeUname(objName))
-	if err != nil {
-		return err
-	}
+func (a *bcastArgs) _selected(tsi *meta.Snode) {
 	nmap := make(meta.NodeMap, 1)
 	nmap[tsi.ID()] = tsi
-	args.nodes = []meta.NodeMap{nmap}
-	args.to = core.SelectedNodes
-	return nil
+	a.nodes = []meta.NodeMap{nmap}
+	a.to = core.SelectedNodes
+}
+
+func (p *proxy) blobdl(smap *smapX, xargs *xact.ArgsMsg, msg *apc.ActMsg) (tsi *meta.Snode, err error) {
+	bck := meta.CloneBck(&xargs.Bck)
+	if err := bck.Init(p.owner.bmd); err != nil {
+		return nil, err
+	}
+	if err := cmn.ValidateRemoteBck(apc.ActBlobDl, &xargs.Bck); err != nil {
+		return nil, err
+	}
+	objName := msg.Name
+	tsi, _, err = smap.HrwMultiHome(xargs.Bck.MakeUname(objName))
+	return tsi, err
 }
 
 func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
@@ -1286,33 +1303,6 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 	debug.Assert(rmdCtx.rebID != "")
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rmdCtx.rebID)))
 	w.Write([]byte(rmdCtx.rebID))
-}
-
-func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xargs *xact.ArgsMsg) {
-	smap := p.owner.smap.get()
-	si := smap.GetTarget(xargs.DaemonID)
-	if si == nil {
-		p.writeErrf(w, r, "cannot resilver %v: node must exist and be a target", si)
-		return
-	}
-
-	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
-	cargs := allocCargs()
-	{
-		cargs.si = si
-		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
-	}
-	res := p.call(cargs, smap)
-	freeCargs(cargs)
-	if res.err != nil {
-		p.writeErr(w, r, res.toErr())
-	} else {
-		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
-		p.ic.registerEqual(regIC{smap: smap, nl: nl})
-		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
-		w.Write([]byte(xargs.ID))
-	}
-	freeCR(res)
 }
 
 func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {

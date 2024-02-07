@@ -98,7 +98,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		}
 		_, cpr.xname = xact.GetKindName(xkind)
 		cpr.totals.objs = numObjs
-		cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)
+		cpr.loghdr = fmt.Sprintf("%s %s => %s", xact.Cname(cpr.xname, cpr.xid), cpr.from, cpr.to)
 		return cpr.multiobj(c, text)
 	}
 
@@ -349,14 +349,14 @@ func (lr *lrCtx) do(c *cli.Context) (err error) {
 			s = fmt.Sprintf("%v...", fileList[:4])
 		}
 		_, xname = xact.GetKindName(kind)
-		text = fmt.Sprintf("%s[%s]: %s %s from %s", xname, xid, s, action, lr.bck.Cname(""))
+		text = fmt.Sprintf("%s: %s %s from %s", xact.Cname(xname, xid), s, action, lr.bck.Cname(""))
 	} else {
 		num = pt.Count()
 		_, xname = xact.GetKindName(kind)
 		if emptyTemplate {
-			text = fmt.Sprintf("%s[%s]: %s entire bucket %s", xname, xid, action, lr.bck.Cname(""))
+			text = fmt.Sprintf("%s: %s entire bucket %s", xact.Cname(xname, xid), action, lr.bck.Cname(""))
 		} else {
-			text = fmt.Sprintf("%s[%s]: %s %q from %s", xname, xid, action, lr.tmplObjs, lr.bck.Cname(""))
+			text = fmt.Sprintf("%s: %s %q from %s", xact.Cname(xname, xid), action, lr.tmplObjs, lr.bck.Cname(""))
 		}
 	}
 

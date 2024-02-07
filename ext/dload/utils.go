@@ -243,8 +243,9 @@ func headLink(link string) (resp *http.Response, err error) {
 // to compare local object with its remote counterpart (source).
 func CompareObjects(lom *core.LOM, dst *DstElement) (bool /*equal*/, error) {
 	if dst.Link == "" {
-		eq, _, err := lom.CheckRemoteMD(true /*rlocked*/, false /*sync*/) // TODO: use job.Sync()
-		return eq, err
+		res := lom.CheckRemoteMD(true /*rlocked*/, false /*sync*/) // TODO: use job.Sync()
+		return res.Eq, res.Err
+		// TODO: make use of res.ObjAttrs
 	}
 
 	resp, err := headLink(dst.Link) //nolint:bodyclose // cos.Close

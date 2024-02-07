@@ -101,14 +101,15 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 			lom.Unlock(false)
 			return // nothing to do
 		}
-		var eq bool
-		if eq, errCode, err = lom.CheckRemoteMD(true /*rlocked*/, false /*synchronize*/); eq {
+		res := lom.CheckRemoteMD(true /*rlocked*/, false /*synchronize*/)
+		if res.Eq {
+			debug.Assert(res.Err == nil)
 			lom.Unlock(false)
 			return // nothing to do
 		}
-		if err != nil {
+		if err = res.Err; err != nil {
 			lom.Unlock(false)
-			if cos.IsNotExist(err, errCode) && lrit.lrp != lrpList {
+			if cos.IsNotExist(err, res.ErrCode) && lrit.lrp != lrpList {
 				return // not found, prefix or range
 			}
 			goto eret

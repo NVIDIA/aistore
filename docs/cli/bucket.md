@@ -683,11 +683,12 @@ OPTIONS:
    --wait            wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    --timeout value   maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                      valid time units: ns, us (or µs), ms, s (default), m, h
-   --latest          GET, prefetch, or copy the latest object version from the associated remote bucket;
-                     provides operation-level control over object versioning (and version synchronization)
-                     without requiring to change bucket configuration
-                     - the latter can be done using 'ais bucket props set BUCKET versioning'
-                     - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
+   --latest          check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
+                     from the associated remote bucket:
+                      - provides operation-level control over object versioning (and version synchronization)
+                        without requiring to change bucket configuration
+                      - the latter can be done using 'ais bucket props set BUCKET versioning'
+                      - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
    --sync            synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source;
                      the option is a stronger variant of the '--latest' (option) - in addition it entails
                      removing of the objects that no longer exist remotely

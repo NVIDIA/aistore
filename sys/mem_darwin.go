@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"syscall"
-	"unsafe" //nolint:gci,gocritic // super weird case
+	"unsafe" //nolint:gocritic // super weird case
 )
 
 type (

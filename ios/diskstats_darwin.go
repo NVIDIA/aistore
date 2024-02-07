@@ -10,7 +10,20 @@ import (
 	"github.com/lufia/iostat"
 )
 
-func readStats(disks, _ cos.StrKVs, all allBlockStats) {
+// Based on:
+// - https://www.kernel.org/doc/Documentation/iostats.txt
+// - https://www.kernel.org/doc/Documentation/block/stat.txt
+type blockStats struct {
+	readSectors  int64 // 3 - # of sectors read
+	readMs       int64 // 4 - # ms spent reading
+	writeSectors int64 // 7 - # of sectors written
+	writeMs      int64 // 8 - # of milliseconds spent writing
+	ioMs         int64 // 10 - # of milliseconds spent doing I/Os
+}
+
+type allBlockStats map[string]*blockStats
+
+func readStats(_, _ cos.StrKVs, all allBlockStats) {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil {
 		return

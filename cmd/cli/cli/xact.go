@@ -73,7 +73,7 @@ func waitXact(apiBP api.BaseParams, args *xact.ArgsMsg) error {
 		return V(err)
 	}
 	if status.Aborted() {
-		return fmt.Errorf("%s[%s] aborted", xname, status.UUID)
+		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
 	}
 	return nil
 }

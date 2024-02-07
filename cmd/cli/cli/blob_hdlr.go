@@ -8,6 +8,8 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -25,7 +27,6 @@ func blobDownloadHandler(c *cli.Context) error {
 		bck      cmn.Bck
 		err      error
 		uri      = c.Args().Get(0)
-		jobs     map[string]string
 	)
 	if flagIsSet(c, listFlag) {
 		listObjs := parseStrFlag(c, listFlag)
@@ -60,126 +61,185 @@ func blobDownloadHandler(c *cli.Context) error {
 	msg.LatestVer = flagIsSet(c, latestVerFlag)
 
 	// start
-	jobs = make(map[string]string, len(objNames))
-	for _, o := range objNames {
-		xid, err := api.BlobDownload(apiBP, bck, o, &msg)
+	var (
+		xids []string
+		cnt  int
+	)
+	xids, cnt, err = blobStartAll(c, bck, objNames, &msg)
+	if err != nil || cnt == 0 /* nothing to do */ {
+		return err
+	}
+
+	// show progress, wait, or simply return
+	switch {
+	case flagIsSet(c, progressFlag):
+		err = blobAllProgress(c, bck, objNames, xids)
+	case len(objNames) == 1:
+		xid, objName := xids[0], objNames[0]
+		cname := xact.Cname(apc.ActBlobDl, xid)
+		text := cname + " " + bck.Cname(objName)
+		if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+			actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+			return nil
+		}
+		err = _blobWaitOne(c, xid, text)
+	default:
+		if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+			text := fmt.Sprintf("%s[%v]", apc.ActBlobDl, strings.Join(xids, ", "))
+			actionDone(c, text+". "+toMonitorMsg(c, apc.ActBlobDl, ""))
+			return nil
+		}
+		// wait multiple (no progress)
+		var (
+			wg    = &sync.WaitGroup{}
+			errCh = make(chan error, len(objNames))
+		)
+		wg.Add(len(objNames))
+		for i := range objNames {
+			objName, xid := objNames[i], xids[i]
+			if xid == "" {
+				continue // nothing to do
+			}
+			cname := xact.Cname(apc.ActBlobDl, xid)
+			fmt.Fprintln(c.App.Writer, fcyan(cname))
+			go func(objName, xid, cname string) {
+				text := cname + " " + bck.Cname(objName)
+				err := _blobWaitOne(c, xid, text)
+				if err != nil {
+					errCh <- err
+				}
+				wg.Done()
+			}(objName, xid, cname)
+		}
+		wg.Wait()
+		select {
+		case err = <-errCh:
+		default:
+		}
+		close(errCh)
+	}
+	if err == nil {
+		actionDone(c, fmtXactSucceeded)
+	}
+	return err
+}
+
+func blobStartAll(c *cli.Context, bck cmn.Bck, objNames []string, msg *apc.BlobMsg) (xids []string, cnt int, err error) {
+	var xid string
+	xids = make([]string, 0, len(objNames))
+	for _, objName := range objNames {
+		xid, err = api.BlobDownload(apiBP, bck, objName, msg)
 		if err != nil {
-			for xid := range jobs {
+			for _, xid = range xids {
 				errN := api.AbortXaction(apiBP, &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl})
 				if errN != nil {
 					actionWarn(c, errN.Error())
 				}
 			}
-			return V(err)
+			return nil, 0, V(err)
 		}
-		jobs[xid] = o
-	}
-	for xid, objName := range jobs {
-		var errN error
-		if flagIsSet(c, progressFlag) {
-			errN = _blobOneProgress(c, bck, xid, objName)
+		if xid == "" {
+			actionDone(c, bck.Cname(objName)+" already downloaded, nothing to do")
 		} else {
-			errN = _blobOne(c, bck, xid, objName)
+			cnt++
 		}
-		if errN != nil {
-			if len(jobs) > 1 {
-				actionWarn(c, errN.Error())
-			}
-			err = errN
-		}
+		xids = append(xids, xid)
 	}
-	return err
+	return xids, cnt, nil
 }
 
-func _blobOneProgress(c *cli.Context, bck cmn.Bck, xid, objName string) error {
-	fmt.Fprintln(c.App.Writer, fcyan(fmt.Sprintf("%s[%s]", apc.ActBlobDl, xid)))
+func blobAllProgress(c *cli.Context, bck cmn.Bck, objNames, xids []string) (err error) {
 	var (
-		// total is zero at init time with full size set upon the first call ("known")
-		args           = barArgs{barType: sizeArg, barText: bck.Cname(objName), total: 0}
-		progress, bars = simpleBar(args)
-		errCh          = make(chan error, 1)
+		bargs       = make([]barArgs, 0, len(xids))
+		errCh       = make(chan error, len(xids))
+		refreshRate = _refreshRate(c)
 	)
-	go func(c *cli.Context, xid string, errCh chan error) {
-		var (
-			size        int64
-			refreshRate = _refreshRate(c)
-			xargs       = xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl}
-			sizeKnown   bool
-		)
-		for {
-			newSize, done, known, err := blobProgress(&xargs, bars[0], size, sizeKnown)
-			if err != nil {
-				bars[0].Abort(true)
-				errCh <- err
-				return
-			}
-			if done {
-				bars[0].SetTotal(newSize, true)
-				return
-			}
-			time.Sleep(refreshRate)
-			size, sizeKnown = newSize, known
+	debug.Assert(len(xids) == len(objNames)) // xid <=1:1=> objName
+	for i := range xids {
+		if xids[i] != "" {
+			bargs = append(bargs, barArgs{barType: sizeArg, barText: bck.Cname(objNames[i]), total: 0})
 		}
-	}(c, xid, errCh)
+	}
+	progress, bars := simpleBar(bargs...)
+	for i := range objNames {
+		if xids[i] != "" {
+			xid, bar := xids[i], bars[i]
+			cname := xact.Cname(apc.ActBlobDl, xid)
+			fmt.Fprintln(c.App.Writer, fcyan(cname))
+			go _blobOneProgress(xid, bar, errCh, refreshRate)
+		}
+	}
 	progress.Wait()
-
-	var err error
 	select {
 	case err = <-errCh:
 	default:
 	}
-	if err == nil {
-		actionDone(c, fmtXactSucceeded)
+	if len(objNames) == 1 {
+		close(errCh)
 	}
-	close(errCh)
 	return err
 }
 
-func _blobOne(c *cli.Context, bck cmn.Bck, xid, objName string) error {
-	text := fmt.Sprintf("%s[%s] %s", apc.ActBlobDl, xid, bck.Cname(objName))
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
-		return nil
+func _blobOneProgress(xid string, bar *mpb.Bar, errCh chan error, sleep time.Duration) {
+	var (
+		xargs    = xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl}
+		currSize int64
+		fullSize = int64(-1)
+		done     bool
+	)
+	for {
+		daemonID, snap, errN := getXactSnap(&xargs)
+		if errN != nil {
+			errCh <- errN
+			break
+		}
+		done = snap.Finished()
+		debug.Assert(snap.ID == xargs.ID)
+		if xargs.DaemonID == "" {
+			xargs.DaemonID = daemonID
+		}
+		if fullSize < 0 && snap.Stats.InBytes != 0 {
+			fullSize = snap.Stats.InBytes
+			bar.SetTotal(fullSize, false)
+		}
+		debug.Assert(xargs.DaemonID == daemonID)
+		if snap.Stats.Bytes != 0 {
+			bar.IncrInt64(snap.Stats.Bytes - currSize)
+			currSize = snap.Stats.Bytes
+			if currSize == fullSize {
+				done = true
+			}
+		}
+		if snap.IsAborted() && (fullSize > 0 && currSize < fullSize) {
+			errCh <- errors.New(snap.AbortErr)
+			break
+		}
+		if done {
+			bar.SetTotal(currSize, true)
+			return // --> ok
+		}
+		time.Sleep(sleep)
 	}
-
-	// wait
-	var timeout time.Duration
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	fmt.Fprintln(c.App.Writer, text+" ...")
-	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: timeout}
-	if err := waitXact(apiBP, &xargs); err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Failed to download blob %s\n", bck.Cname(objName))
-		return err
-	}
-	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
-	return nil
+	bar.Abort(true)
 }
 
-func blobProgress(xargs *xact.ArgsMsg, bar *mpb.Bar, prevSize int64, knownSize bool) (newSize int64, done, sizeKnown bool, err error) {
-	daemonID, snap, errN := getXactSnap(xargs)
-	if errN != nil {
-		return 0, false, false, errN
+func _blobWaitOne(c *cli.Context, xid, text string) error {
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl}
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	done = snap.Finished()
-	debug.Assert(snap.ID == xargs.ID)
-	if xargs.DaemonID == "" {
-		xargs.DaemonID = daemonID
+	fmt.Fprintln(c.App.Writer, text+" ...")
+	for {
+		_, snap, errN := getXactSnap(&xargs)
+		if errN != nil {
+			return errN
+		}
+		if snap.IsAborted() {
+			return errors.New(snap.AbortErr)
+		}
+		debug.Assert(snap.ID == xargs.ID)
+		if snap.Finished() {
+			return nil
+		}
 	}
-
-	if !knownSize && snap.Stats.InBytes != 0 {
-		sizeKnown = true
-		bar.SetTotal(snap.Stats.InBytes, false)
-	}
-
-	debug.Assert(xargs.DaemonID == daemonID)
-	if snap.Stats.Bytes != 0 {
-		newSize = snap.Stats.Bytes
-		bar.IncrInt64(newSize - prevSize)
-	}
-	if snap.IsAborted() {
-		err = errors.New(snap.AbortErr)
-	}
-	return
 }
