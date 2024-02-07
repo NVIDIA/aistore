@@ -6,7 +6,6 @@ package sys
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -26,8 +25,6 @@ type MemStat struct {
 	SwapFree   uint64
 	SwapUsed   uint64
 }
-
-var mem0 = MemStat{ActualFree: math.MaxUint64}
 
 func (mem *MemStat) Get() error {
 	if !containerized {

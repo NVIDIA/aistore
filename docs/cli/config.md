@@ -258,34 +258,23 @@ client.client_long_timeout               30m                                    
 # only 10 lines of output shown
 ```
 
-#### Show daemon LRU config section
-
-Display only the LRU config section of the node with ID `Gpuut8085`
-
-```console
-$ ais show config Gpuut8085 lru
-PROPERTY                 VALUE   DEFAULT
-lru.capacity_upd_time    10m     -
-lru.dont_evict_time      120m    -
-lru.enabled              false   true
-lru.highwm               90      -
-lru.lowwm                75      -
-lru.out_of_space         95      -
-```
-
 #### Show cluster LRU config section
 
 Display only the LRU config section of the global config
 
 ```console
-$ ais show cluster config lru
-PROPERTY                 VALUE
-lru.lowwm                75
-lru.highwm               90
-lru.out_of_space         95
-lru.dont_evict_time      120m
-lru.capacity_upd_time    10m
-lru.enabled              true
+$ ais show config cluster lru
+PROPERTY		        VALUE
+lru.dont_evict_time	    1s
+lru.capacity_upd_time	10m
+lru.enabled		        true
+
+$ ais show config cluster space
+PROPERTY		        VALUE
+space.cleanupwm		    70
+space.lowwm		        80
+space.highwm		    90
+space.out_of_space	    95
 ```
 
 ## Update cluster configuration

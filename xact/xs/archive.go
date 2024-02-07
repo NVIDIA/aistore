@@ -385,7 +385,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	cos.Close(wi.wfh)
 	wi.wfh = nil
 
-	errCode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
+	errCode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive)
 	core.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
 	return

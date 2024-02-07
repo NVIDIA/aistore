@@ -46,17 +46,17 @@ func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
 func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 
-func (*TargetMock) GetAllRunning(*core.AllRunningInOut, bool)             {}
-func (*TargetMock) PutObject(*core.LOM, *core.PutParams) error            { return nil }
-func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact) (int, error) { return 0, nil }
-func (*TargetMock) EvictObject(*core.LOM) (int, error)                    { return 0, nil }
-func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)             { return 0, nil }
-func (*TargetMock) Promote(*core.PromoteParams) (int, error)              { return 0, nil }
-func (*TargetMock) Backend(*meta.Bck) core.BackendProvider                { return nil }
-func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode) bool                { return false }
-func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)             {}
-func (*TargetMock) FSHC(error, string)                                    {}
-func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                        { return fs.CapStatus{} }
+func (*TargetMock) GetAllRunning(*core.AllRunningInOut, bool)                      {}
+func (*TargetMock) PutObject(*core.LOM, *core.PutParams) error                     { return nil }
+func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact, cmn.OWT) (int, error) { return 0, nil }
+func (*TargetMock) EvictObject(*core.LOM) (int, error)                             { return 0, nil }
+func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)                      { return 0, nil }
+func (*TargetMock) Promote(*core.PromoteParams) (int, error)                       { return 0, nil }
+func (*TargetMock) Backend(*meta.Bck) core.BackendProvider                         { return nil }
+func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode) bool                         { return false }
+func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                      {}
+func (*TargetMock) FSHC(error, string)                                             {}
+func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                                 { return fs.CapStatus{} }
 
 func (*TargetMock) CopyObject(*core.LOM, core.DM, *core.CopyParams) (int64, error) {
 	return 0, nil

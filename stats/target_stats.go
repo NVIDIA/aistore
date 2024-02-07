@@ -102,6 +102,9 @@ const (
 	LcacheCollisionCount = core.LcacheCollisionCount
 	LcacheEvictedCount   = core.LcacheEvictedCount
 	LcacheFlushColdCount = core.LcacheFlushColdCount
+
+	// variable label used for prometheus disk metrics
+	diskMetricLabel = "disk"
 )
 
 type (
@@ -182,11 +185,14 @@ func (r *Trunner) InitCDF() error {
 	return nil
 }
 
-func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
-func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }
-func nameWbps(disk string) string { return "disk." + disk + ".write.bps" }
-func nameWavg(disk string) string { return "disk." + disk + ".avg.wsize" }
-func nameUtil(disk string) string { return "disk." + disk + ".util" }
+func diskMetricName(disk, metric string) string {
+	return fmt.Sprintf("%s.%s.%s", diskMetricLabel, disk, metric)
+}
+func nameRbps(disk string) string { return diskMetricName(disk, "read.bps") }
+func nameRavg(disk string) string { return diskMetricName(disk, "avg.rsize") }
+func nameWbps(disk string) string { return diskMetricName(disk, "write.bps") }
+func nameWavg(disk string) string { return diskMetricName(disk, "avg.wsize") }
+func nameUtil(disk string) string { return diskMetricName(disk, ".util") }
 
 // log vs idle logic
 func isDiskMetric(name string) bool {
@@ -194,6 +200,16 @@ func isDiskMetric(name string) bool {
 }
 func isDiskUtilMetric(name string) bool {
 	return isDiskMetric(name) && strings.HasSuffix(name, ".util")
+}
+
+// extractPromDiskMetricName returns prometheus friendly metrics name
+// from disk tracker name of format `disk.<disk-name>.<metric-name>`
+// it returns, two strings:
+//  1. <disk-name> used as prometheus variable label
+//  2. `disk.<metric-name>` used for prometheus metric name
+func extractPromDiskMetricName(name string) (diskName, metricName string) {
+	diskName = strings.Split(name, ".")[1]
+	return diskName, strings.ReplaceAll(name, "."+diskName+".", ".")
 }
 
 // target-specific metrics, in addition to common and already added via regCommon()

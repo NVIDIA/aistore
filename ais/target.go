@@ -909,8 +909,9 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	case apc.ActBlobDl:
 		var (
-			args    apc.BlobMsg
+			xid     string
 			objName = msg.Name
+			args    apc.BlobMsg
 		)
 		if err = cos.MorphMarshal(msg.Value, &args); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
@@ -920,8 +921,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
-		xid := cos.GenUUID()
-		if err = _blobdl(xid, lom, &args); err == nil {
+		if xid, err = t.blobdl(lom, &args); err == nil && len(xid) > 0 {
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 			// lom is eventually freed by x-blob
@@ -1373,16 +1373,71 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func _blobdl(uuid string, lom *core.LOM, args *apc.BlobMsg) error {
-	rns := xs.RenewBlobDl(uuid, lom, args)
-	if rns.Err != nil || rns.IsRunning() {
-		// cmn.IsErrXactUsePrev(rns.Err): single download per blob
-		return rns.Err
+func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, err error) {
+	// cap
+	cs := fs.Cap()
+	if errCap := cs.Err(); errCap != nil {
+		cs = t.OOS(nil)
+		if err := cs.Err(); err != nil {
+			return "", err
+		}
+	}
+	if !lom.TryLock(true) {
+		return "", cmn.NewErrBusy("blob", lom, "")
+	}
+	// do
+	xid, err = _blobdl(lom, args)
+
+	// NOTE:
+	// - wlock (above) to load, check availability
+	// - unlock right away
+	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
+	// - there's a single x-blob-download (see WhenPrevIsRunning)
+	lom.Unlock(true)
+
+	return xid, err
+}
+
+// returns empty xid ("") if nothing to do
+func _blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, _ error) {
+	var oa *cmn.ObjAttrs
+
+	// exists; latest
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if !cos.IsNotExist(err, 0) {
+			return xid, err
+		}
+	} else if args.LatestVer {
+		res := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/)
+		if res.Eq || res.Err != nil {
+			return xid, res.Err
+		}
+		oa = res.ObjAttrs
+	} else {
+		return xid, nil
 	}
 
+	// open workfile
+	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, "blob-dl")
+	lmfh, err := lom.CreateFile(wfqn)
+	if err != nil {
+		return xid, err
+	}
+
+	// new
+	xid = cos.GenUUID()
+	rns := xs.RenewBlobDl(xid, lom, oa, wfqn, lmfh, args)
+	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
+		if errRemove := cos.RemoveFile(wfqn); errRemove != nil {
+			nlog.Errorln("nested err", errRemove)
+		}
+		return xid, rns.Err
+	}
+
+	// run
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
 	go xblob.Run(nil)
-	return nil
+	return xid, nil
 }
 
 func (t *target) fsErr(err error, filepath string) {

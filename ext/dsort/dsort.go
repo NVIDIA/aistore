@@ -792,7 +792,7 @@ func (m *Manager) phase3(maxSize int64) error {
 
 	m.recm.Records.Drain()
 
-	wg := cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), len(shardsToTarget))
+	wg := cos.NewLimitedWaitGroup(cmn.MaxParallelism(), len(shardsToTarget))
 	for si, s := range shardsToTarget {
 		wg.Add(1)
 		go m._dist(si, s, sendOrder[si.ID()], errCh, wg)

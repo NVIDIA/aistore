@@ -410,11 +410,12 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset
 		return
 	}
 	if respProps.StatusCode() >= http.StatusBadRequest {
-		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": get blob props]", cloudBck.Cname(lom.ObjName), nil, respProps.StatusCode())
+		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": get blob props]", cloudBck.Cname(lom.ObjName),
+			nil, respProps.StatusCode())
 		res.ErrCode = respProps.StatusCode()
 		return
 	}
-	// (0, 0) read range: whole object
+	// (0, 0) range: whole object
 	resp, err := blobURL.Download(ctx, offset, length, azblob.BlobAccessConditions{}, false, azKeyOptions)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
@@ -427,25 +428,26 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset
 	}
 
 	res.Size = resp.ContentLength()
-	//
-	// custom metadata
-	//
-	lom.SetCustomKey(cmn.SourceObjMD, apc.Azure)
-	etag := azEncodeEtag(respProps.ETag())
-	lom.SetCustomKey(cmn.ETag, etag)
-	if v := respProps.VersionID(); v != "" {
-		lom.SetVersion(v)
-	} else {
-		lom.SetVersion(etag) // (ListObjects and elsewhere)
-	}
-	if md5 := azEncodeChecksum(respProps.ContentMD5()); md5 != "" {
-		lom.SetCustomKey(cmn.MD5ObjMD, md5)
-		res.ExpCksum = cos.NewCksum(cos.ChecksumMD5, md5)
+
+	if length == 0 {
+		// custom metadata
+		lom.SetCustomKey(cmn.SourceObjMD, apc.Azure)
+		etag := azEncodeEtag(respProps.ETag())
+		lom.SetCustomKey(cmn.ETag, etag)
+		if v := respProps.VersionID(); v != "" {
+			lom.SetVersion(v)
+		} else {
+			lom.SetVersion(etag) // (ListObjects and elsewhere)
+		}
+		if md5 := azEncodeChecksum(respProps.ContentMD5()); md5 != "" {
+			lom.SetCustomKey(cmn.MD5ObjMD, md5)
+			res.ExpCksum = cos.NewCksum(cos.ChecksumMD5, md5)
+		}
 	}
 
 	retryOpts := azblob.RetryReaderOptions{MaxRetryRequests: 1} // NOTE: just once
 	res.R = resp.Body(retryOpts)
-	return
+	return res
 }
 
 //

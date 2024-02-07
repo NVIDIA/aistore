@@ -92,9 +92,12 @@ OPTIONS:
    --yes, -y         assume 'yes' to all questions
    --check-cached    instead of GET execute HEAD(object) to check if the object is present in aistore
                      (applies only to buckets with remote backend)
-   --latest          GET, prefetch, or copy the latest object version from the associated remote bucket;
-                     allows operation-level control over object version synchronization _without_ changing bucket configuration
-                     (the latter can be done using 'ais bucket props set BUCKET versioning')
+   --latest          check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
+                     from the associated remote bucket:
+                      - provides operation-level control over object versioning (and version synchronization)
+                        without requiring to change bucket configuration
+                      - the latter can be done using 'ais bucket props set BUCKET versioning'
+                      - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --progress        show progress bar(s) and progress of execution in real time
@@ -1314,9 +1317,12 @@ OPTIONS:
    --prefix value    select objects that have names starting with the specified prefix, e.g.:
                      '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
                      '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
-   --latest          GET, prefetch, or copy the latest object version from the associated remote bucket;
-                     allows operation-level control over object version synchronization _without_ changing bucket configuration
-                     (the latter can be done using 'ais bucket props set BUCKET versioning')
+   --latest          check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
+                     from the associated remote bucket:
+                      - provides operation-level control over object versioning (and version synchronization)
+                        without requiring to change bucket configuration
+                      - the latter can be done using 'ais bucket props set BUCKET versioning'
+                      - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
    --help, -h        show help
 ```
 

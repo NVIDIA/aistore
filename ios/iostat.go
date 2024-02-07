@@ -8,7 +8,6 @@ package ios
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -75,10 +74,6 @@ type (
 // interface guard
 var _ IOS = (*ios)(nil)
 
-var (
-	regex, cregex *regexp.Regexp
-)
-
 ///////////////
 // MpathUtil //
 ///////////////
@@ -117,9 +112,6 @@ func New(num int) IOS {
 	if res := lsblk("new-ios", true); res != nil {
 		ios.lsblk.Store(res)
 	}
-
-	regex = regexp.MustCompile(`nvme(\d+)n(\d+)`)
-	cregex = regexp.MustCompile(`nvme(\d+)c(\d+)n(\d+)`)
 
 	return ios
 }

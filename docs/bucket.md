@@ -93,8 +93,6 @@ is protected (versioned, checksummed) and replicated across the entire cluster.
 * Inherited defaults include (but are not limited to) checksum, LRU, versioning, n-way mirroring, and erasure-coding configurations.
 * By default, LRU is disabled for AIS (`ais://`) buckets.
 
-> Use `api.SetBucketProps` to enable LRU-based eviction on any given ais bucket (or, vice versa, disable LRU on any specific remote bucket) of your choice.
-
 Bucket creation operation allows to override the **inherited defaults**, which include:
 
 | Configuration section | References |
@@ -111,16 +109,16 @@ Bucket creation operation allows to override the **inherited defaults**, which i
 Example specifying (non-default) bucket properties at creation time:
 
 ```console
-$ ais create ais://abc --props="lru.enabled=false mirror.enabled=true mirror.copies=4"
+$ ais create ais://abc --props="mirror.enabled=true mirror.copies=4"
 
 # or, same using JSON:
-$ ais create ais://abc --props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
+$ ais create ais://abc --props='{"mirror": {"enabled": true, "copies": 4}}'
 ```
 
 ## Inherited Bucket Properties and LRU
 
-1. [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `lru.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
-2. By default, `lru.highwm` = `90%` of total storage space.
+1. [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `space.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
+2. By default, `space.highwm` = `90%` of total storage space.
 3. Another important knob is `lru.enabled` that defines whether a given bucket can be a subject of LRU eviction in the first place.
 4. By default, these two and all the other knobs are [inherited](#default-bucket-properties) by a newly created bucket from [default (global, cluster-wide) configuration](configuration.md#cluster-and-node-configuration).
 5. However, those inherited defaults can be changed - [overridden](#default-bucket-properties) - both at bucket creation time, and at any later time.
@@ -620,7 +618,7 @@ The full list of bucket properties are:
 | --- | --- | --- | --- |
 | Provider | `provider` | "ais", "aws", "azure", "gcp", "hdfs" or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"hdfs"/"ht"` |
 | Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
-| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }` |
+| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `space.lowwm` and `space.highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `space.out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `space.highwm`. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": {"dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }`. Note: `space.*` are cluster level properties. |
 | Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "enabled": bool }` |
 | EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
 | Versioning | `versioning` | Configuration for object versioning support where `enabled` represents if object versioning is enabled for a bucket. For remote bucket versioning must be enabled in the corresponding backend (e.g. Amazon S3). `validate_warm_get`: determines if the object's version is checked | `"versioning": { "enabled": true, "validate_warm_get": false }`|

@@ -73,7 +73,7 @@ func waitXact(apiBP api.BaseParams, args *xact.ArgsMsg) error {
 		return V(err)
 	}
 	if status.Aborted() {
-		return fmt.Errorf("%s[%s] aborted", xname, status.UUID)
+		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
 	}
 	return nil
 }
@@ -184,17 +184,17 @@ func flattenXactStats(snap *core.Snap, units string) nvpairList {
 	return props
 }
 
-func getXactSnap(xargs *xact.ArgsMsg) (*core.Snap, error) {
+func getXactSnap(xargs *xact.ArgsMsg) (string, *core.Snap, error) {
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
-		return nil, V(err)
+		return "", nil, V(err)
 	}
-	for _, snaps := range xs {
+	for tid, snaps := range xs {
 		for _, snap := range snaps {
-			return snap, nil
+			return tid, snap, nil
 		}
 	}
-	return nil, nil
+	return "", nil, nil
 }
 
 func queryXactions(xargs *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
