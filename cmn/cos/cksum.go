@@ -120,7 +120,7 @@ func (ck *CksumHash) Init(ty string) {
 	case ChecksumSHA512:
 		ck.H = sha512.New()
 	default:
-		Assert(false)
+		AssertMsg(false, "unknown checksum type: "+ty)
 	}
 }
 

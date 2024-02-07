@@ -85,7 +85,7 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 		return V(err)
 	}
 	_, xname := xact.GetKindName(apc.ActMoveBck)
-	text := fmt.Sprintf("%s %s => %s", xactCname(xname, xid), bckFrom, bckTo)
+	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom, bckTo)
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
 		return nil

@@ -239,8 +239,7 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 	return core.Quiescent
 }
 
-// see also: xact.ParseCname (api.go)
-func (xctn *Base) Cname() string { return xctn.Kind() + LeftID + xctn.ID() + RightID }
+func (xctn *Base) Cname() string { return Cname(xctn.Kind(), xctn.ID()) }
 
 func (xctn *Base) Name() (s string) { return xctn._nam }
 

@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func dropCaches() {
+func DropCaches() {
 	cmd := exec.Command("purge")
 	_, err := cmd.Output()
 	cos.AssertNoErr(err)

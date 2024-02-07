@@ -29,6 +29,13 @@ type (
 		cos.ReadOpenCloser
 		lif LIF
 	}
+
+	CRMD struct {
+		Err      error
+		ObjAttrs *cmn.ObjAttrs
+		ErrCode  int
+		Eq       bool
+	}
 )
 
 // interface guard
@@ -57,15 +64,15 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 	if loadErr == nil {
 		if latestVer || sync {
 			debug.Assert(lom.Bck().IsRemote(), lom.Bck().String()) // caller's responsibility
-			eq, errCode, err := lom.CheckRemoteMD(true /* rlocked*/, sync)
-			if err != nil {
+			res := lom.CheckRemoteMD(true /* rlocked*/, sync)
+			if res.Err != nil {
 				lom.Unlock(false)
-				if !cos.IsNotExist(err, errCode) {
-					err = cmn.NewErrFailedTo(T, "head-latest", lom, err)
+				if !cos.IsNotExist(res.Err, res.ErrCode) {
+					res.Err = cmn.NewErrFailedTo(T, "head-latest", lom, res.Err)
 				}
-				return nil, nil, err
+				return nil, nil, res.Err
 			}
-			if !eq {
+			if !res.Eq {
 				// version changed
 				lom.Unlock(false)
 				goto remote
@@ -110,18 +117,18 @@ remote:
 // - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
 //
 // Returns NotFound also after having removed local replica (the Sync option)
-func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
+func (lom *LOM) CheckRemoteMD(locked, sync bool) (res CRMD) {
 	bck := lom.Bck()
 	if !bck.HasVersioningMD() {
 		// nothing to do with: in-cluster ais:// bucket, or a remote one
 		// that doesn't provide any versioning metadata
-		return true, 0, nil
+		return CRMD{Eq: true}
 	}
 
 	oa, errCode, err := T.Backend(bck).HeadObj(context.Background(), lom)
 	if err == nil {
 		debug.Assert(errCode == 0, errCode)
-		return lom.Equal(oa), errCode, nil
+		return CRMD{Eq: lom.Equal(oa), ErrCode: errCode}
 	}
 
 	if errCode == http.StatusNotFound {
@@ -129,7 +136,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
 	}
 	if !locked {
 		// return info (neq and, possibly, not-found), and be done
-		return false, errCode, err
+		return CRMD{ErrCode: errCode, Err: err}
 	}
 
 	// rm remotely-deleted
@@ -141,9 +148,9 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool) (bool /*equal*/, int, error) {
 			g.tstats.Inc(RemoteDeletedDelCount)
 		}
 		debug.Assert(err != nil)
-		return false, errCode, err
+		return CRMD{ErrCode: errCode, Err: err}
 	}
 
 	lom.Uncache()
-	return false, errCode, err
+	return CRMD{ErrCode: errCode, Err: err}
 }

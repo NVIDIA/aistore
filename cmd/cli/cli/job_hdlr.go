@@ -631,7 +631,7 @@ func waitDownload(c *cli.Context, id string) (err error) {
 	var (
 		elapsed, timeout time.Duration
 		refreshRate      = _refreshRate(c)
-		qn               = xactCname(cmdDownload, id)
+		qn               = xact.Cname(cmdDownload, id)
 		aborted          bool
 	)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
@@ -867,7 +867,7 @@ func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	}
 	switch {
 	case xactKind != "" && xactID != "":
-		return fmt.Sprintf("%s%s", xactCname(xactKind, xactID), sb)
+		return fmt.Sprintf("%s%s", xact.Cname(xactKind, xactID), sb)
 	case xactKind != "" && sb != "":
 		return fmt.Sprintf("%s%s", xactKind, sb)
 	case xactKind != "":
@@ -1030,7 +1030,7 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 	var (
 		total   time.Duration
 		timeout time.Duration
-		qn      = xactCname(cmdDownload, id)
+		qn      = xact.Cname(cmdDownload, id)
 	)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
@@ -1074,7 +1074,7 @@ func waitDsortHandler(c *cli.Context, id string) error {
 	var (
 		total   time.Duration
 		timeout time.Duration
-		qn      = xactCname(cmdDsort, id)
+		qn      = xact.Cname(cmdDsort, id)
 	)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)

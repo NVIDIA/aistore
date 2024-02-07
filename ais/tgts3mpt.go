@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -281,7 +282,13 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	buf, slab := t.gmm.Alloc()
 	concatMD5, written, errA := _appendMpt(nparts, buf, mw)
 	slab.Free(buf)
+
+	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
+		errS := wfh.Sync()
+		debug.AssertNoErr(errS)
+	}
 	cos.Close(wfh)
+
 	if errA == nil && written != size {
 		errA = fmt.Errorf("upload %q %q: expected full size=%d, got %d", uploadID, lom.Cname(), size, written)
 	}

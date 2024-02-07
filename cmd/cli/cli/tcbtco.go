@@ -293,7 +293,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 	}
 
 	_, xname := xact.GetKindName(apc.ActETLBck)
-	text := fmt.Sprintf("%s %s => %s", xactCname(xname, xid), bckFrom, bckTo)
+	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom, bckTo)
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		fmt.Fprintln(c.App.Writer, text)
 		return nil

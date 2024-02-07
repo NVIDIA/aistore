@@ -13,6 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+var mem0 = MemStat{ActualFree: math.MaxUint64}
+
 func (mem *MemStat) setValue(name, valStr string) error {
 	val, err := strconv.ParseUint(valStr, 10, 64)
 	if err != nil {
