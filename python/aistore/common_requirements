@@ -2,7 +2,7 @@ pytest==7.1.1
 pydantic==1.10.14
 cloudpickle==2.2.0
 pylint==2.16.0
-typing_extensions==4.1.1
+typing_extensions==4.2.0
 requests==2.27.1
 humanize>=4.6.0
 braceexpand>=0.1.7
