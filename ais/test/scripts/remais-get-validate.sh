@@ -14,6 +14,11 @@
 ## 2nd, run:
 #  $./ais/test/scripts/remais-get-validate.sh --bucket ais://@remais/abc     #####################
 
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+
 lorem='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
 
 duis='Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Et harum quidem..'

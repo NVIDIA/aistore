@@ -226,7 +226,7 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, err error) {
+func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, size int64, err error) {
 	_, q, hdr := args.ret()
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
@@ -237,7 +237,7 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) 
 		reqParams.Query = q
 		reqParams.Header = hdr
 	}
-	r, err = reqParams.doReader()
+	r, size, err = reqParams.doReader()
 	FreeRp(reqParams)
 	return
 }

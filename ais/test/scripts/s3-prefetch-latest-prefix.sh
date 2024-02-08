@@ -32,6 +32,10 @@ if ! [ -x "$(command -v s3cmd)" ]; then
   echo "Error: s3cmd not installed" >&2
   exit 1
 fi
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
 
 ## uncomment for verbose output
 ## set -x

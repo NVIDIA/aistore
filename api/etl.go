@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
@@ -54,7 +55,7 @@ func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
 		reqParams.BaseParams = params
 		reqParams.Path = apc.URLPathETL.Join(etlName)
 	}
-	r, err := reqParams.doReader()
+	r, size, err := reqParams.doReader()
 	FreeRp(reqParams)
 	if err != nil {
 		return nil, err
@@ -65,6 +66,7 @@ func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
+	debug.Assert(size < 0 || size == int64(len(b)), size, " != ", len(b))
 	return etl.UnmarshalInitMsg(b)
 }
 

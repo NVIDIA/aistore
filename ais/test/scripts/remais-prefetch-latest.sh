@@ -6,13 +6,17 @@
 # - optionally, remais bucket (the bucket will be created if doesn't exist)
 # - ais (CLI)
 #
-## Example usage:
-## 1st, make sure remote ais cluster is attached, e.g.:
+## Example usage: first, make sure remote ais cluster is attached, e.g.:
 #  $ ais show remote-cluster -H
 #  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
 #
-## 2nd, run:
-#  $./ais/test/scripts/remais-prefetch-latest.sh --bucket ais://@remais/abc     ####################
+## Run:
+#  $./ais/test/scripts/remais-prefetch-latest.sh --bucket ais://@remais/abc     ###################
+
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
 
 lorem='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
 

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+
 ## start from scratch and generate 999 tgz shards
 ais bucket rm ais://src ais://dst -y 2>/dev/null
 ais create ais://src

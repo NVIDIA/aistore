@@ -1679,12 +1679,14 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 
-	// TODO: revisit versus remote bucket not being present, see p.tryBckInit
 	bck := apireq.bck
-	if err := bck.Init(p.owner.bmd); err != nil {
-		p.writeErr(w, r, err)
+	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AcePUT, bck: bck}
+	bckArgs.createAIS = false
+	bckArgs.dontHeadRemote = true
+	if _, err := bckArgs.initAndTry(); err != nil {
 		return
 	}
+
 	switch msg.Action {
 	case apc.ActRenameObject:
 		if err := p.checkAccess(w, r, bck, apc.AceObjMOVE); err != nil {

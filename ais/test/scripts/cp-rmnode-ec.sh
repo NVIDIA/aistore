@@ -1,4 +1,10 @@
 #!/bin/bash
+
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+
 ais bucket rm ais://src-ec ais://dst -y 2>/dev/null
 
 ## create erasure-coded bucket

@@ -173,16 +173,16 @@ func (reqParams *ReqParams) doWriter(w io.Writer) (wresp *wrappedResp, err error
 }
 
 // same as above except that it returns response body (as io.ReadCloser) for subsequent reading
-func (reqParams *ReqParams) doReader() (io.ReadCloser, error) {
+func (reqParams *ReqParams) doReader() (io.ReadCloser, int64, error) {
 	resp, err := reqParams.do()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if err := reqParams.checkResp(resp); err != nil {
 		resp.Body.Close()
-		return nil, err
+		return nil, 0, err
 	}
-	return resp.Body, nil
+	return resp.Body, resp.ContentLength, nil
 }
 
 // makes HTTP request, retries on connection-refused and reset errors, and returns the response

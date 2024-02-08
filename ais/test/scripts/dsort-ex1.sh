@@ -3,6 +3,11 @@
 ## Example usage:
 ## ./ais/test/scripts/dsort-ex1.sh --srcbck ais://aaaaa --dstbck ais://qqqqq
 
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+
 SCRIPT_PATH="$(cd "$(dirname "$0")"; pwd -P)"
 
 ## Command line options (and their respective defaults)

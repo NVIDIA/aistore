@@ -8,6 +8,11 @@
 ## Example usage:
 ## ./ais/test/scripts/cp-sync-remais-out-of-band.sh --bucket s3://abc      ########################
 
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+
 ## default cloud bucket
 src="s3://abc"
 
