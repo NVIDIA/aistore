@@ -94,10 +94,12 @@ var (
 			waitJobXactFinishedFlag,
 			latestVerFlag,
 			syncFlag,
+			nonverboseFlag,
 		},
 		commandRename: {
 			waitFlag,
 			waitJobXactFinishedFlag,
+			nonverboseFlag,
 		},
 		commandEvict: append(
 			listRangeProgressWaitFlags,

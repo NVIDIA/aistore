@@ -21,13 +21,13 @@ if ! [ -x "$(command -v aisloader)" ]; then
   exit 1
 fi
 
-## Command line options (and their respective defaults)
+## Command line options and respective defaults
 bucket="ais://@remais/abc"
 minsize="10MB"
 maxsize="10MB"
 totalsize="100MB"
 
-subdir="blob-$RANDOM" ## to contain aisloader-generated content
+subdir="blob-$RANDOM" ## destination for aisloader-generated content
 
 while (( "$#" )); do
   case "${1}" in
@@ -52,8 +52,7 @@ rendpoint=$(ais show remote-cluster -H | awk '{print $2}')
 [[ ! -z "$rendpoint" ]] || { echo "Error: no remote ais clusters"; exit 1; }
 uuid=$(ais show remote-cluster -H | awk '{print $1}')
 
-## TODO -- FIXME: see "remote ais aliasing" in ais/prxbck; remove
-bucket="ais://@${uuid}/$(basename ${bucket})"
+echo "Note: remote ais bucket $bucket is, in fact, ais://@${uuid}/$(basename ${bucket})"
 
 ## check remote bucket; create if doesn't exist
 exists=true
@@ -73,6 +72,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 ## aisloader => remais, to generate (PUT) content in $bucket/$subdir
+echo "Running aisloader now..."
 AIS_ENDPOINT=$rendpoint aisloader -bucket=$rbucket -subdir=$subdir -cleanup=false -numworkers=2 -quiet -pctput=100 -minsize=$minsize -maxsize=$maxsize -totalputsize=$totalsize
 
 ais ls $bucket --all --limit 4

@@ -87,7 +87,11 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	_, xname := xact.GetKindName(apc.ActMoveBck)
 	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom, bckTo)
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+		if flagIsSet(c, nonverboseFlag) {
+			fmt.Fprintln(c.App.Writer, xid)
+		} else {
+			actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+		}
 		return nil
 	}
 
@@ -98,7 +102,7 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: timeout}
-	if err := waitXact(apiBP, &xargs); err != nil {
+	if err := waitXact(&xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "rename", bckFrom, bckTo)
 		return err
 	}
@@ -147,10 +151,15 @@ func _evictBck(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = ensureRemoteProvider(bck); err != nil {
 		return err
 	}
-	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
+	keep := flagIsSet(c, keepMDFlag)
+	if err = api.EvictRemoteBucket(apiBP, bck, keep); err != nil {
 		return V(err)
 	}
-	actionDone(c, "Evicted bucket "+bck.Cname("")+" from aistore")
+	if !keep {
+		actionDone(c, "Evicted bucket "+bck.Cname("")+" from aistore")
+	} else {
+		actionDone(c, "Evicted "+bck.Cname("")+" contents from aistore: the bucket is now empty")
+	}
 	return nil
 }
 
@@ -421,6 +430,10 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	if xid, err = api.MakeNCopies(apiBP, bck, copies); err != nil {
 		return
 	}
+	if flagIsSet(c, nonverboseFlag) {
+		fmt.Fprintln(c.App.Writer, xid)
+		return nil
+	}
 	var baseMsg string
 	if copies > 1 {
 		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror. ", bck.Cname(""), copies)
@@ -428,7 +441,7 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.Cname(""))
 	}
 	actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
-	return
+	return nil
 }
 
 // erasure code the entire bucket
@@ -437,7 +450,11 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xid, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
-	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.Cname(""))
-	actionDone(c, msg+toMonitorMsg(c, xid, ""))
-	return
+	if flagIsSet(c, nonverboseFlag) {
+		fmt.Fprintln(c.App.Writer, xid)
+	} else {
+		msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.Cname(""))
+		actionDone(c, msg+toMonitorMsg(c, xid, ""))
+	}
+	return nil
 }

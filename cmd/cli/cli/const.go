@@ -734,7 +734,7 @@ var (
 			indent1 + "\t  - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);\n" +
 			indent1 + "\t  - most of the time, there's no need to worry about it as aistore handles presence/non-presence\n" +
 			indent1 + "\t    transparently behind the scenes;\n" +
-			indent1 + "\t  - but if you'd want to explicltly add the bucket, you could also use '--add' option",
+			indent1 + "\t  - but if you do want to (explicltly) add the bucket, you could also use '--add' option",
 	}
 
 	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "enable"}

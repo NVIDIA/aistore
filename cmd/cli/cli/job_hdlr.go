@@ -58,6 +58,7 @@ var (
 	startCommonFlags = []cli.Flag{
 		waitFlag,
 		waitJobXactFinishedFlag,
+		nonverboseFlag,
 	}
 	startSpecialFlags = map[string][]cli.Flag{
 		cmdDownload: {
@@ -92,10 +93,12 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 			latestVerFlag,
+			nonverboseFlag,
 		},
 		cmdLRU: {
 			lruBucketsFlag,
 			forceFlag,
+			nonverboseFlag,
 		},
 	}
 
@@ -373,11 +376,12 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 	}
 
 	debug.Assert(xact.IsValidUUID(xid), xid)
-	msg := "Started global rebalance. To monitor the progress, run 'ais show rebalance'"
-	if xargs.Kind != apc.ActRebalance {
-		msg = fmt.Sprintf("Started %s[%s]. %s", xargs.Kind, xid, toMonitorMsg(c, xid, ""))
+
+	if xargs.Kind == apc.ActRebalance {
+		actionDone(c, "Started global rebalance. To monitor the progress, run 'ais show rebalance'")
+	} else {
+		actionX(c, xargs, "")
 	}
-	actionDone(c, msg)
 
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		return nil
@@ -691,7 +695,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, toMonitorMsg(c, id, ""))
+	actionX(c, &xact.ArgsMsg{Kind: apc.ActLRU, ID: id}, "")
 	return
 }
 
@@ -1006,11 +1010,22 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
+
+	// find out the kind if not provided
+	if xargs.Kind == "" {
+		_, snap, err := getXactSnap(&xargs)
+		if err != nil {
+			return err
+		}
+		xargs.Kind = snap.Kind
+		_, xname = xact.GetKindName(xargs.Kind)
+	}
+
 	msg := formatXactMsg(xactID, xname, bck)
-	fmt.Fprintf(c.App.Writer, "Waiting for "+msg+" ...")
-	err := waitXact(apiBP, &xargs)
+	fmt.Fprintln(c.App.Writer, "Waiting for "+msg+" ...")
+	err := waitXact(&xargs)
 	if err == nil {
-		actionDone(c, " done.")
+		actionDone(c, "Done.")
 	}
 	return nil
 }

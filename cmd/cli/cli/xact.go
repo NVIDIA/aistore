@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -60,10 +62,18 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 
 // Wait for the caller's started xaction to run until finished _or_ idle (NOTE),
 // warn if aborted
-func waitXact(apiBP api.BaseParams, args *xact.ArgsMsg) error {
+func waitXact(args *xact.ArgsMsg) error {
 	debug.Assert(args.ID == "" || xact.IsValidUUID(args.ID))
+
+	// NOTE: relying on the Kind to decide between waiting APIs
+	debug.Assert(args.Kind != "")
 	kind, xname := xact.GetKindName(args.Kind)
-	debug.Assert(kind != "") // relying on it to decide between APIs
+	debug.Assert(kind != "")
+
+	if kind == apc.ActBlobDl {
+		return waitXactBlob(args)
+	}
+
 	if xact.IdlesBeforeFinishing(kind) {
 		return api.WaitForXactionIdle(apiBP, args)
 	}
@@ -76,6 +86,26 @@ func waitXact(apiBP api.BaseParams, args *xact.ArgsMsg) error {
 		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
 	}
 	return nil
+}
+
+// (x-blob doesn't do nofif listener - see ais/prxclu xstart)
+func waitXactBlob(xargs *xact.ArgsMsg) error {
+	var sleep = xact.MinPollTime
+	for {
+		time.Sleep(sleep)
+		_, snap, errN := getXactSnap(xargs)
+		if errN != nil {
+			return errN
+		}
+		if snap.IsAborted() {
+			return errors.New(snap.AbortErr)
+		}
+		debug.Assert(snap.ID == xargs.ID)
+		if snap.Finished() {
+			return nil
+		}
+		sleep = min(sleep+sleep/2, xact.MaxPollTime)
+	}
 }
 
 func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr error) {

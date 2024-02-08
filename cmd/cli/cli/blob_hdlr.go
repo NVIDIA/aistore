@@ -62,12 +62,16 @@ func blobDownloadHandler(c *cli.Context) error {
 
 	// start
 	var (
-		xids []string
-		cnt  int
+		xids    []string
+		cnt     int
+		timeout time.Duration
 	)
 	xids, cnt, err = blobStartAll(c, bck, objNames, &msg)
 	if err != nil || cnt == 0 /* nothing to do */ {
 		return err
+	}
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 
 	// show progress, wait, or simply return
@@ -78,15 +82,24 @@ func blobDownloadHandler(c *cli.Context) error {
 		xid, objName := xids[0], objNames[0]
 		cname := xact.Cname(apc.ActBlobDl, xid)
 		text := cname + " " + bck.Cname(objName)
-		if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-			actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+		if !flagIsSet(c, waitFlag) && timeout == 0 {
+			if flagIsSet(c, nonverboseFlag) {
+				fmt.Fprintln(c.App.Writer, xid)
+			} else {
+				actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+			}
 			return nil
 		}
-		err = _blobWaitOne(c, xid, text)
+		xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: timeout}
+		err = _blobWaitOne(c, &xargs, text)
 	default:
-		if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-			text := fmt.Sprintf("%s[%v]", apc.ActBlobDl, strings.Join(xids, ", "))
-			actionDone(c, text+". "+toMonitorMsg(c, apc.ActBlobDl, ""))
+		if !flagIsSet(c, waitFlag) && timeout == 0 {
+			if flagIsSet(c, nonverboseFlag) {
+				fmt.Fprintln(c.App.Writer, strings.Join(xids, " "))
+			} else {
+				text := fmt.Sprintf("%s[%v]", apc.ActBlobDl, strings.Join(xids, ", "))
+				actionDone(c, text+". "+toMonitorMsg(c, apc.ActBlobDl, ""))
+			}
 			return nil
 		}
 		// wait multiple (no progress)
@@ -102,14 +115,15 @@ func blobDownloadHandler(c *cli.Context) error {
 			}
 			cname := xact.Cname(apc.ActBlobDl, xid)
 			fmt.Fprintln(c.App.Writer, fcyan(cname))
-			go func(objName, xid, cname string) {
+			go func(objName, xid, cname string, timeout time.Duration) {
 				text := cname + " " + bck.Cname(objName)
-				err := _blobWaitOne(c, xid, text)
+				xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: timeout}
+				err := _blobWaitOne(c, &xargs, text)
 				if err != nil {
 					errCh <- err
 				}
 				wg.Done()
-			}(objName, xid, cname)
+			}(objName, xid, cname, timeout)
 		}
 		wg.Wait()
 		select {
@@ -223,23 +237,7 @@ func _blobOneProgress(xid string, bar *mpb.Bar, errCh chan error, sleep time.Dur
 	bar.Abort(true)
 }
 
-func _blobWaitOne(c *cli.Context, xid, text string) error {
-	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl}
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
+func _blobWaitOne(c *cli.Context, xargs *xact.ArgsMsg, text string) error {
 	fmt.Fprintln(c.App.Writer, text+" ...")
-	for {
-		_, snap, errN := getXactSnap(&xargs)
-		if errN != nil {
-			return errN
-		}
-		if snap.IsAborted() {
-			return errors.New(snap.AbortErr)
-		}
-		debug.Assert(snap.ID == xargs.ID)
-		if snap.Finished() {
-			return nil
-		}
-	}
+	return waitXactBlob(xargs)
 }

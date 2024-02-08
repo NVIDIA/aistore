@@ -221,10 +221,10 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
 		return
 	}
-
+	xargs.ID = id
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		if id != "" {
-			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q. %s\n", id, toMonitorMsg(c, id, ""))
+			actionX(c, &xargs, "")
 		} else {
 			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
 		}
@@ -235,7 +235,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	if err := waitXact(apiBP, &xargs); err != nil {
+	if err := waitXact(&xargs); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)

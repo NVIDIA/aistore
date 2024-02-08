@@ -2,4 +2,5 @@
 "ais://$BUCKET_2" created
 ^Copying ais://$BUCKET_1 => ais://$BUCKET_2. To monitor.*$
 ^Waiting for.*$
+Done.
 ^No running.*$

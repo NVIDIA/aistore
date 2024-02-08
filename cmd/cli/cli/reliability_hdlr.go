@@ -16,10 +16,12 @@ var (
 	storageSvcCmdsFlags = map[string][]cli.Flag{
 		commandMirror: {
 			copiesFlag,
+			nonverboseFlag,
 		},
 		commandECEncode: {
 			dataSlicesFlag,
 			paritySlicesFlag,
+			nonverboseFlag,
 		},
 	}
 

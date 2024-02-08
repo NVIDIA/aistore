@@ -208,7 +208,11 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		/// TODO: unify vs e2e: ("%s[%s] %s => %s", kind, xid, from, to)
-		actionDone(c, tcbtcoCptn("Copying", bckFrom, bckTo)+". "+toMonitorMsg(c, xid, ""))
+		if flagIsSet(c, nonverboseFlag) {
+			fmt.Fprintln(c.App.Writer, xid)
+		} else {
+			actionDone(c, tcbtcoCptn("Copying", bckFrom, bckTo)+". "+toMonitorMsg(c, xid, ""))
+		}
 		return nil
 	}
 
@@ -219,7 +223,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 	}
 	fmt.Fprintf(c.App.Writer, tcbtcoCptn("Copying", bckFrom, bckTo)+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
-	if err := waitXact(apiBP, &xargs); err != nil {
+	if err := waitXact(&xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
 		return err
 	}
@@ -306,7 +310,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout}
-	if err := waitXact(apiBP, &xargs); err != nil {
+	if err := waitXact(&xargs); err != nil {
 		return err
 	}
 	if !flagIsSet(c, copyDryRunFlag) {

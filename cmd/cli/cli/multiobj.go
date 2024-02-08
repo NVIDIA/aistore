@@ -104,7 +104,11 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 
 	// done
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		actionDone(c, tcbtcoCptn(text, bckFrom, bckTo)+". "+toMonitorMsg(c, xid, ""))
+		if flagIsSet(c, nonverboseFlag) {
+			fmt.Fprintln(c.App.Writer, xid)
+		} else {
+			actionDone(c, tcbtcoCptn(text, bckFrom, bckTo)+". "+toMonitorMsg(c, xid, ""))
+		}
 		return nil
 	}
 
@@ -117,7 +121,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	xargs := xact.ArgsMsg{ID: xid, Kind: xkind, Timeout: timeout}
-	if err = waitXact(apiBP, &xargs); err != nil {
+	if err = waitXact(&xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, text, bckFrom, bckTo)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
@@ -389,7 +393,7 @@ func (lr *lrCtx) do(c *cli.Context) (err error) {
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: xname, Timeout: timeout}
-	if err := waitXact(apiBP, &xargs); err != nil {
+	if err := waitXact(&xargs); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)

@@ -232,22 +232,26 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 
 	// 3. create ais bucket _or_ lookup and, *if* confirmed, add remote bucket to the BMD
 	// (see also: "on the fly")
-	bck, err = bctx.try()
-	return
+	return bctx.try()
 }
 
 func (bctx *bctx) try() (bck *meta.Bck, err error) {
 	bck, errCode, err := bctx._try()
-	if err != nil && err != errForwarded {
-		if cmn.IsErrBucketAlreadyExists(err) {
-			// e.g., when (re)setting backend two times in a row
-			nlog.Infoln(bctx.p.String()+":", err, " - nothing to do")
-			err = nil
+	switch {
+	case err == nil || err == errForwarded:
+		return bck, err
+	case cmn.IsErrBucketAlreadyExists(err):
+		// e.g., when (re)setting backend two times in a row
+		nlog.Infoln(bctx.p.String()+":", err, " - nothing to do")
+		return bck, nil
+	default:
+		if bctx.perms == apc.AceBckHEAD {
+			bctx.p.writeErr(bctx.w, bctx.r, err, errCode, Silent)
 		} else {
 			bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
 		}
+		return bck, err
 	}
-	return bck, err
 }
 
 //
