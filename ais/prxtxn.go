@@ -709,36 +709,27 @@ func parseECConf(value any) (*cmn.ECConfToSet, error) {
 		err := jsoniter.Unmarshal(v, conf)
 		return conf, err
 	default:
-		return nil, errors.New("invalid request")
+		debug.Assert(false, v)
+		return nil, errors.New("invalid ec-encode request")
 	}
 }
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error) {
 	nlp := newBckNLP(bck)
-	ecConf, err := parseECConf(msg.Value)
-	if err != nil {
-		return
+	confToSet, errV := parseECConf(msg.Value)
+	if errV != nil {
+		return "", errV
 	}
-	if ecConf.DataSlices == nil {
+	if confToSet.DataSlices == nil {
 		err = errors.New("missing number of data slices")
 		return
 	}
-	if ecConf.ParitySlices == nil {
+	if confToSet.ParitySlices == nil {
 		err = errors.New("missing number of parity slices")
 		return
 	}
-	dataSlices, paritySlices := *ecConf.DataSlices, *ecConf.ParitySlices
-	if dataSlices < 1 || paritySlices < 1 {
-		err = fmt.Errorf("invalid EC configuration (d=%d, p=%d), bucket %s", dataSlices, paritySlices, bck)
-		return
-	}
-	smap := p.owner.smap.get()
-	if numTs := smap.CountActiveTs(); dataSlices+paritySlices+1 > numTs {
-		err = fmt.Errorf("%v: EC config (d=%d, p=%d) for bucket %s requires %d targets, have %d (%s)",
-			cmn.ErrNotEnoughTargets, dataSlices, paritySlices, bck, dataSlices+paritySlices+1, numTs, smap)
-		return
-	}
+
 	if !nlp.TryLock(cmn.Rom.CplaneOperation() / 2) {
 		err = cmn.NewErrBusy("bucket", bck, "")
 		return
@@ -751,9 +742,9 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 		err = cmn.NewErrBckNotFound(bck.Bucket())
 		return
 	}
-	if props.EC.Enabled {
-		// Changing data or parity slice count on the fly is unsupported yet
-		err = fmt.Errorf("%s: EC is already enabled for bucket %s", p, bck)
+
+	// 1.5. validate ec config
+	if err = p.validateECConf(bck, confToSet, &props.EC); err != nil {
 		return
 	}
 
@@ -774,7 +765,7 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 		wait:          waitmsync,
 		msg:           &c.msg.ActMsg,
 		txnID:         c.uuid,
-		propsToUpdate: &cmn.BpropsToSet{EC: ecConf},
+		propsToUpdate: &cmn.BpropsToSet{EC: confToSet},
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
@@ -795,6 +786,29 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 		c.bcastAbort(bck, err) // cleanup txn
 	}
 	return xid, err
+}
+
+func (p *proxy) validateECConf(bck *meta.Bck, confToSet *cmn.ECConfToSet, currConf *cmn.ECConf) error {
+	newConf := *currConf
+	newConf.Enabled = true
+	newConf.DataSlices = *confToSet.DataSlices
+	newConf.ParitySlices = *confToSet.ParitySlices
+	if confToSet.ObjSizeLimit != nil {
+		newConf.ObjSizeLimit = *confToSet.ObjSizeLimit
+	}
+
+	if currConf.Enabled {
+		err := fmt.Errorf("%s: EC is already enabled on the bucket %s", p, bck.Cname(""))
+		if newConf.DataSlices != currConf.DataSlices || newConf.ParitySlices != currConf.ParitySlices {
+			// Changing data or parity slice count on the fly is unsupported
+			return err
+		}
+		nlog.Warningf("%v: old %+v, new %+v", err, currConf, newConf)
+	}
+
+	smap := p.owner.smap.get()
+	numTs := smap.CountActiveTs()
+	return newConf.ValidateAsProps(numTs)
 }
 
 // compare w/ bmodSetProps
@@ -1063,8 +1077,7 @@ func (p *proxy) undoUpdateCopies(msg *apc.ActMsg, bck *meta.Bck, propsToUpdate *
 }
 
 // Make and validate new bucket props.
-func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet,
-	creating ...bool) (nprops *cmn.Bprops, err error) {
+func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, creating ...bool) (nprops *cmn.Bprops, err error) {
 	var (
 		cfg    = cmn.GCO.Get()
 		bprops = bck.Props
@@ -1120,7 +1133,7 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet,
 	}
 	err = nprops.Validate(targetCnt)
 	if cmn.IsErrSoft(err) && propsToUpdate.Force {
-		nlog.Warningf("Ignoring soft error: %v", err)
+		nlog.Warningln("Ignoring soft error:", err)
 		err = nil
 	}
 	return

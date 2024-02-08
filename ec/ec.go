@@ -315,7 +315,7 @@ func unique(prefix string, bck *meta.Bck, objName string) string {
 }
 
 func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
-	return size < ecConf.ObjSizeLimit
+	return size < ecConf.ObjSizeLimit || ecConf.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate
 }
 
 // returns whether EC must use disk instead of keeping everything in memory.

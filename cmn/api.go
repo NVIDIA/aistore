@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // Bprops - manageable, user-configurable, and inheritable (from cluster config).
@@ -220,7 +221,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 		}
 	}
 	if bp.Mirror.Enabled && bp.EC.Enabled {
-		return fmt.Errorf("cannot enable mirroring and ec at the same time for the same bucket")
+		nlog.Warningln("n-way mirroring and EC are both enabled at the same time on the same bucket")
 	}
 	return softErr
 }

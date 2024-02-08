@@ -646,7 +646,7 @@ func showBMDHandler(c *cli.Context) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 	if !flagIsSet(c, noHeaderFlag) {
-		fmt.Fprintln(tw, "PROVIDER\tNAMESPACE\tNAME\tBACKEND\tCOPIES\tEC(D/P, minsize)\tCREATED")
+		fmt.Fprintln(tw, "PROVIDER\tNAMESPACE\tNAME\tBACKEND\tCOPIES\tEC\tCREATED")
 	}
 	for provider, namespaces := range bmd.Providers {
 		for nsUname, buckets := range namespaces {
@@ -657,8 +657,13 @@ func showBMDHandler(c *cli.Context) error {
 					copies = strconv.Itoa(int(props.Mirror.Copies))
 				}
 				if props.EC.Enabled {
-					ec = fmt.Sprintf("%d/%d, %s", props.EC.DataSlices,
-						props.EC.ParitySlices, cos.ToSizeIEC(props.EC.ObjSizeLimit, 0))
+					if props.EC.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate {
+						// no EC - always producing %d total replicas
+						ec = fmt.Sprintf("%d-way replication", props.EC.ParitySlices+1)
+					} else {
+						ec = fmt.Sprintf("D=%d, P=%d (size limit %s)", props.EC.DataSlices,
+							props.EC.ParitySlices, cos.ToSizeIEC(props.EC.ObjSizeLimit, 0))
+					}
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					provider, ns, bucket, props.BackendBck, copies, ec,
