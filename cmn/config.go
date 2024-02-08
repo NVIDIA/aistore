@@ -193,7 +193,7 @@ type (
 		//
 		// The value 0 (zero) indicates that objects of any size
 		// are to be sliced, to produce (D) data slices and (P) erasure coded parity slices.
-		// On the other hand, the value -1 requires that absolutely all objects of any size
+		// On the other hand, the value -1 specifies that absolutely all objects of any size
 		// must be replicated as is. In effect, the (-1) option provides data protection via
 		// intra-cluster (P+1)-way replication (a.k.a. mirroring).
 		//
@@ -201,8 +201,8 @@ type (
 		// whereby P nodes can be lost without incurring loss of data.
 		ObjSizeLimit int64 `json:"objsize_limit"`
 
-		// Number of data (D) slices; the value 1 will have have an effect of producing
-		// (P) full-size replicas.
+		// Number of data (D) slices; the value 1 will have an effect of producing
+		// (P) additional full-size replicas.
 		DataSlices int `json:"data_slices"`
 
 		// Depending on the object size and `ObjSizeLimit`, the value of `ParitySlices` (or P) indicates:
