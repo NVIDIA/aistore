@@ -61,7 +61,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/OneOfOne/xxhash"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -197,7 +197,7 @@ var (
 	port        string
 	envEndpoint string
 
-	s3svc *s3.S3 // s3 client - see s3ListObjects
+	s3svc *s3.Client // s3 client - see s3ListObjects
 
 	s3Endpoint string
 	s3Profile  string
@@ -281,7 +281,9 @@ func Start(version, buildtime string) (err error) {
 	}
 
 	if isDirectS3() {
-		initS3Svc()
+		if err := initS3Svc(); err != nil {
+			return err
+		}
 	}
 
 	// list objects, or maybe not

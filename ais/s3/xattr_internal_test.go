@@ -16,8 +16,8 @@ func TestPackUnpack(t *testing.T) {
 		in  = mpt{parts: make([]*MptPart, 0)}
 		out = &mpt{}
 	)
-	for i := int64(0); i < nump; i++ {
-		in.parts = append(in.parts, &MptPart{Num: 111 + i*i, MD5: trand.String(8), Size: 1024 + i})
+	for i := int32(0); i < nump; i++ {
+		in.parts = append(in.parts, &MptPart{Num: 111 + i*i, MD5: trand.String(8), Size: 1024 + int64(i)})
 	}
 	b := in.pack()
 	if err := out.unpack(b); err != nil {

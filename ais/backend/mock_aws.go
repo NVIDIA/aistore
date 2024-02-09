@@ -24,7 +24,7 @@ func StartMpt(*core.LOM) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("start-mpt", mock)
 }
 
-func PutMptPart(*core.LOM, *os.File, string, int64, int64) (string, int, error) {
+func PutMptPart(*core.LOM, *os.File, string, int32, int64) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("put-mpt-part", mock)
 }
 

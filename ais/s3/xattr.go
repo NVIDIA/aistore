@@ -19,7 +19,7 @@ const mptXattrID = "user.ais.s3-multipart"
 
 const iniCapParts = 8
 
-func OffsetSorted(lom *core.LOM, partNum int64) (off, size int64, status int, err error) {
+func OffsetSorted(lom *core.LOM, partNum int32) (off, size int64, status int, err error) {
 	var mpt *mpt
 	if mpt, err = loadMptXattr(lom.FQN); err != nil {
 		return
@@ -57,8 +57,8 @@ func storeMptXattr(fqn string, mpt *mpt) (err error) {
 // mpt //
 /////////
 
-func (mpt *mpt) _offSorted(name string, num int64) (off, size int64, err error) {
-	var prev = int64(-1)
+func (mpt *mpt) _offSorted(name string, num int32) (off, size int64, err error) {
+	var prev = int32(-1)
 	for _, part := range mpt.parts {
 		debug.Assert(part.Num > prev) // must ascend
 		if part.Num == num {
@@ -83,7 +83,7 @@ func (mpt *mpt) packedSize() (size int) {
 func (mpt *mpt) pack() []byte {
 	packer := cos.NewPacker(nil, mpt.packedSize())
 	for _, part := range mpt.parts {
-		packer.WriteInt64(part.Num)
+		packer.WriteInt32(part.Num)
 		packer.WriteString(part.MD5)
 		packer.WriteInt64(part.Size)
 	}
@@ -96,7 +96,7 @@ func (mpt *mpt) unpack(b []byte) (err error) {
 	mpt.parts = make([]*MptPart, 0, iniCapParts)
 	for unpacker.Len() > 0 {
 		part := &MptPart{}
-		if part.Num, err = unpacker.ReadInt64(); err != nil {
+		if part.Num, err = unpacker.ReadInt32(); err != nil {
 			break
 		}
 		if part.MD5, err = unpacker.ReadString(); err != nil {
@@ -110,7 +110,7 @@ func (mpt *mpt) unpack(b []byte) (err error) {
 	return
 }
 
-func (mpt *mpt) getPart(num int64) *MptPart {
+func (mpt *mpt) getPart(num int32) *MptPart {
 	for _, part := range mpt.parts {
 		if part.Num == num {
 			return part

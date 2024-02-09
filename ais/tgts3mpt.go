@@ -122,7 +122,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 	// workfile name format: <upload-id>.<part-number>.<obj-name>
-	prefix := uploadID + "." + strconv.FormatInt(partNum, 10)
+	prefix := uploadID + "." + strconv.FormatInt(int64(partNum), 10)
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
 	partFh, errC := lom.CreateFileRW(wfqn)
 	if errC != nil {

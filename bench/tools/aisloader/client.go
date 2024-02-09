@@ -6,6 +6,7 @@
 package aisloader
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,10 +20,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 const longListTime = 10 * time.Second // list-objects progress
@@ -177,8 +178,8 @@ func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 
 // a bare-minimum (e.g. not passing checksum or any other metadata)
 func s3put(bck cmn.Bck, objName string, reader cos.ReadOpenCloser) (err error) {
-	uploader := s3manager.NewUploaderWithClient(s3svc)
-	_, err = uploader.Upload(&s3manager.UploadInput{
+	uploader := s3manager.NewUploader(s3svc)
+	_, err = uploader.Upload(context.Background(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 		Body:   reader,
@@ -302,7 +303,7 @@ func newGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length 
 }
 
 func s3getDiscard(bck cmn.Bck, objName string) (int64, error) {
-	obj, err := s3svc.GetObject(&s3.GetObjectInput{
+	obj, err := s3svc.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 	})
@@ -462,27 +463,30 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 	return objs, nil
 }
 
-func initS3Svc() {
-	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
-	config.WithEndpoint(s3Endpoint)
-	opts := session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Config:            config,
-		Profile:           s3Profile,
+func initS3Svc() error {
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithSharedConfigProfile(s3Profile),
+	)
+	if err != nil {
+		return err
 	}
-	sess := session.Must(session.NewSessionWithOptions(opts))
-	// config.Region = aws.String("us-east-1") // NOTE: may be needed
+	if s3Endpoint != "" {
+		cfg.BaseEndpoint = aws.String(s3Endpoint)
+	}
+	cfg.Region = "us-east-1" // NOTE: may be needed
 
-	s3svc = s3.New(sess)
+	s3svc = s3.NewFromConfig(cfg)
+	return nil
 }
 
 func s3ListObjects() ([]string, error) {
 	// first page
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(runParams.bck.Name)}
-	params.MaxKeys = aws.Int64(apc.DefaultPageSizeCloud)
+	params.MaxKeys = aws.Int32(apc.DefaultPageSizeCloud)
 
 	prev := mono.NanoTime()
-	resp, err := s3svc.ListObjectsV2(params)
+	resp, err := s3svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +513,7 @@ func s3ListObjects() ([]string, error) {
 	var eol bool
 	for token != "" {
 		params.ContinuationToken = &token
-		resp, err = s3svc.ListObjectsV2(params)
+		resp, err = s3svc.ListObjectsV2(context.Background(), params)
 		if err != nil {
 			return nil, err
 		}

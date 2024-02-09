@@ -67,7 +67,7 @@ type (
 	// Multipart uploaded part
 	PartInfo struct {
 		ETag       string `xml:"ETag"`
-		PartNumber int64  `xml:"PartNumber"`
+		PartNumber int32  `xml:"PartNumber"`
 		Size       int64  `xml:"Size,omitempty"`
 	}
 

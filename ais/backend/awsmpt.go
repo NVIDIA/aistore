@@ -7,6 +7,7 @@
 package backend
 
 import (
+	"context"
 	"os"
 	"strings"
 
@@ -15,8 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 func StartMpt(lom *core.LOM) (id string, errCode int, _ error) {
@@ -31,7 +33,7 @@ func StartMpt(lom *core.LOM) (id string, errCode int, _ error) {
 	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(errN)
 	}
-	out, err := svc.CreateMultipartUpload(&input)
+	out, err := svc.CreateMultipartUpload(context.Background(), &input)
 	if err == nil {
 		id = *out.UploadId
 	} else {
@@ -40,7 +42,7 @@ func StartMpt(lom *core.LOM) (id string, errCode int, _ error) {
 	return id, errCode, err
 }
 
-func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum, size int64) (etag string, errCode int, _ error) {
+func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum int32, size int64) (etag string, errCode int, _ error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		input    = s3.UploadPartInput{
@@ -57,7 +59,7 @@ func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum, size int64
 		nlog.Warningln(errN)
 	}
 
-	out, err := svc.UploadPart(&input)
+	out, err := svc.UploadPart(context.Background(), &input)
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
@@ -70,7 +72,7 @@ func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum, size int64
 func CompleteMpt(lom *core.LOM, uploadID string, parts *s3types.CompleteMptUpload) (etag string, errCode int, _ error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
-		s3parts  s3.CompletedMultipartUpload
+		s3parts  types.CompletedMultipartUpload
 		input    = s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(cloudBck.Name),
 			Key:      aws.String(lom.ObjName),
@@ -83,16 +85,16 @@ func CompleteMpt(lom *core.LOM, uploadID string, parts *s3types.CompleteMptUploa
 	}
 
 	// TODO -- FIXME: reduce copying
-	s3parts.Parts = make([]*s3.CompletedPart, 0, len(parts.Parts))
+	s3parts.Parts = make([]types.CompletedPart, 0, len(parts.Parts))
 	for _, part := range parts.Parts {
-		s3parts.Parts = append(s3parts.Parts, &s3.CompletedPart{
+		s3parts.Parts = append(s3parts.Parts, types.CompletedPart{
 			ETag:       aws.String(part.ETag),
-			PartNumber: aws.Int64(part.PartNumber),
+			PartNumber: aws.Int32(part.PartNumber),
 		})
 	}
 	input.MultipartUpload = &s3parts
 
-	out, err := svc.CompleteMultipartUpload(&input)
+	out, err := svc.CompleteMultipartUpload(context.Background(), &input)
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
@@ -115,7 +117,7 @@ func AbortMpt(lom *core.LOM, uploadID string) (errCode int, err error) {
 	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(errN)
 	}
-	if _, err = svc.AbortMultipartUpload(&input); err != nil {
+	if _, err = svc.AbortMultipartUpload(context.Background(), &input); err != nil {
 		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	return errCode, err

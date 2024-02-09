@@ -24,7 +24,7 @@ type (
 		MD5  string // MD5 of the part (*)
 		FQN  string // FQN of the corresponding workfile
 		Size int64  // part size in bytes (*)
-		Num  int64  // part number (*)
+		Num  int32  // part number (*)
 	}
 	mpt struct {
 		bckName string
@@ -78,7 +78,7 @@ func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 		return nil, fmt.Errorf("upload %q not found", id)
 	}
 	// first, check that all parts are present
-	var prev = int64(-1)
+	var prev = int32(-1)
 	for _, part := range parts {
 		debug.Assert(part.PartNumber > prev) // must ascend
 		if mpt.getPart(part.PartNumber) == nil {
@@ -94,12 +94,12 @@ func CheckParts(id string, parts []*PartInfo) ([]*MptPart, error) {
 	return nparts, nil
 }
 
-func ParsePartNum(s string) (partNum int64, err error) {
-	partNum, err = strconv.ParseInt(s, 10, 16)
+func ParsePartNum(s string) (int32, error) {
+	partNum, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
 		err = fmt.Errorf("invalid part number %q (must be in 1-%d range): %v", s, MaxPartsPerUpload, err)
 	}
-	return
+	return int32(partNum), err
 }
 
 // Return a sum of upload part sizes.
