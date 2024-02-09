@@ -314,7 +314,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int
 		//    to the contents of an object, not its metadata."
 		// - "The ETag may or may not be an MD5 digest of the object data. Whether or
 		//    not it is depends on how the object was created and how it is encrypted..."
-		if !strings.Contains(v, cmn.AwsMultipartDelim) {
+		if !cmn.IsS3MultipartEtag(v) {
 			oa.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}
@@ -419,7 +419,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 	// see ETag/MD5 NOTE above
 	if v, ok := h.EncodeCksum(obj.ETag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
-		if !strings.Contains(v, cmn.AwsMultipartDelim) {
+		if !cmn.IsS3MultipartEtag(v) {
 			md5 = cos.NewCksum(cos.ChecksumMD5, v)
 			lom.SetCustomKey(cmn.MD5ObjMD, v)
 		}
@@ -443,15 +443,19 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, extraArgs *core.Extra
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]string, 2)
 	)
-
-	resp, err := aiss3.PassThroughSignedReq(extraArgs.DataClient, extraArgs.Req, lom, r)
-	if err != nil {
-		return resp.StatusCode, err
-	} else if resp != nil {
-		uploadOutput = &s3manager.UploadOutput{
-			ETag: aws.String(resp.Header.Get(cos.HdrETag)),
+	if oreq := extraArgs.Req; oreq != nil {
+		q := oreq.URL.Query()
+		pts := aiss3.NewPassThroughSignedReq(extraArgs.DataClient, oreq, lom, r, q)
+		resp, err := pts.Do()
+		if err != nil {
+			return resp.StatusCode, err
 		}
-		goto exit
+		if resp != nil {
+			uploadOutput = &s3manager.UploadOutput{
+				ETag: aws.String(resp.Header.Get(cos.HdrETag)),
+			}
+			goto exit
+		}
 	}
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
@@ -484,7 +488,7 @@ exit:
 	if v, ok := h.EncodeCksum(uploadOutput.ETag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 		// see ETag/MD5 NOTE above
-		if !strings.Contains(v, cmn.AwsMultipartDelim) {
+		if !cmn.IsS3MultipartEtag(v) {
 			lom.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}

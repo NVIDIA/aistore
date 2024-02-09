@@ -120,8 +120,8 @@ func NewAzure(t core.TargetPut) (core.BackendProvider, error) {
 	}, nil
 }
 
-// custom metadata helpers (note: not using cmn/backend)
-func azEncodeEtag(etag azblob.ETag) string { return strings.Trim(string(etag), "\"") }
+// (compare w/ cmn/backend)
+func azEncodeEtag(etag azblob.ETag) string { return cmn.UnquoteCEV(string(etag)) }
 
 func azEncodeChecksum(v []byte) string {
 	if len(v) == 0 {

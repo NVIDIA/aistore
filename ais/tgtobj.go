@@ -573,15 +573,17 @@ do:
 		// TODO: utilize res.ObjAttrs
 	} else if cmn.Rom.Features().IsSet(feat.PassThroughSignedS3Req) {
 		cold = false
-
-		resp, err := s3.PassThroughSignedReq(g.client.control, goi.req, goi.lom, nil)
+		q := goi.req.URL.Query()
+		pts := s3.NewPassThroughSignedReq(g.client.control, goi.req, goi.lom, nil, q)
+		resp, err := pts.Do()
 		if err != nil {
 			return resp.StatusCode, err
-		} else if resp != nil {
-			cksum := strings.Trim(resp.Header.Get(cos.HdrETag), `"`)
-			objCustomMD := map[string]string{cmn.SourceObjMD: apc.AWS, cmn.ETag: cksum, cmn.MD5ObjMD: cksum}
-			if !goi.lom.Equal(&cmn.ObjAttrs{CustomMD: objCustomMD}) {
-				return http.StatusGone, fmt.Errorf("checksum doesn't match, object should be retrieved from S3")
+		}
+		if resp != nil {
+			oa := resp.ObjAttrs()
+			if !goi.lom.Equal(oa) {
+				err := fmt.Errorf("%s: checksum doesn't match, object should be retrieved from S3", goi.lom.Cname())
+				return http.StatusGone, err
 			}
 		}
 	}

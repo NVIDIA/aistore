@@ -61,6 +61,14 @@ func (b *Bck) Cname(name string) string     { return (*cmn.Bck)(b).Cname(name) }
 func (b *Bck) IsEmpty() bool                { return (*cmn.Bck)(b).IsEmpty() }
 func (b *Bck) HasVersioningMD() bool        { return (*cmn.Bck)(b).HasVersioningMD() }
 
+func (b *Bck) IsRemoteS3() bool {
+	if b.Provider == apc.AWS {
+		return true
+	}
+	backend := b.Backend()
+	return backend != nil && backend.Provider == apc.AWS
+}
+
 func (b *Bck) NewQuery() url.Values               { return (*cmn.Bck)(b).NewQuery() }
 func (b *Bck) AddToQuery(q url.Values) url.Values { return (*cmn.Bck)(b).AddToQuery(q) }
 

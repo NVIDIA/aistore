@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -14,8 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-const AwsMultipartDelim = "-"
-
 type backendFuncs struct {
 	EncodeVersion func(v any) (version string, isSet bool)
 	EncodeCksum   func(v any) (cksumValue string, isSet bool)
@@ -24,6 +22,19 @@ type backendFuncs struct {
 func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "" && *version != "null"
 }
+
+// from https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
+// "The ETag may or may not be an MD5 digest of the object data. Whether or
+// not it is depends on how the object was created and how it is encrypted..."
+const AwsMultipartDelim = "-"
+
+func IsS3MultipartEtag(etag string) bool {
+	return strings.Contains(etag, AwsMultipartDelim)
+}
+
+// unquote checksum, ETag, and version
+// e.g., https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+func UnquoteCEV(val string) string { return strings.Trim(val, "\"") }
 
 var BackendHelpers = struct {
 	Amazon backendFuncs
@@ -53,11 +64,10 @@ var BackendHelpers = struct {
 		EncodeCksum: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case *string:
-				if strings.Contains(*x, AwsMultipartDelim) {
+				if IsS3MultipartEtag(*x) {
 					return *x, true // return as-is multipart
 				}
-				cksum, _ := strconv.Unquote(*x)
-				return cksum, true
+				return UnquoteCEV(*x), true
 			case string:
 				return x, true
 			default:
@@ -116,7 +126,7 @@ var BackendHelpers = struct {
 			case string:
 				// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 				x = strings.TrimPrefix(x, "W/")
-				x = strings.Trim(x, "\"")
+				x = UnquoteCEV(x)
 				return x, x != ""
 			default:
 				debug.FailTypeCast(v)

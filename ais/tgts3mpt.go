@@ -15,12 +15,10 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/ais/s3"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -38,14 +36,6 @@ func decodeXML[T any](body []byte) (result T, _ error) {
 	return result, nil
 }
 
-func isRemoteS3(bck *meta.Bck) bool {
-	if bck.Provider == apc.AWS {
-		return true
-	}
-	b := bck.Backend()
-	return b != nil && b.Provider == apc.AWS
-}
-
 func multiWriter(writers ...io.Writer) io.Writer {
 	a := make([]io.Writer, 0, 3)
 	for _, w := range writers {
@@ -60,7 +50,7 @@ func multiWriter(writers ...io.Writer) io.Writer {
 // - Generate UUID for the upload
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
-func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
+func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck, q url.Values) {
 	var (
 		objName  = s3.ObjName(items)
 		lom      = &core.LOM{ObjName: objName}
@@ -72,13 +62,14 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if isRemoteS3(bck) {
-		var resp *s3.PassThroughSignedResp
-		resp, err = s3.PassThroughSignedReq(g.client.control, r, lom, nil)
+	if bck.IsRemoteS3() {
+		pts := s3.NewPassThroughSignedReq(g.client.control, r, lom, nil, q)
+		resp, err := pts.Do()
 		if err != nil {
 			s3.WriteErr(w, r, err, resp.StatusCode)
 			return
-		} else if resp != nil {
+		}
+		if resp != nil {
 			result, err := decodeXML[s3.InitiateMptUploadResult](resp.Body)
 			if err != nil {
 				s3.WriteErr(w, r, err, http.StatusBadRequest)
@@ -90,7 +81,6 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 			w.Write(resp.Body)
 			return
 		}
-
 		uploadID, errCode, err = backend.StartMpt(lom)
 		if err != nil {
 			s3.WriteErr(w, r, err, errCode)
@@ -166,7 +156,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		buf, slab    = t.gmm.Alloc()
 		cksumSHA     = &cos.CksumHash{}
 		cksumMD5     = &cos.CksumHash{}
-		remote       = isRemoteS3(bck)
+		remote       = bck.IsRemoteS3()
 	)
 	if checkPartSHA {
 		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
@@ -181,11 +171,14 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	// 4. rewind and call s3 API
 	if err == nil && remote {
 		if _, err = partFh.Seek(0, io.SeekStart); err == nil {
-			var resp *s3.PassThroughSignedResp
-			resp, err = s3.PassThroughSignedReq(g.client.data, r, lom, partFh)
+			var (
+				resp *s3.PassThroughSignedResp
+				pts  = s3.NewPassThroughSignedReq(g.client.data, r, lom, partFh, q)
+			)
+			resp, err = pts.Do()
 			if resp != nil {
 				errCode = resp.StatusCode
-				etag = strings.Trim(resp.Header.Get(cos.HdrETag), `"`)
+				etag = cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
 			} else {
 				etag, errCode, err = backend.PutMptPart(lom, partFh, uploadID, partNum, size)
 			}
@@ -276,10 +269,11 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	var (
 		etag    string
 		started = time.Now()
-		remote  = isRemoteS3(bck)
+		remote  = bck.IsRemoteS3()
 	)
 	if remote {
-		resp, err := s3.PassThroughSignedReq(g.client.control, r, lom, io.NopCloser(bytes.NewReader(output)))
+		pts := s3.NewPassThroughSignedReq(g.client.control, r, lom, io.NopCloser(bytes.NewReader(output)), q)
+		resp, err := pts.Do()
 		if err != nil {
 			s3.WriteErr(w, r, err, resp.StatusCode)
 			return
@@ -389,7 +383,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 
 	if errF != nil {
 		// NOTE: not failing if remote op. succeeded
-		if !isRemoteS3(bck) {
+		if !remote {
 			s3.WriteMptErr(w, r, errF, errCode, lom, uploadID)
 			return
 		}
@@ -447,12 +441,14 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 
 	uploadID := q.Get(s3.QparamMptUploadID)
 
-	if isRemoteS3(bck) {
-		resp, err := s3.PassThroughSignedReq(g.client.control, r, lom, r.Body)
+	if bck.IsRemoteS3() {
+		pts := s3.NewPassThroughSignedReq(g.client.control, r, lom, r.Body, q)
+		resp, err := pts.Do()
 		if err != nil {
 			s3.WriteErr(w, r, err, resp.StatusCode)
 			return
-		} else if resp == nil {
+		}
+		if resp == nil {
 			errCode, err := backend.AbortMpt(lom, uploadID)
 			if err != nil {
 				s3.WriteErr(w, r, err, errCode)

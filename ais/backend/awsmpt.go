@@ -9,7 +9,6 @@ package backend
 import (
 	"context"
 	"os"
-	"strings"
 
 	s3types "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
@@ -63,7 +62,7 @@ func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum int32, size
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
-		etag = strings.Trim(*out.ETag, "\"")
+		etag = cmn.UnquoteCEV(*out.ETag)
 	}
 
 	return etag, errCode, err
@@ -98,7 +97,7 @@ func CompleteMpt(lom *core.LOM, uploadID string, parts *s3types.CompleteMptUploa
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
-		etag = strings.Trim(*out.ETag, "\"")
+		etag = cmn.UnquoteCEV(*out.ETag)
 	}
 
 	return etag, errCode, err

@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -193,7 +192,7 @@ func SetEtag(hdr http.Header, lom *core.LOM) {
 	if hdr.Get(cos.S3CksumHeader) != "" {
 		return
 	}
-	if v, exists := lom.GetCustomKey(cmn.ETag); exists && !strings.Contains(v, cmn.AwsMultipartDelim) {
+	if v, exists := lom.GetCustomKey(cmn.ETag); exists && !cmn.IsS3MultipartEtag(v) {
 		hdr.Set(cos.S3CksumHeader, v)
 		return
 	}

@@ -377,7 +377,7 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("startMpt", bck.String(), items, q)
 		}
-		t.startMpt(w, r, items, bck)
+		t.startMpt(w, r, items, bck, q)
 		return
 	}
 	if q.Has(s3.QparamMptUploadID) {
