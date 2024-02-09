@@ -1,4 +1,6 @@
-## Prerequisites: #################################################################################
+#!/bin/bash
+
+## Prerequisites: ###############################################################################
 # - aistore cluster
 # - remote aistore cluster (a.k.a. "remais")
 # - optionally, remais bucket (the bucket will be created if doesn't exist)
@@ -9,8 +11,11 @@
 #  $ ais show remote-cluster -H
 #  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
 #
-## Run:
-#  $./ais/test/scripts/remais-blob-download.sh --bucket ais://@remais/abc --maxsize=10mb --totalsize=1G
+## Examples:
+#  $./remais-blob-download.sh --bucket ais://@remais/abc --maxsize=10mb --totalsize=1G
+#
+#  $./remais-blob-download.sh --bucket ais://@remais/abc --numworkers=5 --chunksize=500kb
+#################################################################################################
 
 if ! [ -x "$(command -v ais)" ]; then
   echo "Error: ais (CLI) not installed" >&2
@@ -23,10 +28,14 @@ fi
 
 ## Command line options and respective defaults
 bucket="ais://@remais/abc"
-minsize="10MB"
-maxsize="10MB"
-totalsize="100MB"
+minsize="10MiB"
+maxsize="10MiB"
+totalsize="100MiB"
+chunksize="1MB"
+numworkers=4
 
+## runtime
+max_num_downloads=100
 subdir="blob-$RANDOM" ## destination for aisloader-generated content
 
 while (( "$#" )); do
@@ -34,7 +43,10 @@ while (( "$#" )); do
     --bucket) bucket=$2; shift; shift;;
     --minsize) minsize=$2; shift; shift;;
     --maxsize) maxsize=$2; shift; shift;;
-    --totalsize) totalsize=$2; shift; shift;; *) echo "fatal: unknown argument '${1}'"; exit 1;;
+    --totalsize) totalsize=$2; shift; shift;;
+    --chunksize) chunksize=$2; shift; shift;;
+    --numworkers) numworkers=$2; shift; shift;;
+    *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
 done
 
@@ -79,9 +91,17 @@ ais ls $bucket --all --limit 4
 echo "..."
 files=$(ais ls $bucket --prefix=$subdir/ --name-only -H --no-footers --all | awk '{print $1}')
 
+## put some limit to it
+count=0
+
 ## for all listed objects
 for f in $files; do
-  ais blob-download $bucket/$f --wait 1> /dev/null || exit $?
+  xid=$(ais blob-download $bucket/$f --chunk-size $chunksize --num-workers $numworkers --nv || exit $?)
+  ais wait $xid || exit $?
+  count=`expr $count + 1`
+  if [ $count -ge $max_num_downloads ]; then
+     break
+  fi
 done
 
 echo "..."

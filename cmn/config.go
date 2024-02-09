@@ -206,11 +206,11 @@ type (
 		DataSlices int `json:"data_slices"`
 
 		// Depending on the object size and `ObjSizeLimit`, the value of `ParitySlices` (or P) indicates:
-		// - a number of additional parity slices to produce out of the (D) data slices of the object,
+		// - a number of additional parity slices (generated or _computed_ from the (D) data slices),
 		// or:
 		// - a number of full object replicas (copies).
-		// In all cases, the same rule applies: all the (D + P) slices and/or all (P) additional full copies
-		// are stored on a different storage nodes (a.k.a. targets) in a cluster.
+		// In all cases, the same rule applies: all slices and/or all full copies are stored on different
+		// storage nodes (a.k.a. targets).
 		ParitySlices int `json:"parity_slices"`
 
 		SbundleMult int `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination

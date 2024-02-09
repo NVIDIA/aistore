@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sync"
 
@@ -63,6 +64,7 @@ type (
 		err  error
 		sgl  *memsys.SGL
 		roff int64
+		code int
 	}
 	blobFactory struct {
 		xreg.RenewBase
@@ -252,9 +254,14 @@ outer:
 		select {
 		case done := <-r.doneCh:
 			sgl := done.sgl
-			if r.p.args.fullSize == done.roff+sgl.Size() || done.err == io.EOF {
+			if r.p.args.fullSize <= done.roff+sgl.Size() || done.code == http.StatusRequestedRangeNotSatisfiable {
 				eof = true
-				if r.p.args.fullSize > done.roff+sgl.Size() {
+				switch {
+				case r.p.args.fullSize < done.roff+sgl.Size():
+					err = fmt.Errorf("%s: detected size increase during download: expected %d, have %d",
+						r.Name(), r.p.args.fullSize, done.roff+sgl.Size())
+					goto fin
+				case r.p.args.fullSize > done.roff+sgl.Size():
 					err = fmt.Errorf("%s: premature EOF: expected size %d, have %d",
 						r.Name(), r.p.args.fullSize, done.roff+sgl.Size())
 					goto fin
@@ -412,18 +419,23 @@ func (reader *blobReader) run() {
 		if reader.parent.IsAborted() {
 			break
 		}
+		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+			debug.Assert(res.Size == 0)
+			reader.parent.doneCh <- blobDone{nil, sgl, msg.roff, http.StatusRequestedRangeNotSatisfiable}
+			break
+		}
 		if err = res.Err; err == nil {
 			written, err = io.Copy(sgl, res.R)
 		}
 		if err != nil {
-			reader.parent.doneCh <- blobDone{err, sgl, msg.roff}
+			reader.parent.doneCh <- blobDone{err, sgl, msg.roff, res.ErrCode}
 			break
 		}
 		debug.Assert(res.Size == written, res.Size, " ", written)
 		debug.Assert(sgl.Size() == written, sgl.Size(), " ", written)
 		debug.Assert(sgl.Size() == sgl.Len(), sgl.Size(), " ", sgl.Len())
 
-		reader.parent.doneCh <- blobDone{nil, sgl, msg.roff}
+		reader.parent.doneCh <- blobDone{nil, sgl, msg.roff, res.ErrCode}
 	}
 	reader.parent.wg.Done()
 }

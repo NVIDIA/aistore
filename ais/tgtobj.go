@@ -1138,7 +1138,7 @@ func (goi *getOI) parseRange(resphdr http.Header, size int64) (hrng *htrange, er
 	var ranges []htrange
 	ranges, err = parseMultiRange(goi.ranges.Range, size)
 	if err != nil {
-		if _, ok := err.(*errRangeNoOverlap); ok {
+		if cmn.IsErrRangeNotSatisfiable(err) {
 			// https://datatracker.ietf.org/doc/html/rfc7233#section-4.2
 			resphdr.Set(cos.HdrContentRange, fmt.Sprintf("%s*/%d", cos.HdrContentRangeValPrefix, size))
 		}

@@ -197,6 +197,10 @@ type (
 		act string
 		bck *Bck
 	}
+	ErrRangeNotSatisfiable struct {
+		ranges []string // RFC 7233
+		size   int64    // [0, size)
+	}
 )
 
 var (
@@ -678,9 +682,7 @@ func IsErrSoft(err error) bool {
 	return errors.As(err, &target)
 }
 
-///////////////////////
 // ErrLmetaCorrupted & ErrLmetaNotFound
-///////////////////////
 
 func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
 func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
@@ -700,9 +702,7 @@ func IsErrLmetaNotFound(err error) bool {
 	return ok
 }
 
-///////////////////////////
-// ErrLimitedCoexistence //
-///////////////////////////
+// ErrLimitedCoexistence
 
 func NewErrLimitedCoexistence(node, xaction, action, detail string) *ErrLimitedCoexistence {
 	return &ErrLimitedCoexistence{node, xaction, action, detail}
@@ -713,9 +713,7 @@ func (e *ErrLimitedCoexistence) Error() string {
 		e.node, e.xaction, e.action, e.detail)
 }
 
-////////////////////
-// ErrXactUsePrev //
-////////////////////
+// ErrXactUsePrev
 
 func NewErrXactUsePrev(xaction string) *ErrXactUsePrev {
 	return &ErrXactUsePrev{xaction}
@@ -730,9 +728,7 @@ func IsErrXactUsePrev(err error) bool {
 	return ok
 }
 
-//
 // ErrInvalidObjName
-//
 
 func ValidateObjName(name string) (err *ErrInvalidObjName) {
 	if cos.IsLastB(name, filepath.Separator) || strings.Contains(name, "../") {
@@ -745,9 +741,7 @@ func (e *ErrInvalidObjName) Error() string {
 	return fmt.Sprintf("invalid object name %q", e.name)
 }
 
-//
 // ErrNotRemoteBck
-//
 
 func ValidateRemoteBck(act string, bck *Bck) (err *ErrNotRemoteBck) {
 	if !bck.IsRemote() {
@@ -760,9 +754,7 @@ func (e *ErrNotRemoteBck) Error() string {
 	return fmt.Sprintf("%s: expecting remote bucket (have %s)", e.act, e.bck)
 }
 
-///////////////////////
-// ErrXactTgtInMaint //
-///////////////////////
+// ErrXactTgtInMaint
 
 func NewErrXactTgtInMaint(xaction, tname string) *ErrXactTgtInMaint {
 	return &ErrXactTgtInMaint{xaction, tname}
@@ -773,9 +765,26 @@ func (e *ErrXactTgtInMaint) Error() string {
 		e.tname, e.xaction)
 }
 
-////////////////////////////
-// error grouping helpers //
-////////////////////////////
+// ErrRangeNotSatisfiable
+// http.StatusRequestedRangeNotSatisfiable = 416 // RFC 9110, 15.5.17
+
+func NewErrRangeNotSatisfiable(ranges []string, size int64) *ErrRangeNotSatisfiable {
+	return &ErrRangeNotSatisfiable{ranges, size}
+}
+
+func (e *ErrRangeNotSatisfiable) Error() string {
+	s := "object size = " + strconv.FormatInt(e.size, 10)
+	return fmt.Sprintf("%s, range%s %v not satisfiable", s, cos.Plural(len(e.ranges)), e.ranges)
+}
+
+func IsErrRangeNotSatisfiable(err error) bool {
+	_, ok := err.(*ErrRangeNotSatisfiable)
+	return ok
+}
+
+//
+// more is-error helpers
+//
 
 // nought: not a thing
 func IsErrBucketNought(err error) bool {
@@ -1037,6 +1046,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 		status = http.StatusNotFound
 	} else if IsErrCapExceeded(err) {
 		status = http.StatusInsufficientStorage
+	} else if IsErrRangeNotSatisfiable(err) {
+		status = http.StatusRequestedRangeNotSatisfiable
 	}
 
 	herr.init(r, err, status)

@@ -41,10 +41,6 @@ type (
 	htrange struct {
 		Start, Length int64
 	}
-	errRangeNoOverlap struct {
-		ranges []string // RFC 7233
-		size   int64    // [0, size)
-	}
 
 	// Local unicast IP info
 	localIPv4Info struct {
@@ -254,16 +250,6 @@ func (r htrange) contentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", cos.HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
 }
 
-// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
-// all of the byte-range-spec values is greater than the content size.
-func (e *errRangeNoOverlap) Error() string {
-	msg := fmt.Sprintf("overlap with the content [0, %d)", e.size)
-	if len(e.ranges) == 1 {
-		return fmt.Sprintf("range %q does not %s", e.ranges[0], msg)
-	}
-	return fmt.Sprintf("none of the ranges %v %s", e.ranges, msg)
-}
-
 // ParseMultiRange parses a Range Header string as per RFC 7233.
 // ErrNoOverlap is returned if none of the ranges overlap with the [0, size) content.
 func parseMultiRange(s string, size int64) (ranges []htrange, err error) {
@@ -331,7 +317,7 @@ func parseMultiRange(s string, size int64) (ranges []htrange, err error) {
 	}
 
 	if noOverlap && len(ranges) == 0 {
-		return nil, &errRangeNoOverlap{allRanges, size}
+		return nil, cmn.NewErrRangeNotSatisfiable(allRanges, size)
 	}
 	return ranges, nil
 }

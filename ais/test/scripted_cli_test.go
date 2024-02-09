@@ -61,7 +61,7 @@ func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-get-validate.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
+	tlog.Logf("Running '%s'\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -84,7 +84,7 @@ func TestPrefetchLatestS3UsingScript(t *testing.T) {
 		bucketName = cliBck.Cname("")
 		cmd        = exec.Command("./scripts/s3-prefetch-latest-prefix.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
+	tlog.Logf("Running '%s'\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -111,7 +111,7 @@ func TestPrefetchLatestRemaisUsingScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-prefetch-latest.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
+	tlog.Logf("Running '%s'\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -130,8 +130,7 @@ func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/cp-sync-remais-out-of-band.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
-	tlog.Logln("Note: this may take a while...")
+	tlog.Logf("Running '%s'\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -139,7 +138,10 @@ func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
-// NOTE: not running with remote `cliBck` (because it could take hours)
+// NOTE: not running with an actual remote s3 bucket (could take hours)
+// instead, using aisore S3 API with a temp `ais://` bucket, and with two additional workarounds:
+// 1. MD5
+// 2. "apc.S3Scheme+apc.BckProviderSeparator+bck.Name" (below)
 func TestMultipartUploadLargeFilesScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		Long: true,
@@ -153,20 +155,47 @@ func TestMultipartUploadLargeFilesScript(t *testing.T) {
 
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 
-	// NOTE: need to set MD5 to satisfy `s3cmd` (for details, see docs/s3cmd.md & docs/s3compat.md)
+	// 1. set MD5 to satisfy `s3cmd` (for details, see docs/s3cmd.md & docs/s3compat.md)
 	bprops := &cmn.BpropsToSet{
 		Cksum: &cmn.CksumConfToSet{Type: apc.String(cos.ChecksumMD5)},
 	}
 	tools.CreateBucket(t, proxyURL, bck, bprops, true /*cleanup*/)
 
+	// 2. subst "ais://" with "s3://" to circumvent s3cmd failing with "not a recognized URI"
 	cmd := exec.Command("./scripts/s3-mpt-large-files.sh", tempdir, apc.S3Scheme+apc.BckProviderSeparator+bck.Name,
 		"1",    // number of iterations
 		"true", // generate large files
 		"1",    // number of large files
 	)
 
-	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
-	tlog.Logln("Note: this may take a while...")
+	tlog.Logf("Running '%s' (this may take a while...)\n", cmd.String())
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
+// remais-blob-download.sh
+func TestRemaisBlobDownloadScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long: true,
+	})
+	bck := cmn.Bck{
+		Name:     trand.String(10),
+		Ns:       cmn.Ns{UUID: tools.RemoteCluster.UUID},
+		Provider: apc.AIS,
+	}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	name := bck.Cname("")
+	cmd := exec.Command("./scripts/remais-blob-download.sh",
+		"--bucket", name,
+		"--minsize", "1MB",
+		"--maxsize", "10MB",
+		"--totalsize", "100MB",
+		"--chunksize", "500K",
+		"--numworkers", "5")
+	tlog.Logf("Running '%s' (this may take a while...)\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
