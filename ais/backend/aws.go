@@ -19,6 +19,7 @@ import (
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -640,7 +641,7 @@ func getBucketLocation(svc *s3.Client, bckName string) (region string, err error
 	}
 	region = string(resp.LocationConstraint)
 	if region == "" {
-		region = "us-east-1" // Buckets in region `us-east-1` have a LocationConstraint of null.
+		region = env.AwsDefaultRegion // Buckets in region `us-east-1` have a LocationConstraint of null.
 	}
 	return
 }

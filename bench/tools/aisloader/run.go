@@ -76,6 +76,15 @@ const (
 
 	defaultClusterIP   = "localhost"
 	defaultClusterIPv4 = "127.0.0.1"
+
+	// environment variable to globally override the default 'https://s3.amazonaws.com' endpoint
+	// NOTE: the same can be done by passing a flag to aisloader `-s3endpoint`
+	// (`-s3endpoint` flag will always take precedence)
+	awsEnvS3Endpoint = "S3_ENDPOINT"
+
+	// ditto non-default profile (the default is [default] in ~/.aws/credentials)
+	// same NOTE in re precedence
+	awsEnvConfigProfile = "AWS_PROFILE"
 )
 
 type (
@@ -619,6 +628,9 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 
 // validate command line and finish initialization
 func _init(p *params) (err error) {
+	if s3Endpoint == "" && os.Getenv(awsEnvS3Endpoint) != "" {
+		s3Endpoint = os.Getenv(awsEnvS3Endpoint)
+	}
 	if p.bck.Name != "" {
 		if p.cleanUp.Val && isDirectS3() {
 			return errors.New("direct S3 access via '-s3endpoint': option '-cleanup' is not supported yet")

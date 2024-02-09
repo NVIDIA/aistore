@@ -12,10 +12,12 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -464,6 +466,9 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 }
 
 func initS3Svc() error {
+	if s3Profile == "" && os.Getenv(awsEnvConfigProfile) != "" {
+		s3Profile = os.Getenv(awsEnvConfigProfile)
+	}
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithSharedConfigProfile(s3Profile),
@@ -474,7 +479,9 @@ func initS3Svc() error {
 	if s3Endpoint != "" {
 		cfg.BaseEndpoint = aws.String(s3Endpoint)
 	}
-	cfg.Region = "us-east-1" // NOTE: may be needed
+	if cfg.Region == "" {
+		cfg.Region = env.AwsDefaultRegion // Buckets in region `us-east-1` have a LocationConstraint of null.
+	}
 
 	s3svc = s3.NewFromConfig(cfg)
 	return nil

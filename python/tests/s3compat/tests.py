@@ -50,6 +50,8 @@ from minio.sse import SseCustomerKey
 from minio.time import to_http_header
 from minio.versioningconfig import VersioningConfig
 
+from aistore.sdk.const import AWS_DEFAULT_REGION
+
 _CLIENT = None  # initialized in main().
 _TEST_FILE = None  # initialized in main().
 _LARGE_FILE = None  # initialized in main().
@@ -157,7 +159,9 @@ def test_make_bucket_default_region(log_entry):
 
     log_entry["args"] = {
         "bucket_name": bucket_name,
-        "location": "default value ('us-east-1')",  # Default location
+        "location": "default value ('{}')".format(
+            AWS_DEFAULT_REGION
+        ),  # Default location
     }
 
     # Create a bucket with default bucket location
@@ -204,7 +208,7 @@ def test_negative_make_bucket_invalid_name(log_entry):  # pylint: disable=invali
     bucket_name = _gen_bucket_name()
     # Default location
     log_entry["args"] = {
-        "location": "default value ('us-east-1')",
+        "location": "default value ('{}')".format(AWS_DEFAULT_REGION),
     }
     # Create an array of invalid bucket names to test
     invalid_bucket_name_list = [
@@ -1948,7 +1952,7 @@ def test_remove_bucket(log_entry):
     }
 
     if _IS_AWS:
-        log_entry["args"]["location"] = location = "us-east-1"
+        log_entry["args"]["location"] = location = AWS_DEFAULT_REGION
         _CLIENT.make_bucket(bucket_name, location)
     else:
         _CLIENT.make_bucket(bucket_name)

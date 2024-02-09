@@ -127,3 +127,6 @@ DUIS = (
     " proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
     " Et harum quidem.."
 )
+
+# AWS Constants
+AWS_DEFAULT_REGION = "us-east-1"
