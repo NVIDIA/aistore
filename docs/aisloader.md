@@ -59,6 +59,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -batchsize | `int` | Batch size to list and delete | `100` |
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
 | -bucket | `string` | Bucket name. Bucket will be created if doesn't exist. If empty, aisloader generates a new random bucket name | `""` |
+| -cached | `bool` | list in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
 | -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash`|
 | -cleanup | `bool` | when true, remove bucket upon benchmark termination | `n/a` (required) |
 | -dry-run | `bool` | show the entire set of parameters that aisloader will use when actually running | `false` |

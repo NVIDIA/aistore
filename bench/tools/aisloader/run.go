@@ -143,12 +143,13 @@ type (
 		uniqueGETs    bool
 		skipList      bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
 		verifyHash    bool // verify xxhash during get
-		getConfig     bool // when true, load control plane (read proxy config)
+		getConfig     bool // when true, execute control plane requests (read cluster configuration)
 		jsonFormat    bool
 		stoppable     bool // when true, terminate by Ctrl-C
-		dryRun        bool // when true, print configuration and parameters that aisloader will use at runtime
-		traceHTTP     bool // when true, trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
-		latest        bool // when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
+		dryRun        bool // print configuration and parameters that aisloader will use at runtime
+		traceHTTP     bool // trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+		latest        bool // check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
+		cached        bool // list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")
 	}
 
 	// sts records accumulated puts/gets information.
@@ -287,6 +288,10 @@ func Start(version, buildtime string) (err error) {
 	var created bool
 	if err := setupBucket(runParams, &created); err != nil {
 		return err
+	}
+	if runParams.cached && runParams.bck.IsAIS() {
+		return fmt.Errorf("--cached option (to list \"cached\" objects only) applies to remote buckets (have %s)",
+			runParams.bck.Cname(""))
 	}
 
 	if isDirectS3() {
@@ -594,6 +599,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "when true, trace HTTP latencies") // see httpLatencies
 	f.StringVar(&p.cksumType, "cksum-type", cos.ChecksumXXHash, "cksum type to use for put object requests")
 	f.BoolVar(&p.latest, "latest", false, "when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket")
+	f.BoolVar(&p.cached, "cached", false, "list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")")
 
 	// ETL
 	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
@@ -1162,7 +1168,7 @@ func listObjects() error {
 	case isDirectS3():
 		names, err = s3ListObjects()
 	default:
-		names, err = listObjectNames(runParams.bp, runParams.bck, runParams.subDir)
+		names, err = listObjectNames(runParams.bp, runParams.bck, runParams.subDir, runParams.cached)
 	}
 	if err != nil {
 		return err

@@ -371,11 +371,11 @@ var (
 	}
 	copyAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\") in the cluster",
+		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\") in cluster",
 	}
 	etlAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "transform all objects from a remote bucket including those that are not present (not \"cached\") in the cluster",
+		Usage: "transform all objects from a remote bucket including those that are not present (not \"cached\") in cluster",
 	}
 
 	// obj props
@@ -692,16 +692,16 @@ var (
 	// See also: apc.Flt* enum.
 	headObjPresentFlag = cli.BoolFlag{
 		Name: "check-cached",
-		Usage: "instead of GET execute HEAD(object) to check if the object is present in aistore\n" +
+		Usage: "check whether a given named object is present in cluster\n" +
 			indent1 + "\t(applies only to buckets with remote backend)",
 	}
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "list only those objects from a remote bucket that are present (\"cached\")",
+		Usage: "list only in-cluster objects - only those objects from a remote bucket that are present (\"cached\")",
 	}
 	getObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "get only those objects from a remote bucket that are present (\"cached\") in aistore",
+		Usage: "get only in-cluster objects - only those objects from a remote bucket that are present (\"cached\")",
 	}
 	// when '--all' is used for/by another flag
 	objNotCachedPropsFlag = cli.BoolFlag{
@@ -722,7 +722,7 @@ var (
 	}
 	dontAddRemoteFlag = cli.BoolFlag{
 		Name: "dont-add",
-		Usage: "list remote bucket without adding it to cluster's metadata\n" +
+		Usage: "list remote bucket without adding it to cluster's metadata - e.g.:\n" +
 			indent1 + "\t  - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);\n" +
 			indent1 + "\t  - then, if we ask aistore to list remote buckets: `ais ls s3://abc --all'\n" +
 			indent1 + "\t    the bucket will be added (in effect, it'll be created);\n" +

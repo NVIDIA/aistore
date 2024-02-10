@@ -447,10 +447,14 @@ func listObjCallback(ctx *api.LsoCounter) {
 }
 
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
-func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]string, error) {
+func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string, cached bool) ([]string, error) {
 	msg := &apc.LsoMsg{Prefix: prefix, PageSize: apc.DefaultPageSizeCloud}
 	if bck.IsAIS() || bck.IsRemoteAIS() {
 		msg.PageSize = apc.DefaultPageSizeAIS
+	}
+	// if bck is remote then check for cached flag
+	if cached {
+		msg.Flags |= apc.LsObjCached
 	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
 	objList, err := api.ListObjects(baseParams, bck, msg, args)
