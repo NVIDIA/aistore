@@ -183,9 +183,8 @@ func TestRemaisBlobDownloadScript(t *testing.T) {
 		Long:                  true,
 	})
 	bck := cmn.Bck{
-		Name: trand.String(10),
-		Ns:   cmn.Ns{UUID: tools.RemoteCluster.Alias},
-		// Ns:       cmn.Ns{UUID: tools.RemoteCluster.UUID},
+		Name:     trand.String(10),
+		Ns:       cmn.Ns{UUID: tools.RemoteCluster.Alias},
 		Provider: apc.AIS,
 	}
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)

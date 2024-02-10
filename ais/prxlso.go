@@ -176,6 +176,12 @@ func (b *lsobjBuffer) mergeTargetBuffers() (filled bool) {
 		entries = make(cmn.LsoEntries, 0, totalCnt)
 	)
 	for _, list := range b.leftovers {
+		for i := range list.entries {
+			if list.entries[i] == nil {
+				list.entries = list.entries[:i]
+				break
+			}
+		}
 		entries = append(entries, list.entries...)
 
 		if list.done || len(list.entries) == 0 {
