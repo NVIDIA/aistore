@@ -527,7 +527,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	opts.ValidateCallback = r.validateCb
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
-			nlog.Errorf("%s walk failed, err %v", r, err)
+			r.AddErr(err, 0)
 		}
 	}
 	close(r.walk.pageCh)

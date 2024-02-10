@@ -23,15 +23,6 @@ func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "" && *version != "null"
 }
 
-// from https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
-// "The ETag may or may not be an MD5 digest of the object data. Whether or
-// not it is depends on how the object was created and how it is encrypted..."
-const AwsMultipartDelim = "-"
-
-func IsS3MultipartEtag(etag string) bool {
-	return strings.Contains(etag, AwsMultipartDelim)
-}
-
 // unquote checksum, ETag, and version
 // e.g., https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 func UnquoteCEV(val string) string { return strings.Trim(val, "\"") }

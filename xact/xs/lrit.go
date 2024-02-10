@@ -6,12 +6,9 @@
 package xs
 
 import (
-	"net/http"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -160,6 +157,7 @@ func (r *lriterator) _range(wi lrwi, smap *meta.Smap) error {
 func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
 		err     error
+		errCode int
 		lst     *cmn.LsoResult
 		msg     = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
 		npg     = newNpgCtx(r.bck, msg, noopCb)
@@ -176,22 +174,16 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 			break
 		}
 		if bremote {
-			var errCode int
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
 			errCode, err = core.T.Backend(r.bck).ListObjects(r.bck, msg, lst) // (TODO comment above)
-			if err != nil {
-				freeLsoEntries(lst.Entries)
-				if errCode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
-					debug.Assert(false, err, errCode) // TODO: remove
-					err = cos.NewErrNotFound(nil, err.Error())
-				}
-			}
 		} else {
 			npg.page.Entries = allocLsoEntries()
 			err = npg.nextPageA()
 			lst = &npg.page
 		}
 		if err != nil {
+			nlog.Errorln(core.T.String()+":", err, errCode)
+			freeLsoEntries(lst.Entries)
 			return err
 		}
 		for _, be := range lst.Entries {

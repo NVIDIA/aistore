@@ -17,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -484,7 +483,7 @@ func initS3Svc() error {
 		cfg.BaseEndpoint = aws.String(s3Endpoint)
 	}
 	if cfg.Region == "" {
-		cfg.Region = env.AwsDefaultRegion // Buckets in region `us-east-1` have a LocationConstraint of null.
+		cfg.Region = cmn.AwsDefaultRegion // Buckets in region `us-east-1` have a LocationConstraint of null.
 	}
 
 	s3svc = s3.NewFromConfig(cfg)

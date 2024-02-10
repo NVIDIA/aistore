@@ -285,13 +285,12 @@ func Start(version, buildtime string) (err error) {
 	loggedUserToken = authn.LoadToken(runParams.tokenFile)
 	runParams.bp.Token = loggedUserToken
 	runParams.bp.UA = ua
+
 	var created bool
-	if err := setupBucket(runParams, &created); err != nil {
-		return err
-	}
-	if runParams.cached && runParams.bck.IsAIS() {
-		return fmt.Errorf("--cached option (to list \"cached\" objects only) applies to remote buckets (have %s)",
-			runParams.bck.Cname(""))
+	if !runParams.getConfig {
+		if err := setupBucket(runParams, &created); err != nil {
+			return err
+		}
 	}
 
 	if isDirectS3() {
@@ -975,9 +974,6 @@ func (s *sts) aggregate(other *sts) {
 }
 
 func setupBucket(runParams *params, created *bool) error {
-	if runParams.getConfig {
-		return nil
-	}
 	if strings.Contains(runParams.bck.Name, apc.BckProviderSeparator) {
 		bck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{})
 		if err != nil {
@@ -993,11 +989,25 @@ func setupBucket(runParams *params, created *bool) error {
 		}
 		runParams.bck = bck
 	}
-	if isDirectS3() && apc.ToScheme(runParams.bck.Provider) != apc.S3Scheme {
-		return fmt.Errorf("option --s3endpoint requires s3 bucket (have %s)", runParams.bck)
+
+	const cachedText = "--cached option (to list \"cached\" objects only) "
+
+	if isDirectS3() {
+		if apc.ToScheme(runParams.bck.Provider) != apc.S3Scheme {
+			return fmt.Errorf("option --s3endpoint requires s3 bucket (have %s)", runParams.bck)
+		}
+		if runParams.cached {
+			return errors.New(cachedText + "cannot be used together with --s3endpoint (direct S3 access)")
+		}
+	}
+	if runParams.putPct == 100 && runParams.cached {
+		return errors.New(cachedText + "is incompatible with 100% PUT workload")
 	}
 	if runParams.bck.Provider != apc.AIS {
 		return nil
+	}
+	if runParams.cached && !runParams.bck.IsRemote() {
+		return fmt.Errorf(cachedText+"applies to remote buckets (have %s)", runParams.bck.Cname(""))
 	}
 
 	//

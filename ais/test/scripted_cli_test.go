@@ -179,11 +179,13 @@ func TestMultipartUploadLargeFilesScript(t *testing.T) {
 // remais-blob-download.sh
 func TestRemaisBlobDownloadScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
-		Long: true,
+		RequiresRemoteCluster: true,
+		Long:                  true,
 	})
 	bck := cmn.Bck{
-		Name:     trand.String(10),
-		Ns:       cmn.Ns{UUID: tools.RemoteCluster.UUID},
+		Name: trand.String(10),
+		Ns:   cmn.Ns{UUID: tools.RemoteCluster.Alias},
+		// Ns:       cmn.Ns{UUID: tools.RemoteCluster.UUID},
 		Provider: apc.AIS,
 	}
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
