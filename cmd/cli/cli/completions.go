@@ -762,7 +762,7 @@ func oneClusterCompletions(c *cli.Context) {
 func authNConfigPropList() []string {
 	propList := []string{}
 	emptyCfg := authn.ConfigToUpdate{Server: &authn.ServerConfToSet{}}
-	cmn.IterFields(emptyCfg, func(tag string, field cmn.IterField) (error, bool) {
+	cmn.IterFields(emptyCfg, func(tag string, _ cmn.IterField) (error, bool) {
 		propList = append(propList, tag)
 		return nil, false
 	})

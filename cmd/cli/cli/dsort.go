@@ -471,21 +471,21 @@ func (b *dsortPB) result() dsortResult {
 	}
 }
 
-func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finished bool, errV error) {
+func printMetrics(w io.Writer, jobID string, daemonIDs []string) (aborted, finished bool, errV error) {
 	resp, err := api.MetricsDsort(apiBP, jobID)
 	if err != nil {
 		return false, false, V(err)
 	}
-	if len(daemonIds) > 0 {
+	if len(daemonIDs) > 0 {
 		// Check if targets exist in the metric output.
-		for _, daemonID := range daemonIds {
+		for _, daemonID := range daemonIDs {
 			if _, ok := resp[daemonID]; !ok {
 				return false, false, fmt.Errorf("invalid node id %q ", daemonID)
 			}
 		}
 		// Filter metrics only for requested targets.
 		filterMap := map[string]*dsort.JobInfo{}
-		for _, daemonID := range daemonIds {
+		for _, daemonID := range daemonIDs {
 			filterMap[daemonID] = resp[daemonID]
 		}
 		resp = filterMap
@@ -673,11 +673,11 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	// Show metrics just once.
 	if !refresh && !logging {
 		if usejs || verbose {
-			var daemonIds []string
+			var daemonIDs []string
 			if false { // TODO: revisit
-				daemonIds = append(daemonIds, c.Args().Get(1))
+				daemonIDs = append(daemonIDs, c.Args().Get(1))
 			}
-			if _, _, err := printMetrics(c.App.Writer, id, daemonIds); err != nil {
+			if _, _, err := printMetrics(c.App.Writer, id, daemonIDs); err != nil {
 				return err
 			}
 

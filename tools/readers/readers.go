@@ -356,7 +356,7 @@ func New(p Params, cksumType string) (Reader, error) {
 	case TypeTar:
 		return newTarReader(p.Size, cksumType)
 	default:
-		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
+		return nil, errors.New("unknown memory type for creating inmem reader")
 	}
 }
 

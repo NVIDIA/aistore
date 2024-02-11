@@ -359,7 +359,7 @@ func getDtor(kindOrName string) (string, *Descriptor) {
 
 func (args *ArgsMsg) String() (s string) {
 	if args.ID == "" {
-		s = fmt.Sprintf("x-%s", args.Kind)
+		s = "x-" + args.Kind
 	} else {
 		s = fmt.Sprintf("x-%s[%s]", args.Kind, args.ID)
 	}
@@ -381,7 +381,7 @@ func (args *ArgsMsg) String() (s string) {
 
 func (msg *QueryMsg) String() (s string) {
 	if msg.ID == "" {
-		s = fmt.Sprintf("x-%s", msg.Kind)
+		s = "x-" + msg.Kind
 	} else {
 		s = fmt.Sprintf("x-%s[%s]", msg.Kind, msg.ID)
 	}

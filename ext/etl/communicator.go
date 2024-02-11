@@ -180,7 +180,7 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(n int, err error) { c.boot.xctn.InObjsAdd(0, int64(n)) },
+		ReadCb: func(n int, _ error) { c.boot.xctn.InObjsAdd(0, int64(n)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
@@ -292,7 +292,7 @@ finish:
 	args := cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(n int, err error) { pc.boot.xctn.InObjsAdd(0, int64(n)) },
+		ReadCb: func(n int, _ error) { pc.boot.xctn.InObjsAdd(0, int64(n)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()

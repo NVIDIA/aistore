@@ -95,7 +95,7 @@ func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter boo
 		split []string
 		l     = len(itemsPresent)
 	)
-	if len(path) > 0 && path[0] == '/' {
+	if path != "" && path[0] == '/' {
 		path = path[1:] // remove leading slash
 	}
 	if splitAfter {

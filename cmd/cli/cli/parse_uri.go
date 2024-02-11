@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -128,7 +129,7 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	if err != nil {
 		return
 	} else if bck.IsHTTP() {
-		err = fmt.Errorf("http bucket is not supported as destination")
+		err = errors.New("http bucket is not supported as destination")
 		return
 	}
 	pathSuffix = strings.Trim(pathSuffix, "/")

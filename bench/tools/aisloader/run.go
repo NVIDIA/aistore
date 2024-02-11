@@ -742,7 +742,7 @@ func _init(p *params) (err error) {
 	}
 
 	if p.loaderID == "" {
-		return fmt.Errorf("loaderID can't be empty")
+		return errors.New("loaderID can't be empty")
 	}
 
 	loaderID, parseErr := strconv.ParseUint(p.loaderID, 10, 64)
@@ -762,12 +762,12 @@ func _init(p *params) (err error) {
 		}
 	} else {
 		if p.loaderCnt > 0 && p.loaderIDHashLen > 0 {
-			return fmt.Errorf("loadernum and loaderIDHashLen can't be > 0 at the same time")
+			return errors.New("loadernum and loaderIDHashLen can't be > 0 at the same time")
 		}
 
 		if p.loaderIDHashLen > 0 {
 			if p.loaderIDHashLen == 0 || p.loaderIDHashLen > 63 {
-				return fmt.Errorf("loaderIDHashLen has to be larger than 0 and smaller than 64")
+				return errors.New("loaderIDHashLen has to be larger than 0 and smaller than 64")
 			}
 
 			suffixIDMaskLen = cos.CeilAlign(p.loaderIDHashLen, 4)
@@ -775,10 +775,10 @@ func _init(p *params) (err error) {
 		} else {
 			// p.loaderCnt > 0
 			if parseErr != nil {
-				return fmt.Errorf("loadername has to be a number when using loadernum")
+				return errors.New("loadername has to be a number when using loadernum")
 			}
 			if loaderID > p.loaderCnt {
-				return fmt.Errorf("loaderid has to be smaller than loadernum")
+				return errors.New("loaderid has to be smaller than loadernum")
 			}
 
 			suffixIDMaskLen = loaderMaskFromTotalLoaders(p.loaderCnt)
@@ -789,12 +789,12 @@ func _init(p *params) (err error) {
 	if p.subDir != "" {
 		p.subDir = filepath.Clean(p.subDir)
 		if p.subDir[0] == '/' {
-			return fmt.Errorf("object name prefix can't start with /")
+			return errors.New("object name prefix can't start with /")
 		}
 	}
 
 	if p.putShards > 100000 {
-		return fmt.Errorf("putshards should not exceed 100000")
+		return errors.New("putshards should not exceed 100000")
 	}
 
 	if err := cos.ValidateCksumType(p.cksumType); err != nil {
@@ -802,7 +802,7 @@ func _init(p *params) (err error) {
 	}
 
 	if p.etlName != "" && p.etlSpecPath != "" {
-		return fmt.Errorf("etl and etl-spec flag can't be set both")
+		return errors.New("etl and etl-spec flag can't be set both")
 	}
 
 	if p.etlSpecPath != "" {

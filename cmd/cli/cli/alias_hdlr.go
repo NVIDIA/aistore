@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -192,7 +193,7 @@ func (a *acli) setAliasHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if !validateAlias(alias) {
-		return fmt.Errorf(invalidAlias)
+		return errors.New(invalidAlias)
 	}
 
 	if c.NArg() < 2 {

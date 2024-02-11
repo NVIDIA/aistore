@@ -82,7 +82,7 @@ func ParseSize(size, units string) (int64, error) {
 		return 0, nil
 	}
 	// validation
-	if len(units) > 0 {
+	if units != "" {
 		switch units {
 		case "", UnitsIEC, UnitsSI, UnitsRaw:
 		default:
@@ -112,7 +112,7 @@ func ParseSize(size, units string) (int64, error) {
 		}
 	}
 	// trim suffix and convert
-	if len(suffix) > 0 {
+	if suffix != "" {
 		s = strings.TrimSuffix(s, suffix)
 	}
 	switch {

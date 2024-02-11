@@ -87,7 +87,7 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize the HTTP servers.
-		transformerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		transformerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, err := w.Write(transformData)
 			Expect(err).NotTo(HaveOccurred())
 		}))

@@ -73,7 +73,7 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 	smapVersion := sv
 	bmdVersion := lv
 	return httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			msg := cluMeta{
 				VoteInProgress: false,
 				Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
@@ -91,7 +91,7 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
 	bmdVersion := lv
-	f := func(w http.ResponseWriter, r *http.Request) {
+	f := func(w http.ResponseWriter, _ *http.Request) {
 		cnt++
 		msg := cluMeta{
 			VoteInProgress: cnt == 1,
@@ -111,7 +111,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
 	bmdVersion := lv
-	f := func(w http.ResponseWriter, r *http.Request) {
+	f := func(w http.ResponseWriter, _ *http.Request) {
 		cnt++
 		if cnt > 2 {
 			msg := cluMeta{
@@ -131,7 +131,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 
 // discoverServerAlwaysFailHandler always responds with error
 func discoverServerAlwaysFailHandler(_, _ int64) *httptest.Server {
-	f := func(w http.ResponseWriter, r *http.Request) {
+	f := func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
 	}
 
@@ -141,7 +141,7 @@ func discoverServerAlwaysFailHandler(_, _ int64) *httptest.Server {
 // discoverServerVoteInProgressHandler always responds with vote in progress
 func discoverServerVoteInProgressHandler(_, _ int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			msg := cluMeta{
 				VoteInProgress: true,
 				Smap:           &smapX{Smap: meta.Smap{Version: 12345}},

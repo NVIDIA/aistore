@@ -5,6 +5,7 @@
 package etl
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -76,7 +77,7 @@ func (r *registry) list() []Info {
 
 func CheckSecret(secret string) error {
 	if secret != reqSecret {
-		return fmt.Errorf("unrecognized request source")
+		return errors.New("unrecognized request source")
 	}
 	return nil
 }

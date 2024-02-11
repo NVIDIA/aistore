@@ -5,7 +5,6 @@
 package integration_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -17,7 +16,7 @@ func TestSmoke(t *testing.T) {
 
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		for _, objSize := range objSizes {
-			name := fmt.Sprintf("size:%s", cos.ToSizeIEC(int64(objSize), 0))
+			name := "size:" + cos.ToSizeIEC(int64(objSize), 0)
 			t.Run(name, func(t *testing.T) {
 				m := ioContext{
 					t:        t,

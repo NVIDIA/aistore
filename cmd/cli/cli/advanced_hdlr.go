@@ -152,8 +152,7 @@ func rotateLogs(c *cli.Context) error {
 		if err := api.RotateLogs(apiBP, node.ID()); err != nil {
 			return V(err)
 		}
-		msg := fmt.Sprintf("%s: rotated logs", sname)
-		actionDone(c, msg)
+		actionDone(c, sname+": rotated logs")
 		return nil
 	}
 	// 2. or cluster

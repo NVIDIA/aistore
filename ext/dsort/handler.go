@@ -557,7 +557,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if m.aborted() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.ActDsort))
+		cmn.WriteErrMsg(w, r, apc.ActDsort+" process was aborted")
 		return
 	}
 
@@ -605,7 +605,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if m.aborted() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.ActDsort))
+		cmn.WriteErrMsg(w, r, apc.ActDsort+" process was aborted")
 		return
 	}
 

@@ -6,6 +6,7 @@
 package volume
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -277,7 +278,7 @@ func LoadVMDTest() (*VMD, error) { return loadVMD("", nil) } // test-only
 // config => (temp MPI) => VMD
 func configLoadVMD(tid string, configPaths cos.StrSet) (vmd *VMD, err error) {
 	if len(configPaths) == 0 {
-		err = fmt.Errorf("no fspaths - see README => Configuration and fspaths section in the config.sh")
+		err = errors.New("no fspaths - see README => Configuration and fspaths section in the config.sh")
 		return
 	}
 	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading

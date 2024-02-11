@@ -157,7 +157,7 @@ func GetFilesFromArchBuffer(mime string, buffer bytes.Buffer, extension string) 
 	if err != nil {
 		return nil, err
 	}
-	rcb := func(filename string, reader cos.ReadCloseSizer, hdr any) (bool, error) {
+	rcb := func(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
 		var (
 			buf bytes.Buffer
 			ext = cos.Ext(filename)
@@ -184,7 +184,7 @@ func GetFileInfosFromArchBuffer(buffer bytes.Buffer, mime string) ([]os.FileInfo
 	if err != nil {
 		return nil, err
 	}
-	rcb := func(filename string, reader cos.ReadCloseSizer, hdr any) (bool, error) {
+	rcb := func(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
 		files = append(files, newDummyFile(filename, reader.Size()))
 		reader.Close()
 		return false, nil

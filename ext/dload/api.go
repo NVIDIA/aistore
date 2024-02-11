@@ -320,7 +320,7 @@ func (b *SingleObj) Validate() error {
 		return errors.New("missing 'link' in the request body")
 	}
 	if b.ObjName == "" {
-		return fmt.Errorf("missing 'object_name' in the request body")
+		return errors.New("missing 'object_name' in the request body")
 	}
 	return nil
 }

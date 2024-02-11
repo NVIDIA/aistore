@@ -434,7 +434,7 @@ func startNode(cmd string, args []string, asPrimary bool) (int, error) {
 	if asPrimary {
 		// Sets the environment variable to start as primary
 		environ := os.Environ()
-		environ = append(environ, fmt.Sprintf("%s=true", env.AIS.IsPrimary))
+		environ = append(environ, env.AIS.IsPrimary+"=true")
 		ncmd.Env = environ
 	}
 	if err := ncmd.Start(); err != nil {
@@ -552,7 +552,7 @@ func getProcess(port string) (pid int, cmd string, args []string, err error) {
 	line := strings.Split(string(output), "\n")[1]
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
-		return 0, "", nil, fmt.Errorf("no returned fields")
+		return 0, "", nil, errors.New("no returned fields")
 	}
 
 	return pid, fields[0], fields[1:], nil
@@ -843,7 +843,7 @@ func _removeNodeFromSmap(proxyURL, sid string, timeout time.Duration) error {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
 	if node != nil && smap.IsPrimary(node) {
-		return fmt.Errorf("unregistering primary proxy is not allowed")
+		return errors.New("unregistering primary proxy is not allowed")
 	}
 	tlog.Logf("Remove %s from %s\n", node.StringEx(), smap)
 

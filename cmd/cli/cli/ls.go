@@ -257,7 +257,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	// when prefix crosses shard boundary
-	if external, internal := splitPrefixShardBoundary(prefix); len(internal) > 0 {
+	if external, internal := splitPrefixShardBoundary(prefix); internal != "" {
 		origPrefix := prefix
 		prefix = external
 		lstFilter._add(func(obj *cmn.LsoEntry) bool { return strings.HasPrefix(obj.Name, origPrefix) })

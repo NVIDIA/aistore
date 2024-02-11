@@ -76,7 +76,7 @@ func (pq ParsedQuantity) String() string {
 	case QuantityBytes:
 		return ToSizeIEC(int64(pq.Value), 2)
 	default:
-		AssertMsg(false, fmt.Sprintf("Unknown quantity type: %s", pq.Type))
+		AssertMsg(false, "Unknown quantity type: "+pq.Type)
 		return ""
 	}
 }

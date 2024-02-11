@@ -342,7 +342,7 @@ func (recm *RecordManager) ExtractionPaths() *sync.Map {
 
 func (recm *RecordManager) Cleanup() {
 	recm.Records.Drain()
-	recm.extractionPaths.Range(func(k, v any) bool {
+	recm.extractionPaths.Range(func(k, _ any) bool {
 		if err := fs.RemoveAll(k.(string)); err != nil {
 			nlog.Errorf("could not remove extraction path (%v) from previous run, err: %v", k, err)
 		}

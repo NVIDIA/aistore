@@ -545,7 +545,7 @@ func (t *target) errURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := r.URL.Path
-	if len(path) > 0 && path[0] == '/' {
+	if path != "" && path[0] == '/' {
 		path = path[1:]
 	}
 	split := strings.Split(path, "/")
@@ -922,7 +922,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
-		if xid, err = t.blobdl(lom, &args); err == nil && len(xid) > 0 {
+		if xid, err = t.blobdl(lom, &args); err == nil && xid != "" {
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 			// lom is eventually freed by x-blob

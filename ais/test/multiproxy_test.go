@@ -817,7 +817,7 @@ loop:
 		default:
 		}
 
-		postKill := func(smap *meta.Smap, newPrimary, _ *meta.Snode) {
+		postKill := func(_ *meta.Smap, newPrimary, _ *meta.Snode) {
 			// let the workers go to the dying primary for a little while longer to generate errored requests
 			time.Sleep(time.Second)
 			for _, ch := range proxyurlchs {

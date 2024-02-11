@@ -42,9 +42,9 @@ func (f *DurationFlagVar) Set(s string) (err error) {
 	return err
 }
 
-//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func (f DurationFlagVar) String() string {
-	return f.Value.String() // compare with orig. DurationFlag.String()
+	// compare with orig. DurationFlag.String()
+	return f.Value.String()
 }
 
 //////////////////
@@ -63,7 +63,6 @@ func (f DurationFlag) ApplyWithError(set *flag.FlagSet) error {
 	return nil
 }
 
-//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func (f DurationFlag) String() string {
 	// compare with DurationFlagVar.String()
 	s := cli.FlagStringer(f)

@@ -1198,7 +1198,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 	freeBcastRes(results)
 
-	if len(xargs.ID) > 0 {
+	if xargs.ID != "" {
 		smap := p.owner.smap.get()
 		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
 		p.ic.registerEqual(regIC{smap: smap, nl: nl})

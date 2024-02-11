@@ -6,6 +6,7 @@
 package cmn
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -260,11 +261,11 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	switch provider {
 	case apc.HDFS:
 		if c.HDFS.RefDirectory == "" {
-			return fmt.Errorf("reference directory must be set for a bucket with HDFS provider")
+			return errors.New("reference directory must be set for a bucket with HDFS provider")
 		}
 	case apc.HTTP:
 		if c.HTTP.OrigURLBck == "" {
-			return fmt.Errorf("original bucket URL must be set for a bucket with HTTP provider")
+			return errors.New("original bucket URL must be set for a bucket with HTTP provider")
 		}
 	}
 	return nil

@@ -243,7 +243,7 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 					xid, locObjs, outObjs, inObjs, totalObj)
 				locBytes, outBytes, inBytes := xs.ByteCounts(xid)
 				bps := float64(locBytes+outBytes) / time.Since(xactStart).Seconds()
-				bpsStr := fmt.Sprintf("%s/s", cos.ToSizeIEC(int64(bps), 2))
+				bpsStr := cos.ToSizeIEC(int64(bps), 2) + "/s"
 				tlog.Logf("ETL[%s] progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps\n",
 					xid, locBytes, outBytes, inBytes, bpsStr)
 			case <-stopCh.Listen():

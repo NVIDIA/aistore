@@ -154,7 +154,7 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 // _localIP takes a list of local IPv4s and returns the best fit for a daemon to listen on it
 func _localIP(addrList []*localIPv4Info) (ip net.IP, err error) {
 	if len(addrList) == 0 {
-		return nil, fmt.Errorf("no addresses to choose from")
+		return nil, errors.New("no addresses to choose from")
 	}
 	if len(addrList) == 1 {
 		nlog.Infof("Found only one IPv4: %s, MTU %d", addrList[0].ipv4, addrList[0].mtu)
@@ -189,7 +189,7 @@ func multihome(configuredIPv4s string) (pub string, extra []string) {
 	pub, extra = strings.TrimSpace(lst[0]), lst[1:]
 	for i := range extra {
 		extra[i] = strings.TrimSpace(extra[i])
-		cos.ExitAssertLog(len(extra[i]) > 0, "invalid format (empty value):", configuredIPv4s)
+		cos.ExitAssertLog(extra[i] != "", "invalid format (empty value):", configuredIPv4s)
 		cos.ExitAssertLog(extra[i] != pub, "duplicated addr or hostname:", configuredIPv4s)
 		for j := 0; j < i; j++ {
 			cos.ExitAssertLog(extra[i] != extra[j], "duplicated addr or hostname:", configuredIPv4s)
@@ -345,7 +345,7 @@ func cleanupConfigDir(name string, keepInitialConfig bool) {
 		cos.RemoveFile(daemon.cli.localConfigPath)
 	}
 	config := cmn.GCO.Get()
-	filepath.Walk(config.ConfigDir, func(path string, finfo os.FileInfo, err error) error {
+	filepath.Walk(config.ConfigDir, func(path string, finfo os.FileInfo, _ error) error {
 		if strings.HasPrefix(finfo.Name(), ".ais.") {
 			if err := cos.RemoveFile(path); err != nil {
 				nlog.Errorf("%s: failed to cleanup %q, err: %v", name, path, err)

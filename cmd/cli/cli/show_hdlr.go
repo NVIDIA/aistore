@@ -879,7 +879,7 @@ For details and usage examples, see: docs/cli/config.md`
 				ra.UUID, ra.URL, ra.Alias, ra.Smap.Primary, ra.Smap.Version, ra.Smap.CountTargets(), uptime)
 		} else {
 			url := ra.URL
-			if len(url) > 0 && url[0] == '[' && !strings.Contains(url, " ") {
+			if url != "" && url[0] == '[' && !strings.Contains(url, " ") {
 				url = strings.Replace(url, "[", "", 1)
 				url = strings.Replace(url, "]", "", 1)
 			}

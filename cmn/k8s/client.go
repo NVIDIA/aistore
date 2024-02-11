@@ -85,7 +85,7 @@ func _namespace() (namespace string) {
 	}
 	// finally, last resort kludge
 	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
-		if namespace = strings.TrimSpace(string(ns)); len(namespace) > 0 {
+		if namespace = strings.TrimSpace(string(ns)); namespace != "" {
 			return
 		}
 	}

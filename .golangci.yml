@@ -28,6 +28,7 @@ linters:
     - prealloc
     - protogetter
     - reassign
+    - spancheck
     - staticcheck
     - testifylint
     - testpackage
@@ -117,6 +118,8 @@ linters-settings:
       - name: unused-parameter
       - name: unused-receiver
       - name: waitgroup-by-value
+  gci:
+    skip-generated: true
   govet:
     enable-all: true
     disable:
@@ -149,6 +152,18 @@ linters-settings:
     # Default is to use a neutral variety of English.
     # Setting locale to US will correct the British spelling of 'colour' to 'color'.
     locale: US
+  spancheck:
+    # Checks to enable.
+    # Options include:
+    # - `end`: check that `span.End()` is called
+    # - `record-error`: check that `span.RecordError(err)` is called when an error is returned
+    # - `set-status`: check that `span.SetStatus(codes.Error, msg)` is called when an error is returned
+    # Default: ["end"]
+    checks:
+      - end
+      - record-error
+      - set-status
+
 
 issues:
   # use default exclude rules

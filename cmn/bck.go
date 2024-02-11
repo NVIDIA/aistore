@@ -112,7 +112,7 @@ func ParseNsUname(s string) (n Ns) {
 	if s == NsGlobalUname {
 		return NsGlobal // to speedup the common case (here and elsewhere)
 	}
-	if len(s) > 0 && s[0] == apc.NsUUIDPrefix {
+	if s != "" && s[0] == apc.NsUUIDPrefix {
 		s = s[1:]
 	}
 	idx := strings.IndexByte(s, apc.NsNamePrefix)

@@ -6,6 +6,7 @@ package mpather_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -42,7 +43,7 @@ func TestJoggerGroup(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *core.LOM, buf []byte) error {
+		VisitObj: func(_ *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
 			return nil
@@ -180,9 +181,9 @@ func TestJoggerGroupError(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *core.LOM, buf []byte) error {
+		VisitObj: func(_ *core.LOM, _ []byte) error {
 			counter.Inc()
-			return fmt.Errorf("oops")
+			return errors.New("oops")
 		},
 	}
 	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
@@ -227,13 +228,13 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *core.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, _ []byte) error {
 			cnt := counters[lom.Mountpath().Path].Inc()
 
 			// Fail only once, on one mpath.
 			if cnt == failAt && failed.CAS(false, true) {
 				failOnMpath = lom.Mountpath()
-				return fmt.Errorf("oops")
+				return errors.New("oops")
 			}
 			return nil
 		},
@@ -282,7 +283,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: cts,
-		VisitObj: func(lom *core.LOM, buf []byte) error {
+		VisitObj: func(_ *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counters[fs.ObjectType].Inc()
 			return nil

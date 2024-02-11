@@ -214,7 +214,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 
 func (rp *reverseProxy) init() {
 	rp.cloud = &httputil.ReverseProxy{
-		Director:  func(r *http.Request) {},
+		Director:  func(_ *http.Request) {},
 		Transport: rpTransport(cmn.GCO.Get()),
 	}
 }

@@ -33,7 +33,7 @@ func TestWorkerGroup(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	wg := mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
-		Callback: func(lom *core.LOM, buf []byte) {
+		Callback: func(_ *core.LOM, _ []byte) {
 			counter.Inc()
 		},
 		QueueSize: 10,

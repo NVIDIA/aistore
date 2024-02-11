@@ -111,12 +111,12 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 				eowner.putPersist(etlMD, nil)
 			})
 
-			It(fmt.Sprintf("should correctly load etlMD for %s", node), func() {
+			It("should correctly load etlMD for "+node, func() {
 				eowner.init()
 				Expect(eowner.Get()).To(Equal(&etlMD.MD))
 			})
 
-			It(fmt.Sprintf("should save and load etlMD using jsp methods for %s", node), func() {
+			It("should save and load etlMD using jsp methods for "+node, func() {
 				eowner.init()
 				etlMD := eowner.get()
 				for _, signature := range []bool{false, true} {
@@ -153,7 +153,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 				}
 			})
 
-			It(fmt.Sprintf("should correctly detect etlMD corruption %s", node), func() {
+			It("should correctly detect etlMD corruption "+node, func() {
 				etlMDFullPath := filepath.Join(mpath, fname.Emd)
 				f, err := os.OpenFile(etlMDFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())

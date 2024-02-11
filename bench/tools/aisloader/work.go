@@ -6,6 +6,7 @@
 package aisloader
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -343,7 +344,7 @@ func _genObjName() (string, error) {
 
 func newGetWorkOrder() (*workOrder, error) {
 	if bucketObjsNames.Len() == 0 {
-		return nil, fmt.Errorf("no objects in bucket")
+		return nil, errors.New("no objects in bucket")
 	}
 
 	getPending++

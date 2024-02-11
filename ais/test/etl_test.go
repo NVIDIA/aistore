@@ -650,7 +650,7 @@ def transform(input_bytes: bytes) -> bytes:
 
 					testETLObject(t, test.etlName, "", "", func(r io.Reader) io.Reader {
 						return r // TODO: Write function to transform input to md5.
-					}, func(f1, f2 string) (bool, error) {
+					}, func(_, _ string) (bool, error) {
 						return true, nil // TODO: Write function to compare output from md5.
 					})
 				case "etl_bucket":

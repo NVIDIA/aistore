@@ -113,7 +113,7 @@ func newAborter(name string) *Aborter {
 }
 
 func (e *Aborter) String() string {
-	return fmt.Sprintf("etl-aborter-%s", e.name)
+	return "etl-aborter-" + e.name
 }
 
 func (e *Aborter) ListenSmapChanged() {

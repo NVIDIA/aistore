@@ -99,7 +99,7 @@ func TestMain(t *testing.M) {
 }
 
 func Example_headers() {
-	f := func(w http.ResponseWriter, r *http.Request) {
+	f := func(_ http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			panic(err)

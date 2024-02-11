@@ -556,7 +556,7 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 }
 
 func (e *ErrAborted) Error() (s string) {
-	s = fmt.Sprintf("%s aborted", e.what)
+	s = e.what + " aborted"
 	if e.err != nil {
 		s = fmt.Sprintf("%s, err: %v", s, e.err)
 	}
@@ -720,7 +720,7 @@ func NewErrXactUsePrev(xaction string) *ErrXactUsePrev {
 }
 
 func (e *ErrXactUsePrev) Error() string {
-	return fmt.Sprintf("%s is already running - not starting", e.xaction)
+	return e.xaction + "is already running - not starting"
 }
 
 func IsErrXactUsePrev(err error) bool {

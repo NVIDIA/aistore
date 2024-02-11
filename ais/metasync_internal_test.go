@@ -6,7 +6,7 @@ package ais
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -268,7 +268,7 @@ func delayedOk(http.ResponseWriter, *http.Request, int) (int, error) {
 // failFirst rejects the first sync call, accept all other calls
 func failFirst(_ http.ResponseWriter, _ *http.Request, cnt int) (int, error) {
 	if cnt == 1 {
-		return http.StatusForbidden, fmt.Errorf("fail first call")
+		return http.StatusForbidden, errors.New("fail first call")
 	}
 	return 0, nil
 }
@@ -467,7 +467,7 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 	addrInfo.Init("http", "127.0.0.1", "53538")
 
 	// handler for /v1/metasync
-	http.HandleFunc(apc.URLPathMetasync.S, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(apc.URLPathMetasync.S, func(_ http.ResponseWriter, _ *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 
@@ -691,7 +691,7 @@ func TestMetasyncMembership(t *testing.T) {
 		}(&wg)
 
 		var cnt atomic.Int32
-		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			cnt.Add(1)
 			http.Error(w, "i don't know how to deal with you", http.StatusNotAcceptable)
 		}))
@@ -734,7 +734,7 @@ func TestMetasyncMembership(t *testing.T) {
 	}(&wg)
 
 	ch := make(chan struct{}, 10)
-	f := func(w http.ResponseWriter, r *http.Request) {
+	f := func(_ http.ResponseWriter, _ *http.Request) {
 		ch <- struct{}{}
 	}
 
@@ -824,7 +824,7 @@ func TestMetasyncReceive(t *testing.T) {
 		}(&wg)
 
 		chProxy := make(chan msPayload, 10)
-		fProxy := func(w http.ResponseWriter, r *http.Request) {
+		fProxy := func(_ http.ResponseWriter, r *http.Request) {
 			d := make(msPayload)
 			err := d.unmarshal(r.Body, "")
 			cos.AssertNoErr(err)

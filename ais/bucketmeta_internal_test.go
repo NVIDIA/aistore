@@ -83,12 +83,12 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				bowner.putPersist(bmd, nil)
 			})
 
-			It(fmt.Sprintf("should correctly load bmd for %s", node), func() {
+			It("should correctly load bmd for "+node, func() {
 				bowner.init()
 				Expect(bowner.Get()).To(Equal(&bmd.BMD))
 			})
 
-			It(fmt.Sprintf("should save and load bmd using jsp methods for %s", node), func() {
+			It("should save and load bmd using jsp methods for "+node, func() {
 				bowner.init()
 				bmd := bowner.get()
 				for _, signature := range []bool{false, true} {
@@ -120,7 +120,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				}
 			})
 
-			It(fmt.Sprintf("should correctly detect bmd corruption %s", node), func() {
+			It("should correctly detect bmd corruption "+node, func() {
 				bmdFullPath := filepath.Join(mpath, fname.Bmd)
 				f, err := os.OpenFile(bmdFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())

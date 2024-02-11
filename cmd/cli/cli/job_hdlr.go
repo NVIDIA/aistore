@@ -283,7 +283,7 @@ outer:
 		// add generic start handler on the fly
 		cmd := cli.Command{
 			Name:   xname,
-			Usage:  fmt.Sprintf("start %s", xname),
+			Usage:  "start " + xname,
 			Flags:  startCommonFlags,
 			Action: startXactionHandler,
 		}
@@ -867,7 +867,7 @@ func stopXactionKindOrAll(c *cli.Context, xactKind, xname string, bck cmn.Bck) e
 func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	var sb string
 	if !bck.IsQuery() {
-		sb = fmt.Sprintf(", %s", bck.Cname(""))
+		sb = ", " + bck.Cname("")
 	}
 	switch {
 	case xactKind != "" && xactID != "":
@@ -890,7 +890,7 @@ func stopDownloadRegex(c *cli.Context, regex string) error {
 	var cnt int
 	for _, dl := range dlList {
 		if err = api.AbortDownload(apiBP, dl.ID); err == nil {
-			actionDone(c, fmt.Sprintf("Stopped download job %s", dl.ID))
+			actionDone(c, "Stopped download job "+dl.ID)
 			cnt++
 		} else {
 			actionWarn(c, fmt.Sprintf("failed to stop download job %q: %v", dl.ID, err))
@@ -922,7 +922,7 @@ func stopDsortRegex(c *cli.Context, regex string) error {
 	var cnt int
 	for _, dsort := range dsortLst {
 		if err = api.AbortDsort(apiBP, dsort.ID); err == nil {
-			actionDone(c, fmt.Sprintf("Stopped dsort job %s", dsort.ID))
+			actionDone(c, "Stopped dsort job "+dsort.ID)
 			cnt++
 		} else {
 			actionWarn(c, fmt.Sprintf("failed to stop dsort job %q: %v", dsort.ID, err))

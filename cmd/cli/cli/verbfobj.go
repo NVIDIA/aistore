@@ -7,6 +7,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -65,7 +66,11 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 	var cptn string
 	cptn += fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
 	cptn += ndir2tag(ndir, recurs)
-	cptn += fmt.Sprintf(" => %s", wop.dest())
+	var arrowCaptionBuilder strings.Builder
+	arrowCaptionBuilder.WriteString(cptn)
+	arrowCaptionBuilder.WriteString(" => ")
+	arrowCaptionBuilder.WriteString(wop.dest())
+	cptn += arrowCaptionBuilder.String()
 
 	var (
 		totalSize, extSizes = groupByExt(fobjs)
@@ -510,7 +515,7 @@ func cksumToCompute(c *cli.Context, bck cmn.Bck) (*cos.Cksum, error) {
 	// otherwise, one of the supported iff requested
 	cksums := altCksumToComp(c)
 	if len(cksums) > 1 {
-		return nil, fmt.Errorf("at most one checksum flag can be set (multi-checksum is not supported yet)")
+		return nil, errors.New("at most one checksum flag can be set (multi-checksum is not supported yet)")
 	}
 	if len(cksums) == 0 {
 		return nil, nil

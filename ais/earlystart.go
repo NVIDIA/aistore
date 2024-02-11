@@ -386,7 +386,7 @@ func (p *proxy) _cluConfig(uuid string) (config *globalConfig, err error) {
 	}
 	// Create version 1 and set primary URL.
 	config, err = p.owner.config.modify(&configModifier{
-		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+		pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
 			debug.Assert(clone.version() == 0)
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
 			clone.UUID = uuid
@@ -835,7 +835,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 	if after.Config != before.Config {
 		var err error
 		after.Config, err = p.owner.config.modify(&configModifier{
-			pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+			pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
 				*clone = *after.Config
 				updated = true
 				return
@@ -872,7 +872,7 @@ ret:
 	clone.Pmap[p.SID()] = p.si
 	clone.Version += 100
 	after.Config, err = p.owner.config.modify(&configModifier{
-		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
+		pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
 			clone.Version++
 			updated = true

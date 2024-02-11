@@ -346,7 +346,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
-	src := fmt.Sprintf("GET %s", bck.Cname(objName))
+	src := "GET " + bck.Cname(objName)
 	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 
 	resp.Body.Close()
@@ -385,7 +385,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, offset, lengt
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 
-	src := fmt.Sprintf("GET %s", bck.Cname(objName))
+	src := "GET " + bck.Cname(objName)
 	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 	if err != nil {
 		return 0, httpLatencies{}, err

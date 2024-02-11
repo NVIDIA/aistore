@@ -5,6 +5,7 @@
 package docker
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -147,7 +148,7 @@ func RemoveMpathDir(c int, mpathFQN string) (err error) {
 
 func _exec(containerName string, args ...string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("not enough arguments to execute a command")
+		return errors.New("not enough arguments to execute a command")
 	}
 	temp := append([]string{"docker", "exec", containerName}, args...)
 	cmd := exec.Command(temp[0], temp[1:]...) //nolint:gosec // used only in tests

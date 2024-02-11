@@ -868,7 +868,7 @@ func (c *BackendConf) Validate() (err error) {
 				return fmt.Errorf("invalid cloud specification: %v", err)
 			}
 			if len(hdfsConf.Addresses) == 0 {
-				return fmt.Errorf("no addresses provided to HDFS NameNode")
+				return errors.New("no addresses provided to HDFS NameNode")
 			}
 
 			// Check connectivity and filter out non-reachable addresses.
@@ -889,7 +889,7 @@ func (c *BackendConf) Validate() (err error) {
 
 			// Re-check if there is any address reachable.
 			if len(hdfsConf.Addresses) == 0 {
-				return fmt.Errorf("no address provided to HDFS NameNode is reachable")
+				return errors.New("no address provided to HDFS NameNode is reachable")
 			}
 
 			c.Conf[provider] = hdfsConf
@@ -970,7 +970,7 @@ func (c *BackendConf) EqualRemAIS(o *BackendConf, sname string) bool {
 
 func (c BackendConfAIS) String() (s string) {
 	for a, urls := range c {
-		if len(s) > 0 {
+		if s != "" {
 			s += "; "
 		}
 		s += fmt.Sprintf("[%s => %v]", a, urls)
@@ -988,10 +988,10 @@ func (c *DiskConf) Validate() (err error) {
 		return fmt.Errorf("invalid (disk_util_lwm, disk_util_hwm, disk_util_maxwm) config %+v", c)
 	}
 	if c.IostatTimeLong <= 0 {
-		return fmt.Errorf("disk.iostat_time_long is zero")
+		return errors.New("disk.iostat_time_long is zero")
 	}
 	if c.IostatTimeShort <= 0 {
-		return fmt.Errorf("disk.iostat_time_short is zero")
+		return errors.New("disk.iostat_time_short is zero")
 	}
 	if c.IostatTimeLong < c.IostatTimeShort {
 		return fmt.Errorf("disk.iostat_time_long %v shorter than disk.iostat_time_short %v",
@@ -1666,7 +1666,7 @@ func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
 	}
 
 	if !anyExists {
-		return fmt.Errorf("no properties to update")
+		return errors.New("no properties to update")
 	}
 	return nil
 }

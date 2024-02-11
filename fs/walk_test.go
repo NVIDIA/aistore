@@ -85,7 +85,7 @@ func TestWalkBck(t *testing.T) {
 				WalkOpts: fs.WalkOpts{
 					Bck: bck,
 					CTs: []string{fs.ObjectType},
-					Callback: func(fqn string, de fs.DirEntry) error {
+					Callback: func(fqn string, _ fs.DirEntry) error {
 						parsedFQN, err := fs.ParseFQN(fqn)
 						tassert.CheckError(t, err)
 						objs = append(objs, parsedFQN.ObjName)
@@ -164,7 +164,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		WalkOpts: fs.WalkOpts{
 			Bck: bck,
 			CTs: []string{fs.ObjectType},
-			Callback: func(fqn string, de fs.DirEntry) error {
+			Callback: func(fqn string, _ fs.DirEntry) error {
 				fqns = append(fqns, fqn)
 				return nil
 			},
