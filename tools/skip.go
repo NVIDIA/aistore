@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -23,9 +24,11 @@ type SkipTestArgs struct {
 	MinMountpaths         int
 	RequiresRemoteCluster bool
 	RequiresAuth          bool
+	RequiresTLS           bool
 	Long                  bool
 	RemoteBck             bool
 	CloudBck              bool
+	RequiredCloudProvider string
 	K8s                   bool
 	Local                 bool
 }
@@ -49,6 +52,9 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	if args.RequiresAuth && LoggedUserToken == "" {
 		tb.Skipf("%s requires authentication token", tb.Name())
 	}
+	if args.RequiresTLS && !cos.IsHTTPS(proxyURLReadOnly) {
+		tb.Skipf("%s requires TLS cluster deployment", tb.Name())
+	}
 	if args.Long && testing.Short() {
 		tb.Skipf(fmtSkippingShort, tb.Name())
 	}
@@ -58,10 +64,12 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 			tb.Skipf("%s requires a remote bucket (have %q)", tb.Name(), args.Bck)
 		}
 	}
-	if args.CloudBck {
+	if args.CloudBck || args.RequiredCloudProvider != "" {
 		proxyURL := GetPrimaryURL()
 		if !isCloudBucket(tb, proxyURL, args.Bck) {
 			tb.Skipf("%s requires a cloud bucket", tb.Name())
+		} else if args.RequiredCloudProvider != args.Bck.Provider {
+			tb.Skipf("%s requires a cloud bucket with %s provider", tb.Name(), args.RequiredCloudProvider)
 		}
 	}
 
