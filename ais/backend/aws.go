@@ -382,13 +382,16 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 		obj, err = svc.GetObject(ctx, &input)
 		if err != nil {
 			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-			return
+			if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+				res.Err = cmn.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+			}
+			return res
 		}
 	} else {
 		obj, err = svc.GetObject(ctx, &input)
 		if err != nil {
 			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-			return
+			return res
 		}
 		// custom metadata
 		lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)

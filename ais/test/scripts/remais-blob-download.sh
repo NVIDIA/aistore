@@ -12,9 +12,9 @@
 #  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
 #
 ## Examples:
-#  $./remais-blob-download.sh --bucket ais://@remais/abc --maxsize=10mb --totalsize=1G
+#  $./remais-blob-download.sh --bucket ais://@remais/abc --maxsize 10mb --totalsize 1G
 #
-#  $./remais-blob-download.sh --bucket ais://@remais/abc --numworkers=5 --chunksize=500kb
+#  $./remais-blob-download.sh --bucket ais://@remais/abc --numworkers 5 --chunksize 500kb
 #################################################################################################
 
 if ! [ -x "$(command -v ais)" ]; then

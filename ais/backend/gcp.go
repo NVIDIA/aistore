@@ -329,17 +329,20 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 	attrs, res.Err = o.Attrs(ctx)
 	if res.Err != nil {
 		res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
-		return
+		return res
 	}
 	if length > 0 {
 		rc, res.Err = o.NewRangeReader(ctx, offset, length)
 		if res.Err != nil {
-			return
+			if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+				res.Err = cmn.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+			}
+			return res
 		}
 	} else {
 		rc, res.Err = o.NewReader(ctx)
 		if res.Err != nil {
-			return
+			return res
 		}
 		// custom metadata
 		lom.SetCustomKey(cmn.SourceObjMD, apc.GCP)

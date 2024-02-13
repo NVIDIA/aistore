@@ -94,11 +94,9 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 }
 
 func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact, owt cmn.OWT) (errCode int, err error) {
-	debug.Func(func() {
-		size := lom.SizeBytes(true)
-		finfo, err := os.Stat(workFQN)
-		debug.Assertf(err == nil && finfo.Size() == size, "err=%v, finfo=%d, size=%d", err, finfo.Size(), size)
-	})
+	if err = cos.Stat(workFQN); err != nil {
+		return
+	}
 	poi := allocPOI()
 	{
 		poi.t = t

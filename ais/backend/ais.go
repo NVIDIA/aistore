@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sync"
 	"time"
@@ -90,6 +91,9 @@ func extractErrCode(e error, uuid string) (int, error) {
 	herr := cmn.Err2HTTPErr(e)
 	if herr == nil {
 		return http.StatusInternalServerError, e
+	}
+	if herr.Status == http.StatusRequestedRangeNotSatisfiable {
+		return http.StatusRequestedRangeNotSatisfiable, cmn.NewErrRangeNotSatisfiable(herr, nil, 0)
 	}
 	if uuid != "" {
 		msg := herr.Message
@@ -574,7 +578,10 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *core.LOM, offset, length i
 	// reader
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
-		args = &api.GetArgs{Header: http.Header{cos.HdrRange: []string{rng}}}
+		args = &api.GetArgs{
+			Header: http.Header{cos.HdrRange: []string{rng}},
+			Query:  url.Values{apc.QparamSilent: []string{"true"}},
+		}
 	} else {
 		if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent, true /*silent*/); res.Err != nil {
 			res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)

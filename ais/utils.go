@@ -317,7 +317,7 @@ func parseMultiRange(s string, size int64) (ranges []htrange, err error) {
 	}
 
 	if noOverlap && len(ranges) == 0 {
-		return nil, cmn.NewErrRangeNotSatisfiable(allRanges, size)
+		return nil, cmn.NewErrRangeNotSatisfiable(nil, allRanges, size)
 	}
 	return ranges, nil
 }

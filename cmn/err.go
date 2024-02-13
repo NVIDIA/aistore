@@ -198,6 +198,7 @@ type (
 		bck *Bck
 	}
 	ErrRangeNotSatisfiable struct {
+		err    error    // original (backend reported) error
 		ranges []string // RFC 7233
 		size   int64    // [0, size)
 	}
@@ -372,7 +373,7 @@ func (e *ErrBusy) Error() string {
 	if e.detail != "" {
 		s = " (" + e.detail + ")"
 	}
-	return fmt.Sprintf("%s %q is currently busy%s, please try again in a few seconds or minutes", e.what, e.name, s)
+	return fmt.Sprintf("%s %q is currently busy%s, please try again", e.what, e.name, s)
 }
 
 // errAccessDenied & ErrBucketAccessDenied
@@ -768,13 +769,16 @@ func (e *ErrXactTgtInMaint) Error() string {
 // ErrRangeNotSatisfiable
 // http.StatusRequestedRangeNotSatisfiable = 416 // RFC 9110, 15.5.17
 
-func NewErrRangeNotSatisfiable(ranges []string, size int64) *ErrRangeNotSatisfiable {
-	return &ErrRangeNotSatisfiable{ranges, size}
+func NewErrRangeNotSatisfiable(err error, ranges []string, size int64) *ErrRangeNotSatisfiable {
+	return &ErrRangeNotSatisfiable{err, ranges, size}
 }
 
 func (e *ErrRangeNotSatisfiable) Error() string {
-	s := "object size = " + strconv.FormatInt(e.size, 10)
-	return fmt.Sprintf("%s, range%s %v not satisfiable", s, cos.Plural(len(e.ranges)), e.ranges)
+	if e.err == nil {
+		s := "object size = " + strconv.FormatInt(e.size, 10)
+		return fmt.Sprintf("%s, range%s %v not satisfiable", s, cos.Plural(len(e.ranges)), e.ranges)
+	}
+	return e.err.Error()
 }
 
 func IsErrRangeNotSatisfiable(err error) bool {

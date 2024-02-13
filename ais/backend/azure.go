@@ -413,18 +413,21 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset
 		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": get blob props]", cloudBck.Cname(lom.ObjName),
 			nil, respProps.StatusCode())
 		res.ErrCode = respProps.StatusCode()
-		return
+		return res
 	}
-	// (0, 0) range: whole object
+	// (0, 0) range indicates "whole object"
 	resp, err := blobURL.Download(ctx, offset, length, azblob.BlobAccessConditions{}, false, azKeyOptions)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return
+		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
+			res.Err = cmn.NewErrRangeNotSatisfiable(res.Err, nil, 0)
+		}
+		return res
 	}
-	if resp.StatusCode() >= http.StatusBadRequest {
-		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": GET]", cloudBck.Cname(lom.ObjName), nil, respProps.StatusCode())
-		res.ErrCode = resp.StatusCode()
-		return
+	if status := resp.StatusCode(); status >= http.StatusBadRequest {
+		res.Err = cmn.NewErrFailedTo(core.T, azErrPrefix+": GET]", cloudBck.Cname(lom.ObjName), nil, status)
+		res.ErrCode = status
+		return res
 	}
 
 	res.Size = resp.ContentLength()

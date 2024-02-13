@@ -718,7 +718,11 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if errCode, err := goi.getObject(); err != nil {
 		t.statsT.IncErr(stats.GetCount)
 		if err != errSendingResp {
-			t._erris(w, r, dpq.silent, err, errCode)
+			silent := dpq.silent
+			if errCode == http.StatusNotFound {
+				silent = "true"
+			}
+			t._erris(w, r, silent, err, errCode)
 		}
 	}
 	lom = goi.lom
@@ -914,12 +918,12 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			objName = msg.Name
 			args    apc.BlobMsg
 		)
-		if err = cos.MorphMarshal(msg.Value, &args); err != nil {
-			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
-			break
-		}
 		lom = core.AllocLOM(objName)
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+			break
+		}
+		if err = cos.MorphMarshal(msg.Value, &args); err != nil {
+			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
 		if xid, err = t.blobdl(lom, &args); err == nil && xid != "" {
@@ -932,8 +936,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 	if err != nil {
-		core.FreeLOM(lom)
 		t.writeErr(w, r, err)
+		core.FreeLOM(lom)
 	}
 }
 

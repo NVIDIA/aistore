@@ -246,31 +246,24 @@ func (r *XactBlobDl) Run(*sync.WaitGroup) {
 		pending []blobDone
 		eof     bool
 	)
-	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.p.args.chunkSize, 0)+
-		", num-concurrent-readers", r.p.args.numReaders)
+	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.p.args.chunkSize, 0)+", num-concurrent-readers", r.p.args.numReaders)
 	r.start()
 outer:
 	for {
 		select {
 		case done := <-r.doneCh:
-			sgl := done.sgl
-			if r.p.args.fullSize <= done.roff+sgl.Size() || done.code == http.StatusRequestedRangeNotSatisfiable {
-				eof = true
-				switch {
-				case r.p.args.fullSize < done.roff+sgl.Size():
-					err = fmt.Errorf("%s: detected size increase during download: expected %d, have %d",
-						r.Name(), r.p.args.fullSize, done.roff+sgl.Size())
-					goto fin
-				case r.p.args.fullSize > done.roff+sgl.Size():
-					err = fmt.Errorf("%s: premature EOF: expected size %d, have %d",
-						r.Name(), r.p.args.fullSize, done.roff+sgl.Size())
-					goto fin
-				}
-			} else if done.err != nil {
-				err = done.err
+			sgl, sz := done.sgl, done.sgl.Size()
+			if done.code == http.StatusRequestedRangeNotSatisfiable && r.p.args.fullSize > done.roff+sz {
+				err = fmt.Errorf("%s: premature eof: expected size %d, have %d", r.Name(), r.p.args.fullSize, done.roff+sz)
 				goto fin
 			}
-			debug.Assert(sgl.Size() > 0)
+			if sz > 0 && r.p.args.fullSize < done.roff+sz {
+				err = fmt.Errorf("%s: detected size increase during download: expected %d, have (%d + %d)", r.Name(),
+					r.p.args.fullSize, done.roff, sz)
+				goto fin
+			}
+			debug.Assert(sz > 0)
+			eof = r.p.args.fullSize <= done.roff+sz
 
 			// add pending in the offset-descending order
 			if done.roff != r.woff {
@@ -285,12 +278,13 @@ outer:
 					}
 				}
 			}
-			// write (type 1)
+			// type1 write
 			if err = r.write(sgl); err != nil {
 				goto fin
 			}
 
 			if r.nextRoff < r.p.args.fullSize {
+				debug.Assert(sgl.Size() == 0)
 				r.workCh <- blobWork{sgl, r.nextRoff}
 				r.nextRoff += r.p.args.chunkSize
 			}
@@ -303,13 +297,14 @@ outer:
 				}
 				debug.Assert(done.roff == r.woff)
 
-				// remove from pending and write (type 2)
+				// type2 write: remove from pending and append
 				sgl := done.sgl
 				pending = pending[:i]
 				if err = r.write(sgl); err != nil {
 					goto fin
 				}
 				if r.nextRoff < r.p.args.fullSize {
+					debug.Assert(sgl.Size() == 0)
 					r.workCh <- blobWork{sgl, r.nextRoff}
 					r.nextRoff += r.p.args.chunkSize
 				}
@@ -319,8 +314,7 @@ outer:
 				goto fin
 			}
 			if eof && cmn.Rom.FastV(5, cos.SmoduleXs) {
-				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d",
-					r.Name(), r.woff, r.nextRoff, r.p.args.fullSize)
+				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d", r.Name(), r.woff, r.nextRoff, r.p.args.fullSize)
 				for i := len(pending) - 1; i >= 0; i-- {
 					nlog.Errorf("   roff %d", pending[i].roff)
 				}
