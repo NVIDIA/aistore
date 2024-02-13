@@ -1,0 +1,75 @@
+---
+name: "🐞 Bug Report"
+description: File a bug/issue
+title: "(short issue description)"
+labels: ["bug", "needs-triage"]
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for the bug you encountered.
+      options:
+      - label: I have searched the existing issues
+        required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: What is the problem? A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: |
+        What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Behavior
+      description: |
+        What actually happened?
+        
+        Please include full errors, uncaught exceptions, stack traces, and relevant logs. 
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps To Reproduce
+      description: |
+        Provide a self-contained, concise snippet of code that can be used to reproduce the issue.
+        Avoid including business logic or unrelated code, it makes diagnosis more difficult.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Possible Solution
+      description: |
+        Suggest a fix/reason for the bug
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Information/Context
+      description: |
+        Anything else that might be relevant for troubleshooting this bug. Providing context helps us come up with a solution that is most useful in the real world.
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: AIStore build, Python SDK version or Docker image and build tag? (`latest`, `v3.22`, ...)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment details (OS name and version, etc.)
+    validations:
+        required: true
