@@ -67,6 +67,7 @@ rendpoint=$(ais show remote-cluster -H | awk '{print $2}')
 uuid=$(ais show remote-cluster -H | awk '{print $1}')
 
 echo "Note: remote ais bucket $bucket is, in fact, ais://@${uuid}/$(basename ${bucket})"
+echo
 
 ## check remote bucket; create if doesn't exist
 exists=true
@@ -95,7 +96,8 @@ files=$(ais ls $bucket --prefix=$subdir/ --name-only -H --no-footers --all | awk
 
 count=0 ## up to max_num_downloads
 
-## for all listed objects
+## first, run as xaction
+echo
 echo "2. Run blob-download jobs"
 for f in $files; do
   xid=$(ais blob-download $bucket/$f --chunk-size $chunksize --num-workers $numworkers --nv || exit $?)
@@ -109,7 +111,9 @@ done
 echo "..."
 ais show job blob-download --all | tail
 
-echo "3. Run GET via blob-downloader (evict first)"
+## second, run the same via GET
+echo
+echo "3. Run GET via blob-downloader - evict first..."
 ais evict $bucket --keep-md || exit $?
 count=0
 for f in $files; do

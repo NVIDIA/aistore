@@ -681,7 +681,12 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		return lom
 	}
 	if cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)) {
-		t.blobdl(lom, &apc.BlobMsg{}, w) // blocking w/ default tunables and simultaneous Tx
+		var args apc.BlobMsg
+		if err := args.FromHeader(r.Header); err != nil {
+			t._erris(w, r, dpq.silent, err, 0)
+			return lom
+		}
+		t.blobdl(lom, &args, w) // NOTE: a blocking call w/ simultaneous Tx
 		return lom
 	}
 

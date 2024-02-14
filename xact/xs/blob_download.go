@@ -38,7 +38,7 @@ const (
 	dfltChunkSize  = 2 * cos.MiB
 	minChunkSize   = memsys.DefaultBufSize
 	maxChunkSize   = 16 * cos.MiB
-	dfltNumReaders = 4
+	dfltNumWorkers = 4
 
 	maxInitialSizeSGL = 128           // vec length
 	maxTotalChunks    = 128 * cos.MiB // max mem per blob downloader
@@ -53,16 +53,16 @@ type (
 		wfqn       string
 		chunkSize  int64
 		fullSize   int64
-		numReaders int
+		numWorkers int
 	}
 	blobReader struct {
 		parent *XactBlobDl
 	}
-	blobWork struct {
+	chunkWi struct {
 		sgl  *memsys.SGL
 		roff int64
 	}
-	blobDone struct {
+	chunkDone struct {
 		err  error
 		sgl  *memsys.SGL
 		roff int64
@@ -77,8 +77,8 @@ type (
 		writer   io.Writer
 		p        *blobFactory
 		readers  []*blobReader
-		workCh   chan blobWork
-		doneCh   chan blobDone
+		workCh   chan chunkWi
+		doneCh   chan chunkDone
 		nextRoff int64
 		woff     int64
 		xact.Base
@@ -101,7 +101,7 @@ func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh 
 		lmfh:       lmfh,
 		wfqn:       wfqn,
 		chunkSize:  msg.ChunkSize,
-		numReaders: msg.NumWorkers,
+		numWorkers: msg.NumWorkers,
 	}
 	if oa == nil {
 		// backend.HeadObj iff not passed (via prior latest-ver check)
@@ -138,14 +138,14 @@ func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh 
 			cos.ToSizeIEC(maxChunkSize, 0))
 		args.chunkSize = maxChunkSize
 	}
-	if args.numReaders == 0 {
-		args.numReaders = dfltNumReaders
+	if args.numWorkers == 0 {
+		args.numWorkers = dfltNumWorkers
 	}
-	if int64(args.numReaders)*args.chunkSize > args.fullSize {
-		args.numReaders = int((args.fullSize + args.chunkSize - 1) / args.chunkSize)
+	if int64(args.numWorkers)*args.chunkSize > args.fullSize {
+		args.numWorkers = int((args.fullSize + args.chunkSize - 1) / args.chunkSize)
 	}
-	if a := cmn.MaxParallelism(); a < args.numReaders {
-		args.numReaders = a
+	if a := cmn.MaxParallelism(); a < args.numWorkers {
+		args.numWorkers = a
 	}
 
 	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: args})
@@ -167,8 +167,8 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *blobFactory) Start() error {
 	r := &XactBlobDl{
 		p:      p,
-		workCh: make(chan blobWork, p.args.numReaders),
-		doneCh: make(chan blobDone, p.args.numReaders),
+		workCh: make(chan chunkWi, p.args.numWorkers),
+		doneCh: make(chan chunkDone, p.args.numWorkers),
 	}
 	r.InitBase(p.Args.UUID, p.Kind(), p.args.lom.Bck())
 
@@ -184,11 +184,11 @@ func (p *blobFactory) Start() error {
 	switch pre {
 	case memsys.PressureHigh:
 		slabSize = memsys.DefaultBufSize
-		p.args.numReaders = 1
+		p.args.numWorkers = 1
 		nlog.Warningln(r.Name() + ": high memory pressure detected...")
 	case memsys.PressureModerate:
 		slabSize >>= 1
-		p.args.numReaders = min(3, p.args.numReaders)
+		p.args.numWorkers = min(3, p.args.numWorkers)
 	}
 
 	cnt := max((p.args.chunkSize+slabSize-1)/slabSize, 1)
@@ -199,16 +199,16 @@ func (p *blobFactory) Start() error {
 	}
 
 	// add a reader, if possible
-	nr := int64(p.args.numReaders)
-	if pre == memsys.PressureLow && p.args.numReaders < cmn.MaxParallelism() &&
+	nr := int64(p.args.numWorkers)
+	if pre == memsys.PressureLow && p.args.numWorkers < cmn.MaxParallelism() &&
 		nr < (p.args.fullSize+p.args.chunkSize-1)/p.args.chunkSize &&
 		nr*p.args.chunkSize < maxTotalChunks-p.args.chunkSize {
-		p.args.numReaders++
+		p.args.numWorkers++
 	}
 
 	// init and allocate
-	r.readers = make([]*blobReader, p.args.numReaders)
-	r.sgls = make([]*memsys.SGL, p.args.numReaders)
+	r.readers = make([]*blobReader, p.args.numWorkers)
+	r.sgls = make([]*memsys.SGL, p.args.numWorkers)
 	for i := range r.readers {
 		r.readers[i] = &blobReader{
 			parent: r,
@@ -262,10 +262,10 @@ func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.p.args.lom.O
 func (r *XactBlobDl) Run(*sync.WaitGroup) {
 	var (
 		err     error
-		pending []blobDone
+		pending []chunkDone
 		eof     bool
 	)
-	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.p.args.chunkSize, 0)+", num-concurrent-readers", r.p.args.numReaders)
+	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.p.args.chunkSize, 0)+", num-concurrent-readers", r.p.args.numWorkers)
 	r.start()
 outer:
 	for {
@@ -288,7 +288,7 @@ outer:
 			if done.roff != r.woff {
 				debug.Assert(done.roff > r.woff)
 				debug.Assert((done.roff-r.woff)%r.p.args.chunkSize == 0)
-				pending = append(pending, blobDone{roff: -1})
+				pending = append(pending, chunkDone{roff: -1})
 				for i := range pending {
 					if i == len(pending)-1 || (pending[i].roff >= 0 && pending[i].roff < done.roff) {
 						copy(pending[i+1:], pending[i:])
@@ -304,7 +304,7 @@ outer:
 
 			if r.nextRoff < r.p.args.fullSize {
 				debug.Assert(sgl.Size() == 0)
-				r.workCh <- blobWork{sgl, r.nextRoff}
+				r.workCh <- chunkWi{sgl, r.nextRoff}
 				r.nextRoff += r.p.args.chunkSize
 			}
 
@@ -324,7 +324,7 @@ outer:
 				}
 				if r.nextRoff < r.p.args.fullSize {
 					debug.Assert(sgl.Size() == 0)
-					r.workCh <- blobWork{sgl, r.nextRoff}
+					r.workCh <- chunkWi{sgl, r.nextRoff}
 					r.nextRoff += r.p.args.chunkSize
 				}
 			}
@@ -379,7 +379,7 @@ func (r *XactBlobDl) start() {
 		go r.readers[i].run()
 	}
 	for i := range r.readers {
-		r.workCh <- blobWork{r.sgls[i], r.nextRoff}
+		r.workCh <- chunkWi{r.sgls[i], r.nextRoff}
 		r.nextRoff += r.p.args.chunkSize
 	}
 }
@@ -435,21 +435,21 @@ func (reader *blobReader) run() {
 		}
 		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
 			debug.Assert(res.Size == 0)
-			reader.parent.doneCh <- blobDone{nil, sgl, msg.roff, http.StatusRequestedRangeNotSatisfiable}
+			reader.parent.doneCh <- chunkDone{nil, sgl, msg.roff, http.StatusRequestedRangeNotSatisfiable}
 			break
 		}
 		if err = res.Err; err == nil {
 			written, err = io.Copy(sgl, res.R)
 		}
 		if err != nil {
-			reader.parent.doneCh <- blobDone{err, sgl, msg.roff, res.ErrCode}
+			reader.parent.doneCh <- chunkDone{err, sgl, msg.roff, res.ErrCode}
 			break
 		}
 		debug.Assert(res.Size == written, res.Size, " ", written)
 		debug.Assert(sgl.Size() == written, sgl.Size(), " ", written)
 		debug.Assert(sgl.Size() == sgl.Len(), sgl.Size(), " ", sgl.Len())
 
-		reader.parent.doneCh <- blobDone{nil, sgl, msg.roff, res.ErrCode}
+		reader.parent.doneCh <- chunkDone{nil, sgl, msg.roff, res.ErrCode}
 	}
 	reader.parent.wg.Done()
 }

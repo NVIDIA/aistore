@@ -18,6 +18,8 @@ const (
 
 	// GET via x-blob-download
 	HdrBlobDownload = HeaderPrefix + ActBlobDl
+	HdrBlobChunk    = HeaderPrefix + "blob-chunk"   // e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
+	HdrBlobWorkers  = HeaderPrefix + "blob-workers" // (dfltNumWorkers in xs/blob_download.go)
 
 	// Bucket props headers
 	HdrBucketProps      = HeaderPrefix + "bucket-props"       // => cmn.Bprops

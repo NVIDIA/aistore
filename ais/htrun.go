@@ -967,7 +967,7 @@ func (h *htrun) logerr(tag string, v any, err error) {
 func _parseNCopies(value any) (copies int64, err error) {
 	switch v := value.(type) {
 	case string:
-		copies, err = strconv.ParseInt(v, 10, 64)
+		copies, err = strconv.ParseInt(v, 10, 16)
 	case float64:
 		copies = int64(v)
 	default:
