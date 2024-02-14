@@ -196,30 +196,33 @@ func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, outFile, sname strin
 		if !confirmed {
 			return nil
 		}
-		if outFile != discardIO {
+		if !discardOutput(outFile) {
 			if !strings.HasSuffix(outFile, archive.ExtTarGz) && !strings.HasSuffix(outFile, archive.ExtTgz) {
 				outFile += archive.ExtTarGz
 			}
 		}
 	}
-	file, err := os.Create(outFile)
-	if err != nil {
-		return fmt.Errorf("failed to create destination %s: %v", outFile, err)
-	}
-
 	if sev == apc.LogErr || sev == apc.LogWarn {
 		s = " (errors and warnings)"
 	}
-	if outFile != discardIO {
+
+	args := api.GetLogInput{Severity: sev, All: true}
+	if !discardOutput(outFile) {
+		file, err := os.Create(outFile)
+		if err != nil {
+			return fmt.Errorf("failed to create destination %s: %v", outFile, err)
+		}
+		defer file.Close()
+
+		args.Writer = file
 		fmt.Fprintf(c.App.Writer, "Downloading %s%s logs as %s\n", sname, s, outFile)
 	} else {
 		fmt.Fprintf(c.App.Writer, "Downloading (and discarding) %s%s logs\n", sname, s)
+		args.Writer = io.Discard
 	}
 
 	// call api
-	args := api.GetLogInput{Writer: file, Severity: sev, All: true}
-	_, err = api.GetDaemonLog(apiBP, node, args)
-	file.Close()
+	_, err := api.GetDaemonLog(apiBP, node, args)
 	return V(err)
 }
 
@@ -271,7 +274,7 @@ func _currentLog(c *cli.Context) error {
 		file     *os.File
 		readsize int64
 		s        string
-		writer   = os.Stdout // default
+		writer   = io.Writer(os.Stdout) // default
 		args     = api.GetLogInput{Severity: sev, Offset: getLongRunOffset(c)}
 	)
 	if outFile != fileStdIO && outFile != "" /* empty => standard output */ {
@@ -281,22 +284,24 @@ func _currentLog(c *cli.Context) error {
 			return nil
 		}
 		if args.Offset == 0 {
-			if file, err = os.Create(outFile); err != nil {
-				return err
-			}
-			setLongRunOutfile(c, file)
 			if sev == apc.LogErr || sev == apc.LogWarn {
 				s = " (errors and warnings)"
 			}
-			if outFile != discardIO {
-				fmt.Fprintf(c.App.Writer, "Downloading %s%s log as %s ...\n", sname, s, outFile)
-			} else {
+			if discardOutput(outFile) {
 				fmt.Fprintf(c.App.Writer, "Downloading (and discarding) %s%s log ...\n", sname, s)
+				writer = io.Discard
+			} else {
+				if file, err = os.Create(outFile); err != nil {
+					return err
+				}
+				setLongRunOutfile(c, file)
+				fmt.Fprintf(c.App.Writer, "Downloading %s%s log as %s ...\n", sname, s, outFile)
+				writer = file
 			}
 		} else {
 			file = getLongRunOutfile(c)
+			writer = file
 		}
-		writer = file
 	}
 
 	// call api
@@ -342,7 +347,7 @@ func parseLogSev(c *cli.Context) (sev string, err error) {
 }
 
 func _logDestName(c *cli.Context, node *meta.Snode, outFile string) (string, bool) {
-	if outFile == discardIO {
+	if discardOutput(outFile) {
 		return outFile, true
 	}
 	finfo, errEx := os.Stat(outFile)

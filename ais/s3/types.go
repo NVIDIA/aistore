@@ -193,7 +193,7 @@ func SetEtag(hdr http.Header, lom *core.LOM) {
 		return
 	}
 	if v, exists := lom.GetCustomKey(cmn.ETag); exists && !cmn.IsS3MultipartEtag(v) {
-		hdr.Set(cos.S3CksumHeader, v)
+		hdr.Set(cos.S3CksumHeader /*"ETag"*/, v)
 		return
 	}
 	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {

@@ -88,8 +88,8 @@ const (
 	commandEvict    = "evict"    // apc.ActEvictRemoteBck or apc.ActEvictObjects
 	commandPrefetch = "prefetch" // apc.ActPrefetchObjects
 
-	cmdBlobDownload = apc.ActBlobDl
-	cmdDownload     = apc.ActDownload
+	cmdBlobDownload = apc.ActBlobDl   // blob-download
+	cmdDownload     = apc.ActDownload // download
 	cmdDsort        = apc.ActDsort
 	cmdRebalance    = apc.ActRebalance
 	cmdLRU          = apc.ActLRU
@@ -185,11 +185,6 @@ const (
 //
 
 const flagPrefix = "--"
-
-const (
-	fileStdIO = "-"         // STDIN (for `ais put`), STDOUT (for `ais put`)
-	discardIO = "/dev/null" // (io.Discard)
-)
 
 const (
 	cluTotal = "--- Cluster:"
@@ -756,6 +751,11 @@ var (
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
 		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
+	}
+
+	blobDownloadFlag = cli.BoolFlag{
+		Name:  apc.ActBlobDl,
+		Usage: "utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects",
 	}
 
 	numWorkersFlag = cli.IntFlag{

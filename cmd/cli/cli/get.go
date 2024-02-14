@@ -26,6 +26,10 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
+const (
+	fileStdIO = "-" // STDIN (for `ais put`), STDOUT (for `ais put`)
+)
+
 const extractVia = "--extract(*)"
 
 func catHandler(c *cli.Context) error {
@@ -73,6 +77,26 @@ func getHandler(c *cli.Context) error {
 		return fmt.Errorf("option %s is incompatible with the specified bucket %s\n"+
 			"(tip: can only GET latest object's version from a bucket with Cloud or remote AIS backend)",
 			qflprn(latestVerFlag), bck.String())
+	}
+
+	if flagIsSet(c, blobDownloadFlag) {
+		if flagIsSet(c, lengthFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(lengthFlag), qflprn(blobDownloadFlag))
+		}
+		if flagIsSet(c, getObjCachedFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(getObjCachedFlag), qflprn(blobDownloadFlag))
+		}
+		if flagIsSet(c, archpathGetFlag) {
+			return errors.New("cannot use blob downloader to read archived files - not implemented yet")
+		}
+		if !bck.IsRemote() {
+			return fmt.Errorf("blob downloader: expecting remote bucket (have %s)", bck.Cname(""))
+		}
+		if flagIsSet(c, progressFlag) {
+			// TODO: niy
+			return fmt.Errorf("cannot show progress when running GET via blob-downloader (tip: try 'ais %s %s --progress')",
+				cmdBlobDownload, uri)
+		}
 	}
 
 	// destination (empty "" implies using source `basename`)
@@ -186,7 +210,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	// can't do many to one
 	l := len(objList.Entries)
 	if l > 1 {
-		if outFile != "" && outFile != fileStdIO && outFile != discardIO {
+		if outFile != "" && outFile != fileStdIO && !discardOutput(outFile) {
 			finfo, errEx := os.Stat(outFile)
 			// destination directory must exist
 			if errEx != nil || !finfo.IsDir() {
@@ -210,7 +234,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 		return err
 	}
 
-	if outFile == discardIO {
+	if discardOutput(outFile) {
 		discard = " (and discard)"
 	} else if outFile == fileStdIO {
 		out = " to standard output"
@@ -308,7 +332,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 	if shardName != "" {
 		objName = shardName
 		archpath = strings.TrimPrefix(entry.Name, shardName+"/")
-		if outFile != fileStdIO && outFile != discardIO {
+		if outFile != fileStdIO && !discardOutput(outFile) {
 			// when getting multiple files retain the full archpath
 			// (compare w/ filepath.Base usage otherwise)
 			outFile = filepath.Join(outFile, archpath)
@@ -344,7 +368,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	if outFile == fileStdIO && extract {
 		return errors.New("cannot extract archived files to standard output - not implemented yet")
 	}
-	if outFile == discardIO && extract {
+	if discardOutput(outFile) && extract {
 		return errors.New("cannot extract and discard archived files - not implemented yet")
 	}
 	if flagIsSet(c, listArchFlag) && archpath == "" {
@@ -379,7 +403,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		} else {
 			outFile = filepath.Base(objName)
 		}
-	} else if outFile != fileStdIO && outFile != discardIO {
+	} else if outFile != fileStdIO && !discardOutput(outFile) {
 		finfo, errEx := os.Stat(outFile)
 		if errEx == nil {
 			if !finfo.IsDir() && extract {
@@ -408,9 +432,15 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		rng := cmn.MakeRangeHdr(offset, length)
 		hdr = http.Header{cos.HdrRange: []string{rng}}
 	}
+	if flagIsSet(c, blobDownloadFlag) {
+		debug.Assert(length == 0) // checked above
+		hdr = http.Header{apc.HdrBlobDownload: []string{"true"}}
+	}
 	if outFile == fileStdIO {
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		quiet = true
+	} else if discardOutput(outFile) {
+		getArgs = api.GetArgs{Writer: io.Discard, Header: hdr}
 	} else {
 		var file *os.File
 		if file, err = os.Create(outFile); err != nil {
@@ -471,7 +501,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		bn           = bck.Cname("")
 	)
 	switch {
-	case outFile == discardIO:
+	case discardOutput(outFile):
 		discard = " (and discard)"
 	case outFile == fileStdIO:
 		out = " to standard output"
@@ -575,4 +605,9 @@ func (ex *extractor) _write(filename string, size int64, wfh *os.File, reader io
 			filename, ex.shardName, n, size)
 	}
 	return false, nil
+}
+
+// discard
+func discardOutput(outf string) bool {
+	return outf == "/dev/null" || outf == "dev/null" || outf == "dev/nil"
 }

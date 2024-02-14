@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -30,7 +31,7 @@ import (
 // TODO:
 // 1. load, latest-ver, checksum, write, finalize
 // 2. track each chunk reader with 'started' timestamp; abort/retry individual chunks; timeout
-// 3. tune-up: (chunk size, slab size, full size) vs memory pressure
+// 3. validate `expCksum`
 
 // default tunables (can override via apc.BlobMsg)
 const (
@@ -45,6 +46,7 @@ const (
 
 type (
 	blobArgs struct {
+		w          http.ResponseWriter
 		lom        *core.LOM
 		expCksum   *cos.Cksum
 		lmfh       *os.File
@@ -92,8 +94,9 @@ var (
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
-func RenewBlobDl(uuid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh *os.File, msg *apc.BlobMsg) xreg.RenewRes {
+func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh *os.File, msg *apc.BlobMsg, w http.ResponseWriter) xreg.RenewRes {
 	args := &blobArgs{
+		w:          w,
 		lom:        lom,
 		lmfh:       lmfh,
 		wfqn:       wfqn,
@@ -118,7 +121,7 @@ func RenewBlobDl(uuid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh
 	args.expCksum = oa.Cksum
 
 	if msg.FullSize > 0 && msg.FullSize != args.fullSize {
-		name := xact.Cname(apc.ActBlobDl, uuid) + "/" + lom.Cname()
+		name := xact.Cname(apc.ActBlobDl, xid) + "/" + lom.Cname()
 		err := fmt.Errorf("%s: user-specified size %d, have %d", name, msg.FullSize, args.fullSize)
 		return xreg.RenewRes{Err: err}
 	}
@@ -145,7 +148,7 @@ func RenewBlobDl(uuid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh
 		args.numReaders = a
 	}
 
-	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: uuid, Custom: args})
+	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: args})
 }
 
 //
@@ -213,12 +216,28 @@ func (p *blobFactory) Start() error {
 		r.sgls[i] = mm.NewSGL(cnt*slabSize, slabSize)
 	}
 
+	// compound multi-writer
+	ws := make([]io.Writer, 0, 3)
 	if ty := p.args.lom.CksumConf().Type; ty != cos.ChecksumNone {
 		r.cksum.Init(ty)
-		r.writer = io.MultiWriter(p.args.lmfh, r.cksum.H)
-	} else {
-		r.writer = p.args.lmfh
+		ws = append(ws, r.cksum.H)
 	}
+	ws = append(ws, p.args.lmfh)
+	if p.args.w != nil {
+		// and transmit concurrently (alternatively,
+		// could keep writing locally even after GET client goes away)
+		ws = append(ws, p.args.w)
+
+		whdr := p.args.w.Header()
+		whdr.Set(cos.HdrContentLength, strconv.FormatInt(p.args.fullSize, 10))
+		whdr.Set(cos.HdrContentType, cos.ContentBinary)
+		if v, ok := r.p.args.lom.GetCustomKey(cmn.ETag); ok {
+			whdr.Set(cos.HdrETag, v)
+		}
+		// expCksum
+	}
+	r.writer = cos.NewWriterMulti(ws...)
+
 	p.xctn = r
 	return nil
 }
@@ -388,8 +407,9 @@ func (r *XactBlobDl) cleanup() {
 		r.sgls[i].Free()
 	}
 	clear(r.sgls)
-
-	core.FreeLOM(r.p.args.lom)
+	if r.p.args.w == nil { // not a GET
+		core.FreeLOM(r.p.args.lom)
+	}
 }
 
 //

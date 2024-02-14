@@ -675,19 +675,17 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 	}
 
-	debug.Assert(dpq.uuid == "", dpq.uuid+" vs "+dpq.etlName) // expecting etlName or none of the above
+	// two special flows
 	if dpq.etlName != "" {
-		t.doETL(w, r, dpq.etlName, bck, lom.ObjName)
+		t.getETL(w, r, dpq.etlName, bck, lom.ObjName)
+		return lom
+	}
+	if cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)) {
+		t.blobdl(lom, &apc.BlobMsg{}, w) // blocking w/ default tunables and simultaneous Tx
 		return lom
 	}
 
-	filename := dpq.archpath // apc.QparamArchpath
-	if strings.HasPrefix(filename, lom.ObjName) {
-		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
-			filename = rel
-		}
-	}
-	// GET context
+	// GET: regular | archive | range
 	goi := allocGOI()
 	{
 		goi.atime = time.Now().UnixNano()
@@ -703,18 +701,26 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.w = w
 		goi.ctx = context.Background()
 		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
-		goi.archive = archiveQuery{
-			filename: filename,
-			mime:     dpq.archmime, // apc.QparamArchmime
-		}
-		goi.isGFN = cos.IsParseBool(dpq.isGFN)                 // query.Get(apc.QparamIsGFNRequest)
+		goi.isGFN = cos.IsParseBool(dpq.isGFN)                 // apc.QparamIsGFNRequest
 		goi.latestVer = goi.lom.ValidateWarmGet(dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
 		goi.isS3 = dpq.isS3 != ""
 	}
+	// apc.QparamArchpath & apc.QparamArchmime, respectively
+	if goi.archive.filename = dpq.archpath; goi.archive.filename != "" {
+		if strings.HasPrefix(goi.archive.filename, lom.ObjName) {
+			if rel, err := filepath.Rel(lom.ObjName, goi.archive.filename); err == nil {
+				goi.archive.filename = rel
+			}
+		}
+		goi.archive.mime = dpq.archmime
+	}
+	// apc.QparamOrigURL
 	if bck.IsHTTP() {
-		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
+		originalURL := dpq.origURL
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
+
+	// do
 	if errCode, err := goi.getObject(); err != nil {
 		t.statsT.IncErr(stats.GetCount)
 		if err != errSendingResp {
@@ -926,7 +932,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
-		if xid, err = t.blobdl(lom, &args); err == nil && xid != "" {
+		if xid, err = t.blobdl(lom, &args, nil); err == nil && xid != "" {
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 			// lom is eventually freed by x-blob
@@ -1151,7 +1157,9 @@ func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
 	case ec.URLMeta:
 		t.sendECMetafile(w, r, apireq.bck, apireq.items[2])
 	case ec.URLCT:
-		t.sendECCT(w, r, apireq.bck, apireq.items[2])
+		lom := core.AllocLOM(apireq.items[2])
+		t.sendECCT(w, r, apireq.bck, lom)
+		core.FreeLOM(lom)
 	default:
 		t.writeErrURL(w, r)
 	}
@@ -1180,9 +1188,7 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 	w.Write(b)
 }
 
-func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
-	lom := core.AllocLOM(objName)
-	defer core.FreeLOM(lom)
+func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM) {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -1193,7 +1199,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 			return
 		}
 	}
-	sliceFQN := lom.Mountpath().MakePathFQN(bck.Bucket(), fs.ECSliceType, objName)
+	sliceFQN := lom.Mountpath().MakePathFQN(bck.Bucket(), fs.ECSliceType, lom.ObjName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
 		t.writeErr(w, r, err, http.StatusNotFound, Silent)
@@ -1210,7 +1216,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
 	cos.Close(file)
 	if err != nil {
-		nlog.Errorf("Failed to send slice %s: %v", bck.Cname(objName), err)
+		nlog.Errorf("Failed to send slice %s: %v", lom.Cname(), err)
 	}
 }
 
@@ -1378,7 +1384,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, err error) {
+func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter) (xid string, err error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
@@ -1391,20 +1397,20 @@ func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, err error
 		return "", cmn.NewErrBusy("blob", lom, "")
 	}
 	// do
-	xid, err = _blobdl(lom, args)
+	xid, err = _blobdl(lom, args, w)
 
 	// NOTE:
-	// - wlock (above) to load, check availability
+	// - try-lock (above) to load, check availability
 	// - unlock right away
 	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
-	// - there's a single x-blob-download (see WhenPrevIsRunning)
+	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
 	lom.Unlock(true)
 
 	return xid, err
 }
 
 // returns empty xid ("") if nothing to do
-func _blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, _ error) {
+func _blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter) (xid string, _ error) {
 	var oa *cmn.ObjAttrs
 
 	// exists; latest
@@ -1431,18 +1437,23 @@ func _blobdl(lom *core.LOM, args *apc.BlobMsg) (xid string, _ error) {
 
 	// new
 	xid = cos.GenUUID()
-	rns := xs.RenewBlobDl(xid, lom, oa, wfqn, lmfh, args)
+	rns := xs.RenewBlobDl(xid, lom, oa, wfqn, lmfh, args, w)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
 		if errRemove := cos.RemoveFile(wfqn); errRemove != nil {
 			nlog.Errorln("nested err", errRemove)
 		}
-		return xid, rns.Err
+		return "", rns.Err
 	}
 
-	// run
+	// a) via x-start, x-blob-download
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
-	go xblob.Run(nil)
-	return xid, nil
+	if w == nil {
+		go xblob.Run(nil)
+		return xid, nil
+	}
+	// b) via GET (blocking w/ simultaneous transmission)
+	xblob.Run(nil)
+	return xid, xblob.AbortErr()
 }
 
 func (t *target) fsErr(err error, filepath string) {

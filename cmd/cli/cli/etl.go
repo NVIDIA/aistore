@@ -471,6 +471,8 @@ func etlObjectHandler(c *cli.Context) error {
 	var w io.Writer
 	if outputDest == "-" {
 		w = os.Stdout
+	} else if discardOutput(outputDest) {
+		w = io.Discard
 	} else {
 		f, err := os.Create(outputDest)
 		if err != nil {

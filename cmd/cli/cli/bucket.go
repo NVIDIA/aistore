@@ -121,8 +121,11 @@ func evictBucket(c *cli.Context, bck cmn.Bck) error {
 		return err
 	}
 	if !bck.IsQuery() {
-		if _, present := bmd.Get((*meta.Bck)(&bck)); !present {
-			return fmt.Errorf("%s does not exist - nothing to do", bck)
+		// check presence unless remais (in re: bck/@alias/name vs bck/@uuid/name)
+		if !bck.IsRemoteAIS() {
+			if _, present := bmd.Get((*meta.Bck)(&bck)); !present {
+				return fmt.Errorf("%s does not exist - nothing to do", bck)
+			}
 		}
 		return _evictBck(c, bck)
 	}

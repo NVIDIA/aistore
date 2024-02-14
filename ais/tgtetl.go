@@ -152,7 +152,7 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 	}
 }
 
-func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, bck *meta.Bck, objName string) {
+func (t *target) getETL(w http.ResponseWriter, r *http.Request, etlName string, bck *meta.Bck, objName string) {
 	var (
 		comm etl.Communicator
 		err  error

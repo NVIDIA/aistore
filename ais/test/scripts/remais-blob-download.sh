@@ -34,9 +34,11 @@ totalsize="100MiB"
 chunksize="1MB"
 numworkers=4
 
-## runtime
-max_num_downloads=100
-subdir="blob-$RANDOM" ## destination for aisloader-generated content
+## put some limit to it
+max_num_downloads=20
+
+## destination for aisloader-generated content
+subdir="blob-$RANDOM"
 
 while (( "$#" )); do
   case "${1}" in
@@ -84,20 +86,34 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 ## aisloader => remais, to generate (PUT) content in $bucket/$subdir
-echo "Running aisloader now..."
+echo "1. Run aisloader"
 AIS_ENDPOINT=$rendpoint aisloader -bucket=$rbucket -subdir=$subdir -cleanup=false -numworkers=2 -quiet -pctput=100 -minsize=$minsize -maxsize=$maxsize -totalputsize=$totalsize
 
 ais ls $bucket --all --limit 4
 echo "..."
 files=$(ais ls $bucket --prefix=$subdir/ --name-only -H --no-footers --all | awk '{print $1}')
 
-## put some limit to it
-count=0
+count=0 ## up to max_num_downloads
 
 ## for all listed objects
+echo "2. Run blob-download jobs"
 for f in $files; do
   xid=$(ais blob-download $bucket/$f --chunk-size $chunksize --num-workers $numworkers --nv || exit $?)
-  ais wait $xid || exit $?
+  ais wait $xid >/dev/null || exit $?
+  count=`expr $count + 1`
+  if [ $count -ge $max_num_downloads ]; then
+     break
+  fi
+done
+
+echo "..."
+ais show job blob-download --all | tail
+
+echo "3. Run GET via blob-downloader (evict first)"
+ais evict $bucket --keep-md || exit $?
+count=0
+for f in $files; do
+  ais get $bucket/$f /dev/null --blob-download >/dev/null || exit $?
   count=`expr $count + 1`
   if [ $count -ge $max_num_downloads ]; then
      break

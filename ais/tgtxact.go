@@ -236,8 +236,8 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		lom := core.AllocLOM(msg.Name)
 		err := lom.InitBck(&args.Bck)
 		if err == nil {
-			// empty control message when executed via x-start API
-			xid, err = t.blobdl(lom, &apc.BlobMsg{})
+			// empty control message (ie., default tunables) when executed via x-start API
+			xid, err = t.blobdl(lom, &apc.BlobMsg{}, nil)
 		}
 		if err != nil {
 			core.FreeLOM(lom)

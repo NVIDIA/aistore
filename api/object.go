@@ -43,11 +43,12 @@ type (
 		// 4. `apc.QparamLatestVer`: get latest version from the associated Cloud bucket; see also: `ValidateWarmGet`
 		Query url.Values
 
-		// The field is exclusively used to facilitate Range Read.
-		// E.g. usage:
+		// The field is used to facilitate a) range read, and b) blob download
+		// E.g. range:
 		// * Header.Set(cos.HdrRange, fmt.Sprintf("bytes=%d-%d", fromOffset, toOffset))
-		// For range formatting, see the spec:
-		// * https://www.rfc-editor.org/rfc/rfc7233#section-2.1
+		//   For range formatting, see https://www.rfc-editor.org/rfc/rfc7233#section-2.1
+		// E.g. blob download:
+		// * Header.Set(apc.HdrBlobDownload, "true")
 		Header http.Header
 	}
 
