@@ -41,8 +41,10 @@ var (
 			latestVerFlag,
 			refreshFlag,
 			progressFlag,
-			// blob
+			// blob-downloader
 			blobDownloadFlag,
+			chunkSizeFlag,
+			numWorkersFlag,
 			// archive
 			archpathGetFlag,
 			extractFlag,

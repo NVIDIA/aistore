@@ -25,7 +25,7 @@ echo "$pod_list"
 function is_pod_running {
     local pod_name="$1"
     local pod_status=$(kubectl get pod -n "$cert_manager_namespace" "$pod_name" -o jsonpath='{.status.phase}')
-    
+
     if [ "$pod_status" == "Running" ]; then
         return 0  # Pod is running
     else

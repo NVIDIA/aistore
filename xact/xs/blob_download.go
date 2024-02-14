@@ -281,8 +281,8 @@ outer:
 					r.p.args.fullSize, done.roff, sz)
 				goto fin
 			}
-			debug.Assert(sz > 0)
 			eof = r.p.args.fullSize <= done.roff+sz
+			debug.Assert(sz > 0 || eof)
 
 			// add pending in the offset-descending order
 			if done.roff != r.woff {

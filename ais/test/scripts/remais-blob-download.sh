@@ -7,6 +7,8 @@
 # - ais (CLI)
 # - aisloader
 
+# NOTE: max_num_downloads limit (hardcoded)
+
 ## Example usage: first, make sure remote ais cluster is attached, e.g.:
 #  $ ais show remote-cluster -H
 #  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
@@ -14,7 +16,7 @@
 ## Examples:
 #  $./remais-blob-download.sh --bucket ais://@remais/abc --maxsize 10mb --totalsize 1G
 #
-#  $./remais-blob-download.sh --bucket ais://@remais/abc --numworkers 5 --chunksize 500kb
+#  $./remais-blob-download.sh --bucket ais://@remais/abc --chunksize 500kb
 #################################################################################################
 
 if ! [ -x "$(command -v ais)" ]; then
@@ -28,17 +30,20 @@ fi
 
 ## Command line options and respective defaults
 bucket="ais://@remais/abc"
-minsize="10MiB"
-maxsize="10MiB"
-totalsize="100MiB"
-chunksize="1MB"
-numworkers=4
+
+minsize="10MiB"     ### for aisloader
+maxsize="10MiB"     ### ditto
+totalsize="100MiB"  ### ditto
+chunksize="1MB"     ### permutating (1mb, 2mb, 3mb) unless explicitly given in command line
 
 ## put some limit to it
-max_num_downloads=20
+max_num_downloads=20 ########## ---------------------------------------------------------------------
 
 ## destination for aisloader-generated content
 subdir="blob-$RANDOM"
+
+## initial number of the chunk-reading workers
+numworkers_initial=3
 
 while (( "$#" )); do
   case "${1}" in
@@ -47,7 +52,6 @@ while (( "$#" )); do
     --maxsize) maxsize=$2; shift; shift;;
     --totalsize) totalsize=$2; shift; shift;;
     --chunksize) chunksize=$2; shift; shift;;
-    --numworkers) numworkers=$2; shift; shift;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
 done
@@ -86,6 +90,16 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+chunk_size() {
+  if [ $chunksize == "1MB" ]; then
+    chunksize="2MB"
+  elif [ $chunksize == "2MB" ]; then
+    chunksize="3MB"
+  else
+    chunksize="1MB"
+  fi
+}
+
 ## aisloader => remais, to generate (PUT) content in $bucket/$subdir
 echo "1. Run aisloader"
 AIS_ENDPOINT=$rendpoint aisloader -bucket=$rbucket -subdir=$subdir -cleanup=false -numworkers=2 -quiet -pctput=100 -minsize=$minsize -maxsize=$maxsize -totalputsize=$totalsize
@@ -99,6 +113,7 @@ count=0 ## up to max_num_downloads
 ## first, run as xaction
 echo
 echo "2. Run blob-download jobs"
+numworkers=$numworkers_initial
 for f in $files; do
   xid=$(ais blob-download $bucket/$f --chunk-size $chunksize --num-workers $numworkers --nv || exit $?)
   ais wait $xid >/dev/null || exit $?
@@ -106,6 +121,11 @@ for f in $files; do
   if [ $count -ge $max_num_downloads ]; then
      break
   fi
+  numworkers=`expr $numworkers + 1`
+  if [ $numworkers -ge 16 ]; then
+     numworkers=$numworkers_initial
+  fi
+  chunk_size
 done
 
 echo "..."
@@ -116,12 +136,18 @@ echo
 echo "3. Run GET via blob-downloader - evict first..."
 ais evict $bucket --keep-md || exit $?
 count=0
+numworkers=$numworkers_initial
 for f in $files; do
-  ais get $bucket/$f /dev/null --blob-download >/dev/null || exit $?
+  ais get $bucket/$f /dev/null --blob-download --num-workers=$numworkers >/dev/null || exit $?
   count=`expr $count + 1`
   if [ $count -ge $max_num_downloads ]; then
      break
   fi
+  numworkers=`expr $numworkers + 1`
+  if [ $numworkers -ge 16 ]; then
+     numworkers=$numworkers_initial
+  fi
+  chunk_size
 done
 
 echo "..."

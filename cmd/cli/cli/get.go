@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -435,7 +436,24 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	if flagIsSet(c, blobDownloadFlag) {
 		debug.Assert(length == 0) // checked above
 		hdr = http.Header{apc.HdrBlobDownload: []string{"true"}}
+		if flagIsSet(c, chunkSizeFlag) {
+			if _, err := parseSizeFlag(c, chunkSizeFlag); err != nil {
+				return err
+			}
+			hdr.Set(apc.HdrBlobChunk, parseStrFlag(c, chunkSizeFlag))
+		}
+		if flagIsSet(c, numWorkersFlag) {
+			nw := parseIntFlag(c, numWorkersFlag)
+			if nw <= 0 || nw > 128 {
+				return fmt.Errorf("invalid %s=%d: expecting (1..128) range", flprn(numWorkersFlag), nw)
+			}
+			hdr.Set(apc.HdrBlobWorkers, strconv.Itoa(nw))
+		}
+	} else if flagIsSet(c, chunkSizeFlag) || flagIsSet(c, numWorkersFlag) {
+		return fmt.Errorf("command line options (%s, %s) can be used only together with %s",
+			qflprn(chunkSizeFlag), qflprn(numWorkersFlag), qflprn(blobDownloadFlag))
 	}
+
 	if outFile == fileStdIO {
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		quiet = true
