@@ -31,13 +31,16 @@ fi
 ## Command line options and respective defaults
 bucket="ais://@remais/abc"
 
-minsize="10MiB"     ### for aisloader
-maxsize="10MiB"     ### ditto
-totalsize="100MiB"  ### ditto
-chunksize="1MB"     ### permutating (1mb, 2mb, 3mb) unless explicitly given in command line
+## aisloader command line
+minsize="10MiB"
+maxsize="1GiB"
+totalsize="10GiB"
+
+## permutating (1mb, 2mb, 3mb) unless explicitly given in the command line
+chunksize="1MB"
 
 ## put some limit to it
-max_num_downloads=20 ########## ---------------------------------------------------------------------
+max_num_downloads=30 ########## ---------------------------------------------------------------------
 
 ## destination for aisloader-generated content
 subdir="blob-$RANDOM"
@@ -128,8 +131,11 @@ for f in $files; do
   chunk_size
 done
 
+## show some tails
 echo "..."
 ais show job blob-download --all | tail
+echo "..."
+ais ls $bucket --cached | tail
 
 ## second, run the same via GET
 echo
@@ -150,5 +156,8 @@ for f in $files; do
   chunk_size
 done
 
+## ditto
 echo "..."
 ais show job blob-download --all | tail
+echo "..."
+ais ls $bucket --cached | tail

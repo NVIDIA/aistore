@@ -189,13 +189,15 @@ func TestRemaisBlobDownloadScript(t *testing.T) {
 	}
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	name := bck.Cname("")
-	cmd := exec.Command("./scripts/remais-blob-download.sh",
-		"--bucket", name,
-		"--minsize", "1MB",
-		"--maxsize", "10MB",
-		"--totalsize", "100MB",
-		"--chunksize", "500K",
-		"--numworkers", "5")
+
+	// use remais-blob-download.sh defaults for everything except bucket name (e.g.):
+	// "--minsize", "1MB",
+	// "--maxsize", "10MB",
+	// "--totalsize", "100MB",
+	// "--chunksize", "500K",
+	// "--numworkers", "5"
+	cmd := exec.Command("./scripts/remais-blob-download.sh", "--bucket", name)
+
 	tlog.Logf("Running '%s' (this may take a while...)\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {

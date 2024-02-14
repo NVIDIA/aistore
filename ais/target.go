@@ -1398,18 +1398,18 @@ func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter)
 			return "", err
 		}
 	}
-	if !lom.TryLock(true) {
-		return "", cmn.NewErrBusy("blob", lom, "")
-	}
-	// do
-	xid, err = _blobdl(lom, args, w)
 
-	// NOTE:
 	// - try-lock (above) to load, check availability
 	// - unlock right away
 	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
 	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
+	if !lom.TryLock(true) {
+		return "", cmn.NewErrBusy("blob", lom, "")
+	}
 	lom.Unlock(true)
+
+	// do
+	xid, err = _blobdl(lom, args, w)
 
 	return xid, err
 }
