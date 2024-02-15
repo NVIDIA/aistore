@@ -105,7 +105,7 @@ $ aws s3api --endpoint-url http://localhost:8080/s3 head-object --bucket abc --k
 
 ## Presigned S3 requests
 
-AIStore also supports (passing through) [presignd S3 requests](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide).
+AIStore also supports (passing through) [presigned S3 requests](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide).
 
 To use this _feature_, you need to enable it - as follows:
 
@@ -113,7 +113,7 @@ To use this _feature_, you need to enable it - as follows:
 $ ais config cluster features Pass-Through-Signed-S3-Req
 ```
 
-Once we have our cluster configured we can prepare and issue presignd S3 request:
+Once we have our cluster configured we can prepare and issue presigned S3 request:
 1. First create a signed S3 request.
    ```commandline
    $ aws s3 presign s3://bucket/test.txt
@@ -124,7 +124,7 @@ Once we have our cluster configured we can prepare and issue presignd S3 request
    ```commandline
    $ curl -L -X -d 'testing 1 2 3' PUT https://localhost:8080/s3/bucket/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
    ```
-   At this point, AIStore will send the presignd (PUT) URL to S3 and, if successful, store the object in cluster.
+   At this point, AIStore will send the presigned (PUT) URL to S3 and, if successful, store the object in cluster.
 
 3. Check status of the object:
    ```commandline
