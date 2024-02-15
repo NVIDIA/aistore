@@ -154,3 +154,29 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool) (res CRMD) {
 	lom.Uncache()
 	return CRMD{ErrCode: errCode, Err: err}
 }
+
+// NOTE: must be locked; NOTE: Sync == false (ie., not deleting)
+func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err error) {
+	debug.AssertFunc(func() bool {
+		rc, exclusive := lom.IsLocked()
+		return exclusive || rc > 0
+	})
+	err = lom.Load(true /*cache it*/, true /*locked*/)
+	if err != nil {
+		return nil, false, err
+	}
+	if latest {
+		res := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/)
+		if res.Eq {
+			debug.AssertNoErr(res.Err)
+			return nil, false, nil
+		}
+		if res.Err != nil {
+			deleted = cos.IsNotExist(res.Err, res.ErrCode)
+			lom.Uncache()
+			return nil, deleted, res.Err
+		}
+		oa = res.ObjAttrs
+	}
+	return oa, false, nil
+}

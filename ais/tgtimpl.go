@@ -203,6 +203,12 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 	return 0, nil
 }
 
+func (t *target) GetColdBlob(lom *core.LOM) (xctn core.Xact, err error) {
+	var args apc.BlobMsg
+	_, xctn, err = t.blobdl(lom, &args, nil)
+	return xctn, err
+}
+
 func (t *target) Promote(params *core.PromoteParams) (errCode int, err error) {
 	lom := core.AllocLOM(params.ObjName)
 	if err = lom.InitBck(params.Bck.Bucket()); err == nil {

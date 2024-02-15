@@ -65,6 +65,9 @@ func (*TargetMock) CopyObject(*core.LOM, core.DM, *core.CopyParams) (int64, erro
 func (*TargetMock) GetCold(context.Context, *core.LOM, cmn.OWT) (int, error) {
 	return http.StatusOK, nil
 }
+func (*TargetMock) GetColdBlob(*core.LOM) (core.Xact, error) {
+	return nil, nil
+}
 
 func (*TargetMock) Health(*meta.Snode, time.Duration, url.Values) ([]byte, int, error) {
 	return nil, 0, nil

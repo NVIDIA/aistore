@@ -91,6 +91,8 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 		errCode int
 	)
 	lom.Lock(false)
+
+	// TODO: reuse lom.LoadLatest(), simplify
 	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsErrObjNought(err) {
 			lom.Unlock(false)
@@ -124,6 +126,8 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see core/lcache.go).                                             ==========================
 	lom.SetAtimeUnix(-time.Now().UnixNano())
+
+	// TODO -- FIXME: core.T.GetColdBlob() when the size >= msg.BlobThreshold
 
 	errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done

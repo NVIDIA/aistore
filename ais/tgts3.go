@@ -267,9 +267,12 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	lom := core.AllocLOM(objName)
 	dpq.isS3 = "true"
-	t.getObject(w, r, dpq, bck, lom)
-
+	lom, err = t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
+
+	if err != nil {
+		s3.WriteErr(w, r, err, 0)
+	}
 	dpqFree(dpq)
 }
 

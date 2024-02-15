@@ -265,8 +265,12 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom := core.AllocLOM(objName)
-	t.getObject(w, r, dpq, bck, lom)
+	lom, err = t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
+
+	if err != nil {
+		t._erris(w, r, dpq.silent, err, 0)
+	}
 	dpqFree(dpq)
 }
 

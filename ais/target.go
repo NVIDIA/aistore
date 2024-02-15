@@ -643,10 +643,12 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	if err := t.parseReq(w, r, apireq); err != nil {
+	err := t.parseReq(w, r, apireq)
+	if err != nil {
 		return
 	}
-	if err := apireq.dpq.parse(r.URL.RawQuery); err != nil {
+	err = apireq.dpq.parse(r.URL.RawQuery)
+	if err != nil {
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return
@@ -658,36 +660,39 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 			return
 		}
 	}
+
 	lom := core.AllocLOM(apireq.items[1])
-	lom = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
+	lom, err = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
+	if err != nil {
+		t._erris(w, r, apireq.dpq.silent, err, 0)
+	}
 	core.FreeLOM(lom)
 }
 
-func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *core.LOM) *core.LOM {
+func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *core.LOM) (*core.LOM, error) {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
 			err = lom.InitBck(bck.Bucket())
 		}
 		if err != nil {
-			t._erris(w, r, dpq.silent, err, 0)
-			return lom
+			return lom, err
 		}
 	}
 
 	// two special flows
 	if dpq.etlName != "" {
 		t.getETL(w, r, dpq.etlName, bck, lom.ObjName)
-		return lom
+		return lom, nil
 	}
 	if cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)) {
 		var args apc.BlobMsg
 		if err := args.FromHeader(r.Header); err != nil {
-			t._erris(w, r, dpq.silent, err, 0)
-			return lom
+			return lom, err
 		}
-		t.blobdl(lom, &args, w) // NOTE: a blocking call w/ simultaneous Tx
-		return lom
+		// NOTE: make a blocking call w/ simultaneous Tx
+		_, _, err := t.blobdl(lom, &args, w)
+		return lom, err
 	}
 
 	// GET: regular | archive | range
@@ -728,17 +733,23 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	// do
 	if errCode, err := goi.getObject(); err != nil {
 		t.statsT.IncErr(stats.GetCount)
+
+		// handle right here, return nil
 		if err != errSendingResp {
-			silent := dpq.silent
-			if errCode == http.StatusNotFound {
-				silent = "true"
+			if dpq.isS3 != "" {
+				s3.WriteErr(w, r, err, errCode)
+			} else {
+				silent := dpq.silent
+				if errCode == http.StatusNotFound {
+					silent = "true"
+				}
+				t._erris(w, r, silent, err, errCode)
 			}
-			t._erris(w, r, silent, err, errCode)
 		}
 	}
 	lom = goi.lom
 	freeGOI(goi)
-	return lom
+	return lom, nil
 }
 
 // err in silence
@@ -937,7 +948,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
-		if xid, err = t.blobdl(lom, &args, nil); err == nil && xid != "" {
+		if xid, _, err = t.blobdl(lom, &args, nil); xid != "" {
+			debug.AssertNoErr(err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 			// lom is eventually freed by x-blob
@@ -1389,13 +1401,13 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter) (xid string, err error) {
+func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
 		cs = t.OOS(nil)
 		if err := cs.Err(); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
@@ -1403,62 +1415,59 @@ func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter)
 	// - unlock right away
 	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
 	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
-	if !lom.TryLock(true) {
-		return "", cmn.NewErrBusy("blob", lom, "")
+	if !lom.TryLock(false) {
+		return "", nil, cmn.NewErrBusy("blob", lom, "")
 	}
-	lom.Unlock(true)
 
-	// do
-	xid, err = _blobdl(lom, args, w)
+	oa, deleted, err := lom.LoadLatest(args.LatestVer)
+	lom.Unlock(false)
 
-	return xid, err
+	// w/ assorted returns
+	switch {
+	case deleted: // remotely
+		debug.Assert(args.LatestVer && err != nil)
+		return "", nil, err
+	case oa != nil:
+		debug.Assert(args.LatestVer && err == nil)
+		// not latest
+	case err == nil:
+		return "", nil, nil // nothing to do
+	case !cmn.IsErrObjNought(err):
+		return "", nil, err
+	}
+
+	// handle: (not-present || latest-not-eq)
+	return _blobdl(lom, args, w, oa)
 }
 
 // returns empty xid ("") if nothing to do
-func _blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter) (xid string, _ error) {
-	var oa *cmn.ObjAttrs
-
-	// exists; latest
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cos.IsNotExist(err, 0) {
-			return xid, err
-		}
-	} else if args.LatestVer {
-		res := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/)
-		if res.Eq || res.Err != nil {
-			return xid, res.Err
-		}
-		oa = res.ObjAttrs
-	} else {
-		return xid, nil
-	}
-
-	// open workfile
+func _blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+	// create wfqn
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, "blob-dl")
 	lmfh, err := lom.CreateFile(wfqn)
 	if err != nil {
-		return xid, err
+		return "", nil, err
 	}
 
 	// new
-	xid = cos.GenUUID()
+	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, lom, oa, wfqn, lmfh, args, w)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
 		if errRemove := cos.RemoveFile(wfqn); errRemove != nil {
 			nlog.Errorln("nested err", errRemove)
 		}
-		return "", rns.Err
+		return "", nil, rns.Err
 	}
 
 	// a) via x-start, x-blob-download
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
 	if w == nil {
 		go xblob.Run(nil)
-		return xid, nil
+		return xblob.ID(), xblob, nil
 	}
 	// b) via GET (blocking w/ simultaneous transmission)
 	xblob.Run(nil)
-	return xid, xblob.AbortErr()
+	return "", nil, xblob.AbortErr()
 }
 
 func (t *target) fsErr(err error, filepath string) {
