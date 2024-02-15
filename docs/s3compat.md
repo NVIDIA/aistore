@@ -7,12 +7,13 @@ redirect_from:
  - /docs/s3compat.md/
 ---
 
-AIS supports Amazon S3 in two distinct and different ways:
+AIS supports Amazon S3 in 3 (three) distinct and different ways:
 
-1. On the back, via [backend](providers.md) abstraction. Specifically for S3 the corresponding [backend](providers.md) implementation currently utilizes [AWS SDK for Go](https://aws.amazon.com/sdk-for-go);
+1. On the back, via [backend](providers.md) abstraction. Specifically for the S3 [backend](providers.md), the implementation currently utilizes [AWS SDK for Go v2](https://github.com/aws/aws-sdk-go-v2).
 2. On the client-facing front, AIS provides S3 compatible API, so that existing S3 applications could use AIStore out of the box and without the need to change their (existing) code.
+3. Similar to the option 2. but instead of instantiating, signing, and issuing requests to S3, AIS executes already signed S3 request ([presigned URLs](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide). Elsewhere in the documentation and the source, we refer to this mechanism as a _pass-through_.
 
-This document talks about the latter - about AIS providing S3 compatible API.
+This document talks about the 2. and 3. - about AIS providing S3 compatible API to clients and apps.
 
 There's a separate, albeit closely related, [document](/docs/s3cmd.md) that explains how to configure `s3cmd` and then maybe tweak AIStore configuration to work with it:
 
@@ -25,11 +26,11 @@ For additional background, see:
 
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
 - [Quick example using `aws` CLI](#quick-example-using-aws-cli)
   - [PUT(object)](#putobject)
   - [GET(object)](#getobject)
   - [HEAD(object)](#headobject)
+- [Presigned S3 requests](#presigned-s3-requests)
 - [Quick example using Internet Browser](#quick-example-using-internet-browser)
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
@@ -99,6 +100,63 @@ $ aws s3api --endpoint-url http://localhost:8080/s3 head-object --bucket abc --k
     "ContentLength": 1075,
     "ETag": "f70a21a0c5fa26a93820b0bef5be7619",
     "LastModified": "Mon, 19 Dec 2022 22:23:05 GMT"
+}
+```
+
+## Presigned S3 requests
+
+AIStore also supports (passing through) [presignd S3 requests](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide).
+
+To use this _feature_, you need to enable it - as follows:
+
+```commandline
+$ ais config cluster features Pass-Through-Signed-S3-Req
+```
+
+Once we have our cluster configured we can prepare and issue presignd S3 request:
+1. First create a signed S3 request.
+   ```commandline
+   $ aws s3 presign s3://bucket/test.txt
+   https://bucket.s3.us-west-2.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
+   ```
+
+2. Issue request against AIStore:
+   ```commandline
+   $ curl -L -X -d 'testing 1 2 3' PUT https://localhost:8080/s3/bucket/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
+   ```
+   At this point, AIStore will send the presignd (PUT) URL to S3 and, if successful, store the object in cluster.
+
+3. Check status of the object:
+   ```commandline
+   ais bucket ls s3://bucket
+   NAME          SIZE   CACHED  STATUS
+   test.txt      13B    yes     ok
+   ```
+
+It is also possible to achieve the same using a Go client. You will need to define a custom `RoundTripper` that changes URL from S3 to AIStore, e.g.:
+
+```go
+type customTransport struct {
+	rt http.RoundTripper
+}
+
+func (t *customTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	bucket := strings.Split(req.URL.Host, ".")[0]
+	req.URL.Host = "localhost:8080" // <--- CHANGE THIS.
+	req.URL.Path = "/s3/" + bucket + req.URL.Path
+	return t.rt.RoundTrip(req)
+}
+
+...
+
+func main() {
+	customClient := &http.Client{...}
+	s3Client := s3.New(s3.Options{HTTPClient: customClient})
+	getOutput, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: aws.String("bucket"),
+		Key:    aws.String("test.txt"),
+	})
+	...
 }
 ```
 
@@ -474,6 +532,7 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 * CORS
 * Website endpoints
 * CloudFront CDN
+
 
 ## Boto3 Compatibility
 
