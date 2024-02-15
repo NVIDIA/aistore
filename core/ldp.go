@@ -128,7 +128,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool) (res CRMD) {
 	oa, errCode, err := T.Backend(bck).HeadObj(context.Background(), lom)
 	if err == nil {
 		debug.Assert(errCode == 0, errCode)
-		return CRMD{Eq: lom.Equal(oa), ErrCode: errCode}
+		return CRMD{ObjAttrs: oa, Eq: lom.Equal(oa), ErrCode: errCode}
 	}
 
 	if errCode == http.StatusNotFound {
@@ -163,7 +163,9 @@ func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err err
 	})
 	err = lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
-		return nil, false, err
+		if !cmn.IsErrObjNought(err) || !latest {
+			return nil, false, err
+		}
 	}
 	if latest {
 		res := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/)
@@ -173,7 +175,6 @@ func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err err
 		}
 		if res.Err != nil {
 			deleted = cos.IsNotExist(res.Err, res.ErrCode)
-			lom.Uncache()
 			return nil, deleted, res.Err
 		}
 		oa = res.ObjAttrs

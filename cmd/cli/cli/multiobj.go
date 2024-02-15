@@ -435,6 +435,12 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 			msg.Template = lr.tmplObjs
 			msg.LatestVer = flagIsSet(c, latestVerFlag)
 		}
+		if flagIsSet(c, blobThresholdFlag) {
+			msg.BlobThreshold, err = parseSizeFlag(c, blobThresholdFlag)
+			if err != nil {
+				return
+			}
+		}
 		xid, err = api.Prefetch(apiBP, lr.bck, msg)
 		kind = apc.ActPrefetchObjects
 		action = "prefetch"

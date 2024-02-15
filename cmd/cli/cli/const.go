@@ -748,9 +748,16 @@ var (
 
 	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' to all questions"}
 
+	// usage: STDIN, blob
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
 		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
+	}
+
+	blobThresholdFlag = cli.StringFlag{
+		Name: "blob-threshold",
+		Usage: "utilize built-in blob-downloader for remote objects greater than the specified (threshold) size\n" +
+			indent1 + "\tin IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
 	}
 
 	blobDownloadFlag = cli.BoolFlag{

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
@@ -46,6 +47,12 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *prfFactory) Start() (err error) {
+	if p.msg.BlobThreshold > 0 {
+		if a := int64(minChunkSize << 2); p.msg.BlobThreshold < a {
+			return fmt.Errorf("blob-threshold (size) is too small: must be at least %s", cos.ToSizeIEC(a, 0))
+		}
+	}
+
 	b := p.Bck
 	if err = b.Init(core.T.Bowner()); err != nil {
 		return err
@@ -88,50 +95,49 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	var (
 		err     error
+		size    int64
 		errCode int
 	)
-	lom.Lock(false)
 
-	// TODO: reuse lom.LoadLatest(), simplify
-	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-		if !cmn.IsErrObjNought(err) {
-			lom.Unlock(false)
-			goto eret
-		}
-	} else {
-		if !r.latestVer {
-			lom.Unlock(false)
-			return // nothing to do
-		}
-		res := lom.CheckRemoteMD(true /*rlocked*/, false /*synchronize*/)
-		if res.Eq {
-			debug.Assert(res.Err == nil)
-			lom.Unlock(false)
-			return // nothing to do
-		}
-		if err = res.Err; err != nil {
-			lom.Unlock(false)
-			if cos.IsNotExist(err, res.ErrCode) && lrit.lrp != lrpList {
-				return // not found, prefix or range
-			}
-			goto eret
-		}
-	}
+	lom.Lock(false)
+	oa, deleted, err := lom.LoadLatest(r.latestVer || r.msg.BlobThreshold > 0) // NOTE: shortcut to find size
 	lom.Unlock(false)
+
+	// handle assorted returns
+	switch {
+	case deleted: // remotely
+		debug.Assert(r.latestVer && err != nil)
+		if lrit.lrp != lrpList {
+			return // deleted or not found remotely, prefix or range
+		}
+		goto eret
+	case oa != nil:
+		// not latest
+		size = oa.Size
+	case err == nil:
+		return // nothing to do
+	case !cmn.IsErrObjNought(err):
+		goto eret
+	}
 
 	// Minimal locking, optimistic concurrency ====================================================
 	// Not setting atime (a.k.a. access time) as prefetching != actual access.
 	//
 	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
-	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
+	// housekeeping traversal will remove it. Using negative `-now` value for subsequent correction
 	// (see core/lcache.go).                                             ==========================
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 
-	// TODO -- FIXME: core.T.GetColdBlob() when the size >= msg.BlobThreshold
+	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold {
+		err = _prefetchBlob(lom)
+	} else {
+		errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
+		if err == nil { // done
+			r.ObjsAdd(1, lom.SizeBytes())
+		}
+	}
 
-	errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
-		r.ObjsAdd(1, lom.SizeBytes())
 		return
 	}
 	if cos.IsNotExist(err, errCode) && lrit.lrp != lrpList {
@@ -139,6 +145,34 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	}
 eret:
 	r.AddErr(err, 5, cos.SmoduleXs)
+}
+
+// TODO -- FIXME: initial, hardcoded, and simplified
+func _prefetchBlob(lom *core.LOM) error {
+	var (
+		total time.Duration
+		sleep = 5 * time.Second
+		lom2  = core.AllocLOM(lom.ObjName)
+	)
+	if err := lom2.InitBck(lom.Bucket()); err != nil {
+		return err
+	}
+	xctn, err := core.T.GetColdBlob(lom2)
+	if err != nil {
+		return err
+	}
+	for !xctn.Finished() {
+		time.Sleep(sleep)
+		total += sleep
+		if total >= time.Minute {
+			break
+		}
+	}
+	if xctn.Finished() {
+		return xctn.AbortErr()
+	}
+	nlog.Warningln(xctn.Name(), "- is taking more than 1 minute to complete")
+	return nil // (leaving x-blob dangling)
 }
 
 func (r *prefetch) Snap() (snap *core.Snap) {

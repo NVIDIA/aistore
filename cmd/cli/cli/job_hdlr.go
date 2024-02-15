@@ -83,6 +83,7 @@ var (
 			dryRunFlag,
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			latestVerFlag,
+			blobThresholdFlag,
 		),
 		cmdBlobDownload: {
 			refreshFlag,

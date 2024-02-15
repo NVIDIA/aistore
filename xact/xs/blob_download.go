@@ -350,13 +350,17 @@ fin:
 	cos.Close(r.p.args.lmfh)
 
 	if err == nil {
-		debug.Assert(r.p.args.fullSize == r.woff)
-		r.p.args.lom.SetSize(r.woff)
-		if r.cksum.H != nil {
-			r.cksum.Finalize()
-			r.p.args.lom.SetCksum(r.cksum.Clone())
+		if r.p.args.fullSize > r.woff {
+			err = fmt.Errorf("%s: full %d > %d off (terminating?..)", r.Name(), r.p.args.fullSize, r.woff)
+			nlog.Errorln(err)
+		} else {
+			r.p.args.lom.SetSize(r.woff)
+			if r.cksum.H != nil {
+				r.cksum.Finalize()
+				r.p.args.lom.SetCksum(r.cksum.Clone())
+			}
+			_, err = core.T.FinalizeObj(r.p.args.lom, r.p.args.wfqn, r, cmn.OwtGetPrefetchLock)
 		}
-		_, err = core.T.FinalizeObj(r.p.args.lom, r.p.args.wfqn, r, cmn.OwtGetPrefetchLock)
 	}
 	if err == nil {
 		r.ObjsAdd(1, 0)
