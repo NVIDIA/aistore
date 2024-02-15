@@ -115,6 +115,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 			return
 		}
 	}
+	debug.Assert(svc != nil)
 	region = svc.Options().Region
 	debug.Assert(region != "")
 
@@ -150,8 +151,13 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		versioning bool
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
-	if err != nil && cmn.Rom.FastV(4, cos.SmoduleBackend) {
-		nlog.Warningln(err)
+	if err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
 	}
 
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
@@ -287,8 +293,13 @@ func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int
 		cloudBck   = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
-	if err != nil && cmn.Rom.FastV(4, cos.SmoduleBackend) {
-		nlog.Warningln(err)
+	if err != nil {
+		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
 	}
 	headOutput, err = svc.HeadObject(context.Background(), &s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -373,8 +384,13 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 		}
 	)
 	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_object]")
-	if err != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Warningln(err)
+	if err != nil {
+		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
 	}
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
@@ -462,8 +478,13 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, extraArgs *core.Extra
 	}
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
-	if err != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Warningln(err)
+	if err != nil {
+		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
 	}
 
 	md[cos.S3MetadataChecksumType] = cksumType
@@ -512,8 +533,13 @@ func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
-	if err != nil && cmn.Rom.FastV(4, cos.SmoduleBackend) {
-		nlog.Warningln(err)
+	if err != nil {
+		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
 	}
 	_, err = svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),
