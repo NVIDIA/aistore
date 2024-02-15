@@ -691,7 +691,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			return lom, err
 		}
 		// NOTE: make a blocking call w/ simultaneous Tx
-		_, _, err := t.blobdl(lom, &args, w)
+		_, _, err := t.blobdl(lom, nil /*oa*/, &args, w)
 		return lom, err
 	}
 
@@ -948,7 +948,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
-		if xid, _, err = t.blobdl(lom, &args, nil); xid != "" {
+		if xid, _, err = t.blobdl(lom, nil /*oa*/, &args, nil /*writer*/); xid != "" {
 			debug.AssertNoErr(err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
@@ -1401,7 +1401,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter) (string, *xs.XactBlobDl, error) {
+func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, args *apc.BlobMsg, w http.ResponseWriter) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
@@ -1409,6 +1409,10 @@ func (t *target) blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter)
 		if err := cs.Err(); err != nil {
 			return "", nil, err
 		}
+	}
+
+	if oa != nil {
+		return _blobdl(lom, args, w, oa)
 	}
 
 	// - try-lock (above) to load, check availability

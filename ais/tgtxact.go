@@ -237,7 +237,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		err := lom.InitBck(&args.Bck)
 		if err == nil {
 			// default tunables when executing via x-start API
-			xid, _, err = t.blobdl(lom, &apc.BlobMsg{}, nil)
+			xid, _, err = t.blobdl(lom, nil /*oa*/, &apc.BlobMsg{}, nil /*writer*/)
 		}
 		if err != nil {
 			core.FreeLOM(lom)

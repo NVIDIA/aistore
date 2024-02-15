@@ -129,7 +129,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold {
-		err = _prefetchBlob(lom)
+		err = _prefetchBlob(lom, oa)
 	} else {
 		errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 		if err == nil { // done
@@ -148,7 +148,7 @@ eret:
 }
 
 // TODO -- FIXME: initial, hardcoded, and simplified
-func _prefetchBlob(lom *core.LOM) error {
+func _prefetchBlob(lom *core.LOM, oa *cmn.ObjAttrs) error {
 	var (
 		total time.Duration
 		sleep = 5 * time.Second
@@ -157,7 +157,7 @@ func _prefetchBlob(lom *core.LOM) error {
 	if err := lom2.InitBck(lom.Bucket()); err != nil {
 		return err
 	}
-	xctn, err := core.T.GetColdBlob(lom2)
+	xctn, err := core.T.GetColdBlob(lom2, oa)
 	if err != nil {
 		return err
 	}
