@@ -126,7 +126,7 @@ var (
 		Usage: "run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
 			indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
 			indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- use 4 concurrent readers to download each of the 2 blobs\n" +
-			indent1 + "Note: when _not_ using '--progress' option, run 'ais show job' to monitor.",
+			indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor.",
 		ArgsUsage:    objectArgument,
 		Flags:        startSpecialFlags[cmdBlobDownload],
 		Action:       blobDownloadHandler,
