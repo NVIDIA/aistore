@@ -71,6 +71,22 @@ Further, there's the capability referred to as [global namespace](https://github
 
 > For performance tuning and preparing AIS nodes for bare-metal deployment, see [performance](/docs/performance.md).
 
+## Existing datasets
+
+AIStore supports multiple ways to populate itself with existing datasets, including (but not limited to):
+
+* **on demand**, often during the first epoch;
+* **copy** entire bucket or its selected virtual subdirectories;
+* **copy** multiple matching objects;
+* **archive** multiple objects
+* **prefetch** remote bucket or parts of thereof;
+* **download** raw http(s) addressible directories, including (but not limited to) Cloud storages;
+* **promote** NFS or SMB shares accessible by one or multiple (or all) AIS target nodes;
+
+> The on-demand "way" is maybe the most popular, whereby users just start running their workloads against a [remote bucket](docs/providers.md) with AIS cluster positioned as an intermediate fast tier.
+
+But there's more. In v3.22, we introduce [blob downloader](docs/blob_downloader.md), a special facility to download very large remote objects (BLOBs).
+
 ## Installing from release binaries
 
 Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](Makefile) from source or, alternatively, installed directly from GitHub:
@@ -117,6 +133,7 @@ With a little effort, they all could be extracted and used outside.
 - Amazon S3
   - [`s3cmd` client](/docs/s3cmd.md)
   - [S3 compatibility](/docs/s3compat.md)
+  - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
   - [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)
 - [CLI](/docs/cli.md)
   - [`ais help`](/docs/cli/help.md)
