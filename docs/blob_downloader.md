@@ -1,3 +1,12 @@
+---
+layout: post
+title: Blob Downloader
+permalink: /docs/blob_downloader
+redirect_from:
+ - /blob_downloader.md/
+ - /docs/blob_downloader.md/
+---
+
 ## Background
 
 AIStore supports multiple ways to populate itself with existing datasets, including (but not limited to):
@@ -32,29 +41,31 @@ User can control (or tune-up) the number of workers and the chunk size(s), among
 
 In addition to massively parallel reading (**), blob downloader also:
 
-* stores and _finalizes_ (checksums, protects, replicates, erasure codes as per bucket configuration) downloaded object;
-* optionally(**), transmits the loaded content concurrently.
+* stores and _finalizes_ (checksums, replicates, erasure codes - as per bucket configuration) downloaded object;
+* optionally(**), concurrently transmits the loaded content to requesting user.
 
 > (**) assuming sufficient and _not_ rate-limited network bandwidth
 
-> (**) see [GET](#get-via-blob-downloader) section below
+> (**) see [GET](#2-get-via-blob-downloader) section below
 
 ## Flavors
 
-For users, blob downloader exists in 3 distinct flavors:
+For users, blob downloader is currently(**) available in 3 distinct flavors:
 
-| Name | Go API(**) | CLI |
+| Name | Go API | CLI |
 | --- | --- | --- |
-| `blob-download` job | [api.BlobDownload](https://github.com/NVIDIA/aistore/blob/main/api/blob.go) | `ais blob-download`  |
-| `GET` request | [api.GetObject](https://github.com/NVIDIA/aistore/blob/main/api/object.go) and friends  | `ais get`  |
-| `prefetch` job | [api.Prefetch](https://github.com/NVIDIA/aistore/blob/main/api/multiobj.go) | `ais prefetch`  |
+| 1. `blob-download` job | [api.BlobDownload](https://github.com/NVIDIA/aistore/blob/main/api/blob.go) | `ais blob-download`  |
+| 2. `GET` request | [api.GetObject](https://github.com/NVIDIA/aistore/blob/main/api/object.go) and friends  | `ais get`  |
+| 3. `prefetch` job | [api.Prefetch](https://github.com/NVIDIA/aistore/blob/main/api/multiobj.go) | `ais prefetch`  |
 
 
-> (**) At the time of this writing none of the above is supported (yet) in our [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk).
+> (**) There's a plan to integrate blob downloader with [Internet Downloader](downloader.md) and, generally, all supported mechanisms that one way or another read remote objects and files.
 
-Rest of the text provides additional details, insights, and context.
+> (**) At the time of this writing, none of the above is supported (yet) in our [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk).
 
-## Usage
+Rest of this text talks separately about each of the 3 "flavors" providing additional details, insights, and context.
+
+## 1. Usage
 
 To put some of the blob downloader's functionality into immediate perspective, let's see some CLI:
 
@@ -91,7 +102,7 @@ OPTIONS:
                         - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
 ```
 
-## GET via blob downloader
+## 2. GET via blob downloader
 
 Some of the common use cases boil down to the following:
 
@@ -108,6 +119,54 @@ To meet this motivation, AIS now supports `GET` request with additional (and opt
 | `ais-blob-chunk` | "1mb", "1234567", "128KiB"  | [system defaults](#blob-downloader) above |
 | `ais-blob-workers` | "3", "7", "16"  | ditto |
 
-## Prefetch remote buckets w/ blob size threshold
+## 3. Prefetch remote buckets w/ blob size threshold
 
-**TODO**
+`Prefetch` is another batch operation, one of the supported job types that can be invoked both via Go or Python call, or command line.
+
+The idea of size threshold applies here as well, with the only difference being the _scope_: single object in [GET](#2-get-via-blob-downloader), all matching objects in `prefetch`.
+
+> The `prefetch` operation supports multi-object selection via the usual `--list`, `--template`, and `--prefix` options.
+
+But first thing first, let's see an example.
+
+```console
+$ ais ls s3://abc
+NAME             SIZE            CACHED
+aisloader        39.30MiB        no
+largefile        5.76GiB         no
+smallfile        100.00MiB       no
+```
+
+Given the bucket (above), we now run `prefetch` with 1MB size threshold:
+
+```console
+$ ais prefetch s3://abc --blob-threshold 1mb
+prefetch-objects[E-w0gjdm1z]: prefetch entire bucket s3://abc. To monitor the progress, run 'ais show job E-w0gjdm1z'
+```
+
+But notice, `prefetch` stats do not move:
+
+```console
+$ ais show job E-w0gjdm1z
+NODE             ID              KIND                 BUCKET     OBJECTS      BYTES       START        END     STATE
+CAHt8081         E-w0gjdm1z      prefetch-listrange   s3://abc   -            -           10:08:24     -       Running
+```
+
+And that is because it is the blob downloader that actually does all the work behind the scenes:
+
+```console
+$ ais show job blob-download
+blob-download[lP3Lpe5jJ]
+NODE             ID              KIND            BUCKET         OBJECTS      BYTES        START        END     STATE
+CAHt8081         lP3Lpe5jJ       blob-download   s3://abc       -            20.00MiB     10:08:25     -       Running
+```
+
+The work that shortly thereafter results in:
+
+```console
+$ ais ls s3://abc
+NAME             SIZE            CACHED
+aisloader        39.30MiB        yes
+largefile        5.76GiB         yes
+smallfile        100.00MiB       yes
+```

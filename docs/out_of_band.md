@@ -1,3 +1,12 @@
+---
+layout: post
+title: Out-of-band updates
+permalink: /docs/out_of_band
+redirect_from:
+ - /out_of_band.md/
+ - /docs/out_of_band.md/
+---
+
 ## Out-of-band updates
 
 One (but not the only one) way to deal with out-of-band updates is to configure bucket as follows:

@@ -1,3 +1,12 @@
+---
+layout: post
+title: Node lifecycle
+permalink: /docs/lifecycle_node
+redirect_from:
+ - /lifecycle_node.md/
+ - /docs/lifecycle_node.md/
+---
+
 There's a set of topics in system management that can often be found under alternative subtitles:
 "graceful termination and cleanup", "shutting down and restarting", "adding/removing members", "joining and leaving cluster", and similar.
 
