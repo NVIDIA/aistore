@@ -104,7 +104,7 @@ func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh 
 		numWorkers: msg.NumWorkers,
 	}
 	if oa == nil {
-		// backend.HeadObj iff not passed (via prior latest-ver check)
+		// backend.HeadObj() unless already done via prior latest-ver or prefetch-threshold check
 		oah, errCode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
 			return xreg.RenewRes{Err: err}
@@ -118,6 +118,9 @@ func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh 
 	lom.SetAtimeUnix(oa.Atime)
 	// and separately:
 	args.fullSize = oa.Size
+
+	// NOTE: unlike etag, checksum is not always present
+	// OTOH, a large object's etag won't be md5 and cannot be used anyway
 	args.expCksum = oa.Cksum
 
 	if msg.FullSize > 0 && msg.FullSize != args.fullSize {
@@ -339,6 +342,7 @@ outer:
 				}
 			}
 		case <-r.ChanAbort():
+			err = cmn.ErrXactUserAbort
 			goto fin
 		}
 	}
@@ -350,9 +354,9 @@ fin:
 	cos.Close(r.p.args.lmfh)
 
 	if err == nil {
-		if r.p.args.fullSize > r.woff {
-			err = fmt.Errorf("%s: full %d > %d off (terminating?..)", r.Name(), r.p.args.fullSize, r.woff)
-			nlog.Errorln(err)
+		if r.p.args.fullSize != r.woff {
+			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.p.args.fullSize, r.woff)
+			debug.AssertNoErr(err)
 		} else {
 			r.p.args.lom.SetSize(r.woff)
 			if r.cksum.H != nil {
@@ -368,7 +372,9 @@ fin:
 		if errRemove := cos.RemoveFile(r.p.args.wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}
-		r.Abort(err)
+		if err != cmn.ErrXactUserAbort {
+			r.Abort(err)
+		}
 	}
 
 	r.wg.Wait()
