@@ -220,7 +220,9 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProp
 	}
 	bckProps = make(cos.StrKVs, 2)
 	bckProps[apc.HdrBackendProvider] = apc.Azure
-	bckProps[apc.HdrBucketVerEnabled] = "true"
+
+	bckProps[apc.HdrBucketVerEnabled] = "true" // NOTE: etag
+
 	return bckProps, http.StatusOK, nil
 }
 
@@ -267,15 +269,11 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
 			continue
 		}
-		etag := azEncodeEtag(blob.Properties.Etag)
 
-		if blob.VersionID != nil {
-			// ref: https://learn.microsoft.com/en-us/azure/storage/blobs/versioning-overview#how-blob-versioning-works
-			entry.Version = *blob.VersionID
-		} else {
-			entry.Version = etag // NOTE: for non-versioned blobs default to using Etag as the version
-		}
 		entry.Checksum = azEncodeChecksum(blob.Properties.ContentMD5)
+
+		etag := azEncodeEtag(blob.Properties.Etag)
+		entry.Version = etag // NOTE: workaround to provide for validate-warm-get
 
 		// custom
 		if msg.WantProp(apc.GetPropsCustom) {
@@ -285,6 +283,10 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 			}
 			if blob.Properties.ContentType != nil {
 				custom[cos.HdrContentType] = *blob.Properties.ContentType
+			}
+			if blob.VersionID != nil {
+				// ref: https://learn.microsoft.com/en-us/azure/storage/blobs/versioning-overview#how-blob-versioning-works
+				custom[cmn.VersionObjMD] = *blob.VersionID
 			}
 			entry.Custom = cmn.CustomMD2S(custom)
 		}
@@ -357,11 +359,8 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Ob
 	etag := azEncodeEtag(resp.ETag())
 	oa.SetCustomKey(cmn.ETag, etag)
 
-	if v := resp.VersionID(); v != "" {
-		oa.Ver = v
-	} else {
-		oa.Ver = etag // NOTE: (ListObjects and elsewhere)
-	}
+	oa.Ver = etag // NOTE: workaround to provide for validate-warm-get
+
 	if md5 := azEncodeChecksum(resp.ContentMD5()); md5 != "" {
 		oa.SetCustomKey(cmn.MD5ObjMD, md5)
 	}
@@ -437,11 +436,9 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset
 		lom.SetCustomKey(cmn.SourceObjMD, apc.Azure)
 		etag := azEncodeEtag(respProps.ETag())
 		lom.SetCustomKey(cmn.ETag, etag)
-		if v := respProps.VersionID(); v != "" {
-			lom.SetVersion(v)
-		} else {
-			lom.SetVersion(etag) // (ListObjects and elsewhere)
-		}
+
+		lom.SetVersion(etag) // NOTE: workaround to provide for validate-warm-get
+
 		if md5 := azEncodeChecksum(respProps.ContentMD5()); md5 != "" {
 			lom.SetCustomKey(cmn.MD5ObjMD, md5)
 			res.ExpCksum = cos.NewCksum(cos.ChecksumMD5, md5)
@@ -472,27 +469,25 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *core.ExtraArg
 		BufferSize: 64 * 1024,
 		MaxBuffers: 3,
 	}
-	putResp, err := azblob.UploadStreamToBlockBlob(azctx, r, blobURL, opts)
+	commonResp, err := azblob.UploadStreamToBlockBlob(azctx, r, blobURL, opts)
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return status, err
 	}
 
-	resp := putResp.Response()
+	resp := commonResp.Response()
 	resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
 		err := cmn.NewErrFailedTo(core.T, azErrPrefix+": PUT]", cloudBck.Cname(lom.ObjName), nil, resp.StatusCode)
 		return resp.StatusCode, err
 	}
 
-	etag := azEncodeEtag(putResp.ETag())
+	etag := azEncodeEtag(commonResp.ETag())
 	lom.SetCustomKey(cmn.ETag, etag)
-	if v := putResp.Version(); v != "" {
-		lom.SetVersion(v)
-	} else {
-		lom.SetVersion(etag)
-	}
-	if v := putResp.LastModified(); !v.IsZero() {
+
+	lom.SetVersion(etag) // NOTE: workaround to provide for validate-warm-get
+
+	if v := commonResp.LastModified(); !v.IsZero() {
 		lom.SetCustomKey(cmn.LastModified, fmtTime(v))
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
@@ -508,7 +503,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *core.ExtraArg
 func (ap *azureProvider) DeleteObj(lom *core.LOM) (int, error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
-		cntURL   = ap.s.NewContainerURL(lom.Bck().Name)
+		cntURL   = ap.s.NewContainerURL(cloudBck.Name)
 		blobURL  = cntURL.NewBlobURL(lom.ObjName)
 	)
 	rsp, err := blobURL.Delete(azctx, azblob.DeleteSnapshotsOptionInclude, azblob.BlobAccessConditions{})

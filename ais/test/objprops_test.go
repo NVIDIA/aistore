@@ -59,9 +59,8 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 	}
 
 	reslist := testListObjects(t, proxyURL, bck, msg)
-	if reslist == nil {
-		return
-	}
+	tassert.Errorf(t, len(oldVersions) == len(reslist.Entries), "len(oldVersions) %d != %d len(reslist.Entries)",
+		len(oldVersions), len(reslist.Entries))
 
 	var (
 		ver string
@@ -85,6 +84,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 			t.Fatalf("%s: version is empty", bck.Cname(m.Name))
 		}
 	}
+	tlog.Logf("All %d object versions updated\n", len(reslist.Entries))
 
 	return
 }
@@ -400,9 +400,6 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 
 	// rewrite objects and compare versions - they should change
 	newVersions := propsUpdateObjects(t, proxyURL, bck, filesList, msg, versionEnabled, cksumType)
-	if len(newVersions) != len(filesList) {
-		t.Errorf("Wrong number of objects: expected %d, have %d", len(filesList), len(newVersions))
-	}
 
 	// check that files are read from cache
 	propsReadObjects(t, proxyURL, bck, filesList)
