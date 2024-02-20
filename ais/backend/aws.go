@@ -56,8 +56,10 @@ type (
 )
 
 var (
-	clients    map[string]*s3.Client // one s3.Client aka "svc" per (profile, region, endpoint) triplet
-	cmu        sync.Mutex
+	// map[string]*s3.Client, with one s3.Client a.k.a. "svc"
+	// per (profile, region, endpoint) triplet
+	clients sync.Map
+
 	s3Endpoint string
 	awsProfile string
 )
@@ -66,7 +68,6 @@ var (
 var _ core.BackendProvider = (*awsProvider)(nil)
 
 func NewAWS(t core.TargetPut) (core.BackendProvider, error) {
-	clients = make(map[string]*s3.Client, 2)
 	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
 	awsProfile = os.Getenv(awsEnvConfigProfile)
 	return &awsProvider{t: t}, nil
@@ -562,17 +563,15 @@ func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 // newClient creates new S3 client on a per-region basis or, more precisely,
 // per (region, endpoint) pair - and note that s3 endpoint is per-bucket configurable.
 // If the client already exists newClient simply returns it.
-//
 // From S3 SDK:
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
-func newClient(conf sessConf, tag string) (svc *s3.Client, region string, err error) {
+func newClient(conf sessConf, tag string) (*s3.Client, string, error) {
 	var (
 		endpoint = s3Endpoint
 		profile  = awsProfile
+		region   = conf.region
 	)
-	region = conf.region
-
 	if conf.bck != nil && conf.bck.Props != nil {
 		if region == "" {
 			region = conf.bck.Props.Extra.AWS.CloudRegion
@@ -584,14 +583,13 @@ func newClient(conf sessConf, tag string) (svc *s3.Client, region string, err er
 			profile = conf.bck.Props.Extra.AWS.Profile
 		}
 	}
-	cid := _cid(profile, region, endpoint)
 
-	// reuse
-	cmu.Lock()
-	svc = clients[cid]
-	cmu.Unlock()
-	if svc != nil {
-		return
+	cid := _cid(profile, region, endpoint)
+	asvc, loaded := clients.Load(cid)
+	if loaded {
+		svc, ok := asvc.(*s3.Client)
+		debug.Assert(ok)
+		return svc, region, nil
 	}
 
 	// slow path
@@ -603,18 +601,16 @@ func newClient(conf sessConf, tag string) (svc *s3.Client, region string, err er
 		if tag != "" {
 			err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
 		}
-		svc = s3.NewFromConfig(cfg)
-		return
+		return s3.NewFromConfig(cfg), "", err
 	}
-	svc = s3.NewFromConfig(cfg, func(options *s3.Options) {
+	svc := s3.NewFromConfig(cfg, func(options *s3.Options) {
 		options.Region = region
 	})
 	debug.Assertf(region == svc.Options().Region, "%s != %s", region, svc.Options().Region)
 
-	cmu.Lock()
-	clients[cid] = svc
-	cmu.Unlock()
-	return
+	// race or no race, no particular reason to do LoadOrStore
+	clients.Store(cid, svc)
+	return svc, region, nil
 }
 
 func _cid(profile, region, endpoint string) string {
