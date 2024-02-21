@@ -458,7 +458,14 @@ func readCredFile() (projectID string) {
 	return
 }
 
+const gcpErrPrefix = "gcp-error"
+
 func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+		nlog.InfoDepth(1, "begin "+gcpErrPrefix+" =========================")
+		nlog.InfoDepth(1, gcpError)
+		nlog.InfoDepth(1, "end "+gcpErrPrefix+" ===========================")
+	}
 	if gcpError == storage.ErrBucketNotExist {
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	}
@@ -482,7 +489,7 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 
 // (compare w/ _awsErr)
 func _gcpErr(gcpError error) error {
-	return errors.New("gcp-error[" + gcpError.Error() + "]")
+	return errors.New(gcpErrPrefix + "[" + gcpError.Error() + "]")
 }
 
 func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {

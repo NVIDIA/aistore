@@ -670,8 +670,16 @@ func getBucketLocation(svc *s3.Client, bckName string) (region string, err error
 	return
 }
 
+const awsErrPrefix = "aws-error"
+
 // For reference see https://github.com/aws/aws-sdk-go-v2/issues/1110#issuecomment-1054643716.
 func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, error) {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+		nlog.InfoDepth(1, "begin "+awsErrPrefix+" =========================")
+		nlog.InfoDepth(1, awsError)
+		nlog.InfoDepth(1, "end "+awsErrPrefix+" ===========================")
+	}
+
 	var reqErr smithy.APIError
 	if !errors.As(awsError, &reqErr) {
 		return http.StatusInternalServerError, _awsErr(awsError)
@@ -681,7 +689,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 	case *types.NoSuchBucket:
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case *types.NoSuchKey:
-		return http.StatusNotFound, errors.New("aws-error[NotFound: " + bck.Cname(objName) + "]")
+		return http.StatusNotFound, errors.New(awsErrPrefix + "[NotFound: " + bck.Cname(objName) + "]")
 	default:
 		var httpResponseErr *awshttp.ResponseError
 		if errors.As(awsError, &httpResponseErr) {
@@ -711,5 +719,5 @@ func _awsErr(awsError error) error {
 		// `idx+1` because we want to remove `\n`.
 		msg += " (" + origErrMsg[idx+1:] + ")"
 	}
-	return errors.New("aws-error[" + strings.TrimSuffix(msg, ".") + "]")
+	return errors.New(awsErrPrefix + "[" + strings.TrimSuffix(msg, ".") + "]")
 }
