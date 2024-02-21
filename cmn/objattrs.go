@@ -146,8 +146,7 @@ func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 	oa.Size = oah.SizeBytes()
 	oa.Ver = oah.Version()
 	if !skipCksum {
-		debug.Assert(oah.Checksum() != nil, oah.String())
-		oa.Cksum = oah.Checksum().Clone() // checksum by value (***)
+		oa.Cksum = oah.Checksum().Clone()
 	}
 	for k, v := range oah.GetCustomMD() {
 		oa.SetCustomKey(k, v)

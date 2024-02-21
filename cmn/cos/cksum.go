@@ -16,7 +16,6 @@ import (
 	"io"
 	"sort"
 
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -191,8 +190,7 @@ func (ck *Cksum) Value() string {
 }
 
 func (ck *Cksum) Clone() *Cksum {
-	debug.Assert(ck != nil)
-	return &Cksum{ty: ck.ty, value: ck.value}
+	return &Cksum{value: ck.Value(), ty: ck.Type()}
 }
 
 func (ck *Cksum) String() string {
