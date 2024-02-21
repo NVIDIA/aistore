@@ -59,6 +59,7 @@ type (
 		DefaultProvider string        `json:"default_provider,omitempty"` // NOTE: not supported yet (see app.go)
 		NoColor         bool          `json:"no_color"`
 		Verbose         bool          `json:"verbose"` // more warnings, errors with backtraces and details
+		NoMore          bool          `json:"no_more"`
 	}
 )
 
@@ -115,6 +116,7 @@ func init() {
 		Aliases:         DefaultAliasConfig,
 		DefaultProvider: apc.AIS,
 		NoColor:         false,
+		NoMore:          false,
 	}
 }
 

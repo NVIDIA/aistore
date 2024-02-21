@@ -387,15 +387,26 @@ If `--path` is set, display only the path to the CLI configuration file.
 ```console
 $ ais config cli show
 PROPERTY                         VALUE
-aliases                          map[get:object get ls:bucket ls put:object put]
-auth.url                         http://127.0.0.1:52001
-cluster.default_ais_host         http://127.0.0.1:8080
-cluster.default_docker_host      http://172.50.0.2:8080
-cluster.skip_verify_crt          false
-cluster.url                      http://127.0.0.1:8080
-default_provider                 ais
-timeout.http_timeout             0s
-timeout.tcp_timeout              60s
+aliases				 cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict';
+                                 ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start';
+				 blob-download => 'job start blob-download'; download => 'job start download';
+				 dsort => 'job start dsort'; stop => 'job stop'; wait => 'job wait';
+				 get => 'object get'; prefetch => 'object prefetch'; put => 'object put';
+				 rmo => 'object rm'
+auth.url			 http://127.0.0.1:52001
+cluster.client_ca_tls            
+cluster.client_crt               
+cluster.client_crt_key           
+cluster.default_ais_host	 http://127.0.0.1:8080
+cluster.default_docker_host	 http://172.50.0.2:8080
+cluster.skip_verify_crt		 false
+cluster.url			 http://127.0.0.1:8080
+default_provider		 ais
+no_color			 false
+no_more				 false
+timeout.http_timeout		 0s
+timeout.tcp_timeout		 60s
+verbose				 false
 
 $ ais config cli show --path
 /home/user/.ais/cli/cli.json
@@ -420,20 +431,38 @@ $ ais config cli show --json
         "url": "http://127.0.0.1:8080",
         "default_ais_host": "http://127.0.0.1:8080",
         "default_docker_host": "http://172.50.0.2:8080",
+        "client_crt": "",
+        "client_crt_key": "",
+        "client_ca_tls": "",
         "skip_verify_crt": false
     },
     "timeout": {
-        "tcp_timeout": "61s",
+        "tcp_timeout": "60s",
         "http_timeout": "0s"
     },
     "auth": {
         "url": "http://127.0.0.1:52001"
     },
     "aliases": {
-        "get": "object get",
+        "wait": "job wait",
+        "cp": "bucket cp",
         "ls": "bucket ls",
-        "put": "object put"
+        "prefetch": "object prefetch",
+        "rmo": "object rm",
+        "dsort": "job start dsort",
+        "get": "object get",
+        "rmb": "bucket rm",
+        "start": "job start",
+        "put": "object put",
+        "stop": "job stop",
+        "blob-download": "job start blob-download",
+        "create": "bucket create",
+        "download": "job start download",
+        "evict": "bucket evict"
     },
-    "default_provider": "ais"
+    "default_provider": "ais",
+    "no_color": false,
+    "verbose": false,
+    "no_more": false
 }
 ```

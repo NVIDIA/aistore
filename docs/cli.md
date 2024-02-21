@@ -17,7 +17,7 @@ redirect_from:
 - [Global options](#global-options)
 - [Backend Provider](#backend-provider)
 - [Verbose errors](#verbose-errors)
-
+- [CLI Help Paging](#cli-help-paging)
 
 AIS command-line interface (CLI) is a tool to easily manage and monitor every aspect of the AIS clusters' lifecycle.
 
@@ -197,22 +197,26 @@ $ ais config cli --json
         "url": "http://127.0.0.1:52001"
     },
     "aliases": {
+        "dsort": "job start dsort",
+        "prefetch": "object prefetch",
+        "rmo": "object rm",
+        "get": "object get",
+        "ls": "bucket ls",
         "wait": "job wait",
-        "cp": "bucket cp",
         "create": "bucket create",
         "download": "job start download",
-        "evict": "bucket evict",
-        "get": "object get",
-        "put": "object put",
-        "dsort": "job start dsort",
-        "ls": "bucket ls",
-        "rmb": "bucket rm",
         "start": "job start",
-        "stop": "job stop"
+        "stop": "job stop",
+        "blob-download": "job start blob-download",
+        "cp": "bucket cp",
+        "evict": "bucket evict",
+        "put": "object put",
+        "rmb": "bucket rm"
     },
     "default_provider": "ais",
     "no_color": false,
-    "verbose": false
+    "verbose": false,
+    "no_more": false
 }
 ```
 
@@ -321,4 +325,13 @@ $ ais config cli set verbose true
 
 $ ais bucket mv ais://ddd ais://mmm
 Error: {"tcode":"ErrBckNotFound","message":"bucket \"ais://ddd\" does not exist","method":"HEAD","url_path":"/v1/buckets/ddd","remote_addr":"127.0.0.1:57026","caller":"","node":"p[JFkp8080]","status":404}: HEAD /v1/buckets/ddd (stack: [utils.go:445 <- bucket.go:104 <- bucket_hdlr.go:343])
+```
+
+## CLI Help Paging
+
+To view help content page-by-page, CLI uses the `more` command. Disable this by setting `no_more` to `true` in your configuration.
+
+```console
+$ ais config cli set no_more=true
+"no_more" set to: "true" (was: "false")
 ```

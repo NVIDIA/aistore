@@ -8,13 +8,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
@@ -112,6 +115,41 @@ var helpCommand = cli.Command{
 	},
 }
 
+func paginate(_ io.Writer, templ string, data interface{}) {
+	gmm, err := memsys.NewMMSA("cli-out-buffer", true)
+	if err != nil {
+		exitln("memsys:", err)
+	}
+	sgl := gmm.NewSGL(0)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		exitln("os.pipe:", err)
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		if _, err := io.Copy(sgl, r); err != nil {
+			exitln("write sgl:", err)
+		}
+		r.Close()
+	}()
+
+	cli.HelpPrinterCustom(w, templ, data, nil)
+	w.Close()
+	wg.Wait()
+
+	cmd := exec.Command("more")
+	cmd.Stdin = sgl
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		exitln("cmd more:", err)
+	}
+}
+
 func cliConfVerbose() bool { return cfg.Verbose } // more warnings, errors with backtraces and details
 
 func helpCmdHandler(c *cli.Context) error {
@@ -119,9 +157,7 @@ func helpCmdHandler(c *cli.Context) error {
 	if args.Present() {
 		return cli.ShowCommandHelp(c, args.First())
 	}
-
-	cli.ShowAppHelp(c)
-	return nil
+	return cli.ShowAppHelp(c)
 }
 
 // main method
@@ -240,9 +276,10 @@ func (a *acli) init(version string, emptyCmdline bool) {
 	app.Writer = a.outWriter
 	app.ErrWriter = a.errWriter
 	app.Description = cliDescr
-
+	if !cfg.NoMore {
+		cli.HelpPrinter = paginate
+	}
 	cli.AppHelpTemplate = appHelpTemplate
-
 	a.setupCommands(emptyCmdline)
 }
 
@@ -290,8 +327,7 @@ func (a *acli) enableSearch() {
 }
 
 func setupCommandHelp(commands []cli.Command) {
-	lst := splitCsv(cli.HelpFlag.GetName())
-	helpName := lst[0]
+	helpName := fl1n(cli.HelpFlag.GetName())
 	for i := range commands {
 		command := &commands[i]
 
@@ -422,4 +458,9 @@ func setLongRunOutfile(c *cli.Context, file *os.File) {
 func getLongRunOutfile(c *cli.Context) *os.File {
 	params := c.App.Metadata[metadata].(*longRun)
 	return params.outFile
+}
+
+func exitln(prompt string, err error) {
+	fmt.Fprintln(os.Stderr, prompt, err)
+	os.Exit(1)
 }
