@@ -737,17 +737,17 @@ func (m *ioContext) setNonDefaultBucketProps() {
 	copies := int64(rand.Intn(2))
 	props := &cmn.BpropsToSet{
 		Mirror: &cmn.MirrorConfToSet{
-			Enabled: apc.Bool(copies > 0),
-			Copies:  apc.Int64(copies),
+			Enabled: apc.Ptr(copies > 0),
+			Copies:  apc.Ptr[int64](copies),
 		},
 		Cksum: &cmn.CksumConfToSet{
-			Type:            apc.String(cos.ChecksumSHA512),
-			EnableReadRange: apc.Bool(true),
-			ValidateWarmGet: apc.Bool(true),
-			ValidateColdGet: apc.Bool(false),
+			Type:            apc.Ptr(cos.ChecksumSHA512),
+			EnableReadRange: apc.Ptr(true),
+			ValidateWarmGet: apc.Ptr(true),
+			ValidateColdGet: apc.Ptr(false),
 		},
 		Extra: &cmn.ExtraToSet{
-			HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.String("/abc")},
+			HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.Ptr("/abc")},
 		},
 	}
 	_, err := api.SetBucketProps(baseParams, m.bck, props)
@@ -799,8 +799,8 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 			props: &cmn.BpropsToSet{
 				Mirror: &cmn.MirrorConfToSet{
-					Enabled: apc.Bool(true),
-					Copies:  apc.Int64(3),
+					Enabled: apc.Ptr(true),
+					Copies:  apc.Ptr[int64](3),
 				},
 			},
 			skipArgs: tools.SkipTestArgs{Long: true},
@@ -810,9 +810,9 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
 			props: &cmn.BpropsToSet{
 				EC: &cmn.ECConfToSet{
-					DataSlices:   apc.Int(2),
-					ParitySlices: apc.Int(2),
-					ObjSizeLimit: apc.Int64(0),
+					DataSlices:   apc.Ptr(2),
+					ParitySlices: apc.Ptr(2),
+					ObjSizeLimit: apc.Ptr[int64](0),
 				},
 			},
 			skipArgs: tools.SkipTestArgs{Long: true},

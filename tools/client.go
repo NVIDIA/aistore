@@ -249,8 +249,8 @@ func SetBackendBck(t *testing.T, bp api.BaseParams, srcBck, dstBck cmn.Bck) {
 
 	_, err = api.SetBucketProps(bp, srcBck, &cmn.BpropsToSet{
 		BackendBck: &cmn.BackendBckToSet{
-			Name:     apc.String(dstBck.Name),
-			Provider: apc.String(p.Provider),
+			Name:     apc.Ptr(dstBck.Name),
+			Provider: apc.Ptr(p.Provider),
 		},
 	})
 	tassert.CheckFatal(t, err)

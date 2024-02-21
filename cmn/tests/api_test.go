@@ -22,7 +22,7 @@ var _ = Describe("API", func() {
 			Entry("non-nested field",
 				cmn.Bprops{},
 				cmn.BpropsToSet{
-					Access: apc.AccAttrs(1024),
+					Access: apc.Ptr[apc.AccessAttrs](1024),
 				},
 				cmn.Bprops{
 					Access: 1024,
@@ -33,7 +33,7 @@ var _ = Describe("API", func() {
 					Provider: apc.AWS,
 				},
 				cmn.BpropsToSet{
-					Access: apc.AccAttrs(1024),
+					Access: apc.Ptr[apc.AccessAttrs](1024),
 				},
 				cmn.Bprops{
 					Provider: apc.AWS,
@@ -44,7 +44,7 @@ var _ = Describe("API", func() {
 				cmn.Bprops{},
 				cmn.BpropsToSet{
 					Cksum: &cmn.CksumConfToSet{
-						Type: apc.String("value"),
+						Type: apc.Ptr("value"),
 					},
 				},
 				cmn.Bprops{
@@ -57,12 +57,12 @@ var _ = Describe("API", func() {
 				cmn.Bprops{},
 				cmn.BpropsToSet{
 					Cksum: &cmn.CksumConfToSet{
-						Type:            apc.String("value"),
-						ValidateColdGet: apc.Bool(true),
+						Type:            apc.Ptr("value"),
+						ValidateColdGet: apc.Ptr(true),
 					},
 					EC: &cmn.ECConfToSet{
-						Enabled:      apc.Bool(true),
-						ObjSizeLimit: apc.Int64(1024),
+						Enabled:      apc.Ptr(true),
+						ObjSizeLimit: apc.Ptr[int64](1024),
 					},
 				},
 				cmn.Bprops{
@@ -96,13 +96,13 @@ var _ = Describe("API", func() {
 				},
 				cmn.BpropsToSet{
 					Cksum: &cmn.CksumConfToSet{
-						Type: apc.String("value"),
+						Type: apc.Ptr("value"),
 					},
 					Mirror: &cmn.MirrorConfToSet{
-						Enabled: apc.Bool(true),
-						Copies:  apc.Int64(3),
+						Enabled: apc.Ptr(true),
+						Copies:  apc.Ptr[int64](3),
 					},
-					Access: apc.AccAttrs(10),
+					Access: apc.Ptr[apc.AccessAttrs](10),
 				},
 				cmn.Bprops{
 					Provider: apc.AWS,
@@ -125,31 +125,31 @@ var _ = Describe("API", func() {
 				cmn.Bprops{},
 				cmn.BpropsToSet{
 					Versioning: &cmn.VersionConfToSet{
-						Enabled:         apc.Bool(true),
-						ValidateWarmGet: apc.Bool(true),
+						Enabled:         apc.Ptr(true),
+						ValidateWarmGet: apc.Ptr(true),
 					},
 					Cksum: &cmn.CksumConfToSet{
-						Type:            apc.String("value"),
-						ValidateColdGet: apc.Bool(true),
-						ValidateWarmGet: apc.Bool(false),
-						ValidateObjMove: apc.Bool(true),
-						EnableReadRange: apc.Bool(false),
+						Type:            apc.Ptr("value"),
+						ValidateColdGet: apc.Ptr(true),
+						ValidateWarmGet: apc.Ptr(false),
+						ValidateObjMove: apc.Ptr(true),
+						EnableReadRange: apc.Ptr(false),
 					},
 					Mirror: &cmn.MirrorConfToSet{
-						Copies:  apc.Int64(10),
-						Burst:   apc.Int(32),
-						Enabled: apc.Bool(false),
+						Copies:  apc.Ptr[int64](10),
+						Burst:   apc.Ptr(32),
+						Enabled: apc.Ptr(false),
 					},
 					EC: &cmn.ECConfToSet{
-						Enabled:      apc.Bool(true),
-						ObjSizeLimit: apc.Int64(1024),
-						DataSlices:   apc.Int(1024),
-						ParitySlices: apc.Int(1024),
-						Compression:  apc.String("false"),
+						Enabled:      apc.Ptr(true),
+						ObjSizeLimit: apc.Ptr[int64](1024),
+						DataSlices:   apc.Ptr(1024),
+						ParitySlices: apc.Ptr(1024),
+						Compression:  apc.Ptr("false"),
 					},
-					Access: apc.AccAttrs(1024),
+					Access: apc.Ptr[apc.AccessAttrs](1024),
 					WritePolicy: &cmn.WritePolicyConfToSet{
-						MD: apc.WPolicy(apc.WriteDelayed),
+						MD: apc.Ptr(apc.WriteDelayed),
 					},
 				},
 				cmn.Bprops{

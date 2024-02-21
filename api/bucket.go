@@ -272,7 +272,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xid string, e
 	ecConf := string(cos.MustMarshal(&cmn.ECConfToSet{
 		DataSlices:   &data,
 		ParitySlices: &parity,
-		Enabled:      apc.Bool(true),
+		Enabled:      apc.Ptr(true),
 	}))
 	reqParams := AllocRp()
 	{

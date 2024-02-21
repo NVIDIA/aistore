@@ -747,7 +747,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		Cksum: &cmn.CksumConfToSet{ValidateWarmGet: apc.Bool(true)},
+		Cksum: &cmn.CksumConfToSet{ValidateWarmGet: apc.Ptr(true)},
 	})
 	tassert.CheckFatal(t, err)
 
@@ -788,7 +788,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		Cksum: &cmn.CksumConfToSet{ValidateWarmGet: apc.Bool(true)},
+		Cksum: &cmn.CksumConfToSet{ValidateWarmGet: apc.Ptr(true)},
 	})
 	tassert.CheckFatal(t, err)
 
@@ -824,7 +824,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		Cksum: &cmn.CksumConfToSet{ValidateWarmGet: apc.Bool(true)},
+		Cksum: &cmn.CksumConfToSet{ValidateWarmGet: apc.Ptr(true)},
 	})
 	tassert.CheckFatal(t, err)
 
@@ -960,7 +960,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	// Disallow PUT (TODO: use apc.AceObjUpdate instead when/if supported)
 	aattrs := apc.AccessAll &^ apc.AcePUT
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		Access: apc.AccAttrs(aattrs),
+		Access: apc.Ptr(aattrs),
 	})
 	tassert.CheckFatal(t, err)
 
@@ -980,7 +980,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	tlog.Logln("Allow updates back again, and download " + link)
 	aattrs = apc.AccessAll
 	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		Access: apc.AccAttrs(aattrs),
+		Access: apc.Ptr(aattrs),
 	})
 	tassert.CheckFatal(t, err)
 

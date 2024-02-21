@@ -252,7 +252,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		cloudBck = bck.RemoteBck()
 		cntURL   = ap.u + "/" + cloudBck.Name
 		num      = int32(msg.PageSize)
-		opts     = container.ListBlobsFlatOptions{Prefix: apc.String(msg.Prefix), MaxResults: &num}
+		opts     = container.ListBlobsFlatOptions{Prefix: apc.Ptr(msg.Prefix), MaxResults: &num}
 	)
 	client, err := container.NewClientWithSharedKeyCredential(cntURL, ap.creds, nil)
 	if err != nil {
@@ -262,7 +262,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		nlog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
-		opts.Marker = apc.String(msg.ContinuationToken)
+		opts.Marker = apc.Ptr(msg.ContinuationToken)
 	}
 
 	pager := client.NewListBlobsFlatPager(&opts)

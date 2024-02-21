@@ -142,7 +142,7 @@ func TestConfigSetGlobal(t *testing.T) {
 	)
 	ecCondition = !config.EC.Enabled
 	toUpdate := &cmn.ConfigToSet{EC: &cmn.ECConfToSet{
-		Enabled: apc.Bool(ecCondition),
+		Enabled: apc.Ptr(ecCondition),
 	}}
 
 	tools.SetClusterConfigUsingMsg(t, toUpdate)

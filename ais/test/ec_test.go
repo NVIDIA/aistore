@@ -115,10 +115,10 @@ var ecTests = []ecTest{
 func defaultECBckProps(o *ecOptions) *cmn.BpropsToSet {
 	return &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{
-			Enabled:      apc.Bool(true),
-			ObjSizeLimit: apc.Int64(ecObjLimit),
-			DataSlices:   apc.Int(o.dataCnt),
-			ParitySlices: apc.Int(o.parityCnt),
+			Enabled:      apc.Ptr(true),
+			ObjSizeLimit: apc.Ptr[int64](ecObjLimit),
+			DataSlices:   apc.Ptr(o.dataCnt),
+			ParitySlices: apc.Ptr(o.parityCnt),
 		},
 	}
 }
@@ -570,10 +570,10 @@ func TestECChange(t *testing.T) {
 
 	bucketProps := &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{
-			Enabled:      apc.Bool(true),
-			ObjSizeLimit: apc.Int64(ecObjLimit),
-			DataSlices:   apc.Int(1),
-			ParitySlices: apc.Int(1),
+			Enabled:      apc.Ptr(true),
+			ObjSizeLimit: apc.Ptr[int64](ecObjLimit),
+			DataSlices:   apc.Ptr(1),
+			ParitySlices: apc.Ptr(1),
 		},
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
@@ -583,14 +583,14 @@ func TestECChange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logln("Trying to set too many slices")
-	bucketProps.EC.DataSlices = apc.Int(25)
-	bucketProps.EC.ParitySlices = apc.Int(25)
+	bucketProps.EC.DataSlices = apc.Ptr(25)
+	bucketProps.EC.ParitySlices = apc.Ptr(25)
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err != nil, "Enabling EC must fail in case of the number of targets fewer than the number of slices")
 
 	tlog.Logln("Enabling EC")
-	bucketProps.EC.DataSlices = apc.Int(1)
-	bucketProps.EC.ParitySlices = apc.Int(1)
+	bucketProps.EC.DataSlices = apc.Ptr(1)
+	bucketProps.EC.ParitySlices = apc.Ptr(1)
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.CheckFatal(t, err)
 
@@ -599,18 +599,18 @@ func TestECChange(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logln("Trying to disable EC")
-	bucketProps.EC.Enabled = apc.Bool(false)
+	bucketProps.EC.Enabled = apc.Ptr(false)
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err == nil, "Disabling EC failed: %v", err)
 
 	tlog.Logln("Trying to re-enable EC")
-	bucketProps.EC.Enabled = apc.Bool(true)
+	bucketProps.EC.Enabled = apc.Ptr(true)
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err == nil, "Enabling EC failed: %v", err)
 
 	tlog.Logln("Trying to modify EC options when EC is enabled")
-	bucketProps.EC.Enabled = apc.Bool(true)
-	bucketProps.EC.ObjSizeLimit = apc.Int64(300000)
+	bucketProps.EC.Enabled = apc.Ptr(true)
+	bucketProps.EC.ObjSizeLimit = apc.Ptr[int64](300000)
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	tassert.Errorf(t, err != nil, "Modifiying EC properties must fail")
 
@@ -831,7 +831,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 				o.objSizeLimit = test.objSizeLimit
 				setBucketECProps(t, baseParams, bck, defaultECBckProps(o))
 				defer api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-					EC: &cmn.ECConfToSet{Enabled: apc.Bool(false)},
+					EC: &cmn.ECConfToSet{Enabled: apc.Ptr(false)},
 				})
 
 				defer func() {
@@ -1089,7 +1089,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	// Disable EC, put normal files, check if were created properly
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		EC: &cmn.ECConfToSet{Enabled: apc.Bool(false)},
+		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(false)},
 	})
 	tassert.CheckError(t, err)
 
@@ -1112,7 +1112,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	// Enable EC again, check if EC was started properly and creates files with EC correctly
 	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		EC: &cmn.ECConfToSet{Enabled: apc.Bool(true)},
+		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 	})
 	tassert.CheckError(t, err)
 
@@ -1212,14 +1212,14 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	tlog.Logf("Disabling EC for the bucket %s\n", bck)
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		EC: &cmn.ECConfToSet{Enabled: apc.Bool(false)},
+		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(false)},
 	})
 	tassert.CheckError(t, err)
 
 	time.Sleep(15 * time.Millisecond)
 	tlog.Logf("Enabling EC for the bucket %s\n", bck)
 	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
-		EC: &cmn.ECConfToSet{Enabled: apc.Bool(true)},
+		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 	})
 	tassert.CheckError(t, err)
 	reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck}
@@ -1514,7 +1514,7 @@ func TestECXattrs(t *testing.T) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
 	bckProps.Versioning = &cmn.VersionConfToSet{
-		Enabled: apc.Bool(true),
+		Enabled: apc.Ptr(true),
 	}
 
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
@@ -2234,10 +2234,10 @@ func TestECBucketEncode(t *testing.T) {
 	tlog.Logf("Enabling EC\n")
 	bckPropsToUpate := &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{
-			Enabled:      apc.Bool(true),
-			ObjSizeLimit: apc.Int64(1),
-			DataSlices:   apc.Int(1),
-			ParitySlices: apc.Int(parityCnt),
+			Enabled:      apc.Ptr(true),
+			ObjSizeLimit: apc.Ptr[int64](1),
+			DataSlices:   apc.Ptr(1),
+			ParitySlices: apc.Ptr(parityCnt),
 		},
 	}
 	_, err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)

@@ -1062,7 +1062,7 @@ func switchHTTPS(toCfg *cmn.ProxyConfToSet, fromCfg *cmn.ProxyConf, use bool) {
 	f := func(to *string, from string) *string {
 		if to == nil && strings.HasPrefix(from, fromScheme) {
 			s := strings.Replace(from, fromScheme, toScheme, 1)
-			to = apc.String(s)
+			to = apc.Ptr(s)
 		}
 		return to
 	}
