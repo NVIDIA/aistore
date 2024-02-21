@@ -22,6 +22,7 @@ See also:
 The rest of this document is structured as follows:
 
 - [At a glance](#at-a-glance)
+- [Terminology](#terminology)
 - [ETL](#etl)
 - [Recently Added](#recently-added)
 - [Design Philosophy](#design-philosophy)
@@ -40,6 +41,20 @@ The rest of this document is structured as follows:
 - [CLI](#cli)
 - [_No limitations_ principle](#no-limitations-principle)
 
+## At a glance
+
+Following is a high-level **block diagram** with an emphasis on supported frontend and backend APIs, and the capability to scale-out horizontally. The picture also tries to make the point that AIS aggregates an arbitrary numbers of storage servers ("targets") with local or locally accessible drives, whereby each drive is formatted with a local filesystem of choice (e.g., xfs or zfs).
+
+![At-a-Glance](images/cluster-block-2024.png)
+
+In any aistore cluster, there are **two kinds of nodes**: proxies (a.k.a. gateways) and storage nodes (targets):
+
+![Proxies and Targets](images/proxy-target-block-2024.png)
+
+Proxies provide access points ("endpoints") for the frontend API. At any point in time there is a single **primary** proxy that also controls versioning and distribution of the current cluster map. When and if the primary fails, another proxy is majority-elected to perform the (primary) role.
+
+All user data is equally distributed (or [balanced](/docs/rebalance.md)) across all storage nodes ("targets"). Which, combined with zero (I/O routing and metadata processing) overhead, provides for linear scale with no limitation on the total number of aggregated storage drives.
+
 ## Terminology
 
 * [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
@@ -53,14 +68,6 @@ The rest of this document is structured as follows:
    - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
 
 * [Xaction](/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
-
-## At a glance
-
-Following is a high-level block diagram with an emphasis on supported frontend and backend APIs, and the capability to scale-out horizontally. The picture also tries to make the point that AIS aggregates arbitrary numbers of storage servers with local drive(s), whereby each drive is formatted with a local filesystem of choice (e.g., xfs or zfs).
-
-![At-a-Glance](images/ais-block.png)
-
-All user data is at any point in time equally [balanced](/docs/rebalance.md) across all storage nodes (aka "targets"). Which, combined with zero (I/O routing and metadata processing) overhead, provides for linear scale with no limitation on the total number of aggregated storage drives.
 
 ## ETL
 
