@@ -494,18 +494,29 @@ func bucketAndPropsCompletions(c *cli.Context) {
 		f(c)
 		return
 	} else if c.NArg() == 1 {
-		var props []string
+		var sections []string
 		err := cmn.IterFields(cmn.Bprops{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 			section := strings.Split(uniqueTag, cmn.IterFieldNameSepa)[0]
-			props = append(props, section)
+			sections = append(sections, section)
 			if flagIsSet(c, verboseFlag) {
-				props = append(props, uniqueTag)
+				sections = append(sections, uniqueTag)
 			}
 			return nil, false
 		})
+		// NOTE: do not have bprops at this point, may miss remote backend (prop)
+		if bck, err := parseBckURI(c, c.Args().Get(0), false); err == nil {
+			p := apc.NormalizeProvider(bck.Provider)
+			cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (e error, f bool) {
+				if strings.Contains(tag, "."+p) { // e.g., "extra.aws"
+					sections = append(sections, "extra")
+				}
+				return
+			})
+		}
+
 		debug.AssertNoErr(err)
-		sort.Strings(props)
-		for _, prop := range props {
+		sort.Strings(sections)
+		for _, prop := range sections {
 			fmt.Println(prop)
 		}
 	}

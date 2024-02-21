@@ -163,6 +163,9 @@ func (dm *DataMover) String() string {
 	case dm.stage.regred.Load():
 		s = "reg-" // not open yet or closed but not unreg-ed yet
 	}
+	if dm.data.streams == nil {
+		return "dm-nil-" + s
+	}
 	if dm.data.streams.UsePDU() {
 		return "dm-pdu-" + s + dm.data.streams.Trname()
 	}
