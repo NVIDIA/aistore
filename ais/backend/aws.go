@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -463,18 +464,20 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, extraArgs *core.Extra
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]string, 2)
 	)
-	if oreq := extraArgs.Req; oreq != nil {
-		q := oreq.URL.Query()
-		pts := aiss3.NewPassThroughSignedReq(extraArgs.DataClient, oreq, lom, r, q)
-		resp, err := pts.Do()
-		if err != nil {
-			return resp.StatusCode, err
-		}
-		if resp != nil {
-			uploadOutput = &s3manager.UploadOutput{
-				ETag: aws.String(resp.Header.Get(cos.HdrETag)),
+	if cmn.Rom.Features().IsSet(feat.PassThroughSignedS3Req) {
+		if oreq := extraArgs.Req; oreq != nil {
+			q := oreq.URL.Query()
+			pts := aiss3.NewPassThroughSignedReq(extraArgs.DataClient, oreq, lom, r, q)
+			resp, err := pts.Do()
+			if err != nil {
+				return resp.StatusCode, err
 			}
-			goto exit
+			if resp != nil {
+				uploadOutput = &s3manager.UploadOutput{
+					ETag: aws.String(resp.Header.Get(cos.HdrETag)),
+				}
+				goto exit
+			}
 		}
 	}
 
