@@ -21,7 +21,7 @@ func calcPageSize(pageSize, maxPageSize uint) uint {
 	if pageSize == 0 {
 		return maxPageSize
 	}
-	return pageSize
+	return min(pageSize, maxPageSize)
 }
 
 //nolint:deadcode,unused // It is used but in `*_mock.go` files.

@@ -80,8 +80,7 @@ func hdfsErrorToAISError(err error) (int, error) {
 	return http.StatusBadRequest, err
 }
 
-func (*hdfsProvider) Provider() string  { return apc.HDFS }
-func (*hdfsProvider) MaxPageSize() uint { return 10000 }
+func (*hdfsProvider) Provider() string { return apc.HDFS }
 
 //
 // CREATE BUCKET
@@ -131,7 +130,7 @@ func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Lso
 		h   = cmn.BackendHelpers.HDFS
 		idx int
 	)
-	msg.PageSize = calcPageSize(msg.PageSize, hp.MaxPageSize())
+	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 
 	err := hp.c.Walk(bck.Props.Extra.HDFS.RefDirectory, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {

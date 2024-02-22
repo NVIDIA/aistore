@@ -380,8 +380,7 @@ func (m *AISBackendProvider) resolve(uuid string) (*remAis, string, error) {
 // BackendProvider //
 /////////////////////
 
-func (*AISBackendProvider) Provider() string  { return apc.AIS }
-func (*AISBackendProvider) MaxPageSize() uint { return apc.DefaultPageSizeAIS }
+func (*AISBackendProvider) Provider() string { return apc.AIS }
 
 func (*AISBackendProvider) CreateBucket(_ *meta.Bck) (errCode int, err error) {
 	debug.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
@@ -429,7 +428,7 @@ func (m *AISBackendProvider) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, l
 		return
 	}
 	remoteMsg := msg.Clone()
-	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, m.MaxPageSize())
+	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, remoteBck.MaxPageSize())
 
 	// TODO:
 	// Currently, not encoding xaction (aka request) `UUID` from the remote cluster

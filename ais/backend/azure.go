@@ -199,9 +199,6 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 
 func (*azureProvider) Provider() string { return apc.Azure }
 
-// ref: https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
-func (*azureProvider) MaxPageSize() uint { return 5000 }
-
 //
 // CREATE BUCKET
 //
@@ -247,7 +244,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.Str
 //
 
 func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
-	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
+	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (
 		cloudBck = bck.RemoteBck()
 		cntURL   = ap.u + "/" + cloudBck.Name

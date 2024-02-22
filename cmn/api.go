@@ -68,7 +68,7 @@ type (
 	}
 
 	ExtraPropsAWS struct {
-		CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
+		CloudRegion string `json:"cloud_region,omitempty"`
 
 		// from https://github.com/aws/aws-sdk-go/blob/main/aws/config.go:
 		// - "An optional endpoint URL (hostname only or fully qualified URI)
@@ -80,11 +80,18 @@ type (
 		// set the value of the environment variable will be loaded (AWS_PROFILE,
 		// or AWS_DEFAULT_PROFILE if the Shared Config is enabled)."
 		Profile string `json:"profile,omitempty"`
+
+		// Amazon S3: 1000
+		// - https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
+		// vs OpenStack Swift: 10,000
+		// - https://docs.openstack.org/swift/latest/api/pagination.html
+		MaxPageSize uint `json:"max_pagesize,omitempty"`
 	}
 	ExtraPropsAWSToSet struct {
 		CloudRegion *string `json:"cloud_region"`
 		Endpoint    *string `json:"endpoint"`
 		Profile     *string `json:"profile"`
+		MaxPageSize *uint   `json:"max_pagesize"`
 	}
 
 	ExtraPropsHTTP struct {

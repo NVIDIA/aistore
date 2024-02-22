@@ -12,9 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-// TODO: consider a separate pool for ais
-
-const maxEntries = apc.DefaultPageSizeCloud
+const maxEntries = apc.MaxPageSizeAIS
 
 var (
 	lstPool sync.Pool

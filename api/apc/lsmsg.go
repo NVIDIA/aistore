@@ -79,10 +79,13 @@ const (
 	LsVerChanged
 )
 
-// List objects default page size
+// max page sizes
+// see also:  bprops Extra.AWS.MaxPageSize
 const (
-	DefaultPageSizeAIS   = 10000
-	DefaultPageSizeCloud = 1000
+	MaxPageSizeAIS   = 10000
+	MaxPageSizeAWS   = 1000
+	MaxPageSizeGCP   = 1000
+	MaxPageSizeAzure = 5000
 )
 
 const (

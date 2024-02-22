@@ -3,16 +3,16 @@
 # Prerequisites: ########################################################################################
 # - aistore cluster
 # - s3cmd
-# - locally accessible directory that MAY contain large files (see examples below)
+# - locally accessible (source) directory that MAY contain large files (see examples below)
 # - any aistore bucket
 #
 ## Example usage:
 ## 1. use existing large files and run 8 iterations
-##    ./ais/test/scripts/ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 8
+##    ./ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 8
 ## 2. generate (the default number of) large files, run 16 iterations
-##    ./ais/test/scripts/ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true
+##    ./ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true
 ## 3. same as above w/ 10 generated large files
-##    ./ais/test/scripts/ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true 10
+##    ./ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true 10
 # #######################################################################################################
 
 # command line

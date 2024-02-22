@@ -116,9 +116,6 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 
 func (*gcpProvider) Provider() string { return apc.GCP }
 
-// https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
-func (*gcpProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
-
 //
 // CREATE BUCKET
 //
@@ -156,13 +153,13 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos
 // LIST OBJECTS
 //
 
-func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
-	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
+	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	if msg.Prefix != "" {
 		query = &storage.Query{Prefix: msg.Prefix}
 	}

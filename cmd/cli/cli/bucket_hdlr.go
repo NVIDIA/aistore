@@ -111,6 +111,7 @@ var (
 		),
 		cmdSetBprops: {
 			forceFlag,
+			dontHeadRemoteFlag,
 		},
 		cmdResetBprops: {},
 
@@ -402,7 +403,14 @@ func removeBucketHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return destroyBuckets(c, buckets)
+	bck, err := destroyBuckets(c, buckets)
+	if err == nil {
+		return nil
+	}
+	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.TypeCode == "ErrUnsupp" {
+		return fmt.Errorf("%v\n(Tip: did you want to evict '%s' from aistore?)", err, bck.Cname(""))
+	}
+	return err
 }
 
 func resetPropsHandler(c *cli.Context) error {
@@ -462,8 +470,11 @@ func setPropsHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if currProps, err = headBucket(bck, false /* don't add */); err != nil {
-		return err
+	dontHeadRemote := flagIsSet(c, dontHeadRemoteFlag)
+	if !dontHeadRemote {
+		if currProps, err = headBucket(bck, false /* don't add */); err != nil {
+			return err
+		}
 	}
 	newProps, err := parseBpropsFromContext(c)
 

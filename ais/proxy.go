@@ -2103,7 +2103,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 		flags     uint32
 	)
 	if lsmsg.PageSize == 0 {
-		lsmsg.PageSize = apc.DefaultPageSizeAIS
+		lsmsg.PageSize = apc.MaxPageSizeAIS
 	}
 	pageSize := lsmsg.PageSize
 

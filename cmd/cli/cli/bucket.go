@@ -46,8 +46,9 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadR
 }
 
 // Destroy ais buckets
-func destroyBuckets(c *cli.Context, buckets []cmn.Bck) error {
-	for _, bck := range buckets {
+func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
+	for i := range buckets {
+		bck := buckets[i]
 		empty, errEmp := isBucketEmpty(bck, true /*cached*/)
 		if errEmp == nil && !empty {
 			if !flagIsSet(c, yesFlag) {
@@ -65,14 +66,14 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) error {
 		if cmn.IsStatusNotFound(err) {
 			err := &errDoesNotExist{what: "bucket", name: bck.Cname("")}
 			if !flagIsSet(c, ignoreErrorFlag) {
-				return err
+				return bck, err
 			}
-			fmt.Fprintln(c.App.ErrWriter, err.Error())
+			fmt.Fprintln(c.App.ErrWriter, err)
 			continue
 		}
-		return err
+		return bck, err
 	}
-	return nil
+	return cmn.Bck{}, nil
 }
 
 // Rename ais bucket

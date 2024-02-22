@@ -251,3 +251,26 @@ func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {
 	err = cmn.NewBucketAccessDenied(b.String(), op, b.Props.Access)
 	return
 }
+
+func (b *Bck) MaxPageSize() uint {
+	switch b.Provider {
+	case apc.AIS:
+		return apc.MaxPageSizeAIS
+	case apc.AWS:
+		// ref:
+		// - https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
+		// - https://docs.openstack.org/swift/latest/api/pagination.html
+		if b == nil || b.Props == nil || b.Props.Extra.AWS.MaxPageSize == 0 {
+			return apc.MaxPageSizeAWS
+		}
+		return b.Props.Extra.AWS.MaxPageSize
+	case apc.GCP:
+		// ref: https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
+		return apc.MaxPageSizeGCP
+	case apc.Azure:
+		// ref: https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
+		return apc.MaxPageSizeAzure
+	default:
+		return 1000
+	}
+}

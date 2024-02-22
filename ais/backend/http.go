@@ -43,8 +43,7 @@ func (hp *httpProvider) client(u string) *http.Client {
 	return hp.cliH
 }
 
-func (*httpProvider) Provider() string  { return apc.HTTP }
-func (*httpProvider) MaxPageSize() uint { return 10000 }
+func (*httpProvider) Provider() string { return apc.HTTP }
 
 // TODO: can be done
 func (hp *httpProvider) CreateBucket(*meta.Bck) (int, error) {

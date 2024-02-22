@@ -447,10 +447,7 @@ func listObjCallback(ctx *api.LsoCounter) {
 
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
 func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string, cached bool) ([]string, error) {
-	msg := &apc.LsoMsg{Prefix: prefix, PageSize: apc.DefaultPageSizeCloud}
-	if bck.IsAIS() || bck.IsRemoteAIS() {
-		msg.PageSize = apc.DefaultPageSizeAIS
-	}
+	msg := &apc.LsoMsg{Prefix: prefix}
 	// if bck is remote then check for cached flag
 	if cached {
 		msg.Flags |= apc.LsObjCached
@@ -493,7 +490,7 @@ func initS3Svc() error {
 func s3ListObjects() ([]string, error) {
 	// first page
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(runParams.bck.Name)}
-	params.MaxKeys = aws.Int32(apc.DefaultPageSizeCloud)
+	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS)
 
 	prev := mono.NanoTime()
 	resp, err := s3svc.ListObjectsV2(context.Background(), params)
@@ -509,7 +506,7 @@ func s3ListObjects() ([]string, error) {
 		token = *resp.NextContinuationToken
 	}
 	if token != "" {
-		l = 16 * apc.DefaultPageSizeCloud
+		l = 16 * apc.MaxPageSizeAWS
 	}
 	names := make([]string, 0, l)
 	for _, object := range resp.Contents {

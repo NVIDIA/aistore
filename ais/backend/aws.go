@@ -78,9 +78,6 @@ func NewAWS(t core.TargetPut) (core.BackendProvider, error) {
 
 func (*awsProvider) Provider() string { return apc.AWS }
 
-// https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
-func (*awsProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
-
 //
 // CREATE BUCKET
 //
@@ -145,7 +142,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		svc        *s3.Client
 		h          = cmn.BackendHelpers.Amazon
@@ -171,7 +168,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	}
 
 	versioning = bck.Props != nil && bck.Props.Versioning.Enabled && msg.WantProp(apc.GetPropsVersion)
-	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
+	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	if versioning {
 		msg.PageSize = min(versionedPageSize, msg.PageSize)
 	}

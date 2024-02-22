@@ -31,7 +31,7 @@ type (
 
 	BackendProvider interface {
 		Provider() string
-		MaxPageSize() uint
+		// NOTE: MaxPageSize moved to cmn.Bck
 		CreateBucket(bck *meta.Bck) (errCode int, err error)
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
