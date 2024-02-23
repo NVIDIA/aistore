@@ -176,7 +176,7 @@ With a little effort, they all could be extracted and used outside.
   - [S3 compatibility](/docs/s3compat.md)
 - Cluster Management
   - [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)
-  - [CLI: `ais cluster` and subcommands](/docs/cli/show.md)
+  - [Monitoring: `ais show` and subcommands](/docs/cli/show.md)
   - [Joining AIS cluster](/docs/join_cluster.md)
   - [Leaving AIS cluster](/docs/leave_cluster.md)
   - [Global Rebalance](/docs/rebalance.md)

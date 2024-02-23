@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
@@ -92,7 +93,16 @@ func helpCmdHandler(c *cli.Context) error {
 func Run(version, buildtime string, args []string) error {
 	a := acli{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr, longRun: &longRun{}}
 	buildTime = buildtime
-	a.init(version)
+
+	// empty command line or 'ais help'
+	debug.Assert(args[0] == cliName, "expecting arg0:", cliName)
+	emptyCmdline := len(args) == 1 ||
+		strings.Contains(args[1], "help") ||
+		strings.Contains(args[1], "usage") ||
+		args[1] == "-h" ||
+		strings.Contains(args[1], fl1n(cli.HelpFlag.GetName()))
+
+	a.init(version, emptyCmdline)
 
 	teb.Init(os.Stdout, cfg.NoColor)
 
@@ -101,6 +111,10 @@ func Run(version, buildtime string, args []string) error {
 		return err
 	}
 	if !a.longRun.isSet() {
+		if emptyCmdline {
+			fmt.Println("\nALIASES:")
+			fmt.Println(indent1 + cfg.Aliases.Str(indent1))
+		}
 		return nil
 	}
 	if a.longRun.outFile != nil {
@@ -164,7 +178,7 @@ func (a *acli) runN(args []string) error {
 	return nil
 }
 
-func (a *acli) init(version string) {
+func (a *acli) init(version string, emptyCmdline bool) {
 	app := a.app
 
 	if cfg.NoColor {
@@ -192,10 +206,10 @@ func (a *acli) init(version string) {
 	app.ErrWriter = a.errWriter
 	app.Description = cliDescr
 
-	a.setupCommands()
+	a.setupCommands(emptyCmdline)
 }
 
-func (a *acli) setupCommands() {
+func (a *acli) setupCommands(emptyCmdline bool) {
 	app := a.app
 
 	// Note: order of commands below is the order shown in "ais help"
@@ -222,6 +236,12 @@ func (a *acli) setupCommands() {
 	if k8sDetected {
 		app.Commands = append(app.Commands, k8sCmd)
 	}
+
+	// not adding aliases - showing them as part of `ais [--help]`
+	if emptyCmdline {
+		return
+	}
+
 	app.Commands = append(app.Commands, a.initAliases()...)
 	setupCommandHelp(app.Commands)
 	a.enableSearch()

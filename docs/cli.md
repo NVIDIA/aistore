@@ -19,16 +19,53 @@ redirect_from:
 - [Verbose errors](#verbose-errors)
 
 
-AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
-In addition, CLI provides dataset management commands, commands to read and write data, and more.
+AIS command-line interface (CLI) is a tool to easily manage and monitor every aspect of the AIS clusters' lifecycle.
+
+In addition, CLI provides dataset management commands, reading and writing primitives, and more.
+
+Goven an existing aistore instance, maybe the very first command you execute would be `ais show cluster` - a variant of numerous `ais show` subcommands.  For example:
+
+```console
+$ ais show cluster
+PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME          K8s POD         STATUS
+p[DlPmJiRU]      0.01%           366.36GiB       [0.1 0.3 0.3]   526h28m20s      ais-proxy-5     online
+p[JedAkLgG][P]   0.02%           366.52GiB       [0.7 0.3 0.3]   526h27m30s      ais-proxy-7     online
+...
+...
+...
+
+TARGET         MEM USED(%)     MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVERAGE    REBALANCE     UPTIME        K8s POD         STATUS
+t[KoplySra]    0.03%           366.37GiB     52%           8.324TiB      [0.1 0.3 0.3]   -             526h26m10s    ais-target-1    online
+t[MgHaIvNG]    0.03%           366.62GiB     52%           8.177TiB      [0.9 0.8 0.6]   -             526h27m10s    ais-target-4    online
+t[WoLfoQEW]    0.03%           366.56GiB     50%           8.499TiB      [0.4 0.2 0.2]   -             526h28m30s    ais-target-7    online
+t[fXFPnenn]    0.03%           366.52GiB     51%           8.347TiB      [0.7 0.3 0.3]   -             526h28m10s    ais-target-6    online
+t[fwKWswQP]    0.03%           366.56GiB     51%           8.434TiB      [0.5 0.3 0.3]   -             526h27m40s    ais-target-5    online
+t[tFUjHCCO]    0.03%           366.37GiB     50%           8.509TiB      [1.5 0.9 0.6]   -             526h28m40s    ais-target-8    online
+t[tfNKAtFk]    0.03%           366.40GiB     52%           8.350TiB      [1.6 0.8 0.6]   -             526h26m30s    ais-target-2    online
+...
+...
+
+Summary:
+   Proxies:             10 (all electable)
+   Targets:             10 (total disks: 30)
+   Cluster Map:         version 760, UUID HCGGmT4K0, primary p[JedAkLgG]
+   Deployment:          K8s
+   Status:              20 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.22.rc2.f889d45
+   Build:               2024-01-29T00:29:36+0000
+```
+
+Next, montoring wise, you'd maybe run `ais show performance`, etc.
 
 ## Getting Started
 
-To build CLI from source, run the following two steps:
+To build CLI from the source, run the following two steps:
 
 ```console
 $ make cli			# 1. build CLI binary and install it into your `$GOPATH/bin` directory
-$ make cli-autocompletions	# 2. install CLI autocompletions (Bash and/or Zsh)
+$ make cli-autocompletions	# 2. install CLI autocompletions (Bash or Zsh)
 ```
 
 To build with debug, run:
@@ -111,9 +148,19 @@ Following is a brief summary (that's non-exhaustive and slightly outdated):
 {: .nobreak}
 
 Other CLI documentation:
-- [Attach, Detach, and monitor remote clusters](/docs/cli/remote.md)
-- [Start, Stop, and monitor downloads](/docs/cli/download.md)
-- [Distributed Sort](/docs/cli/dsort.md)
+- [`ais help`](/docs/cli/help.md)
+- [Reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
+- [Monitoring](/docs/cli/show.md)
+  - [`ais show cluster`](/docs/cli/show.md)
+  - [`ais show performance`](/docs/cli/show.md)
+  - [`ais show job`](/docs/cli/show.md)
+- [Cluster and node management](/docs/cli/cluster.md)
+- [Mountpath (disk) management](/docs/cli/storage.md)
+- [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
+- [Start, stop, and monitor downloads](/docs/cli/download.md)
+- [Distributed shuffle](/docs/cli/dsort.md)
+- [User account and access management](/docs/cli/auth.md)
+- [Jobs](/docs/cli/job.md)
 
 > Note: In CLI docs, the terms "xaction" and "job" are used interchangeably.
 
