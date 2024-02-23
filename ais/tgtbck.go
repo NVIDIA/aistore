@@ -254,13 +254,6 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 // returns `cmn.LsoResult` containing object names and (requested) props
 // control/scope - via `apc.LsoMsg`
 func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) (ok bool) {
-	if !bck.IsAIS() && !lsmsg.IsFlagSet(apc.LsObjCached) {
-		maxRemotePageSize := bck.MaxPageSize()
-		if lsmsg.PageSize > maxRemotePageSize {
-			t.writeErrf(w, r, "page size %d exceeds the maximum (%d)", lsmsg.PageSize, maxRemotePageSize)
-			return false
-		}
-	}
 	// (advanced) user-selected target to execute remote ls
 	if lsmsg.SID != "" {
 		smap := t.owner.smap.get()
