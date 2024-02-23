@@ -122,7 +122,7 @@ cat > $AIS_CONF_FILE <<EOL
 			"use_https":         ${AIS_USE_HTTPS:-false},
 			"server_crt":        "${AIS_SERVER_CRT:-server.crt}",
 			"server_key":        "${AIS_SERVER_KEY:-server.key}",
-			"domain_tls":        "${AIS_DOMAIN_TLS:-localhost}",
+			"domain_tls":        "",
 			"client_ca_tls":     "${AIS_CLIENT_CA_TLS}",
 			"client_auth_tls":   ${AIS_CLIENT_AUTH_TLS:-0},
 			"write_buffer_size": ${HTTP_WRITE_BUFFER_SIZE:-0},

@@ -622,7 +622,7 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 			return nil, fmt.Errorf("tls: failed to append CA certs from PEM: %q", conf.ClientCA)
 		}
 	}
-	tlsConf = &tls.Config{ServerName: conf.ServerNameTLS, ClientAuth: clientAuth, ClientCAs: pool}
+	tlsConf = &tls.Config{ClientAuth: clientAuth, ClientCAs: pool}
 	return
 }
 

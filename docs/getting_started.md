@@ -468,7 +468,7 @@ Here's a quick summary of the corresponding configuration variables (that are al
 | -- | -- | -- |
 | `AIS_SERVER_CRT`         | aistore cluster X509 certificate | "net.http.server_crt" |
 | `AIS_SERVER_KEY`         | certificate's private key | "net.http.server_key"|
-| `AIS_DOMAIN_TLS`         | domain, hostname, or Subject Alternative Name (SAN) registered with the certificate | "net.http.domain_tls"|
+| `AIS_DOMAIN_TLS`         | NOTE: not supported, must be empty (domain, hostname, or SAN registered with the certificate) | "net.http.domain_tls"|
 | `AIS_CLIENT_CA_TLS`       | Certificate authority that authorized (signed) the certificate | "net.http.client_ca_tls" |
 | `AIS_CLIENT_AUTH_TLS`       | Client authentication during TLS handshake: a range from 0 (no authentication) to 4 (request and validate client's certificate) | "net.http.client_auth_tls" |
 | `AIS_SKIP_VERIFY_CRT` | when true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |

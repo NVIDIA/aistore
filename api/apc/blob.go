@@ -15,10 +15,10 @@ import (
 const _bldl = "blob-downloader"
 
 type BlobMsg struct {
-	ChunkSize  int64
-	FullSize   int64
-	NumWorkers int
-	LatestVer  bool
+	ChunkSize  int64 `json:"chunk-size"`
+	FullSize   int64 `json:"full-size"`
+	NumWorkers int   `json:"num-workers"`
+	LatestVer  bool  `json:"latest-ver"`
 }
 
 func (msg *BlobMsg) FromHeader(hdr http.Header) error {

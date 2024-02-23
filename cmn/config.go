@@ -654,6 +654,7 @@ var (
 	_ Validator = (*RebalanceConf)(nil)
 	_ Validator = (*ResilverConf)(nil)
 	_ Validator = (*NetConf)(nil)
+	_ Validator = (*HTTPConf)(nil)
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DsortConf)(nil)
 	_ Validator = (*TransportConf)(nil)
@@ -1257,6 +1258,13 @@ func (c *NetConf) Validate() (err error) {
 	if c.HTTP.ClientAuthTLS < int(tls.NoClientCert) || c.HTTP.ClientAuthTLS > int(tls.RequireAndVerifyClientCert) {
 		return fmt.Errorf("invalid client_auth_tls %d (expecting range [0 - %d])", c.HTTP.ClientAuthTLS,
 			tls.RequireAndVerifyClientCert)
+	}
+	return nil
+}
+
+func (c *HTTPConf) Validate() error {
+	if c.ServerNameTLS != "" {
+		return fmt.Errorf("invalid domain_tls %q: expecting empty (domain names/SANs should be set in X.509 cert)", c.ServerNameTLS)
 	}
 	return nil
 }

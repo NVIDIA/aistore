@@ -514,7 +514,6 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	}
 	// + cloud
-	// TODO: skip when updating cmn.ExtraProps, and in part ExtraPropsAWS.CloudRegion, ExtraPropsAWS.Endpoint, etc.
 	bucketProps, code, err = t.Backend(apireq.bck).HeadBucket(ctx, apireq.bck)
 	if err != nil {
 		if !inBMD {

@@ -450,8 +450,17 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
 			return
 		}
 		if uint(pageSize) > b.MaxPageSize() {
-			err = fmt.Errorf("invalid %s: page size (%d) cannot exceed the maximum (%d)", qflprn(pageSizeFlag), pageSize, b.MaxPageSize())
-			return
+			if b.Props == nil {
+				if b.Props, err = headBucket(bck, true /* don't add */); err != nil {
+					return
+				}
+			}
+			// still?
+			if uint(pageSize) > b.MaxPageSize() {
+				err = fmt.Errorf("invalid %s: page size (%d) cannot exceed the maximum (%d)",
+					qflprn(pageSizeFlag), pageSize, b.MaxPageSize())
+				return
+			}
 		}
 	}
 
