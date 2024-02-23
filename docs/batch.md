@@ -9,15 +9,41 @@ redirect_from:
 
 ## Introduction
 
-By definition,  *eXtended actions* (aka *xactions*) are batch operations that run asynchronously, are monitorable, can be aborted, and - most importantly - may take many seconds (minutes, sometimes hours) to execute.
+Extended actions (_xactions_) are batch operations, or jobs, that run asynchronously, report satistics (viewable at runtime and later), can be waited upon, and can be stopped.
 
-Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
+Terminology-wise, in the code we mostly call it _xaction_ by the name of the corresponding software abstraction. But elsewhere, it is simply a _job_ - the two terms are interchangeable.
 
-> In the source code, all supported - and the most recently updated - *xactions* are enumerated [here](https://github.com/NVIDIA/aistore/blob/main/xaction/table.go).
+For users, there's an API to start, stop, and wait for a job:
 
-All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+* [Go API: xaction](https://github.com/NVIDIA/aistore/blob/main/api/xaction.go)
+* [Python API: job](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/job.py)
 
-Global rebalance that gets triggered by any membership changes (nodes joining, leaving, powercycling, etc.) can be further visualized via `ais show rebalance` CLI.
+In CLI, there's `ais job` command and its subcommands (`<TAB-TAB>` completions):
+
+```commandline
+$ ais job
+start   stop    wait    rm      show
+
+$ ais job start
+prefetch           download           lru                rebalance          resilver           ec-encode          copy-bck
+blob-download      dsort              etl                cleanup            mirror             warm-up-metadata   move-bck
+```
+
+Not all supported jobs can be started via `ais start` or by the corresponding Go or Python API call. Example, the job to copy or (ETL) transform datasets has its own dedicated API (both Python and Go) and CLI.
+
+> See e.g., `ais cp --help`
+
+Complete and most recently updated list of supported jobs can be found in this [table of job descriptors](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L111-L116).
+
+Last (but not the least) is - time. Job execution may take many seconds, sometimes minutes or hours.
+
+Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and more.
+
+Global rebalance gets (automatically) triggered by any membership changes (nodes joining, leaving, powercycling, etc.) that can be further visualized via `ais show rebalance` CLI.
+
+Another example would be _primary election_. AIS proxies provide access points ("endpoints") for the frontend API. At any point in time there is a single **primary** proxy that also controls versioning and distribution of the current cluster map. When and if the primary fails, another proxy is majority-elected to perform the (primary) role.
+
+This (election by simple majority) is also a _job_ that cannot be started via `ais start` or the corresponding API. Similar to global rebalance, it is _event-driven_. Similar to rebalance, there's a separate dedicated API to run it administratively.
 
 > Rebalance and a few other AIS jobs have their own CLI extensions. Generally, though, you can always monitor *xactions* via `ais show job xaction` command that also supports verbose mode and other options.
 

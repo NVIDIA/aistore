@@ -29,21 +29,24 @@ A cluster deployed in `debug` mode will produce a log like this:
 
 As of v3.18 (git tag 1.3.18), the following can be done at any point in time:
 
-```console
+```commandline
 $ ais config cluster log.modules <TAB-TAB>
-transport    memsys       fs           ec           ios          backend      mirror       downloader
-ais          cluster      reb          stats        xs           space        dsort        etl     none
 
+transport    memsys       fs       ec         ios        backend      mirror     downloader   s3
+ais          cluster      reb      stats      xs         space        dsort      etl          none
+```
+
+```commandline
 $ ais config cluster log.modules ec xs
 
 log.level: "3 (modules: ec,xs)"
 ```
 
-The example above elevates verbosity level of two specific modules: EC (erasure coding) and xactions (batch jobs).
+The example (above) elevates verbosity level of two specific modules: EC (erasure coding) and xactions ([batch jobs](batch.md)).
 
 The change takes an effect immediately. But you can also change logging verbosity for the entire cluster - all modules:
 
-```console
+```commandline
 $ ais config cluster log
 PROPERTY         VALUE
 log.level        3

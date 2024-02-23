@@ -23,8 +23,6 @@ The rest of this document is structured as follows:
 
 - [At a glance](#at-a-glance)
 - [Terminology](#terminology)
-- [ETL](#etl)
-- [Recently Added](#recently-added)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Traffic Patterns](#traffic-patterns)
@@ -39,6 +37,7 @@ The rest of this document is structured as follows:
 - [Other Services](#other-services)
 - [dSort](#dsort)
 - [CLI](#cli)
+- [ETL](#etl)
 - [_No limitations_ principle](#no-limitations-principle)
 
 ## At a glance
@@ -68,22 +67,6 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
    - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
 
 * [Xaction](/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
-
-## ETL
-
-AIStore is a hyper-converged architecture tailored specifically to run [extract-transform-load](/ext/etl/README.md) workloads - run them close to data and on (and by) all storage nodes in parallel:
-
-![etl-v3.3](images/etl-v3.3.png)
-
-For background and further references, see:
-
-* [Extract, Transform, Load with AIStore](etl.md)
-* [AIS-ETL introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls)
-
-## Recently Added
-
-- [v3.16](https://github.com/NVIDIA/aistore/releases/tag/v1.3.16)
-- [v3.12](https://github.com/NVIDIA/aistore/releases/tag/v1.3.15)
 
 ## Design Philosophy
 
@@ -401,6 +384,18 @@ One salient feature of AIS CLI is its Bash style [auto-completions](/docs/cli.md
 ![CLI-tab](images/cli-overview.gif)
 
 AIS CLI is currently quickly developing. For more information, please see the project's own [README](/docs/cli.md).
+
+## ETL
+
+AIStore is a hyper-converged architecture tailored specifically to run [extract-transform-load](/ext/etl/README.md) workloads - run them close to data and on (and by) all storage nodes in parallel:
+
+![etl-v3.3](images/etl-v3.3.png)
+
+For background and further references, see:
+
+* [Extract, Transform, Load with AIStore](etl.md)
+* [AIS-ETL introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls)
+
 
 ## _No limitations_ principle
 
