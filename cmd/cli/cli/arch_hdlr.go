@@ -153,7 +153,7 @@ var (
 	// main `ais archive`
 	archCmd = cli.Command{
 		Name:   commandArch,
-		Usage:  "Archive multiple objects from a given bucket; archive local files and directories; list archived content",
+		Usage:  "archive multiple objects from a given bucket; archive local files and directories; list archived content",
 		Action: archUsageHandler,
 		Subcommands: []cli.Command{
 			archBucketCmd,

@@ -124,7 +124,7 @@ $ ais -h
 DESCRIPTION:
    If [Tab] completion doesn't work:
    * download https://github.com/NVIDIA/aistore/tree/main/cmd/cli/autocomplete
-   * and run 'install.sh'.
+   * run 'cmd/cli/autocomplete/install.sh'
    For more information, please refer to https://github.com/NVIDIA/aistore/blob/main/cmd/cli/README.md
 
 COMMANDS:

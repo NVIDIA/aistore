@@ -23,10 +23,45 @@ const (
 	cliName  = "ais"
 	ua       = "ais/cli"
 	metadata = "md"
+)
+
+const (
 	cliDescr = `If <TAB-TAB> completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/main/cmd/cli/autocomplete
-   * and run 'install.sh'.
+   * run 'cmd/cli/autocomplete/install.sh'
    To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/main/deploy/scripts/install_from_binaries.sh`
+
+	// custom cli.AppHelpTemplate
+	// "You can render custom help text by setting this variable." (from github.com/urfave/cli)
+	appHelpTemplate = `NAME:
+   {{.Name}}{{if .Usage}} - {{.Usage}}{{end}}
+
+USAGE:
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Version}}{{if not .HideVersion}}
+
+VERSION:
+   {{.Version}}{{end}}{{end}}{{if .Description}}
+
+TAB completions (Bash and Zsh):
+   {{.Description}}{{end}}{{if len .Authors}}
+
+AUTHOR{{with $length := len .Authors}}{{if ne 1 $length}}S{{end}}{{end}}:
+   {{range $index, $author := .Authors}}{{if $index}}
+   {{end}}{{$author}}{{end}}{{end}}{{if .VisibleCommands}}
+
+COMMANDS:{{range .VisibleCategories}}{{if .Name}}
+
+   {{.Name}}:{{range .VisibleCommands}}
+     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{else}}{{range .VisibleCommands}}
+   {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
+
+GLOBAL OPTIONS:
+   {{range $index, $option := .VisibleFlags}}{{if $index}}
+   {{end}}{{$option}}{{end}}{{end}}{{if .Copyright}}
+
+COPYRIGHT:
+   {{.Copyright}}{{end}}
+`
 )
 
 const (
@@ -205,6 +240,8 @@ func (a *acli) init(version string, emptyCmdline bool) {
 	app.Writer = a.outWriter
 	app.ErrWriter = a.errWriter
 	app.Description = cliDescr
+
+	cli.AppHelpTemplate = appHelpTemplate
 
 	a.setupCommands(emptyCmdline)
 }

@@ -73,7 +73,7 @@ VERSION:
 DESCRIPTION:
    If <TAB-TAB> completion doesn't work:
    * download https://github.com/NVIDIA/aistore/tree/main/cmd/cli/autocomplete
-   * and run 'install.sh'.
+   * run 'cmd/cli/autocomplete/install.sh'
    To install CLI directly from GitHub: https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/install_from_binaries.sh
 
 COMMANDS:
