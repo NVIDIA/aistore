@@ -7,6 +7,17 @@ redirect_from:
  - /docs/leave_cluster.md/
 ---
 
+**Note**: for the most recent updates on the topic of cluster membership and node lifecycle, please also check:
+
+* [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)
+
+Also, see related:
+
+* [Joining aistore cluster](join_cluster.md)
+* [Global rebalance](rebalance.md)
+* [CLI: `ais cluster` command](/docs/cli/cluster.md)
+* [Scripted integration tests](https://github.com/NVIDIA/aistore/tree/main/ais/test/scripts)
+
 ## Table of Contents
 
 - [Putting a node in maintenance](#putting-a-node-in-maintenance)
@@ -32,7 +43,7 @@ In general, when storage targets leave (or join) the cluster, the current *prima
 This results in each AIS target starting to traverse its locally stored content, recomputing object locations, and sending at least some of the objects to their respective *new* locations.
 Object migration is then carried out via an intra-cluster optimized [communication mechanism](/transport/README.md) and over a separate [physical or logical network](/cmn/network.go), if provisioned.
 
-For more details about the rebalancing process, see [REBALANCE](/docs/rebalance.md). 
+For more details about the rebalancing process, see [REBALANCE](/docs/rebalance.md).
 
 ```console
 $ ais cluster add-remove-nodes start-maintenance 59262t8087

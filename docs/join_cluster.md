@@ -7,11 +7,18 @@ redirect_from:
  - /docs/join_cluster.md/
 ---
 
-## Table of Contents
+**Note**: for the most recent updates on the topic of cluster membership and node lifecycle, please also check:
 
-- [Joining a Cluster](#joining-a-cluster)
+* [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)
 
-## Joining a Cluster
+Also, see related:
+
+* [Leaving aistore cluster](leave_cluster.md)
+* [Global rebalance](rebalance.md)
+* [CLI: `ais cluster` command](/docs/cli/cluster.md)
+* [Scripted integration tests](https://github.com/NVIDIA/aistore/tree/main/ais/test/scripts)
+
+## Joining a Cluster: _discovery_ URL, and more
 
 First, some basic facts. AIStore clusters can be deployed with an arbitrary number of AIStore proxies. Each proxy/gateway implements RESTful API and provides full access to objects stored in the cluster. Each proxy collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](ha.md).
 
