@@ -110,7 +110,7 @@ AIStore also supports (passing through) [presigned S3 requests](https://docs.aws
 To use this _feature_, you need to enable it - as follows:
 
 ```commandline
-$ ais config cluster features Pass-Through-Signed-S3-Req
+$ ais config cluster features Presigned-S3-Req
 ```
 
 Once we have our cluster configured we can prepare and issue presigned S3 request:

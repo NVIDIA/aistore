@@ -468,7 +468,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset
 // PUT OBJECT
 //
 
-func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *core.ExtraArgsPut) (int, error) {
+func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	defer cos.Close(r)
 
 	client, err := azblob.NewClientWithSharedKeyCredential(ap.u, ap.creds, nil)

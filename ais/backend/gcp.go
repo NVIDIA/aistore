@@ -383,7 +383,7 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 // PUT OBJECT
 //
 
-func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *core.ExtraArgsPut) (errCode int, err error) {
+func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (errCode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		written  int64

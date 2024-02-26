@@ -28,7 +28,7 @@ const (
 	DontAllowPassingFQNtoETL  // do not allow passing fully-qualified name of a locally stored object to (local) ETL containers
 	IgnoreLimitedCoexistence  // run in presence of "limited coexistence" type conflicts (same as e.g. CopyBckMsg.Force but globally)
 	DisableFastColdGET        // use regular datapath to execute cold-GET operations
-	PassThroughSignedS3Req    // pass-through client-authenticated and signed S3 requests
+	PresignedS3Req            // pass-through client-signed (presigned) S3 requests for subsequent authentication by S3
 )
 
 var All = []string{
@@ -42,7 +42,7 @@ var All = []string{
 	"Dont-Allow-Passing-FQN-to-ETL",
 	"Ignore-LimitedCoexistence-Conflicts",
 	"Disable-Fast-Cold-GET",
-	"Pass-Through-Signed-S3-Req",
+	"Presigned-S3-Req",
 }
 
 func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }

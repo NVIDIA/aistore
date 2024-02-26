@@ -207,7 +207,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset,
 	return res
 }
 
-func (*httpProvider) PutObj(io.ReadCloser, *core.LOM, *core.ExtraArgsPut) (int, error) {
+func (*httpProvider) PutObj(io.ReadCloser, *core.LOM, *http.Request) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("PUT", " objects => HTTP backend")
 }
 

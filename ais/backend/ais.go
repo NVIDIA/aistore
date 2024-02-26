@@ -598,7 +598,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *core.LOM, offset, length i
 	return
 }
 
-func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *core.ExtraArgsPut) (errCode int, err error) {
+func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (errCode int, err error) {
 	var (
 		oah       api.ObjAttrs
 		remAis    *remAis

@@ -24,14 +24,13 @@ const (
 )
 
 type (
-	PassThroughSignedReq struct {
-		client *http.Client
-		oreq   *http.Request
-		lom    *core.LOM
-		body   io.ReadCloser
-		query  url.Values
+	PresignedReq struct {
+		oreq  *http.Request
+		lom   *core.LOM
+		body  io.ReadCloser
+		query url.Values
 	}
-	PassThroughSignedResp struct {
+	PresignedResp struct {
 		Body       []byte
 		Header     http.Header
 		StatusCode int
@@ -52,11 +51,11 @@ func parseSignatureV4(query url.Values, header http.Header) (region string) {
 	return region
 }
 
-func NewPassThroughSignedReq(c *http.Client, oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values) *PassThroughSignedReq {
-	return &PassThroughSignedReq{c, oreq, lom, body, q}
+func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values) *PresignedReq {
+	return &PresignedReq{oreq, lom, body, q}
 }
 
-func (pts *PassThroughSignedReq) Do() (*PassThroughSignedResp, error) {
+func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 	region := parseSignatureV4(pts.query, pts.oreq.Header)
 	if region == "" {
 		return nil, nil
@@ -71,7 +70,7 @@ func (pts *PassThroughSignedReq) Do() (*PassThroughSignedResp, error) {
 	s3url := makeS3URL(region, pts.lom.Bck().Name, pts.lom.ObjName, queryEncoded)
 	nreq, err := http.NewRequest(pts.oreq.Method, s3url, pts.body)
 	if err != nil {
-		return &PassThroughSignedResp{StatusCode: http.StatusInternalServerError}, err
+		return &PresignedResp{StatusCode: http.StatusInternalServerError}, err
 	}
 	nreq.Header = pts.oreq.Header // NOTE: _not_ cloning
 	if nreq.Body != nil {
@@ -82,24 +81,24 @@ func (pts *PassThroughSignedReq) Do() (*PassThroughSignedResp, error) {
 		}
 	}
 
-	resp, err := pts.client.Do(nreq)
+	resp, err := client.Do(nreq)
 	if err != nil {
-		return &PassThroughSignedResp{StatusCode: http.StatusInternalServerError}, err
+		return &PresignedResp{StatusCode: http.StatusInternalServerError}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		output, _ := io.ReadAll(resp.Body)
-		return &PassThroughSignedResp{StatusCode: resp.StatusCode},
+		return &PresignedResp{StatusCode: resp.StatusCode},
 			fmt.Errorf("invalid status: %d, output: %s", resp.StatusCode, string(output))
 	}
 
 	output, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &PassThroughSignedResp{StatusCode: http.StatusBadRequest},
+		return &PresignedResp{StatusCode: http.StatusBadRequest},
 			fmt.Errorf("failed to read response body: %v", err)
 	}
-	return &PassThroughSignedResp{
+	return &PresignedResp{
 		Body:       output,
 		Header:     resp.Header,
 		StatusCode: resp.StatusCode,
@@ -107,11 +106,11 @@ func (pts *PassThroughSignedReq) Do() (*PassThroughSignedResp, error) {
 }
 
 ///////////////////////////
-// PassThroughSignedResp //
+// PresignedResp //
 ///////////////////////////
 
 // (compare w/ cmn/objattrs FromHeader)
-func (resp *PassThroughSignedResp) ObjAttrs() (oa *cmn.ObjAttrs) {
+func (resp *PresignedResp) ObjAttrs() (oa *cmn.ObjAttrs) {
 	oa = &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 3)
 

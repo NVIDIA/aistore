@@ -63,7 +63,7 @@ type (
 	Target interface {
 		TargetLoc
 
-		// (for intra-cluster data-net comm - no streams)
+		// target <=> target & target => backend (no streams)
 		DataClient() *http.Client
 
 		// core object (+ PutObject above)

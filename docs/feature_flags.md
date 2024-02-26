@@ -21,7 +21,7 @@ $ ais config cluster features <TAB-TAB>
 Enforce-IntraCluster-Access           Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL
 Do-not-HEAD-Remote-Bucket             Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
 Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Do-not-Auto-Detect-FileShare
-LZ4-Frame-Checksum                    Disable-Fast-Cold-GET                 Pass-Through-Signed-S3-Req
+LZ4-Frame-Checksum                    Disable-Fast-Cold-GET                 Presigned-S3-Req
 none
 ```
 
@@ -79,4 +79,4 @@ Cluster config updated
 | `LZ4-Frame-Checksum` | checksum lz4 frames |
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `Disable-Fast-Cold-GET` | use regular datapath to execute cold-GET operations |
-| `Pass-Through-Signed-S3-Req` | pass-through client-authenticated and signed S3 requests |
+| `Presigned-S3-Req` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |

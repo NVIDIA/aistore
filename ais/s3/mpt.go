@@ -40,11 +40,12 @@ var (
 	mu  sync.RWMutex
 )
 
-func Init() { ups = make(uploads) }
-
 // Start miltipart upload
 func InitUpload(id, bckName, objName string) {
 	mu.Lock()
+	if ups == nil {
+		ups = make(uploads, 8)
+	}
 	ups[id] = &mpt{
 		bckName: bckName,
 		objName: objName,

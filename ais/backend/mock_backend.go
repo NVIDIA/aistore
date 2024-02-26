@@ -60,7 +60,7 @@ func (*mockBP) GetObjReader(context.Context, *core.LOM, int64, int64) (res core.
 	return
 }
 
-func (*mockBP) PutObj(_ io.ReadCloser, lom *core.LOM, _ *core.ExtraArgsPut) (int, error) {
+func (*mockBP) PutObj(_ io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 

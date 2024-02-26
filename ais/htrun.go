@@ -75,8 +75,6 @@ type htrun struct {
 // interface guard
 var _ core.Node = (*htrun)(nil)
 
-func (*htrun) DataClient() *http.Client { return g.client.data } // TODO: a better way
-
 func (h *htrun) Snode() *meta.Snode { return h.si }
 func (h *htrun) callerName() string { return h.si.String() }
 func (h *htrun) SID() string        { return h.si.ID() }

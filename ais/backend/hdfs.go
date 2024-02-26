@@ -276,7 +276,7 @@ func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *core.LOM, offset, l
 // PUT OBJECT
 //
 
-func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *core.ExtraArgsPut) (errCode int, err error) {
+func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
 	if err != nil {

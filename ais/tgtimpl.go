@@ -35,6 +35,8 @@ func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
 
+func (*target) DataClient() *http.Client { return g.client.data }
+
 func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	xreg.GetAllRunning(inout, periodic)
 }

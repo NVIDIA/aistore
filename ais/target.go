@@ -222,8 +222,6 @@ func (t *target) init(config *cmn.Config) {
 		cos.ExitLog(err)
 	}
 	fs.Clblk()
-
-	s3.Init() // s3 multipart
 }
 
 func (t *target) initHostIP(config *cmn.Config) {
@@ -232,9 +230,7 @@ func (t *target) initHostIP(config *cmn.Config) {
 		return
 	}
 	extAddr := net.ParseIP(hostIP)
-	if extAddr == nil {
-		cos.AssertMsg(false, "invalid IP addr via 'AIS_HOST_IP' env: "+hostIP)
-	}
+	cos.AssertMsg(extAddr != nil, "invalid public IP addr via 'AIS_HOST_IP' env: "+hostIP)
 
 	extPort := config.HostNet.Port
 	if portStr := os.Getenv("AIS_HOST_PORT"); portStr != "" {
@@ -246,7 +242,7 @@ func (t *target) initHostIP(config *cmn.Config) {
 	t.si.PubNet.Port = strconv.Itoa(extPort)
 	t.si.PubNet.URL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
 
-	nlog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetPublic))
+	nlog.Infoln("AIS_HOST_IP:", hostIP, "pub:", t.si.URL(cmn.NetPublic))
 
 	// applies to intra-cluster networks unless separately defined
 	if !config.HostNet.UseIntraControl {
@@ -260,7 +256,7 @@ func (t *target) initHostIP(config *cmn.Config) {
 func initTID(config *cmn.Config) (tid string, generated bool) {
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
-			nlog.Errorf("Warning: %v", err)
+			nlog.Errorln("Warning:", err)
 		}
 		return
 	}
@@ -276,9 +272,8 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 	tid = genDaemonID(apc.Target, config)
 	err = cos.ValidateDaemonID(tid)
 	debug.AssertNoErr(err)
-	nlog.Infof("t[%s] ID randomly generated", tid)
-	generated = true
-	return
+	nlog.Infoln(meta.Tname(tid) + ": ID randomly generated")
+	return tid, true
 }
 
 func regDiskMetrics(node *meta.Snode, tstats *stats.Trunner, mpi fs.MPI) {

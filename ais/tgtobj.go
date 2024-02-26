@@ -47,7 +47,7 @@ import (
 
 type (
 	putOI struct {
-		req        *http.Request
+		oreq       *http.Request
 		r          io.ReadCloser // content reader
 		xctn       core.Xact     // xaction that puts
 		t          *target       // this
@@ -137,7 +137,7 @@ type (
 // poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
 	{
-		poi.req = r
+		poi.oreq = r
 		poi.r = r.Body
 		poi.resphdr = resphdr
 		poi.workFQN = fs.CSM.Gen(poi.lom, fs.WorkfileType, fs.WorkfilePut)
@@ -366,10 +366,7 @@ func (poi *putOI) putRemote() (errCode int, err error) {
 		lom.ObjAttrs().DelCustomKeys(cmn.SourceObjMD, cmn.CRC32CObjMD, cmn.ETag, cmn.MD5ObjMD, cmn.VersionObjMD)
 	}
 
-	errCode, err = backend.PutObj(lmfh, lom, &core.ExtraArgsPut{
-		DataClient: g.client.data,
-		Req:        poi.req,
-	})
+	errCode, err = backend.PutObj(lmfh, lom, poi.oreq)
 	if err == nil && !lom.Bck().IsRemoteAIS() {
 		lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
 	}
@@ -534,35 +531,38 @@ do:
 		}
 	}
 
-	if cold {
-		if goi.lom.Bck().IsAIS() { // ais bucket with no backend - try lookup and restore
-			goi.lom.Unlock(false)
-			doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
-			if doubleCheck && err != nil {
-				lom2 := core.AllocLOM(goi.lom.ObjName)
-				er2 := lom2.InitBck(goi.lom.Bucket())
-				if er2 == nil {
-					er2 = lom2.Load(true /*cache it*/, false /*locked*/)
-				}
-				if er2 == nil {
-					core.FreeLOM(goi.lom)
-					goi.lom = lom2
-					err = nil
-				} else {
-					core.FreeLOM(lom2)
-				}
+	switch {
+	case cold && goi.lom.Bck().IsAIS():
+		// ais bucket with no backend - try recover
+		goi.lom.Unlock(false)
+		doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
+		if doubleCheck && err != nil {
+			lom2 := core.AllocLOM(goi.lom.ObjName)
+			er2 := lom2.InitBck(goi.lom.Bucket())
+			if er2 == nil {
+				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
 			}
-			if err != nil {
-				goi.unlocked = true
-				return errCode, err
+			if er2 == nil {
+				core.FreeLOM(goi.lom)
+				goi.lom = lom2
+				err = nil
+			} else {
+				core.FreeLOM(lom2)
 			}
-			goi.lom.Lock(false)
-			if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-				return 0, err
-			}
-			goto fin
 		}
-	} else if goi.latestVer { // apc.QparamLatestVer or 'versioning.validate_warm_get'
+		if err != nil {
+			goi.unlocked = true
+			return errCode, err
+		}
+		goi.lom.Lock(false)
+		if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+			return 0, err
+		}
+		goto fin // ok, done
+	case cold:
+		// have remote backend - use it
+	case goi.latestVer:
+		// apc.QparamLatestVer or 'versioning.validate_warm_get'
 		res := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/)
 		if res.Err != nil {
 			return res.ErrCode, res.Err
@@ -571,11 +571,10 @@ do:
 			cold, goi.verchanged = true, true
 		}
 		// TODO: utilize res.ObjAttrs
-	} else if cmn.Rom.Features().IsSet(feat.PassThroughSignedS3Req) {
-		cold = false
-		q := goi.req.URL.Query()
-		pts := s3.NewPassThroughSignedReq(g.client.control, goi.req, goi.lom, nil, q)
-		resp, err := pts.Do()
+	case cmn.Rom.Features().IsSet(feat.PresignedS3Req):
+		q := goi.req.URL.Query() // TODO: optimize-out
+		pts := s3.NewPresignedReq(goi.req, goi.lom, nil, q)
+		resp, err := pts.Do(g.client.data)
 		if err != nil {
 			return resp.StatusCode, err
 		}
@@ -588,7 +587,8 @@ do:
 		}
 	}
 
-	if !cold && goi.lom.CksumConf().ValidateWarmGet { // validate checksums and recover (self-heal) if corrupted
+	// validate checksums and recover (a.k.a. self-heal) if corrupted
+	if !cold && goi.lom.CksumConf().ValidateWarmGet {
 		cold, errCode, err = goi.validateRecover()
 		if err != nil {
 			if !cold {

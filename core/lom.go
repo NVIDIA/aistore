@@ -141,7 +141,7 @@ func (lom *LOM) Version(special ...bool) string {
 
 func (lom *LOM) ValidateWarmGet(qparam string /*apc.QparamLatestVer*/) bool {
 	switch {
-	case cmn.Rom.Features().IsSet(feat.PassThroughSignedS3Req):
+	case cmn.Rom.Features().IsSet(feat.PresignedS3Req):
 		return false
 	case !lom.Bck().IsCloud() && !lom.Bck().IsRemoteAIS():
 		return false

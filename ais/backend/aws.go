@@ -451,7 +451,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, extraArgs *core.ExtraArgsPut) (errCode int, err error) {
+func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (errCode int, err error) {
 	var (
 		svc                   *s3.Client
 		uploader              *s3manager.Uploader
@@ -461,20 +461,18 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, extraArgs *core.Extra
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]string, 2)
 	)
-	if cmn.Rom.Features().IsSet(feat.PassThroughSignedS3Req) {
-		if oreq := extraArgs.Req; oreq != nil {
-			q := oreq.URL.Query()
-			pts := aiss3.NewPassThroughSignedReq(extraArgs.DataClient, oreq, lom, r, q)
-			resp, err := pts.Do()
-			if err != nil {
-				return resp.StatusCode, err
+	if cmn.Rom.Features().IsSet(feat.PresignedS3Req) && oreq != nil {
+		q := oreq.URL.Query() // TODO: optimize-out
+		pts := aiss3.NewPresignedReq(oreq, lom, r, q)
+		resp, err := pts.Do(core.T.DataClient())
+		if err != nil {
+			return resp.StatusCode, err
+		}
+		if resp != nil {
+			uploadOutput = &s3manager.UploadOutput{
+				ETag: aws.String(resp.Header.Get(cos.HdrETag)),
 			}
-			if resp != nil {
-				uploadOutput = &s3manager.UploadOutput{
-					ETag: aws.String(resp.Header.Get(cos.HdrETag)),
-				}
-				goto exit
-			}
+			goto exit
 		}
 	}
 

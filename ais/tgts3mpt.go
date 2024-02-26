@@ -63,8 +63,8 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if bck.IsRemoteS3() {
-		pts := s3.NewPassThroughSignedReq(g.client.control, r, lom, nil, q)
-		resp, err := pts.Do()
+		pts := s3.NewPresignedReq(r, lom, nil, q)
+		resp, err := pts.Do(g.client.control)
 		if err != nil {
 			s3.WriteErr(w, r, err, resp.StatusCode)
 			return
@@ -172,10 +172,10 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	if err == nil && remote {
 		if _, err = partFh.Seek(0, io.SeekStart); err == nil {
 			var (
-				resp *s3.PassThroughSignedResp
-				pts  = s3.NewPassThroughSignedReq(g.client.data, r, lom, partFh, q)
+				resp *s3.PresignedResp
+				pts  = s3.NewPresignedReq(r, lom, partFh, q)
 			)
-			resp, err = pts.Do()
+			resp, err = pts.Do(g.client.data)
 			if resp != nil {
 				errCode = resp.StatusCode
 				etag = cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
@@ -272,18 +272,19 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		remote  = bck.IsRemoteS3()
 	)
 	if remote {
-		pts := s3.NewPassThroughSignedReq(g.client.control, r, lom, io.NopCloser(bytes.NewReader(output)), q)
-		resp, err := pts.Do()
+		pts := s3.NewPresignedReq(r, lom, io.NopCloser(bytes.NewReader(output)), q)
+		resp, err := pts.Do(g.client.control)
 		if err != nil {
 			s3.WriteErr(w, r, err, resp.StatusCode)
 			return
-		} else if resp != nil {
+		}
+		if resp != nil {
+			// presigned mpt
 			result, err := decodeXML[s3.CompleteMptUploadResult](resp.Body)
 			if err != nil {
 				s3.WriteErr(w, r, err, http.StatusBadRequest)
 				return
 			}
-
 			etag = result.ETag
 		} else {
 			v, errCode, err := backend.CompleteMpt(lom, uploadID, partList)
@@ -442,8 +443,8 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	if bck.IsRemoteS3() {
-		pts := s3.NewPassThroughSignedReq(g.client.control, r, lom, r.Body, q)
-		resp, err := pts.Do()
+		pts := s3.NewPresignedReq(r, lom, r.Body, q)
+		resp, err := pts.Do(g.client.control)
 		if err != nil {
 			s3.WriteErr(w, r, err, resp.StatusCode)
 			return
