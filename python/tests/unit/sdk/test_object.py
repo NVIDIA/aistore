@@ -21,11 +21,12 @@ from aistore.sdk.const import (
     AIS_CUSTOM_MD,
     HTTP_METHOD_POST,
     ACT_PROMOTE,
+    ACT_BLOB_DOWNLOAD,
     URL_PATH_OBJECTS,
 )
 from aistore.sdk.object import Object
 from aistore.sdk.object_reader import ObjectReader
-from aistore.sdk.types import ActionMsg, PromoteAPIArgs
+from aistore.sdk.types import ActionMsg, BlobMsg, PromoteAPIArgs
 
 BCK_NAME = "bucket_name"
 OBJ_NAME = "object_name"
@@ -230,4 +231,45 @@ class TestObject(unittest.TestCase):
         self.object.delete()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE, path=REQUEST_PATH, params=self.expected_params
+        )
+
+    def test_blob_download_default_args(self):
+        request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
+        expected_blob_msg = BlobMsg(
+            chunk_size=0,
+            num_workers=0,
+            latest=False,
+        ).as_dict()
+        expected_json = ActionMsg(
+            action=ACT_BLOB_DOWNLOAD, name=OBJ_NAME, value=expected_blob_msg
+        ).dict()
+        self.object.blob_download()
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_POST,
+            path=request_path,
+            params=self.expected_params,
+            json=expected_json,
+        )
+
+    def test_blob_download(self):
+        request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
+        chunk_size = 20 * 1024 * 1024
+        num_workers = 10
+        latest = True
+        expected_blob_msg = BlobMsg(
+            chunk_size=chunk_size,
+            num_workers=num_workers,
+            latest=latest,
+        ).as_dict()
+        expected_json = ActionMsg(
+            action=ACT_BLOB_DOWNLOAD, name=OBJ_NAME, value=expected_blob_msg
+        ).dict()
+        self.object.blob_download(
+            num_workers=num_workers, chunk_size=chunk_size, latest=latest
+        )
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_POST,
+            path=request_path,
+            params=self.expected_params,
+            json=expected_json,
         )

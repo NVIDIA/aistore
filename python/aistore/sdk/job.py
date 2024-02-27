@@ -156,45 +156,38 @@ class Job:
             errors.Timeout: Timeout while waiting for the job to finish
         """
         action = f"job '{self._job_id}' to reach idle state"
-        logger = logging.getLogger(f"{__name__}.wait_for_idle")
-        logger.disabled = not verbose
-        passed = 0
-        sleep_time = probing_frequency(timeout)
-        while True:
-            snapshot_lists = self._query_job_snapshots().values()
-            snapshots = list(itertools.chain.from_iterable(snapshot_lists))
-            job_info_found = True
-            try:
-                if self._check_job_idle(snapshots):
-                    logger.info("Job '%s' reached idle state", self._job_id)
-                    return
-            except JobInfoNotFound:
-                logger.info("No information found for job %s, retrying", self._job_id)
-                job_info_found = False
-            if passed > timeout:
-                if len(snapshots) == 0:
-                    raise Timeout(action, "No job information found.")
-                if not job_info_found:
-                    raise Timeout(
-                        action, f"No information found for job {self._job_id}."
-                    )
-                raise Timeout(action)
-            time.sleep(sleep_time)
-            passed += sleep_time
-            logger.info("Waiting for %s", action)
+        logger_name = "wait_for_idle"
+        self._wait_for_condition(
+            self._check_job_idle, action, logger_name, verbose, timeout
+        )
 
-    def _check_job_idle(self, snapshots):
-        job_found = False
-        for snap in snapshots:
-            if snap.id != self._job_id:
-                continue
-            # If any targets are reporting the job not idle, continue waiting
-            if not snap.is_idle:
-                return False
-            job_found = True
-        if not job_found:
-            raise JobInfoNotFound(f"No info found for job {self._job_id}")
-        return True
+    def wait_single_node(
+        self,
+        timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
+        verbose: bool = True,
+    ):
+        """
+        Wait for a job running on a single node
+
+        Args:
+            timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
+            verbose (bool, optional): Whether to log wait status to standard output
+
+        Returns:
+            None
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            errors.Timeout: Timeout while waiting for the job to finish
+        """
+        logger_name = "wait_single_node"
+        action = f"job '{self._job_id}' to finish"
+        self._wait_for_condition(
+            self._check_snapshot_finished, action, logger_name, verbose, timeout
+        )
 
     def start(
         self,
@@ -241,13 +234,75 @@ class Job:
         )
         return resp.text
 
-    def _query_job_snapshots(self) -> Dict[str, List[JobSnapshot]]:
+    def _query_job_snapshots(self) -> List[JobSnapshot]:
         value = JobArgs(id=self._job_id, kind=self._job_kind).as_dict()
         params = {QPARAM_WHAT: WHAT_QUERY_XACT_STATS}
-        return self._client.request_deserialize(
+        snapshot_lists = self._client.request_deserialize(
             HTTP_METHOD_GET,
             path=URL_PATH_CLUSTER,
             json=value,
             params=params,
             res_model=Dict[str, List[JobSnapshot]],
-        )
+        ).values()
+        snapshots = list(itertools.chain.from_iterable(snapshot_lists))
+        return snapshots
+
+    def _check_snapshot_finished(self, snapshots, logger):
+        job_found = False
+        snapshot = None
+        for snap in snapshots:
+            if snap.id != self._job_id:
+                continue
+            job_found = True
+            snapshot = snap
+            break
+
+        if not job_found:
+            raise JobInfoNotFound(f"No info found for job {self._job_id}")
+
+        end_time = datetime.fromisoformat(snapshot.end_time.rstrip("Z")).time()
+        if snapshot.end_time != "0001-01-01T00:00:00Z" and not snapshot.aborted:
+            logger.info("Job '%s' finished at time '%s'", self.job_id, end_time)
+            return True
+        if snapshot.aborted:
+            logger.error("Job '%s' aborted at time '%s'", self.job_id, end_time)
+            return True
+        return False
+
+    def _check_job_idle(self, snapshots, logger):
+        job_found = False
+        for snap in snapshots:
+            if snap.id != self._job_id:
+                continue
+            # If any targets are reporting the job not idle, continue waiting
+            if not snap.is_idle:
+                return False
+            job_found = True
+        if not job_found:
+            raise JobInfoNotFound(f"No info found for job {self._job_id}")
+        logger.info("Job '%s' reached idle state", self._job_id)
+        return True
+
+    # pylint: disable=too-many-arguments
+    def _wait_for_condition(self, condition_fn, action, logger_name, verbose, timeout):
+        logger = logging.getLogger(f"{__name__}.{logger_name}")
+        logger.disabled = not verbose
+        passed = 0
+        sleep_time = probing_frequency(timeout)
+
+        while True:
+            snapshots = []
+            snapshots = self._query_job_snapshots()
+            try:
+                if condition_fn(snapshots, logger):
+                    return
+            except JobInfoNotFound:
+                logger.info("No information found for job %s, retrying", self._job_id)
+
+            if passed > timeout:
+                if len(snapshots) == 0:
+                    raise Timeout(action, "No job information found.")
+                raise Timeout(action)
+            time.sleep(sleep_time)
+            passed += sleep_time
+            logger.info("Waiting for %s", action)

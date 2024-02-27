@@ -20,10 +20,11 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
     HEADER_RANGE,
+    ACT_BLOB_DOWNLOAD,
 )
 from aistore.sdk.object_reader import ObjectReader
 
-from aistore.sdk.types import ActionMsg, PromoteAPIArgs
+from aistore.sdk.types import ActionMsg, PromoteAPIArgs, BlobMsg
 from aistore.sdk.utils import read_file_bytes, validate_file
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -272,3 +273,42 @@ class Object(AISSource):
             path=self._object_path,
             params=self._qparams,
         )
+
+    def blob_download(
+        self,
+        chunk_size: int = None,
+        num_workers: int = None,
+        latest: bool = False,
+    ) -> str:
+        """
+        A special facility to download very large remote objects a.k.a. BLOBs
+        Returns job ID that for the blob download operation.
+
+        Args:
+            chunk_size (int): chunk size in bytes
+            num_workers (int): number of concurrent blob-downloading workers (readers)
+            latest (bool): GET the latest object version from the associated remote bucket
+
+        Returns:
+            Job ID (as str) that can be used to check the status of the operation
+
+        Raises:
+            aistore.sdk.errors.AISError: All other types of errors with AIStore
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.exceptions.HTTPError: Service unavailable
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+        """
+        params = self._qparams.copy()
+        value = BlobMsg(
+            chunk_size=chunk_size,
+            num_workers=num_workers,
+            latest=latest,
+        ).as_dict()
+        json_val = ActionMsg(
+            action=ACT_BLOB_DOWNLOAD, value=value, name=self.name
+        ).dict()
+        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }"
+        return self._client.request(
+            HTTP_METHOD_POST, path=url, params=params, json=json_val
+        ).text

@@ -8,7 +8,7 @@ import base64
 from typing import Any, Mapping, List, Optional, Dict
 
 import msgspec
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 
 from aistore.sdk.namespace import Namespace
 from aistore.sdk.const import PROVIDER_AIS
@@ -367,17 +367,25 @@ class JobSnapshot(BaseModel):
     Structure for the data returned when querying a single job on a single target node
     """
 
-    id: str = ""
-    kind: str = ""
-    start_time: str = ""
-    end_time: str = ""
-    bucket: BucketModel = None
-    source_bck: str = ""
-    dest_bck: str = ""
-    rebalance_id: str = ""
-    stats: JobStats = None
-    aborted: bool = False
-    is_idle: bool = False
+    id: str = Field(default="", alias="id")
+    kind: str = Field(default="", alias="kind")
+    start_time: str = Field(default="", alias="start-time")
+    end_time: str = Field(default="", alias="end-time")
+    bucket: BucketModel = Field(default=None, alias="bck")
+    source_bck: str = Field(default="", alias="source-bck")
+    dest_bck: str = Field(default="", alias="dest-bck")
+    rebalance_id: str = Field(default="", alias="glob.id")
+    stats: JobStats = Field(default=None, alias="stats")
+    aborted: bool = Field(default=False, alias="aborted")
+    is_idle: bool = Field(default=False, alias="is_idle")
+    abort_err: str = Field(default="", alias="abort-err")
+
+    class Config:
+        """
+        Configuration for Pydantic model to use alias.
+        """
+
+        allow_population_by_field_name = True
 
 
 class CopyBckMsg(BaseModel):
@@ -522,4 +530,25 @@ class ArchiveMultiObj(BaseModel):
             dict_rep["mime"] = self.mime
         if self.to_bck:
             dict_rep["tobck"] = self.to_bck.as_dict()
+        return dict_rep
+
+
+class BlobMsg(BaseModel):
+    """
+    Represents the set of args the sdk will pass to AIStore when making a blob-download request
+    and provides conversion to the expected json format
+    """
+
+    chunk_size: int = None
+    num_workers: int = None
+    latest: bool
+
+    def as_dict(self):
+        dict_rep = {
+            "latest-ver": self.latest,
+        }
+        if self.chunk_size:
+            dict_rep["chunk-size"] = self.chunk_size
+        if self.num_workers:
+            dict_rep["num-workers"] = self.num_workers
         return dict_rep

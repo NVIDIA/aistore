@@ -36,7 +36,6 @@ User can control (or tune-up) the number of workers and the chunk size(s), among
 | default chunk size  | 2 MiB |
 | minimum chunk size  | 32 KiB |
 | maximum chunk size  | 16 MiB |
-| default chunk size  | 2MiB |
 | default number of workers | 4 |
 
 In addition to massively parallel reading (**), blob downloader also:

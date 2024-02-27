@@ -87,6 +87,7 @@ ACT_LIST = "list"
 ACT_MOVE_BCK = "move-bck"
 ACT_PROMOTE = "promote"
 ACT_SUMMARY_BCK = "summary-bck"
+ACT_BLOB_DOWNLOAD = "blob-download"
 # Multi-object actions
 ACT_DELETE_OBJECTS = "delete-listrange"
 ACT_EVICT_OBJECTS = "evict-listrange"

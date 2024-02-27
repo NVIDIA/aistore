@@ -14,7 +14,12 @@ from tests.integration import (
     OBJECT_COUNT,
     TEST_TIMEOUT_LONG,
 )
-from tests.utils import random_string, destroy_bucket, create_and_put_objects
+from tests.utils import (
+    random_string,
+    destroy_bucket,
+    create_and_put_objects,
+    create_and_put_object,
+)
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
 
@@ -41,6 +46,7 @@ class RemoteEnabledTest(unittest.TestCase):
             provider, bck_name = REMOTE_BUCKET.split("://")
             self.bucket = self.client.bucket(bck_name, provider=provider)
             self.provider = provider
+            self.bck_name = bck_name
         else:
             self.provider = PROVIDER_AIS
             self.bucket = self._create_bucket(self.bck_name)
@@ -71,7 +77,43 @@ class RemoteEnabledTest(unittest.TestCase):
         self.buckets.append(bck_name)
         return bck
 
-    def _create_objects(self, num_obj=OBJECT_COUNT, suffix=""):
+    def _create_object(self, obj_name=""):
+        """
+        Create an object with the given object name and track them for later cleanup
+
+        Args:
+            obj_name: Name of the object to create
+
+        Returns:
+            The object created
+        """
+        obj = self.bucket.object(obj_name=obj_name)
+        if REMOTE_SET:
+            self.cloud_objects.append(obj_name)
+        return obj
+
+    def _create_object_with_content(self, obj_name=""):
+        """
+        Create an object with the given object name and some content and track them for later cleanup
+
+        Args:
+            obj_name: Name of the object to create
+
+        Returns:
+            The content of the object created
+        """
+
+        content = create_and_put_object(
+            client=self.client,
+            bck_name=self.bck_name,
+            obj_name=obj_name,
+            provider=self.provider,
+        )
+        if REMOTE_SET:
+            self.cloud_objects.append(obj_name)
+        return content
+
+    def _create_objects(self, num_obj=OBJECT_COUNT, suffix="", obj_names=None):
         """
         Create a list of objects using a unique test prefix and track them for later cleanup
         Args:
@@ -84,6 +126,7 @@ class RemoteEnabledTest(unittest.TestCase):
             self.obj_prefix,
             suffix,
             num_obj,
+            obj_names,
         )
         if REMOTE_SET:
             self.cloud_objects.extend(obj_names)

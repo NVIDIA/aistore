@@ -183,7 +183,7 @@ class TestJob(unittest.TestCase):
         with self.assertRaises(Timeout) as exc:
             self.job.wait_for_idle()
         self.assertEqual(
-            "Timed out while waiting for job '1234' to reach idle state. No information found for job 1234.",
+            "Timed out while waiting for job '1234' to reach idle state. ",
             str(exc.exception.args[0]),
         )
 
@@ -238,3 +238,55 @@ class TestJob(unittest.TestCase):
             json=expected_action,
             params=expected_params,
         )
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    @patch("aistore.sdk.job.Job._query_job_snapshots")
+    def test_wait_single_node_finishes_successfully(self, mock_query_snapshot):
+        finished_snapshot = [
+            JobSnapshot(
+                id=self.job_id,
+                is_idle=True,
+                end_time="2024-01-01T00:00:00Z",
+                aborted=False,
+            )
+        ]
+        mock_query_snapshot.return_value = finished_snapshot
+
+        self.job.wait_single_node()
+
+        mock_query_snapshot.assert_called()
+        self.assertEqual(mock_query_snapshot.call_count, 1)
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    @patch("aistore.sdk.job.Job._query_job_snapshots")
+    def test_wait_single_node_is_aborted(self, mock_query_snapshot):
+        aborted_snapshot = [
+            JobSnapshot(
+                id=self.job_id,
+                is_idle=True,
+                end_time="2024-01-01T00:00:00Z",
+                aborted=True,
+            )
+        ]
+        mock_query_snapshot.return_value = aborted_snapshot
+
+        self.job.wait_single_node()
+        mock_query_snapshot.assert_called()
+
+    @patch("aistore.sdk.job.time.sleep", Mock())
+    @patch("aistore.sdk.job.Job._query_job_snapshots")
+    def test_wait_single_node_timeout(self, mock_query_snapshot):
+        ongoing_snapshot = [
+            JobSnapshot(
+                id=self.job_id,
+                is_idle=False,
+                end_time="0001-01-01T00:00:00Z",
+                aborted=False,
+            )
+        ]
+        mock_query_snapshot.return_value = ongoing_snapshot
+
+        with self.assertRaises(Timeout):
+            self.job.wait_single_node()
+
+        mock_query_snapshot.assert_called()
