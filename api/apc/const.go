@@ -19,6 +19,8 @@ const (
 	DeploymentDev = "dev"
 )
 
+const NilValue = "none" // features (flags), log modules, et al.
+
 // in re: "Slowloris Attack"
 const (
 	ReadHeaderTimeout    = 16 * time.Second

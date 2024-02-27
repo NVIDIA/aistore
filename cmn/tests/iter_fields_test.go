@@ -8,6 +8,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -96,8 +97,9 @@ var _ = Describe("IterFields", func() {
 					"extra.aws.profile":      "",
 					"extra.aws.max_pagesize": uint(0),
 
-					"access":  apc.AccessAttrs(0),
-					"created": int64(0),
+					"access":   apc.AccessAttrs(0),
+					"features": feat.Flags(0),
+					"created":  int64(0),
 
 					"write_policy.data": apc.WritePolicy(""),
 					"write_policy.md":   apc.WritePolicy(""),
@@ -113,7 +115,8 @@ var _ = Describe("IterFields", func() {
 					Cksum: &cmn.CksumConfToSet{
 						Type: apc.Ptr(cos.ChecksumXXHash),
 					},
-					Access: apc.Ptr[apc.AccessAttrs](1024),
+					Access:   apc.Ptr[apc.AccessAttrs](1024),
+					Features: apc.Ptr[feat.Flags](1024),
 					WritePolicy: &cmn.WritePolicyConfToSet{
 						MD: apc.Ptr(apc.WriteDelayed),
 					},
@@ -148,7 +151,8 @@ var _ = Describe("IterFields", func() {
 					"lru.dont_evict_time":   (*cos.Duration)(nil),
 					"lru.capacity_upd_time": (*cos.Duration)(nil),
 
-					"access": apc.Ptr[apc.AccessAttrs](1024),
+					"access":   apc.Ptr[apc.AccessAttrs](1024),
+					"features": apc.Ptr[feat.Flags](1024),
 
 					"write_policy.data": (*apc.WritePolicy)(nil),
 					"write_policy.md":   apc.Ptr(apc.WriteDelayed),

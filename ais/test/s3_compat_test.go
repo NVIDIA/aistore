@@ -75,7 +75,7 @@ func TestS3PassThroughPutGet(t *testing.T) {
 		objName = "object.txt"
 	)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.Value()})
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.String()})
 	t.Cleanup(func() {
 		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 	})
@@ -116,7 +116,7 @@ func TestS3PassThroughMultipart(t *testing.T) {
 		objName = "object.txt"
 	)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.Value()})
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.String()})
 	t.Cleanup(func() {
 		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 	})
@@ -192,7 +192,7 @@ func TestWriteThroughCacheNoColdGet(t *testing.T) {
 		objName = "object.txt"
 	)
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.Value()})
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.String()})
 	t.Cleanup(func() {
 		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 	})

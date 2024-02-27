@@ -184,12 +184,12 @@ func setCluConfigHandler(c *cli.Context) error {
 		goto show
 	}
 	for k, v := range nvs {
-		if k == feat.FeaturesPropName {
-			featfl, err := parseFeatureFlags(v)
+		if k == feat.PropName {
+			featfl, _, err := parseFeatureFlags([]string{v}, 0)
 			if err != nil {
 				return fmt.Errorf("invalid feature flag %q", v)
 			}
-			nvs[k] = featfl.Value()
+			nvs[k] = featfl.String() // FormatUint
 		}
 		if k == confLogModules { // (ref 836)
 			if nvs[confLogLevel], err = parseLogModules(v); err != nil {
@@ -232,7 +232,7 @@ func parseLogModules(v string) (string, error) {
 		return "", V(err)
 	}
 	level, _ := config.Log.Level.Parse()
-	if v == "" || v == NilValue {
+	if v == "" || v == apc.NilValue {
 		config.Log.Level.Set(level, []string{""})
 	} else {
 		config.Log.Level.Set(level, splitCsv(v))

@@ -11,7 +11,9 @@ redirect_from:
 
 `Feature flags` is a 64-bit (bit-wise) field in aistore cluster configuration denoting assorted (named) capabilities that can be individually enabled at runtime.
 
-The features themselves are enumerated below. By default, all features are disabled, and the corresponding 64-bit field is set to zero.
+The features themselves are enumerated below. Not all feature flags - henceforth, "features" - are cluster-global. Assorted features can be changed on a bucket basis - the fact that is denoted by the `(*)` suffix in the name.
+
+By default, all features are disabled, and the corresponding 64-bit field is set to zero.
 
 ## How to see, how to view, how to change
 
@@ -19,10 +21,9 @@ The features themselves are enumerated below. By default, all features are disab
 $ ais config cluster features <TAB-TAB>
 
 Enforce-IntraCluster-Access           Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL
-Do-not-HEAD-Remote-Bucket             Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
-Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Do-not-Auto-Detect-FileShare
-LZ4-Frame-Checksum                    Disable-Fast-Cold-GET                 Presigned-S3-Req
-none
+Do-not-HEAD-Remote-Bucket             Fsync-PUT(*)                          Ignore-LimitedCoexistence-Conflicts
+Skip-Loading-VersionChecksum-MD(*)    LZ4-Block-1MB                         Do-not-Auto-Detect-FileShare
+LZ4-Frame-Checksum                    Presigned-S3-Req(*)                   none
 ```
 
 For example:
@@ -78,5 +79,4 @@ Cluster config updated
 | `LZ4-Block-1MB` | .tar.lz4 format, lz4 compression: maximum uncompressed block size=1MB (default: 256K) |
 | `LZ4-Frame-Checksum` | checksum lz4 frames |
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
-| `Disable-Fast-Cold-GET` | use regular datapath to execute cold-GET operations |
 | `Presigned-S3-Req` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |

@@ -37,10 +37,16 @@ const (
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
-		confLogModules:                        append(cos.Smodules, NilValue),
-		cmn.PropBucketAccessAttrs:             apc.SupportedPermissions(),
-		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
-		feat.FeaturesPropName:                 append(feat.All, NilValue),
+		// log modules
+		confLogModules: append(cos.Smodules, apc.NilValue),
+		// checksums
+		apc.HdrObjCksumType: cos.SupportedChecksums(),
+		// access
+		cmn.PropBucketAccessAttrs: apc.SupportedPermissions(),
+		// feature flags
+		"cluster.features": append(feat.Cluster, apc.NilValue),
+		"bucket.features":  append(feat.Bucket, apc.NilValue),
+		// rest
 		"write_policy.data":                   apc.SupportedWritePolicy,
 		"write_policy.md":                     apc.SupportedWritePolicy,
 		"ec.compression":                      apc.SupportedCompression,
@@ -69,9 +75,29 @@ var (
 	}
 )
 
-func lastIsSmodule(c *cli.Context) bool { return _lastv(c, propCmpls[confLogModules]) }
-func lastIsAccess(c *cli.Context) bool  { return _lastv(c, propCmpls[cmn.PropBucketAccessAttrs]) }
-func lastIsFeature(c *cli.Context) bool { return _lastv(c, propCmpls[feat.FeaturesPropName]) }
+func lastIsSmodule(c *cli.Context) bool {
+	if argLast(c) == confLogModules {
+		return true
+	}
+	return _lastv(c, propCmpls[confLogModules])
+}
+
+func lastIsAccess(c *cli.Context) bool {
+	if argLast(c) == cmn.PropBucketAccessAttrs {
+		return true
+	}
+	return _lastv(c, propCmpls[cmn.PropBucketAccessAttrs])
+}
+
+func lastIsFeature(c *cli.Context, bucketScope bool) bool {
+	if argLast(c) == feat.PropName {
+		return true
+	}
+	if bucketScope {
+		return _lastv(c, propCmpls["bucket.features"])
+	}
+	return _lastv(c, propCmpls["cluster.features"])
+}
 
 // Returns true if the last arg is any of the enumerated constants
 func _lastv(c *cli.Context, values []string) bool {
@@ -79,6 +105,7 @@ func _lastv(c *cli.Context, values []string) bool {
 		return false
 	}
 	lastArg := argLast(c)
+
 	for _, v := range values {
 		if v == lastArg {
 			return true
@@ -93,7 +120,14 @@ func _lastv(c *cli.Context, values []string) bool {
 // - features
 func smoduleCompletions(c *cli.Context) { remaining(c, propCmpls[confLogModules]) }
 func accessCompletions(c *cli.Context)  { remaining(c, propCmpls[cmn.PropBucketAccessAttrs]) }
-func featureCompletions(c *cli.Context) { remaining(c, propCmpls[feat.FeaturesPropName]) }
+
+func featureCompletions(c *cli.Context, bucketScope bool) {
+	if bucketScope {
+		remaining(c, propCmpls["bucket.features"])
+	} else {
+		remaining(c, propCmpls["cluster.features"])
+	}
+}
 
 func remaining(c *cli.Context, values []string) {
 	typedList := c.Args()
@@ -108,15 +142,15 @@ outer:
 	}
 }
 
-func propValueCompletion(c *cli.Context) bool {
+func propValueCompletion(c *cli.Context, bucketScope bool) bool {
 	switch {
 	case c.NArg() == 0:
 		return false
 	case lastIsAccess(c):
 		accessCompletions(c)
 		return true
-	case lastIsFeature(c):
-		featureCompletions(c)
+	case lastIsFeature(c, bucketScope):
+		featureCompletions(c, bucketScope)
 		return true
 	case lastIsSmodule(c):
 		smoduleCompletions(c)
@@ -299,7 +333,7 @@ func setCluConfigCompletions(c *cli.Context) {
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)
 
-	if propValueCompletion(c) {
+	if propValueCompletion(c, false /*bucket scope*/) {
 		return
 	}
 	for _, prop := range propList {
@@ -310,7 +344,7 @@ func setCluConfigCompletions(c *cli.Context) {
 }
 
 func suggestUpdatableConfig(c *cli.Context) {
-	if propValueCompletion(c) {
+	if propValueCompletion(c, false /*bucket scope*/) {
 		return
 	}
 	scope := apc.Cluster
@@ -349,7 +383,7 @@ func (opts *bcmplop) buckets(c *cli.Context) {
 	)
 	additionalCompletions = opts.additionalCompletions
 	if c.NArg() > opts.firstBucketIdx && !opts.multiple {
-		if propValueCompletion(c) {
+		if propValueCompletion(c, true /*bucket scope*/) {
 			return
 		}
 		for _, f := range additionalCompletions {

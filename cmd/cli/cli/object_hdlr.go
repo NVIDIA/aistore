@@ -386,10 +386,10 @@ func putStdin(c *cli.Context, a *putargs) error {
 	}
 	if flagIsSet(c, chunkSizeFlag) && chunkSize == 0 {
 		return fmt.Errorf("chunk size (in %s) cannot be zero (%s recommended)",
-			qflprn(chunkSizeFlag), teb.FmtSize(defaultChunkSize, cos.UnitsIEC, 0))
+			qflprn(chunkSizeFlag), teb.FmtSize(dfltStdinChunkSize, cos.UnitsIEC, 0))
 	}
 	if chunkSize == 0 {
-		chunkSize = defaultChunkSize
+		chunkSize = dfltStdinChunkSize
 	}
 	if flagIsSet(c, verboseFlag) {
 		actionWarn(c, "To terminate input, press Ctrl-D two or more times")

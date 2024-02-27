@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -51,6 +52,7 @@ type (
 		LRU         LRUConf         `json:"lru"`                            // LRU (watermarks and enabled/disabled)
 		Mirror      MirrorConf      `json:"mirror"`                         // mirroring
 		Access      apc.AccessAttrs `json:"access,string"`                  // access permissions
+		Features    feat.Flags      `json:"features,string"`                // assorted features from feat.Bucket
 		BID         uint64          `json:"bid,string" list:"omit"`         // unique ID
 		Created     int64           `json:"created,string" list:"readonly"` // creation timestamp
 		Versioning  VersionConf     `json:"versioning"`                     // versioning (see "inherit")
@@ -121,6 +123,7 @@ type (
 		Mirror      *MirrorConfToSet      `json:"mirror,omitempty"`
 		EC          *ECConfToSet          `json:"ec,omitempty"`
 		Access      *apc.AccessAttrs      `json:"access,string,omitempty"`
+		Features    *feat.Flags           `json:"features,string,omitempty"`
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
 		Extra       *ExtraToSet           `json:"extra,omitempty"`
 		Force       bool                  `json:"force,omitempty" copy:"skip" list:"omit"`
@@ -172,6 +175,7 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 		Access:      apc.AccessAll,
 		EC:          c.EC,
 		WritePolicy: wp,
+		Features:    c.Features,
 	}
 }
 

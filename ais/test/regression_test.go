@@ -108,7 +108,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.String()})
 			t.Cleanup(func() {
 				tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 			})
@@ -196,7 +196,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 			if i == 0 {
 				tlog.Logln("Modifying config to enforce intra-cluster access, expecting errors...\n")
 			}
-			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
+			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.String()})
 			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
 
 			if err == nil {

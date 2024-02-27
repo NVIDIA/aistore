@@ -37,6 +37,14 @@ type (
 	}
 )
 
+//////////////////
+// PresignedReq //
+//////////////////
+
+func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values) *PresignedReq {
+	return &PresignedReq{oreq, lom, body, q}
+}
+
 // FIXME: handle error cases
 func parseSignatureV4(query url.Values, header http.Header) (region string) {
 	if credentials := query.Get(HeaderCredentials); credentials != "" {
@@ -49,10 +57,6 @@ func parseSignatureV4(query url.Values, header http.Header) (region string) {
 		region = strings.Split(credentials, "/")[2]
 	}
 	return region
-}
-
-func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values) *PresignedReq {
-	return &PresignedReq{oreq, lom, body, q}
 }
 
 func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
@@ -98,16 +102,12 @@ func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 		return &PresignedResp{StatusCode: http.StatusBadRequest},
 			fmt.Errorf("failed to read response body: %v", err)
 	}
-	return &PresignedResp{
-		Body:       output,
-		Header:     resp.Header,
-		StatusCode: resp.StatusCode,
-	}, nil
+	return &PresignedResp{Body: output, Header: resp.Header, StatusCode: resp.StatusCode}, nil
 }
 
-///////////////////////////
+///////////////////
 // PresignedResp //
-///////////////////////////
+///////////////////
 
 // (compare w/ cmn/objattrs FromHeader)
 func (resp *PresignedResp) ObjAttrs() (oa *cmn.ObjAttrs) {

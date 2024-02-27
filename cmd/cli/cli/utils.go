@@ -208,7 +208,7 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 		case i < ll-2 && args[i+1] == keyAndValueSeparator:
 			nvs[args[i]] = args[i+2]
 			i += 3
-		case args[i] == feat.FeaturesPropName && i < ll-1:
+		case args[i] == feat.PropName && i < ll-1:
 			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only features nothing else in the tail
 			return
 		case args[i] == confLogModules && i < ll-1:
@@ -262,7 +262,7 @@ func isJSON(arg string) bool {
 	return false
 }
 
-func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, newIdx int, err error) {
+func parseBucketACL(values []string, idx int) (access apc.AccessAttrs, newIdx int, err error) {
 	var (
 		acc apc.AccessAttrs
 		val uint64
@@ -270,7 +270,7 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 	if len(values) == 0 {
 		return access, idx, nil
 	}
-	// Case: `access GET,PUT`
+	// 1: `access GET,PUT`
 	if strings.Index(values[idx], ",") > 0 {
 		newIdx = idx + 1
 		lst := splitCsv(values[idx])
@@ -279,54 +279,79 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 			if perm == "" {
 				continue
 			}
-			acc, err = apc.StrToAccess(perm)
-			if err != nil {
-				return
+			if acc, err = apc.StrToAccess(perm); err != nil {
+				return access, newIdx, err
 			}
 			access |= acc
 		}
 		return
 	}
+
+	// 2: direct hexadecimal input, e.g. `access 0x342`
+	// 3: `access HEAD`
 	for newIdx = idx; newIdx < len(values); {
-		// Case: `access 0x342`
-		val, err = parseHexOrUint(values[newIdx])
-		if err == nil {
-			access |= apc.AccessAttrs(val)
-			newIdx++
-			continue
-		}
-		// Case: `access HEAD`
-		acc, err = apc.StrToAccess(values[newIdx])
-		if err != nil {
-			break
+		if val, err = parseHexOrUint(values[newIdx]); err == nil {
+			acc = apc.AccessAttrs(val)
+		} else if acc, err = apc.StrToAccess(values[newIdx]); err != nil {
+			return access, newIdx, err
 		}
 		access |= acc
 		newIdx++
 	}
-	if idx == newIdx {
-		return 0, newIdx, err
-	}
 	return access, newIdx, nil
 }
 
-func parseFeatureFlags(v string) (res feat.Flags, err error) {
-	if v == "" || v == NilValue {
-		return 0, nil
+func parseFeatureFlags(values []string, idx int) (res feat.Flags, newIdx int, err error) {
+	if len(values) == 0 {
+		return 0, idx, nil
 	}
-	values := splitCsv(v)
-	for _, v := range values {
-		var f feat.Flags
-		if f, err = feat.StrToFeat(v); err != nil {
-			return
+	if values[idx] == apc.NilValue {
+		return 0, idx + 1, nil
+	}
+	// 1: parse (comma-separated) feat.Flags.String()
+	if strings.Index(values[idx], ",") > 0 {
+		newIdx = idx + 1
+		lst := splitCsv(values[idx])
+		for _, vv := range lst {
+			var (
+				f feat.Flags
+				v = strings.TrimSpace(vv)
+			)
+			if v == "" {
+				continue
+			}
+			if f, err = feat.CSV2Feat(v); err != nil {
+				return res, idx, err
+			}
+			res = res.Set(f)
 		}
-		res |= f // TODO -- FIXME: use res.Set(f)
+		return res, newIdx, nil
 	}
-	return
+
+	// 2: direct hexadecimal input, e.g. `features 0x342`
+	// 3: `features F3`
+	for newIdx = idx; newIdx < len(values); {
+		var (
+			f   feat.Flags
+			val uint64
+		)
+		if val, err = parseHexOrUint(values[newIdx]); err == nil {
+			f = feat.Flags(val)
+		} else if f, err = feat.CSV2Feat(values[newIdx]); err != nil {
+			return res, idx, err
+		}
+		res = res.Set(f)
+		newIdx++
+	}
+	return res, newIdx, nil
 }
 
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
 func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
-	props := make([]string, 0, 20)
+	var (
+		cmd   string
+		props = make([]string, 0, 20)
+	)
 	err = cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (error, bool) {
 		props = append(props, tag)
 		return nil, false
@@ -335,10 +360,6 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 		return
 	}
 
-	var (
-		access apc.AccessAttrs
-		cmd    string
-	)
 	nvs = make(cos.StrKVs, 8)
 	for idx := 0; idx < len(values); {
 		pos := strings.Index(values[idx], "=")
@@ -366,14 +387,31 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 			cmd = ""
 			continue
 		}
+
 		cmd = values[idx]
 		idx++
+		if idx >= len(values) {
+			break
+		}
+
+		// two special cases: access and feature flags
 		if cmd == cmn.PropBucketAccessAttrs {
-			access, idx, err = parseBucketAccessValues(values, idx)
+			var access apc.AccessAttrs
+			access, idx, err = parseBucketACL(values, idx)
 			if err != nil {
 				return nil, err
 			}
-			nvs[cmd] = strconv.FormatUint(uint64(access), 10)
+			nvs[cmd] = access.String() // FormatUint
+			cmd = ""
+			continue
+		}
+		if cmd == feat.PropName {
+			var features feat.Flags
+			features, idx, err = parseFeatureFlags(values, idx)
+			if err != nil {
+				return nil, err
+			}
+			nvs[cmd] = features.String() // FormatUint
 			cmd = ""
 		}
 	}

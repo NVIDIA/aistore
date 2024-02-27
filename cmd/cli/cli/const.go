@@ -191,10 +191,8 @@ const (
 	tgtTotal = "------- Sum:"
 )
 
-const NilValue = "none"
-
 const (
-	defaultChunkSize = 10 * cos.MiB
+	dfltStdinChunkSize = 10 * cos.MiB
 )
 
 const (

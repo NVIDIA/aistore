@@ -1,10 +1,17 @@
 // Package env contains environment variables
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package env
 
-// See also: docs/environment-vars.md
+// See also:
+// - "AIS_READ_HEADER_TIMEOUT"
+// - "AIS_DAEMON_ID"
+// - "AIS_CLUSTER_CIDR", "AIS_HOST_IP", "AIS_HOST_PORT"
+// - "AIS_TARGET_URL"
+//
+// See also:
+// - docs/environment-vars.md
 
 var (
 	AIS = struct {

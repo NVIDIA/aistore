@@ -604,7 +604,6 @@ do:
 		var (
 			res    core.GetReaderResult
 			ckconf = goi.lom.CksumConf()
-			fast   = !cmn.Rom.Features().IsSet(feat.DisableFastColdGET) // can be disabled
 			loaded bool
 		)
 		if cs.IsNil() {
@@ -637,18 +636,16 @@ do:
 		}
 		goi.cold = true
 
-		// fast path limitations: read archived; compute more checksums (TODO: reduce)
-		fast = fast && goi.archive.filename == "" &&
-			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange))
-
-		// fast path
-		if fast {
+		// two alternative ways to perform cold GET: "fast" and "regular"
+		// "fast" limitations: read archived; compute more checksums (TODO)
+		if goi.archive.filename == "" &&
+			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange)) {
+			// fast path
 			err = goi.coldSeek(&res)
 			goi.unlocked = true // always
 			return 0, err
 		}
-
-		// regular path
+		// otherwise, regular path
 		errCode, err = goi._coldPut(&res)
 		if err != nil {
 			goi.unlocked = true
