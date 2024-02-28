@@ -794,7 +794,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	// load (maybe)
-	skipVC := cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC)
+	skipVC := lom.IsFeatureSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC)
 	if !skipVC {
 		_ = lom.Load(true, false)
 	}
@@ -1046,7 +1046,7 @@ func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 			}
 			op.Mirror.Paths = append(op.Mirror.Paths, fs)
 		}
-		if lom.Bck().Props.EC.Enabled {
+		if lom.ECEnabled() {
 			if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
 				hasEC = true
 				op.EC.DataSlices = md.Data
@@ -1361,7 +1361,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 	if lom.Bck().IsRemote() {
 		return fmt.Errorf("%s: cannot rename object %s from remote bucket", t.si, lom)
 	}
-	if lom.Bck().Props.EC.Enabled {
+	if lom.ECEnabled() {
 		return fmt.Errorf("%s: cannot rename erasure-coded object %s", t.si, lom)
 	}
 	if msg.Name == lom.ObjName {

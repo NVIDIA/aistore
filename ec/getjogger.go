@@ -782,7 +782,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 
 // Entry point: restores main objects and slices if possible
 func (c *getJogger) restore(ctx *restoreCtx) error {
-	if ctx.lom.Bprops() == nil || !ctx.lom.Bprops().EC.Enabled {
+	if ctx.lom.Bprops() == nil || !ctx.lom.ECEnabled() {
 		return ErrorECDisabled
 	}
 

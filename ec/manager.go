@@ -222,7 +222,7 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 //   - intra - if true, it is internal request and has low priority
 //   - cb - optional callback that is called after the object is encoded
 func (mgr *Manager) EncodeObject(lom *core.LOM, cb core.OnFinishObj) error {
-	if !lom.Bprops().EC.Enabled {
+	if !lom.ECEnabled() {
 		return ErrorECDisabled
 	}
 	cs := fs.Cap()
@@ -247,7 +247,7 @@ func (mgr *Manager) EncodeObject(lom *core.LOM, cb core.OnFinishObj) error {
 }
 
 func (mgr *Manager) CleanupObject(lom *core.LOM) {
-	if !lom.Bprops().EC.Enabled {
+	if !lom.ECEnabled() {
 		return
 	}
 	debug.Assert(lom.FQN != "" && lom.Mountpath().Path != "")
@@ -256,7 +256,7 @@ func (mgr *Manager) CleanupObject(lom *core.LOM) {
 }
 
 func (mgr *Manager) RestoreObject(lom *core.LOM) error {
-	if !lom.Bprops().EC.Enabled {
+	if !lom.ECEnabled() {
 		return ErrorECDisabled
 	}
 	cs := fs.Cap()

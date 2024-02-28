@@ -811,8 +811,8 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 		}
 		return cmn.ErrSkip
 	}
-	// skip EC.Enabled bucket - the job for EC rebalance
-	if lom.Bck().Props.EC.Enabled {
+	// skip EC.Enabled bucket - leave the job for EC rebalance
+	if lom.ECEnabled() {
 		return filepath.SkipDir
 	}
 	tsi, err := rj.smap.HrwHash2T(lom.Digest())

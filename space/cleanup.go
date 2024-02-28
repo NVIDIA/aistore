@@ -470,7 +470,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	if lom.IsCopy() {
 		return
 	}
-	if lom.Bprops().EC.Enabled {
+	if lom.ECEnabled() {
 		metaFQN := fs.CSM.Gen(lom, fs.ECMetaType, "")
 		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, core.NewCTFromLOM(lom, fs.ObjectType))

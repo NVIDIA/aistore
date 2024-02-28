@@ -443,7 +443,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 	}
 
 	// ok
-	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
+	if poi.lom.IsFeatureSet(feat.FsyncPUT) {
 		err = lmfh.Sync() // compare w/ cos.FlushClose
 		debug.AssertNoErr(err)
 	}
@@ -571,7 +571,7 @@ do:
 			cold, goi.verchanged = true, true
 		}
 		// TODO: utilize res.ObjAttrs
-	case cmn.Rom.Features().IsSet(feat.PresignedS3Req):
+	case goi.lom.IsFeatureSet(feat.PresignedS3Req):
 		q := goi.req.URL.Query() // TODO: optimize-out
 		pts := s3.NewPresignedReq(goi.req, goi.lom, nil, q)
 		resp, err := pts.Do(g.client.data)
@@ -771,7 +771,7 @@ validate:
 	}
 
 	nlog.Warningln(err)
-	redundant := lom.HasCopies() || lom.Bprops().EC.Enabled
+	redundant := lom.HasCopies() || lom.ECEnabled()
 	//
 	// return err if there's no redundancy OR already recovered once (and failed)
 	//
@@ -801,7 +801,7 @@ validate:
 			goto validate
 		}
 	}
-	if lom.Bprops().EC.Enabled {
+	if lom.ECEnabled() {
 		retried = true
 		goi.lom.Unlock(false)
 		cos.RemoveFile(lom.FQN)
@@ -859,7 +859,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode
 		marked    = xreg.GetRebMarked()
 		running   = marked.Xact != nil
 		gfnActive = reb.IsGFN() // GFN(global rebalance)
-		ecEnabled = goi.lom.Bprops().EC.Enabled
+		ecEnabled = goi.lom.ECEnabled()
 		// TODO: when not enough EC targets to restore a sliced object,
 		// we might still be able to restore from the object's full replica
 		enoughECRestoreTargets = goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTs()
@@ -1744,7 +1744,7 @@ func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 	if err := a.lom.Persist(); err != nil {
 		return err
 	}
-	if a.lom.Bprops().EC.Enabled {
+	if a.lom.ECEnabled() {
 		if err := ec.ECM.EncodeObject(a.lom, nil); err != nil && err != ec.ErrorECDisabled {
 			return err
 		}

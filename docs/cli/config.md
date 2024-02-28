@@ -394,9 +394,9 @@ aliases				 cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict
 				 get => 'object get'; prefetch => 'object prefetch'; put => 'object put';
 				 rmo => 'object rm'
 auth.url			 http://127.0.0.1:52001
-cluster.client_ca_tls            
-cluster.client_crt               
-cluster.client_crt_key           
+cluster.client_ca_tls
+cluster.client_crt
+cluster.client_crt_key
 cluster.default_ais_host	 http://127.0.0.1:8080
 cluster.default_docker_host	 http://172.50.0.2:8080
 cluster.skip_verify_crt		 false

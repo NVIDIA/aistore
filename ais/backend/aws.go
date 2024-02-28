@@ -461,7 +461,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]string, 2)
 	)
-	if cmn.Rom.Features().IsSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
 		q := oreq.URL.Query() // TODO: optimize-out
 		pts := aiss3.NewPresignedReq(oreq, lom, r, q)
 		resp, err := pts.Do(core.T.DataClient())

@@ -235,6 +235,13 @@ func (bp *Bprops) Validate(targetCnt int) error {
 	if bp.Mirror.Enabled && bp.EC.Enabled {
 		nlog.Warningln("n-way mirroring and EC are both enabled at the same time on the same bucket")
 	}
+
+	names := bp.Features.Names()
+	for _, n := range names {
+		if !feat.IsBucketScope(n) {
+			return fmt.Errorf("feature flag %q cannot be set (expecting \"bucket scope\", see docs/feature_flags.md for details)", n)
+		}
+	}
 	return softErr
 }
 

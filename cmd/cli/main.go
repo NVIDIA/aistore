@@ -30,7 +30,7 @@ func dispatchInterruptHandler() {
 func main() {
 	dispatchInterruptHandler()
 
-	if err := cli.Init(); err != nil {
+	if err := cli.Init(os.Args); err != nil {
 		exitf("%v", err)
 	}
 

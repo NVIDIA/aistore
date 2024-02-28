@@ -7,7 +7,9 @@ package feat
 import (
 	"errors"
 	"strconv"
+	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -16,7 +18,7 @@ type Flags cos.BitFlags
 // NOTE:
 // - `Bucket` features(*) are a strict subset of all `Cluster` features, and can be changed
 //    for individual buckets
-// - when making changes, make sure to update `Cluster` names and maybe `Bucket` as well
+// - when making any changes, make sure to update `Cluster` and maybe the `Bucket` enum as well (NOTE)
 
 const (
 	PropName = "features"
@@ -60,7 +62,7 @@ func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlag
 func (f Flags) Set(flags Flags) Flags { return Flags(cos.BitFlags(f).Set(cos.BitFlags(flags))) }
 func (f Flags) String() string        { return strconv.FormatUint(uint64(f), 10) }
 
-func IsBucketScope(s string) bool { return cos.StringInSlice(s, Bucket) }
+func IsBucketScope(name string) bool { return cos.StringInSlice(name, Bucket) }
 
 func CSV2Feat(s string) (Flags, error) {
 	if s == "" || s == "none" {
@@ -74,14 +76,22 @@ func CSV2Feat(s string) (Flags, error) {
 	return 0, errors.New("unknown feature flag '" + s + "'")
 }
 
-func (f Flags) CSV() (s string) {
+func (f Flags) Names() (names []string) {
+	if f == 0 {
+		return names
+	}
 	for i, name := range Cluster {
 		if f&(1<<i) != 0 {
-			s += name + ","
+			names = append(names, name)
 		}
 	}
-	if s == "" {
-		return "none"
+	return names
+}
+
+func (f Flags) CSV() (s string) {
+	names := f.Names()
+	if len(names) == 0 {
+		return apc.NilValue
 	}
-	return s[:len(s)-1]
+	return strings.Join(names, ",")
 }

@@ -253,7 +253,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 
 	// 1. fix EC metafile
 	var metaOldPath, metaNewPath string
-	if !lom.IsHRW() && lom.Bprops().EC.Enabled {
+	if !lom.IsHRW() && lom.ECEnabled() {
 		// copy metafile
 		newMpath, _, errEc := core.ResolveFQN(lom.HrwFQN)
 		if errEc != nil {

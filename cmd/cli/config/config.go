@@ -170,17 +170,30 @@ func (c *Config) validate() (err error) {
 	return nil
 }
 
-func Load() (*Config, error) {
-	cfg := &Config{}
-	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, &cfg); err != nil {
+func Load(args []string, reset string) (*Config, error) {
+	var (
+		cfg          = &Config{}
+		resetAndExit bool
+	)
+	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, cfg); err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to load CLI config %q: %v",
-				filepath.Join(ConfigDir, fname.CliConfig), err)
+			if !cos.StringInSlice(reset, args) {
+				const tip = "To reset config to system defaults, run 'ais config reset'. Or, edit the JSON file (above) directly."
+				path := filepath.Join(ConfigDir, fname.CliConfig)
+				return nil, fmt.Errorf("failed to load CLI config %q: %v\n\n%s", path, err, tip)
+			}
+			resetAndExit = true
 		}
 
-		// Use default config in case of error.
-		err = Save(&defaultConfig)
-		cfg := &defaultConfig
+		// revert to default config
+		if err = Save(&defaultConfig); err != nil {
+			return nil, err
+		}
+		if resetAndExit {
+			fmt.Println("Done.")
+			os.Exit(0)
+		}
+		cfg = &defaultConfig
 		return cfg, err
 	}
 

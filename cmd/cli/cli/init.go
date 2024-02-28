@@ -21,8 +21,8 @@ import (
 
 var loggedUserToken string
 
-func Init() (err error) {
-	cfg, err = config.Load()
+func Init(args []string) (err error) {
+	cfg, err = config.Load(args, cmdReset)
 	if err != nil {
 		return
 	}

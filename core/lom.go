@@ -141,7 +141,7 @@ func (lom *LOM) Version(special ...bool) string {
 
 func (lom *LOM) ValidateWarmGet(qparam string /*apc.QparamLatestVer*/) bool {
 	switch {
-	case cmn.Rom.Features().IsSet(feat.PresignedS3Req):
+	case lom.IsFeatureSet(feat.PresignedS3Req):
 		return false
 	case !lom.Bck().IsCloud() && !lom.Bck().IsRemoteAIS():
 		return false
@@ -185,15 +185,17 @@ func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 	return
 }
 
-func (lom *LOM) ECEnabled() bool { return lom.Bprops().EC.Enabled }
-func (lom *LOM) IsHRW() bool     { return lom.HrwFQN == lom.FQN } // subj to resilvering
+func (lom *LOM) IsHRW() bool { return lom.HrwFQN == lom.FQN } // subj to resilvering
 
 func (lom *LOM) Bprops() *cmn.Bprops { return lom.bck.Props }
 
-func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
-func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }
-func (lom *LOM) CksumType() string            { return lom.bck.CksumConf().Type }
-func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
+// bprops accessors for convenience
+func (lom *LOM) ECEnabled() bool                { return lom.Bprops().EC.Enabled }
+func (lom *LOM) IsFeatureSet(f feat.Flags) bool { return lom.Bprops().Features.IsSet(f) }
+func (lom *LOM) MirrorConf() *cmn.MirrorConf    { return &lom.Bprops().Mirror }
+func (lom *LOM) CksumConf() *cmn.CksumConf      { return lom.bck.CksumConf() }
+func (lom *LOM) CksumType() string              { return lom.bck.CksumConf().Type }
+func (lom *LOM) VersionConf() cmn.VersionConf   { return lom.bck.VersionConf() }
 
 // as fs.PartsFQN
 func (lom *LOM) ObjectName() string       { return lom.ObjName }

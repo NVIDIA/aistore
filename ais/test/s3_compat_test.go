@@ -67,6 +67,20 @@ func newS3Client() *http.Client {
 	}
 }
 
+func setPresignedS3(t *testing.T, bck cmn.Bck) {
+	f := feat.PresignedS3Req
+	props := &cmn.BpropsToSet{Features: &f}
+	_, err := api.SetBucketProps(baseParams, bck, props)
+	tassert.CheckFatal(t, err)
+
+	t.Cleanup(func() {
+		var f feat.Flags
+		props := &cmn.BpropsToSet{Features: &f}
+		_, err := api.SetBucketProps(baseParams, bck, props)
+		tassert.CheckFatal(t, err)
+	})
+}
+
 func TestS3PassThroughPutGet(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, RequiresTLS: true, RequiredCloudProvider: apc.AWS})
 
@@ -74,15 +88,20 @@ func TestS3PassThroughPutGet(t *testing.T) {
 		bck     = cliBck
 		objName = "object.txt"
 	)
-
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
-
 	_, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
+	setPresignedS3(t, bck)
+
+	/* TODO -- FIXME: alternatively, use env vars AWS_PROFILE et al:
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithSharedConfigProfile("default"),
+	)
+	tassert.CheckFatal(t, err)
+	cfg.HTTPClient = newS3Client()
+	s3Client := s3.NewFromConfig(cfg)
+	*/
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: cmn.AwsDefaultRegion})
 
 	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
@@ -115,14 +134,10 @@ func TestS3PassThroughMultipart(t *testing.T) {
 		bck     = cliBck
 		objName = "object.txt"
 	)
-
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
-
 	_, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
+
+	setPresignedS3(t, bck)
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: cmn.AwsDefaultRegion})
 
@@ -191,14 +206,10 @@ func TestWriteThroughCacheNoColdGet(t *testing.T) {
 		bck     = cliBck
 		objName = "object.txt"
 	)
-
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.PresignedS3Req.String()})
-	t.Cleanup(func() {
-		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
-	})
-
 	_, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
+
+	setPresignedS3(t, bck)
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: cmn.AwsDefaultRegion})
 
