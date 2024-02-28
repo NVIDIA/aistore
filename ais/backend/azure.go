@@ -61,14 +61,11 @@ const (
 	azProtoEnvVar = "AIS_AZURE_PROTO"
 )
 
-// used to parse azure errors
 const (
-	azErrDesc = "Description"
-	azErrCode = "Code: "
-
 	azErrPrefix = "azure-error["
 )
 
+// parse azure errors
 var (
 	azCleanErrRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 )
@@ -133,6 +130,12 @@ func azEncodeChecksum(v []byte) string {
 // format and parse errors
 //
 
+const (
+	azErrDesc = "Description"
+	azErrResp = "RESPONSE"
+	azErrCode = "Code: " // and CODE:
+)
+
 func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, error) {
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.InfoDepth(1, "begin azure error =========================")
@@ -184,12 +187,19 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 	for _, line := range lines {
 		if strings.HasPrefix(line, azErrDesc) {
 			description = azCleanErrRegex.ReplaceAllString(line[len(azErrDesc):], "")
-		} else if i := strings.Index(line, azErrCode); i > 0 {
+		} else if strings.HasPrefix(line, azErrResp) {
+			i := max(0, strings.Index(line, ": "))
+			// alternatively, take "^RESPONSE ...: <...>" for description
+			description = azCleanErrRegex.ReplaceAllString(line[i:], "")
+		}
+		if i := strings.Index(line, azErrCode); i > 0 {
+			code = azCleanErrRegex.ReplaceAllString(line[i+len(azErrCode):], "")
+		} else if i := strings.Index(line, strings.ToUpper(azErrCode)); i > 0 {
 			code = azCleanErrRegex.ReplaceAllString(line[i+len(azErrCode):], "")
 		}
 	}
 	if code != "" && description != "" {
-		return status, errors.New(azErrPrefix + code + ": " + description + "]")
+		return status, errors.New(azErrPrefix + code + ": " + strings.TrimSpace(description) + "]")
 	}
 	debug.Assert(false, azureError) // expecting to parse
 	return status, azureError
