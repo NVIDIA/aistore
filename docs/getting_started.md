@@ -83,7 +83,7 @@ The rest of this document is structured as follows:
 
 - [Local Playground](#local-playground)
   - [From source](#from-source)
-  - [Demo](#demo)
+  - [Running Local Playground with emulated disks](#running-local-playground-with-emulated-disks)
   - [Running Local Playground remotely](#running-local-playground-remotely)
 - [Make](#make)
 - [System environment variables](#system-environment-variables)
@@ -101,13 +101,15 @@ The rest of this document is structured as follows:
 
 ## Local Playground
 
-If you're looking for a speedy evaluation, feature experimentation, initial usage, or development, running AIS from its GitHub source might be a good option.
+If you're looking for speedy evaluation, want to experiment with [supported features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features), get a feel of initial usage, or development - for any and all of these reasons running AIS from its GitHub source might be a good option.
 
-Hence, **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
+Hence, we introduced and keep maintaining **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
+
+> Some of the most popular deployment options are also **summarized** in this [table](https://github.com/NVIDIA/aistore/tree/main/deploy#readme). The list includes Local Playground, and its complementary guide [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md).
 
 > Local Playground is **not intended** for production and is not meant to provide optimal performance.
 
-To run AIStore from source, you'd typically need **Go**: compiler, linker, tools, and required packages. However:
+To run AIStore from source, one would typically need to have **Go**: compiler, linker, tools, and required packages. However:
 
 > `CROSS_COMPILE` option (see below) can be used to build AIStore without having (to install) [Go](https://golang.org/dl/) and its toolchain (requires Docker).
 
@@ -152,11 +154,75 @@ $ clean_deploy.sh --proxy-cnt 1 --target-cnt 7
 $ clean_deploy.sh --proxy-cnt 1 --target-cnt 7 --gcp
 ```
 
-For more options and detailed descriptions, run `make help` and see: [`clean_deploy.sh`](/docs/development.md#clean-deploy).
+For more options and usage examples:
 
-### Demo
+* run `make help`
+* see [`clean_deploy.sh`](/docs/development.md#clean-deploy).
 
-Here's a quick, albeit somewhat outdated, [YouTube introduction and demo](https://www.youtube.com/watch?v=ANshjHphqfI).
+### Running Local Playground with emulated disks
+
+Here's a quick walk-through (with more references included below).
+
+* Step 1: patch `deploy/dev/local/aisnode_config.sh` as follows:
+
+```diff
+diff --git a/deploy/dev/local/aisnode_config.sh b/deploy/dev/local/aisnode_config.sh
+index c5e0e4fae..46085e19c 100755
+--- a/deploy/dev/local/aisnode_config.sh
++++ b/deploy/dev/local/aisnode_config.sh
+@@ -192,11 +192,12 @@ cat > $AIS_LOCAL_CONF_FILE <<EOL
+                "port_intra_data":    "${PORT_INTRA_DATA:-10080}"
+        },
+        "fspaths": {
+-               $AIS_FS_PATHS
++               "/tmp/ais/mp1": {},
++               "/tmp/ais/mp2": {}
+        },
+        "test_fspaths": {
+                "root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
+-               "count":    ${TEST_FSPATH_COUNT:-0},
++               "count":    0,
+                "instance": ${INSTANCE:-0}
+        }
+ }
+```
+
+* Step 2: deploy a single target with two loopback devices (1GB size each):
+
+```console
+$ make kill clean cli deploy <<< $'1\n1\n2\ny\ny\nn\nn\n1G\n'
+
+$ mount | grep dev/loop
+/dev/loop23 on /tmp/ais/mp1 type ext4 (rw,relatime)
+/dev/loop25 on /tmp/ais/mp2 type ext4 (rw,relatime)
+```
+
+* Step 3: observe a running cluster; notice the deployment [type]((#multiple-deployment-options)) and the number of disks:
+
+```console
+$ ais show cluster
+PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION         BUILD TIME
+p[BOxqibgv][P]   0.14%           27.28GiB        [1.2 1.1 1.1]   -       online  3.22.bf26375e5  2024-02-29T11:11:52-0500
+
+TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       LOAD AVERAGE    REBALANCE       UPTIME  STATUS  VERSION
+t[IwzSpiIm]      0.14%           27.28GiB        6%              1.770GiB        [1.2 1.1 1.1]   -               -       online  3.22.bf26375e5
+
+Summary:
+   Proxies:             1
+   Targets:             1 (num disks: 2)
+   Cluster Map:         version 4, UUID g7sPH9dTY, primary p[BOxqibgv]
+   Deployment:          linux
+   Status:              2 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.22.bf26375e5
+   Build:               2024-02-29T11:11:52-0500
+```
+
+See also:
+> [for developers](development.md);
+> [cluster and node configuration](configuration.md);
+> [supported deployments: summary table and links](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md).
 
 ### Running Local Playground remotely
 
@@ -252,15 +318,25 @@ For details, please see section [TLS: testing with self-signed certificates](#tl
 
 ## Multiple deployment options
 
-All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder has a pair: {`Dockerfile`, `Makefile`}.
+AIStore deploys anywhere anytime supporting multiple deployment options [summarized and further referenced here](/deploy/README.md).
+
+All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder contains a pair: {`Dockerfile`, `Makefile`}.
 
 > This separation is typically small in size and easily readable and maintainable.
 
 Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](./../Makefile).
 
-AIStore deploys anywhere anytime supporting multiple deployment options [summarized and further referenced here](/deploy/README.md).
+In the software, _type of the deployment_ is also present in some minimal way. In particular, to overcome certain limitations of [Local Playground](#local-playground) (single disk shared by multiple targets, etc.) - we need to know the _type_. Which can be:
 
-In particular:
+| enumerated type | comment |
+| --- | --- |
+| `dev` | development |
+| `k8s` | Kubernetes |
+| `linux` | Linux |
+
+> The most recently updated enumeration can be found in the [source](https://github.com/NVIDIA/aistore/blob/main/ais/utils.go#L329)
+
+> The _type_ shows up in the `show cluster` output - see example above.
 
 ### Kubernetes deployments
 
