@@ -197,7 +197,7 @@ $ mount | grep dev/loop
 /dev/loop25 on /tmp/ais/mp2 type ext4 (rw,relatime)
 ```
 
-* Step 3: observe a running cluster; notice the deployment [type]((#multiple-deployment-options)) and the number of disks:
+* Step 3: observe a running cluster; notice the deployment [type](#multiple-deployment-options) and the number of disks:
 
 ```console
 $ ais show cluster
