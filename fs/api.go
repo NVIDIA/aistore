@@ -26,3 +26,11 @@ type (
 		CsErr      string          `json:"cs_err"`  // OOS or high-wm error message
 	}
 )
+
+func InitCDF(tcdf *TargetCDF) {
+	avail := GetAvail()
+	tcdf.Mountpaths = make(map[string]*CDF, len(avail))
+	for mpath := range avail {
+		tcdf.Mountpaths[mpath] = &CDF{}
+	}
+}

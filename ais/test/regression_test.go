@@ -612,7 +612,7 @@ func TestGetClusterStats(t *testing.T) {
 		for mpath := range vCDF.Mountpaths {
 			vcdf, tcdf := vCDF.Mountpaths[mpath], tCDF.Mountpaths[mpath]
 			s := tname + mpath
-			if vcdf.Capacity != tcdf.Capacity {
+			if vcdf.Capacity.PctUsed != tcdf.Capacity.PctUsed {
 				t.Errorf("%-30s capacity is different: [%+v] vs [%+v]\n", s, vcdf, tcdf)
 			} else if !printed {
 				tlog.Logf("%-30s %+v(%+v), %s\n", s, vcdf.Disks, tcdf.Disks, tcdf.FS)

@@ -1096,6 +1096,9 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap 
 	)
 	if len(avail) == 0 {
 		err = cmn.ErrNoMountpaths
+		if tcdf != nil {
+			tcdf.Mountpaths = make(map[string]*CDF)
+		}
 		return
 	}
 	if config == nil {
@@ -1132,6 +1135,12 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap 
 		tcdf.PctMax, tcdf.PctAvg, tcdf.PctMin = cs.PctMax, cs.PctAvg, cs.PctMin
 		if errCap != nil {
 			tcdf.CsErr = errCap.Error()
+		}
+		// prune detached mountpaths
+		for path := range tcdf.Mountpaths {
+			if _, ok := avail[path]; !ok {
+				delete(tcdf.Mountpaths, path)
+			}
 		}
 	}
 

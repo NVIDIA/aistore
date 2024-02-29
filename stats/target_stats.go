@@ -169,12 +169,7 @@ func (r *Trunner) Init(t core.Target) *atomic.Bool {
 }
 
 func (r *Trunner) InitCDF() error {
-	availableMountpaths := fs.GetAvail()
-	r.TargetCDF.Mountpaths = make(map[string]*fs.CDF, len(availableMountpaths))
-	for mpath := range availableMountpaths {
-		r.TargetCDF.Mountpaths[mpath] = &fs.CDF{}
-	}
-
+	fs.InitCDF(&r.TargetCDF)
 	_, err, errCap := fs.CapRefresh(nil, &r.TargetCDF)
 	if err != nil {
 		return err
@@ -292,7 +287,9 @@ func (r *Trunner) RegDiskMetrics(node *meta.Snode, disk string) {
 
 func (r *Trunner) GetStats() (ds *Node) {
 	ds = r.runner.GetStats()
-	ds.TargetCDF = r.TargetCDF
+
+	fs.InitCDF(&ds.TargetCDF)
+	fs.CapRefresh(nil, &ds.TargetCDF)
 	return
 }
 
