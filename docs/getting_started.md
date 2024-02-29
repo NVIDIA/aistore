@@ -94,10 +94,9 @@ The rest of this document is structured as follows:
   - [Manual deployment](#manual-deployment)
   - [Testing your cluster](#testing-your-cluster)
 - [Kubernetes Playground](#kubernetes-playground)
-- [HTTPS from scratch](#https-from-scratch)
+- [Setting Up HTTPS Locally](#setting-up-https-locally)
 - [Build, Make and Development Tools](#build-make-and-development-tools)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
-- [TLS: testing with self-signed certificates](#tls-testing-with-self-signed-certificates)
 - [Assorted command lines](#assorted-command-lines)
 
 ## Local Playground
@@ -369,33 +368,40 @@ In our development and testing, we make use of [Minikube](https://kubernetes.io/
 
 * [AIStore on Minikube](/deploy/dev/k8s/README.md)
 
-## HTTPS from scratch
+## Setting Up HTTPS Locally
 
 In the end, all examples above run a bunch of local web servers that listen for plain HTTP requests. Following are quick steps for developers to engage HTTPS.
 
 This is still a so-called _local playground_ type deployment _from scratch_, whereby we are not trying to switch an existing cluster from HTTP to HTTPS, or vice versa. All we do here is deploying a brand new HTTPS-based aistore.
 
-**1**. Generate X.509 certificate:
+> Note: If you need to switch an existing AIS cluster to HTTPS, please refer to [these steps](switch_https.md).
+
+### Generate Certificates
+
+Creating a self-signed certificate along with its private key and a Certificate Authority (CA) certificate using [OpenSSL](https://www.openssl.org/) involves several steps. First we create a self-signed Certificate Authority (CA) certificate (`ca.crt`). Then we create a Certificate Signing Request (CSR) and finally based on CSR and CA we create the server certs (`server.key` and `server.crt`).
 
 ```console
-$ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 1080 -nodes -subj '/CN=localhost'
+$ openssl req -x509 -newkey rsa:2048 -keyout ca.key -out ca.crt -days 1024 -nodes -subj "/CN=localhost" -extensions v3_ca -config <(printf "[req]\ndistinguished_name=req\nx509_extensions=v3_ca\n[ v3_ca ]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\nbasicConstraints=CA:TRUE\n")
+$ openssl req -new -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj "/C=US/ST=California/L=Santa Clara/O=NVIDIA/OU=AIStore/CN=localhost" -config <(printf "[req]\ndistinguished_name=req\nreq_extensions = v3_req\n[ v3_req ]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\n")
+$ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256 -extfile <(printf "[ext]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment\nextendedKeyUsage=serverAuth,clientAuth\n") -extensions ext
 ```
 
-**2**. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
+**Important:** Ensure you specify the appropriate DNS relevant to your deployment context. For deployments intended to run locally, the domain name `localhost` and `127.0.0.1` should be provided for the certificates to be valid.
+
+### Deploy Cluster (4 targets, 1 gateway, 6 mountpaths, AWS)
 
 ```console
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\nn\n0\n'
+$ # shutdown prev running AIS cluster
+$ make kill
+$ # delete smaps of prev AIS clusters
+$ find ~/.ais* -type f -name ".ais.smap" | xargs rm
+$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-cert>/server.crt AIS_SERVER_KEY=<path-to-key>/server.key make deploy <<< $'4\n1\n6\ny\nn\nn\nn\n0\n'
 ```
+> Notice environment variables above: **AIS_USE_HTTPS**, **AIS_SKIP_VERIFY_CRT**, **AIS_SERVER_CRT** and **AIS_SERVER_KEY**.
 
-**3**. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):
+### Accessing the Cluster
 
-```console
-$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=gs://myGCPbucket go test -v -p 1 -count 1 ./ais/test -run=ListBuckets
-
-$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go test -v -p 1 -count 1 ./ais/test -run=ListBuckets
-```
-
-**4**. To use CLI, try first any command with HTTPS-based cluster endpoint, for instance:
+To use CLI, try first any command with HTTPS-based cluster endpoint, for instance:
 
 ```console
 $ AIS_ENDPOINT=https://127.0.0.1:8080 ais show cluster
@@ -410,9 +416,41 @@ $ ais config cli set cluster.skip_verify_crt true
 
 And then try again.
 
-> Notice environment variables above: **AIS_USE_HTTPS**, **AIS_ENDPOINT**, and **AIS_SKIP_VERIFY_CRT**.
+### TLS: testing with self-signed certificates
 
-> See also: [switching an already deployed cluster between HTTP and HTTPS](/docs/switch_https.md)
+In the previous example, the cluster is simply ignoring SSL certificate verification due to `AIS_SKIP_VERIFY_CRT` being `true`. For a more secure setup, consider validating certificates by configuring the necessary environment variables as shown in the table below- 
+
+| var name | description | the corresponding cluster configuration |
+| -- | -- | -- |
+| `AIS_USE_HTTPS`          | when false, we use plain HTTP with all the TLS config (below) simply **ignored** | "net.http.use_https" |
+| `AIS_SERVER_CRT`         | aistore cluster X509 certificate | "net.http.server_crt" |
+| `AIS_SERVER_KEY`         | certificate's private key | "net.http.server_key"|
+| `AIS_DOMAIN_TLS`         | NOTE: not supported, must be empty (domain, hostname, or SAN registered with the certificate) | "net.http.domain_tls"|
+| `AIS_CLIENT_CA_TLS`      | Certificate authority that authorized (signed) the certificate | "net.http.client_ca_tls" |
+| `AIS_CLIENT_AUTH_TLS`    | Client authentication during TLS handshake: a range from 0 (no authentication) to 4 (request and validate client's certificate) | "net.http.client_auth_tls" |
+| `AIS_SKIP_VERIFY_CRT`    | when true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |
+
+> More info on [`AIS_CLIENT_AUTH_TLS`](https://pkg.go.dev/crypto/tls#ClientAuthType).
+
+In the following example, we run https based deployment where `AIS_SKIP_VERIFY_CRT` is `false`.
+
+```console
+$ make kill
+$ # delete smaps
+$ find ~/.ais* -type f -name ".ais.smap" | xargs rm
+$ # substitute varibles in below files to point to correct certificates
+$ source ais/test/tls-env/server.conf
+$ source ais/test/tls-env/client.conf
+$ AIS_USE_HTTPS=true make deploy <<< $'6\n6\n4\ny\nyn\nn\nn\n'
+```
+
+Notice that when the cluster is first time deployed `server.conf` environment (above) overrides aistore cluster configuration.
+
+> Environment is ignored upon cluster restarts and upgrades.
+
+On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
+
+> See also: [Client-side TLS environment](/docs/cli.md#environment-variables)
 
 ## Build, Make and Development Tools
 
@@ -445,46 +483,6 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 > Memory limits may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding which also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
-
-## TLS: testing with self-signed certificates
-
-Local playground run: 6 gateways, 6 targets:
-
-```console
-$ source ais/test/tls-env/server.conf
-$ source ais/test/tls-env/client.conf
-$ AIS_USE_HTTPS=true make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\nn\n'
-```
-
-Notice that when the cluster is first time deployed `server.conf` environment (above) overrides aistore cluster configuration.
-
-> Environment is ignored upon cluster restarts and upgrades.
-
-Here's a quick summary of the corresponding configuration variables (that are also referenced inside `ais/test/tls-env/server.conf`).
-
-| var name | description | the corresponding cluster configuration |
-| -- | -- | -- |
-| `AIS_USE_HTTPS`       | when false, we use plain HTTP with all the TLS config (below) simply **ignored** | "net.http.use_https" |
-| -- | -- | -- |
-| `AIS_SERVER_CRT`         | aistore cluster X509 certificate | "net.http.server_crt" |
-| `AIS_SERVER_KEY`         | certificate's private key | "net.http.server_key"|
-| `AIS_DOMAIN_TLS`         | NOTE: not supported, must be empty (domain, hostname, or SAN registered with the certificate) | "net.http.domain_tls"|
-| `AIS_CLIENT_CA_TLS`       | Certificate authority that authorized (signed) the certificate | "net.http.client_ca_tls" |
-| `AIS_CLIENT_AUTH_TLS`       | Client authentication during TLS handshake: a range from 0 (no authentication) to 4 (request and validate client's certificate) | "net.http.client_auth_tls" |
-| `AIS_SKIP_VERIFY_CRT` | when true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |
-
-
-On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
-
-Prerequisites:
-
-* `/tmp/tls` (or any other location of your choosing) must contain valid X509 certs for both the CLI (and aisloader, other clients), and aistore itself.
-* testing-wise,`openssl`-generated and self-signed X509 certs will be perfectly fine.
-
-See also:
-
-* [Client-side TLS environment](/docs/cli.md#environment-variables)
-
 
 ## Assorted command lines
 

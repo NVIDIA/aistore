@@ -2,14 +2,16 @@ Here's a quick sequence with detailed comments inline.
 
 ## From HTTP to HTTPS
 
-This assumes that X.509 certificate already exists and the (HTTP-based) cluster is up and running. All we need to do at this point is switch it to HTTPS.
+This assumes that [X.509 certificate already exists](getting_started.md#setting-up-https-locally) and the (HTTP-based) cluster is up and running. All we need to do at this point is switch it to HTTPS.
 
 ```console
 # step 1: reconfigure cluster to use HTTPS
 $ ais config cluster net.http.use_https true
 
-# step 2: is optional, and is only required if the cert will fail validation
+# step 2: add information related to certs
 $ ais config cluster net.http.skip_verify true
+$ ais config cluster net.http.server_key <path-to-cert>/cert.key
+$ ais config cluster net.http.server_crt <path-to-cert>/cert.crt
 
 # step 3: shutdown
 $ ais cluster shutdown
