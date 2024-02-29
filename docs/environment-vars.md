@@ -88,7 +88,6 @@ Background: in a running aistore cluster, at any point in time there's a single 
 
 See also:
 * [three logical networks](/docs/performance.md#network)
-* [K8s deployment: custom resource 'AIStore'](https://github.com/NVIDIA/ais-k8s/blob/master/docs/walkthrough.md#deploy-an-aistore-cluster)
 
 ## HTTPS
 

@@ -48,17 +48,11 @@ The question, then, is how to get the maximum out of the underlying hardware? Ho
 
 Specifically, `sysctl` selected system variables, such as `net.core.wmem_max`, `net.core.rmem_max`, `vm.swappiness`, and more - here's the approximate list:
 
-* [https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/vars/host_config_sysctl.yml](sysctl)
+* [https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/host-config/vars/host_config_sysctl.yml](sysctl)
 
-The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of readmes (also known as *playbooks*) to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md).
+The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of [playbooks](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md) to assist in a full deployment of AIStore.
 
-In particular, there are playbooks:
-
-Playbook | Useful when
------------ | -----------
-[ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_enable_multiqueue.md) | Enabling MQ IO schedulers in Ubuntu releases for which MQ is not the default
-[ais_host_config_common](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_host_config_common.md) | Tuning worker nodes; adding useful packages etc
-[ais_datafs_mkfs](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_datafs.md) | Creating or recreating filesystems for AIStore
+In particular, there is a section of pre-deployment playbooks to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/host-config/README.md)
 
 General references:
 
@@ -224,7 +218,7 @@ More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Featur
 Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
 Tuning the corresponding IO scheduler can prove to be important:
 
-* [ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_enable_multiqueue.md)
+* [ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/host-config/docs/ais_enable_multiqueue.md)
 
 Other related references:
 
@@ -353,4 +347,4 @@ Command-line options
 
 ```
 
-Note as well that `aisloader` is fully StatsD-enabled - collected metrics can be formwarded to any StatsD-compliant backend for visualization and further analysis.
+Note as well that `aisloader` is fully StatsD-enabled - collected metrics can be forwarded to any StatsD-compliant backend for visualization and further analysis.

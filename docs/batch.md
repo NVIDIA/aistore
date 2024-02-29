@@ -13,6 +13,8 @@ Extended actions (_xactions_) are batch operations, or jobs, that run asynchrono
 
 Terminology-wise, in the code we mostly call it _xaction_ by the name of the corresponding software abstraction. But elsewhere, it is simply a _job_ - the two terms are interchangeable.
 
+> In the source code, all supported *xactions* are enumerated [here](https://github.com/NVIDIA/aistore/blob/main/api/apc/actmsg.go).
+
 For users, there's an API to start, stop, and wait for a job:
 
 * [Go API: xaction](https://github.com/NVIDIA/aistore/blob/main/api/xaction.go)

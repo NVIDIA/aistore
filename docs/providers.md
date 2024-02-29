@@ -11,7 +11,7 @@ redirect_from:
 
 Terminology first:
 
-**Backend Provider** is a designed-in [abstraction](https://github.com/NVIDIA/aistore/blob/main/cluster/target.go) and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+**Backend Provider** is a designed-in [abstraction](https://github.com/NVIDIA/aistore/blob/main/ais/target.go) and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 AIStore natively integrates with multiple backend providers:
 

@@ -18,7 +18,7 @@ This section tries to enumerate the *system files* and briefly describe their re
 First, there's a *node configuration* usually derived from a single configuration template and populated at deployment time.
 
 * Local Playground: a single [configuration template](/deploy/dev/local/aisnode_config.sh) and [the script](/deploy/dev/local/deploy.sh) we use to populate it when we run the cluster locally on our development machines;
-* Production K8s deployment: [a set of configuration templates](https://github.com/NVIDIA/ais-k8s/tree/master/helm/ais/charts/templates) and the `values.yaml` file that can be located in the parent directory and that comprises all the values that must be set, modified, or tuned-up for a specific Kubernetes deployment.
+* [Production K8s deployment](https://github.com/NVIDIA/ais-k8s/tree/master): a set of [ansible playbooks](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md) to automate creation of a node's configuration files via a [custom K8s operator](https://github.com/NVIDIA/ais-k8s/blob/master/operator/README.md) and to deploy multiple nodes across a K8s cluster.
 
 The second category of *system files and directories* includes:
 
@@ -44,4 +44,4 @@ And on the machine where you run AIS CLI expect to see the following two files (
 | `cli.json` | Configuration file (if doesn't exist, the config gets created and populated with default values upon the first CLI run) |
 | `auth.token` | The *token file* is created iff `AuthN` (see above) is running and CLI user logged-in (via `ais auth login` command). The `auth.token` is then used to make the requests to the cluster and manage users and their permissions. When a logged-in user signs out, the *token file* gets removed. |
 
-Finally, there's also `ais.db` that each AIS node may store locally to maintain component-specific runtime information in the form of key-value records. The components in-question include [dSort](https://github.com/NVIDIA/aistore/tree/main/dsort) and [Downloader](https://github.com/NVIDIA/aistore/tree/main/downloader) and the example of the stored information would be running downloading jobs and their errors (if any).
+Finally, there's also `ais.db` that each AIS node may store locally to maintain component-specific runtime information in the form of key-value records. The components in-question include [dSort](https://github.com/NVIDIA/aistore/tree/main/ext/dsort) and [Downloader](https://github.com/NVIDIA/aistore/tree/main/ext/dload) and the example of the stored information would be running downloading jobs and their errors (if any).
