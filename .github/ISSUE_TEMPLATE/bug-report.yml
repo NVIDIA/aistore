@@ -64,7 +64,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: AIStore build, Python SDK version or Docker image and build tag? (`latest`, `v3.22`, ...)
+      label: AIStore build/version
+      description: |
+        Please specify the AIStore release, Python SDK version, or Docker image tag you are using. For example, `latest`, `v3.22`, etc. **Note:** We would strongly prefer to only discuss issues that arise from the current (`main`) branch and the most recent stable [release](https://github.com/NVIDIA/aistore/releases).
     validations:
       required: true
   - type: input
