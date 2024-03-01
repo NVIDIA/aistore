@@ -100,6 +100,10 @@ func isErrDoesNotExist(err error) bool {
 // misc. utils, helpers
 //
 
+func isCertificateVerificationError(err error) bool {
+	return strings.HasPrefix(err.Error(), "CertificateVerificationError")
+}
+
 func isUnreachableError(err error) (msg string, unreachable bool) {
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
@@ -125,6 +129,12 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 
 func redErr(err error) error {
 	msg := strings.TrimRight(err.Error(), "\n")
+	if i := strings.Index(msg, "Error:"); i >= 0 && len(msg) > i+10 {
+		// e.g. "CertificateVerificationError: ..."
+		if cos.IsAlphaNice(msg[:i]) {
+			return errors.New(fred(msg[:i+6]) + msg[i+6:])
+		}
+	}
 	return errors.New(fred("Error: ") + msg)
 }
 
@@ -337,6 +347,14 @@ func formatErr(err error) error {
 		err.baseErr = formatErr(err.baseErr)
 		return err
 	default:
+		// unwrap and check assorted system error types
+		// (currently, only tls cert validation)
+		const tip = "\n(Tip: review CLI configuration ('ais config cli'), in particular tls and 'skip_verify' settings)"
+		if uerr := errors.Unwrap(err); uerr != nil {
+			if isCertificateVerificationError(uerr) {
+				err = errors.New(uerr.Error() + tip)
+			}
+		}
 		return redErr(err)
 	}
 }

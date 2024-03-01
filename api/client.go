@@ -70,7 +70,7 @@ type (
 )
 
 func newErrCreateHTTPRequest(err error) error {
-	return fmt.Errorf("failed to create HTTP request: %w", err)
+	return fmt.Errorf("failed to create http request: %w", err)
 }
 
 // HTTPStatus returns HTTP status or (-1) for non-HTTP error.
@@ -209,12 +209,21 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		IsClient:  true,
 	})
 	resp = rr.resp
-	if err != nil && resp != nil {
+	if err == nil {
+		return resp, nil
+	}
+	if resp != nil {
 		herr := cmn.NewErrHTTP(req, err, resp.StatusCode)
 		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
-		err = herr
+		return nil, herr
 	}
-	return
+	if uerr, ok := err.(*url.Error); ok {
+		err = uerr.Unwrap()
+		herr := cmn.NewErrHTTP(req, err, 0)
+		herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
+		return nil, herr
+	}
+	return nil, err
 }
 
 // Check, Drain, Close

@@ -4,10 +4,9 @@
 
 // NOTE:
 // This is a minor fork of the ServeMux portion of https://golang.org/src/net/http/server.go
-// primarily motivated by the need to dynamically "unhandle" registered handlers.
-// That's what mux.Unhandle does - a separate source in this package.
-// Last update: June 2023.
-// See also: transport (in particular, transport/recv.go).
+// circa Go 1.20
+// See also: transport (in particular, transport/recv.go) with its "secondary" mux there.
+// TODO Mar 2024: revisit and, possibly, remove altogether.
 
 package mux
 
