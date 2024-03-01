@@ -2110,9 +2110,6 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 	if prev.CountActiveTs() == 0 {
 		return false
 	}
-	if cur.CountActiveTs() < 2 {
-		return false
-	}
 	if ctx.interrupted || ctx.restarted {
 		return true
 	}
