@@ -43,7 +43,7 @@ rmb             bucket rm
 - [Start Erasure Coding](#start-erasure-coding)
 - [Show bucket properties](#show-bucket-properties)
 - [Set bucket properties](#set-bucket-properties)
-- [Show and set AWS-specific properties](#show-and-set-aws-specific properties)
+- [Show and set AWS-specific properties](#show-and-set-aws-specific-properties)
 - [Reset bucket properties to cluster defaults](#reset-bucket-properties-to-cluster-defaults)
 - [Show bucket metadata](#show-bucket-metadata)
 
