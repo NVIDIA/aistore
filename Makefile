@@ -21,8 +21,8 @@ CLI_VERSION := $(shell ais version 2>/dev/null)
 MAKEFLAGS += --no-print-directory
 
 # Uncomment to cross-compile aisnode and cli, respectively:
-# CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.21
-# CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.21
+# CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.22
+# CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.22
 
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
@@ -257,7 +257,7 @@ lint-update:
 ## See also: .github/workflows/lint.yml
 lint-update-ci:
 	@rm -f $(GOPATH)/bin/golangci-lint
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.56.1
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.56.2
 
 lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true

@@ -205,7 +205,7 @@ issues:
   max-per-linter: 0
 
 run:
-  go: '1.21'
+  go: '1.22'
   tests: true # enable linting test files
 
   build-tags:
