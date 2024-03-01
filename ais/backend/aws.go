@@ -190,19 +190,19 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 	for i := len(lst.Entries); i < l; i++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
 	}
-	for i, key := range resp.Contents {
+	for i, obj := range resp.Contents {
 		entry := lst.Entries[i]
-		entry.Name = *key.Key
-		entry.Size = *key.Size
+		entry.Name = *obj.Key
+		entry.Size = *obj.Size
 		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
 			continue
 		}
-		if v, ok := h.EncodeCksum(key.ETag); ok {
+		if v, ok := h.EncodeCksum(obj.ETag); ok {
 			entry.Checksum = v
 		}
 		if msg.WantProp(apc.GetPropsCustom) {
 			custom[cmn.ETag] = entry.Checksum
-			mtime := *(key.LastModified)
+			mtime := *(obj.LastModified)
 			custom[cmn.LastModified] = fmtTime(mtime)
 			entry.Custom = cmn.CustomMD2S(custom)
 		}

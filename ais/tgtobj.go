@@ -529,6 +529,9 @@ do:
 		if cs.IsOOS() {
 			return http.StatusInsufficientStorage, cs.Err()
 		}
+		if errN := cmn.ValidateObjName(goi.lom.ObjName); errN != nil {
+			return 0, errN
+		}
 	}
 
 	switch {

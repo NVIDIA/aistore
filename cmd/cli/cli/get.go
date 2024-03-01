@@ -282,6 +282,14 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	}
 	for _, entry := range objList.Entries {
 		var shardName string
+
+		// NOTE: s3.ListObjectsV2 _may_ return a directory - filtering out
+		if err := cmn.ValidateObjName(entry.Name); err != nil {
+			warn := fmt.Sprintf("%v in the list-objects results (ignored)", err)
+			actionNote(c, warn)
+			continue
+		}
+
 		if entry.IsInsideArch() {
 			if origPrefix != msg.Prefix {
 				if !strings.HasPrefix(entry.Name, origPrefix) {

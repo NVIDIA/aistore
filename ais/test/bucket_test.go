@@ -2384,6 +2384,7 @@ func TestCopyBucket(t *testing.T) {
 			bckTest := cmn.Bck{Provider: apc.AIS, Ns: cmn.NsGlobal}
 			if test.srcRemote {
 				srcm.bck = cliBck
+				srcm.deleteRemoteBckObjs = true
 				bckTest.Provider = cliBck.Provider
 				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: srcm.bck})
 			}
