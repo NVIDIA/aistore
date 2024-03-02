@@ -11,7 +11,7 @@
     mode: 0555
     lstrip_blocks: true
   vars:
-    DEFAULT_AWS_REGION: "{{ default_aws_region }}"
+    AWS_REGION: "{{ default_aws_region }}"
 
 - name: Copy aws credentials
   template:

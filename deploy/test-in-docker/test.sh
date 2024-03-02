@@ -32,7 +32,7 @@ case ${i} in
         sed -i 's/ = /=/g' ${TMP_FILE}
         sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${TMP_FILE}
         sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${TMP_FILE}
-        sed -i 's/region/AWS_DEFAULT_REGION/g' ${TMP_FILE}
+        sed -i 's/region/AWS_REGION/g' ${TMP_FILE}
 
         RUN_FLAGS="${RUN_FLAGS} --env-file ${TMP_FILE}"
         CLD_PROVIDER=1

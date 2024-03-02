@@ -23,7 +23,7 @@ export PREFIX
 BOTO_UNIT_TEST_COUNT := $(shell ls -1 tests/unit/botocore_patch/test*py | wc -l)
 export AWS_SESSION_TOKEN := testing
 # will be fetched from CI pipeline secrets
-# export AWS_DEFAULT_REGION := us-east-1
+# export AWS_REGION := us-east-1
 # export AWS_SECRET_ACCESS_KEY := testing
 # export AWS_ACCESS_KEY_ID := testing
 export AWS_SECURITY_TOKEN := testing

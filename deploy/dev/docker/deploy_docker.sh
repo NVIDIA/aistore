@@ -311,7 +311,7 @@ if [[ "${AIS_BACKEND_PROVIDERS}" == *aws* ]]; then
     sed -i 's/ = /=/g' ${LOCAL_AWS}
     sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${LOCAL_AWS}
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
-    sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
+    sed -i 's/region/AWS_REGION/g' ${LOCAL_AWS}
 fi
 
 if [ "$CLUSTER_CNT" -eq 0 ]; then

@@ -153,7 +153,7 @@ docker run -d \
     -e GOOGLE_APPLICATION_CREDENTIALS="/credentials/gcp.json" \
     -e AWS_ACCESS_KEY_ID="AWSKEYIDEXAMPLE" \
     -e AWS_SECRET_ACCESS_KEY="AWSSECRETEACCESSKEYEXAMPLE" \
-    -e AWS_DEFAULT_REGION="us-east-2" \
+    -e AWS_REGION="us-east-2" \
     -e AIS_BACKEND_PROVIDERS="gcp aws" \
     -v /disk0:/ais/disk0 \
     aistore/cluster-minimal:latest

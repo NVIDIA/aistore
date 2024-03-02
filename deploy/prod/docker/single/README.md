@@ -167,14 +167,14 @@ docker run -d \
   aistorage/cluster-minimal:latest
 ```
 
-Alternatively, it is possible to explicitly pass the credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`) explicitly as [environment variables](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html) in your `docker run` command:
+Alternatively, it is possible to explicitly pass the credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) explicitly as [environment variables](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html) in your `docker run` command:
 
 ```
 docker run -d \
   -p 51080:51080 \
   -e AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
   -e AWS_SECRET_ACCESS_KEY="wJalrXUtfdfUYBjdtEnFxEMEXAMPLE" \
-  -e AWS_DEFAULT_REGION="us-west-2" \
+  -e AWS_REGION="us-west-2" \
   -e AIS_BACKEND_PROVIDERS="aws" \
   -v /disk0:/ais/disk0 \
   aistorage/cluster-minimal:latest

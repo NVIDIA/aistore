@@ -22,9 +22,6 @@ variables:
   FS_CNT:
     value: "6"
     description: "Number of disks defined for each target."
-  AWS_REGION:
-    value: "us-east-2"
-    description: "Region of AWS bucket."
   CLOUD_BCKS:
     value: "aws://ais-blossom gs://ais-ci-kube" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
     description: "Set of buckets used when running cloud tests."

@@ -5,7 +5,7 @@ AISTORE_PATH=$GOPATH/src/github.com/NVIDIA/aistore
 
 if [ ${CLD_PROVIDER} == 1 ]; then
     BUCKET=${HOSTNAME}
-    aws s3api create-bucket --bucket ${BUCKET} --region ${AWS_DEFAULT_REGION} --create-bucket-configuration LocationConstraint=${AWS_DEFAULT_REGION}
+    aws s3api create-bucket --bucket ${BUCKET} --region ${AWS_REGION} --create-bucket-configuration LocationConstraint=${AWS_REGION}
 elif [ ${CLD_PROVIDER} == 2 ]; then
     BUCKET=smth # TODO:
 fi

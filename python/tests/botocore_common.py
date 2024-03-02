@@ -11,7 +11,7 @@ import boto3
 from moto import mock_s3
 from botocore.exceptions import ClientError
 
-from aistore.sdk.const import UTF_ENCODING, AWS_DEFAULT_REGION
+from aistore.sdk.const import UTF_ENCODING
 from tests import (
     AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
@@ -70,7 +70,7 @@ class BotocoreBaseTest(unittest.TestCase):
             mock_s3_redirect.redirections_enabled = False
             self.mock_s3.start()
             self.s3 = boto3.client(
-                "s3", region_name=AWS_DEFAULT_REGION
+                "s3", region_name=AWS_REGION
             )  # pylint: disable=invalid-name
         else:
             logging.debug("Using aistore for S3 services")
