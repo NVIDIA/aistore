@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -466,8 +467,11 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string, cach
 }
 
 func initS3Svc() error {
-	if s3Profile == "" && os.Getenv(awsEnvConfigProfile) != "" {
-		s3Profile = os.Getenv(awsEnvConfigProfile)
+	// '--s3profile' takes precedence
+	if s3Profile == "" {
+		if profile := os.Getenv(env.AWS.Profile); profile != "" {
+			s3Profile = profile
+		}
 	}
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
@@ -480,7 +484,7 @@ func initS3Svc() error {
 		cfg.BaseEndpoint = aws.String(s3Endpoint)
 	}
 	if cfg.Region == "" {
-		cfg.Region = cmn.AwsDefaultRegion // Buckets in region `us-east-1` have a LocationConstraint of null.
+		cfg.Region = env.AwsDefaultRegion()
 	}
 
 	s3svc = s3.NewFromConfig(cfg)

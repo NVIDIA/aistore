@@ -19,6 +19,7 @@ import (
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -33,17 +34,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
-)
-
-const (
-	// environment variable to globally override the default 'https://s3.amazonaws.com' endpoint
-	// NOTE: the same can be done on a per-bucket basis, via bucket prop `Extra.AWS.Endpoint`
-	// (bucket override will always take precedence)
-	awsEnvS3Endpoint = "S3_ENDPOINT"
-
-	// ditto non-default profile (the default is [default] in ~/.aws/credentials)
-	// same NOTE in re precedence
-	awsEnvConfigProfile = "AWS_PROFILE"
 )
 
 type (
@@ -68,9 +58,11 @@ var (
 // interface guard
 var _ core.BackendProvider = (*awsProvider)(nil)
 
+// environment variables => static defaults that can still be overridden via bck.Props.Extra.AWS
+// in addition to these two (below), default bucket region = env.AwsDefaultRegion()
 func NewAWS(t core.TargetPut) (core.BackendProvider, error) {
-	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
-	awsProfile = os.Getenv(awsEnvConfigProfile)
+	s3Endpoint = os.Getenv(env.AWS.Endpoint)
+	awsProfile = os.Getenv(env.AWS.Profile)
 	return &awsProvider{t: t}, nil
 }
 
@@ -663,7 +655,7 @@ func getBucketLocation(svc *s3.Client, bckName string) (region string, err error
 	}
 	region = string(resp.LocationConstraint)
 	if region == "" {
-		region = cmn.AwsDefaultRegion // Buckets in region `us-east-1` have a LocationConstraint of null.
+		region = env.AwsDefaultRegion()
 	}
 	return
 }

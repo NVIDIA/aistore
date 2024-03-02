@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -102,7 +103,7 @@ func TestS3PassThroughPutGet(t *testing.T) {
 	cfg.HTTPClient = newS3Client()
 	s3Client := s3.NewFromConfig(cfg)
 	*/
-	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: cmn.AwsDefaultRegion})
+	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 
 	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
@@ -139,7 +140,7 @@ func TestS3PassThroughMultipart(t *testing.T) {
 
 	setPresignedS3(t, bck)
 
-	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: cmn.AwsDefaultRegion})
+	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 
 	createMultipartUploadOutput, err := s3Client.CreateMultipartUpload(context.Background(), &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(bck.Name),
@@ -211,7 +212,7 @@ func TestWriteThroughCacheNoColdGet(t *testing.T) {
 
 	setPresignedS3(t, bck)
 
-	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: cmn.AwsDefaultRegion})
+	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 
 	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),

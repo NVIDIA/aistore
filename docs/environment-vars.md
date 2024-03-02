@@ -129,6 +129,16 @@ t[fXbarEnn]    3.08%         367.66GiB     51%           8.414TiB      [0.9 1.1 
 See related:
 * [AIS K8s Operator: environment variables](https://github.com/NVIDIA/ais-k8s/blob/master/operator/pkg/resources/cmn/env.go)
 
+## AWS S3
+
+**NOTE:** for the most recent updates, please refer to the [source](https://github.com/NVIDIA/aistore/blob/main/api/env/aws.go).
+
+| name | comment |
+| ---- | ------- |
+| `S3_ENDPOINT` | global S3 endpoint to be used instead of `s3.amazonaws.com` |
+| `AWS_REGION` | default bucket region; can be set to override the global default 'us-east-1' location |
+| `AWS_PROFILE` | global AWS profile with alternative (as far as the [default]) credentials and/or AWS region |
+
 ## Package: backend
 
 AIS natively supports 3 (three) [Cloud storages](/docs/providers.md).
@@ -137,12 +147,9 @@ The corresponding environment "belongs" to the internal [backend](https://github
 
 | name | comment |
 | ---- | ------- |
-| `S3_ENDPOINT` | global S3 endpoint to be used instead of `s3.amazonaws.com` |
-| `AWS_PROFILE` | global AWS profiles with alternative account credentials and/or AWS region |
-| `GOOGLE_CLOUD_PROJECT` | GCP account with permissions to access your Google Cloud Storage buckets |
-| `GOOGLE_APPLICATION_CREDENTIALS` | (ditto) |
-| `AZURE_STORAGE_ACCOUNT` | Azure account |
-| `AZURE_STORAGE_KEY` | (ditto) |
+| `S3_ENDPOINT`, `AWS_PROFILE`, and `AWS_REGION`| see previous section |
+| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS` | GCP account with permissions to access Google Cloud Storage buckets |
+| `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY` | Azure account with  permissions to access Blob Storage containers |
 | `AIS_AZURE_URL` | Azure endpoint, e.g. `http://<account_name>.blob.core.windows.net` |
 
 Notice in the table above that the variables `S3_ENDPOINT` and `AWS_PROFILE` are designated as _global_: cluster-wide.
