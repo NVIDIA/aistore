@@ -1,3 +1,10 @@
 Bucket 's3://$BUCKET/' created
 ^(.*) $BUCKET$
+s3://$BUCKET/ (bucket):
+   Location:  us-east-1
+   Payer:     none
+   Expiration Rule: none
+   Policy:    none
+   CORS:      none
+   ACL:       none
 Bucket 's3://$BUCKET/' removed

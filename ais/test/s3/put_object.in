@@ -1,11 +1,23 @@
 echo "0123456789" > $OBJECT.txt
-s3cmd mb s3://$BUCKET --host=$HOST $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
+s3cmd mb s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"
 ais bucket props set ais://$BUCKET checksum.type=md5
-s3cmd put $OBJECT.txt --host=$HOST s3://$BUCKET/$OBJECT $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
-s3cmd ls              --host=$HOST s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" | wc -l
-s3cmd get             --host=$HOST s3://$BUCKET$OBJECT $OBJECT_copy.txt $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
+
+#Negative Testing
+s3cmd put $OBJECT.txt s3://non_existent_bucket/$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" //FAIL ERROR: S3 error: 404 (NoSuchBucket): bucket "non_existent_bucket" does not exist
+s3cmd get             s3://$BUCKET$OBJECT $OBJECT_copy.txt --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" //FAIL ERROR: S3 error: 404 (ErrNotFound): t[DEfAlGwT]: ais://$BUCKET$OBJECT does not exist
+s3cmd rm              s3://$BUCKET$OBJECT  --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" //FAIL ERROR: S3 error: 404 (ErrNotFound): t[DEfAlGwT]: ais://$BUCKET$OBJECT does not exist
+s3cmd info            s3://$BUCKET$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" //FAIL ERROR: S3 error: 400 (Bad Request)
+
+#Positive Testing
+s3cmd put $OBJECT.txt s3://$BUCKET/$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
+s3cmd ls              s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | wc -l
+s3cmd get             s3://$BUCKET$OBJECT $OBJECT_copy.txt --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
+s3cmd info            s3://$BUCKET$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | grep -v "Last mod"
 cat $OBJECT_copy.txt
-rm $OBJECT.txt // IGNORE
-rm $OBJECT_copy.txt // IGNORE
-s3cmd rm s3://$BUCKET$OBJECT  --host=$HOST   $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"  // IGNORE
-s3cmd rb s3://$BUCKET $PARAMS --host=$HOST   --region us-west-1 --host-bucket="$HOST/%(bucket)"
+echo "Lorem ipsum dolor sit amet, consectetur adipiscing elit." > $OBJECT_new.txt
+s3cmd put $OBJECT_new.txt s3://$BUCKET/$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
+s3cmd get             s3://$BUCKET$OBJECT $OBJECT_new_copy.txt --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
+cat $OBJECT_new_copy.txt
+rm $OBJECT.txt $OBJECT_copy.txt $OBJECT_new.txt $OBJECT_new_copy.txt // IGNORE
+s3cmd rm s3://$BUCKET$OBJECT  --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"  // IGNORE
+s3cmd rb s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"

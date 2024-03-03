@@ -3,5 +3,15 @@ Bucket 's3://$BUCKET/' created
 
 Bucket props successfully updated.
 1
+s3://$BUCKET$OBJECT (object):
+   File size: 11
+   MIME type: none
+   Storage:   STANDARD
+   MD5 sum:   3749f52bb326ae96782b42dc0a97b4c1
+   SSE:       none
+   Policy:    none
+   CORS:      none
+   ACL:       none
 0123456789
+Loremipsumdolorsitamet,consecteturadipiscingelit.
 Bucket 's3://$BUCKET/' removed
