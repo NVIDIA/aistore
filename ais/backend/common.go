@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -18,6 +19,7 @@ type ctx = context.Context // used when omitted for shortness sake
 func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
 
 func calcPageSize(pageSize, maxPageSize uint) uint {
+	debug.Assert(int(pageSize) >= 0, pageSize)
 	if pageSize == 0 {
 		return maxPageSize
 	}

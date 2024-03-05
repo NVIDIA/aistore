@@ -77,6 +77,9 @@ const (
 	// and if it does:
 	// - check whether remote version differs from its in-cluster copy
 	LsVerChanged
+
+	// (new & experimental)
+	LsInventory
 )
 
 // max page sizes

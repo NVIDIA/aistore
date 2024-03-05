@@ -3,11 +3,11 @@ module github.com/NVIDIA/aistore/cmd/cli
 go 1.22
 
 require (
-	github.com/NVIDIA/aistore v1.3.23-0.20240301175348-cd4020d0f129
+	github.com/NVIDIA/aistore v1.3.23-0.20240303161644-fa4ca2c175ab
 	github.com/fatih/color v1.16.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.30.0
+	github.com/onsi/gomega v1.31.1
 	github.com/urfave/cli v1.22.14
 	github.com/vbauerster/mpb/v4 v4.12.2
 	golang.org/x/sync v0.6.0

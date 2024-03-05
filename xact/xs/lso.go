@@ -351,11 +351,9 @@ func (r *LsoXact) nextPageR() (err error) {
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {
-		err = fmt.Errorf("%s: the paging %s is down or inactive, %s", r, meta.Tname(r.msg.SID), smap)
+		err = fmt.Errorf("%s: \"paging\" %s is down or inactive, %s", r, meta.Tname(r.msg.SID), smap)
 		goto ex
 	}
-	debug.Assert(tsi.IsTarget(), tsi.StringEx())
-
 	r.wiCnt.Inc()
 
 	// TODO -- FIXME: not counting/sizing (locally) present objects that are missing (deleted?) remotely

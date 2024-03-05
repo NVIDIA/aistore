@@ -193,6 +193,9 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	if flagIsSet(c, getObjCachedFlag) {
 		msg.SetFlag(apc.LsObjCached)
 	}
+	if flagIsSet(c, useInventoryFlag) {
+		msg.SetFlag(apc.LsInventory)
+	}
 	pageSize, limit, err := _setPage(c, bck)
 	if err != nil {
 		return err

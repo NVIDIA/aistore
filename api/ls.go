@@ -107,7 +107,6 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 // - usage examples in CLI docs under docs/cli.
 func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
 	var (
-		q    url.Values
 		path = apc.URLPathBuckets.Join(bck.Name)
 		hdr  = http.Header{
 			cos.HdrAccept:      []string{cos.ContentMsgPack},
@@ -118,7 +117,6 @@ func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
 	}
-	q = bck.AddToQuery(q)
 	lsmsg.UUID = ""
 	lsmsg.ContinuationToken = ""
 	reqParams := AllocRp()
@@ -126,7 +124,7 @@ func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 		reqParams.Header = hdr
-		reqParams.Query = q
+		reqParams.Query = bck.AddToQuery(nil)
 
 		reqParams.buf = allocMbuf() // mem-pool msgpack
 	}

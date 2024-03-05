@@ -140,6 +140,7 @@ var (
 			silentFlag,
 			dontWaitFlag,
 			verChangedFlag,
+			useInventoryFlag,
 		},
 
 		cmdLRU: {

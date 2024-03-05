@@ -6,6 +6,7 @@
 package memsys
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"sync"
@@ -241,6 +242,33 @@ func (z *SGL) ReadAll() (b []byte) {
 		off += n
 	}
 	return
+}
+
+// TODO -- FIXME: initial/incomplete
+func (z *SGL) ReadLine(lin []byte) (_ []byte, err error) {
+	if z.roff >= z.woff {
+		err = io.EOF
+		return
+	}
+	var (
+		idx, off = int(z.roff / z.slab.Size()), int(z.roff % z.slab.Size())
+		buf      = z.sgl[idx]
+	)
+	i := bytes.IndexByte(buf[off:], '\n')
+	if i <= 0 {
+		return nil, io.EOF
+	}
+	if buf[off+i-1] == '\r' { // drop eol (unlikely)
+		i--
+	}
+	if cap(lin) < i {
+		lout := make([]byte, i)
+		copy(lout, buf[off:off+i])
+		return lout, nil
+	}
+	lin = lin[:i]
+	copy(lin, buf[off:off+i])
+	return lin, nil
 }
 
 // NOTE assert and use with caution.

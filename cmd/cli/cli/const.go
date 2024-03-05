@@ -527,6 +527,10 @@ var (
 			indent4 + "\t- applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag)\n" +
 			indent4 + "\t- see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'",
 	}
+	useInventoryFlag = cli.BoolFlag{
+		Name:  "inventory",
+		Usage: "experimental; requires s3:// backend",
+	}
 
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}

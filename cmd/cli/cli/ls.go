@@ -308,6 +308,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
+	if flagIsSet(c, useInventoryFlag) {
+		msg.SetFlag(apc.LsInventory)
+	}
 
 	var (
 		props    []string
@@ -502,6 +505,14 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 					break
 				}
 			}
+		}
+	}
+
+	// validate props for typos
+	for _, prop := range propsList {
+		if _, ok := teb.ObjectPropsMap[prop]; !ok {
+			return fmt.Errorf("unknown object property %q (expecting one of: %v)",
+				prop, cos.StrKVs(teb.ObjectPropsMap).Keys())
 		}
 	}
 

@@ -134,7 +134,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		svc        *s3.Client
 		h          = cmn.BackendHelpers.Amazon
@@ -149,6 +149,24 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		if svc == nil {
 			return
 		}
+	}
+
+	// alternative path
+	if msg.IsFlagSet(apc.LsInventory) {
+		var (
+			fqn string
+			fh  *os.File
+		)
+		if fqn, err = awsp.getInventory(cloudBck, svc); err != nil {
+			return
+		}
+		if fh, err = os.Open(fqn); err != nil {
+			_, err = _errInv(err)
+			return
+		}
+		err = awsp.listInventory(cloudBck, fh, msg, lst)
+		fh.Close()
+		return
 	}
 
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
@@ -655,7 +673,7 @@ func getBucketLocation(svc *s3.Client, bckName string) (region string, err error
 	}
 	region = string(resp.LocationConstraint)
 	if region == "" {
-		region = env.AwsDefaultRegion()
+		region = env.AwsDefaultRegion() // env "AWS_REGION" or "us-east-1" - in that order
 	}
 	return
 }

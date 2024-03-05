@@ -54,8 +54,9 @@ var (
 			listArchFlag,
 			objLimitFlag,
 			unitsFlag,
-			verboseFlag, // client side
-			silentFlag,  // server side
+			useInventoryFlag, // experimental
+			verboseFlag,      // client side
+			silentFlag,       // server side
 		},
 
 		commandPut: append(
