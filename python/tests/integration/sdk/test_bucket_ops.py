@@ -64,6 +64,13 @@ class TestBucketOps(RemoteEnabledTest):
         bucket_names = {bck.name for bck in res}
         self.assertIn(new_bck_name, bucket_names)
 
+    @test_cases(
+        "*", ".", "", " ", "bucket/name", "bucket and name", "#name", "$name", "~name"
+    )
+    def test_create_bucket_invalid_name(self, testcase):
+        with self.assertRaises(AISError):
+            self._create_bucket(testcase)
+
     def test_bucket_invalid_name(self):
         with self.assertRaises(ErrBckNotFound):
             self.client.bucket("INVALID_BCK_NAME").list_objects()

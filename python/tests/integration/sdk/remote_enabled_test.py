@@ -6,7 +6,6 @@ import unittest
 import boto3
 
 from aistore.sdk.const import PROVIDER_AIS
-
 from aistore import Client
 from tests.integration import (
     REMOTE_SET,
@@ -68,8 +67,8 @@ class RemoteEnabledTest(unittest.TestCase):
             provider: Provider for new bucket
         """
         bck = self.client.bucket(bck_name, provider=provider)
-        self.buckets.append(bck_name)
         bck.create()
+        self.buckets.append(bck_name)
         return bck
 
     def _create_objects(self, num_obj=OBJECT_COUNT, suffix=""):
