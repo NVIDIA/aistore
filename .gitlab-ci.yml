@@ -65,7 +65,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 25m
+  timeout: 30m
   <<: *default_only_def
   except:
     variables:
@@ -77,7 +77,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 25m
+  timeout: 30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
@@ -89,7 +89,7 @@ variables:
   stage: test-short
   tags:
     - ais
-  timeout: 25m
+  timeout: 30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'

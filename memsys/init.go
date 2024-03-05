@@ -177,7 +177,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 
 	// 3. validate min-free & low-wm
 	if free < min(r.MinFree*2, r.MinFree+minMemFree) {
-		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&r.mem), readme)
+		err = fmt.Errorf("memsys: insufficient free memory %s (see %s for guidance)", r.Str(&r.mem), readme)
 		cos.Errorf("%v", err)
 		r.lowWM = min(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""

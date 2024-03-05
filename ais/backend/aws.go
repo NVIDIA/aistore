@@ -164,7 +164,9 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 			_, err = _errInv(err)
 			return
 		}
-		err = awsp.listInventory(cloudBck, fh, msg, lst)
+		sgl := awsp.t.PageMM().NewSGL(cos.MiB)
+		err = awsp.listInventory(cloudBck, fh, sgl, msg, lst)
+		sgl.Free()
 		fh.Close()
 		return
 	}

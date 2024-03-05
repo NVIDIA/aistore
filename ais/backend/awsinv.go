@@ -7,10 +7,10 @@
 package backend
 
 import (
-	"bufio"
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -126,19 +127,29 @@ func _errInv(err error) (string, error) {
 	return "", fmt.Errorf("bucket-inventory: %w", err)
 }
 
-// TODO -- FIXME: len(line) == 4: expecting strictly (bucket, objname, size, etag)
-func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, msg *apc.LsoMsg, lst *cmn.LsoResult) (err error) {
+// TODO -- FIXME:
+// 1. len(line) == 4: expecting strictly (bucket, objname, size, etag) - use manifests
+// 2. reuse SGL across list-page calls
+// 3. restrict SGL growth - read part fh and wrap around
+func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, msg *apc.LsoMsg, lst *cmn.LsoResult) (err error) {
 	var (
-		i       uint
-		scanner = bufio.NewScanner(fh)
-		skip    = msg.ContinuationToken != ""
+		i    uint
+		skip = msg.ContinuationToken != ""
+		lbuf = make([]byte, 128)
 	)
 	msg.PageSize = calcPageSize(msg.PageSize, apc.MaxPageSizeAIS /* 10k */)
 	for j := uint(len(lst.Entries)); j < msg.PageSize; j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
-	for scanner.Scan() {
-		line := strings.Split(scanner.Text(), ",")
+	if _, err := io.Copy(sgl, fh); err != nil {
+		return err
+	}
+	for {
+		lbuf, err = sgl.ReadLine(lbuf)
+		if err != nil {
+			break
+		}
+		line := strings.Split(string(lbuf), ",")
 		debug.Assert(len(line) == 4)
 		debug.Assert(strings.Contains(line[0], cloudBck.Name))
 
@@ -177,7 +188,8 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, msg *apc.LsoMs
 		}
 	}
 	lst.Entries = lst.Entries[:i]
-
-	debug.AssertNoErr(scanner.Err())
-	return nil
+	if err == io.EOF {
+		err = nil
+	}
+	return err
 }

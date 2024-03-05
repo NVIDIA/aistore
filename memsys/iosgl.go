@@ -1,13 +1,14 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -198,7 +199,7 @@ func (z *SGL) ReadByte() (byte, error) {
 
 func (z *SGL) UnreadByte() error {
 	if z.roff == 0 {
-		return errors.New("cannot unread-byte at zero offset")
+		return errors.New("memsys: cannot unread-byte at zero offset")
 	}
 	z.roff--
 	return nil
@@ -244,31 +245,54 @@ func (z *SGL) ReadAll() (b []byte) {
 	return
 }
 
-// TODO -- FIXME: initial/incomplete
+// NOTE: not returning empty lines - skipping
 func (z *SGL) ReadLine(lin []byte) (_ []byte, err error) {
 	if z.roff >= z.woff {
-		err = io.EOF
-		return
+		return nil, io.EOF
 	}
 	var (
+		part     []byte
+		l        int
+		lout     []byte
 		idx, off = int(z.roff / z.slab.Size()), int(z.roff % z.slab.Size())
 		buf      = z.sgl[idx]
 	)
+
+	for buf[off] == '\r' || buf[off] == '\n' {
+		z.roff++
+		idx, off = int(z.roff/z.slab.Size()), int(z.roff%z.slab.Size())
+		if z.roff >= z.woff {
+			return nil, io.EOF
+		}
+	}
+
 	i := bytes.IndexByte(buf[off:], '\n')
 	if i <= 0 {
-		return nil, io.EOF
+		// when line's spliced across two bufs
+		if idx >= len(z.sgl)-1 {
+			return nil, io.EOF
+		}
+		part = buf[off:]
+		l = len(part)
+		buf = z.sgl[idx+1]
+		off = 0
+		i = bytes.IndexByte(buf, '\n')
+		if i < 0 {
+			return nil, fmt.Errorf("memsys: line is too long (greater than the slab %d)", z.slab.Size())
+		}
 	}
-	if buf[off+i-1] == '\r' { // drop eol (unlikely)
-		i--
+	if cap(lin) < i+l {
+		lout = make([]byte, i+l)
+	} else {
+		// reuse
+		lout = lin[:i+l]
 	}
-	if cap(lin) < i {
-		lout := make([]byte, i)
-		copy(lout, buf[off:off+i])
-		return lout, nil
-	}
-	lin = lin[:i]
-	copy(lin, buf[off:off+i])
-	return lin, nil
+	// copy the `part` if exists
+	copy(lout, part)
+	copy(lout[l:], buf[off:off+i])
+	// advance read offset accordingly
+	z.roff += int64(i + l + 1)
+	return lout, nil
 }
 
 // NOTE assert and use with caution.
@@ -344,10 +368,10 @@ func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {
 	case io.SeekEnd:
 		offset = r.z.woff + from
 	default:
-		return 0, errors.New("invalid whence")
+		return 0, errors.New("memsys: invalid whence")
 	}
 	if offset < 0 {
-		return 0, errors.New("negative position")
+		return 0, errors.New("memsys: negative position")
 	}
 	r.roff = offset
 	return

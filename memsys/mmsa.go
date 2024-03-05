@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -243,11 +243,11 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 func (r *MMSA) GetSlab(bufSize int64) (s *Slab, err error) {
 	a, b := bufSize/r.slabIncStep, bufSize%r.slabIncStep
 	if b != 0 {
-		err = fmt.Errorf("size %d must be a multiple of %d", bufSize, r.slabIncStep)
+		err = fmt.Errorf("memsys: size %d must be a multiple of %d", bufSize, r.slabIncStep)
 		return
 	}
 	if a < 1 || a > int64(r.numSlabs) {
-		err = fmt.Errorf("size %d outside valid range", bufSize)
+		err = fmt.Errorf("memsys: size %d outside valid range", bufSize)
 		return
 	}
 	s = r.rings[a-1]
@@ -342,24 +342,24 @@ func (r *MMSA) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
 		if minfree, err = cos.ParseSize(a, cos.UnitsIEC); err != nil {
-			return fmt.Errorf("cannot parse AIS_MINMEM_FREE %q", a)
+			return fmt.Errorf("memsys: cannot parse AIS_MINMEM_FREE %q", a)
 		}
 		r.MinFree = uint64(minfree)
 	}
 	if a := os.Getenv("AIS_MINMEM_PCT_TOTAL"); a != "" {
 		if r.MinPctTotal, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_TOTAL %q", a)
+			return fmt.Errorf("memsys: cannot parse AIS_MINMEM_PCT_TOTAL %q", a)
 		}
 		if r.MinPctTotal < 0 || r.MinPctTotal > 100 {
-			return fmt.Errorf("invalid AIS_MINMEM_PCT_TOTAL %q", a)
+			return fmt.Errorf("memsys: invalid AIS_MINMEM_PCT_TOTAL %q", a)
 		}
 	}
 	if a := os.Getenv("AIS_MINMEM_PCT_FREE"); a != "" {
 		if r.MinPctFree, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_FREE %q", a)
+			return fmt.Errorf("memsys: cannot parse AIS_MINMEM_PCT_FREE %q", a)
 		}
 		if r.MinPctFree < 0 || r.MinPctFree > 100 {
-			return fmt.Errorf("invalid AIS_MINMEM_PCT_FREE %q", a)
+			return fmt.Errorf("memsys: invalid AIS_MINMEM_PCT_FREE %q", a)
 		}
 	}
 	return
