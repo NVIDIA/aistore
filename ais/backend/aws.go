@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -127,6 +128,38 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 	return
 }
 
+// LIST OBJECTS via INVENTORY
+func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult, offset *int64) (errCode int, err error) {
+	var (
+		svc      *s3.Client
+		fqn      string
+		fh       *os.File
+		cloudBck = bck.RemoteBck()
+	)
+	debug.Assert(msg.IsFlagSet(apc.LsInventory))
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
+	if err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
+	}
+	if fqn, err = awsp.getInventory(cloudBck, svc); err != nil {
+		return
+	}
+	if fh, err = os.Open(fqn); err != nil {
+		_, err = _errInv(err)
+		return
+	}
+	sgl := awsp.t.PageMM().NewSGL(invSizeSGL, memsys.MaxPageSlabSize/2)
+	err = awsp.listInventory(cloudBck, fh, sgl, offset, msg, lst)
+	sgl.Free()
+	fh.Close()
+	return
+}
+
 //
 // LIST OBJECTS
 //
@@ -134,7 +167,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		svc        *s3.Client
 		h          = cmn.BackendHelpers.Amazon
@@ -150,26 +183,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 			return
 		}
 	}
-
-	// alternative path
-	if msg.IsFlagSet(apc.LsInventory) {
-		var (
-			fqn string
-			fh  *os.File
-		)
-		if fqn, err = awsp.getInventory(cloudBck, svc); err != nil {
-			return
-		}
-		if fh, err = os.Open(fqn); err != nil {
-			_, err = _errInv(err)
-			return
-		}
-		sgl := awsp.t.PageMM().NewSGL(cos.MiB)
-		err = awsp.listInventory(cloudBck, fh, sgl, msg, lst)
-		sgl.Free()
-		fh.Close()
-		return
-	}
+	debug.Assert(!msg.IsFlagSet(apc.LsInventory))
 
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
 	if msg.Prefix != "" {

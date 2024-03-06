@@ -253,6 +253,10 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.Str
 // LIST OBJECTS
 //
 
+func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+	return 0, newErrInventory(ap.Provider())
+}
+
 func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (

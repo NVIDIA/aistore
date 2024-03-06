@@ -29,6 +29,7 @@ type (
 
 		CreateBucket(bck *meta.Bck) (errCode int, err error)
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error)
+		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult, offset *int64) (errCode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
 		PutObj(r io.ReadCloser, lom *LOM, origReq *http.Request) (errCode int, err error)
 		DeleteObj(lom *LOM) (errCode int, err error)

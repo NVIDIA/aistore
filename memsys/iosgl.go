@@ -95,6 +95,7 @@ func _freeSGL(z *SGL, isPage bool) {
 
 func (z *SGL) Cap() int64  { return int64(len(z.sgl)) * z.slab.Size() }
 func (z *SGL) Size() int64 { return z.woff }
+func (z *SGL) Roff() int64 { return z.roff }
 func (z *SGL) Slab() *Slab { return z.slab }
 func (z *SGL) IsNil() bool { return z == nil || z.slab == nil }
 

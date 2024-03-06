@@ -38,16 +38,17 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `LZ4-Frame-Checksum` | checksum lz4 frames |
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `Presigned-S3-Req(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
+| `Dont-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
 
 ## Global features
 
 ```console
 $ ais config cluster features <TAB-TAB>
 
-Enforce-IntraCluster-Access           Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL
-Do-not-HEAD-Remote-Bucket             Fsync-PUT(*)                          Ignore-LimitedCoexistence-Conflicts
-Skip-Loading-VersionChecksum-MD(*)    LZ4-Block-1MB                         Do-not-Auto-Detect-FileShare
-LZ4-Frame-Checksum                    Presigned-S3-Req(*)                   none
+Enforce-IntraCluster-Access           Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
+Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Presigned-S3-Req
+Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Dont-Optimize-Listing-Virtual-Dirs
+Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL         none
 ```
 
 For example:

@@ -160,7 +160,7 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 		errCode int
 		lst     *cmn.LsoResult
 		msg     = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
-		npg     = newNpgCtx(r.bck, msg, noopCb)
+		npg     = newNpgCtx(r.bck, msg, noopCb, nil) // TODO -- FIXME: inventory offset
 		bremote = r.bck.IsRemote()
 	)
 	if err := r.bck.Init(core.T.Bowner()); err != nil {

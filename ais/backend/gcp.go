@@ -153,6 +153,10 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos
 // LIST OBJECTS
 //
 
+func (gcpp *gcpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+	return 0, newErrInventory(gcpp.Provider())
+}
+
 func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		query    *storage.Query

@@ -169,7 +169,7 @@ func _join(bdir, prefix string) string {
 	if prefix[len(prefix)-1] == filepath.Separator {
 		return sub
 	}
-	if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtSubdir) {
+	if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtualDir) {
 		if finfo, err := os.Stat(sub); err == nil && finfo.IsDir() {
 			return sub
 		}

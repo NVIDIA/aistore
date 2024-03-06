@@ -970,7 +970,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objNames []string) {
 	tlog.Logf("Testing corner cases\n")
 
-	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.DontOptimizeVirtSubdir.String()})
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.DontOptimizeVirtualDir.String()})
 	t.Cleanup(func() {
 		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 	})

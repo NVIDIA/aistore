@@ -20,10 +20,11 @@ type npgCtx struct {
 	bck  *meta.Bck
 	wi   walkInfo
 	page cmn.LsoResult
+	off  *int64
 	idx  int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, off *int64) (npg *npgCtx) {
 	npg = &npgCtx{
 		bck: bck,
 		wi: walkInfo{
@@ -32,6 +33,7 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
 			wanted:       wanted(msg),
 			smap:         core.T.Sowner().Get(),
 		},
+		off: off,
 	}
 	return
 }
@@ -78,10 +80,15 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (*cmn.LsoResult, error) {
+func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (lst *cmn.LsoResult, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
-	lst := &cmn.LsoResult{Entries: nentries}
-	_, err := core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
+	lst = &cmn.LsoResult{Entries: nentries}
+	if npg.wi.msg.IsFlagSet(apc.LsInventory) {
+		debug.Assert(npg.off != nil)
+		_, err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.off)
+	} else {
+		_, err = core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
+	}
 	if err != nil {
 		freeLsoEntries(nentries)
 		return nil, err

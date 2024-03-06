@@ -26,6 +26,10 @@ func calcPageSize(pageSize, maxPageSize uint) uint {
 	return min(pageSize, maxPageSize)
 }
 
+func newErrInventory(provider string) error {
+	return cmn.NewErrNotImpl("list "+provider+" backend objects via", "bucket inventory")
+}
+
 //nolint:deadcode,unused // It is used but in `*_mock.go` files.
 func newErrInitBackend(provider string) error { return &cmn.ErrInitBackend{Provider: provider} }
 

@@ -62,6 +62,7 @@ type (
 		}
 		streamingX
 		lensgl int64
+		off    int64
 	}
 	LsoRsp struct {
 		Err    error
@@ -120,34 +121,40 @@ func (p *lsoFactory) Start() (err error) {
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
-	// open streams iff:
 	if r.listRemote() && !r.walk.wor {
 		smap := core.T.Sowner().Get()
 		if smap.CountActiveTs() > 1 {
-			if !r.walk.this {
-				r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
+			if err = p.beginStreams(r); err != nil {
+				return err
 			}
-			trname := "lso-" + p.UUID()
-			dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
-			p.dm, err = bundle.NewDataMover(trname, r.recv, cmn.OwtPut, dmxtra)
-			if err != nil {
-				return
-			}
-			debug.Assert(p.dm != nil)
-			if err = p.dm.RegRecv(); err != nil {
-				if p.msg.ContinuationToken != "" {
-					err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", core.T,
-						p.msg.UUID, p.msg.ContinuationToken, err)
-				}
-				nlog.Errorln(err)
-				return
-			}
-			p.dm.SetXact(r)
-			p.dm.Open()
 		}
 	}
 
 	p.xctn = r
+	return nil
+}
+
+func (p *lsoFactory) beginStreams(r *LsoXact) (err error) {
+	if !r.walk.this {
+		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
+	}
+	trname := "lso-" + p.UUID()
+	dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
+	p.dm, err = bundle.NewDataMover(trname, r.recv, cmn.OwtPut, dmxtra)
+	if err != nil {
+		return err
+	}
+	debug.Assert(p.dm != nil)
+	if err = p.dm.RegRecv(); err != nil {
+		if p.msg.ContinuationToken != "" {
+			err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", core.T,
+				p.msg.UUID, p.msg.ContinuationToken, err)
+		}
+		nlog.Errorln(err)
+		return err
+	}
+	p.dm.SetXact(r)
+	p.dm.Open()
 	return nil
 }
 
@@ -350,7 +357,7 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoResult
-		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd)
+		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, &r.off)
 		smap = core.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)

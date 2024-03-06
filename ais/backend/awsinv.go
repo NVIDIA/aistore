@@ -30,6 +30,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+const invSizeSGL = cos.MiB
+
 const (
 	invSrcExt = ".csv.gz"
 	invDstExt = ".csv"
@@ -130,28 +132,41 @@ func _errInv(err error) (string, error) {
 // TODO -- FIXME:
 // 1. len(line) == 4: expecting strictly (bucket, objname, size, etag) - use manifests
 // 2. reuse SGL across list-page calls
-// 3. restrict SGL growth - read part fh and wrap around
-func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, msg *apc.LsoMsg, lst *cmn.LsoResult) (err error) {
+// 3: the offset must correspond to the previously returned ContinuationToken
+func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, off *int64, msg *apc.LsoMsg, lst *cmn.LsoResult) (err error) {
 	var (
-		i    uint
-		skip = msg.ContinuationToken != ""
-		lbuf = make([]byte, 128)
+		i      uint
+		skip   = msg.ContinuationToken != ""
+		lbuf   = make([]byte, 128)
+		offset = *off
 	)
-	msg.PageSize = calcPageSize(msg.PageSize, apc.MaxPageSizeAIS /* 10k */)
+	msg.PageSize = calcPageSize(msg.PageSize, 4*apc.MaxPageSizeAWS /*4k*/)
+
 	for j := uint(len(lst.Entries)); j < msg.PageSize; j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
-	if _, err := io.Copy(sgl, fh); err != nil {
+
+	// seek to the previous offset
+	if offset > 0 {
+		if _, err = fh.Seek(offset, io.SeekStart); err != nil {
+			return err
+		}
+	}
+
+	// NOTE: upper limit hardcoded (assuming enough space to hold msg.PageSize)
+	if _, err = io.CopyN(sgl, fh, invSizeSGL-cos.KiB); err != nil {
 		return err
 	}
+
 	for {
+		*off = offset + sgl.Roff()
 		lbuf, err = sgl.ReadLine(lbuf)
 		if err != nil {
 			break
 		}
 		line := strings.Split(string(lbuf), ",")
-		debug.Assert(len(line) == 4)
-		debug.Assert(strings.Contains(line[0], cloudBck.Name))
+		debug.Assertf(len(line) == 4, "%q", line)
+		debug.Assertf(strings.Contains(line[0], cloudBck.Name), "%q", line)
 
 		objName := cmn.UnquoteCEV(line[1])
 		if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {
@@ -191,5 +206,6 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 	if err == io.EOF {
 		err = nil
 	}
+
 	return err
 }

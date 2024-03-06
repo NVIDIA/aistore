@@ -422,6 +422,10 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *meta.Bck) (bckProps co
 	return
 }
 
+func (m *AISBackendProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+	return 0, newErrInventory(m.Provider())
+}
+
 func (m *AISBackendProvider) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var remAis *remAis
 	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
