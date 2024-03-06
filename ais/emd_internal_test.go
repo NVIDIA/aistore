@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -163,10 +163,10 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 
 				fmt.Println("NOTE: error on screen is expected at this point...")
 				fmt.Println("")
-				eowner = makeEtlMDOwner()
-				eowner.init()
 
-				Expect(eowner.Get()).NotTo(Equal(&etlMD.MD))
+				loaded := newEtlMD()
+				_, err = jsp.Load(etlMDFullPath, loaded, loaded.JspOpts())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	}

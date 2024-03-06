@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -130,10 +130,10 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 				fmt.Println("NOTE: error on screen is expected at this point...")
 				fmt.Println("")
-				bowner = makeBMDOwner()
-				bowner.init()
 
-				Expect(bowner.Get()).NotTo(Equal(&bmd.BMD))
+				loaded := newBucketMD()
+				_, err = jsp.Load(testpath, loaded, loaded.JspOpts())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	}
