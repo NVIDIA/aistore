@@ -30,6 +30,8 @@ const (
 
 const ContentLengthUnknown = -1
 
+const PathSeparator = string(filepath.Separator)
+
 // readers
 type (
 	ReadOpenCloser interface {

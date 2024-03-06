@@ -964,7 +964,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 	for _, mi := range available {
 		ok = true
 		for _, fi := range finfos {
-			debug.Assert(!fi.IsDir(), fname.MarkersDir+"/"+fi.Name()) // marker is file
+			debug.Assert(!fi.IsDir(), fname.MarkersDir+cos.PathSeparator+fi.Name()) // marker is a file
 			var (
 				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
 				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())

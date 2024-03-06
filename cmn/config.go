@@ -1503,7 +1503,7 @@ func ValidateMpath(mpath string) (string, error) {
 	if cleanMpath[0] != filepath.Separator {
 		return mpath, NewErrInvalidaMountpath(mpath, "mountpath must be an absolute path")
 	}
-	if cleanMpath == string(filepath.Separator) {
+	if cleanMpath == cos.PathSeparator {
 		return "", NewErrInvalidaMountpath(mpath, "root directory is not a valid mountpath")
 	}
 	return cleanMpath, nil

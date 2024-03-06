@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -311,7 +310,7 @@ func SliceSize(fileSize int64, slices int) int64 {
 // the same names, cluster.Uname is not enough to generate unique ID. Adding an
 // extra prefix - an identifier of the destination - solves the issue
 func unique(prefix string, bck *meta.Bck, objName string) string {
-	return prefix + string(filepath.Separator) + bck.MakeUname(objName)
+	return prefix + cos.PathSeparator + bck.MakeUname(objName)
 }
 
 func IsECCopy(size int64, ecConf *cmn.ECConf) bool {

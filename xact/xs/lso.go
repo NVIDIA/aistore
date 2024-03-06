@@ -101,6 +101,10 @@ func (p *lsoFactory) Start() (err error) {
 		msgCh:      make(chan *apc.LsoMsg), // unbuffered
 		respCh:     make(chan *LsoRsp),     // ditto: one caller-requested page at a time
 	}
+	if err = cmn.ValidatePrefix(p.msg.Prefix); err != nil {
+		return err
+	}
+
 	r.lastPage = allocLsoEntries()
 	r.stopCh.Init()
 
@@ -519,7 +523,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wi = newWalkInfo(msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	opts.ValidateCallback = r.validateCb
@@ -547,7 +551,7 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 	relPath := ct.ObjectName()
 	if cmn.ObjHasPrefix(relPath, r.walk.wi.msg.Prefix) {
 		suffix := strings.TrimPrefix(relPath, r.walk.wi.msg.Prefix)
-		if strings.Contains(suffix, "/") {
+		if strings.Contains(suffix, cos.PathSeparator) {
 			// We are deeper than it is allowed by prefix, skip dir's content
 			return filepath.SkipDir
 		}
@@ -575,7 +579,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		// Check if the object is nested deeper than requested.
 		// Note that it'd be incorrect to return `SkipDir` in this case.
 		relName := strings.TrimPrefix(entry.Name, r.walk.wi.msg.Prefix)
-		if strings.Contains(relName, "/") {
+		if strings.Contains(relName, cos.PathSeparator) {
 			return nil
 		}
 	}

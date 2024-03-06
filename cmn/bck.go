@@ -302,7 +302,7 @@ func (b *Bck) Cname(objname string) (s string) {
 	if objname == "" {
 		return
 	}
-	return s + string(filepath.Separator) + objname
+	return s + cos.PathSeparator + objname
 }
 
 func (b *Bck) IsEmpty() bool {

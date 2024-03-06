@@ -35,6 +35,7 @@ const (
 	DontAllowPassingFQNtoETL  // do not allow passing fully-qualified name of a locally stored object to (local) ETL containers
 	IgnoreLimitedCoexistence  // run in presence of "limited coexistence" type conflicts (same as e.g. CopyBckMsg.Force but globally)
 	PresignedS3Req            // (*) pass-through client-signed (presigned) S3 requests for subsequent authentication by S3
+	DontOptimizeVirtSubdir    // when prefix has no trailing '/' and is a subdir do not assume there are no "subdir..." named obj-s
 )
 
 var Cluster = []string{
@@ -48,6 +49,7 @@ var Cluster = []string{
 	"Dont-Allow-Passing-FQN-to-ETL",
 	"Ignore-LimitedCoexistence-Conflicts",
 	"Presigned-S3-Req",
+	"Dont-Optimize-Virt-Subdir",
 	// "none" ====================
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/karrick/godirwalk"
@@ -41,6 +42,7 @@ type (
 		Callback walkFunc
 		Bck      cmn.Bck
 		Dir      string
+		Prefix   string
 		CTs      []string
 		Sorted   bool
 	}
@@ -107,20 +109,25 @@ func Walk(opts *WalkOpts) error {
 		ew   = &errCallbackWrapper{}
 	)
 	if opts.Dir != "" {
+		debug.Assert(opts.Prefix == "")
 		fqns = append(fqns, opts.Dir)
-	} else {
+	} else if opts.Bck.Name != "" {
 		debug.Assert(len(opts.CTs) > 0)
-		if opts.Bck.Name != "" {
-			// walk specific content-types inside the bucket.
-			for _, ct := range opts.CTs {
-				fqns = append(fqns, opts.Mi.MakePathCT(&opts.Bck, ct))
+		// one bucket
+		for _, ct := range opts.CTs {
+			bdir := opts.Mi.MakePathCT(&opts.Bck, ct)
+			if opts.Prefix != "" {
+				fqns = append(fqns, _join(bdir, opts.Prefix))
+			} else {
+				fqns = append(fqns, bdir)
 			}
-		} else {
-			// all content-type paths for all bucket subdirectories
-			fqns, err = allMpathCTpaths(opts)
-			if len(fqns) == 0 || err != nil {
-				return err
-			}
+		}
+	} else {
+		// all buckets
+		debug.Assert(len(opts.CTs) > 0)
+		fqns, err = allMpathCTpaths(opts)
+		if len(fqns) == 0 || err != nil {
+			return err
 		}
 	}
 	scratch, slab := memsys.PageMM().AllocSize(memsys.DefaultBufSize)
@@ -157,6 +164,19 @@ func Walk(opts *WalkOpts) error {
 	return err
 }
 
+func _join(bdir, prefix string) string {
+	sub := bdir + cos.PathSeparator + prefix
+	if prefix[len(prefix)-1] == filepath.Separator {
+		return sub
+	}
+	if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtSubdir) {
+		if finfo, err := os.Stat(sub); err == nil && finfo.IsDir() {
+			return sub
+		}
+	}
+	return bdir
+}
+
 func allMpathCTpaths(opts *WalkOpts) (fqns []string, err error) {
 	children, erc := mpathChildren(opts)
 	if erc != nil {
@@ -174,7 +194,12 @@ func allMpathCTpaths(opts *WalkOpts) (fqns []string, err error) {
 			continue
 		}
 		for _, ct := range opts.CTs {
-			fqns = append(fqns, opts.Mi.MakePathCT(&bck, ct))
+			bdir := opts.Mi.MakePathCT(&bck, ct)
+			if opts.Prefix != "" {
+				fqns = append(fqns, _join(bdir, opts.Prefix))
+			} else {
+				fqns = append(fqns, bdir)
+			}
 		}
 	}
 	return
