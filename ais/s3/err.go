@@ -63,8 +63,17 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, errCode int) {
 		out.Code = "BucketAlreadyExists"
 	case cmn.IsErrBckNotFound(err):
 		out.Code = "NoSuchBucket"
-	default:
+	case in.TypeCode != "":
 		out.Code = in.TypeCode
+	default:
+		const awsErrPrefix = "aws-error" // TODO: dedup
+		l := len(awsErrPrefix)
+		// "aws-error[NotFound: blah]"
+		if strings.HasPrefix(out.Message, awsErrPrefix) {
+			if i := strings.Index(out.Message[l+1:], ":"); i > 0 {
+				out.Code = out.Message[l+1 : l+i+1]
+			}
+		}
 	}
 	sgl := memsys.PageMM().NewSGL(0)
 	out.mustMarshal(sgl)
