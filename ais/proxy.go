@@ -1106,6 +1106,11 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
+	if len(apiItems) > 1 {
+		err := cmn.InitErrHTTP(r, fmt.Errorf("invalid request URI %q", r.URL.Path), 0)
+		p.writeErr(w, r, err)
+		return
+	}
 	p._bckpost(w, r, msg, bucket)
 }
 
