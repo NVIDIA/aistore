@@ -22,14 +22,21 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
     @patch("aistore.sdk.client.RequestClient")
     def test_init_defaults(self, mock_request_client):
         Client(self.endpoint)
-        mock_request_client.assert_called_with(self.endpoint, False, None)
+        mock_request_client.assert_called_with(self.endpoint, False, None, None)
 
-    @test_cases((True, None), (False, "ca_cert_location"))
+    @test_cases(
+        (True, None, None),
+        (False, "ca_cert_location", None),
+        (False, None, 30.0),
+        (False, None, (10, 30.0)),
+    )
     @patch("aistore.sdk.client.RequestClient")
     def test_init(self, test_case, mock_request_client):
-        skip_verify, ca_cert = test_case
-        Client(self.endpoint, skip_verify=skip_verify, ca_cert=ca_cert)
-        mock_request_client.assert_called_with(self.endpoint, skip_verify, ca_cert)
+        skip_verify, ca_cert, timeout = test_case
+        Client(self.endpoint, skip_verify=skip_verify, ca_cert=ca_cert, timeout=timeout)
+        mock_request_client.assert_called_with(
+            self.endpoint, skip_verify, ca_cert, timeout
+        )
 
     def test_bucket(self):
         bck_name = "bucket_123"
