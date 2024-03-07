@@ -20,11 +20,11 @@ type npgCtx struct {
 	bck  *meta.Bck
 	wi   walkInfo
 	page cmn.LsoResult
-	off  *int64
+	ctx  *core.LsoInventoryCtx
 	idx  int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, off *int64) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInventoryCtx) (npg *npgCtx) {
 	npg = &npgCtx{
 		bck: bck,
 		wi: walkInfo{
@@ -33,7 +33,7 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, off *int64) (npg
 			wanted:       wanted(msg),
 			smap:         core.T.Sowner().Get(),
 		},
-		off: off,
+		ctx: ctx,
 	}
 	return
 }
@@ -84,8 +84,8 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst = &cmn.LsoResult{Entries: nentries}
 	if npg.wi.msg.IsFlagSet(apc.LsInventory) {
-		debug.Assert(npg.off != nil)
-		_, err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.off)
+		debug.Assert(npg.ctx != nil)
+		_, err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
 	} else {
 		_, err = core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
 	}

@@ -2192,29 +2192,27 @@ end:
 
 func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta.Snode, config *cmn.Config,
 	wantOnlyRemote bool) (*cmn.LsoResult, error) {
-	aisMsg := p.newAmsgActVal(apc.ActList, &lsmsg)
-	args := allocBcArgs()
+	var (
+		results sliceResults
+		aisMsg  = p.newAmsgActVal(apc.ActList, &lsmsg)
+		args    = allocBcArgs()
+		timeout = config.Client.ListObjTimeout.D()
+	)
+	if lsmsg.IsFlagSet(apc.LsInventory) && lsmsg.ContinuationToken == "" {
+		timeout = config.Client.TimeoutLong.D()
+	}
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(aisMsg),
 	}
-
-	var (
-		// TODO: consider restructuring as [apc.ActBegin --- apc.ActQuery] two-stage, where:
-		// - UUID gets returned via apc.ActBegin
-		// - while the first and subsequent pages - via apc.ActQuery
-		reqTimeout = config.Client.ListObjTimeout.D()
-
-		results sliceResults
-	)
 	if wantOnlyRemote {
 		cargs := allocCargs()
 		{
 			cargs.si = tsi
 			cargs.req = args.req
-			cargs.timeout = reqTimeout
+			cargs.timeout = timeout
 			cargs.cresv = cresLso{} // -> cmn.LsoResult
 		}
 		// duplicate via query to have target ignoring an (early) failure to initialize bucket
@@ -2229,7 +2227,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta
 		results = make(sliceResults, 1)
 		results[0] = res
 	} else {
-		args.timeout = reqTimeout
+		args.timeout = timeout
 		args.smap = smap
 		args.cresv = cresLso{} // -> cmn.LsoResult
 		results = p.bcastGroup(args)

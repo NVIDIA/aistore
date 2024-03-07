@@ -125,7 +125,7 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs,
 // LIST OBJECTS
 //
 
-func (hp *hdfsProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+func (hp *hdfsProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
 	debug.Assert(false)
 	return 0, newErrInventory(hp.Provider())
 }

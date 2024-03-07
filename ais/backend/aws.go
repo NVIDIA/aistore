@@ -129,7 +129,8 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 }
 
 // LIST OBJECTS via INVENTORY
-func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult, offset *int64) (errCode int, err error) {
+func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult,
+	ctx *core.LsoInventoryCtx) (errCode int, err error) {
 	var (
 		svc      *s3.Client
 		fqn      string
@@ -146,17 +147,23 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 			return
 		}
 	}
-	if fqn, err = awsp.getInventory(cloudBck, svc); err != nil {
+	if fqn, err = awsp.getInventory(cloudBck, svc, ctx); err != nil {
 		return
 	}
 	if fh, err = os.Open(fqn); err != nil {
-		_, err = _errInv(err)
+		_, err = _errInv("ropen", err)
 		return
 	}
-	sgl := awsp.t.PageMM().NewSGL(invSizeSGL, memsys.MaxPageSlabSize/2)
-	err = awsp.listInventory(cloudBck, fh, sgl, offset, msg, lst)
+	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
+	siz := min(invSizeSGL, ctx.Size-ctx.Offset /*remaining*/)
+	sgl := awsp.t.PageMM().NewSGL(siz, memsys.MaxPageSlabSize/2)
+	err = awsp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
 	sgl.Free()
 	fh.Close()
+	if err == io.EOF {
+		lst.ContinuationToken = ""
+		err = nil
+	}
 	return
 }
 

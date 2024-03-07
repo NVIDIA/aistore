@@ -422,7 +422,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *meta.Bck) (bckProps co
 	return
 }
 
-func (m *AISBackendProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+func (m *AISBackendProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
 	return 0, newErrInventory(m.Provider())
 }
 

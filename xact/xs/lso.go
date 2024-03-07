@@ -62,7 +62,7 @@ type (
 		}
 		streamingX
 		lensgl int64
-		off    int64
+		ctx    *core.LsoInventoryCtx
 	}
 	LsoRsp struct {
 		Err    error
@@ -121,11 +121,16 @@ func (p *lsoFactory) Start() (err error) {
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
-	if r.listRemote() && !r.walk.wor {
-		smap := core.T.Sowner().Get()
-		if smap.CountActiveTs() > 1 {
-			if err = p.beginStreams(r); err != nil {
-				return err
+	if r.listRemote() {
+		if p.msg.IsFlagSet(apc.LsInventory) {
+			r.ctx = &core.LsoInventoryCtx{}
+		}
+		if !r.walk.wor {
+			smap := core.T.Sowner().Get()
+			if smap.CountActiveTs() > 1 {
+				if err = p.beginStreams(r); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -357,7 +362,7 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoResult
-		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, &r.off)
+		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.ctx)
 		smap = core.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)

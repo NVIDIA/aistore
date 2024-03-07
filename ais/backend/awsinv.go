@@ -24,28 +24,51 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-const invSizeSGL = cos.MiB
+// TODO -- FIXME:
+// 1. len(line) == 4: expecting strictly (bucket, objname, size, etag) - use manifests
+// 2: the offset must correspond to the previously returned ContinuationToken
+// 3: cleanup older inventories
+// 4: cached inventory must be stored with its own content-type (or, might disappear during pagination)
+// 5: opt-out ListObjectsV2 when ctx.Offset > 0
+
+const (
+	invSizeSGL = cos.MiB
+	invMaxPage = 8 * apc.MaxPageSizeAWS // roughly, 2MB given 256B lines
+)
 
 const (
 	invSrcExt = ".csv.gz"
 	invDstExt = ".csv"
 )
 
-func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client) (string, error) {
+func _errInv(tag string, err error) (string, error) {
+	return "", fmt.Errorf("bucket-inventory: %s: %w", tag, err)
+}
+
+func sinceInv(t1, t2 time.Time) time.Duration {
+	if t1.After(t2) {
+		return t1.Sub(t2)
+	}
+	return t2.Sub(t1)
+}
+
+func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInventoryCtx) (string, error) {
 	var (
 		latest time.Time
 		found  string
-		params = &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
+		bn     = aws.String(cloudBck.Name)
+		params = &s3.ListObjectsV2Input{Bucket: bn}
 		prefix = path.Join(env.BucketInventory(), cloudBck.Name) // env "S3_BUCKET_INVENTORY" or const
 	)
 	params.Prefix = aws.String(prefix)
-	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS)
+	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS) // no more than 1000 manifests
 
 	// 1. ls inventory
 	resp, err := svc.ListObjectsV2(context.Background(), params)
@@ -66,6 +89,17 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client) (string
 	if found == "" {
 		return "", cos.NewErrNotFound(cloudBck, "S3 bucket inventory")
 	}
+	// 1.1. optionally, cleanup older inventories
+	for _, obj := range resp.Contents {
+		name := *obj.Key
+		mtime := *(obj.LastModified)
+		if name == found || latest.Sub(mtime) < 23*time.Hour {
+			continue
+		}
+		if _, errN := svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{Bucket: bn, Key: obj.Key}); errN != nil {
+			nlog.Errorln("delete", name, errN)
+		}
+	}
 
 	// 2. one bucket, one inventory (and one statically produced name)
 	mi, _, err := fs.Hrw(prefix)
@@ -73,8 +107,15 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client) (string
 		return "", err
 	}
 	fqn := mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
-	if cos.Stat(fqn) == nil {
-		return fqn, nil
+	if finfo, err := os.Stat(fqn); err == nil {
+		if sinceInv(finfo.ModTime(), latest) < 4*time.Second { // allow for a few seconds difference
+			debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
+			ctx.Size = finfo.Size()
+			return fqn, nil
+		}
+		nlog.Infoln("Warning: updating bucket inventory", prefix, finfo.ModTime(), latest)
+	} else {
+		nlog.Infoln("Warning: getting bucket inventory ...", prefix, latest)
 	}
 
 	// 3. get and save unzipped locally
@@ -84,93 +125,83 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client) (string
 		return "", err
 	}
 	defer cos.Close(obj.Body)
+
 	gzr, err := gzip.NewReader(obj.Body)
 	if err != nil {
-		return _errInv(err)
+		return _errInv("gzip", err)
 	}
 	if err = cos.CreateDir(filepath.Dir(fqn)); err != nil {
 		gzr.Close()
-		return _errInv(err)
+		return _errInv("create-dir", err)
 	}
 	wfh, err := os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
 	if err != nil {
-		return _errInv(err)
+		return _errInv("wopen", err)
 	}
-	size := *obj.ContentLength
-	buf, slab := awsp.t.PageMM().AllocSize(min(size, 64*cos.KiB))
-	_, err = cos.CopyBuffer(wfh, gzr, buf)
+	buf, slab := awsp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
+	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
 	slab.Free(buf)
 	wfh.Close()
 
 	if err != nil {
-		return _errInv(err)
+		return _errInv("io.copy", err)
 	}
 	err = gzr.Close()
 	debug.AssertNoErr(err)
 
-	// 4. cleanup older inventories
-	b := aws.String(cloudBck.Name)
-	for _, obj := range resp.Contents {
-		name := *obj.Key
-		mtime := *(obj.LastModified)
-		if name == found || latest.Sub(mtime) < 23*time.Hour {
-			continue
-		}
-		_, errN := svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{Bucket: b, Key: obj.Key})
-		if errN != nil {
-			nlog.Errorln(name, errN)
-		}
+	if err = os.Chtimes(fqn, latest, latest); err != nil {
+		return _errInv("chtimes", err)
 	}
 
+	nlog.Infoln("new bucket inventory:", *ctx, fqn)
 	return fqn, nil
 }
 
-func _errInv(err error) (string, error) {
-	return "", fmt.Errorf("bucket-inventory: %w", err)
-}
-
-// TODO -- FIXME:
-// 1. len(line) == 4: expecting strictly (bucket, objname, size, etag) - use manifests
-// 2. reuse SGL across list-page calls
-// 3: the offset must correspond to the previously returned ContinuationToken
-func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, off *int64, msg *apc.LsoMsg, lst *cmn.LsoResult) (err error) {
-	var (
-		i      uint
-		skip   = msg.ContinuationToken != ""
-		lbuf   = make([]byte, 128)
-		offset = *off
-	)
-	msg.PageSize = calcPageSize(msg.PageSize, 4*apc.MaxPageSizeAWS /*4k*/)
-
+func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInventoryCtx, msg *apc.LsoMsg,
+	lst *cmn.LsoResult) error {
+	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := uint(len(lst.Entries)); j < msg.PageSize; j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
 
-	// seek to the previous offset
-	if offset > 0 {
-		if _, err = fh.Seek(offset, io.SeekStart); err != nil {
+	// seek to the previous offset - the starting-from offset for the next page
+	if ctx.Offset > 0 {
+		if _, err := fh.Seek(ctx.Offset, io.SeekStart); err != nil {
+			lst.Entries = lst.Entries[:0]
 			return err
 		}
 	}
 
 	// NOTE: upper limit hardcoded (assuming enough space to hold msg.PageSize)
-	if _, err = io.CopyN(sgl, fh, invSizeSGL-cos.KiB); err != nil {
+	if written, err := io.CopyN(sgl, fh, invSizeSGL-cos.KiB); err != nil || written == 0 {
+		lst.Entries = lst.Entries[:0]
 		return err
 	}
 
+	var (
+		i    uint
+		off  = ctx.Offset
+		skip = msg.ContinuationToken != ""
+		lbuf = make([]byte, 256)
+		err  error
+	)
 	for {
-		*off = offset + sgl.Roff()
-		lbuf, err = sgl.ReadLine(lbuf)
+		ctx.Offset = off + sgl.Roff()  // advance
+		lbuf, err = sgl.ReadLine(lbuf) // reuse
 		if err != nil {
 			break
 		}
 		line := strings.Split(string(lbuf), ",")
-		debug.Assertf(len(line) == 4, "%q", line)
-		debug.Assertf(strings.Contains(line[0], cloudBck.Name), "%q", line)
+		debug.Assertf(len(line) == 4 && strings.Contains(line[0], cloudBck.Name), "%q %d", line, ctx.Offset)
 
 		objName := cmn.UnquoteCEV(line[1])
 		if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {
 			continue
+		}
+		if skip && off > 0 {
+			// expecting fseek to position precisely at the next
+			debug.Assert(objName == msg.ContinuationToken, objName, " vs ", msg.ContinuationToken)
+			// TODO -- FIXME: recover
 		}
 		if skip && objName == msg.ContinuationToken {
 			skip = false
@@ -202,10 +233,7 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 			entry.Custom = cmn.CustomMD2S(custom)
 		}
 	}
-	lst.Entries = lst.Entries[:i]
-	if err == io.EOF {
-		err = nil
-	}
 
+	lst.Entries = lst.Entries[:i]
 	return err
 }

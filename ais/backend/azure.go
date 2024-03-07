@@ -253,7 +253,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.Str
 // LIST OBJECTS
 //
 
-func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
 	return 0, newErrInventory(ap.Provider())
 }
 

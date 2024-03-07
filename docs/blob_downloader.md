@@ -115,9 +115,11 @@ To meet this motivation, AIS now supports `GET` request with additional (and opt
 
 | Header | Values (examples) | Comments |
 | --- | --- | --- |
-| `ais-blob-download` | "true", ""  | NOTE: to engage blob downloader, this header must be present and must be "true" (or "yes", etc.) |
+| `ais-blob-download` | "true", ""  | NOTE: to engage blob downloader, this http header must be present and must be "true" (or "yes", etc.) |
 | `ais-blob-chunk` | "1mb", "1234567", "128KiB"  | [system defaults](#blob-downloader) above |
 | `ais-blob-workers` | "3", "7", "16"  | ditto |
+
+* HTTP headers that AIStore recognizes and supports are always prefixed with "ais-". For the most recently updated list (of headers), please see [the source](https://github.com/NVIDIA/aistore/blob/main/api/apc/headers.go).
 
 ## 3. Prefetch remote buckets w/ blob size threshold
 

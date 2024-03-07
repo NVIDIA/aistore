@@ -84,7 +84,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 	return
 }
 
-func (hp *httpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *int64) (int, error) {
+func (hp *httpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
 	debug.Assert(false)
 	return 0, newErrInventory(hp.Provider())
 }
