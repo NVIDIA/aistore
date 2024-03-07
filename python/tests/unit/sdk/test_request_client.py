@@ -108,7 +108,11 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 method, path, headers=extra_headers, keyword=extra_kw_arg
             )
         self.mock_session.request.assert_called_with(
-            method, req_url, headers=self.request_headers, keyword=extra_kw_arg
+            method,
+            req_url,
+            headers=self.request_headers,
+            timeout=None,
+            keyword=extra_kw_arg,
         )
         self.assertEqual(mock_response, res)
 
@@ -124,7 +128,11 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                     keyword=extra_kw_arg,
                 )
                 self.mock_session.request.assert_called_with(
-                    method, req_url, headers=self.request_headers, keyword=extra_kw_arg
+                    method,
+                    req_url,
+                    headers=self.request_headers,
+                    timeout=None,
+                    keyword=extra_kw_arg,
                 )
                 self.assertEqual(mock_response, res)
                 mock_handle_err.assert_called_once()

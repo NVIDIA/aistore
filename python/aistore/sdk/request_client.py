@@ -29,10 +29,17 @@ class RequestClient:
         endpoint (str): AIStore endpoint
     """
 
-    def __init__(self, endpoint: str, skip_verify: bool = False, ca_cert: str = None):
+    def __init__(
+        self,
+        endpoint: str,
+        skip_verify: bool = False,
+        ca_cert: str = None,
+        timeout=None,
+    ):
         self._endpoint = endpoint
         self._base_url = urljoin(endpoint, "v1")
         self._session = requests.sessions.session()
+        self._timeout = timeout
         if "https" in self._endpoint:
             self._set_session_verification(skip_verify, ca_cert)
 
@@ -122,6 +129,7 @@ class RequestClient:
             method,
             url,
             headers=headers,
+            timeout=self._timeout,
             **kwargs,
         )
         if resp.status_code < 200 or resp.status_code >= 300:
