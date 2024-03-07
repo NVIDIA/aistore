@@ -701,14 +701,12 @@ func getBucketLocation(svc *s3.Client, bckName string) (region string, err error
 	return
 }
 
-const awsErrPrefix = "aws-error"
-
 // For reference see https://github.com/aws/aws-sdk-go-v2/issues/1110#issuecomment-1054643716.
 func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, error) {
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.InfoDepth(1, "begin "+awsErrPrefix+" =========================")
+		nlog.InfoDepth(1, "begin "+aiss3.ErrPrefix+" =========================")
 		nlog.InfoDepth(1, awsError)
-		nlog.InfoDepth(1, "end "+awsErrPrefix+" ===========================")
+		nlog.InfoDepth(1, "end "+aiss3.ErrPrefix+" ===========================")
 	}
 
 	var reqErr smithy.APIError
@@ -720,7 +718,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 	case *types.NoSuchBucket:
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case *types.NoSuchKey:
-		e := fmt.Errorf("%s[%s: %s]", awsErrPrefix, reqErr.ErrorCode(), bck.Cname(objName))
+		e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, reqErr.ErrorCode(), bck.Cname(objName))
 		return http.StatusNotFound, e
 	default:
 		var (
@@ -735,11 +733,10 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 	}
 }
 
-// Original AWS error contains extra information that a caller does not need:
-// status code: 400, request id: D918CB, host id: RJtDP0q8
-// The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
-// At the same time we want to preserve original error which starts with `\ncaused by:`.
-// See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
+// Strip original AWS error to its essentials: type code and error message
+// See also:
+// * ais/s3/err.go WriteErr() that (NOTE) relies on the formatting below
+// * aws-sdk-go/aws/awserr/types.go
 func _awsErr(awsError error, code string) error {
 	var (
 		msg        = awsError.Error()
@@ -759,5 +756,5 @@ func _awsErr(awsError error, code string) error {
 			msg = msg[i:]
 		}
 	}
-	return errors.New(awsErrPrefix + "[" + strings.TrimSuffix(msg, ".") + "]")
+	return errors.New(aiss3.ErrPrefix + "[" + strings.TrimSuffix(msg, ".") + "]")
 }
