@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -147,7 +148,14 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 			return
 		}
 	}
-	if fqn, err = awsp.getInventory(cloudBck, svc, ctx); err != nil {
+	if ctx.Offset > 0 {
+		// continue using local csv
+		fqn, _, err = checkInventory(cloudBck, time.Time{}, ctx)
+	} else {
+		// calls checkInventory as well, with timestamp of the remote (listed)
+		fqn, err = awsp.getInventory(cloudBck, svc, ctx)
+	}
+	if err != nil {
 		return
 	}
 	if fh, err = os.Open(fqn); err != nil {

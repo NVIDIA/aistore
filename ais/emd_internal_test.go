@@ -154,6 +154,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 			})
 
 			It("should correctly detect etlMD corruption "+node, func() {
+				eowner.init()
 				etlMDFullPath := filepath.Join(mpath, fname.Emd)
 				f, err := os.OpenFile(etlMDFullPath, os.O_RDWR, 0)
 				Expect(err).NotTo(HaveOccurred())

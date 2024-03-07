@@ -59,13 +59,44 @@ func sinceInv(t1, t2 time.Time) time.Duration {
 	return t2.Sub(t1)
 }
 
+// env "S3_BUCKET_INVENTORY" or const
+func prefixInv(cloudBck *cmn.Bck) string {
+	return path.Join(env.BucketInventory(), cloudBck.Name)
+}
+
+func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInventoryCtx) (fqn string, _ bool, _ error) {
+	// 2. one bucket, one inventory (and one statically produced name)
+	prefix := prefixInv(cloudBck)
+	mi, _, err := fs.Hrw(prefix)
+	if err != nil {
+		return "", false, err
+	}
+	fqn = mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
+	if finfo, err := os.Stat(fqn); err == nil {
+		if ctx.Offset > 0 {
+			debug.Assert(latest.IsZero())
+			// keep using the one
+			return fqn, true, nil
+		}
+		if sinceInv(finfo.ModTime(), latest) < 4*time.Second { // allow for a few seconds difference
+			debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
+			ctx.Size = finfo.Size()
+			return fqn, true, nil
+		}
+		nlog.Infoln("Warning: updating bucket inventory", prefix, finfo.ModTime(), latest)
+	} else {
+		nlog.Infoln("Warning: getting bucket inventory ...", prefix, latest)
+	}
+	return fqn, false, nil
+}
+
 func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInventoryCtx) (string, error) {
 	var (
 		latest time.Time
 		found  string
 		bn     = aws.String(cloudBck.Name)
 		params = &s3.ListObjectsV2Input{Bucket: bn}
-		prefix = path.Join(env.BucketInventory(), cloudBck.Name) // env "S3_BUCKET_INVENTORY" or const
+		prefix = prefixInv(cloudBck)
 	)
 	params.Prefix = aws.String(prefix)
 	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS) // no more than 1000 manifests
@@ -101,21 +132,9 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 		}
 	}
 
-	// 2. one bucket, one inventory (and one statically produced name)
-	mi, _, err := fs.Hrw(prefix)
-	if err != nil {
-		return "", err
-	}
-	fqn := mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
-	if finfo, err := os.Stat(fqn); err == nil {
-		if sinceInv(finfo.ModTime(), latest) < 4*time.Second { // allow for a few seconds difference
-			debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
-			ctx.Size = finfo.Size()
-			return fqn, nil
-		}
-		nlog.Infoln("Warning: updating bucket inventory", prefix, finfo.ModTime(), latest)
-	} else {
-		nlog.Infoln("Warning: getting bucket inventory ...", prefix, latest)
+	fqn, usable, err := checkInventory(cloudBck, latest, ctx)
+	if err != nil || usable {
+		return fqn, err
 	}
 
 	// 3. get and save unzipped locally
