@@ -7,7 +7,7 @@ ais ls ais://$BUCKET_1 --props=name,name,size,size,version
 ais ls ais://$BUCKET_1 --props=all
 ais ls ais://$BUCKET_1/
 
-ais ls aws://$BUCKET_1/ // FAIL "cloud bucket"
+ais ls aws://$BUCKET_1/ // FAIL "aws bucket"
 ais ls qqq:// --all // FAIL "backend"
 ais ls http:// --all // FAIL "backend"
 

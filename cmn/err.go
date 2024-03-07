@@ -306,7 +306,7 @@ func NewErrRemoteBckNotFound(bck *Bck) *ErrRemoteBckNotFound {
 
 func (e *ErrRemoteBckNotFound) Error() string {
 	if e.bck.IsCloud() {
-		return fmt.Sprintf("cloud bucket %q does not exist", e.bck)
+		return fmt.Sprintf("%s bucket %q does not exist", apc.NormalizeProvider(e.bck.Provider), e.bck.Cname(""))
 	}
 	return fmt.Sprintf("remote bucket %q does not exist", e.bck)
 }

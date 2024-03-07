@@ -706,21 +706,25 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 
 	var reqErr smithy.APIError
 	if !errors.As(awsError, &reqErr) {
-		return http.StatusInternalServerError, _awsErr(awsError)
+		return http.StatusInternalServerError, _awsErr(awsError, "")
 	}
 
 	switch reqErr.(type) {
 	case *types.NoSuchBucket:
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case *types.NoSuchKey:
-		return http.StatusNotFound, errors.New(awsErrPrefix + "[NotFound: " + bck.Cname(objName) + "]")
+		e := fmt.Errorf("%s[%s: %s]", awsErrPrefix, reqErr.ErrorCode(), bck.Cname(objName))
+		return http.StatusNotFound, e
 	default:
-		var httpResponseErr *awshttp.ResponseError
-		if errors.As(awsError, &httpResponseErr) {
-			return httpResponseErr.HTTPStatusCode(), _awsErr(awsError)
+		var (
+			rspErr *awshttp.ResponseError
+			code   = reqErr.ErrorCode()
+		)
+		if errors.As(awsError, &rspErr) {
+			return rspErr.HTTPStatusCode(), _awsErr(awsError, code)
 		}
 
-		return http.StatusBadRequest, _awsErr(awsError)
+		return http.StatusBadRequest, _awsErr(awsError, code)
 	}
 }
 
@@ -729,7 +733,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 // The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
 // At the same time we want to preserve original error which starts with `\ncaused by:`.
 // See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
-func _awsErr(awsError error) error {
+func _awsErr(awsError error, code string) error {
 	var (
 		msg        = awsError.Error()
 		origErrMsg = awsError.Error()
@@ -742,6 +746,11 @@ func _awsErr(awsError error) error {
 	if idx := strings.Index(origErrMsg, "\ncaused"); idx > 0 {
 		// `idx+1` because we want to remove `\n`.
 		msg += " (" + origErrMsg[idx+1:] + ")"
+	}
+	if code != "" {
+		if i := strings.Index(msg, code+": "); i > 0 {
+			msg = msg[i:]
+		}
 	}
 	return errors.New(awsErrPrefix + "[" + strings.TrimSuffix(msg, ".") + "]")
 }
