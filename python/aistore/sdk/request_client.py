@@ -20,7 +20,7 @@ from aistore.version import __version__ as sdk_version
 T = TypeVar("T")
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable, duplicate-code
 class RequestClient:
     """
     Internal client for buckets, objects, jobs, etc. to use for making requests to an AIS cluster

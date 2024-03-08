@@ -16,7 +16,7 @@ from aistore.sdk.job import Job
 from aistore.sdk.etl import Etl
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable, duplicate-code
 class Client:
     """
     AIStore client for managing buckets, objects, ETL jobs
