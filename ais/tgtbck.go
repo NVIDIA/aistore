@@ -266,12 +266,12 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 	var (
 		xctn core.Xact
-		rns  = xreg.RenewLso(bck, lsmsg.UUID, lsmsg)
+		rns  = xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)
 	)
 	// check that xaction hasn't finished prior to this page read, restart if needed
 	if rns.Err == xs.ErrGone {
 		runtime.Gosched()
-		rns = xreg.RenewLso(bck, lsmsg.UUID, lsmsg)
+		rns = xreg.RenewLso(bck, lsmsg.UUID, lsmsg, r.Header)
 	}
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)

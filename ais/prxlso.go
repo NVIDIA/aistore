@@ -207,7 +207,7 @@ func (b *lsobjBuffer) mergeTargetBuffers() (filled bool) {
 	return true
 }
 
-func (b *lsobjBuffer) get(token string, size uint) (entries cmn.LsoEntries, hasEnough bool) {
+func (b *lsobjBuffer) get(token string, size int64) (entries cmn.LsoEntries, hasEnough bool) {
 	b.lastAccess.Store(mono.NanoTime())
 
 	// If user requested something before what we have currently in the buffer
@@ -227,13 +227,13 @@ func (b *lsobjBuffer) get(token string, size uint) (entries cmn.LsoEntries, hasE
 	})
 	entries = b.currentBuff[idx:]
 
-	if size > uint(len(entries)) {
+	if size > int64(len(entries)) {
 		// In case we don't have enough entries and we haven't filled anything then
 		// we must request more (if filled then we don't have enough because it's end).
 		if !filled {
 			return nil, false
 		}
-		size = uint(len(entries))
+		size = int64(len(entries))
 	}
 
 	// Move buffer after returned entries.
@@ -246,13 +246,13 @@ func (b *lsobjBuffer) get(token string, size uint) (entries cmn.LsoEntries, hasE
 	return entries, true
 }
 
-func (b *lsobjBuffer) set(id string, entries cmn.LsoEntries, size uint) {
+func (b *lsobjBuffer) set(id string, entries cmn.LsoEntries, size int64) {
 	if b.leftovers == nil {
 		b.leftovers = make(map[string]*lsobjBufferTarget, 5)
 	}
 	b.leftovers[id] = &lsobjBufferTarget{
 		entries: entries,
-		done:    uint(len(entries)) < size,
+		done:    len(entries) < int(size),
 	}
 	b.lastAccess.Store(mono.NanoTime())
 }
@@ -273,12 +273,12 @@ func (b *lsobjBuffers) last(id, token string) string {
 	return last
 }
 
-func (b *lsobjBuffers) get(id, token string, size uint) (entries cmn.LsoEntries, hasEnough bool) {
+func (b *lsobjBuffers) get(id, token string, size int64) (entries cmn.LsoEntries, hasEnough bool) {
 	v, _ := b.buffers.LoadOrStore(id, &lsobjBuffer{})
 	return v.(*lsobjBuffer).get(token, size)
 }
 
-func (b *lsobjBuffers) set(id, targetID string, entries cmn.LsoEntries, size uint) {
+func (b *lsobjBuffers) set(id, targetID string, entries cmn.LsoEntries, size int64) {
 	v, _ := b.buffers.LoadOrStore(id, &lsobjBuffer{})
 	v.(*lsobjBuffer).set(targetID, entries, size)
 }
@@ -309,7 +309,7 @@ func (ci *cacheInterval) contains(token string) bool {
 	return false
 }
 
-func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entries cmn.LsoEntries, hasEnough bool) {
+func (ci *cacheInterval) get(token string, objCnt int64, params reqParams) (entries cmn.LsoEntries, hasEnough bool) {
 	ci.lastAccess = mono.NanoTime()
 	entries = ci.entries
 
@@ -336,7 +336,7 @@ func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entri
 	}
 	entries = entries[start:]
 
-	end := min(uint(len(entries)), objCnt)
+	end := min(len(entries), int(objCnt))
 	if params.prefix != "" {
 		// Move `end-1` to last entry that starts with `params.prefix`.
 		for ; end > 0; end-- {
@@ -344,7 +344,7 @@ func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entri
 				break
 			}
 		}
-		if !ci.last && end < uint(len(entries)) {
+		if !ci.last && end < len(entries) {
 			// We filtered out entries that start with `params.prefix` and
 			// the entries are fully contained in the interval, examples:
 			//  * interval = ["a", "ma", "mb", "z"], token = "", objCnt = 4, prefix = "m"
@@ -354,7 +354,7 @@ func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entri
 	}
 	entries = entries[:end]
 
-	if ci.last || uint(len(entries)) >= objCnt {
+	if ci.last || len(entries) >= int(objCnt) {
 		return entries, true
 	}
 	return nil, false
@@ -435,7 +435,7 @@ func (c *lsobjCache) removeInterval(ci *cacheInterval) {
 	}
 }
 
-func (c *lsobjCache) get(token string, objCnt uint, params reqParams) (entries cmn.LsoEntries, hasEnough bool) {
+func (c *lsobjCache) get(token string, objCnt int64, params reqParams) (entries cmn.LsoEntries, hasEnough bool) {
 	c.mtx.RLock()
 	if interval := c.findInterval(token); interval != nil {
 		entries, hasEnough = interval.get(token, objCnt, params)
@@ -444,13 +444,13 @@ func (c *lsobjCache) get(token string, objCnt uint, params reqParams) (entries c
 	return
 }
 
-func (c *lsobjCache) set(token string, entries cmn.LsoEntries, size uint) {
+func (c *lsobjCache) set(token string, entries cmn.LsoEntries, size int64) {
 	var (
 		end *cacheInterval
 		cur = &cacheInterval{
 			token:      token,
 			entries:    entries,
-			last:       uint(len(entries)) < size,
+			last:       len(entries) < int(size),
 			lastAccess: mono.NanoTime(),
 		}
 	)
@@ -473,7 +473,7 @@ func (c *lsobjCache) invalidate() {
 // lsobjCaches //
 /////////////////
 
-func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt uint) (entries cmn.LsoEntries, hasEnough bool) {
+func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt int64) (entries cmn.LsoEntries, hasEnough bool) {
 	if v, ok := c.caches.Load(reqID); ok {
 		if entries, hasEnough = v.(*lsobjCache).get(token, objCnt, reqParams{}); hasEnough {
 			return
@@ -494,7 +494,7 @@ func (c *lsobjCaches) get(reqID cacheReqID, token string, objCnt uint) (entries 
 	return nil, false
 }
 
-func (c *lsobjCaches) set(reqID cacheReqID, token string, entries cmn.LsoEntries, size uint) {
+func (c *lsobjCaches) set(reqID cacheReqID, token string, entries cmn.LsoEntries, size int64) {
 	v, _ := c.caches.LoadOrStore(reqID, &lsobjCache{})
 	v.(*lsobjCache).set(token, entries, size)
 }

@@ -39,6 +39,7 @@ import (
 type (
 	lsoFactory struct {
 		msg *apc.LsoMsg
+		hdr http.Header
 		streamingF
 	}
 	LsoXact struct {
@@ -88,9 +89,11 @@ var (
 )
 
 func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
+	custom := args.Custom.(*xreg.LsoArgs)
 	p := &lsoFactory{
 		streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActList},
-		msg:        args.Custom.(*apc.LsoMsg),
+		msg:        custom.Msg,
+		hdr:        custom.Hdr,
 	}
 	return p
 }
@@ -122,8 +125,8 @@ func (p *lsoFactory) Start() (err error) {
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
 	if r.listRemote() {
-		if p.msg.IsFlagSet(apc.LsInventory) {
-			r.ctx = &core.LsoInventoryCtx{}
+		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) {
+			r.ctx = &core.LsoInventoryCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
 		}
 		if !r.walk.wor {
 			smap := core.T.Sowner().Get()
@@ -329,8 +332,8 @@ func (r *LsoXact) doPage() *LsoRsp {
 		lst  = r.lastPage[idx:]
 		page *cmn.LsoResult
 	)
-	debug.Assert(uint(len(lst)) >= cnt || r.walk.done)
-	if uint(len(lst)) >= cnt {
+	debug.Assert(int64(len(lst)) >= cnt || r.walk.done)
+	if int64(len(lst)) >= cnt {
 		entries := lst[:cnt]
 		page = &cmn.LsoResult{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
 	} else {
@@ -342,21 +345,21 @@ func (r *LsoXact) doPage() *LsoRsp {
 // `ais show job` will report the sum of non-replicated obj numbers and
 // sum of obj sizes - for all visited objects
 // Returns the index of the first object in the page that follows the continuation `token`
-func (r *LsoXact) findToken(token string) uint {
+func (r *LsoXact) findToken(token string) int {
 	if r.listRemote() && r.token == token {
 		return 0
 	}
-	return uint(sort.Search(len(r.lastPage), func(i int) bool { // TODO: revisit
+	return sort.Search(len(r.lastPage), func(i int) bool { // TODO: revisit
 		return !cmn.TokenGreaterEQ(token, r.lastPage[i].Name)
-	}))
+	})
 }
 
-func (r *LsoXact) havePage(token string, cnt uint) bool {
+func (r *LsoXact) havePage(token string, cnt int64) bool {
 	if r.walk.done {
 		return true
 	}
 	idx := r.findToken(token)
-	return idx+cnt < uint(len(r.lastPage))
+	return idx+int(cnt) < len(r.lastPage)
 }
 
 func (r *LsoXact) nextPageR() (err error) {
@@ -490,7 +493,7 @@ func (r *LsoXact) nextPageA() {
 	if r.havePage(r.token, r.msg.PageSize) {
 		return
 	}
-	for cnt := uint(0); cnt < r.msg.PageSize; {
+	for cnt := int64(0); cnt < r.msg.PageSize; {
 		obj, ok := <-r.walk.pageCh
 		if !ok {
 			r.walk.done = true
@@ -517,18 +520,18 @@ func (r *LsoXact) shiftLastPage(token string) {
 	if j == 0 {
 		return
 	}
-	l := uint(len(r.lastPage))
+	l := len(r.lastPage)
 
 	// (all sent)
 	if j == l {
-		r.gcLastPage(0, int(l))
+		r.gcLastPage(0, l)
 		r.lastPage = r.lastPage[:0]
 		return
 	}
 
 	// otherwise, shift the not-yet-transmitted entries and fix the slice
 	copy(r.lastPage[0:], r.lastPage[j:])
-	r.gcLastPage(int(l-j), int(l))
+	r.gcLastPage(l-j, l)
 	r.lastPage = r.lastPage[:l-j]
 }
 

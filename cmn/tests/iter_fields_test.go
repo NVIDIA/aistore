@@ -95,7 +95,7 @@ var _ = Describe("IterFields", func() {
 					"extra.aws.cloud_region": "us-central",
 					"extra.aws.endpoint":     "",
 					"extra.aws.profile":      "",
-					"extra.aws.max_pagesize": uint(0),
+					"extra.aws.max_pagesize": int64(0),
 
 					"access":   apc.AccessAttrs(0),
 					"features": feat.Flags(0),
@@ -161,7 +161,7 @@ var _ = Describe("IterFields", func() {
 					"extra.aws.cloud_region":   (*string)(nil),
 					"extra.aws.endpoint":       (*string)(nil),
 					"extra.aws.profile":        (*string)(nil),
-					"extra.aws.max_pagesize":   (*uint)(nil),
+					"extra.aws.max_pagesize":   (*int64)(nil),
 					"extra.http.original_url":  (*string)(nil),
 				},
 			),

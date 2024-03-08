@@ -120,7 +120,7 @@ func ObjName(items []string) string { return path.Join(items[1:]...) }
 func FillLsoMsg(query url.Values, msg *apc.LsoMsg) {
 	mxStr := query.Get(QparamMaxKeys)
 	if pageSize, err := strconv.Atoi(mxStr); err == nil && pageSize > 0 {
-		msg.PageSize = uint(pageSize)
+		msg.PageSize = int64(pageSize)
 	}
 	if prefix := query.Get(QparamPrefix); prefix != "" {
 		msg.Prefix = prefix

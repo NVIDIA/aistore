@@ -38,9 +38,9 @@ func ParseBool(s string) (bool, error) {
 	// add. options
 	s = strings.ToLower(s)
 	switch s {
-	case "y", "yes", "on":
+	case "y", "yes", "on", "true":
 		return true, nil
-	case "n", "no", "off":
+	case "n", "no", "off", "false":
 		return false, nil
 	}
 	// gen. case

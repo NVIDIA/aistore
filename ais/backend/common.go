@@ -18,8 +18,8 @@ type ctx = context.Context // used when omitted for shortness sake
 
 func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
 
-func calcPageSize(pageSize, maxPageSize uint) uint {
-	debug.Assert(int(pageSize) >= 0, pageSize)
+func calcPageSize(pageSize, maxPageSize int64) int64 {
+	debug.Assert(pageSize >= 0, pageSize)
 	if pageSize == 0 {
 		return maxPageSize
 	}

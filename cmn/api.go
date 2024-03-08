@@ -87,13 +87,13 @@ type (
 		// - https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html#cli-usage-pagination-serverside
 		// vs OpenStack Swift: 10,000
 		// - https://docs.openstack.org/swift/latest/api/pagination.html
-		MaxPageSize uint `json:"max_pagesize,omitempty"`
+		MaxPageSize int64 `json:"max_pagesize,omitempty"`
 	}
 	ExtraPropsAWSToSet struct {
 		CloudRegion *string `json:"cloud_region"`
 		Endpoint    *string `json:"endpoint"`
 		Profile     *string `json:"profile"`
-		MaxPageSize *uint   `json:"max_pagesize"`
+		MaxPageSize *int64  `json:"max_pagesize"`
 	}
 
 	ExtraPropsHTTP struct {

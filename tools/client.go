@@ -124,7 +124,7 @@ func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader)
 }
 
 // ListObjectNames returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit uint, cached bool) ([]string, error) {
+func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLimit int64, cached bool) ([]string, error) {
 	var (
 		bp  = BaseAPIParams(proxyURL)
 		msg = &apc.LsoMsg{Prefix: prefix}

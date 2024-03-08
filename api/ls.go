@@ -39,7 +39,8 @@ type (
 	ListArgs struct {
 		Callback  LsoCB
 		CallAfter time.Duration
-		Limit     uint
+		Header    http.Header // to optimize listing very large buckets, e.g.: Header.Set(apc.HdrInventory, "true")
+		Limit     int64
 	}
 )
 
@@ -103,36 +104,40 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 // listed page along with associated _continuation token_.
 //
 // See also:
-// - `ListObjectsPage`
-// - usage examples in CLI docs under docs/cli.
+// - docs/cli/* for CLI usage examples
+// - `apc.LsoMsg`
+// - `api.ListObjectsPage`
 func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
-	var (
-		path = apc.URLPathBuckets.Join(bck.Name)
-		hdr  = http.Header{
-			cos.HdrAccept:      []string{cos.ContentMsgPack},
-			cos.HdrContentType: []string{cos.ContentJSON},
-		}
-	)
-	bp.Method = http.MethodGet
+	reqParams := lsoReq(bp, bck, &args)
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
-	}
-	lsmsg.UUID = ""
-	lsmsg.ContinuationToken = ""
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = path
-		reqParams.Header = hdr
-		reqParams.Query = bck.AddToQuery(nil)
-
-		reqParams.buf = allocMbuf() // mem-pool msgpack
+	} else {
+		lsmsg.UUID, lsmsg.ContinuationToken = "", "" // new
 	}
 	lst, err := lso(reqParams, lsmsg, args)
 
 	freeMbuf(reqParams.buf)
 	FreeRp(reqParams)
 	return lst, err
+}
+
+func lsoReq(bp BaseParams, bck cmn.Bck, args *ListArgs) *ReqParams {
+	hdr := args.Header
+	if hdr == nil {
+		hdr = make(http.Header, 2)
+	}
+	hdr.Set(cos.HdrAccept, cos.ContentMsgPack)
+	hdr.Set(cos.HdrContentType, cos.ContentJSON)
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
+		reqParams.Header = hdr
+		reqParams.Query = bck.NewQuery()
+		reqParams.buf = allocMbuf() // msgpack
+	}
+	return reqParams
 }
 
 // `toRead` holds the remaining number of objects to list (that is, unless we are listing
@@ -180,7 +185,7 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (lst *cmn.LsoRe
 		if page.ContinuationToken == "" { // listed all pages
 			break
 		}
-		toRead = uint(max(int(toRead)-len(page.Entries), 0))
+		toRead = max(toRead-int64(len(page.Entries)), 0)
 		lsmsg.ContinuationToken = page.ContinuationToken
 	}
 	return lst, nil
@@ -206,29 +211,18 @@ func lsoPage(reqParams *ReqParams) (_ *cmn.LsoResult, err error) {
 // ListObjectsPage returns the first page of bucket objects.
 // On success the function updates `lsmsg.ContinuationToken` which client then can reuse
 // to fetch the next page.
-// See also: CLI and CLI usage examples
-// See also: `apc.LsoMsg`
-// See also: `api.ListObjectsInvalidateCache`
-// See also: `api.ListObjects`
-func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg) (*cmn.LsoResult, error) {
-	bp.Method = http.MethodGet
+// See also:
+// - docs/cli/* for CLI usage examples
+// - `apc.LsoMsg`
+// - `api.ListObjects`
+func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
+	reqParams := lsoReq(bp, bck, &args)
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
 	}
 	actMsg := apc.ActMsg{Action: apc.ActList, Value: lsmsg}
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Header = http.Header{
-			cos.HdrAccept:      []string{cos.ContentMsgPack},
-			cos.HdrContentType: []string{cos.ContentJSON},
-		}
-		reqParams.Query = bck.AddToQuery(url.Values{})
-		reqParams.Body = cos.MustMarshal(actMsg)
+	reqParams.Body = cos.MustMarshal(actMsg)
 
-		reqParams.buf = allocMbuf() // mem-pool msgpack
-	}
 	// no need to preallocate bucket entries slice (msgpack does it)
 	page := &cmn.LsoResult{}
 	_, err := reqParams.DoReqAny(page)

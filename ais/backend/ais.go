@@ -446,7 +446,7 @@ func (m *AISBackendProvider) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, l
 	unsetUUID(&bck)
 
 	var lstRes *cmn.LsoResult
-	if lstRes, err = api.ListObjectsPage(remAis.bp, bck, remoteMsg); err != nil {
+	if lstRes, err = api.ListObjectsPage(remAis.bp, bck, remoteMsg, api.ListArgs{}); err != nil {
 		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}

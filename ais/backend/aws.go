@@ -129,16 +129,18 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 	return
 }
 
+//
 // LIST OBJECTS via INVENTORY
-func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult,
-	ctx *core.LsoInventoryCtx) (errCode int, err error) {
+//
+
+func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult, ctx *core.LsoInventoryCtx) (errCode int, err error) {
 	var (
 		svc      *s3.Client
 		fqn      string
 		fh       *os.File
 		cloudBck = bck.RemoteBck()
 	)
-	debug.Assert(msg.IsFlagSet(apc.LsInventory))
+	debug.Assert(ctx != nil)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
@@ -198,8 +200,6 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 			return
 		}
 	}
-	debug.Assert(!msg.IsFlagSet(apc.LsInventory))
-
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
 	if msg.Prefix != "" {
 		params.Prefix = aws.String(msg.Prefix)

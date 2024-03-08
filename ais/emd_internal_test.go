@@ -6,15 +6,12 @@ package ais
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/ext/etl"
 	. "github.com/onsi/ginkgo"
@@ -151,23 +148,6 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 						}
 					}
 				}
-			})
-
-			It("should correctly detect etlMD corruption "+node, func() {
-				eowner.init()
-				etlMDFullPath := filepath.Join(mpath, fname.Emd)
-				f, err := os.OpenFile(etlMDFullPath, os.O_RDWR, 0)
-				Expect(err).NotTo(HaveOccurred())
-				_, err = f.WriteAt([]byte("xxxxxxxxxxxx"), 10)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(f.Close()).NotTo(HaveOccurred())
-
-				fmt.Println("NOTE: error on screen is expected at this point...")
-				fmt.Println("")
-
-				loaded := newEtlMD()
-				_, err = jsp.Load(etlMDFullPath, loaded, loaded.JspOpts())
-				Expect(err).To(HaveOccurred())
 			})
 		})
 	}

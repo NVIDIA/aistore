@@ -1535,7 +1535,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 
 	// do page
 	beg := mono.NanoTime()
-	lst, err := p.lsPage(bck, amsg, lsmsg, p.owner.smap.get())
+	lst, err := p.lsPage(bck, amsg, lsmsg, r.Header, p.owner.smap.get())
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1563,7 +1563,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 }
 
 // one page; common code (native, s3 api)
-func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, smap *smapX) (*cmn.LsoResult, error) {
+func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (*cmn.LsoResult, error) {
 	var (
 		nl             nl.Listener
 		err            error
@@ -1612,7 +1612,7 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, smap 
 		}
 
 		config := cmn.GCO.Get()
-		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, config, wantOnlyRemote)
+		lst, err = p.lsObjsR(bck, lsmsg, hdr, smap, tsi, config, wantOnlyRemote)
 
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
@@ -2183,7 +2183,7 @@ end:
 		Entries: entries,
 		Flags:   flags,
 	}
-	if uint(len(entries)) >= pageSize {
+	if len(entries) >= int(pageSize) {
 		allEntries.ContinuationToken = entries[len(entries)-1].Name
 	}
 	// By default, recursion is always enabled. When disabled the result will include
@@ -2195,7 +2195,7 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta.Snode, config *cmn.Config,
+func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,
 	wantOnlyRemote bool) (*cmn.LsoResult, error) {
 	var (
 		results sliceResults
@@ -2203,12 +2203,13 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta
 		args    = allocBcArgs()
 		timeout = config.Client.ListObjTimeout.D()
 	)
-	if lsmsg.IsFlagSet(apc.LsInventory) && lsmsg.ContinuationToken == "" {
+	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) && lsmsg.ContinuationToken == "" /*first page*/ {
 		timeout = config.Client.TimeoutLong.D()
 	}
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
+		Header: hdr,
 		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(aisMsg),
 	}

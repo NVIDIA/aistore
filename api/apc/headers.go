@@ -1,25 +1,31 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
 import "strings"
 
+// AIS http header conventions:
+//   - always starts with the prefix "ais-"
+//   - all words separated with "-"
+//   - no '.' periods, no underscores.
 // For standard and provider-specific HTTP headers, see cmn/cos/const_http.go
 
 const HdrError = "Hdr-Error"
 
-// Header Key conventions:
-//   - starts with a prefix "ais-",
-//   - all words separated with "-": no dots and underscores.
 const (
 	HeaderPrefix = "ais-"
 
+	// bucket inventory - an alternative way to list (very large) buckets
+	HdrInventory = HeaderPrefix + "bucket-inventory" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
+	HdrInvName   = HeaderPrefix + "inv-name"         // optional; name of the inventory (to override the system default)
+	HdrInvID     = HeaderPrefix + "inv-id"           // optional; inventory ID (ditto)
+
 	// GET via x-blob-download
-	HdrBlobDownload = HeaderPrefix + ActBlobDl
-	HdrBlobChunk    = HeaderPrefix + "blob-chunk"   // e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
-	HdrBlobWorkers  = HeaderPrefix + "blob-workers" // (dfltNumWorkers in xs/blob_download.go)
+	HdrBlobDownload = HeaderPrefix + ActBlobDl      // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
+	HdrBlobChunk    = HeaderPrefix + "blob-chunk"   // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
+	HdrBlobWorkers  = HeaderPrefix + "blob-workers" // optional; the default number of workers is dfltNumWorkers in xs/blob_download.go
 
 	// Bucket props headers
 	HdrBucketProps      = HeaderPrefix + "bucket-props"       // => cmn.Bprops

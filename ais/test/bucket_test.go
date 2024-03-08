@@ -778,7 +778,7 @@ func TestListObjectsGoBack(t *testing.T) {
 		tlog.Logln("listing couple pages to move iterator on targets")
 		for page := 0; page < m.num/int(msg.PageSize); page++ {
 			tokens = append(tokens, msg.ContinuationToken)
-			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			expectedEntries = append(expectedEntries, objPage.Entries...)
 		}
@@ -787,7 +787,7 @@ func TestListObjectsGoBack(t *testing.T) {
 
 		for i := len(tokens) - 1; i >= 0; i-- {
 			msg.ContinuationToken = tokens[i]
-			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			entries = append(entries, objPage.Entries...)
 		}
@@ -852,7 +852,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			prevToken := msg.ContinuationToken
 			for i := 0; i < rerequests; i++ {
 				msg.ContinuationToken = prevToken
-				objList, err = api.ListObjectsPage(baseParams, m.bck, msg)
+				objList, err = api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 			}
 			totalCnt += len(objList.Entries)
@@ -1119,7 +1119,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 		}
 		for {
 			baseParams := tools.BaseAPIParams()
-			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			objList, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			totalCnt += len(objList.Entries)
 			if objList.ContinuationToken == "" {
@@ -1158,15 +1158,15 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			defer m.del()
 		}
 		for {
-			msg.PageSize = uint(rand.Intn(50) + 50)
+			msg.PageSize = rand.Int63n(50) + 50
 
-			objList, err := api.ListObjectsPage(baseParams, m.bck, msg)
+			objList, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			totalCnt += len(objList.Entries)
 			if objList.ContinuationToken == "" {
 				break
 			}
-			tassert.Errorf(t, uint(len(objList.Entries)) == msg.PageSize, "wrong page size %d (expected %d)",
+			tassert.Errorf(t, len(objList.Entries) == int(msg.PageSize), "wrong page size %d (expected %d)",
 				len(objList.Entries), msg.PageSize,
 			)
 		}
@@ -1203,11 +1203,11 @@ func TestListObjects(t *testing.T) {
 	}
 
 	tests := []struct {
-		pageSize uint
+		pageSize int64
 	}{
 		{pageSize: 0},
 		{pageSize: 2000},
-		{pageSize: uint(rand.Intn(15000))},
+		{pageSize: rand.Int63n(15000)},
 	}
 
 	for _, test := range tests {
@@ -1409,8 +1409,8 @@ func TestListObjectsPrefix(t *testing.T) {
 			tests := []struct {
 				name     string
 				prefix   string
-				pageSize uint
-				limit    uint
+				pageSize int64
+				limit    int64
 				expected int
 			}{
 				{
@@ -1504,7 +1504,7 @@ func TestListObjectsCache(t *testing.T) {
 			for iter := 0; iter < totalIters; iter++ {
 				var (
 					started = time.Now()
-					msg     = &apc.LsoMsg{PageSize: uint(rand.Intn(20)) + 4}
+					msg     = &apc.LsoMsg{PageSize: rand.Int63n(20) + 4}
 				)
 				if useCache {
 					msg.SetFlag(apc.UseListObjsCache)
@@ -3438,7 +3438,7 @@ func TestBucketListAndSummary(t *testing.T) {
 						apc.ActSummaryBck, xid, m.bck, summary.ObjCount, expectedFiles)
 				}
 			} else {
-				msg := &apc.LsoMsg{PageSize: uint(min(m.num/3, 256))} // mult. pages
+				msg := &apc.LsoMsg{PageSize: int64(min(m.num/3, 256))} // mult. pages
 				if test.cached {
 					msg.Flags = apc.LsObjCached
 				}

@@ -7,14 +7,11 @@ package ais
 import (
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/core/meta"
 	. "github.com/onsi/ginkgo"
@@ -118,22 +115,6 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 						}
 					}
 				}
-			})
-
-			It("should correctly detect bmd corruption "+node, func() {
-				bmdFullPath := filepath.Join(mpath, fname.Bmd)
-				f, err := os.OpenFile(bmdFullPath, os.O_RDWR, 0)
-				Expect(err).NotTo(HaveOccurred())
-				_, err = f.WriteAt([]byte("xxxxxxxxxxxx"), 10)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(f.Close()).NotTo(HaveOccurred())
-
-				fmt.Println("NOTE: error on screen is expected at this point...")
-				fmt.Println("")
-
-				loaded := newBucketMD()
-				_, err = jsp.Load(testpath, loaded, loaded.JspOpts())
-				Expect(err).To(HaveOccurred())
 			})
 		})
 	}

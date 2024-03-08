@@ -346,7 +346,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	// - "encoding-type"
 	s3.FillLsoMsg(q, lsmsg)
 
-	lst, err := p.lsAllPagesS3(bck, amsg, lsmsg)
+	lst, err := p.lsAllPagesS3(bck, amsg, lsmsg, r.Header)
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("lsoS3", bck.Cname(""), len(lst.Entries), err)
 	}
@@ -371,11 +371,11 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	lst = nil
 }
 
-func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) (lst *cmn.LsoResult, _ error) {
+func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (lst *cmn.LsoResult, _ error) {
 	smap := p.owner.smap.get()
 	for pageNum := 1; ; pageNum++ {
 		beg := mono.NanoTime()
-		page, err := p.lsPage(bck, amsg, lsmsg, smap)
+		page, err := p.lsPage(bck, amsg, lsmsg, hdr, smap)
 		if err != nil {
 			return lst, err
 		}

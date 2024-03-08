@@ -83,8 +83,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (lst *cmn.LsoResult, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst = &cmn.LsoResult{Entries: nentries}
-	if npg.wi.msg.IsFlagSet(apc.LsInventory) {
-		debug.Assert(npg.ctx != nil)
+	if npg.ctx != nil {
 		_, err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
 	} else {
 		_, err = core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)

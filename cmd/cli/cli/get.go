@@ -184,7 +184,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 		}
 	}
 
-	// setup list-objects control msg and api call
+	// setup lsmsg
 	msg := &apc.LsoMsg{Prefix: prefix}
 	msg.AddProps(apc.GetPropsMinimal...)
 	if flagIsSet(c, listArchFlag) || extract || archpath != "" {
@@ -193,17 +193,23 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	if flagIsSet(c, getObjCachedFlag) {
 		msg.SetFlag(apc.LsObjCached)
 	}
-	if flagIsSet(c, useInventoryFlag) {
-		msg.SetFlag(apc.LsInventory)
-	}
 	pageSize, limit, err := _setPage(c, bck)
 	if err != nil {
 		return err
 	}
-	msg.PageSize = uint(pageSize)
+	msg.PageSize = pageSize
+
+	// setup lsargs
+	lsargs := api.ListArgs{Limit: limit}
+	if flagIsSet(c, useInventoryFlag) {
+		lsargs.Header = http.Header{
+			apc.HdrInventory: []string{"true"},
+			apc.HdrInvName:   []string{"inv-all"}, // TODO -- FIXME: remove; provide via flag
+		}
+	}
 
 	// list-objects
-	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Limit: uint(limit)})
+	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return V(err)
 	}
@@ -244,8 +250,8 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 		out = " to standard output"
 	} else {
 		out = outFile
-		if out != "" && cos.IsLastB(out, filepath.Separator) {
-			out = out[:len(out)-1]
+		if out != "" {
+			out = cos.TrimLastB(out, filepath.Separator)
 		}
 	}
 	if flagIsSet(c, lengthFlag) {
@@ -536,15 +542,11 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		out = " to standard output"
 	case extract:
 		out = " to " + outFile
-		if cos.IsLastB(out, filepath.Separator) {
-			out = out[:len(out)-1]
-		}
+		out = cos.TrimLastB(out, filepath.Separator)
 		out = strings.TrimSuffix(out, mime) + "/"
 	default:
 		out = " as " + outFile
-		if cos.IsLastB(out, filepath.Separator) {
-			out = out[:len(out)-1]
-		}
+		out = cos.TrimLastB(out, filepath.Separator)
 	}
 	switch {
 	case flagIsSet(c, lengthFlag):

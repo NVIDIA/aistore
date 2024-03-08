@@ -35,6 +35,7 @@ type (
 		amsg    *apc.ActMsg // orig
 		config  *cmn.Config
 		smap    *smapX
+		hdr     http.Header
 		// work
 		tsi     *meta.Snode
 		xid     string // x-tco
@@ -107,7 +108,7 @@ func (c *lstcx) do() (string, error) {
 
 	// 2. ls 1st page
 	var lst *cmn.LsoResult
-	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.smap, tsi /*designated target*/, c.config, true)
+	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, tsi /*designated target*/, c.config, true)
 	if err != nil {
 		return "", err
 	}
@@ -169,7 +170,7 @@ func (c *lstcx) pages(s string, cnt int) {
 
 // next page
 func (c *lstcx) _page() (int, error) {
-	lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.smap, c.tsi, c.config, true)
+	lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, c.tsi, c.config, true)
 	if err != nil {
 		return 0, err
 	}

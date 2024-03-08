@@ -144,7 +144,7 @@ func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Lso
 			}
 			return err
 		}
-		if uint(len(lst.Entries)) >= msg.PageSize {
+		if len(lst.Entries) >= int(msg.PageSize) {
 			return skipDir(fi)
 		}
 		objName := strings.TrimPrefix(strings.TrimPrefix(path, bck.Props.Extra.HDFS.RefDirectory), string(filepath.Separator))
@@ -197,7 +197,7 @@ func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Lso
 	}
 	lst.Entries = lst.Entries[:idx]
 	// Set continuation token only if we reached the page size.
-	if uint(len(lst.Entries)) >= msg.PageSize {
+	if len(lst.Entries) >= int(msg.PageSize) {
 		lst.ContinuationToken = lst.Entries[len(lst.Entries)-1].Name
 	}
 	return 0, nil

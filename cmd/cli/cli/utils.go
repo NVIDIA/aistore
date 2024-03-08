@@ -657,7 +657,7 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 		msg.SetFlag(apc.LsObjCached)
 	}
 	msg.SetFlag(apc.LsNameOnly)
-	objList, err := api.ListObjectsPage(apiBP, bck, msg)
+	objList, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})
 	if err != nil {
 		return false, V(err)
 	}

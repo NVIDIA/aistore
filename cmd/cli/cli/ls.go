@@ -308,9 +308,6 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
-	if flagIsSet(c, useInventoryFlag) {
-		msg.SetFlag(apc.LsInventory)
-	}
 
 	var (
 		props    []string
@@ -372,13 +369,22 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return err
 	}
-	msg.PageSize = uint(pageSize)
+	msg.PageSize = pageSize
 
-	// list page by page, print pages one at a time
+	// finally, setup lsargs
+	lsargs := api.ListArgs{Limit: limit}
+	if flagIsSet(c, useInventoryFlag) {
+		lsargs.Header = http.Header{
+			apc.HdrInventory: []string{"true"},
+			apc.HdrInvName:   []string{"inv-all"}, // TODO -- FIXME: remove; provide via flag
+		}
+	}
+
+	// list (and immediately show) pages, one page at a time
 	if flagIsSet(c, pagedFlag) {
-		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
+		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), int(limit)
 		for {
-			objList, err := api.ListObjectsPage(apiBP, bck, msg)
+			objList, err := api.ListObjectsPage(apiBP, bck, msg, lsargs)
 			if err != nil {
 				return lsoErr(msg, err)
 			}
@@ -417,7 +423,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		}
 	}
 
-	// list all pages up to a limit, show progress
+	// alternatively (when `--paged` not specified) list all pages up to a limit, show progress
 	var (
 		callAfter = listObjectsWaitTime
 		u         = &_listed{c: c, bck: &bck}
@@ -425,8 +431,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
 	}
-	args := api.ListArgs{Callback: u.cb, CallAfter: callAfter, Limit: uint(limit)}
-	objList, err := api.ListObjects(apiBP, bck, msg, args)
+	lsargs.Callback = u.cb
+	lsargs.CallAfter = callAfter
+	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return lsoErr(msg, err)
 	}
@@ -444,22 +451,22 @@ func lsoErr(msg *apc.LsoMsg, err error) error {
 	return V(err)
 }
 
-func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
+func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int64, err error) {
 	b := meta.CloneBck(&bck)
 	if flagIsSet(c, pageSizeFlag) {
-		pageSize = parseIntFlag(c, pageSizeFlag)
+		pageSize = int64(parseIntFlag(c, pageSizeFlag))
 		if pageSize < 0 {
 			err = fmt.Errorf("invalid %s: page size (%d) cannot be negative", qflprn(pageSizeFlag), pageSize)
 			return
 		}
-		if uint(pageSize) > b.MaxPageSize() {
+		if pageSize > b.MaxPageSize() {
 			if b.Props == nil {
 				if b.Props, err = headBucket(bck, true /* don't add */); err != nil {
 					return
 				}
 			}
 			// still?
-			if uint(pageSize) > b.MaxPageSize() {
+			if pageSize > b.MaxPageSize() {
 				err = fmt.Errorf("invalid %s: page size (%d) cannot exceed the maximum (%d)",
 					qflprn(pageSizeFlag), pageSize, b.MaxPageSize())
 				return
@@ -467,7 +474,7 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
 		}
 	}
 
-	limit = parseIntFlag(c, objLimitFlag)
+	limit = int64(parseIntFlag(c, objLimitFlag))
 	if limit < 0 {
 		err = fmt.Errorf("invalid %s: max number of listed objects (%d) cannot be negative", qflprn(objLimitFlag), limit)
 		return
@@ -477,7 +484,7 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
 	}
 
 	// when limit "wins"
-	if limit < pageSize || (uint(limit) < b.MaxPageSize() && pageSize == 0) {
+	if limit < pageSize || (limit < b.MaxPageSize() && pageSize == 0) {
 		pageSize = limit
 	}
 	return
@@ -647,9 +654,14 @@ func (u *_listed) cb(ctx *api.LsoCounter) {
 		s := "Listed " + cos.FormatBigNum(ctx.Count()) + " objects"
 		if u.l == 0 {
 			u.l = len(s) + 3
-			if u.bck.IsRemote() && !flagIsSet(u.c, listObjCachedFlag) {
-				note := fmt.Sprintf("listing remote objects in %s may take a while (tip: use %s to speed up)\n",
-					u.bck.Cname(""), qflprn(listObjCachedFlag))
+			if u.bck.IsRemote() {
+				var tip string
+				if flagIsSet(u.c, listObjCachedFlag) {
+					tip = fmt.Sprintf("use %s to show pages immediately - one page at a time", qflprn(pagedFlag))
+				} else {
+					tip = fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
+				}
+				note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
 				actionNote(u.c, note)
 			}
 		} else if len(s) > u.l {

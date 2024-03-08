@@ -402,7 +402,7 @@ func (b *Bck) HasProvider() bool { return b.Provider != "" }
 //
 
 func (b *Bck) NewQuery() (q url.Values) {
-	q = make(url.Values)
+	q = make(url.Values, 1)
 	if b.Provider != "" {
 		q.Set(apc.QparamProvider, b.Provider)
 	}
@@ -415,7 +415,7 @@ func (b *Bck) NewQuery() (q url.Values) {
 func (b *Bck) AddToQuery(query url.Values) url.Values {
 	if b.Provider != "" {
 		if query == nil {
-			query = make(url.Values)
+			query = make(url.Values, 1)
 		}
 		query.Set(apc.QparamProvider, b.Provider)
 	}

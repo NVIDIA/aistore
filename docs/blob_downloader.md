@@ -115,7 +115,7 @@ To meet this motivation, AIS now supports `GET` request with additional (and opt
 
 | Header | Values (examples) | Comments |
 | --- | --- | --- |
-| `ais-blob-download` | "true", ""  | NOTE: to engage blob downloader, this http header must be present and must be "true" (or "yes", etc.) |
+| `ais-blob-download` | "true", ""  | NOTE: to engage blob downloader, this http header must be present and must be "true" (or "y", "yes", "on" case-insensitive) |
 | `ais-blob-chunk` | "1mb", "1234567", "128KiB"  | [system defaults](#blob-downloader) above |
 | `ais-blob-workers` | "3", "7", "16"  | ditto |
 

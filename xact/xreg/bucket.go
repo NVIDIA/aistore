@@ -5,6 +5,8 @@
 package xreg
 
 import (
+	"net/http"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -42,6 +44,10 @@ type (
 	MNCArgs struct {
 		Tag    string
 		Copies int
+	}
+	LsoArgs struct {
+		Msg *apc.LsoMsg
+		Hdr http.Header
 	}
 )
 
@@ -142,7 +148,11 @@ func RenewBckRename(bckFrom, bckTo *meta.Bck, uuid string, rmdVersion int64, pha
 	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{Custom: custom, UUID: uuid})
 }
 
-func RenewLso(bck *meta.Bck, uuid string, msg *apc.LsoMsg) RenewRes {
-	e := dreg.bckXacts[apc.ActList].New(Args{UUID: uuid, Custom: msg}, bck)
+func RenewLso(bck *meta.Bck, uuid string, msg *apc.LsoMsg, hdr http.Header) RenewRes {
+	custom := &LsoArgs{
+		Msg: msg,
+		Hdr: hdr,
+	}
+	e := dreg.bckXacts[apc.ActList].New(Args{UUID: uuid, Custom: custom}, bck)
 	return dreg.renewByID(e, bck)
 }

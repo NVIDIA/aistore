@@ -12,14 +12,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -33,10 +31,9 @@ import (
 
 // TODO -- FIXME:
 // 1. len(line) == 4: expecting strictly (bucket, objname, size, etag) - use manifests
-// 2: the offset must correspond to the previously returned ContinuationToken
+// 2: the offset must correspond to the previously returned ContinuationToken ====> recover or fail?
 // 3: cleanup older inventories
 // 4: cached inventory must be stored with its own content-type (or, might disappear during pagination)
-// 5: opt-out ListObjectsV2 when ctx.Offset > 0
 
 const (
 	invSizeSGL = cos.MiB
@@ -44,6 +41,7 @@ const (
 )
 
 const (
+	invName   = ".inventory"
 	invSrcExt = ".csv.gz"
 	invDstExt = ".csv"
 )
@@ -59,14 +57,17 @@ func sinceInv(t1, t2 time.Time) time.Duration {
 	return t2.Sub(t1)
 }
 
-// env "S3_BUCKET_INVENTORY" or const
-func prefixInv(cloudBck *cmn.Bck) string {
-	return path.Join(env.BucketInventory(), cloudBck.Name)
+func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInventoryCtx) (prefix string) {
+	prefix = cos.Either(ctx.Name, invName) + cos.PathSeparator + cloudBck.Name
+	if ctx.ID != "" {
+		prefix += cos.PathSeparator + ctx.ID
+	}
+	return prefix
 }
 
 func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInventoryCtx) (fqn string, _ bool, _ error) {
 	// 2. one bucket, one inventory (and one statically produced name)
-	prefix := prefixInv(cloudBck)
+	prefix := prefixInv(cloudBck, ctx)
 	mi, _, err := fs.Hrw(prefix)
 	if err != nil {
 		return "", false, err
@@ -96,7 +97,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 		found  string
 		bn     = aws.String(cloudBck.Name)
 		params = &s3.ListObjectsV2Input{Bucket: bn}
-		prefix = prefixInv(cloudBck)
+		prefix = prefixInv(cloudBck, ctx)
 	)
 	params.Prefix = aws.String(prefix)
 	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS) // no more than 1000 manifests
@@ -179,7 +180,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInventoryCtx, msg *apc.LsoMsg,
 	lst *cmn.LsoResult) error {
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
-	for j := uint(len(lst.Entries)); j < msg.PageSize; j++ {
+	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
 	}
 
@@ -198,7 +199,7 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 	}
 
 	var (
-		i    uint
+		i    int64
 		off  = ctx.Offset
 		skip = msg.ContinuationToken != ""
 		lbuf = make([]byte, 256)

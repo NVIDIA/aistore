@@ -252,7 +252,7 @@ func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {
 	return
 }
 
-func (b *Bck) MaxPageSize() uint {
+func (b *Bck) MaxPageSize() int64 {
 	switch b.Provider {
 	case apc.AIS:
 		return apc.MaxPageSizeAIS

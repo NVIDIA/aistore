@@ -24,6 +24,8 @@ type (
 		ErrCode  int
 	}
 	LsoInventoryCtx struct {
+		Name   string
+		ID     string
 		Offset int64
 		Size   int64
 	}
