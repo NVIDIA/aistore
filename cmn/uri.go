@@ -56,7 +56,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 		bck.Provider = opts.DefaultProvider
 	}
 
-	parts = strings.SplitN(uri, apc.BckObjnameSeparator, 2)
+	parts = strings.SplitN(uri, "/", 2)
 	if parts[0] != "" && (parts[0][0] == apc.NsUUIDPrefix || parts[0][0] == apc.NsNamePrefix) {
 		bck.Ns = ParseNsUname(parts[0])
 		if err := bck.Ns.validate(); err != nil {
@@ -78,7 +78,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 		}
 
 		// Case: "[provider://]@uuid#ns/bucket"
-		parts = strings.SplitN(parts[1], apc.BckObjnameSeparator, 2)
+		parts = strings.SplitN(parts[1], "/", 2)
 	}
 
 	bck.Name = parts[0]

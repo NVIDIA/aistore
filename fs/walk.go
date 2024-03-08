@@ -166,7 +166,7 @@ func Walk(opts *WalkOpts) error {
 
 func _join(bdir, prefix string) string {
 	sub := bdir + cos.PathSeparator + prefix
-	if prefix[len(prefix)-1] == filepath.Separator {
+	if cos.IsLastB(prefix, filepath.Separator) {
 		return sub
 	}
 	if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtualDir) {

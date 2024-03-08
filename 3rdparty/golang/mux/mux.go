@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // ServeMux is an HTTP request multiplexer.
@@ -86,7 +88,7 @@ func cleanPath(p string) string {
 	np := path.Clean(p)
 	// path.Clean removes trailing slash except for root;
 	// put the trailing slash back if necessary.
-	if p[len(p)-1] == '/' && np != "/" {
+	if cos.IsLastB(p, '/') && np != "/" {
 		// Fast path for common case of p being the string we want:
 		if len(p) == len(np)+1 && strings.HasPrefix(p, np) {
 			np = p
@@ -272,7 +274,7 @@ func (mux *ServeMux) _handle(pattern string, handler http.Handler) {
 	}
 	e := muxEntry{h: handler, pattern: pattern}
 	mux.m[pattern] = e
-	if pattern[len(pattern)-1] == '/' {
+	if cos.IsLastB(pattern, '/') {
 		mux.es = appendSorted(mux.es, e)
 	}
 

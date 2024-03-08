@@ -244,7 +244,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 		out = " to standard output"
 	} else {
 		out = outFile
-		if out != "" && out[len(out)-1] == filepath.Separator {
+		if out != "" && cos.IsLastB(out, filepath.Separator) {
 			out = out[:len(out)-1]
 		}
 	}
@@ -536,13 +536,13 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		out = " to standard output"
 	case extract:
 		out = " to " + outFile
-		if out[len(out)-1] == filepath.Separator {
+		if cos.IsLastB(out, filepath.Separator) {
 			out = out[:len(out)-1]
 		}
 		out = strings.TrimSuffix(out, mime) + "/"
 	default:
 		out = " as " + outFile
-		if out[len(out)-1] == filepath.Separator {
+		if cos.IsLastB(out, filepath.Separator) {
 			out = out[:len(out)-1]
 		}
 	}

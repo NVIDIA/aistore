@@ -25,8 +25,6 @@ const (
 	// consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
 	BckProviderSeparator = "://"
 
-	BckObjnameSeparator = "/"
-
 	// scheme://
 	DefaultScheme = "https"
 	GSScheme      = "gs"

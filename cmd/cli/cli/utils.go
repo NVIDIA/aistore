@@ -253,7 +253,7 @@ func isJSON(arg string) bool {
 	if possibleJSON == "" {
 		return false
 	}
-	if possibleJSON[0] == '\'' && possibleJSON[len(possibleJSON)-1] == '\'' {
+	if possibleJSON[0] == '\'' && cos.IsLastB(possibleJSON, '\'') {
 		possibleJSON = possibleJSON[1 : len(possibleJSON)-1]
 	}
 	if len(possibleJSON) >= 2 {
@@ -522,7 +522,7 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 // - otherwise, prints everything until the end of one of the args
 func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]string) {
 	objs := make([]any, 0, len(args))
-	if fmtStr == "" || fmtStr[len(fmtStr)-1] != '\n' {
+	if fmtStr == "" || !cos.IsLastB(fmtStr, '\n') {
 		fmtStr += "\n"
 	}
 
@@ -686,8 +686,8 @@ func ensureRemoteProvider(bck cmn.Bck) error {
 }
 
 func parseURLtoBck(strURL string) (bck cmn.Bck) {
-	if strURL[len(strURL)-1:] != apc.BckObjnameSeparator {
-		strURL += apc.BckObjnameSeparator
+	if !cos.IsLastB(strURL, '/') {
+		strURL += "/"
 	}
 	bck.Provider = apc.HTTP
 	bck.Name = cmn.OrigURLBck2Name(strURL)

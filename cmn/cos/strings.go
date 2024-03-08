@@ -22,6 +22,13 @@ func SHead(s string) string {
 
 func IsLastB(s string, b byte) bool { return s[len(s)-1] == b }
 
+func TrimLastB(s string, b byte) string {
+	if l := len(s); s[l-1] == b {
+		return s[:l-1]
+	}
+	return s
+}
+
 // return non-empty
 func Either(lhs, rhs string) string {
 	if lhs != "" {
