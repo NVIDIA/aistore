@@ -101,7 +101,7 @@ variables:
   stage: test-long
   tags:
     - ais
-  timeout: 200m
+  timeout: 4h ## NOTE: when changing, make sure to update deploy/scripts/bootstrap.sh and GitLab /settings/ci_cd
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
@@ -113,7 +113,7 @@ variables:
   stage: test-long
   tags:
     - ais
-  timeout: 200m
+  timeout: 4h ## NOTE: when changing, make sure to update deploy/scripts/bootstrap.sh and GitLab /settings/ci_cd
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
@@ -427,7 +427,7 @@ test:short:assorted:k8s:
 test:long:k8s:
   stage: test-long
   <<: *test_k8s_long_def
-  timeout: 200m
+  timeout: 4h ## NOTE: when changing, make sure to update deploy/scripts/bootstrap.sh and GitLab /settings/ci_cd
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
@@ -445,7 +445,7 @@ test:long:k8s:
 test:long:k8s:single-target:
   stage: test-long
   <<: *test_k8s_long_def
-  timeout: 200m
+  timeout: 4h
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'

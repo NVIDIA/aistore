@@ -12,7 +12,8 @@ run_tests() {
     tests_dir="${AISTORE_PATH}/${TESTS_DIR}"
   fi
 
-  timeout="-timeout=3h"
+  ## NOTE: when changing, make sure to update .gitlab-ci.yml and GitLab /settings/ci_cd
+  timeout="-timeout=4h"
   shuffle="-shuffle=on"
   if [[ -n "${SHORT}" ]]; then
     short="-short"
