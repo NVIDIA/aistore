@@ -51,8 +51,11 @@ else
   fi
 fi
 
-AISTORE_PATH=$(cd "$(dirname "$0")/../../../"; pwd -P) # absolute path to aistore directory
+## NOTE: absolute path to aistore root
+## (should we use `git rev-parse --show-toplevel` instead?)
+AISTORE_PATH=$(cd "$(dirname "$0")/../../../"; pwd -P)
 source $AISTORE_PATH/deploy/dev/utils.sh
+
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
 AIS_HTTP_CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536

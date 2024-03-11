@@ -12,7 +12,8 @@ include:
     file: /templates/static-analysis/Checkmarx-main-csv.gitlab-ci.yml
 
 variables:
-  MODE: debug # run tests with debug asserts
+  MODE: debug # run aistore and tests with debug asserts enabled
+  SCRIPTS_DIR: "./scripts"
   NUM_TARGET:
     value: "5"
     description: "Number of targets deployed."
@@ -101,7 +102,7 @@ variables:
   stage: test-long
   tags:
     - ais
-  timeout: 4h ## NOTE: when changing, make sure to update deploy/scripts/bootstrap.sh and GitLab /settings/ci_cd
+  timeout: 4h ## NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
@@ -113,7 +114,7 @@ variables:
   stage: test-long
   tags:
     - ais
-  timeout: 4h ## NOTE: when changing, make sure to update deploy/scripts/bootstrap.sh and GitLab /settings/ci_cd
+  timeout: 4h ## NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
@@ -157,7 +158,7 @@ test:short:
   variables:
     BUCKET: "ais://test"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-short
     - FLAGS="--duration=10s" make test-aisloader
 
@@ -168,7 +169,7 @@ test:short:python:
     AIS_ENDPOINT: "http://localhost:8080"
     BUCKET: "aws://ais-ci-python"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
     - make python_sdk_tests
     - make python_botocore_tests
@@ -183,7 +184,7 @@ test:short:python-etl:
   tags:
     - ais-k8s
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - cd python
     - make python_etl_tests
   except:
@@ -205,7 +206,7 @@ test:short:minimal:
   variables:
     BUCKET: "ais://test"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
     - NUM_PROXY=1 NUM_TARGET=1 make test-short
 
 test:short:s3-compat:
@@ -213,7 +214,7 @@ test:short:s3-compat:
   tags:
     - ais
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - ais config cluster features Provide-S3-API-via-Root
     - ais config cluster checksum.type=md5
     - cd python/tests/s3compat
@@ -234,7 +235,7 @@ test:short:authn:
     BUCKET: "ais://test"
     RE: "TestAuth"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - ais auth login $AIS_AUTHN_SU_NAME -p $AIS_AUTHN_SU_PASS
     - make test-run
     - ais auth logout
@@ -250,7 +251,7 @@ test:short:https:
     BUCKET: "ais://ais-ci"
   script:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --https
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --https
     - make test-short
 
 test:short:s3rproxy:
@@ -260,7 +261,7 @@ test:short:s3rproxy:
     TAGS: "s3rproxy"
     RE: "S3"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - make test-short
 
 test:short:aws:
@@ -268,7 +269,7 @@ test:short:aws:
   variables:
     BUCKET: "aws://ais-cicd"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
     - make test-short
 
 test:short:gcp:
@@ -278,7 +279,7 @@ test:short:gcp:
     BUCKET: "gs://ais-ci"
   script:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
 
 test:short:azure:
@@ -286,7 +287,7 @@ test:short:azure:
   variables:
     BUCKET: "az://ais-ci"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-short
 
 test:long:
@@ -295,7 +296,7 @@ test:long:
     NUM_PROXY: 6
     BUCKET: "ais://ais-ci"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - make test-long
 
 test:long:aws:
@@ -304,7 +305,7 @@ test:long:aws:
     NUM_PROXY: 6
     BUCKET: "aws://ais-cicd"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
     - make test-long
 
 test:long:gcp:
@@ -315,7 +316,7 @@ test:long:gcp:
     BUCKET: "gs://ais-ci"
   script:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-long
 
 test:long:azure:
@@ -324,7 +325,7 @@ test:long:azure:
     NUM_PROXY: 6
     BUCKET: "az://ais-ci"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-long
 
 # test:long:hdfs:
@@ -335,7 +336,7 @@ test:long:azure:
 #     BUCKET: "hdfs://ais-ci"
 #   script:
 #     - bash deploy/ci/setup_hdfs.sh
-#     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
+#     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
 #     - ais bucket create "${BUCKET}" --props="extra.hdfs.ref_directory=/"
 #     - make test-long
 
@@ -347,7 +348,7 @@ test:long:aisloader:
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
     - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
@@ -396,7 +397,7 @@ test:short:k8s:
     - export NUM_TARGET=3
     - export NUM_PROXY=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
     - status=$? make kill && exit $status
 
@@ -419,7 +420,7 @@ test:short:assorted:k8s:
     - export NUM_TARGET=3
     - export NUM_PROXY=3
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-run
     - status=$? make kill && exit $status
   <<: *gather_logs_def
@@ -427,7 +428,7 @@ test:short:assorted:k8s:
 test:long:k8s:
   stage: test-long
   <<: *test_k8s_long_def
-  timeout: 4h ## NOTE: when changing, make sure to update deploy/scripts/bootstrap.sh and GitLab /settings/ci_cd
+  timeout: 4h ## NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
@@ -437,7 +438,7 @@ test:long:k8s:
   script:
     - export NUM_TARGET=5
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-run
     - status=$? make kill && exit $status
   <<: *k8s_long_exit_def
@@ -453,7 +454,7 @@ test:long:k8s:single-target:
       allow_failure: true
   script:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - status=0
     - make test-run
     - status=$? make kill && exit $status
@@ -469,7 +470,7 @@ test:long:k8s:aisloader:
       when: manual
       allow_failure: true
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # Give some time for the cluster to stabilize.
     - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
     - status=$? make kill && exit $status
@@ -493,7 +494,7 @@ test:long:k8s:all:
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
   script:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --aws
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --aws
     - |
       echo "----- RUNNING K8S TESTS -----"
       BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath" make test-run

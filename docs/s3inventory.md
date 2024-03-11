@@ -31,7 +31,9 @@ Notwithstanding CLI examples above, the feature (as always) is provided via AISt
 
 ## Managing inventories
 
-As of Q1 2024, the operations to enable, list, disable inventories are _scripted_. The scripts themselves can be located in [`deploy/dev/scripts/s3`](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/s3), and include:
+As of Q1 2024, the operations to enable, list, disable inventories are _scripted_. The scripts themselves can be found in directory [`scripts/s3`](https://github.com/NVIDIA/aistore/tree/main/scripts/s3).
+
+They include:
 
 | script | description |
 | --- | --- |
@@ -58,7 +60,7 @@ ID      PREFIX  FREQUENCY
 Example of `get` (more detailed):
 
 ```
-$ ./deploy/scripts/aws/get-bucket-inventory.sh -b ais-vm -n 1234
+$ ./scripts/aws/get-bucket-inventory.sh -b ais-vm -n 1234
 ID      1234
 Prefix  inv-all
 Frequency       Daily

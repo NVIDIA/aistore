@@ -33,5 +33,5 @@ jobs:
       - name: Run and test AIStore
         run: |
           export GOPATH="$(go env GOPATH)"
-          deploy/scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 2
+          scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 2
           NUM_PROXY=1 NUM_TARGET=3 BUCKET="ais://test" make test-short

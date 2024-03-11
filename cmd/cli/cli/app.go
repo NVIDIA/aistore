@@ -32,7 +32,7 @@ const (
 	cliDescr = `If <TAB-TAB> completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/main/cmd/cli/autocomplete
    * run 'cmd/cli/autocomplete/install.sh'
-   To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/main/deploy/scripts/install_from_binaries.sh`
+   To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/main/scripts/install_from_binaries.sh`
 
 	// custom cli.AppHelpTemplate
 	// "You can render custom help text by setting this variable." (from github.com/urfave/cli)

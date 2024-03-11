@@ -37,7 +37,7 @@ Standalone binaries, on the other hand, can be [built](Makefile) from source or 
 In particular:
 
 ```console
-$ ./deploy/scripts/install_from_binaries.sh --help
+$ ./scripts/install_from_binaries.sh --help
 
 NAME:
   install_from_binaries.sh - install 'ais' (CLI) and 'aisloader' from release binaries

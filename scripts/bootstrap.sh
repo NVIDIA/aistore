@@ -37,11 +37,12 @@ run_tests() {
   fi
 }
 
-AISTORE_PATH="$(cd "$(dirname "$0")/../../"; pwd -P)"
+AISTORE_PATH="$(cd "$(dirname "$0")/../"; pwd -P)" ## NOTE: this assumes `bootstrap.sh` itself is one level below
+SCRIPTS_DIR=${AISTORE_PATH}/scripts
 PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
 # This script is used by Makefile to run commands.
-source ${AISTORE_PATH}/deploy/scripts/utils.sh
+source ${SCRIPTS_DIR}/utils.sh
 
 case $1 in
 lint)
@@ -153,18 +154,18 @@ test-docker)
 
 test-bench)
   echo "Running benchmark tests..." >&2
-  SCRIPT_ROOT=${AISTORE_PATH}/deploy/scripts
-  . ${SCRIPT_ROOT}/bench.sh cmp --dir "${AISTORE_PATH}" --verbose --post-checkout "${SCRIPT_ROOT}/clean_deploy.sh --dir ${AISTORE_PATH}"
+  SCRIPTS_DIR=${AISTORE_PATH}/scripts
+  . ${SCRIPTS_DIR}/bench.sh cmp --dir "${AISTORE_PATH}" --verbose --post-checkout "${SCRIPTS_DIR}/clean_deploy.sh --dir ${AISTORE_PATH}"
   ;;
 
 bench)
   shift
-  . ${AISTORE_PATH}/deploy/scripts/bench.sh
+  . ${SCRIPTS_DIR}/bench.sh
   ;;
 
 clean-deploy)
   shift
-  . ${AISTORE_PATH}/deploy/scripts/clean_deploy.sh
+  . ${SCRIPTS_DIR}/clean_deploy.sh
   ;;
 
 dev-init)

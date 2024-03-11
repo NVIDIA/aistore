@@ -137,7 +137,7 @@ $ cd $GOPATH/src/github.com/NVIDIA
 $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore
 # Optionally, run `make mod-tidy` to preload dependencies
-$ ./deploy/scripts/clean_deploy.sh
+$ ./scripts/clean_deploy.sh
 
 $ ais show cluster
 ```

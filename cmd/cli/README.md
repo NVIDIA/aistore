@@ -15,15 +15,15 @@ $ make cli-autocompletions	# 2. install CLI autocompletions (Bash and/or Zsh)
 
 Alternatively, install directly from GitHub:
 
-* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/install_from_binaries.sh)
+* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/main/scripts/install_from_binaries.sh)
 
 For example, the following command extracts CLI binary to the specified destination and, secondly, installs Bash autocompletions:
 
 ```console
-$ ./deploy/scripts/install_from_binaries.sh --dstdir /tmp/www --completions
+$ ./scripts/install_from_binaries.sh --dstdir /tmp/www --completions
 ```
 
-For more usage options, run: `./deploy/scripts/install_from_binaries.sh --help`
+For more usage options, run: `./scripts/install_from_binaries.sh --help`
 
 You can also install Bash and/or Zsh autocompletions separately at any (later) time:
 

@@ -92,7 +92,7 @@ But there's more. In v3.22, we introduce [blob downloader](docs/blob_downloader.
 Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](Makefile) from source or, alternatively, installed directly from GitHub:
 
 ```console
-$ ./deploy/scripts/install_from_binaries.sh --help
+$ ./scripts/install_from_binaries.sh --help
 ```
 
 The script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from the most recent, or the previous, GitHub [release](https://github.com/NVIDIA/aistore/releases). For CLI, it'll also enable auto-completions (which is strongly recommended).

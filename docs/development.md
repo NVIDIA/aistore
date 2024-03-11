@@ -91,7 +91,7 @@ Performs cleanup and then deploys a new instance of an AIS cluster.
 To make it even more convenient, consider setting up an alias:
 
 ```bash
-alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/scripts/clean-deploy --aws --gcp"
+alias cais="bash ${GOPATH}/src/github.com/NVIDIA/aistore/scripts/clean-deploy --aws --gcp"
 ```
 
 #### Example: minimal remote cluster
@@ -107,13 +107,13 @@ The script will not only deploy the two clusters - it will also assign the remot
 and attach one cluster to another, thus forming a [global namespace](providers.md#remote-ais-cluster).
 
 ```console
-$ deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 4 --deployment all --remote-alias remais
+$ scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 4 --deployment all --remote-alias remais
 ```
 
 Here's another example that illustrates multi-node (6 + 6) cluster with storage targets utilizing loopback devices to simulate actual non-shared storage disks (one disk per target mountpath):
 
 ```console
-$ deploy/scripts/clean_deploy.sh --target-cnt 6 --proxy-cnt 6 --mountpath-cnt 4 --deployment all --loopback 123M --remote-alias remais --gcp --aws
+$ scripts/clean_deploy.sh --target-cnt 6 --proxy-cnt 6 --mountpath-cnt 4 --deployment all --loopback 123M --remote-alias remais --gcp --aws
 ```
 
 > Overall, this line above will create 4 loopbacks of total size 123M * 4 = 0.5GiB. It'll take maybe a few extra seconds but only at the very first run - subsequent cluster restarts will utilize already provisioned devices and other persistent configuration.
@@ -145,7 +145,7 @@ The command below starts a cluster with 5 proxies and 5 targets with GCP cloud e
 Remember to set `GOOGLE_APPLICATION_CREDENTIALS` env when using GCP cloud!
 
 ```console
-$ bash ./deploy/scripts/clean-deploy --gcp
+$ bash ./scripts/clean-deploy --gcp
 ```
 
 The example below deploys:
@@ -155,7 +155,7 @@ The example below deploys:
 - with AWS support
 
 ```console
-$ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS --target-cnt 3 --proxy-cnt 3 --aws
+$ bash ./scripts/clean-deploy --deployment all --remote-alias remoteAIS --target-cnt 3 --proxy-cnt 3 --aws
 ```
 
 #### Options
@@ -196,7 +196,7 @@ It also can quickly provide an answer if the change that was made actually impro
 The command below will compare the benchmark(s) `BenchmarkRandom*` between the current commit and `f9a1536f...`.
 
 ```console
-$ bash ./deploy/scripts/bootstrap.sh bench cmp f9a1536f4c9af0d1ac84c200e68f2ba73676c487 --dir bench/tools/aisloader --bench BenchmarkRandom
+$ bash ./scripts/bootstrap.sh bench cmp f9a1536f4c9af0d1ac84c200e68f2ba73676c487 --dir bench/tools/aisloader --bench BenchmarkRandom
 ```
 
 #### Options

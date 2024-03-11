@@ -32,7 +32,7 @@ jobs:
       - name: Run AIStore
         run: |
           export GOPATH="$(go env GOPATH)"
-          deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1
+          scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4

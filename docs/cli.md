@@ -76,15 +76,15 @@ $ MODE=debug make cli
 
 Alternatively, install directly from GitHub:
 
-* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/install_from_binaries.sh)
+* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/main/scripts/install_from_binaries.sh)
 
 For example, the following command extracts CLI binary to the specified destination and, secondly, installs `bash` autocompletions:
 
 ```console
-$ ./deploy/scripts/install_from_binaries.sh --dstdir /tmp/www --completions
+$ ./scripts/install_from_binaries.sh --dstdir /tmp/www --completions
 ```
 
-For more usage options, run: `./deploy/scripts/install_from_binaries.sh --help`
+For more usage options, run: `./scripts/install_from_binaries.sh --help`
 
 You can also install `bash` and/or `zsh` autocompletions separately at any (later) time:
 

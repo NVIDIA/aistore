@@ -20,7 +20,7 @@ function retry {
   done
 }
 
-root_dir="$(cd "$(dirname "$0")/../../"; pwd -P)"
+root_dir="$(cd "$(dirname "$0")/../"; pwd -P)" ## NOTE: this assumes `clean_deploy.sh` itself is one level below
 
 # Default values
 aws_provider="n"

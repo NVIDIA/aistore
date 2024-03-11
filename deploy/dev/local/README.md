@@ -52,7 +52,7 @@ Note that we are still running everything locally.
 Therefore: remove the previously generated configuration (if any) and redeploy from scratch a minimal cluster consisting of a single gateway and a single target:
 
 ```console
-$ deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 0 --deployment local --remote-alias remais --gcp --aws
+$ scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 0 --deployment local --remote-alias remais --gcp --aws
 
 # or, same:
 $ make kill clean cli deploy <<< $'1\n1\n0\ny\ny\nn\nn\n0\n'

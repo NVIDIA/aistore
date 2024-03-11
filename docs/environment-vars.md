@@ -107,7 +107,7 @@ See also:
 | `NUM_PROXY` | (ditto) |
 
 See also:
-* [deploy/scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/clean_deploy.sh)
+* [scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
 * [wait-for-cluster](https://github.com/NVIDIA/aistore/blob/main/ais/test/main_test.go#L47-L56)
 
 ## Kubernetes

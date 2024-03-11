@@ -3,7 +3,7 @@
 #
 SHELL := /bin/bash
 DEPLOY_DIR = ./deploy/dev/local
-SCRIPTS_DIR = ./deploy/scripts
+SCRIPTS_DIR = ./scripts
 BUILD_DIR = ./cmd
 BUILD_SRC = $(BUILD_DIR)/aisnode/main.go
 
