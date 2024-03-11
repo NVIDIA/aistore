@@ -37,6 +37,7 @@ const (
 	PresignedS3Req            // (*) pass-through client-signed (presigned) S3 requests for subsequent authentication by S3
 	DontOptimizeVirtualDir    // when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ obj names
 	DisableColdGET            // do not perform cold GET request when using remote bucket
+	S3ReverseProxy            // use reverse proxy calls instead of HTTP-redirect for S3 API
 )
 
 var Cluster = []string{
@@ -52,6 +53,7 @@ var Cluster = []string{
 	"Presigned-S3-Req",
 	"Dont-Optimize-Listing-Virtual-Dirs",
 	"Disable-Cold-GET",
+	"S3-Reverse-Proxy",
 	// "none" ====================
 }
 

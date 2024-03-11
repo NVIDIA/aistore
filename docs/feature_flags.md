@@ -40,6 +40,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `Presigned-S3-Req(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
 | `Dont-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
 | `Disable-Cold-GET` | do not perform cold GET request when using remote bucket |
+| `S3-Reverse-Proxy` | use reverse proxy calls instead of HTTP-redirect for S3 API |
 
 ## Global features
 
@@ -50,7 +51,7 @@ Enforce-IntraCluster-Access           Fsync-PUT                             Igno
 Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Presigned-S3-Req
 Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Dont-Optimize-Listing-Virtual-Dirs
 Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
-none
+S3-Reverse-Proxy                      none
 ```
 
 For example:

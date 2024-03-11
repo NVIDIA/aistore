@@ -36,7 +36,6 @@ jobs:
         AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="debug" make node # Build with all backends (debug mode).
         MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
         TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
-        TAGS="s3rproxy" make node # Build with reverse proxy support (redirect is used by default).
         make authn
         make cli
         make aisloader

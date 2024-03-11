@@ -136,7 +136,6 @@ build:linux:
     - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="debug" make node # Build with all backends (debug mode).
     - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
     - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
-    - TAGS="s3rproxy" make node # Build with reverse proxy support (redirect is used by default).
     - make authn
     - make cli
     - make aisloader
@@ -258,10 +257,10 @@ test:short:s3rproxy:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "ais://ais-ci"
-    TAGS: "s3rproxy"
     RE: "S3"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ais config cluster features S3-Reverse-Proxy
     - make test-short
 
 test:short:aws:
