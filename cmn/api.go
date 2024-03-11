@@ -215,6 +215,8 @@ func (bp *Bprops) Validate(targetCnt int) error {
 			return fmt.Errorf("backend bucket %q must be remote", bp.BackendBck)
 		}
 	}
+
+	// run assorted props validators
 	var softErr error
 	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
 		var err error
@@ -236,6 +238,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 		nlog.Warningln("n-way mirroring and EC are both enabled at the same time on the same bucket")
 	}
 
+	// validate bucket features (TODO: pass cmn.Bck parent for additional context, e.g. is-remote, etc.)
 	names := bp.Features.Names()
 	for _, n := range names {
 		if !feat.IsBucketScope(n) {

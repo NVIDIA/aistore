@@ -68,15 +68,17 @@ func newS3Client() *http.Client {
 	}
 }
 
-func setPresignedS3(t *testing.T, bck cmn.Bck) {
-	f := feat.PresignedS3Req
-	props := &cmn.BpropsToSet{Features: &f}
+func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Flags) {
+	if bprops.Features.IsSet(nf) {
+		return // nothing to do
+	}
+	props := &cmn.BpropsToSet{Features: &nf}
 	_, err := api.SetBucketProps(baseParams, bck, props)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		var f feat.Flags
-		props := &cmn.BpropsToSet{Features: &f}
+		// restore original feature flags
+		props := &cmn.BpropsToSet{Features: &bprops.Features}
 		_, err := api.SetBucketProps(baseParams, bck, props)
 		tassert.CheckFatal(t, err)
 	})
@@ -89,10 +91,10 @@ func TestS3PassThroughPutGet(t *testing.T) {
 		bck     = cliBck
 		objName = "object.txt"
 	)
-	_, err := api.HeadBucket(baseParams, bck, false)
+	bprops, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
-	setPresignedS3(t, bck)
+	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req)
 
 	/* TODO -- FIXME: alternatively, use env vars AWS_PROFILE et al:
 	cfg, err := config.LoadDefaultConfig(
@@ -135,10 +137,10 @@ func TestS3PassThroughMultipart(t *testing.T) {
 		bck     = cliBck
 		objName = "object.txt"
 	)
-	_, err := api.HeadBucket(baseParams, bck, false)
+	bprops, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
-	setPresignedS3(t, bck)
+	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req)
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 
@@ -196,21 +198,20 @@ func TestS3PassThroughMultipart(t *testing.T) {
 	)
 }
 
-// FIXME: This test should be enabled once implementation is fixed.
 // This tests checks that when there is no object locally in the AIStore, we
 // won't get it from S3.
-func TestWriteThroughCacheNoColdGet(t *testing.T) {
-	t.Skip()
+func TestDisableColdGet(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, RequiresTLS: true, RequiredCloudProvider: apc.AWS})
 
 	var (
 		bck     = cliBck
 		objName = "object.txt"
 	)
-	_, err := api.HeadBucket(baseParams, bck, false)
+
+	bprops, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
-	setPresignedS3(t, bck)
+	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req|feat.DisableColdGET)
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 

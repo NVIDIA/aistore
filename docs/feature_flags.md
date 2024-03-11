@@ -27,7 +27,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 ## Names and comments
 
 | name | comment |
-| ---- | ------- |
+| --- | ------- |
 | `Enforce-IntraCluster-Access` | when enabled, aistore targets will make sure _not_ to execute direct (ie., not redirected) API calls |
 | `Provide-S3-API-via-Root` | handle S3 requests via `aistore-hostname/` (whereby the default: `aistore-hostname/s3`) |
 | `Dont-Allow-Passing-FQN-to-ETL` |  do not allow passing fully-qualified name of a locally stored object to (local) ETL containers |
@@ -39,6 +39,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `Presigned-S3-Req(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
 | `Dont-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
+| `Disable-Cold-GET` | do not perform cold GET request when using remote bucket |
 
 ## Global features
 
@@ -48,7 +49,8 @@ $ ais config cluster features <TAB-TAB>
 Enforce-IntraCluster-Access           Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
 Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Presigned-S3-Req
 Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Dont-Optimize-Listing-Virtual-Dirs
-Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL         none
+Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
+none
 ```
 
 For example:

@@ -525,6 +525,9 @@ do:
 		if !cold {
 			return http.StatusInternalServerError, err
 		}
+		if goi.lom.IsFeatureSet(feat.DisableColdGET) && goi.lom.Bck().IsRemote() {
+			return http.StatusNotFound, fmt.Errorf("%w (cold GET disabled)", err)
+		}
 		cs = fs.Cap()
 		if cs.IsOOS() {
 			return http.StatusInsufficientStorage, cs.Err()
@@ -574,7 +577,7 @@ do:
 			cold, goi.verchanged = true, true
 		}
 		// TODO: utilize res.ObjAttrs
-	case goi.lom.IsFeatureSet(feat.PresignedS3Req):
+	case goi.lom.IsFeatureSet(feat.PresignedS3Req): // FIXME: This should be moved to `ais/backend/*`.
 		q := goi.req.URL.Query() // TODO: optimize-out
 		pts := s3.NewPresignedReq(goi.req, goi.lom, nil, q)
 		resp, err := pts.Do(g.client.data)
