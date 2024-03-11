@@ -140,7 +140,10 @@ var (
 			silentFlag,
 			dontWaitFlag,
 			verChangedFlag,
+			// bucket inventory
 			useInventoryFlag,
+			invNameFlag,
+			invIDFlag,
 		},
 
 		cmdLRU: {

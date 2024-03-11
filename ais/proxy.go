@@ -2244,9 +2244,6 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	// Combine the results.
 	resLists := make([]*cmn.LsoResult, 0, len(results))
 	for _, res := range results {
-		if res.status == http.StatusNotFound {
-			continue
-		}
 		if res.err != nil {
 			err := res.toErr()
 			freeBcastRes(results)

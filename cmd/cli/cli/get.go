@@ -204,7 +204,8 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	if flagIsSet(c, useInventoryFlag) {
 		lsargs.Header = http.Header{
 			apc.HdrInventory: []string{"true"},
-			apc.HdrInvName:   []string{"inv-all"}, // TODO -- FIXME: remove; provide via flag
+			apc.HdrInvName:   []string{parseStrFlag(c, invNameFlag)},
+			apc.HdrInvID:     []string{parseStrFlag(c, invIDFlag)},
 		}
 	}
 

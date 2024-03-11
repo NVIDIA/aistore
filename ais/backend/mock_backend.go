@@ -35,7 +35,7 @@ func (*mockBP) CreateBucket(*meta.Bck) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("create", mock+" bucket")
 }
 
-func (*mockBP) HeadBucket(_ ctx, bck *meta.Bck) (cos.StrKVs, int, error) {
+func (*mockBP) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
@@ -52,11 +52,11 @@ func (*mockBP) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error
 	return
 }
 
-func (*mockBP) HeadObj(_ ctx, lom *core.LOM) (*cmn.ObjAttrs, int, error) {
+func (*mockBP) HeadObj(_ context.Context, lom *core.LOM) (*cmn.ObjAttrs, int, error) {
 	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) GetObj(_ ctx, lom *core.LOM, _ cmn.OWT) (int, error) {
+func (*mockBP) GetObj(_ context.Context, lom *core.LOM, _ cmn.OWT) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 

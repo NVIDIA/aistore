@@ -48,15 +48,19 @@ var (
 			// archive
 			archpathGetFlag,
 			extractFlag,
+			// bucket inventory
+			useInventoryFlag,
+			invNameFlag,
+			invIDFlag,
 			// multi-object options (passed to list-objects)
 			getObjPrefixFlag,
 			getObjCachedFlag,
 			listArchFlag,
 			objLimitFlag,
-			unitsFlag,
-			useInventoryFlag, // experimental
-			verboseFlag,      // client side
-			silentFlag,       // server side
+			//
+			unitsFlag,   // raw (bytes), kb, mib, etc.
+			verboseFlag, // client side
+			silentFlag,  // server side
 		},
 
 		commandPut: append(

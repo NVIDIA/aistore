@@ -5,7 +5,6 @@
 package backend
 
 import (
-	"context"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -13,8 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
-
-type ctx = context.Context // used when omitted for shortness sake
 
 func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
 

@@ -376,7 +376,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, useInventoryFlag) {
 		lsargs.Header = http.Header{
 			apc.HdrInventory: []string{"true"},
-			apc.HdrInvName:   []string{"inv-all"}, // TODO -- FIXME: remove; provide via flag
+			apc.HdrInvName:   []string{parseStrFlag(c, invNameFlag)},
+			apc.HdrInvID:     []string{parseStrFlag(c, invIDFlag)},
 		}
 	}
 

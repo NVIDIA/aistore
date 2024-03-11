@@ -109,7 +109,7 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *meta.Bck) (errCode int, err er
 // HEAD BUCKET
 //
 
-func (hp *hdfsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs,
+func (hp *hdfsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs,
 	errCode int, err error) {
 	if errCode, err = hp.checkDirectoryExists(bck); err != nil {
 		return
@@ -224,7 +224,7 @@ func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, 
 // HEAD OBJECT
 //
 
-func (hp *hdfsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (hp *hdfsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		fr       *hdfs.FileReader
 		filePath = filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)

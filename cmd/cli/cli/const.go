@@ -527,9 +527,18 @@ var (
 			indent4 + "\t- applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag)\n" +
 			indent4 + "\t- see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'",
 	}
+
 	useInventoryFlag = cli.BoolFlag{
 		Name:  "inventory",
 		Usage: "experimental; requires s3:// backend",
+	}
+	invNameFlag = cli.StringFlag{
+		Name:  "inv-name", // compare w/ HdrInvName
+		Usage: "bucket inventory name (optional; system default name is '.inventory')",
+	}
+	invIDFlag = cli.StringFlag{
+		Name:  "inv-id", // cpmpare w/ HdrInvID
+		Usage: "bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
 
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}

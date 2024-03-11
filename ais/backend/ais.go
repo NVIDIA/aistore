@@ -5,6 +5,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -391,7 +392,7 @@ func (*AISBackendProvider) CreateBucket(_ *meta.Bck) (errCode int, err error) {
 // that, in particular, include `dontAddRemote` = (true | false).
 // Here we have to hardcode the value to keep HeadBucket() consistent across all backends.
 // For similar limitations, see also ListBuckets() below.
-func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
 		remAis      *remAis
 		p           *cmn.Bprops
@@ -519,7 +520,7 @@ func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bc
 // in part including apc.Flt* location specifier.
 // Here, and elsewhere down below, we hardcode (the default) `apc.FltPresent` to, eesentially,
 // keep HeadObj() consistent across backends.
-func (m *AISBackendProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
@@ -539,7 +540,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, er
 	return
 }
 
-func (m *AISBackendProvider) GetObj(_ ctx, lom *core.LOM, owt cmn.OWT) (errCode int, err error) {
+func (m *AISBackendProvider) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT) (errCode int, err error) {
 	var (
 		remAis    *remAis
 		r         io.ReadCloser
@@ -566,7 +567,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *core.LOM, owt cmn.OWT) (errCode 
 	return extractErrCode(err, remAis.uuid)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ ctx, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
