@@ -851,9 +851,6 @@ waitStartup:
 				nlog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
 				lastDateTimestamp = now
 			}
-
-			// refresh assorted read-mostly
-			cmn.Rom.Set(&config.ClusterConfig)
 		case <-r.stopCh:
 			r.ticker.Stop()
 			return nil

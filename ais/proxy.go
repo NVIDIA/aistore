@@ -2941,8 +2941,6 @@ func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 
 	// by default, s3 is serviced at `/s3`
 	// with `/` root reserved for vanilla http locations via ht:// mechanism
-	config := cmn.GCO.Get()
-	cmn.Rom.Set(&config.ClusterConfig)
 	if !cmn.Rom.Features().IsSet(feat.ProvideS3APIviaRoot) {
 		p.htHandler(w, r)
 		return

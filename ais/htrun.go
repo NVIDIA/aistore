@@ -1606,9 +1606,6 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, payload msPayload) (err error)
 	if err = cmn.GCO.Update(&newConfig.ClusterConfig); err != nil {
 		return
 	}
-
-	// update assorted read-mostly knobs
-	cmn.Rom.Set(&newConfig.ClusterConfig)
 	return
 }
 
