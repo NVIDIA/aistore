@@ -3,8 +3,8 @@ This folder is a collection of scripts used for development and productionxi - p
 Separately, there's also root of the repository that contains:
 
 * main [Makefile](/Makefile)
-* GitLab [CI](/.gitlab-ci.yml) - utilizes both the Makefile and the scripts.
-* GitHub [workflows](/.github/workflows) - ditto.
+* GitLab [CI](/.gitlab-ci.yml) (utilizes [Makefile](/Makefile) and the scripts)
+* GitHub [workflows](/.github/workflows) (ditto)
 
 Script names and respective descriptions follow below.
 

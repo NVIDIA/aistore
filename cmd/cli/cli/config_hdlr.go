@@ -185,11 +185,18 @@ func setCluConfigHandler(c *cli.Context) error {
 	}
 	for k, v := range nvs {
 		if k == feat.PropName {
-			featfl, _, err := parseFeatureFlags([]string{v}, 0)
+			nf, _, err := parseFeatureFlags([]string{v}, 0)
 			if err != nil {
 				return fmt.Errorf("invalid feature flag %q", v)
 			}
-			nvs[k] = featfl.String() // FormatUint
+
+			if cf := config.Features; nf != 0 {
+				if nf.IsSet(feat.S3ReverseProxy) && !cf.IsSet(feat.S3ReverseProxy) {
+					actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!")
+				}
+			}
+
+			nvs[k] = nf.String() // FormatUint
 		}
 		if k == confLogModules { // (ref 836)
 			if nvs[confLogLevel], err = parseLogModules(v); err != nil {
