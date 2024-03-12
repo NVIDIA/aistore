@@ -84,7 +84,7 @@ type (
 		Pmap         NodeMap `json:"pmap"` // [pid => Snode]
 		Primary      *Snode  `json:"proxy_si"`
 		Tmap         NodeMap `json:"tmap"`          // [tid => Snode]
-		UUID         string  `json:"uuid"`          // assigned once at creation time and never change
+		UUID         string  `json:"uuid"`          // is assigned once at creation time, never changes
 		CreationTime string  `json:"creation_time"` // creation timestamp
 		Version      int64   `json:"version,string"`
 	}

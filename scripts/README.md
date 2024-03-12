@@ -1,4 +1,12 @@
-This folder is a loose collection of scripts used for development and production. Script names and brief descriptions follow below.
+This folder is a collection of scripts used for development and productionxi - primarily, to build images and run tests.
+
+Separately, there's also root of the repository that contains:
+
+* main [Makefile](/Makefile)
+* GitLab [CI](/.gitlab-ci.yml) - utilizes both the Makefile and the scripts.
+* GitHub [workflows](/.github/workflows) - ditto.
+
+Script names and respective descriptions follow below.
 
 ## github_release.sh
 

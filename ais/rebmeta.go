@@ -25,16 +25,18 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// Rebalance metadata is distributed to start rebalance. We must do it:
-// - when new target(s) joins the cluster - classical case
-// - at startup when cluster starts with unfinished rebalance (was aborted)
-// - when we unregister a target and some bucket(s) use EC - we must redistribute
-//   the slices
-// - on bucket rename:
+// Rebalance metadata is distributed to trigger global (a.k.a. cluster) rebalance.
+// This (distribution) happens:
+// - when a new target node joins cluster;
+// - at startup, when cluster detects unfinished (aborted) rebalance;
+// - when we remove a target while some bucket(s) are erasure-coded
+//   (we then must redistribute slices);
+// - upon bucket rename:
 //    1. bucket is renamed (and the paths of the objects change)
 //    2. rebalance must be started to redistribute the objects to the targets
-//       depending on HRW
-// - when requested by the user - `ais job start rebalance` or via HTTP API
+//       depending on HRW;
+// - when requested by user (`ais start rebalance` or REST API);
+// - upon target node powercycle (and more).
 
 type (
 	// rebMD is revs (see metasync) which is distributed by primary proxy to
@@ -46,9 +48,10 @@ type (
 	// rmdOwner is used to keep the information about the rebalances. Currently
 	// it keeps the Version of the latest rebalance.
 	rmdOwner struct {
+		cluID string
+		fpath string
 		sync.Mutex
-		rmd ratomic.Pointer[rebMD]
-		// global local atomic state
+		rmd         ratomic.Pointer[rebMD]
 		interrupted atomic.Bool // when joining target reports interrupted rebalance
 		starting    atomic.Bool // when starting up
 	}
@@ -58,9 +61,10 @@ type (
 		final func(ctx *rmdModifier, clone *rebMD)
 
 		prev  *rebMD // pre-modification rmd
-		cur   *rebMD // the cloned and modified `prev`
-		rebID string // cluster-wide UUID
+		cur   *rebMD // CoW clone
+		rebID string // cluster-wide rebalance ID, "g[uuid]" in the logs
 
+		cluID   string // cluster ID (== smap.UUID) - never changes
 		p       *proxy
 		smapCtx *smapModifier
 		wait    bool
@@ -90,34 +94,39 @@ func (r *rebMD) String() string {
 		return "RMD <nil>"
 	}
 	if len(r.TargetIDs) == 0 && r.Resilver == "" {
-		return fmt.Sprintf("RMD v%d", r.Version)
+		return fmt.Sprintf("RMD v%d[%s]", r.Version, r.CluID)
 	}
-	if r.Resilver == "" {
-		return fmt.Sprintf("RMD v%d(%v)", r.Version, r.TargetIDs)
+	var s string
+	if r.Resilver != "" {
+		s = ", " + r.Resilver
 	}
-	return fmt.Sprintf("RMD v%d(%v, %s)", r.Version, r.TargetIDs, r.Resilver)
+	return fmt.Sprintf("RMD v%d[%s, %v%s]", r.Version, r.CluID, r.TargetIDs, s)
 }
 
-func newRMDOwner() *rmdOwner {
-	rmdo := &rmdOwner{}
+//////////////
+// rmdOwner //
+//////////////
+
+func newRMDOwner(config *cmn.Config) *rmdOwner {
+	rmdo := &rmdOwner{fpath: filepath.Join(config.ConfigDir, fname.Rmd)}
 	rmdo.put(&rebMD{})
 	return rmdo
 }
 
-func (*rmdOwner) persist(rmd *rebMD) error {
-	rmdPathName := filepath.Join(cmn.GCO.Get().ConfigDir, fname.Rmd)
-	return jsp.SaveMeta(rmdPathName, rmd, nil /*wto*/)
+func (r *rmdOwner) persist(rmd *rebMD) error {
+	return jsp.SaveMeta(r.fpath, rmd, nil /*wto*/)
 }
 
 func (r *rmdOwner) load() {
 	rmd := &rebMD{}
-	_, err := jsp.LoadMeta(filepath.Join(cmn.GCO.Get().ConfigDir, fname.Rmd), rmd)
+	_, err := jsp.LoadMeta(r.fpath, rmd)
 	if err == nil {
 		r.put(rmd)
 		return
 	}
 	if !os.IsNotExist(err) {
-		nlog.Errorf("failed to load rmd: %v", err)
+		nlog.Errorln("failed to load RMD:", err)
+		nlog.Infoln("Warning: make sure to properly decommission previously deployed clusters, proceeding anyway...")
 	}
 }
 
@@ -126,12 +135,35 @@ func (r *rmdOwner) get() *rebMD    { return r.rmd.Load() }
 
 func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 	r.Lock()
+	r._cluID(ctx)
 	clone, err = r.do(ctx)
 	r.Unlock()
+
 	if err == nil && ctx.final != nil {
 		ctx.final(ctx, clone)
 	}
 	return
+}
+
+func (r *rmdOwner) _cluID(ctx *rmdModifier) {
+	if r.cluID == "" {
+		r.cluID = ctx.smapCtx.smap.UUID
+		return
+	}
+	debug.Assert(ctx.smapCtx != nil)
+	if r.cluID == "" {
+		r.cluID = ctx.smapCtx.smap.UUID
+		return
+	}
+	if r.cluID != ctx.smapCtx.smap.UUID {
+		err := r.newClusterIntegrityErr("primary", ctx.smapCtx.smap.UUID, r.cluID)
+		cos.ExitLog(err)
+	}
+}
+
+// FATAL deployment error, most likely unfinished cleanup or worse (co-existence)
+func (r *rmdOwner) newClusterIntegrityErr(node, exp, have string) (err error) {
+	return fmt.Errorf("%s: RMD belongs to a different cluster %q (have %q at %s)", node, exp, have, r.fpath)
 }
 
 func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
@@ -139,6 +171,8 @@ func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
 	clone = ctx.prev.clone()
 	clone.TargetIDs = nil
 	clone.Resilver = ""
+	clone.CluID = r.cluID
+	debug.Assert(cos.IsValidUUID(clone.CluID), clone.CluID)
 	ctx.pre(ctx, clone) // `pre` callback
 
 	if err = r.persist(clone); err == nil {

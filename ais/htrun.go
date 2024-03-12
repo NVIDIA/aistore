@@ -247,7 +247,7 @@ func (h *htrun) init(config *cmn.Config) {
 	}
 
 	h.owner.smap = newSmapOwner(config)
-	h.owner.rmd = newRMDOwner()
+	h.owner.rmd = newRMDOwner(config)
 	h.owner.rmd.load()
 
 	h.gmm = memsys.PageMM()
@@ -1359,17 +1359,25 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 //
 
 func logmsync(ver int64, revs revs, msg *aisMsg, opts ...string) {
+	const tag = "msync Rx:"
 	var (
 		what   string
 		caller = opts[0]
+		lv     = strconv.FormatInt(ver, 10)
 	)
 	if len(opts) == 1 {
 		what = revs.String()
 	} else {
 		what = opts[1]
 	}
-	s := fmt.Sprintf("msync Rx: %s (up from v%d), %s <-- %s", what, ver, msg, caller)
-	nlog.InfoDepth(1, s)
+	switch {
+	case ver == revs.version():
+		nlog.InfoDepth(1, tag, what, "(same v"+lv+",", msg.String(), "<--", caller+")")
+	case ver > revs.version():
+		nlog.InfoDepth(1, "Warning", tag, what, "(down from v"+lv+",", msg.String(), "<--", caller+")")
+	default:
+		nlog.InfoDepth(1, tag, "new", what, "(have v"+lv+",", msg.String(), "<--", caller+")")
+	}
 }
 
 func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
@@ -1505,7 +1513,14 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 			return
 		}
 	}
+
 	rmd := h.owner.rmd.get()
+	if newRMD.CluID != rmd.CluID && rmd.CluID != "" {
+		logmsync(rmd.Version, newRMD, msg, caller)
+		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID)
+		cos.ExitLog(err) // FATAL
+	}
+
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(rmd.Version, newRMD, msg, caller)
 	}
@@ -1863,7 +1878,11 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			} else if self.Flags.IsSet(meta.SnodeMaint) {
 				nlog.Warningln(s + "; NOTE: starting in maintenance mode")
 			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
-				nlog.Infoln(s + ", " + rmd.String())
+				if smap.UUID != rmd.CluID {
+					err = h.owner.rmd.newClusterIntegrityErr(h.String(), smap.UUID, rmd.CluID)
+					cos.ExitLog(err) // FATAL
+				}
+				nlog.Infoln(s+",", rmd.String())
 			} else {
 				nlog.Infoln(s)
 			}

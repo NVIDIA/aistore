@@ -64,7 +64,8 @@ const (
 		"{{ range $key, $si := .Smap.Pmap }} " +
 		"{{ $nonElect := $.Smap.NonElectable $si }}" +
 		"{{ if (eq $nonElect true) }} ProxyID: {{$key}}\n{{end}}{{end}}\n" +
-		"Primary Proxy: {{.Smap.Primary.ID}}\nProxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
+		"Primary Proxy:\t{{.Smap.Primary.ID}}\n" +
+		"Summary:\tproxies({{len .Smap.Pmap}}), targets({{len .Smap.Tmap}}), cluster map(v{{.Smap.Version}}), cluster ID(\"{{.Smap.UUID}}\")\n"
 
 	//
 	// Cluster

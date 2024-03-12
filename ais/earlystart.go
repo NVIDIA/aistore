@@ -449,7 +449,8 @@ until:
 		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
 		aisMsg = p.newAmsg(msg, nil)
 		ctx    = &rmdModifier{
-			pre: func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
+			pre:   func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
+			cluID: smap.UUID,
 		}
 	)
 	rmd, err := p.owner.rmd.modify(ctx)

@@ -514,6 +514,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 			clone.inc()
 			clone.Resilver = cos.GenUUID()
 		},
+		smapCtx: &smapModifier{smap: p.owner.smap.get()},
 	}
 	rmd, err := p.owner.rmd.modify(ctx)
 	if err != nil {
