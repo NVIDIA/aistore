@@ -26,6 +26,7 @@ type (
 	LsoInventoryCtx struct {
 		Name   string
 		ID     string
+		Schema []string
 		Offset int64
 		Size   int64
 	}

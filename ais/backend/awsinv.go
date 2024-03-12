@@ -9,6 +9,7 @@ package backend
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,11 +30,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// TODO -- FIXME:
-// 1. len(line) == 4: expecting strictly (bucket, objname, size, etag) - use manifests
-// 2: the offset must correspond to the previously returned ContinuationToken ====> recover or fail?
-// 3: cleanup older inventories
-// 4: cached inventory must be stored with its own content-type (or, might disappear during pagination)
+// TODO:
+// - the schema<=>entry correspondence can be made more flexible (is partially hardcoded)
+// - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
+// - the offset must correspond to the previously returned ContinuationToken ====> recover or fail?
+// - cleanup older inventories
+// - cached inventory must be stored with its own content-type (or, might disappear during pagination)
 
 const (
 	invSizeSGL = cos.MiB
@@ -41,10 +43,17 @@ const (
 )
 
 const (
-	invName   = ".inventory"
-	invSrcExt = ".csv.gz"
-	invDstExt = ".csv"
+	invName     = ".inventory"
+	invSrcExt   = ".csv.gz"
+	invDstExt   = ".csv"
+	invManifest = "manifest.json"
+	invSchema   = "fileSchema"
 )
+
+type invT struct {
+	oname string
+	mtime time.Time
+}
 
 func _errInv(tag string, err error) (string, error) {
 	return "", fmt.Errorf("bucket-inventory: %s: %w", tag, err)
@@ -66,12 +75,12 @@ func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInventoryCtx) (prefix string) {
 }
 
 func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInventoryCtx) (fqn string, _ bool, _ error) {
-	// 2. one bucket, one inventory (and one statically produced name)
 	prefix := prefixInv(cloudBck, ctx)
 	mi, _, err := fs.Hrw(prefix)
 	if err != nil {
 		return "", false, err
 	}
+	// one bucket, one inventory - and one statically defined name
 	fqn = mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
 	if finfo, err := os.Stat(fqn); err == nil {
 		if ctx.Offset > 0 {
@@ -82,6 +91,7 @@ func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInventoryC
 		if sinceInv(finfo.ModTime(), latest) < 4*time.Second { // allow for a few seconds difference
 			debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
 			ctx.Size = finfo.Size()
+			// start using the one
 			return fqn, true, nil
 		}
 		nlog.Infoln("Warning: updating bucket inventory", prefix, finfo.ModTime(), latest)
@@ -91,41 +101,118 @@ func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInventoryC
 	return fqn, false, nil
 }
 
+func (awsp *awsProvider) getManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string) (fileSchema string, _ error) {
+	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(oname)}
+	obj, err := svc.GetObject(context.Background(), &input)
+	if err != nil {
+		return "", err
+	}
+
+	sgl := awsp.t.PageMM().NewSGL(0)
+	_, err = io.Copy(sgl, obj.Body)
+	cos.Close(obj.Body)
+
+	if err != nil {
+		sgl.Free()
+		return fileSchema, err
+	}
+
+	lbuf := make([]byte, 256)
+	for {
+		lbuf, err = sgl.ReadLine(lbuf) // reuse
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			break
+		}
+		if len(lbuf) < len(invSchema)+10 {
+			continue
+		}
+		line := strings.Split(string(lbuf), ":")
+		if len(line) < 2 {
+			continue
+		}
+		if strings.Contains(line[0], invSchema) {
+			s := strings.TrimSpace(line[1])
+			fileSchema = cmn.UnquoteCEV(strings.TrimSuffix(s, ","))
+			break
+		}
+	}
+	sgl.Free()
+
+	if err == nil && fileSchema == "" {
+		err = errors.New("failed to parse '" + invSchema + "' of the " + oname)
+	}
+	return fileSchema, err
+}
+
 func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInventoryCtx) (string, error) {
 	var (
-		latest time.Time
-		found  string
-		bn     = aws.String(cloudBck.Name)
-		params = &s3.ListObjectsV2Input{Bucket: bn}
-		prefix = prefixInv(cloudBck, ctx)
+		csv      invT
+		manifest invT
+		bn       = aws.String(cloudBck.Name)
+		params   = &s3.ListObjectsV2Input{Bucket: bn}
+		prefix   = prefixInv(cloudBck, ctx)
 	)
 	params.Prefix = aws.String(prefix)
 	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS) // no more than 1000 manifests
 
+	//
 	// 1. ls inventory
+	//
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		return "", err
 	}
 	for _, obj := range resp.Contents {
 		name := *obj.Key
-		if cos.Ext(name) != invSrcExt {
+		if cos.Ext(name) == invSrcExt {
+			mtime := *(obj.LastModified)
+			if csv.mtime.IsZero() || mtime.After(csv.mtime) {
+				csv.mtime = mtime
+				csv.oname = name
+			}
 			continue
 		}
-		mtime := *(obj.LastModified)
-		if mtime.After(latest) {
-			latest = mtime
-			found = name
+		if filepath.Base(name) == invManifest {
+			mtime := *(obj.LastModified)
+			if manifest.mtime.IsZero() || mtime.After(manifest.mtime) {
+				manifest.mtime = mtime
+				manifest.oname = name
+			}
 		}
 	}
-	if found == "" {
-		return "", cos.NewErrNotFound(cloudBck, "S3 bucket inventory")
+	if csv.oname == "" {
+		what := prefix
+		if ctx.ID == "" {
+			what = cos.Either(ctx.Name, invName)
+		}
+		return "", cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
 	}
-	// 1.1. optionally, cleanup older inventories
+
+	//
+	// 2. read the manifest and extract `fileSchema`
+	//
+	fileSchema, err := awsp.getManifest(cloudBck, svc, manifest.oname)
+	if err != nil {
+		return "", err
+	}
+
+	// e.g. [Bucket Key Size ETag]
+	schema := strings.Split(fileSchema, ", ")
+	debug.Assert(len(schema) > 1, schema)       // expecting always
+	debug.Assert(schema[0] == "Bucket", schema) // ditto
+	debug.Assert(schema[1] == "Key", schema)
+	ctx.Schema = schema
+
+	//
+	// 3. optionally, cleanup older inventories
+	//
 	for _, obj := range resp.Contents {
 		name := *obj.Key
 		mtime := *(obj.LastModified)
-		if name == found || latest.Sub(mtime) < 23*time.Hour {
+		if name == csv.oname || csv.mtime.Sub(mtime) < 23*time.Hour {
 			continue
 		}
 		if _, errN := svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{Bucket: bn, Key: obj.Key}); errN != nil {
@@ -133,13 +220,15 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 		}
 	}
 
-	fqn, usable, err := checkInventory(cloudBck, latest, ctx)
+	fqn, usable, err := checkInventory(cloudBck, csv.mtime, ctx)
 	if err != nil || usable {
 		return fqn, err
 	}
 
-	// 3. get and save unzipped locally
-	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(found)}
+	//
+	// 4. get+unzip and save locally
+	//
+	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(csv.oname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
 		return "", err
@@ -169,7 +258,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 	err = gzr.Close()
 	debug.AssertNoErr(err)
 
-	if err = os.Chtimes(fqn, latest, latest); err != nil {
+	if err = os.Chtimes(fqn, csv.mtime, csv.mtime); err != nil {
 		return _errInv("chtimes", err)
 	}
 
@@ -212,7 +301,7 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 			break
 		}
 		line := strings.Split(string(lbuf), ",")
-		debug.Assertf(len(line) == 4 && strings.Contains(line[0], cloudBck.Name), "%q %d", line, ctx.Offset)
+		debug.Assertf(strings.Contains(line[0], cloudBck.Name), "%q %d", line, ctx.Offset)
 
 		objName := cmn.UnquoteCEV(line[1])
 		if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {
@@ -240,15 +329,18 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 		entry := lst.Entries[i]
 		i++
 		entry.Name = objName
-		size := cmn.UnquoteCEV(line[2])
-		entry.Size, err = strconv.ParseInt(size, 10, 64)
-		if err != nil {
-			return err
+
+		if len(ctx.Schema) > 2 && ctx.Schema[2] == "Size" {
+			size := cmn.UnquoteCEV(line[2])
+			entry.Size, err = strconv.ParseInt(size, 10, 64)
+			if err != nil {
+				return err
+			}
 		}
-		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
+		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) || len(ctx.Schema) < 4 {
 			continue
 		}
-		if msg.WantProp(apc.GetPropsCustom) {
+		if msg.WantProp(apc.GetPropsCustom) && ctx.Schema[3] == "ETag" {
 			custom := cos.StrKVs{cmn.ETag: cmn.UnquoteCEV(line[3])}
 			entry.Custom = cmn.CustomMD2S(custom)
 		}

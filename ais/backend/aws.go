@@ -154,7 +154,8 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 		// continue using local csv
 		fqn, _, err = checkInventory(cloudBck, time.Time{}, ctx)
 	} else {
-		// calls checkInventory as well, with timestamp of the remote (listed)
+		// fills-in (manifested) schema
+		// calls checkInventory as well (with timestamp of the remote)
 		fqn, err = awsp.getInventory(cloudBck, svc, ctx)
 	}
 	if err != nil {
