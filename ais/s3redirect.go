@@ -20,7 +20,7 @@ import (
 // s3Redirect performs reverse proxy call or HTTP-redirects to a designated node
 // in a cluster based on feature flag. See also: docs/s3compat.md
 func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redirectURL, bucket string) {
-	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
+	if cmn.GCO.Get().Features.IsSet(feat.S3ReverseProxy) {
 		p.reverseNodeRequest(w, r, si)
 	} else {
 		h := w.Header()

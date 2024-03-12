@@ -84,7 +84,7 @@ func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Fl
 	})
 }
 
-func TestS3PassThroughPutGet(t *testing.T) {
+func TestS3PresignedPutGet(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, RequiresTLS: true, RequiredCloudProvider: apc.AWS})
 
 	var (
@@ -95,6 +95,11 @@ func TestS3PassThroughPutGet(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req)
+
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
+	})
 
 	/* TODO -- FIXME: alternatively, use env vars AWS_PROFILE et al:
 	cfg, err := config.LoadDefaultConfig(
@@ -130,7 +135,7 @@ func TestS3PassThroughPutGet(t *testing.T) {
 	tassert.Errorf(t, *putOutput.ETag == *getOutput.ETag, "ETag does not match between PUT and GET operation (%s != %s)", *putOutput.ETag, *getOutput.ETag)
 }
 
-func TestS3PassThroughMultipart(t *testing.T) {
+func TestS3PresignedMultipart(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, Bck: cliBck, RequiresTLS: true, RequiredCloudProvider: apc.AWS})
 
 	var (
@@ -141,6 +146,11 @@ func TestS3PassThroughMultipart(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req)
+
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
+	})
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 
@@ -212,6 +222,11 @@ func TestDisableColdGet(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req|feat.DisableColdGET)
+
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
+	})
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
 
