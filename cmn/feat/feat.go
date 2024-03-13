@@ -7,9 +7,7 @@ package feat
 import (
 	"errors"
 	"strconv"
-	"strings"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -95,10 +93,12 @@ func (f Flags) Names() (names []string) {
 	return names
 }
 
-func (f Flags) CSV() (s string) {
-	names := f.Names()
-	if len(names) == 0 {
-		return apc.NilValue
+func (f Flags) ClearName(n string) Flags {
+	for i, name := range Cluster {
+		if name == n {
+			of := Flags(1 << i)
+			return f &^ of
+		}
 	}
-	return strings.Join(names, ",")
+	return f
 }

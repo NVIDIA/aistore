@@ -238,11 +238,11 @@ func (bp *Bprops) Validate(targetCnt int) error {
 		nlog.Warningln("n-way mirroring and EC are both enabled at the same time on the same bucket")
 	}
 
-	// validate bucket features (TODO: pass cmn.Bck parent for additional context, e.g. is-remote, etc.)
+	// not inheriting cluster-scope features
 	names := bp.Features.Names()
 	for _, n := range names {
 		if !feat.IsBucketScope(n) {
-			return fmt.Errorf("feature flag %q cannot be set (expecting \"bucket scope\", see docs/feature_flags.md for details)", n)
+			bp.Features = bp.Features.ClearName(n)
 		}
 	}
 	return softErr

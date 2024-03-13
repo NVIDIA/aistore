@@ -192,7 +192,7 @@ func setCluConfigHandler(c *cli.Context) error {
 
 			if cf := config.Features; nf != 0 {
 				if nf.IsSet(feat.S3ReverseProxy) && !cf.IsSet(feat.S3ReverseProxy) {
-					actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!")
+					actionWarn(c, "reverse-proxy mode of operation _may_ (and likely will) degrade scalability and performance!\n")
 				}
 			}
 
@@ -228,7 +228,7 @@ show:
 			fmt.Fprintln(c.App.ErrWriter, redErr(err))
 		}
 	}
-	actionDone(c, "Cluster config updated")
+	actionDone(c, "\nCluster config updated")
 	return nil
 }
 

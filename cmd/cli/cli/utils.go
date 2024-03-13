@@ -582,7 +582,8 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 			case cmn.PropBucketAccessAttrs:
 				value = props.Access.Describe(true /*incl. all*/)
 			default:
-				value = fmt.Sprintf("%v", field.Value())
+				v := field.Value()
+				value = _toStr(v)
 			}
 			propList = append(propList, nvpair{Name: tag, Value: value})
 			return nil, false
@@ -707,10 +708,18 @@ func flattenJSON(jstruct any, section string) (flat nvpairList) {
 	return flat
 }
 
-// NOTE: remove secrets if any
+// remove secrets, if any
 func _toStr(v any) (s string) {
 	m, ok := v.(map[string]any)
 	if !ok {
+		// feature flags: custom formatting
+		if f, ok := v.(feat.Flags); ok {
+			if f == 0 {
+				v = apc.NilValue
+			} else {
+				v = strings.Join(f.Names(), "\n\t ")
+			}
+		}
 		return fmt.Sprintf("%v", v)
 	}
 	// prune

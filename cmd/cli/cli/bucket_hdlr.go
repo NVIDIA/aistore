@@ -542,6 +542,18 @@ func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
 	fmt.Fprintf(c.App.Writer, "Bucket %q already has the same values of props, nothing to do\n", bck.Cname(""))
 }
 
+// in particular, clear feature formatting (see _toStr() in utils.go)
+func _clearFmt(v string) string {
+	if v == "" {
+		return v
+	}
+	if !strings.Contains(v, "\n") && !strings.Contains(v, "\t") {
+		return v
+	}
+	nv := strings.ReplaceAll(v, "\n", "")
+	return strings.ReplaceAll(nv, "\t", "")
+}
+
 func showDiff(c *cli.Context, currProps, newProps *cmn.Bprops) {
 	var (
 		origKV = bckPropList(currProps, true)
@@ -555,11 +567,11 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.Bprops) {
 			}
 			found = true
 			if np.Value != op.Value {
-				fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", np.Name, np.Value, op.Value)
+				fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", np.Name, _clearFmt(np.Value), _clearFmt(op.Value))
 			}
 		}
 		if !found && np.Value != "" {
-			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: n/a)\n", np.Name, np.Value)
+			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: n/a)\n", np.Name, _clearFmt(np.Value))
 		}
 	}
 }
