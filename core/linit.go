@@ -14,8 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-const fmtErrLinit = "lom-init %s: %s mismatch (%q != %q)"
-
 // Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
 // instance includes the following steps:
 // 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
@@ -31,7 +29,6 @@ const fmtErrLinit = "lom-init %s: %s mismatch (%q != %q)"
 // 6) remove a given LOM instance from cache: lom.Uncache()
 // 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
-// =======================================================================================
 
 // NOTE: to facilitate fast path filtering-out
 func (lom *LOM) PreInit(fqn string) (err error) {
@@ -58,34 +55,15 @@ func (lom *LOM) PostInit() (err error) {
 }
 
 func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
-	var parsed fs.ParsedFQN
-	lom.HrwFQN, err = ResolveFQN(fqn, &parsed)
-	if err != nil {
-		return
+	if err = lom.PreInit(fqn); err != nil {
+		return err
 	}
-	debug.Assert(parsed.ContentType == fs.ObjectType)
-	lom.FQN = fqn
-	lom.mi = parsed.Mountpath
-	lom.digest = parsed.Digest
-	lom.ObjName = parsed.ObjName
-	lom.bck = *(*meta.Bck)(&parsed.Bck)
-
-	if expbck != nil {
-		if expbck.Name != parsed.Bck.Name {
-			return fmt.Errorf(fmtErrLinit, lom.FQN, "bucket", expbck.String(), parsed.Bck)
-		}
-		if expbck.Provider != "" && expbck.Provider != lom.bck.Provider {
-			return fmt.Errorf(fmtErrLinit, lom.FQN, "provider", lom.bck.Provider, expbck.Provider)
-		}
-		if !expbck.Ns.IsGlobal() && expbck.Ns != parsed.Bck.Ns {
-			return fmt.Errorf(fmtErrLinit, lom.FQN, "namespace", expbck.Ns, parsed.Bck.Ns)
-		}
+	if expbck != nil && !lom.Bucket().Equal(expbck) {
+		err = fmt.Errorf("lom-init mismatch for %q: %s vs %s", fqn, lom.Bucket(), expbck)
+		debug.AssertNoErr(err)
+		return err
 	}
-	if err = lom.bck.InitFast(T.Bowner()); err != nil {
-		return
-	}
-	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
-	return nil
+	return lom.PostInit()
 }
 
 func (lom *LOM) InitCT(ct *CT) {
