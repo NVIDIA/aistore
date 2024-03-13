@@ -21,9 +21,11 @@ from aistore.sdk.const import (
     URL_PATH_OBJECTS,
     HEADER_RANGE,
     ACT_BLOB_DOWNLOAD,
+    HEADER_OBJECT_BLOB_DOWNLOAD,
+    HEADER_OBJECT_BLOB_WORKERS,
+    HEADER_OBJECT_BLOB_CHUNK_SIZE,
 )
 from aistore.sdk.object_reader import ObjectReader
-
 from aistore.sdk.types import ActionMsg, PromoteAPIArgs, BlobMsg
 from aistore.sdk.utils import read_file_bytes, validate_file
 
@@ -91,6 +93,8 @@ class Object(AISSource):
         writer: BufferedWriter = None,
         latest: bool = False,
         byte_range: str = None,
+        blob_chunk_size: str = None,
+        blob_num_workers: str = None,
     ) -> ObjectReader:
         """
         Reads an object
@@ -105,6 +109,11 @@ class Object(AISSource):
             latest (bool, optional): GET the latest object version from the associated remote bucket
             byte_range (str, optional): Specify a specific data segment of the object for transfer, including
                 both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+            blob_chunk_size (str, optional):  Utilize built-in blob-downloader with the given chunk size in
+                IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k;)
+            blob_num_workers (str, optional): Utilize built-in blob-downloader with the given number of
+                concurrent blob-downloading workers (readers)
+
         Returns:
             The stream of bytes to read an object or a file inside an archive.
 
@@ -121,7 +130,15 @@ class Object(AISSource):
         if latest:
             params[QPARAM_LATEST] = "true"
 
+        if byte_range and (blob_chunk_size or blob_num_workers):
+            raise ValueError("Cannot use Byte Range with Blob Download")
         headers = {}
+        if blob_chunk_size or blob_num_workers:
+            headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
+        if blob_chunk_size:
+            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
+        if blob_num_workers:
+            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_num_workers
         if byte_range:
             # For range formatting, see the spec:
             # https://www.rfc-editor.org/rfc/rfc7233#section-2.1

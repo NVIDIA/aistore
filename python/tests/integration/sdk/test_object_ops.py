@@ -3,10 +3,13 @@
 #
 import random
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from aistore.sdk.const import AIS_VERSION, HEADER_CONTENT_LENGTH, UTF_ENCODING
 
+from tests.const import SMALL_FILE_SIZE
+from tests.unit.sdk.test_utils import test_cases
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import (
     create_and_put_object,
@@ -52,11 +55,13 @@ class TestObjectOps(RemoteEnabledTest):
                 obj += chunk
         self.assertEqual(obj, exp_content)
 
-    def _put_objects(self, num_obj):
+    def _put_objects(self, num_obj, obj_size=None):
         name_to_content = {}
         for i in range(num_obj):
             obj_name = f"obj{ i }"
-            content = self._create_object_with_content(obj_name=obj_name)
+            content = self._create_object_with_content(
+                obj_name=obj_name, obj_size=obj_size
+            )
             name_to_content[obj_name] = content
         return name_to_content
 
@@ -118,6 +123,31 @@ class TestObjectOps(RemoteEnabledTest):
         for obj_name, content in objects.items():
             resp = self.bucket.object(obj_name).get(byte_range="bytes=5-100").read_all()
             self.assertEqual(content[5:101], resp)
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    @test_cases("1mb", "1MiB", "1048576", "128k")
+    def test_get_blob_download(self, testcase):
+        objects = self._put_objects(1, SMALL_FILE_SIZE)
+        obj_names = list(objects.keys())
+        evict_job_id = self.bucket.objects(obj_names=obj_names).evict()
+        self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+
+        for obj_name, content in objects.items():
+            start_time = datetime.now().time()
+            resp = (
+                self.bucket.object(obj_name)
+                .get(blob_chunk_size=testcase, blob_num_workers="4")
+                .read_all()
+            )
+            self.assertEqual(content, resp)
+            end_time = datetime.now().time()
+            jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
+                start_time=start_time, end_time=end_time
+            )
+            self.assertTrue(len(jobs_list) > 0)
 
     @unittest.skipIf(
         "localhost" not in CLUSTER_ENDPOINT and "127.0.0.1" not in CLUSTER_ENDPOINT,

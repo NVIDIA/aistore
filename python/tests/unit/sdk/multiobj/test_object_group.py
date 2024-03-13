@@ -17,6 +17,7 @@ from aistore.sdk.const import (
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj
+from tests.const import LARGE_FILE_SIZE
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -103,6 +104,21 @@ class TestObjectGroup(unittest.TestCase):
             HTTP_METHOD_POST,
             ACT_PREFETCH_OBJECTS,
             prefetch_expected_val,
+        )
+
+    def test_prefetch_with_blob_threshold(self):
+        prefetch_expected_val = self.expected_value.copy()
+        prefetch_expected_val["coer"] = False
+        prefetch_expected_val["latest-ver"] = False
+        blob_threshold_value = LARGE_FILE_SIZE
+        prefetch_expected_val["blob-threshold"] = blob_threshold_value
+
+        self.object_group_test_helper(
+            self.object_group.prefetch,
+            HTTP_METHOD_POST,
+            ACT_PREFETCH_OBJECTS,
+            prefetch_expected_val,
+            blob_threshold=blob_threshold_value,
         )
 
     def test_copy(self):

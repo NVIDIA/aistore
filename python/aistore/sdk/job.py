@@ -154,6 +154,7 @@ class Job:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
+            errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
         """
         action = f"job '{self._job_id}' to reach idle state"
         logger_name = "wait_for_idle"
@@ -182,6 +183,7 @@ class Job:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
+            errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
         """
         logger_name = "wait_single_node"
         action = f"job '{self._job_id}' to finish"
@@ -233,6 +235,45 @@ class Job:
             HTTP_METHOD_PUT, path=URL_PATH_CLUSTER, json=action, params=params
         )
         return resp.text
+
+    def get_within_timeframe(
+        self, start_time: datetime.time, end_time: datetime.time
+    ) -> List[JobSnapshot]:
+        """
+        Checks for jobs that started and finished within a specified timeframe
+
+        Args:
+            start_time (datetime.time): The start of the timeframe for monitoring jobs
+            end_time (datetime.time): The end of the timeframe for monitoring jobs
+
+        Returns:
+            list: A list of jobs that have finished within the specified timeframe
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            errors.Timeout: Timeout while waiting for the job to finish
+            errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
+        """
+
+        snapshots = self._query_job_snapshots()
+        jobs_found = []
+        for snapshot in snapshots:
+            if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
+                snapshot_start_time = datetime.fromisoformat(
+                    snapshot.start_time.rstrip("Z")
+                ).time()
+                snapshot_end_time = datetime.fromisoformat(
+                    snapshot.end_time.rstrip("Z")
+                ).time()
+                if snapshot_start_time >= start_time and snapshot_end_time <= end_time:
+                    jobs_found.append(snapshot)
+                    print(snapshot)
+        if len(jobs_found) == 0:
+            raise JobInfoNotFound("No relevant job info found")
+        return jobs_found
 
     def _query_job_snapshots(self) -> List[JobSnapshot]:
         value = JobArgs(id=self._job_id, kind=self._job_kind).as_dict()

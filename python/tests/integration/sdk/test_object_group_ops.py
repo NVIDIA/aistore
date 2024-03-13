@@ -10,6 +10,7 @@ import pytest
 
 from aistore.sdk.const import PROVIDER_AIS, LOREM, DUIS
 from aistore.sdk.errors import InvalidBckProvider, AISError
+from tests.const import SMALL_FILE_SIZE, MIB
 from tests.integration import REMOTE_SET, TEST_TIMEOUT, OBJECT_COUNT
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import random_string
@@ -58,6 +59,22 @@ class TestObjectGroupOps(RemoteEnabledTest):
         job_id = obj_group.prefetch()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
         self._verify_cached_objects(OBJECT_COUNT, range(1, OBJECT_COUNT))
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_prefetch_blob_download(self):
+        obj_name = self.obj_prefix + str(OBJECT_COUNT) + self.suffix
+        obj_names = self._create_objects(obj_names=[obj_name], obj_size=SMALL_FILE_SIZE)
+        self.obj_names.extend(obj_names)
+        obj_group = self.bucket.objects(obj_names=obj_names)
+        self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
+        job_id = obj_group.prefetch(blob_threshold=2 * MIB)
+        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
+        self._verify_cached_objects(
+            OBJECT_COUNT + 1, range(OBJECT_COUNT, OBJECT_COUNT + 1)
+        )
 
     def test_prefetch_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
@@ -284,7 +301,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         ]
         self.assertEqual(to_obj_values, from_obj_hashes)
 
-    def _evict_all_objects(self):
+    def _evict_all_objects(self, num_obj=OBJECT_COUNT):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(OBJECT_COUNT, expected_cached=False)
+        self._check_all_objects_cached(num_obj, expected_cached=False)

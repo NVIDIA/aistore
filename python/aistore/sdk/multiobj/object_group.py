@@ -128,7 +128,12 @@ class ObjectGroup(AISSource):
             value=self._obj_collection.get_value(),
         ).text
 
-    def prefetch(self, latest: bool = False, continue_on_error: bool = False):
+    def prefetch(
+        self,
+        blob_threshold: int = None,
+        latest: bool = False,
+        continue_on_error: bool = False,
+    ):
         """
         Prefetches a list or range of objects in a bucket so that they are cached in AIS
         NOTE: only Cloud buckets can be prefetched.
@@ -136,6 +141,8 @@ class ObjectGroup(AISSource):
         Args:
             latest (bool, optional): GET the latest object version from the associated remote bucket
             continue_on_error (bool, optional): Whether to continue if there is an error prefetching a single object
+            blob_threshold (int, optional): Utilize built-in blob-downloader for remote objects
+                greater than the specified (threshold) size in bytes
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -155,6 +162,7 @@ class ObjectGroup(AISSource):
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
             latest=latest,
+            blob_threshold=blob_threshold,
         ).as_dict()
 
         return self.bck.make_request(

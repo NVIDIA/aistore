@@ -49,11 +49,17 @@ def cleanup_local(path: str):
 
 
 # pylint: disable=too-many-arguments
-def create_and_put_objects(client, bucket, prefix, suffix, num_obj, obj_names):
+def create_and_put_objects(
+    client, bucket, prefix, suffix, num_obj, obj_names, obj_size=None
+):
     if not obj_names:
         obj_names = [prefix + str(i) + suffix for i in range(num_obj)]
     for obj_name in obj_names:
         create_and_put_object(
-            client, bck_name=bucket.name, provider=bucket.provider, obj_name=obj_name
+            client,
+            bck_name=bucket.name,
+            provider=bucket.provider,
+            obj_name=obj_name,
+            obj_size=obj_size,
         )
     return obj_names

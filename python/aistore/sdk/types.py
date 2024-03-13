@@ -479,11 +479,14 @@ class PrefetchMsg(BaseModel):
     object_selection: dict
     continue_on_err: bool
     latest: bool
+    blob_threshold: int = None
 
     def as_dict(self):
         dict_rep = self.object_selection
         dict_rep["coer"] = self.continue_on_err
         dict_rep["latest-ver"] = self.latest
+        if self.blob_threshold:
+            dict_rep["blob-threshold"] = self.blob_threshold
         return dict_rep
 
 

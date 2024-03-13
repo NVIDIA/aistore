@@ -23,17 +23,21 @@ from aistore.sdk.const import (
     ACT_PROMOTE,
     ACT_BLOB_DOWNLOAD,
     URL_PATH_OBJECTS,
+    HEADER_OBJECT_BLOB_DOWNLOAD,
+    HEADER_OBJECT_BLOB_CHUNK_SIZE,
+    HEADER_OBJECT_BLOB_WORKERS,
 )
 from aistore.sdk.object import Object
 from aistore.sdk.object_reader import ObjectReader
 from aistore.sdk.types import ActionMsg, BlobMsg, PromoteAPIArgs
+from tests.const import SMALL_FILE_SIZE
 
 BCK_NAME = "bucket_name"
 OBJ_NAME = "object_name"
 REQUEST_PATH = f"{URL_PATH_OBJECTS}/{BCK_NAME}/{OBJ_NAME}"
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable, too-many-locals
 class TestObject(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock()
@@ -68,6 +72,8 @@ class TestObject(unittest.TestCase):
     def test_get(self):
         archpath_param = "archpath"
         etl_name = "etl"
+        blob_chunk_size = "4mb"
+        blob_num_workers = 10
         self.expected_params[QPARAM_ARCHPATH] = archpath_param
         self.expected_params[QPARAM_ETL_NAME] = etl_name
         self.get_exec_assert(
@@ -75,6 +81,8 @@ class TestObject(unittest.TestCase):
             chunk_size=3,
             etl_name=etl_name,
             writer=self.mock_writer,
+            blob_chunk_size=blob_chunk_size,
+            blob_num_workers=blob_num_workers,
         )
 
     def get_exec_assert(self, **kwargs):
@@ -109,6 +117,15 @@ class TestObject(unittest.TestCase):
         self.mock_client.request.return_value = mock_response
 
         res = self.object.get(**kwargs)
+        blob_chunk_size = kwargs.get("blob_chunk_size")
+        blob_num_workers = kwargs.get("blob_num_workers")
+        headers = {}
+        if blob_chunk_size or blob_num_workers:
+            headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
+        if blob_chunk_size:
+            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
+        if blob_num_workers:
+            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_num_workers
 
         self.assertEqual(expected_obj.raw(), res.raw())
         self.assertEqual(content_length, res.attributes.size)
@@ -122,7 +139,7 @@ class TestObject(unittest.TestCase):
             path=REQUEST_PATH,
             params=self.expected_params,
             stream=True,
-            headers={},
+            headers=headers,
         )
 
         # Use the object reader iterator to call the stream with the chunk size
@@ -236,8 +253,8 @@ class TestObject(unittest.TestCase):
     def test_blob_download_default_args(self):
         request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
         expected_blob_msg = BlobMsg(
-            chunk_size=0,
-            num_workers=0,
+            chunk_size=None,
+            num_workers=None,
             latest=False,
         ).as_dict()
         expected_json = ActionMsg(
@@ -253,7 +270,7 @@ class TestObject(unittest.TestCase):
 
     def test_blob_download(self):
         request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
-        chunk_size = 20 * 1024 * 1024
+        chunk_size = SMALL_FILE_SIZE
         num_workers = 10
         latest = True
         expected_blob_msg = BlobMsg(

@@ -92,7 +92,7 @@ class RemoteEnabledTest(unittest.TestCase):
             self.cloud_objects.append(obj_name)
         return obj
 
-    def _create_object_with_content(self, obj_name=""):
+    def _create_object_with_content(self, obj_name="", obj_size=None):
         """
         Create an object with the given object name and some content and track them for later cleanup
 
@@ -108,12 +108,15 @@ class RemoteEnabledTest(unittest.TestCase):
             bck_name=self.bck_name,
             obj_name=obj_name,
             provider=self.provider,
+            obj_size=obj_size,
         )
         if REMOTE_SET:
             self.cloud_objects.append(obj_name)
         return content
 
-    def _create_objects(self, num_obj=OBJECT_COUNT, suffix="", obj_names=None):
+    def _create_objects(
+        self, num_obj=OBJECT_COUNT, suffix="", obj_names=None, obj_size=None
+    ):
         """
         Create a list of objects using a unique test prefix and track them for later cleanup
         Args:
@@ -127,6 +130,7 @@ class RemoteEnabledTest(unittest.TestCase):
             suffix,
             num_obj,
             obj_names,
+            obj_size,
         )
         if REMOTE_SET:
             self.cloud_objects.extend(obj_names)

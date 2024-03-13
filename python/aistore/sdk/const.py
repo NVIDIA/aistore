@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
 # Standard Header Keys
@@ -22,6 +22,10 @@ HEADER_PREFIX = "ais-"
 HEADER_BUCKET_PROPS = HEADER_PREFIX + "bucket-props"
 HEADER_BUCKET_SUMM = HEADER_PREFIX + "bucket-summ"
 HEADER_XACTION_ID = HEADER_PREFIX + "xaction-id"
+# Object Props Header Keys
+HEADER_OBJECT_BLOB_DOWNLOAD = HEADER_PREFIX + "blob-download"
+HEADER_OBJECT_BLOB_CHUNK_SIZE = HEADER_PREFIX + "blob-chunk"
+HEADER_OBJECT_BLOB_WORKERS = HEADER_PREFIX + "blob-workers"
 # Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 HEADER_RANGE = "Range"
 
