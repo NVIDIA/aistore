@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// for background, see: docs/on_disk_layout.md
+
 const (
 	prefCT       = '%'
 	prefProvider = '@'
@@ -37,14 +39,16 @@ const (
 type ParsedFQN struct {
 	Mountpath   *Mountpath
 	ContentType string
-	Bck         cmn.Bck
 	ObjName     string
 	Digest      uint64
+	Bck         cmn.Bck
 }
 
-// ParseFQN splits a provided FQN (created by `MakePathFQN`) or reports
-// an error.
-func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
+///////////////
+// ParsedFQN //
+///////////////
+
+func (parsed *ParsedFQN) Init(fqn string) (err error) {
 	var (
 		rel           string
 		itemIdx, prev int
@@ -123,11 +127,14 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 		prev = i + 1
 	}
 
-	err = fmt.Errorf("fqn %s is invalid", fqn)
-	return
+	return fmt.Errorf("fqn %s is invalid", fqn)
 }
 
-// FQN2Mpath matches FQN to mountpath and returns the mountpath and the relative path.
+//
+// supporting helpers
+//
+
+// match FQN to mountpath and return the former and the relative path
 func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
 	avail := GetAvail()
 	if len(avail) == 0 {
@@ -163,18 +170,16 @@ func Path2Mpath(path string) (found *Mountpath, err error) {
 	return
 }
 
-// TODO: define fs.PathErr to return "ais://nnn/shard-99.tar not found"
-// instead of the current "  no such file or directory"
 func CleanPathErr(err error) {
 	var (
 		pathErr *fs.PathError
 		what    string
+		parsed  ParsedFQN
 	)
 	if !errors.As(err, &pathErr) {
 		return
 	}
-	parsed, errV := ParseFQN(pathErr.Path)
-	if errV != nil {
+	if errV := parsed.Init(pathErr.Path); errV != nil {
 		return
 	}
 	pathErr.Path = parsed.Bck.Cname(parsed.ObjName)

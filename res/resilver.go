@@ -254,17 +254,18 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	// 1. fix EC metafile
 	var metaOldPath, metaNewPath string
 	if !lom.IsHRW() && lom.ECEnabled() {
-		// copy metafile
-		newMpath, _, errEc := core.ResolveFQN(lom.HrwFQN)
-		if errEc != nil {
-			nlog.Warningf("%s: %s %v", xname, lom, errEc)
+		var parsed fs.ParsedFQN
+		_, err := core.ResolveFQN(lom.HrwFQN, &parsed)
+		if err != nil {
+			nlog.Warningf("%s: %s %v", xname, lom, err)
 			return nil
 		}
 		ct := core.NewCTFromLOM(lom, fs.ObjectType)
-		metaOldPath, metaNewPath, errEc = _moveECMeta(ct, lom.Mountpath(), newMpath.Mountpath, buf)
-		if errEc != nil {
-			nlog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v",
-				xname, lom, lom.Mountpath().Path, newMpath.Mountpath.Path, errEc)
+		// copy metafile
+		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.Mountpath(), parsed.Mountpath, buf)
+		if err != nil {
+			nlog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v", xname, lom, lom.Mountpath().Path,
+				parsed.Mountpath.Path, err)
 			return nil
 		}
 	}

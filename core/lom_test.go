@@ -1,6 +1,6 @@
 // Package core_test provides tests for cluster package
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core_test
 
@@ -168,9 +168,10 @@ var _ = Describe("LOM", func() {
 				workObject := "foldr/get.test-obj.ext" + "." + testTieIndex + "." + testPid
 				localFQN := mis[0].MakePathFQN(&cloudBckA, fs.WorkfileType, workObject)
 
-				parsedFQN, _, err := core.ResolveFQN(localFQN)
+				var parsed fs.ParsedFQN
+				_, err := core.ResolveFQN(localFQN, &parsed)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(parsedFQN.ContentType).To(BeEquivalentTo(fs.WorkfileType))
+				Expect(parsed.ContentType).To(BeEquivalentTo(fs.WorkfileType))
 			})
 		})
 
@@ -600,7 +601,8 @@ var _ = Describe("LOM", func() {
 					}
 				}
 
-				_, hrw, _ := core.ResolveFQN(fqn)
+				var parsed fs.ParsedFQN
+				hrw, _ := core.ResolveFQN(fqn, &parsed)
 				if defaultLoc && hrw == fqn {
 					return fqn
 				} else if !defaultLoc && hrw != fqn {

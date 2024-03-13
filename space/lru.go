@@ -342,18 +342,18 @@ func (j *lruJ) _visit(lom *core.LOM) (pushed bool) {
 }
 
 func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
+	var parsed fs.ParsedFQN
 	if de.IsDir() {
 		return nil
 	}
 	if err := j.yieldTerm(); err != nil {
 		return err
 	}
-	parsedFQN, _, err := core.ResolveFQN(fqn)
-	if err != nil {
+	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
 		return nil
 	}
-	if parsedFQN.ContentType == fs.ObjectType {
-		j.visitLOM(&parsedFQN)
+	if parsed.ContentType == fs.ObjectType {
+		j.visitLOM(&parsed)
 	}
 
 	return nil

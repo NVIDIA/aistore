@@ -377,8 +377,8 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 		lom := core.AllocLOM("")
 		lom.InitCT(ct)
 		err := j.visitObj(lom, buf)
-		// NOTE: j.visitObj() callback impl-s must either finish the entire
-		//       operation synchronously OR pass lom.LIF to other gorouine(s)
+		// NOTE: j.opts.visitObj() callback implementations must either finish
+		// synchronously or pass lom.LIF to another goroutine
 		core.FreeLOM(lom)
 		return err
 	default:

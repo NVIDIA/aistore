@@ -61,7 +61,7 @@ func WalkBck(opts *WalkBckOpts) error {
 			ctx:      ctx,
 			opts:     opts.WalkOpts,
 		}
-		jg.opts.Callback = jg.cb
+		jg.opts.Callback = jg.cb // --> jg.validate --> opts.ValidateCallback
 		jg.opts.Mi = mi
 		joggers[idx] = jg
 		idx++
@@ -115,9 +115,8 @@ func (jg *joggerBck) cb(fqn string, de DirEntry) error {
 	}
 	if jg.validate != nil {
 		if err := jg.validate(fqn, de); err != nil {
-			// If err != filepath.SkipDir, Walk will propagate the error
-			// to group.Go. Then context will be canceled, which terminates
-			// all other go routines running.
+			// If err != filepath.SkipDir, the Walk will propagate the error to group.Go.
+			// Context will be canceled, which then will terminate all running goroutines.
 			return err
 		}
 	}
@@ -141,13 +140,15 @@ func (h wbeHeap) Less(i, j int) bool { return h[i].objName < h[j].objName }
 func (h wbeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
 func (h *wbeHeap) Push(x any) {
-	info := x.(wbeInfo)
+	var (
+		parsed ParsedFQN
+		info   = x.(wbeInfo)
+	)
 	debug.Assert(info.objName == "")
-	parsedFQN, err := ParseFQN(info.fqn)
-	if err != nil {
+	if err := parsed.Init(info.fqn); err != nil {
 		return
 	}
-	info.objName = parsedFQN.ObjName
+	info.objName = parsed.ObjName
 	*h = append(*h, info)
 }
 

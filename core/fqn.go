@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -9,18 +9,19 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
+func ResolveFQN(fqn string, parsed *fs.ParsedFQN) (hrwFQN string, err error) {
+	if err = parsed.Init(fqn); err != nil {
+		return
+	}
+
+	// NOTE: _misplaced_ hrwFQN != fqn is checked elsewhere - see lom.IsHRW()
+
 	var digest uint64
-	parsedFQN, err = fs.ParseFQN(fqn)
+	hrwFQN, digest, err = HrwFQN(&parsed.Bck, parsed.ContentType, parsed.ObjName)
 	if err != nil {
 		return
 	}
-	// NOTE: _misplaced_ (hrwFQN != fqn) is checked elsewhere (see lom.IsHRW())
-	hrwFQN, digest, err = HrwFQN(&parsedFQN.Bck, parsedFQN.ContentType, parsedFQN.ObjName)
-	if err != nil {
-		return
-	}
-	parsedFQN.Digest = digest
+	parsed.Digest = digest
 	return
 }
 

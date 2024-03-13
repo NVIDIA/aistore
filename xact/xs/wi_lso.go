@@ -81,12 +81,11 @@ func (wi *walkInfo) processDir(fqn string) error {
 	return nil
 }
 
-// Returns true if LOM is to be included in the result set.
-func (wi *walkInfo) match(lom *core.LOM) bool {
-	if !cmn.ObjHasPrefix(lom.ObjName, wi.msg.Prefix) {
+func (wi *walkInfo) match(objName string) bool {
+	if !cmn.ObjHasPrefix(objName, wi.msg.Prefix) {
 		return false
 	}
-	return wi.msg.ContinuationToken == "" || !cmn.TokenGreaterEQ(wi.msg.ContinuationToken, lom.ObjName)
+	return wi.msg.ContinuationToken == "" || !cmn.TokenGreaterEQ(wi.msg.ContinuationToken, objName)
 }
 
 // new entry to be added to the listed page (note: slow path)
@@ -125,26 +124,30 @@ func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, e
 	if de.IsDir() {
 		return
 	}
+
 	lom := core.AllocLOM("")
-	entry, err = wi.cb(lom, fqn)
+	entry, err = wi._cb(lom, fqn)
 	core.FreeLOM(lom)
 	return
 }
 
-func (wi *walkInfo) cb(lom *core.LOM, fqn string) (*cmn.LsoEntry, error) {
-	status := uint16(apc.LocOK)
-	if err := lom.InitFQN(fqn, nil); err != nil {
+func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEntry, error) {
+	if err := lom.PreInit(fqn); err != nil {
 		return nil, err
 	}
-
-	if !wi.match(lom) {
+	if !wi.match(lom.ObjName) {
 		return nil, nil
+	}
+	if err := lom.PostInit(); err != nil {
+		return nil, err
 	}
 
 	_, local, err := lom.HrwTarget(wi.smap)
 	if err != nil {
 		return nil, err
 	}
+
+	status := uint16(apc.LocOK)
 	if !local {
 		status = apc.LocMisplacedNode
 	} else if !lom.IsHRW() {

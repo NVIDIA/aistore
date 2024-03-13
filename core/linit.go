@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -33,28 +33,52 @@ const fmtErrLinit = "lom-init %s: %s mismatch (%q != %q)"
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 
-func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
-	var parsedFQN fs.ParsedFQN
-	parsedFQN, lom.HrwFQN, err = ResolveFQN(fqn)
+// NOTE: to facilitate fast path filtering-out
+func (lom *LOM) PreInit(fqn string) (err error) {
+	var parsed fs.ParsedFQN
+	lom.HrwFQN, err = ResolveFQN(fqn, &parsed)
 	if err != nil {
 		return
 	}
-	debug.Assert(parsedFQN.ContentType == fs.ObjectType)
+	debug.Assert(parsed.ContentType == fs.ObjectType)
 	lom.FQN = fqn
-	lom.mi = parsedFQN.Mountpath
-	lom.digest = parsedFQN.Digest
-	lom.ObjName = parsedFQN.ObjName
-	lom.bck = *(*meta.Bck)(&parsedFQN.Bck)
+	lom.mi = parsed.Mountpath
+	lom.digest = parsed.Digest
+	lom.ObjName = parsed.ObjName
+	lom.bck = *(*meta.Bck)(&parsed.Bck)
+	return nil
+}
+
+func (lom *LOM) PostInit() (err error) {
+	if err = lom.bck.InitFast(T.Bowner()); err != nil {
+		return err
+	}
+	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
+	return nil
+}
+
+func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
+	var parsed fs.ParsedFQN
+	lom.HrwFQN, err = ResolveFQN(fqn, &parsed)
+	if err != nil {
+		return
+	}
+	debug.Assert(parsed.ContentType == fs.ObjectType)
+	lom.FQN = fqn
+	lom.mi = parsed.Mountpath
+	lom.digest = parsed.Digest
+	lom.ObjName = parsed.ObjName
+	lom.bck = *(*meta.Bck)(&parsed.Bck)
 
 	if expbck != nil {
-		if expbck.Name != parsedFQN.Bck.Name {
-			return fmt.Errorf(fmtErrLinit, lom.FQN, "bucket", expbck.String(), parsedFQN.Bck)
+		if expbck.Name != parsed.Bck.Name {
+			return fmt.Errorf(fmtErrLinit, lom.FQN, "bucket", expbck.String(), parsed.Bck)
 		}
 		if expbck.Provider != "" && expbck.Provider != lom.bck.Provider {
 			return fmt.Errorf(fmtErrLinit, lom.FQN, "provider", lom.bck.Provider, expbck.Provider)
 		}
-		if !expbck.Ns.IsGlobal() && expbck.Ns != parsedFQN.Bck.Ns {
-			return fmt.Errorf(fmtErrLinit, lom.FQN, "namespace", expbck.Ns, parsedFQN.Bck.Ns)
+		if !expbck.Ns.IsGlobal() && expbck.Ns != parsed.Bck.Ns {
+			return fmt.Errorf(fmtErrLinit, lom.FQN, "namespace", expbck.Ns, parsed.Bck.Ns)
 		}
 	}
 	if err = lom.bck.InitFast(T.Bowner()); err != nil {

@@ -125,13 +125,14 @@ func (f *contentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 		return
 	}
 	debug.Assert(cos.IsLastB(dir, filepath.Separator), dir)
-	parsedFQN, err := ParseFQN(fqn)
-	if err != nil {
+
+	var parsed ParsedFQN
+	if err := parsed.Init(fqn); err != nil {
 		return
 	}
-	spec, found := f.m[parsedFQN.ContentType]
+	spec, found := f.m[parsed.ContentType]
 	if !found {
-		nlog.Errorf("%q: unknown content type %s", fqn, parsedFQN.ContentType)
+		nlog.Errorf("%q: unknown content type %s", fqn, parsed.ContentType)
 		return
 	}
 	origBase, old, ok := spec.ParseUniqueFQN(base)
@@ -139,7 +140,7 @@ func (f *contentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 		return
 	}
 	resolver = spec
-	info = &ContentInfo{Dir: dir, Base: origBase, Old: old, Type: parsedFQN.ContentType}
+	info = &ContentInfo{Dir: dir, Base: origBase, Old: old, Type: parsed.ContentType}
 	return
 }
 

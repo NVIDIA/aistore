@@ -86,9 +86,10 @@ func TestWalkBck(t *testing.T) {
 					Bck: bck,
 					CTs: []string{fs.ObjectType},
 					Callback: func(fqn string, _ fs.DirEntry) error {
-						parsedFQN, err := fs.ParseFQN(fqn)
+						var parsed fs.ParsedFQN
+						err := parsed.Init(fqn)
 						tassert.CheckError(t, err)
-						objs = append(objs, parsedFQN.ObjName)
+						objs = append(objs, parsed.ObjName)
 						fqns = append(fqns, fqn)
 						return nil
 					},
@@ -171,17 +172,18 @@ func TestWalkBckSkipDir(t *testing.T) {
 			Sorted: true,
 		},
 		ValidateCallback: func(fqn string, de fs.DirEntry) error {
+			var parsed fs.ParsedFQN
 			if de.IsDir() {
 				return nil
 			}
-			parsedFQN, err := fs.ParseFQN(fqn)
+			err := parsed.Init(fqn)
 			tassert.CheckError(t, err)
-			cos.Assert(!mpaths[parsedFQN.Mountpath.Path].done)
+			cos.Assert(!mpaths[parsed.Mountpath.Path].done)
 			if rand.Int()%10 == 0 {
-				mpaths[parsedFQN.Mountpath.Path].done = true
+				mpaths[parsed.Mountpath.Path].done = true
 				return filepath.SkipDir
 			}
-			mpaths[parsedFQN.Mountpath.Path].total++
+			mpaths[parsed.Mountpath.Path].total++
 			return nil
 		},
 	})

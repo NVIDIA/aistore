@@ -203,13 +203,13 @@ func (a *acli) runOnce(args []string) error {
 		return nil
 	}
 	if isStartingUp(err) {
-		for i := 0; i < 4; i++ {
-			briefPause(2)
-			fmt.Fprint(a.app.Writer, ". ")
-			if err = a.app.Run(args); err == nil {
-				fmt.Fprintln(a.app.Writer)
+		fmt.Fprintln(a.app.Writer, "(waiting for cluster to start ...)")
+		briefPause(1)
+		for i := 0; i < 8; i++ {
+			if err = a.app.Run(args); err == nil || !isStartingUp(err) {
 				break
 			}
+			briefPause(1)
 		}
 	}
 	return formatErr(err)

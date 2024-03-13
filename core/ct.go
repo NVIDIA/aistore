@@ -85,23 +85,26 @@ func (ct *CT) Unlock(exclusive bool) {
 //  fqn := ct.Make(fs.ECMetaType)
 
 func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
-	parsedFQN, hrwFQN, errP := ResolveFQN(fqn)
-	if errP != nil {
-		return nil, errP
+	var (
+		hrwFQN string
+		parsed fs.ParsedFQN
+	)
+	if hrwFQN, err = ResolveFQN(fqn, &parsed); err != nil {
+		return nil, err
 	}
 	ct = &CT{
 		fqn:         fqn,
-		objName:     parsedFQN.ObjName,
-		contentType: parsedFQN.ContentType,
+		objName:     parsed.ObjName,
+		contentType: parsed.ContentType,
 		hrwFQN:      hrwFQN,
-		bck:         meta.CloneBck(&parsedFQN.Bck),
-		mi:          parsedFQN.Mountpath,
-		digest:      parsedFQN.Digest,
+		bck:         meta.CloneBck(&parsed.Bck),
+		mi:          parsed.Mountpath,
+		digest:      parsed.Digest,
 	}
 	if b != nil {
 		err = ct.bck.InitFast(b)
 	}
-	return
+	return ct, err
 }
 
 func NewCTFromBO(bck *cmn.Bck, objName string, b meta.Bowner, ctType ...string) (ct *CT, err error) {

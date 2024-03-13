@@ -187,9 +187,10 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			f.Close()
 			tassert.CheckFatal(t, err)
 
-			parsedFQN, err := fs.ParseFQN(fqn)
+			var parsed fs.ParsedFQN
+			err = parsed.Init(fqn)
 			tassert.CheckFatal(t, err)
-			mpathCnts[parsedFQN.Mountpath.Path]++
+			mpathCnts[parsed.Mountpath.Path]++
 
 			switch ct.Type {
 			case fs.ObjectType:
