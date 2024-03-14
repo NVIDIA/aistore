@@ -147,15 +147,14 @@ func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 
 func (r *rmdOwner) _cluID(ctx *rmdModifier) {
 	if r.cluID == "" {
-		r.cluID = ctx.smapCtx.smap.UUID
+		r.cluID = ctx.cluID
+	}
+	if ctx.smapCtx == nil {
 		return
 	}
-	debug.Assert(ctx.smapCtx != nil)
 	if r.cluID == "" {
 		r.cluID = ctx.smapCtx.smap.UUID
-		return
-	}
-	if r.cluID != ctx.smapCtx.smap.UUID {
+	} else if r.cluID != ctx.smapCtx.smap.UUID {
 		err := r.newClusterIntegrityErr("primary", ctx.smapCtx.smap.UUID, r.cluID)
 		cos.ExitLog(err)
 	}
