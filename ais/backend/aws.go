@@ -204,10 +204,7 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
 	if prefix := msg.Prefix; prefix != "" {
 		if msg.IsFlagSet(apc.LsNoRecursion) {
-			if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtualDir) && !cos.IsLastB(prefix, '/') {
-				// NOTE: interpreting prefix as a virtual subdirectory
-				prefix += "/"
-			}
+			// NOTE: important to indicate subdirectory with trailing '/'
 			if cos.IsLastB(prefix, '/') {
 				params.Delimiter = aws.String("/")
 			}

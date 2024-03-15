@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -169,10 +168,7 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 	if prefix := msg.Prefix; prefix != "" {
 		var delim string
 		if msg.IsFlagSet(apc.LsNoRecursion) {
-			if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtualDir) && !cos.IsLastB(prefix, '/') {
-				// NOTE: interpreting prefix as a virtual subdirectory
-				prefix += "/"
-			}
+			// NOTE: important to indicate subdirectory with trailing '/'
 			if cos.IsLastB(prefix, '/') {
 				delim = "/"
 			}
@@ -205,8 +201,14 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
 	}
 	for _, attrs := range objs {
-		if msg.IsFlagSet(apc.LsNoRecursion) && attrs.Name == "" { // NOTE: with Delimiter (above) may include empties
-			continue
+		if msg.IsFlagSet(apc.LsNoRecursion) {
+			if attrs.Name == "" {
+				entry := lst.Entries[i]
+				entry.Name = attrs.Prefix
+				entry.Flags = apc.EntryIsDir
+				i++
+				continue
+			}
 		}
 		entry := lst.Entries[i]
 		i++
