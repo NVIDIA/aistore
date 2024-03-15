@@ -86,11 +86,11 @@ func (*hdfsProvider) Provider() string { return apc.HDFS }
 // CREATE BUCKET
 //
 
-func (hp *hdfsProvider) CreateBucket(bck *meta.Bck) (errCode int, err error) {
+func (hp *hdfsProvider) CreateBucket(bck *meta.Bck) (ecode int, err error) {
 	return hp.checkDirectoryExists(bck)
 }
 
-func (hp *hdfsProvider) checkDirectoryExists(bck *meta.Bck) (errCode int, err error) {
+func (hp *hdfsProvider) checkDirectoryExists(bck *meta.Bck) (ecode int, err error) {
 	debug.Assert(bck.Props != nil)
 	refDirectory := bck.Props.Extra.HDFS.RefDirectory
 	debug.Assert(refDirectory != "")
@@ -110,8 +110,8 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *meta.Bck) (errCode int, err er
 //
 
 func (hp *hdfsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs,
-	errCode int, err error) {
-	if errCode, err = hp.checkDirectoryExists(bck); err != nil {
+	ecode int, err error) {
+	if ecode, err = hp.checkDirectoryExists(bck); err != nil {
 		return
 	}
 
@@ -125,12 +125,12 @@ func (hp *hdfsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps c
 // LIST OBJECTS
 //
 
-func (hp *hdfsProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
+func (hp *hdfsProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
 	debug.Assert(false)
 	return 0, newErrInventory(hp.Provider())
 }
 
-func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
+func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	var (
 		h   = cmn.BackendHelpers.HDFS
 		idx int
@@ -167,11 +167,11 @@ func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Lso
 			return nil
 		}
 
-		var entry *cmn.LsoEntry
+		var entry *cmn.LsoEnt
 		if idx < len(lst.Entries) {
 			entry = lst.Entries[idx]
 		} else {
-			entry = &cmn.LsoEntry{Name: objName}
+			entry = &cmn.LsoEnt{Name: objName}
 			lst.Entries = append(lst.Entries, entry)
 		}
 		idx++
@@ -215,7 +215,7 @@ func skipDir(fi os.FileInfo) error {
 // LIST BUCKETS
 //
 
-func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
+func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, ecode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -224,13 +224,13 @@ func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, 
 // HEAD OBJECT
 //
 
-func (hp *hdfsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (hp *hdfsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		fr       *hdfs.FileReader
 		filePath = filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	)
 	if fr, err = hp.c.Open(filePath); err != nil {
-		errCode, err = hdfsErrorToAISError(err)
+		ecode, err = hdfsErrorToAISError(err)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
@@ -281,7 +281,7 @@ func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *core.LOM, offset, l
 // PUT OBJECT
 //
 
-func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (errCode int, err error) {
+func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
 	if err != nil {
@@ -313,8 +313,8 @@ finish:
 
 	// TODO: Cleanup if there was an error during `c.Create` or `io.Copy` (remove directories and file).
 	if err != nil {
-		errCode, err = hdfsErrorToAISError(err)
-		return errCode, err
+		ecode, err = hdfsErrorToAISError(err)
+		return ecode, err
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[put_object] %s", lom)
@@ -327,11 +327,11 @@ finish:
 // DELETE OBJECT
 //
 
-func (hp *hdfsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
+func (hp *hdfsProvider) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	if err := hp.c.Remove(filePath); err != nil {
-		errCode, err = hdfsErrorToAISError(err)
-		return errCode, err
+		ecode, err = hdfsErrorToAISError(err)
+		return ecode, err
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[delete_object] %s", lom)

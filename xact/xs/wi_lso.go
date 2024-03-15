@@ -84,8 +84,8 @@ func (wi *walkInfo) match(objName string) bool {
 }
 
 // new entry to be added to the listed page (note: slow path)
-func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEntry) {
-	e = &cmn.LsoEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEnt) {
+	e = &cmn.LsoEnt{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsVerChanged) {
 		checkRemoteMD(lom, e)
 	}
@@ -98,7 +98,7 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEntry) {
 }
 
 // NOTE: slow path
-func checkRemoteMD(lom *core.LOM, e *cmn.LsoEntry) {
+func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
 	if !lom.Bucket().HasVersioningMD() {
 		debug.Assert(false, lom.Cname())
 		return
@@ -115,7 +115,7 @@ func checkRemoteMD(lom *core.LOM, e *cmn.LsoEntry) {
 }
 
 // Performs a number of syscalls to load object metadata.
-func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, err error) {
+func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEnt, err error) {
 	if de.IsDir() {
 		return
 	}
@@ -126,7 +126,7 @@ func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, e
 	return
 }
 
-func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEntry, error) {
+func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	if err := lom.PreInit(fqn); err != nil {
 		return nil, err
 	}

@@ -203,17 +203,17 @@ func (b *Bck) init(bmd *BMD) error {
 // to support s3 clients:
 // find an already existing bucket by name (and nothing else)
 // returns an error when name cannot be unambiguously resolved to a single bucket
-func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, errCode int) {
+func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, ecode int) {
 	bmd := bowner.Get()
 	all := bmd.getAllByName(bckName)
 	if all == nil {
 		err = cmn.NewErrBckNotFound(&cmn.Bck{Name: bckName})
-		errCode = http.StatusNotFound
+		ecode = http.StatusNotFound
 	} else if len(all) == 1 {
 		bck = &all[0]
 		if bck.Props == nil {
 			err = cmn.NewErrBckNotFound(bck.Bucket())
-			errCode = http.StatusNotFound
+			ecode = http.StatusNotFound
 		} else if backend := bck.Backend(); backend != nil && backend.Props == nil {
 			debug.Assert(apc.IsRemoteProvider(backend.Provider))
 			err = backend.init(bmd)
@@ -221,7 +221,7 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, errCode
 	} else {
 		err = fmt.Errorf("cannot unambiguously resolve bucket name %q to a single bucket (%v)",
 			bckName, all)
-		errCode = http.StatusUnprocessableEntity
+		ecode = http.StatusUnprocessableEntity
 	}
 	return
 }

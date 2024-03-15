@@ -128,14 +128,14 @@ func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
 // HEAD BUCKET
 //
 
-func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(ctx)
 	if err != nil {
-		errCode, err = gcpErrorToAISError(err, cloudBck)
+		ecode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
 	//
@@ -153,11 +153,11 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos
 // LIST OBJECTS
 //
 
-func (gcpp *gcpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
+func (gcpp *gcpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
 	return 0, newErrInventory(gcpp.Provider())
 }
 
-func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -186,7 +186,7 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infof("list_objects %s: %v", cloudBck.Name, errPage)
 		}
-		errCode, err = gcpErrorToAISError(errPage, cloudBck)
+		ecode, err = gcpErrorToAISError(errPage, cloudBck)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		i      int
 	)
 	for j := len(lst.Entries); j < l; j++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
+		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
 	}
 	for _, attrs := range objs {
 		if msg.IsFlagSet(apc.LsNoRecursion) {
@@ -242,7 +242,7 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 // LIST BUCKETS
 //
 
-func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	if gcpp.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,
@@ -259,7 +259,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 			break
 		}
 		if err != nil {
-			errCode, err = gcpErrorToAISError(err, &cmn.Bck{Provider: apc.GCP})
+			ecode, err = gcpErrorToAISError(err, &cmn.Bck{Provider: apc.GCP})
 			return
 		}
 		bcks = append(bcks, cmn.Bck{
@@ -278,7 +278,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 // HEAD OBJECT
 //
 
-func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		h        = cmn.BackendHelpers.Google
@@ -286,7 +286,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttr
 	)
 	attrs, err = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
 	if err != nil {
-		errCode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
+		ecode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
@@ -408,7 +408,7 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 // PUT OBJECT
 //
 
-func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (errCode int, err error) {
+func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		written  int64
@@ -428,12 +428,12 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request)
 		return
 	}
 	if err = wc.Close(); err != nil {
-		errCode, err = gcpErrorToAISError(err, cloudBck)
+		ecode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
 	attrs, err = gcpObj.Attrs(gctx)
 	if err != nil {
-		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
+		ecode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	_ = setCustomGs(lom, attrs)
@@ -447,13 +447,13 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request)
 // DELETE OBJECT
 //
 
-func (*gcpProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
+func (*gcpProvider) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
 	if err = o.Delete(gctx); err != nil {
-		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
+		ecode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {

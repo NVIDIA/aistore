@@ -52,22 +52,22 @@ type (
 		nextToken string           // next continuation token -> next pages
 		lastPage  cmn.LsoEntries   // last page (contents)
 		walk      struct {
-			pageCh       chan *cmn.LsoEntry // channel to accumulate listed object entries
-			stopCh       *cos.StopCh        // to abort bucket walk
-			wi           *walkInfo          // walking context and state
-			wg           sync.WaitGroup     // wait until this walk finishes
-			done         bool               // done walking (indication)
-			wor          bool               // wantOnlyRemote
-			dontPopulate bool               // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
-			this         bool               // r.msg.SID == core.T.SID(): true when this target does remote paging
+			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
+			stopCh       *cos.StopCh      // to abort bucket walk
+			wi           *walkInfo        // walking context and state
+			wg           sync.WaitGroup   // wait until this walk finishes
+			done         bool             // done walking (indication)
+			wor          bool             // wantOnlyRemote
+			dontPopulate bool             // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
+			this         bool             // r.msg.SID == core.T.SID(): true when this target does remote paging
 		}
 		streamingX
 		lensgl int64
-		ctx    *core.LsoInventoryCtx
+		ctx    *core.LsoInvCtx
 	}
 	LsoRsp struct {
 		Err    error
-		Lst    *cmn.LsoResult
+		Lst    *cmn.LsoRes
 		Status int
 	}
 )
@@ -126,7 +126,7 @@ func (p *lsoFactory) Start() (err error) {
 
 	if r.listRemote() {
 		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) {
-			r.ctx = &core.LsoInventoryCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
+			r.ctx = &core.LsoInvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
 		}
 		if !r.walk.wor {
 			smap := core.T.Sowner().Get()
@@ -288,7 +288,7 @@ func (r *LsoXact) listRemote() bool { return r.p.Bck.IsRemote() && !r.msg.IsFlag
 
 // Start `fs.WalkBck`, so that by the time we read the next page `r.pageCh` is already populated.
 func (r *LsoXact) initWalk() {
-	r.walk.pageCh = make(chan *cmn.LsoEntry, pageChSize)
+	r.walk.pageCh = make(chan *cmn.LsoEnt, pageChSize)
 	r.walk.done = false
 	r.walk.stopCh = cos.NewStopCh()
 	r.walk.wg.Add(1)
@@ -319,7 +319,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 				return &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 			}
 		}
-		page := &cmn.LsoResult{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
+		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
 		return &LsoRsp{Lst: page, Status: http.StatusOK}
 	}
 
@@ -330,14 +330,14 @@ func (r *LsoXact) doPage() *LsoRsp {
 		cnt  = r.msg.PageSize
 		idx  = r.findToken(r.msg.ContinuationToken)
 		lst  = r.lastPage[idx:]
-		page *cmn.LsoResult
+		page *cmn.LsoRes
 	)
 	debug.Assert(int64(len(lst)) >= cnt || r.walk.done)
 	if int64(len(lst)) >= cnt {
 		entries := lst[:cnt]
-		page = &cmn.LsoResult{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
+		page = &cmn.LsoRes{UUID: r.msg.UUID, Entries: entries, ContinuationToken: entries[cnt-1].Name}
 	} else {
-		page = &cmn.LsoResult{UUID: r.msg.UUID, Entries: lst}
+		page = &cmn.LsoRes{UUID: r.msg.UUID, Entries: lst}
 	}
 	return &LsoRsp{Lst: page, Status: http.StatusOK}
 }
@@ -364,7 +364,7 @@ func (r *LsoXact) havePage(token string, cnt int64) bool {
 
 func (r *LsoXact) nextPageR() (err error) {
 	var (
-		page *cmn.LsoResult
+		page *cmn.LsoRes
 		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.ctx)
 		smap = core.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
@@ -421,7 +421,7 @@ ex:
 	return
 }
 
-func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
+func (r *LsoXact) bcast(page *cmn.LsoRes) (err error) {
 	if r.p.dm == nil { // single target
 		return nil
 	}
@@ -575,7 +575,7 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 	relPath := ct.ObjectName()
 	prefix := r.walk.wi.msg.Prefix
 	if prefix == "" || prefix == cos.PathSeparator {
-		entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
+		entry := &cmn.LsoEnt{Name: relPath, Flags: apc.EntryIsDir}
 		select {
 		case r.walk.pageCh <- entry:
 		case <-r.walk.stopCh.Listen():
@@ -592,7 +592,7 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 			// nesting-wise, we are deeper than allowed by the prefix
 			return filepath.SkipDir
 		}
-		entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
+		entry := &cmn.LsoEnt{Name: relPath, Flags: apc.EntryIsDir}
 		select {
 		case r.walk.pageCh <- entry:
 		case <-r.walk.stopCh.Listen():
@@ -635,7 +635,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	}
 	entry.Flags |= apc.EntryIsArchive // the parent archive
 	for _, archEntry := range archList {
-		e := &cmn.LsoEntry{
+		e := &cmn.LsoEnt{
 			Name:  path.Join(entry.Name, archEntry.Name),
 			Flags: entry.Flags | apc.EntryInArch,
 			Size:  archEntry.Size,
@@ -688,7 +688,7 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 
 func (r *LsoXact) _recv(hdr *transport.ObjHdr, objReader io.Reader, buf []byte) (err error) {
 	var (
-		page = &cmn.LsoResult{}
+		page = &cmn.LsoRes{}
 		mr   = msgp.NewReaderBuf(objReader, buf)
 	)
 	err = page.DecodeMsg(mr)

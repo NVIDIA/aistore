@@ -253,14 +253,14 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.Str
 // LIST OBJECTS
 //
 
-func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
+func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
 	return 0, newErrInventory(ap.Provider())
 }
 
 // TODO -- FIXME: support non-recursive (apc.LsNoRecursion) operation, as in:
 // $ az storage blob list -c abc --prefix sub/ --delimiter /
 // See also: aws.go, gcp.go
-func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
+func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (
 		cloudBck = bck.RemoteBck()
@@ -287,7 +287,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 
 	l := len(resp.Segment.BlobItems)
 	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
+		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
 	}
 	for idx := range resp.Segment.BlobItems {
 		var (

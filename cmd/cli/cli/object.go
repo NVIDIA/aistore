@@ -353,7 +353,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 	case apc.GetPropsLocation:
 		v = op.Location
 	case apc.GetPropsStatus:
-		// no "object status" in `cmn.ObjectProps` - nothing to do (see also: `cmn.LsoEntry`)
+		// no "object status" in `cmn.ObjectProps` - nothing to do (see also: `cmn.LsoEnt`)
 	default:
 		debug.Assert(false, "obj prop name: \""+name+"\"")
 	}

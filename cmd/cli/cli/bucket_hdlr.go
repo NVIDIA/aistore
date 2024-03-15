@@ -327,8 +327,8 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 			continue
 		}
 		var (
-			objList *cmn.LsoResult
-			obj     *cmn.LsoEntry
+			objList *cmn.LsoRes
+			obj     *cmn.LsoEnt
 		)
 		p, err := headBucket(bck, true /* don't add */)
 		if err != nil {
@@ -341,7 +341,7 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 			return err
 		}
 
-		updateStats := func(obj *cmn.LsoEntry) {
+		updateStats := func(obj *cmn.LsoEnt) {
 			if obj == nil {
 				return
 			}

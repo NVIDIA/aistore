@@ -726,19 +726,19 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	}
 
 	// do
-	if errCode, err := goi.getObject(); err != nil {
+	if ecode, err := goi.getObject(); err != nil {
 		t.statsT.IncErr(stats.GetCount)
 
 		// handle right here, return nil
 		if err != errSendingResp {
 			if dpq.isS3 != "" {
-				s3.WriteErr(w, r, err, errCode)
+				s3.WriteErr(w, r, err, ecode)
 			} else {
 				silent := dpq.silent
-				if errCode == http.StatusNotFound {
+				if ecode == http.StatusNotFound {
 					silent = "true"
 				}
-				t._erris(w, r, silent, err, errCode)
+				t._erris(w, r, silent, err, ecode)
 			}
 		}
 	}
@@ -801,9 +801,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	// do
 	var (
-		handle  string
-		err     error
-		errCode int
+		handle string
+		err    error
+		ecode  int
 	)
 	switch {
 	case apireq.dpq.archpath != "": // apc.QparamArchpath
@@ -813,7 +813,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 		// do
 		lom.Lock(true)
-		errCode, err = t.putApndArch(r, lom, started, apireq.dpq)
+		ecode, err = t.putApndArch(r, lom, started, apireq.dpq)
 		lom.Unlock(true)
 	case apireq.dpq.appendTy != "": // apc.QparamAppendType
 		a := &apndOI{
@@ -828,7 +828,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			t.writeErr(w, r, err)
 			return
 		}
-		handle, errCode, err = a.do(r)
+		handle, ecode, err = a.do(r)
 		if err == nil && handle != "" {
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
@@ -850,12 +850,12 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			poi.restful = true
 			poi.t2t = t2tput
 		}
-		errCode, err = poi.do(w.Header(), r, apireq.dpq)
+		ecode, err = poi.do(w.Header(), r, apireq.dpq)
 		freePOI(poi)
 	}
 	if err != nil {
 		t.fsErr(err, lom.FQN)
-		t.writeErr(w, r, err, errCode)
+		t.writeErr(w, r, err, ecode)
 	}
 }
 
@@ -885,15 +885,15 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		return
 	}
 
-	errCode, err := t.DeleteObject(lom, evict)
-	if err == nil && errCode == 0 {
+	ecode, err := t.DeleteObject(lom, evict)
+	if err == nil && ecode == 0 {
 		// EC cleanup if EC is enabled
 		ec.ECM.CleanupObject(lom)
 	} else {
-		if errCode == http.StatusNotFound {
+		if ecode == http.StatusNotFound {
 			t.writeErrSilentf(w, r, http.StatusNotFound, "%s doesn't exist", lom.Cname())
 		} else {
-			t.writeErr(w, r, err, errCode)
+			t.writeErr(w, r, err, ecode)
 		}
 	}
 	core.FreeLOM(lom)
@@ -974,14 +974,14 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	}
 	lom := core.AllocLOM(objName)
-	errCode, err := t.objHead(w.Header(), query, bck, lom)
+	ecode, err := t.objHead(w.Header(), query, bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
-		t._erris(w, r, query.Get(apc.QparamSilent), err, errCode)
+		t._erris(w, r, query.Get(apc.QparamSilent), err, ecode)
 	}
 }
 
-func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (errCode int, err error) {
+func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
 	var (
 		fltPresence int
 		exists      = true
@@ -994,7 +994,7 @@ func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 	}
 	if err = lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrBucketNought(err) {
-			errCode = http.StatusNotFound
+			ecode = http.StatusNotFound
 		}
 		return
 	}
@@ -1058,9 +1058,9 @@ func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 	} else {
 		// cold HEAD
 		var oa *cmn.ObjAttrs
-		oa, errCode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		oa, ecode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			if errCode != http.StatusNotFound {
+			if ecode != http.StatusNotFound {
 				err = cmn.NewErrFailedTo(t, "HEAD", lom, err)
 			}
 			return

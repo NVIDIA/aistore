@@ -175,9 +175,9 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 
 // DELETE /s3/<bucket-name> (TODO: AWS allows to delete bucket only if it is empty)
 func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	if err := bck.Allow(apc.AceDestroyBucket); err != nil {
@@ -189,20 +189,20 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		return
 	}
 	if err := p.destroyBucket(&msg, bck); err != nil {
-		errCode := http.StatusInternalServerError
+		ecode := http.StatusInternalServerError
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 			nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			return
 		}
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 	}
 }
 
 func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []string) {
 	bucket := parts[0]
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	if err := bck.Allow(apc.AcePUT); err != nil {
@@ -228,9 +228,9 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 // DELETE /s3/i<bucket-name>?delete
 // Delete a list of objects
 func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	if err := bck.Allow(apc.AceObjDELETE); err != nil {
@@ -291,9 +291,9 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 
 // HEAD /s3/<bucket-name>
 func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	if err := bck.Allow(apc.AceBckHEAD); err != nil {
@@ -316,9 +316,9 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 // GET /s3/<bucket-name>
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string, q url.Values) {
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	amsg := &apc.ActMsg{Action: apc.ActList}
@@ -371,7 +371,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	lst = nil
 }
 
-func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (lst *cmn.LsoResult, _ error) {
+func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (lst *cmn.LsoRes, _ error) {
 	smap := p.owner.smap.get()
 	for pageNum := 1; ; pageNum++ {
 		beg := mono.NanoTime()
@@ -422,9 +422,9 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	// src
-	bckSrc, err, errCode := meta.InitByNameOnly(parts[0], p.owner.bmd)
+	bckSrc, err, ecode := meta.InitByNameOnly(parts[0], p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	if err := bckSrc.Allow(apc.AceGET); err != nil {
@@ -432,9 +432,9 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	// dst
-	bckDst, err, errCode := meta.InitByNameOnly(items[0], p.owner.bmd)
+	bckDst, err, ecode := meta.InitByNameOnly(items[0], p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	var (
@@ -463,9 +463,9 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 // (compare with p.copyObjS3)
 func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	var (
@@ -503,9 +503,9 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, listMultipart bool) {
 	bucket := items[0]
 
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	var (
@@ -601,9 +601,9 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	if err := bck.Allow(apc.AceObjHEAD); err != nil {
@@ -626,9 +626,9 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 // DELETE /s3/<bucket-name>/<object-name>
 func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	var (
@@ -663,9 +663,9 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 
 // GET /s3/<bucket-name>?versioning
 func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	resp := s3.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
@@ -678,8 +678,8 @@ func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 
 // GET /s3/<bucket-name>?lifecycle|cors|policy|acl
 func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket string) {
-	if _, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd); err != nil {
-		s3.WriteErr(w, r, err, errCode)
+	if _, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd); err != nil {
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	w.WriteHeader(http.StatusNotImplemented)
@@ -691,9 +691,9 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
-	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)

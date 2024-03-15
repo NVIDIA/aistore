@@ -210,7 +210,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 	return
 }
 
-func (oa *ObjAttrs) FromLsoEntry(e *LsoEntry) {
+func (oa *ObjAttrs) FromLsoEntry(e *LsoEnt) {
 	oa.Size = e.Size
 	oa.Ver = e.Version
 

@@ -114,8 +114,8 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 
 	// check whether src lom exists
 	var (
-		err     error
-		errCode int
+		err   error
+		ecode int
 	)
 	if src.Bck().IsAIS() {
 		tsi, errV := rp.smap.HrwHash2T(src.Digest())
@@ -126,14 +126,14 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 			err = src.Load(false, false)
 		} else {
 			if present := core.T.HeadObjT2T(src, tsi); !present {
-				errCode = http.StatusNotFound
+				ecode = http.StatusNotFound
 			}
 		}
 	} else {
-		_, errCode, err = core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
+		_, ecode, err = core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
 	}
 
-	if (err == nil && errCode == 0) || !cos.IsNotExist(err, errCode) /*not complaining*/ {
+	if (err == nil && ecode == 0) || !cos.IsNotExist(err, ecode) /*not complaining*/ {
 		return nil
 	}
 

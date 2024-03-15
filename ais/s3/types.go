@@ -156,7 +156,7 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	debug.AssertNoErr(err)
 }
 
-func (r *ListObjectResult) Add(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) {
+func (r *ListObjectResult) Add(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) {
 	if entry.Flags&apc.EntryIsDir == 0 {
 		r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
 	} else {
@@ -164,7 +164,7 @@ func (r *ListObjectResult) Add(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) {
 	}
 }
 
-func entryToS3(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) *ObjInfo {
+func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) *ObjInfo {
 	objInfo := &ObjInfo{
 		Key:          entry.Name,
 		LastModified: entry.Atime,
@@ -179,7 +179,7 @@ func entryToS3(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) *ObjInfo {
 	return objInfo
 }
 
-func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoResult, lsmsg *apc.LsoMsg) {
+func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 	r.KeyCount = len(lst.Entries)
 	r.IsTruncated = lst.ContinuationToken != ""
 	r.NextContinuationToken = lst.ContinuationToken

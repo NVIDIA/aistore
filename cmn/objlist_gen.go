@@ -9,79 +9,7 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
-func (z *LsoEntries) DecodeMsg(dc *msgp.Reader) (err error) {
-	var zb0002 uint32
-	zb0002, err = dc.ReadArrayHeader()
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	if cap((*z)) >= int(zb0002) {
-		(*z) = (*z)[:zb0002]
-	} else {
-		(*z) = make(LsoEntries, zb0002)
-	}
-	for zb0001 := range *z {
-		if dc.IsNil() {
-			err = dc.ReadNil()
-			if err != nil {
-				err = msgp.WrapError(err, zb0001)
-				return
-			}
-			(*z)[zb0001] = nil
-		} else {
-			if (*z)[zb0001] == nil {
-				(*z)[zb0001] = new(LsoEntry)
-			}
-			err = (*z)[zb0001].DecodeMsg(dc)
-			if err != nil {
-				err = msgp.WrapError(err, zb0001)
-				return
-			}
-		}
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z LsoEntries) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteArrayHeader(uint32(len(z)))
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0003 := range z {
-		if z[zb0003] == nil {
-			err = en.WriteNil()
-			if err != nil {
-				return
-			}
-		} else {
-			err = z[zb0003].EncodeMsg(en)
-			if err != nil {
-				err = msgp.WrapError(err, zb0003)
-				return
-			}
-		}
-	}
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z LsoEntries) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize
-	for zb0003 := range z {
-		if z[zb0003] == nil {
-			s += msgp.NilSize
-		} else {
-			s += z[zb0003].Msgsize()
-		}
-	}
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *LsoEntry) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *LsoEnt) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -164,7 +92,7 @@ func (z *LsoEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *LsoEntry) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *LsoEnt) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(9)
 	var zb0001Mask uint16 /* 9 bits */
@@ -318,13 +246,85 @@ func (z *LsoEntry) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *LsoEntry) Msgsize() (s int) {
+func (z *LsoEnt) Msgsize() (s int) {
 	s = 1 + 2 + msgp.StringPrefixSize + len(z.Name) + 3 + msgp.StringPrefixSize + len(z.Checksum) + 2 + msgp.StringPrefixSize + len(z.Atime) + 2 + msgp.StringPrefixSize + len(z.Version) + 2 + msgp.StringPrefixSize + len(z.Location) + 2 + msgp.StringPrefixSize + len(z.Custom) + 2 + msgp.Int64Size + 2 + msgp.Int16Size + 2 + msgp.Uint16Size
 	return
 }
 
 // DecodeMsg implements msgp.Decodable
-func (z *LsoResult) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *LsoEntries) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0002 uint32
+	zb0002, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if cap((*z)) >= int(zb0002) {
+		(*z) = (*z)[:zb0002]
+	} else {
+		(*z) = make(LsoEntries, zb0002)
+	}
+	for zb0001 := range *z {
+		if dc.IsNil() {
+			err = dc.ReadNil()
+			if err != nil {
+				err = msgp.WrapError(err, zb0001)
+				return
+			}
+			(*z)[zb0001] = nil
+		} else {
+			if (*z)[zb0001] == nil {
+				(*z)[zb0001] = new(LsoEnt)
+			}
+			err = (*z)[zb0001].DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, zb0001)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z LsoEntries) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteArrayHeader(uint32(len(z)))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0003 := range z {
+		if z[zb0003] == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = z[zb0003].EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, zb0003)
+				return
+			}
+		}
+	}
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z LsoEntries) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for zb0003 := range z {
+		if z[zb0003] == nil {
+			s += msgp.NilSize
+		} else {
+			s += z[zb0003].Msgsize()
+		}
+	}
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *LsoRes) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -375,7 +375,7 @@ func (z *LsoResult) DecodeMsg(dc *msgp.Reader) (err error) {
 					z.Entries[za0001] = nil
 				} else {
 					if z.Entries[za0001] == nil {
-						z.Entries[za0001] = new(LsoEntry)
+						z.Entries[za0001] = new(LsoEnt)
 					}
 					err = z.Entries[za0001].DecodeMsg(dc)
 					if err != nil {
@@ -402,7 +402,7 @@ func (z *LsoResult) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *LsoResult) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *LsoRes) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 4
 	// write "UUID"
 	err = en.Append(0x84, 0xa4, 0x55, 0x55, 0x49, 0x44)
@@ -462,7 +462,7 @@ func (z *LsoResult) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *LsoResult) Msgsize() (s int) {
+func (z *LsoRes) Msgsize() (s int) {
 	s = 1 + 5 + msgp.StringPrefixSize + len(z.UUID) + 18 + msgp.StringPrefixSize + len(z.ContinuationToken) + 8 + msgp.ArrayHeaderSize
 	for za0001 := range z.Entries {
 		if z.Entries[za0001] == nil {

@@ -473,8 +473,8 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// handshake | check dup
 	if apiOp == apc.AdminJoin {
 		// call the node with cluster-metadata included
-		if errCode, err := p.adminJoinHandshake(smap, nsi, apiOp); err != nil {
-			p.writeErr(w, r, err, errCode)
+		if ecode, err := p.adminJoinHandshake(smap, nsi, apiOp); err != nil {
+			p.writeErr(w, r, err, ecode)
 			return
 		}
 	} else if apiOp == apc.SelfJoin {
@@ -1413,9 +1413,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
-		errCode, err := p.rmNodeFinal(msg, si, nil)
+		ecode, err := p.rmNodeFinal(msg, si, nil)
 		if err != nil {
-			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), ecode)
 		}
 	case msg.Action == apc.ActRmNodeUnsafe: // target unsafe
 		if !opts.SkipRebalance {
@@ -1424,9 +1424,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, err)
 			return
 		}
-		errCode, err := p.rmNodeFinal(msg, si, nil)
+		ecode, err := p.rmNodeFinal(msg, si, nil)
 		if err != nil {
-			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), ecode)
 		}
 	default: // target
 		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled && !inMaint
@@ -1961,8 +1961,8 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if errCode, err := p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node); err != nil {
-		p.writeErr(w, r, err, errCode)
+	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node); err != nil {
+		p.writeErr(w, r, err, ecode)
 	}
 }
 
@@ -1980,11 +1980,11 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 	}
 
 	var (
-		err     error
-		errCode int
-		cargs   = allocCargs()
-		body    = cos.MustMarshal(msg)
-		sname   = node.StringEx()
+		err   error
+		ecode int
+		cargs = allocCargs()
+		body  = cos.MustMarshal(msg)
+		sname = node.StringEx()
 	)
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
@@ -2020,7 +2020,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 
 	switch msg.Action {
 	case apc.ActDecommissionNode, apc.ActRmNodeUnsafe:
-		errCode, err = p.mcastUnreg(msg, node)
+		ecode, err = p.mcastUnreg(msg, node)
 	case apc.ActStartMaintenance, apc.ActShutdownNode:
 		if ctx != nil && ctx.rmdCtx != nil && ctx.rmdCtx.rebID != "" {
 			// final step executing shutdown and start-maintenance transaction:
@@ -2032,10 +2032,10 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 	if err != nil {
 		nlog.Errorf("%s: (%s %s) FATAL: failed to update %s: %v", p, msg, sname, p.owner.smap.get(), err)
 	}
-	return errCode, err
+	return ecode, err
 }
 
-func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *meta.Snode) (errCode int, err error) {
+func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *meta.Snode) (ecode int, err error) {
 	nlog.Infof("%s mcast-unreg: %s, %s", p, msg, si.StringEx())
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,

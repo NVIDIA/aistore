@@ -80,7 +80,7 @@ func LsoTemplate(propsList []string, hideHeader, addCachedCol, addStatusCol bool
 // formatting
 //
 
-func fmtLsObjStatus(e *cmn.LsoEntry) string {
+func fmtLsObjStatus(e *cmn.LsoEnt) string {
 	switch e.Status() {
 	case apc.LocOK:
 		if !e.IsPresent() {
@@ -108,6 +108,6 @@ func fmtLsObjStatus(e *cmn.LsoEntry) string {
 	}
 }
 
-func fmtLsObjIsCached(e *cmn.LsoEntry) string {
+func fmtLsObjIsCached(e *cmn.LsoEnt) string {
 	return FmtBool(e.IsPresent())
 }

@@ -354,7 +354,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				api.AbortXaction(baseParams, &flt)
 			}
 
-			var lstToAppend *cmn.LsoResult
+			var lstToAppend *cmn.LsoRes
 			for ii := 0; ii < 2; ii++ {
 				api.WaitForXactionIdle(baseParams, &flt)
 

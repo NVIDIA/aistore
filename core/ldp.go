@@ -125,34 +125,34 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool) (res CRMD) {
 		return CRMD{Eq: true}
 	}
 
-	oa, errCode, err := T.Backend(bck).HeadObj(context.Background(), lom)
+	oa, ecode, err := T.Backend(bck).HeadObj(context.Background(), lom)
 	if err == nil {
-		debug.Assert(errCode == 0, errCode)
-		return CRMD{ObjAttrs: oa, Eq: lom.Equal(oa), ErrCode: errCode}
+		debug.Assert(ecode == 0, ecode)
+		return CRMD{ObjAttrs: oa, Eq: lom.Equal(oa), ErrCode: ecode}
 	}
 
-	if errCode == http.StatusNotFound {
+	if ecode == http.StatusNotFound {
 		err = cos.NewErrNotFound(T, lom.Cname())
 	}
 	if !locked {
 		// return info (neq and, possibly, not-found), and be done
-		return CRMD{ErrCode: errCode, Err: err}
+		return CRMD{ErrCode: ecode, Err: err}
 	}
 
 	// rm remotely-deleted
-	if cos.IsNotExist(err, errCode) && (lom.VersionConf().Sync || sync) {
+	if cos.IsNotExist(err, ecode) && (lom.VersionConf().Sync || sync) {
 		errDel := lom.Remove(locked /*force through rlock*/)
 		if errDel != nil {
-			errCode, err = 0, errDel
+			ecode, err = 0, errDel
 		} else {
 			g.tstats.Inc(RemoteDeletedDelCount)
 		}
 		debug.Assert(err != nil)
-		return CRMD{ErrCode: errCode, Err: err}
+		return CRMD{ErrCode: ecode, Err: err}
 	}
 
 	lom.Uncache()
-	return CRMD{ErrCode: errCode, Err: err}
+	return CRMD{ErrCode: ecode, Err: err}
 }
 
 // NOTE: must be locked; NOTE: Sync == false (ie., not deleting)

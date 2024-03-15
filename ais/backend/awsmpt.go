@@ -20,7 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func StartMpt(lom *core.LOM) (id string, errCode int, _ error) {
+func StartMpt(lom *core.LOM) (id string, ecode int, _ error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		input    = s3.CreateMultipartUploadInput{
@@ -36,12 +36,12 @@ func StartMpt(lom *core.LOM) (id string, errCode int, _ error) {
 	if err == nil {
 		id = *out.UploadId
 	} else {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
-	return id, errCode, err
+	return id, ecode, err
 }
 
-func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum int32, size int64) (etag string, errCode int, _ error) {
+func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum int32, size int64) (etag string, ecode int, _ error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		input    = s3.UploadPartInput{
@@ -60,15 +60,15 @@ func PutMptPart(lom *core.LOM, fh *os.File, uploadID string, partNum int32, size
 
 	out, err := svc.UploadPart(context.Background(), &input)
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
 		etag = cmn.UnquoteCEV(*out.ETag)
 	}
 
-	return etag, errCode, err
+	return etag, ecode, err
 }
 
-func CompleteMpt(lom *core.LOM, uploadID string, parts *s3types.CompleteMptUpload) (etag string, errCode int, _ error) {
+func CompleteMpt(lom *core.LOM, uploadID string, parts *s3types.CompleteMptUpload) (etag string, ecode int, _ error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		s3parts  types.CompletedMultipartUpload
@@ -95,15 +95,15 @@ func CompleteMpt(lom *core.LOM, uploadID string, parts *s3types.CompleteMptUploa
 
 	out, err := svc.CompleteMultipartUpload(context.Background(), &input)
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
 		etag = cmn.UnquoteCEV(*out.ETag)
 	}
 
-	return etag, errCode, err
+	return etag, ecode, err
 }
 
-func AbortMpt(lom *core.LOM, uploadID string) (errCode int, err error) {
+func AbortMpt(lom *core.LOM, uploadID string) (ecode int, err error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		input    = s3.AbortMultipartUploadInput{
@@ -117,7 +117,7 @@ func AbortMpt(lom *core.LOM, uploadID string) (errCode int, err error) {
 		nlog.Warningln(errN)
 	}
 	if _, err = svc.AbortMultipartUpload(context.Background(), &input); err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
-	return errCode, err
+	return ecode, err
 }

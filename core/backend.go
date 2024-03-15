@@ -23,7 +23,7 @@ type (
 		Size     int64
 		ErrCode  int
 	}
-	LsoInventoryCtx struct {
+	LsoInvCtx struct {
 		Name   string
 		ID     string
 		Schema []string
@@ -34,19 +34,19 @@ type (
 	BackendProvider interface {
 		Provider() string
 
-		CreateBucket(bck *meta.Bck) (errCode int, err error)
-		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error)
-		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult, ctx *LsoInventoryCtx) (errCode int, err error)
-		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error)
-		PutObj(r io.ReadCloser, lom *LOM, origReq *http.Request) (errCode int, err error)
-		DeleteObj(lom *LOM) (errCode int, err error)
+		CreateBucket(bck *meta.Bck) (ecode int, err error)
+		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
+		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) (ecode int, err error)
+		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error)
+		PutObj(r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
+		DeleteObj(lom *LOM) (ecode int, err error)
 
 		// head
-		HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error)
-		HeadObj(ctx context.Context, lom *LOM) (objAttrs *cmn.ObjAttrs, errCode int, err error)
+		HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error)
+		HeadObj(ctx context.Context, lom *LOM) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 
 		// get
-		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error) // calls GetObjReader
+		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error) // calls GetObjReader
 		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
 	}
 )

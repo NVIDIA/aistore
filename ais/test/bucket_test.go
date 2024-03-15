@@ -842,7 +842,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 		}
 		var (
 			err     error
-			objList *cmn.LsoResult
+			objList *cmn.LsoRes
 
 			totalCnt = 0
 			msg      = &apc.LsoMsg{PageSize: 10}
@@ -943,7 +943,7 @@ func TestListObjectsProps(t *testing.T) {
 			}
 			tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
 		}
-		checkProps := func(useCache bool, props []string, f func(en *cmn.LsoEntry)) {
+		checkProps := func(useCache bool, props []string, f func(en *cmn.LsoEnt)) {
 			msg := &apc.LsoMsg{PageSize: 100}
 			if useCache {
 				msg.SetFlag(apc.UseListObjsCache)
@@ -963,7 +963,7 @@ func TestListObjectsProps(t *testing.T) {
 
 		for _, useCache := range []bool{false, true} {
 			tlog.Logf("[cache=%t] trying empty (minimal) subset of props...\n", useCache)
-			checkProps(useCache, []string{}, func(en *cmn.LsoEntry) {
+			checkProps(useCache, []string{}, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Name != "", "name is not set")
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 
@@ -973,7 +973,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying ais-default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefaultAIS, func(en *cmn.LsoEntry) {
+			checkProps(useCache, apc.GetPropsDefaultAIS, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, en.Atime != "", "atime is not set")
@@ -983,7 +983,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying cloud-default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefaultCloud, func(en *cmn.LsoEntry) {
+			checkProps(useCache, apc.GetPropsDefaultCloud, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 				if bck.IsAIS() || remoteVersioning {
@@ -997,7 +997,7 @@ func TestListObjectsProps(t *testing.T) {
 
 			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
 			checkProps(useCache,
-				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEntry) {
+				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEnt) {
 					tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 					if bck.IsAIS() || remoteVersioning {
 						tassert.Errorf(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
@@ -1009,7 +1009,7 @@ func TestListObjectsProps(t *testing.T) {
 				})
 
 			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsSize}, func(en *cmn.LsoEntry) {
+			checkProps(useCache, []string{apc.GetPropsSize}, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 
 				tassert.Errorf(t, en.Atime == "", "atime is set")
@@ -1018,7 +1018,7 @@ func TestListObjectsProps(t *testing.T) {
 			})
 
 			tlog.Logf("[cache=%t] trying all props...\n", useCache)
-			checkProps(useCache, apc.GetPropsAll, func(en *cmn.LsoEntry) {
+			checkProps(useCache, apc.GetPropsAll, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 				if bck.IsAIS() || remoteVersioning {
 					tassert.Errorf(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
@@ -1268,7 +1268,7 @@ func TestListObjects(t *testing.T) {
 					t.Errorf("continuation token was unexpectedly set to: %s", lst.ContinuationToken)
 				}
 
-				empty := &cmn.LsoEntry{}
+				empty := &cmn.LsoEnt{}
 				for _, en := range lst.Entries {
 					e, exists := objs.Load(en.Name)
 					if !exists {
@@ -2344,7 +2344,7 @@ func TestCopyBucket(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			var (
-				srcBckList *cmn.LsoResult
+				srcBckList *cmn.LsoRes
 
 				objCnt = 100
 				srcm   = &ioContext{

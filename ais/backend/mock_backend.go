@@ -39,16 +39,16 @@ func (*mockBP) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, er
 	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
-func (*mockBP) ListObjectsInv(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoResult, _ *core.LsoInventoryCtx) (int, error) {
+func (*mockBP) ListObjectsInv(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoRes, _ *core.LsoInvCtx) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
-func (*mockBP) ListObjects(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoResult) (int, error) {
+func (*mockBP) ListObjects(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoRes) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
 // cannot fail - return empty list
-func (*mockBP) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*mockBP) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	return
 }
 

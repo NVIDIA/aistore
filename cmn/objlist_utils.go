@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-var nilEntry LsoEntry
+var nilEntry LsoEnt
 
 ////////////////
 // LsoEntries //
@@ -21,7 +21,7 @@ var nilEntry LsoEntry
 
 func (entries LsoEntries) cmp(i, j int) bool { return entries[i].less(entries[j]) }
 
-func appSorted(entries LsoEntries, ne *LsoEntry) LsoEntries {
+func appSorted(entries LsoEntries, ne *LsoEnt) LsoEntries {
 	for i := range entries {
 		if ne.Name > entries[i].Name {
 			continue
@@ -49,37 +49,37 @@ func appSorted(entries LsoEntries, ne *LsoEntry) LsoEntries {
 	return entries
 }
 
-//////////////
-// LsoEntry //
-//////////////
+////////////
+// LsoEnt //
+////////////
 
 // The terms "cached" and "present" are interchangeable:
 // "object is cached" and "is present" is actually the same thing
-func (be *LsoEntry) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
-func (be *LsoEntry) SetPresent()     { be.Flags |= apc.EntryIsCached }
+func (be *LsoEnt) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
+func (be *LsoEnt) SetPresent()     { be.Flags |= apc.EntryIsCached }
 
 // see also: "latest-ver", QparamLatestVer, et al.
-func (be *LsoEntry) SetVerChanged()     { be.Flags |= apc.EntryVerChanged }
-func (be *LsoEntry) IsVerChanged() bool { return be.Flags&apc.EntryVerChanged != 0 }
-func (be *LsoEntry) SetVerRemoved()     { be.Flags |= apc.EntryVerRemoved }
-func (be *LsoEntry) IsVerRemoved() bool { return be.Flags&apc.EntryVerRemoved != 0 }
+func (be *LsoEnt) SetVerChanged()     { be.Flags |= apc.EntryVerChanged }
+func (be *LsoEnt) IsVerChanged() bool { return be.Flags&apc.EntryVerChanged != 0 }
+func (be *LsoEnt) SetVerRemoved()     { be.Flags |= apc.EntryVerRemoved }
+func (be *LsoEnt) IsVerRemoved() bool { return be.Flags&apc.EntryVerRemoved != 0 }
 
-func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
-func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
-func (be *LsoEntry) IsDir() bool        { return be.Flags&apc.EntryIsDir != 0 }
-func (be *LsoEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
-func (be *LsoEntry) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 }
-func (be *LsoEntry) String() string     { return "{" + be.Name + "}" }
+func (be *LsoEnt) IsStatusOK() bool   { return be.Status() == 0 }
+func (be *LsoEnt) Status() uint16     { return be.Flags & apc.EntryStatusMask }
+func (be *LsoEnt) IsDir() bool        { return be.Flags&apc.EntryIsDir != 0 }
+func (be *LsoEnt) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
+func (be *LsoEnt) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 }
+func (be *LsoEnt) String() string     { return "{" + be.Name + "}" }
 
-func (be *LsoEntry) less(oe *LsoEntry) bool {
+func (be *LsoEnt) less(oe *LsoEnt) bool {
 	if be.Name == oe.Name {
 		return be.Status() < oe.Status()
 	}
 	return be.Name < oe.Name
 }
 
-func (be *LsoEntry) CopyWithProps(propsSet cos.StrSet) (ne *LsoEntry) {
-	ne = &LsoEntry{Name: be.Name}
+func (be *LsoEnt) CopyWithProps(propsSet cos.StrSet) (ne *LsoEnt) {
+	ne = &LsoEnt{Name: be.Name}
 	if propsSet.Contains(apc.GetPropsSize) {
 		ne.Size = be.Size
 	}
@@ -110,7 +110,7 @@ func (be *LsoEntry) CopyWithProps(propsSet cos.StrSet) (ne *LsoEntry) {
 
 func SortLso(entries LsoEntries) { sort.Slice(entries, entries.cmp) }
 
-func DedupLso(entries LsoEntries, maxSize int) []*LsoEntry {
+func DedupLso(entries LsoEntries, maxSize int) []*LsoEnt {
 	var j int
 	for _, obj := range entries {
 		if j > 0 && entries[j-1].Name == obj.Name {
@@ -130,9 +130,9 @@ func DedupLso(entries LsoEntries, maxSize int) []*LsoEntry {
 // MergeLso merges list-objects results received from targets. For the same
 // object name (ie., the same object) the corresponding properties are merged.
 // If maxSize is greater than 0, the resulting list is sorted and truncated.
-func MergeLso(lists []*LsoResult, maxSize int) *LsoResult {
+func MergeLso(lists []*LsoRes, maxSize int) *LsoRes {
 	if len(lists) == 0 {
-		return &LsoResult{}
+		return &LsoRes{}
 	}
 	resList := lists[0]
 	token := resList.ContinuationToken
@@ -143,7 +143,7 @@ func MergeLso(lists []*LsoResult, maxSize int) *LsoResult {
 		return resList
 	}
 
-	tmp := make(map[string]*LsoEntry, len(resList.Entries)*len(lists))
+	tmp := make(map[string]*LsoEnt, len(resList.Entries)*len(lists))
 	for _, l := range lists {
 		resList.Flags |= l.Flags
 		if token < l.ContinuationToken {

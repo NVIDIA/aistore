@@ -20,7 +20,7 @@ type discardEntriesTestCase struct {
 func generateEntries(size int) cmn.LsoEntries {
 	result := make(cmn.LsoEntries, 0, size)
 	for i := 0; i < size; i++ {
-		result = append(result, &cmn.LsoEntry{Name: strconv.Itoa(i)})
+		result = append(result, &cmn.LsoEnt{Name: strconv.Itoa(i)})
 	}
 	return result
 }

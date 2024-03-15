@@ -50,7 +50,7 @@ func (hp *httpProvider) CreateBucket(*meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", hp.Provider()+" bucket")
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
@@ -84,17 +84,17 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 	return
 }
 
-func (hp *httpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, *core.LsoInventoryCtx) (int, error) {
+func (hp *httpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
 	debug.Assert(false)
 	return 0, newErrInventory(hp.Provider())
 }
 
-func (*httpProvider) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult) (errCode int, err error) {
+func (*httpProvider) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes) (ecode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-func (*httpProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*httpProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -114,7 +114,7 @@ func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string,
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`

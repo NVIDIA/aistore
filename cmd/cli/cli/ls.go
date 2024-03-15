@@ -32,7 +32,7 @@ type (
 		size       uint64 // apparent
 	}
 
-	entryFilter func(*cmn.LsoEntry) bool
+	entryFilter func(*cmn.LsoEnt) bool
 
 	lstFilter struct {
 		predicates []entryFilter
@@ -260,7 +260,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if external, internal := splitPrefixShardBoundary(prefix); internal != "" {
 		origPrefix := prefix
 		prefix = external
-		lstFilter._add(func(obj *cmn.LsoEntry) bool { return strings.HasPrefix(obj.Name, origPrefix) })
+		lstFilter._add(func(obj *cmn.LsoEnt) bool { return strings.HasPrefix(obj.Name, origPrefix) })
 	}
 
 	// lsmsg
@@ -554,14 +554,14 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 	flt = &lstFilter{}
 	if !flagIsSet(c, allObjsOrBcksFlag) {
 		// filter objects that are "not OK" (e.g., misplaced)
-		flt._add(func(obj *cmn.LsoEntry) bool { return obj.IsStatusOK() })
+		flt._add(func(obj *cmn.LsoEnt) bool { return obj.IsStatusOK() })
 	}
 	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
 		regex, err := regexp.Compile(regexStr)
 		if err != nil {
 			return nil, "", err
 		}
-		flt._add(func(obj *cmn.LsoEntry) bool { return regex.MatchString(obj.Name) })
+		flt._add(func(obj *cmn.LsoEnt) bool { return regex.MatchString(obj.Name) })
 	}
 	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
 		pt, err := cos.NewParsedTemplate(bashTemplate)
@@ -576,7 +576,7 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 			for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 				matchingObjectNames[objName] = struct{}{}
 			}
-			flt._add(func(obj *cmn.LsoEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
+			flt._add(func(obj *cmn.LsoEnt) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
 		}
 	}
 	return flt, prefix, nil
@@ -585,7 +585,7 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 func (o *lstFilter) _add(f entryFilter) { o.predicates = append(o.predicates, f) }
 func (o *lstFilter) _len() int          { return len(o.predicates) }
 
-func (o *lstFilter) and(obj *cmn.LsoEntry) bool {
+func (o *lstFilter) and(obj *cmn.LsoEnt) bool {
 	for _, predicate := range o.predicates {
 		if !predicate(obj) {
 			return false

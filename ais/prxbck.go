@@ -97,7 +97,7 @@ func (p *proxy) a2u(aliasOrUUID string) string {
 }
 
 // initialize bucket and check access permissions
-func (bctx *bctx) init() (errCode int, err error) {
+func (bctx *bctx) init() (ecode int, err error) {
 	debug.Assert(bctx.bck != nil)
 
 	bck := bctx.bck
@@ -118,7 +118,7 @@ func (bctx *bctx) init() (errCode int, err error) {
 	}
 
 	if err = bctx.accessSupported(); err != nil {
-		errCode = http.StatusMethodNotAllowed
+		ecode = http.StatusMethodNotAllowed
 		return
 	}
 	if bctx.skipBackend {
@@ -127,9 +127,9 @@ func (bctx *bctx) init() (errCode int, err error) {
 		err = bck.Init(bctx.p.owner.bmd)
 	}
 	if err != nil {
-		errCode = http.StatusBadRequest
+		ecode = http.StatusBadRequest
 		if cmn.IsErrBucketNought(err) {
-			errCode = http.StatusNotFound
+			ecode = http.StatusNotFound
 		}
 		return
 	}
@@ -144,7 +144,7 @@ func (bctx *bctx) init() (errCode int, err error) {
 		}
 		bctx.perms = dtor.Access
 	}
-	errCode, err = bctx.accessAllowed(bck)
+	ecode, err = bctx.accessAllowed(bck)
 	return
 }
 
@@ -182,10 +182,10 @@ rerr:
 }
 
 // (compare w/ accessSupported)
-func (bctx *bctx) accessAllowed(bck *meta.Bck) (errCode int, err error) {
+func (bctx *bctx) accessAllowed(bck *meta.Bck) (ecode int, err error) {
 	err = bctx.p.access(bctx.r.Header, bck, bctx.perms)
-	errCode = aceErrToCode(err)
-	return errCode, err
+	ecode = aceErrToCode(err)
+	return ecode, err
 }
 
 // initAndTry initializes the bucket (proxy-only, as the filename implies).
@@ -194,15 +194,15 @@ func (bctx *bctx) accessAllowed(bck *meta.Bck) (errCode int, err error) {
 // - on error it calls `p.writeErr` and friends, so make sure _not_ to do the same in the caller
 // - for remais buckets: user-provided alias(***)
 func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
-	var errCode int
+	var ecode int
 
 	// 1. init bucket
 	bck = bctx.bck
-	if errCode, err = bctx.init(); err == nil {
+	if ecode, err = bctx.init(); err == nil {
 		return
 	}
-	if errCode != http.StatusNotFound {
-		bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
+	if ecode != http.StatusNotFound {
+		bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 		return
 	}
 	// 2. handle two specific errors
@@ -211,9 +211,9 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 		debug.Assert(bck.IsAIS())
 		if !bctx.createAIS {
 			if bctx.perms == apc.AceBckHEAD {
-				bctx.p.writeErr(bctx.w, bctx.r, err, errCode, Silent)
+				bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
 			} else {
-				bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
+				bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 			}
 			return
 		}
@@ -221,12 +221,12 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 		debug.Assert(bck.IsRemote())
 		// when remote-bucket lookup is not permitted
 		if bctx.dontHeadRemote {
-			bctx.p.writeErr(bctx.w, bctx.r, err, errCode, Silent)
+			bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
 			return
 		}
 	default:
-		debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck, err, errCode)
-		bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
+		debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck, err, ecode)
+		bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 		return
 	}
 
@@ -236,7 +236,7 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 }
 
 func (bctx *bctx) try() (bck *meta.Bck, err error) {
-	bck, errCode, err := bctx._try()
+	bck, ecode, err := bctx._try()
 	switch {
 	case err == nil || err == errForwarded:
 		return bck, err
@@ -246,9 +246,9 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 		return bck, nil
 	default:
 		if bctx.perms == apc.AceBckHEAD {
-			bctx.p.writeErr(bctx.w, bctx.r, err, errCode, Silent)
+			bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
 		} else {
-			bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
+			bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 		}
 		return bck, err
 	}
@@ -258,9 +258,9 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 // methods that are internal to this source
 //
 
-func (bctx *bctx) _try() (bck *meta.Bck, errCode int, err error) {
+func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	if err = bctx.bck.Validate(); err != nil {
-		errCode = http.StatusBadRequest
+		ecode = http.StatusBadRequest
 		return
 	}
 
@@ -268,7 +268,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, errCode int, err error) {
 	// in checking if it exists remotely (in re: `ref_directory`)
 	if bctx.bck.IsHDFS() {
 		err = cmn.NewErrBckNotFound(bctx.bck.Bucket())
-		errCode = http.StatusNotFound
+		ecode = http.StatusNotFound
 		return
 	}
 
@@ -288,7 +288,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, errCode int, err error) {
 	}
 	if bck.IsAIS() {
 		if err = bctx.p.access(bctx.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
-			errCode = aceErrToCode(err)
+			ecode = aceErrToCode(err)
 			return
 		}
 		nlog.Warningf("%s: %q doesn't exist, proceeding to create", bctx.p, bctx.bck)
@@ -297,7 +297,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, errCode int, err error) {
 	action = apc.ActAddRemoteBck // only if requested via bctx
 
 	// lookup remote
-	if remoteHdr, errCode, err = bctx.lookup(bck); err != nil {
+	if remoteHdr, ecode, err = bctx.lookup(bck); err != nil {
 		bck = nil
 		return
 	}
@@ -347,14 +347,14 @@ func (bctx *bctx) _try() (bck *meta.Bck, errCode int, err error) {
 	// add/create
 creadd:
 	if err = bctx.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
-		errCode = crerrStatus(err)
+		ecode = crerrStatus(err)
 		return
 	}
 	// finally, initialize the newly added/created
 	if err = bck.Init(bctx.p.owner.bmd); err != nil {
 		debug.AssertNoErr(err)
-		errCode = http.StatusInternalServerError
-		err = cmn.NewErrFailedTo(bctx.p, "post create-bucket init", bck, err, errCode)
+		ecode = http.StatusInternalServerError
+		err = cmn.NewErrFailedTo(bctx.p, "post create-bucket init", bck, err, ecode)
 	}
 	bck = bctx.bck
 	return

@@ -74,12 +74,12 @@ func (r *evictDelete) Run(wg *sync.WaitGroup) {
 }
 
 func (r *evictDelete) do(lom *core.LOM, lrit *lriterator) {
-	errCode, err := core.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
+	ecode, err := core.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
 	}
-	if cos.IsNotExist(err, errCode) || cmn.IsErrObjNought(err) {
+	if cos.IsNotExist(err, ecode) || cmn.IsErrObjNought(err) {
 		if lrit.lrp == lrpList {
 			goto eret // unlike range and prefix
 		}

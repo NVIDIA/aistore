@@ -333,12 +333,12 @@ func (r *XactArch) finalize(wi *archwi) {
 	r.wiCnt.Dec()
 	r.pending.Unlock()
 
-	errCode, err := r.fini(wi)
+	ecode, err := r.fini(wi)
 	r.DecPending()
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		var s string
 		if err != nil {
-			s = fmt.Sprintf(": %v(%d)", err, errCode)
+			s = fmt.Sprintf(": %v(%d)", err, ecode)
 		}
 		nlog.Infof("%s: finalize %s%s", r.Base.Name(), wi.msg.Cname(), s)
 	}
@@ -351,7 +351,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	r.AddErr(err, 5, cos.SmoduleXs)
 }
 
-func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
+func (r *XactArch) fini(wi *archwi) (ecode int, err error) {
 	wi.writer.Fini()
 
 	if r.IsAborted() {
@@ -377,7 +377,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	if err != nil {
 		wi.cleanup()
 		core.FreeLOM(wi.archlom)
-		errCode = http.StatusInternalServerError
+		ecode = http.StatusInternalServerError
 		return
 	}
 
@@ -385,7 +385,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	cos.Close(wi.wfh)
 	wi.wfh = nil
 
-	errCode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive)
+	ecode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive)
 	core.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
 	return
@@ -494,8 +494,8 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 
 	if coldGet {
 		// cold
-		if errCode, err := core.T.GetCold(context.Background(), lom, cmn.OwtGetLock); err != nil {
-			if lrit.lrp != lrpList && cos.IsNotExist(err, errCode) {
+		if ecode, err := core.T.GetCold(context.Background(), lom, cmn.OwtGetLock); err != nil {
+			if lrit.lrp != lrpList && cos.IsNotExist(err, ecode) {
 				return // range or prefix, not found
 			}
 			wi.r.AddErr(err, 5, cos.SmoduleXs)

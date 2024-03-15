@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -16,12 +16,12 @@ const MsgpLsoBufSize = 32 * cos.KiB
 // NOTE: all json tags except `Flags` must belong to the (apc.GetPropsName, apc.GetPropsSize, etc.) enumeration
 //
 
-// LsoEntry is a single entry in LsoResult.Entries slice (below) containing list-objects result
-// for the corresponding (listed) object or an archived file;
-// `Flags` is a bit field where `EntryStatusBits` bits [0-4] are reserved for object status
-// (all statuses are mutually exclusive)
 type (
-	LsoEntry struct {
+	// a single entry in LsoRes.Entries (below); contains list-objects results
+	// for the corresponding (listed) object or archived file;
+	// `Flags` is a bit field where `EntryStatusBits` bits [0-4] are reserved for object status
+	// (all statuses are mutually exclusive)
+	LsoEnt struct {
 		Name     string `json:"name" msg:"n"`                            // object name
 		Checksum string `json:"checksum,omitempty" msg:"cs,omitempty"`   // checksum
 		Atime    string `json:"atime,omitempty" msg:"a,omitempty"`       // last access time; formatted as ListObjsMsg.TimeFormat
@@ -33,10 +33,10 @@ type (
 		Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // enum { EntryIsCached, EntryIsDir, EntryInArch, ...}
 	}
 
-	LsoEntries []*LsoEntry
+	LsoEntries []*LsoEnt
 
-	// LsoResult carries the results of `api.ListObjects`, `BackendProvider.ListObjects`, and friends
-	LsoResult struct {
+	// `api.ListObjects` and `Backend.ListObjects` results
+	LsoRes struct {
 		UUID              string     `json:"uuid"`
 		ContinuationToken string     `json:"continuation_token"`
 		Entries           LsoEntries `json:"entries"`

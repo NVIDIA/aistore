@@ -226,7 +226,7 @@ var (
 
 // ErrFailedTo
 
-func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, errCode ...int) *ErrFailedTo {
+func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, ecode ...int) *ErrFailedTo {
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
@@ -237,8 +237,8 @@ func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, errC
 	if actor != nil {
 		e.actor = actor.String()
 	}
-	if len(errCode) > 0 {
-		e.status = errCode[0]
+	if len(ecode) > 0 {
+		e.status = ecode[0]
 		if err == nil && e.status > 0 {
 			e.err = errors.New("error code: " + strconv.Itoa(e.status) + "(\"" + http.StatusText(e.status) + "\")")
 		}
@@ -856,23 +856,23 @@ func TypeCodeHTTPErr(s string) (tcode string) {
 	return
 }
 
-func NewErrHTTP(r *http.Request, err error, errCode int) (e *ErrHTTP) {
+func NewErrHTTP(r *http.Request, err error, ecode int) (e *ErrHTTP) {
 	e = &ErrHTTP{}
-	e.init(r, err, errCode)
+	e.init(r, err, ecode)
 	return e
 }
 
 // uses `allocHterr` to allocate - caller must free via `FreeHterr`
-func InitErrHTTP(r *http.Request, err error, errCode int) (e *ErrHTTP) {
+func InitErrHTTP(r *http.Request, err error, ecode int) (e *ErrHTTP) {
 	e = allocHterr()
-	e.init(r, err, errCode)
+	e.init(r, err, ecode)
 	return e
 }
 
-func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
+func (e *ErrHTTP) init(r *http.Request, err error, ecode int) {
 	e.Status = http.StatusBadRequest
-	if errCode != 0 {
-		e.Status = errCode
+	if ecode != 0 {
+		e.Status = ecode
 	}
 	tcode := fmt.Sprintf("%T", err)
 	if i := strings.Index(tcode, "."); i > 0 {
@@ -1074,11 +1074,11 @@ func err2HTTP(err error) (*ErrHTTP, bool) {
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
 func WriteErrMsg(w http.ResponseWriter, r *http.Request, msg string, opts ...int) {
-	var errCode int
+	var ecode int
 	if len(opts) > 0 {
-		errCode = opts[0]
+		ecode = opts[0]
 	}
-	herr := InitErrHTTP(r, errors.New(msg), errCode)
+	herr := InitErrHTTP(r, errors.New(msg), ecode)
 	herr.write(w, r, len(opts) > 1 /*silent*/)
 	FreeHterr(herr)
 }

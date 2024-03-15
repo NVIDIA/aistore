@@ -34,7 +34,7 @@ func (e *Error) mustMarshal(sgl *memsys.SGL) {
 }
 
 // with user-friendly tip
-func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, errCode int, lom *core.LOM, uploadID string) {
+func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, ecode int, lom *core.LOM, uploadID string) {
 	// specifically, for s3cmd example
 	name := strings.Replace(lom.Cname(), apc.AISScheme+apc.BckProviderSeparator, apc.S3Scheme+apc.BckProviderSeparator, 1)
 	s3cmd := "s3cmd abortmp " + name + " " + uploadID
@@ -42,13 +42,13 @@ func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, errCode int,
 		s3cmd = "\n  " + s3cmd
 	}
 	e := fmt.Errorf("%v\nUse upload ID %q to cleanup, e.g.: %s", err, uploadID, s3cmd)
-	if errCode == 0 {
-		errCode = http.StatusInternalServerError
+	if ecode == 0 {
+		ecode = http.StatusInternalServerError
 	}
-	WriteErr(w, r, e, errCode)
+	WriteErr(w, r, e, ecode)
 }
 
-func WriteErr(w http.ResponseWriter, r *http.Request, err error, errCode int) {
+func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
 	var (
 		out       Error
 		in        *cmn.ErrHTTP
@@ -56,7 +56,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, errCode int) {
 		allocated bool
 	)
 	if in, ok = err.(*cmn.ErrHTTP); !ok {
-		in = cmn.InitErrHTTP(r, err, errCode)
+		in = cmn.InitErrHTTP(r, err, ecode)
 		allocated = true
 	}
 	out.Message = in.Message

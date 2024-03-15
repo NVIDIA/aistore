@@ -178,7 +178,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 		if external, internal := splitPrefixShardBoundary(prefix); internal != "" {
 			prefix = external
 			debug.Assert(prefix != origPrefix)
-			lstFilter._add(func(obj *cmn.LsoEntry) bool {
+			lstFilter._add(func(obj *cmn.LsoEnt) bool {
 				return obj.Name == external || strings.HasPrefix(obj.Name, origPrefix)
 			})
 		}
@@ -343,7 +343,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 // uctx - "get" extension
 //////////
 
-func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, quiet, extract bool) {
+func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, outFile string, quiet, extract bool) {
 	var (
 		objName  = entry.Name
 		archpath string

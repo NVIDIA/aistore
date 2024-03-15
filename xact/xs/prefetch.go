@@ -94,9 +94,9 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 
 func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	var (
-		err     error
-		size    int64
-		errCode int
+		err   error
+		size  int64
+		ecode int
 	)
 
 	lom.Lock(false)
@@ -131,7 +131,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold {
 		err = _prefetchBlob(lom, oa)
 	} else {
-		errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
+		ecode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 		if err == nil { // done
 			r.ObjsAdd(1, lom.SizeBytes())
 		}
@@ -140,7 +140,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	if err == nil { // done
 		return
 	}
-	if cos.IsNotExist(err, errCode) && lrit.lrp != lrpList {
+	if cos.IsNotExist(err, ecode) && lrit.lrp != lrpList {
 		return // not found, prefix or range
 	}
 eret:

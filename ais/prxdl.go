@@ -108,8 +108,8 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	xid := cos.GenUUID()
-	if errCode, err := p.dlstart(r, xid, jobID, body); err != nil {
-		p.writeErrStatusf(w, r, errCode, "Error starting download: %v", err)
+	if ecode, err := p.dlstart(r, xid, jobID, body); err != nil {
+		p.writeErrStatusf(w, r, ecode, "Error starting download: %v", err)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -246,7 +246,7 @@ func (p *proxy) dlstatus(nl nl.Listener, config *cmn.Config) ([]byte, int, error
 	return respJSON, http.StatusOK, nil
 }
 
-func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (errCode int, err error) {
+func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (ecode int, err error) {
 	var (
 		config = cmn.GCO.Get()
 		query  = make(url.Values, 2)
@@ -260,10 +260,10 @@ func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (errCod
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 
-	errCode = http.StatusOK
+	ecode = http.StatusOK
 	for _, res := range results {
 		if res.err != nil {
-			errCode, err = res.status, res.err
+			ecode, err = res.status, res.err
 			break
 		}
 	}

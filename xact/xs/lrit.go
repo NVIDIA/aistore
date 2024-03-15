@@ -157,8 +157,8 @@ func (r *lriterator) _range(wi lrwi, smap *meta.Smap) error {
 func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
 		err     error
-		errCode int
-		lst     *cmn.LsoResult
+		ecode   int
+		lst     *cmn.LsoRes
 		msg     = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
 		npg     = newNpgCtx(r.bck, msg, noopCb, nil) // TODO -- FIXME: inventory offset
 		bremote = r.bck.IsRemote()
@@ -174,15 +174,15 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 			break
 		}
 		if bremote {
-			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			errCode, err = core.T.Backend(r.bck).ListObjects(r.bck, msg, lst) // (TODO comment above)
+			lst = &cmn.LsoRes{Entries: allocLsoEntries()}
+			ecode, err = core.T.Backend(r.bck).ListObjects(r.bck, msg, lst) // (TODO comment above)
 		} else {
 			npg.page.Entries = allocLsoEntries()
 			err = npg.nextPageA()
 			lst = &npg.page
 		}
 		if err != nil {
-			nlog.Errorln(core.T.String()+":", err, errCode)
+			nlog.Errorln(core.T.String()+":", err, ecode)
 			freeLsoEntries(lst.Entries)
 			return err
 		}

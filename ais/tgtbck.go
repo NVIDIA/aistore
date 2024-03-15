@@ -210,7 +210,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 	t.writeJSON(w, r, bcks, "list-buckets")
 }
 
-func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (bcks cmn.Bcks, errCode int, err error) {
+func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (bcks cmn.Bcks, ecode int, err error) {
 	// validate
 	debug.Assert(!qbck.IsAIS())
 	if qbck.IsCloud() || qbck.IsHDFS() { // must be configured
@@ -236,14 +236,14 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 			bck = (*meta.Bck)(qbck)
 			ctx = context.Background()
 		)
-		_, errCode, err = backend.HeadBucket(ctx, bck)
+		_, ecode, err = backend.HeadBucket(ctx, bck)
 		if err == nil {
 			bcks = cmn.Bcks{bck.Clone()}
-		} else if errCode == http.StatusNotFound {
+		} else if ecode == http.StatusNotFound {
 			err = nil
 		}
 	} else {
-		bcks, errCode, err = backend.ListBuckets(*qbck)
+		bcks, ecode, err = backend.ListBuckets(*qbck)
 	}
 	if err == nil && len(bcks) > 1 {
 		sort.Sort(bcks)
@@ -251,7 +251,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 	return
 }
 
-// returns `cmn.LsoResult` containing object names and (requested) props
+// returns `cmn.LsoRes` containing object names and (requested) props
 // control/scope - via `apc.LsoMsg`
 func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) (ok bool) {
 	// (advanced) user-selected target to execute remote ls
@@ -443,8 +443,8 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 		return
 	}
-	if errCode, err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
-		t.writeErr(w, r, err, errCode)
+	if ecode, err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
+		t.writeErr(w, r, err, ecode)
 	}
 }
 

@@ -603,7 +603,7 @@ func TestObjProps(t *testing.T) {
 	}
 }
 
-func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg) *cmn.LsoResult {
+func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg) *cmn.LsoRes {
 	if msg == nil {
 		tlog.Logf("LIST %s []\n", bck)
 	} else if msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "" {

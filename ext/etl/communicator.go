@@ -196,16 +196,16 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 //////////////
 
 func (pc *pushComm) doRequest(bck *meta.Bck, lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	var errCode int
+	var ecode int
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
 
 	lom.Lock(false)
-	r, errCode, err = pc.do(lom, timeout)
+	r, ecode, err = pc.do(lom, timeout)
 	lom.Unlock(false)
 
-	if err != nil && cos.IsNotExist(err, errCode) && bck.IsRemote() {
+	if err != nil && cos.IsNotExist(err, ecode) && bck.IsRemote() {
 		_, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
@@ -217,7 +217,7 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *core.LOM, timeout time.Duratio
 	return
 }
 
-func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, errCode int, err error) {
+func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, ecode int, err error) {
 	var (
 		body   io.ReadCloser
 		cancel func()
@@ -285,9 +285,9 @@ finish:
 			cancel()
 		}
 		if resp != nil {
-			errCode = resp.StatusCode
+			ecode = resp.StatusCode
 		}
-		return nil, errCode, err
+		return nil, ecode, err
 	}
 	args := cos.ReaderArgs{
 		R:      resp.Body,

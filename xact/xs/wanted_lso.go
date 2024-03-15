@@ -37,7 +37,7 @@ func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 	return
 }
 
-func (wi *walkInfo) setWanted(e *cmn.LsoEntry, lom *core.LOM) {
+func (wi *walkInfo) setWanted(e *cmn.LsoEnt, lom *core.LOM) {
 	var (
 		custom  = e.Custom
 		version = e.Version

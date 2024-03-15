@@ -72,9 +72,9 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 		s3.WriteErr(w, r, cs.Err(), http.StatusInsufficientStorage)
 		return
 	}
-	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	q := r.URL.Query()
@@ -111,9 +111,9 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 	// src
-	bckSrc, err, errCode := meta.InitByNameOnly(parts[0], t.owner.bmd)
+	bckSrc, err, ecode := meta.InitByNameOnly(parts[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	objSrc := strings.Trim(parts[1], "/")
@@ -138,9 +138,9 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 	// dst
-	bckTo, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bckTo, err, ecode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 
@@ -211,11 +211,11 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
 		poi.restful = true
 	}
-	errCode, err := poi.do(nil /*response hdr*/, r, dpq)
+	ecode, err := poi.do(nil /*response hdr*/, r, dpq)
 	freePOI(poi)
 	if err != nil {
 		t.fsErr(err, lom.FQN)
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	s3.SetEtag(w.Header(), lom)
@@ -224,9 +224,9 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 // GET s3/<bucket-name[/<object-name>]
 func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
-	bck, err, errCode := meta.InitByNameOnly(bucket, t.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	q := r.URL.Query()
@@ -280,9 +280,9 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 // See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket, objName := items[0], s3.ObjName(items)
-	bck, err, errCode := meta.InitByNameOnly(bucket, t.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	lom := core.AllocLOM(objName)
@@ -313,9 +313,9 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		op.ObjAttrs = *lom.ObjAttrs()
 	} else {
 		// cold HEAD
-		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		objAttrs, ecode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			s3.WriteErr(w, r, err, errCode)
+			s3.WriteErr(w, r, err, ecode)
 			return
 		}
 		op.ObjAttrs = *objAttrs
@@ -342,9 +342,9 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 // DELETE /s3/<bucket-name>/<object-name>
 func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -354,13 +354,13 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	errCode, err = t.DeleteObject(lom, false)
+	ecode, err = t.DeleteObject(lom, false)
 	if err != nil {
 		name := lom.Cname()
-		if errCode == http.StatusNotFound {
+		if ecode == http.StatusNotFound {
 			s3.WriteErr(w, r, cos.NewErrNotFound(t, name), http.StatusNotFound)
 		} else {
-			s3.WriteErr(w, r, fmt.Errorf("error deleting %s: %v", name, err), errCode)
+			s3.WriteErr(w, r, fmt.Errorf("error deleting %s: %v", name, err), ecode)
 		}
 		return
 	}
@@ -370,9 +370,9 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 // POST /s3/<bucket-name>/<object-name>
 func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	q := r.URL.Query()

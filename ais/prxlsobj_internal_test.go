@@ -13,7 +13,7 @@ import (
 var _ = Describe("ListObjectsCache+ListObjectsBuffer", func() {
 	makeEntries := func(xs ...string) (entries cmn.LsoEntries) {
 		for _, x := range xs {
-			entries = append(entries, &cmn.LsoEntry{
+			entries = append(entries, &cmn.LsoEnt{
 				Name: x,
 			})
 		}

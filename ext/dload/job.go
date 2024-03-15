@@ -377,7 +377,7 @@ func (j *backendDlJob) getNextObjs() error {
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
 		var (
-			lst = &cmn.LsoResult{}
+			lst = &cmn.LsoRes{}
 			msg = &apc.LsoMsg{Prefix: j.prefix, ContinuationToken: j.continuationToken, PageSize: j.bck.MaxPageSize()}
 		)
 		_, err := backend.ListObjects(j.bck, msg, lst)

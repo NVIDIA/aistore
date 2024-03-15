@@ -131,8 +131,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		},
 	}
 	// TODO: continue-on-error (unify w/ x-archive)
-	errCode, err := core.T.Promote(&params)
-	if cos.IsNotExist(err, errCode) {
+	ecode, err := core.T.Promote(&params)
+	if cos.IsNotExist(err, ecode) {
 		err = nil
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {

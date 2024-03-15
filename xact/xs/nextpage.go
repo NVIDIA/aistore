@@ -19,12 +19,12 @@ import (
 type npgCtx struct {
 	bck  *meta.Bck
 	wi   walkInfo
-	page cmn.LsoResult
-	ctx  *core.LsoInventoryCtx
+	page cmn.LsoRes
+	ctx  *core.LsoInvCtx
 	idx  int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInventoryCtx) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInvCtx) (npg *npgCtx) {
 	npg = &npgCtx{
 		bck: bck,
 		wi: walkInfo{
@@ -80,9 +80,9 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (lst *cmn.LsoResult, err error) {
+func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (lst *cmn.LsoRes, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
-	lst = &cmn.LsoResult{Entries: nentries}
+	lst = &cmn.LsoRes{Entries: nentries}
 	if npg.ctx != nil {
 		_, err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
 	} else {
@@ -101,7 +101,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 	return lst, err
 }
 
-func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
+func (npg *npgCtx) populate(lst *cmn.LsoRes) error {
 	post := npg.wi.lomVisitedCb
 	for _, obj := range lst.Entries {
 		if obj.IsDir() {

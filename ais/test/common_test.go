@@ -359,7 +359,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 		}
 
 		wg.Add(1)
-		go func(obj *cmn.LsoEntry) {
+		go func(obj *cmn.LsoEnt) {
 			_, err := api.GetObject(baseParams, m.bck, obj.Name, nil)
 			tassert.CheckError(m.t, err)
 			wg.Done()
@@ -453,7 +453,7 @@ func (m *ioContext) del(opts ...int) {
 			break
 		}
 		wg.Add(1)
-		go func(obj *cmn.LsoEntry) {
+		go func(obj *cmn.LsoEnt) {
 			m._delOne(baseParams, obj, &errCnt)
 			wg.Done()
 		}(obj)
@@ -461,7 +461,7 @@ func (m *ioContext) del(opts ...int) {
 	wg.Wait()
 }
 
-func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEntry, errCnt *atomic.Int64) {
+func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt *atomic.Int64) {
 	err := api.DeleteObject(baseParams, m.bck, obj.Name)
 	if err == nil {
 		return

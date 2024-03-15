@@ -39,7 +39,7 @@ import (
 // Each request is identified by its `cacheReqID`. List-objects requests
 // that share the same ID will also share a common cache.
 //
-// Cache consists of contiguous intervals of `cmn.LsoEntry`.
+// Cache consists of contiguous intervals of `cmn.LsoEnt`.
 // Cached response (to a request) is valid if and only if the request can be
 // fulfilled by a single cache interval (otherwise, cache cannot be trusted
 // as we don't know how many objects can fit in the requested interval).
@@ -89,7 +89,7 @@ type (
 		prefix string
 	}
 
-	// Single (contiguous) interval of `cmn.LsoEntry`.
+	// Single (contiguous) interval of `cmn.LsoEnt`.
 	cacheInterval struct {
 		// Contains the previous entry (`ContinuationToken`) that was requested
 		// to get this interval. Thanks to this we can match and merge two

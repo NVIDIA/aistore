@@ -431,7 +431,7 @@ type (
 	cresIC struct{} // -> icBundle
 	cresBM struct{} // -> bucketMD
 
-	cresLso   struct{} // -> cmn.LsoResult
+	cresLso   struct{} // -> cmn.LsoRes
 	cresBsumm struct{} // -> cmn.AllBsummResults
 )
 
@@ -463,7 +463,7 @@ func (res *callResult) mread(body io.Reader) {
 func (cresCM) newV() any                              { return &cluMeta{} }
 func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresLso) newV() any                              { return &cmn.LsoResult{} }
+func (cresLso) newV() any                              { return &cmn.LsoRes{} }
 func (c cresLso) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
 func (cresSM) newV() any                              { return &smapX{} }

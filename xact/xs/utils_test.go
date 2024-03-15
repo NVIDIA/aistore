@@ -46,13 +46,13 @@ func TestConcatObjLists(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var (
-				lists          = make([]*cmn.LsoResult, 0, len(test.objCounts))
+				lists          = make([]*cmn.LsoRes, 0, len(test.objCounts))
 				expectedObjCnt = 0
 			)
 			for _, objCount := range test.objCounts {
-				list := &cmn.LsoResult{}
+				list := &cmn.LsoRes{}
 				for i := 0; i < objCount; i++ {
-					list.Entries = append(list.Entries, &cmn.LsoEntry{
+					list.Entries = append(list.Entries, &cmn.LsoEnt{
 						Name: trand.String(5),
 					})
 				}
@@ -78,12 +78,12 @@ func TestConcatObjLists(t *testing.T) {
 // are appended to the first one.
 // If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
 // or negative maxSize means returning all objects.
-func concatLso(lists []*cmn.LsoResult, maxSize int) (objs *cmn.LsoResult) {
+func concatLso(lists []*cmn.LsoRes, maxSize int) (objs *cmn.LsoRes) {
 	if len(lists) == 0 {
-		return &cmn.LsoResult{}
+		return &cmn.LsoRes{}
 	}
 
-	objs = &cmn.LsoResult{}
+	objs = &cmn.LsoRes{}
 	objs.Entries = make(cmn.LsoEntries, 0)
 
 	for _, l := range lists {

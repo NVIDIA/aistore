@@ -55,7 +55,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		objName  = s3.ObjName(items)
 		lom      = &core.LOM{ObjName: objName}
 		uploadID string
-		errCode  int
+		ecode    int
 	)
 	err := lom.InitBck(bck.Bucket())
 	if err != nil {
@@ -81,9 +81,9 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 			w.Write(resp.Body)
 			return
 		}
-		uploadID, errCode, err = backend.StartMpt(lom)
+		uploadID, ecode, err = backend.StartMpt(lom)
 		if err != nil {
-			s3.WriteErr(w, r, err, errCode)
+			s3.WriteErr(w, r, err, ecode)
 			return
 		}
 	} else {
@@ -150,7 +150,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	// 3. write
 	var (
 		etag         string
-		errCode      int
+		ecode        int
 		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
 		buf, slab    = t.gmm.Alloc()
@@ -177,10 +177,10 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 			)
 			resp, err = pts.Do(g.client.data)
 			if resp != nil {
-				errCode = resp.StatusCode
+				ecode = resp.StatusCode
 				etag = cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
 			} else {
-				etag, errCode, err = backend.PutMptPart(lom, partFh, uploadID, partNum, size)
+				etag, ecode, err = backend.PutMptPart(lom, partFh, uploadID, partNum, size)
 			}
 		}
 	}
@@ -190,7 +190,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
 			nlog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
 		}
-		s3.WriteMptErr(w, r, err, errCode, lom, uploadID)
+		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
 
@@ -287,9 +287,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 			}
 			etag = result.ETag
 		} else {
-			v, errCode, err := backend.CompleteMpt(lom, uploadID, partList)
+			v, ecode, err := backend.CompleteMpt(lom, uploadID, partList)
 			if err != nil {
-				s3.WriteMptErr(w, r, err, errCode, lom, uploadID)
+				s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 				return
 			}
 			etag = v
@@ -375,7 +375,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		poi.workFQN = wfqn
 		poi.owt = cmn.OwtNone
 	}
-	errCode, errF := poi.finalize()
+	ecode, errF := poi.finalize()
 	freePOI(poi)
 
 	// .6 cleanup parts - unconditionally
@@ -385,10 +385,10 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	if errF != nil {
 		// NOTE: not failing if remote op. succeeded
 		if !remote {
-			s3.WriteMptErr(w, r, errF, errCode, lom, uploadID)
+			s3.WriteMptErr(w, r, errF, ecode, lom, uploadID)
 			return
 		}
-		nlog.Errorf("upload %q: failed to complete %s locally: %v(%d)", uploadID, lom.Cname(), err, errCode)
+		nlog.Errorf("upload %q: failed to complete %s locally: %v(%d)", uploadID, lom.Cname(), err, ecode)
 	}
 
 	// .7 respond
@@ -428,9 +428,9 @@ func _appendMpt(nparts []*s3.MptPart, buf []byte, mw io.Writer) (concatMD5 strin
 // 3. Remove all info from in-memory structs
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html
 func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
-	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, ecode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -450,9 +450,9 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 			return
 		}
 		if resp == nil {
-			errCode, err := backend.AbortMpt(lom, uploadID)
+			ecode, err := backend.AbortMpt(lom, uploadID)
 			if err != nil {
-				s3.WriteErr(w, r, err, errCode)
+				s3.WriteErr(w, r, err, ecode)
 				return
 			}
 		}
@@ -483,9 +483,9 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.
 		return
 	}
 
-	parts, errCode, err := s3.ListParts(uploadID, lom)
+	parts, ecode, err := s3.ListParts(uploadID, lom)
 	if err != nil {
-		s3.WriteErr(w, r, err, errCode)
+		s3.WriteErr(w, r, err, ecode)
 		return
 	}
 	result := &s3.ListPartsResult{Bucket: bck.Name, Key: objName, UploadID: uploadID, Parts: parts}

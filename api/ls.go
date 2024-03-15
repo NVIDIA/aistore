@@ -84,7 +84,7 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 }
 
 // ListObjects returns a list of objects in a bucket - a slice of structures in the
-// `cmn.LsoResult` that look like `cmn.LsoEntry`.
+// `cmn.LsoRes` that look like `cmn.LsoEnt`.
 //
 // The `numObjects` argument is the maximum number of objects to be returned
 // (where 0 (zero) means returning all objects in the bucket).
@@ -107,7 +107,7 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 // - docs/cli/* for CLI usage examples
 // - `apc.LsoMsg`
 // - `api.ListObjectsPage`
-func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
+func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoRes, error) {
 	reqParams := lsoReq(bp, bck, &args)
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
@@ -144,7 +144,7 @@ func lsoReq(bp BaseParams, bck cmn.Bck, args *ListArgs) *ReqParams {
 // the entire bucket). Each iteration lists a page of objects and reduces `toRead`
 // accordingly. When the latter gets below page size, we perform the final
 // iteration for the reduced page.
-func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (lst *cmn.LsoResult, _ error) {
+func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (lst *cmn.LsoRes, _ error) {
 	var (
 		ctx     *LsoCounter
 		toRead  = args.Limit
@@ -192,9 +192,9 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (lst *cmn.LsoRe
 }
 
 // w/ limited retry and increasing timeout
-func lsoPage(reqParams *ReqParams) (_ *cmn.LsoResult, err error) {
+func lsoPage(reqParams *ReqParams) (_ *cmn.LsoRes, err error) {
 	for i := 0; i < maxListPageRetries; i++ {
-		page := &cmn.LsoResult{}
+		page := &cmn.LsoRes{}
 		if _, err = reqParams.DoReqAny(page); err == nil {
 			return page, nil
 		}
@@ -215,7 +215,7 @@ func lsoPage(reqParams *ReqParams) (_ *cmn.LsoResult, err error) {
 // - docs/cli/* for CLI usage examples
 // - `apc.LsoMsg`
 // - `api.ListObjects`
-func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
+func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoRes, error) {
 	reqParams := lsoReq(bp, bck, &args)
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
@@ -224,7 +224,7 @@ func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArg
 	reqParams.Body = cos.MustMarshal(actMsg)
 
 	// no need to preallocate bucket entries slice (msgpack does it)
-	page := &cmn.LsoResult{}
+	page := &cmn.LsoRes{}
 	_, err := reqParams.DoReqAny(page)
 	freeMbuf(reqParams.buf)
 	FreeRp(reqParams)

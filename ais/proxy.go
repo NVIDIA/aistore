@@ -802,12 +802,12 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: perms, bck: bck, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.createAIS = false
 	if msg.Action == apc.ActEvictRemoteBck {
-		var errCode int
+		var ecode int
 		bckArgs.dontHeadRemote = true // unconditionally
-		errCode, err = bckArgs.init()
+		ecode, err = bckArgs.init()
 		if err != nil {
-			if errCode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(err) {
-				p.writeErr(w, r, err, errCode)
+			if ecode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(err) {
+				p.writeErr(w, r, err, ecode)
 			}
 			return
 		}
@@ -1196,7 +1196,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			bckFrom     = bck
 			bckTo       *meta.Bck
 			tcbmsg      = &apc.TCBMsg{}
-			errCode     int
+			ecode       int
 			fltPresence = apc.FltPresent
 		)
 		switch msg.Action {
@@ -1232,11 +1232,11 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			nlog.Infoln("proceeding to copy remote", bckFrom.String())
 		}
 
-		bckTo, errCode, err = p.initBckTo(w, r, query, bckTo)
+		bckTo, ecode, err = p.initBckTo(w, r, query, bckTo)
 		if err != nil {
 			return
 		}
-		if errCode == http.StatusNotFound {
+		if ecode == http.StatusNotFound {
 			if p.forwardCP(w, r, msg, bucket) { // to create
 				return
 			}
@@ -1271,10 +1271,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			tcomsg  = &cmn.TCObjsMsg{}
-			bckTo   *meta.Bck
-			errCode int
-			eq      bool
+			tcomsg = &cmn.TCObjsMsg{}
+			bckTo  *meta.Bck
+			ecode  int
+			eq     bool
 		)
 		if err = cos.MorphMarshal(msg.Value, tcomsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -1295,11 +1295,11 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		if !eq {
-			bckTo, errCode, err = p.initBckTo(w, r, query, bckTo)
+			bckTo, ecode, err = p.initBckTo(w, r, query, bckTo)
 			if err != nil {
 				return
 			}
-			if errCode == http.StatusNotFound {
+			if ecode == http.StatusNotFound {
 				if p.forwardCP(w, r, msg, bucket) { // to create
 					return
 				}
@@ -1362,20 +1362,20 @@ func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Valu
 	bckToArgs := bctx{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
 	bckToArgs.createAIS = true
 
-	errCode, err := bckToArgs.init()
-	if err != nil && errCode != http.StatusNotFound {
-		p.writeErr(w, r, err, errCode)
+	ecode, err := bckToArgs.init()
+	if err != nil && ecode != http.StatusNotFound {
+		p.writeErr(w, r, err, ecode)
 		return nil, 0, err
 	}
 
 	// remote bucket: create it (BMD-wise) on the fly
-	if errCode == http.StatusNotFound && bckTo.IsRemote() {
+	if ecode == http.StatusNotFound && bckTo.IsRemote() {
 		if bckTo, err = bckToArgs.try(); err != nil {
 			return nil, 0, err
 		}
-		errCode = 0
+		ecode = 0
 	}
-	return bckTo, errCode, nil
+	return bckTo, ecode, nil
 }
 
 // POST { apc.ActCreateBck } /v1/buckets/bucket-name
@@ -1486,12 +1486,12 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	}
 }
 
-func crerrStatus(err error) (errCode int) {
+func crerrStatus(err error) (ecode int) {
 	switch err.(type) {
 	case *cmn.ErrBucketAlreadyExists:
-		errCode = http.StatusConflict
+		ecode = http.StatusConflict
 	case *cmn.ErrNotImpl:
-		errCode = http.StatusNotImplemented
+		ecode = http.StatusNotImplemented
 	}
 	return
 }
@@ -1563,12 +1563,12 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 }
 
 // one page; common code (native, s3 api)
-func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (*cmn.LsoResult, error) {
+func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (*cmn.LsoRes, error) {
 	var (
 		nl             nl.Listener
 		err            error
 		tsi            *meta.Snode
-		lst            *cmn.LsoResult
+		lst            *cmn.LsoRes
 		newls          bool
 		listRemote     bool
 		wantOnlyRemote bool
@@ -2094,7 +2094,7 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIn
 // lsObjsA reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoResult, err error) {
+func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRes, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
@@ -2143,7 +2143,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	}
 	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.cresv = cresLso{} // -> cmn.LsoResult
+	args.cresv = cresLso{} // -> cmn.LsoRes
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -2154,7 +2154,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 			freeBcastRes(results)
 			return nil, err
 		}
-		objList := res.v.(*cmn.LsoResult)
+		objList := res.v.(*cmn.LsoRes)
 		flags |= objList.Flags
 		p.qm.b.set(lsmsg.UUID, res.si.ID(), objList.Entries, pageSize)
 	}
@@ -2178,7 +2178,7 @@ end:
 		entries = propsEntries
 	}
 
-	allEntries = &cmn.LsoResult{
+	allEntries = &cmn.LsoRes{
 		UUID:    lsmsg.UUID,
 		Entries: entries,
 		Flags:   flags,
@@ -2188,7 +2188,7 @@ end:
 	}
 
 	// when recursion is disabled (i.e., lsmsg.IsFlagSet(apc.LsNoRecursion))
-	// the (`cmn.LsoResult`) result _may_ include duplicated names of the virtual subdirectories
+	// the (`cmn.LsoRes`) result _may_ include duplicated names of the virtual subdirectories
 	// - that's why:
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
 		allEntries.Entries = cmn.DedupLso(allEntries.Entries, len(entries))
@@ -2198,7 +2198,7 @@ end:
 }
 
 func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,
-	wantOnlyRemote bool) (*cmn.LsoResult, error) {
+	wantOnlyRemote bool) (*cmn.LsoRes, error) {
 	var (
 		results sliceResults
 		aisMsg  = p.newAmsgActVal(apc.ActList, &lsmsg)
@@ -2221,7 +2221,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 			cargs.si = tsi
 			cargs.req = args.req
 			cargs.timeout = timeout
-			cargs.cresv = cresLso{} // -> cmn.LsoResult
+			cargs.cresv = cresLso{} // -> cmn.LsoRes
 		}
 		// duplicate via query to have target ignoring an (early) failure to initialize bucket
 		if lsmsg.IsFlagSet(apc.LsDontHeadRemote) {
@@ -2237,21 +2237,21 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	} else {
 		args.timeout = timeout
 		args.smap = smap
-		args.cresv = cresLso{} // -> cmn.LsoResult
+		args.cresv = cresLso{} // -> cmn.LsoRes
 		results = p.bcastGroup(args)
 	}
 
 	freeBcArgs(args)
 
 	// Combine the results.
-	resLists := make([]*cmn.LsoResult, 0, len(results))
+	resLists := make([]*cmn.LsoRes, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			err := res.toErr()
 			freeBcastRes(results)
 			return nil, err
 		}
-		resLists = append(resLists, res.v.(*cmn.LsoResult))
+		resLists = append(resLists, res.v.(*cmn.LsoRes))
 	}
 	freeBcastRes(results)
 
@@ -2888,11 +2888,11 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !parsc.OutputBck.Equal(&parsc.InputBck) {
 			bckTo := meta.CloneBck(&parsc.OutputBck)
-			bckTo, errCode, err := p.initBckTo(w, r, nil /*query*/, bckTo)
+			bckTo, ecode, err := p.initBckTo(w, r, nil /*query*/, bckTo)
 			if err != nil {
 				return
 			}
-			if errCode == http.StatusNotFound {
+			if ecode == http.StatusNotFound {
 				if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 					return
 				}

@@ -16,7 +16,7 @@ const maxEntries = apc.MaxPageSizeAIS
 
 var (
 	lstPool sync.Pool
-	entry0  cmn.LsoEntry
+	entry0  cmn.LsoEnt
 )
 
 func allocLsoEntries() (entries cmn.LsoEntries) {

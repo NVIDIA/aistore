@@ -56,7 +56,7 @@ type (
 
 		// FS health and Health
 		FSHC(err error, path string)
-		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
+		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, ecode int, err error)
 	}
 
 	// all of the above; for implementations, see `ais/tgtimpl.go` and `ais/htrun.go`
@@ -67,15 +67,15 @@ type (
 		DataClient() *http.Client
 
 		// core object (+ PutObject above)
-		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT) (errCode int, err error)
-		EvictObject(lom *LOM) (errCode int, err error)
-		DeleteObject(lom *LOM, evict bool) (errCode int, err error)
+		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT) (ecode int, err error)
+		EvictObject(lom *LOM) (ecode int, err error)
+		DeleteObject(lom *LOM, evict bool) (ecode int, err error)
 
-		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
+		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error)
 		GetColdBlob(lom *LOM, oa *cmn.ObjAttrs) (xctn Xact, err error)
 
 		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
-		Promote(params *PromoteParams) (errCode int, err error)
+		Promote(params *PromoteParams) (ecode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
 
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)

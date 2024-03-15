@@ -176,15 +176,15 @@ func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploa
 	return
 }
 
-func ListParts(id string, lom *core.LOM) (parts []*PartInfo, errCode int, err error) {
+func ListParts(id string, lom *core.LOM) (parts []*PartInfo, ecode int, err error) {
 	mu.RLock()
 	mpt, ok := ups[id]
 	if !ok {
-		errCode = http.StatusNotFound
+		ecode = http.StatusNotFound
 		mpt, err = loadMptXattr(lom.FQN)
 		if err != nil || mpt == nil {
 			mu.RUnlock()
-			return nil, errCode, err
+			return nil, ecode, err
 		}
 		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
 		mpt.ctime = lom.Atime()
@@ -194,5 +194,5 @@ func ListParts(id string, lom *core.LOM) (parts []*PartInfo, errCode int, err er
 		parts = append(parts, &PartInfo{ETag: part.MD5, PartNumber: part.Num, Size: part.Size})
 	}
 	mu.RUnlock()
-	return parts, errCode, err
+	return parts, ecode, err
 }

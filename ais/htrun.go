@@ -1070,11 +1070,11 @@ func (h *htrun) sendOneLog(w http.ResponseWriter, r *http.Request, query url.Val
 	}
 	fh, err := os.Open(log)
 	if err != nil {
-		errCode := http.StatusInternalServerError
+		ecode := http.StatusInternalServerError
 		if os.IsNotExist(err) {
-			errCode = http.StatusNotFound
+			ecode = http.StatusNotFound
 		}
-		h.writeErr(w, r, err, errCode)
+		h.writeErr(w, r, err, ecode)
 		return
 	}
 	soff := query.Get(apc.QparamLogOff)
@@ -1213,22 +1213,22 @@ func logname2Sev(fname, severity string) bool {
 
 const Silent = 1
 
-func (*htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	cmn.WriteErr(w, r, err, errCode...) // [errCode[, silent]]
+func (*htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, ecode ...int) {
+	cmn.WriteErr(w, r, err, ecode...) // [ecode[, silent]]
 }
 
-func (*htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	cmn.WriteErrMsg(w, r, msg, errCode...) // [errCode[, silent]]
+func (*htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, ecode ...int) {
+	cmn.WriteErrMsg(w, r, msg, ecode...) // [ecode[, silent]]
 }
 
-func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
+func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, ecode int, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
-	h.writeErr(w, r, err, errCode, Silent)
+	h.writeErr(w, r, err, ecode, Silent)
 }
 
-func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
+func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, ecode int, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
-	h.writeErrMsg(w, r, err.Error(), errCode)
+	h.writeErrMsg(w, r, err.Error(), ecode)
 }
 
 func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...any) {

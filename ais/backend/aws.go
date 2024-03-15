@@ -84,7 +84,7 @@ func (*awsProvider) CreateBucket(_ *meta.Bck) (int, error) {
 // HEAD BUCKET
 //
 
-func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	var (
 		svc      *s3.Client
 		region   string
@@ -99,12 +99,12 @@ func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.S
 		// AWS bucket may not yet exist in the BMD -
 		// get the region manually and recreate S3 client.
 		if region, err = getBucketLocation(svc, cloudBck.Name); err != nil {
-			errCode, err = awsErrorToAISError(err, cloudBck, "")
+			ecode, err = awsErrorToAISError(err, cloudBck, "")
 			return
 		}
 		// Create new svc with the region details.
 		if svc, _, err = newClient(sessConf{region: region}, ""); err != nil {
-			errCode, err = awsErrorToAISError(err, cloudBck, "")
+			ecode, err = awsErrorToAISError(err, cloudBck, "")
 			return
 		}
 	}
@@ -122,7 +122,7 @@ func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.S
 	}
 	versioned, errV := getBucketVersioning(svc, cloudBck)
 	if errV != nil {
-		errCode, err = awsErrorToAISError(errV, cloudBck, "")
+		ecode, err = awsErrorToAISError(errV, cloudBck, "")
 		return
 	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
@@ -133,7 +133,7 @@ func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.S
 // LIST OBJECTS via INVENTORY
 //
 
-func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult, ctx *core.LsoInventoryCtx) (errCode int, err error) {
+func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (ecode int, err error) {
 	var (
 		svc      *s3.Client
 		fqn      string
@@ -185,7 +185,7 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
 		svc        *s3.Client
 		h          = cmn.BackendHelpers.Amazon
@@ -227,7 +227,7 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln("list_objects", cloudBck.Name, err)
 		}
-		errCode, err = awsErrorToAISError(err, cloudBck, "")
+		ecode, err = awsErrorToAISError(err, cloudBck, "")
 		return
 	}
 
@@ -236,7 +236,7 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		l      = len(resp.Contents)
 	)
 	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
+		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
 	}
 	for i, obj := range resp.Contents {
 		entry := lst.Entries[i]
@@ -303,15 +303,15 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 // LIST BUCKETS
 //
 
-func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
+func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
+		ecode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
 		return
 	}
 	result, err := svc.ListBuckets(context.Background(), &s3.ListBucketsInput{})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
+		ecode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
 		return
 	}
 
@@ -332,7 +332,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 // HEAD OBJECT
 //
 
-func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		svc        *s3.Client
 		headOutput *s3.HeadObjectOutput
@@ -353,7 +353,7 @@ func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs,
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
@@ -499,7 +499,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (errCode int, err error) {
+func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
 	var (
 		svc                   *s3.Client
 		uploader              *s3manager.Uploader
@@ -545,7 +545,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (
 		Metadata: md,
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		cos.Close(r)
 		return
 	}
@@ -574,7 +574,7 @@ exit:
 // DELETE OBJECT
 //
 
-func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
+func (*awsProvider) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
 		svc      *s3.Client
 		cloudBck = lom.Bck().RemoteBck()
@@ -593,7 +593,7 @@ func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {

@@ -67,7 +67,7 @@ func sinceInv(t1, t2 time.Time) time.Duration {
 	return t2.Sub(t1)
 }
 
-func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInventoryCtx) (prefix string) {
+func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInvCtx) (prefix string) {
 	prefix = cos.Either(ctx.Name, invName) + cos.PathSeparator + cloudBck.Name
 	if ctx.ID != "" {
 		prefix += cos.PathSeparator + ctx.ID
@@ -75,7 +75,7 @@ func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInventoryCtx) (prefix string) {
 	return prefix
 }
 
-func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInventoryCtx) (fqn string, _ bool, _ error) {
+func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInvCtx) (fqn string, _ bool, _ error) {
 	prefix := prefixInv(cloudBck, ctx)
 	mi, _, err := fs.Hrw(prefix)
 	if err != nil {
@@ -148,7 +148,7 @@ func (awsp *awsProvider) getManifest(cloudBck *cmn.Bck, svc *s3.Client, oname st
 	return fileSchema, err
 }
 
-func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInventoryCtx) (string, error) {
+func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx) (string, error) {
 	var (
 		csv      invT
 		manifest invT
@@ -267,11 +267,11 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 	return fqn, nil
 }
 
-func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInventoryCtx, msg *apc.LsoMsg,
-	lst *cmn.LsoResult) error {
+func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg,
+	lst *cmn.LsoRes) error {
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
+		lst.Entries = append(lst.Entries, &cmn.LsoEnt{})
 	}
 
 	// seek to the previous offset - the starting-from offset for the next page

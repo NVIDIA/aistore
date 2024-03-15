@@ -120,9 +120,9 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())
 		if xargs.Kind == apc.ActPrefetchObjects {
 			// TODO: consider adding `Value any` to generic `xact.ArgsMsg`
-			errCode, err := t.runPrefetch(xargs.ID, bck, &apc.PrefetchMsg{})
+			ecode, err := t.runPrefetch(xargs.ID, bck, &apc.PrefetchMsg{})
 			if err != nil {
-				t.writeErr(w, r, err, errCode)
+				t.writeErr(w, r, err, ecode)
 			}
 			return
 		}

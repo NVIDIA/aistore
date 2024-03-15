@@ -107,7 +107,7 @@ func (c *lstcx) do() (string, error) {
 	c.lsmsg.SID = tsi.ID()
 
 	// 2. ls 1st page
-	var lst *cmn.LsoResult
+	var lst *cmn.LsoRes
 	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.hdr, c.smap, tsi /*designated target*/, c.config, true)
 	if err != nil {
 		return "", err
