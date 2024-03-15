@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -563,43 +562,21 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	//
-	// no recursion: check the level of nesting, add virtual dir-s  ==================
-	//
+	// no recursion: check the level of nesting, add virtual dir-s
 
 	ct, err := core.NewCTFromFQN(fqn, nil)
 	if err != nil {
 		return nil
 	}
-
-	relPath := ct.ObjectName()
-	prefix := r.walk.wi.msg.Prefix
-	if prefix == "" || prefix == cos.PathSeparator {
-		entry := &cmn.LsoEnt{Name: relPath, Flags: apc.EntryIsDir}
-		select {
-		case r.walk.pageCh <- entry:
-		case <-r.walk.stopCh.Listen():
-			return errStopped
-		}
-		return filepath.SkipDir
-	}
-
-	prefix = cos.TrimLastB(prefix, '/')
-
-	if cmn.ObjHasPrefix(relPath, prefix) {
-		suffix := strings.TrimPrefix(relPath, prefix)
-		if strings.Contains(suffix, cos.PathSeparator) {
-			// nesting-wise, we are deeper than allowed by the prefix
-			return filepath.SkipDir
-		}
-		entry := &cmn.LsoEnt{Name: relPath, Flags: apc.EntryIsDir}
+	entry, err := cmn.HandleNoRecurs(r.walk.wi.msg.Prefix, ct.ObjectName())
+	if entry != nil {
 		select {
 		case r.walk.pageCh <- entry:
 		case <-r.walk.stopCh.Listen():
 			return errStopped
 		}
 	}
-	return nil
+	return err
 }
 
 func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {

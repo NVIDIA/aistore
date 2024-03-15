@@ -31,7 +31,6 @@ import (
 )
 
 // TODO:
-// - apc.LsNoRecursion
 // - the schema<=>entry m.b. a map (currently, expecting ETag as num 4, etc.)
 // - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
 // - the offset must correspond to the previously returned ContinuationToken ====> recover or fail?
@@ -267,8 +266,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 	return fqn, nil
 }
 
-func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg,
-	lst *cmn.LsoRes) error {
+func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{})
@@ -292,7 +290,7 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 		i    int64
 		off  = ctx.Offset
 		skip = msg.ContinuationToken != ""
-		lbuf = make([]byte, 256)
+		lbuf = make([]byte, 256) // m.b. enough for all lines
 		err  error
 	)
 	for {
@@ -305,13 +303,20 @@ func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SG
 		debug.Assertf(strings.Contains(line[0], cloudBck.Name), "%q %d", line, ctx.Offset)
 
 		objName := cmn.UnquoteCEV(line[1])
-		if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {
+
+		// prefix
+		if msg.IsFlagSet(apc.LsNoRecursion) {
+			if _, err := cmn.HandleNoRecurs(msg.Prefix, objName); err != nil {
+				continue
+			}
+		} else if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {
 			continue
 		}
+
+		// skip
 		if skip && off > 0 {
-			// expecting fseek to position precisely at the next
+			// expecting fseek to position precisely at the next (TODO: recover?)
 			debug.Assert(objName == msg.ContinuationToken, objName, " vs ", msg.ContinuationToken)
-			// TODO -- FIXME: recover
 		}
 		if skip && objName == msg.ContinuationToken {
 			skip = false
