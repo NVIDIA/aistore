@@ -16,7 +16,7 @@ var (
 	// ObjectPropsMap matches ObjEntry field
 	ObjectPropsMap = map[string]string{
 		apc.GetPropsName:     "{{FormatNameArch $obj.Name $obj.Flags}}",
-		apc.GetPropsSize:     "{{FormatBytesSig $obj.Size 2}}",
+		apc.GetPropsSize:     "{{FormatBytesSig2 $obj.Size 2 $obj.Flags}}",
 		apc.GetPropsChecksum: "{{$obj.Checksum}}",
 		apc.GetPropsAtime:    "{{$obj.Atime}}",
 		apc.GetPropsVersion:  "{{$obj.Version}}",

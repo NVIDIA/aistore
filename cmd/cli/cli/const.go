@@ -747,6 +747,8 @@ var (
 	disableFlag = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 
+	noRecursFlag = cli.BoolFlag{Name: "non-recursive,nr", Usage: "list objects without including nested virtual subdirectories"}
+
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
 	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "ais target designated to carry out the entire operation"}

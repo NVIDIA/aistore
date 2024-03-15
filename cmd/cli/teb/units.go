@@ -11,6 +11,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
@@ -42,13 +43,13 @@ func (ctx *unitsCtx) durHuman(dur time.Duration) string {
 
 func FuncMapUnits(units string) (m template.FuncMap) {
 	ctx := &unitsCtx{units}
-	m = make(template.FuncMap, 4)
+	m = make(template.FuncMap, 6)
 	m["FormatBytesSig"] = ctx.sizeSig
 	m["FormatBytesUns"] = ctx.sizeUns
 	m["FormatMAM"] = ctx.sizeMam
 	m["FormatMilli"] = ctx.durMilli
 	m["FormatDuration"] = ctx.durHuman
-	return
+	return m
 }
 
 func ValidateUnits(units string) error {
@@ -87,6 +88,13 @@ func toSizeSI(b int64, digits int) string {
 	default:
 		return fmt.Sprintf("%dB", b)
 	}
+}
+
+func fmtSize2(size int64, digits int, flags uint16) string {
+	if flags&apc.EntryIsDir != 0 {
+		return ""
+	}
+	return FmtSize(size, cos.UnitsIEC, digits)
 }
 
 // (with B, ns, and /s suffix)

@@ -46,7 +46,7 @@ func (npg *npgCtx) nextPageA() error {
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(npg.bck.Bucket())
-	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
+	opts.ValidateCb = func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
 			return npg.wi.processDir(fqn)
 		}
@@ -104,6 +104,10 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 	post := npg.wi.lomVisitedCb
 	for _, obj := range lst.Entries {
+		if obj.IsDir() {
+			// collecting virtual dir-s when apc.LsNoRecursion is on - skipping here
+			continue
+		}
 		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(obj.Name))
 		if err != nil {
 			return err

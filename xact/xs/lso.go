@@ -541,7 +541,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
-	opts.ValidateCallback = r.validateCb
+	opts.ValidateCb = r.validateCb
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
 			r.AddErr(err, 0)
@@ -556,24 +556,45 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	err := r.walk.wi.processDir(fqn)
-	if err != nil || !r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
+	if err != nil {
 		return err
 	}
+	if !r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
+		return nil
+	}
+
+	//
+	// no recursion: check the level of nesting, add virtual dir-s  ==================
+	//
+
 	ct, err := core.NewCTFromFQN(fqn, nil)
 	if err != nil {
 		return nil
 	}
+
 	relPath := ct.ObjectName()
-	if cmn.ObjHasPrefix(relPath, r.walk.wi.msg.Prefix) {
-		suffix := strings.TrimPrefix(relPath, r.walk.wi.msg.Prefix)
+	prefix := r.walk.wi.msg.Prefix
+	if prefix == "" || prefix == cos.PathSeparator {
+		entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
+		select {
+		case r.walk.pageCh <- entry:
+		case <-r.walk.stopCh.Listen():
+			return errStopped
+		}
+		return filepath.SkipDir
+	}
+
+	prefix = cos.TrimLastB(prefix, '/')
+
+	if cmn.ObjHasPrefix(relPath, prefix) {
+		suffix := strings.TrimPrefix(relPath, prefix)
 		if strings.Contains(suffix, cos.PathSeparator) {
-			// We are deeper than it is allowed by prefix, skip dir's content
+			// nesting-wise, we are deeper than allowed by the prefix
 			return filepath.SkipDir
 		}
 		entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
 		select {
 		case r.walk.pageCh <- entry:
-			/* do nothing */
 		case <-r.walk.stopCh.Listen():
 			return errStopped
 		}
@@ -589,14 +610,6 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	msg := r.walk.wi.lsmsg()
 	if entry.Name <= msg.StartAfter {
 		return nil
-	}
-	if r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
-		// Check if the object is nested deeper than requested.
-		// Note that it'd be incorrect to return `SkipDir` in this case.
-		relName := strings.TrimPrefix(entry.Name, r.walk.wi.msg.Prefix)
-		if strings.Contains(relName, cos.PathSeparator) {
-			return nil
-		}
 	}
 
 	select {

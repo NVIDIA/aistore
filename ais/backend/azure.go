@@ -257,6 +257,9 @@ func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult, 
 	return 0, newErrInventory(ap.Provider())
 }
 
+// TODO -- FIXME: support non-recursive (apc.LsNoRecursion) operation, as in:
+// $ az storage blob list -c abc --prefix sub/ --delimiter /
+// See also: aws.go, gcp.go
 func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (

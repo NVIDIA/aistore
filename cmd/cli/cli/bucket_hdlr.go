@@ -133,6 +133,7 @@ var (
 			maxPagesFlag,
 			startAfterFlag,
 			bckSummaryFlag,
+			noRecursFlag,
 			dontHeadRemoteFlag,
 			dontAddRemoteFlag,
 			listArchFlag,

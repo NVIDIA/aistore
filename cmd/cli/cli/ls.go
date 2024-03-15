@@ -308,6 +308,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
+	if flagIsSet(c, noRecursFlag) {
+		msg.SetFlag(apc.LsNoRecursion)
+	}
 
 	var (
 		props    []string

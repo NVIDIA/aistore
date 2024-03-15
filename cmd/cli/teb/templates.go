@@ -403,6 +403,7 @@ var (
 	funcMap = template.FuncMap{
 		// formatting
 		"FormatBytesSig":      func(size int64, digits int) string { return FmtSize(size, cos.UnitsIEC, digits) },
+		"FormatBytesSig2":     fmtSize2,
 		"FormatBytesUns":      func(size uint64, digits int) string { return FmtSize(int64(size), cos.UnitsIEC, digits) },
 		"FormatMAM":           func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, cos.UnitsIEC, 2)) },
 		"FormatMilli":         func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },

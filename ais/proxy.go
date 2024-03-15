@@ -2186,12 +2186,14 @@ end:
 	if len(entries) >= int(pageSize) {
 		allEntries.ContinuationToken = entries[len(entries)-1].Name
 	}
-	// By default, recursion is always enabled. When disabled the result will include
-	// directories. It is then possible that multiple targets return the same directory
-	// in their respective `cmn.LsoResult` responses - which is why:
+
+	// when recursion is disabled (i.e., lsmsg.IsFlagSet(apc.LsNoRecursion))
+	// the (`cmn.LsoResult`) result _may_ include duplicated names of the virtual subdirectories
+	// - that's why:
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
 		allEntries.Entries = cmn.DedupLso(allEntries.Entries, len(entries))
 	}
+
 	return allEntries, nil
 }
 

@@ -31,7 +31,8 @@ import (
 )
 
 // TODO:
-// - the schema<=>entry correspondence can be made more flexible (is partially hardcoded)
+// - apc.LsNoRecursion
+// - the schema<=>entry m.b. a map (currently, expecting ETag as num 4, etc.)
 // - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
 // - the offset must correspond to the previously returned ContinuationToken ====> recover or fail?
 // - cleanup older inventories

@@ -66,6 +66,7 @@ func (be *LsoEntry) IsVerRemoved() bool { return be.Flags&apc.EntryVerRemoved !=
 
 func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
+func (be *LsoEntry) IsDir() bool        { return be.Flags&apc.EntryIsDir != 0 }
 func (be *LsoEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
 func (be *LsoEntry) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 }
 func (be *LsoEntry) String() string     { return "{" + be.Name + "}" }

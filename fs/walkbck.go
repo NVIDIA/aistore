@@ -17,7 +17,7 @@ import (
 // for those (very few) clients that don't have their own custom implementation
 
 type WalkBckOpts struct {
-	ValidateCallback walkFunc // should return filepath.SkipDir to skip directory without an error
+	ValidateCb walkFunc // should return filepath.SkipDir to skip directory without an error
 	WalkOpts
 }
 
@@ -57,11 +57,11 @@ func WalkBck(opts *WalkBckOpts) error {
 		jg := &joggerBck{
 			workCh:   workCh,
 			mi:       mi,
-			validate: opts.ValidateCallback,
+			validate: opts.ValidateCb,
 			ctx:      ctx,
 			opts:     opts.WalkOpts,
 		}
-		jg.opts.Callback = jg.cb // --> jg.validate --> opts.ValidateCallback
+		jg.opts.Callback = jg.cb // --> jg.validate --> opts.ValidateCb
 		jg.opts.Mi = mi
 		joggers[idx] = jg
 		idx++

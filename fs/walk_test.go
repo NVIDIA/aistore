@@ -171,7 +171,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 			},
 			Sorted: true,
 		},
-		ValidateCallback: func(fqn string, de fs.DirEntry) error {
+		ValidateCb: func(fqn string, de fs.DirEntry) error {
 			var parsed fs.ParsedFQN
 			if de.IsDir() {
 				return nil

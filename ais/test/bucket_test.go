@@ -3472,11 +3472,10 @@ func TestListObjectsNoRecursion(t *testing.T) {
 			"img003", "img-test/pics/vid01"}
 		tests = []test{
 			{prefix: "", count: 4},
-			{prefix: "img", count: 3},
-			{prefix: "img-test", count: 1},
+			{prefix: "img-test", count: 3},
 			{prefix: "img-test/", count: 3},
-			{prefix: "img-test/v", count: 1},
-			{prefix: "img-test/pics/", count: 2},
+			{prefix: "img-test/pics", count: 3},
+			{prefix: "img-test/pics/", count: 3},
 		}
 	)
 
@@ -3499,7 +3498,7 @@ func TestListObjectsNoRecursion(t *testing.T) {
 	tassert.Fatalf(t, len(lst.Entries) == len(objs), "Invalid number of objects %d vs %d", len(lst.Entries), len(objs))
 
 	for idx, tst := range tests {
-		msg := &apc.LsoMsg{Flags: apc.LsNoRecursion, Prefix: tst.prefix, Props: apc.GetPropsName}
+		msg := &apc.LsoMsg{Flags: apc.LsNoRecursion | apc.LsNameSize, Prefix: tst.prefix}
 		lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 

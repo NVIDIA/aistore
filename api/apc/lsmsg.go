@@ -66,11 +66,8 @@ const (
 	// requesting proxy and, subsequently, to client.
 	LsWantOnlyRemoteProps
 
-	// List bucket entries without recursion (POSIX-wise). Note that the result in this case
-	// will include matching directories.
-	// TODO: works only with AIS bucket and only via S3 (no CLI yet). More exactly:
-	// - update AIS CLI to support non-recursive list-objects operation
-	// - when listing remote bucket, call backend (`Backend()`) to list non-recursively
+	// List objects without recursion (POSIX-wise).
+	// See related feature flag: feat.DontOptimizeVirtualDir
 	LsNoRecursion
 
 	// For remote metadata-capable buckets (ie., bck.HasVersioningMD() == true):

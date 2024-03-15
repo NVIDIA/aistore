@@ -56,11 +56,6 @@ func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 
 func (wi *walkInfo) lsmsg() *apc.LsoMsg { return wi.msg }
 
-// Checks if the directory should be processed by cache list call
-// Does checks:
-//   - Object name must start with prefix (if it is set)
-//   - Object name is not in early processed directories by the previous call:
-//     paging support
 func (wi *walkInfo) processDir(fqn string) error {
 	ct, err := core.NewCTFromFQN(fqn, nil)
 	if err != nil {
@@ -71,9 +66,9 @@ func (wi *walkInfo) processDir(fqn string) error {
 		return filepath.SkipDir
 	}
 
-	// When markerDir = "b/c/d/" we should skip directories: "a/", "b/a/",
-	// "b/b/" etc. but should not skip entire "b/" or "b/c/" since it is our
-	// parent which we want to traverse (see that: "b/" < "b/c/d/").
+	// e.g., when `markerDir` "b/c/d/" we skip directories "a/", "b/a/",
+	// "b/b/" etc. but do not skip entire "b/" and "b/c/" since it is our
+	// parent that we need to traverse ("b/" < "b/c/d/").
 	if wi.markerDir != "" && ct.ObjectName() < wi.markerDir && !strings.HasPrefix(wi.markerDir, ct.ObjectName()) {
 		return filepath.SkipDir
 	}

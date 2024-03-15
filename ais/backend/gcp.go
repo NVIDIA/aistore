@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -164,9 +165,21 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 		cloudBck = bck.RemoteBck()
 	)
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
-	if msg.Prefix != "" {
-		query = &storage.Query{Prefix: msg.Prefix}
+
+	if prefix := msg.Prefix; prefix != "" {
+		var delim string
+		if msg.IsFlagSet(apc.LsNoRecursion) {
+			if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtualDir) && !cos.IsLastB(prefix, '/') {
+				// NOTE: interpreting prefix as a virtual subdirectory
+				prefix += "/"
+			}
+			if cos.IsLastB(prefix, '/') {
+				delim = "/"
+			}
+		}
+		query = &storage.Query{Prefix: prefix, Delimiter: delim}
 	}
+
 	var (
 		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
@@ -186,12 +199,17 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 	var (
 		custom = cos.StrKVs{}
 		l      = len(objs)
+		i      int
 	)
-	for i := len(lst.Entries); i < l; i++ {
+	for j := len(lst.Entries); j < l; j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
 	}
-	for i, attrs := range objs {
+	for _, attrs := range objs {
+		if msg.IsFlagSet(apc.LsNoRecursion) && attrs.Name == "" { // NOTE: with Delimiter (above) may include empties
+			continue
+		}
 		entry := lst.Entries[i]
+		i++
 		entry.Name, entry.Size = attrs.Name, attrs.Size
 		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
 			continue
@@ -210,7 +228,8 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResu
 			entry.Custom = cmn.CustomMD2S(custom)
 		}
 	}
-	lst.Entries = lst.Entries[:l]
+	lst.Entries = lst.Entries[:i]
+
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
