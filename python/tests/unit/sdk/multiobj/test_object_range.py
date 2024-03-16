@@ -2,14 +2,15 @@ import unittest
 
 from aistore.sdk.errors import InvalidObjectRangeIndex
 from aistore.sdk.multiobj import ObjectRange
-from tests.unit.sdk.test_utils import test_cases
+from tests.utils import test_cases
+from tests.const import PREFIX_NAME, SUFFIX_NAME
 
 
 # pylint: disable=unused-variable
 class TestObjectRange(unittest.TestCase):
     def setUp(self):
-        self.prefix = "prefix-"
-        self.suffix = "-suffix"
+        self.prefix = PREFIX_NAME
+        self.suffix = SUFFIX_NAME
         self.min_index = 4
         self.max_index = 9
         self.pad_width = 3
@@ -34,7 +35,7 @@ class TestObjectRange(unittest.TestCase):
 
     def test_object_range_prefix_only(self):
         object_range = ObjectRange(prefix=self.prefix)
-        self.assertEqual("prefix-", str(object_range))
+        self.assertEqual(PREFIX_NAME, str(object_range))
 
     def test_object_range_invalid_suffix(self):
         with self.assertRaises(ValueError):

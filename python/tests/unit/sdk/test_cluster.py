@@ -38,7 +38,7 @@ from aistore.sdk.types import (
     NodeThroughput,
 )
 
-from tests.unit.sdk.test_utils import test_cases
+from tests.utils import test_cases
 
 
 class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable

@@ -14,18 +14,8 @@ from aistore.sdk.errors import (
     ErrBckAlreadyExists,
     ErrETLAlreadyExists,
 )
-
-
-def test_cases(*args):
-    def decorator(func):
-        def wrapper(self, *inner_args, **kwargs):
-            for arg in args:
-                with self.subTest(arg=arg):
-                    func(self, arg, *inner_args, **kwargs)
-
-        return wrapper
-
-    return decorator
+from tests.const import PREFIX_NAME
+from tests.utils import test_cases
 
 
 # pylint: disable=unused-variable
@@ -119,7 +109,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(test_case[1], utils.get_file_size(mock_file))
 
     @test_cases(
-        ("prefix-", ["prefix-"], None),
+        (PREFIX_NAME, [PREFIX_NAME], None),
         ("prefix-{}", ["prefix-{}"], None),
         ("prefix-{0..1..2..3}", ["prefix-{0..1..2..3}"], None),
         ("prefix-{0..1..2}}", [], ValueError),

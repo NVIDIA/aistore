@@ -23,12 +23,13 @@ from aistore.sdk.etl_const import (
 
 from aistore.sdk.etl import Etl, _get_default_runtime
 from aistore.sdk.types import ETLDetails
+from tests.const import ETL_NAME
 
 
 class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.mock_client = Mock()
-        self.etl_name = "etl-name"
+        self.etl_name = ETL_NAME
         self.etl = Etl(self.mock_client, self.etl_name)
 
     def test_init_spec_default_params(self):

@@ -4,8 +4,9 @@
 import unittest
 import random
 
-from tests.integration import REMOTE_SET, TEST_TIMEOUT, STRESS_TEST_OBJECT_COUNT
+from tests.integration import REMOTE_SET
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.const import STRESS_TEST_OBJECT_COUNT, TEST_TIMEOUT
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes

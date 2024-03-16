@@ -5,7 +5,8 @@ from datetime import datetime
 import unittest
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
-from tests.integration import REMOTE_SET, TEST_TIMEOUT, OBJECT_COUNT
+from tests.integration import REMOTE_SET
+from tests.const import TEST_TIMEOUT, OBJECT_COUNT
 
 
 class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable

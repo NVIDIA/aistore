@@ -13,12 +13,12 @@ from aistore.sdk.const import UTF_ENCODING, LOREM, DUIS
 from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
-from tests.unit.sdk.test_utils import test_cases
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
 
-from tests.utils import random_string, cleanup_local
-from tests.integration import OBJECT_COUNT, REMOTE_SET
+from tests.utils import random_string, cleanup_local, test_cases
+from tests.const import OBJ_NAME, OBJECT_COUNT, OBJ_CONTENT, PREFIX_NAME
+from tests.integration import REMOTE_SET
 
 INNER_DIR = "directory"
 TOP_LEVEL_FILES = {
@@ -112,7 +112,7 @@ class TestBucketOps(RemoteEnabledTest):
         to_bck_name = self.bck_name + "to"
         from_bck = self._create_bucket(from_bck_name)
         to_bck = self._create_bucket(to_bck_name)
-        prefix = "prefix-"
+        prefix = PREFIX_NAME
         new_prefix = "new-"
         content = b"test"
         expected_name = prefix + "-obj"
@@ -269,7 +269,7 @@ class TestBucketOps(RemoteEnabledTest):
         self.bucket.put_files(
             self.local_test_files,
             prepend=self.obj_prefix,
-            prefix_filter="prefix-",
+            prefix_filter=PREFIX_NAME,
             pattern="*.txt",
         )
         self.bucket.object(self.obj_prefix + included_filename).get()
@@ -349,7 +349,7 @@ class TestBucketOps(RemoteEnabledTest):
         self.assertEqual(bucket_summary["TotalSize"]["size_all_remote_objs"], "0")
         self.assertEqual(bucket_summary["used_pct"], 0)
 
-        summ_test_bck.object("test-object").put_content("test-content")
+        summ_test_bck.object(OBJ_NAME).put_content(OBJ_CONTENT)
 
         bucket_summary = summ_test_bck.summary()
 
@@ -377,7 +377,7 @@ class TestBucketOps(RemoteEnabledTest):
         self.assertEqual(bck_summ["name"], "info-test")
 
         # Upload an object to the bucket
-        info_test_bck.object("test-object").put_content("test-content")
+        info_test_bck.object(OBJ_NAME).put_content(OBJ_CONTENT)
 
         _, bck_summ = info_test_bck.info()
 

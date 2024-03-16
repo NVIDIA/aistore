@@ -30,7 +30,7 @@ from aistore.sdk.const import (
 from aistore.sdk.object import Object
 from aistore.sdk.object_reader import ObjectReader
 from aistore.sdk.types import ActionMsg, BlobMsg, PromoteAPIArgs
-from tests.const import SMALL_FILE_SIZE
+from tests.const import SMALL_FILE_SIZE, ETL_NAME
 
 BCK_NAME = "bucket_name"
 OBJ_NAME = "object_name"
@@ -71,15 +71,14 @@ class TestObject(unittest.TestCase):
 
     def test_get(self):
         archpath_param = "archpath"
-        etl_name = "etl"
         blob_chunk_size = "4mb"
         blob_num_workers = 10
         self.expected_params[QPARAM_ARCHPATH] = archpath_param
-        self.expected_params[QPARAM_ETL_NAME] = etl_name
+        self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
         self.get_exec_assert(
             archpath=archpath_param,
             chunk_size=3,
-            etl_name=etl_name,
+            etl_name=ETL_NAME,
             writer=self.mock_writer,
             blob_chunk_size=blob_chunk_size,
             blob_num_workers=blob_num_workers,
@@ -156,20 +155,18 @@ class TestObject(unittest.TestCase):
     def test_list_urls(self, mock_get_url):
         object_url = "single-object-url"
         mock_get_url.return_value = object_url
-        etl_name = "test-etl"
-        res = self.object.list_urls(etl_name=etl_name)
+        res = self.object.list_urls(etl_name=ETL_NAME)
         self.assertEqual([object_url], list(res))
-        mock_get_url.assert_called_with(etl_name=etl_name)
+        mock_get_url.assert_called_with(etl_name=ETL_NAME)
 
     def test_get_url(self):
         expected_res = "full url"
         archpath = "arch"
-        etl = "test-etl"
         self.mock_client.get_full_url.return_value = expected_res
-        res = self.object.get_url(archpath=archpath, etl_name=etl)
+        res = self.object.get_url(archpath=archpath, etl_name=ETL_NAME)
         self.assertEqual(expected_res, res)
         self.mock_client.get_full_url.assert_called_with(
-            REQUEST_PATH, {QPARAM_ARCHPATH: archpath, QPARAM_ETL_NAME: etl}
+            REQUEST_PATH, {QPARAM_ARCHPATH: archpath, QPARAM_ETL_NAME: ETL_NAME}
         )
 
     @patch("pathlib.Path.is_file")

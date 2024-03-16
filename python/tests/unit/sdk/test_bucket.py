@@ -58,6 +58,7 @@ from aistore.sdk.types import (
     TransformBckMsg,
     CopyBckMsg,
 )
+from tests.const import ETL_NAME, PREFIX_NAME
 
 BCK_NAME = "bucket_name"
 
@@ -220,7 +221,7 @@ class TestBucket(unittest.TestCase):
 
     def test_copy(self):
         prefix_filter = "existing-"
-        prepend_val = "prefix-"
+        prepend_val = PREFIX_NAME
         dry_run = True
         force = True
         latest = False
@@ -264,7 +265,7 @@ class TestBucket(unittest.TestCase):
         )
 
     def test_list_objects(self):
-        prefix = "prefix-"
+        prefix = PREFIX_NAME
         page_size = 0
         uuid = "1234"
         props = "name"
@@ -326,13 +327,14 @@ class TestBucket(unittest.TestCase):
 
     def test_list_objects_iter(self):
         self.assertIsInstance(
-            self.ais_bck.list_objects_iter("prefix-", "obj props", 123), ObjectIterator
+            self.ais_bck.list_objects_iter(PREFIX_NAME, "obj props", 123),
+            ObjectIterator,
         )
 
     def test_list_all_objects(self):
         list_1_id = "123"
         list_1_cont = "cont"
-        prefix = "prefix-"
+        prefix = PREFIX_NAME
         page_size = 5
         props = "name"
         flags = [ListObjectFlag.CACHED, ListObjectFlag.DELETED]
@@ -441,8 +443,7 @@ class TestBucket(unittest.TestCase):
             self.assertIn(expected, self.mock_client.request_deserialize.call_args_list)
 
     def test_transform(self):
-        etl_name = "etl-name"
-        prepend_val = "prefix-"
+        prepend_val = PREFIX_NAME
         prefix_filter = "required-prefix-"
         ext = {"jpg": "txt"}
         timeout = "4m"
@@ -450,7 +451,7 @@ class TestBucket(unittest.TestCase):
         dry_run = True
         action_value = TCBckMsg(
             ext=ext,
-            transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
+            transform_msg=TransformBckMsg(etl_name=ETL_NAME, timeout=timeout),
             copy_msg=CopyBckMsg(
                 prefix=prefix_filter,
                 prepend=prepend_val,
@@ -462,7 +463,7 @@ class TestBucket(unittest.TestCase):
         ).as_dict()
 
         self._transform_exec_assert(
-            etl_name,
+            ETL_NAME,
             action_value,
             prepend=prepend_val,
             prefix_filter=prefix_filter,
@@ -473,9 +474,8 @@ class TestBucket(unittest.TestCase):
         )
 
     def test_transform_default_params(self):
-        etl_name = "etl-name"
         action_value = {
-            "id": etl_name,
+            "id": ETL_NAME,
             "prefix": "",
             "prepend": "",
             "force": False,
@@ -485,7 +485,7 @@ class TestBucket(unittest.TestCase):
             "synchronize": False,
         }
 
-        self._transform_exec_assert(etl_name, action_value)
+        self._transform_exec_assert(ETL_NAME, action_value)
 
     def _transform_exec_assert(self, etl_name, expected_act_value, **kwargs):
         to_bck = Bucket(name="new-bucket")
@@ -568,15 +568,14 @@ class TestBucket(unittest.TestCase):
     @patch("aistore.sdk.bucket.Bucket.list_objects_iter")
     def test_list_urls(self, mock_list_obj, mock_object):
         prefix = "my-prefix"
-        etl_name = "my-etl"
         object_names = ["obj_name", "obj_name2"]
         expected_obj_calls = []
         # Should create an object reference and get url for every object returned by listing
         for name in object_names:
             expected_obj_calls.append(call(name))
-            expected_obj_calls.append(call().get_url(etl_name=etl_name))
+            expected_obj_calls.append(call().get_url(etl_name=ETL_NAME))
         mock_list_obj.return_value = [BucketEntry(n=name) for name in object_names]
-        list(self.ais_bck.list_urls(prefix=prefix, etl_name=etl_name))
+        list(self.ais_bck.list_urls(prefix=prefix, etl_name=ETL_NAME))
         mock_list_obj.assert_called_with(prefix=prefix, props="name")
         mock_object.assert_has_calls(expected_obj_calls)
 

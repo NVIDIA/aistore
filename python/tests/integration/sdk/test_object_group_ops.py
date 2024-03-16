@@ -11,8 +11,15 @@ import pytest
 
 from aistore.sdk.const import PROVIDER_AIS, LOREM, DUIS
 from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
-from tests.const import SMALL_FILE_SIZE, MIB
-from tests.integration import REMOTE_SET, TEST_TIMEOUT, OBJECT_COUNT
+from tests.const import (
+    SMALL_FILE_SIZE,
+    MIB,
+    OBJECT_COUNT,
+    TEST_TIMEOUT,
+    PREFIX_NAME,
+    SUFFIX_NAME,
+)
+from tests.integration import REMOTE_SET
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import random_string
 
@@ -21,7 +28,7 @@ from tests.utils import random_string
 class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
-        self.suffix = "-suffix"
+        self.suffix = SUFFIX_NAME
         self.obj_names = self._create_objects(suffix=self.suffix)
         if REMOTE_SET:
             self.s3_client = self._get_boto3_client()
@@ -120,7 +127,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
             OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))
         )
 
-        new_prefix = "prefix-"
+        new_prefix = PREFIX_NAME
         copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
             to_bck, prepend=new_prefix
         )
@@ -310,7 +317,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         to_bck_name = "destination-bucket"
         to_bck = self._create_bucket(to_bck_name)
-        new_prefix = "prefix-"
+        new_prefix = PREFIX_NAME
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
         self.assertEqual(
             OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))

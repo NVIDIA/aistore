@@ -1,7 +1,7 @@
 import unittest
 
 from aistore.sdk import ListObjectFlag
-from tests.unit.sdk.test_utils import test_cases
+from tests.utils import test_cases
 
 
 # pylint: disable=unused-variable

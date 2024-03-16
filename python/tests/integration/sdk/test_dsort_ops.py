@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 
 from aistore import Client
-from tests.integration import CLUSTER_ENDPOINT, TEST_TIMEOUT
-from tests.unit.sdk.test_utils import test_cases
-from tests.utils import random_string
+from tests.integration import CLUSTER_ENDPOINT
+from tests.const import TEST_TIMEOUT
+from tests.utils import test_cases, random_string
 
 
 class TestDsortOps(unittest.TestCase):

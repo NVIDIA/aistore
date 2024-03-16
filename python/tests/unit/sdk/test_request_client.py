@@ -12,7 +12,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.request_client import RequestClient
 from aistore.version import __version__ as sdk_version
-from tests.unit.sdk.test_utils import test_cases
+from tests.utils import test_cases
 
 
 class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable

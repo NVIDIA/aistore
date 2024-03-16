@@ -63,3 +63,15 @@ def create_and_put_objects(
             obj_size=obj_size,
         )
     return obj_names
+
+
+def test_cases(*args):
+    def decorator(func):
+        def wrapper(self, *inner_args, **kwargs):
+            for arg in args:
+                with self.subTest(arg=arg):
+                    func(self, arg, *inner_args, **kwargs)
+
+        return wrapper
+
+    return decorator

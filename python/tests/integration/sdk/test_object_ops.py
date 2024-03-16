@@ -8,18 +8,20 @@ from pathlib import Path
 
 from aistore.sdk.const import AIS_VERSION, HEADER_CONTENT_LENGTH, UTF_ENCODING
 
-from tests.const import SMALL_FILE_SIZE
-from tests.unit.sdk.test_utils import test_cases
+from tests.const import (
+    SMALL_FILE_SIZE,
+    OBJ_NAME,
+    OBJ_READ_TYPE_ALL,
+    OBJ_READ_TYPE_CHUNK,
+    TEST_TIMEOUT,
+)
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import (
     random_string,
     cleanup_local,
+    test_cases,
 )
-from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET, TEST_TIMEOUT
-
-OBJ_READ_TYPE_ALL = "read_all"
-OBJ_READ_TYPE_CHUNK = "chunk"
-OBJ_NAME = "test-object"
+from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
 
 
 # pylint: disable=unused-variable

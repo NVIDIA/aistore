@@ -12,8 +12,6 @@ from tests.integration import (
     REMOTE_SET,
     REMOTE_BUCKET,
     CLUSTER_ENDPOINT,
-    OBJECT_COUNT,
-    TEST_TIMEOUT_LONG,
 )
 from tests.utils import (
     random_string,
@@ -23,6 +21,7 @@ from tests.utils import (
 )
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
+from tests.const import TEST_TIMEOUT_LONG, OBJECT_COUNT, SUFFIX_NAME
 
 
 class RemoteEnabledTest(unittest.TestCase):
@@ -188,7 +187,7 @@ class RemoteEnabledTest(unittest.TestCase):
             props="name,cached", prefix=self.obj_prefix
         ).entries
         self.assertEqual(expected_object_count, len(objects))
-        cached_names = {self.obj_prefix + str(x) + "-suffix" for x in cached_range}
+        cached_names = {self.obj_prefix + str(x) + SUFFIX_NAME for x in cached_range}
         cached_objs = []
         evicted_objs = []
         for obj in objects:

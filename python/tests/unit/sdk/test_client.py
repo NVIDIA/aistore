@@ -11,7 +11,8 @@ from aistore.sdk.etl import Etl
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
-from tests.unit.sdk.test_utils import test_cases
+from tests.const import ETL_NAME
+from tests.utils import test_cases
 
 
 class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
@@ -64,7 +65,6 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(job_kind, res.job_kind)
 
     def test_etl(self):
-        etl_name = "my-etl"
-        res = self.client.etl(etl_name)
+        res = self.client.etl(ETL_NAME)
         self.assertIsInstance(res, Etl)
-        self.assertEqual(etl_name, res.name)
+        self.assertEqual(ETL_NAME, res.name)

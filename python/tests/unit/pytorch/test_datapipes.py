@@ -5,6 +5,7 @@ from torch.utils.data import IterDataPipe
 
 from aistore.pytorch.aisio import AISSourceLister
 from aistore.sdk.ais_source import AISSource
+from tests.const import ETL_NAME
 
 
 class TestDataPipes(unittest.TestCase):
@@ -17,13 +18,12 @@ class TestDataPipes(unittest.TestCase):
         ais_source_2.list_urls.return_value = source_2_urls
         expected_res = source_1_urls + source_2_urls
         prefix = "obj-prefix-"
-        etl_name = "test-etl"
 
         source_lister = AISSourceLister(
-            [ais_source_1, ais_source_2], prefix=prefix, etl_name=etl_name
+            [ais_source_1, ais_source_2], prefix=prefix, etl_name=ETL_NAME
         )
 
         self.assertIsInstance(source_lister, IterDataPipe)
         self.assertEqual(expected_res, list(source_lister))
-        ais_source_1.list_urls.assert_called_with(prefix=prefix, etl_name=etl_name)
-        ais_source_2.list_urls.assert_called_with(prefix=prefix, etl_name=etl_name)
+        ais_source_1.list_urls.assert_called_with(prefix=prefix, etl_name=ETL_NAME)
+        ais_source_2.list_urls.assert_called_with(prefix=prefix, etl_name=ETL_NAME)
