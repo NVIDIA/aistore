@@ -1388,17 +1388,16 @@ func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 // FSPConf //
 /////////////
 
-func (c *FSPConf) UnmarshalJSON(data []byte) (err error) {
+func (c *FSPConf) UnmarshalJSON(data []byte) error {
 	m := cos.NewStrSet()
-	err = jsoniter.Unmarshal(data, &m)
-	if err != nil {
-		return
+	err := jsoniter.Unmarshal(data, &m)
+	if err == nil {
+		c.Paths = m
 	}
-	c.Paths = m
-	return
+	return err
 }
 
-func (c *FSPConf) MarshalJSON() (data []byte, err error) {
+func (c *FSPConf) MarshalJSON() ([]byte, error) {
 	return cos.MustMarshal(c.Paths), nil
 }
 
@@ -1415,7 +1414,7 @@ func (c *FSPConf) Validate(contextConfig *Config) error {
 	}
 
 	cleanMpaths := make(map[string]struct{})
-	for fspath := range c.Paths {
+	for fspath, val := range c.Paths {
 		mpath, err := ValidateMpath(fspath)
 		if err != nil {
 			return err
@@ -1431,7 +1430,7 @@ func (c *FSPConf) Validate(contextConfig *Config) error {
 				return NewErrInvalidFSPathsConf(err)
 			}
 		}
-		cleanMpaths[mpath] = struct{}{}
+		cleanMpaths[mpath] = val
 	}
 	c.Paths = cleanMpaths
 	return nil
@@ -1783,10 +1782,11 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
 
-	// initialize read-mostly (rom) config
+	// initialize atomic part of the config including most often used timeouts and features
 	Rom.Set(&config.ClusterConfig)
-	Rom.testingEnv = config.TestingEnv()
 
+	// read-only
+	Rom.testingEnv = config.TestingEnv()
 	config.SetRole(daeRole)
 
 	// override config - locally updated global defaults
@@ -1824,10 +1824,10 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 func handleOverrideConfig(config *Config) error {
 	overrideConfig, err := loadOverrideConfig(config.ConfigDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			err = config.Validate() // always validate
+		}
 		return err
-	}
-	if overrideConfig == nil {
-		return config.Validate() // always validate
 	}
 
 	// update config with locally-stored 'OverrideConfigFname' and validate the result
@@ -1846,10 +1846,7 @@ func SaveOverrideConfig(configDir string, toUpdate *ConfigToSet) error {
 func loadOverrideConfig(configDir string) (toUpdate *ConfigToSet, err error) {
 	toUpdate = &ConfigToSet{}
 	_, err = jsp.LoadMeta(path.Join(configDir, fname.OverrideConfig), toUpdate)
-	if os.IsNotExist(err) {
-		err = nil
-	}
-	return
+	return toUpdate, err
 }
 
 func ValidateRemAlias(alias string) (err error) {
