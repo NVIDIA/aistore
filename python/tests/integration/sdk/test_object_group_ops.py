@@ -5,11 +5,12 @@ import hashlib
 import unittest
 import tarfile
 import io
+from datetime import datetime
 
 import pytest
 
 from aistore.sdk.const import PROVIDER_AIS, LOREM, DUIS
-from aistore.sdk.errors import InvalidBckProvider, AISError
+from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
 from tests.const import SMALL_FILE_SIZE, MIB
 from tests.integration import REMOTE_SET, TEST_TIMEOUT, OBJECT_COUNT
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
@@ -70,8 +71,38 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.obj_names.extend(obj_names)
         obj_group = self.bucket.objects(obj_names=obj_names)
         self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
+        start_time = datetime.now().time()
         job_id = obj_group.prefetch(blob_threshold=2 * MIB)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
+        end_time = datetime.now().time()
+        jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
+            start_time=start_time, end_time=end_time
+        )
+        self.assertTrue(len(jobs_list) > 0)
+        self._verify_cached_objects(
+            OBJECT_COUNT + 1, range(OBJECT_COUNT, OBJECT_COUNT + 1)
+        )
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_prefetch_without_blob_download(self):
+        obj_name = self.obj_prefix + str(OBJECT_COUNT) + self.suffix
+        obj_names = self._create_objects(obj_names=[obj_name], obj_size=SMALL_FILE_SIZE)
+        self.obj_names.extend(obj_names)
+        obj_group = self.bucket.objects(obj_names=obj_names)
+        self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
+        start_time = datetime.now().time()
+        job_id = obj_group.prefetch(blob_threshold=2 * SMALL_FILE_SIZE)
+        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
+        end_time = datetime.now().time()
+
+        with self.assertRaises(JobInfoNotFound):
+            self.client.job(job_kind="blob-download").get_within_timeframe(
+                start_time=start_time, end_time=end_time
+            )
+
         self._verify_cached_objects(
             OBJECT_COUNT + 1, range(OBJECT_COUNT, OBJECT_COUNT + 1)
         )
