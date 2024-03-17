@@ -183,8 +183,13 @@ func (t *target) init(config *cmn.Config) {
 	// - in that exact sequence
 	tid, generated := initTID(config)
 	if generated && len(config.FSP.Paths) > 0 {
-		// in an unlikely case of losing all mountpath-stored IDs but still having a volume
-		tid = volume.RecoverTID(tid, config.FSP.Paths)
+		var recovered bool
+		// in an unlikely event when losing all mountpath-stored IDs but still having a volume
+		tid, recovered = volume.RecoverTID(tid, config.FSP.Paths)
+		generated = !recovered
+
+		// TODO: generated == true will not sit well with loading a local copy of Smap
+		// later on during startup sequence - and not finding _this_ target in it
 	}
 	t.si.Init(tid, apc.Target)
 
@@ -193,8 +198,13 @@ func (t *target) init(config *cmn.Config) {
 	memsys.Init(t.SID(), t.SID(), config)
 
 	// new fs, check and add mountpaths
-	newVol := volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks,
-		daemon.cli.target.useLoopbackDevs, daemon.cli.target.startWithLostMountpath)
+	vini := volume.IniCtx{
+		AllowSharedOrNone: daemon.cli.target.allowSharedDisksAndNoDisks,
+		UseLoopbacks:      daemon.cli.target.useLoopbackDevs,
+		IgnoreMissing:     daemon.cli.target.startWithLostMountpath,
+		RandomTID:         generated,
+	}
+	newVol := volume.Init(t, config, vini)
 	fs.ComputeDiskSize()
 
 	t.initHostIP(config)
@@ -258,17 +268,18 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 		if err := cos.ValidateDaemonID(tid); err != nil {
 			nlog.Errorln("Warning:", err)
 		}
-		return
+		return tid, false
 	}
 
 	var err error
 	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
-		cos.ExitLog(err)
+		cos.ExitLog(err) // FATAL
 	}
 	if tid != "" {
-		return
+		return tid, false
 	}
 
+	// this target: generate random ID
 	tid = genDaemonID(apc.Target, config)
 	err = cos.ValidateDaemonID(tid)
 	debug.AssertNoErr(err)

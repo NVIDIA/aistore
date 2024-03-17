@@ -429,7 +429,12 @@ until:
 		}
 	}
 
-	// NOTE: the remaining section under lock to serialize node joins (`httpclupost`)
+	if smap.CountTargets() < 2 && p.owner.smap.get().CountTargets() < 2 {
+		// nothing to do even if interrupted
+		return
+	}
+
+	// NOTE: continue under lock to serialize concurrent node joins (`httpclupost`), if any
 
 	p.owner.smap.mu.Lock()
 	if !p.owner.rmd.interrupted.CAS(true, false) {

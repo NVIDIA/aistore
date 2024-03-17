@@ -1,12 +1,17 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
+	"reflect"
 	"unsafe"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
+
+const MLCG32 = 1103515245 // xxhash seed
 
 // assorted common constants
 const (
@@ -26,4 +31,15 @@ func UnsafeS(b []byte) string {
 // cast string to immutable bytes
 func UnsafeB(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+// shallow copy
+func CopyStruct(dst, src any) {
+	x := reflect.ValueOf(src)
+	debug.Assert(x.Kind() == reflect.Ptr)
+	starX := x.Elem()
+	y := reflect.New(starX.Type())
+	starY := y.Elem()
+	starY.Set(starX)
+	reflect.ValueOf(dst).Elem().Set(y.Elem())
 }

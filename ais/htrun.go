@@ -44,6 +44,16 @@ import (
 
 const ciePrefix = "cluster integrity error cie#"
 
+const notPresentInSmap = `
+%s: %s (self) is not present in the local copy of the %s
+
+-----------------
+To troubleshoot:
+1. first, make sure you are not trying to run two different %s on the same machine
+2. remove possibly outdated cluster map from the %s (located at %s)
+3. restart %s
+-----------------`
+
 // extra or extended state - currently, target only
 type htext interface {
 	interruptedRestarted() (bool, bool)
@@ -386,8 +396,11 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 
 	node := smap.GetNode(h.SID())
 	if node == nil {
-		cos.ExitLogf("%s: %s is not present in the loaded %s", cmn.BadSmapPrefix, h.si, smap.StringEx())
-		return
+		ty := "targets"
+		if h.si.Type() == apc.Proxy {
+			ty = "proxies"
+		}
+		cos.ExitLogf(notPresentInSmap, cmn.BadSmapPrefix, h.si, smap.StringEx(), ty, h.si, h.owner.smap.fpath, h.si)
 	}
 	if node.Type() != h.si.Type() {
 		cos.ExitLogf("%s: %s is %q while the node in the loaded %s is %q", cmn.BadSmapPrefix,
@@ -1517,7 +1530,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	rmd := h.owner.rmd.get()
 	if newRMD.CluID != rmd.CluID && rmd.CluID != "" {
 		logmsync(rmd.Version, newRMD, msg, caller)
-		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID)
+		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID, rmd.Version)
 		cos.ExitLog(err) // FATAL
 	}
 
@@ -1879,10 +1892,17 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 				nlog.Warningln(s + "; NOTE: starting in maintenance mode")
 			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
 				if smap.UUID != rmd.CluID {
-					err = h.owner.rmd.newClusterIntegrityErr(h.String(), smap.UUID, rmd.CluID)
-					cos.ExitLog(err) // FATAL
+					if rmd.CluID != "" {
+						err = h.owner.rmd.newClusterIntegrityErr(h.String(), smap.UUID, rmd.CluID, rmd.version())
+						cos.ExitLog(err) // FATAL
+					}
+
+					nlog.Warningf("local copy of RMD v%d does not have cluster ID (expecting %q)",
+						rmd.version(), smap.UUID)
+					nlog.Infoln(s)
+				} else {
+					nlog.Infoln(s+",", rmd.String())
 				}
-				nlog.Infoln(s+",", rmd.String())
 			} else {
 				nlog.Infoln(s)
 			}

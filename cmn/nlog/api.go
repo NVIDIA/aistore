@@ -7,6 +7,7 @@ package nlog
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -34,8 +35,15 @@ func ErrorDepth(depth int, args ...any)   { log(sevErr, depth, "", args...) }
 func Errorln(args ...any)                 { log(sevErr, 0, "", args...) }
 func Errorf(format string, args ...any)   { log(sevErr, 0, format, args...) }
 
-func SetLogDirRole(dir, role string) { logDir, aisrole = dir, role }
-func SetTitle(s string)              { title = s }
+func SetLogDirRole(dir, role string) {
+	if logDir != "" && logDir != dir && unitTests.Load() {
+		msg := fmt.Sprintf("log dir %q != %q (using nlog _prior_ to loading config?)", logDir, dir)
+		assert(false, msg)
+	}
+	logDir, aisrole = dir, role
+}
+
+func SetTitle(s string) { title = s }
 
 func InfoLogName() string { return sname() + ".INFO" }
 func ErrLogName() string  { return sname() + ".ERROR" }

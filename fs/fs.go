@@ -985,7 +985,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 // load node ID
 
 // traverses all mountpaths to load and validate node ID
-func LoadNodeID(mpaths cos.StrSet) (mDaeID string, err error) {
+func LoadNodeID(mpaths cos.StrKVs) (mDaeID string, err error) {
 	for mp := range mpaths {
 		daeID, err := _loadXattrID(mp)
 		if err != nil {

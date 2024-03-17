@@ -135,7 +135,6 @@ func (r *rmdOwner) get() *rebMD    { return r.rmd.Load() }
 
 func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 	r.Lock()
-	r._cluID(ctx)
 	clone, err = r.do(ctx)
 	r.Unlock()
 
@@ -145,7 +144,23 @@ func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 	return
 }
 
-func (r *rmdOwner) _cluID(ctx *rmdModifier) {
+const rmdFromAnother = `
+%s: RMD v%d (cluster ID %q) belongs to a different cluster %q
+
+-----------------
+To troubleshoot:
+1. first, make sure you are not trying to run two different clusters that utilize (or include) the same machine
+2. remove possibly misplaced RMD from the %s (located at %s)
+3. restart %s
+-----------------`
+
+func (r *rmdOwner) newClusterIntegrityErr(node, otherCID, haveCID string, version int64) (err error) {
+	return fmt.Errorf(rmdFromAnother, node, version, haveCID, otherCID, node, r.fpath, node)
+}
+
+func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
+	ctx.prev = r.get()
+
 	if r.cluID == "" {
 		r.cluID = ctx.cluID
 	}
@@ -155,18 +170,10 @@ func (r *rmdOwner) _cluID(ctx *rmdModifier) {
 	if r.cluID == "" {
 		r.cluID = ctx.smapCtx.smap.UUID
 	} else if r.cluID != ctx.smapCtx.smap.UUID {
-		err := r.newClusterIntegrityErr("primary", ctx.smapCtx.smap.UUID, r.cluID)
-		cos.ExitLog(err)
+		err := r.newClusterIntegrityErr("primary", ctx.smapCtx.smap.UUID, r.cluID, ctx.prev.Version)
+		cos.ExitLog(err) // FATAL
 	}
-}
 
-// FATAL deployment error, most likely unfinished cleanup or worse (co-existence)
-func (r *rmdOwner) newClusterIntegrityErr(node, exp, have string) (err error) {
-	return fmt.Errorf("%s: RMD belongs to a different cluster %q (have %q at %s)", node, exp, have, r.fpath)
-}
-
-func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
-	ctx.prev = r.get()
 	clone = ctx.prev.clone()
 	clone.TargetIDs = nil
 	clone.Resilver = ""

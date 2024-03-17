@@ -30,6 +30,7 @@ func ExitLogf(f string, a ...any) {
 	if flag.Parsed() {
 		nlog.ErrorDepth(1, msg+"\n")
 		nlog.Flush(nlog.ActExit)
+		os.Exit(1)
 	}
 	_exit(msg)
 }
@@ -39,6 +40,7 @@ func ExitLog(a ...any) {
 	if flag.Parsed() {
 		nlog.ErrorDepth(1, msg+"\n")
 		nlog.Flush(nlog.ActExit)
+		os.Exit(1)
 	}
 	_exit(msg)
 }

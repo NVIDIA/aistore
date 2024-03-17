@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,6 +41,8 @@ var (
 
 	onceInitFiles sync.Once
 
+	unitTests atomic.Bool
+
 	toStderr     bool
 	alsoToStderr bool
 )
@@ -54,7 +57,7 @@ func init() {
 
 func initFiles() {
 	if logDir == "" {
-		// unit tests
+		unitTests.Store(true)
 		logDir = filepath.Join(os.TempDir(), "aislogs")
 	}
 	if err := fcreateAll(sevErr); err != nil {

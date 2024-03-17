@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 
@@ -118,12 +118,13 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		metaVer = binary.BigEndian.Uint32(prefix[cos.SizeofI64:])
 		if metaVer != opts.Metaver {
 			if opts.OldMetaverOk == 0 || metaVer > opts.Metaver || metaVer < opts.OldMetaverOk {
-				// not backward compatible
+				// _not_ backward compatible
 				err = newErrVersion(tag, metaVer, opts.Metaver)
 				return
 			}
+			// backward compatible
 			erw := newErrVersion(tag, metaVer, opts.Metaver, opts.OldMetaverOk)
-			nlog.Warningln(erw, "- proceeding anyway") // nlog depth 3
+			nlog.Warningln(erw)
 		}
 		flags := binary.BigEndian.Uint32(prefix[cos.SizeofI64+cos.SizeofI32:])
 		opts.Compress = flags&(1<<0) != 0

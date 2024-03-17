@@ -41,7 +41,7 @@ const (
 
 	MetaverLOM = 1 // LOM
 
-	MetaverConfig      = 3 // Global Configuration (jsp)
+	MetaverConfig      = 4 // Global Configuration (jsp)
 	MetaverAuthNConfig = 1 // Authn config (jsp) // ditto
 	MetaverAuthTokens  = 1 // Authn tokens (jsp) // ditto
 

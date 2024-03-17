@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 
@@ -47,5 +47,6 @@ func (e *ErrUnsupportedMetaVersion) Error() string {
 }
 
 func (e *ErrJspCompatibleVersion) Error() string {
-	return fmt.Sprintf("older compatible meta-version %q: got %d, expected %d", e.tag, e.got, e.expected)
+	return fmt.Sprintf("older but still compatible meta-version %q: %d (the current meta-version is %d)",
+		e.tag, e.got, e.expected)
 }

@@ -1,7 +1,7 @@
-// Package volume provides the volume abstraction and methods to configLoadVMD, store with redundancy,
+// Package volume provides volume (a.k.a. pool of disks) abstraction and methods to configure, store,
 // and validate the corresponding metadata. AIS volume is built on top of mountpaths (fs package).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package volume
 
@@ -18,48 +18,58 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-// initializes mountpaths and volume; on SIE (storage integrity error) terminates and exits
-func Init(t core.Target, config *cmn.Config,
-	allowSharedDisksAndNoDisks, useLoopbackDevs, ignoreMissingMountpath bool) (created bool) {
-	var (
-		vmd *VMD
-		tid = t.SID()
-	)
-	fs.New(len(config.FSP.Paths),
-		allowSharedDisksAndNoDisks || (config.TestingEnv() && !useLoopbackDevs)) // new and empty
+type IniCtx struct {
+	AllowSharedOrNone bool // disks
+	UseLoopbacks      bool // using loopback dev-s
+	IgnoreMissing     bool // ignore missing mountpath(s)
+	RandomTID         bool // generated random target ID
+}
 
-	// bootstrap from a local-config referenced location; two points:
-	// a) local-config is kept in-sync with mountpath changes (see ais/fspathgrp)
-	// b) disk label for absolute referencing - can wait (TODO)
+// bootstrap from local-config referenced locations
+// NOTE: local plain-text config is kept in-sync with mountpath changes (see ais/fspathgrp)
+// potential TODO for bare-metal deployments: store persistent labels (dmidecode style)
+
+// - load (or initialize new) volume
+// - initialize mountpaths
+// - check a variety of SIE (storage integrity error) conditions; terminate and exit if detected
+func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
+	var (
+		vmd     *VMD
+		tid     = t.SID()
+		fspaths = config.FSP.Paths.Keys()
+	)
+	// new and empty
+	fs.New(len(config.FSP.Paths), ctx.AllowSharedOrNone || (config.TestingEnv() && !ctx.UseLoopbacks))
+
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
-		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, config.FSP.Paths.ToSlice())
+		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)
 	} else {
 		vmd = v
 	}
 
+	// a) the very first deployment when volume does not exist, or
+	// b) when the config doesn't contain a single valid mountpath
+	// (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 	if vmd == nil {
-		// a) the very first deployment when volume does not exist, or
-		// b) when the config doesn't contain a single valid mountpath
-		//    (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 		if err := configInitMPI(tid, config); err != nil {
-			cos.ExitLogf("%s: %v (config-init-mpi, %v)", t, err, config.FSP.Paths.ToSlice())
+			cos.ExitLogf("%s: %v (config-init-mpi, %v, %+v)", t, err, fspaths, ctx)
 		}
-		nlog.Warningf("%s: creating new VMD from %v config", t, config.FSP.Paths.ToSlice())
+		nlog.Warningln(t.String()+":", "creating new VMD from", fspaths, "config")
 		if v, err := NewFromMPI(tid); err != nil {
 			cos.ExitLogf("%s: %v (new-from-mpi)", t, err) // unlikely
 		} else {
 			vmd = v
 		}
-		nlog.Warningf("%s: %s created", t, vmd)
+		nlog.Warningln(t.String()+":", vmd.String(), "initialized")
 		created = true
 		return
 	}
 
-	// use loaded VMD to find the most recently updated (the current) one and, simultaneously,
+	// otherwise, use loaded VMD to find the most recently updated (the current) one and, simultaneously,
 	// initialize MPI
 	var persist bool
-	if v, haveOld, err := vmdInitMPI(tid, config, vmd, 1 /*pass #1*/, ignoreMissingMountpath); err != nil {
-		cos.ExitLogf("%s: %v (vmd-init-mpi-p1, ignore-missing=%t, %s)", t, err, ignoreMissingMountpath, vmd)
+	if v, haveOld, err := initMPI(tid, config, vmd, 1 /*pass #1*/, ctx.IgnoreMissing); err != nil {
+		cos.ExitLogf("%s: %v (vmd-init-mpi-p1, %+v, %s)", t, err, ctx, vmd)
 	} else {
 		if v != nil && v.Version > vmd.Version {
 			vmd = v
@@ -68,9 +78,8 @@ func Init(t core.Target, config *cmn.Config,
 		if haveOld {
 			persist = true
 		}
-		if v, _, err := vmdInitMPI(tid, config, vmd, 2 /*pass #2*/, ignoreMissingMountpath); err != nil {
-			cos.ExitLogf("%s: %v (vmd-init-mpi-p2, have-old=%t, ignore-missing=%t, %s)",
-				t, err, haveOld, ignoreMissingMountpath, vmd)
+		if v, _, err := initMPI(tid, config, vmd, 2 /*pass #2*/, ctx.IgnoreMissing); err != nil {
+			cos.ExitLogf("%s: %v (vmd-init-mpi-p2, have-old=%t, %+v, %s)", t, err, haveOld, ctx, vmd)
 		} else {
 			debug.Assert(v == nil || v.Version == vmd.Version)
 		}
@@ -78,6 +87,7 @@ func Init(t core.Target, config *cmn.Config,
 			vmd.persist()
 		}
 	}
+
 	nlog.Infoln(vmd.String())
 	return
 }
@@ -112,7 +122,7 @@ func newVMD(expectedSize int) *VMD {
 	return &VMD{Mountpaths: make(map[string]*fsMpathMD, expectedSize)}
 }
 
-// config => MPI
+// local config => fs.MPI
 func configInitMPI(tid string, config *cmn.Config) (err error) {
 	var (
 		configPaths    = config.FSP.Paths
@@ -143,8 +153,8 @@ rerr:
 	return
 }
 
-// VMD => MPI in two passes
-func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMountpath bool) (maxVerVMD *VMD, haveOld bool, err error) {
+// VMD => fs.MPI in two passes
+func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMountpath bool) (maxVerVMD *VMD, haveOld bool, err error) {
 	var (
 		availablePaths = make(fs.MPI, len(vmd.Mountpaths))
 		disabledPaths  = make(fs.MPI)
@@ -247,7 +257,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 }
 
 // pre-loading to try to recover lost tid
-func RecoverTID(generatedID string, configPaths cos.StrSet) (tid string) {
+func RecoverTID(generatedID string, configPaths cos.StrKVs) (tid string, recovered bool) {
 	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading
 	for mpath := range configPaths {
 		available[mpath] = nil
@@ -261,14 +271,15 @@ func RecoverTID(generatedID string, configPaths cos.StrSet) (tid string) {
 		if tid == "" {
 			nlog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
 			tid = vmd.DaemonID
+			recovered = true
 		} else if tid != vmd.DaemonID {
-			cos.ExitLogf("multiple conflicting target IDs %q(%q) vs %q", vmd.DaemonID, mpath, tid)
+			cos.ExitLogf("multiple conflicting target IDs %q(%q) vs %q", vmd.DaemonID, mpath, tid) // FATAL
 		}
 	}
 	if tid == "" {
 		tid = generatedID
 	}
-	return
+	return tid, recovered
 }
 
 // loading
@@ -276,7 +287,7 @@ func RecoverTID(generatedID string, configPaths cos.StrSet) (tid string) {
 func LoadVMDTest() (*VMD, error) { return loadVMD("", nil) } // test-only
 
 // config => (temp MPI) => VMD
-func configLoadVMD(tid string, configPaths cos.StrSet) (vmd *VMD, err error) {
+func configLoadVMD(tid string, configPaths cos.StrKVs) (vmd *VMD, err error) {
 	if len(configPaths) == 0 {
 		err = errors.New("no fspaths - see README => Configuration and fspaths section in the config.sh")
 		return

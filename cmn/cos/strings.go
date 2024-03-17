@@ -36,3 +36,11 @@ func Either(lhs, rhs string) string {
 	}
 	return rhs
 }
+
+// (common use)
+func Plural(num int) (s string) {
+	if num != 1 {
+		s = "s"
+	}
+	return
+}

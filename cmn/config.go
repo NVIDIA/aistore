@@ -75,6 +75,10 @@ type (
 
 	// ais node: fspaths (a.k.a. mountpaths)
 	FSPConf struct {
+		Paths cos.StrKVs `json:"paths,omitempty" list:"readonly"`
+	}
+	// (for backward compatibility)
+	FSPConfV3 struct {
 		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
 	}
 
@@ -629,7 +633,7 @@ var (
 
 func _jspOpts() jsp.Options {
 	opts := jsp.CCSign(MetaverConfig)
-	opts.OldMetaverOk = 2
+	opts.OldMetaverOk = 3
 	return opts
 }
 
@@ -758,7 +762,7 @@ func (c *LocalConfig) TestingEnv() bool {
 
 func (c *LocalConfig) AddPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
-	c.FSP.Paths.Set(mpath)
+	c.FSP.Paths[mpath] = ""
 }
 
 func (c *LocalConfig) DelPath(mpath string) {
@@ -1339,13 +1343,14 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 // DsortConf //
 ///////////////
 
+const _idsort = "invalid distributed_sort."
+
 func (c *DsortConf) Validate() (err error) {
 	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf("invalid distributed_sort.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+		return fmt.Errorf(_idsort+"bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
 	}
 	if !apc.IsValidCompression(c.Compression) {
-		return fmt.Errorf("invalid distributed_sort.compression: %q (expecting one of: %v)",
-			c.Compression, apc.SupportedCompression)
+		return fmt.Errorf(_idsort+"compression: %q (expecting one of: %v)", c.Compression, apc.SupportedCompression)
 	}
 	return c.ValidateWithOpts(false)
 }
@@ -1356,30 +1361,24 @@ func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	}
 
 	if !checkReaction(c.DuplicatedRecords) {
-		return fmt.Errorf("invalid distributed_sort.duplicated_records: %s (expecting one of: %s)",
-			c.DuplicatedRecords, SupportedReactions)
+		return fmt.Errorf(_idsort+"duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
 	}
 	if !checkReaction(c.MissingShards) {
-		return fmt.Errorf("invalid distributed_sort.missing_shards: %s (expecting one of: %s)",
-			c.MissingShards, SupportedReactions)
+		return fmt.Errorf(_idsort+"missing_shards: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
 	}
 	if !checkReaction(c.EKMMalformedLine) {
-		return fmt.Errorf("invalid distributed_sort.ekm_malformed_line: %s (expecting one of: %s)",
-			c.EKMMalformedLine, SupportedReactions)
+		return fmt.Errorf(_idsort+"ekm_malformed_line: %s (expecting one of: %s)", c.EKMMalformedLine, SupportedReactions)
 	}
 	if !checkReaction(c.EKMMissingKey) {
-		return fmt.Errorf("invalid distributed_sort.ekm_missing_key: %s (expecting one of: %s)",
-			c.EKMMissingKey, SupportedReactions)
+		return fmt.Errorf(_idsort+"ekm_missing_key: %s (expecting one of: %s)", c.EKMMissingKey, SupportedReactions)
 	}
 	if !allowEmpty {
 		if _, err := cos.ParseQuantity(c.DefaultMaxMemUsage); err != nil {
-			return fmt.Errorf("invalid distributed_sort.default_max_mem_usage: %s (err: %s)",
-				c.DefaultMaxMemUsage, err)
+			return fmt.Errorf(_idsort+"default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
 		}
 	}
 	if _, err := cos.ParseSize(c.DsorterMemThreshold, cos.UnitsIEC); err != nil && (!allowEmpty || c.DsorterMemThreshold != "") {
-		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)",
-			c.DsorterMemThreshold, err)
+		return fmt.Errorf(_idsort+"dsorter_mem_threshold: %s (err: %s)", c.DsorterMemThreshold, err)
 	}
 	return nil
 }
@@ -1389,10 +1388,21 @@ func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 /////////////
 
 func (c *FSPConf) UnmarshalJSON(data []byte) error {
-	m := cos.NewStrSet()
+	m := cos.NewStrKVs(10)
 	err := jsoniter.Unmarshal(data, &m)
 	if err == nil {
 		c.Paths = m
+		return nil
+	}
+	// load from the prev. meta-version (backward compatibility)
+	var v3 FSPConfV3
+	if err = jsoniter.Unmarshal(data, &v3.Paths); err == nil {
+		for fspath := range v3.Paths {
+			m[fspath] = ""
+		}
+		c.Paths = m
+		// cannot nlog yet - in the process of loading config (w/ log dirs not yet assigned)
+		fmt.Fprintln(os.Stderr, "Warning: loaded older meta-version config, recovered fspaths:", c.Paths)
 	}
 	return err
 }
@@ -1413,7 +1423,7 @@ func (c *FSPConf) Validate(contextConfig *Config) error {
 		return NewErrInvalidFSPathsConf(ErrNoMountpaths)
 	}
 
-	cleanMpaths := make(map[string]struct{})
+	cleanMpaths := cos.NewStrKVs(len(c.Paths))
 	for fspath, val := range c.Paths {
 		mpath, err := ValidateMpath(fspath)
 		if err != nil {
@@ -1468,13 +1478,13 @@ func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 	}
 	c.Root = cleanMpath
 
-	contextConfig.FSP.Paths = make(cos.StrSet, c.Count)
+	contextConfig.FSP.Paths = cos.NewStrKVs(c.Count)
 	for i := 0; i < c.Count; i++ {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
 		if c.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
 		}
-		contextConfig.FSP.Paths.Set(mpath)
+		contextConfig.FSP.Paths[mpath] = ""
 	}
 	return nil
 }
@@ -1749,7 +1759,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 
 	// first, local config
 	if _, err := jsp.LoadMeta(localConfPath, &config.LocalConfig); err != nil {
-		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err)
+		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err) // FATAL
 	}
 	nlog.SetLogDirRole(config.LogDir, daeRole)
 
