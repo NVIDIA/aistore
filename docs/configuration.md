@@ -93,7 +93,7 @@ $ ais config node t[fbarswQP] local --json
         "port_intra_control": "51082",
         "port_intra_data": "51083"
     },
-    "fspaths": {"/ais/nvme0n1":{},"/ais/nvme1n1":{},"/ais/nvme2n1":{}},
+    "fspaths": {"/ais/nvme0n1": "","/ais/nvme1n1": "","/ais/nvme2n1": ""},
     "test_fspaths": {
         "root": "",
         "count": 0,
@@ -221,7 +221,7 @@ $ ais show config CCDpt8088 --json | tail -20
         "port_intra_control": "51082",
         "port_intra_data": "51083"
     },
-    "fspaths": {"/ais/mp1":{},"/ais/mp2":{},"/ais/mp3":{},"/ais/mp4":{}},
+    "fspaths": {"/ais/mp1": "","/ais/mp2": "","/ais/mp3":{},"/ais/mp4": ""},
     "test_fspaths": {
         "root": "/tmp/ais",
         "count": 0,
@@ -229,7 +229,10 @@ $ ais show config CCDpt8088 --json | tail -20
     }
 ```
 
-### Example: use `--type` option to show only local config
+See also:
+*  [local playground with two data drives](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md)
+
+###Example: use `--type` option to show only local config
 
 ```console
 # ais show config koLAt8081 --type local
@@ -333,7 +336,7 @@ $ ais config node t[fbarswQP] local --json
         "port_intra_control": "51082",
         "port_intra_data": "51083"
     },
-    "fspaths": {"/ais/nvme0n1":{},"/ais/nvme1n1":{},"/ais/nvme2n1":{}},
+    "fspaths": {"/ais/nvme0n1": "","/ais/nvme1n1": "","/ais/nvme2n1": ""},
     "test_fspaths": {
         "root": "",
         "count": 0,
@@ -341,6 +344,9 @@ $ ais config node t[fbarswQP] local --json
     }
 }
 ```
+
+See also:
+*  [local playground with two data drives](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md)
 
 ## Basics
 

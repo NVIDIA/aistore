@@ -175,8 +175,8 @@ index c5e0e4fae..46085e19c 100755
         },
         "fspaths": {
 -               $AIS_FS_PATHS
-+               "/tmp/ais/mp1": {},
-+               "/tmp/ais/mp2": {}
++               "/tmp/ais/mp1": "",
++               "/tmp/ais/mp2": ""
         },
         "test_fspaths": {
                 "root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",

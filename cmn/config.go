@@ -77,7 +77,7 @@ type (
 	FSPConf struct {
 		Paths cos.StrKVs `json:"paths,omitempty" list:"readonly"`
 	}
-	// (for backward compatibility)
+	// NOTE: keeping V3 meta-version for backward compatibility
 	FSPConfV3 struct {
 		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
 	}
@@ -1396,13 +1396,14 @@ func (c *FSPConf) UnmarshalJSON(data []byte) error {
 	}
 	// load from the prev. meta-version (backward compatibility)
 	var v3 FSPConfV3
+	v3.Paths = make(cos.StrSet, 10)
 	if err = jsoniter.Unmarshal(data, &v3.Paths); err == nil {
 		for fspath := range v3.Paths {
 			m[fspath] = ""
 		}
 		c.Paths = m
 		// cannot nlog yet - in the process of loading config (w/ log dirs not yet assigned)
-		fmt.Fprintln(os.Stderr, "Warning: loaded older meta-version config, recovered fspaths:", c.Paths)
+		fmt.Fprintln(os.Stderr, "Warning: load fspaths from V3 (older) config:", c.Paths)
 	}
 	return err
 }

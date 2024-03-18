@@ -38,8 +38,8 @@ And so, since you'd likely want to run binaries produced out of Go sources, you 
         },
         "fspaths": {
 -               $AIS_FS_PATHS
-+               "/sda/ais": {},
-+               "/sdb/ais": {}
++               "/sda/ais": "",
++               "/sdb/ais": ""
         },
         "test_fspaths": {
                 "root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",

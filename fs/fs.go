@@ -395,7 +395,7 @@ func (mi *Mountpath) _checkExists(avail MPI) (err error) {
 }
 
 func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) error {
-	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, config.TestingEnv())
+	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, config)
 	if err != nil {
 		return err
 	}

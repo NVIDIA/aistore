@@ -84,32 +84,38 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 // given parsed lsblk and `fs` (filesystem) fs2disks retrieves the underlying
 // disk or disks; it may return multiple disks but only if the filesystem is
 // RAID; it is called upong adding/enabling mountpath
-func fs2disks(res *LsBlk, fs string, testingEnv bool) (disks FsDisks) {
-	// map trimmed(fs) <= disk(s)
-	var trimmedFS string
+func fs2disks(res *LsBlk, fs, fspInfo string, num int, testingEnv bool) (disks FsDisks) {
+	var (
+		trimmedFS string
+		s         string
+	)
 	if strings.HasPrefix(fs, devPrefixLVM) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixLVM)
 	} else {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixReg)
 	}
-	disks = make(FsDisks, 4)
-	findDevs(res.BlockDevices, trimmedFS, disks)
+	disks = make(FsDisks, num)
+	findDevs(res.BlockDevices, trimmedFS, disks) // map trimmed(fs) <= disk(s)
 
 	// log
-	if flag.Parsed() {
-		if len(disks) == 0 {
-			// skip err logging block devices when running with `test_fspaths` (config.TestingEnv() == true)
-			// e.g.: testing with docker `/dev/root` mount with no disks
-			// see also: `allowSharedDisksAndNoDisks`
-			if !testingEnv {
-				s, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
-				nlog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
-			}
-		} else {
-			nlog.Infof("%s: %v", fs, disks)
-		}
+	if !flag.Parsed() {
+		return disks
 	}
-	return
+	if fspInfo != "" {
+		s = ", " + fspInfo // from config.LocalConfig.FSP, if defined
+	}
+	if len(disks) == 0 {
+		// skip err logging block devices when running with `test_fspaths` (config.TestingEnv() == true)
+		// e.g.: testing with docker `/dev/root` mount with no disks
+		// see also: `allowSharedDisksAndNoDisks`
+		if !testingEnv {
+			s, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
+			nlog.Errorf("No disks for %s(%q%s):\n%s", fs, trimmedFS, s, string(s))
+		}
+	} else {
+		nlog.Infoln("["+fs+s+"]:", disks._str())
+	}
+	return disks
 }
 
 //
@@ -147,4 +153,9 @@ func _match(devList []*blkdev, device string) bool {
 		}
 	}
 	return false
+}
+
+func (disks FsDisks) _str() string {
+	s := fmt.Sprintf("%v", disks)
+	return strings.TrimPrefix(s, "map")
 }

@@ -27,7 +27,7 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath string, fs string, testingEnv bool) (FsDisks, error)
+		AddMpath(mpath string, fs string, config *cmn.Config) (FsDisks, error)
 		RemoveMpath(mpath string, testingEnv bool)
 		FillDiskStats(m AllDiskStats)
 	}
@@ -146,14 +146,19 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fs string, testingEnv bool) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fs string, config *cmn.Config) (fsdisks FsDisks, err error) {
+	var (
+		testingEnv = config.TestingEnv()
+		fspaths    = config.LocalConfig.FSP.Paths
+		confInfo   = fspaths[mpath]
+	)
 	if pres := ios.lsblk.Load(); pres != nil {
 		res := *pres
-		fsdisks = fs2disks(&res, fs, testingEnv)
+		fsdisks = fs2disks(&res, fs, confInfo, len(fspaths), testingEnv)
 	} else {
 		res := lsblk(fs, testingEnv)
 		if res != nil {
-			fsdisks = fs2disks(res, fs, testingEnv)
+			fsdisks = fs2disks(res, fs, confInfo, len(fspaths), testingEnv)
 		}
 	}
 	if len(fsdisks) == 0 {
