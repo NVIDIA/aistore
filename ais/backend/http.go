@@ -114,7 +114,7 @@ func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string,
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -147,7 +147,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Obj
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
+func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
 	res := hp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err

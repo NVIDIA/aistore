@@ -52,11 +52,11 @@ func (*mockBP) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) 
 	return
 }
 
-func (*mockBP) HeadObj(_ context.Context, lom *core.LOM) (*cmn.ObjAttrs, int, error) {
+func (*mockBP) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) GetObj(_ context.Context, lom *core.LOM, _ cmn.OWT) (int, error) {
+func (*mockBP) GetObj(_ context.Context, lom *core.LOM, _ cmn.OWT, _ *http.Request) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 

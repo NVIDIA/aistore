@@ -103,7 +103,7 @@ func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
 		debug.Assert(false, lom.Cname())
 		return
 	}
-	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/)
+	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/, nil /*origReq*/)
 	switch {
 	case res.Eq:
 		debug.AssertNoErr(res.Err)

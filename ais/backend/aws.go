@@ -332,13 +332,27 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err er
 // HEAD OBJECT
 //
 
-func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		svc        *s3.Client
 		headOutput *s3.HeadObjectOutput
 		h          = cmn.BackendHelpers.Amazon
 		cloudBck   = lom.Bck().RemoteBck()
 	)
+
+	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+		q := oreq.URL.Query() // TODO: optimize-out
+		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
+		resp, err := pts.Do(core.T.DataClient())
+		if err != nil {
+			return nil, resp.StatusCode, err
+		}
+		if resp != nil {
+			oa = resp.ObjAttrs()
+			goto exit
+		}
+	}
+
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
 	if err != nil {
 		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
@@ -378,9 +392,8 @@ func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs,
 	}
 
 	// AIS custom (see also: PutObject, GetObjReader)
-	md := headOutput.Metadata
-	if cksumType, ok := md[cos.S3MetadataChecksumType]; ok {
-		if cksumValue, ok := md[cos.S3MetadataChecksumVal]; ok {
+	if cksumType, ok := headOutput.Metadata[cos.S3MetadataChecksumType]; ok {
+		if cksumValue, ok := headOutput.Metadata[cos.S3MetadataChecksumVal]; ok {
 			oa.SetCksum(cksumType, cksumValue)
 		}
 	}
@@ -397,6 +410,8 @@ func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs,
 		}
 		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
+
+exit:
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[head_object]", cloudBck.Cname(lom.ObjName))
 	}
@@ -407,8 +422,30 @@ func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs,
 // GET OBJECT
 //
 
-func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
-	res := awsp.GetObjReader(ctx, lom, 0, 0)
+func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, oreq *http.Request) (int, error) {
+	var res core.GetReaderResult
+
+	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+		q := oreq.URL.Query() // TODO: optimize-out
+		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
+		resp, err := pts.DoReader(core.T.DataClient())
+		if err != nil {
+			res = core.GetReaderResult{Err: err, ErrCode: resp.StatusCode}
+			goto finalize
+		}
+		if resp != nil {
+			res = core.GetReaderResult{
+				R:       resp.BodyR,
+				Size:    resp.Size,
+				ErrCode: resp.StatusCode,
+			}
+			goto finalize
+		}
+	}
+
+	res = awsp.GetObjReader(ctx, lom, 0, 0)
+
+finalize:
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
@@ -430,6 +467,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, len
 			Key:    aws.String(lom.ObjName),
 		}
 	)
+
 	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil {
 		if cmn.Rom.FastV(5, cos.SmoduleBackend) {

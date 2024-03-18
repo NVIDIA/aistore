@@ -43,10 +43,10 @@ type (
 
 		// head
 		HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error)
-		HeadObj(ctx context.Context, lom *LOM) (objAttrs *cmn.ObjAttrs, ecode int, err error)
+		HeadObj(ctx context.Context, lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 
 		// get
-		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error) // calls GetObjReader
+		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT, origReq *http.Request) (ecode int, err error) // calls GetObjReader
 		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
 	}
 )

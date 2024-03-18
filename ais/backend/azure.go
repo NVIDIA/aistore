@@ -366,7 +366,7 @@ func (ap *azureProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ err
 // HEAD OBJECT
 //
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (*cmn.ObjAttrs, int, error) {
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	var (
 		cloudBck = lom.Bucket().RemoteBck()
 		blURL    = ap.u + "/" + cloudBck.Name + "/" + lom.ObjName
@@ -415,7 +415,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (*cmn.ObjAt
 // GET OBJECT
 //
 
-func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
+func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
 	res := ap.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err

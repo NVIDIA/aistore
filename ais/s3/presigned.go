@@ -32,6 +32,8 @@ type (
 	}
 	PresignedResp struct {
 		Body       []byte
+		BodyR      io.ReadCloser // Set when invoked `Do` with `async` option.
+		Size       int64
 		Header     http.Header
 		StatusCode int
 	}
@@ -60,6 +62,22 @@ func parseSignatureV4(query url.Values, header http.Header) (region string) {
 }
 
 func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
+	resp, err := pts.DoReader(client)
+	if err != nil {
+		return resp, err
+	}
+	defer resp.BodyR.Close()
+
+	output, err := io.ReadAll(resp.BodyR)
+	if err != nil {
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response body: %v", err)
+	}
+	return &PresignedResp{Body: output, Size: int64(len(output)), Header: resp.Header, StatusCode: resp.StatusCode}, nil
+}
+
+// DoReader sends request and returns opened body/reader if successful.
+// Caller is responsible for closing the reader.
+func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	region := parseSignatureV4(pts.query, pts.oreq.Header)
 	if region == "" {
 		return nil, nil
@@ -89,20 +107,15 @@ func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusInternalServerError}, err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		output, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		return &PresignedResp{StatusCode: resp.StatusCode},
 			fmt.Errorf("invalid status: %d, output: %s", resp.StatusCode, string(output))
 	}
 
-	output, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &PresignedResp{StatusCode: http.StatusBadRequest},
-			fmt.Errorf("failed to read response body: %v", err)
-	}
-	return &PresignedResp{Body: output, Header: resp.Header, StatusCode: resp.StatusCode}, nil
+	return &PresignedResp{BodyR: resp.Body, Size: resp.ContentLength, Header: resp.Header, StatusCode: resp.StatusCode}, nil
 }
 
 ///////////////////

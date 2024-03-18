@@ -313,7 +313,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		op.ObjAttrs = *lom.ObjAttrs()
 	} else {
 		// cold HEAD
-		objAttrs, ecode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		objAttrs, ecode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom, r)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)
 			return

@@ -569,7 +569,7 @@ do:
 		// have remote backend - use it
 	case goi.latestVer:
 		// apc.QparamLatestVer or 'versioning.validate_warm_get'
-		res := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/)
+		res := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/, goi.req)
 		if res.Err != nil {
 			return res.ErrCode, res.Err
 		}
@@ -577,20 +577,6 @@ do:
 			cold, goi.verchanged = true, true
 		}
 		// TODO: utilize res.ObjAttrs
-	case goi.lom.IsFeatureSet(feat.PresignedS3Req): // FIXME: This should be moved to `ais/backend/*`.
-		q := goi.req.URL.Query() // TODO: optimize-out
-		pts := s3.NewPresignedReq(goi.req, goi.lom, nil, q)
-		resp, err := pts.Do(g.client.data)
-		if err != nil {
-			return resp.StatusCode, err
-		}
-		if resp != nil {
-			oa := resp.ObjAttrs()
-			if !goi.lom.Equal(oa) {
-				err := fmt.Errorf("%s: checksum doesn't match, object should be retrieved from S3", goi.lom.Cname())
-				return http.StatusGone, err
-			}
-		}
 	}
 
 	// validate checksums and recover (a.k.a. self-heal) if corrupted

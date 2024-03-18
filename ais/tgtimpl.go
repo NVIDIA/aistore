@@ -180,7 +180,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 
 	// 2. GET remote object and store it
 	now := mono.NanoTime()
-	if ecode, err = t.Backend(lom.Bck()).GetObj(ctx, lom, owt); err != nil {
+	if ecode, err = t.Backend(lom.Bck()).GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}

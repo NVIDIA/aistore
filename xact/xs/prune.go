@@ -130,7 +130,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 			}
 		}
 	} else {
-		_, ecode, err = core.T.Backend(src.Bck()).HeadObj(context.Background(), src)
+		_, ecode, err = core.T.Backend(src.Bck()).HeadObj(context.Background(), src, nil /*origReq*/)
 	}
 
 	if (err == nil && ecode == 0) || !cos.IsNotExist(err, ecode) /*not complaining*/ {

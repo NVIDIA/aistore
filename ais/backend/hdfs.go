@@ -224,7 +224,7 @@ func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, ecode int, er
 // HEAD OBJECT
 //
 
-func (hp *hdfsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (hp *hdfsProvider) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		fr       *hdfs.FileReader
 		filePath = filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
@@ -246,7 +246,7 @@ func (hp *hdfsProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAt
 // GET OBJECT
 //
 
-func (hp *hdfsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
+func (hp *hdfsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
 	res := hp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err

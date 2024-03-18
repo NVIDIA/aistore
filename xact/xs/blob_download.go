@@ -105,7 +105,7 @@ func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh 
 	}
 	if oa == nil {
 		// backend.HeadObj() unless already done via prior latest-ver or prefetch-threshold check
-		oah, ecode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		oah, ecode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom, nil /*origReq*/)
 		if err != nil {
 			return xreg.RenewRes{Err: err}
 		}

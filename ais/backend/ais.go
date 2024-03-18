@@ -520,7 +520,7 @@ func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bc
 // in part including apc.Flt* location specifier.
 // Here, and elsewhere down below, we hardcode (the default) `apc.FltPresent` to, eesentially,
 // keep HeadObj() consistent across backends.
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (m *AISBackendProvider) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
@@ -540,7 +540,7 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *core.LOM) (oa *cmn.
 	return
 }
 
-func (m *AISBackendProvider) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT) (ecode int, err error) {
+func (m *AISBackendProvider) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
 	var (
 		remAis    *remAis
 		r         io.ReadCloser
