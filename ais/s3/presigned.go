@@ -65,6 +65,8 @@ func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 	resp, err := pts.DoReader(client)
 	if err != nil {
 		return resp, err
+	} else if resp == nil {
+		return nil, nil
 	}
 	defer resp.BodyR.Close()
 
@@ -111,8 +113,7 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		output, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return &PresignedResp{StatusCode: resp.StatusCode},
-			fmt.Errorf("invalid status: %d, output: %s", resp.StatusCode, string(output))
+		return &PresignedResp{StatusCode: resp.StatusCode}, fmt.Errorf("invalid status: %d, output: %s", resp.StatusCode, string(output))
 	}
 
 	return &PresignedResp{BodyR: resp.Body, Size: resp.ContentLength, Header: resp.Header, StatusCode: resp.StatusCode}, nil
