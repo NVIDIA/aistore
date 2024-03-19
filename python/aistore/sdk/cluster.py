@@ -14,19 +14,36 @@ from aistore.sdk.const import (
     QPARAM_WHAT,
     QPARAM_PRIMARY_READY_REB,
     QPARAM_PROVIDER,
-    WHAT_SMAP,
+    HEADER_NODE_ID,
+    URL_PATH_ETL,
+    URL_PATH_REVERSE,
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
     URL_PATH_DAEMON,
     URL_PATH_CLUSTER,
+    WHAT_SMAP,
     WHAT_ALL_XACT_STATUS,
     WHAT_ALL_RUNNING_STATUS,
-    URL_PATH_ETL,
+    WHAT_NODE_STATS_AND_STATUS,
+    WHAT_NODE_STATS_AND_STATUS_V322,
 )
 
-from aistore.sdk.types import BucketModel, JobStatus, JobQuery, ETLInfo
+from aistore.sdk.types import (
+    BucketModel,
+    JobStatus,
+    JobQuery,
+    ETLInfo,
+    ActionMsg,
+    Smap,
+    NodeStats,
+    NodeStatsV322,
+    ClusterPerformance,
+    NodeCounter,
+    NodeLatency,
+    NodeThroughput,
+)
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.types import ActionMsg, Smap
+from aistore.sdk.errors import AISError
 
 logger = logging.getLogger("cluster")
 
@@ -59,18 +76,13 @@ class Cluster:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        return self.client.request_deserialize(
-            HTTP_METHOD_GET,
-            path=URL_PATH_DAEMON,
-            res_model=Smap,
-            params={QPARAM_WHAT: WHAT_SMAP},
-        )
+        return self._get_smap()
 
     def get_primary_url(self) -> str:
         """
         Returns: URL of primary proxy
         """
-        return self.get_info().proxy_si.public_net.direct_url
+        return self._get_smap().proxy_si.public_net.direct_url
 
     def list_buckets(self, provider: str = PROVIDER_AIS):
         """
@@ -174,3 +186,86 @@ class Cluster:
         except Exception as err:
             logger.debug(err)
             return False
+
+    # pylint: disable=too-many-locals
+    def get_performance(
+        self,
+        get_throughput: bool = True,
+        get_latency: bool = True,
+        get_counters: bool = True,
+    ) -> ClusterPerformance:
+        """
+        Retrieves and calculates the performance metrics for each target node in the AIStore cluster.
+        It compiles throughput, latency, and various operational counters from each target node,
+        providing a comprehensive view of the cluster's overall performance
+
+        Args:
+            get_throughput (bool, optional): get cluster throughput
+            get_latency (bool, optional): get cluster latency
+            get_counters (bool, optional): get cluster counters
+
+        Returns:
+            ClusterPerformance: An object encapsulating the detailed performance metrics of the cluster,
+                including throughput, latency, and counters for each node
+
+        Raises:
+            requests.RequestException: If there's an ambiguous exception while processing the request
+            requests.ConnectionError: If there's a connection error with the cluster
+            requests.ConnectionTimeout: If the connection to the cluster times out
+            requests.ReadTimeout: If the timeout is reached while awaiting a response from the cluster
+        """
+
+        targets = self._get_targets()
+        target_stats = {}
+        params = {QPARAM_WHAT: WHAT_NODE_STATS_AND_STATUS}
+        res_model = NodeStats
+        for target_id in targets:
+            headers = {HEADER_NODE_ID: target_id}
+            try:
+                res = self.client.request_deserialize(
+                    HTTP_METHOD_GET,
+                    path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
+                    res_model=res_model,
+                    headers=headers,
+                    params=params,
+                )
+            except AISError as err:
+                if "unrecognized what=node_status" in err.message:
+                    params = {QPARAM_WHAT: WHAT_NODE_STATS_AND_STATUS_V322}
+                    res_model = NodeStatsV322
+                    res = self.client.request_deserialize(
+                        HTTP_METHOD_GET,
+                        path=f"{URL_PATH_REVERSE}/{URL_PATH_DAEMON}",
+                        res_model=res_model,
+                        headers=headers,
+                        params=params,
+                    )
+                else:
+                    raise err
+            target_stats[target_id] = res
+        throughputs = {}
+        latencies = {}
+        counters = {}
+        for target_id, val in target_stats.items():
+            if get_throughput:
+                throughputs[target_id] = NodeThroughput(val.tracker)
+            if get_latency:
+                latencies[target_id] = NodeLatency(val.tracker)
+            if get_counters:
+                counters[target_id] = NodeCounter(val.tracker)
+
+        return ClusterPerformance(
+            throughput=throughputs, latency=latencies, counters=counters
+        )
+
+    def _get_smap(self):
+        return self.client.request_deserialize(
+            HTTP_METHOD_GET,
+            path=URL_PATH_DAEMON,
+            res_model=Smap,
+            params={QPARAM_WHAT: WHAT_SMAP},
+        )
+
+    def _get_targets(self):
+        tmap = self._get_smap().tmap
+        return list(tmap.keys())

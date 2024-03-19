@@ -22,6 +22,7 @@ HEADER_PREFIX = "ais-"
 HEADER_BUCKET_PROPS = HEADER_PREFIX + "bucket-props"
 HEADER_BUCKET_SUMM = HEADER_PREFIX + "bucket-summ"
 HEADER_XACTION_ID = HEADER_PREFIX + "xaction-id"
+HEADER_NODE_ID = HEADER_PREFIX + "node-id"
 # Object Props Header Keys
 HEADER_OBJECT_BLOB_DOWNLOAD = HEADER_PREFIX + "blob-download"
 HEADER_OBJECT_BLOB_CHUNK_SIZE = HEADER_PREFIX + "blob-chunk"
@@ -53,6 +54,8 @@ WHAT_ONE_XACT_STATUS = "status"
 WHAT_ALL_XACT_STATUS = "status_all"
 WHAT_ALL_RUNNING_STATUS = "running_all"
 WHAT_QUERY_XACT_STATS = "qryxstats"
+WHAT_NODE_STATS_AND_STATUS_V322 = "status"
+WHAT_NODE_STATS_AND_STATUS = "node_status"
 
 # URL paths
 URL_PATH_CLUSTER = "cluster"
@@ -62,6 +65,7 @@ URL_PATH_HEALTH = "health"
 URL_PATH_DAEMON = "daemon"
 URL_PATH_ETL = "etl"
 URL_PATH_DSORT = "sort"
+URL_PATH_REVERSE = "reverse"
 DSORT_ABORT = "abort"
 
 # Bucket providers

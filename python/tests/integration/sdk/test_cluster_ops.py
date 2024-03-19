@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
@@ -8,6 +8,7 @@ import unittest
 
 from aistore.sdk import Client
 from aistore.sdk.const import ACT_COPY_OBJECTS
+from aistore.sdk.types import ClusterPerformance
 from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import random_string
 
@@ -82,3 +83,20 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
         finally:
             bck.delete()
             new_bck.delete()
+
+    def test_get_performance(self):
+        smap = self.cluster.get_info()
+        performance = self.cluster.get_performance()
+
+        self.assertIsInstance(performance, ClusterPerformance)
+
+        num_targets_in_smap = len(smap.tmap)
+
+        self.assertEqual(num_targets_in_smap, len(performance.throughput))
+        self.assertEqual(num_targets_in_smap, len(performance.latency))
+        self.assertEqual(num_targets_in_smap, len(performance.counters))
+
+        for target_id in smap.tmap:
+            self.assertIn(target_id, performance.throughput)
+            self.assertIn(target_id, performance.latency)
+            self.assertIn(target_id, performance.counters)
