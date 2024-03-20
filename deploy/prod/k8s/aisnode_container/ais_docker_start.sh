@@ -120,18 +120,7 @@ do
 
     rc=$?   # exit code from aisnode
 
-    #
-    # If/when aisnode exits, aggregate aisnode logs in a persistent
-    # location so that we can see all logs across container restarts
-    # (kubectl logs only has the current and previous container
-    # instances available).
-    #
-    # XXX Needs some log rotation etc in time, just a quick fix for
-    # now.
-    #
-    cat /var/log/ais/aisnode.INFO >> /etc/ais/INFO.agg || true
-    cat /var/log/ais/aisnode.ERROR >> /etc/ais/ERROR.agg || true
-    cat /var/log/ais/aisnode.WARNING >> /etc/ais/WARNING.agg || true
+    # logs will be present in `logsDir` directory of host
 
     # If the shutdown marker is present wait for the container to receive kill signal.
     # This is to ensure that the ais deamon scheduled to terminate isn't restarted by K8s.
