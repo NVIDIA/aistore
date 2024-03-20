@@ -271,6 +271,8 @@ func (s *coreStats) initProm(node *meta.Snode) {
 			variableLabels = []string{diskMetricLabel}
 		}
 		label := strings.ReplaceAll(name, ".", "_")
+		// prometheus metrics names shouldn't include daemonID.
+		label = strings.ReplaceAll(label, "_"+id+"_", "_")
 		v.label.prom = strings.ReplaceAll(label, ":", "_")
 
 		help := v.kind

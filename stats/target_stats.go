@@ -187,7 +187,7 @@ func nameRbps(disk string) string { return diskMetricName(disk, "read.bps") }
 func nameRavg(disk string) string { return diskMetricName(disk, "avg.rsize") }
 func nameWbps(disk string) string { return diskMetricName(disk, "write.bps") }
 func nameWavg(disk string) string { return diskMetricName(disk, "avg.wsize") }
-func nameUtil(disk string) string { return diskMetricName(disk, ".util") }
+func nameUtil(disk string) string { return diskMetricName(disk, "util") }
 
 // log vs idle logic
 func isDiskMetric(name string) bool {
