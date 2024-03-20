@@ -29,6 +29,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.57.1 ### NOTE: see also: Makefile lint-update-ci
+          args: --timeout=30m
       - name: Lint linux
         run: |
           export GOPATH="$(go env GOPATH)"
