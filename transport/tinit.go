@@ -64,7 +64,11 @@ func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 	return sc
 }
 
-func burst(config *cmn.Config) (burst int) {
+func burst(extra *Extra) (burst int) {
+	if extra.WorkChBurst > 0 {
+		return extra.WorkChBurst
+	}
+	config := extra.Config
 	if burst = config.Transport.Burst; burst == 0 {
 		burst = dfltBurstNum
 	}

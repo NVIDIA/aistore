@@ -259,6 +259,7 @@ func (m *Manager) initStreams() error {
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
 			Config:      config,
+			WorkChBurst: 1024,
 		},
 	}
 	if err := transport.Handle(trname, m.recvShard); err != nil {

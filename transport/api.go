@@ -54,7 +54,8 @@ type (
 		SenderID     string        // e.g., xaction ID (optional)
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
 		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below maxSizePDU; unknown size _requires_ PDUs
-		MaxHdrSize   int32         // overrides `dfltMaxHdr` if specified
+		MaxHdrSize   int32         // overrides `dfltMaxHdr`
+		WorkChBurst  int           // overrides `dfltBurstNum`
 	}
 
 	// receive-side session stats indexed by session ID (see recv.go for "uid")
@@ -119,7 +120,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	}
 	debug.Assert(s.usePDU() == extra.UsePDU())
 
-	chsize := burst(extra.Config)      // num objects the caller can post without blocking
+	chsize := burst(extra)             // num objects the caller can post without blocking
 	s.workCh = make(chan *Obj, chsize) // Send Qeueue (SQ)
 	s.cmplCh = make(chan cmpl, chsize) // Send Completion Queue (SCQ)
 
