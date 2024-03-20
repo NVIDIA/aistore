@@ -199,10 +199,9 @@ func (t *target) init(config *cmn.Config) {
 
 	// new fs, check and add mountpaths
 	vini := volume.IniCtx{
-		AllowSharedOrNone: daemon.cli.target.allowSharedDisksAndNoDisks,
-		UseLoopbacks:      daemon.cli.target.useLoopbackDevs,
-		IgnoreMissing:     daemon.cli.target.startWithLostMountpath,
-		RandomTID:         generated,
+		UseLoopbacks:  daemon.cli.target.useLoopbackDevs,
+		IgnoreMissing: daemon.cli.target.startWithLostMountpath,
+		RandomTID:     generated,
 	}
 	newVol := volume.Init(t, config, vini)
 	fs.ComputeDiskSize()

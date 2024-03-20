@@ -19,10 +19,9 @@ import (
 )
 
 type IniCtx struct {
-	AllowSharedOrNone bool // disks
-	UseLoopbacks      bool // using loopback dev-s
-	IgnoreMissing     bool // ignore missing mountpath(s)
-	RandomTID         bool // generated random target ID
+	UseLoopbacks  bool // using loopback dev-s
+	IgnoreMissing bool // ignore missing mountpath(s)
+	RandomTID     bool // generated random target ID
 }
 
 // bootstrap from local-config referenced locations
@@ -39,7 +38,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 		fspaths = config.FSP.Paths.Keys()
 	)
 	// new and empty
-	fs.New(len(config.FSP.Paths), ctx.AllowSharedOrNone || (config.TestingEnv() && !ctx.UseLoopbacks))
+	fs.New(len(config.FSP.Paths))
 
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)
@@ -125,27 +124,24 @@ func newVMD(expectedSize int) *VMD {
 // local config => fs.MPI
 func configInitMPI(tid string, config *cmn.Config) (err error) {
 	var (
-		configPaths    = config.FSP.Paths
-		availablePaths = make(fs.MPI, len(configPaths))
-		disabledPaths  = make(fs.MPI)
+		fspaths  = config.FSP.Paths
+		avail    = make(fs.MPI, len(fspaths))
+		disabled = make(fs.MPI)
 	)
-	for path := range configPaths {
+	for path, diskLabel := range fspaths {
 		var mi *fs.Mountpath
-		if mi, err = fs.NewMountpath(path); err != nil {
+		if mi, err = fs.NewMountpath(path, diskLabel); err != nil {
 			goto rerr
 		}
-		if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
+		if err = mi.AddEnabled(tid, avail, config); err != nil {
 			goto rerr
-		}
-		if err = mi.CheckDisks(); err != nil {
-			return
 		}
 	}
-	if len(availablePaths) == 0 {
+	if len(avail) == 0 {
 		err = cmn.ErrNoMountpaths
 		goto rerr
 	}
-	fs.PutMPI(availablePaths, disabledPaths)
+	fs.PutMPI(avail, disabled)
 	return
 
 rerr:
@@ -154,30 +150,30 @@ rerr:
 }
 
 // VMD => fs.MPI in two passes
-func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMountpath bool) (maxVerVMD *VMD, haveOld bool, err error) {
+func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMi bool) (maxVer *VMD, haveOld bool, err error) {
 	var (
-		availablePaths = make(fs.MPI, len(vmd.Mountpaths))
-		disabledPaths  = make(fs.MPI)
+		avail    = make(fs.MPI, len(vmd.Mountpaths))
+		disabled = make(fs.MPI)
 	)
 	debug.Assert(vmd.DaemonID == tid)
 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
 		var mi *fs.Mountpath
-		mi, err = fs.NewMountpath(mpath)
+		mi, err = fs.NewMountpath(mpath, fsMpathMD.DiskLabel)
 		if !fsMpathMD.Enabled {
 			if pass == 2 {
 				mi.Fs = fsMpathMD.Fs
 				mi.FsType = fsMpathMD.FsType
 				mi.FsID = fsMpathMD.FsID
-				mi.AddDisabled(disabledPaths)
+				mi.AddDisabled(disabled)
 			}
 			continue
 		}
 		// enabled
 		if err != nil {
 			err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
-			if pass == 1 || ignoreMissingMountpath {
-				nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+			if pass == 1 || ignoreMissingMi {
+				nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMi)
 				err = nil
 				continue
 			}
@@ -201,8 +197,8 @@ func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMo
 					Code: fs.SieFsDiffers,
 					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FS, *fsMpathMD),
 				}
-				if pass == 1 || ignoreMissingMountpath {
-					nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+				if pass == 1 || ignoreMissingMi {
+					nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMi)
 					err = nil
 					continue
 				}
@@ -220,7 +216,7 @@ func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMo
 		if pass == 1 {
 			if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
 				debug.Assert(v.Version > vmd.Version)
-				maxVerVMD = v
+				maxVer = v
 			} else if old {
 				debug.AssertNoErr(errLoad)
 				haveOld = true
@@ -228,11 +224,8 @@ func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMo
 				nlog.Warningf("%s: %v", mi, errLoad)
 			}
 		} else {
-			if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
+			if err = mi.AddEnabled(tid, avail, config); err != nil {
 				return
-			}
-			if err = mi.CheckDisks(); err != nil {
-				nlog.Errorf("Warning: %v", err)
 			}
 		}
 	}
@@ -240,16 +233,16 @@ func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMo
 	if pass == 1 {
 		return
 	}
-	if len(availablePaths) == 0 {
-		if len(disabledPaths) == 0 {
+	if len(avail) == 0 {
+		if len(disabled) == 0 {
 			err = cmn.ErrNoMountpaths
 			return
 		}
-		nlog.Errorf("Warning: %v (avail=%d, disabled=%d)", err, len(availablePaths), len(disabledPaths))
+		nlog.Errorf("Warning: %v (avail=%d, disabled=%d)", err, len(avail), len(disabled))
 	}
-	fs.PutMPI(availablePaths, disabledPaths)
+	fs.PutMPI(avail, disabled)
 	// TODO: insufficient
-	if la, lc := len(availablePaths), len(config.FSP.Paths); la != lc {
+	if la, lc := len(avail), len(config.FSP.Paths); la != lc {
 		nlog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
 		nlog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
 	}

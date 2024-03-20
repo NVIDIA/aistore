@@ -55,9 +55,6 @@ type (
 		target    struct {
 			// do not try to auto-join cluster upon startup - stand by and wait for admin request
 			standby bool
-			// allow: disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
-			// (usage: testing, minikube env, etc.)
-			allowSharedDisksAndNoDisks bool
 			// force starting up with a lost or missing mountpath
 			startWithLostMountpath bool
 			// use loopback devices
@@ -89,18 +86,21 @@ func initFlags(flset *flag.FlagSet) {
 		"config filename: local file that stores daemon's local configuration")
 	flset.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
-	flset.BoolVar(&daemon.cli.transient, "transient", false,
-		"false: store customized (via '-config_custom') configuration\ntrue: keep '-config_custom' settings in memory only (non-persistent)")
+	flset.BoolVar(&daemon.cli.transient, "transient", false, "false: store customized (via '-config_custom') configuration\n"+
+		"true: keep '-config_custom' settings in memory only (non-persistent)")
 	flset.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
 
 	// target-only
-	flset.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
-	flset.BoolVar(&daemon.cli.target.allowSharedDisksAndNoDisks, "allow_shared_no_disks", false, "disk sharing by multiple mountpaths and mountpaths with no disks whatsoever (target-only)")
-	flset.BoolVar(&daemon.cli.target.useLoopbackDevs, "loopback", false, "use loopback devices (local playground, target-only)")
-	flset.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false, "force starting up with a lost or missing mountpath (target-only)")
+	flset.BoolVar(&daemon.cli.target.standby, "standby", false,
+		"when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
+	flset.BoolVar(&daemon.cli.target.useLoopbackDevs, "loopback", false,
+		"use loopback devices (local playground, target-only)")
+	flset.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false,
+		"force starting up with a lost or missing mountpath (target-only)")
 
 	// primary-only:
-	flset.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")
+	flset.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0,
+		"number of storage targets expected to be joining at startup (optional, primary-only)")
 	flset.BoolVar(&daemon.cli.primary.skipStartup, "skip_startup", false,
 		"whether primary, when starting up, should skip waiting for target joins (used only in tests)")
 

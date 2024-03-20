@@ -17,11 +17,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-//
-// Parse `lsblk -Jt` to associate filesystem (`fs`) with its disks
-//
-
-// NOTE: these are the two distinct prefixes we currently recognize (TODO: support w/ reference)
+// parse `lsblk -Jt` to associate filesystem (`fs`) with its disks;
+// devPrefix* constants are the (two) distinct prefixes expected in `lsblk` output
 const (
 	devPrefixReg = "/dev/"
 	devPrefixLVM = "/dev/mapper/"
@@ -84,47 +81,56 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 // given parsed lsblk and `fs` (filesystem) fs2disks retrieves the underlying
 // disk or disks; it may return multiple disks but only if the filesystem is
 // RAID; it is called upong adding/enabling mountpath
-func fs2disks(res *LsBlk, fs, fspInfo string, num int, testingEnv bool) (disks FsDisks) {
-	var (
-		trimmedFS string
-		s         string
-	)
+func fs2disks(res *LsBlk, fs, label string, num int, testingEnv bool) (disks FsDisks, err error) {
+	var trimmedFS string
 	if strings.HasPrefix(fs, devPrefixLVM) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixLVM)
 	} else {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixReg)
 	}
 	disks = make(FsDisks, num)
-	findDevs(res.BlockDevices, trimmedFS, disks) // map trimmed(fs) <= disk(s)
+	findDevs(res.BlockDevices, trimmedFS, label, disks) // map trimmed(fs) <= disk(s)
 
-	// log
 	if !flag.Parsed() {
-		return disks
+		return disks, nil // unit tests
 	}
-	if fspInfo != "" {
-		s = ", " + fspInfo // from config.LocalConfig.FSP, if defined
-	}
-	if len(disks) == 0 {
-		// skip err logging block devices when running with `test_fspaths` (config.TestingEnv() == true)
-		// e.g.: testing with docker `/dev/root` mount with no disks
-		// see also: `allowSharedDisksAndNoDisks`
-		if !testingEnv {
-			s, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
-			nlog.Errorf("No disks for %s(%q%s):\n%s", fs, trimmedFS, s, string(s))
+
+	switch {
+	case len(disks) > 0:
+		s := disks._str()
+		if DiskLabel(label).IsEmpty() {
+			nlog.Infoln("["+fs+"]:", s)
+		} else {
+			nlog.Infoln("["+fs+", disk label: "+label+"]", s)
 		}
-	} else {
-		nlog.Infoln("["+fs+s+"]:", disks._str())
+	case testingEnv:
+		// anything goes
+	case DiskLabel(label).IsEmpty():
+		err = fmt.Errorf("No disks for %s(%q) (empty label implies _resolvable_ underlying disk(s))", fs, trimmedFS)
+		nlog.Errorln(err)
+		dump, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
+		nlog.Infoln("Begin lsblk output ================================")
+		nlog.Infoln(string(dump))
+		nlog.Infoln("End lsblk output ==================================")
+	default:
+		nlog.Infof("No disks for %s(%q, disk label: %s)", fs, trimmedFS, label)
 	}
-	return disks
+	return disks, err
 }
 
 //
 // private
 //
 
-func findDevs(devList []*blkdev, trimmedFS string, disks FsDisks) {
+func findDevs(devList []*blkdev, trimmedFS, label string, disks FsDisks) {
 	for _, bd := range devList {
+		// by dev name
 		if bd.Name == trimmedFS {
+			_add(bd, disks)
+			continue
+		}
+		// by label
+		if label != "" && strings.Contains(bd.Name, label) {
 			_add(bd, disks)
 			continue
 		}
@@ -156,6 +162,6 @@ func _match(devList []*blkdev, device string) bool {
 }
 
 func (disks FsDisks) _str() string {
-	s := fmt.Sprintf("%v", disks)
+	s := fmt.Sprintf("%v", disks) // with sector sizes
 	return strings.TrimPrefix(s, "map")
 }

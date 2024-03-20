@@ -92,9 +92,16 @@ const (
 	// - implies remote backend
 	QparamLatestVer = "latest-ver"
 
-	QparamSync = "synchronize" // TODO: in progress
+	// in addition to the latest-ver (above), also entails removing remotely
+	// deleted objects
+	QparamSync = "synchronize"
 
-	QparamSilent = "sln" // when true., skip nlog.Error* (motivation: can be quite numerous and/or ignorable)
+	// when true, skip nlog.Error and friends
+	// (to opt-out logging too many messages and/or benign warnings)
+	QparamSilent = "sln"
+
+	// (see api.AttachMountpath vs. LocalConfig.FSP)
+	QparamDiskLabel = "disk_label"
 )
 
 // QparamFltPresence enum.

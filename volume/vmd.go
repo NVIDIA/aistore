@@ -22,12 +22,13 @@ const vmdCopies = 3
 
 type (
 	fsMpathMD struct {
-		Ext     any      `json:"ext,omitempty"` // reserved for within-metaversion extensions
-		Path    string   `json:"mountpath"`
-		Fs      string   `json:"fs"`
-		FsType  string   `json:"fs_type"`
-		FsID    cos.FsID `json:"fs_id"`
-		Enabled bool     `json:"enabled"`
+		Ext       any      `json:"ext,omitempty"` // reserved for within-metaversion extensions
+		Path      string   `json:"mountpath"`
+		DiskLabel string   `json:"disk_label"`
+		Fs        string   `json:"fs"`
+		FsType    string   `json:"fs_type"`
+		FsID      cos.FsID `json:"fs_id"`
+		Enabled   bool     `json:"enabled"`
 	}
 
 	// VMD is AIS target's volume metadata structure
@@ -62,15 +63,20 @@ func _mpathGreaterEq(curr, prev *VMD, mpath string) bool {
 // interface guard
 var _ jsp.Opts = (*VMD)(nil)
 
-func (*VMD) JspOpts() jsp.Options { return jsp.CCSign(cmn.MetaverVMD) }
+func (*VMD) JspOpts() jsp.Options {
+	opts := jsp.CCSign(cmn.MetaverVMD)
+	opts.OldMetaverOk = 1
+	return opts
+}
 
 func (vmd *VMD) addMountpath(mi *fs.Mountpath, enabled bool) {
 	vmd.Mountpaths[mi.Path] = &fsMpathMD{
-		Path:    mi.Path,
-		Enabled: enabled,
-		Fs:      mi.Fs,
-		FsType:  mi.FsType,
-		FsID:    mi.FsID,
+		Path:      mi.Path,
+		DiskLabel: mi.DiskLabel,
+		Fs:        mi.Fs,
+		FsType:    mi.FsType,
+		FsID:      mi.FsID,
+		Enabled:   enabled,
 	}
 }
 

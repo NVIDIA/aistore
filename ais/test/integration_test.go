@@ -836,7 +836,7 @@ func TestMountpathDetachAll(t *testing.T) {
 
 	// Add target mountpath again
 	for _, mpath := range origMountpaths.Available {
-		err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
+		err = api.AttachMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -893,7 +893,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	// Add new mountpath to target
 	tlog.Logf("attach new %q at target %s\n", testMpath, target.StringEx())
-	err = api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
+	err = api.AttachMountpath(baseParams, target, testMpath)
 	tassert.CheckFatal(t, err)
 
 	tools.WaitForResilvering(t, baseParams, target)
@@ -954,7 +954,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			allMps[target.ID()] = mpList
 
-			err = api.AttachMountpath(baseParams, target, testMpath, true /*force*/)
+			err = api.AttachMountpath(baseParams, target, testMpath)
 			tassert.CheckFatal(t, err)
 		}
 	} else {
@@ -966,7 +966,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 
 			mountpath := filepath.Join(testMpath, strconv.Itoa(idx))
 			cos.CreateDir(mountpath)
-			err = api.AttachMountpath(baseParams, target, mountpath, true /*force*/)
+			err = api.AttachMountpath(baseParams, target, mountpath)
 			tassert.CheckFatal(t, err)
 		}
 	}
@@ -1634,7 +1634,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 
 	// Step 6: Add previously removed mountpath
 	tlog.Logf("Add mountpath %s on target %s\n", mpath, target.ID())
-	err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
+	err = api.AttachMountpath(baseParams, target, mpath)
 	tassert.CheckFatal(t, err)
 
 	tools.WaitForResilvering(t, baseParams, target)
@@ -1687,7 +1687,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		if err != nil {
 			for j := 0; j < i; j++ {
-				api.AttachMountpath(baseParams, target, mpList.Available[j+1], false /*force*/)
+				api.AttachMountpath(baseParams, target, mpList.Available[j+1])
 			}
 			tassert.CheckFatal(t, err)
 		}
@@ -1707,7 +1707,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	// Reattach previously removed mountpaths
 	tlog.Logf("Reattach mountpaths at %s\n", target.StringEx())
 	for _, mpath := range mpList.Available[1:] {
-		err = api.AttachMountpath(baseParams, target, mpath, false /*force*/)
+		err = api.AttachMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 		time.Sleep(time.Second)
 	}
@@ -1773,7 +1773,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		err = api.EnableMountpath(baseParams, target, mpList.Available[0])
 	} else {
 		tlog.Logf("Re-attach %q at target %s\n", mpList.Available[0], target.StringEx())
-		err = api.AttachMountpath(baseParams, target, mpList.Available[0], false /*force*/)
+		err = api.AttachMountpath(baseParams, target, mpList.Available[0])
 	}
 	tassert.CheckFatal(t, err)
 

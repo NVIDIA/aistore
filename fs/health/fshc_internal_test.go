@@ -31,7 +31,6 @@ func initMountpaths(t *testing.T) {
 	cmn.GCO.CommitUpdate(config)
 
 	fs.TestNew(nil)
-	fs.TestDisableValidation()
 	for i := 1; i <= 4; i++ {
 		mpath := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
 

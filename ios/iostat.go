@@ -20,6 +20,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+// when empty, causes aistore target to perform mountpath => disk mapping and, subsequently,
+// enforce non-sharing (of the underlyig disks) across mountpaths;
+// recommended for production deployments
+type DiskLabel string
+
+func (label DiskLabel) IsEmpty() bool { return label == "" }
+
 const statsdir = "/sys/class/block"
 
 // public
@@ -27,7 +34,7 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath string, fs string, config *cmn.Config) (FsDisks, error)
+		AddMpath(mpath, label, fs string, config *cmn.Config) (FsDisks, error)
 		RemoveMpath(mpath string, testingEnv bool)
 		FillDiskStats(m AllDiskStats)
 	}
@@ -146,58 +153,84 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fs string, config *cmn.Config) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, label, fs string, config *cmn.Config) (fsdisks FsDisks, err error) {
 	var (
+		warn       string
 		testingEnv = config.TestingEnv()
 		fspaths    = config.LocalConfig.FSP.Paths
-		confInfo   = fspaths[mpath]
 	)
 	if pres := ios.lsblk.Load(); pres != nil {
 		res := *pres
-		fsdisks = fs2disks(&res, fs, confInfo, len(fspaths), testingEnv)
+		fsdisks, err = fs2disks(&res, fs, label, len(fspaths), testingEnv)
 	} else {
 		res := lsblk(fs, testingEnv)
 		if res != nil {
-			fsdisks = fs2disks(res, fs, confInfo, len(fspaths), testingEnv)
+			fsdisks, err = fs2disks(res, fs, label, len(fspaths), testingEnv)
 		}
 	}
-	if len(fsdisks) == 0 {
+	if len(fsdisks) == 0 || err != nil {
 		return
 	}
 	ios.mu.Lock()
-	err = ios._add(mpath, fsdisks, testingEnv)
+	warn, err = ios._add(mpath, label, fsdisks, fspaths, testingEnv)
 	ios.mu.Unlock()
+
+	if err != nil {
+		nlog.Errorln(err)
+	}
+	if warn != "" {
+		nlog.Infoln(warn)
+	}
 	return
 }
 
-func (ios *ios) _add(mpath string, fsdisks FsDisks, testingEnv bool) (err error) {
+func (ios *ios) _add(mpath, label string, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
 	if dd, ok := ios.mpath2disks[mpath]; ok {
-		err = fmt.Errorf("mountpath %s already exists, disks %v (%v)", mpath, dd, fsdisks)
-		nlog.Errorln(err)
-		return
+		return "", fmt.Errorf("duplicate mountpath %s (disks %s, %s)", mpath, dd._str(), fsdisks._str())
 	}
+
 	ios.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv {
-			err = fmt.Errorf("disk %s: disk sharing is not allowed: %s vs %s", disk, mpath, mp)
-			nlog.Errorln(err)
-			return
+			if DiskLabel(label).IsEmpty() {
+				return "", fmt.Errorf("disk %s is shared between mountpaths %s and %s", disk, mpath, mp)
+			}
+			var otherLabel string
+			if otherLabel, ok = fspaths[mp]; ok {
+				otherLabel = fmt.Sprintf("(%q)", otherLabel)
+			}
+			warn = fmt.Sprintf("Warning: disk (or disk label) %s is shared between %s(%q) and %s%s", disk, mpath, label, mp, otherLabel)
 		}
 		ios.disk2mpath[disk] = mpath
 		ios.blockStats[disk] = &blockStats{}
 	}
-	for disk, mountpath := range ios.disk2mpath {
-		if _, ok := ios.disk2sysfn[disk]; !ok {
-			path := filepath.Join(statsdir, disk, "stat")
-			ios.disk2sysfn[disk] = path
 
-			// multipath NVMe: alternative block-stats location
-			if cdisk := icn(disk, statsdir); cdisk != "" {
-				cpath := filepath.Join(statsdir, cdisk, "stat")
-				if icnPath(ios.disk2sysfn[disk], cpath, mountpath) {
-					nlog.Infoln("alternative block-stats path:", disk, path, "=>", cdisk, cpath)
-					ios.disk2sysfn[disk] = cpath
+	for disk, mountpath := range ios.disk2mpath {
+		if _, ok := ios.disk2sysfn[disk]; ok {
+			continue
+		}
+		path := filepath.Join(statsdir, disk, "stat")
+		ios.disk2sysfn[disk] = path
+
+		// multipath NVMe: alternative block-stats location
+		cdisk, err := icn(disk, statsdir)
+		if err != nil {
+			if DiskLabel(label).IsEmpty() {
+				return "", err
+			}
+			if warn != "" {
+				warn += "\n"
+			}
+			warn += fmt.Sprint("Warning:", err)
+		}
+		if cdisk != "" {
+			cpath := filepath.Join(statsdir, cdisk, "stat")
+			if icnPath(ios.disk2sysfn[disk], cpath, mountpath) {
+				if warn != "" {
+					warn += "\n"
 				}
+				warn += fmt.Sprint("Info: alternative block-stats path:", disk, path, "=>", cdisk, cpath)
+				ios.disk2sysfn[disk] = cpath
 			}
 		}
 	}
@@ -208,7 +241,7 @@ func (ios *ios) _add(mpath string, fsdisks FsDisks, testingEnv bool) (err error)
 			}
 		}
 	}
-	return
+	return warn, nil
 }
 
 //

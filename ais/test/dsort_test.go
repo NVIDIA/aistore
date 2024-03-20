@@ -1577,7 +1577,7 @@ func TestDsortManipulateMountpathDuringPhases(t *testing.T) {
 								tassert.CheckError(t, err)
 							} else {
 								tlog.Logf("adding mountpath %q to %s...\n", mpath, target.ID())
-								err := api.AttachMountpath(df.baseParams, target, mpath, true /*force*/)
+								err := api.AttachMountpath(df.baseParams, target, mpath)
 								tassert.CheckError(t, err)
 							}
 						}
@@ -1596,7 +1596,7 @@ func TestDsortManipulateMountpathDuringPhases(t *testing.T) {
 						for target, mpath := range mountpaths {
 							if adding {
 								tlog.Logf("adding new mountpath %q to %s...\n", mpath, target.ID())
-								err := api.AttachMountpath(df.baseParams, target, mpath, true /*force*/)
+								err := api.AttachMountpath(df.baseParams, target, mpath)
 								tassert.CheckFatal(t, err)
 							} else {
 								tlog.Logf("removing mountpath %q from %s...\n", mpath, target.ID())

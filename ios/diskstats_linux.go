@@ -7,6 +7,7 @@ package ios
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -104,7 +105,7 @@ func (ds *blockStats) ReadMs() int64     { return ds.readMs }
 
 // instance-controller-namespace (icn):
 // given "nvmeInN" return the corresponding multipath "nvmeIcCnN" (same instance, same namespace)
-func icn(disk, dir string) (cdisk string) {
+func icn(disk, dir string) (cdisk string, err error) {
 	if !strings.HasPrefix(disk, "nvme") {
 		return
 	}
@@ -112,10 +113,9 @@ func icn(disk, dir string) (cdisk string) {
 	if len(a) < 3 {
 		return
 	}
-	dentries, err := os.ReadDir(dir)
-	if err != nil {
-		debug.Assert(err == nil, dir, err)
-		return
+	dentries, errN := os.ReadDir(dir)
+	if errN != nil {
+		return "", fmt.Errorf("%q does not parse as NVMe icn", dir)
 	}
 	for _, d := range dentries {
 		name := d.Name()

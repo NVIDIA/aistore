@@ -65,7 +65,6 @@ var _ = Describe("LOM", func() {
 	cmn.GCO.CommitUpdate(config)
 
 	fs.TestNew(nil)
-	fs.TestDisableValidation()
 	for _, mpath := range mpaths {
 		_, _ = fs.Add(mpath, "daeID")
 	}

@@ -145,7 +145,6 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	mios := mock.NewIOS()
 	fs.TestNew(mios)
-	fs.TestDisableValidation()
 
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)

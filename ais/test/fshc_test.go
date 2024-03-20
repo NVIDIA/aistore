@@ -343,7 +343,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
-		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath, false /*force*/); err != nil {
+		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
@@ -400,7 +400,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
-		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath, false /*force*/); err != nil {
+		if err := api.AttachMountpath(md.baseParams, selectedTarget, selectedMpath); err != nil {
 			t.Logf("Failed to add mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
 		}
 
@@ -566,7 +566,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 
 	cos.CreateDir(tmpMpath)
 	tlog.Logf("Adding mountpath to %s\n", target.StringEx())
-	err = api.AttachMountpath(baseParams, target, tmpMpath, true /*force*/)
+	err = api.AttachMountpath(baseParams, target, tmpMpath)
 	tassert.CheckFatal(t, err)
 
 	tools.WaitForResilvering(t, baseParams, target)

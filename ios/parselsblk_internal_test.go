@@ -52,7 +52,7 @@ func TestLsblk_LVM(t *testing.T) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixReg)
 	}
 	disks := make(FsDisks, 4)
-	findDevs(lsblk.BlockDevices, trimmedFS, disks)
+	findDevs(lsblk.BlockDevices, trimmedFS, "", disks)
 	if len(disks) == 0 {
 		t.Fatal("No disks")
 	} else {

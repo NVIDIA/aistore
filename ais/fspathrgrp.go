@@ -50,8 +50,8 @@ func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.Mountpath, err er
 
 // attachMpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
-func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpath, err error) {
-	addedMi, err = fs.AddMpath(mpath, g.t.SID(), g.redistributeMD, force)
+func (g *fsprungroup) attachMpath(mpath, label string) (addedMi *fs.Mountpath, err error) {
+	addedMi, err = fs.AddMpath(g.t.SID(), mpath, label, g.redistributeMD)
 	if err != nil || addedMi == nil {
 		return
 	}

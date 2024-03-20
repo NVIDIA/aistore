@@ -108,8 +108,6 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 }
 
 func setAvailableMountPaths(t *testing.T, paths ...string) []string {
-	fs.TestDisableValidation()
-
 	avail := fs.GetAvail()
 	oldPaths := make([]string, 0, len(avail))
 	for _, mi := range avail {

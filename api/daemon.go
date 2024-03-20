@@ -43,8 +43,7 @@ func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err
 	return mpl, err
 }
 
-// TODO: rewrite tests that come here with `force`
-func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, force bool) error {
+func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ...string) error {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -56,7 +55,9 @@ func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, force bo
 			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
-		reqParams.Query = url.Values{apc.QparamForce: []string{strconv.FormatBool(force)}}
+		if len(label) > 0 {
+			reqParams.Query = url.Values{apc.QparamDiskLabel: []string{label[0]}}
+		}
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)

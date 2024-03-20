@@ -58,7 +58,6 @@ func TestMain(m *testing.M) {
 	cos.CreateDir(testMountpath)
 	defer os.RemoveAll(testMountpath)
 	fs.TestNew(nil)
-	fs.TestDisableValidation()
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 

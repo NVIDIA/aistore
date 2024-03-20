@@ -98,7 +98,7 @@ fi
 # token effort to allow StatsD to set up shop before ais tries to connect
 [[ $total_wait -le 2 ]] && sleep 2
 
-ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -local_config=/etc/ais/$(basename -- $AIS_LOCAL_CONF_FILE) -role=$AIS_NODE_ROLE -allow_shared_no_disks=${AIS_ALLOW_SHARED_NO_DISKS:-false}"
+ARGS="-config=/etc/ais/$(basename -- $AIS_CONF_FILE) -local_config=/etc/ais/$(basename -- $AIS_LOCAL_CONF_FILE) -role=$AIS_NODE_ROLE"
 $is_primary && ARGS+=" -ntargets=$TARGETS"
 echo "aisnode args: $ARGS"
 

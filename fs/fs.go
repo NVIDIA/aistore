@@ -50,7 +50,8 @@ type (
 	Mountpath struct {
 		lomCaches  cos.MultiSyncMap // LOM caches
 		info       string
-		Path       string   // clean path
+		Path       string // clean path
+		DiskLabel  string
 		cos.FS              // underlying filesystem
 		Disks      []string // owned disks (ios.FsDisks map => slice)
 		flags      uint64   // bit flags (set/get atomic)
@@ -79,10 +80,6 @@ type (
 		totalSize atomic.Uint64
 
 		mu sync.RWMutex
-
-		// allow disk sharing by multiple mountpaths and mountpaths with no disks whatsoever
-		// (default = false)
-		allowSharedDisksAndNoDisks bool
 	}
 	CapStatus struct {
 		// config
@@ -103,7 +100,7 @@ var mfs *MountedFS
 // Mountpath //
 ///////////////
 
-func NewMountpath(mpath string) (mi *Mountpath, err error) {
+func NewMountpath(mpath, diskLabel string) (mi *Mountpath, err error) {
 	var (
 		cleanMpath string
 		fsInfo     cos.FS
@@ -119,6 +116,7 @@ func NewMountpath(mpath string) (mi *Mountpath, err error) {
 	}
 	mi = &Mountpath{
 		Path:       cleanMpath,
+		DiskLabel:  diskLabel,
 		FS:         fsInfo,
 		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
@@ -361,7 +359,7 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 //
 
 func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config) (err error) {
-	if err = mi._checkExists(avail); err != nil {
+	if err = mi._checkExists(avail, config); err != nil {
 		return
 	}
 	if err = mi._addEnabled(tid, avail, config); err == nil {
@@ -377,25 +375,35 @@ func (mi *Mountpath) AddDisabled(disabled MPI) {
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
 
-// TODO: extend `force=true` to disregard "filesystem sharing" (see AddMpath)
-func (mi *Mountpath) _checkExists(avail MPI) (err error) {
-	if existingMi, exists := avail[mi.Path]; exists {
-		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
-	} else if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && !mfs.allowSharedDisksAndNoDisks {
-		err = fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
-	} else {
-		l := len(mi.Path)
-		for mpath := range avail {
-			if err = cmn.IsNestedMpath(mi.Path, l, mpath); err != nil {
-				break
-			}
+func (mi *Mountpath) _checkExists(avail MPI, config *cmn.Config) error {
+	existingMi, ok := avail[mi.Path]
+	if ok {
+		return fmt.Errorf("duplicated mountpath %s (%s)", mi, existingMi)
+	}
+	existingFs, ok := mfs.fsIDs[mi.FsID]
+	if ok {
+		if config.TestingEnv() {
+			return nil
+		}
+		if !ios.DiskLabel(mi.DiskLabel).IsEmpty() {
+			// user-assigned disk label implies user's responsibility for filesystem sharing
+			// (or not sharing) across mountpaths
+			return nil
+		}
+		return fmt.Errorf("FsID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingFs)
+	}
+	// check nesting
+	l := len(mi.Path)
+	for mpath := range avail {
+		if err := cmn.IsNestedMpath(mi.Path, l, mpath); err != nil {
+			return err
 		}
 	}
-	return
+	return nil
 }
 
 func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) error {
-	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, config)
+	disks, err := mfs.ios.AddMpath(mi.Path, mi.DiskLabel, mi.Fs, config)
 	if err != nil {
 		return err
 	}
@@ -428,19 +436,12 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 	}
 
 	// add new mp
-	if err = mi._checkExists(avail); err != nil {
+	if err = mi._checkExists(avail, config); err != nil {
 		return
 	}
 	availableCopy := _cloneOne(avail)
 	if err = mi.AddEnabled(tid, availableCopy, config); err == nil {
 		putAvailMPI(availableCopy)
-	}
-	return
-}
-
-func (mi *Mountpath) CheckDisks() (err error) {
-	if !mfs.allowSharedDisksAndNoDisks && len(mi.Disks) == 0 {
-		err = &ErrMountpathNoDisks{Mi: mi}
 	}
 	return
 }
@@ -482,18 +483,15 @@ func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 //
 
 // create a new singleton
-func New(num int, allowSharedDisksAndNoDisks bool) {
-	if allowSharedDisksAndNoDisks {
-		nlog.Warningln("allowed: (I) disk sharing by multiple mountpaths and (II) mountpaths with no disks")
-	}
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: allowSharedDisksAndNoDisks}
+func New(num int) {
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10)}
 	mfs.ios = ios.New(num)
 }
 
 // used only in tests
 func TestNew(iostater ios.IOS) {
 	const num = 10
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, num), allowSharedDisksAndNoDisks: false}
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, num)}
 	if iostater == nil {
 		mfs.ios = ios.New(num)
 	} else {
@@ -507,9 +505,6 @@ func Clblk()                                   { ios.Clblk(mfs.ios) }
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
 func FillDiskStats(m ios.AllDiskStats)         { mfs.ios.FillDiskStats(m) }
-
-// TestDisableValidation disables fsid checking and allows mountpaths without disks (testing-only)
-func TestDisableValidation() { mfs.allowSharedDisksAndNoDisks = true }
 
 func putAvailMPI(available MPI) { mfs.available.Store(&available) }
 func putDisabMPI(disabled MPI)  { mfs.disabled.Store(&disabled) }
@@ -559,9 +554,9 @@ func cloneMPI() (availableCopy, disabledCopy MPI) {
 	return availableCopy, disabledCopy
 }
 
-// (used only in _unit_ tests - compare with AddMpath below)
+// used only in tests (compare with AddMpath below)
 func Add(mpath, tid string) (mi *Mountpath, err error) {
-	mi, err = NewMountpath(mpath)
+	mi, err = NewMountpath(mpath, "test-label")
 	if err != nil {
 		return
 	}
@@ -572,35 +567,28 @@ func Add(mpath, tid string) (mi *Mountpath, err error) {
 	return
 }
 
-// Add adds new mountpath to the target's `avail`
-// TODO: extend `force=true` to disregard "filesystem sharing"
-func AddMpath(mpath, tid string, cb func(), force bool) (mi *Mountpath, err error) {
-	debug.Assert(tid != "")
-	mi, err = NewMountpath(mpath)
+func AddMpath(tid, mpath, label string, cb func()) (mi *Mountpath, err error) {
+	mi, err = NewMountpath(mpath, label)
 	if err != nil {
 		return
 	}
+
 	config := cmn.GCO.Get()
 	if config.TestingEnv() {
 		if err = config.LocalConfig.TestFSP.ValidateMpath(mi.Path); err != nil {
-			if !force {
-				return
-			}
-			nlog.Errorf("%v - ignoring since force=%t", err, force)
+			nlog.Errorln(err, "- proceeding anyway")
 		}
 	}
+
 	mfs.mu.Lock()
 	err = mi._cloneAddEnabled(tid, config)
-	if err == nil {
-		err = mi.CheckDisks()
-	}
 	if err == nil {
 		cb()
 	}
 	mfs.mu.Unlock()
 
 	if mi.Path != mpath {
-		nlog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
+		nlog.Warningf("%s: clean path(%q) => %q", mi, mpath, mi.Path)
 	}
 	return
 }
