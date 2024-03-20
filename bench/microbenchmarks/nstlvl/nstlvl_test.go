@@ -1,6 +1,6 @@
 // Package nstlvl is intended to measure impact (or lack of thereof) of POSIX directory nesting on random read performance.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package nstlvl_test
 
@@ -116,7 +116,7 @@ func (bctx *benchContext) createFiles(lvl int) {
 		reader = &io.LimitedReader{R: bctx.rnd, N: bctx.fileSize}
 		buf    = make([]byte, 32*cos.KiB)
 	)
-	for i := 0; i < bctx.fileCount; i++ {
+	for range bctx.fileCount {
 		fileName := bctx.dir + dirs[:lvl*(dirNameLen+1)+1] + bctx.randNestName()
 		file, err := cos.CreateFile(fileName)
 		cos.AssertNoErr(err)

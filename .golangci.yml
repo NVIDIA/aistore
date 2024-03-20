@@ -41,6 +41,7 @@ linters:
     #
     # linters that must be enabled when time permits:
     # - dupl
+    # - intrange
     #
     # linters that maybe worth running from time to time:
     # - gochecknoinits  - 'func init()'

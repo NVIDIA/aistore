@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -174,7 +174,7 @@ func (sch *StopCh) Close() {
 
 func NewSemaphore(n int) *Semaphore {
 	s := &Semaphore{s: make(chan struct{}, n)}
-	for i := 0; i < n; i++ {
+	for range n {
 		s.s <- struct{}{}
 	}
 	return s

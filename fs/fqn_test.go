@@ -409,7 +409,7 @@ func BenchmarkParseFQN(b *testing.B) {
 	fqn := mpaths[mpath].MakePathFQN(&bck, fs.ObjectType, "super/long/name")
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		var parsed fs.ParsedFQN
 		parsed.Init(fqn)
 	}

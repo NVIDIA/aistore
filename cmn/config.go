@@ -1480,7 +1480,7 @@ func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 	c.Root = cleanMpath
 
 	contextConfig.FSP.Paths = cos.NewStrKVs(c.Count)
-	for i := 0; i < c.Count; i++ {
+	for i := range c.Count {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
 		if c.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))
@@ -1492,7 +1492,7 @@ func (c *TestFSPConf) Validate(contextConfig *Config) (err error) {
 
 func (c *TestFSPConf) ValidateMpath(p string) (err error) {
 	debug.Assert(c.Count > 0)
-	for i := 0; i < c.Count; i++ {
+	for i := range c.Count {
 		mpath := filepath.Join(c.Root, fmt.Sprintf("mp%d", i+1))
 		if c.Instance > 0 {
 			mpath = filepath.Join(mpath, strconv.Itoa(c.Instance))

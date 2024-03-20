@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -255,7 +255,7 @@ func TestMoveToDeleted(t *testing.T) {
 	err := mi.MoveToDeleted("/path/to/wonderland")
 	tassert.CheckFatal(t, err)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		topDir, _ := tools.PrepareDirTree(t, tools.DirTreeDesc{
 			Dirs:  10,
 			Files: 10,
@@ -329,7 +329,7 @@ func BenchmarkMakePathFQN(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		s := mi.MakePathFQN(&bck, fs.ObjectType, objName)
 		cos.Assert(s != "")
 	}

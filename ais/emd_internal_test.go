@@ -64,7 +64,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 
 		etlMD = newEtlMD()
 		for _, initType := range []string{etl.Code, etl.Spec} {
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				var msg etl.InitMsg
 				if initType == etl.Code {
 					msg = &etl.InitCodeMsg{

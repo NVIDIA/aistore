@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos_test
 
@@ -98,12 +98,12 @@ var _ = Describe("BytePacker", func() {
 			key := fmt.Sprintf("test-%04d", i)
 			m[key] = uint16(i + 1)
 		}
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			packer.WriteMapStrUint16(m)
 		}
 		bytes := packer.Bytes()
 		unpacker := cos.NewUnpacker(bytes)
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			mp, err := unpacker.ReadMapStrUint16()
 			Expect(err).ShouldNot(HaveOccurred())
 			for k, v := range mp {

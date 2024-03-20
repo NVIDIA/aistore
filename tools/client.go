@@ -330,7 +330,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	}
 	workerCnt = min(workerCnt, args.ObjCnt)
 
-	for i := 0; i < args.ObjCnt; i++ {
+	for i := range args.ObjCnt {
 		if args.Ordered {
 			objNames = append(objNames, path.Join(args.ObjPath, strconv.Itoa(i)))
 		} else {
@@ -582,7 +582,7 @@ func _waitReToStart(bp api.BaseParams) {
 		timeout = max(10*xactPollSleep, MaxCplaneTimeout)
 		retries = int(timeout / xactPollSleep)
 	)
-	for i := 0; i < retries; i++ {
+	for range retries {
 		for _, kind := range kinds {
 			args := xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true, Kind: kind}
 			status, err := api.GetOneXactionStatus(bp, &args)

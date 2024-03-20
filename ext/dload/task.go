@@ -169,7 +169,7 @@ func (task *singleTask) downloadLocal(lom *core.LOM) (err error) {
 		timeout = task.initialTimeout()
 		fatal   bool
 	)
-	for i := 0; i < retryCnt; i++ {
+	for i := range retryCnt {
 		fatal, err = task._dlocal(lom, timeout)
 		if err == nil || fatal {
 			return err

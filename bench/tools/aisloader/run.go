@@ -373,7 +373,7 @@ func Start(version, buildtime string) (err error) {
 	workCh = make(chan *workOrder, runParams.numWorkers)
 	resCh = make(chan *workOrder, runParams.numWorkers)
 	wg := &sync.WaitGroup{}
-	for i := 0; i < runParams.numWorkers; i++ {
+	for range runParams.numWorkers {
 		wg.Add(1)
 		go worker(workCh, resCh, wg, &numGets)
 	}
@@ -415,7 +415,7 @@ func Start(version, buildtime string) (err error) {
 	preWriteStats(statsWriter, runParams.jsonFormat)
 
 	// Get the workers started
-	for i := 0; i < runParams.numWorkers; i++ {
+	for range runParams.numWorkers {
 		if err = postNewWorkOrder(); err != nil {
 			break
 		}

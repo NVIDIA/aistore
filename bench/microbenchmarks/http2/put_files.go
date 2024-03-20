@@ -1,8 +1,7 @@
 // Package http2 puts a given number of files with a given size into AIStore.
 // See /bench/http2/README.md for more info.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -50,7 +49,7 @@ func main() {
 	flag.Parse()
 	jobs := make(chan func(), files)
 
-	for w := 0; w < workers; w++ {
+	for range workers {
 		go worker(jobs)
 	}
 

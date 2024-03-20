@@ -1,6 +1,6 @@
 // Package memsys_test contains the corresponding micro-benchmarks.
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package syncmap_test
 
@@ -18,7 +18,7 @@ const mapSize = 16 // power of 2
 
 func BenchmarkSyncMap(b *testing.B) {
 	var m sync.Map
-	for i := 0; i < mapSize; i++ {
+	for i := range mapSize {
 		m.Store(i, new(int64))
 	}
 
@@ -38,7 +38,7 @@ func BenchmarkSyncMap(b *testing.B) {
 
 func BenchmarkRegMap(b *testing.B) {
 	m := make(map[int]*int64, mapSize)
-	for i := 0; i < mapSize; i++ {
+	for i := range mapSize {
 		m[i] = new(int64)
 	}
 	lock := &sync.RWMutex{}

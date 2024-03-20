@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -112,7 +112,7 @@ func BenchmarkObjPut(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				b.StopTimer()
 				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
 				poi := &putOI{
@@ -162,7 +162,7 @@ func BenchmarkObjAppend(b *testing.B) {
 
 			var hdl aoHdl
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				b.StopTimer()
 				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
 				aoi := &apndOI{
@@ -253,7 +253,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_, err := goi.getObject()
 				if err != nil {
 					b.Fatal(err)

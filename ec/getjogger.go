@@ -547,7 +547,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 
 	version := ""
 	srcReaders := make([]io.Reader, ctx.meta.Data)
-	for i := 0; i < ctx.meta.Data; i++ {
+	for i := range ctx.meta.Data {
 		if ctx.slices[i] != nil && ctx.slices[i].writer != nil {
 			if version == "" {
 				version = ctx.slices[i].version

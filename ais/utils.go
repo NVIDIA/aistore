@@ -191,7 +191,7 @@ func multihome(configuredIPv4s string) (pub string, extra []string) {
 		extra[i] = strings.TrimSpace(extra[i])
 		cos.ExitAssertLog(extra[i] != "", "invalid format (empty value):", configuredIPv4s)
 		cos.ExitAssertLog(extra[i] != pub, "duplicated addr or hostname:", configuredIPv4s)
-		for j := 0; j < i; j++ {
+		for j := range i {
 			cos.ExitAssertLog(extra[i] != extra[j], "duplicated addr or hostname:", configuredIPv4s)
 		}
 	}

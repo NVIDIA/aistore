@@ -1,7 +1,7 @@
 // Package hrw provides a way to benchmark different HRW variants.
 // See /bench/hrw/README.md for more info.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package hrw
 
@@ -60,7 +60,7 @@ func similarFileName(bucketName string, objNum int) string {
 // Duplicated on purpose to avoid dependency on any AIStore code.
 func randNodeID(randGen *rand.Rand) string {
 	randIP := ""
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		randIP += strconv.Itoa(randGen.Intn(255)) + "."
 	}
 	randIP += strconv.Itoa(randGen.Intn(255))
@@ -72,7 +72,7 @@ func randNodeID(randGen *rand.Rand) string {
 
 func randNodeIDs(numNodes int, randGen *rand.Rand) []node {
 	nodes := make([]node, numNodes)
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		id := randNodeID(randGen)
 		xhash := xxhash.NewS64(xxHashSeed)
 		xhash.WriteString(id)
@@ -88,7 +88,7 @@ func randNodeIDs(numNodes int, randGen *rand.Rand) []node {
 
 func get3DSlice(numRoutines, numFuncs, numNodes int) [][][]int {
 	perRoutine := make([][][]int, numRoutines)
-	for w := 0; w < numRoutines; w++ {
+	for w := range numRoutines {
 		perFunc := make([][]int, numFuncs)
 		for p := range perFunc {
 			perFunc[p] = make([]int, numNodes)

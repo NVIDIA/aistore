@@ -109,7 +109,7 @@ func New(num int) IOS {
 		disk2sysfn:  make(cos.StrKVs, num),
 		blockStats:  make(allBlockStats, num),
 	}
-	for i := 0; i < len(ios.cacheHst); i++ {
+	for i := range len(ios.cacheHst) {
 		ios.cacheHst[i] = newCache(num)
 	}
 	ios._put(ios.cacheHst[0])

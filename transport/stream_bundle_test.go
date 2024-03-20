@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
@@ -124,7 +124,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	// add target nodes
 	smap.Tmap = make(meta.NodeMap, 100)
 	smap.Tmap[lsnode.ID()] = lsnode
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ts := httptest.NewServer(objmux)
 		tss = append(tss, ts)
 		addTarget(&smap, ts, i)

@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -103,7 +103,7 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
 	}
-	for i := 0; i < srcVal.NumField(); i++ {
+	for i := range srcVal.NumField() {
 		var (
 			srcTyField  = srcVal.Type().Field(i)
 			srcValField = srcVal.Field(i)
@@ -234,7 +234,7 @@ func copyProps(src, dst any, asType string) error {
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
 	}
-	for i := 0; i < srcVal.NumField(); i++ {
+	for i := range srcVal.NumField() {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
 		if ok && copyTag == "skip" {
 			continue
@@ -285,7 +285,7 @@ func mergeProps(src, dst any) {
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
 
-	for i := 0; i < srcVal.NumField(); i++ {
+	for i := range srcVal.NumField() {
 		var (
 			srcValField = srcVal.Field(i)
 			dstValField = dstVal.FieldByName(srcVal.Type().Field(i).Name)

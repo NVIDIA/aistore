@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -328,7 +328,7 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 		if err == nil {
 			// [retry] insist on receiving the full length
 			var m int
-			for i := 0; i < maxInReadRetries; i++ {
+			for range maxInReadRetries {
 				runtime.Gosched()
 				m, err = it.Read(it.hbuf[n:hlen])
 				if err != nil {

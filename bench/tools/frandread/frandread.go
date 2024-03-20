@@ -1,6 +1,6 @@
 // Package frandread is a file-reading benchmark that makes a special effort to visit the files randomly and equally.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -113,7 +113,7 @@ func main() {
 			panic("In PUT mode one needs to specify directory to which files will be written")
 		}
 
-		for i := 0; i < 1024; i++ {
+		for range 1024 {
 			fileNames = append(fileNames, randString(10))
 		}
 	}

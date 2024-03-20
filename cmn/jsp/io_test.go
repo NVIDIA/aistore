@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp_test
 
@@ -52,7 +52,7 @@ func makeRandStruct() (ts testStruct) {
 	ts.ST.I64 = rand.Int63()
 	if rand.Intn(2) == 0 {
 		ts.M = make(map[string]string)
-		for i := 0; i < rand.Intn(100)+1; i++ {
+		for range rand.Intn(100) + 1 {
 			ts.M[trand.String(10)] = trand.String(20)
 		}
 	}
@@ -65,7 +65,7 @@ func makeStaticStruct() (ts testStruct) {
 	ts.B = []byte(trand.String(200))
 	ts.ST.I64 = rand.Int63()
 	ts.M = make(map[string]string, 10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ts.M[trand.String(10)] = trand.String(20)
 	}
 	return
@@ -124,7 +124,7 @@ func TestDecodeAndEncodeFuzz(t *testing.T) {
 	b := mmsa.NewSGL(cos.MiB)
 	defer b.Free()
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		var (
 			x, v string
 			opts = jsp.Options{Signature: true, Checksum: true}
@@ -204,7 +204,7 @@ func BenchmarkDecode(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				var (
 					v testStruct
 					r = io.NopCloser(bytes.NewReader(network))

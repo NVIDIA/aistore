@@ -231,7 +231,7 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 		z.sgl = z.sgl[:n]
 	}
 	slab.muget.Lock()
-	for i := 0; i < int(n); i++ {
+	for i := range int(n) {
 		z.sgl[i] = slab._alloc()
 	}
 	slab.muget.Unlock()

@@ -193,7 +193,7 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (lst *cmn.LsoRe
 
 // w/ limited retry and increasing timeout
 func lsoPage(reqParams *ReqParams) (_ *cmn.LsoRes, err error) {
-	for i := 0; i < maxListPageRetries; i++ {
+	for range maxListPageRetries {
 		page := &cmn.LsoRes{}
 		if _, err = reqParams.DoReqAny(page); err == nil {
 			return page, nil

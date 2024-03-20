@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -60,7 +60,7 @@ func GenUUID() (uuid string) {
 // called by xreg.GenBEID
 func GenBEID(val uint64) string {
 	b := make([]byte, LenShortID)
-	for i := 0; i < LenShortID; i++ {
+	for i := range LenShortID {
 		if idx := int(val & letterIdxMask); idx < LenRunes {
 			b[i] = LetterRunes[idx]
 		} else {

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -369,7 +369,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	freeBcastRes(results)
 	// step: handle connection-refused right away
 	lr := len(refused)
-	for i := 0; i < 4; i++ {
+	for range 4 { // retry
 		if len(refused) == 0 {
 			if lr > 0 {
 				nlog.Infof("%s: %d node%s sync-ed", y.p, lr, cos.Plural(lr))

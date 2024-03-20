@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -22,7 +22,7 @@ func (d *FsID) UnmarshalJSON(b []byte) error {
 	if len(v) != 2 {
 		return errors.New("invalid fsid, expected 2 numbers separated by comma")
 	}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := jsoniter.Unmarshal(v[i], &d[i]); err != nil {
 			return err
 		}

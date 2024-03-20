@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -140,7 +140,7 @@ func Decommission(mdOnly bool) {
 		avail, disabled = Get()
 		allmpi          = []MPI{avail, disabled}
 	)
-	for i := 0; i < deretries; i++ { // retry
+	for i := range deretries { // retry
 		if mdOnly {
 			if err := demd(allmpi); err == nil {
 				return
@@ -197,7 +197,7 @@ func deworld(allmpi []MPI) (rerr error) {
 
 // retrying ENOTEMPTY - "directory not empty" race vs. new writes
 func RemoveAll(dir string) (err error) {
-	for i := 0; i < deretries; i++ {
+	for i := range deretries {
 		err = os.RemoveAll(dir)
 		if err == nil {
 			break

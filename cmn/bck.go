@@ -219,7 +219,7 @@ func (b Bck) String() (s string) {
 // unique name => Bck (use MakeUname above to perform the reverse translation)
 func ParseUname(uname string) (b Bck, objName string) {
 	var prev, itemIdx int
-	for i := 0; i < len(uname); i++ {
+	for i := range len(uname) {
 		if uname[i] != filepath.Separator {
 			continue
 		}

@@ -1723,7 +1723,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 		addCandidate(u)
 	}
 	sleep := max(2*time.Second, cmn.Rom.MaxKeepalive())
-	for i := 0; i < 4; i++ {
+	for range 4 { // retry
 		for _, candidateURL := range candidates {
 			if daemon.stopping.Load() {
 				return

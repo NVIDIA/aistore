@@ -181,7 +181,7 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 			group:  group,
 			cancel: cancel,
 		}
-		for i := 0; i < opts.Parallel; i++ {
+		for i := range opts.Parallel {
 			syncGroup.sema <- i
 		}
 	}
@@ -206,7 +206,7 @@ func (j *jogger) run() (err error) {
 			j.bufs = [][]byte{j.opts.Slab.Alloc()}
 		} else {
 			j.bufs = make([][]byte, j.opts.Parallel)
-			for i := 0; i < j.opts.Parallel; i++ {
+			for i := range j.opts.Parallel {
 				j.bufs[i] = j.opts.Slab.Alloc()
 			}
 		}

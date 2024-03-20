@@ -360,7 +360,7 @@ func generateSlicesToMemory(ctx *encodeCtx) error {
 		initSize     = min(ctx.sliceSize, cos.MiB)
 		sliceWriters = make([]io.Writer, ctx.paritySlices)
 	)
-	for i := 0; i < ctx.paritySlices; i++ {
+	for i := range ctx.paritySlices {
 		writer := g.pmm.NewSGL(initSize)
 		ctx.slices[i+ctx.dataSlices] = &slice{obj: writer}
 		if cksumType == cos.ChecksumNone {
@@ -378,7 +378,7 @@ func initializeSlices(ctx *encodeCtx) (err error) {
 	// readers are slices of original object(no memory allocated)
 	cksmReaders := make([]io.Reader, ctx.dataSlices)
 	sizeLeft := ctx.lom.SizeBytes()
-	for i := 0; i < ctx.dataSlices; i++ {
+	for i := range ctx.dataSlices {
 		var (
 			reader     cos.ReadOpenCloser
 			cksmReader cos.ReadOpenCloser
@@ -413,7 +413,7 @@ func finalizeSlices(ctx *encodeCtx, writers []io.Writer) error {
 
 	// Calculate parity slices and their checksums
 	readers := make([]io.Reader, ctx.dataSlices)
-	for i := 0; i < ctx.dataSlices; i++ {
+	for i := range ctx.dataSlices {
 		readers[i] = ctx.slices[i].reader
 	}
 	if err := stream.Encode(readers, writers); err != nil {
@@ -446,7 +446,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 	}()
 
 	cksumType := ctx.lom.CksumType()
-	for i := 0; i < ctx.paritySlices; i++ {
+	for i := range ctx.paritySlices {
 		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
 		writer, err := ctx.lom.CreateFile(workFQN)
 		if err != nil {

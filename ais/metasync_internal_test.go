@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -248,7 +248,7 @@ func TestMetasyncTransport(t *testing.T) {
 // the calls are received in random order.
 func collectResult(n int, ch <-chan transportData) []transportData {
 	msgs := make([]transportData, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		msgs[i] = <-ch
 	}
 
@@ -583,7 +583,7 @@ func TestMetasyncData(t *testing.T) {
 			t.Fatalf("Mismatch: exp = %+v, act = %+v", exp, act)
 		}
 
-		for i := 0; i < cnt; i++ {
+		for range cnt {
 			act := (<-ch).payload
 			for k, e := range act {
 				a, ok := exp[k]

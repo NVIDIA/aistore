@@ -45,7 +45,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 
 		bmd = newBucketMD()
 		for _, provider := range []string{apc.AIS, apc.AWS} {
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				var hdr http.Header
 				if provider != apc.AIS {
 					hdr = http.Header{apc.HdrBackendProvider: []string{provider}}

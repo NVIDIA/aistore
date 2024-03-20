@@ -43,7 +43,7 @@ func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 	g.tstats = tstats
 
 	nextSessionID.Store(100)
-	for i := 0; i < numHmaps; i++ {
+	for i := range numHmaps {
 		hmaps[i] = make(hmap, 4)
 	}
 

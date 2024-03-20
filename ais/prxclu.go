@@ -782,7 +782,7 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 		cargs.timeout = timeout
 	}
 	time.Sleep(sleep)
-	for i := 0; i < 4; i++ { // retry
+	for i := range 4 { // retry
 		res := p.call(cargs, smap)
 		err := res.err
 		freeCR(res)
@@ -1565,7 +1565,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	if _, status, err := p.reqHealth(si, timeout, nil, smap); err != nil {
 		sleep, retries := timeout/2, 5
 		time.Sleep(sleep)
-		for i := 0; i < retries; i++ {
+		for range retries { // retry
 			time.Sleep(sleep)
 			_, status, err = p.reqHealth(si, timeout, nil, smap)
 			if err == nil {

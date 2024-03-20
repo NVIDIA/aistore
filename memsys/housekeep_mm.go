@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -142,7 +142,7 @@ func (r *MMSA) hkIval(pressure int) time.Duration {
 // refresh and clone internal hits/idle stats
 func (r *MMSA) refreshStats() {
 	now := mono.NanoTime()
-	for i := 0; i < r.numSlabs; i++ {
+	for i := range r.numSlabs {
 		hits, prev := r.slabStats.hits[i].Load(), r.slabStats.prev[i]
 		hinc := hits - prev
 		if hinc == 0 {

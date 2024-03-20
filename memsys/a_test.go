@@ -2,7 +2,7 @@
 // with io.Reader and io.Writer interfaces on top of a scatter-gather lists
 // (of reusable buffers)
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys_test
 
@@ -58,7 +58,7 @@ func Test_Sleep(*testing.T) {
 
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		ttl := time.Duration(random.Int63n(int64(time.Millisecond*100))) + time.Millisecond
 		var siz, tot int64
 		if i%2 == 0 {
@@ -72,7 +72,7 @@ func Test_Sleep(*testing.T) {
 	}
 	c := make(chan struct{}, 1)
 	go printMaxRingLen(mem, c)
-	for i := 0; i < 7; i++ {
+	for range 7 {
 		time.Sleep(duration / 8)
 		mem.FreeSpec(memsys.FreeSpec{IdleDuration: 1, MinSize: cos.MiB})
 	}

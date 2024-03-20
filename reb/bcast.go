@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -72,7 +72,7 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		logHdr = reb.logHdr(rargs.id, rargs.smap)
 		tname  = tsi.StringEx()
 	)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		_, code, err := core.T.Health(tsi, cmn.Rom.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {

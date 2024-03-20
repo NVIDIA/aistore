@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
@@ -242,7 +242,7 @@ func TestMultiStream(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	netstats := make(map[string]transport.RxStats)
 	lock := &sync.Mutex{}
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		wg.Add(1)
 		go streamWriteUntil(t, i, wg, ts, netstats, lock, false /*compress*/, false /*PDU*/)
 	}
@@ -288,7 +288,7 @@ func TestMultipleNetworks(t *testing.T) {
 	totalRecv, recvFunc := makeRecvFunc(t)
 
 	streams := make([]*transport.Stream, 0, 10)
-	for idx := 0; idx < 10; idx++ {
+	for idx := range 10 {
 		ts := httptest.NewServer(objmux)
 		defer ts.Close()
 		trname := "endpoint" + strconv.Itoa(idx)
@@ -343,7 +343,7 @@ func TestSendCallback(t *testing.T) {
 		posted    = make([]*randReader, objectCnt)
 	)
 	random := newRand(mono.NanoTime())
-	for idx := 0; idx < len(posted); idx++ {
+	for idx := range len(posted) {
 		hdr, rr := makeRandReader(random, false)
 		mu.Lock()
 		posted[idx] = rr
@@ -543,7 +543,7 @@ func TestDryRun(t *testing.T) {
 
 	for size < total {
 		hdr.ObjAttrs.Size = cos.KiB * 128
-		for i := int64(0); i < cos.MiB/hdr.ObjAttrs.Size; i++ {
+		for i := range cos.MiB / hdr.ObjAttrs.Size {
 			reader := memsys.NewReader(sgl)
 			reader.Seek(i*hdr.ObjAttrs.Size, io.SeekStart)
 
@@ -593,7 +593,7 @@ func TestCompletionCount(t *testing.T) {
 	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil) // provide for sizeable queue at any point
 	random := newRand(mono.NanoTime())
 	rem := int64(0)
-	for idx := 0; idx < 10000; idx++ {
+	for idx := range 10000 {
 		if idx%7 == 0 {
 			hdr := genStaticHeader(random)
 			hdr.ObjAttrs.Size = 0

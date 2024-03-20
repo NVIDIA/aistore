@@ -1,7 +1,6 @@
 // Package statsd_test
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package statsd_test
 
@@ -70,7 +69,7 @@ func TestClient(t *testing.T) {
 
 	// drain accumulated probes
 	buf := make([]byte, 256)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, _, err := s.ReadFromUDP(buf)
 		if err != nil {
 			t.Fatal("Failed to read probe", err)
@@ -146,7 +145,7 @@ func BenchmarkSend(b *testing.B) {
 	}
 	defer c.Close()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		c.Send("timer", 1,
 			statsd.Metric{
 				Type:  statsd.Timer,

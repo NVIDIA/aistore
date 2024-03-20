@@ -2,7 +2,7 @@
 
 // Package hrw provides a way to benchmark different HRW variants.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 
 package hrw
@@ -39,7 +39,7 @@ func BenchmarkHRW(b *testing.B) {
 			for _, hashFunc := range hashFuncs {
 				b.Run(fmt.Sprintf("%s/%d/%d", hashFunc.name, numNodes, nameLen), func(b *testing.B) {
 					var nodeID int
-					for n := 0; n < b.N; n++ {
+					for range b.N {
 						// Record the result to prevent the compiler
 						// eliminating the function call.
 						nodeID = hashFunc.hashF(fileName, nodes)
@@ -83,7 +83,7 @@ func TestEqualDistribution(t *testing.T) {
 
 			var wg sync.WaitGroup
 			wg.Add(numRoutines)
-			for r := 0; r < numRoutines; r++ {
+			for r := range numRoutines {
 				go func(r int, hashFs []hashFuncs, dist [][]int) {
 					defer wg.Done()
 					invokeHashFunctions(seed+int64(r+10), objsPerRoutine, numNodes, useSimilarNames, hashFs, dist)
@@ -96,8 +96,8 @@ func TestEqualDistribution(t *testing.T) {
 			maxDiff := -1.0
 			for f, hashFunc := range hashFs {
 				sum := 0
-				for r := 0; r < numRoutines; r++ {
-					for idx := 0; idx < numNodes; idx++ {
+				for r := range numRoutines {
+					for idx := range numNodes {
 						hashFunc.countObjs[idx] += objDist[r][f][idx]
 						sum += objDist[r][f][idx]
 					}
@@ -130,7 +130,7 @@ func invokeHashFunctions(seed int64, numObjs, numNodes int, useSimilarNames bool
 	randGen := rand.New(rand.NewSource(seed))
 	nodes := randNodeIDs(numNodes, randGen)
 	bucketName := randFileName(randGen, fqnMaxLen-objNameLen)
-	for n := 0; n < numObjs; n++ {
+	for n := range numObjs {
 		var fileName string
 		if useSimilarNames {
 			fileName = similarFileName(bucketName, n)

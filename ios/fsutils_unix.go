@@ -1,7 +1,7 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
@@ -56,7 +56,7 @@ func executeDU(cmd *exec.Cmd, dirPath string, withNonDirPrefix bool, outputBlock
 
 func _parseTotal(s string) (size int64) {
 	var err error
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] < '0' || s[i] > '9' {
 			size, err = strconv.ParseInt(s[:i], 10, 64)
 			debug.AssertNoErr(err)

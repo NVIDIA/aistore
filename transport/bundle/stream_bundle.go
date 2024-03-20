@@ -367,7 +367,7 @@ func (sb *Streams) Resync() {
 
 		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
-		for k := 0; k < sb.multiplier; k++ {
+		for k := range sb.multiplier {
 			ns := transport.NewObjStream(sb.client, dstURL, id /*dstID*/, &sb.extra)
 			nrobin.stsdest[k] = ns
 		}
@@ -378,7 +378,7 @@ func (sb *Streams) Resync() {
 			continue
 		}
 		orobin := nbundle[id]
-		for k := 0; k < sb.multiplier; k++ {
+		for k := range sb.multiplier {
 			os := orobin.stsdest[k]
 			if !os.IsTerminated() {
 				os.Stop() // the node is gone but the stream appears to be still active - stop it

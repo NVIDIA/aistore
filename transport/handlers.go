@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -68,7 +68,7 @@ func oget(trname string) (h handler, err error) {
 }
 
 func _lookup(trname string) error {
-	for j := 0; j < numOld; j++ {
+	for j := range numOld {
 		if old[j] == trname {
 			return &errAlreadyClosedTrname{errTrname{trname}}
 		}

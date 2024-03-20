@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -46,7 +46,7 @@ func TestWalkBck(t *testing.T) {
 				}
 			}()
 
-			for i := 0; i < test.mpathCnt; i++ {
+			for range test.mpathCnt {
 				mpath, err := os.MkdirTemp("", "testwalk")
 				tassert.CheckFatal(t, err)
 
@@ -132,7 +132,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < mpathCnt; i++ {
+	for range mpathCnt {
 		mpath, err := os.MkdirTemp("", "testwalk")
 		tassert.CheckFatal(t, err)
 
@@ -151,7 +151,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		totalFilesCnt := rand.Int()%100 + minObjectsCnt
-		for i := 0; i < totalFilesCnt; i++ {
+		for range totalFilesCnt {
 			f, err := os.CreateTemp(dir, "")
 			tassert.CheckFatal(t, err)
 			f.Close()

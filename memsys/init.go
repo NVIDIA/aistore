@@ -207,7 +207,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	r.statsSnapshot = &Stats{}
 	r.rings = make([]*Slab, r.numSlabs)
 	r.sorted = make([]*Slab, r.numSlabs)
-	for i := 0; i < r.numSlabs; i++ {
+	for i := range r.numSlabs {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,

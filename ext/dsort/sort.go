@@ -1,6 +1,6 @@
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -60,7 +60,7 @@ func sortRecords(r *shard.Records, alg *Algorithm) (err error) {
 			debug.AssertNoErr(err)
 		}
 		rnd = rand.New(rand.NewSource(seed))
-		for i := 0; i < r.Len(); i++ { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+		for i := range r.Len() { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
 			j := rnd.Intn(i + 1)
 			r.Swap(i, j)
 		}

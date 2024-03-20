@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -418,8 +418,9 @@ func (r *registry) hkDelOld() time.Duration {
 
 	r.entries.mtx.RLock()
 	l := len(r.entries.all)
+
 	// first, cleanup list-objects: walk older to newer while counting non-lso
-	for i := 0; i < l; i++ {
+	for i := range l {
 		xctn := r.entries.all[i].Get()
 		if xctn.Kind() != apc.ActList {
 			numNonLso++
@@ -434,7 +435,7 @@ func (r *registry) hkDelOld() time.Duration {
 	// all the rest: older to newer, while keeping at least `keepOldThreshold`
 	if numNonLso > keepOldThreshold {
 		var cnt int
-		for i := 0; i < l; i++ {
+		for i := range l {
 			xctn := r.entries.all[i].Get()
 			if xctn.Kind() == apc.ActList {
 				continue

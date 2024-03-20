@@ -1,7 +1,7 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package hk_test
 
@@ -65,7 +65,7 @@ var _ = Describe("Housekeeper", func() {
 
 		time.Sleep(20 * time.Millisecond)
 		// "foo" and "bar" should fire at the start (no initial interval)
-		for idx := 0; idx < len(fired); idx++ {
+		for idx := range len(fired) {
 			Expect(fired[idx]).To(BeTrue())
 			fired[idx] = false
 		}
@@ -119,7 +119,7 @@ var _ = Describe("Housekeeper", func() {
 	})
 
 	It("should unregister callback that returns UnregInterval", func() {
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			fired := make([]bool, 2)
 			hk.Reg("bar", func() time.Duration {
 				fired[0] = true
@@ -181,7 +181,7 @@ var _ = Describe("Housekeeper", func() {
 			fired   = make([]int32, actionCnt)
 		)
 
-		for i := 0; i < actionCnt; i++ {
+		for i := range actionCnt {
 			durs = append(durs, action{
 				d:       50*time.Millisecond + time.Duration(40*i)*time.Millisecond,
 				origIdx: i,
@@ -193,7 +193,7 @@ var _ = Describe("Housekeeper", func() {
 			durs[i], durs[j] = durs[j], durs[i]
 		})
 
-		for i := 0; i < actionCnt; i++ {
+		for i := range actionCnt {
 			index := i
 			hk.Reg(strconv.Itoa(index), func() time.Duration {
 				if fired[index] == -1 {
@@ -205,7 +205,7 @@ var _ = Describe("Housekeeper", func() {
 
 		time.Sleep(100 * actionCnt * time.Millisecond)
 
-		for i := 0; i < actionCnt; i++ {
+		for i := range actionCnt {
 			Expect(durs[i].origIdx).To(BeEquivalentTo(fired[i]))
 		}
 	})

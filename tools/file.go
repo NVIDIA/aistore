@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -56,7 +56,7 @@ type (
 
 func RandomObjDir(dirLen, maxDepth int) (dir string) {
 	depth := rand.Intn(maxDepth)
-	for i := 0; i < depth; i++ {
+	for range depth {
 		dir = filepath.Join(dir, trand.String(dirLen))
 	}
 	return
@@ -153,7 +153,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	dir := t.TempDir()
 
-	for i := 0; i < desc.MountpathsCnt; i++ {
+	for range desc.MountpathsCnt {
 		mpath, err := os.MkdirTemp(dir, "")
 		tassert.CheckFatal(t, err)
 		mp, err := fs.Add(mpath, "daeID")
@@ -173,7 +173,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	}
 
 	for _, ct := range desc.CTs {
-		for i := 0; i < ct.ContentCnt; i++ {
+		for range ct.ContentCnt {
 			fqn, _, err := core.HrwFQN(&bck, ct.Type, trand.String(15))
 			tassert.CheckFatal(t, err)
 

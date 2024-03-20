@@ -214,7 +214,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 		timeout    = config.Timeout.CplaneOperation.D() / 2
 	)
 	// 1. ping the current primary (not using apc.QparamAskPrimary as it might be transitioning)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if i > 0 {
 			runtime.Gosched()
 		}
@@ -619,7 +619,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 	}
 	// retry
 	sleep := cmn.Rom.CplaneOperation() / 2
-	for i := 0; i < maxRetryElectReq; i++ {
+	for range maxRetryElectReq {
 		time.Sleep(sleep)
 		res = h.call(cargs, vr.Smap)
 		err = res.err

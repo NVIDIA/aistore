@@ -1,6 +1,6 @@
 // Package lstat compares access(), stat() and lstat() (syscall) latencies
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 
 // how to run:
@@ -18,35 +18,35 @@ const (
 )
 
 func BenchmarkAccess(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		access(b, one)
 		access(b, two)
 	}
 }
 
 func BenchmarkStat(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		stat(b, one)
 		stat(b, two)
 	}
 }
 
 func BenchmarkLstat(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		lstat(b, one)
 		lstat(b, two)
 	}
 }
 
 func BenchmarkOpen(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		open(b, one)
 		open(b, two)
 	}
 }
 
 func BenchmarkSyscallStat(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		syscallStat(b, one)
 		syscallStat(b, two)
 	}

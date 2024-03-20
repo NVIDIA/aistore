@@ -428,7 +428,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 		reb.awaiting.targets = reb.awaiting.targets[:0]
 	}
 	acks := reb.lomAcks()
-	for i := 0; i < len(acks); i++ { // init lom acks
+	for i := range len(acks) { // init lom acks
 		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*core.LOM, 64)}
 	}
 

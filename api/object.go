@@ -593,7 +593,7 @@ func DoWithRetry(client *http.Client, cb NewRequestCB, reqArgs *cmn.HreqArgs) (r
 	}
 
 	// retry
-	for i := 0; i < httpMaxRetries; i++ {
+	for range httpMaxRetries {
 		var r io.ReadCloser
 		time.Sleep(sleep)
 		sleep += sleep / 2

@@ -1,6 +1,6 @@
 // Package archive provides common low-level utilities for testing archives
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package tarch
 
@@ -70,7 +70,7 @@ func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, f
 	if len(recExts) == 0 {
 		recExts = []string{".txt"}
 	}
-	for i := 0; i < fileCnt; i++ {
+	for i := range fileCnt {
 		var randomName int
 		if randNames == nil {
 			randomName = rand.Int()
@@ -98,7 +98,7 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 	customFileType, customFileExt string, missingKeys bool) error {
 	aw := archive.NewWriter(ext, w, nil, &archive.Opts{TarFormat: tarFormat})
 	defer aw.Fini()
-	for i := 0; i < fileCnt; i++ {
+	for range fileCnt {
 		fileName := strconv.Itoa(rand.Int()) // generate random names
 		if err := addBufferToArch(aw, fileName+".txt", fileSize, nil); err != nil {
 			return err

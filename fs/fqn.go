@@ -57,7 +57,7 @@ func (parsed *ParsedFQN) Init(fqn string) (err error) {
 	if err != nil {
 		return
 	}
-	for i := 0; i < len(rel); i++ {
+	for i := range len(rel) {
 		if rel[i] != filepath.Separator {
 			continue
 		}

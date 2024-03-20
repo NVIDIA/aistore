@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apitests_test
 
@@ -44,7 +44,7 @@ func createAndFillBucket(b *testing.B, objCnt int, u string) cmn.Bck {
 	tools.CreateBucket(b, baseParams.URL, bck, nil, true /*cleanup*/)
 
 	// Iterations of PUT
-	for wid := uint(0); wid < workerCount; wid++ {
+	for range workerCount {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -81,7 +81,7 @@ func BenchmarkListObject(b *testing.B) {
 			)
 			b.ReportAllocs()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				msg := &apc.LsoMsg{PageSize: int64(test.pageSize)}
 				if test.useCache {
 					msg.SetFlag(apc.UseListObjsCache)

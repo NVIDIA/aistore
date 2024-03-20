@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -319,7 +319,7 @@ func (g *rungroup) runAll(mainRunner cos.Runner) error {
 		}
 	}
 	// Wait for all terminations.
-	for i := 0; i < len(g.rs)-1; i++ {
+	for range len(g.rs) - 1 {
 		<-g.errCh
 	}
 	return ret.err

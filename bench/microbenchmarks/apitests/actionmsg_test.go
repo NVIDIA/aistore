@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apitests_test
 
@@ -13,7 +13,7 @@ import (
 )
 
 func BenchmarkActionMsgMarshal(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		msg := apc.ActMsg{
 			Name:   "test-name",
 			Action: apc.ActDeleteObjects,

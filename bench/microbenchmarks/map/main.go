@@ -1,6 +1,6 @@
 // Package main
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -195,7 +195,7 @@ func randInt(r int) int {
 // Create a node struct where key and value are the same (it should not matter)
 func createNodeList(size int) (nodeList []node) {
 	nodeList = make([]node, 0, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		nodeList = append(nodeList, node{key: i, val: randInt(i)})
 	}
 	return
@@ -206,7 +206,7 @@ func createList(nodeList []node, size int) (keys []int) {
 	nodeLen := len(nodeList)
 	keys = make([]int, 0, size)
 
-	for i := 0; i < size; i++ {
+	for range size {
 		keys = append(keys, cos.NowRand().Intn(nodeLen))
 	}
 	return
@@ -218,7 +218,7 @@ func createReadDelList(nodeList []node, size, iterations int) (keysList [][]int)
 
 	keysList = make([][]int, iterations)
 	wg.Add(iterations)
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		go func(index int) {
 			keysList[index] = createList(nodeList, size)
 			wg.Done()
@@ -276,7 +276,7 @@ func bench(m benchMap, nodeList []node, readList, delList [][]int, iterations, t
 	)
 	fmt.Printf("Fill, Read + Random Write and Shrink with %s\n", m.mapType())
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		start := time.Now()
 		readDurCh := make(chan time.Duration, workers)
 		wg.Add(1)
@@ -285,7 +285,7 @@ func bench(m benchMap, nodeList []node, readList, delList [][]int, iterations, t
 			wg.Done()
 		}()
 
-		for j := 0; j < workers; j++ {
+		for range workers {
 			wg.Add(1)
 			go func(idx int) {
 				readNWrite(m, threshold, readList[idx], readDurCh)

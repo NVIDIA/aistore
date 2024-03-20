@@ -67,14 +67,14 @@ func WalkBck(opts *WalkBckOpts) error {
 		idx++
 	}
 
-	for i := 0; i < l; i++ {
+	for i := range l {
 		group.Go(joggers[i].walk)
 	}
 	group.Go(func() error {
 		h := &wbeHeap{}
 		heap.Init(h)
 
-		for i := 0; i < l; i++ {
+		for i := range l {
 			if wbe, ok := <-joggers[i].workCh; ok {
 				heap.Push(h, wbeInfo{mpathIdx: i, fqn: wbe.fqn, dirEntry: wbe.dirEntry})
 			}

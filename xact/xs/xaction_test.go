@@ -1,6 +1,6 @@
 // Package xs_test contains xs unit test.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs_test
 
@@ -51,7 +51,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	cos.InitShortID(0)
 
 	wg.Add(num)
-	for i := 0; i < num; i++ {
+	for range num {
 		go func() {
 			xactCh <- xreg.RenewLRU(cos.GenUUID())
 			wg.Done()
@@ -90,7 +90,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	ch := make(chan xreg.RenewRes, 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			defer wg.Done()
 			ch <- xreg.RenewPrefetch(cos.GenUUID(), bck, msg)
@@ -303,7 +303,7 @@ func TestBeid(t *testing.T) {
 		tags = []string{"tag1", "tag2"}
 		cnt  int
 	)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		beid, _, _ := xreg.GenBEID(div, tags[i%2])
 		if _, ok := ids[beid]; ok {
 			t.Fatalf("%d: %s duplicated", i, beid)

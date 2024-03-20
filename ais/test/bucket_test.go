@@ -515,7 +515,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 
 			m.init(true /*cleanup*/)
 
-			for i := 0; i < iterCount; i++ {
+			for range iterCount {
 				if err := api.CreateBucket(baseParams, m.bck, nil); err != nil {
 					return err
 				}
@@ -735,7 +735,7 @@ func TestListObjectsSmoke(t *testing.T) {
 
 		// Run couple iterations to see that we get deterministic results.
 		tlog.Logf("run %d list objects iterations\n", iters)
-		for iter := 0; iter < iters; iter++ {
+		for iter := range iters {
 			objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
@@ -776,7 +776,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			expectedEntries cmn.LsoEntries
 		)
 		tlog.Logln("listing couple pages to move iterator on targets")
-		for page := 0; page < m.num/int(msg.PageSize); page++ {
+		for range m.num / int(msg.PageSize) {
 			tokens = append(tokens, msg.ContinuationToken)
 			objPage, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
@@ -850,7 +850,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 		tlog.Logln("starting rerequesting routine...")
 		for {
 			prevToken := msg.ContinuationToken
-			for i := 0; i < rerequests; i++ {
+			for range rerequests {
 				msg.ContinuationToken = prevToken
 				objList, err = api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
@@ -1232,7 +1232,7 @@ func TestListObjects(t *testing.T) {
 				tlog.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
 				objectCount := rand.Intn(800) + 1010
 				totalObjects += objectCount
-				for wid := 0; wid < workerCount; wid++ {
+				for wid := range workerCount {
 					wg.Add(1)
 					go func(wid int) {
 						defer wg.Done()
@@ -1391,7 +1391,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				}
 			})
 
-			for i := 0; i < objCnt; i++ {
+			for i := range objCnt {
 				objName := fmt.Sprintf("prefix/obj%d", i+1)
 				objNames = append(objNames, objName)
 
@@ -1501,7 +1501,7 @@ func TestListObjectsCache(t *testing.T) {
 	for _, useCache := range []bool{true, false} {
 		t.Run(fmt.Sprintf("cache=%t", useCache), func(t *testing.T) {
 			// Do it N times - first: fill the cache; next calls: use it.
-			for iter := 0; iter < totalIters; iter++ {
+			for iter := range totalIters {
 				var (
 					started = time.Now()
 					msg     = &apc.LsoMsg{PageSize: rand.Int63n(20) + 4}
@@ -1563,7 +1563,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 15; i++ {
+		for i := range 15 {
 			tlog.Logf("listing all objects, iter: %d\n", i)
 			lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)

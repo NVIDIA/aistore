@@ -95,7 +95,7 @@ func (f *Filter) Delete(k []byte) {
 
 func (f *Filter) Reset() {
 	f.mtx.Lock()
-	for idx := 0; idx < len(f.filters); idx++ {
+	for idx := range len(f.filters) {
 		f.filters[idx].Reset()
 	}
 	clear(f.filters)

@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -110,7 +110,7 @@ func TestGetFromArch(t *testing.T) {
 						archName = tmpDir + "/" + cos.GenTie() + test.ext
 						dirs     = []string{"a", "b", "c", "a/b", "a/c", "b/c", "a/b/c", "a/c/b", "b/a/c"}
 					)
-					for i := 0; i < numArchived; i++ {
+					for i := range numArchived {
 						j := rand.Int()
 						randomNames[i] = fmt.Sprintf("%d.txt", j)
 						if test.nested {
@@ -308,10 +308,10 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
 
 			if test.list {
-				for i := 0; i < numArchs; i++ {
+				for i := range numArchs {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
-					for j := 0; j < numInArch; j++ {
+					for range numInArch {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(archName string, list []string, i int) {
@@ -328,7 +328,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 					}(archName, list, i)
 				}
 			} else {
-				for i := 0; i < numArchs; i++ {
+				for i := range numArchs {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start, i int) {
@@ -355,7 +355,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			}
 
 			var lstToAppend *cmn.LsoRes
-			for ii := 0; ii < 2; ii++ {
+			for ii := range 2 {
 				api.WaitForXactionIdle(baseParams, &flt)
 
 				tlog.Logf("List %s\n", bckTo)
@@ -517,10 +517,10 @@ func TestAppendToArch(t *testing.T) {
 				numAdd = 3
 			}
 
-			for i := 0; i < numArchs; i++ {
+			for i := range numArchs {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				list := make([]string, 0, numInArch)
-				for j := 0; j < numInArch; j++ {
+				for range numInArch {
 					list = append(list, m.objNames[rand.Intn(m.num)])
 				}
 				go func(archName string, list []string) {
@@ -546,12 +546,12 @@ func TestAppendToArch(t *testing.T) {
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
 			var sparsePrint atomic.Int64
-			for i := 0; i < numArchs; i++ {
+			for i := range numArchs {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				if test.multi {
 					tlog.Logf("APPEND multi-obj %s => %s/%s\n", bckFrom, bckTo, archName)
 					list := make([]string, 0, numAdd)
-					for j := 0; j < numAdd; j++ {
+					for range numAdd {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					msg := cmn.ArchiveBckMsg{

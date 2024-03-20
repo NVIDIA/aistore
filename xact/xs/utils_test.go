@@ -1,6 +1,6 @@
 // Package xs_test - basic list-concatenation unit tests.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs_test
 
@@ -51,7 +51,7 @@ func TestConcatObjLists(t *testing.T) {
 			)
 			for _, objCount := range test.objCounts {
 				list := &cmn.LsoRes{}
-				for i := 0; i < objCount; i++ {
+				for range objCount {
 					list.Entries = append(list.Entries, &cmn.LsoEnt{
 						Name: trand.String(5),
 					})
