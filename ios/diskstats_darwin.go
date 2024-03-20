@@ -56,5 +56,5 @@ func (ds *blockStats) ReadMs() int64     { return ds.readMs }
 // * nvmeInN:     instance I namespace N
 // * nvmeIcCnN:   instance I controller C namespace N
 
-func icn(string, string) string           { return "" }
+func icn(string, string) (string, error)  { return "", nil }
 func icnPath(string, string, string) bool { return false }

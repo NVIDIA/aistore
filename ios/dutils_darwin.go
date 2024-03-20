@@ -15,13 +15,11 @@ type LsBlk struct{}
 
 func lsblk(string, bool) *LsBlk { return nil }
 
-func fs2disks(*LsBlk, string, string, int, bool) (disks FsDisks) {
+func fs2disks(*LsBlk, string, string, int, bool) (FsDisks, error) {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil || len(driveStats) == 0 {
-		return
+		return nil, err
 	}
 	drive := driveStats[0]
-	return FsDisks{
-		drive.Name: drive.BlockSize,
-	}
+	return FsDisks{drive.Name: drive.BlockSize}, nil
 }

@@ -8,6 +8,7 @@ package ios
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -492,4 +493,9 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		maxUtil = max(maxUtil, u)
 	}
 	return
+}
+
+func (disks FsDisks) _str() string {
+	s := fmt.Sprintf("%v", disks) // with sector sizes
+	return strings.TrimPrefix(s, "map")
 }

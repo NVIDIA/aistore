@@ -937,6 +937,13 @@ var (
 		Name:  "no-rebalance",
 		Usage: "do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only!)",
 	}
+	diskLabelFlag = cli.StringFlag{
+		Name: "label",
+		Usage: "optional _disk label_ that can be associated with the mountpath that's being attached\n" +
+			indent2 + "to further assist in:\n" +
+			indent4 + "- mapping the mountpath to its underlying disk(s), if any\n" +
+			indent4 + "- aggregating target mountpaths across non-overlapping storage capacities",
+	}
 	noResilverFlag = cli.BoolFlag{
 		Name:  "no-resilver",
 		Usage: "do _not_ resilver data off of the mountpaths that are being disabled or detached",

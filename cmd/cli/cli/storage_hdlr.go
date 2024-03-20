@@ -46,7 +46,7 @@ type bsummCtx struct {
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
 		cmdMpathAttach: {
-			forceFlag,
+			diskLabelFlag,
 		},
 		cmdMpathEnable: {},
 		cmdMpathDetach: {
@@ -623,12 +623,16 @@ func mpathAction(c *cli.Context, action string) error {
 				return &errDoesNotExist{what: "node", name: nodeID}
 			}
 			return fmt.Errorf("node %q is a proxy "+
-				"(hint: press <TAB-TAB> or run \"ais show cluster target\" to select a target)", nodeID)
+				"(hint: press <TAB-TAB> or run 'ais show cluster target' to select)", nodeID)
 		}
 		switch action {
 		case apc.ActMountpathAttach:
 			acted = "attached"
-			err = api.AttachMountpath(apiBP, si, mountpath, flagIsSet(c, forceFlag))
+			if label := parseStrFlag(c, diskLabelFlag); label == "" {
+				err = api.AttachMountpath(apiBP, si, mountpath)
+			} else {
+				err = api.AttachMountpath(apiBP, si, mountpath, label)
+			}
 		case apc.ActMountpathEnable:
 			acted = "enabled"
 			err = api.EnableMountpath(apiBP, si, mountpath)

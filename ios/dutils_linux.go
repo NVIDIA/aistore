@@ -160,8 +160,3 @@ func _match(devList []*blkdev, device string) bool {
 	}
 	return false
 }
-
-func (disks FsDisks) _str() string {
-	s := fmt.Sprintf("%v", disks) // with sector sizes
-	return strings.TrimPrefix(s, "map")
-}
