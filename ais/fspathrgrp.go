@@ -75,7 +75,7 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.Mountpath) {
 		xreg.RenewMakeNCopies(cos.GenUUID(), action)
 	}()
 
-	g.checkEnable(action, mi.Path)
+	g.checkEnable(action, mi)
 
 	tstats := g.t.statsT.(*stats.Trunner)
 	for _, disk := range mi.Disks {
@@ -257,14 +257,14 @@ func (g *fsprungroup) redistributeMD() {
 	}
 }
 
-func (g *fsprungroup) checkEnable(action, mpath string) {
+func (g *fsprungroup) checkEnable(action string, mi *fs.Mountpath) {
 	availablePaths := fs.GetAvail()
 	if len(availablePaths) > 1 {
-		nlog.Infof("%s mountpath %s", action, mpath)
+		nlog.Infoln(action, mi.String())
 	} else {
-		nlog.Infof("%s the first mountpath %s", action, mpath)
+		nlog.Infoln(action, "the first mountpath", mi.String())
 		if err := g.t.enable(); err != nil {
-			nlog.Errorf("Failed to re-join %s (self), err: %v", g.t, err)
+			nlog.Errorf("Failed to re-join %s (self): %v", g.t, err) // (FATAL, unlikely)
 		}
 	}
 }

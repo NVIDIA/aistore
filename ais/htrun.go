@@ -50,8 +50,9 @@ const notPresentInSmap = `
 -----------------
 To troubleshoot:
 1. first, make sure you are not trying to run two different %s on the same machine
-2. remove possibly outdated cluster map from the %s (located at %s)
-3. restart %s
+2. double check "fspaths" config (used to find ais target's volume metadata and load its node ID)
+3. if none of the above helps, remove possibly outdated cluster map from the %s (located at %s)
+4. restart %s
 -----------------`
 
 // extra or extended state - currently, target only

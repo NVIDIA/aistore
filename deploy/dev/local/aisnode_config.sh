@@ -182,7 +182,7 @@ EOL
 cat > $AIS_LOCAL_CONF_FILE <<EOL
 {
 	"confdir": "${AIS_CONF_DIR:-/etc/ais/}",
-	"log_dir":       "${AIS_LOG_DIR:-/tmp/ais$NEXT_TIER/log}",
+	"log_dir": "${AIS_LOG_DIR:-/tmp/ais$NEXT_TIER/log}",
 	"host_net": {
 		"hostname":                 "${HOSTNAME_LIST}",
 		"hostname_intra_control":   "${HOSTNAME_LIST_INTRA_CONTROL}",

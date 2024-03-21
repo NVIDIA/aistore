@@ -133,14 +133,18 @@ func (mi *Mountpath) IsAnySet(flags uint64) bool {
 }
 
 func (mi *Mountpath) String() string {
+	var label string
+	if mi.DiskLabel != "" {
+		label = ", \"" + mi.DiskLabel + "\""
+	}
 	if mi.info == "" {
 		switch len(mi.Disks) {
 		case 0:
-			mi.info = fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.Fs)
+			mi.info = fmt.Sprintf("mp[%s, fs=%s%s]", mi.Path, mi.Fs, label)
 		case 1:
-			mi.info = fmt.Sprintf("mp[%s, %s]", mi.Path, mi.Disks[0])
+			mi.info = fmt.Sprintf("mp[%s, %s%s]", mi.Path, mi.Disks[0], label)
 		default:
-			mi.info = fmt.Sprintf("mp[%s, %v]", mi.Path, mi.Disks)
+			mi.info = fmt.Sprintf("mp[%s, %v%s]", mi.Path, mi.Disks, label)
 		}
 	}
 	if !mi.IsAnySet(FlagWaitingDD) {
@@ -380,7 +384,7 @@ func (mi *Mountpath) _checkExists(avail MPI, config *cmn.Config) error {
 	if ok {
 		return fmt.Errorf("duplicated mountpath %s (%s)", mi, existingMi)
 	}
-	existingFs, ok := mfs.fsIDs[mi.FsID]
+	otherMpath, ok := mfs.fsIDs[mi.FsID]
 	if ok {
 		if config.TestingEnv() {
 			return nil
@@ -388,9 +392,11 @@ func (mi *Mountpath) _checkExists(avail MPI, config *cmn.Config) error {
 		if !ios.DiskLabel(mi.DiskLabel).IsEmpty() {
 			// user-assigned disk label implies user's responsibility for filesystem sharing
 			// (or not sharing) across mountpaths
+			nlog.Warningf("FsID %v is shared between %s (which is labeled) and %q - proceeding anyway",
+				mi.FsID, mi, otherMpath)
 			return nil
 		}
-		return fmt.Errorf("FsID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingFs)
+		return fmt.Errorf("FsID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, otherMpath)
 	}
 	// check nesting
 	l := len(mi.Path)
