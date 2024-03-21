@@ -47,7 +47,7 @@ source ${SCRIPTS_DIR}/utils.sh
 case $1 in
 lint)
   echo "Running lint..." >&2
-  golangci-lint run $(list_all_go_dirs)
+  golangci-lint --timeout=15m run $(list_all_go_dirs)
   exit $?
   ;;
 
