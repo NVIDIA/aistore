@@ -8,14 +8,12 @@ import (
 	"fmt"
 	"os"
 	"syscall"
-
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func makeFsInfo(mpath string) (fsInfo cos.FS, err error) {
+func (mi *Mountpath) resolveFS() error {
 	var fsStats syscall.Statfs_t
-	if err := syscall.Statfs(mpath, &fsStats); err != nil {
-		return fsInfo, fmt.Errorf("cannot statfs fspath %q, err: %w", mpath, err)
+	if err := syscall.Statfs(mi.Path, &fsStats); err != nil {
+		return fmt.Errorf("cannot statfs fspath %q, err: %w", mi.Path, err)
 	}
 
 	charsToString := func(x []int8) string {
@@ -29,11 +27,10 @@ func makeFsInfo(mpath string) (fsInfo cos.FS, err error) {
 		return s
 	}
 
-	return cos.FS{
-		Fs:     charsToString(fsStats.Fstypename[:]),
-		FsType: charsToString(fsStats.Mntfromname[:]),
-		FsID:   fsStats.Fsid.Val,
-	}, nil
+	mi.Fs = charsToString(fsStats.Fstypename[:])
+	mi.FsType = charsToString(fsStats.Mntfromname[:])
+	mi.FsID = fsStats.Fsid.Val
+	return nil
 }
 
 // DirectOpen opens a file with direct disk access (with OS caching disabled).

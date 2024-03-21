@@ -236,7 +236,7 @@ func fspathsSave(config *cmn.Config) {
 	cmn.GCO.CommitUpdate(config)
 }
 
-// NOTE: executes under mfs lock
+// NOTE: executes under mfs lock; all errors here are FATAL
 func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
 		bo := g.t.owner.bmd

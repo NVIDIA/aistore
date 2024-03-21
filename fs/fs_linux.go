@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -10,9 +10,23 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
-
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
+
+func (mi *Mountpath) resolveFS() error {
+	var fsStats syscall.Statfs_t
+	if err := syscall.Statfs(mi.Path, &fsStats); err != nil {
+		return fmt.Errorf("cannot statfs fspath %q, err: %w", mi.Path, err)
+	}
+	fs, fsType, err := fqn2FsInfo(mi.Path)
+	if err != nil {
+		return err
+	}
+
+	mi.Fs = fs
+	mi.FsType = fsType
+	mi.FsID = fsStats.Fsid.X__val
+	return nil
+}
 
 // fqn2FsInfo is used only at startup to store file systems for each mountpath.
 func fqn2FsInfo(fqn string) (fs, fsType string, err error) {
@@ -26,20 +40,6 @@ func fqn2FsInfo(fqn string) (fs, fsType string, err error) {
 		return "", "", fmt.Errorf("failed to retrieve FS info from path %q, err: invalid format", fqn)
 	}
 	return strings.TrimSpace(info[0]), strings.TrimSpace(info[1]), nil
-}
-
-func makeFsInfo(mpath string) (fsInfo cos.FS, err error) {
-	var fsStats syscall.Statfs_t
-	if err := syscall.Statfs(mpath, &fsStats); err != nil {
-		return fsInfo, fmt.Errorf("cannot statfs fspath %q, err: %w", mpath, err)
-	}
-
-	fs, fsType, err := fqn2FsInfo(mpath)
-	if err != nil {
-		return fsInfo, err
-	}
-
-	return cos.FS{Fs: fs, FsType: fsType, FsID: fsStats.Fsid.X__val}, nil
 }
 
 // DirectOpen opens a file with direct disk access (with OS caching disabled).

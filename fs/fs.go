@@ -60,9 +60,7 @@ type (
 	}
 	MPI map[string]*Mountpath
 
-	// MountedFS holds all mountpaths for the target.
-	MountedFS struct {
-		// Iostats for the available mountpaths
+	MFS struct {
 		ios ios.IOS
 
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
@@ -79,7 +77,7 @@ type (
 		csExpires atomic.Int64
 		totalSize atomic.Uint64
 
-		mu sync.RWMutex
+		mu sync.Mutex
 	}
 	CapStatus struct {
 		// config
@@ -94,33 +92,27 @@ type (
 	}
 )
 
-var mfs *MountedFS
+var mfs *MFS // singleton (target only)
 
 ///////////////
 // Mountpath //
 ///////////////
 
-func NewMountpath(mpath, diskLabel string) (mi *Mountpath, err error) {
-	var (
-		cleanMpath string
-		fsInfo     cos.FS
-	)
-	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
-		return
+func NewMountpath(mpath, diskLabel string) (*Mountpath, error) {
+	cleanMpath, err := cmn.ValidateMpath(mpath)
+	if err != nil {
+		return nil, err
 	}
 	if err = cos.Stat(cleanMpath); err != nil {
 		return nil, cos.NewErrNotFound(nil, "mountpath "+mpath)
 	}
-	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
-		return
-	}
-	mi = &Mountpath{
+	mi := &Mountpath{
 		Path:       cleanMpath,
 		DiskLabel:  diskLabel,
-		FS:         fsInfo,
 		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
-	return
+	err = mi.resolveFS()
+	return mi, err
 }
 
 // flags
@@ -321,7 +313,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 
 func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 	mi.Disks = make([]string, len(fsdisks))
-	i := 0
+	var i int
 	for d := range fsdisks {
 		mi.Disks[i] = d
 		i++
@@ -484,20 +476,29 @@ func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 	return ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 }
 
+func (mi *Mountpath) _add(fsIDs []cos.FsID) ([]cos.FsID, bool) {
+	for _, id := range fsIDs {
+		if mi.FsID == id {
+			return fsIDs, true
+		}
+	}
+	return append(fsIDs, mi.FsID), false
+}
+
 //
-// MountedFS & MPI
+// MFS & MPI
 //
 
 // create a new singleton
 func New(num int) {
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10)}
+	mfs = &MFS{fsIDs: make(map[cos.FsID]string, 10)}
 	mfs.ios = ios.New(num)
 }
 
 // used only in tests
 func TestNew(iostater ios.IOS) {
 	const num = 10
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, num)}
+	mfs = &MFS{fsIDs: make(map[cos.FsID]string, num)}
 	if iostater == nil {
 		mfs.ios = ios.New(num)
 	} else {
@@ -648,7 +649,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 			availableCopy := _cloneOne(avail)
 			mi, ok = availableCopy[cleanMpath]
 			debug.Assert(ok)
-			nlog.Warningf("%s: re-enabling during dd-transition", mi)
+			nlog.Warningln(mi.String()+":", "re-enabling during dd-transition")
 			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 			enabledMpath = mi
 			putAvailMPI(availableCopy)
@@ -1087,44 +1088,52 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap 
 	var (
 		c     Capacity
 		avail = GetAvail()
+		l     = len(avail)
+		fsIDs = make([]cos.FsID, 0, l)
 	)
-	if len(avail) == 0 {
+	if l == 0 {
 		err = cmn.ErrNoMountpaths
 		if tcdf != nil {
 			tcdf.Mountpaths = make(map[string]*CDF)
 		}
 		return
 	}
+
+	// 1. sum up && compute %% capacities while skipping already _counted_ filesystems
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
 	cs.HighWM, cs.OOS = config.Space.HighWM, config.Space.OOS
 	cs.PctMin = 100
-	for path, mi := range avail {
-		if c, err = mi.getCapacity(config, true); err != nil {
-			nlog.Errorf("%s: %v", mi, err)
-			return
+	for mpath, mi := range avail {
+		var alreadyAdded bool
+		if fsIDs, alreadyAdded = mi._add(fsIDs); !alreadyAdded {
+			if c, err = mi.getCapacity(config, true); err != nil {
+				nlog.Errorln(mi.String()+":", err)
+				return
+			}
+			cs.TotalUsed += c.Used
+			cs.TotalAvail += c.Avail
+			cs.PctMax = max(cs.PctMax, c.PctUsed)
+			cs.PctMin = min(cs.PctMin, c.PctUsed)
+			cs.PctAvg += c.PctUsed
 		}
-		cs.TotalUsed += c.Used
-		cs.TotalAvail += c.Avail
-		cs.PctMax = max(cs.PctMax, c.PctUsed)
-		cs.PctMin = min(cs.PctMin, c.PctUsed)
-		cs.PctAvg += c.PctUsed
 		if tcdf == nil {
 			continue
 		}
-		cdf := tcdf.Mountpaths[path]
+		cdf := tcdf.Mountpaths[mpath]
 		if cdf == nil {
-			tcdf.Mountpaths[path] = &CDF{}
-			cdf = tcdf.Mountpaths[path]
+			tcdf.Mountpaths[mpath] = &CDF{}
+			cdf = tcdf.Mountpaths[mpath]
 		}
 		cdf.Capacity = c
 		cdf.Disks = mi.Disks
 		cdf.FS = mi.FS.String()
 	}
-	cs.PctAvg /= int32(len(avail))
+	cs.PctAvg /= int32(l)
 	errCap = cs.Err()
 
+	// 2. fill-in
 	if tcdf != nil {
 		tcdf.PctMax, tcdf.PctAvg, tcdf.PctMin = cs.PctMax, cs.PctAvg, cs.PctMin
 		if errCap != nil {
@@ -1138,7 +1147,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap 
 		}
 	}
 
-	// update cached state
+	// 3. update cached state
 	ratomic.StoreInt64(&mfs.cs.HighWM, cs.HighWM)
 	ratomic.StoreInt64(&mfs.cs.OOS, cs.OOS)
 	ratomic.StoreUint64(&mfs.cs.TotalUsed, cs.TotalUsed)
