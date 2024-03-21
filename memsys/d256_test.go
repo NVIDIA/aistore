@@ -2,7 +2,7 @@
 // with io.Reader and io.Writer interfaces on top of a scatter-gather lists
 // (of reusable buffers)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys_test
 
@@ -72,7 +72,7 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 	rdebug.FreeOSMemory()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		_ = sgl
 	}
@@ -122,7 +122,7 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 	buf := make([]byte, cos.KiB*128)
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		for siz := 0; siz < int(objsiz); siz += len(buf) {
 			sgl.Write(buf)
@@ -186,7 +186,7 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 
 	b.ResetTimer() // <==== start
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		for siz := 0; siz < int(objsiz); siz += l {
 			n, _ := sgl.Write(buf)
@@ -253,7 +253,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	}
 
 	b.ResetTimer() // start timing it
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		file.Seek(0, io.SeekStart)
 		n, _ := io.CopyBuffer(io.Discard, file, buf)
 		if n != largefil {

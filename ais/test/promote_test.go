@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -233,7 +233,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 		}
 	}
 	tlog.Logf("Deleting %d random objects\n", numDel)
-	for i := 0; i < numDel; i++ {
+	for i := range numDel {
 		name := list.Entries[idx+i].Name
 		err := api.DeleteObject(baseParams, m.bck, name)
 		tassert.CheckFatal(t, err)

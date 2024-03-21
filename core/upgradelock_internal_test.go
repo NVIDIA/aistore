@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -36,7 +36,7 @@ func TestUpgradeLock(t *testing.T) {
 
 			sema.Acquire(threadCnt)
 			wg.Add(threadCnt)
-			for i := 0; i < threadCnt; i++ {
+			for range threadCnt {
 				go func() {
 					defer wg.Done()
 

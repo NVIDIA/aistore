@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -411,7 +411,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	objList := make([]string, 0, 5)
-	for n := 0; n < 5; n++ {
+	for n := range 5 {
 		objName := fmt.Sprintf("obj-fshc-%d", n)
 		objList = append(objList, objName)
 	}

@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -691,7 +691,7 @@ func concurrentPutGetDel(t *testing.T) {
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
 func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string) error {
 	baseParams := tools.BaseAPIParams(proxyURL)
-	for i := 0; i < count; i++ {
+	for range count {
 		reader, err := readers.NewRand(fileSize, cksumType)
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
@@ -927,7 +927,7 @@ func proxyStress(t *testing.T) {
 	}()
 
 	// start all workers
-	for i := 0; i < workerCnt; i++ {
+	for i := range workerCnt {
 		errChs[i] = make(chan error, defaultChanSize)
 		stopChs[i] = make(chan struct{}, defaultChanSize)
 		proxyURLChs[i] = make(chan string, defaultChanSize)
@@ -1620,7 +1620,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 		baseParams = tools.BaseAPIParams(proxyURL)
 		wg         = &sync.WaitGroup{}
 	)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		wg.Add(1)
 		go func(idx int) {
 			dstBck := cmn.Bck{

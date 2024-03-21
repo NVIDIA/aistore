@@ -168,7 +168,7 @@ func BenchmarkEncode(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				err := jsp.Encode(body, bench.v, bench.opts)
 				tassert.CheckFatal(b, err)
 				body.Reset()

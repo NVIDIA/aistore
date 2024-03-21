@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -31,7 +31,7 @@ type opRes struct {
 // generates a list of random file names and a buffer to keep random data for filling up files
 func generateRandomNames(fileCount int) {
 	fileNames = make([]string, fileCount)
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		fileNames[i] = trand.String(20)
 	}
 }
@@ -53,8 +53,8 @@ func parallelOpLoop(bck cmn.Bck, cksumType string,
 		fileCount = len(fileNames)
 		wg        = cos.NewLimitedWaitGroup(40, 0)
 	)
-	for i := 0; i < numLoops; i++ {
-		for idx := 0; idx < fileCount; idx++ {
+	for range numLoops {
+		for idx := range fileCount {
 			objName := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			wg.Add(1)
 			go func(objName string) {

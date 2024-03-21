@@ -1,6 +1,6 @@
 // Package prob implements fully features dynamic probabilistic filter.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package prob_test
 
@@ -31,7 +31,7 @@ func randObjName(n int) []byte {
 
 func genKeys(keysNum int) [][]byte {
 	keys := make([][]byte, keysNum)
-	for i := 0; i < keysNum; i++ {
+	for i := range keysNum {
 		keys[i] = randObjName(objNameLength)
 	}
 	return keys
@@ -94,7 +94,7 @@ func BenchmarkInsert(b *testing.B) {
 		filter := prob.NewFilter(uint(b.N))
 
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Insert(keys[n])
 		}
 	})
@@ -104,7 +104,7 @@ func BenchmarkInsert(b *testing.B) {
 		filter := prob.NewFilter(10)
 
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Insert(keys[n])
 		}
 	})
@@ -114,12 +114,12 @@ func BenchmarkLookup(b *testing.B) {
 	b.Run("single filter", func(b *testing.B) {
 		keys := genKeys(b.N)
 		filter := prob.NewFilter(uint(b.N))
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Insert(keys[n])
 		}
 
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Lookup(keys[n])
 		}
 	})
@@ -127,12 +127,12 @@ func BenchmarkLookup(b *testing.B) {
 	b.Run("multiple filters", func(b *testing.B) {
 		keys := genKeys(b.N)
 		filter := prob.NewFilter(10)
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Insert(keys[n])
 		}
 
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Lookup(keys[n])
 		}
 	})
@@ -142,12 +142,12 @@ func BenchmarkDelete(b *testing.B) {
 	b.Run("single filter", func(b *testing.B) {
 		keys := genKeys(b.N)
 		filter := prob.NewFilter(uint(b.N))
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Insert(keys[n])
 		}
 
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Delete(keys[n])
 		}
 	})
@@ -155,12 +155,12 @@ func BenchmarkDelete(b *testing.B) {
 	b.Run("multiple filters", func(b *testing.B) {
 		keys := genKeys(b.N)
 		filter := prob.NewFilter(10)
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Insert(keys[n])
 		}
 
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for n := range b.N {
 			filter.Delete(keys[n])
 		}
 	})
@@ -176,19 +176,19 @@ func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
 		wg := &sync.WaitGroup{}
 		wg.Add(3)
 		go func() {
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				filter.Insert(keys[n])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				filter.Lookup(keys[n])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				filter.Delete(keys[n])
 			}
 			wg.Done()
@@ -205,19 +205,19 @@ func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
 		wg := &sync.WaitGroup{}
 		wg.Add(3)
 		go func() {
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				filter.Insert(keys[n])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				filter.Lookup(keys[n])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := 0; n < b.N; n++ {
+			for n := range b.N {
 				filter.Delete(keys[n])
 			}
 			wg.Done()

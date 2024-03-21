@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -206,7 +206,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-	for i := 0; i < objCount; i++ {
+	for i := range objCount {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
 		r, _ := readers.NewRand(int64(fileSize), cos.ChecksumXXHash)
 		_, err := api.PutObject(&api.PutArgs{
@@ -495,7 +495,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	if nodeType == apc.Target && origTargetCount > 1 {
 		time.Sleep(time.Second)
 		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			status, err := api.WaitForXactionIC(baseParams, &xargs)
 			if err == nil {
 				tlog.Logf("%v\n", status)
@@ -604,7 +604,7 @@ func TestShutdownListObjects(t *testing.T) {
 	if origTargetCount > 1 {
 		time.Sleep(time.Second)
 		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			status, err := api.WaitForXactionIC(baseParams, &xargs)
 			if err == nil {
 				tlog.Logf("%v\n", status)

@@ -125,7 +125,7 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 		minDist     = math.MaxInt64
 		closestName string
 	)
-	for i := 0; i < len(candidates); i++ {
+	for i := range len(candidates) {
 		dist := DamerauLevenstheinDistance(cmd, candidates[i].Name)
 		if dist < minDist {
 			minDist = dist
@@ -812,7 +812,7 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 		// resort to counting nested structures
 		var cnt, off int
 		res = out[from[0]:]
-		for off = 0; off < len(res); off++ {
+		for off = range len(res) {
 			if res[off] == '{' {
 				cnt++
 			} else if res[off] == '}' {

@@ -565,7 +565,7 @@ func TestAppendToArch(t *testing.T) {
 						tassert.CheckError(t, err)
 					}()
 				} else {
-					for j := 0; j < numAdd; j++ {
+					for j := range numAdd {
 						reader, _ := readers.NewRand(fileSize, cos.ChecksumNone)
 						putArgs := api.PutArgs{
 							BaseParams: baseParams,

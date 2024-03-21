@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -294,7 +294,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
 
-	for i := 0; i < objCnt; i++ {
+	for i := range objCnt {
 		r, err := readers.NewRand(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
 
@@ -532,7 +532,7 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *
 
 	// Tell other tasks they can begin to do work in parallel
 	if totalGets > 0 && idx == totalGets/2 { // only for `m.gets(nil, false)`
-		for i := 0; i < m.otherTasksToTrigger; i++ {
+		for range m.otherTasksToTrigger {
 			m.controlCh <- struct{}{}
 		}
 	}
@@ -551,7 +551,7 @@ func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {
 		}
 	}
 	wg := cos.NewLimitedWaitGroup(20, 0)
-	for i := 0; i < totalGets; i++ {
+	for i := range totalGets {
 		wg.Add(1)
 		go func(idx int) {
 			m.get(baseParams, idx, totalGets, getArgs, withValidation)
@@ -650,7 +650,7 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 	baseParams := tools.BaseAPIParams()
 	mpl, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		if len(mpl.Available) == len(mpList.Available) &&
 			len(mpl.Disabled) == len(mpList.Disabled) &&
 			len(mpl.WaitingDD) == len(mpList.WaitingDD) {
@@ -669,7 +669,7 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 
 func ensureNoDisabledMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
 	t.Helper()
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
 			break
 		}
@@ -894,7 +894,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		errCh      = make(chan error, objCnt+len(extraNames))
 	)
 
-	for i := 0; i < objCnt; i++ {
+	for range objCnt {
 		fileName := trand.String(20)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
@@ -940,7 +940,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 		letters    = "abcdefghijklmnopqrstuvwxyz"
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
-	for i := 0; i < len(letters); i++ {
+	for i := range len(letters) {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		msg := &apc.LsoMsg{Prefix: lookFor}

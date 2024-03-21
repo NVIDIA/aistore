@@ -777,7 +777,7 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
 		hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
-		for i := 0; i < int(x&0x1f); i++ {
+		for range int(x & 0x1f) {
 			hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), s)
 		}
 	default:

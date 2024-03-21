@@ -505,7 +505,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 		group, _   = errgroup.WithContext(context.Background())
 	)
 
-	for i := 0; i < bckCount; i++ {
+	for range bckCount {
 		group.Go(func() error {
 			m := &ioContext{
 				t:      t,
@@ -2635,7 +2635,7 @@ func TestCopyBucketSync(t *testing.T) {
 	num2del := max(m.num/10, 1)
 	nam2del := make([]string, 0, num2del)
 	strtpos := rand.Intn(m.num)
-	for i := 0; i < num2del; i++ {
+	for i := range num2del {
 		pos := (strtpos + i*3) % m.num
 		name := m.objNames[pos]
 		for cos.StringInSlice(name, nam2del) {
@@ -3314,7 +3314,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 				objCh <- objName
 			}
 		}()
-		for j := 0; j < numCorrupted; j++ {
+		for range numCorrupted {
 			objName := <-objCh
 			_, err = api.GetObject(baseParams, m.bck, objName, nil)
 			if mirrored || eced {

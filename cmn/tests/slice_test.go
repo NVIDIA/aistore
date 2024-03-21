@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package tests_test
 
@@ -19,7 +19,7 @@ type discardEntriesTestCase struct {
 
 func generateEntries(size int) cmn.LsoEntries {
 	result := make(cmn.LsoEntries, 0, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		result = append(result, &cmn.LsoEnt{Name: strconv.Itoa(i)})
 	}
 	return result

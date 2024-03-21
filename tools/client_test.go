@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package tools_test
 
@@ -98,7 +98,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := putFile(1024*1024, cos.ChecksumXXHash)
 		if err != nil {
 			b.Fatal(err)
@@ -107,7 +107,7 @@ func BenchmarkPutFileWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutRandWithHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := putRand(1024*1024, cos.ChecksumXXHash)
 		if err != nil {
 			b.Fatal(err)
@@ -120,7 +120,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 	sgl := mmsa.NewSGL(cos.MiB)
 	defer sgl.Free()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)
 		if err != nil {
 			b.Fatal(err)
@@ -129,7 +129,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutFileNoHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := putFile(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
@@ -138,7 +138,7 @@ func BenchmarkPutFileNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutRandNoHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := putRand(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
@@ -151,7 +151,7 @@ func BenchmarkPutSGNoHash1M(b *testing.B) {
 	sgl := mmsa.NewSGL(cos.MiB)
 	defer sgl.Free()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := putSG(sgl, 1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)

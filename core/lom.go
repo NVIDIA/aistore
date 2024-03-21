@@ -582,7 +582,7 @@ func lomCaches() []*sync.Map {
 		caches         = make([]*sync.Map, cachesCnt)
 	)
 	for _, mi := range availablePaths {
-		for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
+		for idx := range cos.MultiSyncMapCount {
 			caches[i] = mi.LomCache(idx)
 			i++
 		}

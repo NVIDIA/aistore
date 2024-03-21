@@ -532,7 +532,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logf("putting %d objects into remote bucket %s...\n", fileCnt, test.srcBck)
 
 			expectedObjs := make([]string, 0, fileCnt)
-			for i := 0; i < fileCnt; i++ {
+			for i := range fileCnt {
 				reader, err := readers.NewRand(256, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
 
@@ -874,7 +874,7 @@ func TestDownloadMountpath(t *testing.T) {
 
 	// Prepare objects to be downloaded. Multiple objects to make
 	// sure that at least one of them gets into target with disabled mountpath.
-	for i := 0; i < objsCnt; i++ {
+	for i := range objsCnt {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md"
 	}
 
@@ -1359,7 +1359,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		concurrentJobs bool
 		resp1, resp2   *dload.StatusResp
 	)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		resp1, err = api.DownloadStatus(baseParams, id1, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
 

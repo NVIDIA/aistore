@@ -1080,7 +1080,7 @@ func cleanup() {
 			n       = objsLen / w
 			wg      = &sync.WaitGroup{}
 		)
-		for i := 0; i < w; i++ {
+		for i := range w {
 			wg.Add(1)
 			go cleanupObjs(bucketObjsNames.Names()[i*n:(i+1)*n], wg)
 		}
@@ -1110,7 +1110,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	if !runParams.bck.IsAIS() {
 		b := min(t, runParams.batchSize)
 		n := t / b
-		for i := 0; i < n; i++ {
+		for i := range n {
 			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, objs[i*b:(i+1)*b], "" /*template*/)
 			if err != nil {
 				fmt.Println("delete err ", err)

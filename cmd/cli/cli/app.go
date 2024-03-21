@@ -205,7 +205,7 @@ func (a *acli) runOnce(args []string) error {
 	if isStartingUp(err) {
 		fmt.Fprintln(a.app.Writer, "(waiting for cluster to start ...)")
 		briefPause(1)
-		for i := 0; i < 8; i++ {
+		for range 8 { // retry
 			if err = a.app.Run(args); err == nil || !isStartingUp(err) {
 				break
 			}

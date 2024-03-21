@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that create entities in the cluster.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -666,7 +666,7 @@ func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) *authn.User {
 
 func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 	cluSpec.URLs = make([]string, 0, 1)
-	for idx := 0; idx < c.NArg(); idx++ {
+	for idx := range c.NArg() {
 		arg := c.Args().Get(idx)
 		if strings.HasPrefix(arg, "http:") || strings.HasPrefix(arg, "https:") ||
 			strings.HasPrefix(arg, "HTTP:") || strings.HasPrefix(arg, "HTTPS:") {

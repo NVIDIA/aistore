@@ -1,6 +1,6 @@
 // Package space_test is a unit test for the package.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package space_test
 
@@ -408,7 +408,7 @@ func saveRandomFilesWithMetadata(filesPath string, files []fileMetadata) {
 // Saves random bytes to a file with random name.
 // timestamps and names are not increasing in the same manner
 func saveRandomFiles(filesPath string, filesNumber int) {
-	for i := 0; i < filesNumber; i++ {
+	for i := range filesNumber {
 		saveRandomFile(path.Join(filesPath, getRandomFileName(i)), fileSize)
 	}
 }

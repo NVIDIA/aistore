@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package tests_test
 
@@ -138,14 +138,14 @@ func BenchmarkPackWriteString(b *testing.B) {
 	p := cos.NewPacker(nil, 90*b.N)
 
 	a := make([]string, 0, 1000)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		a = append(a, trand.String(80))
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		p.WriteString(a[i%len(a)])
 	}
 }

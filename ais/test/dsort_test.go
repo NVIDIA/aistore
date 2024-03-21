@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -355,7 +355,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	)
 	tlog.Logf("%s: checking that files are sorted...\n", df.job())
 outer:
-	for i := 0; i < df.outputShardCnt; i++ {
+	for i := range df.outputShardCnt {
 		var (
 			buffer    bytes.Buffer
 			shardName = fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.inputExt)
@@ -874,7 +874,7 @@ func TestDsortParallel(t *testing.T) {
 			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			wg := &sync.WaitGroup{}
-			for i := 0; i < dSortsCount; i++ {
+			for i := range dSortsCount {
 				wg.Add(1)
 				go func(i int) {
 					defer wg.Done()
@@ -904,7 +904,7 @@ func TestDsortChain(t *testing.T) {
 			m.expectTargets(3)
 			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
-			for i := 0; i < dSortsCount; i++ {
+			for i := range dSortsCount {
 				dispatchDsortJob(m, dsorterType, i)
 			}
 		},
@@ -2028,7 +2028,7 @@ func TestDsortOrderFile(t *testing.T) {
 				for _, recordName := range shard.recordNames {
 					match := false
 					// Some shard with specified format contains the record
-					for i := 0; i < 30; i++ {
+					for i := range 30 {
 						match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
 					}
 					if !match {
@@ -2137,7 +2137,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 				for _, recordName := range shard.recordNames {
 					match := false
 					// Some shard with specified format contains the record
-					for i := 0; i < 30; i++ {
+					for i := range 30 {
 						match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
 					}
 					if !match {

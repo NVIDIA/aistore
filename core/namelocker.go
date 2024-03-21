@@ -67,7 +67,7 @@ const (
 
 func newNameLocker() (nl nameLocker) {
 	nl = make(nameLocker, cos.MultiSyncMapCount)
-	for idx := 0; idx < len(nl); idx++ {
+	for idx := range len(nl) {
 		nl[idx].init()
 	}
 	return

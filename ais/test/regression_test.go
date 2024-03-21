@@ -514,7 +514,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}()
 
 	targets := m.smap.Tmap.ActiveNodes()
-	for i := 0; i < targetsToUnregister; i++ {
+	for i := range targetsToUnregister {
 		tlog.Logf("Put %s in maintenance (no rebalance)\n", targets[i].StringEx())
 		args := &apc.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
 		_, err := api.StartMaintenance(baseParams, args)
@@ -536,7 +536,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	// Step 4: Simultaneously reregister each
 	wg := &sync.WaitGroup{}
-	for i := 0; i < targetsToUnregister; i++ {
+	for i := range targetsToUnregister {
 		wg.Add(1)
 		go func(r int) {
 			defer wg.Done()
@@ -803,7 +803,7 @@ func TestDeleteList(t *testing.T) {
 		)
 
 		// 1. Put files to delete
-		for i := 0; i < objCnt; i++ {
+		for i := range objCnt {
 			r, err := readers.NewRand(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
@@ -946,7 +946,7 @@ func TestDeleteRange(t *testing.T) {
 		)
 
 		// 1. Put files to delete
-		for i := 0; i < objCnt; i++ {
+		for i := range objCnt {
 			r, err := readers.NewRand(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
@@ -979,7 +979,7 @@ func TestDeleteRange(t *testing.T) {
 		for _, en := range bktlst.Entries {
 			filemap[en.Name] = en
 		}
-		for i := 0; i < objCnt; i++ {
+		for i := range objCnt {
 			keyname := fmt.Sprintf("%s%04d", prefix, i)
 			_, ok := filemap[keyname]
 			if ok && i >= quarter && i <= third {
@@ -1036,7 +1036,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 1. PUT
 	tlog.Logln("putting objects...")
-	for i := 0; i < numReaders; i++ {
+	for i := range numReaders {
 		size := rand.Int63n(cos.KiB*128) + cos.KiB/3
 		tassert.CheckFatal(t, err)
 		reader, err := readers.NewRand(size, cksumType)
@@ -1046,7 +1046,7 @@ func TestStressDeleteRange(t *testing.T) {
 		go func(i int, reader readers.Reader) {
 			defer wg.Done()
 
-			for j := 0; j < numFiles/numReaders; j++ {
+			for j := range numFiles / numReaders {
 				objName := fmt.Sprintf("%s%d", objNamePrefix, i*numFiles/numReaders+j)
 				putArgs := api.PutArgs{
 					BaseParams: baseParams,
@@ -1088,7 +1088,7 @@ func TestStressDeleteRange(t *testing.T) {
 	for _, en := range lst.Entries {
 		objNames[en.Name] = en
 	}
-	for i := 0; i < numFiles; i++ {
+	for i := range numFiles {
 		objName := fmt.Sprintf("%s%d", objNamePrefix, i)
 		_, ok := objNames[objName]
 		if ok && i < numFiles-tenth {

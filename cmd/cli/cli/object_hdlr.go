@@ -424,7 +424,7 @@ func concatHandler(c *cli.Context) (err error) {
 
 	fullObjName := c.Args().Get(len(c.Args()) - 1)
 	fileNames := make([]string, len(c.Args())-1)
-	for i := 0; i < len(c.Args())-1; i++ {
+	for i := range len(c.Args()) - 1 {
 		fileNames[i] = c.Args().Get(i)
 	}
 

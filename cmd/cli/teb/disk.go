@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -90,7 +90,7 @@ func _flt(cols []*header, regex *regexp.Regexp) []*header {
 }
 
 func _idx(cols []*header, name string) int {
-	for i := 0; i < len(cols); i++ {
+	for i := range len(cols) {
 		if cols[i].name == name {
 			return i
 		}

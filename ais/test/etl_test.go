@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -100,7 +100,7 @@ func tfRecordsEqual(examples1, examples2 []*core.TFExample) (bool, error) {
 		return examples2[i].GetFeature("__key__").String() < examples2[j].GetFeature("__key__").String()
 	})
 
-	for i := 0; i < len(examples1); i++ {
+	for i := range len(examples1) {
 		if !reflect.DeepEqual(examples1[i].ProtoReflect(), examples2[i].ProtoReflect()) {
 			return false, nil
 		}

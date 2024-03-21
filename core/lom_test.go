@@ -53,7 +53,7 @@ var _ = Describe("LOM", func() {
 		oldCloudProviders = cmn.GCO.Get().Backend.Providers
 	)
 
-	for i := 0; i < numMpaths; i++ {
+	for i := range numMpaths {
 		mpath := fmt.Sprintf("%s/mpath%d", tmpDir, i)
 		mpaths = append(mpaths, mpath)
 		mis = append(mis, &fs.Mountpath{Path: mpath})

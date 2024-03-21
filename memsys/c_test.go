@@ -37,13 +37,13 @@ func TestSGLStressN(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	fn := func() {
 		defer wg.Done()
-		for i := 0; i < num; i++ {
+		for i := range num {
 			sglR := mem.NewSGL(128)
 			sglW := mem.NewSGL(128)
 			bufR := make([]byte, objsize)
 
 			// fill buffer with "unique content"
-			for j := 0; j < objsize; j++ {
+			for j := range objsize {
 				bufR[j] = byte('A') + byte(i%26)
 			}
 
@@ -61,7 +61,7 @@ func TestSGLStressN(t *testing.T) {
 			var bufW []byte
 			bufW, err = io.ReadAll(memsys.NewReader(sglW))
 			tassert.CheckFatal(t, err)
-			for j := 0; j < objsize; j++ {
+			for j := range objsize {
 				if bufW[j] != bufR[j] {
 					tlog.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
 					t.Errorf("Step %d failed", i)
@@ -72,7 +72,7 @@ func TestSGLStressN(t *testing.T) {
 			sglW.Free()
 		}
 	}
-	for n := 0; n < workers; n++ {
+	for range workers {
 		wg.Add(1)
 		go fn()
 	}

@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -57,10 +57,10 @@ func TestCopyMultiObjSimple(t *testing.T) {
 	tlog.Logf("exists = %t\n", exists)
 
 	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
-	for i := 0; i < objCnt; i++ {
+	for i := range objCnt {
 		objList = append(objList, fmt.Sprintf("test/a-%04d", i))
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tlog.Logf("PUT %d => %s\n", len(objList), bckFrom.Cname(""))
 		for _, objName := range objList {
 			r, _ := readers.NewRand(objSize, cksumType)
@@ -204,7 +204,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 							tlog.Logf("[%s] %2d: cp list %d objects\n", xid, i, numToCopy)
 						}
 					}
-					for j := 0; j < numToCopy; j++ {
+					for range numToCopy {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					if !test.createDst && i == 0 {

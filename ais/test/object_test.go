@@ -1234,7 +1234,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]",
 			expectedLength, len(outputBytes))
 	}
-	for i := 0; i < len(expectedBytes); i++ {
+	for i := range len(expectedBytes) {
 		if expectedBytes[i] != outputBytes[i] {
 			t.Errorf("Byte mismatch. Expected: %v, Actual: %v", string(expectedBytes), string(outputBytes))
 		}
@@ -1489,7 +1489,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					cksumType = bck.Props.Cksum.Type
 				)
 
-				for i := 0; i < objCnt/2; i++ {
+				for i := range objCnt / 2 {
 					objList = append(objList,
 						fmt.Sprintf("test/a-%04d", i),
 						fmt.Sprintf("test/b-%04d", i),

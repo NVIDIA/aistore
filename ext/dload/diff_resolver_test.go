@@ -1,6 +1,6 @@
 // Package dloader_test is a unit test
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dload_test
 
@@ -163,7 +163,7 @@ func TestDiffResolver(t *testing.T) {
 			}
 			dr.CloseDst()
 
-			for i := 0; i < len(test.expected); i++ {
+			for i := range len(test.expected) {
 				result, err := dr.Next()
 				tassert.CheckFatal(t, err)
 
@@ -190,7 +190,7 @@ func TestDiffResolver(t *testing.T) {
 			}
 
 			// Check that EOF is followed by EOF.
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				result, err := dr.Next()
 				tassert.CheckFatal(t, err)
 				tassert.Errorf(t, result.Action == dload.DiffResolverEOF, "eof not followed by eof")

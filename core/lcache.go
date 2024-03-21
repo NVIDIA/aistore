@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -76,7 +76,7 @@ func UncacheBck(b *meta.Bck) {
 
 // NOTE: watch https://github.com/golang/go/pull/61702 for `sync.Map.Clear`, likely Go 22
 func UncacheMountpath(mi *fs.Mountpath) {
-	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
+	for idx := range cos.MultiSyncMapCount {
 		cache := mi.LomCache(idx)
 		cache.Range(func(hkey any, _ any) bool {
 			cache.Delete(hkey)

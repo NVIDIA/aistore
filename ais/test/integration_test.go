@@ -749,7 +749,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Decommission targets
-	for i := 0; i < unregisterTargetCount; i++ {
+	for i := range unregisterTargetCount {
 		args := &apc.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
 		_, err := api.StartMaintenance(baseParams, args)
 		tassert.CheckError(t, err)
@@ -764,7 +764,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(unregisterTargetCount)
-	for i := 0; i < unregisterTargetCount; i++ {
+	for i := range unregisterTargetCount {
 		go func(number int) {
 			defer wg.Done()
 			args := &apc.ActValRmNode{DaemonID: targets[number].ID()}
@@ -774,7 +774,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	}
 
 	wg.Add(newBucketCount)
-	for i := 0; i < newBucketCount; i++ {
+	for i := range newBucketCount {
 		bck := m.bck
 		bck.Name += strconv.Itoa(i)
 
@@ -1344,7 +1344,7 @@ func TestAtimePrefetch(t *testing.T) {
 	}()
 
 	wg := &sync.WaitGroup{}
-	for i := 0; i < numObjs; i++ {
+	for i := range numObjs {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -1686,7 +1686,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	for i, mpath := range mpList.Available[1:] {
 		err = api.DetachMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		if err != nil {
-			for j := 0; j < i; j++ {
+			for j := range i {
 				api.AttachMountpath(baseParams, target, mpList.Available[j+1])
 			}
 			tassert.CheckFatal(t, err)

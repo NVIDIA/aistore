@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -326,7 +326,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 	wg := &sync.WaitGroup{}
 	sizes := make(chan int64, o.objCount)
 
-	for idx := 0; idx < o.objCount; idx++ {
+	for idx := range o.objCount {
 		wg.Add(1)
 		o.sema.Acquire()
 
@@ -492,7 +492,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 
 	tlog.Logln("Deleting objects...")
 	wg.Add(o.objCount)
-	for idx := 0; idx < o.objCount; idx++ {
+	for idx := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -534,7 +534,7 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt 
 
 	tlog.Logln("Reading all objects...")
 	wg.Add(objCount)
-	for i := 0; i < objCount; i++ {
+	for i := range objCount {
 		objName := fmt.Sprintf(objPatt, i)
 		go getOneObj(objName)
 	}
@@ -848,7 +848,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 
 				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)
-				for i := 0; i < o.objCount; i++ {
+				for i := range o.objCount {
 					o.sema.Acquire()
 					go func(i int) {
 						defer func() {
@@ -916,7 +916,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 				wg := sync.WaitGroup{}
 				wg.Add(o.objCount)
-				for i := 0; i < o.objCount; i++ {
+				for i := range o.objCount {
 					o.sema.Acquire()
 					go func(i int) {
 						defer func() {
@@ -1068,7 +1068,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		o.sema.Acquire()
 		go func(i int) {
 			defer func() {
@@ -1165,7 +1165,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		o.sema.Acquire()
 		go func(i int) {
 			defer func() {
@@ -1416,7 +1416,7 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	cntCh := make(chan sCnt, o.objCount)
 	wg := &sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for idx := 0; idx < o.objCount; idx++ {
+	for idx := range o.objCount {
 		o.sema.Acquire()
 
 		go func(i int) {
@@ -1579,8 +1579,8 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	// PUT objects twice to make their version 2
-	for j := 0; j < 2; j++ {
-		for i := 0; i < o.objCount; i++ {
+	for range 2 {
+		for i := range o.objCount {
 			objName := fmt.Sprintf(o.pattern, i)
 			oneObj(i, objName)
 		}
@@ -1637,7 +1637,7 @@ func TestECDestroyBucket(t *testing.T) {
 	errCnt := atomic.NewInt64(0)
 	sucCnt := atomic.NewInt64(0)
 
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		o.sema.Acquire()
 		wg.Add(1)
 		go func(i int) {
@@ -1769,7 +1769,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	}
 
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		o.sema.Acquire()
 		go putOneObj(i)
 	}
@@ -1840,7 +1840,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	// PUT object
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -1925,7 +1925,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	tlog.Logln("Reading all objects...")
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go getOneObj(i)
 	}
 	wg.Wait()
@@ -2015,7 +2015,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	}
 
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		o.sema.Acquire()
 		go putOneObj(i)
 	}
@@ -2135,7 +2135,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -2327,7 +2327,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	// fill EC bucket
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -2449,7 +2449,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -2476,7 +2476,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(resEC.Entries))
 	}
 
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		objName := ecTestDir + fmt.Sprintf(o.pattern, i)
 		props, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent, false /*silent*/)
 		if err != nil {
@@ -2572,7 +2572,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	// fill EC bucket
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -2683,7 +2683,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(o.objCount)
-	for i := 0; i < o.objCount; i++ {
+	for i := range o.objCount {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
@@ -2769,9 +2769,9 @@ func TestECGenerations(t *testing.T) {
 			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 
 			wg := sync.WaitGroup{}
-			for gen := 0; gen < generations; gen++ {
+			for gen := range generations {
 				wg.Add(o.objCount)
-				for i := 0; i < o.objCount; i++ {
+				for i := range o.objCount {
 					o.sema.Acquire()
 					go func(i, gen int) {
 						defer func() {
@@ -2789,7 +2789,7 @@ func TestECGenerations(t *testing.T) {
 			}
 
 			currentTime := mono.NanoTime()
-			for i := 0; i < o.objCount; i++ {
+			for i := range o.objCount {
 				objName := ecTestDir + fmt.Sprintf(o.pattern, i)
 				props, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent, false /*silent*/)
 				tassert.CheckError(t, err)

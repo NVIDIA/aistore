@@ -37,7 +37,7 @@ func TestTimeoutGroupGoroutines(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	wg := cos.NewTimeoutGroup()
 
-	for i := 0; i < 100000; i++ {
+	for range 100000 {
 		wg.Add(1)
 		go func() {
 			time.Sleep(time.Second * 2)
@@ -157,7 +157,7 @@ func TestDynSemaphore(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	ch := make(chan int32, 10*limit)
 
-	for j := 0; j < 10*limit; j++ {
+	for range 10 * limit {
 		sema.Acquire()
 		wg.Add(1)
 		go func() {

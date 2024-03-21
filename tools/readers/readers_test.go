@@ -1,6 +1,6 @@
 // Package readers provides implementation for common reader types
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package readers_test
 
@@ -294,7 +294,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	filepath := "/tmp"
 	fn := "reader-test"
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		r, err := readers.NewRandFile(filepath, fn, cos.MiB, cos.ChecksumXXHash)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
@@ -309,7 +309,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		r, err := readers.NewRand(cos.MiB, cos.ChecksumXXHash)
 		r.Close()
 		if err != nil {
@@ -326,7 +326,7 @@ func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
 		mmsa.Terminate(false)
 	}()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		sgl.Reset()
 		r, err := readers.NewSG(sgl, cos.MiB, cos.ChecksumXXHash)
 		r.Close()
@@ -340,7 +340,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 	filepath := "/tmp"
 	fn := "reader-test"
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		r, err := readers.NewRandFile(filepath, fn, cos.MiB, cos.ChecksumNone)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
@@ -355,7 +355,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		r, err := readers.NewRand(cos.MiB, cos.ChecksumNone)
 		r.Close()
 		if err != nil {
@@ -372,7 +372,7 @@ func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
 		mmsa.Terminate(false)
 	}()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		sgl.Reset()
 		r, err := readers.NewSG(sgl, cos.MiB, cos.ChecksumNone)
 		r.Close()

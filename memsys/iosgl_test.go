@@ -42,7 +42,7 @@ var _ = Describe("SGL", func() {
 		num := int(rnd.Int63n(1000) + 1)
 		arr := make([]string, num)
 		str := []byte("A")
-		for i := 0; i < num; i++ {
+		for i := range num {
 			str[0] = byte('A' + i%26)
 			// NOTE in re (+1): skipping zero-length lines
 			arr[i] = strings.Repeat(string(str), int(rnd.Int63n(256)+1)) + "\n"
@@ -68,7 +68,7 @@ var _ = Describe("SGL", func() {
 
 		sgl := mm.NewSGL(cos.KiB)
 
-		for i := int64(0); i < size; i++ {
+		for i := range size {
 			err := sgl.WriteByte(buf[i])
 			Expect(err).ToNot(HaveOccurred())
 		}

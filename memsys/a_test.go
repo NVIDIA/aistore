@@ -92,7 +92,7 @@ func Test_NoSleep(*testing.T) {
 
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		siz := random.Int63n(cos.MiB) + cos.KiB
 		tot := random.Int63n(cos.DivCeil(cos.KiB*10, siz))*siz + cos.KiB
 		wg.Add(1)
@@ -100,7 +100,7 @@ func Test_NoSleep(*testing.T) {
 	}
 	c := make(chan struct{}, 1)
 	go printMaxRingLen(mem, c)
-	for i := 0; i < 7; i++ {
+	for range 7 {
 		time.Sleep(duration / 8)
 		mem.FreeSpec(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cos.MiB * 10})
 	}
@@ -110,7 +110,7 @@ func Test_NoSleep(*testing.T) {
 }
 
 func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		select {
 		case <-c:
 			return
@@ -159,7 +159,7 @@ func printStats(mem *memsys.MMSA) {
 	for {
 		time.Sleep(mem.TimeIval)
 		stats := mem.GetStats()
-		for i := 0; i < memsys.NumPageSlabs; i++ {
+		for i := range memsys.NumPageSlabs {
 			slab, err := mem.GetSlab(int64(i+1) * memsys.PageSize)
 			cos.AssertNoErr(err)
 			x := ""
