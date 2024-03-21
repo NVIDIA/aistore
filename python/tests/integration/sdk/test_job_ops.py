@@ -51,7 +51,3 @@ class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
         existing_obj = [entry.name for entry in self.bucket.list_all_objects()]
         for name in object_names:
             self.assertNotIn(name, existing_obj)
-
-
-if __name__ == "__main__":
-    unittest.main()

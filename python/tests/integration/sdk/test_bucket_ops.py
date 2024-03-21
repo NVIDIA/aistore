@@ -9,7 +9,7 @@ import boto3
 import requests
 
 from aistore.sdk import ListObjectFlag
-from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING, LOREM, DUIS
+from aistore.sdk.const import UTF_ENCODING, LOREM, DUIS
 from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
@@ -18,10 +18,7 @@ from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
 
 from tests.utils import random_string, cleanup_local
-from tests.integration import REMOTE_BUCKET, OBJECT_COUNT
-
-# If remote bucket is not set, skip all cloud-related tests
-REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(PROVIDER_AIS + ":")
+from tests.integration import OBJECT_COUNT, REMOTE_SET
 
 INNER_DIR = "directory"
 TOP_LEVEL_FILES = {
@@ -108,6 +105,7 @@ class TestBucketOps(RemoteEnabledTest):
             from_bck.head()
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
+        self._register_for_post_test_cleanup(names=[to_bck_name], is_bucket=True)
 
     def test_copy(self):
         from_bck_name = self.bck_name + "from"
@@ -135,7 +133,7 @@ class TestBucketOps(RemoteEnabledTest):
     )
     def test_get_latest_flag(self):
         obj_name = random_string()
-        self.cloud_objects.append(obj_name)
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
 
         s3_client = boto3.client(
             "s3",
@@ -183,7 +181,7 @@ class TestBucketOps(RemoteEnabledTest):
         objects = self.bucket.list_objects(
             props="name,cached", prefix=self.obj_prefix
         ).entries
-        self._verify_objects_cache_status(objects, True)
+        self._validate_objects_cached(objects, True)
 
         self.bucket.evict(keep_md=True)
 
@@ -191,7 +189,7 @@ class TestBucketOps(RemoteEnabledTest):
             props="name,cached", prefix=self.obj_prefix
         ).entries
         self.assertEqual(OBJECT_COUNT, len(objects))
-        self._verify_objects_cache_status(objects, False)
+        self._validate_objects_cached(objects, False)
 
     def test_evict_local(self):
         # If the bucket is local, eviction should fail
@@ -203,12 +201,6 @@ class TestBucketOps(RemoteEnabledTest):
         local_bucket = self._create_bucket(self.bck_name + "-local")
         with self.assertRaises(InvalidBckProvider):
             local_bucket.evict()
-
-    def _verify_objects_cache_status(self, objects, expected_status):
-        self.assertTrue(len(objects) > 0)
-        for obj in objects:
-            self.assertTrue(obj.is_ok())
-            self.assertEqual(expected_status, obj.is_cached())
 
     def test_put_files_invalid(self):
         with self.assertRaises(ValueError):
@@ -401,7 +393,3 @@ class TestBucketOps(RemoteEnabledTest):
         # Accessing the info of a deleted bucket should raise an error
         with self.assertRaises(ErrBckNotFound):
             info_test_bck.summary()
-
-
-if __name__ == "__main__":
-    unittest.main()

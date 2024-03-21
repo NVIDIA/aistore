@@ -12,7 +12,6 @@ from tests.const import SMALL_FILE_SIZE
 from tests.unit.sdk.test_utils import test_cases
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import (
-    create_and_put_object,
     random_string,
     cleanup_local,
 )
@@ -242,13 +241,8 @@ class TestObjectOps(RemoteEnabledTest):
     )
     def test_blob_download(self):
         obj_name = "obj-blob-download"
-        create_and_put_object(
-            client=self.client,
-            bck_name=self.bck_name,
-            obj_name=obj_name,
-            provider=self.provider,
-        )
-        self.cloud_objects.append(obj_name)
+        _ = self._create_object_with_content(obj_name=obj_name)
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
 
         evict_job_id = self.bucket.objects(obj_names=[obj_name]).evict()
         self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
@@ -259,12 +253,5 @@ class TestObjectOps(RemoteEnabledTest):
             timeout=TEST_TIMEOUT
         )
 
-        objects = self.bucket.list_objects(
-            props="name,cached", prefix=self.obj_prefix
-        ).entries
-
-        for obj in objects:
-            if obj.name == obj_name:
-                self.assertTrue(obj.is_ok())
-                self.assertTrue(obj.is_cached())
-                break
+        objects = self.bucket.list_objects(props="name,cached", prefix=obj_name).entries
+        self._validate_objects_cached(objects, True)

@@ -2,6 +2,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
+from typing import List
 import unittest
 import boto3
 
@@ -74,8 +75,21 @@ class RemoteEnabledTest(unittest.TestCase):
         """
         bck = self.client.bucket(bck_name, provider=provider)
         bck.create()
-        self.buckets.append(bck_name)
+        self._register_for_post_test_cleanup(names=[bck_name], is_bucket=True)
         return bck
+
+    def _register_for_post_test_cleanup(self, names: List[str], is_bucket: bool):
+        """
+        Register objects or buckets for post-test cleanup
+
+        Args:
+            names (List[str]): Names of buckets or objects
+            is_bucket (bool): True if we are storing a bucket; False for an object
+        """
+        if is_bucket:
+            self.buckets.extend(names)
+        elif REMOTE_SET:
+            self.cloud_objects.extend(names)
 
     def _create_object(self, obj_name=""):
         """
@@ -88,8 +102,7 @@ class RemoteEnabledTest(unittest.TestCase):
             The object created
         """
         obj = self.bucket.object(obj_name=obj_name)
-        if REMOTE_SET:
-            self.cloud_objects.append(obj_name)
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
         return obj
 
     def _create_object_with_content(self, obj_name="", obj_size=None):
@@ -110,8 +123,7 @@ class RemoteEnabledTest(unittest.TestCase):
             provider=self.provider,
             obj_size=obj_size,
         )
-        if REMOTE_SET:
-            self.cloud_objects.append(obj_name)
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
         return content
 
     def _create_objects(
@@ -132,8 +144,7 @@ class RemoteEnabledTest(unittest.TestCase):
             obj_names,
             obj_size,
         )
-        if REMOTE_SET:
-            self.cloud_objects.extend(obj_names)
+        self._register_for_post_test_cleanup(names=obj_names, is_bucket=False)
         return obj_names
 
     def _check_all_objects_cached(self, num_obj, expected_cached):
@@ -156,6 +167,7 @@ class RemoteEnabledTest(unittest.TestCase):
             objects: List of objects to check
             expected_cached: Whether we expect them to be cached
         """
+        self.assertTrue(len(objects) > 0)
         for obj in objects:
             self.assertTrue(obj.is_ok())
             if expected_cached:
@@ -184,8 +196,10 @@ class RemoteEnabledTest(unittest.TestCase):
                 cached_objs.append(obj)
             else:
                 evicted_objs.append(obj)
-        self._validate_objects_cached(cached_objs, True)
-        self._validate_objects_cached(evicted_objs, False)
+        if len(cached_objs) > 0:
+            self._validate_objects_cached(cached_objs, True)
+        if len(evicted_objs) > 0:
+            self._validate_objects_cached(evicted_objs, False)
 
     def _get_boto3_client(self):
         return boto3.client(

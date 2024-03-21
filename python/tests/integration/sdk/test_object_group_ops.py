@@ -136,7 +136,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     )
     def test_copy_objects_latest_flag(self):
         obj_name = random_string()
-        self.cloud_objects.append(obj_name)
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
         to_bck_name = "dst-bck-cp-latest"
         to_bck = self._create_bucket(to_bck_name)
 
@@ -213,8 +213,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     )
     def test_prefetch_objects_latest_flag(self):
         obj_name = random_string()
-        self.cloud_objects.append(obj_name)
-        to_bck_name = "dst-bck-prefetch-latest"
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
 
         # out-of-band PUT: first version
         self.s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=LOREM)
@@ -274,7 +273,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def _archive_exec_assert(self, arch_name, src_bck, res_bck, **kwargs):
         # Add to object list to clean up on test finish
         if res_bck.provider != PROVIDER_AIS:
-            self.cloud_objects.append(arch_name)
+            self._register_for_post_test_cleanup(names=[arch_name], is_bucket=False)
         archived_names = self.obj_names[1:5]
         expected_contents = {}
         for name in archived_names:
