@@ -145,7 +145,7 @@ func mpathRow(c *PerfTabCtx, cols []*header, mpath string, cdf *fs.CDF, row []st
 		}
 	}
 	if _idx(cols, colFS) >= 0 {
-		row = append(row, cdf.FS)
+		row = append(row, cdf.FS.String())
 	}
 	return row
 }
@@ -192,7 +192,7 @@ func _fmtMpathDisks(cdfs map[string]*fs.CDF, idx int) (s string) {
 		if next {
 			s += "\n" + strings.Repeat("\t", idx) + " "
 		}
-		s += cdf.FS
+		s += cdf.FS.String()
 		next = true
 	}
 	return

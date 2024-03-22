@@ -101,7 +101,7 @@ const (
 	QparamSilent = "sln"
 
 	// (see api.AttachMountpath vs. LocalConfig.FSP)
-	QparamDiskLabel = "disk_label"
+	QparamMpathLabel = "mountpath_label"
 )
 
 // QparamFltPresence enum.

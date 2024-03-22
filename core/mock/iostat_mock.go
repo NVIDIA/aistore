@@ -20,7 +20,7 @@ func NewIOS() *IOS                              { return &IOS{} }
 func (m *IOS) GetAllMpathUtils() *ios.MpathUtil { return &m.Utils }
 func (m *IOS) GetMpathUtil(mpath string) int64  { return m.Utils.Get(mpath) }
 
-func (*IOS) AddMpath(string, string, string, *cmn.Config) (ios.FsDisks, error) { return nil, nil }
-func (*IOS) RemoveMpath(string, bool)                                          {}
-func (*IOS) LogAppend(l []string) []string                                     { return l }
-func (*IOS) FillDiskStats(ios.AllDiskStats)                                    {}
+func (*IOS) AddMpath(string, string, ios.Label, *cmn.Config) (ios.FsDisks, error) { return nil, nil }
+func (*IOS) RemoveMpath(string, bool)                                             {}
+func (*IOS) LogAppend(l []string) []string                                        { return l }
+func (*IOS) FillDiskStats(ios.AllDiskStats)                                       {}

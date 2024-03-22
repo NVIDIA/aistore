@@ -1,7 +1,7 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
@@ -21,13 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-// when empty, causes aistore target to perform mountpath => disk mapping and, subsequently,
-// enforce non-sharing (of the underlyig disks) across mountpaths;
-// recommended for production deployments
-type DiskLabel string
-
-func (label DiskLabel) IsEmpty() bool { return label == "" }
-
 const statsdir = "/sys/class/block"
 
 // public
@@ -35,7 +28,7 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath, label, fs string, config *cmn.Config) (FsDisks, error)
+		AddMpath(mpath, fs string, label Label, config *cmn.Config) (FsDisks, error)
 		RemoveMpath(mpath string, testingEnv bool)
 		FillDiskStats(m AllDiskStats)
 	}
@@ -154,7 +147,7 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, label, fs string, config *cmn.Config) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fs string, label Label, config *cmn.Config) (fsdisks FsDisks, err error) {
 	var (
 		warn       string
 		testingEnv = config.TestingEnv()
@@ -185,7 +178,7 @@ func (ios *ios) AddMpath(mpath, label, fs string, config *cmn.Config) (fsdisks F
 	return
 }
 
-func (ios *ios) _add(mpath, label string, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
+func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
 	if dd, ok := ios.mpath2disks[mpath]; ok {
 		return "", fmt.Errorf("duplicate mountpath %s (disks %s, %s)", mpath, dd._str(), fsdisks._str())
 	}
@@ -193,14 +186,15 @@ func (ios *ios) _add(mpath, label string, fsdisks FsDisks, fspaths cos.StrKVs, t
 	ios.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv {
-			if DiskLabel(label).IsEmpty() {
+			if label.IsNil() {
 				return "", fmt.Errorf("disk %s is shared between mountpaths %s and %s", disk, mpath, mp)
 			}
-			var otherLabel string
-			if otherLabel, ok = fspaths[mp]; ok {
-				otherLabel = fmt.Sprintf("(%q)", otherLabel)
+			var otherLabel Label
+			if o, ok := fspaths[mp]; ok {
+				otherLabel = Label(o)
 			}
-			warn = fmt.Sprintf("Warning: disk (or disk label) %s is shared between %s(%q) and %s%s", disk, mpath, label, mp, otherLabel)
+			warn = fmt.Sprintf("Warning: disk %s is shared between %s%s and %s%s",
+				disk, mpath, label.ToLog(), mp, otherLabel.ToLog())
 		}
 		ios.disk2mpath[disk] = mpath
 		ios.blockStats[disk] = &blockStats{}
@@ -216,7 +210,7 @@ func (ios *ios) _add(mpath, label string, fsdisks FsDisks, fspaths cos.StrKVs, t
 		// multipath NVMe: alternative block-stats location
 		cdisk, err := icn(disk, statsdir)
 		if err != nil {
-			if DiskLabel(label).IsEmpty() {
+			if label.IsNil() {
 				return "", err
 			}
 			if warn != "" {

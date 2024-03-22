@@ -16,19 +16,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 const vmdCopies = 3
 
 type (
 	fsMpathMD struct {
-		Ext       any      `json:"ext,omitempty"` // reserved for within-metaversion extensions
-		Path      string   `json:"mountpath"`
-		DiskLabel string   `json:"disk_label"`
-		Fs        string   `json:"fs"`
-		FsType    string   `json:"fs_type"`
-		FsID      cos.FsID `json:"fs_id"`
-		Enabled   bool     `json:"enabled"`
+		Ext     any       `json:"ext,omitempty"` // reserved for within-metaversion extensions
+		Path    string    `json:"mountpath"`
+		Label   ios.Label `json:"mountpath_label"`
+		Fs      string    `json:"fs"`
+		FsType  string    `json:"fs_type"`
+		FsID    cos.FsID  `json:"fs_id"`
+		Enabled bool      `json:"enabled"`
 	}
 
 	// VMD is AIS target's volume metadata structure
@@ -71,12 +72,12 @@ func (*VMD) JspOpts() jsp.Options {
 
 func (vmd *VMD) addMountpath(mi *fs.Mountpath, enabled bool) {
 	vmd.Mountpaths[mi.Path] = &fsMpathMD{
-		Path:      mi.Path,
-		DiskLabel: mi.DiskLabel,
-		Fs:        mi.Fs,
-		FsType:    mi.FsType,
-		FsID:      mi.FsID,
-		Enabled:   enabled,
+		Path:    mi.Path,
+		Label:   mi.Label,
+		Fs:      mi.Fs,
+		FsType:  mi.FsType,
+		FsID:    mi.FsID,
+		Enabled: enabled,
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 type IniCtx struct {
@@ -128,9 +129,9 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 		avail    = make(fs.MPI, len(fspaths))
 		disabled = make(fs.MPI)
 	)
-	for path, diskLabel := range fspaths {
+	for path, label := range fspaths {
 		var mi *fs.Mountpath
-		if mi, err = fs.NewMountpath(path, diskLabel); err != nil {
+		if mi, err = fs.NewMountpath(path, ios.Label(label)); err != nil {
 			goto rerr
 		}
 		if err = mi.AddEnabled(tid, avail, config); err != nil {
@@ -159,7 +160,7 @@ func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMi
 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
 		var mi *fs.Mountpath
-		mi, err = fs.NewMountpath(mpath, fsMpathMD.DiskLabel)
+		mi, err = fs.NewMountpath(mpath, fsMpathMD.Label)
 		if !fsMpathMD.Enabled {
 			if pass == 2 {
 				mi.Fs = fsMpathMD.Fs

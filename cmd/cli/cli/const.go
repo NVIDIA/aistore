@@ -341,6 +341,7 @@ const (
 
 var (
 	indent2 = strings.Repeat(indent1, 2)
+	indent3 = strings.Repeat(indent1, 3)
 	indent4 = strings.Repeat(indent1, 4)
 
 	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4" // namely, archive.FileExtensions
@@ -937,12 +938,16 @@ var (
 		Name:  "no-rebalance",
 		Usage: "do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only!)",
 	}
-	diskLabelFlag = cli.StringFlag{
+	mountpathLabelFlag = cli.StringFlag{
 		Name: "label",
-		Usage: "optional _disk label_ that can be associated with the mountpath that's being attached\n" +
-			indent2 + "to further assist in:\n" +
-			indent4 + "- mapping the mountpath to its underlying disk(s), if any\n" +
-			indent4 + "- aggregating target mountpaths across non-overlapping storage capacities",
+		Usage: "optional _mountpath label_ that can be used to deliver extended functionality,\n" +
+			indent1 + "  including:\n" +
+			indent3 + "- mapping of the mountpath to its underlying disk(s), if any\n" +
+			indent3 + "  (potentially useful in highly virtualized/containerized environments);\n" +
+			indent3 + "- disk sharing between multiple mountpaths;\n" +
+			indent3 + "- storage classes (as in: \"different storages - for different buckets\");\n" +
+			indent3 + "- user-defined grouping of the mountpaths;\n" +
+			indent3 + "  (e.g. to reflect different non-overlapping storage capacities and/or storage classes)",
 	}
 	noResilverFlag = cli.BoolFlag{
 		Name:  "no-resilver",

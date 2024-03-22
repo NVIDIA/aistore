@@ -50,12 +50,12 @@ type (
 	Mountpath struct {
 		lomCaches  cos.MultiSyncMap // LOM caches
 		info       string
-		Path       string // clean path
-		DiskLabel  string
-		cos.FS              // underlying filesystem
-		Disks      []string // owned disks (ios.FsDisks map => slice)
-		flags      uint64   // bit flags (set/get atomic)
-		PathDigest uint64   // (HRW logic)
+		Path       string    // clean path
+		Label      ios.Label // (disk sharing; help resolve lsblk; storage class; user-defined grouping)
+		cos.FS               // underlying filesystem
+		Disks      []string  // owned disks (ios.FsDisks map => slice)
+		flags      uint64    // bit flags (set/get atomic)
+		PathDigest uint64    // (HRW logic)
 		capacity   Capacity
 	}
 	MPI map[string]*Mountpath
@@ -98,7 +98,7 @@ var mfs *MFS // singleton (target only)
 // Mountpath //
 ///////////////
 
-func NewMountpath(mpath, diskLabel string) (*Mountpath, error) {
+func NewMountpath(mpath string, label ios.Label) (*Mountpath, error) {
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func NewMountpath(mpath, diskLabel string) (*Mountpath, error) {
 	}
 	mi := &Mountpath{
 		Path:       cleanMpath,
-		DiskLabel:  diskLabel,
+		Label:      label,
 		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
 	err = mi.resolveFS()
@@ -125,18 +125,15 @@ func (mi *Mountpath) IsAnySet(flags uint64) bool {
 }
 
 func (mi *Mountpath) String() string {
-	var label string
-	if mi.DiskLabel != "" {
-		label = ", \"" + mi.DiskLabel + "\""
-	}
+	s := mi.Label.ToLog()
 	if mi.info == "" {
 		switch len(mi.Disks) {
 		case 0:
-			mi.info = fmt.Sprintf("mp[%s, fs=%s%s]", mi.Path, mi.Fs, label)
+			mi.info = fmt.Sprintf("mp[%s, fs=%s%s]", mi.Path, mi.Fs, s)
 		case 1:
-			mi.info = fmt.Sprintf("mp[%s, %s%s]", mi.Path, mi.Disks[0], label)
+			mi.info = fmt.Sprintf("mp[%s, %s%s]", mi.Path, mi.Disks[0], s)
 		default:
-			mi.info = fmt.Sprintf("mp[%s, %v%s]", mi.Path, mi.Disks, label)
+			mi.info = fmt.Sprintf("mp[%s, %v%s]", mi.Path, mi.Disks, s)
 		}
 	}
 	if !mi.IsAnySet(FlagWaitingDD) {
@@ -355,7 +352,7 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 //
 
 func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config) (err error) {
-	if err = mi._checkExists(avail, config); err != nil {
+	if err = mi._validate(avail, config); err != nil {
 		return
 	}
 	if err = mi._addEnabled(tid, avail, config); err == nil {
@@ -371,7 +368,11 @@ func (mi *Mountpath) AddDisabled(disabled MPI) {
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
 
-func (mi *Mountpath) _checkExists(avail MPI, config *cmn.Config) error {
+// check:
+// - duplication
+// - disk sharing
+// - no disks
+func (mi *Mountpath) _validate(avail MPI, config *cmn.Config) error {
 	existingMi, ok := avail[mi.Path]
 	if ok {
 		return fmt.Errorf("duplicated mountpath %s (%s)", mi, existingMi)
@@ -381,11 +382,8 @@ func (mi *Mountpath) _checkExists(avail MPI, config *cmn.Config) error {
 		if config.TestingEnv() {
 			return nil
 		}
-		if !ios.DiskLabel(mi.DiskLabel).IsEmpty() {
-			// user-assigned disk label implies user's responsibility for filesystem sharing
-			// (or not sharing) across mountpaths
-			nlog.Warningf("FsID %v is shared between %s (which is labeled) and %q - proceeding anyway",
-				mi.FsID, mi, otherMpath)
+		if !mi.Label.IsNil() {
+			nlog.Warningf("FsID %v shared between (labeled) %s and %q - proceeding anyway", mi.FsID, mi, otherMpath)
 			return nil
 		}
 		return fmt.Errorf("FsID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, otherMpath)
@@ -401,7 +399,7 @@ func (mi *Mountpath) _checkExists(avail MPI, config *cmn.Config) error {
 }
 
 func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) error {
-	disks, err := mfs.ios.AddMpath(mi.Path, mi.DiskLabel, mi.Fs, config)
+	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config)
 	if err != nil {
 		return err
 	}
@@ -434,7 +432,7 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 	}
 
 	// add new mp
-	if err = mi._checkExists(avail, config); err != nil {
+	if err = mi._validate(avail, config); err != nil {
 		return
 	}
 	availableCopy := _cloneOne(avail)
@@ -483,6 +481,18 @@ func (mi *Mountpath) _add(fsIDs []cos.FsID) ([]cos.FsID, bool) {
 		}
 	}
 	return append(fsIDs, mi.FsID), false
+}
+
+func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
+	cdf := tcdf.Mountpaths[mi.Path]
+	if cdf == nil {
+		tcdf.Mountpaths[mi.Path] = &CDF{}
+		cdf = tcdf.Mountpaths[mi.Path]
+	}
+	cdf.Disks = mi.Disks
+	cdf.FS = mi.FS
+	cdf.Label = mi.Label
+	return cdf
 }
 
 //
@@ -563,7 +573,7 @@ func cloneMPI() (availableCopy, disabledCopy MPI) {
 
 // used only in tests (compare with AddMpath below)
 func Add(mpath, tid string) (mi *Mountpath, err error) {
-	mi, err = NewMountpath(mpath, "test-label")
+	mi, err = NewMountpath(mpath, ios.TestLabel)
 	if err != nil {
 		return
 	}
@@ -574,7 +584,7 @@ func Add(mpath, tid string) (mi *Mountpath, err error) {
 	return
 }
 
-func AddMpath(tid, mpath, label string, cb func()) (mi *Mountpath, err error) {
+func AddMpath(tid, mpath string, label ios.Label, cb func()) (mi *Mountpath, err error) {
 	mi, err = NewMountpath(mpath, label)
 	if err != nil {
 		return
@@ -1084,56 +1094,64 @@ func Cap() (cs CapStatus) {
 	return
 }
 
-func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap error) {
+// sum up && compute %% capacities while skipping already _counted_ filesystems
+func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap error) {
 	var (
-		c     Capacity
-		avail = GetAvail()
-		l     = len(avail)
-		fsIDs = make([]cos.FsID, 0, l)
+		fsIDs        []cos.FsID
+		avail        = GetAvail()
+		l            = len(avail)
+		alreadyAdded bool
 	)
 	if l == 0 {
-		err = cmn.ErrNoMountpaths
 		if tcdf != nil {
 			tcdf.Mountpaths = make(map[string]*CDF)
 		}
-		return
+		return cs, cmn.ErrNoMountpaths, nil
 	}
 
-	// 1. sum up && compute %% capacities while skipping already _counted_ filesystems
+	// fast path: available w/ no sharing
+	fast := len(mfs.fsIDs) == l
+	if !fast {
+		fsIDs = make([]cos.FsID, 0, l)
+	}
+
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
 	cs.HighWM, cs.OOS = config.Space.HighWM, config.Space.OOS
 	cs.PctMin = 100
-	for mpath, mi := range avail {
-		var alreadyAdded bool
-		if fsIDs, alreadyAdded = mi._add(fsIDs); !alreadyAdded {
-			if c, err = mi.getCapacity(config, true); err != nil {
-				nlog.Errorln(mi.String()+":", err)
-				return
-			}
-			cs.TotalUsed += c.Used
-			cs.TotalAvail += c.Avail
-			cs.PctMax = max(cs.PctMax, c.PctUsed)
-			cs.PctMin = min(cs.PctMin, c.PctUsed)
-			cs.PctAvg += c.PctUsed
+	for _, mi := range avail {
+		if !fast {
+			fsIDs, alreadyAdded = mi._add(fsIDs)
 		}
-		if tcdf == nil {
+		// is shared
+		if alreadyAdded {
+			if tcdf != nil {
+				_ = mi._cdf(tcdf)
+			}
 			continue
 		}
-		cdf := tcdf.Mountpaths[mpath]
-		if cdf == nil {
-			tcdf.Mountpaths[mpath] = &CDF{}
-			cdf = tcdf.Mountpaths[mpath]
+
+		// add cap
+		c, err := mi.getCapacity(config, true)
+		if err != nil {
+			nlog.Errorln(mi.String()+":", err)
+			return cs, err, nil
 		}
-		cdf.Capacity = c
-		cdf.Disks = mi.Disks
-		cdf.FS = mi.FS.String()
+		cs.TotalUsed += c.Used
+		cs.TotalAvail += c.Avail
+		cs.PctMax = max(cs.PctMax, c.PctUsed)
+		cs.PctMin = min(cs.PctMin, c.PctUsed)
+		cs.PctAvg += c.PctUsed
+		if tcdf != nil {
+			cdf := mi._cdf(tcdf)
+			cdf.Capacity = c
+		}
 	}
 	cs.PctAvg /= int32(l)
 	errCap = cs.Err()
 
-	// 2. fill-in
+	// fill-in
 	if tcdf != nil {
 		tcdf.PctMax, tcdf.PctAvg, tcdf.PctMin = cs.PctMax, cs.PctAvg, cs.PctMin
 		if errCap != nil {
@@ -1147,7 +1165,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap 
 		}
 	}
 
-	// 3. update cached state
+	// update cached state
 	ratomic.StoreInt64(&mfs.cs.HighWM, cs.HighWM)
 	ratomic.StoreInt64(&mfs.cs.OOS, cs.OOS)
 	ratomic.StoreUint64(&mfs.cs.TotalUsed, cs.TotalUsed)
@@ -1155,7 +1173,8 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err, errCap 
 	ratomic.StoreInt32(&mfs.cs.PctMin, cs.PctMin)
 	ratomic.StoreInt32(&mfs.cs.PctAvg, cs.PctAvg)
 	ratomic.StoreInt32(&mfs.cs.PctMax, cs.PctMax)
-	return
+
+	return cs, nil, errCap
 }
 
 // called only and exclusively by `stats.Trunner` providing `config.Periodic.StatsTime` tick

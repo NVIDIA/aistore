@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -46,7 +47,7 @@ type bsummCtx struct {
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
 		cmdMpathAttach: {
-			diskLabelFlag,
+			mountpathLabelFlag,
 		},
 		cmdMpathEnable: {},
 		cmdMpathDetach: {
@@ -628,11 +629,8 @@ func mpathAction(c *cli.Context, action string) error {
 		switch action {
 		case apc.ActMountpathAttach:
 			acted = "attached"
-			if label := parseStrFlag(c, diskLabelFlag); label == "" {
-				err = api.AttachMountpath(apiBP, si, mountpath)
-			} else {
-				err = api.AttachMountpath(apiBP, si, mountpath, label)
-			}
+			label := parseStrFlag(c, mountpathLabelFlag)
+			err = api.AttachMountpath(apiBP, si, mountpath, ios.Label(label))
 		case apc.ActMountpathEnable:
 			acted = "enabled"
 			err = api.EnableMountpath(apiBP, si, mountpath)

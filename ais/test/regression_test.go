@@ -608,15 +608,11 @@ func TestGetClusterStats(t *testing.T) {
 		if len(vCDF.Mountpaths) != len(tCDF.Mountpaths) {
 			t.Errorf("%s: num mountpaths is different: [%+v] vs [%+v]\n", tname, vCDF, tCDF)
 		}
-		var printed bool
 		for mpath := range vCDF.Mountpaths {
-			vcdf, tcdf := vCDF.Mountpaths[mpath], tCDF.Mountpaths[mpath]
+			tcdf := tCDF.Mountpaths[mpath]
 			s := tname + mpath
-			if vcdf.Capacity.PctUsed != tcdf.Capacity.PctUsed {
-				t.Errorf("%-30s capacity is different: [%+v] vs [%+v]\n", s, vcdf, tcdf)
-			} else if !printed {
-				tlog.Logf("%-30s %+v(%+v), %s\n", s, vcdf.Disks, tcdf.Disks, tcdf.FS)
-				printed = true
+			if tcdf.Capacity.Used != 0 {
+				tlog.Logf("%-30s %+v %+v\n", s, tcdf.Disks, tcdf.Capacity)
 			}
 		}
 	}

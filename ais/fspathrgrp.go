@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/volume"
@@ -50,7 +51,7 @@ func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.Mountpath, err er
 
 // attachMpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
-func (g *fsprungroup) attachMpath(mpath, label string) (addedMi *fs.Mountpath, err error) {
+func (g *fsprungroup) attachMpath(mpath string, label ios.Label) (addedMi *fs.Mountpath, err error) {
 	addedMi, err = fs.AddMpath(g.t.SID(), mpath, label, g.redistributeMD)
 	if err != nil || addedMi == nil {
 		return

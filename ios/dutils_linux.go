@@ -81,7 +81,7 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 // given parsed lsblk and `fs` (filesystem) fs2disks retrieves the underlying
 // disk or disks; it may return multiple disks but only if the filesystem is
 // RAID; it is called upong adding/enabling mountpath
-func fs2disks(res *LsBlk, fs, label string, num int, testingEnv bool) (disks FsDisks, err error) {
+func fs2disks(res *LsBlk, fs string, label Label, num int, testingEnv bool) (disks FsDisks, err error) {
 	var trimmedFS string
 	if strings.HasPrefix(fs, devPrefixLVM) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixLVM)
@@ -98,14 +98,10 @@ func fs2disks(res *LsBlk, fs, label string, num int, testingEnv bool) (disks FsD
 	switch {
 	case len(disks) > 0:
 		s := disks._str()
-		if DiskLabel(label).IsEmpty() {
-			nlog.Infoln("["+fs+"]:", s)
-		} else {
-			nlog.Infoln("["+fs+", disk label: "+label+"]", s)
-		}
+		nlog.Infoln("["+fs+label.ToLog()+"]:", s)
 	case testingEnv:
 		// anything goes
-	case DiskLabel(label).IsEmpty():
+	case label.IsNil():
 		err = fmt.Errorf("No disks for %s(%q) (empty label implies _resolvable_ underlying disk(s))", fs, trimmedFS)
 		nlog.Errorln(err)
 		dump, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
@@ -122,15 +118,15 @@ func fs2disks(res *LsBlk, fs, label string, num int, testingEnv bool) (disks FsD
 // private
 //
 
-func findDevs(devList []*blkdev, trimmedFS, label string, disks FsDisks) {
+func findDevs(devList []*blkdev, trimmedFS string, label Label, disks FsDisks) {
 	for _, bd := range devList {
 		// by dev name
 		if bd.Name == trimmedFS {
 			_add(bd, disks)
 			continue
 		}
-		// by label
-		if label != "" && strings.Contains(bd.Name, label) {
+		// NOTE: by label
+		if label != "" && strings.Contains(bd.Name, string(label)) {
 			_add(bd, disks)
 			continue
 		}

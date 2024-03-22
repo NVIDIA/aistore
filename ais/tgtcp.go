@@ -495,7 +495,8 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	label := r.URL.Query().Get(apc.QparamDiskLabel)
+	q := r.URL.Query()
+	label := ios.Label(q.Get(apc.QparamMpathLabel))
 	addedMi, err := t.fsprg.attachMpath(mpath, label)
 	if err != nil {
 		t.writeErr(w, r, err)

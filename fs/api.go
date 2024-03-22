@@ -1,8 +1,13 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
+
+import (
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/ios"
+)
 
 type (
 	Capacity struct {
@@ -11,11 +16,11 @@ type (
 		PctUsed int32  `json:"pct_used"`     // %% used (redundant ok)
 	}
 	// Capacity, Disks, Filesystem (CDF)
-	// (not to be confused with Cumulative Distribution Function)
 	CDF struct {
 		Capacity
-		Disks []string `json:"disks"` // owned disks (ios.FsDisks map => slice)
-		FS    string   `json:"fs"`    // cos.Fs + cos.FsID
+		Disks []string  `json:"disks"` // owned or shared disks (ios.FsDisks map => slice)
+		Label ios.Label `json:"mountpath_label"`
+		FS    cos.FS    `json:"fs"`
 	}
 	// Target (cumulative) CDF
 	TargetCDF struct {
