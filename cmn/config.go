@@ -1387,6 +1387,8 @@ func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 // FSPConf //
 /////////////
 
+var AllowSharedDisksAndNoDisks bool // NOTE: deprecated; keeping it strictly for backward compatibility
+
 func (c *FSPConf) UnmarshalJSON(data []byte) error {
 	m := cos.NewStrKVs(10)
 	err := jsoniter.Unmarshal(data, &m)

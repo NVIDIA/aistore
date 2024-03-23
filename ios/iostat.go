@@ -185,7 +185,7 @@ func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.Str
 
 	ios.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
-		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv {
+		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv && !cmn.AllowSharedDisksAndNoDisks {
 			if label.IsNil() {
 				return "", fmt.Errorf("disk %s is shared between mountpaths %s and %s", disk, mpath, mp)
 			}

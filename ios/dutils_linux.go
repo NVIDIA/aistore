@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
@@ -99,7 +100,7 @@ func fs2disks(res *LsBlk, fs string, label Label, num int, testingEnv bool) (dis
 	case len(disks) > 0:
 		s := disks._str()
 		nlog.Infoln("["+fs+label.ToLog()+"]:", s)
-	case testingEnv:
+	case testingEnv || cmn.AllowSharedDisksAndNoDisks:
 		// anything goes
 	case label.IsNil():
 		err = fmt.Errorf("No disks for %s(%q) (empty label implies _resolvable_ underlying disk(s))", fs, trimmedFS)

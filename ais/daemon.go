@@ -93,6 +93,8 @@ func initFlags(flset *flag.FlagSet) {
 	// target-only
 	flset.BoolVar(&daemon.cli.target.standby, "standby", false,
 		"when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
+	flset.BoolVar(&cmn.AllowSharedDisksAndNoDisks, "allow_shared_no_disks", false,
+		"NOTE: deprecated, will be removed in future releases")
 	flset.BoolVar(&daemon.cli.target.useLoopbackDevs, "loopback", false,
 		"use loopback devices (local playground, target-only)")
 	flset.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false,
