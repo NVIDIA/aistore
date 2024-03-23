@@ -74,6 +74,7 @@ const (
 
 	ClusterSummary = indent1 + "Proxies:\t{{FormatProxiesSumm .Smap}}\n" +
 		indent1 + "Targets:\t{{FormatTargetsSumm .Smap .NumDisks}}\n" +
+		indent1 + "Capacity:\t{{.Capacity}}\n" +
 		indent1 + "Cluster Map:\t{{FormatSmap .Smap}}\n" +
 		indent1 + "Deployment:\t{{ ( Deployments .Status) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Status) }}\n" +
@@ -378,14 +379,15 @@ type (
 		ExtendedURLs bool
 	}
 	StatsAndStatusHelper struct {
-		Pmap StstMap `json:"pmap"`
-		Tmap StstMap `json:"tmap"`
+		Pmap StstMap
+		Tmap StstMap
 	}
 	StatusHelper struct {
-		Smap      *meta.Smap           `json:"smap"`
-		CluConfig *cmn.ClusterConfig   `json:"config"`
-		Status    StatsAndStatusHelper `json:"status"`
-		NumDisks  int                  `json:"-"`
+		Smap      *meta.Smap
+		CluConfig *cmn.ClusterConfig
+		Status    StatsAndStatusHelper
+		Capacity  string
+		NumDisks  int
 	}
 	ListBucketsHelper struct {
 		XactID string

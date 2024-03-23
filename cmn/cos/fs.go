@@ -29,3 +29,12 @@ func (d *FsID) UnmarshalJSON(b []byte) error {
 	}
 	return nil
 }
+
+func AddUniqueFsID(ids []FsID, nid FsID) ([]FsID, bool /*added*/) {
+	for _, id := range ids {
+		if nid == id {
+			return ids, false
+		}
+	}
+	return append(ids, nid), true
+}

@@ -25,10 +25,12 @@ type (
 	// Target (cumulative) CDF
 	TargetCDF struct {
 		Mountpaths map[string]*CDF // mpath => [Capacity, Disks, FS (CDF)]
-		PctMax     int32           `json:"pct_max"` // max used (%)
-		PctAvg     int32           `json:"pct_avg"` // avg used (%)
-		PctMin     int32           `json:"pct_min"` // min used (%)
-		CsErr      string          `json:"cs_err"`  // OOS or high-wm error message
+		TotalUsed  uint64          `json:"total_used,string"`  // bytes
+		TotalAvail uint64          `json:"total_avail,string"` // bytes
+		PctMax     int32           `json:"pct_max"`            // max used (%)
+		PctAvg     int32           `json:"pct_avg"`            // avg used (%)
+		PctMin     int32           `json:"pct_min"`            // min used (%)
+		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message
 	}
 )
 

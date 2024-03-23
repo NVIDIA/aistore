@@ -474,15 +474,6 @@ func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 	return ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 }
 
-func (mi *Mountpath) _add(fsIDs []cos.FsID) ([]cos.FsID, bool) {
-	for _, id := range fsIDs {
-		if mi.FsID == id {
-			return fsIDs, true
-		}
-	}
-	return append(fsIDs, mi.FsID), false
-}
-
 func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
 	cdf := tcdf.Mountpaths[mi.Path]
 	if cdf == nil {
@@ -1097,10 +1088,11 @@ func Cap() (cs CapStatus) {
 // sum up && compute %% capacities while skipping already _counted_ filesystems
 func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap error) {
 	var (
-		fsIDs        []cos.FsID
-		avail        = GetAvail()
-		l            = len(avail)
-		alreadyAdded bool
+		fsIDs  []cos.FsID
+		avail  = GetAvail()
+		l      = len(avail)
+		n      int // num different filesystems (<= len(mfs.fsIDs))
+		unique bool
 	)
 	if l == 0 {
 		if tcdf != nil {
@@ -1111,6 +1103,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 
 	// fast path: available w/ no sharing
 	fast := len(mfs.fsIDs) == l
+	unique = fast
 	if !fast {
 		fsIDs = make([]cos.FsID, 0, l)
 	}
@@ -1122,15 +1115,16 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 	cs.PctMin = 100
 	for _, mi := range avail {
 		if !fast {
-			fsIDs, alreadyAdded = mi._add(fsIDs)
+			fsIDs, unique = cos.AddUniqueFsID(fsIDs, mi.FsID)
 		}
-		// is shared
-		if alreadyAdded {
+		if !unique {
+			// (same fs across)
 			if tcdf != nil {
 				_ = mi._cdf(tcdf)
 			}
 			continue
 		}
+		n++
 
 		// add cap
 		c, err := mi.getCapacity(config, true)
@@ -1148,12 +1142,13 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 			cdf.Capacity = c
 		}
 	}
-	cs.PctAvg /= int32(l)
+	cs.PctAvg /= int32(n)
 	errCap = cs.Err()
 
 	// fill-in
 	if tcdf != nil {
 		tcdf.PctMax, tcdf.PctAvg, tcdf.PctMin = cs.PctMax, cs.PctAvg, cs.PctMin
+		tcdf.TotalUsed, tcdf.TotalAvail = cs.TotalUsed, cs.TotalAvail
 		if errCap != nil {
 			tcdf.CsErr = errCap.Error()
 		}

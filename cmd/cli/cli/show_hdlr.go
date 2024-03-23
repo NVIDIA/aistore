@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains implementation of the top-level `show` command.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -67,6 +67,7 @@ var (
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
+			unitsFlag,
 		),
 		cmdSmap: append(
 			longRunFlags,
