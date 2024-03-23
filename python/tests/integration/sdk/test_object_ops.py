@@ -242,7 +242,6 @@ class TestObjectOps(RemoteEnabledTest):
     def test_blob_download(self):
         obj_name = "obj-blob-download"
         _ = self._create_object_with_content(obj_name=obj_name)
-        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
 
         evict_job_id = self.bucket.objects(obj_names=[obj_name]).evict()
         self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)

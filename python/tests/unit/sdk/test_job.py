@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta
 from typing import Dict, List
 from unittest.mock import Mock, patch, call
 
@@ -12,14 +13,14 @@ from aistore.sdk.const import (
     ACT_START,
     WHAT_QUERY_XACT_STATS,
 )
-from aistore.sdk.errors import Timeout
+from aistore.sdk.errors import Timeout, JobInfoNotFound
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import JobStatus, JobArgs, BucketModel, ActionMsg, JobSnapshot
 from aistore.sdk.utils import probing_frequency
 from aistore.sdk.job import Job
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable, too-many-public-methods
 class TestJob(unittest.TestCase):
     def setUp(self):
         self.mock_client = Mock()
@@ -240,53 +241,89 @@ class TestJob(unittest.TestCase):
         )
 
     @patch("aistore.sdk.job.time.sleep", Mock())
-    @patch("aistore.sdk.job.Job._query_job_snapshots")
-    def test_wait_single_node_finishes_successfully(self, mock_query_snapshot):
-        finished_snapshot = [
-            JobSnapshot(
-                id=self.job_id,
-                is_idle=True,
-                end_time="2024-01-01T00:00:00Z",
-                aborted=False,
-            )
-        ]
-        mock_query_snapshot.return_value = finished_snapshot
+    def test_wait_single_node_finishes_successfully(self):
+        finished_snapshot = {
+            "key": [
+                JobSnapshot(
+                    id=self.job_id,
+                    is_idle=True,
+                    end_time="2024-01-01T00:00:00Z",
+                    aborted=False,
+                )
+            ]
+        }
+        self.mock_client.request_deserialize.return_value = finished_snapshot
 
         self.job.wait_single_node()
 
-        mock_query_snapshot.assert_called()
-        self.assertEqual(mock_query_snapshot.call_count, 1)
+        self.mock_client.request_deserialize.assert_called()
+        self.assertEqual(self.mock_client.request_deserialize.call_count, 1)
 
     @patch("aistore.sdk.job.time.sleep", Mock())
-    @patch("aistore.sdk.job.Job._query_job_snapshots")
-    def test_wait_single_node_is_aborted(self, mock_query_snapshot):
-        aborted_snapshot = [
-            JobSnapshot(
-                id=self.job_id,
-                is_idle=True,
-                end_time="2024-01-01T00:00:00Z",
-                aborted=True,
-            )
-        ]
-        mock_query_snapshot.return_value = aborted_snapshot
+    def test_wait_single_node_is_aborted(self):
+        aborted_snapshot = {
+            "key": [
+                JobSnapshot(
+                    id=self.job_id,
+                    is_idle=True,
+                    end_time="2024-01-01T00:00:00Z",
+                    aborted=True,
+                )
+            ]
+        }
+        self.mock_client.request_deserialize.return_value = aborted_snapshot
 
         self.job.wait_single_node()
-        mock_query_snapshot.assert_called()
+        self.mock_client.request_deserialize.assert_called()
 
     @patch("aistore.sdk.job.time.sleep", Mock())
-    @patch("aistore.sdk.job.Job._query_job_snapshots")
-    def test_wait_single_node_timeout(self, mock_query_snapshot):
-        ongoing_snapshot = [
-            JobSnapshot(
-                id=self.job_id,
-                is_idle=False,
-                end_time="0001-01-01T00:00:00Z",
-                aborted=False,
-            )
-        ]
-        mock_query_snapshot.return_value = ongoing_snapshot
+    def test_wait_single_node_timeout(self):
+        ongoing_snapshots = {
+            "key": [
+                JobSnapshot(
+                    id=self.job_id,
+                    is_idle=False,
+                    end_time="0001-01-01T00:00:00Z",
+                    aborted=False,
+                )
+            ]
+        }
+        self.mock_client.request_deserialize.return_value = ongoing_snapshots
 
         with self.assertRaises(Timeout):
             self.job.wait_single_node()
 
-        mock_query_snapshot.assert_called()
+        self.mock_client.request_deserialize.assert_called()
+
+    def test_get_within_timeframe_found_jobs(self):
+        start_time = datetime.now() - timedelta(days=1)
+        end_time = datetime.now()
+
+        mock_snapshots = [
+            JobSnapshot(
+                id="1234",
+                kind="test job",
+                start_time=(start_time.isoformat() + "Z"),
+                end_time=(end_time.isoformat() + "Z"),
+                aborted=False,
+                is_idle=True,
+            )
+        ]
+
+        self.mock_client.request_deserialize.return_value = {"key": mock_snapshots}
+
+        found_jobs = self.job.get_within_timeframe(start_time.time(), end_time.time())
+
+        self.assertEqual(len(found_jobs), len(mock_snapshots))
+        for found_job, expected_snapshot in zip(found_jobs, mock_snapshots):
+            self.assertEqual(found_job.id, expected_snapshot.id)
+            self.assertEqual(found_job.start_time, expected_snapshot.start_time)
+            self.assertEqual(found_job.end_time, expected_snapshot.end_time)
+
+    def test_get_within_timeframe_no_jobs_found(self):
+        start_time = datetime.now() - timedelta(days=1)
+        end_time = datetime.now()
+        self.mock_client.request_deserialize.return_value = {}
+
+        with self.assertRaises(JobInfoNotFound):
+            self.job.get_within_timeframe(start_time.time(), end_time.time())
