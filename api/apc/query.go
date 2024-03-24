@@ -184,11 +184,15 @@ const (
 	// config
 	WhatNodeConfig    = "config" // query specific node for (cluster config + overrides, local config)
 	WhatClusterConfig = "cluster_config"
-	// stats
-	WhatNodeStats          = "stats"
-	WhatNodeStatsAndStatus = "status"
-	WhatMetricNames        = "metrics"
-	WhatDiskStats          = "disk"
+
+	// stats and status
+	WhatNodeStatsV322          = "stats"  // [ backward compatibility ]
+	WhatNodeStatsAndStatusV322 = "status" // [ ditto ]
+	WhatNodeStats              = "node_stats"
+	WhatNodeStatsAndStatus     = "node_status"
+
+	WhatMetricNames = "metrics"
+	WhatDiskStats   = "disk"
 	// assorted
 	WhatMountpaths = "mountpaths"
 	WhatRemoteAIS  = "remote"

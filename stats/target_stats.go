@@ -290,7 +290,30 @@ func (r *Trunner) GetStats() (ds *Node) {
 
 	fs.InitCDF(&ds.TargetCDF)
 	fs.CapRefresh(nil, &ds.TargetCDF)
-	return
+	return ds
+}
+
+// [backward compatibility] v3.22 and prior
+func (r *Trunner) GetStatsV322() (out *NodeV322) {
+	ds := r.GetStats()
+
+	out = &NodeV322{}
+	out.Snode = ds.Snode
+	out.Tracker = ds.Tracker
+	out.TargetCDF.PctMax = ds.TargetCDF.PctMax
+	out.TargetCDF.PctAvg = ds.TargetCDF.PctAvg
+	out.TargetCDF.PctMin = ds.TargetCDF.PctMin
+	out.TargetCDF.CsErr = ds.TargetCDF.CsErr
+	out.TargetCDF.Mountpaths = make(map[string]*fs.CDFv322, len(ds.TargetCDF.Mountpaths))
+	for mpath := range ds.TargetCDF.Mountpaths {
+		cdf := &fs.CDFv322{
+			Capacity: ds.TargetCDF.Mountpaths[mpath].Capacity,
+			Disks:    ds.TargetCDF.Mountpaths[mpath].Disks,
+			FS:       ds.TargetCDF.Mountpaths[mpath].FS.String(),
+		}
+		out.TargetCDF.Mountpaths[mpath] = cdf
+	}
+	return out
 }
 
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {

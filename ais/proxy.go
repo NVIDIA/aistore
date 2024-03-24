@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -2450,7 +2449,8 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		fallthrough // fallthrough
 	case apc.WhatNodeConfig, apc.WhatSmapVote, apc.WhatSnode, apc.WhatLog,
-		apc.WhatNodeStats, apc.WhatMetricNames:
+		apc.WhatNodeStats, apc.WhatNodeStatsV322, apc.WhatMetricNames,
+		apc.WhatNodeStatsAndStatus, apc.WhatNodeStatsAndStatusV322:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)
@@ -2478,24 +2478,6 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.writeJSON(w, r, smap, what)
-	case apc.WhatNodeStatsAndStatus:
-		smap := p.owner.smap.get()
-		msg := &stats.NodeStatus{
-			Node: stats.Node{
-				Snode: p.htrun.si,
-			},
-			SmapVersion:    smap.Version,
-			MemCPUInfo:     apc.GetMemCPU(),
-			DeploymentType: deploymentType(),
-			Version:        daemon.version,
-			BuildTime:      daemon.buildTime,
-			K8sPodName:     os.Getenv(env.AIS.K8sPod),
-			Status:         p._status(smap),
-		}
-		daeStats := p.statsT.GetStats()
-		msg.Tracker = daeStats.Tracker
-
-		p.writeJSON(w, r, msg, what)
 	default:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	}

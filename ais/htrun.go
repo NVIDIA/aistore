@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -1045,13 +1046,62 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		statsNode := h.statsT.GetStats()
 		statsNode.Snode = h.si
 		body = statsNode
+	case apc.WhatNodeStatsV322:
+		statsNode := h.statsT.GetStatsV322()
+		statsNode.Snode = h.si
+		body = statsNode
 	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()
+	case apc.WhatNodeStatsAndStatus:
+		ds := h.statsAndStatus()
+		daeStats := h.statsT.GetStats()
+		ds.Tracker = daeStats.Tracker
+		body = ds
+	case apc.WhatNodeStatsAndStatusV322:
+		ds := h.statsAndStatusV322()
+		daeStats := h.statsT.GetStatsV322()
+		ds.Tracker = daeStats.Tracker
+		body = ds
 	default:
 		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
 		return
 	}
 	h.writeJSON(w, r, body, "httpdaeget-"+what)
+}
+
+func (h *htrun) statsAndStatus() (ds *stats.NodeStatus) {
+	smap := h.owner.smap.get()
+	ds = &stats.NodeStatus{
+		Node: stats.Node{
+			Snode: h.si,
+		},
+		SmapVersion:    smap.Version,
+		MemCPUInfo:     apc.GetMemCPU(),
+		DeploymentType: deploymentType(),
+		Version:        daemon.version,
+		BuildTime:      daemon.buildTime,
+		K8sPodName:     os.Getenv(env.AIS.K8sPod),
+		Status:         h._status(smap),
+	}
+	return ds
+}
+
+// [backward compatibility] v3.22 and prior
+func (h *htrun) statsAndStatusV322() (ds *stats.NodeStatusV322) {
+	smap := h.owner.smap.get()
+	ds = &stats.NodeStatusV322{
+		NodeV322: stats.NodeV322{
+			Snode: h.si,
+		},
+		SmapVersion:    smap.Version,
+		MemCPUInfo:     apc.GetMemCPU(),
+		DeploymentType: deploymentType(),
+		Version:        daemon.version,
+		BuildTime:      daemon.buildTime,
+		K8sPodName:     os.Getenv(env.AIS.K8sPod),
+		Status:         h._status(smap),
+	}
+	return ds
 }
 
 func (h *htrun) sendAllLogs(w http.ResponseWriter, r *http.Request, query url.Values) string {

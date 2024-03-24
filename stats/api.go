@@ -40,6 +40,8 @@ type (
 		IncErr(metric string)
 
 		GetStats() *Node
+		GetStatsV322() *NodeV322 // [backward compatibility]
+
 		ResetStats(errorsOnly bool)
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
@@ -64,6 +66,27 @@ type (
 	// (includes stats.Node and more; NOTE: direct API call w/ no proxying)
 	NodeStatus struct {
 		Node
+		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
+		// assorted props
+		Status         string         `json:"status"`
+		DeploymentType string         `json:"deployment"`
+		Version        string         `json:"ais_version"`  // major.minor.build
+		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
+		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
+		MemCPUInfo     apc.MemCPUInfo `json:"sys_info"`
+		SmapVersion    int64          `json:"smap_version,string"`
+	}
+)
+
+// [backward compatibility]: includes v3.22 cdf* structures
+type (
+	NodeV322 struct {
+		Snode     *meta.Snode      `json:"snode"`
+		Tracker   copyTracker      `json:"tracker"`
+		TargetCDF fs.TargetCDFv322 `json:"capacity"`
+	}
+	NodeStatusV322 struct {
+		NodeV322
 		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
 		// assorted props
 		Status         string         `json:"status"`

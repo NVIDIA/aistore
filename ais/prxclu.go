@@ -74,7 +74,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.xquery(w, r, what, query)
 	case apc.WhatAllRunningXacts:
 		p.xgetRunning(w, r, what, query)
-	case apc.WhatNodeStats:
+	case apc.WhatNodeStats, apc.WhatNodeStatsV322:
 		p.qcluStats(w, r, what, query)
 	case apc.WhatSysInfo:
 		p.qcluSysinfo(w, r, what, query)

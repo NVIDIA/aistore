@@ -21,14 +21,15 @@ func NewStatsTracker() stats.Tracker {
 	return &StatsTracker{}
 }
 
-func (*StatsTracker) StartedUp() bool            { return true }
-func (*StatsTracker) Get(string) int64           { return 0 }
-func (*StatsTracker) IncErr(string)              {}
-func (*StatsTracker) Inc(string)                 {}
-func (*StatsTracker) Add(string, int64)          {}
-func (*StatsTracker) AddMany(...cos.NamedVal64)  {}
-func (*StatsTracker) RegMetrics(*meta.Snode)     {}
-func (*StatsTracker) GetMetricNames() cos.StrKVs { return nil }
-func (*StatsTracker) GetStats() *stats.Node      { return nil }
-func (*StatsTracker) ResetStats(bool)            {}
-func (*StatsTracker) IsPrometheus() bool         { return false }
+func (*StatsTracker) StartedUp() bool               { return true }
+func (*StatsTracker) Get(string) int64              { return 0 }
+func (*StatsTracker) IncErr(string)                 {}
+func (*StatsTracker) Inc(string)                    {}
+func (*StatsTracker) Add(string, int64)             {}
+func (*StatsTracker) AddMany(...cos.NamedVal64)     {}
+func (*StatsTracker) RegMetrics(*meta.Snode)        {}
+func (*StatsTracker) GetMetricNames() cos.StrKVs    { return nil }
+func (*StatsTracker) GetStats() *stats.Node         { return nil }
+func (*StatsTracker) GetStatsV322() *stats.NodeV322 { return nil }
+func (*StatsTracker) ResetStats(bool)               {}
+func (*StatsTracker) IsPrometheus() bool            { return false }

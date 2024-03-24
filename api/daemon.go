@@ -1,6 +1,6 @@
-// Package api provides Go based AIStore API/SDK over HTTP(S)
+// Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/stats"
 )
 
 type GetLogInput struct {
@@ -167,64 +166,6 @@ func GetMetricNames(bp BaseParams, node *meta.Snode) (kvs cos.StrKVs, err error)
 	return
 }
 
-// How to compute throughputs:
-//
-// - AIS supports several enumerated metric "kinds", including `KindThroughput`
-// (for complete enumeration, see stats/api.go)
-// - By convention, metrics that have `KindThroughput` kind are named with ".bps"
-// ("bytes per second") suffix.
-// - ".bps" metrics reported by the API are, in fact, cumulative byte numbers.
-// - It is the client's responsibility to compute the actual throughputs
-// as only the client knows _when_ exactly the same ".bps" metric was queried
-// the previous time.
-//
-// See also:
-// - api.GetClusterStats
-// - api.GetStatsAndStatus (below)
-// - stats/api.go
-func GetDaemonStats(bp BaseParams, node *meta.Snode) (ds *stats.Node, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStats}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
-	}
-	_, err = reqParams.DoReqAny(&ds)
-	FreeRp(reqParams)
-	return ds, err
-}
-
-func GetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatDiskStats}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{tid}}
-	}
-	_, err = reqParams.DoReqAny(&res)
-	FreeRp(reqParams)
-	return
-}
-
-// Returns both node's stats and extended status
-func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (daeStatus *stats.NodeStatus, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStatsAndStatus}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
-	}
-	_, err = reqParams.DoReqAny(&daeStatus)
-	FreeRp(reqParams)
-	return daeStatus, err
-}
-
 // Returns log of a specific node in a cluster.
 func GetDaemonLog(bp BaseParams, node *meta.Snode, args GetLogInput) (int64, error) {
 	w := args.Writer
@@ -275,11 +216,6 @@ func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
-}
-
-// see also: ResetClusterStats
-func ResetDaemonStats(bp BaseParams, node *meta.Snode, errorsOnly bool) error {
-	return _putDaemon(bp, node.ID(), apc.ActMsg{Action: apc.ActResetStats, Value: errorsOnly})
 }
 
 // reset node's configuration to cluster defaults

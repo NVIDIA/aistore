@@ -34,6 +34,22 @@ type (
 	}
 )
 
+// [backward compatibility]: v3.22 cdf* structures
+type (
+	CDFv322 struct {
+		Capacity
+		Disks []string `json:"disks"`
+		FS    string   `json:"fs"`
+	}
+	TargetCDFv322 struct {
+		Mountpaths map[string]*CDFv322
+		PctMax     int32  `json:"pct_max"`
+		PctAvg     int32  `json:"pct_avg"`
+		PctMin     int32  `json:"pct_min"`
+		CsErr      string `json:"cs_err"`
+	}
+)
+
 func InitCDF(tcdf *TargetCDF) {
 	avail := GetAvail()
 	tcdf.Mountpaths = make(map[string]*CDF, len(avail))

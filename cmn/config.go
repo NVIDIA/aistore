@@ -73,12 +73,12 @@ type (
 		UseIntraData    bool `json:"-"`
 	}
 
-	// ais node: fspaths (a.k.a. mountpaths)
+	// ais node: fspaths (a.k.a. mountpaths) and their respective (optional) labels
 	FSPConf struct {
 		Paths cos.StrKVs `json:"paths,omitempty" list:"readonly"`
 	}
-	// NOTE: keeping V3 meta-version for backward compatibility
-	FSPConfV3 struct {
+	// [backward compatibility]: v3.22 and prior
+	FSPConfV322 struct {
 		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
 	}
 
@@ -1396,11 +1396,11 @@ func (c *FSPConf) UnmarshalJSON(data []byte) error {
 		c.Paths = m
 		return nil
 	}
-	// load from the prev. meta-version (backward compatibility)
-	var v3 FSPConfV3
-	v3.Paths = make(cos.StrSet, 10)
-	if err = jsoniter.Unmarshal(data, &v3.Paths); err == nil {
-		for fspath := range v3.Paths {
+	// [backward compatibility] try loading from the prev. meta-version
+	var v322 FSPConfV322
+	v322.Paths = make(cos.StrSet, 10)
+	if err = jsoniter.Unmarshal(data, &v322.Paths); err == nil {
+		for fspath := range v322.Paths {
 			m[fspath] = ""
 		}
 		c.Paths = m

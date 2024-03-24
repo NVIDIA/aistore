@@ -586,6 +586,15 @@ func (r *runner) GetStats() *Node {
 	return &Node{Tracker: ctracker}
 }
 
+func (r *runner) GetStatsV322() (out *NodeV322) {
+	ds := r.GetStats()
+
+	out = &NodeV322{}
+	out.Snode = ds.Snode
+	out.Tracker = ds.Tracker
+	return out
+}
+
 func (r *runner) ResetStats(errorsOnly bool) {
 	r.core.reset(errorsOnly)
 }

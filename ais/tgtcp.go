@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -32,7 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -287,40 +284,40 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	)
 	switch getWhat {
 	case apc.WhatNodeConfig, apc.WhatSmap, apc.WhatBMD, apc.WhatSmapVote,
-		apc.WhatSnode, apc.WhatLog, apc.WhatNodeStats, apc.WhatMetricNames:
+		apc.WhatSnode, apc.WhatLog, apc.WhatMetricNames:
 		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	case apc.WhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: apc.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
 	case apc.WhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
-	case apc.WhatNodeStatsAndStatus:
-		var rebSnap *core.Snap
-		if entry := xreg.GetLatest(xreg.Flt{Kind: apc.ActRebalance}); entry != nil {
-			if xctn := entry.Get(); xctn != nil {
-				rebSnap = xctn.Snap()
-			}
-		}
-		smap := t.owner.smap.get()
-		msg := &stats.NodeStatus{
-			Node: stats.Node{
-				Snode: t.htrun.si,
-			},
-			SmapVersion:    smap.Version,
-			MemCPUInfo:     apc.GetMemCPU(),
-			RebSnap:        rebSnap,
-			DeploymentType: deploymentType(),
-			Version:        daemon.version,
-			BuildTime:      daemon.buildTime,
-			K8sPodName:     os.Getenv(env.AIS.K8sPod),
-			Status:         t._status(smap),
-		}
-		// stats and capacity
-		daeStats := t.statsT.GetStats()
-		msg.Tracker = daeStats.Tracker
-		msg.TargetCDF = daeStats.TargetCDF
 
-		t.writeJSON(w, r, msg, httpdaeWhat)
+	case apc.WhatNodeStats:
+		ds := t.statsAndStatus()
+		daeStats := t.statsT.GetStats()
+		ds.Tracker = daeStats.Tracker
+		t.writeJSON(w, r, ds, httpdaeWhat)
+	case apc.WhatNodeStatsV322: // [backward compatibility] v3.22 and prior
+		ds := t.statsAndStatusV322()
+		daeStats := t.statsT.GetStatsV322()
+		ds.Tracker = daeStats.Tracker
+		t.writeJSON(w, r, ds, httpdaeWhat)
+	case apc.WhatNodeStatsAndStatus:
+		ds := t.statsAndStatus()
+		ds.RebSnap = _rebSnap()
+		daeStats := t.statsT.GetStats()
+		ds.Tracker = daeStats.Tracker
+		ds.TargetCDF = daeStats.TargetCDF
+		nlog.Errorln(ds.TargetCDF.TotalUsed, ds.TargetCDF.TotalAvail) // DEBUG
+		t.writeJSON(w, r, ds, httpdaeWhat)
+	case apc.WhatNodeStatsAndStatusV322: // [ditto]
+		ds := t.statsAndStatusV322()
+		ds.RebSnap = _rebSnap()
+		daeStats := t.statsT.GetStatsV322()
+		ds.Tracker = daeStats.Tracker
+		ds.TargetCDF = daeStats.TargetCDF
+		t.writeJSON(w, r, ds, httpdaeWhat)
+
 	case apc.WhatDiskStats:
 		diskStats := make(ios.AllDiskStats)
 		fs.FillDiskStats(diskStats)
@@ -347,6 +344,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	default:
 		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	}
+}
+
+func _rebSnap() (rebSnap *core.Snap) {
+	if entry := xreg.GetLatest(xreg.Flt{Kind: apc.ActRebalance}); entry != nil {
+		if xctn := entry.Get(); xctn != nil {
+			rebSnap = xctn.Snap()
+		}
+	}
+	return rebSnap
 }
 
 // admin-join target | enable/disable mountpath
