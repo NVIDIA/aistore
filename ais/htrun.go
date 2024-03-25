@@ -1058,11 +1058,6 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		body = statsNode
 	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()
-	case apc.WhatNodeStatsAndStatus:
-		ds := h.statsAndStatus()
-		daeStats := h.statsT.GetStats()
-		ds.Tracker = daeStats.Tracker
-		body = ds
 	case apc.WhatNodeStatsAndStatusV322:
 		ds := h.statsAndStatusV322()
 		daeStats := h.statsT.GetStatsV322()

@@ -130,7 +130,7 @@ func randMountpath(c *cli.Context) error {
 	if tsi.IsProxy() {
 		return fmt.Errorf("%s is a 'proxy' (expecting 'target')", sname)
 	}
-	daeStatus, err := api.GetStatsAndStatus(apiBP, tsi)
+	daeStatus, err := _status(tsi)
 	if err != nil {
 		return V(err)
 	}

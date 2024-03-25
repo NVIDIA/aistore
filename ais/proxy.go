@@ -2451,8 +2451,16 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		fallthrough // fallthrough
 	case apc.WhatNodeConfig, apc.WhatSmapVote, apc.WhatSnode, apc.WhatLog,
 		apc.WhatNodeStats, apc.WhatNodeStatsV322, apc.WhatMetricNames,
-		apc.WhatNodeStatsAndStatus, apc.WhatNodeStatsAndStatusV322:
+		apc.WhatNodeStatsAndStatusV322:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
+
+	case apc.WhatNodeStatsAndStatus:
+		ds := p.statsAndStatus()
+		daeStats := p.statsT.GetStats()
+		ds.Tracker = daeStats.Tracker
+		p.ciiFill(&ds.Cluster)
+		p.writeJSON(w, r, ds, what)
+
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)
 	case apc.WhatSmap:

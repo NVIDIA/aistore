@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
-// This file contains util functions and types.
+// This file contains utility functions and types.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
@@ -182,31 +183,79 @@ func daeStatus(nodeMap meta.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex)
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *meta.Snode) {
-			_status(si, mu, out)
+			_addStatus(si, mu, out)
 			wg.Done()
 		}(si)
 	}
 }
 
-func _status(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
-	daeStatus, err := api.GetStatsAndStatus(apiBP, node)
+func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
+	ds, err := _status(node)
 	if err != nil {
-		daeStatus = &stats.NodeStatus{}
-		daeStatus.Snode = node
+		ds = &stats.NodeStatus{}
+		ds.Snode = node
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
-			daeStatus.Status = herr.TypeCode
+			ds.Status = herr.TypeCode
 		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
-			daeStatus.Status = "[errNodeNotFound]"
+			ds.Status = "[errNodeNotFound]"
 		} else {
-			daeStatus.Status = "[" + err.Error() + "]"
+			ds.Status = "[" + err.Error() + "]"
 		}
-	} else if daeStatus.Status == "" {
-		daeStatus.Status = teb.FmtNodeStatus(node)
+	} else if ds.Status == "" {
+		ds.Status = teb.FmtNodeStatus(node)
 	}
 
 	mu.Lock()
-	out[node.ID()] = daeStatus
+	out[node.ID()] = ds
 	mu.Unlock()
+}
+
+// [backward compatibility] v3.22
+func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {
+	ds, err = api.GetStatsAndStatus(apiBP, node)
+	if err == nil || !strings.Contains(err.Error(), "what=node_status") {
+		return ds, err
+	}
+	var v *stats.NodeStatusV322
+	if v, err = api.GetStatsAndStatusV322(apiBP, node); err != nil {
+		return nil, err
+	}
+	ds = &stats.NodeStatus{
+		RebSnap:        v.RebSnap,
+		Status:         v.Status,
+		DeploymentType: v.DeploymentType,
+		Version:        v.Version,
+		BuildTime:      v.BuildTime,
+		K8sPodName:     v.K8sPodName,
+		MemCPUInfo:     v.MemCPUInfo,
+		SmapVersion:    v.SmapVersion,
+	}
+	ds.Node.Snode = v.NodeV322.Snode
+	ds.Node.Tracker = v.NodeV322.Tracker
+	ds.Node.TargetCDF.PctMax = v.NodeV322.TargetCDF.PctMax
+	ds.Node.TargetCDF.PctAvg = v.NodeV322.TargetCDF.PctAvg
+	ds.Node.TargetCDF.PctMin = v.NodeV322.TargetCDF.PctMin
+	ds.Node.TargetCDF.CsErr = v.NodeV322.TargetCDF.CsErr
+	ds.Node.TargetCDF.Mountpaths = make(map[string]*fs.CDF, len(v.NodeV322.TargetCDF.Mountpaths))
+
+	var used, avail uint64
+	for mpath, cdfv322 := range v.NodeV322.TargetCDF.Mountpaths {
+		cdf := &fs.CDF{}
+		cdf.Capacity = cdfv322.Capacity
+		used += cdf.Capacity.Used
+		avail += cdf.Capacity.Avail
+		cdf.Disks = cdfv322.Disks
+		if i := strings.Index(cdfv322.FS, "("); i > 0 {
+			if j := strings.Index(cdfv322.FS, ")"); j > i {
+				cdf.FS.Fs = cdfv322.FS[:i]
+				cdf.FS.FsType = cdfv322.FS[i+1 : j]
+			}
+		}
+		ds.Node.TargetCDF.Mountpaths[mpath] = cdf
+	}
+	ds.Node.TargetCDF.TotalUsed = used
+	ds.Node.TargetCDF.TotalAvail = avail
+	return ds, nil
 }
 
 //

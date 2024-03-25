@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -66,6 +67,7 @@ type (
 	// (includes stats.Node and more; NOTE: direct API call w/ no proxying)
 	NodeStatus struct {
 		Node
+		Cluster cifl.Info
 		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
 		// assorted props
 		Status         string         `json:"status"`
@@ -73,8 +75,12 @@ type (
 		Version        string         `json:"ais_version"`  // major.minor.build
 		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
 		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
+		Reserved1      string         `json:"reserved1,omitempty"`
+		Reserved2      string         `json:"reserved2,omitempty"`
 		MemCPUInfo     apc.MemCPUInfo `json:"sys_info"`
 		SmapVersion    int64          `json:"smap_version,string"`
+		Reserved3      int64          `json:"reserved3,omitempty"`
+		Reserved4      int64          `json:"reserved4,omitempty"`
 	}
 )
 

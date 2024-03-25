@@ -309,7 +309,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		daeStats := t.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
 		ds.TargetCDF = daeStats.TargetCDF
-		nlog.Errorln(ds.TargetCDF.TotalUsed, ds.TargetCDF.TotalAvail) // DEBUG
+		t.ciiFill(&ds.Cluster)
 		t.writeJSON(w, r, ds, httpdaeWhat)
 	case apc.WhatNodeStatsAndStatusV322: // [ditto]
 		ds := t.statsAndStatusV322()

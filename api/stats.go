@@ -91,6 +91,12 @@ func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatus, e
 	return ds, err
 }
 
+func GetStatsAndStatusV322(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatusV322, err error) {
+	ds = &stats.NodeStatusV322{}
+	err = anyStats(bp, node.ID(), apc.WhatNodeStatsAndStatusV322, ds)
+	return ds, err
+}
+
 func GetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err error) {
 	err = anyStats(bp, tid, apc.WhatDiskStats, &res)
 	return res, err
