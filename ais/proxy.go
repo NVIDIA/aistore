@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -890,7 +891,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	if smap.isPrimary(p.si) {
 		const txt = "is primary, cannot be on the receiving side of metasync"
-		cii.fill(&p.htrun)
+		p.ciiFill(cii)
 		if xctn := voteInProgress(); xctn != nil {
 			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p, txt, smap, xctn)
 		} else {
@@ -937,7 +938,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {
 		return
 	}
-	cii.fill(&p.htrun)
+	p.ciiFill(cii)
 	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
 	p.writeErr(w, r, retErr, http.StatusConflict)
 }
@@ -985,8 +986,8 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// piggy-backing cluster info on health
 	if getCii {
 		debug.Assert(!prr)
-		cii := &clusterInfo{}
-		cii.fill(&p.htrun)
+		cii := &cifl.Info{}
+		p.ciiFill(cii)
 		p.writeJSON(w, r, cii, "cluster-info")
 		return
 	}

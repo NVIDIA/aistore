@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -123,10 +124,9 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 }
 
 func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
-	xele := voteInProgress()
-	cm := &cluMeta{
-		SI:             h.si,
-		VoteInProgress: xele != nil,
+	cm := &cluMeta{SI: h.si}
+	if voteInProgress() != nil {
+		cm.Flags = cm.Flags.Set(cifl.VoteInProgress)
 	}
 	if !opts.skipConfig {
 		var err error
@@ -150,7 +150,13 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		cm.EtlMD = h.owner.etl.get()
 	}
 	if h.si.IsTarget() && opts.fillRebMarker {
-		cm.RebInterrupted, cm.Restarted = opts.htext.interruptedRestarted()
+		rebInterrupted, restarted := opts.htext.interruptedRestarted()
+		if rebInterrupted {
+			cm.Flags = cm.Flags.Set(cifl.RebalanceInterrupted)
+		}
+		if restarted {
+			cm.Flags = cm.Flags.Set(cifl.Restarted)
+		}
 	}
 	if !opts.skipPrimeTime && smap.IsPrimary(h.si) {
 		cm.PrimeTime = time.Now().UnixNano()
@@ -1362,19 +1368,19 @@ func (h *htrun) reqHealth(si *meta.Snode, timeout time.Duration, query url.Value
 // - via getMaxCii.do()
 // - checkAll: query all nodes
 // - consider adding max-ver BMD bit here as well (TODO)
-func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num confirmations*/) {
+func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*cifl.Info, int /*num confirmations*/) {
 	if !smap.isValid() {
 		nlog.Errorf("%s: cannot execute with invalid %s", h, smap)
 		return nil, 0
 	}
 	c := getMaxCii{
 		h:        h,
-		maxCii:   &clusterInfo{},
+		maxCii:   &cifl.Info{},
 		query:    url.Values{apc.QparamClusterInfo: []string{"true"}},
 		timeout:  cmn.Rom.CplaneOperation(),
 		checkAll: checkAll,
 	}
-	c.maxCii.fillSmap(smap)
+	smap.fill(c.maxCii)
 
 	h._bch(&c, smap, apc.Proxy)
 	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTs() > 0) {
@@ -1912,7 +1918,7 @@ func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *meta.Snode) {
 	return
 }
 
-func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii *clusterInfo) {
+func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii *cifl.Info) {
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = config.Timeout.CplaneOperation.D()

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -74,12 +75,12 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 	bmdVersion := lv
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
-			msg := cluMeta{
-				VoteInProgress: false,
-				Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
-				BMD:            &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
+			cm := cluMeta{
+				Smap: &smapX{Smap: meta.Smap{Version: smapVersion}},
+				BMD:  &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 			}
-			b, _ := jsoniter.Marshal(msg)
+			cm.Flags = cm.Flags.Clear(cifl.VoteInProgress)
+			b, _ := jsoniter.Marshal(cm)
 			w.Write(b)
 		},
 	))
@@ -93,12 +94,14 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 	bmdVersion := lv
 	f := func(w http.ResponseWriter, _ *http.Request) {
 		cnt++
-		msg := cluMeta{
-			VoteInProgress: cnt == 1,
-			Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
-			BMD:            &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
+		cm := cluMeta{
+			Smap: &smapX{Smap: meta.Smap{Version: smapVersion}},
+			BMD:  &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 		}
-		b, _ := jsoniter.Marshal(msg)
+		if cnt == 1 {
+			cm.Flags = cm.Flags.Set(cifl.VoteInProgress)
+		}
+		b, _ := jsoniter.Marshal(cm)
 		w.Write(b)
 	}
 
@@ -114,12 +117,12 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 	f := func(w http.ResponseWriter, _ *http.Request) {
 		cnt++
 		if cnt > 2 {
-			msg := cluMeta{
-				VoteInProgress: false,
-				Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
-				BMD:            &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
+			cm := cluMeta{
+				Smap: &smapX{Smap: meta.Smap{Version: smapVersion}},
+				BMD:  &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 			}
-			b, _ := jsoniter.Marshal(msg)
+			cm.Flags = cm.Flags.Clear(cifl.VoteInProgress)
+			b, _ := jsoniter.Marshal(cm)
 			w.Write(b)
 		} else {
 			http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
@@ -142,12 +145,12 @@ func discoverServerAlwaysFailHandler(_, _ int64) *httptest.Server {
 func discoverServerVoteInProgressHandler(_, _ int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
-			msg := cluMeta{
-				VoteInProgress: true,
-				Smap:           &smapX{Smap: meta.Smap{Version: 12345}},
-				BMD:            &bucketMD{BMD: meta.BMD{Version: 67890}},
+			cm := cluMeta{
+				Smap: &smapX{Smap: meta.Smap{Version: 12345}},
+				BMD:  &bucketMD{BMD: meta.BMD{Version: 67890}},
 			}
-			b, _ := jsoniter.Marshal(msg)
+			cm.Flags = cm.Flags.Set(cifl.VoteInProgress)
+			b, _ := jsoniter.Marshal(cm)
 			w.Write(b)
 		},
 	))

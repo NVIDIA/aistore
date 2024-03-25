@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -935,7 +936,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil {
 		return
 	}
-	cii.fill(&t.htrun)
+	t.ciiFill(cii)
 	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, nil)
 	t.writeErr(w, r, retErr, http.StatusConflict)
 }
@@ -1052,8 +1053,8 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// piggyback [cluster info]
 	if getCii {
-		cii := &clusterInfo{}
-		cii.fill(&t.htrun)
+		cii := &cifl.Info{}
+		t.ciiFill(cii)
 		t.writeJSON(w, r, cii, "cluster-info")
 		return
 	}

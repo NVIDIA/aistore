@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -41,7 +42,7 @@ func (p *proxy) bootstrap() {
 	var (
 		config          = cmn.GCO.Get()
 		pid, primaryURL string
-		cii             *clusterInfo
+		cii             *cifl.Info
 		primary         bool
 	)
 
@@ -740,7 +741,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 
 		// TODO: maxver of EtlMD
 
-		if svm.Smap != nil && svm.VoteInProgress {
+		if svm.Smap != nil && svm.Flags.IsSet(cifl.VoteInProgress) {
 			var s string
 			if svm.Smap.Primary != nil {
 				s = " of the current one " + svm.Smap.Primary.ID()
@@ -864,7 +865,7 @@ ret:
 
 	debug.Assert(before.Smap.version() < after.Smap.version())
 	// not interfering with elections
-	if after.VoteInProgress {
+	if after.Flags.IsSet(cifl.VoteInProgress) {
 		nlog.Errorln(p.String()+" primary differ:", before.Smap.StringEx(), "vs. newer", after.Smap.StringEx(), "(voting = YES)")
 		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
 		return before.Smap

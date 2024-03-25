@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -57,48 +58,14 @@ type (
 	// cluster-wide control information - replicated, versioned, and synchronized
 	// usage: elect new primary, join cluster, ...
 	cluMeta struct {
-		Smap           *smapX        `json:"smap"`
-		BMD            *bucketMD     `json:"bmd"`
-		RMD            *rebMD        `json:"rmd"`
-		EtlMD          *etlMD        `json:"etlMD"`
-		Config         *globalConfig `json:"config"`
-		SI             *meta.Snode   `json:"si"`
-		PrimeTime      int64         `json:"prime_time"`
-		VoteInProgress bool          `json:"voting"`
-		// target only
-		RebInterrupted bool `json:"reb_interrupted"`
-		Restarted      bool `json:"restarted"`
-	}
-
-	// node <=> node cluster-info exchange
-	clusterInfo struct {
-		Smap struct {
-			Primary struct {
-				PubURL  string `json:"pub_url"`
-				CtrlURL string `json:"control_url"`
-				ID      string `json:"id"`
-			}
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
-		} `json:"smap"`
-		BMD struct {
-			UUID    string `json:"uuid"`
-			Version int64  `json:"version,string"`
-		} `json:"bmd"`
-		RMD struct {
-			Version int64 `json:"version,string"`
-		} `json:"rmd"`
-		Config struct {
-			Version int64 `json:"version,string"`
-		} `json:"config"`
-		EtlMD struct {
-			Version int64 `json:"version,string"`
-		} `json:"etlmd"`
-		Flags struct {
-			VoteInProgress bool `json:"vote_in_progress"`
-			ClusterStarted bool `json:"cluster_started"`
-			NodeStarted    bool `json:"node_started"`
-		} `json:"flags"`
+		Smap      *smapX        `json:"smap"`
+		BMD       *bucketMD     `json:"bmd"`
+		RMD       *rebMD        `json:"rmd"`
+		EtlMD     *etlMD        `json:"etlMD"`
+		Config    *globalConfig `json:"config"`
+		SI        *meta.Snode   `json:"si"`
+		PrimeTime int64         `json:"prime_time"`
+		Flags     cifl.Flags    `json:"flags"`
 	}
 
 	// extend control msg: ActionMsg with an extra information for node <=> node control plane communications
@@ -197,7 +164,7 @@ type (
 
 	getMaxCii struct {
 		h          *htrun
-		maxCii     *clusterInfo
+		maxCii     *cifl.Info
 		query      url.Values
 		maxConfVer int64
 		timeout    time.Duration
@@ -679,41 +646,68 @@ func (m httpMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // clusterInfo //
 /////////////////
 
-func (cii *clusterInfo) String() string { return fmt.Sprintf("%+v", *cii) }
+func (p *proxy) ciiFill(cii *cifl.Info) {
+	p.htrun.fill(cii)
+	onl := true
+	flt := nlFilter{Kind: apc.ActRebalance, OnlyRunning: &onl}
+	if nl := p.notifs.find(flt); nl != nil {
+		cii.Flags = cii.Flags.Set(cifl.Rebalancing)
+	}
+}
 
-func (cii *clusterInfo) fill(h *htrun) {
+func (t *target) ciiFill(cii *cifl.Info) {
+	t.htrun.fill(cii)
+	marked := xreg.GetRebMarked()
+	if marked.Xact != nil {
+		cii.Flags = cii.Flags.Set(cifl.Rebalancing)
+	}
+	if marked.Interrupted {
+		cii.Flags = cii.Flags.Set(cifl.RebalanceInterrupted)
+	}
+	if marked.Restarted {
+		cii.Flags = cii.Flags.Set(cifl.Restarted)
+	}
+	marked = xreg.GetResilverMarked()
+	if marked.Xact != nil {
+		cii.Flags = cii.Flags.Set(cifl.Resilvering)
+	}
+	if marked.Interrupted {
+		cii.Flags = cii.Flags.Set(cifl.ResilverInterrupted)
+	}
+}
+
+func (h *htrun) fill(cii *cifl.Info) {
 	var (
 		smap = h.owner.smap.get()
 		bmd  = h.owner.bmd.get()
 		rmd  = h.owner.rmd.get()
 		etl  = h.owner.etl.get()
 	)
-	cii.fillSmap(smap)
+	smap.fill(cii)
 	cii.BMD.Version = bmd.version()
 	cii.BMD.UUID = bmd.UUID
 	cii.RMD.Version = rmd.Version
 	cii.Config.Version = h.owner.config.version()
 	cii.EtlMD.Version = etl.version()
-	cii.Flags.ClusterStarted = h.ClusterStarted()
-	cii.Flags.NodeStarted = h.NodeStarted()
+	if h.ClusterStarted() {
+		cii.Flags = cii.Flags.Set(cifl.ClusterStarted)
+	}
+	if h.NodeStarted() {
+		cii.Flags = cii.Flags.Set(cifl.NodeStarted)
+	}
 }
 
-func (cii *clusterInfo) fillSmap(smap *smapX) {
+func (smap *smapX) fill(cii *cifl.Info) {
 	cii.Smap.Version = smap.version()
 	cii.Smap.UUID = smap.UUID
 	if smap.Primary != nil {
 		cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetIntraControl)
 		cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetPublic)
 		cii.Smap.Primary.ID = smap.Primary.ID()
-		cii.Flags.VoteInProgress = voteInProgress() != nil
+		if voteInProgress() != nil {
+			cii.Flags = cii.Flags.Set(cifl.VoteInProgress)
+		}
 	}
-}
-
-func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
-	if cii == nil || other == nil {
-		return false
-	}
-	return cii.Smap.Version == other.Smap.Version && cii.Smap.Primary.ID == other.Smap.Primary.ID
 }
 
 ///////////////
@@ -721,7 +715,7 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 ///////////////
 
 func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
-	var cii *clusterInfo
+	var cii *cifl.Info
 	body, _, err := c.h.reqHealth(si, c.timeout, c.query, smap)
 	if err != nil {
 		goto ret
@@ -732,13 +726,13 @@ func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
 	c.mu.Lock()
 	if c.maxCii.Smap.Version < cii.Smap.Version {
 		// reset confirmation count if there's any sign of disagreement
-		if c.maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Flags.VoteInProgress {
+		if c.maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Flags.IsSet(cifl.VoteInProgress) {
 			c.cnt = 1
 		} else {
 			c.cnt++
 		}
 		c.maxCii = cii
-	} else if c.maxCii.smapEqual(cii) {
+	} else if c.maxCii.SmapEqual(cii) {
 		c.cnt++
 	}
 	if c.maxConfVer < cii.Config.Version {
@@ -757,8 +751,8 @@ func (c *getMaxCii) haveEnough() (yes bool) {
 	return
 }
 
-func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *clusterInfo {
-	var cii clusterInfo
+func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *cifl.Info {
+	var cii cifl.Info
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
 		nlog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
 		return nil

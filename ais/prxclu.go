@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -494,19 +495,20 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !config.Rebalance.Enabled {
-		regReq.RebInterrupted, regReq.Restarted = false, false
+		regReq.Flags = regReq.Flags.Clear(cifl.RebalanceInterrupted)
+		regReq.Flags = regReq.Flags.Clear(cifl.Restarted)
 	}
-	if nsi.IsTarget() && (regReq.RebInterrupted || regReq.Restarted) {
+	interrupted, restarted := regReq.Flags.IsSet(cifl.RebalanceInterrupted), regReq.Flags.IsSet(cifl.Restarted)
+	if nsi.IsTarget() && (interrupted || restarted) {
 		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			// handle via rmd.starting + resumeReb
 			if p.owner.rmd.interrupted.CAS(false, true) {
-				nlog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(),
-					regReq.RebInterrupted, regReq.Restarted)
+				nlog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(), interrupted, restarted)
 			}
 		}
 	}
 	// when keepalive becomes a new join
-	if regReq.Restarted && apiOp == apc.Keepalive {
+	if restarted && apiOp == apc.Keepalive {
 		apiOp = apc.SelfJoin
 	}
 
@@ -633,7 +635,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 		}
 		if keepalive {
 			upd = p.kalive(nsi, osi)
-		} else if regReq.Restarted {
+		} else if regReq.Flags.IsSet(cifl.Restarted) {
 			upd = true
 		} else {
 			upd = p.rereg(nsi, osi)
@@ -708,8 +710,8 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		nsi:         nsi,
 		msg:         msg,
 		flags:       flags,
-		interrupted: regReq.RebInterrupted,
-		restarted:   regReq.Restarted,
+		interrupted: regReq.Flags.IsSet(cifl.RebalanceInterrupted),
+		restarted:   regReq.Flags.IsSet(cifl.Restarted),
 	}
 	if err = p._earlyGFN(ctx, ctx.nsi); err != nil {
 		return
