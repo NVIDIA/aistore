@@ -1104,10 +1104,15 @@ func (p *proxy) rotateLogs(w http.ResponseWriter, r *http.Request, msg *apc.ActM
 }
 
 func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
-	if err := p.owner.config.setDaemonConfig(toUpdate, true /* transient */); err != nil {
+	co := p.owner.config
+	co.Lock()
+	err := setConfig(toUpdate, true /* transient */)
+	co.Unlock()
+	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+
 	msg.Value = toUpdate
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{

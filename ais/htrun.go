@@ -435,7 +435,12 @@ func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *
 		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h, msg.Action, msg.Value, err)
 		return
 	}
-	if err := h.owner.config.setDaemonConfig(toUpdate, transient); err != nil {
+
+	co := h.owner.config
+	co.Lock()
+	err := setConfig(toUpdate, transient)
+	co.Unlock()
+	if err != nil {
 		h.writeErr(w, r, err)
 	}
 }
@@ -450,7 +455,11 @@ func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 		h.writeErr(w, r, err)
 		return
 	}
-	err := h.owner.config.setDaemonConfig(toUpdate, transient)
+
+	co := h.owner.config
+	co.Lock()
+	err := setConfig(toUpdate, transient)
+	co.Unlock()
 	if err != nil {
 		h.writeErr(w, r, err)
 	}

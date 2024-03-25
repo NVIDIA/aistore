@@ -645,9 +645,9 @@ func TestLRU(t *testing.T) {
 	)
 
 	// Find out min usage % across all targets
-	for k, v := range cluStats.Target {
-		filesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.n")
-		bytesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.size")
+	for tid, v := range cluStats.Target {
+		filesEvicted[tid] = tools.GetNamedStatsVal(v, "lru.evict.n")
+		bytesEvicted[tid] = tools.GetNamedStatsVal(v, "lru.evict.size")
 		for _, c := range v.TargetCDF.Mountpaths {
 			usedPct = min(usedPct, c.PctUsed)
 		}

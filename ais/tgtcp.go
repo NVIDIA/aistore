@@ -297,6 +297,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds := t.statsAndStatus()
 		daeStats := t.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
+		ds.TargetCDF = daeStats.TargetCDF
 		t.writeJSON(w, r, ds, httpdaeWhat)
 	case apc.WhatNodeStatsV322: // [backward compatibility] v3.22 and prior
 		ds := t.statsAndStatusV322()

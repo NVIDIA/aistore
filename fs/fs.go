@@ -483,6 +483,7 @@ func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
 	cdf.Disks = mi.Disks
 	cdf.FS = mi.FS
 	cdf.Label = mi.Label
+	cdf.Capacity = Capacity{} // reset (for caller to fill-in)
 	return cdf
 }
 
@@ -1104,6 +1105,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 	// fast path: available w/ no sharing
 	fast := len(mfs.fsIDs) == l
 	unique = fast
+
 	if !fast {
 		fsIDs = make([]cos.FsID, 0, l)
 	}
@@ -1112,7 +1114,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 		config = cmn.GCO.Get()
 	}
 	cs.HighWM, cs.OOS = config.Space.HighWM, config.Space.OOS
-	cs.PctMin = 100
+	cs.PctMin = 101
 	for _, mi := range avail {
 		if !fast {
 			fsIDs, unique = cos.AddUniqueFsID(fsIDs, mi.FsID)
@@ -1124,38 +1126,52 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 			}
 			continue
 		}
-		n++
 
-		// add cap
+		// this mountpath's cap
 		c, err := mi.getCapacity(config, true)
 		if err != nil {
 			nlog.Errorln(mi.String()+":", err)
 			return cs, err, nil
 		}
-		cs.TotalUsed += c.Used
-		cs.TotalAvail += c.Avail
-		cs.PctMax = max(cs.PctMax, c.PctUsed)
-		cs.PctMin = min(cs.PctMin, c.PctUsed)
-		cs.PctAvg += c.PctUsed
 		if tcdf != nil {
 			cdf := mi._cdf(tcdf)
 			cdf.Capacity = c
 		}
+
+		// recompute totals
+		cs.TotalUsed += c.Used
+		cs.TotalAvail += c.Avail
+		cs.PctMax = max(cs.PctMax, c.PctUsed)
+		cs.PctMin = min(cs.PctMin, c.PctUsed)
+		n++
+		cs.PctAvg += c.PctUsed
 	}
+	debug.Assert(cs.PctMin < 101)
 	cs.PctAvg /= int32(n)
+
 	errCap = cs.Err()
 
-	// fill-in
+	// fill-in and prune
 	if tcdf != nil {
 		tcdf.PctMax, tcdf.PctAvg, tcdf.PctMin = cs.PctMax, cs.PctAvg, cs.PctMin
 		tcdf.TotalUsed, tcdf.TotalAvail = cs.TotalUsed, cs.TotalAvail
 		if errCap != nil {
 			tcdf.CsErr = errCap.Error()
 		}
-		// prune detached mountpaths
-		for path := range tcdf.Mountpaths {
-			if _, ok := avail[path]; !ok {
-				delete(tcdf.Mountpaths, path)
+		// prune detached mountpaths, if any
+		for mpath := range tcdf.Mountpaths {
+			if _, ok := avail[mpath]; !ok {
+				delete(tcdf.Mountpaths, mpath)
+			}
+		}
+		// duplicate shared filesystem cap => (its mountpaths)
+		if n < l {
+			for mpath1, cdf1 := range tcdf.Mountpaths {
+				for mpath2, cdf2 := range tcdf.Mountpaths {
+					if mpath1 != mpath2 && cdf1.FS.Equal(cdf2.FS) {
+						_either(cdf1, cdf2)
+					}
+				}
 			}
 		}
 	}
@@ -1170,6 +1186,14 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 	ratomic.StoreInt32(&mfs.cs.PctMax, cs.PctMax)
 
 	return cs, nil, errCap
+}
+
+func _either(cdf1, cdf2 *CDF) {
+	if cdf1.Capacity.Used == 0 && cdf1.Capacity.Avail == 0 {
+		cdf1.Capacity = cdf2.Capacity
+	} else if cdf2.Capacity.Used == 0 && cdf2.Capacity.Avail == 0 {
+		cdf2.Capacity = cdf1.Capacity
+	}
 }
 
 // called only and exclusively by `stats.Trunner` providing `config.Periodic.StatsTime` tick

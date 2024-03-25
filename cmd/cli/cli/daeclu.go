@@ -65,7 +65,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	tableT := teb.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 
 	// total num disks and capacity
-	body.NumDisks, body.Capacity = _totals(body.Status.Tmap, units)
+	body.NumDisks, body.Capacity = _totals(body.Status.Tmap, units, cfg)
 
 	out := tableP.Template(false) + "\n"
 	out += tableT.Template(false) + "\n"
@@ -80,8 +80,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	return teb.Print(body, out, teb.Jopts(usejs))
 }
 
-// NOTE: using heuristics
-func _totals(tmap teb.StstMap, units string) (num int, cs string) {
+func _totals(tmap teb.StstMap, units string, cfg *cmn.ClusterConfig) (num int, cs string) {
 	var used, avail int64
 outer:
 	for _, node := range tmap {
@@ -113,6 +112,18 @@ outer:
 		pctUsed = int64(fpct)
 	}
 
-	cs = fmt.Sprintf("used %s (%d%%), available %s", teb.FmtSize(used, units, 2), pctUsed, teb.FmtSize(avail, units, 2))
+	pct := fmt.Sprintf("%d%%", pctUsed)
+	switch {
+	case pctUsed >= cfg.Space.HighWM:
+		pct = fred(pct)
+	case pctUsed > cfg.Space.LowWM:
+		pct = fcyan(pct)
+	case pctUsed > cfg.Space.CleanupWM:
+		pct = fblue(pct)
+	default:
+		pct = fgreen(pct)
+	}
+	cs = fmt.Sprintf("used %s (%s), available %s", teb.FmtSize(used, units, 2), pct, teb.FmtSize(avail, units, 2))
+
 	return num, cs
 }
