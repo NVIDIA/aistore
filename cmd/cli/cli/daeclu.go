@@ -83,9 +83,9 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 func _totals(tmap teb.StstMap, units string, cfg *cmn.ClusterConfig) (num int, cs string) {
 	var used, avail int64
 outer:
-	for _, node := range tmap {
+	for _, ds := range tmap {
 		var (
-			tcdf   = node.TargetCDF
+			tcdf   = ds.TargetCDF
 			fsIDs  = make([]cos.FsID, 0, len(tcdf.Mountpaths))
 			unique bool
 		)
@@ -99,7 +99,7 @@ outer:
 			num += len(cdf.Disks)
 
 			// TODO: a simplifying (local playground) assumption and shortcut
-			if node.DeploymentType == apc.DeploymentDev {
+			if ds.DeploymentType == apc.DeploymentDev {
 				break outer
 			}
 		}
