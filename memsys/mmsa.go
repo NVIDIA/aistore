@@ -190,9 +190,9 @@ func (r *MMSA) String() string {
 func (r *MMSA) Str(mem *sys.MemStat) string {
 	sp := r.pressure2S(r.Pressure(mem))
 	if r.info == "" {
-		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.ToSizeIEC(int64(r.MinFree), 0), cos.ToSizeIEC(int64(r.lowWM), 0))
+		r.info = "(min-free " + cos.ToSizeIEC(int64(r.MinFree), 0) + ", low-wm " + cos.ToSizeIEC(int64(r.lowWM), 0)
 	}
-	return fmt.Sprintf("%s[(%s), %s, %s]", r.Name, mem.String(), r.info, sp)
+	return r.Name + "[(" + mem.String() + "), " + sp + ", " + r.info + "]"
 }
 
 // allocate SGL

@@ -6,7 +6,7 @@
 package memsys
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/sys"
 )
@@ -91,7 +91,7 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) (pressure int) {
 func (r *MMSA) pressure2S(p int) (sp string) {
 	sp = "pressure '" + memPressureText[p] + "'"
 	if crit := r.swap.crit.Load(); crit > 0 {
-		sp = fmt.Sprintf("%s, swapping(%d)", sp, crit)
+		sp += ", swapping(" + strconv.Itoa(int(crit)) + ")"
 	}
-	return
+	return sp
 }

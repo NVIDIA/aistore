@@ -1086,6 +1086,8 @@ func Cap() (cs CapStatus) {
 	return
 }
 
+func NoneShared(numMpaths int) bool { return len(mfs.fsIDs) >= numMpaths }
+
 // sum up && compute %% capacities while skipping already _counted_ filesystems
 func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap error) {
 	var (
@@ -1103,7 +1105,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 	}
 
 	// fast path: available w/ no sharing
-	fast := len(mfs.fsIDs) == l
+	fast := NoneShared(l)
 	unique = fast
 
 	if !fast {
@@ -1158,7 +1160,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 		if errCap != nil {
 			tcdf.CsErr = errCap.Error()
 		}
-		// prune detached mountpaths, if any
+		// prune detached and disabled, if any
 		for mpath := range tcdf.Mountpaths {
 			if _, ok := avail[mpath]; !ok {
 				delete(tcdf.Mountpaths, mpath)

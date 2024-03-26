@@ -115,6 +115,7 @@ type (
 		xln       string
 		runner    // the base (compare w/ Prunner)
 		lines     []string
+		fsIDs     []cos.FsID
 		mem       sys.MemStat
 		xallRun   core.AllRunningInOut
 		standby   bool
@@ -366,29 +367,29 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
 		r.t.OOS(&cs)
 	}
-	if (updated && now >= r.next) || errCap != nil {
-		for mpath, fsCapacity := range r.TargetCDF.Mountpaths {
-			s := fmt.Sprintf("%s: used %d%%", mpath, fsCapacity.Capacity.PctUsed)
-			r.lines = append(r.lines, s)
-			if config.TestingEnv() {
-				// skipping likely identical
-				break
+	if (updated && now >= r.next) || errCap != nil || now >= r.lastCap+maxCapLogInterval {
+		fast := fs.NoneShared(len(r.TargetCDF.Mountpaths))
+		unique := fast
+		if !fast {
+			r.fsIDs = r.fsIDs[:0]
+		}
+		for mpath, cdf := range r.TargetCDF.Mountpaths {
+			if !fast {
+				r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
+			}
+			if unique {
+				s := mpath + cdf.Label.ToLog() + ": used " + strconv.Itoa(int(cdf.Capacity.PctUsed)) + "%"
+				s += ", avail " + cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2)
+				r.lines = append(r.lines, s)
 			}
 		}
+		r.lastCap = now
 	}
 
-	// 4. append disk stats to log subject to (idle) filtering
-	// see related: `ignoreIdle`
+	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
 	r.logDiskStats(now)
 
-	// 5. memory pressure
-	_ = r.mem.Get()
-	mm := r.t.PageMM()
-	if p := mm.Pressure(&r.mem); p >= memsys.PressureHigh {
-		r.lines = append(r.lines, mm.Str(&r.mem))
-	}
-
-	// 6. running xactions
+	// 5. jobs
 	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if !idle {
 		var ln string
@@ -416,9 +417,22 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		r.xln = ln
 	}
 
-	// 7. and, finally
+	// 6. log
 	for _, ln := range r.lines {
 		nlog.Infoln(ln)
+	}
+
+	// 7. separately, memory
+	_ = r.mem.Get()
+	var (
+		mm       = r.t.PageMM()
+		pressure = mm.Pressure(&r.mem)
+	)
+	switch {
+	case pressure >= memsys.PressureExtreme:
+		nlog.Errorln(mm.Str(&r.mem))
+	case pressure >= memsys.PressureHigh:
+		nlog.Warningln(mm.Str(&r.mem))
 	}
 
 	if now > r.next {

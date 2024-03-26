@@ -37,13 +37,14 @@ const (
 	dfltPeriodicFlushTime = time.Minute            // when `config.Log.FlushTime` is 0 (zero)
 	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
 	maxStatsLogInterval   = int64(3 * time.Minute) // when idle; secondly, an upper limit on `config.Log.StatsTime`
+	maxCapLogInterval     = int64(4 * time.Hour)   // to see capacity at least few times a day (when idle)
 )
 
 // more periodic
 const (
-	logsMaxSizeCheckTime = 48 * time.Minute       // periodically check the logs for max accumulated size
-	startupSleep         = 300 * time.Millisecond // periodically poll ClusterStarted()
-	numGorHighCheckTime  = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
+	maxLogSizeCheckTime = 48 * time.Minute       // periodically check the logs for max accumulated size
+	startupSleep        = 300 * time.Millisecond // periodically poll ClusterStarted()
+	numGorHighCheckTime = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
 
 // number-of-goroutines watermarks expressed as multipliers over the number of available logical CPUs (GOMAXPROCS)
@@ -139,6 +140,7 @@ type (
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
 		next      int64       // mono.NanoTime()
+		lastCap   int64       // ditto
 		startedUp atomic.Bool
 	}
 )
@@ -824,7 +826,7 @@ waitStartup:
 	config = cmn.GCO.Get()
 	goMaxProcs := runtime.GOMAXPROCS(0)
 	nlog.Infof("Starting %s", r.Name())
-	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, recycleLogs, logsMaxSizeCheckTime)
+	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, recycleLogs, maxLogSizeCheckTime)
 
 	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
 	r.ticker = time.NewTicker(statsTime)
@@ -906,7 +908,7 @@ func (r *runner) Stop(err error) {
 func recycleLogs() time.Duration {
 	// keep total log size below the configured max
 	go removeLogs(cmn.GCO.Get())
-	return logsMaxSizeCheckTime
+	return maxLogSizeCheckTime
 }
 
 func removeLogs(config *cmn.Config) {
