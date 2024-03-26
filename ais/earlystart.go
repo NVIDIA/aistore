@@ -114,13 +114,18 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	}
 	// parse env
 	envP := struct {
-		pid     string
-		primary bool
+		pid       string
+		primary   bool
+		secondary bool
 	}{
-		pid:     os.Getenv(env.AIS.PrimaryID),
-		primary: cos.IsParseBool(os.Getenv(env.AIS.IsPrimary)),
+		pid:       os.Getenv(env.AIS.PrimaryID),
+		primary:   cos.IsParseBool(os.Getenv(env.AIS.IsPrimary)),
+		secondary: cos.IsParseBool(os.Getenv(env.AIS.IsSecondary)),
 	}
 
+	if envP.primary && envP.secondary {
+		cos.ExitLogf("%s: both %s and %s cannot be true", p, env.AIS.IsPrimary, env.AIS.IsSecondary)
+	}
 	if envP.pid != "" && envP.primary && p.SID() != envP.pid {
 		cos.ExitLogf("%s: invalid combination of %s=true & %s=%s", p, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid)
 	}
@@ -142,13 +147,15 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 			loadedSmap.Primary = primary
 		}
 	}
+
+	// NOTE: environment always takes precedence
 	if envP.pid != "" {
 		primary = envP.pid == p.SID()
 		pid = envP.pid
-	} else if loadedSmap != nil {
+	} else if envP.primary {
+		primary = true
+	} else if loadedSmap != nil && !envP.secondary {
 		primary = loadedSmap.isPrimary(p.si)
-	} else {
-		primary = envP.primary
 	}
 	return
 }

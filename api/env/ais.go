@@ -15,10 +15,11 @@ package env
 
 var (
 	AIS = struct {
-		Endpoint  string
-		IsPrimary string
-		PrimaryID string
-		UseHTTPS  string
+		Endpoint    string
+		IsPrimary   string
+		IsSecondary string
+		PrimaryID   string
+		UseHTTPS    string
 		// TLS: client side
 		Certificate   string
 		CertKey       string
@@ -33,9 +34,10 @@ var (
 		K8sNamespace string
 	}{
 		// the way to designate primary when cluster's starting up
-		Endpoint:  "AIS_ENDPOINT",
-		IsPrimary: "AIS_IS_PRIMARY",
-		PrimaryID: "AIS_PRIMARY_ID",
+		Endpoint:    "AIS_ENDPOINT",
+		IsPrimary:   "AIS_IS_PRIMARY",
+		IsSecondary: "AIS_IS_SECONDARY",
+		PrimaryID:   "AIS_PRIMARY_ID",
 
 		// false: HTTP transport, with all the TLS config (below) ignored
 		// true:  HTTPS/TLS
