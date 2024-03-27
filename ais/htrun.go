@@ -1762,7 +1762,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	)
 	debug.Assert(pubValid && intraValid)
 
-	primaryURL, psi := h.getPrimaryURLAndSI(nil)
+	primaryURL, psi := h.getPrimaryURLAndSI(nil, config)
 	candidates = _addCan(primaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	if psi != nil {
 		candidates = _addCan(psi.URL(cmn.NetPublic), selfPublicURL.Host, selfIntraURL.Host, candidates)
@@ -1877,7 +1877,7 @@ func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration, fast
 		err = errors.New(h.String() + " is stopping")
 		return
 	}
-	primaryURL, psi := h.getPrimaryURLAndSI(smap)
+	primaryURL, psi := h.getPrimaryURLAndSI(smap, nil)
 	pid = psi.ID()
 
 	if fast {
@@ -1911,16 +1911,17 @@ func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration, fast
 	return
 }
 
-func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *meta.Snode) {
+func (h *htrun) getPrimaryURLAndSI(smap *smapX, config *cmn.Config) (string, *meta.Snode) {
 	if smap == nil {
 		smap = h.owner.smap.get()
 	}
 	if smap.validate() != nil {
-		url, psi = cmn.GCO.Get().Proxy.PrimaryURL, nil
-		return
+		if config == nil {
+			config = cmn.GCO.Get()
+		}
+		return config.Proxy.PrimaryURL, nil
 	}
-	url, psi = smap.Primary.URL(cmn.NetIntraControl), smap.Primary
-	return
+	return smap.Primary.URL(cmn.NetIntraControl), smap.Primary
 }
 
 func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii *cifl.Info) {

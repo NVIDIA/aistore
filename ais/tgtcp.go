@@ -591,7 +591,13 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 }
 
 func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag string) (int64, error) {
-	_, psi := t.getPrimaryURLAndSI(nil)
+	var (
+		smap = t.owner.smap.get()
+		psi  *meta.Snode
+	)
+	if smap.validate() == nil {
+		psi = smap.Primary // (caller?)
+	}
 
 	t.owner.bmd.Lock()
 	rmbcks, oldVer, emsg, err := t._syncBMD(newBMD, msg, payload, psi)
@@ -764,18 +770,18 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 					t, msg.Action, xact.RebID2S(newRMD.Version), s, opts)
 			}
 		default:
-			nlog.Infof("%s: starting rebalance[%s]", t, xact.RebID2S(newRMD.Version))
+			nlog.Infoln(t.String() + ": starting rebalance[" + xact.RebID2S(newRMD.Version) + "]")
 		}
 		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 
 		if newRMD.Resilver != "" {
-			nlog.Infof("%s: ... and resilver", t)
+			nlog.Infoln(t.String() + ": ... and resilver")
 			go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
 		}
 		t.owner.rmd.put(newRMD)
 		// TODO: move and refactor
 	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
-		nlog.Warningf("%s: standby => join %s", t, msg)
+		nlog.Warningln(t.String()+": standby => join", msg.String())
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}

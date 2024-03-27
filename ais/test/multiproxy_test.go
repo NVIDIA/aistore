@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -834,15 +833,15 @@ loop:
 // 3. Try restoring the killed nodes one at a time
 func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	var (
-		config             = tools.GetClusterConfig(t)
-		restoreCmd         = make([]tools.RestoreCmd, 0, 3)
-		configDiscovery, _ = cos.ParseURL(config.Proxy.DiscoveryURL)
-		proxyURL           string
-		randomKilled       bool
+		config       = tools.GetClusterConfig(t)
+		restoreCmd   = make([]tools.RestoreCmd, 0, 3)
+		proxyURL     string
+		cnt          int
+		randomKilled bool
 	)
 
 	// Make sure primary is same config
-	smap := primarySetToOriginal(t)
+	smap := primarySetToRand(t)
 	origProxyCnt := smap.CountActivePs()
 	origTargetCnt := smap.CountActiveTs()
 
@@ -850,8 +849,9 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		if smap.IsPrimary(si) {
 			continue
 		}
-		publicURL, _ := cos.ParseURL(si.URL(cmn.NetPublic))
-		if publicURL.Host == configDiscovery.Host || configDiscovery.Port() == publicURL.Port() {
+		if si.URL(cmn.NetPublic) == config.Proxy.DiscoveryURL || si.URL(cmn.NetIntraControl) == config.Proxy.DiscoveryURL {
+			cnt++
+			tlog.Logf("Kill #%d: %s\n", cnt, si.StringEx())
 			cmd, err := tools.KillNode(si)
 			tassert.CheckFatal(t, err)
 			restoreCmd = append(restoreCmd, cmd)
@@ -864,6 +864,8 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		}
 
 		// Kill a random non primary proxy
+		cnt++
+		tlog.Logf("Kill #%d: %s\n", cnt, si.StringEx())
 		cmd, err := tools.KillNode(si)
 		tassert.CheckFatal(t, err)
 		restoreCmd = append(restoreCmd, cmd)
@@ -873,11 +875,15 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	// Kill a random target
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
+	cnt++
+	tlog.Logf("Kill #%d: %s\n", cnt, target.StringEx())
 	cmd, err := tools.KillNode(target)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
 	// Kill original primary
+	cnt++
+	tlog.Logf("Kill #%d: %s\n", cnt, smap.Primary.StringEx())
 	cmd, err = tools.KillNode(smap.Primary)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
@@ -970,7 +976,7 @@ loop:
 
 // smap 	- current Smap
 // directURL	- URL of the proxy that we send the request to (not necessarily the current primary)
-// toID, toURL 	- DaemonID and URL of the proxy that must become the new primary
+// toID 	- DaemonID and URL of the proxy that must become the new primary
 func setPrimaryTo(t *testing.T, proxyURL string, smap *meta.Smap, directURL, toID string) (newSmap *meta.Smap) {
 	if directURL == "" {
 		directURL = smap.Primary.URL(cmn.NetPublic)
@@ -1018,60 +1024,19 @@ func checkSmaps(t *testing.T, proxyURL string) {
 	}
 }
 
-// primarySetToOriginal reads original primary proxy from configuration and
-// makes it a primary proxy again
-// NOTE: This test cannot be run as separate test. It requires that original
-// primary proxy was down and retuned back. So, the test should be executed
-// after primaryCrashElectRestart test
-func primarySetToOriginal(t *testing.T) *meta.Smap {
+func primarySetToRand(t *testing.T) *meta.Smap {
 	var (
-		proxyURL              = tools.GetPrimaryURL()
-		smap                  = tools.GetClusterMap(t, proxyURL)
-		currID                = smap.Primary.ID()
-		currURL               = smap.Primary.URL(cmn.NetPublic)
-		byURL, byPort, origID string
+		proxyURL = tools.GetPrimaryURL()
+		smap     = tools.GetClusterMap(t, proxyURL)
+		currURL  = smap.Primary.URL(cmn.NetPublic)
 	)
 	if currURL != proxyURL {
 		t.Fatalf("Err in the test itself: expecting currURL %s == proxyurl %s", currURL, proxyURL)
 	}
-	tlog.Logf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := tools.GetClusterConfig(t)
-	proxyconf := config.Proxy
-	origURL := proxyconf.OriginalURL
-
-	if origURL == "" {
-		t.Fatal("Original primary proxy is not defined in configuration")
-	}
-	urlparts := strings.Split(origURL, ":")
-	proxyPort := urlparts[len(urlparts)-1]
-
-	for key, val := range smap.Pmap {
-		if val.URL(cmn.NetPublic) == origURL {
-			byURL = key
-			break
-		}
-
-		keyparts := strings.Split(val.URL(cmn.NetPublic), ":")
-		port := keyparts[len(keyparts)-1]
-		if port == proxyPort {
-			byPort = key
-		}
-	}
-	if byPort == "" && byURL == "" {
-		t.Fatalf("No original primary proxy: %v", proxyconf)
-	}
-	origID = byURL
-	if origID == "" {
-		origID = byPort
-	}
-	tlog.Logf("Found original primary ID: %s\n", origID)
-	if currID == origID {
-		tlog.Logf("Original %s == the current primary: nothing to do\n", origID)
-		return smap
-	}
-
-	return setPrimaryTo(t, proxyURL, smap, "", origID)
+	psi, err := smap.GetRandProxy(true /*exclude primary*/)
+	tassert.CheckFatal(t, err)
+	return setPrimaryTo(t, proxyURL, smap, "", psi.ID())
 }
 
 // This is duplicated in the tests because the `idDigest` of `daemonInfo` is not

@@ -132,7 +132,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		<-m.controlCh // <-- half GETs
-		primarySetToOriginal(t)
+		primarySetToRand(t)
 	}()
 	wg.Wait()
 
