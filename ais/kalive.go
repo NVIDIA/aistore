@@ -279,7 +279,7 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 	err := p.owner.smap.modify(ctx)
 	if err != nil {
 		if ctx.msg != nil {
-			nlog.Errorf("FATAL: %v", err)
+			nlog.Errorln("FATAL:", err)
 		} else {
 			nlog.Warningln(err)
 		}

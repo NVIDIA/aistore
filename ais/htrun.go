@@ -1758,31 +1758,22 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 		candidates               = make([]string, 0, 4+len(contactURLs))
 		selfPublicURL, pubValid  = cos.ParseURL(h.si.URL(cmn.NetPublic))
 		selfIntraURL, intraValid = cos.ParseURL(h.si.URL(cmn.NetIntraControl))
-		addCandidate             = func(url string) {
-			if u, valid := cos.ParseURL(url); !valid ||
-				u.Host == selfPublicURL.Host ||
-				u.Host == selfIntraURL.Host {
-				return
-			}
-			if cos.StringInSlice(url, candidates) {
-				return
-			}
-			candidates = append(candidates, url)
-		}
-		resPrev *callResult
+		resPrev                  *callResult
 	)
 	debug.Assert(pubValid && intraValid)
+
 	primaryURL, psi := h.getPrimaryURLAndSI(nil)
-	addCandidate(primaryURL)
+	candidates = _addCan(primaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	if psi != nil {
-		addCandidate(psi.URL(cmn.NetPublic))
+		candidates = _addCan(psi.URL(cmn.NetPublic), selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
-	addCandidate(config.Proxy.PrimaryURL)
-	addCandidate(config.Proxy.DiscoveryURL)
-	addCandidate(config.Proxy.OriginalURL)
+	candidates = _addCan(config.Proxy.PrimaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
+	candidates = _addCan(config.Proxy.DiscoveryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
+	candidates = _addCan(config.Proxy.OriginalURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	for _, u := range contactURLs {
-		addCandidate(u)
+		candidates = _addCan(u, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
+
 	sleep := max(2*time.Second, cmn.Rom.MaxKeepalive())
 	for range 4 { // retry
 		for _, candidateURL := range candidates {
@@ -1802,6 +1793,9 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 		}
 		time.Sleep(sleep)
 	}
+	if resPrev != nil {
+		freeCR(resPrev)
+	}
 
 	smap := h.owner.smap.get()
 	if smap.validate() != nil {
@@ -1819,14 +1813,21 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	if daemon.stopping.Load() {
 		return
 	}
-	if resPrev != nil {
-		freeCR(resPrev)
-	}
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 	if res.err == nil {
 		nlog.Infoln(h.String()+": joined cluster via", primaryURL)
 	}
 	return
+}
+
+func _addCan(url, selfPub, selfCtrl string, candidates []string) []string {
+	if u, valid := cos.ParseURL(url); !valid || u.Host == selfPub || u.Host == selfCtrl {
+		return candidates
+	}
+	if cos.StringInSlice(url, candidates) {
+		return candidates
+	}
+	return append(candidates, url)
 }
 
 func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Values, htext htext, keepalive bool) *callResult {

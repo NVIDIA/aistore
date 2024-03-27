@@ -548,8 +548,7 @@ func (m *Smap) StrIC(node *Snode) string {
 	return strings.Join(all, ",")
 }
 
-func (m *Smap) ICCount() int {
-	count := 0
+func (m *Smap) ICCount() (count int) {
 	for _, psi := range m.Pmap {
 		if psi.IsIC() {
 			count++

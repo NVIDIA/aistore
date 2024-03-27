@@ -947,12 +947,12 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 	if !smap.IsIC(p.si) || !newSmap.IsIC(p.si) {
 		return
 	}
-
+	// async - not waiting
 	for _, psi := range newSmap.Pmap {
 		if p.SID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
 			go func(psi *meta.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi, newSmap); err != nil {
-					nlog.Errorf("%s: failed to send ownership table to %s, err:%v", p, psi, err)
+					nlog.Errorln(p.String()+": failed to send ownership table to", psi.String()+":", err)
 				}
 			}(psi)
 		}
@@ -2801,7 +2801,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
 	nlog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
-	config, err := p.ensureConfigPrimaryURL()
+	config, err := p.ensureConfigURLs()
 	if err != nil {
 		nlog.Errorln(err)
 	}
@@ -2814,27 +2814,40 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		pairs = append(pairs, revsPair{etl, msg})
 		nlog.Infof("%s: plus %s", p, etl)
 	}
+	// metasync
 	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
+
+	// synchronize IC tables
 	p.syncNewICOwners(ctx.smap, clone)
 }
 
-func (p *proxy) ensureConfigPrimaryURL() (config *globalConfig, err error) {
-	config, err = p.owner.config.modify(&configModifier{pre: p._primaryURLPre})
+func (p *proxy) ensureConfigURLs() (config *globalConfig, err error) {
+	config, err = p.owner.config.modify(&configModifier{pre: p._configURLs})
 	if err != nil {
-		err = cmn.NewErrFailedTo(p, "update primary URL", config, err)
+		err = cmn.NewErrFailedTo(p, "update config (primary, original, discovery) URLs", config, err)
 	}
-	return
+	return config, err
 }
 
-func (p *proxy) _primaryURLPre(_ *configModifier, clone *globalConfig) (updated bool, err error) {
+func (p *proxy) _configURLs(_ *configModifier, clone *globalConfig) (updated bool, _ error) {
 	smap := p.owner.smap.get()
 	debug.Assert(smap.isPrimary(p.si))
+
 	if newURL := smap.Primary.URL(cmn.NetPublic); clone.Proxy.PrimaryURL != newURL {
 		clone.Proxy.PrimaryURL = smap.Primary.URL(cmn.NetPublic)
 		updated = true
 	}
-	return
+	orig, disc := smap.configURLsIC(clone.Proxy.OriginalURL, clone.Proxy.DiscoveryURL)
+	if orig != "" && orig != clone.Proxy.OriginalURL {
+		clone.Proxy.OriginalURL = orig
+		updated = true
+	}
+	if disc != "" && disc != clone.Proxy.DiscoveryURL {
+		clone.Proxy.DiscoveryURL = disc
+		updated = true
+	}
+	return updated, nil
 }
 
 // [METHOD] /v1/sort

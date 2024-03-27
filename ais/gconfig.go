@@ -95,66 +95,67 @@ func newConfigOwner(config *cmn.Config) (co *configOwner) {
 func (co *configOwner) get() (clone *globalConfig, err error) {
 	clone = &globalConfig{}
 	if _, err = jsp.LoadMeta(co.globalFpath, clone); err == nil {
-		return
+		return clone, nil
 	}
-	clone = nil
 	if os.IsNotExist(err) {
 		err = nil
 	} else {
 		nlog.Errorf("failed to load global config from %s: %v", co.globalFpath, err)
 	}
-	return
+	return nil, err
 }
 
 func (*configOwner) version() int64 { return cmn.GCO.Get().Version }
 
-func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err error) {
-	co.Lock()
-	defer co.Unlock()
+// is called under co.lock
+func (co *configOwner) _runPre(ctx *configModifier) (clone *globalConfig, err error) {
 	clone, err = co.get()
 	if err != nil {
 		return
 	}
-	// NOTE: nil config == missing config
 	if clone == nil {
+		// missing config - try to load initial plain-text
 		clone = &globalConfig{}
-		_, err = jsp.Load(cmn.GCO.GetInitialGconfPath(), clone, jsp.Plain())
+		_, err = jsp.Load(cmn.GCO.GetInitialGconfPath(), clone, jsp.Plain()) // must exist
 		if err != nil {
-			return
+			return clone, err
 		}
 	}
 
-	if updated, err := ctx.pre(ctx, clone); err != nil || !updated {
+	var updated bool
+	if updated, err = ctx.pre(ctx, clone); err != nil || !updated {
 		return nil, err
 	}
 
 	ctx.oldConfig = cmn.GCO.Get()
 	if err = cmn.GCO.Update(&clone.ClusterConfig); err != nil {
-		clone = nil
-		return
+		return nil, err
 	}
 
 	clone.Version++
 	clone.LastUpdated = time.Now().String()
 	clone._sgl = clone._encode(co.immSize)
 	co.immSize = max(co.immSize, clone._sgl.Len())
-	if err := co.persist(clone, nil); err != nil {
+	if err = co.persist(clone, nil); err != nil {
 		clone._sgl.Free()
 		clone._sgl = nil
 		return nil, cmn.NewErrFailedTo(nil, "persist", clone, err)
 	}
-	return
+	return clone, nil
 }
 
 // Update the global config on primary proxy.
 func (co *configOwner) modify(ctx *configModifier) (config *globalConfig, err error) {
-	if config, err = co.runPre(ctx); err != nil || config == nil {
-		return
+	co.Lock()
+	config, err = co._runPre(ctx)
+	co.Unlock()
+	if err != nil || config == nil {
+		return config, err
 	}
 	if ctx.final != nil {
 		ctx.final(ctx, config)
 	}
-	return
+	return config, nil
 }
 
 func (co *configOwner) persist(clone *globalConfig, payload msPayload) error {

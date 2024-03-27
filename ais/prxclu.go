@@ -852,11 +852,18 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		aisMsg = p.newAmsg(ctx.msg, bmd)
 		pairs  = make([]revsPair, 0, 5)
 	)
-	if config, err := p.owner.config.get(); err != nil {
+	// when targets join as well (redundant?, minor)
+	config, err := p.ensureConfigURLs()
+	if config == nil /*not updated*/ && err == nil {
+		config, err = p.owner.config.get()
+	}
+	if err != nil {
 		nlog.Errorln(err)
+		// proceed anyway
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, aisMsg})
 	}
+
 	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg})
 	if etlMD != nil && etlMD.version() > 0 {
 		pairs = append(pairs, revsPair{etlMD, aisMsg})
@@ -893,6 +900,13 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
 	}
 	debug.Assert(clone._sgl != nil)
+
+	config, err := p.ensureConfigURLs()
+	if config != nil /*updated*/ {
+		debug.AssertNoErr(err)
+		pairs = append(pairs, revsPair{config, aisMsg})
+	}
+
 	wg := p.metasyncer.sync(pairs...)
 	if ctx.rmdCtx != nil && ctx.rmdCtx.wait {
 		wg.Wait()

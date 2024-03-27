@@ -317,11 +317,12 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		p.owner.smap.put(clone)
 		smap = clone
 	}
-	// try to start with a fully staffed IC
-	if l := smap.ICCount(); l < meta.DfltCountIC {
+
+	// 5.5: try to start with a fully staffed IC
+	if count := smap.ICCount(); count < meta.DfltCountIC {
 		clone := smap.clone()
-		clone.staffIC()
-		if l != clone.ICCount() {
+		nc := clone.staffIC()
+		if count != nc {
 			clone.Version++
 			smap = clone
 			p.owner.smap.put(smap)
@@ -355,7 +356,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 9. cluster config: load existing _or_ initialize brand new v1
-	cluConfig, err := p._cluConfig(smap.UUID)
+	cluConfig, err := p._cluConfig(smap)
 	if err != nil {
 		cos.ExitLog(err)
 	}
@@ -388,21 +389,41 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	p.owner.rmd.starting.Store(false)
 }
 
-func (p *proxy) _cluConfig(uuid string) (config *globalConfig, err error) {
-	if p.owner.config.version() > 0 {
-		return p.owner.config.get()
+func (p *proxy) _cluConfig(smap *smapX) (config *globalConfig, err error) {
+	var orig, disc string
+	if config, err = p.owner.config.get(); err != nil {
+		return nil, err
 	}
-	// Create version 1 and set primary URL.
+	if config != nil && config.version() > 0 {
+		orig, disc = smap.configURLsIC(config.Proxy.OriginalURL, config.Proxy.DiscoveryURL)
+		if orig == config.Proxy.OriginalURL && disc == config.Proxy.DiscoveryURL {
+			// no changes, good to go
+			return config, nil
+		}
+		if orig == "" && disc == "" {
+			// likely no IC members yet, nothing can do
+			return config, nil
+		}
+	}
+
+	// update _or_ create version 1; set config (primary, original, discovery) URLs
+	// NOTE:
+	// - using cmn.NetPublic for PrimaryURL, and cmn.NetIntraControl for the other two
 	config, err = p.owner.config.modify(&configModifier{
-		pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
-			debug.Assert(clone.version() == 0)
+		pre: func(_ *configModifier, clone *globalConfig) (bool /*updated*/, error) {
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
-			clone.UUID = uuid
-			updated = true
-			return
+			if orig != "" {
+				clone.Proxy.OriginalURL = orig
+			}
+			if disc != "" {
+				clone.Proxy.DiscoveryURL = disc
+			}
+			clone.UUID = smap.UUID
+			return true, nil
 		},
 	})
-	return
+
+	return config, err
 }
 
 // [cluster startup]: resume rebalance if `interrupted`

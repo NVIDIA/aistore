@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -145,51 +145,91 @@ func (m *smapX) init(tsize, psize int) {
 	m.Pmap = make(meta.NodeMap, psize)
 }
 
-func (m *smapX) _fillIC() {
-	if m.ICCount() >= meta.DfltCountIC {
-		return
-	}
+//
+// begin IC -----------
+//
 
-	// try to select the missing members - upto DefaultICSize - if available
-	for _, si := range m.Pmap {
-		if si.Flags.IsSet(meta.SnodeNonElectable) {
-			continue
-		}
-		m.addIC(si)
-		if m.ICCount() >= meta.DfltCountIC {
-			return
-		}
-	}
-}
-
-// only used by primary
-func (m *smapX) staffIC() {
-	m.addIC(m.Primary)
+// executed only by primary
+func (m *smapX) staffIC() (count int) {
+	_ = m._setIC(m.Primary)
 	m.Primary = m.GetNode(m.Primary.ID())
-	m._fillIC()
-	m.evictIC()
+
+	count = m.ICCount()
+	if count < meta.DfltCountIC {
+		// assign additional IC members, if available
+		for _, psi := range m.Pmap {
+			if psi.Flags.IsSet(meta.SnodeNonElectable) || !m._setIC(psi) {
+				continue
+			}
+			count++
+			if count >= meta.DfltCountIC {
+				return count
+			}
+		}
+	} else if count > meta.DfltCountIC {
+		if m.unstaffIC() {
+			count--
+		}
+	}
+	return count
 }
 
-// ensure num IC members doesn't exceed max value
-// Evict the most recently added IC member
-func (m *smapX) evictIC() {
-	if m.ICCount() <= meta.DfltCountIC {
-		return
-	}
-	for sid, si := range m.Pmap {
-		if sid == m.Primary.ID() || !m.IsIC(si) {
+// remove one
+func (m *smapX) unstaffIC() bool {
+	for pid, psi := range m.Pmap {
+		if pid == m.Primary.ID() || !m.IsIC(psi) {
 			continue
 		}
-		m.clearNodeFlags(sid, meta.SnodeIC)
-		break
+		m.clearNodeFlags(pid, meta.SnodeIC)
+		return true
 	}
+	return false
 }
 
-func (m *smapX) addIC(psi *meta.Snode) {
+func (m *smapX) _setIC(psi *meta.Snode) (ok bool) {
 	if !m.IsIC(psi) {
 		m.setNodeFlags(psi.ID(), meta.SnodeIC)
+		ok = true
 	}
+	return ok
 }
+
+// check configured "original" and "discovery" URLs vs IC members' control,
+// or pick IC members to provide alternative ones
+func (m *smapX) configURLsIC(original, discovery string) (orig, disc string) {
+	// extra effort to avoid changing existing URLs if they work
+	for _, psi := range m.Pmap {
+		if !m.IsIC(psi) {
+			continue
+		}
+		if orig == "" && original != "" && psi.URL(cmn.NetIntraControl) == original {
+			orig = original
+		} else if disc == "" && discovery != "" && psi.URL(cmn.NetIntraControl) == discovery {
+			disc = discovery
+		}
+		if orig != "" && disc != "" {
+			return orig, disc
+		}
+	}
+	// pick alternatives
+	for _, psi := range m.Pmap {
+		if !m.IsIC(psi) {
+			continue
+		}
+		if orig == "" {
+			orig = psi.URL(cmn.NetIntraControl)
+		} else if disc == "" {
+			disc = psi.URL(cmn.NetIntraControl)
+		} else {
+			break
+		}
+	}
+	return orig, disc
+}
+
+//
+// end IC -----------
+//
 
 // to be used exclusively at startup - compare with validate() below
 func (m *smapX) isValid() bool {
