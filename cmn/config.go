@@ -1465,6 +1465,15 @@ func IsNestedMpath(a string, la int, b string) (err error) {
 }
 
 /////////////////
+// FSPConfV322 //
+/////////////////
+
+// [backward compatibility]: used to generate fspath config for older ais versions
+func (c *FSPConfV322) MarshalJSON() ([]byte, error) {
+	return cos.MustMarshal(c.Paths), nil
+}
+
+/////////////////
 // TestFSPConf //
 /////////////////
 
