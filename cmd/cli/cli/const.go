@@ -941,12 +941,12 @@ var (
 	mountpathLabelFlag = cli.StringFlag{
 		Name: "label",
 		Usage: "an optional _mountpath label_ to facilitate extended functionality and context, including:\n" +
-			indent2 + "1. mapping of the mountpath to underlying block device(s)\n" +
-			indent2 + "   (potentially useful in virtualized/containerized environments where `lsblk` wouldn't show a thing);\n" +
-			indent2 + "2. device sharing (or non-sharing) between multiple mountpaths;\n" +
-			indent2 + "3. associated storage class (one of the enumerated ones, as in: \"different storage media for different datasets\");\n" +
-			indent2 + "4. I/O parallelism multiplier - a number of goroutines to concurrently read, write, or traverse the mountpath in question\n" +
+			indent2 + "1. device sharing (or non-sharing) between multiple mountpaths;\n" +
+			indent2 + "2. associated storage class (one of the enumerated ones, as in: \"different storage media for different datasets\");\n" +
+			indent2 + "3. parallelism multiplier - a number of goroutines to concurrently read, write, and/or traverse the mountpath in question\n" +
 			indent2 + "   (e.g.: 'local-NVMe = 8', 'remote-NFS = 1', etc.);\n" +
+			indent2 + "4. mapping of the mountpath to underlying block device(s)\n" +
+			indent2 + "   (potentially useful in virtualized/containerized environments where 'lsblk' wouldn't show a thing);\n" +
 			indent2 + "5. user-defined grouping of the target mountpaths",
 	}
 	noResilverFlag = cli.BoolFlag{
