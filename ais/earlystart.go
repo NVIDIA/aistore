@@ -55,7 +55,7 @@ func (p *proxy) bootstrap() {
 	}
 
 	// 2. make the preliminary/primary decision
-	pid, primary = p.determineRole(smap)
+	pid, primary = p.determineRole(smap, config)
 
 	// 3. primary?
 	if primary {
@@ -106,7 +106,7 @@ func (p *proxy) bootstrap() {
 //     loaded Smap, if exists
 //   - handle AIS_PRIMARY_ID (TODO: target)
 //   - see also "change of mind"
-func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
+func (p *proxy) determineRole(loadedSmap *smapX, config *cmn.Config) (pid string, primary bool) {
 	tag := "no Smap, "
 	if loadedSmap != nil {
 		loadedSmap.Pmap[p.SID()] = p.si
@@ -149,13 +149,17 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	}
 
 	// NOTE: environment always takes precedence
-	if envP.pid != "" {
+	switch {
+	case envP.pid != "":
 		primary = envP.pid == p.SID()
 		pid = envP.pid
-	} else if envP.primary {
+	case envP.primary:
 		primary = true
-	} else if loadedSmap != nil && !envP.secondary {
+	case loadedSmap != nil && !envP.secondary:
 		primary = loadedSmap.isPrimary(p.si)
+	default:
+		primary = config.Proxy.PrimaryURL == p.si.URL(cmn.NetIntraControl) ||
+			config.Proxy.PrimaryURL == p.si.URL(cmn.NetPublic)
 	}
 	return
 }
@@ -407,11 +411,10 @@ func (p *proxy) _cluConfig(smap *smapX) (config *globalConfig, err error) {
 	}
 
 	// update _or_ create version 1; set config (primary, original, discovery) URLs
-	// NOTE:
-	// - using cmn.NetPublic for PrimaryURL, and cmn.NetIntraControl for the other two
+	// NOTE: using cmn.NetIntraControl network for all  three
 	config, err = p.owner.config.modify(&configModifier{
 		pre: func(_ *configModifier, clone *globalConfig) (bool /*updated*/, error) {
-			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
+			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetIntraControl)
 			if orig != "" {
 				clone.Proxy.OriginalURL = orig
 			}
@@ -908,7 +911,7 @@ ret:
 	clone.Version += 100
 	after.Config, err = p.owner.config.modify(&configModifier{
 		pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
-			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetPublic)
+			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetIntraControl)
 			clone.Version++
 			updated = true
 			return

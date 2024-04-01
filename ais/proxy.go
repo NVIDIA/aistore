@@ -2830,12 +2830,13 @@ func (p *proxy) ensureConfigURLs() (config *globalConfig, err error) {
 	return config, err
 }
 
+// using cmn.NetIntraControl network for all three: PrimaryURL, OriginalURL, and DiscoveryURL
 func (p *proxy) _configURLs(_ *configModifier, clone *globalConfig) (updated bool, _ error) {
 	smap := p.owner.smap.get()
 	debug.Assert(smap.isPrimary(p.si))
 
-	if newURL := smap.Primary.URL(cmn.NetPublic); clone.Proxy.PrimaryURL != newURL {
-		clone.Proxy.PrimaryURL = smap.Primary.URL(cmn.NetPublic)
+	if prim := smap.Primary.URL(cmn.NetIntraControl); clone.Proxy.PrimaryURL != prim {
+		clone.Proxy.PrimaryURL = prim
 		updated = true
 	}
 	orig, disc := smap.configURLsIC(clone.Proxy.OriginalURL, clone.Proxy.DiscoveryURL)
