@@ -836,7 +836,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		config       = tools.GetClusterConfig(t)
 		restoreCmd   = make([]tools.RestoreCmd, 0, 3)
 		proxyURL     string
-		cnt          int
+		pcnt, tcnt   int
 		randomKilled bool
 	)
 
@@ -849,9 +849,9 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		if smap.IsPrimary(si) {
 			continue
 		}
-		if si.URL(cmn.NetPublic) == config.Proxy.DiscoveryURL || si.URL(cmn.NetIntraControl) == config.Proxy.DiscoveryURL {
-			cnt++
-			tlog.Logf("Kill #%d: %s\n", cnt, si.StringEx())
+		if si.HasURL(config.Proxy.DiscoveryURL) {
+			pcnt++
+			tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, si.StringEx())
 			cmd, err := tools.KillNode(si)
 			tassert.CheckFatal(t, err)
 			restoreCmd = append(restoreCmd, cmd)
@@ -864,8 +864,8 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		}
 
 		// Kill a random non primary proxy
-		cnt++
-		tlog.Logf("Kill #%d: %s\n", cnt, si.StringEx())
+		pcnt++
+		tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, si.StringEx())
 		cmd, err := tools.KillNode(si)
 		tassert.CheckFatal(t, err)
 		restoreCmd = append(restoreCmd, cmd)
@@ -875,20 +875,20 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	// Kill a random target
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
-	cnt++
-	tlog.Logf("Kill #%d: %s\n", cnt, target.StringEx())
+	tcnt++
+	tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, target.StringEx())
 	cmd, err := tools.KillNode(target)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
 	// Kill original primary
-	cnt++
-	tlog.Logf("Kill #%d: %s\n", cnt, smap.Primary.StringEx())
+	pcnt++
+	tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, smap.Primary.StringEx())
 	cmd, err = tools.KillNode(smap.Primary)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
-	proxyCnt, targetCnt := origProxyCnt-2, origTargetCnt-1
+	proxyCnt, targetCnt := origProxyCnt-pcnt, origTargetCnt-tcnt
 	smap, err = tools.WaitForClusterState(proxyURL, "kill proxies and target", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 

@@ -160,6 +160,9 @@ func (p *proxy) determineRole(loadedSmap *smapX, config *cmn.Config) (pid string
 	default:
 		primary = config.Proxy.PrimaryURL == p.si.URL(cmn.NetIntraControl) ||
 			config.Proxy.PrimaryURL == p.si.URL(cmn.NetPublic)
+		if !primary {
+			primary = p.si.HasURL(config.Proxy.PrimaryURL)
+		}
 	}
 	return
 }

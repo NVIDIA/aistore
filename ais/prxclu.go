@@ -458,7 +458,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			nlog.Errorf("%s: failed to parse %s for non-electability: %v", p, s, err)
 		}
 	}
-	if err := parseOrResolve(nsi.PubNet.Hostname); err != nil {
+	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname); err != nil {
 		p.writeErrf(w, r, "%s: failed to %s %s: invalid hostname: %v", p.si, apiOp, nsi.StringEx(), err)
 		return
 	}

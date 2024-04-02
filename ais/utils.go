@@ -130,7 +130,7 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 		if net.ParseIP(host) != nil { // parses as IP
 			ipv4 = host
 		} else {
-			ip, err := _resolve(host)
+			ip, err := cmn.Host2IP(host)
 			if err != nil {
 				nlog.Errorln("failed to resolve hostname(?)", host, "err:", err, "[idx:", i, len(hostnames))
 				continue
@@ -216,28 +216,6 @@ func initNetInfo(ni *meta.NetInfo, addrList []*localIPv4Info, proto, configuredI
 	if host, err = _selectHost(addrList, lst); err == nil {
 		ni.Init(proto, host, port)
 	}
-	return
-}
-
-func _resolve(hostName string) (net.IP, error) {
-	ips, err := net.LookupIP(hostName)
-	if err != nil {
-		return nil, err
-	}
-	for _, ip := range ips {
-		if ip.To4() != nil {
-			return ip, nil
-		}
-	}
-	return nil, fmt.Errorf("failed to find non-empty IPv4 in list %v (hostName=%q)", ips, hostName)
-}
-
-func parseOrResolve(hostname string) (err error) {
-	if net.ParseIP(hostname) != nil {
-		// is a parse-able IP addr
-		return
-	}
-	_, err = _resolve(hostname)
 	return
 }
 

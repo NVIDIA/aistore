@@ -246,6 +246,62 @@ func (d *Snode) isDupNet(n *Snode, smap *Smap) error {
 	return nil
 }
 
+// NOTE: used only for starting-up proxies and assumes that proxy's listening on a single NIC (no multihoming)
+func (d *Snode) HasURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		nlog.Errorf("failed to parse raw URL %q: %v", rawURL, err)
+		return false
+	}
+	var (
+		host, port = u.Hostname(), u.Port()
+		isIP       = net.ParseIP(host) != nil
+		nis        = []NetInfo{d.PubNet, d.ControlNet, d.DataNet}
+		numIPs     int
+		sameHost   bool
+		samePort   bool
+	)
+	for _, ni := range nis {
+		if ni.Hostname == host {
+			if ni.Port == port {
+				return true
+			}
+			sameHost = true
+		} else if ni.Port == port {
+			samePort = true
+		}
+		if net.ParseIP(ni.Hostname) != nil {
+			numIPs++
+		}
+	}
+	if sameHost && samePort {
+		nlog.Warningln("assuming that", d.nameNets(), "\"contains\"", rawURL)
+		return true
+	}
+	if (numIPs > 0 && isIP) || (numIPs == 0 && !isIP) {
+		return false
+	}
+
+	// slow path: locally resolve (hostname => IPv4) and compare
+	rip, err := cmn.ParseHost2IP(host)
+	if err != nil {
+		nlog.Warningln(host, err)
+		return false
+	}
+	for _, ni := range nis {
+		nip, err := cmn.ParseHost2IP(ni.Hostname)
+		if err != nil {
+			nlog.Warningln(ni.Hostname, err)
+			return false
+		}
+		if rip.Equal(nip) && ni.Port == port {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (d *Snode) IsProxy() bool  { return d.DaeType == apc.Proxy }
 func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
