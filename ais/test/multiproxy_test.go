@@ -888,7 +888,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
-	proxyCnt, targetCnt := origProxyCnt-3, origTargetCnt-1
+	proxyCnt, targetCnt := origProxyCnt-2, origTargetCnt-1
 	smap, err = tools.WaitForClusterState(proxyURL, "kill proxies and target", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 
@@ -992,7 +992,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *meta.Smap, directURL, toI
 	if newSmap.Primary.ID() != toID {
 		t.Fatalf("Expected primary=%s, got %s", toID, newSmap.Primary.ID())
 	}
-	checkSmaps(t, proxyURL)
+	checkSmaps(t, newSmap.Primary.URL(cmn.NetPublic))
 	return
 }
 
@@ -1009,8 +1009,9 @@ func chooseNextProxy(smap *meta.Smap) (proxyid, proxyURL string, err error) {
 // For each proxy: compare its Smap vs primary(*) and return an error if differs
 func checkSmaps(t *testing.T, proxyURL string) {
 	var (
-		smap1   = tools.GetClusterMap(t, proxyURL)
-		primary = smap1.Primary // primary according to the `proxyURL`(*)
+		smap1      = tools.GetClusterMap(t, proxyURL)
+		primary    = smap1.Primary // primary according to the `proxyURL`(*)
+		smapDiffer bool
 	)
 	for _, psi := range smap1.Pmap {
 		smap2 := tools.GetClusterMap(t, psi.URL(cmn.NetPublic))
@@ -1021,6 +1022,10 @@ func checkSmaps(t *testing.T, proxyURL string) {
 		err := fmt.Errorf("(%s %s, primary=%s) != (%s %s, primary=%s): (uuid=%s, same-orig=%t, same-ver=%t)",
 			proxyURL, smap1, primary, psi.URL(cmn.NetPublic), smap2, smap2.Primary, uuid, sameOrigin, sameVersion)
 		t.Error(err)
+		smapDiffer = true
+	}
+	if !smapDiffer {
+		tlog.Logln("all Smap copies are identical: " + smap1.StringEx())
 	}
 }
 
