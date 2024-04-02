@@ -51,6 +51,10 @@ minikube start --cpus=$MINIKUBE_CPU --memory=$MINIKUBE_MEMORY
 # Apply RBAC to allow the default service account admin privileges
 kubectl apply -f minikube_rbac.yaml
 
+# Apply modified coredns config to allow for faster DNS updates
+# Useful for tests where we create and destroy new services rapidly
+kubectl replace -f coredns_config.yaml
+
 # Register the runner in short-lived config container if a runner token is provided
 if [ -n "$RUNNER_TOKEN" ]; then
 echo "Running gitlab-runner register to create config with new token"
