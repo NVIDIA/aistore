@@ -178,6 +178,20 @@ test:short:python:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
 
+test:short:pytorch:
+  <<: *test_short_def
+  variables:
+    AIS_ENDPOINT: "http://localhost:8080"
+    BUCKET: "aws://ais-ci-python"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
+    - cd python
+    - make python_pytorch_unit_tests
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+      - $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/
+
 test:short:python-etl:
   <<: *test_short_def
   tags:

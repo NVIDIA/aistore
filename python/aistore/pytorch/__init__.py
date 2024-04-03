@@ -4,3 +4,4 @@ from aistore.pytorch.aisio import (
     AISSourceLister,
 )
 from aistore.pytorch.dataset import AISDataset
+from aistore.pytorch.dataset import AISIterDataset

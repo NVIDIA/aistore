@@ -4,9 +4,11 @@ Utils for AIS PyTorch Plugin
 Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Mapping, Tuple
-from urllib.parse import urlparse, urlunparse
+from typing import List, Tuple, Iterable
+from urllib.parse import urlparse, urlunparse, parse_qs
 from aistore.sdk import Client
+from aistore.sdk.ais_source import AISSource
+from aistore.sdk.object import Object
 
 
 def parse_url(url: str) -> Tuple[str, str, str]:
@@ -29,25 +31,33 @@ def parse_url(url: str) -> Tuple[str, str, str]:
 
 
 # pylint: disable=unused-variable
-def list_objects_info(client: Client, urls_list: List[str]) -> List[Mapping[str, str]]:
+def list_objects(
+    client: Client, urls_list: List[str], ais_source_list: List[AISSource]
+) -> List[Object]:
     """
-    Create list of [bucket_name, object_name] from all the object urls
+    Create list of all the objects in the given urls and AISSources
+
     Args:
         client (Client): AIStore client object of the calling method
         urls_list (List[str]): list of urls
+        ais_source_list (AISSource, List[AISSource]): list of AISSource objects to load data
+
     Returns:
-        List[samples](List[Mapping[str, str]]): list of {provider, bucket, path to the object}
+        List[Object]: list of all the objects in the given urls and AISSources
     """
     samples = []
-    for url in urls_list:
-        provider, bck_name, path = parse_url(url)
-        objects = client.bucket(bck_name=bck_name, provider=provider).list_objects(
-            prefix=path
-        )
-        for obj_info in objects.entries:
-            samples.append(
-                {"provider": provider, "bck_name": bck_name, "object": obj_info.name}
-            )
+    for item in urls_list:
+        provider, bck_name, path = parse_url(item)
+        objects_iter = client.bucket(
+            bck_name=bck_name, provider=provider
+        ).list_all_objects_iter(prefix=path)
+        for obj in objects_iter:
+            samples.append(obj)
+
+    for item in ais_source_list:
+        for obj in item.list_all_objects_iter():
+            samples.append(obj)
+
     return samples
 
 
@@ -62,3 +72,32 @@ def unparse_url(provider: str, bck_name: str, obj_name: str) -> str:
         unparsed_url(str): Unparsed url (complete url)
     """
     return urlunparse([provider, bck_name, obj_name, "", "", ""])
+
+
+def list_objects_iterator(
+    client: Client,
+    urls_list: List[str],
+    ais_source_list: List[AISSource],
+) -> Iterable[Object]:
+    """
+    Create an iterable over all the objects in the given urls and AISSources
+
+    Args:
+        client (Client): AIStore client object of the calling method
+        urls_list (List[str]): list of urls
+        ais_source_list (AISSource, List[AISSource]): list of AISSource objects to load data
+
+    Returns:
+        Iterable[Object]: iterable over all the objects in the given urls and AISSources
+    """
+    for item in urls_list:
+        provider, bck_name, path = parse_url(item)
+        objects_iter = client.bucket(
+            bck_name=bck_name, provider=provider
+        ).list_all_objects_iter(prefix=path)
+        for obj in objects_iter:
+            yield obj
+
+    for item in ais_source_list:
+        for obj in item.list_all_objects_iter():
+            yield obj

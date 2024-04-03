@@ -17,6 +17,10 @@ But, to create a DataLoader you have to first create a Dataset, which is a class
 
 PyTorch offers two styles of Dataset class: Map-style and Iterable-style.
 
+**Note:** Both datasets can be initialized with a urls_list parameter and/or an ais_source_list parameter that defines which objects to reference in AIS.
+```urls_list``` can be a single prefix url or a list of prefixes. Eg. ```"ais://bucket1/file-"``` or ```["aws://bucket2/train/", "ais://bucket3/train/"]```.
+Likewise ```ais_source_list``` can be a single [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) object or a list of [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) objects. Eg. ```"Client.bucket()``` or ```[Client.bucket.objects(), Client.bucket()]```.
+
 #### ***Map-style Dataset***
 
 A map-style dataset in PyTorch implements the `__getitem__()` and `__len__()` functions and provides the user a map from indices/keys to data samples.
@@ -33,17 +37,42 @@ for i in range(len(dataset)): # calculate length of all items present using len(
 
 ```
 
-**Note:** ```urls_list``` can be a single prefix url or a list of prefixs. Eg. ```"ais://bucket1/file-"``` or ```["aws://bucket2/train/", "ais://bucket3/train/"]```
 
 #### ***Iterable-style datasets***
 
-Iterable-style datasets are an instance of a subclass of the IterableDataset. Every Iterable-style dataset has to implement the `iter()` function, which represents iterable over a sample. This kind of dataset is mostly suitable for tasks where random reads are expensive or even not possible.
+Iterable-style datasets in PyTorch are tailored for scenarios where data needs to be processed as a stream, and direct indexing is either not feasible or inefficient. Such datasets inherit from IterableDataset and override the `__iter__()` method, providing an iterator over the data samples.
 
-Examples of such datasets include a stream of data readings from a database, remote server, or logs-stream.
+These datasets are particularly useful when dealing with large data streams that cannot be loaded entirely into memory, or when data is continuously generated or fetched from external sources like databases, remote servers, or live data feeds.
 
-More information on Iterable-style datasets in PyTorch can be found [here](https://pytorch.org/data/main/torchdata.datapipes.iter.html).
+We have extended support for iterable-style datasets to AIStore (AIS) backends, enabling efficient streaming of data directly from AIS buckets. This approach is ideal for training models on large datasets stored in AIS, minimizing memory overhead and facilitating seamless data ingestion from AIS's distributed object storage.
 
-**Currently, we are working on supporting Iterable-style datasets for AIS backends**
+Here's how you can use an iterable-style dataset with AIStore:
+
+```
+from aistore.pytorch.dataset import AISIterDataset
+from aistore.sdk import Client
+
+ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
+client = Client(ais_url)
+bucket = client.bucket("my-bck").create(exist_ok=True)
+
+# Creating objects in our bucket 
+object_names = [f"example_obj_{i}" for i in range(10)]
+for name in object_names:
+    bucket.object(name).put_content("object content".encode("utf-8"))
+
+# Creating an object group
+my_objects = bucket.objects(obj_names=object_names)
+
+# Initialize the dataset with the AIS client URL and the data source location
+dataset = AISIterDataset(client_url=ais_url, urls_list="ais://bucket1/", ais_source_list=my_objects)
+
+# Iterate over the dataset to fetch data samples as a stream
+for data_sample in dataset:
+    print(data_sample)  # Each iteration fetches a data sample (object name and byte array)
+
+```
+
 
 **Creating DataLoader from AISDataset**
 ```
@@ -51,7 +80,7 @@ from aistore.pytorch.dataset import AISDataset
 
 train_loader = torch.utils.data.DataLoader(
     AISDataset(
-        "http://ais-gateway-url:8080", urls_list=["ais://dataset1/train/", "ais://dataset2/train/"],
+        "http://ais-gateway-url:8080", urls_list=["ais://dataset1/train/", "ais://dataset2/train/"]),
     batch_size=args.batch_size, shuffle=True,
     num_workers=args.workers, pin_memory=True,
 )
