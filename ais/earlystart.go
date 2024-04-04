@@ -7,6 +7,7 @@ package ais
 import (
 	"net/url"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -247,9 +248,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		before.Config, _ = p.owner.config.get()
 
 		forcePrimaryChange := prim.isCfg || prim.isEP || prim.isIs
-		p.reg.mu.RLock()
 		smap = p.regpoolMaxVer(&before, &after, forcePrimaryChange)
-		p.reg.mu.RUnlock()
 
 		uuid, created = smap.UUID, smap.CreationTime
 
@@ -802,7 +801,14 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 }
 
 func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (smap *smapX) {
+	var (
+		voteInProgress bool
+		cloned         bool
+	)
 	*after = *before
+
+	p.reg.mu.RLock()
+
 	if len(p.reg.pool) == 0 {
 		goto ret
 	}
@@ -812,6 +818,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 			nlog.Errorln("Warning:", err)
 			continue
 		}
+		voteInProgress = voteInProgress || regReq.Flags.IsSet(cifl.VoteInProgress)
 		if regReq.Smap != nil && regReq.Smap.version() > 0 && cos.IsValidUUID(regReq.Smap.UUID) {
 			if after.Smap != nil && after.Smap.version() > 0 {
 				if cos.IsValidUUID(after.Smap.UUID) && after.Smap.UUID != regReq.Smap.UUID {
@@ -862,10 +869,9 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 	if after.Config != before.Config {
 		var err error
 		after.Config, err = p.owner.config.modify(&configModifier{
-			pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
+			pre: func(_ *configModifier, clone *globalConfig) (bool, error) {
 				*clone = *after.Config
-				updated = true
-				return
+				return true, nil
 			},
 		})
 		if err != nil {
@@ -874,6 +880,43 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 	}
 
 ret:
+	p.reg.mu.RUnlock()
+
+	// not interfering with elections
+	if voteInProgress {
+		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
+		nlog.Errorln("voting is in progress, continuing with potentially older", before.Smap.StringEx())
+		return before.Smap
+	}
+
+	runtime.Gosched()
+
+	// NOTE:
+	// - always update joining nodes' net-infos; alternatively, narrow it down to only proxies
+	// - as targets have PV/PVCs affinity and always restart on the same K8s nodes
+	// - compare w/ httpclupost
+
+	p.reg.mu.RLock()
+	for _, regReq := range p.reg.pool {
+		nsi := regReq.SI
+		if nsi.Validate() != nil {
+			continue
+		}
+		osi := after.Smap.GetNode(nsi.ID())
+		if osi == nil {
+			continue
+		}
+		if err := osi.NetEq(nsi); err != nil {
+			nlog.Warningln("Warning:", err)
+			if !cloned {
+				after.Smap = after.Smap.clone()
+				cloned = true
+			}
+			after.Smap.putNode(nsi, osi.Flags, true /*silent*/)
+		}
+	}
+	p.reg.mu.RUnlock()
+
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
 		after.Smap.UUID, after.Smap.CreationTime = newClusterUUID()
 		nlog.Infoln(p.String(), "new cluster UUID:", after.Smap.UUID)
@@ -883,54 +926,32 @@ ret:
 		if !forcePrimaryChange {
 			return after.Smap
 		}
-		nlog.Warningln("force primary change --> self")
 	} else {
 		debug.Assert(before.Smap.version() < after.Smap.version())
 		nlog.Warningln("before:", before.Smap.StringEx(), "after:", after.Smap.StringEx())
 	}
 
-	// not interfering with elections
-	if after.Flags.IsSet(cifl.VoteInProgress) {
-		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
-		nlog.Errorln("voting in progress, cannot take over as primary")
-		return before.Smap
+	if after.Smap.Primary.ID() != p.SID() {
+		nlog.Warningln(p.String() + ": taking over as primary")
 	}
-
-	nlog.Warningln(p.String() + ": taking over as primary")
-
-	// trusting & taking over (have joins)
-	var err error
-	clone := after.Smap.clone()
-	clone.Primary = p.si
-	clone.Pmap[p.SID()] = p.si
-
-	clone.Version += 50
-
-	// compare w/ httpclupost
-	for _, regReq := range p.reg.pool {
-		nsi := regReq.SI
-		if nsi.Validate() != nil {
-			continue
-		}
-		osi := clone.GetNode(nsi.ID())
-		if osi != nil {
-			if err := osi.NetEq(nsi); err != nil {
-				nlog.Warningln("Warning:", err)
-				clone.putNode(nsi, osi.Flags, true /*silent*/)
-			}
-		}
+	if !cloned {
+		after.Smap = after.Smap.clone()
 	}
+	after.Smap.Primary = p.si
+	after.Smap.Pmap[p.SID()] = p.si
 
-	after.Config, err = p.owner.config.modify(&configModifier{
-		pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
+	after.Smap.Version += 50
+
+	config, errN := p.owner.config.modify(&configModifier{
+		pre: func(_ *configModifier, clone *globalConfig) (bool, error) {
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetIntraControl)
 			clone.Version++
-			updated = true
-			return
+			return true, nil
 		},
 	})
-	if err != nil {
-		cos.ExitLog(err)
+	if errN != nil {
+		cos.ExitLog(errN)
 	}
-	return clone
+	after.Config = config
+	return after.Smap
 }

@@ -777,9 +777,9 @@ func (r *runner) Get(name string) (val int64) { return r.core.get(name) }
 
 func (r *runner) _run(logger statsLogger /* Prunner or Trunner */) error {
 	var (
-		i, j   time.Duration
-		sleep  = startupSleep
-		ticker = time.NewTicker(sleep)
+		i, j, k time.Duration
+		sleep   = startupSleep
+		ticker  = time.NewTicker(sleep)
 
 		// NOTE: the maximum time we agree to wait for r.daemon.ClusterStarted()
 		config   = cmn.GCO.Get()
@@ -797,6 +797,11 @@ waitStartup:
 			ticker.Stop()
 			return nil
 		case <-ticker.C:
+			k += sleep
+			if k >= config.Periodic.StatsTime.D() {
+				nlog.Flush(nlog.ActNone)
+				k = 0
+			}
 			if r.daemon.ClusterStarted() {
 				break waitStartup
 			}
@@ -806,7 +811,6 @@ waitStartup:
 				deadline = time.Hour
 
 				nlog.Infoln(r.Name() + ": standing by...")
-				nlog.Flush(nlog.ActNone)
 				continue
 			}
 			j += sleep
