@@ -227,12 +227,12 @@ func (p *proxy) Run() error {
 	}
 	p.regNetHandlers(networkHandlers)
 
-	nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PubNet.URL)
+	nlog.Infoln(cmn.NetPublic+":", "\t\t", p.si.PubNet.URL)
 	if p.si.PubNet.URL != p.si.ControlNet.URL {
-		nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraControl, p.si.ControlNet.URL)
+		nlog.Infoln(cmn.NetIntraControl+":", "\t", p.si.ControlNet.URL)
 	}
 	if p.si.PubNet.URL != p.si.DataNet.URL {
-		nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.DataNet.URL)
+		nlog.Infoln(cmn.NetIntraData+":", "\t", p.si.DataNet.URL)
 	}
 
 	dsort.Pinit(p, config)
@@ -993,7 +993,11 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	if err := smap.validate(); err != nil {
-		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		if !p.ClusterStarted() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		}
 		return
 	}
 
@@ -3109,7 +3113,7 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error
 
 	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
-	if smap.IsIC(p.si) && smap.CountActiveTs() > 0 {
+	if smap.IsIC(p.si) && smap.CountActiveTs() > 0 && (smap.IsPrimary(p.si) || p.ClusterStarted()) {
 		nl := xact.NewXactNL(xact.RebID2S(newRMD.Version), apc.ActRebalance, &smap.Smap, nil)
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)

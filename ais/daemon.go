@@ -8,11 +8,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -35,6 +37,7 @@ type (
 		rg        *rungroup
 		version   string      // major.minor.build (see cmd/aisnode)
 		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
+		envPriURL string      // env "AIS_PRIMARY_EP"
 		stopping  atomic.Bool // true when exiting
 		resilver  struct {
 			reason   string // Reason why resilver needs to be run.
@@ -204,7 +207,37 @@ func initDaemon(version, buildTime string) cos.Runner {
 	// K8s
 	k8s.Init()
 
+	// declared xactions, as per xact/api.go
 	xreg.Init()
+
+	// primary 'host[:port]' endpoint or URL from the environment
+	if daemon.envPriURL = os.Getenv(env.AIS.PrimaryEP); daemon.envPriURL != "" {
+		scheme := "http"
+		if config.Net.HTTP.UseHTTPS {
+			scheme = "https"
+		}
+		if strings.Contains(daemon.envPriURL, "://") {
+			u, err := url.Parse(daemon.envPriURL)
+			if err != nil {
+				cos.ExitLogf("invalid environment %s=%s: %v", env.AIS.PrimaryEP, daemon.envPriURL, err)
+			}
+			if u.Path != "" && u.Path != "/" {
+				cos.ExitLogf("invalid environment %s=%s (not expecting path %q)",
+					env.AIS.PrimaryEP, daemon.envPriURL, u.Path)
+			}
+			// reassemble and compare
+			ustr := scheme + "://" + u.Hostname()
+			if port := u.Port(); port != "" {
+				ustr += ":" + port
+			}
+			if ustr != daemon.envPriURL {
+				nlog.Warningln("environment-set primary URL mismatch:", daemon.envPriURL, "vs", ustr)
+				daemon.envPriURL = ustr
+			}
+		} else {
+			daemon.envPriURL = scheme + "://" + daemon.envPriURL
+		}
+	}
 
 	// fork (proxy | target)
 	co := newConfigOwner(config)

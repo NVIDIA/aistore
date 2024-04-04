@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/urfave/cli"
 )
@@ -103,6 +104,10 @@ outer:
 				break outer
 			}
 		}
+	}
+	if avail == 0 {
+		debug.Assert(num == 0)
+		return 0, ""
 	}
 
 	pctUsed := used * 100 / (used + avail)

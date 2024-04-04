@@ -31,6 +31,15 @@ const (
 type (
 	bmds  map[*meta.Snode]*bucketMD
 	smaps map[*meta.Snode]*smapX
+
+	// sourced from: (env, config, smap)
+	prim struct {
+		url    string
+		isSmap bool // <-- loaded Smap
+		isCfg  bool // <-- config.proxy.primary_url
+		isEP   bool // <-- env AIS_PRIMARY_EP
+		isIs   bool // <-- env AIS_IS_PRIMARY
+	}
 )
 
 // Background:
@@ -39,55 +48,33 @@ type (
 //   - Only the primary (leader) proxy distributes Smap updates to all other clustered nodes
 //   - Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxy) bootstrap() {
-	var (
-		config          = cmn.GCO.Get()
-		pid, primaryURL string
-		cii             *cifl.Info
-		primary         bool
-	)
-
 	// 1: load a local copy and try to utilize it for discovery
 	smap, reliable := p.loadSmap()
 	if !reliable {
 		smap = nil
+		nlog.Infoln(p.String() + ": starting without Smap")
 	} else {
 		nlog.Infoln(p.String()+": loaded", smap.StringEx())
 	}
 
-	// 2. make the preliminary/primary decision
-	pid, primary = p.determineRole(smap, config)
+	// 2. make preliminary _primary_ decision
+	config := cmn.GCO.Get()
+	prim := p.determineRole(smap, config)
 
-	// 3. primary?
-	if primary {
-		if pid != "" { // takes precedence over everything else
-			cos.Assert(pid == p.SID())
-		} else if reliable {
-			var cnt int // confirmation count
-			// double-check
-			if cii, cnt = p.bcastHealth(smap, true /*checkAll*/); cii != nil && cii.Smap.Version > smap.version() {
-				if cii.Smap.Primary.ID != p.SID() || cnt < maxVerConfirmations {
-					nlog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
-						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
-					primary = false
-					primaryURL = cii.Smap.Primary.PubURL
-				} else {
-					nlog.Warningf("%s: proceeding as primary even though local %s < v%d(%s, cnt=%d)",
-						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
-				}
-			}
+	// 3: start as primary
+	if prim.isSmap || prim.isCfg || prim.isEP || prim.isIs {
+		var snow string
+		if prim.isSmap {
+			snow = " _for now_"
 		}
-	}
-
-	// 4.1: start as primary
-	if primary {
-		nlog.Infoln(p.String() + ": assuming primary role for now, starting up")
-		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets)
+		nlog.Infof("%s: assuming primary role%s %+v", p, snow, prim)
+		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets, prim)
 		return
 	}
 
-	// 4.2: otherwise, join as non-primary
+	// 4: otherwise, join as non-primary
 	nlog.Infoln(p.String() + ": starting up as non-primary")
-	err := p.secondaryStartup(smap, primaryURL)
+	err := p.secondaryStartup(smap, prim.url)
 	if err != nil {
 		if reliable {
 			svm := p.uncoverMeta(smap)
@@ -102,68 +89,55 @@ func (p *proxy) bootstrap() {
 	}
 }
 
-//   - make the *primary* decision taking into account both environment and
-//     loaded Smap, if exists
-//   - handle AIS_PRIMARY_ID (TODO: target)
-//   - see also "change of mind"
-func (p *proxy) determineRole(loadedSmap *smapX, config *cmn.Config) (pid string, primary bool) {
-	tag := "no Smap, "
-	if loadedSmap != nil {
-		loadedSmap.Pmap[p.SID()] = p.si
-		tag = loadedSmap.StringEx() + ", "
-	}
-	// parse env
-	envP := struct {
-		pid       string
-		primary   bool
-		secondary bool
-	}{
-		pid:       os.Getenv(env.AIS.PrimaryID),
-		primary:   cos.IsParseBool(os.Getenv(env.AIS.IsPrimary)),
-		secondary: cos.IsParseBool(os.Getenv(env.AIS.IsSecondary)),
-	}
-
-	if envP.primary && envP.secondary {
-		cos.ExitLogf("%s: both %s and %s cannot be true", p, env.AIS.IsPrimary, env.AIS.IsSecondary)
-	}
-	if envP.pid != "" && envP.primary && p.SID() != envP.pid {
-		cos.ExitLogf("%s: invalid combination of %s=true & %s=%s", p, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid)
-	}
-	nlog.Infof("%s: %sprimary-env=%+v", p, tag, envP)
-
-	if loadedSmap != nil && envP.pid != "" {
-		primary := loadedSmap.GetProxy(envP.pid)
-		if primary == nil {
-			nlog.Errorf(
-				"%s: ignoring %s=%s - not found in the loaded %s",
-				p.si, env.AIS.IsPrimary, envP.pid, loadedSmap,
-			)
-			envP.pid = ""
-		} else if loadedSmap.Primary.ID() != envP.pid {
-			nlog.Warningf(
-				"%s: new %s=%s, previous %s",
-				p.si, env.AIS.PrimaryID, envP.pid, loadedSmap.Primary,
-			)
-			loadedSmap.Primary = primary
-		}
-	}
-
-	// NOTE: environment always takes precedence
+// make the *primary* decision taking into account both the environment and loaded Smap, if exists
+// cases 1 through 4 below (and see also "change of mind")
+func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim prim) {
+	prim.isIs = cos.IsParseBool(os.Getenv(env.AIS.IsPrimary))
 	switch {
-	case envP.pid != "":
-		primary = envP.pid == p.SID()
-		pid = envP.pid
-	case envP.primary:
-		primary = true
-	case loadedSmap != nil && !envP.secondary:
-		primary = loadedSmap.isPrimary(p.si)
+	case daemon.envPriURL != "":
+		// 1. user override local Smap (if exists) via env-set primary URL
+		prim.isEP = daemon.envPriURL == p.si.URL(cmn.NetIntraControl) || daemon.envPriURL == p.si.URL(cmn.NetPublic)
+		if !prim.isEP {
+			prim.isEP = p.si.HasURL(daemon.envPriURL)
+		}
+		if prim.isIs && !prim.isEP {
+			nlog.Warningf("%s: invalid combination of '%s=true' vs '%s=%s'", p, env.AIS.IsPrimary,
+				env.AIS.PrimaryEP, daemon.envPriURL)
+			nlog.Warningln("proceeding as non-primary...")
+		}
+		if prim.isEP {
+			daemon.envPriURL = ""
+		} else {
+			prim.url = daemon.envPriURL
+		}
+	case prim.isIs:
+		// 2. TODO: needed for tests, consider removing
+	case smap != nil:
+		// 3. regular case: relying on local copy of Smap (double-checking its version though)
+		prim.isSmap = smap.isPrimary(p.si)
+		if prim.isSmap {
+			cii, cnt := p.bcastHealth(smap, true /*checkAll*/)
+			if cii != nil && cii.Smap.Version > smap.version() {
+				if cii.Smap.Primary.ID != p.SID() || cnt < maxVerConfirmations {
+					nlog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
+						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
+					prim.isSmap = false
+					prim.url = cii.Smap.Primary.PubURL
+				} else {
+					nlog.Warningf("%s: proceeding as primary even though local %s < v%d(%s, cnt=%d)",
+						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
+				}
+			}
+		}
 	default:
-		primary = config.Proxy.PrimaryURL == p.si.URL(cmn.NetIntraControl) ||
+		// 4. initial deployment
+		prim.isCfg = config.Proxy.PrimaryURL == p.si.URL(cmn.NetIntraControl) ||
 			config.Proxy.PrimaryURL == p.si.URL(cmn.NetPublic)
-		if !primary {
-			primary = p.si.HasURL(config.Proxy.PrimaryURL)
+		if !prim.isCfg {
+			prim.isCfg = p.si.HasURL(config.Proxy.PrimaryURL)
 		}
 	}
+
 	return
 }
 
@@ -207,7 +181,7 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 // Proxy/gateway that is, potentially, the leader of the cluster.
 // It waits a configured time for other nodes to join,
 // discovers cluster-wide metadata, and resolve remaining conflicts.
-func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int) {
+func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int, prim prim) {
 	var (
 		smap          = newSmap()
 		uuid, created string
@@ -272,6 +246,14 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		p.reg.mu.RUnlock()
 
 		uuid, created = smap.UUID, smap.CreationTime
+
+		// NOTE: all except prim.isSmap
+		if smap.Primary.ID() != p.SID() && (prim.isCfg || prim.isEP || prim.isIs) {
+			nlog.Warningf("%s: primary change from %s to self (based on %+v)", p, smap.Primary.StringEx(), prim)
+			smap.Primary = si
+			smap.Version += 50
+		}
+
 		p.owner.smap.put(smap)
 		p.owner.smap.mu.Unlock()
 

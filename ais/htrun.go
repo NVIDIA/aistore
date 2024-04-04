@@ -416,11 +416,11 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 		return
 	}
 
-	// NOTE: not enforcing Snode's immutability - in particular, IPs that may change upon restart
-	// in certain environments
+	//
+	// NOTE: not enforcing Snode's immutability - in particular, IPs that may change upon restart in K8s
+	//
 	if _, err := smap.IsDupNet(h.si); err != nil {
-		nlog.Errorln(err)
-		return
+		nlog.Warningln(err, "- proceeding with the loaded", smap.String(), "anyway...")
 	}
 	reliable = true
 	return
@@ -1762,6 +1762,10 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	)
 	debug.Assert(pubValid && intraValid)
 
+	// env goes first
+	if daemon.envPriURL != "" {
+		candidates = _addCan(daemon.envPriURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
+	}
 	primaryURL, psi := h.getPrimaryURLAndSI(nil, config)
 	candidates = _addCan(primaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	if psi != nil {
