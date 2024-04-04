@@ -295,7 +295,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	if k8s.IsK8s() && config.HostNet.Hostname != "" {
 		// K8s: skip IP addr validation
 		// public hostname could be a load balancer's external IP or a service DNS
-		nlog.Infof("K8s deployment: skipping hostname validation for %q", config.HostNet.Hostname)
+		nlog.Infoln("K8s deployment: skipping hostname validation for", config.HostNet.Hostname)
 		pubAddr.Init(proto, pub, port)
 	} else {
 		if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port); err != nil {

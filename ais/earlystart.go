@@ -90,9 +90,13 @@ func (p *proxy) bootstrap() {
 }
 
 // make the *primary* decision taking into account both the environment and loaded Smap, if exists
-// cases 1 through 4 below (and see also "change of mind")
+// cases 1 through 4:
+// 1, 2: environment "AIS_PRIMARY_EP" and "AIS_IS_PRIMARY" take precedence unconditionally (in that exact sequence);
+// 3: next, loaded Smap (but it can be overridden by newer versions from other nodes);
+// 4: finally, if none of the above applies, take into account cluster config (its "proxy" section).
+// See also: "change of mind"
 func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim prim) {
-	prim.isIs = cos.IsParseBool(os.Getenv(env.AIS.IsPrimary))
+	isIs := cos.IsParseBool(os.Getenv(env.AIS.IsPrimary))
 	switch {
 	case daemon.envPriURL != "":
 		// 1. user override local Smap (if exists) via env-set primary URL
@@ -100,7 +104,7 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 		if !prim.isEP {
 			prim.isEP = p.si.HasURL(daemon.envPriURL)
 		}
-		if prim.isIs && !prim.isEP {
+		if isIs && !prim.isEP {
 			nlog.Warningf("%s: invalid combination of '%s=true' vs '%s=%s'", p, env.AIS.IsPrimary,
 				env.AIS.PrimaryEP, daemon.envPriURL)
 			nlog.Warningln("proceeding as non-primary...")
@@ -110,8 +114,9 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 		} else {
 			prim.url = daemon.envPriURL
 		}
-	case prim.isIs:
+	case isIs:
 		// 2. TODO: needed for tests, consider removing
+		prim.isIs = isIs
 	case smap != nil:
 		// 3. regular case: relying on local copy of Smap (double-checking its version though)
 		prim.isSmap = smap.isPrimary(p.si)
@@ -241,18 +246,12 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		before.Smap, before.BMD, before.RMD, before.EtlMD = clone, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
 		before.Config, _ = p.owner.config.get()
 
+		forcePrimaryChange := prim.isCfg || prim.isEP || prim.isIs
 		p.reg.mu.RLock()
-		smap = p.regpoolMaxVer(&before, &after)
+		smap = p.regpoolMaxVer(&before, &after, forcePrimaryChange)
 		p.reg.mu.RUnlock()
 
 		uuid, created = smap.UUID, smap.CreationTime
-
-		// NOTE: all except prim.isSmap
-		if smap.Primary.ID() != p.SID() && (prim.isCfg || prim.isEP || prim.isIs) {
-			nlog.Warningf("%s: primary change from %s to self (based on %+v)", p, smap.Primary.StringEx(), prim)
-			smap.Primary = si
-			smap.Version += 50
-		}
 
 		p.owner.smap.put(smap)
 		p.owner.smap.mu.Unlock()
@@ -802,7 +801,7 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	return nil
 }
 
-func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
+func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (smap *smapX) {
 	*after = *before
 	if len(p.reg.pool) == 0 {
 		goto ret
@@ -876,20 +875,26 @@ ret:
 		return after.Smap
 	}
 	if before.Smap == after.Smap {
-		return after.Smap
+		if !forcePrimaryChange {
+			return after.Smap
+		}
+		nlog.Warningln("force primary change --> self")
+	} else {
+		debug.Assert(before.Smap.version() < after.Smap.version())
+		nlog.Warningln("before:", before.Smap.StringEx(), "after:", after.Smap.StringEx())
 	}
 
-	debug.Assert(before.Smap.version() < after.Smap.version())
 	// not interfering with elections
 	if after.Flags.IsSet(cifl.VoteInProgress) {
-		nlog.Errorln(p.String()+" primary differ:", before.Smap.StringEx(), "vs. newer", after.Smap.StringEx(), "(voting = YES)")
 		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
+		nlog.Errorln("voting = YES")
 		return before.Smap
 	}
+
+	nlog.Warningln(p.String() + ": taking over as primary")
+
 	// trusting & taking over (have joins)
 	var err error
-	nlog.Warningf("%s: primary differ: %s vs. newer %s - taking over as PRIMARY...", p,
-		before.Smap.StringEx(), after.Smap.StringEx())
 	clone := after.Smap.clone()
 	clone.Primary = p.si
 	clone.Pmap[p.SID()] = p.si
