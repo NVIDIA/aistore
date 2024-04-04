@@ -60,6 +60,11 @@ type (
 		URL         string `json:"direct_url"`
 		tcpEndpoint string
 	}
+	errNetInfoChanged struct {
+		sname    string
+		tag      string
+		oep, nep string
+	}
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
@@ -169,10 +174,6 @@ func (d *Snode) URL(network string) (u string) {
 	return u
 }
 
-// TODO [feature]
-// - support node restart+join with different network(s)
-// - factor in PubExtra as well
-
 func (d *Snode) Eq(o *Snode) (eq bool) {
 	if d == nil || o == nil {
 		return
@@ -182,19 +183,26 @@ func (d *Snode) Eq(o *Snode) (eq bool) {
 		if !eq {
 			return
 		}
-		name := d.StringEx()
-		debug.Assertf(d.DaeType == o.DaeType, "%s: node type %q vs %q", name, d.DaeType, o.DaeType)
-		if !d.PubNet.eq(&o.PubNet) {
-			nlog.Infof("Warning %s: pub %s vs %s", name, d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint())
-		}
-		if !d.ControlNet.eq(&o.ControlNet) {
-			nlog.Infof("Warning %s: control %s vs %s", name, d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint())
-		}
-		if !d.DataNet.eq(&o.DataNet) {
-			nlog.Infof("Warning %s: data %s vs %s", name, d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint())
+		if err := d.NetEq(o); err != nil {
+			nlog.Warningln(err)
 		}
 	})
 	return eq
+}
+
+func (d *Snode) NetEq(o *Snode) error {
+	name := d.StringEx()
+	debug.Assertf(d.DaeType == o.DaeType, "%s: node type %q vs %q", name, d.DaeType, o.DaeType)
+	if !d.PubNet.eq(&o.PubNet) {
+		return &errNetInfoChanged{name, "pub", d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint()}
+	}
+	if !d.ControlNet.eq(&o.ControlNet) {
+		return &errNetInfoChanged{name, "control", d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint()}
+	}
+	if !d.DataNet.eq(&o.DataNet) {
+		return &errNetInfoChanged{name, "data", d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint()}
+	}
+	return nil
 }
 
 func (d *Snode) Validate() error {
@@ -337,6 +345,10 @@ func (d *Snode) Fl2S() string {
 /////////////
 // NetInfo //
 /////////////
+
+func (e *errNetInfoChanged) Error() string {
+	return fmt.Sprintf("%s: %s %s vs %s", e.sname, e.tag, e.nep, e.oep)
+}
 
 func _ep(hostname, port string) string { return hostname + ":" + port }
 

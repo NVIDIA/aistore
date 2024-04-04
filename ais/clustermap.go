@@ -329,7 +329,7 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 		}
 		m.addProxy(nsi)
 		if flags.IsSet(meta.SnodeNonElectable) {
-			nlog.Warningf("%s won't be electable", nsi)
+			nlog.Warningln(nsi.String(), "won't be electable")
 		}
 	} else {
 		debug.Assert(nsi.IsTarget())
@@ -339,9 +339,9 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 		m.addTarget(nsi)
 	}
 	if old != nil {
-		nlog.Errorf("Warning: same ID %s vs (joining) %s, %s", old.StringEx(), nsi.StringEx(), m.StringEx())
+		nlog.Warningln("same ID", old.StringEx(), "vs (joining)", nsi.StringEx(), "->", m.StringEx())
 	} else if !silent {
-		nlog.Infof("joined %s, %s", nsi, m.StringEx())
+		nlog.Infoln("joined", nsi.String(), "->", m.StringEx())
 	}
 }
 

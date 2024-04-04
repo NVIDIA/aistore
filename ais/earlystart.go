@@ -807,6 +807,11 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 		goto ret
 	}
 	for _, regReq := range p.reg.pool {
+		nsi := regReq.SI
+		if err := nsi.Validate(); err != nil {
+			nlog.Errorln("Warning:", err)
+			continue
+		}
 		if regReq.Smap != nil && regReq.Smap.version() > 0 && cos.IsValidUUID(regReq.Smap.UUID) {
 			if after.Smap != nil && after.Smap.version() > 0 {
 				if cos.IsValidUUID(after.Smap.UUID) && after.Smap.UUID != regReq.Smap.UUID {
@@ -887,7 +892,7 @@ ret:
 	// not interfering with elections
 	if after.Flags.IsSet(cifl.VoteInProgress) {
 		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
-		nlog.Errorln("voting = YES")
+		nlog.Errorln("voting in progress, cannot take over as primary")
 		return before.Smap
 	}
 
@@ -898,7 +903,24 @@ ret:
 	clone := after.Smap.clone()
 	clone.Primary = p.si
 	clone.Pmap[p.SID()] = p.si
-	clone.Version += 100
+
+	clone.Version += 50
+
+	// compare w/ httpclupost
+	for _, regReq := range p.reg.pool {
+		nsi := regReq.SI
+		if nsi.Validate() != nil {
+			continue
+		}
+		osi := clone.GetNode(nsi.ID())
+		if osi != nil {
+			if err := osi.NetEq(nsi); err != nil {
+				nlog.Warningln("Warning:", err)
+				clone.putNode(nsi, osi.Flags, true /*silent*/)
+			}
+		}
+	}
+
 	after.Config, err = p.owner.config.modify(&configModifier{
 		pre: func(_ *configModifier, clone *globalConfig) (updated bool, err error) {
 			clone.Proxy.PrimaryURL = p.si.URL(cmn.NetIntraControl)
