@@ -388,7 +388,7 @@ func freeBcastRes(results sliceResults) {
 //
 
 type (
-	cresCM struct{} // -> cluMeta
+	cresCM struct{} // -> cluMeta; selectively and alternatively, via `recvCluMetaBytes`
 	cresSM struct{} // -> smapX
 	cresND struct{} // -> meta.Snode
 	cresBA struct{} // -> cmn.BackendInfoAIS

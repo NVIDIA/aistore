@@ -50,12 +50,18 @@ type (
 //   - Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
 func (p *proxy) bootstrap() {
 	// 1: load a local copy and try to utilize it for discovery
-	smap, reliable := p.loadSmap()
+	var (
+		smap, reliable = p.loadSmap()
+		isSelf         string
+	)
 	if !reliable {
 		smap = nil
 		nlog.Infoln(p.String() + ": starting without Smap")
 	} else {
-		nlog.Infoln(p.String()+": loaded", smap.StringEx())
+		if smap.Primary.ID() == p.SID() {
+			isSelf = ", where primary=self"
+		}
+		nlog.Infoln(p.String()+": loaded", smap.StringEx()+isSelf)
 	}
 
 	// 2. make preliminary _primary_ decision
@@ -63,12 +69,15 @@ func (p *proxy) bootstrap() {
 	prim := p.determineRole(smap, config)
 
 	// 3: start as primary
-	if prim.isSmap || prim.isCfg || prim.isEP || prim.isIs {
-		var snow string
+	forcePrimaryChange := prim.isCfg || prim.isEP || prim.isIs
+	if prim.isSmap || forcePrimaryChange {
 		if prim.isSmap {
-			snow = " _for now_"
+			nlog.Infof("%s: assuming primary role _for now_ %+v", p, prim)
+		} else if prim.isEP && isSelf != "" {
+			nlog.Infoln(p.String()+": assuming primary role", "(env '"+env.AIS.IsPrimary+"' is the current primary and is redundant)")
+		} else {
+			nlog.Infof("%s: assuming primary role as per: %+v", p, prim)
 		}
-		nlog.Infof("%s: assuming primary role%s %+v", p, snow, prim)
 		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets, prim)
 		return
 	}
@@ -259,9 +268,12 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{after.BMD, msg})
 
 		// before and after
-		nlog.Infof("%s: loaded %s, merged %s, added %d", p, loadedSmap, before.Smap.StringEx(), added)
+		if loadedSmap != nil {
+			nlog.Infof("%s: loaded %s, merged %s, added %d", p, loadedSmap.StringEx(), before.Smap.StringEx(), added)
+		}
 		nlog.Infof("before: %s, %s, %s, %s", before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
-		nlog.Infof("after: %s, %s, %s, %s, %s", smap.StringEx(), after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
+		nlog.Infof("after:  %s, %s, %s, %s", after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
+		nlog.Infoln("after: ", smap.StringEx())
 		wg.Wait()
 	} else {
 		nlog.Infoln(p.String() + ": no registrations yet")
@@ -357,7 +369,8 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	p.markClusterStarted()
-	nlog.Infoln(p.String(), "primary: cluster started up:", smap.StringEx(), bmd.StringEx())
+	nlog.Infoln(p.String(), "primary: cluster started up")
+	nlog.Infoln(smap.StringEx()+",", bmd.StringEx())
 
 	if etlMD.Version > 0 {
 		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})

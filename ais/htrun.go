@@ -1589,7 +1589,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	}
 
 	rmd := h.owner.rmd.get()
-	if newRMD.CluID != rmd.CluID && rmd.CluID != "" {
+	if newRMD.CluID != "" && newRMD.CluID != rmd.CluID && rmd.CluID != "" {
 		logmsync(rmd.Version, newRMD, msg, caller)
 		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID, rmd.Version)
 		cos.ExitLog(err) // FATAL
@@ -1956,6 +1956,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			if self := smap.GetNode(h.si.ID()); self == nil {
 				nlog.Warningln(s + "; NOTE: not present in the cluster map")
 			} else if self.Flags.IsSet(meta.SnodeMaint) {
+				h.si.Flags = self.Flags
 				nlog.Warningln(s + "; NOTE: starting in maintenance mode")
 			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
 				if smap.UUID != rmd.CluID {

@@ -409,8 +409,11 @@ func (m *Smap) StringEx() string {
 	if m.Primary == nil {
 		return fmt.Sprintf("Smap v%d[%s, nil]", m.Version, m.UUID)
 	}
-	return fmt.Sprintf("Smap v%d[%s, %s, t=%d, p=%d]", m.Version, m.UUID,
-		m.Primary.StringEx(), m.CountTargets(), m.CountProxies())
+	tall, tactive, pall := m.CountTargets(), m.CountActiveTs(), m.CountProxies()
+	if tall == tactive {
+		return fmt.Sprintf("Smap v%d[%s, %s, t=%d, p=%d]", m.Version, m.UUID, m.Primary.StringEx(), tall, pall)
+	}
+	return fmt.Sprintf("Smap v%d[%s, %s, t=(%d/%d), p=%d]", m.Version, m.UUID, m.Primary.StringEx(), tactive, tall, pall)
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }

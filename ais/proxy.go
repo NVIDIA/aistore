@@ -3109,6 +3109,8 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error
 		return
 	}
 	p.owner.rmd.put(newRMD)
+	err = p.owner.rmd.persist(newRMD)
+	debug.AssertNoErr(err)
 	p.owner.rmd.Unlock()
 
 	// Register `nl` for rebalance/resilver

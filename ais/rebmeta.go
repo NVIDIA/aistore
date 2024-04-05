@@ -229,12 +229,17 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 		sname = tsi.StringEx()
 		xname = "rebalance[" + nl.UUID() + "]"
 		smap  = p.owner.smap.get()
-		warn  = "remove " + sname + " from the current " + smap.StringEx()
+		ntsi  = smap.GetNode(m.smapCtx.sid) // with updated flags
+		warn  = "remove " + sname + " from the current "
 	)
+	if ntsi != nil && (ntsi.Flags.IsSet(meta.SnodeMaint) || ntsi.Flags.IsSet(meta.SnodeMaintPostReb)) {
+		warn = "mark " + sname + " for maintenance mode in the current "
+	}
+	warn += smap.StringEx()
 	debug.Assert(nl.UUID() == m.rebID && tsi.IsTarget())
 
 	if nl.ErrCnt() == 0 {
-		nlog.Infoln("post-rebalance commit: ", warn)
+		nlog.Infoln("post-rebalance commit:", warn)
 		if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
 			nlog.Errorln(err)
 		}
