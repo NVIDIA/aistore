@@ -59,7 +59,7 @@ func (p *proxy) bootstrap() {
 		nlog.Infoln(p.String() + ": starting without Smap")
 	} else {
 		if smap.Primary.ID() == p.SID() {
-			isSelf = ", where primary=self"
+			isSelf = ", where primary is self"
 		}
 		nlog.Infoln(p.String()+": loaded", smap.StringEx()+isSelf)
 	}
@@ -202,7 +202,6 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		uuid, created string
 		haveJoins     bool
 	)
-
 	// 1: init Smap to accept reg-s
 	p.owner.smap.mu.Lock()
 	si := p.si.Clone()
@@ -224,8 +223,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			}
 			maxVerSmap.Pmap[p.SID()] = p.si
 			p.owner.smap.put(maxVerSmap)
-			nlog.Infof("%s: change-of-mind #1: registering with %s(%s)",
-				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetIntraControl))
+			nlog.Infof("%s: change-of-mind #1: joining via %s[P])", p.si, maxVerSmap.Primary.StringEx())
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
 				cos.ExitLogf("%s: %v", cmn.BadSmapPrefix, err)
 			}
@@ -236,6 +234,10 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	smap = p.owner.smap.get()
 	haveJoins = smap.CountTargets() > 0 || smap.CountProxies() > 1
 
+	if loadedSmap != nil {
+		smap = smap.mergeFlags(loadedSmap)
+	}
+
 	// 2: merging local => boot
 	if haveJoins {
 		var (
@@ -243,17 +245,9 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			added         int
 		)
 		p.owner.smap.mu.Lock()
-		clone := p.owner.smap.get().clone()
-		if loadedSmap != nil {
-			// TODO [feature]: when node re-joins with different network settings (see prxclu)
-			added, _ = clone.merge(loadedSmap, true /*override (IP, port) duplicates*/)
-			clone = loadedSmap
-			if added > 0 {
-				clone.Version = clone.Version + int64(added) + 1
-			}
-		}
+
 		// NOTE: use regpool to try to upgrade all the four revs: Smap, BMD, RMD, and global Config
-		before.Smap, before.BMD, before.RMD, before.EtlMD = clone, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
+		before.Smap, before.BMD, before.RMD, before.EtlMD = smap, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
 		before.Config, _ = p.owner.config.get()
 
 		forcePrimaryChange := prim.isCfg || prim.isEP || prim.isIs
@@ -269,8 +263,9 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 
 		// before and after
 		if loadedSmap != nil {
-			nlog.Infof("%s: loaded %s, merged %s, added %d", p, loadedSmap.StringEx(), before.Smap.StringEx(), added)
+			nlog.Infoln(p.String(), "loaded", loadedSmap.StringEx(), "merged", before.Smap.StringEx(), "added", added)
 		}
+
 		nlog.Infof("before: %s, %s, %s, %s", before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
 		nlog.Infof("after:  %s, %s, %s, %s", after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
 		nlog.Infoln("after: ", smap.StringEx())
@@ -382,7 +377,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	p.reg.pool = nil
 	p.reg.mu.Unlock()
 
-	// 12. resume rebalance if needed
+	// 13. resume rebalance if needed
 	if config.Rebalance.Enabled {
 		p.resumeReb(smap, config)
 	}
@@ -475,23 +470,20 @@ until:
 		goto until // repeat
 	}
 
-	// TODO: skip when there's a single target (benign)
-
 	// do
 	var (
 		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
 		aisMsg = p.newAmsg(msg, nil)
 		ctx    = &rmdModifier{
-			pre:   func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
-			cluID: smap.UUID,
+			pre:     func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
+			smapCtx: &smapModifier{smap: smap},
+			cluID:   smap.UUID,
 		}
 	)
 	rmd, err := p.owner.rmd.modify(ctx)
 	if err != nil {
 		cos.ExitLog(err)
 	}
-	// NOTE: cannot rmdModifier.listen - p.notifs may not be initialized yet
-
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
 
 	p.owner.rmd.starting.Store(false) // done
@@ -502,8 +494,7 @@ until:
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
-func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
-	ntargets int) (maxVerSmap *smapX) {
+func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config, ntargets int) (maxVerSmap *smapX) {
 	const quiescentIter = 4 // Number of iterations to consider the cluster quiescent.
 	var (
 		deadlineTime         = config.Timeout.Startup.D()
@@ -540,16 +531,15 @@ func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 	}
 
 	targetCnt := p.owner.smap.get().CountTargets()
+	s := "target" + cos.Plural(targetCnt)
 	if definedTargetCnt {
-		s := "target" + cos.Plural(ntargets)
 		if targetCnt >= ntargets {
-			nlog.Infof("%s: reached expected membership of %d %s (joined: %d)", p, ntargets, s, targetCnt)
+			nlog.Infoln(p.String()+":", "reached expected membership of", ntargets, s, "joined:", targetCnt)
 		} else {
-			nlog.Warningf("%s: timed out waiting for %d %s (joined: %d)", p, ntargets, s, targetCnt)
+			nlog.Warningln(p.String()+":", "timed out waiting for", ntargets, s, "joined:", targetCnt)
 		}
 	} else {
-		s := "target" + cos.Plural(targetCnt)
-		nlog.Infof("%s: joined %d new %s", p, targetCnt, s)
+		nlog.Infoln(p.String()+":", "joined", targetCnt, s)
 	}
 	return
 }

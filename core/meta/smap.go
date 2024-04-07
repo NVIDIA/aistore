@@ -179,14 +179,12 @@ func (d *Snode) Eq(o *Snode) (eq bool) {
 		return
 	}
 	eq = d.ID() == o.ID()
-	debug.Func(func() {
-		if !eq {
-			return
-		}
+	if eq {
 		if err := d.NetEq(o); err != nil {
 			nlog.Warningln(err)
+			eq = false
 		}
-	})
+	}
 	return eq
 }
 
@@ -403,17 +401,38 @@ func (m *Smap) String() string {
 }
 
 func (m *Smap) StringEx() string {
+	var sb strings.Builder
 	if m == nil {
 		return "Smap <nil>"
 	}
+	sb.WriteString("Smap v")
+	sb.WriteString(strconv.FormatInt(m.Version, 10))
+	sb.WriteByte('[')
+	sb.WriteString(m.UUID)
 	if m.Primary == nil {
-		return fmt.Sprintf("Smap v%d[%s, nil]", m.Version, m.UUID)
+		sb.WriteString(", nil]")
+		return sb.String()
 	}
-	tall, tactive, pall := m.CountTargets(), m.CountActiveTs(), m.CountProxies()
-	if tall == tactive {
-		return fmt.Sprintf("Smap v%d[%s, %s, t=%d, p=%d]", m.Version, m.UUID, m.Primary.StringEx(), tall, pall)
+	sb.WriteString(", ")
+	sb.WriteString(m.Primary.StringEx())
+	sb.WriteString(", t=")
+	_counts(&sb, m.CountTargets(), m.CountActiveTs())
+	sb.WriteString(", p=")
+	_counts(&sb, m.CountProxies(), m.CountActivePs())
+	sb.WriteByte(']')
+	return sb.String()
+}
+
+func _counts(sb *strings.Builder, all, active int) {
+	if all == active {
+		sb.WriteString(strconv.Itoa(all))
+	} else {
+		sb.WriteByte('(')
+		sb.WriteString(strconv.Itoa(active))
+		sb.WriteByte('/')
+		sb.WriteString(strconv.Itoa(all))
+		sb.WriteByte(')')
 	}
-	return fmt.Sprintf("Smap v%d[%s, %s, t=(%d/%d), p=%d]", m.Version, m.UUID, m.Primary.StringEx(), tactive, tall, pall)
 }
 
 func (m *Smap) CountTargets() int { return len(m.Tmap) }

@@ -466,6 +466,32 @@ func (m *smapX) clearNodeFlags(id string, flags cos.BitFlags) {
 	m._applyFlags(si, si.Flags.Clear(flags))
 }
 
+func (m *smapX) mergeFlags(from *smapX) (clone *smapX) {
+	all := []meta.NodeMap{from.Tmap, from.Pmap}
+	for _, mm := range all {
+		for _, osi := range mm {
+			nsi := m.GetNode(osi.ID())
+			if nsi == nil {
+				continue
+			}
+			if osi.Flags == nsi.Flags {
+				continue
+			}
+			if clone == nil {
+				clone = m.clone()
+			}
+			nsi = clone.GetNode(osi.ID())
+			nsi.Flags = osi.Flags
+			if nsi.IsTarget() {
+				clone.Tmap[nsi.ID()] = nsi
+			} else {
+				clone.Pmap[nsi.ID()] = nsi
+			}
+		}
+	}
+	return clone
+}
+
 ///////////////
 // smapOwner //
 ///////////////

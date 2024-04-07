@@ -889,17 +889,26 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
+
 	if smap.isPrimary(p.si) {
-		const txt = "is primary, cannot be on the receiving side of metasync"
+		const txt = "cannot be on the receiving side of metasync"
+		xctn := voteInProgress()
+		maps := smap.StringEx()
 		p.ciiFill(cii)
-		if xctn := voteInProgress(); xctn != nil {
-			err.Message = fmt.Sprintf("%s: %s [%s, %s]", p, txt, smap, xctn)
-		} else {
-			err.Message = fmt.Sprintf("%s: %s, %s", p, txt, smap)
+		switch {
+		case !p.ClusterStarted():
+			err.Message = fmt.Sprintf("%s(self) %s, %s", p, "is starting up as primary, "+txt, maps)
+		case xctn != nil:
+			err.Message = fmt.Sprintf("%s(self) %s, %s", p, "is still primary while voting is in progress, "+txt, maps)
+		default:
+			err.Message = fmt.Sprintf("%s(self) %s, %s", p, "is primary, "+txt, maps)
 		}
-		p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
+		nlog.Errorln(err.Message)
+		// marshal along with cii
+		p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict, Silent)
 		return
 	}
+
 	payload := make(msPayload)
 	if errP := payload.unmarshal(r.Body, "metasync put"); errP != nil {
 		cmn.WriteErr(w, r, errP)

@@ -611,8 +611,7 @@ func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (
 }
 
 // executes under lock
-func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta,
-	msg *apc.ActMsg) (upd bool, err error) {
+func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta, msg *apc.ActMsg) (upd bool, err error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
@@ -622,15 +621,12 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	keepalive := apiOp == apc.Keepalive
 	osi := smap.GetNode(nsi.ID())
 	if osi == nil {
-		// TODO [feature]: support node (shutdown followed by restart) with different network(s)
-		// (see also: meta.Snode.Eq())
 		if keepalive {
-			nlog.Warningf("%s keepalive %s: adding back to the %s", p, nsi.StringEx(), smap)
+			nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 		}
 	} else {
 		if osi.Type() != nsi.Type() {
-			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
-				osi.StringEx(), nsi.StringEx(), smap, keepalive)
+			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)", osi.StringEx(), nsi.StringEx(), smap.StringEx(), keepalive)
 			return
 		}
 		if keepalive {
