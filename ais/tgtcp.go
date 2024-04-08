@@ -62,32 +62,43 @@ func (t *target) joinCluster(action string, primaryURLs ...string) (status int, 
 	return
 }
 
+const tagCM = "recv-clumeta"
+
 // TODO: unify w/ p.recvCluMeta
 // do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
 func (t *target) recvCluMetaBytes(action string, body []byte, caller string) error {
 	var (
 		cm   cluMeta
 		errs []error
+		self = t.String() + ":"
 	)
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, t, "clumeta", cos.BHead(body), err)
+		return fmt.Errorf(cmn.FmtErrUnmarshal, t, tagCM, cos.BHead(body), err)
+	}
+	if cm.PrimeTime == 0 {
+		err := errors.New(self + " zero prime_time (non-primary responded to an attempt to join?")
+		nlog.Errorln(err)
+		return err
 	}
 
-	debug.Assert(cm.PrimeTime != 0, t.String()) // expecting
 	xreg.PrimeTime.Store(cm.PrimeTime)
 	xreg.MyTime.Store(time.Now().UnixNano())
 
 	msg := t.newAmsgStr(action, cm.BMD)
 
 	// Config
-	debug.Assert(cm.Config != nil)
+	if cm.Config == nil {
+		err := fmt.Errorf(self+" invalid %T (nil config): %+v", cm, cm)
+		nlog.Errorln(err)
+		return err
+	}
 	if err := t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
 		}
 	} else {
-		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.Config)
+		nlog.Infoln(self, tagCM, action, cm.Config.String())
 	}
 
 	// There's a window of time between:
@@ -104,7 +115,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 			nlog.Errorln(err)
 		}
 	} else {
-		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.BMD)
+		nlog.Infoln(self, tagCM, action, cm.BMD.String())
 	}
 	// Smap
 	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, t.htrun.smapUpdatedCB); err != nil {
@@ -113,7 +124,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 			nlog.Errorln(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
 		}
 	} else if cm.Smap != nil {
-		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.Smap)
+		nlog.Infoln(self, tagCM, action, cm.Smap)
 	}
 	switch {
 	case errs == nil:

@@ -274,6 +274,7 @@ func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) erro
 func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	var (
 		msg  = p.newAmsgStr(action, cm.BMD)
+		self = p.String() + ":"
 		errs []error
 	)
 	if cm.PrimeTime != 0 {
@@ -281,14 +282,18 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		xreg.MyTime.Store(time.Now().UnixNano())
 	}
 	// Config
-	debug.Assert(cm.Config != nil)
+	if cm.Config == nil {
+		err := fmt.Errorf(self+" invalid %T (nil config): %+v", cm, cm)
+		nlog.Errorln(err)
+		return err
+	}
 	if err := p.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
 		}
 	} else {
-		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.Config)
+		nlog.Infoln(self, tagCM, action, cm.Config.String())
 	}
 	// Smap
 	if err := p.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
@@ -297,7 +302,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 			nlog.Errorln(err)
 		}
 	} else if cm.Smap != nil {
-		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.Smap)
+		nlog.Infoln(self, tagCM, action, cm.Smap.String())
 	}
 	// BMD
 	if err := p.receiveBMD(cm.BMD, msg, nil, caller); err != nil {
@@ -306,7 +311,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 			nlog.Errorln(err)
 		}
 	} else {
-		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.BMD)
+		nlog.Infoln(self, tagCM, action, cm.BMD.String())
 	}
 	// RMD
 	if err := p.receiveRMD(cm.RMD, msg, caller); err != nil {
@@ -315,7 +320,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 			nlog.Errorln(err)
 		}
 	} else {
-		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.RMD)
+		nlog.Infoln(self, tagCM, action, cm.RMD.String())
 	}
 	// EtlMD
 	if err := p.receiveEtlMD(cm.EtlMD, msg, nil, caller, nil); err != nil {
@@ -324,7 +329,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 			nlog.Errorln(err)
 		}
 	} else if cm.EtlMD != nil {
-		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.EtlMD)
+		nlog.Infoln(self, tagCM, action, cm.EtlMD.String())
 	}
 
 	switch {
@@ -334,7 +339,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		return errs[0]
 	default:
 		s := fmt.Sprintf("%v", errs)
-		return cmn.NewErrFailedTo(p, action, "clumeta", errors.New(s))
+		return cmn.NewErrFailedTo(p, action, tagCM, errors.New(s))
 	}
 }
 
