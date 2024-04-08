@@ -8,3 +8,4 @@ humanize>=4.6.0
 braceexpand>=0.1.7
 msgspec>=0.15.1
 boto3==1.34.15
+webdataset==0.2.86

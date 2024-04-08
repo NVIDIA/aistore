@@ -43,7 +43,8 @@ dependencies = [
     "cloudpickle==2.2.0",
     "humanize>=4.6.0",
     "braceexpand>=0.1.7",
-    "msgspec>=0.15.1"
+    "msgspec>=0.15.1",
+    "webdataset==0.2.86"
 ]
 
 keywords = [

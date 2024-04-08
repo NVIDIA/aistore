@@ -1,15 +1,17 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
 
 import json
 import logging
+import os
 from pathlib import Path
 import time
 from typing import Dict, List, NewType, Iterable
 import requests
+from webdataset import ShardWriter
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
@@ -23,6 +25,7 @@ from aistore.sdk.const import (
     ACT_LIST,
     ACT_MOVE_BCK,
     ACT_SUMMARY_BCK,
+    DEFAULT_DATASET_MAX_COUNT,
     HEADER_ACCEPT,
     HEADER_BUCKET_PROPS,
     HEADER_BUCKET_SUMM,
@@ -45,6 +48,7 @@ from aistore.sdk.const import (
     STATUS_OK,
     STATUS_PARTIAL_CONTENT,
 )
+from aistore.sdk.dataset.dataset_config import DatasetConfig
 
 from aistore.sdk.errors import (
     InvalidBckProvider,
@@ -73,7 +77,7 @@ from aistore.sdk.utils import validate_directory, get_file_size
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
-# pylint: disable=unused-variable,too-many-public-methods
+# pylint: disable=unused-variable,too-many-public-methods,too-many-lines
 class Bucket(AISSource):
     """
     A class representing a bucket that contains user data.
@@ -890,3 +894,37 @@ class Bucket(AISSource):
         return BucketModel(
             name=self.name, namespace=self.namespace, provider=self.provider
         )
+
+    def write_dataset(self, config: DatasetConfig, **kwargs):
+        """
+        Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter
+
+        Args:
+            config (DatasetConfig): Configuration dict specifying how to process
+                and store each part of the dataset item
+            **kwargs (optional): Optional keyword arguments to pass to the ShardWriter
+        """
+
+        max_shard_items = (
+            kwargs["maxcount"] if "maxcount" in kwargs else DEFAULT_DATASET_MAX_COUNT
+        )
+        size = len(str(max_shard_items))
+        if "pattern" in kwargs:
+            kwargs["pattern"] = kwargs["pattern"] + f"-%0{size}d.tar"
+        else:
+            kwargs["pattern"] = "sample" + f"-%0{size}d.tar"
+
+        original_post = kwargs.get("post", lambda path: None)
+
+        # Add the upload shard logic to the original post processing function
+        def combined_post_processing(shard_path):
+            original_post(shard_path)
+            self.object(shard_path).put_file(shard_path)
+            os.unlink(shard_path)
+
+        kwargs["post"] = combined_post_processing
+        shard_writer = ShardWriter(**kwargs)
+        dataset = config.generate_dataset(max_shard_items)
+        for sample in dataset:
+            shard_writer.write(sample)
+        shard_writer.close()
