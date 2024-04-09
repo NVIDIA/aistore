@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

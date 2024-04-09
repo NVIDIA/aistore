@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/tools/trand"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

@@ -8,12 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/tools"
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -24,27 +21,20 @@ func TestE2E(t *testing.T) {
 		t.Skip("'ais' binary not found")
 	}
 
-	config.DefaultReporterConfig.SlowSpecThreshold = 15 * time.Second.Seconds()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "E2E")
 }
 
 var _ = Describe("E2E CLI Tests", func() {
 	var (
-		entries []TableEntry
-
 		f        = &tools.E2EFramework{}
 		files, _ = filepath.Glob("./*.in")
+		args     = make([]any, 0, len(files)+1)
 	)
-
+	args = append(args, f.RunE2ETest)
 	for _, fileName := range files {
 		fileName = fileName[:len(fileName)-len(filepath.Ext(fileName))]
-		entries = append(entries, Entry(fileName, fileName))
+		args = append(args, Entry(fileName, fileName))
 	}
-
-	DescribeTable(
-		"e2e",
-		f.RunE2ETest,
-		entries...,
-	)
+	DescribeTable("e2e-cli", args...)
 })

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/hk"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
