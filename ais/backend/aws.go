@@ -154,15 +154,16 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 		// continue using local csv
 		fqn, _, err = checkInventory(cloudBck, time.Time{}, ctx)
 	} else {
-		// fills-in (manifested) schema
-		// calls checkInventory as well (with timestamp of the remote)
-		fqn, err = awsp.getInventory(cloudBck, svc, ctx)
+		// first time:
+		// - fills-in (manifested) schema
+		// - calls getInventory() and checkInventory(), the latter with the timestamp of the remote
+		fqn, ecode, err = awsp.getInventory(cloudBck, svc, ctx)
 	}
 	if err != nil {
 		return
 	}
 	if fh, err = os.Open(fqn); err != nil {
-		_, err = _errInv("ropen", err)
+		err = _errInv("ropen", err)
 		return
 	}
 	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
@@ -171,9 +172,13 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 	err = awsp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
 	sgl.Free()
 	fh.Close()
-	if err == io.EOF {
-		lst.ContinuationToken = ""
-		err = nil
+	if err != nil {
+		if err == io.EOF {
+			lst.ContinuationToken = ""
+			err = nil
+		} else {
+			err = _errInv("list-inventory", err)
+		}
 	}
 	return
 }

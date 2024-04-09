@@ -308,7 +308,8 @@ func (z *SGL) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 // reuse already allocated SGL (compare with Reader below)
-func (z *SGL) Reset() { z.woff, z.roff = 0, 0 }
+func (z *SGL) Reset()  { z.woff, z.roff = 0, 0 }
+func (z *SGL) Rewind() { z.roff = 0 }
 
 func (z *SGL) Len() int64                        { return z.woff - z.roff }
 func (z *SGL) Open() (cos.ReadOpenCloser, error) { return NewReader(z), nil }

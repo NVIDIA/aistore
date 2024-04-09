@@ -1,21 +1,25 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
-const maxl = 16
+const _dfltLen = 16
 
-func BHead(b []byte) string {
-	if len(b) > maxl {
-		return string(b[:maxl]) + "..."
+func BHead(b []byte, ls ...int) string {
+	l := _dfltLen
+	if len(ls) > 0 {
+		l = ls[0]
+	}
+	if len(b) > l {
+		return string(b[:l]) + "..."
 	}
 	return string(b)
 }
 
 func SHead(s string) string {
-	if len(s) > maxl {
-		return s[:maxl] + "..."
+	if len(s) > _dfltLen {
+		return s[:_dfltLen] + "..."
 	}
 	return s
 }
