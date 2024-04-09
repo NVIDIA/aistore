@@ -237,11 +237,15 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes)
 	}
 
 	var (
-		custom = cos.StrKVs{}
-		l      = len(resp.Contents)
+		custom     cos.StrKVs
+		l          = len(resp.Contents)
+		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
 	for i := len(lst.Entries); i < l; i++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
+	}
+	if wantCustom {
+		custom = make(cos.StrKVs, 2) // reuse
 	}
 	for i, obj := range resp.Contents {
 		entry := lst.Entries[i]
@@ -253,7 +257,7 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes)
 		if v, ok := h.EncodeCksum(obj.ETag); ok {
 			entry.Checksum = v
 		}
-		if msg.WantProp(apc.GetPropsCustom) {
+		if wantCustom {
 			custom[cmn.ETag] = entry.Checksum
 			mtime := *(obj.LastModified)
 			custom[cmn.LastModified] = fmtTime(mtime)

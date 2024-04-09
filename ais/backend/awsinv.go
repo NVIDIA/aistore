@@ -36,12 +36,11 @@ import (
 // one bucket, one inventory (for this same bucket), and one statically defined cached FQN.csv
 
 // TODO:
-// - the schema<=>entry m.b. a map (currently, expecting ETag as num 4, etc.)
 // - use blob downloader (****)
 // - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
-// - the offset must correspond to the previously returned ContinuationToken ====> recover or fail?
-// - cleanup older inventories
 // - cached inventory must be stored with its own content-type (or, might disappear during pagination)
+// separately:
+// - cleanup older inventories
 
 const (
 	invSizeSGL = cos.MiB

@@ -193,12 +193,16 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes)
 	lst.ContinuationToken = nextPageToken
 
 	var (
-		custom = cos.StrKVs{}
-		l      = len(objs)
-		i      int
+		custom     cos.StrKVs
+		i          int
+		l          = len(objs)
+		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
 	for j := len(lst.Entries); j < l; j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
+	}
+	if wantCustom {
+		custom = make(cos.StrKVs, 3) // reuse
 	}
 	for _, attrs := range objs {
 		if msg.IsFlagSet(apc.LsNoRecursion) {
@@ -223,7 +227,7 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes)
 			entry.Version = v
 		}
 		// custom
-		if msg.WantProp(apc.GetPropsCustom) {
+		if wantCustom {
 			custom[cmn.ETag], _ = h.EncodeCksum(attrs.Etag)
 			custom[cmn.LastModified] = fmtTime(attrs.Updated)
 			custom[cos.HdrContentType] = attrs.ContentType

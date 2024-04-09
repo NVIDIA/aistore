@@ -285,15 +285,21 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		return azureErrorToAISError(err, cloudBck, "")
 	}
 
-	l := len(resp.Segment.BlobItems)
+	var (
+		custom     cos.StrKVs
+		l          = len(resp.Segment.BlobItems)
+		wantCustom = msg.WantProp(apc.GetPropsCustom)
+	)
 	for i := len(lst.Entries); i < l; i++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
 	}
+	if wantCustom {
+		custom = make(cos.StrKVs, 4) // reuse
+	}
 	for idx := range resp.Segment.BlobItems {
 		var (
-			custom = cos.StrKVs{}
-			blob   = resp.Segment.BlobItems[idx]
-			entry  = lst.Entries[idx]
+			blob  = resp.Segment.BlobItems[idx]
+			entry = lst.Entries[idx]
 		)
 		entry.Name = *blob.Name
 		entry.Size = *blob.Properties.ContentLength
@@ -307,7 +313,8 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		entry.Version = etag // (TODO a the top)
 
 		// custom
-		if msg.WantProp(apc.GetPropsCustom) {
+		if wantCustom {
+			clear(custom)
 			custom[cmn.ETag] = etag
 			if !blob.Properties.LastModified.IsZero() {
 				custom[cmn.LastModified] = fmtTime(*blob.Properties.LastModified)
