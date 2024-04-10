@@ -22,8 +22,8 @@ function check_gomod {
 
 function check_files_headers {
   for f in $(find ${AISTORE_PATH} -type f -name "*.go" -not -name "*gen.go"  ! -regex $EXTERNAL_SRC_REGEX); do
-    # Expect '//go:build ...' or '// Package ...'.
-    out=$(head -n 1 $f | grep -P "\/\/(go:build(.*)|\sPackage(.*))")
+    # Allow files to start with '//go:build ...', '// Package ...', or '//nolint:...'\
+    out=$(head -n 1 $f | grep -P "\/\/(go:build(.*)|\sPackage(.*)|nolint:(.*))")
     if [[ $? -ne 0 ]]; then
       echo "$f: first line should be package a description. Instead got:"
       head -n 1 $f
