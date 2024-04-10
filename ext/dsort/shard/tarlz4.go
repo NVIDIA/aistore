@@ -1,7 +1,7 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023 - 2024, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
@@ -61,60 +60,18 @@ func (trw *tlz4RW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordEx
 	return c.extractedSize, c.extractedCount, err
 }
 
-// Create creates a new shard locally based on the Shard.
-// Note that the order of closing must be trw, lzw, then finally tarball.
+// create a new local shard based on Shard
 func (*tlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
-		n         int64
-		needFlush bool
-		lzw       = lz4.NewWriter(tarball)
-		tw        = tar.NewWriter(lzw)
-		rdReader  = newTarRecordDataReader()
+		lzw      = lz4.NewWriter(tarball)
+		tw       = tar.NewWriter(lzw)
+		rdReader = newTarRecordDataReader()
 	)
+	written, err = writeCompressedTar(s, tw, lzw, loader, rdReader)
 
-	defer func() {
-		rdReader.free()
-		cos.Close(tw)
-		cos.Close(lzw)
-	}()
-
-	for _, rec := range s.Records.All() {
-		for _, obj := range rec.Objects {
-			switch obj.StoreType {
-			case OffsetStoreType:
-				if needFlush {
-					// We now will write directly to the tarball file so we need
-					// to flush everything what we have written so far.
-					if err := tw.Flush(); err != nil {
-						return written, err
-					}
-					needFlush = false
-				}
-				if n, err = loader.Load(lzw, rec, obj); err != nil {
-					return written + n, err
-				}
-				// pad to 512 bytes
-				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
-				if diff > 0 {
-					if _, err = lzw.Write(padBuf[:diff]); err != nil {
-						return written + n, err
-					}
-					n += diff
-				}
-				debug.Assert(diff >= 0 && diff < archive.TarBlockSize)
-			case SGLStoreType, DiskStoreType:
-				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
-				if n, err = loader.Load(rdReader, rec, obj); err != nil {
-					return written + n, err
-				}
-				written += n
-				needFlush = true
-			default:
-				debug.Assert(false, obj.StoreType)
-			}
-
-			written += n
-		}
-	}
-	return written, nil
+	// note the order of closing: tw, gzw, and eventually tarball (by the caller)
+	rdReader.free()
+	cos.Close(tw)
+	cos.Close(lzw)
+	return written, err
 }

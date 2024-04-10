@@ -513,7 +513,7 @@ func (m *Manager) startDsort() {
 }
 
 func (m *Manager) errHandler(err error) {
-	nlog.Infoln(err)
+	nlog.InfoDepth(1, "Error:", err)
 
 	// If we were aborted by some other process this means that we do not
 	// broadcast abort (we assume that daemon aborted us, aborted also others).

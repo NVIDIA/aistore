@@ -151,7 +151,7 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
 	}
 	tw.lck.Unlock()
-	return
+	return err
 }
 
 func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {

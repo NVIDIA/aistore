@@ -117,7 +117,7 @@ func (m *Manager) start() (err error) {
 
 		shardSize := int64(float64(m.Pars.OutputShardSize) / ratio)
 		nlog.Infof("%s: [dsort] %s started phase 3: ratio=%f, shard size (%d, %d)",
-			core.T, m.ManagerUUID, shardSize, m.Pars.OutputShardSize)
+			core.T, m.ManagerUUID, ratio, shardSize, m.Pars.OutputShardSize)
 		if err := m.phase3(shardSize); err != nil {
 			nlog.Errorf("%s: [dsort] %s phase3 err: %v", core.T, m.ManagerUUID, err)
 			return err
