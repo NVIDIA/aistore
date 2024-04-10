@@ -14,8 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// common method to compress .tar via `cw` (compression writer)
-func writeCompressedTar(s *Shard, tw *tar.Writer, cw io.Writer, loader ContentLoader, rdReader *tarRecordDataReader) (written int64, _ error) {
+// common method to compress .tar via `aw` (archive writer)
+func writeCompressedTar(s *Shard, tw *tar.Writer, aw io.Writer, loader ContentLoader, rdReader *tarRecordW) (written int64, _ error) {
 	var needFlush bool
 	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {
@@ -28,7 +28,7 @@ func writeCompressedTar(s *Shard, tw *tar.Writer, cw io.Writer, loader ContentLo
 					}
 					needFlush = false
 				}
-				n, err := loader.Load(cw, rec, obj)
+				n, err := loader.Load(aw, rec, obj)
 				written += n
 				if err != nil {
 					return written, err
@@ -37,7 +37,7 @@ func writeCompressedTar(s *Shard, tw *tar.Writer, cw io.Writer, loader ContentLo
 				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
 				debug.Assert(diff >= 0)
 				if diff > 0 {
-					npad, errP := cw.Write(padBuf[:diff])
+					npad, errP := aw.Write(padBuf[:diff])
 					written += int64(npad)
 					if errP != nil {
 						return written, errP

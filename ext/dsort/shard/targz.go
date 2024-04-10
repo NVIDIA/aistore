@@ -13,8 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/ext/dsort/ct"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 type tgzRW struct {
@@ -37,29 +35,13 @@ func (trw *tgzRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExt
 	if err != nil {
 		return 0, 0, err
 	}
-	workFQN := fs.CSM.Gen(lom, ct.DsortFileType, "") // tarFQN
-	wfh, err := cos.CreateFile(workFQN)
-	if err != nil {
-		return 0, 0, err
-	}
-
 	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	c.tw = tar.NewWriter(wfh)
-	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
-	c.buf = buf
+	err = c.extract(lom, ar)
 
-	_, err = ar.Range("", c.xtar)
-	slab.Free(buf)
-	if err == nil {
-		cos.Close(c.tw)
-	} else {
-		_ = c.tw.Close()
-	}
-	cos.Close(wfh)
 	return c.extractedSize, c.extractedCount, err
 }
 
-// create a new local shard based on Shard
+// create local shard based on Shard
 func (*tgzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		gzw, _   = gzip.NewWriterLevel(tarball, gzip.BestSpeed)

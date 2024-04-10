@@ -22,44 +22,41 @@ type (
 	tarRW struct {
 		ext string
 	}
-
-	// tarRecordDataReader is used for writing metadata as well as data to the buffer.
-	tarRecordDataReader struct {
-		slab *memsys.Slab
-
+	tarRecordW struct {
+		tarWriter    *tar.Writer
+		slab         *memsys.Slab
 		metadataSize int64
 		size         int64
 		written      int64
 		metadataBuf  []byte
-		tarWriter    *tar.Writer
 	}
 )
 
 // interface guard
 var _ RW = (*tarRW)(nil)
 
-/////////////////////////
-// tarRecordDataReader //
-/////////////////////////
+////////////////
+// tarRecordW //
+////////////////
 
-func newTarRecordDataReader() *tarRecordDataReader {
-	rd := &tarRecordDataReader{}
+func newTarRecordDataReader() *tarRecordW {
+	rd := &tarRecordW{}
 	rd.metadataBuf, rd.slab = core.T.ByteMM().Alloc()
 	return rd
 }
 
-func (rd *tarRecordDataReader) reinit(tw *tar.Writer, size, metadataSize int64) {
+func (rd *tarRecordW) reinit(tw *tar.Writer, size, metadataSize int64) {
 	rd.tarWriter = tw
 	rd.written = 0
 	rd.size = size
 	rd.metadataSize = metadataSize
 }
 
-func (rd *tarRecordDataReader) free() {
+func (rd *tarRecordW) free() {
 	rd.slab.Free(rd.metadataBuf)
 }
 
-func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
+func (rd *tarRecordW) Write(p []byte) (int, error) {
 	// Write header
 	remainingMetadataSize := rd.metadataSize - rd.written
 	if remainingMetadataSize > 0 {
@@ -173,7 +170,7 @@ func (*tarRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written
 	return written, nil
 }
 
-// NOTE: Mostly taken from `tar.formatPAXRecord`.
+// mostly follows `tar.formatPAXRecord`
 func estimateXHeaderSize(paxRecords map[string]string) int64 {
 	const padding = 3 // Extra padding for ' ', '=', and '\n'
 	totalSize := 0

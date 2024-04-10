@@ -1,7 +1,7 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -120,4 +121,27 @@ func (c *rcbCtx) xzip(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 	}
 	reader.Close()
 	return err != nil /*stop*/, err
+}
+
+// common method to extract compressed tar using `ar` (archive reader)
+func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
+	workFQN := fs.CSM.Gen(lom, ct.DsortFileType, "") // tarFQN
+	wfh, err := cos.CreateFile(workFQN)
+	if err != nil {
+		return err
+	}
+
+	c.tw = tar.NewWriter(wfh)
+	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
+	c.buf = buf
+
+	_, err = ar.Range("", c.xtar)
+	slab.Free(buf)
+	if err == nil {
+		cos.Close(c.tw)
+	} else {
+		_ = c.tw.Close()
+	}
+	cos.Close(wfh)
+	return err
 }

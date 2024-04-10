@@ -6,6 +6,7 @@ linters:
     - asciicheck
     - bodyclose
     - dogsled
+    - dupl
     - durationcheck
     - errcheck
     - exportloopref
@@ -38,47 +39,7 @@ linters:
     - unused
     - whitespace
 
-    # See: https://golangci-lint.run/usage/linters/
-    #
-    # linters that must be enabled when time permits:
-    # - dupl
-    #
-    # linters that maybe worth running from time to time:
-    # - gochecknoinits  - 'func init()'
-    # - goconst
-    # - errchkjson
-    # - nilnil
-    # - inamedparam
-    # - tagalign
-    #
-    # linters disabled because of generics:
-    # - rowserrcheck
-    # - sqlclosecheck
-    #
-    # linters that used to produce false positives:
-    # - godot
-    # - goerr113
-    # - nestif
-    # - scopelint
-    # - structcheck - doesn't handle embedded structs
-    # - gofumpt
-    #
-    # linters that are not really helpful:
-    # - cyclop
-    # - exhaustive
-    # - forbidigo
-    # - forcetypeassert
-    # - interfacer
-    # - nlreturn
-    # - noctx
-    # - predeclared
-    # - thelper
-    # - tparallel
-    # - wrapcheck
-    #
-    # linters that seem to be abandoned:
-    # - deadcode
-    # - varcheck
+# See: https://golangci-lint.run/usage/linters/
 
 linters-settings:
   revive:

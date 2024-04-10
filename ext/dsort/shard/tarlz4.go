@@ -1,7 +1,7 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2023 - 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
@@ -12,8 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/ext/dsort/ct"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/pierrec/lz4/v3"
 )
 
@@ -36,31 +34,13 @@ func (trw *tlz4RW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordEx
 	if err != nil {
 		return 0, 0, err
 	}
-	workFQN := fs.CSM.Gen(lom, ct.DsortFileType, "") // tarFQN
-	wfh, err := cos.CreateFile(workFQN)
-	if err != nil {
-		return 0, 0, err
-	}
-
 	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	c.tw = tar.NewWriter(wfh)
-	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
-	c.buf = buf
-
-	_, err = ar.Range("", c.xtar)
-
-	slab.Free(buf)
-	if err == nil {
-		cos.Close(c.tw)
-	} else {
-		_ = c.tw.Close()
-	}
-	cos.Close(wfh)
+	err = c.extract(lom, ar)
 
 	return c.extractedSize, c.extractedCount, err
 }
 
-// create a new local shard based on Shard
+// create local shard based on Shard
 func (*tlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		lzw      = lz4.NewWriter(tarball)

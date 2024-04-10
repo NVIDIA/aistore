@@ -1,3 +1,4 @@
+//nolint:dupl // copy-paste benign and can wait
 // Package integration_test.
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.

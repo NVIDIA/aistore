@@ -1,3 +1,4 @@
+//nolint:dupl // copy-paste benign and can wait
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
