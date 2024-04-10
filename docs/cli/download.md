@@ -36,11 +36,10 @@ Currently, the schemas supported for `SOURCE` location are:
 * `aws://` or `s3://` - refers to Amazon Web Services S3 storage, eg. `s3://bucket/sub_folder/object_name.tar`
 * `azure://` or `az://` - refers to Azure Blob Storage, eg. `az://bucket/sub_folder/object_name.tar`
 * `gcp://` or `gs://` - refers to Google Cloud Storage, eg. `gs://bucket/sub_folder/object_name.tar`
-* `hdfs://` - refers to Hadoop Storage, eg. `hdfs://bucket/sub_folder/object_name.tar`
 * `http://` or `https://` - refers to external link somewhere on the web, eg. `http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso`
 
 As for `DESTINATION` location should be in form `schema://bucket/sub_folder/object_name`:
-* `schema://` - schema specifying the provider of the destination bucket (`ais://`, `aws://`, `azure://`, `gcp://`, `hdfs://`)
+* `schema://` - schema specifying the provider of the destination bucket (`ais://`, `aws://`, `azure://`, `gcp://`)
 * `bucket` - bucket name where the object(s) will be stored
 * `sub_folder/object_name` - in case of downloading a single file, this will be the name of the object saved in AIS cluster.
 

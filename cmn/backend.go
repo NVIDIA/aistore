@@ -40,7 +40,6 @@ var BackendHelpers = struct {
 	Amazon backendFuncs
 	Azure  backendFuncs
 	Google backendFuncs
-	HDFS   backendFuncs
 	HTTP   backendFuncs
 }{
 	Amazon: backendFuncs{
@@ -103,17 +102,6 @@ var BackendHelpers = struct {
 				// See: https://cloud.google.com/storage/docs/xml-api/reference-headers#xgooghash.
 				b := []byte{byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
 				return base64.StdEncoding.EncodeToString(b), true
-			default:
-				debug.FailTypeCast(v)
-				return "", false
-			}
-		},
-	},
-	HDFS: backendFuncs{
-		EncodeCksum: func(v any) (cksumValue string, isSet bool) {
-			switch x := v.(type) {
-			case []byte:
-				return hex.EncodeToString(x), true
 			default:
 				debug.FailTypeCast(v)
 				return "", false

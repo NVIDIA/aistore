@@ -144,9 +144,7 @@ func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err e
 		return nil, err
 	}
 	// FIXME: transform backend structures on the client side
-	// - as a side effect, config.Backend validation populates non-JSON structs that client can utilize;
-	// - secondly, HDFS networking, etc.
-	// TODO: revise and remove
+	// as a side effect, config.Backend validation populates non-JSON structs that client can utilize;
 	_ = config.Backend.Validate()
 	return config, nil
 }

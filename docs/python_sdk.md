@@ -273,7 +273,7 @@ Returns list of buckets in AIStore cluster.
 
 **Arguments**:
 
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", or "ht".
   Defaults to "ais". Empty provider returns buckets of all providers.
   
 

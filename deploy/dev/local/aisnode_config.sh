@@ -7,7 +7,6 @@ for backend in ${AIS_BACKEND_PROVIDERS}; do
     aws)   backend_desc+=('"aws":   {}') ;;
     azure) backend_desc+=('"azure": {}') ;;
     gcp)   backend_desc+=('"gcp":   {}') ;;
-    hdfs)  backend_desc+=('"hdfs":  {"user": "root", "addresses": ["localhost:8020", "localhost:9000"], "use_datanode_hostname": true}') ;;
   esac
 done
 

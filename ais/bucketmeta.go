@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -509,18 +509,6 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.Bprops) {
 		debug.Assert(args.hdr == nil)
 	case args.bck.Backend() != nil:
 		debug.Assertf(args.hdr == nil, "%s, hdr=%+v", args.bck, args.hdr)
-	case args.bck.IsHDFS():
-		props.Versioning.Enabled = false
-		if args.hdr != nil {
-			props = mergeRemoteBckProps(props, args.hdr)
-		}
-		if args.bck.Props == nil {
-			// Since the original bucket does not have any HDFS related info,
-			// validation will fail, so we must skip.
-			return
-		}
-		// Use HDFS props.
-		props.Extra.HDFS = args.bck.Props.Extra.HDFS
 	case args.bck.IsRemote():
 		debug.Assert(args.hdr != nil)
 		props.Versioning.Enabled = false

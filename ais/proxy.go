@@ -828,8 +828,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 			return
 		}
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
-		// HDFS buckets will always keep metadata so they can re-register later
-		if bck.IsHDFS() || keepMD {
+		if keepMD {
 			if err := p.destroyBucketData(msg, bck); err != nil {
 				p.writeErr(w, r, err)
 			}
@@ -1415,11 +1414,6 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	if bck.Provider == "" {
 		bck.Provider = apc.AIS
 	}
-	if bck.IsHDFS() && msg.Value == nil {
-		p.writeErr(w, r,
-			errors.New("property 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket"))
-		return
-	}
 
 	if bck.IsRemote() {
 		// (feature) add Cloud bucket to BMD, to further set its `Props.Extra`
@@ -1496,7 +1490,7 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 				}
 			}
 		}
-		// Send all props to the target (required for HDFS).
+		// Send all props to the target
 		msg.Value = bck.Props
 	}
 	if err := p.createBucket(msg, bck, remoteHdr); err != nil {
@@ -2017,7 +2011,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		bmd     = p.owner.bmd.get()
 		present bool
 	)
-	if qbck.IsAIS() || qbck.IsHTTP() || qbck.IsHDFS() {
+	if qbck.IsAIS() || qbck.IsHTTP() {
 		bcks := bmd.Select(qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return

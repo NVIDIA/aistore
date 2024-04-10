@@ -178,7 +178,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		if qbck.IsAIS() || qbck.IsHTTP() { // built-in providers
 			bcks = bmd.Select(qbck)
 		} else {
-			bcks, code, err = t.blist(qbck, config, bmd)
+			bcks, code, err = t.blist(qbck, config)
 			if err != nil {
 				if _, ok := err.(*cmn.ErrMissingBackend); !ok {
 					err = cmn.NewErrFailedTo(t, "list buckets", qbck.String(), err, code)
@@ -194,7 +194,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 			if qbck.IsAIS() || qbck.IsHTTP() {
 				buckets = bmd.Select(qbck)
 			} else {
-				buckets, code, err = t.blist(qbck, config, bmd)
+				buckets, code, err = t.blist(qbck, config)
 				if err != nil {
 					if _, ok := err.(*cmn.ErrMissingBackend); !ok { // note on top of this func
 						t.writeErr(w, r, err, code)
@@ -210,10 +210,10 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 	t.writeJSON(w, r, bcks, "list-buckets")
 }
 
-func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (bcks cmn.Bcks, ecode int, err error) {
+func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, ecode int, err error) {
 	// validate
 	debug.Assert(!qbck.IsAIS())
-	if qbck.IsCloud() || qbck.IsHDFS() { // must be configured
+	if qbck.IsCloud() { // must be configured
 		if config.Backend.Get(qbck.Provider) == nil {
 			err = &cmn.ErrMissingBackend{Provider: qbck.Provider}
 			return
@@ -224,11 +224,6 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 			return
 			// otherwise go ahead and try to list below
 		}
-	}
-	// hdfs cannot list
-	if qbck.IsHDFS() {
-		bcks = bmd.Select(qbck)
-		return
 	}
 	backend := t.Backend((*meta.Bck)(qbck))
 	if qbck.IsBucket() {
@@ -370,8 +365,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	switch msg.Action {
 	case apc.ActEvictRemoteBck:
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
-		// HDFS buckets will always keep metadata so they can re-register later
-		if apireq.bck.IsHDFS() || keepMD {
+		if keepMD {
 			nlp := newBckNLP(apireq.bck)
 			nlp.Lock()
 			defer nlp.Unlock()

@@ -26,7 +26,6 @@ root_dir="$(cd "$(dirname "$0")/../"; pwd -P)" ## NOTE: this assumes `clean_depl
 aws_provider="n"
 azure_provider="n"
 gcp_provider="n"
-hdfs_provider="n"
 loopback=0
 target_cnt=5
 proxy_cnt=5
@@ -51,7 +50,6 @@ OPTIONS:
   --aws               Support AWS S3 backend (i.e., build \`aisnode\` executable with AWS S3 SDK)
   --gcp               Support Google Cloud Platform (i.e., build \`aisnode\` with libraries to access GCP)
   --azure             Support Azure Cloud (experimental)
-  --hdfs              Support HDFS as a backend provider (experimental)
   --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means: no loopbacks.
   --dir               The root directory of the aistore repository
   --https             Use HTTPS
@@ -76,7 +74,6 @@ while (( "$#" )); do
     --aws)   aws_provider="y";   shift;;
     --azure) azure_provider="y"; shift;;
     --gcp)   gcp_provider="y";   shift;;
-    --hdfs)  hdfs_provider="y";  shift;;
     --loopback) loopback=$2;  shift; shift;;
     --dir) root_dir=$2; shift; shift;;
     --deployment) deployment=$2; shift; shift;;
@@ -119,7 +116,7 @@ if [[ ${cleanup} == "true" ]]; then
 fi
 
 if [[ ${deployment} == "local" || ${deployment} == "all" ]]; then
-  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" |\
+  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${loopback}\n" |\
 	  make deploy "RUN_ARGS=${RUN_ARGS}"
 fi
 
@@ -129,7 +126,7 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   if [[ ${deployment} == "all" ]]; then
     echo -e "\n*** Remote cluster ***"
   fi
-  echo -e "1\n1\n3\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${hdfs_provider}\n${loopback}\n" | DEPLOY_AS_NEXT_TIER="true" AIS_AUTHN_ENABLED=false make deploy
+  echo -e "1\n1\n3\n${aws_provider}\n${gcp_provider}\n${azure_provider}\n${loopback}\n" | DEPLOY_AS_NEXT_TIER="true" AIS_AUTHN_ENABLED=false make deploy
 
   # Do not try attach remote cluster if the main cluster did not start.
   if [[ ${deployment} == "all" ]]; then

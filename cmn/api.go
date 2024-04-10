@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -61,12 +61,12 @@ type (
 	ExtraProps struct {
 		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
-		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"`
+		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"` // NOTE: obsolete; rm with meta-version
 	}
 	ExtraToSet struct { // ref. bpropsFilterExtra
 		AWS  *ExtraPropsAWSToSet  `json:"aws"`
 		HTTP *ExtraPropsHTTPToSet `json:"http"`
-		HDFS *ExtraPropsHDFSToSet `json:"hdfs"`
+		HDFS *ExtraPropsHDFSToSet `json:"hdfs"` // ditto
 	}
 
 	ExtraPropsAWS struct {
@@ -279,15 +279,8 @@ func NewBpropsToSet(nvs cos.StrKVs) (props *BpropsToSet, err error) {
 func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
-	switch provider {
-	case apc.HDFS:
-		if c.HDFS.RefDirectory == "" {
-			return errors.New("reference directory must be set for a bucket with HDFS provider")
-		}
-	case apc.HTTP:
-		if c.HTTP.OrigURLBck == "" {
-			return errors.New("original bucket URL must be set for a bucket with HTTP provider")
-		}
+	if provider == apc.HTTP && c.HTTP.OrigURLBck == "" {
+		return errors.New("original bucket URL must be set for a bucket with HTTP provider")
 	}
 	return nil
 }

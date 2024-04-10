@@ -89,7 +89,7 @@ class Cluster:
         Returns list of buckets in AIStore cluster.
 
         Args:
-            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
+            provider (str, optional): Name of bucket provider, one of "ais", "aws", "gcp", "az" or "ht".
             Defaults to "ais". Empty provider returns buckets of all providers.
 
         Returns:

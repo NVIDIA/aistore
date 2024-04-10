@@ -315,51 +315,29 @@ func TestCreateRemoteBucket(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cliBck
 	)
-
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
-
-	if bck.IsHDFS() {
-		hdfsBck := cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)}
-		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BpropsToSet{
-			Extra: &cmn.ExtraToSet{
-				HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.Ptr("/")},
-			},
-		})
-		tassert.CheckFatal(t, err)
-		err = api.DestroyBucket(baseParams, hdfsBck)
-		tassert.CheckFatal(t, err)
-	} else {
-		exists, _ := tools.BucketExists(nil, tools.GetPrimaryURL(), bck)
-		tests := []struct {
-			bck    cmn.Bck
-			props  *cmn.BpropsToSet
-			exists bool
-		}{
-			{bck: bck, exists: exists},
-			{ // If cluster is not built with HDFS support, bucket creation should fail.
-				bck: cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)},
-				props: &cmn.BpropsToSet{
-					Extra: &cmn.ExtraToSet{
-						HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.Ptr("/")},
-					},
-				},
-			},
-			{bck: cmn.Bck{Provider: cliBck.Provider, Name: trand.String(10)}},
+	exists, _ := tools.BucketExists(nil, tools.GetPrimaryURL(), bck)
+	tests := []struct {
+		bck    cmn.Bck
+		props  *cmn.BpropsToSet
+		exists bool
+	}{
+		{bck: bck, exists: exists},
+		{bck: cmn.Bck{Provider: cliBck.Provider, Name: trand.String(10)}},
+	}
+	for _, test := range tests {
+		err := api.CreateBucket(baseParams, test.bck, test.props)
+		if err == nil {
+			continue
 		}
-		for _, test := range tests {
-			err := api.CreateBucket(baseParams, test.bck, test.props)
-			if err == nil {
-				continue
-			}
-			herr := cmn.Err2HTTPErr(err)
-			tassert.Fatalf(t, herr != nil, "expected ErrHTTP, got %v (bucket %q)", err, test.bck)
-			if test.exists {
-				tassert.Fatalf(t, strings.Contains(herr.Message, "already exists"),
-					"expecting \"already exists\", got %+v", herr)
-			} else {
-				tassert.Fatalf(t, herr.Status == http.StatusNotImplemented || strings.Contains(herr.Message, "support"),
-					"expecting 501 status or unsupported, got %+v", herr)
-			}
+		herr := cmn.Err2HTTPErr(err)
+		tassert.Fatalf(t, herr != nil, "expected ErrHTTP, got %v (bucket %q)", err, test.bck)
+		if test.exists {
+			tassert.Fatalf(t, strings.Contains(herr.Message, "already exists"),
+				"expecting \"already exists\", got %+v", herr)
+		} else {
+			tassert.Fatalf(t, herr.Status == http.StatusNotImplemented || strings.Contains(herr.Message, "support"),
+				"expecting 501 status or unsupported, got %+v", herr)
 		}
 	}
 }
@@ -707,9 +685,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 	tlog.Logf("Checking %q object versions [total: %d]\n", m.bck, len(bckObjs.Entries))
 	for _, en := range bckObjs.Entries {
 		tassert.Errorf(t, en.Size != 0, "object %s does not have size", en.Name)
-		if !m.bck.IsHDFS() {
-			tassert.Errorf(t, en.Version != "", "object %s does not have version", en.Name)
-		}
+		tassert.Errorf(t, en.Version != "", "object %s does not have version", en.Name)
 	}
 }
 

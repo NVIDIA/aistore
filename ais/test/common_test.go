@@ -748,7 +748,7 @@ func (m *ioContext) setNonDefaultBucketProps() {
 			ValidateColdGet: apc.Ptr(false),
 		},
 		Extra: &cmn.ExtraToSet{
-			HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.Ptr("/abc")},
+			AWS: &cmn.ExtraPropsAWSToSet{CloudRegion: apc.Ptr("us-notheast")},
 		},
 	}
 	_, err := api.SetBucketProps(baseParams, m.bck, props)

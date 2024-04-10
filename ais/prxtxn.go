@@ -1093,9 +1093,6 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 				p.si, bck, _versioning(bv))
 			return
 		}
-	} else if bck.IsHDFS() {
-		nprops.Versioning.Enabled = false
-		// TODO: Check if the `RefDirectory` does not overlap with other buckets.
 	}
 	if bprops.EC.Enabled && nprops.EC.Enabled {
 		sameSlices := bprops.EC.DataSlices == nprops.EC.DataSlices && bprops.EC.ParitySlices == nprops.EC.ParitySlices

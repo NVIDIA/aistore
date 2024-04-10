@@ -74,7 +74,6 @@ PROVIDER_AIS = "ais"
 PROVIDER_AMAZON = "aws"
 PROVIDER_AZURE = "azure"
 PROVIDER_GOOGLE = "gcp"
-PROVIDER_HDFS = "hdfs"
 PROVIDER_HTTP = "ht"
 
 # HTTP Methods

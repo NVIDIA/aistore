@@ -139,8 +139,6 @@ func (t *target) _initBuiltin() error {
 			add, err = backend.NewGCP(t)
 		case apc.Azure:
 			add, err = backend.NewAzure(t)
-		case apc.HDFS:
-			add, err = backend.NewHDFS(t)
 		case apc.AIS, apc.HTTP:
 			continue
 		default:

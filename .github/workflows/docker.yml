@@ -51,7 +51,6 @@ env:
   CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
   CI_IMAGE: 'aistorage/ci'
   AISNODE_MINIKUBE_IMAGE: 'aistorage/aisnode-minikube'
-  # HDFS_CI_IMAGE: 'aistorage/hdfs-ci'
 
 jobs:
   docker:
@@ -99,7 +98,6 @@ jobs:
       run: |
 
         pushd $GITHUB_WORKSPACE/deploy/ci
-        # CI_IMAGE="${{ env.CI_IMAGE }}" HDFS_CI_IMAGE=${{ env.HDFS_CI_IMAGE }} IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
 

@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -303,7 +303,6 @@ func TestParseQueryBckURI(t *testing.T) {
 		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}}},
 		{uri: "ais://@uuid#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
 		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}},
-		{uri: "hdfs://bucket", bck: cmn.QueryBcks{Provider: apc.HDFS, Name: "bucket"}},
 		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
 		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
 		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
@@ -340,7 +339,6 @@ func TestParseBckURI(t *testing.T) {
 		bck cmn.Bck
 	}{
 		{uri: "ais://bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket"}},
-		{uri: "hdfs://bucket", bck: cmn.Bck{Provider: apc.HDFS, Name: "bucket"}},
 		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
 		{uri: "ais://@uuid#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
 		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
@@ -398,11 +396,6 @@ func TestParseBckObjectURI(t *testing.T) {
 			objName: "object_name",
 		},
 		{
-			uri:     "hdfs://bucket/object_name/something",
-			bck:     cmn.Bck{Provider: apc.HDFS, Name: "bucket"},
-			objName: "object_name/something",
-		},
-		{
 			uri:     "ais://#ns/bucket/a/b/c",
 			bck:     cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}},
 			objName: "a/b/c",
@@ -458,7 +451,6 @@ func TestParseBckObjectURI(t *testing.T) {
 		{uri: "ais://@uuid#ns"},
 		{uri: "ais://@uuid#ns/bucket"},
 		{uri: "ftp://unsupported"},
-		{uri: "hdfs://bucket"},
 	}
 	for _, test := range negativeTests {
 		bck, objName, err := parseBckObjURI(&cli.Context{}, test.uri, test.optObjName)

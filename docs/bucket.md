@@ -164,7 +164,6 @@ Backend provider is realized as an optional parameter in the GET, PUT, APPEND, D
 * `aws` or `s3` - for Amazon S3 buckets
 * `azure` or `az` - for Microsoft Azure Blob Storage buckets
 * `gcp` or `gs` - for Google Cloud Storage buckets
-* `hdfs` - for Hadoop/HDFS clusters
 * `ht` - for HTTP(S) based datasets
 
 For API reference, please refer [to the RESTful API and examples](http_api.md).
@@ -616,7 +615,7 @@ The full list of bucket properties are:
 
 | Bucket Property | JSON | Description | Fields |
 | --- | --- | --- | --- |
-| Provider | `provider` | "ais", "aws", "azure", "gcp", "hdfs" or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"hdfs"/"ht"` |
+| Provider | `provider` | "ais", "aws", "azure", "gcp", or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"ht"` |
 | Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
 | LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `space.lowwm` and `space.highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `space.out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `space.highwm`. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": {"dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }`. Note: `space.*` are cluster level properties. |
 | Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "enabled": bool }` |

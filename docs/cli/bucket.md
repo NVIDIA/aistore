@@ -104,17 +104,6 @@ $ ais create ais://@Bghort1l/bucket_name --props='{"versioning": {"enabled": tru
 "ais://@Bghort1l/bucket_name" bucket created
 ```
 
-#### Create HDFS bucket
-
-Create bucket `bucket_name` in HDFS backend with bucket pointing to `/yt8m` directory.
-More info about HDFS buckets can be found [here](/docs/providers.md#hdfs-provider).
-
-```console
-$ ais create hdfs://bucket_name --props="extra.hdfs.ref_directory=/yt8m"
-"hdfs://bucket_name" bucket created
-```
-
-
 #### Incorrect buckets creation
 
 ```console
@@ -498,8 +487,7 @@ NAME                                             SIZE
     A.tar/tutorials/etl/compute_md5.md           8.28KiB
     A.tar/tutorials/etl/etl_imagenet_pytorch.md  4.16KiB
     A.tar/tutorials/etl/etl_webdataset.md        3.97KiB
-    A.tar/tutorials/various/hdfs_backend.md      5.39KiB
-Listed: 5 names
+Listed: 4 names
 ````
 
 or, same:
@@ -511,8 +499,7 @@ NAME                                             SIZE
     A.tar/tutorials/etl/compute_md5.md           8.28KiB
     A.tar/tutorials/etl/etl_imagenet_pytorch.md  4.16KiB
     A.tar/tutorials/etl/etl_webdataset.md        3.97KiB
-    A.tar/tutorials/various/hdfs_backend.md      5.39KiB
-Listed: 5 names
+Listed: 4 names
 ```
 
 ## Evict remote bucket
@@ -564,9 +551,6 @@ TDXBNBEZNl.tar   8.50KiB         33345a69bade096a30abd42058da4537               
 qFpwOOifUe.tar   8.50KiB         8b5919c0850a07d931c3c46ed9101eab                1622133846120151        no      ok      0
 thmdpZXetG.tar   8.50KiB         cfe0c386e91daa1571d6a659f49b1408                1622137609269706        no      ok      0
 ```
-
-> Note: When an [HDFS bucket](/docs/providers.md#hdfs-provider) is evicted, AIS will only remove objects stored in the cluster.
-AIS will retain the bucket's metadata to allow the bucket to re-register later.
 
 ## Move or Rename a bucket
 

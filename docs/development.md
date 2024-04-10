@@ -165,7 +165,7 @@ $ bash ./scripts/clean-deploy --deployment all --remote-alias remoteAIS --target
 | `--target-cnt` | Number of targets to start (default: 5) |
 | `--proxy-cnt` | Number of proxies to start (default: 5) |
 | `--mountpath-cnt` | Number of mountpaths to use (default: 5) |
-| `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp`, `--hdfs` |
+| `--PROVIDER` | Specifies the backend provider(s). Can be: `--aws`, `--azure`, `--gcp` |
 | `--loopback` | Loopback device size, e.g. 10G, 100M (default: 0). Zero size means: no loopbacks. The minimum size is 100M. |
 | `--deployment` | Choose which AIS cluster to deploy. `local` to deploy only one AIS cluster, `remote` to only start an AIS-behind-AIS cluster, and `all` to deploy both the local and remote clusters. |
 | `--remote-alias` | Alias to assign to the remote cluster |

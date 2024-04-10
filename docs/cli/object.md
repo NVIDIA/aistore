@@ -284,8 +284,7 @@ NAME                                             SIZE
     A.tar/tutorials/etl/compute_md5.md           8.28KiB
     A.tar/tutorials/etl/etl_imagenet_pytorch.md  4.16KiB
     A.tar/tutorials/etl/etl_webdataset.md        3.97KiB
-    A.tar/tutorials/various/hdfs_backend.md      5.39KiB
-Listed: 5 names
+Listed: 4 names
 ```
 
 Now, extract matching files _from_ the bucket to /tmp/out:
@@ -314,8 +313,10 @@ $ tree /tmp/out
     │   ├── etl_imagenet_pytorch.md
     │   └── etl_webdataset.md
     ├── README.md
-    └── various
-        └── hdfs_backend.md
+    └── etl
+        └── compute_md5.md
+        └── etl_imagenet_pytorch.md
+        └── etl_webdataset.md
 ```
 
 > **NOTE:** for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).

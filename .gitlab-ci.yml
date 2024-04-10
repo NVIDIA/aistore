@@ -132,8 +132,8 @@ build:linux:
   script:
     - MODE="" make node # Build node without backends in production mode.
     - MODE="debug" make node # Build node without backends in debug mode.
-    - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="" make node # Build with all backends (production mode).
-    - AIS_BACKEND_PROVIDERS="ais aws azure gcp hdfs" MODE="debug" make node # Build with all backends (debug mode).
+    - AIS_BACKEND_PROVIDERS="ais aws azure gcp" MODE="" make node # Build with all backends (production mode).
+    - AIS_BACKEND_PROVIDERS="ais aws azure gcp" MODE="debug" make node # Build with all backends (debug mode).
     - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
     - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
     - make authn
@@ -326,18 +326,6 @@ test:long:azure:
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-long
-
-# test:long:hdfs:
-#   image: aistorage/hdfs-ci
-#   <<: *test_long_skip_scheduled_def
-#   variables:
-#     NUM_PROXY: 6
-#     BUCKET: "hdfs://ais-ci"
-#   script:
-#     - bash deploy/ci/setup_hdfs.sh
-#     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
-#     - ais bucket create "${BUCKET}" --props="extra.hdfs.ref_directory=/"
-#     - make test-long
 
 test:long:aisloader:
   stage: test-long

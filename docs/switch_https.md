@@ -20,7 +20,7 @@ $ ais cluster shutdown
 $ find ~/.ais* -type f -name ".ais.smap" | xargs rm
 
 # step 5: restart
-$ make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\nn\n'
+$ make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\n'
 
 # step 6: optionally, run aisloader
 $ AIS_ENDPOINT=https://localhost:8080 aisloader -bucket=ais://nnn -cleanup=false -numworkers=8 -pctput=0 -randomproxy
@@ -60,7 +60,7 @@ $ AIS_ENDPOINT=https://127.0.0.1:8080 ais cluster shutdown -y
 $ find ~/.ais* -type f -name ".ais.smap" | xargs rm
 
 # step 4: restart
-$ make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\nn\n'
+$ make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\n'
 
 # step 5: and use
 $ ais show cluster

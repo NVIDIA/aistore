@@ -171,7 +171,7 @@ run:
   tests: true # enable linting test files
 
   build-tags:
-    - hrw aws azure gcp hdfs # Build hrw and backend providers so that staticcheck doesn't complain about unused export functions.
+    - hrw aws azure gcp # Build hrw and backend providers so that staticcheck doesn't complain about unused export functions.
 
   concurrency: 4
   deadline: 6m

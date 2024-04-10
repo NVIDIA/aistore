@@ -49,7 +49,6 @@ func (b *Bck) Bucket() *cmn.Bck { return (*cmn.Bck)(b) }
 func (b *Bck) IsAIS() bool                  { return (*cmn.Bck)(b).IsAIS() }
 func (b *Bck) HasProvider() bool            { return (*cmn.Bck)(b).HasProvider() }
 func (b *Bck) IsHTTP() bool                 { return (*cmn.Bck)(b).IsHTTP() }
-func (b *Bck) IsHDFS() bool                 { return (*cmn.Bck)(b).IsHDFS() }
 func (b *Bck) IsCloud() bool                { return (*cmn.Bck)(b).IsCloud() }
 func (b *Bck) IsRemote() bool               { return (*cmn.Bck)(b).IsRemote() }
 func (b *Bck) IsRemoteAIS() bool            { return (*cmn.Bck)(b).IsRemoteAIS() }

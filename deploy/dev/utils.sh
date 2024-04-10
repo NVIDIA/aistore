@@ -46,9 +46,6 @@ parse_backend_providers() {
   echo "Azure: (y/n) ?"
   read -r cld_azure
   is_boolean "${cld_azure}"
-  echo "HDFS: (y/n) ?"
-  read -r cld_hdfs
-  is_boolean "${cld_hdfs}"
 
   if  [[ "${cld_aws}" == "y" ]] ; then
     AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} aws"
@@ -58,9 +55,6 @@ parse_backend_providers() {
   fi
   if  [[ "${cld_azure}" == "y" ]] ; then
     AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"
-  fi
-  if  [[ "${cld_hdfs}" == "y" ]] ; then
-    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} hdfs"
   fi
 }
 

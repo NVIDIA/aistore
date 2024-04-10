@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -162,10 +162,6 @@ func (bctx *bctx) accessSupported() error {
 		op = "rename/move remote bucket"
 		goto rerr
 	}
-	// accept rename (check!) HDFS buckets are fine across the board
-	if bctx.bck.IsHDFS() {
-		return nil
-	}
 	// HTTP buckets are not writeable
 	if bctx.bck.IsHTTP() && bctx._perm(apc.AcePUT) {
 		op = "write to HTTP bucket"
@@ -261,14 +257,6 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	if err = bctx.bck.Validate(); err != nil {
 		ecode = http.StatusBadRequest
-		return
-	}
-
-	// if HDFS bucket is not present in the BMD there is no point
-	// in checking if it exists remotely (in re: `ref_directory`)
-	if bctx.bck.IsHDFS() {
-		err = cmn.NewErrBckNotFound(bctx.bck.Bucket())
-		ecode = http.StatusNotFound
 		return
 	}
 

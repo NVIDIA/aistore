@@ -190,7 +190,7 @@ index c5e0e4fae..46085e19c 100755
 * Step 2: deploy a single target with two loopback devices (1GB size each):
 
 ```console
-$ make kill clean cli deploy <<< $'1\n1\n2\ny\ny\nn\nn\n1G\n'
+$ make kill clean cli deploy <<< $'1\n1\n2\ny\ny\nn\n1G\n'
 
 $ mount | grep dev/loop
 /dev/loop23 on /tmp/ais/mp1 type ext4 (rw,relatime)
@@ -281,7 +281,7 @@ $ make deploy
 $ make kill clean
 
 # Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
-$ make kill deploy <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
+$ make kill deploy <<< $'7\n2\n4\ny\ny\nn\n0\n'
 ```
 
 ## System environment variables
@@ -384,14 +384,8 @@ Run `make help` for supported (make) options and usage examples, including:
 
 ```console
 # Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
-$ make restart <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
+$ make restart <<< $'7\n2\n4\ny\ny\nn\n0\n'
 
-# Redeploy the cluster (4 targets, 1 proxyi, 4 mountoaths); build `aisnode` executable for debug without any backend-supporting libraries; use RUN_ARGS to pass an additional command-line option ('-override_backends=true') to each running node
-$ RUN_ARGS=-override_backends MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
-
-# Same as above, but additionally run all 4 targets in a standby mode
-$ RUN_ARGS='-override_backends -standby' MODE=debug make kill deploy <<< $'4\n1\n4\nn\nn\nn\nn\n0\n'
-...
 ...
 ```
 
@@ -471,7 +465,7 @@ $ # shutdown prev running AIS cluster
 $ make kill
 $ # delete smaps of prev AIS clusters
 $ find ~/.ais* -type f -name ".ais.smap" | xargs rm
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-cert>/server.crt AIS_SERVER_KEY=<path-to-key>/server.key make deploy <<< $'4\n1\n6\ny\nn\nn\nn\n0\n'
+$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-cert>/server.crt AIS_SERVER_KEY=<path-to-key>/server.key make deploy <<< $'4\n1\n6\ny\nn\nn\n0\n'
 ```
 > Notice environment variables above: **AIS_USE_HTTPS**, **AIS_SKIP_VERIFY_CRT**, **AIS_SERVER_CRT** and **AIS_SERVER_KEY**.
 
@@ -517,7 +511,7 @@ $ find ~/.ais* -type f -name ".ais.smap" | xargs rm
 $ # substitute varibles in below files to point to correct certificates
 $ source ais/test/tls-env/server.conf
 $ source ais/test/tls-env/client.conf
-$ AIS_USE_HTTPS=true make deploy <<< $'6\n6\n4\ny\nyn\nn\nn\n'
+$ AIS_USE_HTTPS=true make deploy <<< $'6\n6\n4\ny\ny\nn\n\n'
 ```
 
 Notice that when the cluster is first time deployed `server.conf` environment (above) overrides aistore cluster configuration.

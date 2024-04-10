@@ -21,7 +21,6 @@ AIStore natively integrates with multiple backend providers:
 | `aws` | `aws://`, `s3://` | [Amazon Cloud Storage](#cloud-object-storage) |
 | `azure` | `azure://`, `az://` | [Azure Cloud Storage](#cloud-object-storage)|
 | `gcp` | `gcp://`, `gs://` | [Google Cloud Storage](#cloud-object-storage) |
-| `hdfs` | `hdfs://` | [Hadoop Distributed File System](#hdfs-provider) |
 | `ht` | `ht://` | [HTTP(S) based dataset](#https-based-dataset) |
 
 **Native integration**, in turn, implies:
@@ -52,7 +51,7 @@ Further:
 
 ## Remote AIS cluster
 
-In addition to the listed above 3rd party Cloud storages and non-Cloud HTTP(S) and HDFS-based backends, any given pair of AIS clusters can be organized in a way where one cluster would be providing fully-accessible *backend* to another.
+In addition to the listed above 3rd party Cloud storages and non-Cloud HTTP(S) backend, any given pair of AIS clusters can be organized in a way where one cluster would be providing fully-accessible *backend* to another.
 
 Terminology:
 
@@ -157,57 +156,6 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 > Notwithstanding, *remote buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
 
 > Note as well that AIS provides [5 (five) easy ways to populate its *remote buckets*](overview.md) - including, but not limited to conventional on-demand caching (aka *cold GET*).
-
-## HDFS Provider
-
-Hadoop and HDFS is well known and widely used software for distributed processing of large datasets using MapReduce model.
-For years, it has been considered as a standard for big data.
-
-HDFS backend provider is a way to access files contained inside the HDFS cluster from AIStore.
-Here we will talk about standard configuration and usages (see also [full tutorial on HDFS provider](/docs/tutorials/various/hdfs_backend.md)).
-
-### Configuration
-
-Before we jump to functionalities, let's first focus on configuration.
-AIStore needs to know the address of NameNode server and the username for the requests.
-Important note here is that the NameNode and DataNode addresses must be accessible from the AIStore, otherwise the connection will fail.
-
-Example of HDFS provider configuration:
-```json
-"backend": {
-  "hdfs": {
-    "user": "root",
-    "addresses": ["localhost:8020"],
-    "use_datanode_hostname": false
-  }
-}
-```
-
-* `user` specifies which HDFS user the client will act as.
-* `addresses` specifies the namenode(s) to connect to.
-* `use_datanode_hostname` specifies whether the client should connect to the datanodes via hostname (which is useful in multi-homed setups) or IP address, which may be required if DNS isn't available.
-
-### Usage
-
-After the HDFS is set up, and the binary is built with HDFS provider, we can see everything in action.
-```console
-$ ais create hdfs://yt8m --props="extra.hdfs.ref_directory=/part1/video"
-"hdfs://yt8m" bucket created
-$ ais ls hdfs://
-HDFS Buckets (1)
-  hdfs://yt8m
-$ ais put 1.mp4 hdfs://yt8m/1.mp4
-PUT "1.mp4" into bucket "hdfs://yt8m"
-$ ais ls hdfs://yt8m
-NAME	 SIZE
-1.mp4	 76.31KiB
-$ ais get hdfs://yt8m/1.mp4 video.mp4
-GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
-```
-
-The first thing to notice is `--props="extra.hdfs.ref_directory=/part1/video"`.
-Here we specify the **required** path the `hdfs://yt8m` bucket will refer to (the directory must exist on bucket creation).
-It means that when accessing object `hdfs://yt8m/1.mp4` the path will be resolved to `/part1/video/1.mp4` (`/part1/video` + `1.mp4`).
 
 ## HTTP(S) based dataset
 

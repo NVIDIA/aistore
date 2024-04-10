@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -14,10 +14,9 @@ const (
 	AWS   = "aws"
 	Azure = "azure"
 	GCP   = "gcp"
-	HDFS  = "hdfs"
 	HTTP  = "ht"
 
-	AllProviders = "ais, aws (s3://), gcp (gs://), azure (az://), hdfs://, ht://" // NOTE: must include all
+	AllProviders = "ais, aws (s3://), gcp (gs://), azure (az://), ht://" // NOTE: must include all
 
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
@@ -33,7 +32,7 @@ const (
 	AISScheme     = "ais"
 )
 
-var Providers = cos.NewStrSet(AIS, GCP, AWS, Azure, HDFS, HTTP)
+var Providers = cos.NewStrSet(AIS, GCP, AWS, Azure, HTTP)
 
 func IsProvider(p string) bool { return Providers.Contains(p) }
 
@@ -41,8 +40,9 @@ func IsCloudProvider(p string) bool {
 	return p == AWS || p == GCP || p == Azure
 }
 
+// not to confuse w/ bck.IsRemote()
 func IsRemoteProvider(p string) bool {
-	return IsCloudProvider(p) || p == HDFS || p == HTTP
+	return IsCloudProvider(p) || p == HTTP
 }
 
 func ToScheme(p string) string {
@@ -86,8 +86,6 @@ func DisplayProvider(p string) string {
 		return "Azure"
 	case GCP, GSScheme:
 		return "GCP"
-	case HDFS:
-		return "HDFS"
 	case HTTP:
 		return "HTTP(S)"
 	default:

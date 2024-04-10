@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"path"
@@ -170,11 +169,6 @@ type (
 		Conf map[string]any `json:"conf,omitempty"`
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
-	}
-	BackendConfHDFS struct {
-		Addresses           []string `json:"addresses"`
-		User                string   `json:"user"`
-		UseDatanodeHostname bool     `json:"use_datanode_hostname"`
 	}
 	BackendConfAIS map[string][]string // cluster alias -> [urls...]
 
@@ -867,38 +861,6 @@ func (c *BackendConf) Validate() (err error) {
 				}
 			}
 			c.Conf[provider] = aisConf
-		case apc.HDFS:
-			var hdfsConf BackendConfHDFS
-			if err := jsoniter.Unmarshal(b, &hdfsConf); err != nil {
-				return fmt.Errorf("invalid cloud specification: %v", err)
-			}
-			if len(hdfsConf.Addresses) == 0 {
-				return errors.New("no addresses provided to HDFS NameNode")
-			}
-
-			// Check connectivity and filter out non-reachable addresses.
-			reachableAddrs := hdfsConf.Addresses[:0]
-			for _, address := range hdfsConf.Addresses {
-				conn, err := net.DialTimeout("tcp", address, 5*time.Second)
-				if err != nil {
-					nlog.Warningf(
-						"Failed to dial %q HDFS address, check connectivity to the HDFS cluster, err: %v",
-						address, err,
-					)
-					continue
-				}
-				conn.Close()
-				reachableAddrs = append(reachableAddrs, address)
-			}
-			hdfsConf.Addresses = reachableAddrs
-
-			// Re-check if there is any address reachable.
-			if len(hdfsConf.Addresses) == 0 {
-				return errors.New("no address provided to HDFS NameNode is reachable")
-			}
-
-			c.Conf[provider] = hdfsConf
-			c.setProvider(provider)
 		case "":
 			continue
 		default:
@@ -911,7 +873,7 @@ func (c *BackendConf) Validate() (err error) {
 func (c *BackendConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
-	case apc.AWS, apc.Azure, apc.GCP, apc.HDFS:
+	case apc.AWS, apc.Azure, apc.GCP:
 		ns = NsGlobal
 	default:
 		debug.Assert(false, "unknown backend provider "+provider)
