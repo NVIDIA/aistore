@@ -217,7 +217,7 @@ func doPut(wo *workOrder) {
 		}
 	} else {
 		debug.Assert(!isDirectS3())
-		wo.latencies, wo.err = putWithTrace(url, wo.bck, wo.objName, r.Cksum(), r)
+		wo.err = putWithTrace(url, wo.bck, wo.objName, &wo.latencies, r.Cksum(), r)
 	}
 	if runParams.readerType == readers.TypeFile {
 		r.Close()
@@ -247,8 +247,8 @@ func doGet(wo *workOrder) {
 		}
 	} else {
 		debug.Assert(!isDirectS3())
-		wo.size, wo.latencies, wo.err = getTraceDiscard(url, wo.bck,
-			wo.objName, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
+		wo.size, wo.err = getTraceDiscard(url, wo.bck,
+			wo.objName, &wo.latencies, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
 	}
 }
 

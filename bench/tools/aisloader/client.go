@@ -155,6 +155,20 @@ func (t *traceableTransport) GotFirstResponseByte() {
 	}
 }
 
+func (t *traceableTransport) set(l *httpLatencies) {
+	l.ProxyConn = timeDelta(t.tsProxyConn, t.tsBegin)
+	l.Proxy = timeDelta(t.tsRedirect, t.tsProxyConn)
+	l.TargetConn = timeDelta(t.tsTargetConn, t.tsRedirect)
+	l.Target = timeDelta(t.tsHTTPEnd, t.tsTargetConn)
+	l.PostHTTP = time.Since(t.tsHTTPEnd)
+	l.ProxyWroteHeader = timeDelta(t.tsProxyWroteHeaders, t.tsProxyConn)
+	l.ProxyWroteRequest = timeDelta(t.tsProxyWroteRequest, t.tsProxyWroteHeaders)
+	l.ProxyFirstResponse = timeDelta(t.tsProxyFirstResponse, t.tsProxyWroteRequest)
+	l.TargetWroteHeader = timeDelta(t.tsTargetWroteHeaders, t.tsTargetConn)
+	l.TargetWroteRequest = timeDelta(t.tsTargetWroteRequest, t.tsTargetWroteHeaders)
+	l.TargetFirstResponse = timeDelta(t.tsTargetFirstResponse, t.tsTargetWroteRequest)
+}
+
 //////////////////////////////////
 // detailed http trace _putter_ //
 //////////////////////////////////
@@ -214,7 +228,7 @@ func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader 
 }
 
 // PUT with HTTP trace
-func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (httpLatencies, error) {
+func putWithTrace(proxyURL string, bck cmn.Bck, objName string, latencies *httpLatencies, cksum *cos.Cksum, reader cos.ReadOpenCloser) error {
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut
@@ -231,24 +245,13 @@ func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum
 	_, err := api.DoWithRetry(putter.tctx.tracedClient, putter.do, reqArgs) //nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
 	if err != nil {
-		return httpLatencies{}, err
+		return err
 	}
 	tctx := putter.tctx
 	tctx.tr.tsHTTPEnd = time.Now()
-	l := httpLatencies{
-		ProxyConn:           timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               timeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          timeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              timeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
-		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    timeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   timeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  timeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   timeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  timeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
-	}
-	return l, nil
+
+	tctx.tr.set(latencies)
+	return nil
 }
 
 func newTraceCtx(proxyURL string) *traceCtx {
@@ -361,14 +364,14 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int
 }
 
 // Same as above, but with HTTP trace.
-func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int64, validate, latest bool) (int64, httpLatencies, error) {
+func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *httpLatencies, offset, length int64, validate, latest bool) (int64, error) {
 	var (
 		hdrCksumValue string
 		hdrCksumType  string
 	)
 	req, err := newGetRequest(proxyURL, bck, objName, offset, length, latest)
 	if err != nil {
-		return 0, httpLatencies{}, err
+		return 0, err
 	}
 
 	tctx := newTraceCtx(proxyURL)
@@ -376,7 +379,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, offset, lengt
 
 	resp, err := tctx.tracedClient.Do(req)
 	if err != nil {
-		return 0, httpLatencies{}, err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
@@ -389,26 +392,14 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, offset, lengt
 	src := "GET " + bck.Cname(objName)
 	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 	if err != nil {
-		return 0, httpLatencies{}, err
+		return 0, err
 	}
 	if validate && hdrCksumValue != cksumValue {
 		err = cmn.NewErrInvalidCksum(hdrCksumValue, cksumValue)
 	}
 
-	latencies := httpLatencies{
-		ProxyConn:           timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:               timeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
-		TargetConn:          timeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
-		Target:              timeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
-		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
-		ProxyWroteHeader:    timeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
-		ProxyWroteRequest:   timeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  timeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
-		TargetWroteHeader:   timeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
-		TargetWroteRequest:  timeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
-		TargetFirstResponse: timeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
-	}
-	return n, latencies, err
+	tctx.tr.set(latencies)
+	return n, err
 }
 
 // getConfig sends a {what:config} request to the url and discard the message
