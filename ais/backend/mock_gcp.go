@@ -11,6 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-func NewGCP(_ core.TargetPut) (core.BackendProvider, error) {
+func NewGCP(_ core.TargetPut) (core.Backend, error) {
 	return nil, newErrInitBackend(apc.GCP)
 }

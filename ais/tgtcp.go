@@ -337,11 +337,11 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.WhatRemoteAIS:
 		var (
-			aisBackend = t.aisBackend()
-			refresh    = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+			aisbp   = t.aisbp()
+			refresh = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 		)
 		if !refresh {
-			t.writeJSON(w, r, aisBackend.GetInfoInternal(), httpdaeWhat)
+			t.writeJSON(w, r, aisbp.GetInfoInternal(), httpdaeWhat)
 			return
 		}
 
@@ -353,7 +353,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		aisConf, ok := anyConf.(cmn.BackendConfAIS)
 		debug.Assert(ok)
 
-		t.writeJSON(w, r, aisBackend.GetInfo(aisConf), httpdaeWhat)
+		t.writeJSON(w, r, aisbp.GetInfo(aisConf), httpdaeWhat)
 	default:
 		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	}
@@ -1007,12 +1007,12 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 // NOTE: apply the entire config: add new and update existing entries (remote clusters)
 func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *aisMsg) (err error) {
 	var (
-		aisBackend *backend.AISBackendProvider
-		aisConf    = newConfig.Backend.Get(apc.AIS)
+		aisbp   *backend.AISbp
+		aisConf = newConfig.Backend.Get(apc.AIS)
 	)
 	debug.Assert(aisConf != nil)
-	aisBackend = t.aisBackend()
-	return aisBackend.Apply(aisConf, msg.Action, &newConfig.ClusterConfig)
+	aisbp = t.aisbp()
+	return aisbp.Apply(aisConf, msg.Action, &newConfig.ClusterConfig)
 }
 
 // POST /v1/metasync

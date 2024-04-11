@@ -39,8 +39,9 @@ import (
 )
 
 type (
-	awsProvider struct {
+	s3bp struct {
 		t core.TargetPut
+		base
 	}
 	sessConf struct {
 		bck    *cmn.Bck
@@ -58,33 +59,26 @@ var (
 )
 
 // interface guard
-var _ core.BackendProvider = (*awsProvider)(nil)
+var _ core.Backend = (*s3bp)(nil)
 
 // environment variables => static defaults that can still be overridden via bck.Props.Extra.AWS
 // in addition to these two (below), default bucket region = env.AwsDefaultRegion()
-func NewAWS(t core.TargetPut) (core.BackendProvider, error) {
+func NewAWS(t core.TargetPut) (core.Backend, error) {
 	s3Endpoint = os.Getenv(env.AWS.Endpoint)
 	awsProfile = os.Getenv(env.AWS.Profile)
-	return &awsProvider{t: t}, nil
+	return &s3bp{
+		t:    t,
+		base: base{apc.AWS},
+	}, nil
 }
 
-// as core.BackendProvider --------------------------------------------------------------
-
-func (*awsProvider) Provider() string { return apc.AWS }
-
-//
-// CREATE BUCKET
-//
-
-func (*awsProvider) CreateBucket(_ *meta.Bck) (int, error) {
-	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "s3:// bucket")
-}
+// as core.Backend --------------------------------------------------------------
 
 //
 // HEAD BUCKET
 //
 
-func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	var (
 		svc      *s3.Client
 		region   string
@@ -133,7 +127,7 @@ func (*awsProvider) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.S
 // LIST OBJECTS via INVENTORY
 //
 
-func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (ecode int, err error) {
+func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (ecode int, err error) {
 	var (
 		svc      *s3.Client
 		fqn      string
@@ -157,7 +151,7 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 		// first time:
 		// - fills-in (manifested) schema
 		// - calls getInventory() and checkInventory(), the latter with the timestamp of the remote
-		fqn, ecode, err = awsp.getInventory(cloudBck, svc, ctx)
+		fqn, ecode, err = s3bp.getInventory(cloudBck, svc, ctx)
 	}
 	if err != nil {
 		return
@@ -168,8 +162,8 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 	}
 	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
 	siz := min(invSizeSGL, ctx.Size-ctx.Offset /*remaining*/)
-	sgl := awsp.t.PageMM().NewSGL(siz, memsys.MaxPageSlabSize/2)
-	err = awsp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
+	sgl := s3bp.t.PageMM().NewSGL(siz, memsys.MaxPageSlabSize/2)
+	err = s3bp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
 	sgl.Free()
 	fh.Close()
 	if err != nil {
@@ -190,7 +184,7 @@ func (awsp *awsProvider) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
 		svc        *s3.Client
 		h          = cmn.BackendHelpers.Amazon
@@ -312,7 +306,7 @@ func (*awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes)
 // LIST BUCKETS
 //
 
-func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
+func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
@@ -341,7 +335,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err er
 // HEAD OBJECT
 //
 
-func (*awsProvider) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		svc        *s3.Client
 		headOutput *s3.HeadObjectOutput
@@ -431,7 +425,7 @@ exit:
 // GET OBJECT
 //
 
-func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, oreq *http.Request) (int, error) {
+func (s3bp *s3bp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, oreq *http.Request) (int, error) {
 	var res core.GetReaderResult
 
 	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
@@ -452,14 +446,14 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT,
 		}
 	}
 
-	res = awsp.GetObjReader(ctx, lom, 0, 0)
+	res = s3bp.GetObjReader(ctx, lom, 0, 0)
 
 finalize:
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
 	params := allocPutParams(res, owt)
-	err := awsp.t.PutObject(lom, params)
+	err := s3bp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
@@ -467,7 +461,7 @@ finalize:
 	return 0, err
 }
 
-func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		obj      *s3.GetObjectOutput
 		cloudBck = lom.Bck().RemoteBck()
@@ -546,7 +540,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
+func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
 	var (
 		svc                   *s3.Client
 		uploader              *s3manager.Uploader
@@ -621,7 +615,7 @@ exit:
 // DELETE OBJECT
 //
 
-func (*awsProvider) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
 		svc      *s3.Client
 		cloudBck = lom.Bck().RemoteBck()

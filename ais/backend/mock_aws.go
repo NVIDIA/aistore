@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-func NewAWS(_ core.TargetPut) (core.BackendProvider, error) {
+func NewAWS(_ core.TargetPut) (core.Backend, error) {
 	return nil, newErrInitBackend(apc.AWS)
 }
 

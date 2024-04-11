@@ -45,7 +45,7 @@ func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values)
 	return t.reqHealth(si, timeout, query, t.owner.smap.get())
 }
 
-func (t *target) Backend(bck *meta.Bck) core.BackendProvider {
+func (t *target) Backend(bck *meta.Bck) core.Backend {
 	if bck.IsRemoteAIS() {
 		return t.backend[apc.AIS]
 	}

@@ -5,13 +5,34 @@
 package backend
 
 import (
+	"net/http"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
+
+type base struct {
+	provider string
+}
+
+func (b *base) Provider() string { return b.provider }
+
+func (b *base) CreateBucket(_ *meta.Bck) (int, error) {
+	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", b.provider+" bucket")
+}
+
+func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
+	return 0, cmn.NewErrNotImpl("list "+b.provider+" backend objects via", "bucket inventory")
+}
+
+//
+// common helpers and misc
+//
 
 func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
 
@@ -23,11 +44,7 @@ func calcPageSize(pageSize, maxPageSize int64) int64 {
 	return min(pageSize, maxPageSize)
 }
 
-func newErrInventory(provider string) error {
-	return cmn.NewErrNotImpl("list "+provider+" backend objects via", "bucket inventory")
-}
-
-//nolint:deadcode,unused // It is used but in `*_mock.go` files.
+//nolint:deadcode,unused // used by dummy backends
 func newErrInitBackend(provider string) error { return &cmn.ErrInitBackend{Provider: provider} }
 
 func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {

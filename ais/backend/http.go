@@ -20,37 +20,34 @@ import (
 )
 
 type (
-	httpProvider struct {
+	htbp struct {
 		t      core.TargetPut
 		cliH   *http.Client
 		cliTLS *http.Client
+		base
 	}
 )
 
 // interface guard
-var _ core.BackendProvider = (*httpProvider)(nil)
+var _ core.Backend = (*htbp)(nil)
 
-func NewHTTP(t core.TargetPut, config *cmn.Config) core.BackendProvider {
-	hp := &httpProvider{t: t}
-	hp.cliH, hp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
-	return hp
-}
-
-func (hp *httpProvider) client(u string) *http.Client {
-	if cos.IsHTTPS(u) {
-		return hp.cliTLS
+func NewHTTP(t core.TargetPut, config *cmn.Config) core.Backend {
+	htbp := &htbp{
+		t:    t,
+		base: base{apc.HTTP},
 	}
-	return hp.cliH
+	htbp.cliH, htbp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
+	return htbp
 }
 
-func (*httpProvider) Provider() string { return apc.HTTP }
-
-// TODO: can be done
-func (hp *httpProvider) CreateBucket(*meta.Bck) (int, error) {
-	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", hp.Provider()+" bucket")
+func (htbp *htbp) client(u string) *http.Client {
+	if cos.IsHTTPS(u) {
+		return htbp.cliTLS
+	}
+	return htbp.cliH
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
@@ -63,7 +60,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 	}
 
 	// Contact the original URL - as long as we can make connection we assume it's good.
-	resp, err := hp.client(origURL).Head(origURL)
+	resp, err := htbp.client(origURL).Head(origURL)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
@@ -84,17 +81,12 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 	return
 }
 
-func (hp *httpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
-	debug.Assert(false)
-	return 0, newErrInventory(hp.Provider())
-}
-
-func (*httpProvider) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes) (ecode int, err error) {
+func (*htbp) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes) (ecode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-func (*httpProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
+func (*htbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -114,7 +106,7 @@ func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string,
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -125,7 +117,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Requ
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] original_url: %q", origURL)
 	}
-	resp, err := hp.client(origURL).Head(origURL)
+	resp, err := htbp.client(origURL).Head(origURL)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
@@ -147,13 +139,13 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Requ
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
-	res := hp.GetObjReader(ctx, lom, 0, 0)
+func (htbp *htbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
+	res := htbp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
 	params := allocPutParams(res, owt)
-	res.Err = hp.t.PutObject(lom, params)
+	res.Err = htbp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if res.Err != nil {
 		return 0, res.Err
@@ -164,7 +156,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, 
 	return 0, nil
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (htbp *htbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		req  *http.Request
 		resp *http.Response
@@ -188,7 +180,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset,
 		rng := cmn.MakeRangeHdr(offset, length)
 		req.Header = http.Header{cos.HdrRange: []string{rng}}
 	}
-	resp, res.Err = hp.client(origURL).Do(req) //nolint:bodyclose // is closed by the caller
+	resp, res.Err = htbp.client(origURL).Do(req) //nolint:bodyclose // is closed by the caller
 	if res.Err != nil {
 		return res
 	}
@@ -212,10 +204,10 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset,
 	return res
 }
 
-func (*httpProvider) PutObj(io.ReadCloser, *core.LOM, *http.Request) (int, error) {
+func (*htbp) PutObj(io.ReadCloser, *core.LOM, *http.Request) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("PUT", " objects => HTTP backend")
 }
 
-func (*httpProvider) DeleteObj(*core.LOM) (int, error) {
+func (*htbp) DeleteObj(*core.LOM) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("DELETE", " objects from HTTP backend")
 }

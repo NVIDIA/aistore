@@ -52,7 +52,7 @@ func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact, cmn.OWT) (int, erro
 func (*TargetMock) EvictObject(*core.LOM) (int, error)                             { return 0, nil }
 func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)                      { return 0, nil }
 func (*TargetMock) Promote(*core.PromoteParams) (int, error)                       { return 0, nil }
-func (*TargetMock) Backend(*meta.Bck) core.BackendProvider                         { return nil }
+func (*TargetMock) Backend(*meta.Bck) core.Backend                                 { return nil }
 func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode) bool                         { return false }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                      {}
 func (*TargetMock) FSHC(error, string)                                             {}

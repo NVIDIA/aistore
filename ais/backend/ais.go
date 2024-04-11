@@ -40,35 +40,37 @@ const remAisDefunct = "defunct" // uuid configured offline
 type (
 	remAis struct {
 		smap *meta.Smap
-		m    *AISBackendProvider
+		m    *AISbp
 		url  string
 		uuid string
 		bp   api.BaseParams
 	}
-	AISBackendProvider struct {
+	AISbp struct {
 		t             core.TargetPut
 		remote        map[string]*remAis // by UUID
 		alias         cos.StrKVs         // alias => UUID
 		mu            sync.RWMutex
 		appliedCfgVer int64
+		base
 	}
 )
 
 // interface guard
-var _ core.BackendProvider = (*AISBackendProvider)(nil)
+var _ core.Backend = (*AISbp)(nil)
 
 var (
 	preg, treg *regexp.Regexp
 )
 
-func NewAIS(t core.TargetPut) *AISBackendProvider {
+func NewAIS(t core.TargetPut) *AISbp {
 	suff := regexp.QuoteMeta(meta.SnameSuffix)
 	preg = regexp.MustCompile(regexp.QuoteMeta(meta.PnamePrefix) + `\S*` + suff + ": ")
 	treg = regexp.MustCompile(regexp.QuoteMeta(meta.TnamePrefix) + `\S*` + suff + ": ")
-	return &AISBackendProvider{
+	return &AISbp{
 		t:      t,
 		remote: make(map[string]*remAis),
 		alias:  make(cos.StrKVs),
+		base:   base{apc.AIS},
 	}
 }
 
@@ -110,7 +112,7 @@ func extractErrCode(e error, uuid string) (int, error) {
 }
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
-func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) (err error) {
+func (m *AISbp) Apply(v any, action string, cfg *cmn.ClusterConfig) (err error) {
 	conf := cmn.BackendConfAIS{}
 	if err = cos.MorphMarshal(v, &conf); err != nil {
 		err = fmt.Errorf("%s: invalid ais backend config (%+v, %T): %v", m.t, v, v, err)
@@ -127,7 +129,7 @@ func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig)
 	return
 }
 
-func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.BackendConfAIS, action string) error {
+func (m *AISbp) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.BackendConfAIS, action string) error {
 	// detach
 	if action == apc.ActDetachRemAis {
 		for alias, uuid := range m.alias {
@@ -167,7 +169,7 @@ func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.Back
 // return (m.remote + m.alias) in-memory info wo/ connecting to remote cluster(s)
 // (compare with GetInfo() below)
 // TODO: caller to pass its cached version to optimize-out allocations
-func (m *AISBackendProvider) GetInfoInternal() (res meta.RemAisVec) {
+func (m *AISbp) GetInfoInternal() (res meta.RemAisVec) {
 	m.mu.RLock()
 	res.A = make([]*meta.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
@@ -190,7 +192,7 @@ func (m *AISBackendProvider) GetInfoInternal() (res meta.RemAisVec) {
 // select the correct one at the moment it sends a request.
 // See also: GetInfoInternal()
 // TODO: ditto
-func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
+func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 	var (
 		cfg              = cmn.GCO.Get()
 		cliPlain, cliTLS = remaisClients(&cfg.Client)
@@ -293,7 +295,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 
 // NOTE: supporting remote attachments both by alias and by UUID interchangeably,
 // with mappings: 1(uuid) to 1(cluster) and 1(alias) to 1(cluster)
-func (m *AISBackendProvider) add(newAis *remAis, newAlias string) (err error) {
+func (m *AISbp) add(newAis *remAis, newAlias string) (err error) {
 	if remAis, ok := m.remote[newAlias]; ok {
 		return fmt.Errorf("cannot attach %s: alias %q is already in use as uuid for %s",
 			newAlias, newAlias, remAis)
@@ -337,14 +339,14 @@ ad:
 	return
 }
 
-func (m *AISBackendProvider) getRemAis(aliasOrUUID string) (remAis *remAis, err error) {
+func (m *AISbp) getRemAis(aliasOrUUID string) (remAis *remAis, err error) {
 	m.mu.RLock()
 	remAis, _, err = m.resolve(aliasOrUUID)
 	m.mu.RUnlock()
 	return
 }
 
-func (m *AISBackendProvider) headRemAis(aliasOrUUID string) (remAis *remAis, alias, uuid string, err error) {
+func (m *AISbp) headRemAis(aliasOrUUID string) (remAis *remAis, alias, uuid string, err error) {
 	m.mu.RLock()
 	remAis, uuid, err = m.resolve(aliasOrUUID)
 	if err != nil {
@@ -363,7 +365,7 @@ func (m *AISBackendProvider) headRemAis(aliasOrUUID string) (remAis *remAis, ali
 
 // resolve (alias | UUID) => remAis, UUID
 // is called under lock
-func (m *AISBackendProvider) resolve(uuid string) (*remAis, string, error) {
+func (m *AISbp) resolve(uuid string) (*remAis, string, error) {
 	remAis, ok := m.remote[uuid]
 	if ok {
 		return remAis, uuid, nil
@@ -381,9 +383,7 @@ func (m *AISBackendProvider) resolve(uuid string) (*remAis, string, error) {
 // BackendProvider //
 /////////////////////
 
-func (*AISBackendProvider) Provider() string { return apc.AIS }
-
-func (*AISBackendProvider) CreateBucket(_ *meta.Bck) (ecode int, err error) {
+func (*AISbp) CreateBucket(_ *meta.Bck) (ecode int, err error) {
 	debug.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
 	return 0, nil
 }
@@ -392,7 +392,7 @@ func (*AISBackendProvider) CreateBucket(_ *meta.Bck) (ecode int, err error) {
 // that, in particular, include `dontAddRemote` = (true | false).
 // Here we have to hardcode the value to keep HeadBucket() consistent across all backends.
 // For similar limitations, see also ListBuckets() below.
-func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (m *AISbp) HeadBucket(_ context.Context, remoteBck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	var (
 		remAis      *remAis
 		p           *cmn.Bprops
@@ -423,11 +423,7 @@ func (m *AISBackendProvider) HeadBucket(_ context.Context, remoteBck *meta.Bck) 
 	return
 }
 
-func (m *AISBackendProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
-	return 0, newErrInventory(m.Provider())
-}
-
-func (m *AISBackendProvider) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var remAis *remAis
 	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
 		return
@@ -458,7 +454,7 @@ func (m *AISBackendProvider) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, l
 	return
 }
 
-func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
+func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 	if !qbck.Ns.IsAnyRemote() {
 		// caller provided uuid (or alias)
 		bcks, err = m.blist(qbck.Ns.UUID, qbck)
@@ -496,7 +492,7 @@ func (m *AISBackendProvider) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, eco
 // also include apc.Flt* _location_ specifier. Here we simply hardcode the `apc.FltExists`
 // to keep `ListBuckets` consistent across (aws, gcp, etc.) backends.
 
-func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
+func (m *AISbp) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bcks, err error) {
 	var (
 		remAis      *remAis
 		remoteQuery = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: qbck.Ns.Name}}
@@ -520,7 +516,7 @@ func (m *AISBackendProvider) blist(uuid string, qbck cmn.QueryBcks) (bcks cmn.Bc
 // in part including apc.Flt* location specifier.
 // Here, and elsewhere down below, we hardcode (the default) `apc.FltPresent` to, eesentially,
 // keep HeadObj() consistent across backends.
-func (m *AISBackendProvider) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
@@ -540,7 +536,7 @@ func (m *AISBackendProvider) HeadObj(_ context.Context, lom *core.LOM, _ *http.R
 	return
 }
 
-func (m *AISBackendProvider) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
+func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
 	var (
 		remAis    *remAis
 		r         io.ReadCloser
@@ -567,7 +563,7 @@ func (m *AISBackendProvider) GetObj(_ context.Context, lom *core.LOM, owt cmn.OW
 	return extractErrCode(err, remAis.uuid)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
@@ -603,7 +599,7 @@ func (m *AISBackendProvider) GetObjReader(_ context.Context, lom *core.LOM, offs
 	return
 }
 
-func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
+func (m *AISbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	var (
 		oah       api.ObjAttrs
 		remAis    *remAis
@@ -638,7 +634,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Requ
 	return
 }
 
-func (m *AISBackendProvider) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (m *AISbp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
 		remAis    *remAis
 		remoteBck = lom.Bck().Clone()

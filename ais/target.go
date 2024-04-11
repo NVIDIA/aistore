@@ -60,7 +60,7 @@ type (
 		disabled atomic.Bool // true: standing by
 		prevbmd  atomic.Bool // special
 	}
-	backends map[string]core.BackendProvider
+	backends map[string]core.Backend
 	// main
 	target struct {
 		htrun
@@ -102,12 +102,12 @@ func (*target) interruptedRestarted() (interrupted, restarted bool) {
 
 func (t *target) initBackends() {
 	config := cmn.GCO.Get()
-	aisBackend := backend.NewAIS(t)
-	t.backend[apc.AIS] = aisBackend                  // always present
+	aisbp := backend.NewAIS(t)
+	t.backend[apc.AIS] = aisbp                       // always present
 	t.backend[apc.HTTP] = backend.NewHTTP(t, config) // ditto
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
-		if err := aisBackend.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
+		if err := aisbp.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
 			nlog.Errorln(t.String()+":", err, "- proceeding to start anyway")
 		} else {
 			nlog.Infoln(t.String()+": remote-ais", aisConf)
@@ -129,7 +129,7 @@ func (t *target) _initBuiltin() error {
 	)
 	for provider := range apc.Providers {
 		var (
-			add core.BackendProvider
+			add core.Backend
 			err error
 		)
 		switch provider {
@@ -167,9 +167,9 @@ func (t *target) _initBuiltin() error {
 	return nil
 }
 
-func (t *target) aisBackend() *backend.AISBackendProvider {
+func (t *target) aisbp() *backend.AISbp {
 	bendp := t.backend[apc.AIS]
-	return bendp.(*backend.AISBackendProvider)
+	return bendp.(*backend.AISbp)
 }
 
 func (t *target) init(config *cmn.Config) {

@@ -42,10 +42,11 @@ import (
 )
 
 type (
-	azureProvider struct {
-		u     string
-		creds *azblob.SharedKeyCredential
+	azbp struct {
 		t     core.TargetPut
+		creds *azblob.SharedKeyCredential
+		u     string
+		base
 	}
 )
 
@@ -71,7 +72,7 @@ var (
 )
 
 // interface guard
-var _ core.BackendProvider = (*azureProvider)(nil)
+var _ core.Backend = (*azbp)(nil)
 
 func azProto() string {
 	proto := os.Getenv(azProtoEnvVar)
@@ -100,7 +101,7 @@ func asEndpoint() string {
 	}
 }
 
-func NewAzure(t core.TargetPut) (core.BackendProvider, error) {
+func NewAzure(t core.TargetPut) (core.Backend, error) {
 	blurl := asEndpoint()
 
 	// NOTE: NewSharedKeyCredential requires account name and its primary or secondary key
@@ -109,10 +110,11 @@ func NewAzure(t core.TargetPut) (core.BackendProvider, error) {
 		return nil, cmn.NewErrFailedTo(nil, azErrPrefix+": init]", "credentials", err)
 	}
 
-	return &azureProvider{
+	return &azbp{
 		t:     t,
 		creds: creds,
 		u:     blurl,
+		base:  base{apc.Azure},
 	}, nil
 }
 
@@ -205,28 +207,18 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 	return status, azureError
 }
 
-// as core.BackendProvider --------------------------------------------------------------
-
-func (*azureProvider) Provider() string { return apc.Azure }
-
-//
-// CREATE BUCKET
-//
-
-func (*azureProvider) CreateBucket(_ *meta.Bck) (int, error) {
-	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "azure:// bucket")
-}
+// as core.Backend --------------------------------------------------------------
 
 //
 // HEAD BUCKET
 //
 
-func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
+func (azbp *azbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	var (
 		cloudBck = bck.RemoteBck()
-		cntURL   = ap.u + "/" + cloudBck.Name
+		cntURL   = azbp.u + "/" + cloudBck.Name
 	)
-	client, err := container.NewClientWithSharedKeyCredential(cntURL, ap.creds, nil)
+	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, nil)
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, "")
 		return nil, status, err
@@ -253,22 +245,18 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.Str
 // LIST OBJECTS
 //
 
-func (ap *azureProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
-	return 0, newErrInventory(ap.Provider())
-}
-
-// TODO -- FIXME: support non-recursive (apc.LsNoRecursion) operation, as in:
+// TODO: support non-recursive (apc.LsNoRecursion) operation, as in:
 // $ az storage blob list -c abc --prefix sub/ --delimiter /
 // See also: aws.go, gcp.go
-func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (
 		cloudBck = bck.RemoteBck()
-		cntURL   = ap.u + "/" + cloudBck.Name
+		cntURL   = azbp.u + "/" + cloudBck.Name
 		num      = int32(msg.PageSize)
 		opts     = container.ListBlobsFlatOptions{Prefix: apc.Ptr(msg.Prefix), MaxResults: &num}
 	)
-	client, err := container.NewClientWithSharedKeyCredential(cntURL, ap.creds, nil)
+	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, nil)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, "")
 	}
@@ -343,8 +331,8 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 // LIST BUCKETS
 //
 
-func (ap *azureProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ error) {
-	serviceClient, err := service.NewClientWithSharedKeyCredential(ap.u, ap.creds, nil)
+func (azbp *azbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ error) {
+	serviceClient, err := service.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
 	if err != nil {
 		status, err := azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 		return nil, status, err
@@ -373,12 +361,12 @@ func (ap *azureProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ err
 // HEAD OBJECT
 //
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
+func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	var (
 		cloudBck = lom.Bucket().RemoteBck()
-		blURL    = ap.u + "/" + cloudBck.Name + "/" + lom.ObjName
+		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
-	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, ap.creds, nil)
+	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return nil, status, err
@@ -422,13 +410,13 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Req
 // GET OBJECT
 //
 
-func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
-	res := ap.GetObjReader(ctx, lom, 0, 0)
+func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
+	res := azbp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
 	params := allocPutParams(res, owt)
-	err := ap.t.PutObject(lom, params)
+	err := azbp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
@@ -436,12 +424,12 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT,
 	return 0, err
 }
 
-func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		cloudBck = lom.Bucket().RemoteBck()
-		blURL    = ap.u + "/" + cloudBck.Name + "/" + lom.ObjName
+		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
-	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, ap.creds, nil)
+	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return
@@ -492,10 +480,10 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset
 // PUT OBJECT
 //
 
-func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+func (azbp *azbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	defer cos.Close(r)
 
-	client, err := azblob.NewClientWithSharedKeyCredential(ap.u, ap.creds, nil)
+	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
 	if err != nil {
 		return azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 	}
@@ -529,8 +517,8 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request)
 // DELETE OBJECT
 //
 
-func (ap *azureProvider) DeleteObj(lom *core.LOM) (int, error) {
-	client, err := azblob.NewClientWithSharedKeyCredential(ap.u, ap.creds, nil)
+func (azbp *azbp) DeleteObj(lom *core.LOM) (int, error) {
+	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
 	if err != nil {
 		return azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 	}

@@ -39,9 +39,10 @@ const (
 )
 
 type (
-	gcpProvider struct {
+	gsbp struct {
 		t         core.TargetPut
 		projectID string
+		base
 	}
 )
 
@@ -56,10 +57,10 @@ var (
 	gctx context.Context
 
 	// interface guard
-	_ core.BackendProvider = (*gcpProvider)(nil)
+	_ core.Backend = (*gsbp)(nil)
 )
 
-func NewGCP(t core.TargetPut) (bp core.BackendProvider, err error) {
+func NewGCP(t core.TargetPut) (bp core.Backend, err error) {
 	var (
 		projectID     string
 		credProjectID = readCredFile()
@@ -80,17 +81,21 @@ func NewGCP(t core.TargetPut) (bp core.BackendProvider, err error) {
 	default:
 		nlog.Warningln("unauthenticated client")
 	}
-	gcpp := &gcpProvider{t: t, projectID: projectID}
-	bp = gcpp
+	gsbp := &gsbp{
+		t:         t,
+		projectID: projectID,
+		base:      base{apc.GCP},
+	}
+	bp = gsbp
 
 	gctx = context.Background()
-	gcpClient, err = gcpp.createClient(gctx)
+	gcpClient, err = gsbp.createClient(gctx)
 	return
 }
 
-func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, error) {
+func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {
 	opts := []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
-	if gcpp.projectID == "" {
+	if gsbp.projectID == "" {
 		opts = append(opts, option.WithoutAuthentication())
 	}
 	// create HTTP transport
@@ -98,7 +103,7 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 	if err != nil {
 		if strings.Contains(err.Error(), "credentials") {
 			details := fmt.Sprintf("%s Hint: check your %q and %q environment settings for project ID=%q.",
-				err, projectIDEnvVar, credPathEnvVar, gcpp.projectID)
+				err, projectIDEnvVar, credPathEnvVar, gsbp.projectID)
 			return nil, errors.New(details)
 		}
 		return nil, cmn.NewErrFailedTo(nil, "gcp-backend: create", "http transport", err)
@@ -112,23 +117,13 @@ func (gcpp *gcpProvider) createClient(ctx context.Context) (*storage.Client, err
 	return client, nil
 }
 
-// as core.BackendProvider --------------------------------------------------------------
-
-func (*gcpProvider) Provider() string { return apc.GCP }
-
-//
-// CREATE BUCKET
-//
-
-func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
-	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "gs:// bucket")
-}
+// as core.Backend --------------------------------------------------------------
 
 //
 // HEAD BUCKET
 //
 
-func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (*gsbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("head_bucket %s", bck.Name)
 	}
@@ -153,11 +148,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos
 // LIST OBJECTS
 //
 
-func (gcpp *gcpProvider) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
-	return 0, newErrInventory(gcpp.Provider())
-}
-
-func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -246,14 +237,14 @@ func (*gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes)
 // LIST BUCKETS
 //
 
-func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
-	if gcpp.projectID == "" {
+func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
+	if gsbp.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,
 			errors.New("empty project ID: cannot list GCP buckets with no authentication")
 	}
 	bcks = make(cmn.Bcks, 0, 16)
-	it := gcpClient.Buckets(gctx, gcpp.projectID)
+	it := gcpClient.Buckets(gctx, gsbp.projectID)
 	for {
 		var battrs *storage.BucketAttrs
 
@@ -282,7 +273,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int,
 // HEAD OBJECT
 //
 
-func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		h        = cmn.BackendHelpers.Google
@@ -331,13 +322,13 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request)
 // GET OBJECT
 //
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
-	res := gcpp.GetObjReader(ctx, lom, 0, 0)
+func (gsbp *gsbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
+	res := gsbp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
 	params := allocPutParams(res, owt)
-	err := gcpp.t.PutObject(lom, params)
+	err := gsbp.t.PutObject(lom, params)
 	core.FreePutParams(params)
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
@@ -345,7 +336,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT,
 	return 0, err
 }
 
-func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (*gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		attrs    *storage.ObjectAttrs
 		rc       *storage.Reader
@@ -412,7 +403,7 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 // PUT OBJECT
 //
 
-func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
+func (gsbp *gsbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		written  int64
@@ -424,7 +415,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request)
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Checksum().Get()
 
 	wc.Metadata = md
-	buf, slab := gcpp.t.PageMM().Alloc()
+	buf, slab := gsbp.t.PageMM().Alloc()
 	written, err = io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	cos.Close(r)
@@ -451,7 +442,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request)
 // DELETE OBJECT
 //
 
-func (*gcpProvider) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (*gsbp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)

@@ -52,7 +52,7 @@ type (
 		TargetPut
 
 		// backend
-		Backend(*meta.Bck) BackendProvider
+		Backend(*meta.Bck) Backend
 
 		// FS health and Health
 		FSHC(err error, path string)

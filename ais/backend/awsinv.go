@@ -125,7 +125,7 @@ func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInvCtx) (f
 // NOTE: see "manifest" comment above;
 // with JSON-tagged manifest structure (that'd include `json:"fileSchema"`)
 // it'd then make sense to additionally validate: format == csv and source bucket == destination bucket == this bucket
-func (awsp *awsProvider) getManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string) (schema []string, _ int, _ error) {
+func (s3bp *s3bp) getManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string) (schema []string, _ int, _ error) {
 	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(oname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
@@ -133,7 +133,7 @@ func (awsp *awsProvider) getManifest(cloudBck *cmn.Bck, svc *s3.Client, oname st
 		return nil, ecode, e
 	}
 
-	sgl := awsp.t.PageMM().NewSGL(0)
+	sgl := s3bp.t.PageMM().NewSGL(0)
 	_, err = io.Copy(sgl, obj.Body)
 	cos.Close(obj.Body)
 
@@ -207,7 +207,7 @@ func _bhead(sgl *memsys.SGL, lbuf []byte) (s string) {
 	return s
 }
 
-func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx) (string, int, error) {
+func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx) (string, int, error) {
 	var (
 		csv      invT
 		manifest invT
@@ -255,7 +255,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 	//
 	// 2. read the manifest and extract `fileSchema`
 	//
-	schema, ecode, err := awsp.getManifest(cloudBck, svc, manifest.oname)
+	schema, ecode, err := s3bp.getManifest(cloudBck, svc, manifest.oname)
 	if err != nil {
 		return "", ecode, err
 	}
@@ -305,7 +305,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 	if err != nil {
 		return "", 0, _errInv("wopen", err)
 	}
-	buf, slab := awsp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
+	buf, slab := s3bp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
 	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
 	slab.Free(buf)
 	wfh.Close()
@@ -324,7 +324,7 @@ func (awsp *awsProvider) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *co
 	return fqn, 0, nil
 }
 
-func (*awsProvider) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
+func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{})

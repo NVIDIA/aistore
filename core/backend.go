@@ -31,7 +31,7 @@ type (
 		Size   int64
 	}
 
-	BackendProvider interface {
+	Backend interface {
 		Provider() string
 
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
