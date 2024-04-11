@@ -26,6 +26,7 @@ type (
 	LsoInvCtx struct {
 		Name   string
 		ID     string
+		FQN    string
 		Schema []string
 		Offset int64
 		Size   int64
@@ -36,7 +37,6 @@ type (
 
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
-		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) (ecode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error)
 		PutObj(r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
 		DeleteObj(lom *LOM) (ecode int, err error)
@@ -48,5 +48,9 @@ type (
 		// get
 		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT, origReq *http.Request) (ecode int, err error) // calls GetObjReader
 		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
+
+		// bucket inventory
+		GetBucketInv(bck *meta.Bck, ctx *LsoInvCtx) (ecode int, err error)
+		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) (ecode int, err error)
 	}
 )

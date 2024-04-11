@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -127,15 +126,13 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 // LIST OBJECTS via INVENTORY
 //
 
-func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (ecode int, err error) {
+func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, err error) {
 	var (
 		svc      *s3.Client
-		fqn      string
-		fh       *os.File
 		cloudBck = bck.RemoteBck()
 	)
-	debug.Assert(ctx != nil)
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
+	debug.Assert(ctx != nil && ctx.FQN == "")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_bucket_inv]")
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Warningln(err)
@@ -144,19 +141,27 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 			return
 		}
 	}
-	if ctx.Offset > 0 {
-		// continue using local csv
-		fqn, _, err = checkInventory(cloudBck, time.Time{}, ctx)
-	} else {
-		// first time:
-		// - fills-in (manifested) schema
-		// - calls getInventory() and checkInventory(), the latter with the timestamp of the remote
-		fqn, ecode, err = s3bp.getInventory(cloudBck, svc, ctx)
-	}
+	return s3bp.getInventory(cloudBck, svc, ctx)
+}
+
+// continue using local csv
+func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (ecode int, err error) {
+	var (
+		svc      *s3.Client
+		fh       *os.File
+		cloudBck = bck.RemoteBck()
+	)
+	debug.Assert(ctx != nil && ctx.FQN != "")
+	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects_inv]")
 	if err != nil {
-		return
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Warningln(err)
+		}
+		if svc == nil {
+			return
+		}
 	}
-	if fh, err = os.Open(fqn); err != nil {
+	if fh, err = os.Open(ctx.FQN); err != nil {
 		err = _errInv("ropen", err)
 		return
 	}
@@ -166,6 +171,7 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 	err = s3bp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
 	sgl.Free()
 	fh.Close()
+
 	if err != nil {
 		if err == io.EOF {
 			lst.ContinuationToken = ""

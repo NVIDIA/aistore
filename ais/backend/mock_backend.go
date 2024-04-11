@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -21,26 +21,23 @@ const mock = "mock-backend"
 
 type mockbp struct {
 	t core.TargetPut
+	base
 }
 
 // interface guard
 var _ core.Backend = (*mockbp)(nil)
 
-func NewDummyBackend(t core.TargetPut) (core.Backend, error) { return &mockbp{t: t}, nil }
-
-func (*mockbp) Provider() string           { return mock }
-func (*mockbp) MaxPageSize(*meta.Bck) uint { return math.MaxUint32 }
-
-func (*mockbp) CreateBucket(*meta.Bck) (int, error) {
-	return http.StatusBadRequest, cmn.NewErrUnsupp("create", mock+" bucket")
+func NewDummyBackend(t core.TargetPut) (core.Backend, error) {
+	return &mockbp{
+		t:    t,
+		base: base{mock},
+	}, nil
 }
+
+func (*mockbp) MaxPageSize(*meta.Bck) uint { return math.MaxUint32 }
 
 func (*mockbp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
-}
-
-func (*mockbp) ListObjectsInv(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoRes, _ *core.LsoInvCtx) (int, error) {
-	return http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
 func (*mockbp) ListObjects(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoRes) (int, error) {

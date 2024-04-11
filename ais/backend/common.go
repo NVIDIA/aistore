@@ -23,11 +23,19 @@ type base struct {
 func (b *base) Provider() string { return b.provider }
 
 func (b *base) CreateBucket(_ *meta.Bck) (int, error) {
-	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", b.provider+" bucket")
+	return http.StatusNotImplemented, cmn.NewErrUnsupp("create", b.provider+" bucket")
+}
+
+func newErrInventory(provider string) error {
+	return cmn.NewErrUnsupp("list "+provider+" backend objects via", "bucket inventory")
+}
+
+func (b *base) GetBucketInv(*meta.Bck, *core.LsoInvCtx) (int, error) {
+	return 0, newErrInventory(b.provider)
 }
 
 func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
-	return 0, cmn.NewErrNotImpl("list "+b.provider+" backend objects via", "bucket inventory")
+	return 0, newErrInventory(b.provider)
 }
 
 //

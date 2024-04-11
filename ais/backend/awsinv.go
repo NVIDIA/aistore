@@ -37,6 +37,7 @@ import (
 
 // TODO:
 // - use blob downloader (****)
+// - keep it open between pages (currently, fopen/close each page)
 // - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
 // - cached inventory must be stored with its own content-type (or, might disappear during pagination)
 // separately:
@@ -77,7 +78,7 @@ type invT struct {
 }
 
 func _errInv(tag string, err error) error {
-	return fmt.Errorf("bucket-inventory: %s: %w", tag, err)
+	return fmt.Errorf("bucket-inventory: %s: %v", tag, err)
 }
 
 func sinceInv(t1, t2 time.Time) time.Duration {
@@ -95,31 +96,22 @@ func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInvCtx) (prefix string) {
 	return prefix
 }
 
-func checkInventory(cloudBck *cmn.Bck, latest time.Time, ctx *core.LsoInvCtx) (fqn string, _ bool, _ error) {
-	prefix := prefixInv(cloudBck, ctx)
-	mi, _, err := fs.Hrw(prefix)
-	if err != nil {
-		return "", false, err
+func _usableInv(latest time.Time, ctx *core.LsoInvCtx) bool {
+	finfo, err := os.Stat(ctx.FQN)
+	switch {
+	case err != nil:
+		debug.Assert(os.IsNotExist(err), err)
+		nlog.Infoln("Warning: getting bucket inventory ...", latest)
+		return false
+	case sinceInv(finfo.ModTime(), latest) < 4*time.Second: // allow for a few seconds difference
+		debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
+		ctx.Size = finfo.Size()
+		// start (or rather, keep) using this one
+		return true
+	default:
+		nlog.Infoln("Warning: updating bucket inventory", ctx.FQN, finfo.ModTime(), latest)
+		return false
 	}
-	// one bucket, one inventory - and one statically defined name
-	fqn = mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
-	if finfo, err := os.Stat(fqn); err == nil {
-		if ctx.Offset > 0 {
-			debug.Assert(latest.IsZero())
-			// keep using the one
-			return fqn, true, nil
-		}
-		if sinceInv(finfo.ModTime(), latest) < 4*time.Second { // allow for a few seconds difference
-			debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
-			ctx.Size = finfo.Size()
-			// start using the one
-			return fqn, true, nil
-		}
-		nlog.Infoln("Warning: updating bucket inventory", prefix, finfo.ModTime(), latest)
-	} else {
-		nlog.Infoln("Warning: getting bucket inventory ...", prefix, latest)
-	}
-	return fqn, false, nil
 }
 
 // NOTE: see "manifest" comment above;
@@ -207,7 +199,9 @@ func _bhead(sgl *memsys.SGL, lbuf []byte) (s string) {
 	return s
 }
 
-func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx) (string, int, error) {
+// first time: list inventory, read manifest, and more
+// (steps 1 through 5)
+func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx) (int, error) {
 	var (
 		csv      invT
 		manifest invT
@@ -224,7 +218,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		ecode, e := awsErrorToAISError(err, cloudBck, "")
-		return "", ecode, e
+		return ecode, e
 	}
 	for _, obj := range resp.Contents {
 		name := *obj.Key
@@ -249,7 +243,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 		if ctx.ID == "" {
 			what = cos.Either(ctx.Name, invName)
 		}
-		return "", http.StatusNotFound, cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
+		return http.StatusNotFound, cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
 	}
 
 	//
@@ -257,7 +251,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 	//
 	schema, ecode, err := s3bp.getManifest(cloudBck, svc, manifest.oname)
 	if err != nil {
-		return "", ecode, err
+		return ecode, err
 	}
 
 	ctx.Schema = schema
@@ -277,33 +271,38 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 		}
 	}
 
-	fqn, usable, err := checkInventory(cloudBck, csv.mtime, ctx)
-	if err != nil || usable {
-		return fqn, 0, err
+	// 4. one bucket, one inventory, one statically defined name
+	mi, _, err := fs.Hrw(prefix)
+	if err != nil {
+		return 0, _errInv("hrw", err)
+	}
+	ctx.FQN = mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
+	if _usableInv(csv.mtime, ctx) {
+		return 0, nil // keep using
 	}
 
 	//
-	// 4. get+unzip and save locally
+	// 5. get+unzip and save locally
 	//
 	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(csv.oname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
 		ecode, e := awsErrorToAISError(err, cloudBck, csv.oname)
-		return "", ecode, e
+		return ecode, e
 	}
 	defer cos.Close(obj.Body)
 
 	gzr, err := gzip.NewReader(obj.Body)
 	if err != nil {
-		return "", 0, _errInv("gzip", err)
+		return 0, _errInv("gzip", err)
 	}
-	if err = cos.CreateDir(filepath.Dir(fqn)); err != nil {
+	if err = cos.CreateDir(filepath.Dir(ctx.FQN)); err != nil {
 		gzr.Close()
-		return "", 0, _errInv("create-dir", err)
+		return 0, _errInv("create-dir", err)
 	}
-	wfh, err := os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
+	wfh, err := os.OpenFile(ctx.FQN, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
 	if err != nil {
-		return "", 0, _errInv("wopen", err)
+		return 0, _errInv("wopen", err)
 	}
 	buf, slab := s3bp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
 	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
@@ -311,17 +310,17 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 	wfh.Close()
 
 	if err != nil {
-		return "", 0, _errInv("io.copy", err)
+		return 0, _errInv("io.copy", err)
 	}
 	err = gzr.Close()
 	debug.AssertNoErr(err)
 
-	if err = os.Chtimes(fqn, csv.mtime, csv.mtime); err != nil {
-		return "", 0, _errInv("chtimes", err)
+	if err = os.Chtimes(ctx.FQN, csv.mtime, csv.mtime); err != nil {
+		return 0, _errInv("chtimes", err)
 	}
 
-	nlog.Infoln("new bucket inventory:", *ctx, fqn)
-	return fqn, 0, nil
+	nlog.Infoln("new bucket inventory:", *ctx, ctx.FQN)
+	return 0, nil
 }
 
 func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
