@@ -131,7 +131,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, e
 		svc      *s3.Client
 		cloudBck = bck.RemoteBck()
 	)
-	debug.Assert(ctx != nil && ctx.FQN == "")
+	debug.Assert(ctx != nil && ctx.Lom == nil)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_bucket_inv]")
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
@@ -141,7 +141,32 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, e
 			return
 		}
 	}
-	return s3bp.getInventory(cloudBck, svc, ctx)
+
+	// one bucket, one inventory, one statically defined name
+	prefix, objName := _namingInv(cloudBck, ctx)
+	lom := core.AllocLOM(objName)
+	if err = lom.InitBck(bck.Bucket()); err != nil {
+		return 0, err
+	}
+	ctx.Lom = lom
+
+	return s3bp.getInventory(cloudBck, svc, ctx, prefix)
+}
+
+func _namingInv(cloudBck *cmn.Bck, ctx *core.LsoInvCtx) (prefix, objName string) {
+	if ctx.Name == "" {
+		ctx.Name = invName
+	}
+	prefix = ctx.Name + cos.PathSeparator + cloudBck.Name
+	if ctx.ID != "" {
+		prefix += cos.PathSeparator + ctx.ID
+	}
+	if ctx.Name == invName {
+		objName = prefix + invDstExt
+	} else {
+		objName = invName + cos.PathSeparator + prefix + invDstExt
+	}
+	return prefix, objName
 }
 
 // continue using local csv
@@ -151,7 +176,7 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 		fh       *os.File
 		cloudBck = bck.RemoteBck()
 	)
-	debug.Assert(ctx != nil && ctx.FQN != "")
+	debug.Assert(ctx != nil && ctx.Lom != nil)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects_inv]")
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
@@ -161,7 +186,7 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 			return
 		}
 	}
-	if fh, err = os.Open(ctx.FQN); err != nil {
+	if fh, err = os.Open(ctx.Lom.FQN); err != nil {
 		err = _errInv("ropen", err)
 		return
 	}

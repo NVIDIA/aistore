@@ -33,13 +33,15 @@ import (
 )
 
 // Main assumption/requirement:
-// one bucket, one inventory (for this same bucket), and one statically defined cached FQN.csv
+// one bucket, one inventory (for this same bucket), and one statically defined .csv
 
 // TODO:
+// - x-lso (caller) must rlock ctx.Lom, runlock on exit
+// - keep the underlying csv file open between pages
 // - use blob downloader (****)
-// - keep it open between pages (currently, fopen/close each page)
 // - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
 // - cached inventory must be stored with its own content-type (or, might disappear during pagination)
+//
 // separately:
 // - cleanup older inventories
 
@@ -88,16 +90,8 @@ func sinceInv(t1, t2 time.Time) time.Duration {
 	return t2.Sub(t1)
 }
 
-func prefixInv(cloudBck *cmn.Bck, ctx *core.LsoInvCtx) (prefix string) {
-	prefix = cos.Either(ctx.Name, invName) + cos.PathSeparator + cloudBck.Name
-	if ctx.ID != "" {
-		prefix += cos.PathSeparator + ctx.ID
-	}
-	return prefix
-}
-
 func _usableInv(latest time.Time, ctx *core.LsoInvCtx) bool {
-	finfo, err := os.Stat(ctx.FQN)
+	finfo, err := os.Stat(ctx.Lom.FQN)
 	switch {
 	case err != nil:
 		debug.Assert(os.IsNotExist(err), err)
@@ -109,7 +103,7 @@ func _usableInv(latest time.Time, ctx *core.LsoInvCtx) bool {
 		// start (or rather, keep) using this one
 		return true
 	default:
-		nlog.Infoln("Warning: updating bucket inventory", ctx.FQN, finfo.ModTime(), latest)
+		nlog.Infoln("Warning: updating bucket inventory", ctx.Lom.Cname(), finfo.ModTime(), latest)
 		return false
 	}
 }
@@ -201,20 +195,17 @@ func _bhead(sgl *memsys.SGL, lbuf []byte) (s string) {
 
 // first time: list inventory, read manifest, and more
 // (steps 1 through 5)
-func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx) (int, error) {
+func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, prefix string) (int, error) {
 	var (
 		csv      invT
 		manifest invT
 		bn       = aws.String(cloudBck.Name)
 		params   = &s3.ListObjectsV2Input{Bucket: bn}
-		prefix   = prefixInv(cloudBck, ctx)
 	)
 	params.Prefix = aws.String(prefix)
 	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS) // no more than 1000 manifests
 
-	//
 	// 1. ls inventory
-	//
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		ecode, e := awsErrorToAISError(err, cloudBck, "")
@@ -246,9 +237,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 		return http.StatusNotFound, cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
 	}
 
-	//
-	// 2. read the manifest and extract `fileSchema`
-	//
+	// 2. read the manifest and extract `fileSchema` --> ctx
 	schema, ecode, err := s3bp.getManifest(cloudBck, svc, manifest.oname)
 	if err != nil {
 		return ecode, err
@@ -256,9 +245,11 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 
 	ctx.Schema = schema
 
-	//
+	if _usableInv(csv.mtime, ctx) {
+		return 0, nil // exists and can be used
+	}
+
 	// 3. optionally, cleanup older inventories
-	//
 	for _, obj := range resp.Contents {
 		name := *obj.Key
 		mtime := *(obj.LastModified)
@@ -271,56 +262,48 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 		}
 	}
 
-	// 4. one bucket, one inventory, one statically defined name
-	mi, _, err := fs.Hrw(prefix)
-	if err != nil {
-		return 0, _errInv("hrw", err)
-	}
-	ctx.FQN = mi.MakePathFQN(cloudBck, fs.WorkfileType, prefix) + invDstExt
-	if _usableInv(csv.mtime, ctx) {
-		return 0, nil // keep using
-	}
-
-	//
-	// 5. get+unzip and save locally
-	//
+	// 4. get+unzip and write lom
 	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(csv.oname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
 		ecode, e := awsErrorToAISError(err, cloudBck, csv.oname)
 		return ecode, e
 	}
-	defer cos.Close(obj.Body)
 
 	gzr, err := gzip.NewReader(obj.Body)
 	if err != nil {
+		cos.Close(obj.Body)
 		return 0, _errInv("gzip", err)
 	}
-	if err = cos.CreateDir(filepath.Dir(ctx.FQN)); err != nil {
-		gzr.Close()
-		return 0, _errInv("create-dir", err)
-	}
-	wfh, err := os.OpenFile(ctx.FQN, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
+
+	wfqn := fs.CSM.Gen(ctx.Lom, fs.WorkfileType, "")
+	wfh, err := ctx.Lom.CreateFile(wfqn)
 	if err != nil {
-		return 0, _errInv("wopen", err)
+		cos.Close(obj.Body)
+		gzr.Close()
+		return 0, _errInv("create-file", err)
 	}
+
 	buf, slab := s3bp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
 	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
 	slab.Free(buf)
+	cos.Close(obj.Body)
 	wfh.Close()
+	gzr.Close()
 
-	if err != nil {
-		return 0, _errInv("io.copy", err)
+	// 5. finalize
+	if err == nil {
+		if err = ctx.Lom.RenameFrom(wfqn); err == nil {
+			if err = os.Chtimes(ctx.Lom.FQN, csv.mtime, csv.mtime); err == nil {
+				nlog.Infoln("new bucket inventory:", *ctx, ctx.Lom.Cname())
+				return 0, nil
+			}
+		}
 	}
-	err = gzr.Close()
-	debug.AssertNoErr(err)
-
-	if err = os.Chtimes(ctx.FQN, csv.mtime, csv.mtime); err != nil {
-		return 0, _errInv("chtimes", err)
+	if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
+		nlog.Errorf("final-steps (%v), nested fail to remove (%v)", err, nerr)
 	}
-
-	nlog.Infoln("new bucket inventory:", *ctx, ctx.FQN)
-	return 0, nil
+	return 0, _errInv("final-steps", err)
 }
 
 func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {

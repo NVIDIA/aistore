@@ -84,7 +84,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst = &cmn.LsoRes{Entries: nentries}
 	if npg.ctx != nil {
-		if npg.ctx.FQN == "" {
+		if npg.ctx.Lom == nil {
 			_, err = core.T.Backend(npg.bck).GetBucketInv(npg.bck, npg.ctx)
 		}
 		if err == nil {

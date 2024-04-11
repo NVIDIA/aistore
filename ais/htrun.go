@@ -297,11 +297,10 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		// public hostname could be a load balancer's external IP or a service DNS
 		nlog.Infoln("K8s deployment: skipping hostname validation for", config.HostNet.Hostname)
 		pubAddr.Init(proto, pub, port)
-	} else {
-		if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port); err != nil {
-			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
-		}
+	} else if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port); err != nil {
+		cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
 	}
+
 	// multi-home (when config.HostNet.Hostname is a comma-separated list)
 	// using the same pub port
 	if l := len(extra); l > 0 {

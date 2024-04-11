@@ -24,9 +24,9 @@ type (
 		ErrCode  int
 	}
 	LsoInvCtx struct {
+		Lom    *LOM
 		Name   string
 		ID     string
-		FQN    string
 		Schema []string
 		Offset int64
 		Size   int64

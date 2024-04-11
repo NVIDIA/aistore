@@ -244,6 +244,10 @@ func (r *LsoXact) stop() {
 		freeLsoEntries(r.lastPage)
 		r.lastPage = nil
 	}
+	if r.ctx != nil && r.ctx.Lom != nil {
+		core.FreeLOM(r.ctx.Lom)
+		r.ctx.Lom = nil
+	}
 }
 
 func (r *LsoXact) lastmsg() {
