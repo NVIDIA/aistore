@@ -732,7 +732,7 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 	}
 
 	if !nlp.TryLock(cmn.Rom.CplaneOperation() / 2) {
-		err = cmn.NewErrBusy("bucket", bck, "")
+		err = cmn.NewErrBusy("bucket", bck.Cname(""))
 		return
 	}
 	defer nlp.Unlock()
@@ -1126,7 +1126,7 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 	remirror := _reMirror(bprops, nprops)
 	targetCnt, reec := _reEC(bprops, nprops, bck, p.owner.smap.get())
 	if len(creating) == 0 && remirror && reec {
-		err = cmn.NewErrBusy("bucket", bck, "")
+		err = cmn.NewErrBusy("bucket", bck.Cname(""))
 		return
 	}
 	err = nprops.Validate(targetCnt)

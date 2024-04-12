@@ -85,7 +85,7 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 		return beid, nil
 	}
 	if prev != nil {
-		err = cmn.NewErrBusy("node", core.T, "running "+prev.Name())
+		err = cmn.NewErrBusy("node", core.T.String(), "running "+prev.Name())
 	}
 	return "", err
 }

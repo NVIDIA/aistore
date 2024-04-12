@@ -128,19 +128,16 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 //
 
 // NOTE: when successful, returns w/ rlock held; otherwise, always unlocks and frees
-func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, err error) {
-	var (
-		svc      *s3.Client
-		cloudBck = bck.RemoteBck()
-	)
+func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) {
 	debug.Assert(ctx != nil && ctx.Lom == nil)
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_bucket_inv]")
+	cloudBck := bck.RemoteBck()
+	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_bucket_inv]")
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Warningln(err)
 		}
 		if svc == nil {
-			return
+			return 0, err
 		}
 	}
 
@@ -151,8 +148,9 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, e
 		return 0, err
 	}
 	if !lom.TryLock(false) {
+		err = cmn.NewErrBusy(invTag, lom.Cname(), "likely getting updated")
 		core.FreeLOM(lom)
-		return 0, cmn.NewErrBusy("bucket-inventory", lom, "likely getting updated")
+		return 0, err
 	}
 
 	lsV2resp, csv, ecode, err := s3bp.initInventory(cloudBck, svc, ctx, prefix)
@@ -162,42 +160,59 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, e
 		return ecode, err
 	}
 	ctx.Lom = lom
-	if inventoryIsUsable(csv.mtime, ctx) {
+	mtime, usable := checkInvLom(csv.mtime, ctx)
+	if usable {
 		return 0, nil // w/ rlock
 	}
 
-	//
-	// rlock -> wlock, cleanup old, read and write as ctx.Lom
-	//
+	// rlock -> wlock
+
 	lom.Unlock(false)
-	err = cmn.NewErrBusy("bucket-inventory", lom, "polling for write access")
-	for range 5 {
+	err = cmn.NewErrBusy(invTag, lom.Cname(), "timed out waiting to acquire write access") // prelim
+	sleep, total := time.Second, invBusyTimeout
+	for total >= 0 {
 		if lom.TryLock(true) {
 			err = nil
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(sleep)
+		total -= sleep
 	}
 	if err != nil {
 		core.FreeLOM(lom)
 		ctx.Lom = nil
-		return 0, err
+		return 0, err // busy
 	}
 
-	// under wlock --
+	// acquired wlock: check for write/write race
+
+	finfo, err := os.Stat(ctx.Lom.FQN)
+	if err == nil {
+		newMtime := finfo.ModTime()
+		if newMtime.Sub(mtime) > time.Hour {
+			// updated by smbd else
+			// reload the lom and return
+			ctx.Lom.Uncache()
+			_, usable = checkInvLom(newMtime, ctx)
+			debug.Assert(usable)
+
+			// wlock --> rlock must succeed
+			lom.Unlock(true)
+			lom.Lock(false)
+			return 0, nil
+		}
+	}
+
+	// still under wlock: cleanup old, read and write as ctx.Lom
 
 	cleanupOldInventory(cloudBck, svc, lsV2resp, csv)
 
 	ecode, err = s3bp.getInventory(cloudBck, svc, ctx, csv)
 
-	// NOTE: instead of t.FinalizeObj() (that does more)
-	if err == nil {
-		if errN := lom.PersistMain(); errN != nil {
-			nlog.Errorln("bucket inventory: failed to persist", lom.Cname(), "err:", err, "- proceeding anyway")
-		}
-	}
+	// wlock --> rlock
 
 	lom.Unlock(true)
+
 	if err != nil {
 		core.FreeLOM(lom)
 		ctx.Lom = nil
@@ -257,7 +272,7 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 			lst.ContinuationToken = ""
 			err = nil
 		} else {
-			err = _errInv("list-inventory", err)
+			err = _errInv("list", err)
 		}
 	}
 	return

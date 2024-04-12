@@ -1423,7 +1423,7 @@ func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, args *apc.BlobMsg, w ht
 	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
 	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
 	if !lom.TryLock(false) {
-		return "", nil, cmn.NewErrBusy("blob", lom, "")
+		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
 	}
 
 	oa, deleted, err := lom.LoadLatest(args.LatestVer)

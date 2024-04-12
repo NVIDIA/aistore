@@ -41,7 +41,14 @@ import (
 // - keep the underlying csv file open between pages
 //
 // TODO (desirable):
+// - `cached` status and other local md (see npg.populate)
 // - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
+
+// constant and tunables
+
+const invTag = "bucket-inventory"
+
+const invBusyTimeout = 10 * time.Second
 
 const (
 	invSizeSGL = cos.MiB
@@ -119,7 +126,7 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 		if ctx.ID == "" {
 			what = cos.Either(ctx.Name, invName)
 		}
-		return nil, csv, http.StatusNotFound, cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
+		return nil, csv, http.StatusNotFound, cos.NewErrNotFound(cloudBck, invTag+":"+what)
 	}
 
 	// 2. read the manifest and extract `fileSchema` --> ctx
@@ -151,26 +158,34 @@ func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObj
 		num++
 	}
 	if num > 0 {
-		nlog.Infoln("cleanup: removed", num, "older inventory file"+cos.Plural(num))
+		nlog.Infoln("cleanup: removed", num, "older", invTag, "file"+cos.Plural(num))
 	}
 }
 
-func inventoryIsUsable(latest time.Time, ctx *core.LsoInvCtx) bool {
+func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 	finfo, err := os.Stat(ctx.Lom.FQN)
-	switch {
-	case err != nil:
+	if err != nil {
 		debug.Assert(os.IsNotExist(err), err)
-		nlog.Infoln("Warning: getting bucket inventory ...", latest)
-		return false
-	case _sinceInv(finfo.ModTime(), latest) < 4*time.Second: // allow for a few seconds difference
+		nlog.Infoln("getting", invTag, "for the timestamp:", latest)
+		return time.Time{}, false
+	}
+
+	mtime := finfo.ModTime()
+	abs := _sinceAbs(mtime, latest)
+	if abs < time.Second {
 		debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
 		ctx.Size = finfo.Size()
+
 		// start (or rather, keep) using this one
-		return true
-	default:
-		nlog.Infoln("Warning: updating bucket inventory", ctx.Lom.Cname(), finfo.ModTime(), latest)
-		return false
+		errN := ctx.Lom.Load(true, true)
+		debug.AssertNoErr(errN)
+		debug.Assert(ctx.Lom.SizeBytes() == finfo.Size(), ctx.Lom.SizeBytes(), finfo.Size())
+		debug.Assert(_sinceAbs(mtime, ctx.Lom.Atime()) < time.Second, mtime.String(), ctx.Lom.Atime().String())
+		return time.Time{}, true
 	}
+
+	nlog.Infoln(invTag, ctx.Lom.Cname(), "is likely being updated: [", mtime.String(), latest.String(), abs, "]")
+	return mtime, false
 }
 
 // get+unzip and write lom
@@ -198,19 +213,25 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 
 	buf, slab := s3bp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
 	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
+
 	slab.Free(buf)
 	cos.Close(obj.Body)
 	wfh.Close()
 	gzr.Close()
 
-	// finalize (NOTE a lighter version of t.FinalizeObj - no redundancy, no locks)
+	// finalize (NOTE a lighter version of FinalizeObj - no redundancy, no locks)
 	if err == nil {
-		if err = ctx.Lom.RenameFrom(wfqn); err == nil {
-			if err = os.Chtimes(ctx.Lom.FQN, csv.mtime, csv.mtime); err == nil {
-				nlog.Infoln("new bucket inventory:", *ctx, ctx.Lom.Cname())
+		lom := ctx.Lom
+		if err = lom.RenameFrom(wfqn); err == nil {
+			if err = os.Chtimes(lom.FQN, csv.mtime, csv.mtime); err == nil {
+				nlog.Infoln("new", invTag+":", lom.Cname(), ctx.Schema)
 
-				ctx.Lom.SetSize(ctx.Size)
-				ctx.Lom.SetAtimeUnix(csv.mtime.UnixNano())
+				lom.SetSize(ctx.Size)
+				lom.SetAtimeUnix(csv.mtime.UnixNano())
+				if errN := lom.PersistMain(); errN != nil {
+					debug.AssertNoErr(errN) // (unlikely)
+					nlog.Errorln("failed to persist", lom.Cname(), "err:", err, "- proceeding anyway...")
+				}
 				return 0, nil
 			}
 		}
@@ -417,10 +438,10 @@ func _bhead(sgl *memsys.SGL, lbuf []byte) (s string) {
 }
 
 func _errInv(tag string, err error) error {
-	return fmt.Errorf("bucket-inventory: %s: %v", tag, err)
+	return fmt.Errorf("%s: %s: %v", invTag, tag, err)
 }
 
-func _sinceInv(t1, t2 time.Time) time.Duration {
+func _sinceAbs(t1, t2 time.Time) time.Duration {
 	if t1.After(t2) {
 		return t1.Sub(t2)
 	}

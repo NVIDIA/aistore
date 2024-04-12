@@ -71,9 +71,9 @@ type (
 	ErrBckNotFound         struct{ bck Bck }
 
 	ErrBusy struct {
-		what   string
-		name   fmt.Stringer
-		detail string
+		whereOrType string
+		what        string
+		detail      []string
 	}
 
 	ErrFailedTo struct {
@@ -364,16 +364,16 @@ func (*ErrInvalidBackendProvider) Is(target error) bool {
 
 // ErrBusy
 
-func NewErrBusy(what string, name fmt.Stringer, detail string) *ErrBusy {
-	return &ErrBusy{what, name, detail}
+func NewErrBusy(whereOrType, what string, detail ...string) *ErrBusy {
+	return &ErrBusy{whereOrType, what, detail}
 }
 
 func (e *ErrBusy) Error() string {
 	var s string
-	if e.detail != "" {
-		s = " (" + e.detail + ")"
+	if len(e.detail) > 0 {
+		s = " (" + e.detail[0] + ")"
 	}
-	return fmt.Sprintf("%s %q is currently busy%s, please try again", e.what, e.name, s)
+	return fmt.Sprintf("%s %q is currently busy%s, please try again", e.whereOrType, e.what, s)
 }
 
 // errAccessDenied & ErrBucketAccessDenied

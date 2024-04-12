@@ -692,7 +692,7 @@ outer:
 		case mono.Since(now) < max(cmn.Rom.CplaneOperation(), 2*time.Second):
 			nlog.Errorln(t.String()+": failed to load", lom.String(), err, "- retrying...")
 		default:
-			err = cmn.NewErrBusy("object", lom, "")
+			err = cmn.NewErrBusy("object", lom.Cname())
 			break outer
 		}
 	}
