@@ -35,15 +35,13 @@ import (
 // Main assumption/requirement:
 // one bucket, one inventory (for this same bucket), and one statically defined .csv
 
-// TODO:
-// - x-lso (caller) must rlock ctx.Lom, runlock on exit
-// - keep the underlying csv file open between pages
+// TODO (must):
+// - rlock -> wlock and poll
 // - use blob downloader (****)
-// - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
-// - cached inventory must be stored with its own content-type (or, might disappear during pagination)
+// - keep the underlying csv file open between pages
 //
-// separately:
-// - cleanup older inventories
+// TODO (desirable):
+// - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
 
 const (
 	invSizeSGL = cos.MiB
@@ -79,129 +77,16 @@ type invT struct {
 	mtime time.Time
 }
 
-func _errInv(tag string, err error) error {
-	return fmt.Errorf("bucket-inventory: %s: %v", tag, err)
-}
-
-func sinceInv(t1, t2 time.Time) time.Duration {
-	if t1.After(t2) {
-		return t1.Sub(t2)
-	}
-	return t2.Sub(t1)
-}
-
-func _usableInv(latest time.Time, ctx *core.LsoInvCtx) bool {
-	finfo, err := os.Stat(ctx.Lom.FQN)
-	switch {
-	case err != nil:
-		debug.Assert(os.IsNotExist(err), err)
-		nlog.Infoln("Warning: getting bucket inventory ...", latest)
-		return false
-	case sinceInv(finfo.ModTime(), latest) < 4*time.Second: // allow for a few seconds difference
-		debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
-		ctx.Size = finfo.Size()
-		// start (or rather, keep) using this one
-		return true
-	default:
-		nlog.Infoln("Warning: updating bucket inventory", ctx.Lom.Cname(), finfo.ModTime(), latest)
-		return false
-	}
-}
-
-// NOTE: see "manifest" comment above;
-// with JSON-tagged manifest structure (that'd include `json:"fileSchema"`)
-// it'd then make sense to additionally validate: format == csv and source bucket == destination bucket == this bucket
-func (s3bp *s3bp) getManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string) (schema []string, _ int, _ error) {
-	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(oname)}
-	obj, err := svc.GetObject(context.Background(), &input)
-	if err != nil {
-		ecode, e := awsErrorToAISError(err, cloudBck, oname)
-		return nil, ecode, e
-	}
-
-	sgl := s3bp.t.PageMM().NewSGL(0)
-	_, err = io.Copy(sgl, obj.Body)
-	cos.Close(obj.Body)
-
-	if err != nil {
-		sgl.Free()
-		return nil, 0, err
-	}
-
-	var (
-		fileSchema string
-		lbuf       = make([]byte, invMaxLine)
-		cname      = cloudBck.Cname(oname)
-	)
-	for {
-		lbuf, err = sgl.ReadLine(lbuf) // reuse
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-			break
-		}
-		if len(lbuf) < len(invSchema)+10 {
-			continue
-		}
-		line := strings.Split(string(lbuf), ":")
-		if len(line) < 2 {
-			continue
-		}
-		if strings.Contains(line[0], invSchema) {
-			s := strings.TrimSpace(line[1])
-			fileSchema = cmn.UnquoteCEV(strings.TrimSuffix(s, ","))
-			break
-		}
-	}
-
-	// parse, validate
-	if err != nil || fileSchema == "" {
-		err = _parseErr(cname, sgl, lbuf, err)
-	} else {
-		// e.g. "Bucket, Key, Size, ETag"
-		schema = strings.Split(fileSchema, ", ")
-		if len(schema) < 2 {
-			err = _parseErr(cname, sgl, lbuf, errors.New("invalid schema '"+fileSchema+"'"))
-		} else if schema[invBucketPos] != invSchemaBucket || schema[invKeyPos] != invSchemaKey {
-			err = _parseErr(cname, sgl, lbuf,
-				errors.New("unexpected schema '"+fileSchema+"': expecting Bucket followed by Key"))
-		}
-	}
-
-	sgl.Free()
-	return schema, 0, err
-}
-
-func _parseErr(cname string, sgl *memsys.SGL, lbuf []byte, err error) error {
-	out := fmt.Sprintf("failed to parse %s for %q", cname, invSchema)
-	if s := _bhead(sgl, lbuf); s != "" {
-		out += ": [" + s + "]"
-	}
-	if err != nil {
-		out += ", err: " + err.Error()
-	}
-	return errors.New(out)
-}
-
-func _bhead(sgl *memsys.SGL, lbuf []byte) (s string) {
-	sgl.Rewind()
-	n, _ := sgl.Read(lbuf)
-	if n > 0 {
-		s = cos.BHead(lbuf, invMaxLine)
-	}
-	return s
-}
-
-// first time: list inventory, read manifest, and more
-// (steps 1 through 5)
-func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, prefix string) (int, error) {
+// list inventories, read and parse manifest, return schema and unique oname
+func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, prefix string) (*s3.ListObjectsV2Output, invT,
+	int, error) {
 	var (
 		csv      invT
 		manifest invT
 		bn       = aws.String(cloudBck.Name)
 		params   = &s3.ListObjectsV2Input{Bucket: bn}
 	)
+
 	params.Prefix = aws.String(prefix)
 	params.MaxKeys = aws.Int32(apc.MaxPageSizeAWS) // no more than 1000 manifests
 
@@ -209,7 +94,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		ecode, e := awsErrorToAISError(err, cloudBck, "")
-		return ecode, e
+		return nil, csv, ecode, e
 	}
 	for _, obj := range resp.Contents {
 		name := *obj.Key
@@ -234,23 +119,25 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 		if ctx.ID == "" {
 			what = cos.Either(ctx.Name, invName)
 		}
-		return http.StatusNotFound, cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
+		return nil, csv, http.StatusNotFound, cos.NewErrNotFound(cloudBck, "S3 bucket inventory '"+what+"'")
 	}
 
 	// 2. read the manifest and extract `fileSchema` --> ctx
-	schema, ecode, err := s3bp.getManifest(cloudBck, svc, manifest.oname)
+	schema, ecode, err := s3bp._getParseManifest(cloudBck, svc, manifest.oname)
 	if err != nil {
-		return ecode, err
+		return nil, csv, ecode, err
 	}
 
 	ctx.Schema = schema
+	return resp, csv, 0, nil
+}
 
-	if _usableInv(csv.mtime, ctx) {
-		return 0, nil // exists and can be used
-	}
-
-	// 3. optionally, cleanup older inventories
-	for _, obj := range resp.Contents {
+func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObjectsV2Output, csv invT) {
+	var (
+		num int
+		bn  = aws.String(cloudBck.Name)
+	)
+	for _, obj := range lsV2resp.Contents {
 		name := *obj.Key
 		mtime := *(obj.LastModified)
 		if name == csv.oname || csv.mtime.Sub(mtime) < 23*time.Hour {
@@ -259,10 +146,35 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 		if _, errN := svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{Bucket: bn, Key: obj.Key}); errN != nil {
 			ecode, e := awsErrorToAISError(errN, cloudBck, name)
 			nlog.Errorln("delete", name, e, ecode)
+			continue
 		}
+		num++
 	}
+	if num > 0 {
+		nlog.Infoln("cleanup: removed", num, "older inventory file"+cos.Plural(num))
+	}
+}
 
-	// 4. get+unzip and write lom
+func inventoryIsUsable(latest time.Time, ctx *core.LsoInvCtx) bool {
+	finfo, err := os.Stat(ctx.Lom.FQN)
+	switch {
+	case err != nil:
+		debug.Assert(os.IsNotExist(err), err)
+		nlog.Infoln("Warning: getting bucket inventory ...", latest)
+		return false
+	case _sinceInv(finfo.ModTime(), latest) < 4*time.Second: // allow for a few seconds difference
+		debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
+		ctx.Size = finfo.Size()
+		// start (or rather, keep) using this one
+		return true
+	default:
+		nlog.Infoln("Warning: updating bucket inventory", ctx.Lom.Cname(), finfo.ModTime(), latest)
+		return false
+	}
+}
+
+// get+unzip and write lom
+func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, csv invT) (int, error) {
 	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(csv.oname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
@@ -291,15 +203,20 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 	wfh.Close()
 	gzr.Close()
 
-	// 5. finalize
+	// finalize (NOTE a lighter version of t.FinalizeObj - no redundancy, no locks)
 	if err == nil {
 		if err = ctx.Lom.RenameFrom(wfqn); err == nil {
 			if err = os.Chtimes(ctx.Lom.FQN, csv.mtime, csv.mtime); err == nil {
 				nlog.Infoln("new bucket inventory:", *ctx, ctx.Lom.Cname())
+
+				ctx.Lom.SetSize(ctx.Size)
+				ctx.Lom.SetAtimeUnix(csv.mtime.UnixNano())
 				return 0, nil
 			}
 		}
 	}
+
+	// otherwise
 	if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
 		nlog.Errorf("final-steps (%v), nested fail to remove (%v)", err, nerr)
 	}
@@ -406,4 +323,106 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx 
 
 	lst.Entries = lst.Entries[:i]
 	return err
+}
+
+// GET, parse, and validate inventory manifest
+// (see "hardcoding" comment above)
+// with JSON-tagged manifest structure (that'd include `json:"fileSchema"`)
+// it'd then make sense to additionally validate: format == csv and source bucket == destination bucket == this bucket
+
+func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string) (schema []string, _ int, _ error) {
+	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(oname)}
+	obj, err := svc.GetObject(context.Background(), &input)
+	if err != nil {
+		ecode, e := awsErrorToAISError(err, cloudBck, oname)
+		return nil, ecode, e
+	}
+
+	sgl := s3bp.t.PageMM().NewSGL(0)
+	_, err = io.Copy(sgl, obj.Body)
+	cos.Close(obj.Body)
+
+	if err != nil {
+		sgl.Free()
+		return nil, 0, err
+	}
+
+	var (
+		fileSchema string
+		lbuf       = make([]byte, invMaxLine)
+		cname      = cloudBck.Cname(oname)
+	)
+	for {
+		lbuf, err = sgl.ReadLine(lbuf) // reuse
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			break
+		}
+		if len(lbuf) < len(invSchema)+10 {
+			continue
+		}
+		line := strings.Split(string(lbuf), ":")
+		if len(line) < 2 {
+			continue
+		}
+		if strings.Contains(line[0], invSchema) {
+			s := strings.TrimSpace(line[1])
+			fileSchema = cmn.UnquoteCEV(strings.TrimSuffix(s, ","))
+			break
+		}
+	}
+
+	// parse, validate
+	if err != nil || fileSchema == "" {
+		err = _parseErr(cname, sgl, lbuf, err)
+	} else {
+		// e.g. "Bucket, Key, Size, ETag"
+		schema = strings.Split(fileSchema, ", ")
+		if len(schema) < 2 {
+			err = _parseErr(cname, sgl, lbuf, errors.New("invalid schema '"+fileSchema+"'"))
+		} else if schema[invBucketPos] != invSchemaBucket || schema[invKeyPos] != invSchemaKey {
+			err = _parseErr(cname, sgl, lbuf,
+				errors.New("unexpected schema '"+fileSchema+"': expecting Bucket followed by Key"))
+		}
+	}
+
+	sgl.Free()
+	return schema, 0, err
+}
+
+//
+// internal
+//
+
+func _parseErr(cname string, sgl *memsys.SGL, lbuf []byte, err error) error {
+	out := fmt.Sprintf("failed to parse %s for %q", cname, invSchema)
+	if s := _bhead(sgl, lbuf); s != "" {
+		out += ": [" + s + "]"
+	}
+	if err != nil {
+		out += ", err: " + err.Error()
+	}
+	return errors.New(out)
+}
+
+func _bhead(sgl *memsys.SGL, lbuf []byte) (s string) {
+	sgl.Rewind()
+	n, _ := sgl.Read(lbuf)
+	if n > 0 {
+		s = cos.BHead(lbuf, invMaxLine)
+	}
+	return s
+}
+
+func _errInv(tag string, err error) error {
+	return fmt.Errorf("bucket-inventory: %s: %v", tag, err)
+}
+
+func _sinceInv(t1, t2 time.Time) time.Duration {
+	if t1.After(t2) {
+		return t1.Sub(t2)
+	}
+	return t2.Sub(t1)
 }

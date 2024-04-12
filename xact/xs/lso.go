@@ -202,6 +202,7 @@ loop:
 			break loop
 		}
 	}
+
 	r.stop()
 }
 
@@ -245,6 +246,7 @@ func (r *LsoXact) stop() {
 		r.lastPage = nil
 	}
 	if r.ctx != nil && r.ctx.Lom != nil {
+		r.ctx.Lom.Unlock(false) // NOTE: either using inventory w/ rlock held, or else
 		core.FreeLOM(r.ctx.Lom)
 		r.ctx.Lom = nil
 	}

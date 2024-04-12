@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -126,6 +127,7 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 // LIST OBJECTS via INVENTORY
 //
 
+// NOTE: when successful, returns w/ rlock held; otherwise, always unlocks and frees
 func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, err error) {
 	var (
 		svc      *s3.Client
@@ -148,9 +150,62 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (ecode int, e
 	if err = lom.InitBck(bck.Bucket()); err != nil {
 		return 0, err
 	}
-	ctx.Lom = lom
+	if !lom.TryLock(false) {
+		core.FreeLOM(lom)
+		return 0, cmn.NewErrBusy("bucket-inventory", lom, "likely getting updated")
+	}
 
-	return s3bp.getInventory(cloudBck, svc, ctx, prefix)
+	lsV2resp, csv, ecode, err := s3bp.initInventory(cloudBck, svc, ctx, prefix)
+	if err != nil {
+		lom.Unlock(false)
+		core.FreeLOM(lom)
+		return ecode, err
+	}
+	ctx.Lom = lom
+	if inventoryIsUsable(csv.mtime, ctx) {
+		return 0, nil // w/ rlock
+	}
+
+	//
+	// rlock -> wlock, cleanup old, read and write as ctx.Lom
+	//
+	lom.Unlock(false)
+	err = cmn.NewErrBusy("bucket-inventory", lom, "polling for write access")
+	for range 5 {
+		if lom.TryLock(true) {
+			err = nil
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		core.FreeLOM(lom)
+		ctx.Lom = nil
+		return 0, err
+	}
+
+	// under wlock --
+
+	cleanupOldInventory(cloudBck, svc, lsV2resp, csv)
+
+	ecode, err = s3bp.getInventory(cloudBck, svc, ctx, csv)
+
+	// NOTE: instead of t.FinalizeObj() (that does more)
+	if err == nil {
+		if errN := lom.PersistMain(); errN != nil {
+			nlog.Errorln("bucket inventory: failed to persist", lom.Cname(), "err:", err, "- proceeding anyway")
+		}
+	}
+
+	lom.Unlock(true)
+	if err != nil {
+		core.FreeLOM(lom)
+		ctx.Lom = nil
+		return ecode, err
+	}
+	lom.Lock(false) // must succeed
+
+	return 0, nil
 }
 
 func _namingInv(cloudBck *cmn.Bck, ctx *core.LsoInvCtx) (prefix, objName string) {
