@@ -1,8 +1,9 @@
 #
-# Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023 - 2024, NVIDIA CORPORATION. All rights reserved.
 #
 from abc import ABC, abstractmethod
 from typing import Iterable
+from aistore.sdk.object import Object
 
 
 # pylint: disable=too-few-public-methods
@@ -12,9 +13,21 @@ class AISSource(ABC):
     """
 
     @abstractmethod
+    def list_all_objects_iter(self, prefix: str = "") -> Iterable[Object]:
+        """
+        Get an iterable of all the objects contained in this source (bucket, group, etc.)
+
+        Args:
+            prefix (str, optional): Only include objects with names matching this prefix
+
+        Returns:
+            Iterable over selected objects
+        """
+
+    @abstractmethod
     def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
         """
-        Get an iterable of urls to reference the objects contained in this source (bucket, group, etc.)
+        Get an iterable of full urls to reference the objects contained in this source (bucket, group, etc.)
         Args:
             prefix (str, optional): Only include objects with names matching this prefix
             etl_name (str, optional): Apply an ETL when retrieving object contents

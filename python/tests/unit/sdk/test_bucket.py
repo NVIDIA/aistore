@@ -4,6 +4,7 @@ from unittest.mock import Mock, call, patch
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.bucket import Bucket, Header
+from aistore.sdk.object import Object
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_iterator import ObjectIterator
 from aistore.sdk import ListObjectFlag
@@ -578,6 +579,14 @@ class TestBucket(unittest.TestCase):
         list(self.ais_bck.list_urls(prefix=prefix, etl_name=ETL_NAME))
         mock_list_obj.assert_called_with(prefix=prefix, props="name")
         mock_object.assert_has_calls(expected_obj_calls)
+
+    @patch("aistore.sdk.bucket.Bucket.list_objects_iter")
+    def test_list_all_objects_iter(self, mock_list_obj):
+        object_names = ["obj_name", "obj_name2"]
+        mock_list_obj.return_value = [BucketEntry(n=name) for name in object_names]
+        objects_iter = self.ais_bck.list_all_objects_iter()
+        for obj in objects_iter:
+            self.assertIsInstance(obj, Object)
 
     def test_make_request_no_client(self):
         bucket = Bucket(name="name")

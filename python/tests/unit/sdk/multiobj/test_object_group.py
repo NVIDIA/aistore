@@ -280,3 +280,7 @@ class TestObjectGroup(unittest.TestCase):
             expected_obj_calls.append(call().get_url(etl_name=ETL_NAME))
         list(self.object_group.list_urls(etl_name=ETL_NAME))
         self.mock_bck.object.assert_has_calls(expected_obj_calls)
+
+    def test_list_all_objects_iter(self):
+        res = self.object_group.list_all_objects_iter()
+        self.assertEqual(len(list(res)), len(self.obj_names))

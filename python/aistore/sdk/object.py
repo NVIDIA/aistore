@@ -2,11 +2,10 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from io import BufferedWriter
-from typing import NewType, Iterable
+from typing import NewType
 
 import requests
 
-from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
@@ -33,7 +32,7 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=consider-using-with,unused-variable
-class Object(AISSource):
+class Object:
     """
     A class representing an object of a bucket bound to a client.
 
@@ -60,9 +59,6 @@ class Object(AISSource):
     def name(self):
         """Name of this object"""
         return self._name
-
-    def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
-        yield self.get_url(etl_name=etl_name)
 
     def head(self) -> Header:
         """
@@ -159,6 +155,16 @@ class Object(AISSource):
         if writer:
             writer.writelines(obj_reader)
         return obj_reader
+
+    def get_semantic_url(self):
+        """
+        Get the semantic URL to the object
+
+        Returns:
+            Semantic URL to get object
+        """
+
+        return f"{self.bucket.provider}://{self._bck_name}/{self._name}"
 
     def get_url(self, archpath: str = "", etl_name: str = None):
         """

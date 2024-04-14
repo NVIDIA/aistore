@@ -127,16 +127,32 @@ class Bucket(AISSource):
 
     def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
         """
-            Get an iterator of full URLs to every object in this bucket matching the prefix
+        Implementation of the abstract method from AISSource that provides an iterator
+        of full URLs to every object in this bucket matching the specified prefix
+
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
             etl_name (str, optional): ETL to include in URLs
 
         Returns:
-            Iterator of all object URLs matching the prefix
+            Iterator of full URLs of all objects matching the prefix
         """
         for entry in self.list_objects_iter(prefix=prefix, props="name"):
             yield self.object(entry.name).get_url(etl_name=etl_name)
+
+    def list_all_objects_iter(self, prefix: str = "") -> Iterable[Object]:
+        """
+        Implementation of the abstract method from AISSource that provides an iterator
+        of all the objects in this bucket matching the specified prefix
+
+        Args:
+            prefix (str, optional): Limit objects selected by a given string prefix
+
+        Returns:
+            Iterator of all object URLs matching the prefix
+        """
+        for entry in self.list_objects_iter(prefix=prefix, props="name"):
+            yield self.object(entry.name)
 
     def create(self, exist_ok=False):
         """

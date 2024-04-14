@@ -4,7 +4,6 @@ from unittest.mock import Mock, patch, mock_open
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 
-from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
@@ -52,9 +51,6 @@ class TestObject(unittest.TestCase):
     def test_properties(self):
         self.assertEqual(self.mock_bucket, self.object.bucket)
         self.assertEqual(OBJ_NAME, self.object.name)
-
-    def test_ais_source(self):
-        self.assertIsInstance(self.object, AISSource)
 
     def test_head(self):
         self.object.head()
@@ -150,14 +146,6 @@ class TestObject(unittest.TestCase):
 
         if "writer" in kwargs:
             self.mock_writer.writelines.assert_called_with(res)
-
-    @patch("aistore.sdk.object.Object.get_url")
-    def test_list_urls(self, mock_get_url):
-        object_url = "single-object-url"
-        mock_get_url.return_value = object_url
-        res = self.object.list_urls(etl_name=ETL_NAME)
-        self.assertEqual([object_url], list(res))
-        mock_get_url.assert_called_with(etl_name=ETL_NAME)
 
     def test_get_url(self):
         expected_res = "full url"
