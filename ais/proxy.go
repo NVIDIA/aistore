@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -121,17 +122,30 @@ func (p *proxy) init(config *cmn.Config) {
 }
 
 func initPID(config *cmn.Config) (pid string) {
+	// 1. ID from env
 	if pid = envDaemonID(apc.Proxy); pid != "" {
 		if err := cos.ValidateDaemonID(pid); err != nil {
 			nlog.Errorf("Warning: %v", err)
 		}
 		return
 	}
-	// try to read ID
+
+	// 2. proxy, K8s
+	if k8s.IsK8s() {
+		// NOTE: always generate i.e., compute
+		if net.ParseIP(k8s.NodeName) != nil { // does not parse as IP
+			nlog.Warningf("using K8s node name %q, an IP addr, to compute _persistent_ proxy ID", k8s.NodeName)
+		}
+		return cos.HashK8sProxyID(k8s.NodeName)
+	}
+
+	// 3. try to read ID
 	if pid = readProxyID(config); pid != "" {
 		nlog.Infof("p[%s] from %q", pid, fname.ProxyID)
 		return
 	}
+
+	// 4. initial deployment
 	pid = genDaemonID(apc.Proxy, config)
 	err := cos.ValidateDaemonID(pid)
 	debug.AssertNoErr(err)

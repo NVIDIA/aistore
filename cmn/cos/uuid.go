@@ -6,8 +6,10 @@ package cos
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/OneOfOne/xxhash"
 	"github.com/teris-io/shortid"
 )
 
@@ -20,6 +22,8 @@ const (
 
 	lenDaemonID  = 8  // via cryptographic rand
 	lenTooLongID = 32 // suspiciously long
+
+	lenK8sProxyID = 13
 )
 
 const (
@@ -58,9 +62,9 @@ func GenUUID() (uuid string) {
 
 // "best-effort ID" - to independently and locally generate globally unique ID
 // called by xreg.GenBEID
-func GenBEID(val uint64) string {
-	b := make([]byte, LenShortID)
-	for i := range LenShortID {
+func GenBEID(val uint64, l int) string {
+	b := make([]byte, l)
+	for i := range l {
 		if idx := int(val & letterIdxMask); idx < LenRunes {
 			b[i] = LetterRunes[idx]
 		} else {
@@ -92,7 +96,20 @@ func ValidateNiceID(id string, minlen int, tag string) (err error) {
 // Daemon ID
 //
 
-func GenDaemonID() string              { return CryptoRandS(lenDaemonID) }
+func GenDaemonID() string { return CryptoRandS(lenDaemonID) }
+
+func HashK8sProxyID(nodeName string) (pid string) {
+	digest := xxhash.Checksum64S(UnsafeB(nodeName), MLCG32)
+	pid = strconv.FormatUint(digest, 36)
+	if pid[0] >= '0' && pid[0] <= '9' {
+		pid = pid[1:]
+	}
+	if l := lenK8sProxyID - len(pid); l > 0 {
+		return GenBEID(digest, l) + pid
+	}
+	return pid
+}
+
 func ValidateDaemonID(id string) error { return ValidateNiceID(id, lenDaemonID, "node ID") }
 
 // (when config.TestingEnv)

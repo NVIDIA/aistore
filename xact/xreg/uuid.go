@@ -29,7 +29,7 @@ func GenBEID(div uint64, tag string) (beid string, xctn core.Xact, err error) {
 	val := now / div
 	org := val
 	val ^= xxhash.Checksum64S(cos.UnsafeB(tag), val)
-	beid = cos.GenBEID(val)
+	beid = cos.GenBEID(val, cos.LenShortID)
 
 	// check vs registry
 	xctn, err = GetXact(beid)
@@ -43,7 +43,7 @@ func GenBEID(div uint64, tag string) (beid string, xctn core.Xact, err error) {
 
 	// "idling" away, so try again but only once
 	val ^= org
-	beid = cos.GenBEID(val)
+	beid = cos.GenBEID(val, cos.LenShortID)
 	if xctn, err = GetXact(beid); err != nil || xctn != nil {
 		beid = ""
 	}
