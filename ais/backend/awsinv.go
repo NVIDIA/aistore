@@ -36,7 +36,6 @@ import (
 // one bucket, one inventory (for this same bucket), and one statically defined .csv
 
 // TODO (must):
-// - rlock -> wlock and poll
 // - use blob downloader (****)
 // - keep the underlying csv file open between pages
 //

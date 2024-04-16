@@ -1762,8 +1762,8 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	debug.Assert(pubValid && intraValid)
 
 	// env goes first
-	if daemon.envPriURL != "" {
-		candidates = _addCan(daemon.envPriURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
+	if daemon.EP != "" {
+		candidates = _addCan(daemon.EP, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
 	primaryURL, psi := h.getPrimaryURLAndSI(nil, config)
 	candidates = _addCan(primaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)

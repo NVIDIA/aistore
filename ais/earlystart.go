@@ -108,21 +108,21 @@ func (p *proxy) bootstrap() {
 func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim prim) {
 	isIs := cos.IsParseBool(os.Getenv(env.AIS.IsPrimary))
 	switch {
-	case daemon.envPriURL != "":
+	case daemon.EP != "":
 		// 1. user override local Smap (if exists) via env-set primary URL
-		prim.isEP = daemon.envPriURL == p.si.URL(cmn.NetIntraControl) || daemon.envPriURL == p.si.URL(cmn.NetPublic)
+		prim.isEP = daemon.EP == p.si.URL(cmn.NetIntraControl) || daemon.EP == p.si.URL(cmn.NetPublic)
 		if !prim.isEP {
-			prim.isEP = p.si.HasURL(daemon.envPriURL)
+			prim.isEP = p.si.HasURL(daemon.EP)
 		}
 		if isIs && !prim.isEP {
 			nlog.Warningf("%s: invalid combination of '%s=true' vs '%s=%s'", p, env.AIS.IsPrimary,
-				env.AIS.PrimaryEP, daemon.envPriURL)
+				env.AIS.PrimaryEP, daemon.EP)
 			nlog.Warningln("proceeding as non-primary...")
 		}
 		if prim.isEP {
-			daemon.envPriURL = ""
+			daemon.EP = ""
 		} else {
-			prim.url = daemon.envPriURL
+			prim.url = daemon.EP
 		}
 	case isIs:
 		// 2. TODO: needed for tests, consider removing

@@ -37,7 +37,7 @@ type (
 		rg        *rungroup
 		version   string      // major.minor.build (see cmd/aisnode)
 		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
-		envPriURL string      // env "AIS_PRIMARY_EP"
+		EP        string      // env "AIS_PRIMARY_EP"
 		stopping  atomic.Bool // true when exiting
 		resilver  struct {
 			reason   string // Reason why resilver needs to be run.
@@ -211,31 +211,31 @@ func initDaemon(version, buildTime string) cos.Runner {
 	xreg.Init()
 
 	// primary 'host[:port]' endpoint or URL from the environment
-	if daemon.envPriURL = os.Getenv(env.AIS.PrimaryEP); daemon.envPriURL != "" {
+	if daemon.EP = os.Getenv(env.AIS.PrimaryEP); daemon.EP != "" {
 		scheme := "http"
 		if config.Net.HTTP.UseHTTPS {
 			scheme = "https"
 		}
-		if strings.Contains(daemon.envPriURL, "://") {
-			u, err := url.Parse(daemon.envPriURL)
+		if strings.Contains(daemon.EP, "://") {
+			u, err := url.Parse(daemon.EP)
 			if err != nil {
-				cos.ExitLogf("invalid environment %s=%s: %v", env.AIS.PrimaryEP, daemon.envPriURL, err)
+				cos.ExitLogf("invalid environment %s=%s: %v", env.AIS.PrimaryEP, daemon.EP, err)
 			}
 			if u.Path != "" && u.Path != "/" {
 				cos.ExitLogf("invalid environment %s=%s (not expecting path %q)",
-					env.AIS.PrimaryEP, daemon.envPriURL, u.Path)
+					env.AIS.PrimaryEP, daemon.EP, u.Path)
 			}
 			// reassemble and compare
 			ustr := scheme + "://" + u.Hostname()
 			if port := u.Port(); port != "" {
 				ustr += ":" + port
 			}
-			if ustr != daemon.envPriURL {
-				nlog.Warningln("environment-set primary URL mismatch:", daemon.envPriURL, "vs", ustr)
-				daemon.envPriURL = ustr
+			if ustr != daemon.EP {
+				nlog.Warningln("environment-set primary URL mismatch:", daemon.EP, "vs", ustr)
+				daemon.EP = ustr
 			}
 		} else {
-			daemon.envPriURL = scheme + "://" + daemon.envPriURL
+			daemon.EP = scheme + "://" + daemon.EP
 		}
 	}
 
