@@ -382,12 +382,13 @@ if [ "$FS_LIST" != "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     AIS_FS_PATHS=${AIS_FS_PATHS#","}
 fi
 
-composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml"
+composer_file="${DIR}/docker-compose.singlenet.yml"
 if [ "${NETWORK}" = "multi" ]; then
-    composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
+    composer_file="${DIR}/docker-compose.singlenet.yml -f ${DIR}/docker-compose.multinet.yml"
 fi
 
 cp $DIR/../local/aisnode_config.sh aisnode_config.sh
+cp $DIR/../../conf/limits.conf limits.conf
 
 docker network create docker_default || true
 if [ "$GRAFANA" == true ]; then
@@ -462,7 +463,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     docker-compose -p ais${i} -f ${composer_file} build
 
     echo Starting Primary Proxy
-    AIS_IS_PRIMARY=true docker-compose -p ais${i} -f ${composer_file} up -d proxy
+    docker-compose -p ais${i} -f ${composer_file} up -d proxy
     sleep 2 # give primary proxy some room to breathe
     echo Starting cluster ..
     PRIMARY_IP=$(docker inspect -f "{{ .NetworkSettings.Networks.ais${i}_public.IPAddress }}" ais${i}_proxy_1)
@@ -497,6 +498,7 @@ fi
 
 # Consider moving these to a folder instead of deleting - for future reference
 rm aisnode_config.sh
+rm limits.conf
 docker ps
 
 # Install the CLI

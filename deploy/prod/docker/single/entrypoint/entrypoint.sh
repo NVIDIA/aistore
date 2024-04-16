@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export AIS_FS_PATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": {}"; done | paste -sd ",")
+export AIS_FS_PATHS=$(ls -d /ais/* | while read x; do echo -e "\"$x\": \"\""; done | paste -sd ",")
 
 function start_node {
   # Required for `aisnode_config.sh`.
@@ -11,14 +11,14 @@ function start_node {
   export STATSD_CONF_FILE=${AIS_CONF_DIR}/statsd.conf
 
   export PORT=$2
-  export AIS_PRIMARY_URL="http://127.0.0.1:51080"
+  export AIS_PRIMARY_URL="http://$(hostname -i):51080"
   export AIS_LOG_DIR=/var/log/aisnode/$1
   mkdir -p ${AIS_CONF_DIR}
   mkdir -p ${AIS_LOG_DIR}
 
   source aisnode_config.sh
 
-  AIS_IS_PRIMARY="true" bin/aisnode \
+  bin/aisnode \
     -config=${AIS_CONF_FILE} \
     -local_config=${AIS_LOCAL_CONF_FILE} \
     -role=$1 \

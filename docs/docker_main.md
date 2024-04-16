@@ -82,6 +82,12 @@ $ sudo apt-get install -y python-pip
 $ sudo pip install docker-compose
 ```
 
+OR
+
+```console
+sudo apt install docker-compose
+```
+
 8. Test the installation:
 
 ```console

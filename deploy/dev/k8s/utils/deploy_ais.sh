@@ -66,12 +66,6 @@ echo "Starting primary proxy deployment..."
 for i in $(seq 0 $((PROXY_CNT-1))); do
   export POD_NAME="ais-proxy-${i}"
   export PORT=$((PRIMARY_PORT+i))
-  if [ $PORT -eq $PRIMARY_PORT ]; then
-    export AIS_IS_PRIMARY=true
-  else
-    export AIS_IS_PRIMARY=false
-  fi
-  
   export INSTANCE=${INSTANCE}
   export AIS_LOG_DIR="/tmp/ais/${INSTANCE}/log"
   (minikube ssh "sudo mkdir -p ${AIS_LOG_DIR}")

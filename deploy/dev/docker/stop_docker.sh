@@ -1,6 +1,7 @@
 #!/bin/bash
 NAME=`basename "$0"`
 SETUP_FILE="/tmp/docker_ais/deploy.env"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 usage() {
     echo "============================================== Usage: =============================================="
@@ -33,9 +34,9 @@ get_setup() {
 
 determine_config() {
     if [ "${NETWORK}" == "single" ]; then
-        composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml"
+        composer_file="${DIR}/docker-compose.singlenet.yml"
     elif [ "${NETWORK}" == "multi" ]; then
-        composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
+        composer_file="${DIR}/docker-compose.singlenet.yml -f ${DIR}/docker-compose.multinet.yml"
     else
         echo "ERROR: No docker configuration selected."
         usage

@@ -41,7 +41,6 @@ export TARGET_CNT=1
 
 export POD_NAME="ais-proxy-0"
 export PORT=$PRIMARY_PORT
-export AIS_IS_PRIMARY=true
 export INSTANCE=0
 
 export AIS_LOG_DIR="/tmp/ais/${INSTANCE}/log"

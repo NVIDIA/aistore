@@ -416,32 +416,31 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	}
 
 	tlog.Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
-	pid, err := startNode(cmd.Cmd, cmd.Args, asPrimary)
+	pid, err := startNode(&cmd, asPrimary)
 	if err == nil && pid <= 0 {
 		err = fmt.Errorf("RestoreNode: invalid process ID %d", pid)
 	}
 	return err
 }
 
-func startNode(cmd string, args []string, asPrimary bool) (int, error) {
-	ncmd := exec.Command(cmd, args...)
-	// When using Ctrl-C on test, children (restored daemons) should not be
-	// killed as well.
-	// (see: https://groups.google.com/forum/#!topic/golang-nuts/shST-SDqIp4)
+// When using Ctrl-C on test, children (restored daemons) should not be killed as well.
+// (see: https://groups.google.com/forum/#!topic/golang-nuts/shST-SDqIp4)
+func startNode(cmd *RestoreCmd, asPrimary bool) (int, error) {
+	ncmd := exec.Command(cmd.Cmd, cmd.Args...) //nolint:gosec // used only in tests
 	ncmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
 	if asPrimary {
 		// Sets the environment variable to start as primary
 		environ := os.Environ()
-		environ = append(environ, env.AIS.IsPrimary+"=true")
+		environ = append(environ, env.AIS.PrimaryEP+"="+cmd.Node.PubNet.URL)
 		ncmd.Env = environ
 	}
 	if err := ncmd.Start(); err != nil {
 		return 0, err
 	}
 	pid := ncmd.Process.Pid
-	err := ncmd.Process.Release() // TODO -- FIXME: needed?
+	err := ncmd.Process.Release()
 	return pid, err
 }
 
@@ -467,15 +466,18 @@ func DeployNode(t *testing.T, node *meta.Snode, conf *cmn.Config, localConf *cmn
 	err = jsp.SaveMeta(configFile, &conf.ClusterConfig, nil)
 	tassert.CheckFatal(t, err)
 
-	args := []string{
-		"-role=" + node.Type(),
-		"-daemon_id=" + node.ID(),
-		"-config=" + configFile,
-		"-local_config=" + localConfFile,
+	var cmd = RestoreCmd{
+		Args: []string{
+			"-role=" + node.Type(),
+			"-daemon_id=" + node.ID(),
+			"-config=" + configFile,
+			"-local_config=" + localConfFile,
+		},
+		Node: node,
+		Cmd:  getAISNodeCmd(t),
 	}
 
-	cmd := getAISNodeCmd(t)
-	pid, err := startNode(cmd, args, false)
+	pid, err := startNode(&cmd, false)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, pid > 0, "invalid process ID %d", pid)
 	return pid

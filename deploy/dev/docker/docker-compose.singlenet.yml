@@ -17,7 +17,6 @@ services:
       - docker_default
     environment:
       - AIS_NODE_ROLE=proxy
-      - AIS_IS_PRIMARY=${AIS_IS_PRIMARY:-}
       - AIS_NO_DISK_IO=${AIS_NO_DISK_IO}
       - PORT=${PORT}
       - AIS_PRIMARY_URL=http://${PRIMARY_IP}:${PORT}

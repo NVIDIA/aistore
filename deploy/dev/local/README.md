@@ -5,7 +5,7 @@ Intended audience includes developers and first-time users, including those who'
 
 ## `$GOPATH` and `$PATH`
 
-There's of course a tone of [tutorials](https://tip.golang.org/doc/tutorial/getting-started) and markdowns on the web, but the gist of it boils down to a single word: `GOPATH`. Namely, setting it up and exporting, e.g.:
+There's of course a ton of [tutorials](https://tip.golang.org/doc/tutorial/getting-started) and markdowns on the web, but the gist of it boils down to a single word: `GOPATH`. Namely, setting it up and exporting, e.g.:
 
 ```console
 $ mkdir /tmp/go/src /tmp/go/pkg /tmp/go/bin

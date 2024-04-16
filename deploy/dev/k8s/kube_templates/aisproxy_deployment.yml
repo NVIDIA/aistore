@@ -33,8 +33,6 @@ spec:
             fieldPath: spec.nodeName
       - name: AIS_NODE_ROLE
         value: "proxy"
-      - name: AIS_IS_PRIMARY
-        value: "${AIS_IS_PRIMARY}"
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/

@@ -7,7 +7,6 @@ package ais
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"runtime"
 	"time"
 
@@ -44,7 +43,6 @@ type (
 		isSmap bool // <-- loaded Smap
 		isCfg  bool // <-- config.proxy.primary_url
 		isEP   bool // <-- env AIS_PRIMARY_EP
-		isIs   bool // <-- env AIS_IS_PRIMARY
 	}
 )
 
@@ -74,12 +72,12 @@ func (p *proxy) bootstrap() {
 	prim := p.determineRole(smap, config)
 
 	// 3: start as primary
-	forcePrimaryChange := prim.isCfg || prim.isEP || prim.isIs
+	forcePrimaryChange := prim.isCfg || prim.isEP
 	if prim.isSmap || forcePrimaryChange {
 		if prim.isSmap {
 			nlog.Infof("%s: assuming primary role _for now_ %+v", p, prim)
 		} else if prim.isEP && isSelf != "" {
-			nlog.Infoln(p.String()+": assuming primary role", "(env '"+env.AIS.IsPrimary+"' is the current primary and is redundant)")
+			nlog.Infof("%s: assuming primary role (and note that env %s=%s is redundant)", p, env.AIS.PrimaryEP, daemon.EP)
 		} else {
 			nlog.Infof("%s: assuming primary role as per: %+v", p, prim)
 		}
@@ -106,12 +104,11 @@ func (p *proxy) bootstrap() {
 
 // make the *primary* decision taking into account both the environment and loaded Smap, if exists
 // cases 1 through 4:
-// 1, 2: environment "AIS_PRIMARY_EP" and "AIS_IS_PRIMARY" take precedence unconditionally (in that exact sequence);
+// 1, environment "AIS_PRIMARY_EP" takes precedence unconditionally (in that exact sequence);
 // 3: next, loaded Smap (but it can be overridden by newer versions from other nodes);
-// 4: finally, if none of the above applies, take into account cluster config (its "proxy" section).
+// 3: finally, if none of the above applies, take into account cluster config (its "proxy" section).
 // See also: "change of mind"
 func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim prim) {
-	isIs := cos.IsParseBool(os.Getenv(env.AIS.IsPrimary))
 	switch {
 	case daemon.EP != "":
 		// 1. user override local Smap (if exists) via env-set primary URL
@@ -119,21 +116,13 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 		if !prim.isEP {
 			prim.isEP = p.si.HasURL(daemon.EP)
 		}
-		if isIs && !prim.isEP {
-			nlog.Warningf("%s: invalid combination of '%s=true' vs '%s=%s'", p, env.AIS.IsPrimary,
-				env.AIS.PrimaryEP, daemon.EP)
-			nlog.Warningln("proceeding as non-primary...")
-		}
 		if prim.isEP {
 			daemon.EP = ""
 		} else {
 			prim.url = daemon.EP
 		}
-	case isIs:
-		// 2. TODO: needed for tests, consider removing
-		prim.isIs = isIs
 	case smap != nil:
-		// 3. regular case: relying on local copy of Smap (double-checking its version though)
+		// 2. relying on local copy of Smap (double-checking its version though)
 		prim.isSmap = smap.isPrimary(p.si)
 		if prim.isSmap {
 			cii, cnt := p.bcastHealth(smap, true /*checkAll*/)
@@ -150,7 +139,7 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 			}
 		}
 	default:
-		// 4. initial deployment
+		// 3. initial deployment
 		prim.isCfg = config.Proxy.PrimaryURL == p.si.URL(cmn.NetIntraControl) ||
 			config.Proxy.PrimaryURL == p.si.URL(cmn.NetPublic)
 		if !prim.isCfg {
@@ -240,7 +229,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		before.Smap, before.BMD, before.RMD, before.EtlMD = smap, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
 		before.Config, _ = p.owner.config.get()
 
-		forcePrimaryChange := prim.isCfg || prim.isEP || prim.isIs
+		forcePrimaryChange := prim.isCfg || prim.isEP
 		smap = p.regpoolMaxVer(&before, &after, forcePrimaryChange)
 
 		uuid, created = smap.UUID, smap.CreationTime
