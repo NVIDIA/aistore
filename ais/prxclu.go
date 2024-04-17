@@ -481,7 +481,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	} else if apiOp == apc.SelfJoin {
 		// check for dup node ID
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Eq(nsi) {
-			duplicate, err := p.detectDuplicate(osi, nsi)
+			duplicate, err := p.detectDuplicate(osi, nsi) // handshake and find out
 			if err != nil {
 				p.writeErrf(w, r, "failed to obtain node info: %v", err)
 				return
@@ -644,9 +644,12 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	if err = smap.validateUUID(p.si, regSmap, nsi.StringEx(), 80 /* ciError */); err != nil {
 		return
 	}
-	// whether IP is in use by a different node
-	if _, err = smap.IsDupNet(nsi); err != nil {
-		err = errors.New(p.String() + ": " + err.Error())
+	if apiOp == apc.Keepalive {
+		// whether IP is in use by a different node
+		// (but only for keep-alive - the other two opcodes have been already checked via handshake)
+		if _, err = smap.IsDupNet(nsi); err != nil {
+			err = errors.New(p.String() + ": " + err.Error())
+		}
 	}
 
 	// when cluster's starting up

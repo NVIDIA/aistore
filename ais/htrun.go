@@ -807,6 +807,13 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 			if si.ID() == h.si.ID() {
 				continue
 			}
+
+			// TODO -- FIXME: remove
+			if si.URL(cmn.NetIntraControl) == h.si.URL(cmn.NetIntraControl) {
+				nlog.Errorf("%s: _not_ sending to self via control-net (%q, %q)", h, si.StringEx(), si.URL(cmn.NetIntraControl))
+				continue
+			}
+
 			if !bargs.ignoreMaintenance && si.InMaintOrDecomm() {
 				continue
 			}
