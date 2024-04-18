@@ -161,7 +161,7 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 }
 
 // join cluster
-// no change of mind when on the "secondary" track
+// (point of no return: starting up as non-primary; see also: "change of mind")
 func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
@@ -176,24 +176,8 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	}
 
 	p.markNodeStarted()
+	go p.gojoin(cmn.GCO.Get())
 
-	go func() {
-		config := cmn.GCO.Get()
-		cii := p.pollClusterStarted(config, smap.Primary)
-		if daemon.stopping.Load() {
-			return
-		}
-		if cii != nil {
-			primary := cii.Smap.Primary
-			if status, err := p.joinCluster(apc.ActSelfJoinProxy, primary.CtrlURL, primary.PubURL); err != nil {
-				nlog.Errorf("%s failed to rejoin cluster: %v(%d)", p, err, status)
-				return
-			}
-		}
-		p.markClusterStarted()
-	}()
-
-	nlog.Infoln(p.String()+": joined as non-primary,", smap.StringEx())
 	return nil
 }
 

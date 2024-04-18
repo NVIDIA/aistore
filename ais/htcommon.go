@@ -51,6 +51,8 @@ const (
 	fmtUnknownQue       = "unexpected query [what=%s]"
 	fmtNested           = "%s: nested (%v): failed to %s %q: %v"
 	fmtOutside          = "%s is present (vs requested 'flt-outside'(%d))"
+	fmtFailedRejoin     = "%s failed to rejoin cluster: %v(%d)"
+	fmtSelfNotPresent   = "%s (self) not present in %s"
 )
 
 // intra-cluster control messages
@@ -722,6 +724,15 @@ func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
 	}
 	if cii = extractCii(body, smap, c.h.si, si); cii == nil {
 		goto ret
+	}
+	if cii.Smap.UUID != smap.UUID {
+		if cii.Smap.UUID == "" {
+			goto ret
+		}
+		if smap.UUID != "" {
+			// FATAL: cluster integrity error (cie)
+			cos.ExitLogf("%s: split-brain uuid [%s %s] vs %+v", ciError(10), c.h, smap.StringEx(), cii.Smap)
+		}
 	}
 	c.mu.Lock()
 	if c.maxCii.Smap.Version < cii.Smap.Version {

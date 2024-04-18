@@ -298,9 +298,10 @@ func Run(version, buildTime string) int {
 		return e.ExitCode()
 	}
 	if errors.Is(err, cmn.ErrStartupTimeout) {
-		// NOTE: stats and keepalive runners wait for the ClusterStarted() - i.e., for the primary
-		//       to reach the corresponding stage. There must be an external "restarter" (e.g. K8s)
-		//       to restart the daemon if the primary gets killed or panics prior (to reaching that state)
+		// NOTE:
+		// stats and keepalive runners wait for the ClusterStarted() - i.e., for the primary
+		// to reach the corresponding stage. There must be an external "restarter" (e.g. K8s)
+		// to restart the daemon if the primary gets killed or panics prior (to reaching that state)
 		nlog.Errorln("Timed-out while starting up")
 	}
 	nlog.Errorf("Terminated with err: %v", err)

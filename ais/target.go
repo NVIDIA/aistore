@@ -381,7 +381,7 @@ func (t *target) Run() error {
 
 	marked := xreg.GetResilverMarked()
 	if marked.Interrupted || daemon.resilver.required {
-		go t.goreslver(marked.Interrupted)
+		go t.goresilver(marked.Interrupted)
 	}
 
 	dsort.Tinit(t.statsT, db, config)
@@ -395,16 +395,20 @@ func (t *target) Run() error {
 	return err
 }
 
+// apart from minor (albeit subtle) differences between `t.joinCluster` vs `p.joinCluster`
+// this method is otherwise identical to t.gojoin (TODO: unify)
 func (t *target) gojoin(config *cmn.Config) {
 	smap := t.owner.smap.get()
 	cii := t.pollClusterStarted(config, smap.Primary)
 	if daemon.stopping.Load() {
 		return
 	}
+
 	if cii != nil {
-		if status, err := t.joinCluster(apc.ActSelfJoinTarget,
-			cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
-			nlog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
+		// (primary changed)
+		primary := cii.Smap.Primary
+		if status, err := t.joinCluster(apc.ActSelfJoinTarget, primary.CtrlURL, primary.PubURL); err != nil {
+			nlog.Errorf(fmtFailedRejoin, t, err, status)
 			return
 		}
 	}
@@ -414,9 +418,10 @@ func (t *target) gojoin(config *cmn.Config) {
 		config := cmn.GCO.BeginUpdate()
 		fspathsSave(config)
 	}
+	nlog.Infoln(t.String(), "is ready")
 }
 
-func (t *target) goreslver(interrupted bool) {
+func (t *target) goresilver(interrupted bool) {
 	if interrupted {
 		nlog.Infoln("Resuming resilver...")
 	} else if daemon.resilver.required {

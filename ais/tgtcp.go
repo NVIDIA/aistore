@@ -745,7 +745,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		return
 	}
 	if smap.GetNode(t.SID()) == nil {
-		err = fmt.Errorf("%s (self) not present in %s", t, smap.StringEx())
+		err = fmt.Errorf(fmtSelfNotPresent, t, smap.StringEx())
 		return
 	}
 	for _, tsi := range rmd.TargetIDs {

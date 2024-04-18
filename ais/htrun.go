@@ -1953,7 +1953,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			continue
 		}
 		if h.si.IsProxy() && smap.isPrimary(h.si) { // TODO: unlikely - see httpRequestNewPrimary
-			nlog.Warningf("%s: started as a non-primary and got ELECTED during startup", h.si)
+			nlog.Warningln(h.String(), "started as a non-primary and got _elected_ during startup")
 			return
 		}
 		if _, _, err := h.reqHealth(smap.Primary, healthTimeout, query /*ask primary*/, smap); err == nil {
@@ -1991,8 +1991,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 					pid = psi.ID()
 				}
 				if cii.Smap.Primary.ID != pid && cnt >= maxVerConfirmations {
-					nlog.Warningf("%s: change of primary %s => %s - must rejoin",
-						h.si, pid, cii.Smap.Primary.ID)
+					nlog.Warningf("%s: change of primary %s => %s - must rejoin", h.si, pid, cii.Smap.Primary.ID)
 					maxCii = cii
 					return
 				}

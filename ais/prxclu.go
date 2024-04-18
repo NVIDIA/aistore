@@ -481,7 +481,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	} else if apiOp == apc.SelfJoin {
 		// check for dup node ID
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Eq(nsi) {
-			duplicate, err := p.detectDuplicate(osi, nsi) // handshake and find out
+			duplicate, err := p.detectDuplicate(osi, nsi) // handshake (to find out)
 			if err != nil {
 				p.writeErrf(w, r, "failed to obtain node info: %v", err)
 				return

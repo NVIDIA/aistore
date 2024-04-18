@@ -276,6 +276,68 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 	return
 }
 
+// apart from minor, albeit subtle, differences between `t.joinCluster` vs `p.joinCluster`
+// this method is otherwise identical to t.gojoin (TODO: unify)
+func (p *proxy) gojoin(config *cmn.Config) {
+	var (
+		smap      = p.owner.smap.get()
+		pub, ctrl string
+	)
+	if smap.Primary != nil && smap.Version > 0 {
+		pub = smap.Primary.URL(cmn.NetPublic)
+		ctrl = smap.Primary.URL(cmn.NetIntraControl)
+	}
+	cii := p.pollClusterStarted(config, smap.Primary)
+	if daemon.stopping.Load() {
+		return
+	}
+
+	if cii != nil {
+		// (primary changed)
+		pub, ctrl = cii.Smap.Primary.PubURL, cii.Smap.Primary.CtrlURL
+		if status, err := p.joinCluster(apc.ActSelfJoinProxy, ctrl, pub); err != nil {
+			nlog.Errorf(fmtFailedRejoin, p, err, status)
+			return
+		}
+	}
+
+	// (not present | net-info changed)
+	i, sleep, total := 2, config.Timeout.MaxKeepalive.D(), config.Timeout.JoinAtStartup.D()>>1
+	for total >= 0 {
+		smap = p.owner.smap.get()
+		si := smap.GetNode(p.SID())
+		if si == nil {
+			nlog.Errorf(fmtSelfNotPresent, p, smap.StringEx())
+		} else {
+			nerr := si.NetEq(p.si)
+			if nerr == nil {
+				p.markClusterStarted()
+				nlog.Infoln(p.String(), "is ready")
+				return // ok -------------
+			}
+			nlog.Warningln(p.String(), "- trying to rejoin and, simultaneously, have the primary to update net-info:")
+			nlog.Warningln("\t", nerr, smap.StringEx())
+		}
+
+		if daemon.stopping.Load() {
+			return
+		}
+		time.Sleep(sleep)
+		i++
+
+		smap = p.owner.smap.get()
+		if ctrl == "" && smap.Primary != nil && smap.Version > 0 {
+			pub = smap.Primary.URL(cmn.NetPublic)
+			ctrl = smap.Primary.URL(cmn.NetIntraControl)
+		}
+		nlog.Warningln(p.String(), "- attempt number", i, "to join")
+		if status, err := p.joinCluster(apc.ActSelfJoinProxy, ctrl, pub); err != nil {
+			nlog.Errorf(fmtFailedRejoin, p, err, status)
+			return
+		}
+	}
+}
+
 func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) error {
 	var cm cluMeta
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
