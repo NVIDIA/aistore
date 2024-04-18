@@ -213,6 +213,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	smap.addProxy(si)
 	if loadedSmap != nil {
 		smap.UUID = loadedSmap.UUID
+		smap.Version = loadedSmap.Version
 	}
 	p.owner.smap.put(smap)
 	p.owner.smap.mu.Unlock()
