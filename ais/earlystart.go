@@ -29,6 +29,10 @@ const (
 	metaction3 = "primary-startup-resume-rebalance"
 )
 
+const (
+	fmtErrNetInfoChanged = "%s: net-info changed upon restart (on K8s?) - excluding self from the broadcast (%q, %q)"
+)
+
 type (
 	bmds  map[*meta.Snode]*bucketMD
 	smaps map[*meta.Snode]*smapX
@@ -715,7 +719,26 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 		Query: url.Values{apc.QparamWhat: []string{apc.WhatSmapVote}},
 	}
 	args.smap = bcastSmap
-	args.to = core.AllNodes
+	args.to = core.SelectedNodes
+
+	args.nodes = make([]meta.NodeMap, 0, 2)
+	if len(bcastSmap.Tmap) > 0 {
+		args.nodes = append(args.nodes, bcastSmap.Tmap)
+	}
+	pmap := make(meta.NodeMap, len(bcastSmap.Pmap))
+	ctrl := p.si.URL(cmn.NetIntraControl)
+	for pid, si := range bcastSmap.Pmap {
+		if pid == p.SID() {
+			continue
+		}
+		if si.URL(cmn.NetIntraControl) == ctrl {
+			nlog.Warningf(fmtErrNetInfoChanged, p, si.StringEx(), ctrl)
+			continue
+		}
+		pmap[pid] = si
+	}
+	args.nodes = append(args.nodes, pmap)
+
 	args.cresv = cresCM{} // -> cluMeta
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
