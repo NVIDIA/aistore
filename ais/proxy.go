@@ -301,8 +301,9 @@ func (p *proxy) gojoin(config *cmn.Config) {
 		}
 	}
 
-	// (not present | net-info changed)
-	i, sleep, total := 2, config.Timeout.MaxKeepalive.D(), config.Timeout.JoinAtStartup.D()>>1
+	// normally, immediately return with "is ready";
+	// otherwise, handle: (not present in cluster map | net-info changed)
+	i, sleep, total := 2, config.Timeout.MaxKeepalive.D(), config.Timeout.MaxHostBusy.D()
 	for total >= 0 {
 		smap = p.owner.smap.get()
 		si := smap.GetNode(p.SID())
@@ -313,7 +314,7 @@ func (p *proxy) gojoin(config *cmn.Config) {
 			if nerr == nil {
 				p.markClusterStarted()
 				nlog.Infoln(p.String(), "is ready")
-				return // ok -------------
+				return // ok ---
 			}
 			nlog.Warningln(p.String(), "- trying to rejoin and, simultaneously, have the primary to update net-info:")
 			nlog.Warningln("\t", nerr, smap.StringEx())
@@ -324,7 +325,7 @@ func (p *proxy) gojoin(config *cmn.Config) {
 		}
 		time.Sleep(sleep)
 		i++
-
+		total -= sleep
 		smap = p.owner.smap.get()
 		if ctrl == "" && smap.Primary != nil && smap.Version > 0 {
 			pub = smap.Primary.URL(cmn.NetPublic)
@@ -336,6 +337,9 @@ func (p *proxy) gojoin(config *cmn.Config) {
 			return
 		}
 	}
+
+	p.markClusterStarted()
+	nlog.Infoln(p.String(), "is ready(?)")
 }
 
 func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) error {
@@ -3250,16 +3254,8 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 	return
 }
 
-func (p *proxy) detectDuplicate(osi, nsi *meta.Snode) (bool, error) {
-	si, err := p.getDaemonInfo(osi)
-	if err != nil {
-		return false, err
-	}
-	return !nsi.Eq(si), nil
-}
-
 // getDaemonInfo queries osi for its daemon info and returns it.
-func (p *proxy) getDaemonInfo(osi *meta.Snode) (si *meta.Snode, err error) {
+func (p *proxy) _getSI(osi *meta.Snode) (si *meta.Snode, err error) {
 	cargs := allocCargs()
 	{
 		cargs.si = osi

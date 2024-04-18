@@ -396,7 +396,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		nsi = regReq.SI
 		// must be reachable and must respond
-		si, err := p.getDaemonInfo(nsi)
+		si, err := p._getSI(nsi)
 		if err != nil {
 			p.writeErrf(w, r, "%s: failed to obtain node info from %s: %v", p.si, nsi.StringEx(), err)
 			return
@@ -479,18 +479,24 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if apiOp == apc.SelfJoin {
-		// check for dup node ID
+		//
+		// check for: a) different node, duplicate node ID, or b) same node, net-info change
+		//
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Eq(nsi) {
-			duplicate, err := p.detectDuplicate(osi, nsi) // handshake (to find out)
+			ok, err := p._confirmSnode(osi, nsi) // handshake (expecting nsi in response)
 			if err != nil {
-				p.writeErrf(w, r, "failed to obtain node info: %v", err)
-				return
-			}
-			if duplicate {
+				if !cos.IsRetriableConnErr(err) {
+					p.writeErrf(w, r, "failed to obtain node info: %v", err)
+					return
+				}
+				// starting up, not listening yet
+				// NOTE [ref0417]
+				// TODO: try to confirm asynchronously
+			} else if !ok {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi.StringEx(), nsi.StringEx())
 				return
 			}
-			nlog.Warningf("%s: self-joining %s with duplicate node ID %q", p, nsi.StringEx(), nsi.ID())
+			nlog.Warningf("%s: self-joining %s [err %v, confirmed %t]", p, nsi.StringEx(), err, ok)
 		}
 	}
 
@@ -670,14 +676,22 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	return
 }
 
+func (p *proxy) _confirmSnode(osi, nsi *meta.Snode) (bool, error) {
+	si, err := p._getSI(osi)
+	if err != nil {
+		return false, err
+	}
+	return nsi.Eq(si), nil
+}
+
 func (p *proxy) kalive(nsi, osi *meta.Snode) bool {
 	if !osi.Eq(nsi) {
-		duplicate, err := p.detectDuplicate(osi, nsi)
+		ok, err := p._confirmSnode(osi, nsi)
 		if err != nil {
 			nlog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
 			return false
 		}
-		if duplicate {
+		if !ok {
 			nlog.Errorf("%s: %s(%s) is trying to keepalive with duplicate ID", p, nsi.StringEx(), nsi.PubNet.URL)
 			return false
 		}
@@ -694,10 +708,12 @@ func (p *proxy) rereg(nsi, osi *meta.Snode) bool {
 		return true
 	}
 	if osi.Eq(nsi) {
-		nlog.Infof("%s: %s is already *in*", p, nsi.StringEx())
+		nlog.Infoln(p.String()+":", nsi.StringEx(), "is already _in_")
 		return false
 	}
-	nlog.Warningf("%s: renewing %s %+v => %+v", p, nsi.StringEx(), osi, nsi)
+
+	// NOTE: see also ref0417 (ais/earlystart)
+	nlog.Warningln(p.String()+":", "renewing", nsi.StringEx(), "=>", nsi.StrURLs())
 	return true
 }
 

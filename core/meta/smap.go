@@ -150,7 +150,7 @@ func (d *Snode) StringEx() string {
 	return Tname(d.DaeID)
 }
 
-func (d *Snode) nameNets() string {
+func (d *Snode) StrURLs() string {
 	if d.PubNet.URL != d.ControlNet.URL ||
 		d.PubNet.URL != d.DataNet.URL {
 		return fmt.Sprintf("%s(pub: %s, control: %s, data: %s)", d.Name(),
@@ -208,7 +208,7 @@ func (d *Snode) Validate() error {
 		return errors.New("invalid Snode: nil")
 	}
 	if d.ID() == "" {
-		return errors.New("invalid Snode: missing node " + d.nameNets())
+		return errors.New("invalid Snode: missing node " + d.StrURLs())
 	}
 	if d.DaeType != apc.Proxy && d.DaeType != apc.Target {
 		cos.Assertf(false, "invalid Snode type %q", d.DaeType)
@@ -281,7 +281,7 @@ func (d *Snode) HasURL(rawURL string) bool {
 		}
 	}
 	if sameHost && samePort {
-		nlog.Warningln("assuming that", d.nameNets(), "\"contains\"", rawURL)
+		nlog.Warningln("assuming that", d.StrURLs(), "\"contains\"", rawURL)
 		return true
 	}
 	if (numIPs > 0 && isIP) || (numIPs == 0 && !isIP) {

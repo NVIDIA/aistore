@@ -808,11 +808,12 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 				continue
 			}
 
-			// TODO -- FIXME: remove
-			if si.URL(bargs.network) == h.si.URL(bargs.network) {
-				nlog.Errorf(fmtErrNetInfoChanged, h, si.StringEx(), si.URL(bargs.network))
-				continue
-			}
+			// TODO: remove
+			debug.Func(func() {
+				if si.URL(bargs.network) == h.si.URL(bargs.network) {
+					nlog.Errorf(fmtErrNetInfoChanged, h, si.StringEx(), si.URL(bargs.network))
+				}
+			})
 
 			if !bargs.ignoreMaintenance && si.InMaintOrDecomm() {
 				continue

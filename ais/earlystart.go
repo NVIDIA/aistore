@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"runtime"
@@ -91,10 +92,10 @@ func (p *proxy) bootstrap() {
 	err := p.secondaryStartup(smap, prim.url)
 	if err != nil {
 		if reliable {
-			svm := p.uncoverMeta(smap)
-			if svm.Smap != nil && svm.Smap.Primary != nil {
-				nlog.Infoln(p.String()+": second attempt - joining via", svm.Smap.String())
-				err = p.secondaryStartup(svm.Smap)
+			cm := p.uncoverMeta(smap)
+			if cm.Smap != nil && cm.Smap.Primary != nil {
+				nlog.Infoln(p.String()+": second attempt - joining via", cm.Smap.String())
+				err = p.secondaryStartup(cm.Smap)
 			}
 		}
 	}
@@ -520,15 +521,25 @@ func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 	}
 
 	targetCnt := p.owner.smap.get().CountTargets()
-	s := "target" + cos.Plural(targetCnt)
+
+	// log
+	s1 := "target" + cos.Plural(targetCnt)
 	if definedTargetCnt {
-		if targetCnt >= ntargets {
-			nlog.Infoln(p.String()+":", "reached expected membership of", ntargets, s, "joined:", targetCnt)
-		} else {
-			nlog.Warningln(p.String()+":", "timed out waiting for", ntargets, s, "joined:", targetCnt)
+		switch {
+		case targetCnt == ntargets:
+			nlog.Infoln(p.String(), "reached the expected membership of", ntargets, s1)
+		case targetCnt > ntargets:
+			nlog.Infoln(p.String(), "joined", targetCnt, s1, "( greater than expected", ntargets, " )")
+		default:
+			s2 := fmt.Sprintf("%s timed out waiting for %d target%s:", p, ntargets, cos.Plural(ntargets))
+			if targetCnt > 0 {
+				nlog.Warningln(s2, "joined", targetCnt, "so far", targetCnt)
+			} else {
+				nlog.Warningln(s2, "joined none so far")
+			}
 		}
 	} else {
-		nlog.Infoln(p.String()+":", "joined", targetCnt, s)
+		nlog.Infoln(p.String(), "joined", targetCnt, s1)
 	}
 	return
 }
@@ -536,101 +547,105 @@ func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 // the final major step in the primary startup sequence:
 // discover cluster-wide metadata and resolve remaining conflicts
 func (p *proxy) discoverMeta(smap *smapX) {
-	svm := p.uncoverMeta(smap)
-	if svm.BMD != nil {
+	// NOTE [ref0417]:
+	// in addition, consider to return meta.NodeMap(all responded snodes)
+	// and use them
+	cm := p.uncoverMeta(smap)
+
+	if cm.BMD != nil {
 		p.owner.bmd.Lock()
 		bmd := p.owner.bmd.get()
-		if bmd == nil || bmd.version() < svm.BMD.version() {
-			nlog.Infoln(p.String()+"override local", bmd.String(), "with", svm.BMD.String())
-			if err := p.owner.bmd.putPersist(svm.BMD, nil); err != nil {
+		if bmd == nil || bmd.version() < cm.BMD.version() {
+			nlog.Infoln(p.String()+"override local", bmd.String(), "with", cm.BMD.String())
+			if err := p.owner.bmd.putPersist(cm.BMD, nil); err != nil {
 				cos.ExitLog(err)
 			}
 		}
 		p.owner.bmd.Unlock()
 	}
-	if svm.RMD != nil {
+	if cm.RMD != nil {
 		p.owner.rmd.Lock()
 		rmd := p.owner.rmd.get()
-		if rmd == nil || rmd.version() < svm.RMD.version() {
-			nlog.Infoln(p.String()+"override local", rmd.String(), "with", svm.RMD.String())
-			p.owner.rmd.put(svm.RMD)
+		if rmd == nil || rmd.version() < cm.RMD.version() {
+			nlog.Infoln(p.String()+"override local", rmd.String(), "with", cm.RMD.String())
+			p.owner.rmd.put(cm.RMD)
 		}
 		p.owner.rmd.Unlock()
 	}
 
-	if svm.Config != nil && svm.Config.UUID != "" {
+	if cm.Config != nil && cm.Config.UUID != "" {
 		p.owner.config.Lock()
 		config := cmn.GCO.Get()
-		if config.Version < svm.Config.version() {
-			if !cos.IsValidUUID(svm.Config.UUID) {
-				debug.Assert(false, svm.Config.String())
-				cos.ExitLogf("%s: invalid config UUID: %s", p, svm.Config)
+		if config.Version < cm.Config.version() {
+			if !cos.IsValidUUID(cm.Config.UUID) {
+				debug.Assert(false, cm.Config.String())
+				cos.ExitLogf("%s: invalid config UUID: %s", p, cm.Config)
 			}
-			if cos.IsValidUUID(config.UUID) && config.UUID != svm.Config.UUID {
+			if cos.IsValidUUID(config.UUID) && config.UUID != cm.Config.UUID {
 				nlog.Errorf("Warning: configs have different UUIDs: (%s, %s) vs %s - proceeding anyway",
-					p, config, svm.Config)
+					p, config, cm.Config)
 			} else {
-				nlog.Infoln(p.String(), "override local", config.String(), "with", svm.Config.String())
+				nlog.Infoln(p.String(), "override local", config.String(), "with", cm.Config.String())
 			}
-			cmn.GCO.Update(&svm.Config.ClusterConfig)
+			cmn.GCO.Update(&cm.Config.ClusterConfig)
 		}
 		p.owner.config.Unlock()
 	}
 
-	if svm.Smap == nil || svm.Smap.version() == 0 {
+	if cm.Smap == nil || cm.Smap.version() == 0 {
 		nlog.Infoln(p.String() + ": no max-ver Smaps")
 		return
 	}
-	nlog.Infoln(p.String(), "local", smap.StringEx(), "max-ver", svm.Smap.StringEx())
-	smapUUID, sameUUID, sameVersion, eq := smap.Compare(&svm.Smap.Smap)
+	nlog.Infoln(p.String(), "local", smap.StringEx(), "max-ver", cm.Smap.StringEx())
+	smapUUID, sameUUID, sameVersion, eq := smap.Compare(&cm.Smap.Smap)
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
-		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p, smap.StringEx(), svm.Smap.StringEx())
+		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p, smap.StringEx(), cm.Smap.StringEx())
 	}
 	if eq && sameVersion {
 		return
 	}
-	if svm.Smap.Primary != nil && svm.Smap.Primary.ID() != p.SID() {
-		if svm.Smap.version() > smap.version() {
-			if dupNode, err := svm.Smap.IsDupNet(p.si); err != nil {
-				if !svm.Smap.IsPrimary(dupNode) {
+	if cm.Smap.Primary != nil && cm.Smap.Primary.ID() != p.SID() {
+		if cm.Smap.version() > smap.version() {
+			if dupNode, err := cm.Smap.IsDupNet(p.si); err != nil {
+				if !cm.Smap.IsPrimary(dupNode) {
 					cos.ExitLog(err)
 				}
 				// If the primary in max-ver Smap version and current node only differ by `DaemonID`,
 				// overwrite the proxy entry with current `Snode` and proceed to merging Smap.
 				// TODO: Add validation to ensure `dupNode` and `p.si` only differ in `DaemonID`.
-				svm.Smap.Primary = p.si
-				svm.Smap.delProxy(dupNode.ID())
-				svm.Smap.Pmap[p.SID()] = p.si
+				cm.Smap.Primary = p.si
+				cm.Smap.delProxy(dupNode.ID())
+				cm.Smap.Pmap[p.SID()] = p.si
 				goto merge
 			}
-			nlog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p, smap.StringEx(), svm.Smap.StringEx())
-			svm.Smap.Pmap[p.SID()] = p.si
-			p.owner.smap.put(svm.Smap)
+			nlog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p, smap.StringEx(), cm.Smap.StringEx())
+			cm.Smap.Pmap[p.SID()] = p.si
+			p.owner.smap.put(cm.Smap)
 			return
 		}
 		// FATAL: cluster integrity error (cie)
-		cos.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p, smap.StringEx(), svm.Smap.StringEx())
+		cos.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p, smap.StringEx(), cm.Smap.StringEx())
 	}
 merge:
 	p.owner.smap.mu.Lock()
 	clone := p.owner.smap.get().clone()
 	if !eq {
-		nlog.Infof("%s: merge local %s <== %s", p, clone, svm.Smap)
-		_, err := svm.Smap.merge(clone, false /*err if detected (IP, port) duplicates*/)
+		nlog.Infof("%s: merge local %s <== %s", p, clone, cm.Smap)
+		_, err := cm.Smap.merge(clone, false /*err if detected (IP, port) duplicates*/)
 		if err != nil {
-			cos.ExitLogf("%s: %v vs %s", p, err, svm.Smap.StringEx())
+			cos.ExitLogf("%s: %v vs %s", p, err, cm.Smap.StringEx())
 		}
 	} else {
 		clone.UUID = smapUUID
 	}
-	clone.Version = max(clone.version(), svm.Smap.version()) + 1
+	clone.Version = max(clone.version(), cm.Smap.version()) + 1
 	p.owner.smap.put(clone)
 	p.owner.smap.mu.Unlock()
 	nlog.Infof("%s: merged %s", p, clone.pp())
 }
 
-func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
+func (p *proxy) uncoverMeta(bcastSmap *smapX) (cm cluMeta) {
 	var (
 		err         error
 		suuid       string
@@ -644,11 +659,11 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 	)
 	for {
 		if daemon.stopping.Load() {
-			svm.Smap = nil
+			cm.Smap = nil
 			return
 		}
 		last := time.Now().After(deadline)
-		svm, done, slowp = p.bcastMaxVer(bcastSmap, bmds, smaps)
+		cm, done, slowp = p.bcastMaxVer(bcastSmap, bmds, smaps)
 		if done || last {
 			break
 		}
@@ -658,7 +673,7 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 		return
 	}
 	nlog.Infoln(p.String(), "(primary) slow path...")
-	if svm.BMD, err = resolveUUIDBMD(bmds); err != nil {
+	if cm.BMD, err = resolveUUIDBMD(bmds); err != nil {
 		if _, split := err.(*errBmdUUIDSplit); split {
 			cos.ExitLog(p.String(), "(primary), err:", err) // cluster integrity error
 		}
@@ -685,10 +700,10 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 		if smap.UUID != suuid {
 			continue
 		}
-		if svm.Smap == nil {
-			svm.Smap = smap
-		} else if svm.Smap.version() < smap.version() {
-			svm.Smap = smap
+		if cm.Smap == nil {
+			cm.Smap = smap
+		} else if cm.Smap.version() < smap.version() {
+			cm.Smap = smap
 		}
 	}
 	return
@@ -737,60 +752,60 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 			done = false
 			continue
 		}
-		svm, ok := res.v.(*cluMeta)
+		cm, ok := res.v.(*cluMeta)
 		debug.Assert(ok)
-		if svm.BMD != nil && svm.BMD.version() > 0 {
+		if cm.BMD != nil && cm.BMD.version() > 0 {
 			if out.BMD == nil { // 1. init
-				borigin, out.BMD = svm.BMD.UUID, svm.BMD
-			} else if borigin != "" && borigin != svm.BMD.UUID { // 2. slow path
+				borigin, out.BMD = cm.BMD.UUID, cm.BMD
+			} else if borigin != "" && borigin != cm.BMD.UUID { // 2. slow path
 				slowp = true
-			} else if !slowp && out.BMD.Version < svm.BMD.Version { // 3. fast path max(version)
-				out.BMD = svm.BMD
-				borigin = svm.BMD.UUID
+			} else if !slowp && out.BMD.Version < cm.BMD.Version { // 3. fast path max(version)
+				out.BMD = cm.BMD
+				borigin = cm.BMD.UUID
 			}
 		}
-		if svm.RMD != nil && svm.RMD.version() > 0 {
+		if cm.RMD != nil && cm.RMD.version() > 0 {
 			if out.RMD == nil { // 1. init
-				out.RMD = svm.RMD
-			} else if !slowp && out.RMD.Version < svm.RMD.Version { // 3. fast path max(version)
-				out.RMD = svm.RMD
+				out.RMD = cm.RMD
+			} else if !slowp && out.RMD.Version < cm.RMD.Version { // 3. fast path max(version)
+				out.RMD = cm.RMD
 			}
 		}
-		if svm.Config != nil && svm.Config.version() > 0 {
+		if cm.Config != nil && cm.Config.version() > 0 {
 			if out.Config == nil { // 1. init
-				out.Config = svm.Config
-			} else if !slowp && out.Config.version() < svm.Config.version() { // 3. fast path max(version)
-				out.Config = svm.Config
+				out.Config = cm.Config
+			} else if !slowp && out.Config.version() < cm.Config.version() { // 3. fast path max(version)
+				out.Config = cm.Config
 			}
 		}
 
 		// TODO: maxver of EtlMD
 
-		if svm.Smap != nil && svm.Flags.IsSet(cifl.VoteInProgress) {
+		if cm.Smap != nil && cm.Flags.IsSet(cifl.VoteInProgress) {
 			var s string
-			if svm.Smap.Primary != nil {
-				s = " of the current one " + svm.Smap.Primary.ID()
+			if cm.Smap.Primary != nil {
+				s = " of the current one " + cm.Smap.Primary.ID()
 			}
 			nlog.Warningln(p.String(), "starting up as primary(?) during reelection"+s)
 			out.Smap, out.BMD, out.RMD = nil, nil, nil // zero-out as unusable
 			done = false
 			break
 		}
-		if svm.Smap != nil && svm.Smap.version() > 0 {
+		if cm.Smap != nil && cm.Smap.version() > 0 {
 			if out.Smap == nil { // 1. init
-				sorigin, out.Smap = svm.Smap.UUID, svm.Smap
-			} else if sorigin != "" && sorigin != svm.Smap.UUID { // 2. slow path
+				sorigin, out.Smap = cm.Smap.UUID, cm.Smap
+			} else if sorigin != "" && sorigin != cm.Smap.UUID { // 2. slow path
 				slowp = true
-			} else if !slowp && out.Smap.Version < svm.Smap.Version { // 3. fast path max(version)
-				out.Smap = svm.Smap
-				sorigin = svm.Smap.UUID
+			} else if !slowp && out.Smap.Version < cm.Smap.Version { // 3. fast path max(version)
+				out.Smap = cm.Smap
+				sorigin = cm.Smap.UUID
 			}
 		}
-		if bmds != nil && svm.BMD != nil && svm.BMD.version() > 0 {
-			bmds[res.si] = svm.BMD
+		if bmds != nil && cm.BMD != nil && cm.BMD.version() > 0 {
+			bmds[res.si] = cm.BMD
 		}
-		if smaps != nil && svm.Smap != nil && svm.Smap.version() > 0 {
-			smaps[res.si] = svm.Smap
+		if smaps != nil && cm.Smap != nil && cm.Smap.version() > 0 {
+			smaps[res.si] = cm.Smap
 		}
 	}
 	freeBcastRes(results)
@@ -798,13 +813,13 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 }
 
 func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
-	svm, _, slowp := p.bcastMaxVer(smap, nil, nil)
-	if svm.Smap != nil && !slowp {
-		if svm.Smap.UUID == smap.UUID && svm.Smap.version() > smap.version() && svm.Smap.validate() == nil {
-			if svm.Smap.Primary.ID() != p.SID() {
+	cm, _, slowp := p.bcastMaxVer(smap, nil, nil)
+	if cm.Smap != nil && !slowp {
+		if cm.Smap.UUID == smap.UUID && cm.Smap.version() > smap.version() && cm.Smap.validate() == nil {
+			if cm.Smap.Primary.ID() != p.SID() {
 				nlog.Warningln(p.String(), "detected primary change, whereby local", smap.StringEx(),
-					"is older than max-ver", svm.Smap.StringEx())
-				return svm.Smap
+					"is older than max-ver", cm.Smap.StringEx())
+				return cm.Smap
 			}
 		}
 	}
@@ -902,29 +917,13 @@ ret:
 
 	runtime.Gosched()
 
-	// NOTE:
-	// - always update joining nodes' net-infos; alternatively, narrow it down to only proxies
-	// - as targets have PV/PVCs affinity and always restart on the same K8s nodes
-	// - compare w/ httpclupost
+	// NOTE [ref0417]:
+	// - always update joining nodes' net-infos;
+	// - alternatively, narrow it down to only proxies (as targets always restart on the same K8s nodes)
 
 	p.reg.mu.RLock()
 	for _, regReq := range p.reg.pool {
-		nsi := regReq.SI
-		if nsi.Validate() != nil {
-			continue
-		}
-		osi := after.Smap.GetNode(nsi.ID())
-		if osi == nil {
-			continue
-		}
-		if err := osi.NetEq(nsi); err != nil {
-			nlog.Warningln("Warning:", err)
-			if !cloned {
-				after.Smap = after.Smap.clone()
-				cloned = true
-			}
-			after.Smap.putNode(nsi, osi.Flags, true /*silent*/)
-		}
+		after.Smap, cloned = _updNetInfo(after.Smap, regReq.SI, cloned)
 	}
 	p.reg.mu.RUnlock()
 
@@ -965,4 +964,23 @@ ret:
 	}
 	after.Config = config
 	return after.Smap
+}
+
+func _updNetInfo(smap *smapX, nsi *meta.Snode, cloned bool) (*smapX, bool) {
+	if nsi.Validate() != nil {
+		return smap, cloned
+	}
+	osi := smap.GetNode(nsi.ID())
+	if osi == nil || osi.Type() != nsi.Type() {
+		return smap, cloned
+	}
+	if err := osi.NetEq(nsi); err != nil {
+		nlog.Warningln("Warning: reniewing", err)
+		if !cloned {
+			smap = smap.clone()
+			cloned = true
+		}
+		smap.putNode(nsi, osi.Flags, true /*silent*/)
+	}
+	return smap, cloned
 }
