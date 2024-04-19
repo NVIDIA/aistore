@@ -45,33 +45,18 @@ const (
 )
 
 type (
-	blobArgs struct {
-		w          http.ResponseWriter
-		lom        *core.LOM
+	BlobArgs struct {
+		RspW http.ResponseWriter
+		Lom  *core.LOM
+		Lmfh *os.File
+		Msg  *apc.BlobMsg
+		Wfqn string
+		// private; might be adjusted below
+		// to differ from user-provided (ie., apc.BlobMsg) values
 		expCksum   *cos.Cksum
-		lmfh       *os.File
-		wfqn       string
 		chunkSize  int64
 		fullSize   int64
 		numWorkers int
-	}
-	blobReader struct {
-		parent *XactBlobDl
-	}
-	chunkWi struct {
-		sgl  *memsys.SGL
-		roff int64
-	}
-	chunkDone struct {
-		err  error
-		sgl  *memsys.SGL
-		roff int64
-		code int
-	}
-	blobFactory struct {
-		xreg.RenewBase
-		args *blobArgs
-		xctn *XactBlobDl
 	}
 	XactBlobDl struct {
 		writer   io.Writer
@@ -88,21 +73,38 @@ type (
 	}
 )
 
+// internal
+type (
+	blobReader struct {
+		parent *XactBlobDl
+	}
+	chunkWi struct {
+		sgl  *memsys.SGL
+		roff int64
+	}
+	chunkDone struct {
+		err  error
+		sgl  *memsys.SGL
+		roff int64
+		code int
+	}
+	blobFactory struct {
+		xreg.RenewBase
+		args *BlobArgs
+		xctn *XactBlobDl
+	}
+)
+
 // interface guard
 var (
 	_ core.Xact      = (*XactBlobDl)(nil)
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
-func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh *os.File, msg *apc.BlobMsg, w http.ResponseWriter) xreg.RenewRes {
-	args := &blobArgs{
-		w:          w,
-		lom:        lom,
-		lmfh:       lmfh,
-		wfqn:       wfqn,
-		chunkSize:  msg.ChunkSize,
-		numWorkers: msg.NumWorkers,
-	}
+func RenewBlobDl(xid string, args *BlobArgs, oa *cmn.ObjAttrs) xreg.RenewRes {
+	lom := args.Lom
+	args.chunkSize = args.Msg.ChunkSize
+	args.numWorkers = args.Msg.NumWorkers
 	if oa == nil {
 		// backend.HeadObj() unless already done via prior latest-ver or prefetch-threshold check
 		oah, ecode, err := core.T.Backend(lom.Bck()).HeadObj(context.Background(), lom, nil /*origReq*/)
@@ -123,9 +125,9 @@ func RenewBlobDl(xid string, lom *core.LOM, oa *cmn.ObjAttrs, wfqn string, lmfh 
 	// OTOH, a large object's etag won't be md5 and cannot be used anyway
 	args.expCksum = oa.Cksum
 
-	if msg.FullSize > 0 && msg.FullSize != args.fullSize {
+	if args.Msg.FullSize > 0 && args.Msg.FullSize != args.fullSize {
 		name := xact.Cname(apc.ActBlobDl, xid) + "/" + lom.Cname()
-		err := fmt.Errorf("%s: user-specified size %d, have %d", name, msg.FullSize, args.fullSize)
+		err := fmt.Errorf("%s: user-specified size %d, have %d", name, args.Msg.FullSize, args.fullSize)
 		return xreg.RenewRes{Err: err}
 	}
 
@@ -162,7 +164,7 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	debug.Assert(bck.IsRemote())
 	p := &blobFactory{
 		RenewBase: xreg.RenewBase{Args: args, Bck: bck},
-		args:      args.Custom.(*blobArgs),
+		args:      args.Custom.(*BlobArgs),
 	}
 	return p
 }
@@ -173,7 +175,7 @@ func (p *blobFactory) Start() error {
 		workCh: make(chan chunkWi, p.args.numWorkers),
 		doneCh: make(chan chunkDone, p.args.numWorkers),
 	}
-	r.InitBase(p.Args.UUID, p.Kind(), p.args.lom.Bck())
+	r.InitBase(p.Args.UUID, p.Kind(), p.args.Lom.Bck())
 
 	// tune-up
 	var (
@@ -221,20 +223,20 @@ func (p *blobFactory) Start() error {
 
 	// compound multi-writer
 	ws := make([]io.Writer, 0, 3)
-	if ty := p.args.lom.CksumConf().Type; ty != cos.ChecksumNone {
+	if ty := p.args.Lom.CksumConf().Type; ty != cos.ChecksumNone {
 		r.cksum.Init(ty)
 		ws = append(ws, r.cksum.H)
 	}
-	ws = append(ws, p.args.lmfh)
-	if p.args.w != nil {
+	ws = append(ws, p.args.Lmfh)
+	if p.args.RspW != nil {
 		// and transmit concurrently (alternatively,
 		// could keep writing locally even after GET client goes away)
-		ws = append(ws, p.args.w)
+		ws = append(ws, p.args.RspW)
 
-		whdr := p.args.w.Header()
+		whdr := p.args.RspW.Header()
 		whdr.Set(cos.HdrContentLength, strconv.FormatInt(p.args.fullSize, 10))
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
-		if v, ok := r.p.args.lom.GetCustomKey(cmn.ETag); ok {
+		if v, ok := r.p.args.Lom.GetCustomKey(cmn.ETag); ok {
 			whdr.Set(cos.HdrETag, v)
 		}
 		// expCksum
@@ -250,7 +252,7 @@ func (p *blobFactory) Get() core.Xact { return p.xctn }
 
 func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	xprev := prev.Get().(*XactBlobDl)
-	if xprev.p.args.lom.Bucket().Equal(p.args.lom.Bucket()) && xprev.p.args.lom.ObjName == p.args.lom.ObjName {
+	if xprev.p.args.Lom.Bucket().Equal(p.args.Lom.Bucket()) && xprev.p.args.Lom.ObjName == p.args.Lom.ObjName {
 		return xreg.WprUse, cmn.NewErrXactUsePrev(prev.Get().String())
 	}
 	return xreg.WprKeepAndStartNew, nil
@@ -260,7 +262,7 @@ func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 // XactBlobDl
 //
 
-func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.p.args.lom.ObjName }
+func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.p.args.Lom.ObjName }
 
 func (r *XactBlobDl) Run(*sync.WaitGroup) {
 	var (
@@ -349,27 +351,27 @@ outer:
 fin:
 	close(r.workCh)
 	if err == nil && cmn.Rom.Features().IsSet(feat.FsyncPUT) {
-		err = r.p.args.lmfh.Sync()
+		err = r.p.args.Lmfh.Sync()
 	}
-	cos.Close(r.p.args.lmfh)
+	cos.Close(r.p.args.Lmfh)
 
 	if err == nil {
 		if r.p.args.fullSize != r.woff {
 			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.p.args.fullSize, r.woff)
 			debug.AssertNoErr(err)
 		} else {
-			r.p.args.lom.SetSize(r.woff)
+			r.p.args.Lom.SetSize(r.woff)
 			if r.cksum.H != nil {
 				r.cksum.Finalize()
-				r.p.args.lom.SetCksum(r.cksum.Clone())
+				r.p.args.Lom.SetCksum(r.cksum.Clone())
 			}
-			_, err = core.T.FinalizeObj(r.p.args.lom, r.p.args.wfqn, r, cmn.OwtGetPrefetchLock)
+			_, err = core.T.FinalizeObj(r.p.args.Lom, r.p.args.Wfqn, r, cmn.OwtGetPrefetchLock)
 		}
 	}
 	if err == nil {
 		r.ObjsAdd(1, 0)
 	} else {
-		if errRemove := cos.RemoveFile(r.p.args.wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
+		if errRemove := cos.RemoveFile(r.p.args.Wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}
 		if err != cmn.ErrXactUserAbort {
@@ -417,8 +419,8 @@ func (r *XactBlobDl) cleanup() {
 		r.sgls[i].Free()
 	}
 	clear(r.sgls)
-	if r.p.args.w == nil { // not a GET
-		core.FreeLOM(r.p.args.lom)
+	if r.p.args.RspW == nil { // not a GET
+		core.FreeLOM(r.p.args.Lom)
 	}
 }
 
@@ -439,7 +441,7 @@ func (reader *blobReader) run() {
 			break
 		}
 		sgl := msg.sgl
-		res := core.T.Backend(a.lom.Bck()).GetObjReader(ctx, a.lom, msg.roff, a.chunkSize)
+		res := core.T.Backend(a.Lom.Bck()).GetObjReader(ctx, a.Lom, msg.roff, a.chunkSize)
 		if reader.parent.IsAborted() {
 			break
 		}

@@ -694,12 +694,12 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		return lom, nil
 	}
 	if cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)) {
-		var args apc.BlobMsg
-		if err := args.FromHeader(r.Header); err != nil {
+		var msg apc.BlobMsg
+		if err := msg.FromHeader(r.Header); err != nil {
 			return lom, err
 		}
 		// NOTE: make a blocking call w/ simultaneous Tx
-		_, _, err := t.blobdl(lom, nil /*oa*/, &args, w)
+		_, _, err := t.blobdl(lom, nil /*oa*/, &msg, w)
 		return lom, err
 	}
 
@@ -946,17 +946,17 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		var (
 			xid     string
 			objName = msg.Name
-			args    apc.BlobMsg
+			blobMsg apc.BlobMsg
 		)
 		lom = core.AllocLOM(objName)
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
-		if err = cos.MorphMarshal(msg.Value, &args); err != nil {
+		if err = cos.MorphMarshal(msg.Value, &blobMsg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
-		if xid, _, err = t.blobdl(lom, nil /*oa*/, &args, nil /*writer*/); xid != "" {
+		if xid, _, err = t.blobdl(lom, nil /*oa*/, &blobMsg, nil /*writer*/); xid != "" {
 			debug.AssertNoErr(err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
@@ -1409,7 +1409,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, args *apc.BlobMsg, w http.ResponseWriter) (string, *xs.XactBlobDl, error) {
+func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, w http.ResponseWriter) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
@@ -1419,8 +1419,13 @@ func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, args *apc.BlobMsg, w ht
 		}
 	}
 
+	args := &xs.BlobArgs{
+		RspW: w,
+		Lom:  lom,
+		Msg:  msg,
+	}
 	if oa != nil {
-		return _blobdl(lom, args, w, oa)
+		return _blobdl(args, oa)
 	}
 
 	// - try-lock (above) to load, check availability
@@ -1431,16 +1436,16 @@ func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, args *apc.BlobMsg, w ht
 		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
 	}
 
-	oa, deleted, err := lom.LoadLatest(args.LatestVer)
+	oa, deleted, err := lom.LoadLatest(msg.LatestVer)
 	lom.Unlock(false)
 
 	// w/ assorted returns
 	switch {
 	case deleted: // remotely
-		debug.Assert(args.LatestVer && err != nil)
+		debug.Assert(msg.LatestVer && err != nil)
 		return "", nil, err
 	case oa != nil:
-		debug.Assert(args.LatestVer && err == nil)
+		debug.Assert(msg.LatestVer && err == nil)
 		// not latest
 	case err == nil:
 		return "", nil, nil // nothing to do
@@ -1449,21 +1454,23 @@ func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, args *apc.BlobMsg, w ht
 	}
 
 	// handle: (not-present || latest-not-eq)
-	return _blobdl(lom, args, w, oa)
+	return _blobdl(args, oa)
 }
 
-// returns empty xid ("") if nothing to do
-func _blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+// returns an empty xid ("") if nothing to do
+func _blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
 	// create wfqn
-	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, "blob-dl")
-	lmfh, err := lom.CreateFile(wfqn)
+	wfqn := fs.CSM.Gen(args.Lom, fs.WorkfileType, "blob-dl")
+	lmfh, err := args.Lom.CreateFile(wfqn)
 	if err != nil {
 		return "", nil, err
 	}
+	args.Lmfh = lmfh
+	args.Wfqn = wfqn
 
 	// new
 	xid := cos.GenUUID()
-	rns := xs.RenewBlobDl(xid, lom, oa, wfqn, lmfh, args, w)
+	rns := xs.RenewBlobDl(xid, args, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
 		if errRemove := cos.RemoveFile(wfqn); errRemove != nil {
 			nlog.Errorln("nested err", errRemove)
@@ -1473,7 +1480,7 @@ func _blobdl(lom *core.LOM, args *apc.BlobMsg, w http.ResponseWriter, oa *cmn.Ob
 
 	// a) via x-start, x-blob-download
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
-	if w == nil {
+	if args.RspW == nil {
 		go xblob.Run(nil)
 		return xblob.ID(), xblob, nil
 	}

@@ -206,8 +206,8 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 }
 
 func (t *target) GetColdBlob(lom *core.LOM, oa *cmn.ObjAttrs) (xctn core.Xact, err error) {
-	var args apc.BlobMsg
-	_, xctn, err = t.blobdl(lom, oa, &args, nil /*writer*/)
+	var msg apc.BlobMsg // chunk size, etc. - all defaults
+	_, xctn, err = t.blobdl(lom, oa, &msg, nil /*writer*/)
 	return xctn, err
 }
 
