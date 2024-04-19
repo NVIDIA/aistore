@@ -57,15 +57,15 @@ func log(sev severity, depth int, format string, args ...any) {
 	case !flag.Parsed():
 		os.Stderr.WriteString("Error: logging before flag.Parse: ")
 		fallthrough
-	case toStderr:
+	case LogToStderr:
 		fb := alloc()
 		sprintf(sev, depth, format, fb, args...)
 		fb.flush(os.Stderr)
 		free(fb)
-	case alsoToStderr || sev >= sevWarn:
+	case sev >= sevWarn:
 		fb := alloc()
 		sprintf(sev, depth, format, fb, args...)
-		if alsoToStderr || sev >= sevErr {
+		if sev >= sevErr {
 			fb.flush(os.Stderr)
 		}
 		if sev >= sevWarn {

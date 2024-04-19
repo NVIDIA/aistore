@@ -108,8 +108,6 @@ func initFlags(flset *flag.FlagSet) {
 		"number of storage targets expected to be joining at startup (optional, primary-only)")
 	flset.BoolVar(&daemon.cli.primary.skipStartup, "skip_startup", false,
 		"whether primary, when starting up, should skip waiting for target joins (used only in tests)")
-
-	nlog.InitFlags(flset)
 }
 
 func initDaemon(version, buildTime string) cos.Runner {

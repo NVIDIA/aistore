@@ -232,9 +232,11 @@ type (
 		MaxTotal  cos.SizeIEC  `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
 		FlushTime cos.Duration `json:"flush_time"` // log flush interval
 		StatsTime cos.Duration `json:"stats_time"` // (not used)
+		ToStderr  bool         `json:"to_stderr"`  // Log only to stderr instead of files.
 	}
 	LogConfToSet struct {
 		Level     *cos.LogLevel `json:"level,omitempty"`
+		ToStderr  *bool         `json:"to_stderr,omitempty"`
 		MaxSize   *cos.SizeIEC  `json:"max_size,omitempty"`
 		MaxTotal  *cos.SizeIEC  `json:"max_total,omitempty"`
 		FlushTime *cos.Duration `json:"flush_time,omitempty"`
@@ -1748,14 +1750,15 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
 		if !os.IsNotExist(err) {
 			if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-				nlog.Errorf(FmtErrBackwardCompat, err)
+				fmt.Fprintf(os.Stderr, "ERROR: "+FmtErrBackwardCompat+"\n", err)
 			}
 			return fmt.Errorf("failed to load global config %q: %v", globalConfPath, err)
 		}
 
 		// initial plain-text
 		const itxt = "load initial global config"
-		nlog.Warningf("%s %q", itxt, globalConfPath)
+		fmt.Fprintf(os.Stderr, "WARNING: %s %q\n", itxt, globalConfPath)
+
 		_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
 		if err != nil {
 			return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
@@ -1765,6 +1768,9 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	} else {
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
+
+	// Set up logging.
+	nlog.Setup(config.Log.ToStderr, int64(config.Log.MaxSize))
 
 	// initialize atomic part of the config including most often used timeouts and features
 	Rom.Set(&config.ClusterConfig)
@@ -1791,12 +1797,6 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		}
 	}
 
-	// rotate log
-	nlog.MaxSize = int64(config.Log.MaxSize)
-	if nlog.MaxSize > cos.GiB {
-		nlog.Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", nlog.MaxSize)
-		nlog.MaxSize = 4 * cos.MiB
-	}
 	// log header
 	nlog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level.String())

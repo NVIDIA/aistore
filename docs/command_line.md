@@ -22,8 +22,6 @@ $ aisnode -config=/etc/ais/config.json -local_config=/etc/ais/local_config.json 
 The common executable, typically called `aisnode`, supports the following command-line arguments:
 
 ```console
-  -alsologtostderr
-        log to standard error as well as files
   -config string
         config filename: local file that stores the global cluster configuration
   -config_custom string
@@ -33,10 +31,6 @@ The common executable, typically called `aisnode`, supports the following comman
   -h    show usage and exit
   -local_config string
         config filename: local file that stores daemon's local configuration
-  -log_backtrace_at value
-        when logging hits line file:N, emit a stack trace
-  -logtostderr
-        log to standard error instead of files
   -ntargets int
         number of storage targets expected to be joining at startup (optional, primary-only)
   -override_backends

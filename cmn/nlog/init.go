@@ -42,9 +42,6 @@ var (
 	onceInitFiles sync.Once
 
 	unitTests atomic.Bool
-
-	toStderr     bool
-	alsoToStderr bool
 )
 
 func init() {

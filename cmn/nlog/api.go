@@ -6,7 +6,6 @@
 package nlog
 
 import (
-	"flag"
 	"fmt"
 	"time"
 
@@ -19,12 +18,8 @@ const (
 	ActRotate
 )
 
+var LogToStderr bool
 var MaxSize int64 = 4 * 1024 * 1024 // usually, config.log.max_size
-
-func InitFlags(flset *flag.FlagSet) {
-	flset.BoolVar(&toStderr, "logtostderr", false, "log to standard error instead of files")
-	flset.BoolVar(&alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
-}
 
 func InfoDepth(depth int, args ...any)    { log(sevInfo, depth, "", args...) }
 func Infoln(args ...any)                  { log(sevInfo, 0, "", args...) }
@@ -34,6 +29,15 @@ func Warningf(format string, args ...any) { log(sevWarn, 0, format, args...) }
 func ErrorDepth(depth int, args ...any)   { log(sevErr, depth, "", args...) }
 func Errorln(args ...any)                 { log(sevErr, 0, "", args...) }
 func Errorf(format string, args ...any)   { log(sevErr, 0, format, args...) }
+
+func Setup(logToStderr bool, maxSize int64) {
+	LogToStderr = logToStderr
+	MaxSize = maxSize
+	if MaxSize > 1024*1024*1024 {
+		Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", MaxSize)
+		MaxSize = 4 * 1024 * 1024
+	}
+}
 
 func SetLogDirRole(dir, role string) {
 	if logDir != "" && logDir != dir && unitTests.Load() {
