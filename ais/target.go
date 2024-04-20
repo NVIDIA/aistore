@@ -698,8 +698,14 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		if err := msg.FromHeader(r.Header); err != nil {
 			return lom, err
 		}
+
 		// NOTE: make a blocking call w/ simultaneous Tx
-		_, _, err := t.blobdl(lom, nil /*oa*/, &msg, w)
+		args := &xs.BlobArgs{
+			RspW: w,
+			Lom:  lom,
+			Msg:  &msg,
+		}
+		_, _, err := t.blobdl(args, nil /*oa*/)
 		return lom, err
 	}
 
@@ -956,7 +962,11 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
-		if xid, _, err = t.blobdl(lom, nil /*oa*/, &blobMsg, nil /*writer*/); xid != "" {
+		args := &xs.BlobArgs{
+			Lom: lom,
+			Msg: &blobMsg,
+		}
+		if xid, _, err = t.blobdl(args, nil /*oa*/); xid != "" {
 			debug.AssertNoErr(err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
@@ -1409,7 +1419,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, w http.ResponseWriter) (string, *xs.XactBlobDl, error) {
+func (t *target) blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
@@ -1419,11 +1429,6 @@ func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, w htt
 		}
 	}
 
-	args := &xs.BlobArgs{
-		RspW: w,
-		Lom:  lom,
-		Msg:  msg,
-	}
 	if oa != nil {
 		return _blobdl(args, oa)
 	}
@@ -1432,20 +1437,21 @@ func (t *target) blobdl(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, w htt
 	// - unlock right away
 	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
 	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
+	lom, latestVer := args.Lom, args.Msg.LatestVer
 	if !lom.TryLock(false) {
 		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
 	}
 
-	oa, deleted, err := lom.LoadLatest(msg.LatestVer)
+	oa, deleted, err := lom.LoadLatest(latestVer)
 	lom.Unlock(false)
 
 	// w/ assorted returns
 	switch {
 	case deleted: // remotely
-		debug.Assert(msg.LatestVer && err != nil)
+		debug.Assert(latestVer && err != nil)
 		return "", nil, err
 	case oa != nil:
-		debug.Assert(msg.LatestVer && err == nil)
+		debug.Assert(latestVer && err == nil)
 		// not latest
 	case err == nil:
 		return "", nil, nil // nothing to do

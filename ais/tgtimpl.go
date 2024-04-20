@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // interface guard
@@ -205,9 +206,12 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	return 0, nil
 }
 
-func (t *target) GetColdBlob(lom *core.LOM, oa *cmn.ObjAttrs) (xctn core.Xact, err error) {
-	var msg apc.BlobMsg // chunk size, etc. - all defaults
-	_, xctn, err = t.blobdl(lom, oa, &msg, nil /*writer*/)
+func (t *target) GetColdBlob(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg) (xctn core.Xact, err error) {
+	args := &xs.BlobArgs{
+		Lom: lom,
+		Msg: msg, // chunk size, etc. tunables
+	}
+	_, xctn, err = t.blobdl(args, oa)
 	return xctn, err
 }
 

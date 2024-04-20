@@ -72,7 +72,7 @@ type (
 		DeleteObject(lom *LOM, evict bool) (ecode int, err error)
 
 		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error)
-		GetColdBlob(lom *LOM, oa *cmn.ObjAttrs) (xctn Xact, err error)
+		GetColdBlob(lom *LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg) (xctn Xact, err error)
 
 		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
 		Promote(params *PromoteParams) (ecode int, err error)

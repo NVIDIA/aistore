@@ -147,20 +147,23 @@ eret:
 	r.AddErr(err, 5, cos.SmoduleXs)
 }
 
-// TODO -- FIXME: initial, hardcoded, and simplified
+// TODO: revisit
 func _prefetchBlob(lom *core.LOM, oa *cmn.ObjAttrs) error {
 	var (
-		total time.Duration
-		sleep = 5 * time.Second
+		sleep = 5 * time.Second // TODO: add a tunable
+		msg   apc.BlobMsg       // TODO: ditto
 		lom2  = core.AllocLOM(lom.ObjName)
 	)
 	if err := lom2.InitBck(lom.Bucket()); err != nil {
 		return err
 	}
-	xctn, err := core.T.GetColdBlob(lom2, oa)
+	xctn, err := core.T.GetColdBlob(lom2, oa, &msg)
 	if err != nil {
 		return err
 	}
+
+	// TODO: add async option
+	var total time.Duration
 	for !xctn.Finished() {
 		time.Sleep(sleep)
 		total += sleep
@@ -171,6 +174,7 @@ func _prefetchBlob(lom *core.LOM, oa *cmn.ObjAttrs) error {
 	if xctn.Finished() {
 		return xctn.AbortErr()
 	}
+
 	nlog.Warningln(xctn.Name(), "- is taking more than 1 minute to complete")
 	return nil // (leaving x-blob dangling)
 }
