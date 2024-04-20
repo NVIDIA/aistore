@@ -256,7 +256,11 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		propsFlag     []string
 		selectedProps []string
 		fltPresence   = apc.FltPresentCluster
+		units, errU   = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		return errU
+	}
 	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		fltPresence = apc.FltExists
 	}
@@ -276,9 +280,6 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		return fmt.Errorf("%q not found in %s%s", objName, bck.Cname(""), hint)
 	}
 
-	if flagIsSet(c, jsonFlag) {
-		return teb.Print(objProps, teb.PropValTmpl, teb.Jopts(true))
-	}
 	if flagIsSet(c, allPropsFlag) {
 		propsFlag = apc.GetPropsAll
 	} else if flagIsSet(c, objPropsFlag) {
@@ -305,6 +306,16 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		if v := propVal(objProps, name); v != "" {
 			if name == apc.GetPropsAtime && isUnsetTime(c, v) {
 				v = teb.NotSetVal
+			}
+			if name == apc.GetPropsSize && units != "" {
+				// reformat
+				size, err := cos.ParseSize(v, "")
+				if err != nil {
+					warn := fmt.Sprintf("failed to parse 'size': %v", err)
+					actionWarn(c, warn)
+				} else {
+					v = teb.FmtSize(size, units, 2)
+				}
 			}
 			propNVs = append(propNVs, nvpair{name, v})
 		}

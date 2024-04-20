@@ -25,6 +25,10 @@ func (ctx *unitsCtx) sizeSig(siz int64, digits int) string {
 	return FmtSize(siz, ctx.units, digits)
 }
 
+func (ctx *unitsCtx) sizeSig2(siz int64, digits int, flags uint16) string {
+	return fmtSize2(siz, ctx.units, digits, flags)
+}
+
 func (ctx *unitsCtx) sizeUns(siz uint64, digits int) string {
 	return FmtSize(int64(siz), ctx.units, digits)
 }
@@ -45,6 +49,7 @@ func FuncMapUnits(units string) (m template.FuncMap) {
 	ctx := &unitsCtx{units}
 	m = make(template.FuncMap, 6)
 	m["FormatBytesSig"] = ctx.sizeSig
+	m["FormatBytesSig2"] = ctx.sizeSig2
 	m["FormatBytesUns"] = ctx.sizeUns
 	m["FormatMAM"] = ctx.sizeMam
 	m["FormatMilli"] = ctx.durMilli
@@ -90,11 +95,11 @@ func toSizeSI(b int64, digits int) string {
 	}
 }
 
-func fmtSize2(size int64, digits int, flags uint16) string {
+func fmtSize2(size int64, units string, digits int, flags uint16) string {
 	if flags&apc.EntryIsDir != 0 {
 		return ""
 	}
-	return FmtSize(size, cos.UnitsIEC, digits)
+	return FmtSize(size, units, digits)
 }
 
 // (with B, ns, and /s suffix)

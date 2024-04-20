@@ -60,7 +60,7 @@ var (
 			allPropsFlag,
 			objNotCachedPropsFlag,
 			noHeaderFlag,
-			jsonFlag,
+			unitsFlag,
 			silentFlag,
 		},
 		cmdCluster: append(
@@ -129,7 +129,7 @@ var (
 	}
 	showCmdObject = cli.Command{
 		Name:         cmdObject,
-		Usage:        "show object details",
+		Usage:        "show object properties",
 		ArgsUsage:    objectArgument,
 		Flags:        showCmdsFlags[cmdObject],
 		Action:       showObjectHandler,
