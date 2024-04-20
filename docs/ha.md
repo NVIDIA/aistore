@@ -33,15 +33,14 @@ Further:
 
 The proxy's bootstrap sequence initiates by executing the following three main steps:
 
-- step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;
+- step 1: load a local copy of the cluster map (Smap) and try to use it for the discovery of the current one;
 - step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
-- step 3: use all of the above _and_ two environment settings - `AIS_PRIMARY_ID` and `AIS_IS_PRIMARY` - to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
+- step 3: use all of the above and, optionally, [`AIS_PRIMARY_EP`](environment-vars.md) to figure out whether this proxy must keep starting up as a _primary_;
+  - otherwise, join as a non-primary (a.k.a. _secondary_).
 
-The rules to decide whether a given starting-up proxy is the primary one are very simple:
+The rules to determine whether a given starting-up proxy is the primary one in the cluster - are simple. In fact, it's a single switch statement in the namesake function:
 
-- `AIS_PRIMARY_ID` is considered first. If non-empty, this environment variable unambiguously and directly specifies the unique ID of the primary gateway. As such, it takes precedence over local copy of the cluster map (Smap);
-- if `AIS_PRIMARY_ID` is empty or not available, then it is the local copy of Smap that makes the determination.
-- if both `AIS_PRIMARY_ID` and Smap are empty or not available, then it is the `AIS_IS_PRIMARY` environment - if true, then the starting up proxy will start as a primary
+* [`determineRole`](https://github.com/NVIDIA/aistore/blob/main/ais/earlystart.go).
 
 Further, the (potentially) primary proxy executes more steps:
 

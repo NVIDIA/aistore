@@ -67,8 +67,13 @@ Background: in a running aistore cluster, at any point in time there's a single 
 
 | name | comment |
 | ---- | ------- |
-| `AIS_IS_PRIMARY` | at startup, tells _one_ of the (starting-up) proxies to assume the _primary_ role; e.g. usage: 'export AIS_IS_PRIMARY=true' |
-| `AIS_PRIMARY_ID` | at startup, tells _all_ starting-up proxies that the one of them with a given ID _is_, in fact, the _primary_; e.g. usage: 'export AIS_PRIMARY_ID=foo-bar' |
+| `AIS_PRIMARY_EP` | at startup, tells _one_ of the starting-up proxies to assume the _primary_ role iff `AIS_PRIMARY_EP` specifies one of the proxy's listening endpoints; e.g. usage: |
+
+```bash
+$ AIS_PRIMARY_EP=https://ais-proxy-0.svc.cluster.local:51082
+# or (same):
+$ AIS_PRIMARY_EP=ais-proxy-0.svc.cluster.local:51082
+```
 
 ## Network
 

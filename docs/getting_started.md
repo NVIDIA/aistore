@@ -306,7 +306,7 @@ $ ais config node <NODE> local host_net --json
 
 where `NODE` is, effectively, any clustered proxy (that'll show up if you type `ais config node` and press `<TAB-TAB>`).
 
-Other variables, such as `AIS_IS_PRIMARY` and `AIS_USE_HTTPS` can prove to be useful at deployment time for the most part.
+Other variables, such as [`AIS_PRIMARY_EP`](environment-vars.md#primary) and [`AIS_USE_HTTPS`](environment-vars.md#https) can prove to be useful at deployment time.
 
 For developers, CLI `ais config cluster log.modules ec xs` (for instance) would allow to selectively raise and/or reduce logging verbosity on a per module bases - modules EC (erasure coding) and xactions (batch jobs) in this particular case.
 
