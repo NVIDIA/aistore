@@ -156,15 +156,15 @@ func (b *downloaderPB) start() (bool /*finishedE early*/, error) {
 	}
 
 	if cnt := b.totalFilesCnt(); cnt > 1 {
-		b.totalBar = b.p.AddBar(
-			int64(cnt),
-			mpb.BarRemoveOnComplete(),
+		options := make([]mpb.BarOption, 0, 6)
+		options = append(options, mpb.BarRemoveOnComplete(),
 			mpb.PrependDecorators(
 				decor.Name(barText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
 				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
 			),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
 		)
+		options = appendDefaultDecorators(options)
+		b.totalBar = b.p.AddBar(int64(cnt), options...)
 		b.totalBar.IncrBy(b.finishedFiles + b.errFiles)
 	}
 

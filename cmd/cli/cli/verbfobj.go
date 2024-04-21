@@ -63,16 +63,8 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		return fmt.Errorf("no files to %s (check source name and formatting, see examples)", wop.verb())
 	}
 
-	var cptn string
-	cptn += fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
-	cptn += ndir2tag(ndir, recurs)
-	var arrowCaptionBuilder strings.Builder
-	arrowCaptionBuilder.WriteString(cptn)
-	arrowCaptionBuilder.WriteString(" => ")
-	arrowCaptionBuilder.WriteString(wop.dest())
-	cptn += arrowCaptionBuilder.String()
-
 	var (
+		cptn                string
 		totalSize, extSizes = groupByExt(fobjs)
 		units, errU         = parseUnitsFlag(c, unitsFlag)
 		tmpl                = teb.MultiPutTmpl + strconv.Itoa(l) + "\t " + cos.ToSizeIEC(totalSize, 2) + "\n"
@@ -89,6 +81,10 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 	if err != nil {
 		return err
 	}
+
+	cptn = fmt.Sprintf("\n%s %d file%s", wop.verb(), l, cos.Plural(l))
+	cptn += ndir2tag(ndir, recurs)
+	cptn += " => " + wop.dest()
 
 	// confirm
 	if flagIsSet(c, dryRunFlag) {
@@ -282,15 +278,21 @@ func (u *uctx) init(c *cli.Context, fobj fobj) (fh *cos.FileHandle, bar *mpb.Bar
 	}
 
 	// setup "verbose" bar
-	bar = u.progress.AddBar(
-		fobj.size,
+	options := make([]mpb.BarOption, 0, 6)
+	options = append(options,
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
 			decor.Name(fobj.dstName+" ", decor.WC{W: len(fobj.dstName) + 1, C: decor.DSyncWidthR}),
 			decor.Counters(decor.UnitKiB, "%.1f/%.1f", decor.WCSyncWidth),
 		),
-		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
 	)
+	// NOTE: conditional/hardcoded
+	if fobj.size >= 512*cos.KiB {
+		options = appendDefaultDecorators(options)
+	} else if fobj.size >= 32*cos.KiB {
+		options = append(options, mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)))
+	}
+	bar = u.progress.AddBar(fobj.size, options...)
 	return
 }
 

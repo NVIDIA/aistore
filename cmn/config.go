@@ -1757,13 +1757,14 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 
 		// initial plain-text
 		const itxt = "load initial global config"
-		fmt.Fprintf(os.Stderr, "WARNING: %s %q\n", itxt, globalConfPath)
-
 		_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
 		if err != nil {
 			return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
 		}
-		debug.Assert(config.Version == 0)
+		if !config.TestingEnv() {
+			fmt.Fprintln(os.Stderr, itxt, globalConfPath)
+		}
+		debug.Assert(config.Version == 0, config.Version)
 		globalFpath = globalConfPath
 	} else {
 		debug.Assert(config.Version > 0 && config.UUID != "")

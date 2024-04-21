@@ -491,22 +491,21 @@ func genShardsHandler(c *cli.Context) error {
 	}
 
 	var (
-		// Progress bar
-		text     = "Shards created: "
-		progress = mpb.New(mpb.WithWidth(barWidth))
-		bar      = progress.AddBar(
-			pt.Count(),
-			mpb.PrependDecorators(
-				decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
-				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
-			),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
-		)
-
+		shardNum      int
+		progress      = mpb.New(mpb.WithWidth(barWidth))
 		concSemaphore = make(chan struct{}, concLimit)
 		group, ctx    = errgroup.WithContext(context.Background())
-		shardNum      = 0
+		text          = "Shards created: "
+		options       = make([]mpb.BarOption, 0, 6)
 	)
+	// progress bar
+	options = append(options, mpb.PrependDecorators(
+		decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
+		decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+	))
+	options = appendDefaultDecorators(options)
+	bar := progress.AddBar(pt.Count(), options...)
+
 	pt.InitIter()
 
 loop:

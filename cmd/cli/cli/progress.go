@@ -15,6 +15,12 @@ import (
 	"github.com/vbauerster/mpb/v4/decor"
 )
 
+// TODO:
+// progressFlag is a simple yes/no boolean; make it enumerated string to let user select (e.g.):
+// - remaining time (decor.AverageETA, decor.MovingAverageETA, decor.MovingAverageSpeed, ...)
+// - time style (decor.ET_STYLE_HHMMSS, ...)
+// See also: downloaderPB and its decorator
+
 const barWidth = 64
 
 type (
@@ -52,16 +58,21 @@ func simpleBar(args ...barArgs) (progress *mpb.Progress, bars []*mpb.Bar) {
 		default:
 			debug.Assertf(false, "invalid argument: %s", a.barType)
 		}
-		options := make([]mpb.BarOption, 0, len(a.options)+2)
+		options := make([]mpb.BarOption, 0, len(a.options)+5)
 		options = append(options, a.options...)
-		options = append(
-			options,
-			mpb.PrependDecorators(argDecorators...),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
-		)
+		options = append(options, mpb.PrependDecorators(argDecorators...))
+		options = appendDefaultDecorators(options)
 		bars = append(bars, progress.AddBar(a.total, options...))
 	}
 	return
+}
+
+// (see TODO at the top)
+func appendDefaultDecorators(options []mpb.BarOption) []mpb.BarOption {
+	return append(options,
+		mpb.AppendDecorators(decor.NewPercentage("%d", decor.WCSyncSpaceR)),
+		mpb.AppendDecorators(decor.Elapsed(decor.ET_STYLE_GO, decor.WCSyncWidth)),
+	)
 }
 
 ///////////////////
