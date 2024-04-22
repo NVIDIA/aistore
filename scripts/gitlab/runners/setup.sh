@@ -7,8 +7,8 @@ set -e
 SCRIPTS_DIR=$(dirname $(realpath -s $0))
 TMP_DOWNLOAD="$SCRIPTS_DIR/tmp_download"
 
-SYSBOX_VER=v0.6.3
-SYSBOX_PKG=sysbox-ce_0.6.3-0.linux_amd64.deb
+SYSBOX_VER=v0.6.4
+SYSBOX_PKG=sysbox-ce_0.6.4-0.linux_amd64.deb
 RUNNER_VERSION=16.9.1-1
 
 # Create the directory if it doesn't already exist
@@ -39,22 +39,56 @@ install_docker() {
   usermod -aG docker $USER && newgrp docker
 }
 
+confirm_docker_rm() {
+    # Call with a prompt string or use a default
+    read -r -p "${1:-Are you sure you want to remove all Docker containers? [y/N]} " response
+    case "$response" in
+        [yY][eE][sS]|[yY]) 
+            true
+            ;;
+        *)
+            false
+            ;;
+    esac
+}
+
+
 install_sysbox() {
-  echo "Installing Sysbox Docker driver"
+  echo "Installing Sysbox Docker runtime"
   # Download the latest Sysbox .deb package on the GitHub releases page (https://github.com/nestybox/sysbox/releases). We want the Linux x86-64 (AMD64) variant.
   wget https://downloads.nestybox.com/sysbox/releases/$SYSBOX_VER/$SYSBOX_PKG
-  
+
+  if confirm_docker_rm; then
+    echo "Removing all Docker containers..."
+    docker rm $(docker ps -a -q) -f || true
+  else
+      echo "Canceled setup script due to user request."
+      exit 1
+  fi
+
   # Install Sysbox.
   apt install ./$SYSBOX_PKG
   
   # Check if the Sysbox system service is running.
   systemctl status sysbox --no-pager
-  
+
   # Delete the Sysbox .deb package.
-  rm ./sysbox-ce_0.6.3-0.linux_amd64.deb
+  rm $SYSBOX_PKG
+
+  # If docker daemon json is empty, create a json config object
+  if [ ! -s /etc/docker/daemon.json ]; then
+    echo '{}' | tee /etc/docker/daemon.json
+  fi
 
   # Set Docker Engine's default container runtime to sysbox-runc. We can't read from and write to the same file: https://github.com/jqlang/jq/issues/2152
-  jq '."default-runtime" = "sysbox-runc"' /etc/docker/daemon.json --indent 4 | tee /etc/docker/daemon-staging.json && mv -f /etc/docker/daemon-staging.json /etc/docker/daemon.json
+  jq '. + {
+      "default-runtime": "sysbox-runc",
+      "runtimes": {
+        "sysbox-runc": {
+            "path": "/usr/bin/sysbox-runc"
+        }
+      }
+  }' /etc/docker/daemon.json | tee /etc/docker/daemon-staging.json && mv -f /etc/docker/daemon-staging.json /etc/docker/daemon.json
 
   # Restart the Docker Engine system service.
   systemctl restart docker

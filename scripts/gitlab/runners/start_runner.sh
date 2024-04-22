@@ -13,10 +13,34 @@ fi
 sudo ./setup.sh
 
 GITLAB_HOST="https://gitlab-master.nvidia.com/"
+
+MINIKUBE_NODES=${MINIKUBE_NODES:-3}
+# Requirements for each minikube node
+MAX_CPU=16
+MAX_RAM=32768
+MIN_CPU=4
+MIN_RAM=8192
+# Reserved for host system
+HOST_MEM=2000
+HOST_CPU=2
+
 NUM_CPU=$(nproc --all)
 TOTAL_MEM=$(free -m | awk '/^Mem:/{print $2}')
-MINIKUBE_CPU=$(($NUM_CPU-2))
-MINIKUBE_MEMORY=$(($TOTAL_MEM-2000))
+# Reserve 2 cores for the host system, but do not exceed the max number of cores
+MINIKUBE_CPU=$(((NUM_CPU-HOST_CPU) / MINIKUBE_NODES))
+if [ "$MINIKUBE_CPU" -gt "$MAX_CPU" ]; then
+  MINIKUBE_CPU=$MAX_CPU
+elif [ "$MINIKUBE_CPU" -lt $MIN_CPU ]; then
+  MINIKUBE_CPU=$MIN_CPU
+fi
+
+# Reserve 2000MB for the host system, but do not exceed the max amount of memory
+MINIKUBE_MEMORY=$(((TOTAL_MEM - HOST_MEM) / MINIKUBE_NODES))
+if [ "$MINIKUBE_MEMORY" -gt "$MAX_RAM" ]; then
+  MINIKUBE_MEMORY=$MAX_RAM
+elif [ "$MINIKUBE_MEMORY" -lt "$MIN_RAM" ]; then
+  MINIKUBE_MEMORY=$MIN_RAM
+fi
 # Must be named this for minikube to pick it up, so we have a consistent config dir
 export MINIKUBE_HOME=/var/local/minikube/.minikube
 
@@ -46,7 +70,13 @@ cleanup_minikube() {
 
 # (Re)Start minikube
 cleanup_minikube
-minikube start --cpus=$MINIKUBE_CPU --memory=$MINIKUBE_MEMORY
+minikube start --cpus=$MINIKUBE_CPU --memory=$MINIKUBE_MEMORY --nodes=$MINIKUBE_NODES
+
+# Required for hostPath mounts on multi-node clusters https://minikube.sigs.k8s.io/docs/tutorials/multi_node/
+minikube addons enable volumesnapshots
+minikube addons enable csi-hostpath-driver
+# Cannot build with "minikube docker-env" for multi-node, so use registry
+minikube addons enable registry
 
 # Apply RBAC to allow the default service account admin privileges
 kubectl apply -f minikube_rbac.yaml
