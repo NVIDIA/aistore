@@ -103,11 +103,11 @@ func (p *proxy) bootstrap() {
 }
 
 // make the *primary* decision taking into account both the environment and loaded Smap, if exists
-// cases 1 through 4:
+// (cases 1 through 3 below):
 // 1, environment "AIS_PRIMARY_EP" takes precedence unconditionally (in that exact sequence);
 // 3: next, loaded Smap (but it can be overridden by newer versions from other nodes);
 // 3: finally, if none of the above applies, take into account cluster config (its "proxy" section).
-// See also: "change of mind"
+// See also: "change-of-mind"
 func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim prim) {
 	switch {
 	case daemon.EP != "":
@@ -151,7 +151,7 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 }
 
 // join cluster
-// (point of no return: starting up as non-primary; see also: "change of mind")
+// (point of no return: starting up as non-primary; see also: "change-of-mind")
 func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
