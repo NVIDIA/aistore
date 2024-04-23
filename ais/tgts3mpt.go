@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -63,25 +62,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if bck.IsRemoteS3() {
-		pts := s3.NewPresignedReq(r, lom, nil, q)
-		resp, err := pts.Do(g.client.control)
-		if err != nil {
-			s3.WriteErr(w, r, err, resp.StatusCode)
-			return
-		}
-		if resp != nil {
-			result, err := decodeXML[s3.InitiateMptUploadResult](resp.Body)
-			if err != nil {
-				s3.WriteErr(w, r, err, http.StatusBadRequest)
-				return
-			}
-
-			s3.InitUpload(result.UploadID, result.Bucket, result.Key)
-			w.Header().Set(cos.HdrContentType, cos.ContentXML)
-			w.Write(resp.Body)
-			return
-		}
-		uploadID, ecode, err = backend.StartMpt(lom)
+		uploadID, ecode, err = backend.StartMpt(lom, r, q)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)
 			return
@@ -171,17 +152,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	// 4. rewind and call s3 API
 	if err == nil && remote {
 		if _, err = partFh.Seek(0, io.SeekStart); err == nil {
-			var (
-				resp *s3.PresignedResp
-				pts  = s3.NewPresignedReq(r, lom, partFh, q)
-			)
-			resp, err = pts.Do(g.client.data)
-			if resp != nil {
-				ecode = resp.StatusCode
-				etag = cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
-			} else {
-				etag, ecode, err = backend.PutMptPart(lom, partFh, uploadID, partNum, size)
-			}
+			etag, ecode, err = backend.PutMptPart(lom, partFh, r, uploadID, partNum, size)
 		}
 	}
 
@@ -272,28 +243,12 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		remote  = bck.IsRemoteS3()
 	)
 	if remote {
-		pts := s3.NewPresignedReq(r, lom, io.NopCloser(bytes.NewReader(output)), q)
-		resp, err := pts.Do(g.client.control)
+		v, ecode, err := backend.CompleteMpt(lom, r, uploadID, partList)
 		if err != nil {
-			s3.WriteErr(w, r, err, resp.StatusCode)
+			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 			return
 		}
-		if resp != nil {
-			// presigned mpt
-			result, err := decodeXML[s3.CompleteMptUploadResult](resp.Body)
-			if err != nil {
-				s3.WriteErr(w, r, err, http.StatusBadRequest)
-				return
-			}
-			etag = result.ETag
-		} else {
-			v, ecode, err := backend.CompleteMpt(lom, uploadID, partList)
-			if err != nil {
-				s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-				return
-			}
-			etag = v
-		}
+		etag = v
 	}
 
 	// append parts and finalize locally
@@ -443,18 +398,10 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	if bck.IsRemoteS3() {
-		pts := s3.NewPresignedReq(r, lom, r.Body, q)
-		resp, err := pts.Do(g.client.control)
+		ecode, err := backend.AbortMpt(lom, r, uploadID)
 		if err != nil {
-			s3.WriteErr(w, r, err, resp.StatusCode)
+			s3.WriteErr(w, r, err, ecode)
 			return
-		}
-		if resp == nil {
-			ecode, err := backend.AbortMpt(lom, uploadID)
-			if err != nil {
-				s3.WriteErr(w, r, err, ecode)
-				return
-			}
 		}
 	}
 
