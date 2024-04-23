@@ -128,13 +128,12 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	// 3. write
 	var (
 		etag         string
+		size         int64
 		ecode        int
 		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
-		buf, slab    = t.gmm.Alloc()
 		cksumSHA     = &cos.CksumHash{}
 		cksumMD5     = &cos.CksumHash{}
 		remote       = bck.IsRemoteS3()
@@ -145,15 +144,22 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	if !remote {
 		cksumMD5 = cos.NewCksumHash(cos.ChecksumMD5)
 	}
-	mw := multiWriter(cksumMD5.H, cksumSHA.H, partFh)
-	size, err := io.CopyBuffer(mw, r.Body, buf)
-	slab.Free(buf)
 
-	// 4. rewind and call s3 API
-	if err == nil && remote {
-		if _, err = partFh.Seek(0, io.SeekStart); err == nil {
-			etag, ecode, err = backend.PutMptPart(lom, partFh, r, uploadID, partNum, size)
-		}
+	// 3. write
+	mw := multiWriter(cksumMD5.H, cksumSHA.H, partFh)
+
+	if !remote {
+		// write locally
+		buf, slab := t.gmm.Alloc()
+		size, err = io.CopyBuffer(mw, r.Body, buf)
+		slab.Free(buf)
+	} else {
+		// write locally and utilize TeeReader to simultaneously send data to S3
+		tr := io.NopCloser(io.TeeReader(r.Body, mw))
+		size = r.ContentLength
+		debug.Assert(size > 0, "mpt upload: expecting positive content-length")
+
+		etag, ecode, err = backend.PutMptPart(lom, tr, r, q, uploadID, size, partNum)
 	}
 
 	cos.Close(partFh)
@@ -165,8 +171,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	// 5. finalize part
-	// expecting the part's remote etag to be md5 checksum, not computing otherwise
+	// 4. finalize the part (expecting the part's remote etag to be md5 checksum)
 	md5 := etag
 	if cksumMD5.H != nil {
 		debug.Assert(etag == "")
@@ -243,7 +248,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		remote  = bck.IsRemoteS3()
 	)
 	if remote {
-		v, ecode, err := backend.CompleteMpt(lom, r, uploadID, partList)
+		v, ecode, err := backend.CompleteMpt(lom, r, q, uploadID, partList)
 		if err != nil {
 			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 			return
@@ -398,7 +403,7 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	if bck.IsRemoteS3() {
-		ecode, err := backend.AbortMpt(lom, r, uploadID)
+		ecode, err := backend.AbortMpt(lom, r, q, uploadID)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)
 			return

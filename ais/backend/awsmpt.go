@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
@@ -39,7 +38,8 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err
-		} else if resp != nil {
+		}
+		if resp != nil {
 			result, err := decodeXML[aiss3.InitiateMptUploadResult](resp.Body)
 			if err != nil {
 				return "", http.StatusBadRequest, err
@@ -68,14 +68,15 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 	return id, ecode, err
 }
 
-func PutMptPart(lom *core.LOM, fh *os.File, oreq *http.Request, uploadID string, partNum int32, size int64) (etag string, ecode int, _ error) {
+func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (etag string,
+	ecode int, _ error) {
 	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
-		q := oreq.URL.Query() // TODO: optimize-out
-		pts := aiss3.NewPresignedReq(oreq, lom, fh, q)
+		pts := aiss3.NewPresignedReq(oreq, lom, r, oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err
-		} else if resp != nil {
+		}
+		if resp != nil {
 			ecode = resp.StatusCode
 			etag = cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
 			return
@@ -87,7 +88,7 @@ func PutMptPart(lom *core.LOM, fh *os.File, oreq *http.Request, uploadID string,
 		input    = s3.UploadPartInput{
 			Bucket:        aws.String(cloudBck.Name),
 			Key:           aws.String(lom.ObjName),
-			Body:          fh,
+			Body:          r,
 			UploadId:      aws.String(uploadID),
 			PartNumber:    &partNum,
 			ContentLength: &size,
@@ -108,19 +109,19 @@ func PutMptPart(lom *core.LOM, fh *os.File, oreq *http.Request, uploadID string,
 	return etag, ecode, err
 }
 
-func CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, parts *aiss3.CompleteMptUpload) (etag string, ecode int, _ error) {
+func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, parts *aiss3.CompleteMptUpload) (etag string,
+	ecode int, _ error) {
 	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
-		q := oreq.URL.Query() // TODO: optimize-out
-
 		body, err := xml.Marshal(parts)
 		if err != nil {
 			return "", http.StatusBadRequest, err
 		}
-		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(body)), q)
+		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(body)), oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err
-		} else if resp != nil {
+		}
+		if resp != nil {
 			result, err := decodeXML[aiss3.CompleteMptUploadResult](resp.Body)
 			if err != nil {
 				return "", http.StatusBadRequest, err
@@ -164,14 +165,14 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, parts *aiss
 	return etag, ecode, err
 }
 
-func AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode int, err error) {
+func AbortMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {
 	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
-		q := oreq.URL.Query() // TODO: optimize-out
-		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, q)
+		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return resp.StatusCode, err
-		} else if resp != nil {
+		}
+		if resp != nil {
 			return resp.StatusCode, nil
 		}
 	}

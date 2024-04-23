@@ -7,9 +7,9 @@
 package backend
 
 import (
+	"io"
 	"net/http"
 	"net/url"
-	"os"
 
 	s3types "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -25,14 +25,14 @@ func StartMpt(*core.LOM, *http.Request, url.Values) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("start-mpt", mock)
 }
 
-func PutMptPart(*core.LOM, *os.File, *http.Request, string, int32, int64) (string, int, error) {
+func PutMptPart(*core.LOM, io.ReadCloser, *http.Request, url.Values, string, int64, int32) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("put-mpt-part", mock)
 }
 
-func CompleteMpt(*core.LOM, *http.Request, string, *s3types.CompleteMptUpload) (string, int, error) {
+func CompleteMpt(*core.LOM, *http.Request, url.Values, string, *s3types.CompleteMptUpload) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("complete-part", mock)
 }
 
-func AbortMpt(*core.LOM, *http.Request, string) (int, error) {
+func AbortMpt(*core.LOM, *http.Request, url.Values, string) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("abort-mpt", mock)
 }
