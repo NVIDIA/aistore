@@ -291,7 +291,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	concatMD5, written, errA := _appendMpt(nparts, buf, mw)
 	slab.Free(buf)
 
-	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
+	if lom.IsFeatureSet(feat.FsyncPUT) {
 		errS := wfh.Sync()
 		debug.AssertNoErr(errS)
 	}

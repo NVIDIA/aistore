@@ -350,7 +350,7 @@ outer:
 	}
 fin:
 	close(r.workCh)
-	if err == nil && cmn.Rom.Features().IsSet(feat.FsyncPUT) {
+	if err == nil && r.p.args.Lom.IsFeatureSet(feat.FsyncPUT) {
 		err = r.p.args.Lmfh.Sync()
 	}
 	cos.Close(r.p.args.Lmfh)

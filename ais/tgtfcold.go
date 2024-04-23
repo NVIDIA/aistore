@@ -61,7 +61,7 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	debug.Assertf(written == res.Size, "%s: expected size=%d, got %d", lom.Cname(), res.Size, written)
 
 	// fsync (flush), if requested
-	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
+	if lom.IsFeatureSet(feat.FsyncPUT) {
 		if err = lmfh.Sync(); err != nil {
 			goi._cleanup(revert, lmfh, buf, slab, err, "(fsync)")
 			return err
