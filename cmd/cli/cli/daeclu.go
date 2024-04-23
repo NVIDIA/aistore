@@ -95,8 +95,8 @@ outer:
 			if !unique {
 				continue
 			}
-			used += int64(tcdf.TotalUsed)
-			avail += int64(tcdf.TotalAvail)
+			used += int64(cdf.Used)
+			avail += int64(cdf.Avail)
 			num += len(cdf.Disks)
 
 			// TODO: a simplifying (local playground) assumption and shortcut
