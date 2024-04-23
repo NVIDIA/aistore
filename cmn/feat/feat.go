@@ -34,7 +34,8 @@ const (
 	IgnoreLimitedCoexistence  // run in presence of "limited coexistence" type conflicts (same as e.g. CopyBckMsg.Force but globally)
 	PresignedS3Req            // (*) pass-through client-signed (presigned) S3 requests for subsequent authentication by S3
 	DontOptimizeVirtualDir    // when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ obj names
-	DisableColdGET            // do not perform cold GET request when using remote bucket
+	DisableColdGET            // disable cold-GET (from remote bucket)
+	StreamingColdGET          // write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 	S3ReverseProxy            // use reverse proxy calls instead of HTTP-redirect for S3 API
 )
 
@@ -51,6 +52,7 @@ var Cluster = []string{
 	"Presigned-S3-Req",
 	"Dont-Optimize-Listing-Virtual-Dirs",
 	"Disable-Cold-GET",
+	"Streaming-Cold-GET",
 	"S3-Reverse-Proxy",
 	// "none" ====================
 }
@@ -60,6 +62,7 @@ var Bucket = []string{
 	"Fsync-PUT",
 	"Presigned-S3-Req",
 	"Disable-Cold-GET",
+	"Streaming-Cold-GET",
 	// "none" ====================
 }
 

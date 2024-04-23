@@ -7,6 +7,7 @@ package ais
 import (
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
@@ -118,6 +119,7 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr)
 	if goi.isS3 {
+		// (expecting user to set bucket checksum = md5)
 		s3.SetEtag(whdr, goi.lom)
 	}
 
@@ -171,4 +173,111 @@ func (goi *getOI) _cleanup(revert string, fh *os.File, buf []byte, slab *memsys.
 		nlog.InfoDepth(1, ftcg+tag, err)
 	}
 	goi.lom.Unlock(true)
+}
+
+//
+// NOTE: BEWARE! use streaming cold GET (feat.StreamingColdGET) at your own risk
+//
+
+func (goi *getOI) coldStream(res *core.GetReaderResult) error {
+	var (
+		t, lom = goi.t, goi.lom
+		fqn    = lom.FQN
+		revert string
+	)
+	if goi.verchanged {
+		revert = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
+		if err := os.Rename(lom.FQN, revert); err != nil {
+			nlog.Errorln("failed to rename prev. version - proceeding anyway", lom.FQN, "=>", revert)
+			revert = ""
+		}
+	}
+	lmfh, err := lom.CreateFileRW(fqn)
+	if err != nil {
+		cos.Close(res.R)
+		goi._cleanup(revert, nil, nil, nil, err, "(fcreate)")
+		return err
+	}
+
+	// read remote, write local
+	var (
+		written   int64
+		buf, slab = t.gmm.AllocSize(min(res.Size, 64*cos.KiB))
+		cksum     = cos.NewCksumHash(lom.CksumConf().Type)
+		mw        = cos.NewWriterMulti(goi.w, lmfh, cksum.H) // NOTE: write locally and transmit remote content in parallel
+		whdr      = goi.w.Header()
+	)
+
+	// response header goes out with obj meta that is a) very limited, and b) not validated
+	whdr.Set(cos.HdrContentType, cos.ContentBinary)
+	whdr.Set(cos.HdrContentLength, strconv.FormatInt(res.Size, 10))
+	if res.ExpCksum != nil && res.ExpCksum.Type() == cos.ChecksumMD5 {
+		whdr.Set(cos.S3CksumHeader, res.ExpCksum.Value())
+	}
+
+	written, err = cos.CopyBuffer(mw, res.R, buf)
+	cos.Close(res.R)
+
+	// NOTE: if error happens down below cannot return it: whdr is already on the wire
+
+	if err != nil {
+		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")
+		return errSendingResp
+	}
+	debug.Assertf(written == res.Size, "%s: expected size=%d, got %d", lom.Cname(), res.Size, written)
+
+	// fsync (flush), if requested
+	if lom.IsFeatureSet(feat.FsyncPUT) {
+		if err = lmfh.Sync(); err != nil {
+			goi._cleanup(revert, lmfh, buf, slab, err, "(fsync)")
+			return errSendingResp
+		}
+	}
+
+	// persist lom (main repl.)
+	lom.SetSize(written)
+	if cksum != nil {
+		cksum.Finalize()
+		lom.SetCksum(&cksum.Cksum)
+	}
+	if lom.HasCopies() {
+		if err := lom.DelAllCopies(); err != nil {
+			nlog.Errorln(err)
+		}
+	}
+	if err = lom.PersistMain(); err != nil {
+		goi._cleanup(revert, lmfh, buf, slab, err, "(persist)")
+		return errSendingResp
+	}
+	// with remaining stats via goi.stats()
+	goi.t.statsT.AddMany(
+		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+		cos.NamedVal64{Name: stats.GetColdSize, Value: res.Size},
+		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(goi.ltime)},
+	)
+
+	slab.Free(buf)
+	cos.Close(lmfh)
+	if revert != "" {
+		if errV := cos.RemoveFile(revert); errV != nil {
+			nlog.Infoln(ftcg+"(rm-revert)", lom, err)
+		}
+	}
+
+	// make copies and slices (async)
+	if err = ec.ECM.EncodeObject(lom, nil); err != nil && err != ec.ErrorECDisabled {
+		nlog.Infoln(ftcg+"(ec)", lom, err)
+	}
+	t.putMirror(lom)
+
+	// load; inc stats
+	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+		goi.lom.Unlock(true)
+		nlog.Infoln(ftcg+"(load)", lom, err) // (unlikely)
+		return errSendingResp
+	}
+	goi.lom.Unlock(true)
+
+	goi.stats(written)
+	return nil
 }

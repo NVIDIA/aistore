@@ -1309,8 +1309,10 @@ func TestAtimeColdGet(t *testing.T) {
 	timeAfterPut := time.Now()
 
 	// Perform the COLD get
-	_, err := api.GetObject(baseParams, bck, objectName, nil)
+	oah, err := api.GetObject(baseParams, bck, objectName, nil)
 	tassert.CheckFatal(t, err)
+
+	tlog.Logf("%+v\n", oah) // DEBUG
 
 	getAtime, getAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 	tassert.Fatalf(t, !getAtime.IsZero(), "GET atime is zero")

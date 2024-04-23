@@ -628,12 +628,14 @@ do:
 		}
 		goi.cold = true
 
-		// two alternative ways to perform cold GET: "fast" and "regular"
-		// "fast" limitations: read archived; compute more checksums (TODO)
+		// 3 alternative ways to perform cold GET
 		if goi.archive.filename == "" &&
 			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange)) {
-			// fast path
-			err = goi.coldSeek(&res)
+			if goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET) {
+				err = goi.coldStream(&res)
+			} else {
+				err = goi.coldSeek(&res)
+			}
 			goi.unlocked = true // always
 			return 0, err
 		}
@@ -1008,6 +1010,7 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 	)
 	cmn.ToHeader(goi.lom.ObjAttrs(), hdr) // (defaults)
 	if goi.isS3 {
+		// (expecting user to set bucket checksum = md5)
 		s3.SetEtag(hdr, goi.lom)
 	}
 	switch {
