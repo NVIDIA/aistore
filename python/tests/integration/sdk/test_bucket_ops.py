@@ -10,6 +10,9 @@ import requests
 
 from aistore.sdk import ListObjectFlag
 from aistore.sdk.const import UTF_ENCODING, LOREM, DUIS
+from aistore.sdk.dataset.dataset_config import DatasetConfig
+from aistore.sdk.dataset.data_attribute import DataAttribute
+from aistore.sdk.dataset.label_attribute import LabelAttribute
 from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
@@ -21,6 +24,7 @@ from tests.const import OBJ_NAME, OBJECT_COUNT, OBJ_CONTENT, PREFIX_NAME
 from tests.integration import REMOTE_SET
 
 INNER_DIR = "directory"
+DATASET_DIR = "dataset"
 TOP_LEVEL_FILES = {
     "top_level_file.txt": b"test data to verify",
     "other_top_level_file.txt": b"other file test data to verify",
@@ -393,3 +397,37 @@ class TestBucketOps(RemoteEnabledTest):
         # Accessing the info of a deleted bucket should raise an error
         with self.assertRaises(ErrBckNotFound):
             info_test_bck.summary()
+
+    def test_write_dataset(self):
+        self.local_test_files.mkdir(exist_ok=True)
+        dataset_directory = self.local_test_files.joinpath(DATASET_DIR)
+        dataset_directory.mkdir(exist_ok=True)
+        img_files = {
+            "file1.jpg": b"file1",
+            "file2.jpg": b"file2",
+            "file3.jpg": b"file3",
+        }
+        _create_files(dataset_directory, img_files)
+
+        dataset_config = DatasetConfig(
+            primary_attribute=DataAttribute(
+                path=dataset_directory, name="image", file_type="jpg"
+            ),
+            secondary_attributes=[
+                LabelAttribute(
+                    name="label", label_identifier=lambda filename: f"{filename}_label"
+                )
+            ],
+        )
+        shards = []
+
+        def post_process(shard_path):
+            self._register_for_post_test_cleanup(names=[shard_path], is_bucket=False)
+            shards.append(shard_path)
+
+        self.bucket.write_dataset(
+            dataset_config, pattern="dataset", maxcount=10, post=post_process
+        )
+        self.assertEqual(len(shards), 1)
+        for shard in shards:
+            self.assertIsNotNone(self.bucket.object(shard).head())

@@ -1,6 +1,6 @@
 import unittest
 from unittest import mock
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, call, patch, MagicMock
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.bucket import Bucket, Header
@@ -42,6 +42,7 @@ from aistore.sdk.const import (
     STATUS_BAD_REQUEST,
     STATUS_OK,
 )
+from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.errors import (
     InvalidBckProvider,
     ErrBckAlreadyExists,
@@ -430,7 +431,7 @@ class TestBucket(unittest.TestCase):
         expected_calls = []
         for expected_val in [expected_act_value_1, expected_act_value_2]:
             expected_calls.append(
-                mock.call(
+                call(
                     HTTP_METHOD_GET,
                     path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
                     headers={HEADER_ACCEPT: MSGPACK_CONTENT_TYPE},
@@ -747,6 +748,25 @@ class TestBucket(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.ais_bck.info(flt_presence=6)
 
+    @patch("aistore.sdk.bucket.ShardWriter")
+    def test_write_dataset(self, mock_shard_writer_class):
+        sample_data = [
+            {"__key__": "sample_01", "image.jpg": "data1", "cls": "label1"},
+            {"__key__": "sample_02", "image.jpg": "data2", "cls": "label2"},
+        ]
+        mock_shard_writer = MagicMock()
+        mock_shard_writer_class.return_value = mock_shard_writer
+        mock_dataset_config = MagicMock(spec=DatasetConfig)
+        mock_dataset_samples = iter(sample_data)
+        mock_dataset_config.generate_dataset.return_value = mock_dataset_samples
+        kwargs = {"pattern": "data", "maxcount": 10}
+        expected_pattern = "data-%02d.tar"
 
-if __name__ == "__main__":
-    unittest.main()
+        self.ais_bck.write_dataset(mock_dataset_config, **kwargs)
+
+        mock_shard_writer_class.assert_called_once_with(
+            pattern=expected_pattern, maxcount=10, post=mock.ANY
+        )
+        expected_calls = [call.write(sample) for sample in sample_data]
+        mock_shard_writer.assert_has_calls(expected_calls, any_order=True)
+        mock_shard_writer.close.assert_called_once()

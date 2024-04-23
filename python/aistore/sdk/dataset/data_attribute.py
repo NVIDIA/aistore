@@ -34,9 +34,9 @@ class DataAttribute(ConfigAttribute):
         Returns:
             Tuple[str, any]: A tuple containing the sample key and the data for the given filename
         """
+        key = self.name + "." + self.file_type
         try:
             data = read_file_bytes(self.path.joinpath(filename + "." + self.file_type))
-            key = self.name + "." + self.file_type
         except FileNotFoundError as err:
             print(f"File not found: {err}")
             data = None
