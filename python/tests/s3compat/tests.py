@@ -50,8 +50,6 @@ from minio.sse import SseCustomerKey
 from minio.time import to_http_header
 from minio.versioningconfig import VersioningConfig
 
-from aistore.sdk.const import AWS_REGION
-
 _CLIENT = None  # initialized in main().
 _TEST_FILE = None  # initialized in main().
 _LARGE_FILE = None  # initialized in main().
@@ -62,6 +60,7 @@ HTTP = urllib3.PoolManager(
     cert_reqs="CERT_REQUIRED",
     ca_certs=os.environ.get("SSL_CERT_FILE") or certifi.where(),
 )
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 
 def _gen_bucket_name():

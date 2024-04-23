@@ -26,12 +26,6 @@ variables:
   CLOUD_BCKS:
     value: "aws://ais-blossom gs://ais-ci-kube" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
     description: "Set of buckets used when running cloud tests."
-  S3_COMPAT_RUN_ALL:
-    value: "False"
-    description: "Whether to run all s3 compatibility tests or only verified passing ones"
-  S3_COMPAT_STRICT:
-    value: "True"
-    description: "Whether to fail pipeline stage immediately on s3 compatibility test failure"
 
 # Templates
 
@@ -226,12 +220,20 @@ test:short:s3-compat:
   <<: *test_short_def
   tags:
     - ais
+  variables:
+    # Run only s3 compat tests we know should pass
+    S3_COMPAT_RUN_ALL:
+      value: "False"
+    # Fail on first failure
+    S3_COMPAT_STRICT:
+      value: "True"
+
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - ais config cluster features Provide-S3-API-via-Root
     - ais config cluster checksum.type=md5
-    - cd python/tests/s3compat
-    - ./compatibility_test.sh
+    - cd python
+    - make python_s3_compat_test
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/

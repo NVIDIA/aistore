@@ -51,10 +51,14 @@ See above [Environment variables](#environment-variables) section for selecting 
 Because these tests use the Minio client rather than boto3, running does not require importing the
 `aistore.botocore_patch` module. 
 
-Run on UNIX systems:
 
-    cd tests/s3compat
-    ./compatibility_test.sh
+From `/python` directory:
+
+    make python_s3_compat_test
+
+Or: 
+- Install the prerequisites from the requirements file: `pip3 install -r tests/s3compat/requirements`
+- Run `python3 tests/s3compat/run_tests.py`
 
 
 ## References

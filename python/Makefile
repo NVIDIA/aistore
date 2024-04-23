@@ -48,6 +48,10 @@ dev_deps:
 botocore_deps:
 	$(PIP) install --upgrade -r aistore/botocore_patch/botocore_requirements $(BOTO_VERSION_ARGS) --quiet
 
+.PHONY: s3_test_deps
+s3_test_deps:
+	$(PIP) install --upgrade -r tests/s3compat/requirements --quiet
+
 .PHONY: python_tests
 python_tests: common_deps dev_deps botocore_deps python_sdk_tests python_etl_tests python_botocore_tests
 
@@ -66,6 +70,10 @@ python_sdk_unit_tests: common_deps
 .PHONY: python_etl_tests
 python_etl_tests: common_deps
 	pytest -v -s tests/integration/sdk/ -m etl
+
+.PHONY: python_s3_compat_test
+python_s3_compat_test: s3_test_deps
+	python3 tests/s3compat/run_tests.py
 
 # Tests for aistore.botocore_patch
 .PHONY: python_botocore_tests
