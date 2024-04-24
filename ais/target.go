@@ -1096,7 +1096,7 @@ func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 	}
 
 	// to header
-	cmn.ToHeader(&op.ObjAttrs, hdr)
+	cmn.ToHeader(&op.ObjAttrs, hdr, op.ObjAttrs.Size)
 	if op.ObjAttrs.Cksum == nil {
 		// cos.Cksum does not have default nil/zero value (reflection)
 		op.ObjAttrs.Cksum = cos.NewCksum("", "")

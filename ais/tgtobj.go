@@ -203,8 +203,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 			)
 			// RESTful PUT response header
 			if poi.resphdr != nil {
-				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr)
-				poi.resphdr.Del(cos.HdrContentLength)
+				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr, 0 /*skip setting content-length*/)
 			}
 		}
 	} else if poi.xctn != nil && poi.owt == cmn.OwtPromote {
@@ -655,7 +654,7 @@ do:
 
 	// read locally and stream back
 fin:
-	ecode, err = goi.finalize()
+	ecode, err = goi.txfini()
 	if err == nil {
 		debug.Assert(ecode == 0, ecode)
 		return 0, nil
@@ -959,7 +958,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	return false
 }
 
-func (goi *getOI) finalize() (ecode int, err error) {
+func (goi *getOI) txfini() (ecode int, err error) {
 	var (
 		lmfh *os.File
 		hrng *htrange
@@ -981,13 +980,13 @@ func (goi *getOI) finalize() (ecode int, err error) {
 		return
 	}
 
-	hdr := goi.w.Header()
+	whdr := goi.w.Header()
 	if goi.ranges.Range != "" {
 		rsize := goi.lom.SizeBytes()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
 		}
-		if hrng, ecode, err = goi.parseRange(hdr, rsize); err != nil {
+		if hrng, ecode, err = goi.rngToHeader(whdr, rsize); err != nil {
 			goto ret
 		}
 		if goi.archive.filename != "" {
@@ -996,23 +995,20 @@ func (goi *getOI) finalize() (ecode int, err error) {
 			goto ret
 		}
 	}
-	ecode, err = goi.fini(fqn, lmfh, hdr, hrng)
+	ecode, err = goi._txfini(fqn, lmfh, whdr, hrng)
 ret:
 	cos.Close(lmfh)
 	return
 }
 
 // in particular, setup reader and writer and set headers
-func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange) (ecode int, err error) {
+func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htrange) (ecode int, err error) {
 	var (
 		size   int64
 		reader io.Reader = lmfh
+		sgl    *memsys.SGL
+		cksum  *cos.Cksum
 	)
-	cmn.ToHeader(goi.lom.ObjAttrs(), hdr) // (defaults)
-	if goi.isS3 {
-		// (expecting user to set bucket checksum = md5)
-		s3.SetEtag(hdr, goi.lom)
-	}
 	switch {
 	case goi.archive.filename != "": // archive
 		var (
@@ -1022,7 +1018,7 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 		)
 		mime, err = archive.MimeFile(lmfh, goi.t.smm, goi.archive.mime, goi.lom.ObjName)
 		if err != nil {
-			return
+			return 0, err
 		}
 		ar, err = archive.NewReader(mime, lmfh, goi.lom.SizeBytes())
 		if err != nil {
@@ -1030,8 +1026,7 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 		}
 		csl, err = ar.Range(goi.archive.filename, nil)
 		if err != nil {
-			err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
-			return
+			return 0, cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
 		}
 		if csl == nil {
 			return http.StatusNotFound,
@@ -1042,44 +1037,49 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 			csl.Close()
 		}()
 		reader, size = csl, csl.Size()
-		hdr.Del(apc.HdrObjCksumVal)
-		hdr.Del(apc.HdrObjCksumType)
-		hdr.Set(apc.HdrArchmime, mime)
-		hdr.Set(apc.HdrArchpath, goi.archive.filename)
+		whdr.Set(apc.HdrArchmime, mime)
+		whdr.Set(apc.HdrArchpath, goi.archive.filename)
+		cksum = cos.NoneCksum
 	case hrng != nil: // range
+		cksum = goi.lom.Checksum()
 		ckconf := goi.lom.CksumConf()
 		cksumRange := ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
 		size = hrng.Length
 		reader = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
 		if cksumRange {
-			var (
-				cksum *cos.CksumHash
-				sgl   = goi.t.gmm.NewSGL(size)
-			)
-			_, cksum, err = cos.CopyAndChecksum(sgl /*as ReaderFrom*/, reader, nil, ckconf.Type)
+			sgl = goi.t.gmm.NewSGL(size)
+			_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, reader, nil, ckconf.Type)
 			if err != nil {
 				sgl.Free()
-				return
+				return 0, err
 			}
-			hdr.Set(apc.HdrObjCksumVal, cksum.Value())
-			hdr.Set(apc.HdrObjCksumType, ckconf.Type)
 			reader = sgl
-			defer func() {
-				sgl.Free()
-			}()
+			if cksumH != nil {
+				cksum = &cksumH.Cksum
+			}
 		}
 	default:
+		// regular case
 		size = goi.lom.SizeBytes()
+		cksum = goi.lom.Checksum()
 	}
 
-	hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
-	hdr.Set(cos.HdrContentType, cos.ContentBinary)
+	// set response header
+	whdr.Set(cos.HdrContentType, cos.ContentBinary)
+	cmn.ToHeader(goi.lom.ObjAttrs(), whdr, size, cksum)
+	if goi.isS3 {
+		// (expecting user to set bucket checksum = md5)
+		s3.SetEtag(whdr, goi.lom)
+	}
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, 64*cos.KiB))
 	err = goi.transmit(reader, buf, fqn)
 	slab.Free(buf)
 
-	return
+	if sgl != nil {
+		sgl.Free()
+	}
+	return 0, nil
 }
 
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
@@ -1127,8 +1127,9 @@ func (goi *getOI) stats(written int64) {
 	}
 }
 
-// parse & validate user-spec-ed goi.ranges, and set response header
-func (goi *getOI) parseRange(resphdr http.Header, size int64) (hrng *htrange, ecode int, err error) {
+// - parse and validate user specified read range (goi.ranges)
+// - set response header accordingly
+func (goi *getOI) rngToHeader(resphdr http.Header, size int64) (hrng *htrange, ecode int, err error) {
 	var ranges []htrange
 	ranges, err = parseMultiRange(goi.ranges.Range, size)
 	if err != nil {
@@ -1561,7 +1562,7 @@ func (coi *copyOI) put(t *target, sargs *sendArgs) error {
 		hdr   = make(http.Header, 8)
 		query = sargs.bckTo.NewQuery()
 	)
-	cmn.ToHeader(sargs.objAttrs, hdr)
+	cmn.ToHeader(sargs.objAttrs, hdr, sargs.objAttrs.SizeBytes(true))
 	hdr.Set(apc.HdrT2TPutterID, t.SID())
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {

@@ -651,7 +651,7 @@ func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n 
 
 	if cksumType == ChecksumNone || cksumType == "" {
 		n, err = io.CopyBuffer(w, r, buf)
-		return
+		return n, nil, err
 	}
 
 	cksum = NewCksumHash(cksumType)
@@ -661,7 +661,7 @@ func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n 
 	}
 	n, err = io.CopyBuffer(mw, r, buf)
 	cksum.Finalize()
-	return
+	return n, cksum, err
 }
 
 // ChecksumBytes computes checksum of given bytes using additional buffer.

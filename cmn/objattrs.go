@@ -157,16 +157,28 @@ func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 // to and from HTTP header converters (as in: HEAD /object)
 //
 
-func ToHeader(oah cos.OAH, hdr http.Header) {
-	if cksum := oah.Checksum(); !cksum.IsEmpty() {
+// may set headers:
+// - standard cos.HdrContentLength ("Content-Length") & cos.HdrETag ("ETag")
+// - atime, version, etc. - all the rest "ais-" prefixed
+func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
+	var cksum *cos.Cksum
+	if len(cksums) > 0 {
+		// - range checksum, or
+		// - archived file checksum, or
+		// - object checksum (when read range is _not_ checksummed)
+		cksum = cksums[0]
+	} else {
+		cksum = oah.Checksum()
+	}
+	if !cksum.IsEmpty() {
 		hdr.Set(apc.HdrObjCksumType, cksum.Ty())
 		hdr.Set(apc.HdrObjCksumVal, cksum.Val())
 	}
 	if at := oah.AtimeUnix(); at != 0 {
 		hdr.Set(apc.HdrObjAtime, cos.UnixNano2S(at))
 	}
-	if n := oah.SizeBytes(true); n > 0 {
-		hdr.Set(cos.HdrContentLength, strconv.FormatInt(n, 10))
+	if size > 0 {
+		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	}
 	if v := oah.Version(true); v != "" {
 		hdr.Set(apc.HdrObjVersion, v)
