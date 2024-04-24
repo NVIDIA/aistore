@@ -18,8 +18,8 @@ MINIKUBE_NODES=${MINIKUBE_NODES:-3}
 # Requirements for each minikube node
 MAX_CPU=16
 MAX_RAM=32768
-MIN_CPU=4
-MIN_RAM=8192
+MIN_CPU=2
+MIN_RAM=4096
 # Reserved for host system
 HOST_MEM=2000
 HOST_CPU=2

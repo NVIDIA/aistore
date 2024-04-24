@@ -36,7 +36,11 @@ install_docker() {
   # Check if the Docker system service is running
   systemctl status docker --no-pager
 
-  usermod -aG docker $USER && newgrp docker
+  # Assuming this script is run as sudo, add the calling user to the docker group
+  usermod -aG docker $SUDO_USER
+
+  echo "Docker installed"
+  echo "Log out and back in or run 'newgrp docker' to allow root-less docker access (required for minikube). Then re-run start_runner.sh"
 }
 
 confirm_docker_rm() {
@@ -51,7 +55,6 @@ confirm_docker_rm() {
             ;;
     esac
 }
-
 
 install_sysbox() {
   echo "Installing Sysbox Docker runtime"
@@ -117,10 +120,11 @@ fi
 
 defaultRuntime=$(docker info --format '{{.DefaultRuntime}}')
 
-if [ "$defaultRuntime" != "sysbox-runc" ]; then
-  echo "Installing sysbox and setting as default Docker runtime"
-  install_sysbox
-fi
+# TODO: Restore later if we need docker available in runners
+# if [ "$defaultRuntime" != "sysbox-runc" ]; then
+#   echo "Installing sysbox and setting as default Docker runtime"
+#   install_sysbox
+# fi
 
 # Install minikube if needed
 if [ ! -f /usr/local/bin/minikube ]; then
