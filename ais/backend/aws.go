@@ -142,9 +142,10 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	}
 
 	// one bucket, one inventory, one statically defined name
-	prefix, objName := _namingInv(cloudBck, ctx)
+	prefix, objName := aiss3.InvPrefObjname(bck.Bucket(), ctx.Name, ctx.ID)
 	lom := core.AllocLOM(objName)
 	if err = lom.InitBck(bck.Bucket()); err != nil {
+		core.FreeLOM(lom)
 		return 0, err
 	}
 	if !lom.TryLock(false) {
@@ -207,7 +208,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 
 	cleanupOldInventory(cloudBck, svc, lsV2resp, csv)
 
-	ecode, err = s3bp.getInventory(cloudBck, svc, ctx, csv)
+	err = s3bp.getInventory(cloudBck, ctx, csv)
 
 	// wlock --> rlock
 
@@ -216,27 +217,11 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	if err != nil {
 		core.FreeLOM(lom)
 		ctx.Lom = nil
-		return ecode, err
+		return 0, err
 	}
 	lom.Lock(false) // must succeed
 
 	return 0, nil
-}
-
-func _namingInv(cloudBck *cmn.Bck, ctx *core.LsoInvCtx) (prefix, objName string) {
-	if ctx.Name == "" {
-		ctx.Name = invName
-	}
-	prefix = ctx.Name + cos.PathSeparator + cloudBck.Name
-	if ctx.ID != "" {
-		prefix += cos.PathSeparator + ctx.ID
-	}
-	if ctx.Name == invName {
-		objName = prefix + invDstExt
-	} else {
-		objName = invName + cos.PathSeparator + prefix + invDstExt
-	}
-	return prefix, objName
 }
 
 // continue using local csv

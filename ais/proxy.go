@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
@@ -1757,6 +1758,8 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		}
 		return
 	}
+	// if listing using bucket inventory (`apc.HdrInventory`) is requested
+	// target selection can change - see lsObjsR below
 	if tsi, err = smap.HrwTargetTask(lsmsg.UUID); err == nil {
 		lsmsg.SID = tsi.ID()
 	}
@@ -2299,6 +2302,14 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	)
 	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) && lsmsg.ContinuationToken == "" /*first page*/ {
 		timeout = config.Client.TimeoutLong.D()
+
+		// override _lsofc selection (see above)
+		_, objName := s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrInvID))
+		tsi, err := smap.HrwName2T(bck.MakeUname(objName))
+		if err != nil {
+			return nil, err
+		}
+		lsmsg.SID = tsi.ID()
 	}
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,

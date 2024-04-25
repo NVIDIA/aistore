@@ -157,7 +157,7 @@ func _prefetchBlob(lom *core.LOM, oa *cmn.ObjAttrs) error {
 	if err := lom2.InitBck(lom.Bucket()); err != nil {
 		return err
 	}
-	xctn, err := core.T.GetColdBlob(lom2, oa, &msg)
+	xctn, err := core.T.GetColdBlob(lom2, oa, &msg, nil /*write sgl*/)
 	if err != nil {
 		return err
 	}

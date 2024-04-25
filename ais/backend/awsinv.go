@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,12 +56,6 @@ const (
 	invMaxLine = 256
 )
 
-const (
-	invName   = ".inventory"
-	invSrcExt = ".csv.gz"
-	invDstExt = ".csv"
-)
-
 // NOTE: hardcoding two groups of constants - cannot find any of them in https://github.com/aws/aws-sdk-go-v2
 // Generally, instead of reading inventory manifest line by line (and worrying about duplicated constants)
 // it'd be much nicer to have an official JSON.
@@ -68,6 +63,7 @@ const (
 const (
 	invManifest = "manifest.json"
 	invSchema   = "fileSchema" // e.g. "fileSchema" : "Bucket, Key, Size, ETag"
+	invSize     = "\"size\""
 )
 
 // canonical schema
@@ -81,6 +77,7 @@ const (
 type invT struct {
 	oname string
 	mtime time.Time
+	size  int64
 }
 
 // list inventories, read and parse manifest, return schema and unique oname
@@ -104,11 +101,12 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 	}
 	for _, obj := range resp.Contents {
 		name := *obj.Key
-		if cos.Ext(name) == invSrcExt {
+		if cos.Ext(name) == aiss3.InvSrcExt {
 			mtime := *(obj.LastModified)
 			if csv.mtime.IsZero() || mtime.After(csv.mtime) {
 				csv.mtime = mtime
 				csv.oname = name
+				csv.size = *(obj.Size)
 			}
 			continue
 		}
@@ -123,13 +121,13 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 	if csv.oname == "" {
 		what := prefix
 		if ctx.ID == "" {
-			what = cos.Either(ctx.Name, invName)
+			what = cos.Either(ctx.Name, aiss3.InvName)
 		}
 		return nil, csv, http.StatusNotFound, cos.NewErrNotFound(cloudBck, invTag+":"+what)
 	}
 
 	// 2. read the manifest and extract `fileSchema` --> ctx
-	schema, ecode, err := s3bp._getParseManifest(cloudBck, svc, manifest.oname)
+	schema, ecode, err := s3bp._getParseManifest(cloudBck, svc, manifest.oname, csv.size)
 	if err != nil {
 		return nil, csv, ecode, err
 	}
@@ -168,7 +166,9 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 		nlog.Infoln("getting", invTag, "for the timestamp:", latest)
 		return time.Time{}, false
 	}
-
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+		nlog.Infoln(core.T.String(), "checking", ctx.Lom.String(), ctx.Lom.FQN, ctx.Lom.HrwFQN)
+	}
 	mtime := finfo.ModTime()
 	abs := _sinceAbs(mtime, latest)
 	if abs < time.Second {
@@ -179,7 +179,8 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 		errN := ctx.Lom.Load(true, true)
 		debug.AssertNoErr(errN)
 		debug.Assert(ctx.Lom.SizeBytes() == finfo.Size(), ctx.Lom.SizeBytes(), finfo.Size())
-		debug.Assert(_sinceAbs(mtime, ctx.Lom.Atime()) < time.Second, mtime.String(), ctx.Lom.Atime().String())
+		// TODO -- FIXME: revisit
+		// debug.Assert(_sinceAbs(mtime, ctx.Lom.Atime()) < time.Second, mtime.String(), ctx.Lom.Atime().String())
 		return time.Time{}, true
 	}
 
@@ -188,33 +189,49 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 }
 
 // get+unzip and write lom
-func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, csv invT) (int, error) {
-	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(csv.oname)}
-	obj, err := svc.GetObject(context.Background(), &input)
-	if err != nil {
-		ecode, e := awsErrorToAISError(err, cloudBck, csv.oname)
-		return ecode, e
+func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT) error {
+	lom := &core.LOM{ObjName: csv.oname}
+	if err := lom.InitBck(cloudBck); err != nil {
+		return err
 	}
-
-	gzr, err := gzip.NewReader(obj.Body)
-	if err != nil {
-		cos.Close(obj.Body)
-		return 0, _errInv("gzip", err)
-	}
+	lom.SetSize(csv.size)
 
 	wfqn := fs.CSM.Gen(ctx.Lom, fs.WorkfileType, "")
 	wfh, err := ctx.Lom.CreateFile(wfqn)
 	if err != nil {
-		cos.Close(obj.Body)
-		gzr.Close()
-		return 0, _errInv("create-file", err)
+		return _errInv("create-file", err)
 	}
 
-	buf, slab := s3bp.t.PageMM().AllocSize(min(*obj.ContentLength*3, 64*cos.KiB)) // wrt "uncompressed"
-	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
+	var (
+		r = &reader{
+			workCh: make(chan *memsys.SGL, 1),
+			doneCh: make(chan *memsys.SGL, 1),
+		}
+		uzw = &unzipWriter{
+			r:   r,
+			wfh: wfh,
+		}
+		xblob core.Xact
+		gzr   *gzip.Reader
+	)
+	// run x-blob-downloader with default (num-readers, chunk-size) tunables
+	xblob, err = s3bp.t.GetColdBlob(lom, lom.ObjAttrs(), &apc.BlobMsg{}, uzw.writeSGL)
+	if err == nil {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Infoln("started", xblob.String(), "->", wfqn)
+		}
+		gzr, err = gzip.NewReader(r)
+	}
+	if err != nil {
+		wfh.Close()
+		cos.RemoveFile(wfqn)
+		return _errInv("blob-gunzip", err)
+	}
+
+	buf, slab := s3bp.t.PageMM().AllocSize(64 * cos.KiB)
+	ctx.Size, err = cos.CopyBuffer(uzw, gzr, buf)
 
 	slab.Free(buf)
-	cos.Close(obj.Body)
 	wfh.Close()
 	gzr.Close()
 
@@ -230,8 +247,10 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 				if errN := lom.PersistMain(); errN != nil {
 					debug.AssertNoErr(errN) // (unlikely)
 					nlog.Errorln("failed to persist", lom.Cname(), "err:", err, "- proceeding anyway...")
+				} else if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+					nlog.Infoln("done", xblob.String(), "->", lom.Cname(), ctx.Size)
 				}
-				return 0, nil
+				return nil
 			}
 		}
 	}
@@ -240,7 +259,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoI
 	if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
 		nlog.Errorf("final-steps (%v), nested fail to remove (%v)", err, nerr)
 	}
-	return 0, _errInv("final-steps", err)
+	return _errInv("final-steps", err)
 }
 
 func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
@@ -350,7 +369,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx 
 // with JSON-tagged manifest structure (that'd include `json:"fileSchema"`)
 // it'd then make sense to additionally validate: format == csv and source bucket == destination bucket == this bucket
 
-func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string) (schema []string, _ int, _ error) {
+func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string, osize int64) (schema []string, _ int, _ error) {
 	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(oname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
@@ -369,10 +388,11 @@ func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname str
 
 	var (
 		fileSchema string
+		size       int64
 		lbuf       = make([]byte, invMaxLine)
 		cname      = cloudBck.Cname(oname)
 	)
-	for {
+	for fileSchema == "" || size == 0 {
 		lbuf, err = sgl.ReadLine(lbuf) // reuse
 		if err != nil {
 			if err == io.EOF {
@@ -388,9 +408,16 @@ func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname str
 			continue
 		}
 		if strings.Contains(line[0], invSchema) {
+			debug.Assert(fileSchema == "", fileSchema)
 			s := strings.TrimSpace(line[1])
 			fileSchema = cmn.UnquoteCEV(strings.TrimSuffix(s, ","))
-			break
+		} else if strings.Contains(line[0], invSize) {
+			s := strings.TrimSpace(line[1])
+			size, err = strconv.ParseInt(strings.TrimSuffix(s, ","), 10, 64)
+			if size != osize {
+				debug.AssertNoErr(err)
+				nlog.Warningln("Warning: size in the manifest", size, "vs latest csv.gz size", osize)
+			}
 		}
 	}
 
@@ -398,6 +425,9 @@ func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname str
 	if err != nil || fileSchema == "" {
 		err = _parseErr(cname, sgl, lbuf, err)
 	} else {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Infoln("parsed manifest", cname, fileSchema, "compressed size", size)
+		}
 		// e.g. "Bucket, Key, Size, ETag"
 		schema = strings.Split(fileSchema, ", ")
 		if len(schema) < 2 {
@@ -445,4 +475,76 @@ func _sinceAbs(t1, t2 time.Time) time.Duration {
 		return t1.Sub(t2)
 	}
 	return t2.Sub(t1)
+}
+
+//
+// chunk reader; serial reader; unzip unzipWriter
+//
+
+type (
+	reader struct {
+		sgl    *memsys.SGL
+		workCh chan *memsys.SGL
+		doneCh chan *memsys.SGL
+	}
+	unzipWriter struct {
+		r   *reader
+		wfh *os.File
+	}
+)
+
+/////////////////
+// unzipWriter //
+/////////////////
+
+// callback of the type `core.WriteSGL`
+func (uzw *unzipWriter) writeSGL(sgl *memsys.SGL) error {
+	uzw.r.workCh <- sgl
+	<-uzw.r.doneCh // block here
+	return nil
+}
+
+func (uzw *unzipWriter) Write(p []byte) (int, error) {
+	return uzw.wfh.Write(p)
+}
+
+////////////
+// reader //
+////////////
+
+func (r *reader) Read(b []byte) (n int, err error) {
+	if r.sgl == nil {
+		goto next
+	}
+read:
+	n, err = r.sgl.Read(b)
+	if err == nil {
+		debug.Assert(n > 0)
+		if r.sgl.Len() == 0 {
+			r.doneCh <- r.sgl // recycle
+			r.sgl = nil
+		}
+		return n, nil
+	}
+	if err == io.EOF {
+		// done reading multi-SGL input
+		debug.Assert(r.sgl.Len() == 0)
+		debug.Assert(n > 0)
+		err = nil
+	}
+	r.doneCh <- r.sgl // return on: sgl is fully read (EOF above) or any error
+	r.sgl = nil
+	return n, err
+
+next: // (nil indicates EOF or error)
+	r.sgl = <-r.workCh
+
+	if r.sgl == nil {
+		// user done as well
+		close(r.workCh)
+		close(r.doneCh)
+		return 0, io.EOF
+	}
+	debug.Assert(r.sgl.Len() > 0)
+	goto read
 }

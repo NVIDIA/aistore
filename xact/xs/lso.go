@@ -123,10 +123,8 @@ func (p *lsoFactory) Start() (err error) {
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
+	// begin streams iff:
 	if r.listRemote() {
-		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) {
-			r.ctx = &core.LsoInvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
-		}
 		if !r.walk.wor {
 			smap := core.T.Sowner().Get()
 			if smap.CountActiveTs() > 1 {
@@ -142,7 +140,12 @@ func (p *lsoFactory) Start() (err error) {
 }
 
 func (p *lsoFactory) beginStreams(r *LsoXact) (err error) {
-	if !r.walk.this {
+	if r.walk.this {
+		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) {
+			// NOTE: initiate backend.GetBucketInv()
+			r.ctx = &core.LsoInvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
+		}
+	} else {
 		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
 	}
 	trname := "lso-" + p.UUID()

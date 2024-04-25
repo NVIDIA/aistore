@@ -24,64 +24,6 @@ import (
 // ais target: types and interfaces
 //
 
-type (
-	NodeMemCap interface {
-		Node
-
-		// Memory allocators
-		PageMM() *memsys.MMSA
-		ByteMM() *memsys.MMSA
-
-		// Space
-		OOS(*fs.CapStatus) fs.CapStatus
-
-		// xactions (jobs) now
-		GetAllRunning(inout *AllRunningInOut, periodic bool)
-	}
-
-	// a node that can also write objects
-	TargetPut interface {
-		NodeMemCap
-
-		// local PUT
-		PutObject(lom *LOM, params *PutParams) (err error)
-	}
-
-	// local target node
-	TargetLoc interface {
-		TargetPut
-
-		// backend
-		Backend(*meta.Bck) Backend
-
-		// FS health and Health
-		FSHC(err error, path string)
-		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, ecode int, err error)
-	}
-
-	// all of the above; for implementations, see `ais/tgtimpl.go` and `ais/htrun.go`
-	Target interface {
-		TargetLoc
-
-		// target <=> target & target => backend (no streams)
-		DataClient() *http.Client
-
-		// core object (+ PutObject above)
-		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT) (ecode int, err error)
-		EvictObject(lom *LOM) (ecode int, err error)
-		DeleteObject(lom *LOM, evict bool) (ecode int, err error)
-
-		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error)
-		GetColdBlob(lom *LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg) (xctn Xact, err error)
-
-		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
-		Promote(params *PromoteParams) (ecode int, err error)
-		HeadObjT2T(lom *LOM, si *meta.Snode) bool
-
-		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
-	}
-)
-
 // intra-cluster data path: control structures and types
 type (
 	OnFinishObj = func(lom *LOM, err error)
@@ -120,5 +62,67 @@ type (
 		DryRun    bool
 		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
 		Sync      bool // ditto -  bucket's 'versioning.synchronize'
+	}
+
+	WriteSGL func(*memsys.SGL) error
+)
+
+type (
+	NodeMemCap interface {
+		Node
+
+		// Memory allocators
+		PageMM() *memsys.MMSA
+		ByteMM() *memsys.MMSA
+
+		// Space
+		OOS(*fs.CapStatus) fs.CapStatus
+
+		// xactions (jobs) now
+		GetAllRunning(inout *AllRunningInOut, periodic bool)
+	}
+
+	// a node that can also write objects
+	TargetPut interface {
+		NodeMemCap
+
+		// PUT params.Reader => lom
+		PutObject(lom *LOM, params *PutParams) (err error)
+
+		// cold GET => (lom | write callback) using multi-reader blob downloader
+		GetColdBlob(lom *LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, fwrite WriteSGL) (xctn Xact, err error)
+	}
+
+	// local target node
+	TargetLoc interface {
+		TargetPut
+
+		// backend
+		Backend(*meta.Bck) Backend
+
+		// FS health and Health
+		FSHC(err error, path string)
+		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, ecode int, err error)
+	}
+
+	// all of the above; for implementations, see `ais/tgtimpl.go` and `ais/htrun.go`
+	Target interface {
+		TargetLoc
+
+		// target <=> target & target => backend (no streams)
+		DataClient() *http.Client
+
+		// core object (+ PutObject above)
+		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT) (ecode int, err error)
+		EvictObject(lom *LOM) (ecode int, err error)
+		DeleteObject(lom *LOM, evict bool) (ecode int, err error)
+
+		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error)
+
+		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
+		Promote(params *PromoteParams) (ecode int, err error)
+		HeadObjT2T(lom *LOM, si *meta.Snode) bool
+
+		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 	}
 )

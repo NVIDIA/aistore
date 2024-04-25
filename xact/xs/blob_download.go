@@ -46,14 +46,14 @@ const (
 
 type (
 	BlobArgs struct {
-		RspW http.ResponseWriter
-		Lom  *core.LOM
-		Lmfh *os.File
-		Msg  *apc.BlobMsg
-		Wfqn string
+		RspW     http.ResponseWriter // (GET)
+		WriteSGL core.WriteSGL       // custom write
+		Lom      *core.LOM
+		Lmfh     *os.File
+		Msg      *apc.BlobMsg
+		Wfqn     string
 		// private; might be adjusted below
 		// to differ from user-provided (ie., apc.BlobMsg) values
-		expCksum   *cos.Cksum
 		chunkSize  int64
 		fullSize   int64
 		numWorkers int
@@ -101,6 +101,7 @@ var (
 	_ xreg.Renewable = (*blobFactory)(nil)
 )
 
+// NOTE: to optimize-out additional HEAD request (below), the caller must pass `oa` attrs (just lom is not enough)
 func RenewBlobDl(xid string, args *BlobArgs, oa *cmn.ObjAttrs) xreg.RenewRes {
 	lom := args.Lom
 	args.chunkSize = args.Msg.ChunkSize
@@ -120,10 +121,6 @@ func RenewBlobDl(xid string, args *BlobArgs, oa *cmn.ObjAttrs) xreg.RenewRes {
 	lom.SetAtimeUnix(oa.Atime)
 	// and separately:
 	args.fullSize = oa.Size
-
-	// NOTE: unlike etag, checksum is not always present
-	// OTOH, a large object's etag won't be md5 and cannot be used anyway
-	args.expCksum = oa.Cksum
 
 	if args.Msg.FullSize > 0 && args.Msg.FullSize != args.fullSize {
 		name := xact.Cname(apc.ActBlobDl, xid) + "/" + lom.Cname()
@@ -152,7 +149,6 @@ func RenewBlobDl(xid string, args *BlobArgs, oa *cmn.ObjAttrs) xreg.RenewRes {
 	if a := cmn.MaxParallelism(); a < args.numWorkers {
 		args.numWorkers = a
 	}
-
 	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: args})
 }
 
@@ -221,7 +217,14 @@ func (p *blobFactory) Start() error {
 		r.sgls[i] = mm.NewSGL(cnt*slabSize, slabSize)
 	}
 
-	// compound multi-writer
+	p.xctn = r
+
+	// deliver locally for custom processing
+	if p.args.WriteSGL != nil {
+		return nil
+	}
+
+	// otherwise, use multi-writer (that may include remote send)
 	ws := make([]io.Writer, 0, 3)
 	if ty := p.args.Lom.CksumConf().Type; ty != cos.ChecksumNone {
 		r.cksum.Init(ty)
@@ -239,11 +242,8 @@ func (p *blobFactory) Start() error {
 		if v, ok := r.p.args.Lom.GetCustomKey(cmn.ETag); ok {
 			whdr.Set(cos.HdrETag, v)
 		}
-		// expCksum
 	}
 	r.writer = cos.NewWriterMulti(ws...)
-
-	p.xctn = r
 	return nil
 }
 
@@ -350,32 +350,39 @@ outer:
 	}
 fin:
 	close(r.workCh)
-	if err == nil && r.p.args.Lom.IsFeatureSet(feat.FsyncPUT) {
-		err = r.p.args.Lmfh.Sync()
-	}
-	cos.Close(r.p.args.Lmfh)
 
-	if err == nil {
-		if r.p.args.fullSize != r.woff {
-			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.p.args.fullSize, r.woff)
-			debug.AssertNoErr(err)
-		} else {
-			r.p.args.Lom.SetSize(r.woff)
-			if r.cksum.H != nil {
-				r.cksum.Finalize()
-				r.p.args.Lom.SetCksum(r.cksum.Clone())
-			}
-			_, err = core.T.FinalizeObj(r.p.args.Lom, r.p.args.Wfqn, r, cmn.OwtGetPrefetchLock)
-		}
-	}
-	if err == nil {
-		r.ObjsAdd(1, 0)
+	if r.p.args.WriteSGL != nil {
+		errN := r.p.args.WriteSGL(nil)
+		debug.AssertNoErr(errN)
 	} else {
-		if errRemove := cos.RemoveFile(r.p.args.Wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
-			nlog.Errorln("nested err:", errRemove)
+		// finalize r.p.args.Lom
+		if err == nil && r.p.args.Lom.IsFeatureSet(feat.FsyncPUT) {
+			err = r.p.args.Lmfh.Sync()
 		}
-		if err != cmn.ErrXactUserAbort {
-			r.Abort(err)
+		cos.Close(r.p.args.Lmfh)
+
+		if err == nil {
+			if r.p.args.fullSize != r.woff {
+				err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.p.args.fullSize, r.woff)
+				debug.AssertNoErr(err)
+			} else {
+				r.p.args.Lom.SetSize(r.woff)
+				if r.cksum.H != nil {
+					r.cksum.Finalize()
+					r.p.args.Lom.SetCksum(r.cksum.Clone())
+				}
+				_, err = core.T.FinalizeObj(r.p.args.Lom, r.p.args.Wfqn, r, cmn.OwtGetPrefetchLock)
+			}
+		}
+		if err == nil {
+			r.ObjsAdd(1, 0)
+		} else {
+			if errRemove := cos.RemoveFile(r.p.args.Wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
+				nlog.Errorln("nested err:", errRemove)
+			}
+			if err != cmn.ErrXactUserAbort {
+				r.Abort(err)
+			}
 		}
 	}
 
@@ -396,9 +403,17 @@ func (r *XactBlobDl) start() {
 	}
 }
 
-func (r *XactBlobDl) write(sgl *memsys.SGL) error {
-	size := sgl.Size()
-	written, err := io.Copy(r.writer, sgl) // using sgl.ReadFrom
+func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
+	var (
+		written int64
+		size    = sgl.Size()
+	)
+	if r.p.args.WriteSGL != nil {
+		err = r.p.args.WriteSGL(sgl)
+		written = sgl.Size() - sgl.Len()
+	} else {
+		written, err = io.Copy(r.writer, sgl) // using sgl.ReadFrom
+	}
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleXs) {
 			nlog.Errorf("%s: failed to write (woff=%d, next=%d, sgl-size=%d): %v",

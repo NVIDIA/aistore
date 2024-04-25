@@ -1465,21 +1465,26 @@ func (t *target) blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBl
 
 // returns an empty xid ("") if nothing to do
 func _blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
-	// create wfqn
-	wfqn := fs.CSM.Gen(args.Lom, fs.WorkfileType, "blob-dl")
-	lmfh, err := args.Lom.CreateFile(wfqn)
-	if err != nil {
-		return "", nil, err
+	if args.WriteSGL == nil {
+		wfqn := fs.CSM.Gen(args.Lom, fs.WorkfileType, "blob-dl")
+		lmfh, err := args.Lom.CreateFile(wfqn)
+		if err != nil {
+			return "", nil, err
+		}
+		args.Lmfh = lmfh
+		args.Wfqn = wfqn
 	}
-	args.Lmfh = lmfh
-	args.Wfqn = wfqn
-
 	// new
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, args, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
-		if errRemove := cos.RemoveFile(wfqn); errRemove != nil {
-			nlog.Errorln("nested err", errRemove)
+		if args.Lmfh != nil {
+			cos.Close(args.Lmfh)
+		}
+		if args.Wfqn != "" {
+			if errRemove := cos.RemoveFile(args.Wfqn); errRemove != nil {
+				nlog.Errorln("nested err", errRemove)
+			}
 		}
 		return "", nil, rns.Err
 	}

@@ -206,10 +206,11 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	return 0, nil
 }
 
-func (t *target) GetColdBlob(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg) (xctn core.Xact, err error) {
+func (t *target) GetColdBlob(lom *core.LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, fwrite core.WriteSGL) (xctn core.Xact, err error) {
 	args := &xs.BlobArgs{
-		Lom: lom,
-		Msg: msg, // chunk size, etc. tunables
+		Lom:      lom,
+		Msg:      msg, // chunk size, etc. tunables
+		WriteSGL: fwrite,
 	}
 	_, xctn, err = t.blobdl(args, oa)
 	return xctn, err
