@@ -214,11 +214,16 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 			r:   r,
 			wfh: wfh,
 		}
+		params = &core.BlobParams{
+			Lom:      lom,
+			Msg:      &apc.BlobMsg{}, // default tunables
+			WriteSGL: uzw.writeSGL,
+		}
 		xblob core.Xact
 		gzr   *gzip.Reader
 	)
 	// run x-blob-downloader with default (num-readers, chunk-size) tunables
-	xblob, err = s3bp.t.GetColdBlob(lom, lom.ObjAttrs(), &apc.BlobMsg{}, uzw.writeSGL)
+	xblob, err = s3bp.t.GetColdBlob(params, lom.ObjAttrs())
 	if err == nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln("started", xblob.String(), "->", wfqn)

@@ -700,7 +700,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 
 		// NOTE: make a blocking call w/ simultaneous Tx
-		args := &xs.BlobArgs{
+		args := &core.BlobParams{
 			RspW: w,
 			Lom:  lom,
 			Msg:  &msg,
@@ -962,7 +962,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, "set-custom", msg.Value, err)
 			break
 		}
-		args := &xs.BlobArgs{
+		args := &core.BlobParams{
 			Lom: lom,
 			Msg: &blobMsg,
 		}
@@ -1419,7 +1419,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
@@ -1430,14 +1430,14 @@ func (t *target) blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBl
 	}
 
 	if oa != nil {
-		return _blobdl(args, oa)
+		return _blobdl(params, oa)
 	}
 
 	// - try-lock (above) to load, check availability
 	// - unlock right away
 	// - subsequently, use cmn.OwtGetPrefetchLock to finalize
 	// - there's a single x-blob-download per object (see WhenPrevIsRunning)
-	lom, latestVer := args.Lom, args.Msg.LatestVer
+	lom, latestVer := params.Lom, params.Msg.LatestVer
 	if !lom.TryLock(false) {
 		return "", nil, cmn.NewErrBusy("blob", lom.Cname())
 	}
@@ -1460,29 +1460,30 @@ func (t *target) blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBl
 	}
 
 	// handle: (not-present || latest-not-eq)
-	return _blobdl(args, oa)
+	return _blobdl(params, oa)
 }
 
 // returns an empty xid ("") if nothing to do
-func _blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
-	if args.WriteSGL == nil {
-		wfqn := fs.CSM.Gen(args.Lom, fs.WorkfileType, "blob-dl")
-		lmfh, err := args.Lom.CreateFile(wfqn)
+func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+	if params.WriteSGL == nil {
+		// regular lom save (custom writer not present)
+		wfqn := fs.CSM.Gen(params.Lom, fs.WorkfileType, "blob-dl")
+		lmfh, err := params.Lom.CreateFile(wfqn)
 		if err != nil {
 			return "", nil, err
 		}
-		args.Lmfh = lmfh
-		args.Wfqn = wfqn
+		params.Lmfh = lmfh
+		params.Wfqn = wfqn
 	}
 	// new
 	xid := cos.GenUUID()
-	rns := xs.RenewBlobDl(xid, args, oa)
+	rns := xs.RenewBlobDl(xid, params, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
-		if args.Lmfh != nil {
-			cos.Close(args.Lmfh)
+		if params.Lmfh != nil {
+			cos.Close(params.Lmfh)
 		}
-		if args.Wfqn != "" {
-			if errRemove := cos.RemoveFile(args.Wfqn); errRemove != nil {
+		if params.Wfqn != "" {
+			if errRemove := cos.RemoveFile(params.Wfqn); errRemove != nil {
 				nlog.Errorln("nested err", errRemove)
 			}
 		}
@@ -1491,7 +1492,7 @@ func _blobdl(args *xs.BlobArgs, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error
 
 	// a) via x-start, x-blob-download
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
-	if args.RspW == nil {
+	if params.RspW == nil {
 		go xblob.Run(nil)
 		return xblob.ID(), xblob, nil
 	}

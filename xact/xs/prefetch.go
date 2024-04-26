@@ -149,15 +149,15 @@ eret:
 
 // TODO: revisit
 func _prefetchBlob(lom *core.LOM, oa *cmn.ObjAttrs) error {
-	var (
-		sleep = 5 * time.Second // TODO: add a tunable
-		msg   apc.BlobMsg       // TODO: ditto
-		lom2  = core.AllocLOM(lom.ObjName)
-	)
-	if err := lom2.InitBck(lom.Bucket()); err != nil {
+	const sleep = 5 * time.Second // TODO: add a tunable
+	params := &core.BlobParams{
+		Lom: core.AllocLOM(lom.ObjName),
+		Msg: &apc.BlobMsg{}, // TODO: ditto
+	}
+	if err := params.Lom.InitBck(lom.Bucket()); err != nil {
 		return err
 	}
-	xctn, err := core.T.GetColdBlob(lom2, oa, &msg, nil /*write sgl*/)
+	xctn, err := core.T.GetColdBlob(params, oa)
 	if err != nil {
 		return err
 	}

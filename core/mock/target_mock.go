@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -67,7 +66,7 @@ func (*TargetMock) GetCold(context.Context, *core.LOM, cmn.OWT) (int, error) {
 	return http.StatusOK, nil
 }
 
-func (*TargetMock) GetColdBlob(*core.LOM, *cmn.ObjAttrs, *apc.BlobMsg, core.WriteSGL) (core.Xact, error) {
+func (*TargetMock) GetColdBlob(*core.BlobParams, *cmn.ObjAttrs) (core.Xact, error) {
 	return nil, nil
 }
 

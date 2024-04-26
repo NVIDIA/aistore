@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -64,7 +65,17 @@ type (
 		Sync      bool // ditto -  bucket's 'versioning.synchronize'
 	}
 
+	// blob
 	WriteSGL func(*memsys.SGL) error
+
+	BlobParams struct {
+		RspW     http.ResponseWriter // (GET)
+		WriteSGL WriteSGL            // custom write
+		Lom      *LOM
+		Lmfh     *os.File
+		Msg      *apc.BlobMsg
+		Wfqn     string
+	}
 )
 
 type (
@@ -89,8 +100,8 @@ type (
 		// PUT params.Reader => lom
 		PutObject(lom *LOM, params *PutParams) (err error)
 
-		// cold GET => (lom | write callback) using multi-reader blob downloader
-		GetColdBlob(lom *LOM, oa *cmn.ObjAttrs, msg *apc.BlobMsg, fwrite WriteSGL) (xctn Xact, err error)
+		// utilize blob downloader to cold-GET => (lom | custom write callback)
+		GetColdBlob(params *BlobParams, oa *cmn.ObjAttrs) (xctn Xact, err error)
 	}
 
 	// local target node
