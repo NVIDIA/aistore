@@ -40,7 +40,8 @@ import (
 
 type (
 	s3bp struct {
-		t core.TargetPut
+		t  core.TargetPut
+		mm *memsys.MMSA
 		base
 	}
 	sessConf struct {
@@ -68,6 +69,7 @@ func NewAWS(t core.TargetPut) (core.Backend, error) {
 	awsProfile = os.Getenv(env.AWS.Profile)
 	return &s3bp{
 		t:    t,
+		mm:   t.PageMM(),
 		base: base{apc.AWS},
 	}, nil
 }
@@ -246,8 +248,8 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 		return
 	}
 	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
-	siz := min(invSizeSGL, ctx.Size-ctx.Offset /*remaining*/)
-	sgl := s3bp.t.PageMM().NewSGL(siz, memsys.MaxPageSlabSize/2)
+	siz := min(invPageSGL, ctx.Size-ctx.Offset /*remaining*/)
+	sgl := s3bp.mm.NewSGL(siz, memsys.MaxPageSlabSize/2)
 	err = s3bp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
 	sgl.Free()
 	fh.Close()

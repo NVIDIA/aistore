@@ -1072,7 +1072,7 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 		s3.SetEtag(whdr, goi.lom)
 	}
 
-	buf, slab := goi.t.gmm.AllocSize(min(size, 64*cos.KiB))
+	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
 	err = goi.transmit(reader, buf, fqn)
 	slab.Free(buf)
 

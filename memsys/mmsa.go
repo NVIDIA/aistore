@@ -92,6 +92,7 @@ const readme = cmn.GitHubHome + "/blob/main/memsys/README.md"
 const (
 	PageSize            = cos.KiB * 4
 	DefaultBufSize      = PageSize * 8
+	DefaultBuf2Size     = PageSize * 16
 	DefaultSmallBufSize = cos.KiB
 )
 

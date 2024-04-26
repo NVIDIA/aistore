@@ -2300,16 +2300,22 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 		args    = allocBcArgs()
 		timeout = config.Client.ListObjTimeout.D()
 	)
-	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) && lsmsg.ContinuationToken == "" /*first page*/ {
-		timeout = config.Client.TimeoutLong.D()
-
-		// override _lsofc selection (see above)
-		_, objName := s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrInvID))
-		tsi, err := smap.HrwName2T(bck.MakeUname(objName))
-		if err != nil {
-			return nil, err
+	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) {
+		// TODO: extend to other Clouds or, more precisely, other list-objects supporting backends
+		if !bck.IsRemoteS3() {
+			return nil, cmn.NewErrUnsupp("list (via bucket inventory) non-S3 bucket", bck.Cname(""))
 		}
-		lsmsg.SID = tsi.ID()
+		if lsmsg.ContinuationToken == "" /*first page*/ {
+			timeout = config.Client.TimeoutLong.D()
+
+			// override _lsofc selection (see above)
+			_, objName := s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrInvID))
+			tsi, err := smap.HrwName2T(bck.MakeUname(objName))
+			if err != nil {
+				return nil, err
+			}
+			lsmsg.SID = tsi.ID()
+		}
 	}
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,

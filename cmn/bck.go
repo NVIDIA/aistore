@@ -378,6 +378,10 @@ func (b *Bck) IsRemote() bool {
 	return apc.IsRemoteProvider(b.Provider) || b.IsRemoteAIS() || b.Backend() != nil
 }
 
+//
+// NOTE: for more Is* accessors (e.g. IsRemoteS3), see also: core/meta/bck.go
+//
+
 func (b *Bck) IsCloud() bool {
 	if apc.IsCloudProvider(b.Provider) {
 		return true

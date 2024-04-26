@@ -277,10 +277,20 @@ func (e *ErrUnsupp) Error() string {
 	return fmt.Sprintf("cannot %s %s - operation not supported", e.action, e.what)
 }
 
+func isErrUnsupp(err error) bool {
+	_, ok := err.(*ErrUnsupp)
+	return ok
+}
+
 func NewErrNotImpl(action, what string) *ErrNotImpl { return &ErrNotImpl{action, what} }
 
 func (e *ErrNotImpl) Error() string {
 	return fmt.Sprintf("cannot %s %s - not impemented yet", e.action, e.what)
+}
+
+func isErrNotImpl(err error) bool {
+	_, ok := err.(*ErrNotImpl)
+	return ok
 }
 
 // (ais) ErrBucketAlreadyExists
@@ -1041,17 +1051,23 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 
 	// assign status (in order of priority)
 	if cos.IsErrNotFound(err) {
+		// NOTE: override opts[0] status, e.g.: "remote cluster "uuid" does not exist, status=500"
 		status = http.StatusNotFound
 	} else if l > 0 {
 		status = opts[0]
 	} else if errf, ok := err.(*ErrFailedTo); ok {
 		status = errf.status
-	} else if isErrNotFoundExtended(err, status) {
-		status = http.StatusNotFound
-	} else if IsErrCapExceeded(err) {
-		status = http.StatusInsufficientStorage
-	} else if IsErrRangeNotSatisfiable(err) {
-		status = http.StatusRequestedRangeNotSatisfiable
+	} else {
+		switch {
+		case isErrNotFoundExtended(err, status):
+			status = http.StatusNotFound
+		case IsErrCapExceeded(err):
+			status = http.StatusInsufficientStorage
+		case IsErrRangeNotSatisfiable(err):
+			status = http.StatusRequestedRangeNotSatisfiable
+		case isErrUnsupp(err), isErrNotImpl(err):
+			status = http.StatusNotImplemented
+		}
 	}
 
 	herr.init(r, err, status)

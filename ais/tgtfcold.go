@@ -46,7 +46,7 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	// read remote, write local
 	var (
 		written   int64
-		buf, slab = t.gmm.AllocSize(min(res.Size, 64*cos.KiB))
+		buf, slab = t.gmm.AllocSize(min(res.Size, memsys.DefaultBuf2Size))
 		cksumH    = cos.NewCksumHash(lom.CksumConf().Type)
 		mw        = cos.NewWriterMulti(lmfh, cksumH.H)
 	)
@@ -209,7 +209,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 
 	var (
 		written   int64
-		buf, slab = t.gmm.AllocSize(min(res.Size, 64*cos.KiB))
+		buf, slab = t.gmm.AllocSize(min(res.Size, memsys.DefaultBuf2Size))
 		cksum     = cos.NewCksumHash(lom.CksumConf().Type)
 		mw        = cos.NewWriterMulti(goi.w, lmfh, cksum.H)
 		whdr      = goi.w.Header()

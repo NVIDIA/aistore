@@ -37,7 +37,6 @@ import (
 // one bucket, one inventory (for this same bucket), and one statically defined .csv
 
 // TODO (must):
-// - use blob downloader (****)
 // - keep the underlying csv file open between pages
 //
 // TODO (desirable):
@@ -51,9 +50,9 @@ const invTag = "bucket-inventory"
 const invBusyTimeout = 10 * time.Second
 
 const (
-	invSizeSGL = cos.MiB
-	invMaxPage = 8 * apc.MaxPageSizeAWS // roughly, 2MB given 256B lines
-	invMaxLine = 256
+	invMaxPage = 8 * apc.MaxPageSizeAWS       // roughly, 1MB given 128 byte lines
+	invPageSGL = max(invMaxPage*128, cos.MiB) // ditto
+	invMaxLine = 256                          // line buf (2x)
 )
 
 // NOTE: hardcoding two groups of constants - cannot find any of them in https://github.com/aws/aws-sdk-go-v2
@@ -63,7 +62,7 @@ const (
 const (
 	invManifest = "manifest.json"
 	invSchema   = "fileSchema" // e.g. "fileSchema" : "Bucket, Key, Size, ETag"
-	invSize     = "\"size\""
+	invKey      = "\"key\""
 )
 
 // canonical schema
@@ -125,9 +124,13 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 		}
 		return nil, csv, http.StatusNotFound, cos.NewErrNotFound(cloudBck, invTag+":"+what)
 	}
+	if csv.mtime.After(manifest.mtime) {
+		a, b := cos.FormatTime(manifest.mtime, cos.StampSec), cos.FormatTime(csv.mtime, cos.StampSec)
+		nlog.Warningln("using an older manifest:", manifest.oname, a, "to parse:", csv.oname, b)
+	}
 
 	// 2. read the manifest and extract `fileSchema` --> ctx
-	schema, ecode, err := s3bp._getParseManifest(cloudBck, svc, manifest.oname, csv.size)
+	schema, ecode, err := s3bp._getManifest(cloudBck, svc, manifest.oname, csv.oname)
 	if err != nil {
 		return nil, csv, ecode, err
 	}
@@ -163,7 +166,7 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 	finfo, err := os.Stat(ctx.Lom.FQN)
 	if err != nil {
 		debug.Assert(os.IsNotExist(err), err)
-		nlog.Infoln("getting", invTag, "for the timestamp:", latest)
+		nlog.Infoln(invTag, "does not exist, getting a new one for the timestamp:", latest)
 		return time.Time{}, false
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
@@ -228,7 +231,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 		return _errInv("blob-gunzip", err)
 	}
 
-	buf, slab := s3bp.t.PageMM().AllocSize(64 * cos.KiB)
+	buf, slab := s3bp.mm.AllocSize(memsys.DefaultBuf2Size)
 	ctx.Size, err = cos.CopyBuffer(uzw, gzr, buf)
 
 	slab.Free(buf)
@@ -277,7 +280,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx 
 	}
 
 	// NOTE: upper limit hardcoded (assuming enough space to hold msg.PageSize)
-	if written, err := io.CopyN(sgl, fh, invSizeSGL-cos.KiB); err != nil || written == 0 {
+	if written, err := io.CopyN(sgl, fh, invPageSGL-cos.KiB); err != nil || written == 0 {
 		lst.Entries = lst.Entries[:0]
 		return err
 	}
@@ -368,16 +371,15 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx 
 // (see "hardcoding" comment above)
 // with JSON-tagged manifest structure (that'd include `json:"fileSchema"`)
 // it'd then make sense to additionally validate: format == csv and source bucket == destination bucket == this bucket
-
-func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname string, osize int64) (schema []string, _ int, _ error) {
-	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(oname)}
+func (s3bp *s3bp) _getManifest(cloudBck *cmn.Bck, svc *s3.Client, mname, csvname string) (schema []string, _ int, _ error) {
+	input := s3.GetObjectInput{Bucket: aws.String(cloudBck.Name), Key: aws.String(mname)}
 	obj, err := svc.GetObject(context.Background(), &input)
 	if err != nil {
-		ecode, e := awsErrorToAISError(err, cloudBck, oname)
+		ecode, e := awsErrorToAISError(err, cloudBck, mname)
 		return nil, ecode, e
 	}
 
-	sgl := s3bp.t.PageMM().NewSGL(0)
+	sgl := s3bp.mm.NewSGL(0)
 	_, err = io.Copy(sgl, obj.Body)
 	cos.Close(obj.Body)
 
@@ -390,7 +392,7 @@ func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname str
 		fileSchema string
 		size       int64
 		lbuf       = make([]byte, invMaxLine)
-		cname      = cloudBck.Cname(oname)
+		cname      = cloudBck.Cname(mname)
 	)
 	for fileSchema == "" || size == 0 {
 		lbuf, err = sgl.ReadLine(lbuf) // reuse
@@ -411,12 +413,11 @@ func (s3bp *s3bp) _getParseManifest(cloudBck *cmn.Bck, svc *s3.Client, oname str
 			debug.Assert(fileSchema == "", fileSchema)
 			s := strings.TrimSpace(line[1])
 			fileSchema = cmn.UnquoteCEV(strings.TrimSuffix(s, ","))
-		} else if strings.Contains(line[0], invSize) {
+		} else if strings.Contains(line[0], invKey) {
 			s := strings.TrimSpace(line[1])
-			size, err = strconv.ParseInt(strings.TrimSuffix(s, ","), 10, 64)
-			if size != osize {
-				debug.AssertNoErr(err)
-				nlog.Warningln("Warning: size in the manifest", size, "vs latest csv.gz size", osize)
+			oname := cmn.UnquoteCEV(strings.TrimSuffix(s, ","))
+			if oname != csvname {
+				nlog.Warningln("manifested object", oname, "vs latest csv.gz", csvname)
 			}
 		}
 	}
