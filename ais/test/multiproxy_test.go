@@ -480,14 +480,20 @@ func primaryAndProxyCrash(t *testing.T) {
 func targetRejoin(t *testing.T) {
 	var (
 		id       string
-		node     *meta.Snode
 		proxyURL = tools.RandomProxyURL(t)
 	)
 
 	smap := tools.GetClusterMap(t, proxyURL)
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
-	node, _ = smap.GetRandTarget()
+	node, err := smap.GetRandTarget()
+	if err != nil {
+		tlog.Logf("Warning: %v - retrying...\n", err)
+		// retry once
+		time.Sleep(8 * time.Second)
+		node, err = smap.GetRandTarget()
+		tassert.CheckFatal(t, err)
+	}
 	id = node.ID()
 
 	cmd, err := tools.KillNode(node)
