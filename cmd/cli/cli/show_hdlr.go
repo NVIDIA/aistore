@@ -68,6 +68,7 @@ var (
 			jsonFlag,
 			noHeaderFlag,
 			unitsFlag,
+			nonverboseFlag,
 		),
 		cmdSmap: append(
 			longRunFlags,
@@ -377,7 +378,11 @@ func showClusterHandler(c *cli.Context) error {
 	}
 	if c.NArg() > 1 {
 		arg := c.Args().Get(1)
-		if sid != "" { // not "what"
+		if sid != "" { // already set above, must be the last arg
+			if err := errTailArgsContainFlag(c.Args()[1:]); err != nil {
+				tip := reorderTailArgs("ais show cluster", c.Args()[1:], sid)
+				return fmt.Errorf("%v (tip: try '%s')", err, tip)
+			}
 			return incorrectUsageMsg(c, "", arg)
 		}
 		node, _, err := getNode(c, arg)
@@ -385,6 +390,10 @@ func showClusterHandler(c *cli.Context) error {
 			return err
 		}
 		sid, daeType = node.ID(), node.Type()
+		if err := errTailArgsContainFlag(c.Args()[2:]); err != nil {
+			tip := reorderTailArgs("ais show cluster", c.Args()[2:], daeType, sid)
+			return fmt.Errorf("%v (tip: try '%s')", err, tip)
+		}
 	}
 
 	setLongRunParams(c)
@@ -397,10 +406,8 @@ func showClusterHandler(c *cli.Context) error {
 	if err != nil {
 		return V(err)
 	}
-	if sid != "" {
-		return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, sid)
-	}
-	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, what)
+
+	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, cos.Either(sid, what))
 }
 
 func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {

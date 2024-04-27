@@ -455,7 +455,7 @@ var (
 	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 
 	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose output"}
-	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose (quiet) output, minimized reporting"}
+	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose (quiet) output, minimized reporting, fewer warnings"}
 	verboseJobFlag = cli.BoolFlag{
 		Name:  verboseFlag.Name,
 		Usage: "show extended statistics",

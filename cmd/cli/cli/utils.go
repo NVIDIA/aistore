@@ -98,11 +98,39 @@ func arg0Node(c *cli.Context) (node *meta.Snode, sname string, err error) {
 	return
 }
 
-func errMisplacedFlag(c *cli.Context, arg string) (err error) {
+//
+// misplaced or mistyped flag(s)
+//
+
+func errArgIsFlag(c *cli.Context, arg string) (err error) {
 	if len(arg) > 1 && arg[0] == '-' {
 		err = incorrectUsageMsg(c, "missing command line argument (hint: flag '%s' misplaced?)", arg)
 	}
 	return err
+}
+
+func errTailArgsContainFlag(tail []string) error {
+	for _, arg := range tail {
+		if len(arg) > 1 && arg[0] == '-' {
+			return fmt.Errorf("unrecognized or misplaced option %q", arg)
+		}
+	}
+	return nil
+}
+
+func reorderTailArgs(left string, middle []string, right ...string) string {
+	var sb strings.Builder
+	sb.WriteString(left)
+	sb.WriteByte(' ')
+	for _, s := range middle {
+		sb.WriteString(s)
+		sb.WriteByte(' ')
+	}
+	for _, s := range right {
+		sb.WriteString(s)
+		sb.WriteByte(' ')
+	}
+	return strings.TrimSuffix(sb.String(), " ")
 }
 
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }

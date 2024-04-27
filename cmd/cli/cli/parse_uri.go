@@ -16,7 +16,7 @@ import (
 )
 
 func errBucketNameInvalid(c *cli.Context, arg string, err error) error {
-	if errV := errMisplacedFlag(c, arg); errV != nil {
+	if errV := errArgIsFlag(c, arg); errV != nil {
 		return errV
 	}
 	if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {

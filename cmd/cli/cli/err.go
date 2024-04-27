@@ -289,15 +289,6 @@ func _errUsage(c *cli.Context, msg string) *errUsage {
 	}
 }
 
-func mistypedFlag(extraArgs []string) error {
-	for _, arg := range extraArgs {
-		if strings.HasPrefix(arg, flagPrefix) {
-			return fmt.Errorf("unrecognized option %q (a typo? see %s for details)", arg, qflprn(cli.HelpFlag))
-		}
-	}
-	return nil
-}
-
 // prints completion (TAB-TAB) error when calling AIS APIs
 func completionErr(c *cli.Context, err error) {
 	fmt.Fprintln(c.App.ErrWriter)

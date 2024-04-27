@@ -183,7 +183,7 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		return
 	}
 
-	if err := mistypedFlag(c.Args()[2:]); err != nil {
+	if err := errTailArgsContainFlag(c.Args()[2:]); err != nil {
 		return err
 	}
 

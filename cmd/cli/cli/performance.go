@@ -43,6 +43,7 @@ var (
 		regexColsFlag,
 		unitsFlag,
 		averageSizeFlag,
+		nonverboseFlag,
 	)
 
 	// alias
@@ -132,11 +133,11 @@ func showPerfHandler(c *cli.Context) error {
 }
 
 func _warnThruLatIters(c *cli.Context) {
-	if !flagIsSet(c, refreshFlag) {
-		warn := fmt.Sprintf("for better results, use %s option and/or run several iterations\n",
-			qflprn(refreshFlag))
-		actionWarn(c, warn)
+	if flagIsSet(c, refreshFlag) || flagIsSet(c, nonverboseFlag) {
+		return
 	}
+	warn := fmt.Sprintf("for better results, use %s option and/or run several iterations\n", qflprn(refreshFlag))
+	actionWarn(c, warn)
 }
 
 func perfCptn(c *cli.Context, tab string) {

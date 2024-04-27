@@ -173,6 +173,9 @@ func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, 
 		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which is not compatible with the CLI (expecting v%s)",
 			sname, s1, s2, version, expected)
 	} else {
+		if flagIsSet(c, nonverboseFlag) {
+			return
+		}
 		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which may not be fully compatible with the CLI (expecting v%s)",
 			sname, s1, s2, version, expected)
 	}
