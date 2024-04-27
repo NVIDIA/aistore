@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -131,6 +131,14 @@ func showPerfHandler(c *cli.Context) error {
 	return nil
 }
 
+func _warnThruLatIters(c *cli.Context) {
+	if !flagIsSet(c, refreshFlag) {
+		warn := fmt.Sprintf("for better results, use %s option and/or run several iterations\n",
+			qflprn(refreshFlag))
+		actionWarn(c, warn)
+	}
+}
+
 func perfCptn(c *cli.Context, tab string) {
 	stamp := cos.FormatNowStamp()
 	repeat := 40 - len(stamp) - len(tab)
@@ -162,6 +170,9 @@ func showThroughputHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	_warnThruLatIters(c)
+
 	selected := make(cos.StrKVs, len(metrics))
 	for name, kind := range metrics {
 		switch {
@@ -204,8 +215,12 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 			}
 			vend := end.Tracker[name]
 			if vend.Value <= v.Value {
+				// no changes, nothing to show
+				v.Value = 0
+				begin.Tracker[name] = v
 				continue
 			}
+
 			v.Value = (vend.Value - v.Value) / seconds
 			begin.Tracker[name] = v
 			num++
@@ -223,6 +238,9 @@ func showLatencyHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	_warnThruLatIters(c)
+
 	// statically filter metrics (names)
 	selected := make(cos.StrKVs, len(selectedLatency))
 	for name, kind := range metrics {
@@ -273,6 +291,7 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 					continue
 				}
 			}
+			// no changes, nothing to show
 			v.Value = 0
 			begin.Tracker[name] = v
 		}
