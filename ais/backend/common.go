@@ -34,8 +34,8 @@ func (b *base) GetBucketInv(*meta.Bck, *core.LsoInvCtx) (int, error) {
 	return 0, newErrInventory(b.provider)
 }
 
-func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) (int, error) {
-	return 0, newErrInventory(b.provider)
+func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) error {
+	return newErrInventory(b.provider)
 }
 
 //

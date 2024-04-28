@@ -129,7 +129,8 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 // LIST OBJECTS via INVENTORY
 //
 
-// NOTE: when successful, returns w/ rlock held; otherwise, always unlocks and frees
+// when successful, returns w/ rlock held and inventory's (lom, lmfh) in the context;
+// otherwise, always unlocks and frees
 func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) {
 	debug.Assert(ctx != nil && ctx.Lom == nil)
 	cloudBck := bck.RemoteBck()
@@ -165,6 +166,13 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	ctx.Lom = lom
 	mtime, usable := checkInvLom(csv.mtime, ctx)
 	if usable {
+		if ctx.Lmfh, err = os.Open(ctx.Lom.FQN); err != nil {
+			lom.Unlock(false)
+			core.FreeLOM(lom)
+			ctx.Lom = nil
+			return 0, _errInv("usable-inv-open", err)
+		}
+
 		return 0, nil // w/ rlock
 	}
 
@@ -202,7 +210,14 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 			// wlock --> rlock must succeed
 			lom.Unlock(true)
 			lom.Lock(false)
-			return 0, nil
+
+			if ctx.Lmfh, err = os.Open(ctx.Lom.FQN); err != nil {
+				lom.Unlock(false)
+				core.FreeLOM(lom)
+				ctx.Lom = nil
+				return 0, _errInv("reload-inv-open", err)
+			}
+			return 0, nil // ok
 		}
 	}
 
@@ -221,48 +236,48 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 		ctx.Lom = nil
 		return 0, err
 	}
-	lom.Lock(false) // must succeed
 
-	return 0, nil
+	lom.Lock(false) // must succeed
+	if ctx.Lmfh, err = os.Open(ctx.Lom.FQN); err != nil {
+		lom.Unlock(false)
+		core.FreeLOM(lom)
+		ctx.Lom = nil
+		return 0, _errInv("get-inv-open", err)
+	}
+
+	return 0, nil // ok
 }
 
 // continue using local csv
-func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (ecode int, err error) {
-	var (
-		svc      *s3.Client
-		fh       *os.File
-		cloudBck = bck.RemoteBck()
-	)
-	debug.Assert(ctx != nil && ctx.Lom != nil)
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects_inv]")
+func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) error {
+	cloudBck := bck.RemoteBck()
+	debug.Assert(ctx.Lom != nil)
+	debug.Assert(ctx.Lmfh != nil)
+	svc, _, err := newClient(sessConf{bck: cloudBck}, "[list_objects_inv]")
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Warningln(err)
 		}
 		if svc == nil {
-			return
+			return err
 		}
 	}
-	if fh, err = os.Open(ctx.Lom.FQN); err != nil {
-		err = _errInv("ropen", err)
-		return
-	}
+
 	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
 	siz := min(invPageSGL, ctx.Size-ctx.Offset /*remaining*/)
 	sgl := s3bp.mm.NewSGL(siz, memsys.MaxPageSlabSize/2)
-	err = s3bp.listInventory(cloudBck, fh, sgl, ctx, msg, lst)
+	err = s3bp.listInventory(cloudBck, sgl, ctx, msg, lst)
 	sgl.Free()
-	fh.Close()
 
-	if err != nil {
-		if err == io.EOF {
-			lst.ContinuationToken = ""
-			err = nil
-		} else {
-			err = _errInv("list", err)
-		}
+	if err == nil {
+		return nil
 	}
-	return
+	if err == io.EOF {
+		lst.ContinuationToken = ""
+		return nil
+	}
+	lst.Entries = lst.Entries[:0]
+	return err
 }
 
 //

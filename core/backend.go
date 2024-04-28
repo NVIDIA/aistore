@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,6 +26,7 @@ type (
 	}
 	LsoInvCtx struct {
 		Lom    *LOM
+		Lmfh   *os.File
 		Name   string
 		ID     string
 		Schema []string
@@ -51,6 +53,6 @@ type (
 
 		// bucket inventory
 		GetBucketInv(bck *meta.Bck, ctx *LsoInvCtx) (ecode int, err error)
-		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) (ecode int, err error)
+		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) error
 	}
 )

@@ -88,7 +88,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 			_, err = core.T.Backend(npg.bck).GetBucketInv(npg.bck, npg.ctx)
 		}
 		if err == nil {
-			_, err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
+			err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
 		}
 	} else {
 		_, err = core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)

@@ -9,6 +9,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// NOTE currently implemented main assumption/requirement:
+// one bucket, one inventory (for this same bucket), and one statically defined .csv
+
 const (
 	InvName   = ".inventory"
 	InvSrcExt = ".csv.gz"

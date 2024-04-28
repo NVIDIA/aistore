@@ -123,15 +123,23 @@ func (p *lsoFactory) Start() (err error) {
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
-	// begin streams iff:
 	if r.listRemote() {
+		// begin streams
 		if !r.walk.wor {
-			smap := core.T.Sowner().Get()
-			if smap.CountActiveTs() > 1 {
+			nt := core.T.Sowner().Get().CountActiveTs()
+			if nt > 1 {
+				// NOTE streams
 				if err = p.beginStreams(r); err != nil {
 					return err
 				}
 			}
+		}
+		// NOTE alternative flow _this_ target will execute:
+		// - nextpage =>
+		// -     backend.GetBucketInv() =>
+		// -        while { backend.ListObjectsInv }
+		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) && r.walk.this {
+			r.ctx = &core.LsoInvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
 		}
 	}
 
@@ -140,12 +148,7 @@ func (p *lsoFactory) Start() (err error) {
 }
 
 func (p *lsoFactory) beginStreams(r *LsoXact) (err error) {
-	if r.walk.this {
-		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) {
-			// NOTE: initiate backend.GetBucketInv()
-			r.ctx = &core.LsoInvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
-		}
-	} else {
+	if !r.walk.this {
 		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
 	}
 	trname := "lso-" + p.UUID()
@@ -249,7 +252,8 @@ func (r *LsoXact) stop() {
 		r.lastPage = nil
 	}
 	if r.ctx != nil && r.ctx.Lom != nil {
-		r.ctx.Lom.Unlock(false) // NOTE: either using inventory w/ rlock held, or else
+		cos.Close(r.ctx.Lmfh)
+		r.ctx.Lom.Unlock(false) // NOTE: see GetBucketInv() "returns" comment in aws.go
 		core.FreeLOM(r.ctx.Lom)
 		r.ctx.Lom = nil
 	}

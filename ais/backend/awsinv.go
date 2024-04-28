@@ -33,17 +33,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// Main assumption/requirement:
-// one bucket, one inventory (for this same bucket), and one statically defined .csv
+// NOTE currently implemented main assumption/requirement:
+// - one bucket, one inventory (for this same bucket), and one statically defined .csv
+// TODO:
+// - LsoMsg.StartAfter (a.k.a. ListObjectsV2Input.StartAfter)
 
-// TODO (must):
-// - keep the underlying csv file open between pages
 //
-// TODO (desirable):
-// - `cached` status and other local md (see npg.populate)
-// - handle partial inventory get+unzip download (w/ subsequent EOF or worse)
-
-// constant and tunables
+// constant and tunables (see also: ais/s3/inventory)
+//
 
 const invTag = "bucket-inventory"
 
@@ -53,6 +50,10 @@ const (
 	invMaxPage = 8 * apc.MaxPageSizeAWS       // roughly, 1MB given 128 byte lines
 	invPageSGL = max(invMaxPage*128, cos.MiB) // ditto
 	invMaxLine = 256                          // line buf (2x)
+)
+
+const (
+	numBlobWorkers = 10
 )
 
 // NOTE: hardcoding two groups of constants - cannot find any of them in https://github.com/aws/aws-sdk-go-v2
@@ -216,7 +217,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 		}
 		params = &core.BlobParams{
 			Lom:      lom,
-			Msg:      &apc.BlobMsg{}, // default tunables
+			Msg:      &apc.BlobMsg{NumWorkers: numBlobWorkers},
 			WriteSGL: uzw.writeSGL,
 		}
 		xblob core.Xact
@@ -265,29 +266,35 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 
 	// otherwise
 	if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
-		nlog.Errorf("final-steps (%v), nested fail to remove (%v)", err, nerr)
+		nlog.Errorf("get-inv (%v), nested fail to remove (%v)", err, nerr)
 	}
-	return _errInv("final-steps", err)
+	if abrt := xblob.AbortErr(); abrt != nil {
+		return _errInv("get-inv-abort", abrt)
+	}
+	return _errInv("get-inv-gzr-uzw-fail", err)
 }
 
-func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
+func (*s3bp) listInventory(cloudBck *cmn.Bck, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{})
 	}
 
-	// seek to the previous offset - the starting-from offset for the next page
 	if ctx.Offset > 0 {
-		if _, err := fh.Seek(ctx.Offset, io.SeekStart); err != nil {
-			lst.Entries = lst.Entries[:0]
-			return err
+		if debug.ON() || cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			pos, err := ctx.Lmfh.Seek(0, io.SeekCurrent)
+			if err != nil {
+				return _errInv("list-seek-curr", err)
+			}
+			if pos != ctx.Offset {
+				return _errInv("list-offset", fmt.Errorf("%d vs %d", pos, ctx.Offset))
+			}
 		}
 	}
 
 	// NOTE: upper limit hardcoded (assuming enough space to hold msg.PageSize)
-	if written, err := io.CopyN(sgl, fh, invPageSGL-cos.KiB); err != nil || written == 0 {
-		lst.Entries = lst.Entries[:0]
-		return err
+	if written, err := io.CopyN(sgl, ctx.Lmfh, invPageSGL-cos.KiB); err != nil || written == 0 {
+		return _errInv("list-copy-npage", err)
 	}
 
 	var (
@@ -295,7 +302,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx 
 		i      int64
 		off    = ctx.Offset
 		skip   = msg.ContinuationToken != ""
-		lbuf   = make([]byte, 256) // m.b. enough for all lines
+		lbuf   = make([]byte, invMaxLine) // m.b. enough for all lines
 		custom cos.StrKVs
 	)
 	if msg.WantProp(apc.GetPropsCustom) {
@@ -323,7 +330,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, fh *os.File, sgl *memsys.SGL, ctx 
 
 		// skip
 		if skip && off > 0 {
-			// expecting fseek to position precisely at the next (TODO: recover?)
+			// expecting fseek to position precisely at the next
 			debug.Assert(objName == msg.ContinuationToken, objName, " vs ", msg.ContinuationToken)
 		}
 		if skip && objName == msg.ContinuationToken {
