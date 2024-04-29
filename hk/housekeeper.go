@@ -1,7 +1,7 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package hk
 
@@ -42,13 +42,12 @@ type (
 	timedActions []timedAction
 
 	housekeeper struct {
-		stopCh   cos.StopCh
-		sigCh    chan os.Signal
-		actions  *timedActions
-		timer    *time.Timer
-		workCh   chan request
-		stopping *atomic.Bool
-		running  atomic.Bool
+		stopCh  cos.StopCh
+		sigCh   chan os.Signal
+		actions *timedActions
+		timer   *time.Timer
+		workCh  chan request
+		running atomic.Bool
 	}
 )
 
@@ -59,12 +58,10 @@ var _ cos.Runner = (*housekeeper)(nil)
 
 func TestInit() {
 	_init(false)
-	DefaultHK.stopping = &atomic.Bool{} // dummy
 }
 
-func Init(stopping *atomic.Bool) {
+func Init() {
 	_init(true)
-	DefaultHK.stopping = stopping
 }
 
 func _init(mustRun bool) {
@@ -113,7 +110,7 @@ func WaitStarted() {
 func IsReg(name string) bool { return DefaultHK.byName(name) != -1 } // see "duplicated" below
 
 func Reg(name string, f hkcb, interval time.Duration) {
-	debug.Assert(DefaultHK.stopping.Load() || DefaultHK.running.Load())
+	debug.Assert(nlog.Stopping() || DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering:     true,
 		name:            name,
@@ -123,7 +120,7 @@ func Reg(name string, f hkcb, interval time.Duration) {
 }
 
 func Unreg(name string) {
-	debug.Assert(DefaultHK.stopping.Load() || DefaultHK.running.Load())
+	debug.Assert(nlog.Stopping() || DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering: false,
 		name:        name,

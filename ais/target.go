@@ -400,7 +400,7 @@ func (t *target) Run() error {
 func (t *target) gojoin(config *cmn.Config) {
 	smap := t.owner.smap.get()
 	cii := t.pollClusterStarted(config, smap.Primary)
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 

@@ -280,7 +280,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	if reqT == reqNotify {
 		method = http.MethodPost
 	}
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 

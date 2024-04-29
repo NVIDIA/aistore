@@ -967,7 +967,7 @@ func isBrowser(userAgent string) bool {
 func (h *htrun) logerr(tag string, v any, err error) {
 	const maxl = 48
 	var efmt, msg string
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 	if v != nil {
@@ -1788,7 +1788,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	sleep := max(2*time.Second, cmn.Rom.MaxKeepalive())
 	for range 4 { // retry
 		for _, candidateURL := range candidates {
-			if daemon.stopping.Load() {
+			if nlog.Stopping() {
 				return
 			}
 			if resPrev != nil {
@@ -1821,7 +1821,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	primaryURL = cii.Smap.Primary.PubURL
 
 	// Daemon is stopping skip register
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
@@ -1884,7 +1884,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 }
 
 func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration, fast bool) (pid string, status int, err error) {
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		err = errors.New(h.String() + " is stopping")
 		return
 	}
@@ -1946,7 +1946,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 		time.Sleep(sleep)
 		total += sleep
 		rediscover += sleep
-		if daemon.stopping.Load() {
+		if nlog.Stopping() {
 			return
 		}
 		smap := h.owner.smap.get()

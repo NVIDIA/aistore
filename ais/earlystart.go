@@ -647,7 +647,7 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (cm cluMeta) {
 		done, slowp bool
 	)
 	for {
-		if daemon.stopping.Load() {
+		if nlog.Stopping() {
 			cm.Smap = nil
 			return
 		}

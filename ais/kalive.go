@@ -534,7 +534,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 		started = mono.NanoTime()
 		fast    bool
 	)
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 	fast = k.k.cluUptime(started) > max(k.interval<<2, config.Timeout.Startup.D()>>1)
@@ -585,7 +585,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			if cos.IsUnreachable(err, status) {
 				continue
 			}
-			if daemon.stopping.Load() {
+			if nlog.Stopping() {
 				return true
 			}
 			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", si, meta.Pname(pid), err, status)

@@ -42,6 +42,8 @@ var (
 	onceInitFiles sync.Once
 
 	unitTests atomic.Bool
+
+	stopping atomic.Bool // true when exiting
 )
 
 func init() {

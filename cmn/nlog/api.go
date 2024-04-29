@@ -97,3 +97,6 @@ func Since() time.Duration {
 func OOB() bool {
 	return nlogs[sevInfo].oob.Load() || nlogs[sevErr].oob.Load()
 }
+
+func Stopping() bool { return stopping.Load() }
+func SetStopping()   { stopping.Store(true) }

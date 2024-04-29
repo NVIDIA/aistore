@@ -289,7 +289,7 @@ func (p *proxy) gojoin(config *cmn.Config) {
 		ctrl = smap.Primary.URL(cmn.NetIntraControl)
 	}
 	cii := p.pollClusterStarted(config, smap.Primary)
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 
@@ -321,7 +321,7 @@ func (p *proxy) gojoin(config *cmn.Config) {
 			nlog.Warningln("\t", nerr, smap.StringEx())
 		}
 
-		if daemon.stopping.Load() {
+		if nlog.Stopping() {
 			return
 		}
 		time.Sleep(sleep)

@@ -945,7 +945,7 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		p.writeErr(w, r, fmt.Errorf("%s is stopping", p), http.StatusServiceUnavailable)
 		return
 	}
@@ -1821,7 +1821,7 @@ func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		return
 	}
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return
 	}
 	if clone.CountActiveTs() < 2 {
@@ -2109,7 +2109,7 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 
 // rebalance's `can`: factors not including cluster map
 func (p *proxy) canRebalance() (err error) {
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return fmt.Errorf("%s is stopping", p)
 	}
 	smap := p.owner.smap.get()
@@ -2139,7 +2139,7 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		return false
 	}
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		return false
 	}
 	prev := ctx.smap

@@ -871,7 +871,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 		caller = r.Header.Get(apc.HdrCallerName)
 	}
 	t.regstate.mu.Lock()
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		t.regstate.mu.Unlock()
 		return
 	}
@@ -884,14 +884,14 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 
 // [METHOD] /v1/metasync
 func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
-	if daemon.stopping.Load() {
+	if nlog.Stopping() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	switch r.Method {
 	case http.MethodPut:
 		t.regstate.mu.Lock()
-		if daemon.stopping.Load() {
+		if nlog.Stopping() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
 			t.metasyncPut(w, r)
@@ -1226,7 +1226,7 @@ func (t *target) termKaliveX(action string, abort bool) {
 
 func (t *target) shutdown(action string) {
 	t.regstate.mu.Lock()
-	daemon.stopping.Store(true)
+	nlog.SetStopping()
 	t.regstate.mu.Unlock()
 
 	t.Stop(&errNoUnregister{action})
@@ -1234,7 +1234,7 @@ func (t *target) shutdown(action string) {
 
 func (t *target) decommission(action string, opts *apc.ActValRmNode) {
 	t.regstate.mu.Lock()
-	daemon.stopping.Store(true)
+	nlog.SetStopping()
 	t.regstate.mu.Unlock()
 
 	nlog.Infof("%s: %s %v", t, action, opts)
@@ -1252,10 +1252,10 @@ func (t *target) decommission(action string, opts *apc.ActValRmNode) {
 
 // stop gracefully, return from rungroup.run
 func (t *target) Stop(err error) {
-	if !daemon.stopping.Load() {
+	if !nlog.Stopping() {
 		// vs metasync
 		t.regstate.mu.Lock()
-		daemon.stopping.Store(true)
+		nlog.SetStopping()
 		t.regstate.mu.Unlock()
 	}
 	if err == nil {

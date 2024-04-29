@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -35,10 +34,9 @@ type (
 	daemonCtx struct {
 		cli       cliFlags
 		rg        *rungroup
-		version   string      // major.minor.build (see cmd/aisnode)
-		buildTime string      // YYYY-MM-DD HH:MM:SS-TZ
-		EP        string      // env "AIS_PRIMARY_EP"
-		stopping  atomic.Bool // true when exiting
+		version   string // major.minor.build (see cmd/aisnode)
+		buildTime string // YYYY-MM-DD HH:MM:SS-TZ
+		EP        string // env "AIS_PRIMARY_EP"
 		resilver  struct {
 			reason   string // Reason why resilver needs to be run.
 			required bool   // Determines if the resilver needs to be started.
@@ -199,7 +197,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	sys.SetMaxProcs()
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
-	hk.Init(&daemon.stopping)
+	hk.Init()
 	daemon.rg.add(hk.DefaultHK)
 
 	// K8s
@@ -328,7 +326,6 @@ func (g *rungroup) run(r cos.Runner) {
 
 func (g *rungroup) runAll(mainRunner cos.Runner) error {
 	g.errCh = make(chan runRet, len(g.rs))
-	daemon.stopping.Store(false)
 
 	// run all, housekeeper first
 	go g.run(hk.DefaultHK)
@@ -343,7 +340,7 @@ func (g *rungroup) runAll(mainRunner cos.Runner) error {
 
 	// Stop all runners, target (or proxy) first.
 	ret := <-g.errCh
-	daemon.stopping.Store(true)
+	nlog.SetStopping()
 	if ret.name != mainRunner.Name() {
 		mainRunner.Stop(ret.err)
 	}

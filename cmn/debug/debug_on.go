@@ -2,7 +2,7 @@
 
 // Package provides debug utilities
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package debug
 
@@ -62,7 +62,10 @@ func _panic(a ...any) {
 	} else {
 		fmt.Fprintln(os.Stderr, buffer.String())
 	}
-	panic(msg)
+
+	if !nlog.Stopping() { // no panicking when stopping
+		panic(msg)
+	}
 }
 
 func Assert(cond bool, a ...any) {

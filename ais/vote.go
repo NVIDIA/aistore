@@ -437,13 +437,13 @@ func (h *htrun) onPrimaryDown(self *proxy, callerID string) {
 	nlog.Infof("%s (%s): primary %s is no longer online and must be reelected", h, s, clone.Primary.StringEx())
 
 	for {
-		if daemon.stopping.Load() {
+		if nlog.Stopping() {
 			return
 		}
 		// use HRW ordering
 		nextPrimaryProxy, err := clone.HrwProxy(clone.Primary.ID())
 		if err != nil {
-			if !daemon.stopping.Load() {
+			if !nlog.Stopping() {
 				nlog.Errorf("%s failed to execute HRW selection: %v", h, err)
 			}
 			return
@@ -632,7 +632,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 		}
 		sleep += sleep / 2
 	}
-	if !daemon.stopping.Load() {
+	if !nlog.Stopping() {
 		nlog.Errorf("%s: failed to request election from the _next_ primary %s: %v",
 			h.si, nextPrimaryProxy.StringEx(), err)
 	}

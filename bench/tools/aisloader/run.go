@@ -342,7 +342,7 @@ func Start(version, buildtime string) (err error) {
 	// init housekeeper and memsys;
 	// empty config to use memsys constants;
 	// alternatively: "memsys": { "min_free": "2gb", ... }
-	hk.Init(&stopping)
+	hk.Init()
 	go hk.DefaultHK.Run()
 	hk.WaitStarted()
 
