@@ -126,6 +126,12 @@ func lsoReq(bp BaseParams, bck cmn.Bck, args *ListArgs) *ReqParams {
 	if hdr == nil {
 		hdr = make(http.Header, 2)
 	}
+
+	// NOTE:
+	// unlike S3 API (that aistore also provides), native Go-based API always utilizes
+	// message pack serialization (of the list-objects results), with performance
+	// improvement that proved to be _significant_, esp. in large-scale benchmarks
+
 	hdr.Set(cos.HdrAccept, cos.ContentMsgPack)
 	hdr.Set(cos.HdrContentType, cos.ContentJSON)
 	bp.Method = http.MethodGet

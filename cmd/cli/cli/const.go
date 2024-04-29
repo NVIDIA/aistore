@@ -497,14 +497,32 @@ var (
 		Name:  "start-after",
 		Usage: "list bucket's content alphabetically starting with the first name _after_ the specified",
 	}
-	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object name count (0 - unlimited)"}
-	pageSizeFlag = cli.IntFlag{
-		Name:  "page-size",
-		Usage: "maximum number of names per page (0 - the maximum is defined by the corresponding backend)",
-	}
-	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
-	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 
+	//
+	// list-objects sizing and limiting
+	//
+	objLimitFlag = cli.IntFlag{
+		Name: "limit",
+		Usage: "maximum number of object names to display (0 - unlimited; see also '--max-pages')\n" +
+			indent4 + "\te.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom",
+	}
+	pageSizeFlag = cli.IntFlag{
+		Name: "page-size",
+		Usage: "maximum number of object names per page; when the flag is omitted or 0 (zero)\n" +
+			indent4 + "\tthe maximum is defined by the corresponding backend; see also '--max-pages' and '--paged'",
+	}
+	maxPagesFlag = cli.IntFlag{
+		Name: "max-pages",
+		Usage: "maximum number of pages to display (see also '--page-size' and '--limit')\n" +
+			indent4 + "\te.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7",
+	}
+	pagedFlag = cli.BoolFlag{
+		Name: "paged",
+		Usage: "list objects page by page - one page at a time (see also '--page-size' and '--limit')\n" +
+			indent4 + "\tnote: recommended for use with very large buckets",
+	}
+
+	// bucket summary
 	validateSummaryFlag = cli.BoolFlag{
 		Name:  "validate",
 		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
@@ -514,10 +532,7 @@ var (
 		Usage: "show object numbers, bucket sizes, and used capacity;\n" +
 			indent4 + "\tnote: applies only to buckets and objects that are _present_ in the cluster",
 	}
-	pagedFlag = cli.BoolFlag{
-		Name:  "paged",
-		Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')",
-	}
+
 	showUnmatchedFlag = cli.BoolFlag{
 		Name:  "show-unmatched",
 		Usage: "list also objects that were _not_ matched by regex and/or template (range)",
@@ -530,8 +545,12 @@ var (
 	}
 
 	useInventoryFlag = cli.BoolFlag{
-		Name:  "inventory",
-		Usage: "experimental; requires s3:// backend",
+		Name: "inventory",
+		Usage: "list objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance\n" +
+			indent4 + "\tboost when used with very large s3 buckets; e.g. usage:\n" +
+			indent4 + "\t  1) 'ais ls s3://abc --inventory'\n" +
+			indent4 + "\t  2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'\n" +
+			indent4 + "\t(see also: docs/s3inventory.md)",
 	}
 	invNameFlag = cli.StringFlag{
 		Name:  "inv-name", // compare w/ HdrInvName
@@ -541,6 +560,8 @@ var (
 		Name:  "inv-id", // cpmpare w/ HdrInvID
 		Usage: "bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
+
+	copiesFlag = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}

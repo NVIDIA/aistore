@@ -355,6 +355,14 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
+	// NOTE:
+	// - the following few lines of code translate (using additional memory) list-objects
+	//   results into S3 format, and then use xml encoding to serialize the entire thing;
+	// - compare with native Go-based API that utilizes message pack encoding with
+	//   (certainly) no translations;
+	// - the implication: if, when working with very large remote datasets, list-objects performance
+	//   becomes an issue - consider using native API.
+
 	resp := s3.NewListObjectResult(bucket)
 	resp.ContinuationToken = lsmsg.ContinuationToken
 	resp.FromLsoResult(lst, lsmsg)

@@ -70,9 +70,30 @@ const (
 	QparamLogOff  = "offset"
 	QparamAllLogs = "all"
 
-	// Archive filename and format (mime type)
+	// - intended for usage with sharded datasets, whereby the shards are .tar, .tgz (or .tar.gz), .zip, or .tar.lz4
+	//   archives;
+	// - specifies archiveed pathname and expected format (mime type) of the containing shard; the latter is
+	//   especially usable with non-standard shard name extensions;
+	// See also:
+	// - next two query parameters (below)
+	// - docs/archive.md or cmn/archive/mime.go for the most recently updated list of supported serialization formats.
 	QparamArchpath = "archpath"
 	QparamArchmime = "archmime"
+
+	// (related to the above)
+	// - intended for usage with sharded datasets, whereby the shards are .tar, .tgz (or .tar.gz), .zip, or .tar.lz4
+	//   archives;
+	// - further, relies on so-called _basename_ convention to read and return multi-file sample (record) from a given
+	//   shard (archive) - in one shot;
+	// - the _basename_ convention is often referred to as "WebDataset format", wheveby for every single sharded file
+	//   its basename is considered a _key_ defining the entire sample;
+	// - example two samples: (subdir/a.jpg, subdir/a.json, subdir/a.cls) and (subdir/b.jpg, subdir/b.json, subdir/b.cls)
+	//
+	// See also:
+	// - https://github.com/webdataset/webdataset for WebDataset
+	// - docs/archive.md or cmn/archive/mime.go for the most recently updated list of supported serialization formats.
+	QparamWdsKey = "wds-key"
+	QparamWdsIdx = "wds-idx"
 
 	// Skip loading existing object's metadata, in part to
 	// compare its Checksum and update its existing Version (if exists).
