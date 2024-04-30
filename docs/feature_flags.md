@@ -29,7 +29,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | name | comment |
 | --- | ------- |
 | `Enforce-IntraCluster-Access` | when enabled, aistore targets will make sure _not_ to execute direct (ie., not redirected) API calls |
-| `Provide-S3-API-via-Root` | handle S3 requests via `aistore-hostname/` (whereby the default: `aistore-hostname/s3`) |
+| `S3-API-via-Root` | handle S3 requests via `aistore-hostname/` (whereby the default: `aistore-hostname/s3`) |
 | `Dont-Allow-Passing-FQN-to-ETL` |  do not allow passing fully-qualified name of a locally stored object to (local) ETL containers |
 | `Fsync-PUT(*)` | PUT and cold-GET: commit (or sync) the object payload to stable storage |
 | `Ignore-LimitedCoexistence-Conflicts` | run in presence of "limited coexistence" type conflicts |
@@ -37,10 +37,11 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `LZ4-Block-1MB` | .tar.lz4 format, lz4 compression: maximum uncompressed block size=1MB (default: 256K) |
 | `LZ4-Frame-Checksum` | checksum lz4 frames |
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
-| `Presigned-S3-Req(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
+| `S3-Presigned-Request(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
 | `Dont-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
 | `Disable-Cold-GET` | do not perform cold GET request when using remote bucket |
 | `S3-Reverse-Proxy` | use reverse proxy calls instead of HTTP-redirect for S3 API |
+| `S3-Use-Path-Style` | use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY |
 
 ## Global features
 
@@ -48,18 +49,18 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 $ ais config cluster features <TAB-TAB>
 
 Enforce-IntraCluster-Access           Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
-Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Presigned-S3-Req
+Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         S3-Presigned-Request
 Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Dont-Optimize-Listing-Virtual-Dirs
-Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
+S3-API-via-Root                       Dont-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
 S3-Reverse-Proxy                      none
 ```
 
 For example:
 
 ```console
-$ ais config cluster features Provide-S3-API-via-Root Skip-Loading-VersionChecksum-MD Ignore-LimitedCoexistence-Conflicts
+$ ais config cluster features S3-API-via-Root Skip-Loading-VersionChecksum-MD Ignore-LimitedCoexistence-Conflicts
 PROPERTY         VALUE
-features         Provide-S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Skip-Loading-VersionChecksum-MD
+features         S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Skip-Loading-VersionChecksum-MD
 
 Cluster config updated
 ```
@@ -71,7 +72,7 @@ To view the current (configured) setting, type the same command and hit `Enter`:
 ```console
 $ ais config cluster features
 PROPERTY         VALUE
-features         Provide-S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Skip-Loading-VersionChecksum-MD
+features         S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Skip-Loading-VersionChecksum-MD
 ```
 
 The same in JSON:
@@ -108,11 +109,11 @@ Here's a brief 1-2-3 demonstration in re specifically: feature flags.
 ## 1. show existing bucket-scope features:
 
 $ ais bucket props set ais://nnn features <TAB-TAB>
-Skip-Loading-VersionChecksum-MD   Fsync-PUT                         Presigned-S3-Req                  none
+Skip-Loading-VersionChecksum-MD   Fsync-PUT        S3-Presigned-Request       none
 
 ## 2. select and set:
 
-$ ais bucket props set ais://nnn features Presigned-S3-Req
+$ ais bucket props set ais://nnn features S3-Presigned-Request
 "features" set to: "512" (was: "0")
 
 Bucket props successfully updated.

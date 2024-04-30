@@ -94,7 +94,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 	bprops, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
-	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req)
+	setBucketFeatures(t, bck, bprops, feat.S3PresignedRequest)
 
 	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
 	t.Cleanup(func() {
@@ -145,7 +145,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 	bprops, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
-	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req)
+	setBucketFeatures(t, bck, bprops, feat.S3PresignedRequest)
 
 	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
 	t.Cleanup(func() {
@@ -221,7 +221,7 @@ func TestDisableColdGet(t *testing.T) {
 	bprops, err := api.HeadBucket(baseParams, bck, false)
 	tassert.CheckFatal(t, err)
 
-	setBucketFeatures(t, bck, bprops, feat.PresignedS3Req|feat.DisableColdGET)
+	setBucketFeatures(t, bck, bprops, feat.S3PresignedRequest|feat.DisableColdGET)
 
 	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
 	t.Cleanup(func() {

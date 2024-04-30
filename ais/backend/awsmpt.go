@@ -33,7 +33,7 @@ func decodeXML[T any](body []byte) (result T, _ error) {
 }
 
 func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecode int, _ error) {
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
@@ -71,7 +71,7 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 
 func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (etag string,
 	ecode int, _ error) {
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, r, oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
@@ -113,7 +113,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 
 func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, parts *aiss3.CompleteMptUpload) (etag string,
 	ecode int, _ error) {
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		body, err := xml.Marshal(parts)
 		if err != nil {
 			return "", http.StatusBadRequest, err
@@ -169,7 +169,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 }
 
 func AbortMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {

@@ -21,7 +21,7 @@ The tests are divided into two sections:
 First, the AIS cluster to test against must be configured to run as an s3 client and run with AWS-style MD5 checksums.
 This can be set with AIS cli. 
 
-    ais config cluster features Provide-S3-API-via-Root
+    ais config cluster features S3-API-via-Root
     ais config cluster checksum.type=md5
 
 ---

@@ -433,7 +433,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		sessConf   = sessConf{bck: cloudBck}
 	)
 
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		q := oreq.URL.Query() // TODO: optimize-out
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
 		resp, err := pts.Do(core.T.DataClient())
@@ -513,7 +513,7 @@ exit:
 func (s3bp *s3bp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, oreq *http.Request) (int, error) {
 	var res core.GetReaderResult
 
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		q := oreq.URL.Query() // TODO: optimize-out
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
 		resp, err := pts.DoReader(core.T.DataClient())
@@ -632,7 +632,7 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 		sessConf              = sessConf{bck: cloudBck}
 		md                    = make(map[string]string, 2)
 	)
-	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
+	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		q := oreq.URL.Query() // TODO: optimize-out
 		pts := aiss3.NewPresignedReq(oreq, lom, r, q)
 		resp, err := pts.Do(core.T.DataClient())
@@ -782,6 +782,13 @@ func (sessConf *sessConf) options(options *s3.Options) {
 		options.Region = sessConf.region
 	} else {
 		sessConf.region = options.Region
+	}
+	if bck := sessConf.bck; bck != nil {
+		if bck.Props != nil {
+			options.UsePathStyle = bck.Props.Features.IsSet(feat.S3UsePathStyle)
+		} else {
+			options.UsePathStyle = cmn.Rom.Features().IsSet(feat.S3UsePathStyle)
+		}
 	}
 }
 

@@ -178,7 +178,7 @@ and then run existing S3 applications against an aistore cluster at `10.0.4.53` 
 Moreover, configure aistore to handle S3 requests at its "/" root:
 
 ```console
-$ ais config cluster features Provide-S3-API-via-Root
+$ ais config cluster features S3-API-via-Root
 ```
 
 and re-specify `S3_ENDPOINT` environment to make it looking slightly more conventional:

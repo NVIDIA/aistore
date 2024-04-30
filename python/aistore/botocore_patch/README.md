@@ -22,7 +22,7 @@ To use AIS as an S3 client, you must first configure the cluster.
 Set the cluster to run as an S3 client:
 
 ```shell
-ais config cluster features Provide-S3-API-via-Root
+ais config cluster features S3-API-via-Root
 ```
 
 S3 uses MD5 hashes, so set the cluster to use it:
