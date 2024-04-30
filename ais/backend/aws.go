@@ -80,38 +80,37 @@ func NewAWS(t core.TargetPut) (core.Backend, error) {
 // HEAD BUCKET
 //
 
-func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+const gotBucketLocation = "got_bucket_location"
+
+func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, _ error) {
 	var (
-		svc      *s3.Client
-		region   string
-		errC     error
 		cloudBck = bck.RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 	)
-	svc, region, errC = newClient(sessConf{bck: cloudBck}, "")
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Infoln("[head_bucket]", cloudBck.Name, errC)
+	svc, err := sessConf.s3client("")
+	if err != nil {
+		return nil, 0, err
 	}
-	if region == "" {
-		// AWS bucket may not yet exist in the BMD -
-		// get the region manually and recreate S3 client.
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+		nlog.Infoln("[head_bucket]", cloudBck.Name)
+	}
+	if sessConf.region == "" {
+		var region string
 		if region, err = getBucketLocation(svc, cloudBck.Name); err != nil {
 			ecode, err = awsErrorToAISError(err, cloudBck, "")
-			return
+			return nil, ecode, err
 		}
-		// Create new svc with the region details.
-		if svc, _, err = newClient(sessConf{region: region}, ""); err != nil {
-			ecode, err = awsErrorToAISError(err, cloudBck, "")
-			return
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Infoln("get-bucket-location", cloudBck.Name, "region", region)
 		}
+		svc, err = sessConf.s3client(gotBucketLocation)
+		debug.AssertNoErr(err)
 	}
-	debug.Assert(svc != nil)
-	region = svc.Options().Region
-	debug.Assert(region != "")
 
 	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
 	bckProps = make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
-	bckProps[apc.HdrS3Region] = region
+	bckProps[apc.HdrS3Region] = sessConf.region
 	bckProps[apc.HdrS3Endpoint] = ""
 	if bck.Props != nil {
 		bckProps[apc.HdrS3Endpoint] = bck.Props.Extra.AWS.Endpoint
@@ -119,10 +118,10 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 	versioned, errV := getBucketVersioning(svc, cloudBck)
 	if errV != nil {
 		ecode, err = awsErrorToAISError(errV, cloudBck, "")
-		return
+		return nil, ecode, err
 	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
-	return
+	return bckProps, 0, nil
 }
 
 //
@@ -133,15 +132,13 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 // otherwise, always unlocks and frees
 func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) {
 	debug.Assert(ctx != nil && ctx.Lom == nil)
-	cloudBck := bck.RemoteBck()
-	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_bucket_inv]")
+	var (
+		cloudBck = bck.RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
+	)
+	svc, err := sessConf.s3client("[get_bucket_inv]")
 	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return 0, err
-		}
+		return 0, err
 	}
 
 	// one bucket, one inventory, one statically defined name
@@ -250,23 +247,13 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 
 // continue using local csv
 func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) error {
-	cloudBck := bck.RemoteBck()
-	debug.Assert(ctx.Lom != nil)
-	debug.Assert(ctx.Lmfh != nil)
-	svc, _, err := newClient(sessConf{bck: cloudBck}, "[list_objects_inv]")
-	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return err
-		}
-	}
-
+	debug.Assert(ctx.Lom != nil && ctx.Lmfh != nil, ctx.Lom, " ", ctx.Lmfh)
 	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
+
+	cloudBck := bck.RemoteBck()
 	siz := min(invPageSGL, ctx.Size-ctx.Offset /*remaining*/)
 	sgl := s3bp.mm.NewSGL(siz, memsys.MaxPageSlabSize/2)
-	err = s3bp.listInventory(cloudBck, sgl, ctx, msg, lst)
+	err := s3bp.listInventory(cloudBck, sgl, ctx, msg, lst)
 	sgl.Free()
 
 	if err == nil {
@@ -287,21 +274,16 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 // NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
 const versionedPageSize = 20
 
-func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, _ error) {
 	var (
-		svc        *s3.Client
 		h          = cmn.BackendHelpers.Amazon
 		cloudBck   = bck.RemoteBck()
+		sessConf   = sessConf{bck: cloudBck}
 		versioning bool
 	)
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
+	svc, err := sessConf.s3client("[list_objects]")
 	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return
-		}
+		return 0, err
 	}
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
 	if prefix := msg.Prefix; prefix != "" {
@@ -330,7 +312,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			nlog.Infoln("list_objects", cloudBck.Name, err)
 		}
 		ecode, err = awsErrorToAISError(err, cloudBck, "")
-		return
+		return ecode, err
 	}
 
 	var (
@@ -371,7 +353,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries))
 		}
-		return
+		return 0, nil
 	}
 
 	// [slow path] for each already listed object:
@@ -402,23 +384,27 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries), num)
 	}
-	return
+	return 0, nil
 }
 
 //
 // LIST BUCKETS
 //
 
-func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
-	svc, _, err := newClient(sessConf{}, "")
+func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
+	var (
+		sessConf sessConf
+		result   *s3.ListBucketsOutput
+	)
+	svc, err := sessConf.s3client("")
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
-		return
+		return nil, ecode, err
 	}
-	result, err := svc.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	result, err = svc.ListBuckets(context.Background(), &s3.ListBucketsInput{})
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
-		return
+		return nil, ecode, err
 	}
 
 	bcks = make(cmn.Bcks, len(result.Buckets))
@@ -431,7 +417,7 @@ func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
 			Provider: apc.AWS,
 		}
 	}
-	return
+	return bcks, 0, nil
 }
 
 //
@@ -444,6 +430,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		headOutput *s3.HeadObjectOutput
 		h          = cmn.BackendHelpers.Amazon
 		cloudBck   = lom.Bck().RemoteBck()
+		sessConf   = sessConf{bck: cloudBck}
 	)
 
 	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
@@ -459,14 +446,9 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		}
 	}
 
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
+	svc, err = sessConf.s3client("[head_object]")
 	if err != nil {
-		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return
-		}
+		return
 	}
 	headOutput, err = svc.HeadObject(context.Background(), &s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -568,20 +550,16 @@ func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 	var (
 		obj      *s3.GetObjectOutput
 		cloudBck = lom.Bck().RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 		input    = s3.GetObjectInput{
 			Bucket: aws.String(cloudBck.Name),
 			Key:    aws.String(lom.ObjName),
 		}
 	)
-
-	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_object]")
+	svc, err := sessConf.s3client("[get_obj_reader]")
 	if err != nil {
-		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return
-		}
+		res.Err = err
+		return
 	}
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
@@ -651,6 +629,7 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 		h                     = cmn.BackendHelpers.Amazon
 		cksumType, cksumValue = lom.Checksum().Get()
 		cloudBck              = lom.Bck().RemoteBck()
+		sessConf              = sessConf{bck: cloudBck}
 		md                    = make(map[string]string, 2)
 	)
 	if lom.IsFeatureSet(feat.PresignedS3Req) && oreq != nil {
@@ -668,14 +647,9 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 		}
 	}
 
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
+	svc, err = sessConf.s3client("[put_object]")
 	if err != nil {
-		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return
-		}
+		return
 	}
 
 	md[cos.S3MetadataChecksumType] = cksumType
@@ -722,15 +696,11 @@ func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
 		svc      *s3.Client
 		cloudBck = lom.Bck().RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 	)
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
+	svc, err = sessConf.s3client("[delete_object]")
 	if err != nil {
-		if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-			nlog.Warningln(err)
-		}
-		if svc == nil {
-			return
-		}
+		return
 	}
 	_, err = svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -756,51 +726,63 @@ func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 // From S3 SDK:
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
-func newClient(conf sessConf, tag string) (*s3.Client, string, error) {
+func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	var (
 		endpoint = s3Endpoint
 		profile  = awsProfile
-		region   = conf.region
 	)
-	if conf.bck != nil && conf.bck.Props != nil {
-		if region == "" {
-			region = conf.bck.Props.Extra.AWS.CloudRegion
+	if sessConf.bck != nil && sessConf.bck.Props != nil {
+		if sessConf.region == "" {
+			sessConf.region = sessConf.bck.Props.Extra.AWS.CloudRegion
 		}
-		if conf.bck.Props.Extra.AWS.Endpoint != "" {
-			endpoint = conf.bck.Props.Extra.AWS.Endpoint
+		if sessConf.bck.Props.Extra.AWS.Endpoint != "" {
+			endpoint = sessConf.bck.Props.Extra.AWS.Endpoint
 		}
-		if conf.bck.Props.Extra.AWS.Profile != "" {
-			profile = conf.bck.Props.Extra.AWS.Profile
+		if sessConf.bck.Props.Extra.AWS.Profile != "" {
+			profile = sessConf.bck.Props.Extra.AWS.Profile
 		}
 	}
 
-	cid := _cid(profile, region, endpoint)
+	cid := _cid(profile, sessConf.region, endpoint)
 	asvc, loaded := clients.Load(cid)
 	if loaded {
 		svc, ok := asvc.(*s3.Client)
 		debug.Assert(ok)
-		return svc, region, nil
+		return svc, nil
 	}
 
 	// slow path
 	cfg, err := loadConfig(endpoint, profile)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	if region == "" {
-		if tag != "" {
-			err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
-		}
-		return s3.NewFromConfig(cfg), "", err
-	}
-	svc := s3.NewFromConfig(cfg, func(options *s3.Options) {
-		options.Region = region
-	})
-	debug.Assertf(region == svc.Options().Region, "%s != %s", region, svc.Options().Region)
 
-	// race or no race, no particular reason to do LoadOrStore
-	clients.Store(cid, svc)
-	return svc, region, nil
+	svc := s3.NewFromConfig(cfg, sessConf.options)
+
+	// NOTE:
+	// - gotBucketLocation special case
+	// - otherwise, not caching s3 client for an unknown or missing region
+	if sessConf.region == "" && tag != gotBucketLocation {
+		if tag != "" && cmn.Rom.FastV(4, cos.SmoduleBackend) {
+			nlog.Warningln(tag, "no region for bucket", sessConf.bck.Cname(""))
+		}
+		return svc, nil
+	}
+
+	// cache (without recomputing _cid and possibly an empty region)
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		nlog.Infoln("add s3client for tuple (profile, region, endpoint):", cid)
+	}
+	clients.Store(cid, svc) // race or no race, no particular reason to do LoadOrStore
+	return svc, nil
+}
+
+func (sessConf *sessConf) options(options *s3.Options) {
+	if sessConf.region != "" {
+		options.Region = sessConf.region
+	} else {
+		sessConf.region = options.Region
+	}
 }
 
 func _cid(profile, region, endpoint string) string {

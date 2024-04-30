@@ -50,12 +50,13 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 
 	var (
 		cloudBck = lom.Bck().RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 		input    = s3.CreateMultipartUploadInput{
 			Bucket: aws.String(cloudBck.Name),
 			Key:    aws.String(lom.ObjName),
 		}
 	)
-	svc, _, errN := newClient(sessConf{bck: cloudBck}, "[start_mpt]")
+	svc, errN := sessConf.s3client("[start_mpt]")
 	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(errN)
 	}
@@ -85,6 +86,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 
 	var (
 		cloudBck = lom.Bck().RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 		input    = s3.UploadPartInput{
 			Bucket:        aws.String(cloudBck.Name),
 			Key:           aws.String(lom.ObjName),
@@ -94,7 +96,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 			ContentLength: &size,
 		}
 	)
-	svc, _, errN := newClient(sessConf{bck: cloudBck}, "[put_mpt_part]")
+	svc, errN := sessConf.s3client("[put_mpt_part]")
 	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(errN)
 	}
@@ -133,6 +135,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 
 	var (
 		cloudBck = lom.Bck().RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 		s3parts  types.CompletedMultipartUpload
 		input    = s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(cloudBck.Name),
@@ -140,7 +143,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 			UploadId: aws.String(uploadID),
 		}
 	)
-	svc, _, errN := newClient(sessConf{bck: cloudBck}, "[complete_mpt]")
+	svc, errN := sessConf.s3client("[complete_mpt]")
 	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(errN)
 	}
@@ -179,13 +182,14 @@ func AbortMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string)
 
 	var (
 		cloudBck = lom.Bck().RemoteBck()
+		sessConf = sessConf{bck: cloudBck}
 		input    = s3.AbortMultipartUploadInput{
 			Bucket:   aws.String(cloudBck.Name),
 			Key:      aws.String(lom.ObjName),
 			UploadId: aws.String(uploadID),
 		}
 	)
-	svc, _, errN := newClient(sessConf{bck: cloudBck}, "[abort_mpt]")
+	svc, errN := sessConf.s3client("[abort_mpt]")
 	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(errN)
 	}
