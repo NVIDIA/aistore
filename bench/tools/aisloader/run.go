@@ -200,8 +200,9 @@ var (
 
 	s3svc *s3.Client // s3 client - see s3ListObjects
 
-	s3Endpoint string
-	s3Profile  string
+	s3Endpoint     string
+	s3Profile      string
+	s3UsePathStyle bool
 
 	loggedUserToken string
 )
@@ -287,6 +288,10 @@ func Start(version, buildtime string) (err error) {
 	if isDirectS3() {
 		if err := initS3Svc(); err != nil {
 			return err
+		}
+	} else {
+		if s3UsePathStyle {
+			return errors.New("cannot use '-s3-use-path-style' without '-s3endpoint'")
 		}
 	}
 
@@ -525,6 +530,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	//
 	f.StringVar(&s3Endpoint, "s3endpoint", "", "S3 endpoint to read/write s3 bucket directly (with no aistore)")
 	f.StringVar(&s3Profile, "s3profile", "", "other then default S3 config profile referencing alternative credentials")
+	f.BoolVar(&s3UsePathStyle, "s3-use-path-style", false, "use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY. Should only be used with 's3endpoint' option")
 
 	DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). \n"+

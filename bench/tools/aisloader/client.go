@@ -478,7 +478,9 @@ func initS3Svc() error {
 		cfg.Region = env.AwsDefaultRegion()
 	}
 
-	s3svc = s3.NewFromConfig(cfg)
+	s3svc = s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = s3UsePathStyle
+	})
 	return nil
 }
 
