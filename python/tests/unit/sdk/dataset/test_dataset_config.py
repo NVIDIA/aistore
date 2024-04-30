@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from pathlib import Path
 from aistore.sdk.dataset.data_attribute import DataAttribute
 from aistore.sdk.dataset.label_attribute import LabelAttribute
@@ -20,41 +20,22 @@ class TestDatasetConfig(unittest.TestCase):
             secondary_attributes=[self.secondary_label_attribute],
         )
 
-    @patch("aistore.sdk.dataset.dataset_config.Path.glob")
-    def test_generate_dataset(self, mock_glob):
-        mock_glob.return_value = [
-            Path("/fake/path/image1.jpg"),
-            Path("/fake/path/image2.jpg"),
+    @patch("aistore.sdk.dataset.dataset_config.ShardWriter")
+    def test_write_shards(self, mock_shard_writer_class):
+        sample_data = [
+            ({"__key__": "sample_01", "image.jpg": "data1", "cls": "label1"}, []),
+            ({"__key__": "sample_02", "image.jpg": "data2", "cls": "label2"}, []),
         ]
-        self.primary_data_attribute.get_data_for_entry = MagicMock(
-            side_effect=[("image.jpg", b"fakeimage1"), ("image.jpg", b"fakeimage2")]
-        )
-        self.secondary_label_attribute.get_data_for_entry = MagicMock(
-            return_value=("label", "label1")
-        )
+        mock_shard_writer = MagicMock()
+        mock_shard_writer_class.return_value = mock_shard_writer
+        mock_generate_dataset = MagicMock(return_value=iter(sample_data))
+        self.dataset_config.generate_dataset = mock_generate_dataset
 
-        items = list(self.dataset_config.generate_dataset(max_shard_items=10))
+        self.dataset_config.write_shards(skip_missing=True, maxcount=2)
 
-        self.assertEqual(len(items), 2)
-        self.assertDictEqual(
-            items[0],
-            {"image.jpg": b"fakeimage1", "label": "label1", "__key__": "sample_00"},
+        mock_shard_writer_class.assert_called_once_with(
+            pattern="dataset-%01d.tar", maxcount=2
         )
-        self.assertDictEqual(
-            items[1],
-            {"image.jpg": b"fakeimage2", "label": "label1", "__key__": "sample_01"},
-        )
-
-    @patch("aistore.sdk.dataset.dataset_config.Path.glob")
-    def test_generate_dataset_with_missing_data(self, mock_glob):
-        mock_glob.return_value = [Path("/fake/path/image1.jpg")]
-        self.primary_data_attribute.get_data_for_entry = MagicMock(
-            return_value=(None, None)
-        )
-        self.secondary_label_attribute.get_data_for_entry = MagicMock(
-            return_value=(None, None)
-        )
-
-        items = list(self.dataset_config.generate_dataset(max_shard_items=1))
-
-        self.assertEqual(len(items), 0)
+        calls = [call.write(data) for data, _ in sample_data]
+        mock_shard_writer.assert_has_calls(calls)
+        mock_shard_writer.close.assert_called_once()

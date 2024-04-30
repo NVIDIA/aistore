@@ -11,7 +11,6 @@ from pathlib import Path
 import time
 from typing import Dict, List, NewType, Iterable
 import requests
-from webdataset import ShardWriter
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
@@ -25,7 +24,6 @@ from aistore.sdk.const import (
     ACT_LIST,
     ACT_MOVE_BCK,
     ACT_SUMMARY_BCK,
-    DEFAULT_DATASET_MAX_COUNT,
     HEADER_ACCEPT,
     HEADER_BUCKET_PROPS,
     HEADER_BUCKET_SUMM,
@@ -895,36 +893,29 @@ class Bucket(AISSource):
             name=self.name, namespace=self.namespace, provider=self.provider
         )
 
-    def write_dataset(self, config: DatasetConfig, **kwargs):
+    def write_dataset(
+        self,
+        config: DatasetConfig,
+        skip_missing: bool = True,
+        **kwargs,
+    ):
         """
-        Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter
+        Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter. Logs the missing attributes
 
         Args:
             config (DatasetConfig): Configuration dict specifying how to process
                 and store each part of the dataset item
+            skip_missing (bool, optional): Skip samples that are missing one or more attributes, defaults to True
             **kwargs (optional): Optional keyword arguments to pass to the ShardWriter
         """
 
-        max_shard_items = (
-            kwargs["maxcount"] if "maxcount" in kwargs else DEFAULT_DATASET_MAX_COUNT
-        )
-        size = len(str(max_shard_items))
-        if "pattern" in kwargs:
-            kwargs["pattern"] = kwargs["pattern"] + f"-%0{size}d.tar"
-        else:
-            kwargs["pattern"] = "sample" + f"-%0{size}d.tar"
-
+        # Add the upload shard logic to the original post processing function
         original_post = kwargs.get("post", lambda path: None)
 
-        # Add the upload shard logic to the original post processing function
         def combined_post_processing(shard_path):
             original_post(shard_path)
             self.object(shard_path).put_file(shard_path)
             os.unlink(shard_path)
 
         kwargs["post"] = combined_post_processing
-        shard_writer = ShardWriter(**kwargs)
-        dataset = config.generate_dataset(max_shard_items)
-        for sample in dataset:
-            shard_writer.write(sample)
-        shard_writer.close()
+        config.write_shards(skip_missing=skip_missing, **kwargs)

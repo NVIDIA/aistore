@@ -431,3 +431,26 @@ class TestBucketOps(RemoteEnabledTest):
         self.assertEqual(len(shards), 1)
         for shard in shards:
             self.assertIsNotNone(self.bucket.object(shard).head())
+
+    def test_write_dataset_missing_attributes(self):
+        self.local_test_files.mkdir(exist_ok=True)
+        dataset_directory = self.local_test_files.joinpath(DATASET_DIR)
+        dataset_directory.mkdir(exist_ok=True)
+        img_files = {
+            "file1.jpg": b"file1",
+            "file2.jpg": b"file2",
+            "file3.jpg": b"file3",
+        }
+        _create_files(dataset_directory, img_files)
+
+        dataset_config = DatasetConfig(
+            primary_attribute=DataAttribute(
+                path=dataset_directory, name="image", file_type="jpg"
+            ),
+            secondary_attributes=[
+                LabelAttribute(name="cls", label_identifier=lambda filename: None)
+            ],
+        )
+        self.bucket.write_dataset(
+            dataset_config, skip_missing=False, pattern="dataset", maxcount=10
+        )

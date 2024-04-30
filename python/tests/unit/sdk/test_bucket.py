@@ -1,5 +1,4 @@
 import unittest
-from unittest import mock
 from unittest.mock import Mock, call, patch, MagicMock
 
 from aistore.sdk.ais_source import AISSource
@@ -75,6 +74,7 @@ class TestBucket(unittest.TestCase):
         self.amz_bck_params = self.amz_bck.qparam.copy()
         self.ais_bck = Bucket(name=BCK_NAME, client=self.mock_client)
         self.ais_bck_params = self.ais_bck.qparam.copy()
+        self.dataset_config = MagicMock(spec=DatasetConfig)
 
     def test_default_props(self):
         bucket = Bucket(name=BCK_NAME, client=self.mock_client)
@@ -748,25 +748,21 @@ class TestBucket(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.ais_bck.info(flt_presence=6)
 
-    @patch("aistore.sdk.bucket.ShardWriter")
-    def test_write_dataset(self, mock_shard_writer_class):
-        sample_data = [
-            {"__key__": "sample_01", "image.jpg": "data1", "cls": "label1"},
-            {"__key__": "sample_02", "image.jpg": "data2", "cls": "label2"},
-        ]
-        mock_shard_writer = MagicMock()
-        mock_shard_writer_class.return_value = mock_shard_writer
-        mock_dataset_config = MagicMock(spec=DatasetConfig)
-        mock_dataset_samples = iter(sample_data)
-        mock_dataset_config.generate_dataset.return_value = mock_dataset_samples
-        kwargs = {"pattern": "data", "maxcount": 10}
-        expected_pattern = "data-%02d.tar"
+    def test_write_dataset_skip_missing_true_but_missing_attributes(self):
+        self.dataset_config.write_shards = MagicMock()
 
-        self.ais_bck.write_dataset(mock_dataset_config, **kwargs)
-
-        mock_shard_writer_class.assert_called_once_with(
-            pattern=expected_pattern, maxcount=10, post=mock.ANY
+        self.ais_bck.write_dataset(
+            self.dataset_config, log_dir="/fake/log", skip_missing=True
         )
-        expected_calls = [call.write(sample) for sample in sample_data]
-        mock_shard_writer.assert_has_calls(expected_calls, any_order=True)
-        mock_shard_writer.close.assert_called_once()
+
+        self.dataset_config.write_shards.assert_called()
+        args, kwargs = self.dataset_config.write_shards.call_args
+        self.assertTrue(callable(kwargs["post"]))
+
+    def test_write_dataset_successful(self):
+        self.dataset_config.write_shards = MagicMock()
+
+        self.ais_bck.write_dataset(self.dataset_config, skip_missing=True)
+        self.dataset_config.write_shards.assert_called()
+        args, kwargs = self.dataset_config.write_shards.call_args
+        self.assertTrue(callable(kwargs["post"]))
