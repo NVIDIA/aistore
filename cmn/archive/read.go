@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -20,12 +20,15 @@ import (
 // usage boils down to a) constructing (`NewReader`) and b) iterating (`Range`) - that's all
 // (all supported formats)
 type (
-	ReadCB func(filename string, reader cos.ReadCloseSizer, hdr any) (bool, error)
+	ReadCB func(filename string, reader cos.ReadCloseSizer, hdr any) (bool /*stop*/, error)
 
 	Reader interface {
-		// pass non-empty filename to facilitate a simple/single selection
-		// (generalize as a multi-selection callback? no need yet...)
-		Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error)
+		// call rcb (reader callback) with each archived file; stop upon EOF
+		// or when rcb returns true (ie., stop) or any error
+		ReadUntil(rcb ReadCB) error
+
+		// simple/single selection of a given archived filename (full path)
+		ReadOne(filename string) (cos.ReadCloseSizer, error)
 
 		// private
 		init(fh io.Reader) error
@@ -94,27 +97,34 @@ func (tr *tarReader) init(fh io.Reader) error {
 	return nil
 }
 
-func (tr *tarReader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error) {
-	debug.Assert(rcb != nil || filename != "") // either/or
+func (tr *tarReader) ReadUntil(rcb ReadCB) error {
 	for {
-		hdr, ern := tr.tr.Next()
-		if ern != nil {
-			if ern == io.EOF {
-				ern = nil
+		hdr, err := tr.tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				err = nil
 			}
-			return nil, ern
+			return err
 		}
-		if filename != "" {
-			if hdr.Name == filename || namesEq(hdr.Name, filename) {
-				return &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}, nil
-			}
-			continue
-		}
-		// otherwise, read them all until stopped
 		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}
-		stop, err := rcb(hdr.Name, csl, hdr)
-		if stop || err != nil {
+		if stop, err := rcb(hdr.Name, csl, hdr); stop || err != nil {
+			return err
+		}
+	}
+}
+
+func (tr *tarReader) ReadOne(filename string) (cos.ReadCloseSizer, error) {
+	debug.Assert(filename != "", "missing archived filename (pathname)")
+	for {
+		hdr, err := tr.tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
 			return nil, err
+		}
+		if hdr.Name == filename || namesEq(hdr.Name, filename) {
+			return &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}, nil
 		}
 	}
 }
@@ -131,17 +141,25 @@ func (tgr *tgzReader) init(fh io.Reader) (err error) {
 	return
 }
 
-// NOTE:
-// - when the method returns non-nil reader the responsibility to close the latter goes to the caller (via reader.Close)
-// - otherwise, gzip.Reader is closed upon return
-// currently, non-nil reader is returned iff filename != "" (indicating extraction of a single named file)
-func (tgr *tgzReader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error) {
-	reader, err := tgr.tr.Range(filename, rcb)
+func (tgr *tgzReader) ReadUntil(rcb ReadCB) (err error) {
+	err = tgr.tr.ReadUntil(rcb)
+	erc := tgr.gzr.Close()
+	if err == nil {
+		err = erc
+	}
+	return err
+}
+
+// here and elsewhere, `filename` indicates extraction of a single named archived file
+func (tgr *tgzReader) ReadOne(filename string) (cos.ReadCloseSizer, error) {
+	reader, err := tgr.tr.ReadOne(filename)
 	if err != nil {
 		tgr.gzr.Close()
 		return reader, err
 	}
 	if reader != nil {
+		// when the method returns non-nil reader it is the responsibility of the caller to close the former
+		// otherwise, gzip.Reader is always closed upon return
 		csc := &cslClose{gzr: tgr.gzr /*to close*/, R: reader /*to read from*/, N: reader.Size()}
 		return csc, err
 	}
@@ -158,36 +176,43 @@ func (zr *zipReader) init(fh io.Reader) (err error) {
 	return
 }
 
-func (zr *zipReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSizer, err error) {
+func (zr *zipReader) ReadUntil(rcb ReadCB) (err error) {
 	for _, f := range zr.zr.File {
 		finfo := f.FileInfo()
 		if finfo.IsDir() {
 			continue
 		}
-		// select one
-		if filename != "" {
-			if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
-				csf := &cslFile{size: finfo.Size()}
-				csf.file, err = f.Open()
-				reader = csf
-				return
-			}
-			continue
-		}
-
 		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
 			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
 
 		csf := &cslFile{size: int64(f.FileHeader.UncompressedSize64)}
 		if csf.file, err = f.Open(); err != nil {
-			return
+			return err
 		}
-		stop, err := rcb(f.FileHeader.Name, csf, &f.FileHeader)
-		if stop || err != nil {
-			return nil, err
+		if stop, err := rcb(f.FileHeader.Name, csf, &f.FileHeader); stop || err != nil {
+			return err
 		}
 	}
 	return
+}
+
+func (zr *zipReader) ReadOne(filename string) (reader cos.ReadCloseSizer, err error) {
+	debug.Assert(filename != "", "missing archived filename (pathname)")
+	for _, f := range zr.zr.File {
+		finfo := f.FileInfo()
+		if finfo.IsDir() {
+			continue
+		}
+		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
+			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
+
+		if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
+			csf := &cslFile{size: finfo.Size()}
+			csf.file, err = f.Open()
+			return csf, err
+		}
+	}
+	return nil, nil
 }
 
 // lz4Reader
@@ -199,8 +224,12 @@ func (lzr *lz4Reader) init(fh io.Reader) error {
 	return nil
 }
 
-func (lzr *lz4Reader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error) {
-	return lzr.tr.Range(filename, rcb)
+func (lzr *lz4Reader) ReadUntil(rcb ReadCB) error {
+	return lzr.tr.ReadUntil(rcb)
+}
+
+func (lzr *lz4Reader) ReadOne(filename string) (cos.ReadCloseSizer, error) {
+	return lzr.tr.ReadOne(filename)
 }
 
 //

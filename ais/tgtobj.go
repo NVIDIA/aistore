@@ -1024,7 +1024,7 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 		if err != nil {
 			return 0, fmt.Errorf("failed to open %s: %w", goi.lom.Cname(), err)
 		}
-		csl, err = ar.Range(goi.archive.filename, nil)
+		csl, err = ar.ReadOne(goi.archive.filename)
 		if err != nil {
 			return 0, cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
 		}

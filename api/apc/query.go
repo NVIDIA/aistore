@@ -72,7 +72,7 @@ const (
 
 	// - intended for usage with sharded datasets, whereby the shards are .tar, .tgz (or .tar.gz), .zip, or .tar.lz4
 	//   archives;
-	// - specifies archiveed pathname and expected format (mime type) of the containing shard; the latter is
+	// - specifies archived pathname and expected format (mime type) of the containing shard; the latter is
 	//   especially usable with non-standard shard name extensions;
 	// See also:
 	// - next two query parameters (below)
@@ -80,9 +80,12 @@ const (
 	QparamArchpath = "archpath"
 	QparamArchmime = "archmime"
 
-	// (related to the above)
-	// - intended for usage with sharded datasets, whereby the shards are .tar, .tgz (or .tar.gz), .zip, or .tar.lz4
-	//   archives;
+	// - intended for usage with sharded datasets (see above);
+	// - specifies regular expression that can be used to match archived filenames, and therefore select possibly
+	//   multiple files to return in one shot;
+	QparamArchregx = "archregx"
+
+	// - intended for usage with sharded datasets (see above)
 	// - further, relies on so-called _basename_ convention to read and return multi-file sample (record) from a given
 	//   shard (archive) - in one shot;
 	// - the _basename_ convention is often referred to as "WebDataset format", wheveby for every single sharded file

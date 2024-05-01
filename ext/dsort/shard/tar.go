@@ -108,7 +108,7 @@ func (trw *tarRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExt
 	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
-	_, err = ar.Range("", c.xtar)
+	err = ar.ReadUntil(c.xtar)
 
 	slab.Free(buf)
 	return c.extractedSize, c.extractedCount, err

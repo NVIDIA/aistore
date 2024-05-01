@@ -172,7 +172,7 @@ func GetFilesFromArchBuffer(mime string, buffer bytes.Buffer, extension string) 
 		return false, nil
 	}
 
-	_, err = ar.Range("", rcb)
+	err = ar.ReadUntil(rcb)
 	return files, err
 }
 
@@ -189,7 +189,7 @@ func GetFileInfosFromArchBuffer(buffer bytes.Buffer, mime string) ([]os.FileInfo
 		reader.Close()
 		return false, nil
 	}
-	_, err = ar.Range("", rcb)
+	err = ar.ReadUntil(rcb)
 	return files, err
 }
 

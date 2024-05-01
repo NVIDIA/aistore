@@ -65,7 +65,7 @@ func (zrw *zipRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExt
 	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
-	_, err = ar.Range("", c.xzip)
+	err = ar.ReadUntil(c.xzip)
 
 	slab.Free(buf)
 	return c.extractedSize, c.extractedCount, err
