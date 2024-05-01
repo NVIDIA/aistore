@@ -605,7 +605,7 @@ func doExtract(objName, outFile string, objLen int64) (mime string, err error) {
 	}
 
 	ex := &extractor{outFile, mime}
-	_, err = ar.Range("", ex.do)
+	err = ar.ReadUntil(ex.do, "", 0)
 	rfh.Close()
 	return
 }

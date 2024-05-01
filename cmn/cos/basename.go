@@ -6,6 +6,7 @@ package cos
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -24,5 +25,5 @@ func Ext(path string) (ext string) {
 // WebDataset convention - not to confuse with filepath.Base (!)
 // * see https://github.com/webdataset/webdataset#the-webdataset-format
 func Basename(path string) string {
-	return strings.TrimSuffix(path, Ext(path))
+	return strings.TrimSuffix(path, filepath.Ext(path))
 }

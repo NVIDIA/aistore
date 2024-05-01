@@ -80,10 +80,14 @@ const (
 	QparamArchpath = "archpath"
 	QparamArchmime = "archmime"
 
-	// - intended for usage with sharded datasets (see above);
-	// - specifies regular expression that can be used to match archived filenames, and therefore select possibly
-	//   multiple files to return in one shot;
+	// - two closely related query params intended for usage with sharded datasets;
+	// - "regx" specifies prefix, suffix, WebDataset basename, or gen-purpose regular expression
+	//   that can be used to match archived filenames,
+	//   and to select possibly multiple files to return in one shot;
+	// - non-zero "mode" tells aistore to interpret "regx" as a simple a) prefix, b) suffix, etc. -
+	//   for faster matching; all available choices are enumerated in cmn/archive/read
 	QparamArchregx = "archregx"
+	QparamArchmode = "archmode" // see `MatchMode` enum in cmn/archive/read
 
 	// - intended for usage with sharded datasets (see above)
 	// - further, relies on so-called _basename_ convention to read and return multi-file sample (record) from a given
