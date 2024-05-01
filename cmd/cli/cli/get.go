@@ -492,9 +492,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	}
 
 	// finally, http query
-	if bck.IsHTTP() || archpath != "" || flagIsSet(c, silentFlag) || flagIsSet(c, latestVerFlag) {
-		getArgs.Query = _getQparams(c, &bck, archpath)
-	}
+	getArgs.Query = _getQparams(c, &bck, archpath)
 
 	// do
 	if flagIsSet(c, cksumFlag) {
@@ -563,18 +561,26 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 }
 
 func _getQparams(c *cli.Context, bck *cmn.Bck, archpath string) (q url.Values) {
-	q = make(url.Values, 2)
+	f := func() {
+		if q == nil {
+			q = make(url.Values, 4)
+		}
+	}
 	if bck.IsHTTP() {
+		f()
 		uri := c.Args().Get(0)
 		q.Set(apc.QparamOrigURL, uri)
 	}
 	if archpath != "" {
+		f()
 		q.Set(apc.QparamArchpath, archpath)
 	}
 	if flagIsSet(c, silentFlag) {
+		f()
 		q.Set(apc.QparamSilent, "true")
 	}
 	if flagIsSet(c, latestVerFlag) {
+		f()
 		q.Set(apc.QparamLatestVer, "true")
 	}
 	return q

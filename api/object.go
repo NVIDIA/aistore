@@ -36,11 +36,16 @@ type (
 		// (in other words, with no writer the object that is being read will be discarded)
 		Writer io.Writer
 
-		// Currently, this (optional) Query field can optionally carry:
-		// 1. `apc.QparamETLName`: named ETL to transform the object (i.e., perform "inline transformation")
-		// 2. `apc.QparamOrigURL`: GET from a vanilla http(s) location (`ht://` bucket with the corresponding `OrigURLBck`)
-		// 3. `apc.QparamSilent`: do not log errors
-		// 4. `apc.QparamLatestVer`: get latest version from the associated Cloud bucket; see also: `ValidateWarmGet`
+		// Currently, this (optional) Query field can (optionally) carry:
+		// - `apc.QparamETLName`: named ETL to transform the object (i.e., perform "inline transformation")
+		// - `apc.QparamOrigURL`: GET from a vanilla http(s) location (`ht://` bucket with the corresponding `OrigURLBck`)
+		// - `apc.QparamSilent`: do not log errors
+		// - `apc.QparamLatestVer`: get latest version from the associated Cloud bucket; see also: `ValidateWarmGet`
+		// - and a group of parameters used to read aistore-supported serialized archives ("shards"), namely:
+		//   - `apc.QparamArchpath`
+		//   - `apc.QparamArchmime`
+		//   - `apc.QparamArchregx`
+		//   - `apc.QparamArchmode`
 		Query url.Values
 
 		// The field is used to facilitate a) range read, and b) blob download

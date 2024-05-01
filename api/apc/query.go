@@ -80,27 +80,23 @@ const (
 	QparamArchpath = "archpath"
 	QparamArchmime = "archmime"
 
-	// - two closely related query params intended for usage with sharded datasets;
-	// - "regx" specifies prefix, suffix, WebDataset basename, or gen-purpose regular expression
-	//   that can be used to match archived filenames,
-	//   and to select possibly multiple files to return in one shot;
-	// - non-zero "mode" tells aistore to interpret "regx" as a simple a) prefix, b) suffix, etc. -
-	//   for faster matching; all available choices are enumerated in cmn/archive/read
+	// - the following two closely related query params intended for usage with sharded datasets - in particular:
+	// - "archregx" specifies prefix, suffix, WebDataset basename, or gen-purpose regular expression
+	//   that can be used to match archived filenames, and select possibly multiple files
+	//   (that will be then return to user in one shot);
 	QparamArchregx = "archregx"
-	QparamArchmode = "archmode" // see `MatchMode` enum in cmn/archive/read
 
-	// - intended for usage with sharded datasets (see above)
-	// - further, relies on so-called _basename_ convention to read and return multi-file sample (record) from a given
-	//   shard (archive) - in one shot;
-	// - the _basename_ convention is often referred to as "WebDataset format", wheveby for every single sharded file
-	//   its basename is considered a _key_ defining the entire sample;
-	// - example two samples: (subdir/a.jpg, subdir/a.json, subdir/a.cls) and (subdir/b.jpg, subdir/b.json, subdir/b.cls)
-	//
+	// - "archmode", on the other hand, tells aistore whether to interpret "regx" string (above) as a
+	//   a gen-purpose regular expression or, alternatively, use it for a simple and fast string comparison;
+	// - the latter is further formalized as `MatchMode` enum in the cmn/archive package,
+	//   with enumerated values including: "prefix", "suffix", "substr", "wdskey".
+	// - for example:
+	// - given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
+	//   and "wdskey" = "subdir/aaa", aistore will match and return (subdir/aaa.jpg, subdir/aaa.json).
 	// See also:
 	// - https://github.com/webdataset/webdataset for WebDataset
 	// - docs/archive.md or cmn/archive/mime.go for the most recently updated list of supported serialization formats.
-	QparamWdsKey = "wds-key"
-	QparamWdsIdx = "wds-idx"
+	QparamArchmode = "archmode" // see `MatchMode` enum in cmn/archive/read
 
 	// Skip loading existing object's metadata, in part to
 	// compare its Checksum and update its existing Version (if exists).

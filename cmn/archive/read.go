@@ -27,11 +27,19 @@ const (
 	Prefix
 	Suffix
 	Substr
-	WdsBasename // WebDataset convention - pathname without extension (https://github.com/webdataset/webdataset#the-webdataset-format)
+	WdsKey // WebDataset convention - pathname without extension (https://github.com/webdataset/webdataset#the-webdataset-format)
 
 	// ------------------ (m.b. the last)
 	_lastmode
 )
+
+var MatchModeText = []string{
+	"regexp",
+	"prefix",
+	"suffix",
+	"substr",
+	"wdskey",
+}
 
 // to use, construct (`NewReader`) and iterate (`RangeUntil`)
 // (all supported formats)
@@ -123,13 +131,13 @@ func (m *matcher) init() (err error) {
 		return fmt.Errorf("invalid match-mode %d", m.mode)
 	}
 	switch {
-	case m.regex == "": // empty match matches all archived filenames
+	case m.regex == "": // 1. empty match matches all archived filenames
 		debug.Assert(m.mode == 0)
 		return nil
-	case m.mode > 0: // fast and simple string-based match: prefix, et al.
+	case m.mode > 0: // 2. fast and simple string-based match: prefix, et al.
 		debug.Assert(m.regex == "")
 		return nil
-	default:
+	default: // finally, 3. regex
 		m.re, err = regexp.Compile(m.regex)
 		return err
 	}
@@ -150,8 +158,8 @@ func (m *matcher) do(filename string) bool {
 	case Substr:
 		return strings.Contains(filename, m.regex)
 	default:
-		debug.Assert(m.mode == WdsBasename, m.mode)
-		return m.regex == cos.Basename(filename)
+		debug.Assert(m.mode == WdsKey, m.mode)
+		return m.regex == cos.WdsKey(filename)
 	}
 }
 

@@ -24,6 +24,10 @@ func Ext(path string) (ext string) {
 
 // WebDataset convention - not to confuse with filepath.Base (!)
 // * see https://github.com/webdataset/webdataset#the-webdataset-format
-func Basename(path string) string {
-	return strings.TrimSuffix(path, filepath.Ext(path))
+func WdsKey(path string) (key string) {
+	key = strings.TrimSuffix(path, filepath.Ext(path))
+	if key != "" && key[0] == '/' {
+		key = key[1:]
+	}
+	return key
 }
