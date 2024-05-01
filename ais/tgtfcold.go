@@ -24,7 +24,7 @@ import (
 
 const ftcg = "Warning: failed to cold-GET"
 
-func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
+func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	var (
 		t, lom = goi.t, goi.lom
 		revert string
@@ -36,7 +36,7 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 			revert = ""
 		}
 	}
-	lmfh, err := lom.CreateFileRW(lom.FQN)
+	lmfh, err := lom.CreateFile(lom.FQN)
 	if err != nil {
 		cos.Close(res.R)
 		goi._cleanup(revert, nil, nil, nil, err, "(fcreate)")
@@ -66,9 +66,14 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 			return err
 		}
 	}
+	err = lmfh.Close()
+	lmfh = nil
+	if err != nil {
+		goi._cleanup(revert, lmfh, buf, slab, err, "(fclose)")
+		return err
+	}
 
-	// persist lom (main repl.) --
-
+	// lom (main replica)
 	lom.SetSize(written)
 	cksumH.Finalize()
 	lom.SetCksum(&cksumH.Cksum) // and return via whdr as well
@@ -82,10 +87,9 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 		return err
 	}
 
-	// seek & transmit ---
-
-	if _, err = lmfh.Seek(0, io.SeekStart); err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(seek)")
+	// reopen & transmit ---
+	if lmfh, err = os.Open(lom.FQN); err != nil {
+		goi._cleanup(revert, nil, buf, slab, err, "(seek)")
 		return err
 	}
 	var (
@@ -122,8 +126,8 @@ func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	}
 	debug.Assertf(written == size, "%s: transmit-size %d != %d expected", lom.Cname(), written, size)
 
-	slab.Free(buf)
 	cos.Close(lmfh)
+	slab.Free(buf)
 
 	return goi._fini(revert, res.Size, written)
 }
@@ -240,7 +244,14 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 		}
 	}
 
-	// persist lom (main repl.)
+	err = lmfh.Close()
+	lmfh = nil
+	if err != nil {
+		goi._cleanup(revert, lmfh, buf, slab, err, "(fclose)")
+		return errSendingResp // ditto
+	}
+
+	// lom (main replica)
 	lom.SetSize(written)
 	cksum.Finalize()
 	lom.SetCksum(&cksum.Cksum)
@@ -255,7 +266,6 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	}
 
 	slab.Free(buf)
-	cos.Close(lmfh)
 
 	return goi._fini(revert, res.Size, written)
 }

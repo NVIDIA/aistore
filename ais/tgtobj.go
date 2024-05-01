@@ -633,7 +633,7 @@ do:
 			if goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET) {
 				err = goi.coldStream(&res)
 			} else {
-				err = goi.coldSeek(&res)
+				err = goi.coldReopen(&res)
 			}
 			goi.unlocked = true // always
 			return 0, err
