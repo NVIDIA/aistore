@@ -73,6 +73,7 @@ Here's in detail:
 
 ```console
 $ ais get --help
+
 NAME:
    ais get - (alias for "object get") get an object, a shard, an archived file, or a range of bytes from all of the above;
               write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
@@ -86,37 +87,62 @@ USAGE:
    ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
 
 OPTIONS:
-   --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
-   --length value    object read length; default formatting: IEC (use '--units' to override)
-   --checksum        validate checksum
-   --yes, -y         assume 'yes' to all questions
-   --check-cached    instead of GET execute HEAD(object) to check if the object is present in aistore
-                     (applies only to buckets with remote backend)
-   --latest          check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
-                     from the associated remote bucket:
-                      - provides operation-level control over object versioning (and version synchronization)
-                        without requiring to change bucket configuration
-                      - the latter can be done using 'ais bucket props set BUCKET versioning'
-                      - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
-   --refresh value   interval for continuous monitoring;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress        show progress bar(s) and progress of execution in real time
-   --archpath value  extract the specified file from an archive (shard)
-   --extract, -x     extract all files from archive(s)
-   --prefix value    get objects that start with the specified prefix, e.g.:
-                     '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
-                     a/b that have their names (relative to this directory) starting with 'c';
-                     '--prefix ""' - get entire bucket (all objects)
-   --cached          get only those objects from a remote bucket that are present ("cached") in aistore
-   --archive         list archived content (see docs/archive.md for details)
-   --limit value     limit object name count (0 - unlimited) (default: 0)
-   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                     si  - SI (metric) format, e.g.: KB, MB, GB
-                     raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose output
-   --silent          server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
-   --help, -h        show help
+   --offset value       object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
+   --length value       object read length; default formatting: IEC (use '--units' to override)
+   --checksum           validate checksum
+   --yes, -y            assume 'yes' to all questions
+   --check-cached       check whether a given named object is present in cluster
+                        (applies only to buckets with remote backend)
+   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
+                        from the associated remote bucket:
+                        - provides operation-level control over object versioning (and version synchronization)
+                          without requiring to change bucket configuration
+                        - the latter can be done using 'ais bucket props set BUCKET versioning'
+                        - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
+   --refresh value      interval for continuous monitoring;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress           show progress bar(s) and progress of execution in real time
+   --blob-download      utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
+   --chunk-size value   chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   --num-workers value  number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
+   --archpath value     extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                        see also: '--archregx'
+   --archmime value     expected format (mime type) of an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                        especially usable for shards with non-standard extensions
+   --archregx value     prefix, suffix, WebDataset key, or general-purpose regular expression to select possibly multiple matching archived files;
+                        use '--archmode' to specify the "matching mode" (that can be prefix, suffix, WebDataset key, or regex)
+   --archmode value     enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
+                          * regexp - general purpose regular expression;
+                          * prefix - matching filename starts with;
+                          * suffix - matching filename ends with;
+                          * substr - matching filename contains;
+                          * wdskey - WebDataset key, e.g.:
+                        example:
+                          given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
+                          and wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)
+   --extract, -x        extract all files from archive(s)
+   --inventory          list objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+                        boost when used with very large s3 buckets; e.g. usage:
+                          1) 'ais ls s3://abc --inventory'
+                          2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
+                        (see also: docs/s3inventory.md)
+   --inv-name value     bucket inventory name (optional; system default name is '.inventory')
+   --inv-id value       bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
+   --prefix value       get objects that start with the specified prefix, e.g.:
+                        '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
+                        a/b that have their names (relative to this directory) starting with 'c';
+                        '--prefix ""' - get entire bucket (all objects)
+   --cached             get only in-cluster objects - only those objects from a remote bucket that are present ("cached")
+   --archive            list archived content (see docs/archive.md for details)
+   --limit value        maximum number of object names to display (0 - unlimited; see also '--max-pages')
+                        e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
+   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                        si  - SI (metric) format, e.g.: KB, MB, GB
+                        raw - do not convert to (or from) human-readable format
+   --verbose, -v        verbose output
+   --silent             server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
+   --help, -h           show help
 ```
 
 ## Save object to local file

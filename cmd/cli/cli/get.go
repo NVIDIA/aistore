@@ -33,6 +33,13 @@ const (
 
 const extractVia = "--extract(*)"
 
+type qparamArch struct {
+	archpath string // apc.QparamArchpath
+	archmime string // apc.QparamArchmime
+	archregx string // apc.QparamArchregx
+	archmode string // apc.QparamArchmode
+}
+
 func catHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -43,8 +50,8 @@ func catHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	archpath := parseStrFlag(c, archpathGetFlag)
-	return getObject(c, bck, objName, archpath, fileStdIO, true /*quiet*/, false /*extract*/)
+	a := qparamArch{archpath: parseStrFlag(c, archpathGetFlag)}
+	return getObject(c, bck, objName, fileStdIO, a, true /*quiet*/, false /*extract*/)
 }
 
 func getHandler(c *cli.Context) error {
@@ -103,29 +110,29 @@ func getHandler(c *cli.Context) error {
 	// destination (empty "" implies using source `basename`)
 	outFile := c.Args().Get(1)
 
-	// extract all or (archpath) selected
+	// archive
 	var (
-		archpath string
-		extract  bool
+		a       qparamArch
+		extract bool
 	)
-	if flagIsSet(c, archpathGetFlag) {
-		archpath = parseStrFlag(c, archpathGetFlag)
+	if err := a.init(c); err != nil {
+		return err
 	}
 	if actionIsHandler(c.Command.Action, getArchHandler) {
 		extract = true // extractFlag is implied unless:
 
-		if archpath != "" {
+		if a.archpath != "" {
 			extract = false
 		} else if oname, fname := splitObjnameShardBoundary(objName); fname != "" {
 			objName = oname
-			archpath = fname
+			a.archpath = fname
 			extract = false
 		}
 	} else {
 		extract = flagIsSet(c, extractFlag)
 	}
 
-	// validate extract and archpath
+	// validate '--extract' and '--archpath' vs other command line
 	if extract {
 		if flagIsSet(c, headObjPresentFlag) {
 			return fmt.Errorf(errFmtExclusive, extractVia, qflprn(headObjPresentFlag))
@@ -135,18 +142,8 @@ func getHandler(c *cli.Context) error {
 				qflprn(lengthFlag), qflprn(offsetFlag), extractVia)
 		}
 	}
-	if archpath != "" {
-		if flagIsSet(c, getObjPrefixFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
-		}
-		if flagIsSet(c, headObjPresentFlag) {
-			return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
-				qflprn(headObjPresentFlag), qflprn(archpathGetFlag))
-		}
-		if flagIsSet(c, lengthFlag) {
-			return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
-				qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
-		}
+	if err := a.validate(c); err != nil {
+		return err
 	}
 
 	// GET multiple -- currently, only prefix (TODO: list/range)
@@ -158,16 +155,19 @@ func getHandler(c *cli.Context) error {
 					uri, qflprn(getObjPrefixFlag))
 			}
 		}
-		// calls `getObject` with progress bar and bells and whistles
-		return getMultiObj(c, bck, archpath, outFile, extract)
+
+		// `getMultiObj` is a fusion of 'ais ls' and GET, with progress bar and a
+		// very limited archival support (that boils down to listing archived files)
+		// TODO -- FIXME: implement '--archregx' and the rest of the `qparamArch`
+		return getMultiObj(c, bck, outFile, a.enabled(), extract)
 	}
 
 	// GET
-	return getObject(c, bck, objName, archpath, outFile, false /*quiet*/, extract)
+	return getObject(c, bck, objName, outFile, a, false /*quiet*/, extract)
 }
 
 // GET multiple -- currently, only prefix (TODO: list/range)
-func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract bool) error {
+func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bool) error {
 	var (
 		prefix     = parseStrFlag(c, getObjPrefixFlag)
 		origPrefix = prefix
@@ -187,7 +187,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	// setup lsmsg
 	msg := &apc.LsoMsg{Prefix: prefix}
 	msg.AddProps(apc.GetPropsMinimal...)
-	if flagIsSet(c, listArchFlag) || extract || archpath != "" {
+	if flagIsSet(c, listArchFlag) || extract || lsarch {
 		msg.SetFlag(apc.LsArchDir)
 	}
 	if flagIsSet(c, getObjCachedFlag) {
@@ -345,22 +345,22 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 
 func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, outFile string, quiet, extract bool) {
 	var (
-		objName  = entry.Name
-		archpath string
+		a       qparamArch // effectively, ignore user-specified command line and redefine to GET a given shardName
+		objName = entry.Name
 	)
 	if shardName != "" {
 		objName = shardName
-		archpath = strings.TrimPrefix(entry.Name, shardName+"/")
+		a.archpath = strings.TrimPrefix(entry.Name, shardName+"/")
 		if outFile != fileStdIO && !discardOutput(outFile) {
 			// when getting multiple files retain the full archpath
 			// (compare w/ filepath.Base usage otherwise)
-			outFile = filepath.Join(outFile, archpath)
+			outFile = filepath.Join(outFile, a.archpath)
 			if err := cos.CreateDir(filepath.Dir(outFile)); err != nil {
 				actionWarn(c, err.Error())
 			}
 		}
 	}
-	err := getObject(c, bck, objName, archpath, outFile, quiet, extract)
+	err := getObject(c, bck, objName, outFile, a, quiet, extract)
 	if err != nil {
 		u.errCount.Inc()
 	}
@@ -378,21 +378,16 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, ou
 }
 
 // get one (main function)
-func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, quiet, extract bool) (err error) {
-	var (
-		getArgs api.GetArgs
-		oah     api.ObjAttrs
-		units   string
-	)
+func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArch, quiet, extract bool) error {
 	if outFile == fileStdIO && extract {
 		return errors.New("cannot extract archived files to standard output - not implemented yet")
 	}
 	if discardOutput(outFile) && extract {
 		return errors.New("cannot extract and discard archived files - not implemented yet")
 	}
-	if flagIsSet(c, listArchFlag) && archpath == "" {
+	if flagIsSet(c, listArchFlag) && a.archpath == "" {
 		if external, internal := splitPrefixShardBoundary(objName); internal != "" {
-			objName, archpath = external, internal
+			objName, a.archpath = external, internal
 		}
 	}
 
@@ -401,7 +396,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 		return isObjPresent(c, bck, objName)
 	}
 
-	units, err = parseUnitsFlag(c, unitsFlag)
+	units, err := parseUnitsFlag(c, unitsFlag)
 	if err != nil {
 		return err
 	}
@@ -417,8 +412,8 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	// where to
 	if outFile == "" {
 		// archive
-		if archpath != "" {
-			outFile = filepath.Base(archpath)
+		if a.archpath != "" {
+			outFile = filepath.Base(a.archpath)
 		} else {
 			outFile = filepath.Base(objName)
 		}
@@ -431,8 +426,8 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 			// destination is: directory | file (confirm overwrite)
 			if finfo.IsDir() {
 				// archive
-				if archpath != "" {
-					outFile = filepath.Join(outFile, filepath.Base(archpath))
+				if a.archpath != "" {
+					outFile = filepath.Join(outFile, filepath.Base(a.archpath))
 				} else {
 					outFile = filepath.Join(outFile, filepath.Base(objName))
 				}
@@ -472,6 +467,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 			qflprn(chunkSizeFlag), qflprn(numWorkersFlag), qflprn(blobDownloadFlag))
 	}
 
+	var getArgs api.GetArgs
 	if outFile == fileStdIO {
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		quiet = true
@@ -492,16 +488,17 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	}
 
 	// finally, http query
-	getArgs.Query = _getQparams(c, &bck, archpath)
+	getArgs.Query = a.getQuery(c, &bck)
 
 	// do
+	var oah api.ObjAttrs
 	if flagIsSet(c, cksumFlag) {
 		oah, err = api.GetObjectWithValidation(apiBP, bck, objName, &getArgs)
 	} else {
 		oah, err = api.GetObject(apiBP, bck, objName, &getArgs)
 	}
 	if err != nil {
-		if cmn.IsStatusNotFound(err) && archpath == "" {
+		if cmn.IsStatusNotFound(err) && !a.enabled() {
 			err = &errDoesNotExist{what: "object", name: bck.Cname(objName)}
 		}
 		return err
@@ -522,7 +519,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	}
 
 	if quiet {
-		return
+		return nil
 	}
 
 	//
@@ -550,17 +547,63 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	switch {
 	case flagIsSet(c, lengthFlag):
 		fmt.Fprintf(c.App.Writer, "Read%s range (length %s (%dB) at offset %d)%s\n", discard, sz, objLen, offset, out)
-	case archpath != "":
-		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, archpath, bck.Cname(objName), out, sz)
+	case a.archpath != "":
+		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, a.archpath, bck.Cname(objName), out, sz)
 	case extract:
 		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s) and extract%s\n", objName, bn, outFile, sz, out)
 	default:
 		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, objName, bn, out, sz)
 	}
-	return
+	return nil
 }
 
-func _getQparams(c *cli.Context, bck *cmn.Bck, archpath string) (q url.Values) {
+//
+// qparamArch
+//
+
+func (a *qparamArch) init(c *cli.Context) error {
+	if flagIsSet(c, archpathGetFlag) {
+		a.archpath = parseStrFlag(c, archpathGetFlag)
+	}
+	if flagIsSet(c, archmimeFlag) {
+		a.archmime = parseStrFlag(c, archmimeFlag)
+	}
+	if flagIsSet(c, archregxFlag) {
+		a.archregx = parseStrFlag(c, archregxFlag)
+	}
+	if flagIsSet(c, archmodeFlag) {
+		a.archmode = parseStrFlag(c, archmodeFlag)
+		if !cos.StringInSlice(a.archmode, archive.MatchModeText) {
+			return fmt.Errorf("invalid matching mode %q, expecting one of: %v", a.archmode, archive.MatchModeText)
+		}
+	}
+	if a.archpath != "" && a.archregx != "" {
+		return fmt.Errorf(errFmtExclusive, qflprn(archpathGetFlag), qflprn(archregxFlag))
+	}
+	return nil
+}
+
+func (a *qparamArch) validate(c *cli.Context) error {
+	if a.archpath == "" {
+		return nil
+	}
+	if flagIsSet(c, getObjPrefixFlag) {
+		return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
+	}
+	if flagIsSet(c, headObjPresentFlag) {
+		return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
+			qflprn(headObjPresentFlag), qflprn(archpathGetFlag))
+	}
+	if flagIsSet(c, lengthFlag) {
+		return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
+			qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
+	}
+	return nil
+}
+
+func (a *qparamArch) enabled() bool { return a.archpath != "" || a.archregx != "" }
+
+func (a *qparamArch) getQuery(c *cli.Context, bck *cmn.Bck) (q url.Values) {
 	f := func() {
 		if q == nil {
 			q = make(url.Values, 4)
@@ -571,9 +614,21 @@ func _getQparams(c *cli.Context, bck *cmn.Bck, archpath string) (q url.Values) {
 		uri := c.Args().Get(0)
 		q.Set(apc.QparamOrigURL, uri)
 	}
-	if archpath != "" {
+	if a.archpath != "" {
 		f()
-		q.Set(apc.QparamArchpath, archpath)
+		q.Set(apc.QparamArchpath, a.archpath)
+	}
+	if a.archmime != "" {
+		f()
+		q.Set(apc.QparamArchmime, a.archmime)
+	}
+	if a.archregx != "" {
+		f()
+		q.Set(apc.QparamArchregx, a.archregx)
+	}
+	if a.archmode != "" {
+		f()
+		q.Set(apc.QparamArchmode, a.archmode)
 	}
 	if flagIsSet(c, silentFlag) {
 		f()
@@ -587,7 +642,7 @@ func _getQparams(c *cli.Context, bck *cmn.Bck, archpath string) (q url.Values) {
 }
 
 //
-// post-GET extraction
+// post-GET local extraction
 //
 
 type extractor struct {

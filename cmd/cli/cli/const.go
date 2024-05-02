@@ -838,14 +838,39 @@ var (
 	// archive
 	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
 
-	archpathFlag = cli.StringFlag{
+	archpathFlag = cli.StringFlag{ // PUT/append => shard
 		Name:  "archpath",
-		Usage: "filename in archive (shard)",
+		Usage: "filename in an object (\"shard\") formatted as: " + archFormats,
 	}
-	archpathGetFlag = cli.StringFlag{
-		Name:  archpathFlag.Name,
-		Usage: "extract the specified file from an archive (shard)",
+	archpathGetFlag = cli.StringFlag{ // GET from shard
+		Name: archpathFlag.Name,
+		Usage: "extract the specified file from an object (\"shard\") formatted as: " + archFormats + ";\n" +
+			indent4 + "\tsee also: '--archregx'",
 	}
+	archmimeFlag = cli.StringFlag{
+		Name: "archmime",
+		Usage: "expected format (mime type) of an object (\"shard\") formatted as: " + archFormats + ";\n" +
+			indent4 + "\tespecially usable for shards with non-standard extensions\n",
+	}
+	archregxFlag = cli.StringFlag{
+		Name: "archregx",
+		Usage: "prefix, suffix, WebDataset key, or general-purpose regular expression to select possibly multiple matching archived files;\n" +
+			indent4 + "\tuse '--archmode' to specify the \"matching mode\" (that can be prefix, suffix, WebDataset key, or regex)",
+	}
+	archmodeFlag = cli.StringFlag{
+		Name: "archmode",
+		Usage: "enumerated \"matching mode\" that tells aistore how to handle '--archregx', one of:\n" +
+			indent4 + "\t  * regexp - general purpose regular expression;\n" +
+			indent4 + "\t  * prefix - matching filename starts with;\n" +
+			indent4 + "\t  * suffix - matching filename ends with;\n" +
+			indent4 + "\t  * substr - matching filename contains;\n" +
+			indent4 + "\t  * wdskey - WebDataset key\n" +
+			indent4 + "\texample:\n" +
+			indent4 + "\t\tgiven a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)\n" +
+			indent4 + "\t\tand wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)",
+	}
+
+	// client side
 	extractFlag = cli.BoolFlag{
 		Name:  "extract,x",
 		Usage: "extract all files from archive(s)",

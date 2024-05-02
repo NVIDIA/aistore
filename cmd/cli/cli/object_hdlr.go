@@ -47,6 +47,10 @@ var (
 			numWorkersFlag,
 			// archive
 			archpathGetFlag,
+			archmimeFlag,
+			archregxFlag,
+			archmodeFlag,
+			// archive, client side
 			extractFlag,
 			// bucket inventory
 			useInventoryFlag,

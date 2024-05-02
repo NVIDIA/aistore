@@ -81,7 +81,7 @@ const (
 	QparamArchmime = "archmime"
 
 	// - the following two closely related query params intended for usage with sharded datasets - in particular:
-	// - "archregx" specifies prefix, suffix, WebDataset basename, or gen-purpose regular expression
+	// - "archregx" specifies prefix, suffix, WebDataset key, or gen-purpose regular expression
 	//   that can be used to match archived filenames, and select possibly multiple files
 	//   (that will be then return to user in one shot);
 	QparamArchregx = "archregx"
