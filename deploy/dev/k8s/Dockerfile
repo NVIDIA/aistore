@@ -1,4 +1,4 @@
-FROM golang:1.22 AS builder
+FROM docker.io/golang:1.22 AS builder
 
 ARG mode
 ARG providers
@@ -12,7 +12,7 @@ COPY . .
 
 RUN MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} make node
 
-FROM ubuntu:22.04
+FROM docker.io/ubuntu:22.04
 
 ARG MODE
 RUN apt-get clean && apt-get update &&\

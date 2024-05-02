@@ -134,6 +134,34 @@ build:linux:
     - make cli
     - make aisloader
 
+build:k8s:
+  stage: build
+  image: quay.io/buildah/stable
+  variables:
+    # Use vfs with buildah. Docker offers overlayfs as a default, but Buildah
+    # cannot stack overlayfs on top of another overlayfs filesystem.
+    STORAGE_DRIVER: vfs
+    # Write all image metadata in the docker format, not the standard OCI format.
+    BUILDAH_FORMAT: docker
+    FQ_IMAGE_NAME: "$CI_REGISTRY_IMAGE/aisnode:$CI_COMMIT_SHORT_SHA"
+
+  before_script:
+    - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $CI_REGISTRY
+  script:
+    - buildah images 
+    - buildah build -t $FQ_IMAGE_NAME -f deploy/dev/k8s/Dockerfile --build-arg MODE="debug" --build-arg providers="gcp"
+    - buildah images
+    - buildah push $FQ_IMAGE_NAME
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      allow_failure: false
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+      allow_failure: false
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
+      allow_failure: false
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: never
+
 lint:linux:
   stage: build
   tags:
