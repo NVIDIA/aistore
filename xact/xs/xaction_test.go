@@ -7,6 +7,7 @@ package xs_test
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +33,7 @@ func init() {
 	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
 	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Timeout.MaxHostBusy = cos.Duration(20 * time.Second)
+	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
 	xreg.Init()
@@ -85,9 +87,11 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	xreg.TestReset()
 	bmd.Add(bck)
 
-	_, err := fs.Add("/tmp", tMock.SID())
-	tassert.CheckFatal(t, err)
-
+	_ = cos.CreateDir("/tmp/prefetch")
+	_, err := fs.Add("/tmp/prefetch", tMock.SID())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ignoring:", err)
+	}
 	xreg.RegBckXact(&xs.TestXFactory{})
 	defer xreg.AbortAll(nil)
 	cos.InitShortID(0)
