@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${POD_NAME}
+  labels:
+    app: ais
+spec:
+  type: ClusterIP
+  ports:
+    - port: ${PORT}
+      targetPort: ${PORT}
+      protocol: TCP
+      name: http
+  selector:
+    app: ais
+    type: ais-proxy
+---  
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME}
+  labels:
+    app: ais
+    type: ais-proxy
+spec:
+  containers:
+  - name: aisnode
+    image: ${AISNODE_IMAGE}
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      httpGet:
+        path: /v1/health
+        port: ${PORT}
+        scheme: ${PROTOCOL}
+      initialDelaySeconds: 60
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /v1/health?readiness=true # Don't require the whole cluster to be ready
+        port: ${PORT}
+        scheme: ${PROTOCOL}
+      initialDelaySeconds: 10
+      failureThreshold: 5
+      periodSeconds: 5
+    env:
+      - name: MY_NODE
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      - name: AIS_NODE_ROLE
+        value: "proxy"
+    volumeMounts:
+     - name: aws-credentials
+       mountPath: /root/.aws/
+     - name: ais-tls-certs
+       mountPath: /var/certs
+     - name: ais-logs
+       mountPath: ${AIS_LOG_DIR}
+    ports:
+      - containerPort: ${PORT}
+    command: ["bash","-c"]
+    args:
+      - export PORT=${PORT} &&
+        export HOSTNAME_LIST=${HOSTNAME_LIST} &&
+        export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
+        export AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" &&
+        export AIS_CONF_FILE=/etc/ais/ais.json &&
+        export AIS_LOCAL_CONF_FILE=/etc/ais/ais_local.json &&
+        export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
+        export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
+        export INSTANCE=${INSTANCE} &&
+        export AIS_LOG_DIR=${AIS_LOG_DIR} &&
+        export AIS_USE_HTTPS=${AIS_USE_HTTPS} &&
+        export AIS_SKIP_VERIFY_CRT=${AIS_SKIP_VERIFY_CRT} &&
+        export AIS_SERVER_CRT=${AIS_SERVER_CRT} &&
+        export AIS_SERVER_KEY=${AIS_SERVER_KEY} &&
+        source /etc/ais/aisnode_config.sh &&
+        aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=proxy -ntargets=${NUM_TARGET};
+  volumes:
+    - name: collectd-config
+      configMap:
+        name: collectd-config
+    - name: statsd-config
+      configMap:
+        name: statsd-config
+    - name: aws-credentials
+      secret:
+        secretName: aws-credentials
+        optional: true
+    - name: ais-tls-certs
+      secret:
+        secretName: ais-tls-certs
+        optional: true
+    - name: ais-logs
+      hostPath:
+        path: ${AIS_LOG_DIR}/proxy-${INSTANCE}
+        type: DirectoryOrCreate

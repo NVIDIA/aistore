@@ -43,16 +43,6 @@ variables:
     paths: [ logs/ ]
     expire_in: 1 days
 
-.k8s_long_exit_template: &k8s_long_exit_def
-  after_script:
-    - make kill
-    - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
-  artifacts:
-    when: on_failure
-    paths: [ logs/ ]
-    expire_in: 1 days
-
 .default_only_template: &default_only_def
   only:
     - main
@@ -395,27 +385,51 @@ test:long:aisloader:
 # Kubernetes stages
 #
 
-.test_k8s_short_template: &test_k8s_short_def
-  stage: test-short
+.test_k8s:
   tags:
     - ais-k8s
+  needs: 
+    - "build:k8s"
   variables:
     BUCKET: "gs://ais-ci-kube"
-    RE: "TestETL|TestConfig|TestMountpath"
     TESTS_DIR: "ais/test"
-    MY_NODE: "minikube"
-    HOSTNAME_LIST: "localhost"
+    AISNODE_IMAGE: "$CI_REGISTRY_IMAGE/aisnode:$CI_COMMIT_SHORT_SHA"
+    AIS_ENDPOINT: "http://ais-proxy-0.default.svc.cluster.local:8080"
+    FS_CNT: 6
+    RE: "TestETL|TestConfig|TestMountpath"
+    PROVIDERS: gcp
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
-  <<: *gather_logs_def
+    - cd deploy/dev/k8s
+    - make deploy-ci
+    - cd ../../..
+    - make cli
+  after_script:
+    - mkdir $CI_PROJECT_DIR/logs
+    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+    - cd deploy/dev/k8s
+    - make cleanup-ci
+  artifacts:
+    when: on_failure
+    paths: [ logs/ ]
+    expire_in: 1 days
 
-.test_k8s_long_template: &test_k8s_long_def
-  extends: .test_k8s_short_template
+.test_k8s_short_template:
+  stage: test-short
+  extends: .test_k8s
+  variables:
+    NUM_PROXY: 1
+    NUM_TARGET: 1
+
+.test_k8s_long_template:
   stage: test-long
+  extends: .test_k8s
+  variables:
+    NUM_PROXY: 1
+    NUM_TARGET: 5
 
 test:short:k8s:
-  stage: test-short
-  <<: *test_k8s_short_def
+  extends: .test_k8s_short_template
   timeout: 1h
   only:
     - merge_requests
@@ -426,40 +440,25 @@ test:short:k8s:
       - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
       - $CI_MERGE_REQUEST_LABELS !~ /.*etl.*/
   variables:
-    BUCKET: "gs://ais-ci-kube"
-    NUM_PROXY: 1
-    NUM_TARGET: 1
+    RE: "TestETL|TestConfig|TestMountpath"
   script:
-    - export HOSTNAME_LIST="localhost"
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt 3 --gcp --cleanup
     - make test-short
-    - status=$? make kill && exit $status
 
 #  e.g. RE: "ETLBucket|ETLConnectionError|ETLInitCode" (or any other regex to select tests)
 test:short:assorted:k8s:
-  stage: test-short
-  tags:
-    - ais-k8s
+  extends: .test_k8s_short_template
   timeout: 30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   variables:
-    BUCKET: "gs://ais-ci-kube"
-    TESTS_DIR: "ais/test"
     RE: "ETLAnyToAny|ETLMultiObj"
-    NUM_TARGET: 1
-    NUM_PROXY: 1
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-run
-    - status=$? make kill && exit $status
-  <<: *gather_logs_def
 
 test:long:k8s:
-  stage: test-long
-  <<: *test_k8s_long_def
+  extends: .test_k8s_long_template
   ## NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
@@ -469,15 +468,10 @@ test:long:k8s:
       when: manual
       allow_failure: true
   script:
-    - export NUM_TARGET=5
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-run
-    - status=$? make kill && exit $status
-  <<: *k8s_long_exit_def
 
 test:long:k8s:single-target:
-  stage: test-long
-  <<: *test_k8s_long_def
+  extends: .test_k8s_long_template
   timeout: 4h
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
@@ -487,15 +481,10 @@ test:long:k8s:single-target:
   variables:
     NUM_TARGET: 1
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
-    - status=0
     - make test-run
-    - status=$? make kill && exit $status
-  <<: *k8s_long_exit_def
 
 test:long:k8s:aisloader:
-  stage: test-long
-  <<: *test_k8s_long_def
+  extends: .test_k8s_long_template
   timeout: 15m
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
@@ -503,28 +492,29 @@ test:long:k8s:aisloader:
       when: manual
       allow_failure: true
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # Give some time for the cluster to stabilize.
+    - make aisloader
     - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
-    - status=$? make kill && exit $status
 
 test:long:k8s:all:
-  stage: test-long
-  tags:
-    - ais-k8s
+  extends: .test_k8s_long_template
   timeout: 5h
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
+  variables: 
+    PROVIDERS: "gcp,aws"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
+    - cd deploy/dev/k8s
+    - make deploy-ci
+    - cd ../../..
     # Make sure that metrics collection is enabled.
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --aws
     - |
       echo "----- RUNNING K8S TESTS -----"
       BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath" make test-run
@@ -539,8 +529,6 @@ test:long:k8s:all:
         result=$((result + exit_code))
         echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
       done
-    - make kill && exit $result
-  <<: *k8s_long_exit_def
 
 checkmarx-scan-csv:
   stage: security

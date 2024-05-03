@@ -37,6 +37,14 @@ redeploy-ais:
 	@ ./utils/disable_vpn.sh && \
 	  ./utils/deploy_ais.sh
 
+# Used by CI runners. Expects an image $AISNODE and kubectl with access to a running k8s cluster 
+deploy-ci: 
+	./deploy_ci.sh
+
+# Used by CI runners. Clean-up created K8s resources
+cleanup-ci:
+	./utils/cleanup_k8s_ci.sh
+
 # Set up minikube and deploy a minimal cluster with the new aisnode container including local changes
 minimal-local: 
 	@ export USE_LOCAL_REGISTRY=true && \
