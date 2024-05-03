@@ -185,6 +185,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			if wg != nil {
 				wg.Wait()
 			}
+			lrit.wait()
 
 			if r.IsAborted() || err != nil {
 				goto fin
@@ -366,12 +367,15 @@ func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap, pt *cos.ParsedTemp
 	}
 
 	// same range iterator but different bucket
+	var syncit lriterator
 	debug.Assert(lrit.lrp == lrpRange)
-	syncit := *lrit
+
+	err := syncit.init(lrit.parent, lrit.msg, rp.bckTo)
+	debug.AssertNoErr(err)
 	syncit.pt = pt
-	syncit.bck = rp.bckTo
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
 	syncit.run(syncwi, smap)
+	syncit.wait()
 }
 
 func (syncwi *syncwi) do(lom *core.LOM, _ *lriterator) {

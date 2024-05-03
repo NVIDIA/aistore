@@ -22,7 +22,9 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// utilizes mult-object lr-iterator
+// TODO:
+// - user-assigned (configurable) num-workers
+// - jogger(s) per mountpath type concurrency
 
 type (
 	prfFactory struct {
@@ -89,6 +91,7 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 	if err != nil {
 		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
 	}
+	r.lriterator.wait()
 	r.Finish()
 }
 

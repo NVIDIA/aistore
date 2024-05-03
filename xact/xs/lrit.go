@@ -6,12 +6,15 @@
 package xs
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -21,6 +24,10 @@ import (
 //   1. bash-extension style: `file-{0..100}`
 //   2. at-style: `file-@100`
 //   3. if none of the above, fall back to just prefix matching
+
+// TODO:
+// - user-assigned (configurable) num-workers
+// - jogger(s) per mountpath type concurrency
 
 const (
 	lrpList = iota + 1
@@ -40,7 +47,17 @@ type (
 		IsAborted() bool
 		Finished() bool
 	}
-	// common multi-obj operation context and iterList()/iterRangeOrPref() logic
+
+	// running concurrency
+	lrpair struct {
+		lom *core.LOM
+		wi  lrwi
+	}
+	lrworker struct {
+		lrit *lriterator
+	}
+
+	// common multi-object operation context and list|range|prefix logic
 	lriterator struct {
 		parent lrxact
 		msg    *apc.ListRange
@@ -48,6 +65,11 @@ type (
 		pt     *cos.ParsedTemplate
 		prefix string
 		lrp    int // { lrpList, ... } enum
+
+		// running concurrency
+		workCh  chan lrpair
+		workers []*lrworker
+		wg      sync.WaitGroup
 	}
 )
 
@@ -72,20 +94,49 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck) error {
+func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, blocking ...bool) error {
+	avail := fs.GetAvail()
+	l := len(avail)
+	if l == 0 {
+		return cmn.ErrNoMountpaths
+	}
 	r.parent = xctn
 	r.msg = msg
 	r.bck = bck
+
+	// list is the simplest and always single-threaded
 	if msg.IsList() {
 		r.lrp = lrpList
 		return nil
 	}
+	if err := r._inipr(msg); err != nil {
+		return err
+	}
+	if l == 1 {
+		return nil
+	}
+	if len(blocking) > 0 && blocking[0] {
+		return nil
+	}
 
+	// num-workers == num-mountpaths but note:
+	// these are not _joggers_
+	r.workers = make([]*lrworker, 0, l)
+	for range avail {
+		r.workers = append(r.workers, &lrworker{r})
+	}
+	r.workCh = make(chan lrpair, l)
+	return nil
+}
+
+// [NOTE] treating an empty ("") or wildcard ('*') template
+// as an empty prefix, to facilitate all-objects scope, e.g.:
+// - "copy entire source bucket", or even
+// - "archive entire bucket as a single shard" (caution!)
+
+func (r *lriterator) _inipr(msg *apc.ListRange) error {
 	pt, err := cos.NewParsedTemplate(msg.Template)
 	if err != nil {
-		// [Making Exception] treating an empty or '*' template
-		// as an empty prefix, to facilitate all-objects scope
-		// (e.g., "archive entire bucket as a single shard (caution!)
 		if err == cos.ErrEmptyTemplate {
 			pt.Prefix = ""
 			goto pref
@@ -108,6 +159,10 @@ pref:
 }
 
 func (r *lriterator) run(wi lrwi, smap *meta.Smap) (err error) {
+	for _, worker := range r.workers {
+		r.wg.Add(1)
+		go worker.run()
+	}
 	switch r.lrp {
 	case lrpList:
 		err = r._list(wi, smap)
@@ -119,6 +174,14 @@ func (r *lriterator) run(wi lrwi, smap *meta.Smap) (err error) {
 	return err
 }
 
+func (r *lriterator) wait() {
+	if r.workers == nil {
+		return
+	}
+	close(r.workCh)
+	r.wg.Wait()
+}
+
 func (r *lriterator) done() bool { return r.parent.IsAborted() || r.parent.Finished() }
 
 func (r *lriterator) _list(wi lrwi, smap *meta.Smap) error {
@@ -128,10 +191,13 @@ func (r *lriterator) _list(wi lrwi, smap *meta.Smap) error {
 			break
 		}
 		lom := core.AllocLOM(objName)
-		err := r.do(lom, wi, smap)
-		core.FreeLOM(lom)
+		done, err := r.do(lom, wi, smap)
 		if err != nil {
+			core.FreeLOM(lom)
 			return err
+		}
+		if done {
+			core.FreeLOM(lom)
 		}
 	}
 	return nil
@@ -144,10 +210,13 @@ func (r *lriterator) _range(wi lrwi, smap *meta.Smap) error {
 			return nil
 		}
 		lom := core.AllocLOM(objName)
-		err := r.do(lom, wi, smap)
-		core.FreeLOM(lom)
+		done, err := r.do(lom, wi, smap)
 		if err != nil {
+			core.FreeLOM(lom)
 			return err
+		}
+		if done {
+			core.FreeLOM(lom)
 		}
 	}
 	return nil
@@ -160,7 +229,7 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 		ecode   int
 		lst     *cmn.LsoRes
 		msg     = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
-		npg     = newNpgCtx(r.bck, msg, noopCb, nil) // TODO -- FIXME: inventory offset
+		npg     = newNpgCtx(r.bck, msg, noopCb, nil /*core.LsoInvCtx bucket inventory*/)
 		bremote = r.bck.IsRemote()
 	)
 	if err := r.bck.Init(core.T.Bowner()); err != nil {
@@ -195,11 +264,14 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 				return nil
 			}
 			lom := core.AllocLOM(be.Name)
-			err := r.do(lom, wi, smap)
-			core.FreeLOM(lom)
+			done, err := r.do(lom, wi, smap)
 			if err != nil {
+				core.FreeLOM(lom)
 				freeLsoEntries(lst.Entries)
 				return err
+			}
+			if done {
+				core.FreeLOM(lom)
 			}
 		}
 		freeLsoEntries(lst.Entries)
@@ -213,21 +285,44 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
-// NOTE: (smap != nil) to filter non-locals
-func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) error {
+func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
 	if err := lom.InitBck(r.bck.Bucket()); err != nil {
-		return err
+		return false, err
 	}
+	// (smap != nil) to filter non-locals
 	if smap != nil {
 		_, local, err := lom.HrwTarget(smap)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if !local {
-			return nil
+			return true, nil
 		}
 	}
-	// NOTE: lom is alloc-ed prior to the call and freed upon return
-	wi.do(lom, r)
-	return nil
+
+	if r.workers == nil {
+		wi.do(lom, r)
+		return true, nil
+	}
+	r.workCh <- lrpair{lom, wi} // lom eventually freed below
+	return false, nil
+}
+
+//////////////
+// lrworker //
+//////////////
+
+func (worker *lrworker) run() {
+	for {
+		lrpair, ok := <-worker.lrit.workCh
+		if !ok {
+			break
+		}
+		lrpair.wi.do(lrpair.lom, worker.lrit)
+		core.FreeLOM(lrpair.lom)
+		if worker.lrit.parent.IsAborted() {
+			break
+		}
+	}
+	worker.lrit.wg.Done()
 }

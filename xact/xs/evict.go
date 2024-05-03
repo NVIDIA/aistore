@@ -70,6 +70,7 @@ func (r *evictDelete) Run(wg *sync.WaitGroup) {
 	if err != nil {
 		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
 	}
+	r.lriterator.wait()
 	r.Finish()
 }
 

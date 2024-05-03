@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/xact"
@@ -35,6 +36,7 @@ func init() {
 
 	xreg.Init()
 	xs.Xreg(false)
+	fs.TestNew(nil)
 }
 
 // Smoke tests for xactions
@@ -83,6 +85,9 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	xreg.TestReset()
 	bmd.Add(bck)
 
+	_, err := fs.Add("/tmp", tMock.SID())
+	tassert.CheckFatal(t, err)
+
 	xreg.RegBckXact(&xs.TestXFactory{})
 	defer xreg.AbortAll(nil)
 	cos.InitShortID(0)
@@ -107,7 +112,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		}
 	}
 
-	tassert.Errorf(t, len(res) > 0, "expected some evictDelete xactions to be created, got %d", len(res))
+	tassert.Errorf(t, len(res) > 0, "expected xactions to be created")
 }
 
 func TestXactionAbortAll(t *testing.T) {

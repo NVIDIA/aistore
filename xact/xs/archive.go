@@ -31,7 +31,9 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// TODO (feature): one source multiple destinations (buckets)
+// TODO:
+// - enable multi-threaded list-range iter (see lrit.init)
+// - one source multiple destination buckets (feature)
 
 type (
 	archFactory struct {
@@ -215,7 +217,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				smap = core.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
-			err = lrit.init(r, &msg.ListRange, r.Bck())
+			err = lrit.init(r, &msg.ListRange, r.Bck(), true /*TODO: remove blocking*/)
 			if err != nil {
 				r.Abort(err)
 				goto fin
@@ -224,6 +226,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 			if err != nil {
 				r.AddErr(err)
 			}
+			lrit.wait()
 			if r.Err() != nil {
 				wi.cleanup()
 				goto fin
