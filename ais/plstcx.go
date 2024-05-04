@@ -123,6 +123,9 @@ func (c *lstcx) do() (string, error) {
 	lr, cnt := &c.tcomsg.ListRange, len(lst.Entries)
 	lr.ObjNames = make([]string, 0, cnt)
 	for _, e := range lst.Entries {
+		if e.IsDir() || cos.IsLastB(e.Name, '/') { // skip virtual dir (apc.EntryIsDir)
+			continue
+		}
 		lr.ObjNames = append(lr.ObjNames, e.Name)
 	}
 

@@ -259,6 +259,9 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 			if !be.IsStatusOK() {
 				continue
 			}
+			if be.IsDir() || cos.IsLastB(be.Name, '/') { // skip virtual dir (apc.EntryIsDir)
+				continue
+			}
 			if r.done() {
 				freeLsoEntries(lst.Entries)
 				return nil
