@@ -1665,7 +1665,7 @@ cpap: // copy + append
 		aw.Fini()
 	} else {
 		// copy + append
-		lmfh, err = os.Open(a.lom.FQN)
+		lmfh, err = a.lom.OpenFile()
 		if err != nil {
 			cos.Close(wfh)
 			return http.StatusNotFound, err

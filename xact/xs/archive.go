@@ -441,7 +441,7 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 	}
 	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
 	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
-	lmfh, err = os.Open(wi.archlom.FQN)
+	lmfh, err = wi.archlom.OpenFile()
 	if err != nil {
 		return
 	}

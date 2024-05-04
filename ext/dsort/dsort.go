@@ -13,7 +13,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -955,7 +954,7 @@ func (es *extractShard) _do(lom *core.LOM) error {
 	}
 
 	lom.Lock(false)
-	fh, err := os.Open(lom.FQN)
+	fh, err := lom.OpenFile()
 	if err != nil {
 		phaseInfo.adjuster.releaseSema(lom.Mountpath())
 		lom.Unlock(false)

@@ -378,7 +378,7 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error)
 	if cksumType == cos.ChecksumNone {
 		return
 	}
-	if file, err = os.Open(lom.FQN); err != nil {
+	if file, err = lom.OpenFile(); err != nil {
 		return
 	}
 	// No need to allocate `buf` as `io.Discard` has efficient `io.ReaderFrom` implementation.

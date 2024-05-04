@@ -493,7 +493,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	if err != nil {
 		s3.WriteErr(w, r, err, status)
 	}
-	fh, err := os.Open(lom.FQN)
+	fh, err := lom.OpenFile()
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

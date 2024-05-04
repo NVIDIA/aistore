@@ -488,9 +488,11 @@ func targetRejoin(t *testing.T) {
 
 	node, err := smap.GetRandTarget()
 	if err != nil {
-		tlog.Logf("Warning: %v - retrying...\n", err)
+		tlog.Logf("Warning: %v\n", err)
+		tlog.Logln("Retrying...")
 		// retry once
-		time.Sleep(8 * time.Second)
+		time.Sleep(10 * time.Second)
+		smap = tools.GetClusterMap(t, proxyURL)
 		node, err = smap.GetRandTarget()
 		tassert.CheckFatal(t, err)
 	}

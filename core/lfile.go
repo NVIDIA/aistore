@@ -14,6 +14,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+func (lom *LOM) OpenFile() (*os.File, error) {
+	return os.Open(lom.FQN)
+}
+
 // (compare with cos.CreateFile)
 func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)

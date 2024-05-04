@@ -88,7 +88,7 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	}
 
 	// reopen & transmit ---
-	if lmfh, err = os.Open(lom.FQN); err != nil {
+	if lmfh, err = lom.OpenFile(); err != nil {
 		goi._cleanup(revert, nil, buf, slab, err, "(seek)")
 		return err
 	}

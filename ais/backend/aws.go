@@ -163,7 +163,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	ctx.Lom = lom
 	mtime, usable := checkInvLom(csv.mtime, ctx)
 	if usable {
-		if ctx.Lmfh, err = os.Open(ctx.Lom.FQN); err != nil {
+		if ctx.Lmfh, err = ctx.Lom.OpenFile(); err != nil {
 			lom.Unlock(false)
 			core.FreeLOM(lom)
 			ctx.Lom = nil
@@ -208,7 +208,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 			lom.Unlock(true)
 			lom.Lock(false)
 
-			if ctx.Lmfh, err = os.Open(ctx.Lom.FQN); err != nil {
+			if ctx.Lmfh, err = ctx.Lom.OpenFile(); err != nil {
 				lom.Unlock(false)
 				core.FreeLOM(lom)
 				ctx.Lom = nil
@@ -235,7 +235,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	}
 
 	lom.Lock(false) // must succeed
-	if ctx.Lmfh, err = os.Open(ctx.Lom.FQN); err != nil {
+	if ctx.Lmfh, err = ctx.Lom.OpenFile(); err != nil {
 		lom.Unlock(false)
 		core.FreeLOM(lom)
 		ctx.Lom = nil
