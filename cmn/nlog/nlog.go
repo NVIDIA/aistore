@@ -186,7 +186,11 @@ func (nlog *nlog) flush() {
 func (nlog *nlog) do(pw *fixed) {
 	// write
 	if nlog.erred.Load() {
-		os.Stderr.Write(pw.buf[:pw.woff])
+		if Stopping() {
+			_whileStopping(pw.buf[:pw.woff])
+		} else {
+			os.Stderr.Write(pw.buf[:pw.woff])
+		}
 	} else {
 		n, err := pw.flush(nlog.file)
 		if err != nil {
@@ -292,6 +296,14 @@ func sprintf(sev severity, depth int, format string, fb *fixed, args ...any) {
 		fmt.Fprintf(fb, format, args...)
 		fb.eol()
 	}
+}
+
+const wstag = "[while stopping:] "
+
+func _whileStopping(p []byte) {
+	os.Stderr.WriteString(wstag)
+	os.Stderr.Write(p)
+	os.Stderr.WriteString("\n")
 }
 
 // mem pool of additional buffers

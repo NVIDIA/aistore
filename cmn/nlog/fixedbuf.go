@@ -41,6 +41,10 @@ func (fb *fixed) writeByte(c byte) {
 func (fb *fixed) flush(file *os.File) (n int, err error) {
 	n, err = file.Write(fb.buf[:fb.woff])
 	if err != nil {
+		if Stopping() {
+			_whileStopping(fb.buf[:fb.woff])
+			return 0, nil
+		}
 		os.Stderr.WriteString(err.Error() + "\n")
 	}
 	return

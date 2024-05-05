@@ -92,7 +92,7 @@ func hdr2msg(bck cmn.Bck, status int, err error) error {
 	if !ok {
 		return err
 	}
-	debug.Assert(herr.Status == status)
+	debug.Assert(herr.Status == status, herr.Status, " vs ", status)
 
 	quoted := "\"" + bck.Cname("") + "\""
 	if !bck.IsQuery() && status == http.StatusNotFound {

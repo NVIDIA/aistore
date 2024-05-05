@@ -18,6 +18,10 @@ func assert(cond bool, a ...any) {
 		if len(a) > 0 {
 			msg += ": " + fmt.Sprint(a...)
 		}
+		if Stopping() {
+			os.Stderr.WriteString(wstag + msg + "\n")
+			return
+		}
 		os.Stderr.WriteString(msg + "\n")
 		rdebug.PrintStack()
 		os.Exit(1)
