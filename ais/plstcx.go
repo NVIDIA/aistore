@@ -187,6 +187,9 @@ func (c *lstcx) _page() (int, error) {
 	clear(lr.ObjNames)
 	lr.ObjNames = lr.ObjNames[:0]
 	for _, e := range lst.Entries {
+		if e.IsDir() || cos.IsLastB(e.Name, '/') { // skip virtual dir (apc.EntryIsDir)
+			continue
+		}
 		lr.ObjNames = append(lr.ObjNames, e.Name)
 	}
 	c.altmsg.Value = &c.tcomsg

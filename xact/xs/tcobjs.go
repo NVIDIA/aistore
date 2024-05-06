@@ -150,14 +150,32 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			var (
+				wi   *tcowi
 				smap = core.T.Sowner().Get()
 				lrit = &lriterator{}
+				ok   bool
 			)
 			r.pending.mtx.Lock()
-			wi, ok := r.pending.m[msg.TxnUUID]
+			if msg.TxnUUID == "" {
+				// FIXME:
+				// hack to accommodate t.httpxpost via plstcx when the former does not have msg.TxnUUID (c.uuid) -
+				// deliver msg.TxnUUID back to client or revise plstcx flow
+				for _, wi = range r.pending.m {
+					if wi.msg.ToBck.Equal(&msg.ToBck) {
+						msg.TxnUUID = wi.msg.TxnUUID
+						ok = true
+					}
+				}
+				if msg.TxnUUID == "" {
+					r.pending.mtx.Unlock()
+					continue
+				}
+			} else {
+				wi, ok = r.pending.m[msg.TxnUUID]
+			}
 			r.pending.mtx.Unlock()
 			if !ok {
-				debug.Assert(r.ErrCnt() > 0) // see cleanup
+				debug.Assertf(r.ErrCnt() > 0, "expecting errors %s: %q", r.String(), msg.TxnUUID) // see cleanup
 				goto fin
 			}
 

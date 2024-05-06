@@ -24,7 +24,10 @@ func SHead(s string) string {
 	return s
 }
 
-func IsLastB(s string, b byte) bool { return s[len(s)-1] == b }
+func IsLastB(s string, b byte) bool {
+	l := len(s)
+	return l > 0 && s[l-1] == b
+}
 
 func TrimLastB(s string, b byte) string {
 	if l := len(s); s[l-1] == b {
