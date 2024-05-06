@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -38,10 +37,6 @@ type bsummCtx struct {
 	l       int
 	n       int
 	res     cmn.AllBsummResults
-	// waiting
-	longWaitTime   time.Duration
-	longWaitPrompt string
-	dontWait       bool
 }
 
 var (
@@ -334,9 +329,10 @@ func showDiskStats(c *cli.Context, tid string) error {
 	return teb.Print(dsh, out)
 }
 
-//
-// summary (compare with `listBckTableWithSummary` - fast)
-//
+// storage summary (a.k.a. bucket summary)
+// NOTE:
+// - compare with `listBckTableWithSummary` - fast
+// - currently, only in-cluster buckets - TODO
 
 func summaryStorageHandler(c *cli.Context) error {
 	uri := c.Args().Get(0)
@@ -344,16 +340,15 @@ func summaryStorageHandler(c *cli.Context) error {
 	if errV != nil {
 		return errV
 	}
-
-	units, errU := parseUnitsFlag(c, unitsFlag)
-	if errU != nil {
-		return errU
+	var (
+		prefix     = parseStrFlag(c, bsummPrefixFlag)
+		objCached  = flagIsSet(c, listObjCachedFlag)
+		bckPresent = true // currently, only in-cluster buckets
+	)
+	ctx, err := newBsummCtxMsg(c, qbck, prefix, objCached, bckPresent)
+	if err != nil {
+		return err
 	}
-
-	// TODO: remote buckets not in BMD - see ais ls --summary and `listBckTableWithSummary`
-	dontWait := flagIsSet(c, dontWaitFlag)
-	ctx := newBsummContext(c, units, qbck, true /*bckPresent*/, dontWait)
-
 	setLongRunParams(c)
 
 	var news = true
@@ -361,7 +356,10 @@ func summaryStorageHandler(c *cli.Context) error {
 		ctx.msg.UUID = xid
 		news = false
 	}
-	xid, summaries, err := ctx.slow() // execute
+
+	// execute
+	err = ctx.get()
+	xid, summaries := ctx.xid, ctx.res
 
 	f := func() string {
 		verb := "has started"
@@ -372,6 +370,7 @@ func summaryStorageHandler(c *cli.Context) error {
 			"see %s for more options",
 			cmdSummary, xid, verb, uri, xid, flprn(dontWaitFlag), xid, qflprn(cli.HelpFlag))
 	}
+	dontWait := flagIsSet(c, dontWaitFlag)
 	if err == nil && dontWait && len(summaries) == 0 {
 		actionDone(c, f())
 		return nil
@@ -396,7 +395,7 @@ func summaryStorageHandler(c *cli.Context) error {
 		return err
 	}
 
-	altMap := teb.FuncMapUnits(units)
+	altMap := teb.FuncMapUnits(ctx.units)
 	opts := teb.Opts{AltMap: altMap}
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	if hideHeader {
@@ -405,43 +404,32 @@ func summaryStorageHandler(c *cli.Context) error {
 	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }
 
-func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks, bckPresent, dontWait bool) *bsummCtx {
-	ctx := &bsummCtx{
-		c:        c,
-		units:    units,
-		qbck:     qbck,
-		started:  mono.NanoTime(),
-		dontWait: dontWait,
+func newBsummCtxMsg(c *cli.Context, qbck cmn.QueryBcks, prefix string, objCached, bckPresent bool) (*bsummCtx, error) {
+	units, errU := parseUnitsFlag(c, unitsFlag)
+	if errU != nil {
+		return nil, errU
 	}
-	ctx.msg.Prefix = parseStrFlag(c, bsummPrefixFlag)
-	ctx.msg.ObjCached = flagIsSet(c, listObjCachedFlag)
+	ctx := &bsummCtx{
+		c:       c,
+		units:   units,
+		qbck:    qbck,
+		started: mono.NanoTime(),
+	}
+	ctx.msg.Prefix = prefix
+	ctx.msg.ObjCached = objCached
 	ctx.msg.BckPresent = bckPresent
 
-	ctx.args.DontWait = dontWait
-
-	if flagIsSet(c, refreshFlag) {
-		ctx.args.CallAfter = parseDurationFlag(c, refreshFlag)
-		ctx.args.Callback = ctx.progress
-		ctx.longWaitTime = 0 // have refresh callback
-	} else if !dontWait {
-		ctx.longWaitTime = listObjectsWaitTime
-		if ctx.msg.UUID != "" {
-			ctx.longWaitPrompt = "Please wait, the operation may take some time.\n" +
-				"To monitor, run 'ais storage summary " + ctx.msg.UUID // TODO -- FIXME
+	if ctx.args.DontWait = flagIsSet(c, dontWaitFlag); ctx.args.DontWait {
+		if showProgress := flagIsSet(c, progressFlag); showProgress {
+			return nil, fmt.Errorf(errFmtExclusive, qflprn(dontWaitFlag), qflprn(progressFlag))
 		}
+		return ctx, nil
 	}
-	return ctx
-}
 
-// "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
-func (ctx *bsummCtx) slow() (xid string, res cmn.AllBsummResults, err error) {
-	if ctx.longWaitTime > 0 {
-		err = waitForFunc(ctx.get, ctx.longWaitTime, ctx.longWaitPrompt)
-	} else {
-		err = ctx.get()
-	}
-	xid, res = ctx.xid, ctx.res
-	return
+	// otherwise, call back periodically
+	ctx.args.CallAfter = _refreshRate(c)
+	ctx.args.Callback = ctx.progress
+	return ctx, nil
 }
 
 func (ctx *bsummCtx) get() (err error) {

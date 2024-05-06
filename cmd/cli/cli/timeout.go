@@ -16,7 +16,7 @@ const (
 	longClientTimeout = 60 * time.Second
 
 	// list-objects progress; list-objects with --summary
-	listObjectsWaitTime = 10 * time.Second
+	listObjectsWaitTime = 8 * time.Second
 
 	// default '--refresh' durations and counts
 	refreshRateDefault = 5 * time.Second

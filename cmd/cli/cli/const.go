@@ -414,7 +414,7 @@ var (
 	//
 	refreshFlag = DurationFlag{
 		Name: "refresh",
-		Usage: "interval for continuous monitoring;\n" +
+		Usage: "time interval for continuous monitoring; can be also used to update progress bar (at a given interval);\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	countFlag = cli.IntFlag{

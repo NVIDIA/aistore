@@ -130,29 +130,29 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fl
 // compare with `showBucketSummary`
 func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, args api.BinfoArgs) int {
 	var (
-		footer      lsbFooter
-		hideHeader  = flagIsSet(c, noHeaderFlag)
-		hideFooter  = flagIsSet(c, noFooterFlag)
-		data        = make([]teb.ListBucketsHelper, 0, len(bcks))
-		units, errU = parseUnitsFlag(c, unitsFlag)
-	)
-	if errU != nil {
-		actionWarn(c, errU.Error())
-		units = ""
-	}
-	var (
-		opts       = teb.Opts{AltMap: teb.FuncMapUnits(units)}
+		footer     lsbFooter
+		hideHeader = flagIsSet(c, noHeaderFlag)
+		hideFooter = flagIsSet(c, noFooterFlag)
 		maxwait    = listObjectsWaitTime
-		bckPresent = apc.IsFltPresent(args.FltPresence) // all-buckets part in the `allObjsOrBcksFlag`
-		dontWait   = flagIsSet(c, dontWaitFlag)
-		ctx        = newBsummContext(c, units, qbck, bckPresent, dontWait)
-		prev       = ctx.started
+
+		objCached  = flagIsSet(c, listObjCachedFlag)
+		bckPresent = flagIsSet(c, allObjsOrBcksFlag)
+		prefix     = parseStrFlag(c, listObjPrefixFlag)
 	)
 	debug.Assert(args.Summarize)
+	ctx, err := newBsummCtxMsg(c, qbck, prefix, objCached, bckPresent)
+	if err != nil {
+		actionWarn(c, err.Error()+"\n")
+	}
+
+	// because api.BinfoArgs (left) contains api.BsummArgs (right)
 	args.CallAfter = ctx.args.CallAfter
-	args.Callback = ctx.args.Callback // reusing bsummCtx.progress()
+	args.Callback = ctx.args.Callback
 
 	// one at a time
+	prev := ctx.started
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(ctx.units)}
+	data := make([]teb.ListBucketsHelper, 0, len(bcks))
 	for i := range bcks {
 		bck := bcks[i]
 		if !qbck.Contains(&bck) {
@@ -230,7 +230,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 	if qbck.IsRemoteAIS() {
 		p = "Remote " + p
 	}
-	apparentSize := teb.FmtSize(int64(footer.size), units, 2)
+	apparentSize := teb.FmtSize(int64(footer.size), ctx.units, 2)
 	if footer.pobj+footer.robj != 0 {
 		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
 			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj, apparentSize, footer.pct)

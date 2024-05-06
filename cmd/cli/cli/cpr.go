@@ -39,32 +39,30 @@ type cprCtx struct {
 }
 
 func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.CopyBckMsg, fltPresence int) error {
+	actionNote(c, "to initialize progress bar, running 'bucket summary' on the source: "+bckFrom.Cname(""))
+
 	// 1. get from-bck summary
-	qbck := cmn.QueryBcks(bckFrom)
-	ctx := &bsummCtx{
-		qbck:         qbck,
-		longWaitTime: listObjectsWaitTime,
-	}
-	ctx.msg.Prefix = msg.Prefix
-	ctx.msg.ObjCached = apc.IsFltPresent(fltPresence)
-	ctx.msg.BckPresent = apc.IsFltPresent(fltPresence)
-
-	// compare w/ newBsummContext
-	ctx.args.DontWait = false
-	ctx.args.Callback = nil
-
-	// TODO -- FIXME: revisit
-	_ /*xid*/, summaries, err := ctx.slow()
+	var (
+		qbck       = cmn.QueryBcks(bckFrom)
+		objCached  = !flagIsSet(c, copyAllObjsFlag)
+		bckPresent = apc.IsFltPresent(fltPresence)
+	)
+	debug.Assert(parseStrFlag(c, verbObjPrefixFlag) == msg.Prefix)
+	ctx, err := newBsummCtxMsg(c, qbck, msg.Prefix, objCached, bckPresent)
 	if err != nil {
 		return err
 	}
+	if err = ctx.get(); err != nil {
+		return err
+	}
 
+	// 2. got bucket summary(ies)
+	summaries := ctx.res
 	for _, res := range summaries {
 		debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck, bckFrom)
 		cpr.totals.size += int64(res.TotalSize.PresentObjs + res.TotalSize.RemoteObjs)
 		cpr.totals.objs += int64(res.ObjCount.Present + res.ObjCount.Remote)
 	}
-
 	if cpr.totals.objs == 0 {
 		debug.Assert(cpr.totals.size == 0)
 		if !apc.IsFltPresent(fltPresence) {
@@ -76,7 +74,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.C
 		return err
 	}
 
-	// 2. setup progress bar
+	// 3. setup progress bar
 	var (
 		progress *mpb.Progress
 		bars     []*mpb.Bar
@@ -103,11 +101,11 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.C
 		cpr.loghdr = fmt.Sprintf("%s[%s] %s", cpr.xname, cpr.xid, cpr.from)
 	}
 
-	// 3. poll x-copy-bucket asynchronously and update the progress
+	// 4. poll x-copy-bucket asynchronously and update the progress
 	cpr.do(c)
 	progress.Wait()
 
-	// 4. done
+	// 5. done
 	err = <-cpr.errCh
 	if err == nil {
 		actionDone(c, fmtXactSucceeded)

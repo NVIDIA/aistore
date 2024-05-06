@@ -65,14 +65,14 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	}
 
 	// NOTE: copyAllObjsFlag forces 'x-list' to list the remote one, and vice versa
-	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
+	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo)
 }
 
 //
 // main function: (cp | etl) & (bucket | multi-object)
 //
 
-func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) (err error) {
+func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo cmn.Bck) (err error) {
 	text1, text2 := "copy", "Copying"
 	if etlName != "" {
 		text1, text2 = "transform", "Transforming"
@@ -87,6 +87,8 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
 		return err
 	}
+
+	allIncludingRemote := flagIsSet(c, copyAllObjsFlag)
 	empty, err := isBucketEmpty(bckFrom, !bckFrom.IsRemote() || !allIncludingRemote /*cached*/)
 	debug.AssertNoErr(err)
 	if empty {
@@ -125,9 +127,9 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 			actionDone(c, text2+" the entire bucket")
 		}
 		if etlName != "" {
-			return etlBucket(c, etlName, bckFrom, bckTo, allIncludingRemote)
+			return etlBucket(c, etlName, bckFrom, bckTo)
 		}
-		return copyBucket(c, bckFrom, bckTo, allIncludingRemote)
+		return copyBucket(c, bckFrom, bckTo)
 	}
 
 	// or 2. multi-object x-tco
@@ -163,7 +165,7 @@ func _iniCopyBckMsg(c *cli.Context, msg *apc.CopyBckMsg) (err error) {
 	return err
 }
 
-func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
+func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	var (
 		msg          apc.CopyBckMsg
 		showProgress = flagIsSet(c, progressFlag)
@@ -179,10 +181,9 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 		return err
 	}
 
-	// by default, copying objects in the cluster, with an option to override
-	// TODO: FltExistsOutside maybe later
+	// by default, copying in-cluster objects, with an option to copy remote as well (TODO: FltExistsOutside)
 	fltPresence := apc.FltPresent
-	if allIncludingRemote {
+	if flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, etlAllObjsFlag) {
 		fltPresence = apc.FltExists
 	}
 
@@ -191,6 +192,12 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
 		cpr.from, cpr.to = bckFrom.Cname(""), bckTo.Cname("")
 		return cpr.copyBucket(c, bckFrom, bckTo, &msg, fltPresence)
+	}
+
+	if flagIsSet(c, copyAllObjsFlag) && (bckFrom.Provider != apc.AIS || !bckFrom.Ns.IsGlobal()) {
+		const s = "copying remote (ie, not in-cluster) objects may take considerable time"
+		warn := fmt.Sprintf("%s (tip: use %s to show progress, '--help' for details)", s, qflprn(progressFlag))
+		actionWarn(c, warn)
 	}
 
 	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, &msg, fltPresence)
@@ -252,10 +259,10 @@ func etlBucketHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return copyTransform(c, etlName, objFrom, bckFrom, bckTo, flagIsSet(c, etlAllObjsFlag))
+	return copyTransform(c, etlName, objFrom, bckFrom, bckTo)
 }
 
-func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
+func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	var msg = apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
 	}
@@ -287,7 +294,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 	// by default, copying objects in the cluster, with an option to override
 	// TODO: FltExistsOutside maybe later
 	fltPresence := apc.FltPresent
-	if allIncludingRemote {
+	if flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, etlAllObjsFlag) {
 		fltPresence = apc.FltExists
 	}
 
