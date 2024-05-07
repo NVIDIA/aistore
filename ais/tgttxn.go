@@ -671,6 +671,8 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCObjsMsg, dp core.DP) (xid string, 
 		xid = xctn.ID()
 
 		xtco := xctn.(*xs.XactTCObjs)
+
+		debug.Assert(msg.TxnUUID == "" || msg.TxnUUID == c.uuid) // (ref050724)
 		msg.TxnUUID = c.uuid
 		txn := newTxnTCObjs(c, bckFrom, xtco, msg)
 		if err := t.transactions.begin(txn); err != nil {

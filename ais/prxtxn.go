@@ -647,8 +647,11 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 	)
 	c := &txnCln{
 		p:    p,
-		uuid: cos.GenUUID(), // TODO -- FIXME tcomsg.TxnUUID, // (via target-local xreg.GenBEID)
+		uuid: tcomsg.TxnUUID, // (ref050724)
 		smap: p.owner.smap.get(),
+	}
+	if c.uuid == "" {
+		c.uuid = cos.GenUUID()
 	}
 	c.init(msg, bckFrom, config, waitmsync)
 

@@ -292,9 +292,8 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 }
 
 func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
-	txnUUID := string(hdr.Opaque)
 	r.pending.RLock()
-	wi, ok := r.pending.m[txnUUID]
+	wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 	r.pending.RUnlock()
 	if !ok {
 		if r.Finished() || r.IsAborted() {
@@ -304,7 +303,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		debug.Assert(cnt > 0) // see cleanup
 		return err
 	}
-	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == txnUUID)
+	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == cos.UnsafeS(hdr.Opaque))
 
 	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == opcodeDone {

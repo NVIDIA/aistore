@@ -150,33 +150,19 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			var (
-				wi   *tcowi
 				smap = core.T.Sowner().Get()
 				lrit = &lriterator{}
-				ok   bool
 			)
+			debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
 			r.pending.mtx.Lock()
-			if msg.TxnUUID == "" {
-				// FIXME:
-				// hack to accommodate t.httpxpost via plstcx when the former does not have msg.TxnUUID (c.uuid) -
-				// deliver msg.TxnUUID back to client or revise plstcx flow
-				for _, wi = range r.pending.m {
-					if wi.msg.ToBck.Equal(&msg.ToBck) {
-						msg.TxnUUID = wi.msg.TxnUUID
-						ok = true
-					}
-				}
-				if msg.TxnUUID == "" {
-					r.pending.mtx.Unlock()
-					continue
-				}
-			} else {
-				wi, ok = r.pending.m[msg.TxnUUID]
-			}
+			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.mtx.Unlock()
 			if !ok {
-				debug.Assertf(r.ErrCnt() > 0, "expecting errors %s: %q", r.String(), msg.TxnUUID) // see cleanup
-				goto fin
+				if r.ErrCnt() > 0 {
+					goto fin
+				}
+				nlog.Errorf("%s: expecting errors in %s, missing txn %q", core.T.String(), r.String(), msg.TxnUUID) // (unlikely)
+				continue
 			}
 
 			// this target must be active (ref: ignoreMaintenance)
@@ -218,8 +204,8 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 	}
 fin:
 	r.fin(true /*unreg Rx*/)
-	if r.Err() != nil {
-		// cleanup: destroy destination iff it was created by this copy
+	if r.ErrCnt() > 0 {
+		// (see "expecting errors" and cleanup)
 		r.pending.mtx.Lock()
 		clear(r.pending.m)
 		r.pending.mtx.Unlock()
@@ -265,9 +251,8 @@ ex:
 
 func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode == opcodeDone {
-		txnUUID := string(hdr.Opaque)
 		r.pending.mtx.Lock()
-		wi, ok := r.pending.m[txnUUID]
+		wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 		if !ok {
 			r.pending.mtx.Unlock()
 			_, err := r.JoinErr()
@@ -275,7 +260,6 @@ func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		}
 		refc := wi.refc.Dec()
 		if refc == 0 {
-			delete(r.pending.m, txnUUID)
 			r.wiCnt.Dec()
 		}
 		r.pending.mtx.Unlock()

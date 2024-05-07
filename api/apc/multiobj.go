@@ -37,7 +37,7 @@ type (
 	//  Multi-object copy & transform (see also: TCBMsg)
 	TCObjsMsg struct {
 		ListRange
-		TxnUUID string `json:"-"`
+		TxnUUID string // (plstcx client, internal use)
 		TCBMsg
 		ContinueOnError bool `json:"coer"`
 	}

@@ -118,7 +118,10 @@ func (c *lstcx) do() (string, error) {
 		return c.lsmsg.UUID, nil
 	}
 
-	// 3. tcomsg
+	// 3. assign txn UUID here, and use it to communicate with x-tco directly across pages (ref050724)
+	c.tcomsg.TxnUUID = cos.GenUUID()
+
+	// 4. tcomsg
 	c.tcomsg.ToBck = c.bckTo.Clone()
 	lr, cnt := &c.tcomsg.ListRange, len(lst.Entries)
 	lr.ObjNames = make([]string, 0, cnt)
@@ -129,7 +132,7 @@ func (c *lstcx) do() (string, error) {
 		lr.ObjNames = append(lr.ObjNames, e.Name)
 	}
 
-	// 4. multi-obj action: transform/copy 1st page
+	// 5. multi-obj action: transform/copy 1st page
 	c.altmsg.Value = &c.tcomsg
 	c.altmsg.Action = apc.ActCopyObjects
 	if c.amsg.Action == apc.ActETLBck {
@@ -143,7 +146,7 @@ func (c *lstcx) do() (string, error) {
 	nlog.Infoln("'ls --all' to execute [" + c.amsg.Action + " -> " + c.altmsg.Action + "]")
 	s := fmt.Sprintf("%s[%s] %s => %s", c.altmsg.Action, c.xid, c.bckFrom, c.bckTo)
 
-	// 5. more pages, if any
+	// 6. more pages, if any
 	if lst.ContinuationToken != "" {
 		// Run
 		nlog.Infoln("run", s, "...")
@@ -192,6 +195,7 @@ func (c *lstcx) _page() (int, error) {
 		}
 		lr.ObjNames = append(lr.ObjNames, e.Name)
 	}
+	c.altmsg.Name = c.xid
 	c.altmsg.Value = &c.tcomsg
 	err = c.bcast()
 	return len(lr.ObjNames), err
@@ -199,7 +203,7 @@ func (c *lstcx) _page() (int, error) {
 
 // calls t.httpxpost (TODO: slice of names is the only "delta" - optimize)
 func (c *lstcx) bcast() (err error) {
-	body := cos.MustMarshal(apc.ActMsg{Name: c.xid, Value: &c.tcomsg})
+	body := cos.MustMarshal(c.altmsg)
 	args := allocBcArgs()
 	{
 		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathXactions.S, Body: body}
