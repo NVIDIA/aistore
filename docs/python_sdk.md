@@ -22,11 +22,13 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
     * [get\_info](#cluster.Cluster.get_info)
+    * [get\_primary\_url](#cluster.Cluster.get_primary_url)
     * [list\_buckets](#cluster.Cluster.list_buckets)
     * [list\_jobs\_status](#cluster.Cluster.list_jobs_status)
     * [list\_running\_jobs](#cluster.Cluster.list_running_jobs)
     * [list\_running\_etls](#cluster.Cluster.list_running_etls)
-    * [is\_aistore\_running](#cluster.Cluster.is_aistore_running)
+    * [is\_ready](#cluster.Cluster.is_ready)
+    * [get\_performance](#cluster.Cluster.get_performance)
 * [bucket](#bucket)
   * [Bucket](#bucket.Bucket)
     * [client](#bucket.Bucket.client)
@@ -34,11 +36,15 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [provider](#bucket.Bucket.provider)
     * [name](#bucket.Bucket.name)
     * [namespace](#bucket.Bucket.namespace)
+    * [list\_urls](#bucket.Bucket.list_urls)
+    * [list\_all\_objects\_iter](#bucket.Bucket.list_all_objects_iter)
     * [create](#bucket.Bucket.create)
     * [delete](#bucket.Bucket.delete)
     * [rename](#bucket.Bucket.rename)
     * [evict](#bucket.Bucket.evict)
     * [head](#bucket.Bucket.head)
+    * [summary](#bucket.Bucket.summary)
+    * [info](#bucket.Bucket.info)
     * [copy](#bucket.Bucket.copy)
     * [list\_objects](#bucket.Bucket.list_objects)
     * [list\_objects\_iter](#bucket.Bucket.list_objects_iter)
@@ -51,18 +57,24 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [verify\_cloud\_bucket](#bucket.Bucket.verify_cloud_bucket)
     * [get\_path](#bucket.Bucket.get_path)
     * [as\_model](#bucket.Bucket.as_model)
+    * [write\_dataset](#bucket.Bucket.write_dataset)
 * [object](#object)
   * [Object](#object.Object)
     * [bucket](#object.Object.bucket)
     * [name](#object.Object.name)
     * [head](#object.Object.head)
     * [get](#object.Object.get)
+    * [get\_semantic\_url](#object.Object.get_semantic_url)
+    * [get\_url](#object.Object.get_url)
     * [put\_content](#object.Object.put_content)
     * [put\_file](#object.Object.put_file)
     * [promote](#object.Object.promote)
     * [delete](#object.Object.delete)
+    * [blob\_download](#object.Object.blob_download)
 * [multiobj.object\_group](#multiobj.object_group)
   * [ObjectGroup](#multiobj.object_group.ObjectGroup)
+    * [list\_urls](#multiobj.object_group.ObjectGroup.list_urls)
+    * [list\_all\_objects\_iter](#multiobj.object_group.ObjectGroup.list_all_objects_iter)
     * [delete](#multiobj.object_group.ObjectGroup.delete)
     * [evict](#multiobj.object_group.ObjectGroup.evict)
     * [prefetch](#multiobj.object_group.ObjectGroup.prefetch)
@@ -83,7 +95,9 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [status](#job.Job.status)
     * [wait](#job.Job.wait)
     * [wait\_for\_idle](#job.Job.wait_for_idle)
+    * [wait\_single\_node](#job.Job.wait_single_node)
     * [start](#job.Job.start)
+    * [get\_within\_timeframe](#job.Job.get_within_timeframe)
 * [object\_reader](#object_reader)
   * [ObjectReader](#object_reader.ObjectReader)
     * [attributes](#object_reader.ObjectReader.attributes)
@@ -261,6 +275,16 @@ Returns state of AIS cluster, including the detailed information about its nodes
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 
+<a id="cluster.Cluster.get_primary_url"></a>
+
+### get\_primary\_url
+
+```python
+def get_primary_url() -> str
+```
+
+Returns: URL of primary proxy
+
 <a id="cluster.Cluster.list_buckets"></a>
 
 ### list\_buckets
@@ -273,7 +297,7 @@ Returns list of buckets in AIStore cluster.
 
 **Arguments**:
 
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", or "ht".
+- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az" or "ht".
   Defaults to "ais". Empty provider returns buckets of all providers.
   
 
@@ -345,12 +369,12 @@ Note: Does not list ETLs that have been stopped or deleted.
 
 - `List[ETLInfo]` - A list of details on running ETLs
 
-<a id="cluster.Cluster.is_aistore_running"></a>
+<a id="cluster.Cluster.is_ready"></a>
 
-### is\_aistore\_running
+### is\_ready
 
 ```python
-def is_aistore_running() -> bool
+def is_ready() -> bool
 ```
 
 Checks if cluster is ready or still setting up.
@@ -359,12 +383,46 @@ Checks if cluster is ready or still setting up.
 
 - `bool` - True if cluster is ready, or false if cluster is still setting up
 
+<a id="cluster.Cluster.get_performance"></a>
+
+### get\_performance
+
+```python
+def get_performance(get_throughput: bool = True,
+                    get_latency: bool = True,
+                    get_counters: bool = True) -> ClusterPerformance
+```
+
+Retrieves and calculates the performance metrics for each target node in the AIStore cluster.
+It compiles throughput, latency, and various operational counters from each target node,
+providing a comprehensive view of the cluster's overall performance
+
+**Arguments**:
+
+- `get_throughput` _bool, optional_ - get cluster throughput
+- `get_latency` _bool, optional_ - get cluster latency
+- `get_counters` _bool, optional_ - get cluster counters
+  
+
+**Returns**:
+
+- `ClusterPerformance` - An object encapsulating the detailed performance metrics of the cluster,
+  including throughput, latency, and counters for each node
+  
+
+**Raises**:
+
+- `requests.RequestException` - If there's an ambiguous exception while processing the request
+- `requests.ConnectionError` - If there's a connection error with the cluster
+- `requests.ConnectionTimeout` - If the connection to the cluster times out
+- `requests.ReadTimeout` - If the timeout is reached while awaiting a response from the cluster
+
 <a id="bucket.Bucket"></a>
 
 ## Class: Bucket
 
 ```python
-class Bucket()
+class Bucket(AISSource)
 ```
 
 A class representing a bucket that contains user data.
@@ -430,6 +488,47 @@ def namespace() -> Namespace
 ```
 
 The namespace for this bucket.
+
+<a id="bucket.Bucket.list_urls"></a>
+
+### list\_urls
+
+```python
+def list_urls(prefix: str = "", etl_name: str = None) -> Iterable[str]
+```
+
+Implementation of the abstract method from AISSource that provides an iterator
+of full URLs to every object in this bucket matching the specified prefix
+
+**Arguments**:
+
+- `prefix` _str, optional_ - Limit objects selected by a given string prefix
+- `etl_name` _str, optional_ - ETL to include in URLs
+  
+
+**Returns**:
+
+  Iterator of full URLs of all objects matching the prefix
+
+<a id="bucket.Bucket.list_all_objects_iter"></a>
+
+### list\_all\_objects\_iter
+
+```python
+def list_all_objects_iter(prefix: str = "") -> Iterable[Object]
+```
+
+Implementation of the abstract method from AISSource that provides an iterator
+of all the objects in this bucket matching the specified prefix
+
+**Arguments**:
+
+- `prefix` _str, optional_ - Limit objects selected by a given string prefix
+  
+
+**Returns**:
+
+  Iterator of all object URLs matching the prefix
 
 <a id="bucket.Bucket.create"></a>
 
@@ -568,6 +667,72 @@ Requests bucket properties.
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 - `requests.ReadTimeout` - Timed out receiving response from AIStore
 
+<a id="bucket.Bucket.summary"></a>
+
+### summary
+
+```python
+def summary(uuid: str = "",
+            prefix: str = "",
+            cached: bool = True,
+            present: bool = True)
+```
+
+Returns bucket summary (starts xaction job and polls for results).
+
+**Arguments**:
+
+- `uuid` _str_ - Identifier for the bucket summary. Defaults to an empty string.
+- `prefix` _str_ - Prefix for objects to be included in the bucket summary.
+  Defaults to an empty string (all objects).
+- `cached` _bool_ - If True, summary entails cached entities. Defaults to True.
+- `present` _bool_ - If True, summary entails present entities. Defaults to True.
+  
+
+**Raises**:
+
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+
+<a id="bucket.Bucket.info"></a>
+
+### info
+
+```python
+def info(flt_presence: int = 0, bsumm_remote: bool = True)
+```
+
+Returns bucket summary and information/properties.
+
+**Arguments**:
+
+- `flt_presence` _int_ - Describes the presence of buckets and objects with respect to their existence
+  or non-existence in the AIS cluster. Defaults to 0.
+  
+  Expected values are:
+  0 - (object | bucket) exists inside and/or outside cluster
+  1 - same as 0 but no need to return summary
+  2 - bucket: is present | object: present and properly located
+  3 - same as 2 but no need to return summary
+  4 - objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
+  5 - not present - exists _outside_ cluster
+- `bsumm_remote` _bool_ - If True, returned bucket info will include remote objects as well
+  
+
+**Raises**:
+
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+- `ValueError` - `flt_presence` is not one of the expected values
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+
 <a id="bucket.Bucket.copy"></a>
 
 ### copy
@@ -577,7 +742,9 @@ def copy(to_bck: Bucket,
          prefix_filter: str = "",
          prepend: str = "",
          dry_run: bool = False,
-         force: bool = False) -> str
+         force: bool = False,
+         latest: bool = False,
+         sync: bool = False) -> str
 ```
 
 Returns job ID that can be used later to check the status of the asynchronous operation.
@@ -590,6 +757,8 @@ Returns job ID that can be used later to check the status of the asynchronous op
 - `dry_run` _bool, optional_ - Determines if the copy should actually
   happen or not
 - `force` _bool, optional_ - Override existing destination bucket
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `sync` _bool, optional_ - synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
   
 
 **Returns**:
@@ -756,7 +925,9 @@ def transform(etl_name: str,
               prepend: str = "",
               ext: Dict[str, str] = None,
               force: bool = False,
-              dry_run: bool = False) -> str
+              dry_run: bool = False,
+              latest: bool = False,
+              sync: bool = False) -> str
 ```
 
 Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -773,6 +944,8 @@ result to the destination bucket
   (i.e. {"jpg": "txt"})
 - `dry_run` _bool, optional_ - determines if the copy should actually happen or not
 - `force` _bool, optional_ - override existing destination bucket
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `sync` _bool, optional_ - synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
   
 
 **Returns**:
@@ -924,6 +1097,22 @@ Return a data-model of the bucket
 
   BucketModel representation
 
+<a id="bucket.Bucket.write_dataset"></a>
+
+### write\_dataset
+
+```python
+def write_dataset(config: DatasetConfig, **kwargs)
+```
+
+Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter
+
+**Arguments**:
+
+- `config` _DatasetConfig_ - Configuration dict specifying how to process
+  and store each part of the dataset item
+- `**kwargs` _optional_ - Optional keyword arguments to pass to the ShardWriter
+
 <a id="object.Object"></a>
 
 ## Class: Object
@@ -992,7 +1181,11 @@ Requests object properties.
 def get(archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
-        writer: BufferedWriter = None) -> ObjectReader
+        writer: BufferedWriter = None,
+        latest: bool = False,
+        byte_range: str = None,
+        blob_chunk_size: str = None,
+        blob_num_workers: str = None) -> ObjectReader
 ```
 
 Reads an object
@@ -1003,8 +1196,15 @@ Reads an object
   from the archive
 - `chunk_size` _int, optional_ - chunk_size to use while reading from stream
 - `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
-- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output.
+- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output
   User is responsible for closing the writer
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `byte_range` _str, optional_ - Specify a specific data segment of the object for transfer, including
+  both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+- `blob_chunk_size` _str, optional_ - Utilize built-in blob-downloader with the given chunk size in
+  IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k;)
+- `blob_num_workers` _str, optional_ - Utilize built-in blob-downloader with the given number of
+  concurrent blob-downloading workers (readers)
   
 
 **Returns**:
@@ -1018,6 +1218,41 @@ Reads an object
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="object.Object.get_semantic_url"></a>
+
+### get\_semantic\_url
+
+```python
+def get_semantic_url()
+```
+
+Get the semantic URL to the object
+
+**Returns**:
+
+  Semantic URL to get object
+
+<a id="object.Object.get_url"></a>
+
+### get\_url
+
+```python
+def get_url(archpath: str = "", etl_name: str = None)
+```
+
+Get the full url to the object including base url and any query parameters
+
+**Arguments**:
+
+- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file
+  from the archive
+- `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
+  
+
+**Returns**:
+
+  Full URL to get object
 
 <a id="object.Object.put_content"></a>
 
@@ -1128,12 +1363,45 @@ Delete an object from a bucket.
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exceptions.HTTPError(404)` - The object does not exist
 
+<a id="object.Object.blob_download"></a>
+
+### blob\_download
+
+```python
+def blob_download(chunk_size: int = None,
+                  num_workers: int = None,
+                  latest: bool = False) -> str
+```
+
+A special facility to download very large remote objects a.k.a. BLOBs
+Returns job ID that for the blob download operation.
+
+**Arguments**:
+
+- `chunk_size` _int_ - chunk size in bytes
+- `num_workers` _int_ - number of concurrent blob-downloading workers (readers)
+- `latest` _bool_ - GET the latest object version from the associated remote bucket
+  
+
+**Returns**:
+
+  Job ID (as str) that can be used to check the status of the operation
+  
+
+**Raises**:
+
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+
 <a id="multiobj.object_group.ObjectGroup"></a>
 
 ## Class: ObjectGroup
 
 ```python
-class ObjectGroup()
+class ObjectGroup(AISSource)
 ```
 
 A class representing multiple objects within the same bucket. Only one of obj_names, obj_range, or obj_template
@@ -1145,6 +1413,47 @@ should be provided.
 - `obj_names` _list[str], optional_ - List of object names to include in this collection
 - `obj_range` _ObjectRange, optional_ - Range defining which object names in the bucket should be included
 - `obj_template` _str, optional_ - String argument to pass as template value directly to api
+
+<a id="multiobj.object_group.ObjectGroup.list_urls"></a>
+
+### list\_urls
+
+```python
+def list_urls(prefix: str = "", etl_name: str = None) -> Iterable[str]
+```
+
+Implementation of the abstract method from AISSource that provides an iterator
+of full URLs to every object in this bucket matching the specified prefix
+
+**Arguments**:
+
+- `prefix` _str, optional_ - Limit objects selected by a given string prefix
+- `etl_name` _str, optional_ - ETL to include in URLs
+  
+
+**Returns**:
+
+  Iterator of all object URLs in the group
+
+<a id="multiobj.object_group.ObjectGroup.list_all_objects_iter"></a>
+
+### list\_all\_objects\_iter
+
+```python
+def list_all_objects_iter(prefix: str = "") -> Iterable[Object]
+```
+
+Implementation of the abstract method from AISSource that provides an iterator
+of all the objects in this bucket matching the specified prefix
+
+**Arguments**:
+
+- `prefix` _str, optional_ - Limit objects selected by a given string prefix
+  
+
+**Returns**:
+
+  Iterator of all the objects in the group
 
 <a id="multiobj.object_group.ObjectGroup.delete"></a>
 
@@ -1200,11 +1509,21 @@ NOTE: only Cloud buckets can be evicted.
 ### prefetch
 
 ```python
-def prefetch()
+def prefetch(blob_threshold: int = None,
+             latest: bool = False,
+             continue_on_error: bool = False)
 ```
 
 Prefetches a list or range of objects in a bucket so that they are cached in AIS
 NOTE: only Cloud buckets can be prefetched.
+
+**Arguments**:
+
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `continue_on_error` _bool, optional_ - Whether to continue if there is an error prefetching a single object
+- `blob_threshold` _int, optional_ - Utilize built-in blob-downloader for remote objects
+  greater than the specified (threshold) size in bytes
+  
 
 **Raises**:
 
@@ -1229,7 +1548,9 @@ def copy(to_bck: "Bucket",
          prepend: str = "",
          continue_on_error: bool = False,
          dry_run: bool = False,
-         force: bool = False)
+         force: bool = False,
+         latest: bool = False,
+         sync: bool = False)
 ```
 
 Copies a list or range of objects in a bucket
@@ -1242,6 +1563,8 @@ Copies a list or range of objects in a bucket
 - `dry_run` _bool, optional_ - Skip performing the copy and just log the intended actions
 - `force` _bool, optional_ - Force this job to run over others in case it conflicts
   (see "limited coexistence" and xact/xreg/xreg.go)
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `sync` _bool, optional_ - synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
   
 
 **Raises**:
@@ -1269,7 +1592,9 @@ def transform(to_bck: "Bucket",
               prepend: str = "",
               continue_on_error: bool = False,
               dry_run: bool = False,
-              force: bool = False)
+              force: bool = False,
+              latest: bool = False,
+              sync: bool = False)
 ```
 
 Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
@@ -1284,6 +1609,8 @@ Performs ETL operation on a list or range of objects in a bucket, placing the re
 - `dry_run` _bool, optional_ - Skip performing the transform and just log the intended actions
 - `force` _bool, optional_ - Force this job to run over others in case it conflicts
   (see "limited coexistence" and xact/xreg/xreg.go)
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `sync` _bool, optional_ - synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
   
 
 **Raises**:
@@ -1509,6 +1836,38 @@ Wait for a job to reach an idle state
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `errors.Timeout` - Timeout while waiting for the job to finish
+- `errors.JobInfoNotFound` - Raised when information on a job's status could not be found on the AIS cluster
+
+<a id="job.Job.wait_single_node"></a>
+
+### wait\_single\_node
+
+```python
+def wait_single_node(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
+                     verbose: bool = True)
+```
+
+Wait for a job running on a single node
+
+**Arguments**:
+
+- `timeout` _int, optional_ - The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
+- `verbose` _bool, optional_ - Whether to log wait status to standard output
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `errors.Timeout` - Timeout while waiting for the job to finish
+- `errors.JobInfoNotFound` - Raised when information on a job's status could not be found on the AIS cluster
 
 <a id="job.Job.start"></a>
 
@@ -1542,6 +1901,37 @@ Start a job and return its ID.
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="job.Job.get_within_timeframe"></a>
+
+### get\_within\_timeframe
+
+```python
+def get_within_timeframe(start_time: datetime.time,
+                         end_time: datetime.time) -> List[JobSnapshot]
+```
+
+Checks for jobs that started and finished within a specified timeframe
+
+**Arguments**:
+
+- `start_time` _datetime.time_ - The start of the timeframe for monitoring jobs
+- `end_time` _datetime.time_ - The end of the timeframe for monitoring jobs
+  
+
+**Returns**:
+
+- `list` - A list of jobs that have finished within the specified timeframe
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `errors.Timeout` - Timeout while waiting for the job to finish
+- `errors.JobInfoNotFound` - Raised when information on a job's status could not be found on the AIS cluster
 
 <a id="object_reader.ObjectReader"></a>
 
@@ -1650,10 +2040,11 @@ Name of the ETL
 ```python
 def init_spec(template: str,
               communication_type: str = DEFAULT_ETL_COMM,
-              timeout: str = DEFAULT_ETL_TIMEOUT) -> str
+              timeout: str = DEFAULT_ETL_TIMEOUT,
+              arg_type: str = "") -> str
 ```
 
-Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
+Initializes ETL based on Kubernetes pod spec template.
 
 **Arguments**:
 
@@ -1679,10 +2070,10 @@ def init_code(transform: Callable,
               communication_type: str = DEFAULT_ETL_COMM,
               timeout: str = DEFAULT_ETL_TIMEOUT,
               chunk_size: int = None,
-              transform_url: bool = False) -> str
+              arg_type: str = "") -> str
 ```
 
-Initializes ETL based on the provided source code. Returns etl_name.
+Initializes ETL based on the provided source code.
 
 **Arguments**:
 
@@ -1698,8 +2089,9 @@ Initializes ETL based on the provided source code. Returns etl_name.
 - `timeout` _str_ - [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
 - `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data.
   (whole object is read by default)
-- `transform_url` _optional, bool_ - If True, the runtime will provide the transform function with the URL to the
-  object on the target rather than the raw bytes read from the object
+- `arg_type` _optional, str_ - The type of argument the runtime will provide the transform function.
+  The default value of "" will provide the raw bytes read from the object.
+  When used with hpull communication_type, setting this to "url" will provide the URL of the object.
 
 **Returns**:
 
