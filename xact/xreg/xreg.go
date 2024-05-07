@@ -651,7 +651,10 @@ func (e *entries) del(id string) {
 	for idx, entry := range e.active {
 		xctn := entry.Get()
 		if xctn.ID() == id {
-			debug.Assert(xctn.Finished(), xctn.String())
+			if !xctn.Finished() {
+				nlog.Errorln("Warning: premature HK call to del-old", xctn.String())
+				break
+			}
 			nlen := len(e.active) - 1
 			e.active[idx] = e.active[nlen]
 			e.active = e.active[:nlen]
