@@ -187,7 +187,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		if k == feat.PropName {
 			nf, _, err := parseFeatureFlags([]string{v}, 0)
 			if err != nil {
-				return fmt.Errorf("invalid feature flag %q", v)
+				return fmt.Errorf("invalid feature flag %q, err: %v", v, err)
 			}
 
 			if cf := config.Features; nf != 0 {
