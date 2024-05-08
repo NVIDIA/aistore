@@ -196,9 +196,11 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
 			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
+			size := poi.lom.SizeBytes()
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
-				cos.NamedVal64{Name: stats.PutThroughput, Value: poi.lom.SizeBytes()},
+				cos.NamedVal64{Name: stats.PutSize, Value: size},
+				cos.NamedVal64{Name: stats.PutThroughput, Value: size},
 				cos.NamedVal64{Name: stats.PutLatency, Value: mono.SinceNano(poi.ltime)},
 			)
 			// RESTful PUT response header
@@ -1116,6 +1118,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 func (goi *getOI) stats(written int64) {
 	goi.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
+		cos.NamedVal64{Name: stats.GetSize, Value: written},
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},                // vis-à-vis user (as written m.b. range)
 		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.ltime)}, // see also: stats.GetColdRwLatency
 	)
