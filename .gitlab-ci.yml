@@ -388,8 +388,6 @@ test:long:aisloader:
 .test_k8s:
   tags:
     - ais-k8s
-  needs: 
-    - "build:k8s"
   variables:
     BUCKET: "gs://ais-ci-kube"
     TESTS_DIR: "ais/test"
