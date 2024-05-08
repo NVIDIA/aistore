@@ -251,11 +251,21 @@ func (r *LsoXact) stop() {
 		freeLsoEntries(r.lastPage)
 		r.lastPage = nil
 	}
-	if r.ctx != nil && r.ctx.Lom != nil {
-		cos.Close(r.ctx.Lmfh)
-		r.ctx.Lom.Unlock(false) // NOTE: see GetBucketInv() "returns" comment in aws.go
-		core.FreeLOM(r.ctx.Lom)
-		r.ctx.Lom = nil
+	if r.ctx != nil {
+		if r.ctx.Lom != nil {
+			cos.Close(r.ctx.Lmfh)
+			r.ctx.Lom.Unlock(false) // NOTE: see GetBucketInv() "returns" comment in aws.go
+			core.FreeLOM(r.ctx.Lom)
+			r.ctx.Lom = nil
+		}
+		if r.ctx.SGL != nil {
+			if r.ctx.SGL.Len() > 0 {
+				nlog.Errorln("remains upon exit", r.ctx.SGL.Len()) // TODO -- FIXME: revisit
+			}
+			r.ctx.SGL.Free()
+			r.ctx.SGL = nil
+		}
+		r.ctx = nil
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // interface guard
@@ -246,53 +247,66 @@ func (z *SGL) ReadAll() (b []byte) {
 	return
 }
 
-// NOTE: not returning empty lines - skipping
-func (z *SGL) ReadLine(lin []byte) (_ []byte, err error) {
+func (z *SGL) ErrDumpAt() {
 	if z.roff >= z.woff {
-		return nil, io.EOF
+		return
 	}
 	var (
-		part     []byte
+		idx, off = int(z.roff / z.slab.Size()), int(z.roff % z.slab.Size())
+		buf      = z.sgl[idx]
+		part     = buf[off:]
+	)
+	s := fmt.Sprintf("at %2d: %s", idx, cos.BHead(part, 128))
+	nlog.ErrorDepth(1, s)
+	if idx < len(z.sgl)-1 {
+		buf = z.sgl[idx+1]
+		part = buf[0:]
+		s = fmt.Sprintf("at %2d: %s", idx+1, cos.BHead(part, 128))
+		nlog.ErrorDepth(1, s)
+	}
+}
+
+func (z *SGL) NextLine(lin []byte, advanceRoff bool) (lout []byte, err error) {
+	var (
 		l        int
-		lout     []byte
+		part     []byte
 		idx, off = int(z.roff / z.slab.Size()), int(z.roff % z.slab.Size())
 		buf      = z.sgl[idx]
 	)
-
-	for buf[off] == '\r' || buf[off] == '\n' {
-		z.roff++
-		idx, off = int(z.roff/z.slab.Size()), int(z.roff%z.slab.Size())
-		if z.roff >= z.woff {
-			return nil, io.EOF
-		}
+	if z.roff >= z.woff {
+		return nil, io.EOF
 	}
 
-	i := bytes.IndexByte(buf[off:], '\n')
+	i := bytes.IndexRune(buf[off:], '\n')
 	if i <= 0 {
-		// when line's spliced across two bufs
-		if idx >= len(z.sgl)-1 {
-			return nil, io.EOF
-		}
 		part = buf[off:]
 		l = len(part)
+		// when line's spliced across two bufs
+		if idx >= len(z.sgl)-1 {
+			return nil, errors.New("sgl last buf with a partial line: " + cos.BHead(part, 128))
+		}
 		buf = z.sgl[idx+1]
 		off = 0
-		i = bytes.IndexByte(buf, '\n')
+		i = bytes.IndexRune(buf, '\n')
 		if i < 0 {
-			return nil, fmt.Errorf("memsys: line is too long (greater than the slab %d)", z.slab.Size())
+			return nil, fmt.Errorf("missing eol: %q, %q", cos.BHead(part, 128), cos.BHead(buf))
 		}
 	}
 	if cap(lin) < i+l {
+		debug.Assert(lin == nil, "check initial line buf cap: ", cap(lin), " vs ", i+l)
 		lout = make([]byte, i+l)
 	} else {
-		// reuse
 		lout = lin[:i+l]
 	}
-	// copy the `part` if exists
+
+	// copy the `part`
 	copy(lout, part)
 	copy(lout[l:], buf[off:off+i])
-	// advance read offset accordingly
-	z.roff += int64(i + l + 1)
+
+	if advanceRoff {
+		// i.e., read it
+		z.roff += int64(i + l + 1)
+	}
 	return lout, nil
 }
 

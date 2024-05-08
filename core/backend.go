@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 type (
@@ -30,7 +31,7 @@ type (
 		Name   string
 		ID     string
 		Schema []string
-		Offset int64
+		SGL    *memsys.SGL
 		Size   int64
 	}
 

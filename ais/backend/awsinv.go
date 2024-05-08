@@ -35,25 +35,23 @@ import (
 
 // NOTE currently implemented main assumption/requirement:
 // - one bucket, one inventory (for this same bucket), and one statically defined .csv
-// TODO:
-// - LsoMsg.StartAfter (a.k.a. ListObjectsV2Input.StartAfter)
 
-//
+// TODO:
+// - LsoMsg.StartAfter (a.k.a. ListObjectsV2Input.StartAfter); see also "expecting to resume" below
+
 // constant and tunables (see also: ais/s3/inventory)
-//
+const numBlobWorkers = 10
 
 const invTag = "bucket-inventory"
 
 const invBusyTimeout = 10 * time.Second
 
 const (
-	invMaxPage = 8 * apc.MaxPageSizeAWS       // roughly, 1MB given 128 byte lines
-	invPageSGL = max(invMaxPage*128, cos.MiB) // ditto
-	invMaxLine = 256                          // line buf (2x)
-)
+	invMaxLine = cos.KiB >> 1 // line buf
+	invSwapSGL = invMaxLine
 
-const (
-	numBlobWorkers = 10
+	invMaxPage = 8 * apc.MaxPageSizeAWS
+	invPageSGL = max(invMaxPage*invMaxLine, 2*cos.MiB)
 )
 
 // NOTE: hardcoding two groups of constants - cannot find any of them in https://github.com/aws/aws-sdk-go-v2
@@ -81,8 +79,8 @@ type invT struct {
 }
 
 // list inventories, read and parse manifest, return schema and unique oname
-func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, prefix string) (*s3.ListObjectsV2Output, invT,
-	int, error) {
+func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.LsoInvCtx, prefix string) (*s3.ListObjectsV2Output,
+	invT, invT, int, error) {
 	var (
 		csv      invT
 		manifest invT
@@ -97,7 +95,7 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		ecode, e := awsErrorToAISError(err, cloudBck, "")
-		return nil, csv, ecode, e
+		return nil, csv, manifest, ecode, e
 	}
 	for _, obj := range resp.Contents {
 		name := *obj.Key
@@ -123,7 +121,7 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 		if ctx.ID == "" {
 			what = cos.Either(ctx.Name, aiss3.InvName)
 		}
-		return nil, csv, http.StatusNotFound, cos.NewErrNotFound(cloudBck, invTag+":"+what)
+		return nil, csv, manifest, http.StatusNotFound, cos.NewErrNotFound(cloudBck, invTag+":"+what)
 	}
 	if csv.mtime.After(manifest.mtime) {
 		a, b := cos.FormatTime(manifest.mtime, cos.StampSec), cos.FormatTime(csv.mtime, cos.StampSec)
@@ -133,14 +131,14 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 	// 2. read the manifest and extract `fileSchema` --> ctx
 	schema, ecode, err := s3bp._getManifest(cloudBck, svc, manifest.oname, csv.oname)
 	if err != nil {
-		return nil, csv, ecode, err
+		return nil, csv, manifest, ecode, err
 	}
 
 	ctx.Schema = schema
-	return resp, csv, 0, nil
+	return resp, csv, manifest, 0, nil
 }
 
-func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObjectsV2Output, csv invT) {
+func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObjectsV2Output, csv, manifest invT) {
 	var (
 		num int
 		bn  = aws.String(cloudBck.Name)
@@ -148,7 +146,10 @@ func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObj
 	for _, obj := range lsV2resp.Contents {
 		name := *obj.Key
 		mtime := *(obj.LastModified)
-		if name == csv.oname || csv.mtime.Sub(mtime) < 23*time.Hour {
+		if name == csv.oname || name == manifest.oname || csv.mtime.Sub(mtime) < 23*time.Hour {
+			continue
+		}
+		if _sinceAbs(csv.mtime, mtime) < 23*time.Hour {
 			continue
 		}
 		if _, errN := svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{Bucket: bn, Key: obj.Key}); errN != nil {
@@ -274,76 +275,68 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	return _errInv("get-inv-gzr-uzw-fail", err)
 }
 
-func (*s3bp) listInventory(cloudBck *cmn.Bck, sgl *memsys.SGL, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) error {
+func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) (eof bool, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{})
 	}
 
-	if ctx.Offset > 0 {
-		if debug.ON() || cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			pos, err := ctx.Lmfh.Seek(0, io.SeekCurrent)
-			if err != nil {
-				return _errInv("list-seek-curr", err)
-			}
-			if pos != ctx.Offset {
-				return _errInv("list-offset", fmt.Errorf("%d vs %d", pos, ctx.Offset))
-			}
-		}
-	}
-
-	// NOTE: upper limit hardcoded (assuming enough space to hold msg.PageSize)
-	if written, err := io.CopyN(sgl, ctx.Lmfh, invPageSGL-cos.KiB); err != nil || written == 0 {
-		return _errInv("list-copy-npage", err)
-	}
-
 	var (
-		err    error
 		i      int64
-		off    = ctx.Offset
-		skip   = msg.ContinuationToken != ""
-		lbuf   = make([]byte, invMaxLine) // m.b. enough for all lines
 		custom cos.StrKVs
+		sgl    = ctx.SGL
 	)
+	if sgl.Len() < 2*invSwapSGL {
+		// read some more: sgl <= csv file
+		_, err = io.CopyN(sgl, ctx.Lmfh, invPageSGL-sgl.Len()-256)
+		eof = err == io.EOF
+		if err != nil && !eof {
+			nlog.Errorln("Warning: error reading csv", err)
+			return eof, err
+		}
+		if sgl.Len() == 0 && eof {
+			return eof, err
+		}
+		err = nil
+	}
+
 	if msg.WantProp(apc.GetPropsCustom) {
 		custom = make(cos.StrKVs, 2)
 	}
-	for {
-		ctx.Offset = off + sgl.Roff()  // advance
-		lbuf, err = sgl.ReadLine(lbuf) // reuse
+
+	lst.ContinuationToken = ""
+
+	skip := msg.ContinuationToken != ""                       // (tentatively)
+	lbuf := make([]byte, invMaxLine)                          // reuse for all read lines
+	for i < msg.PageSize && (sgl.Len() > invSwapSGL || eof) { // NOTE: never want to have a line split across pages
+		lbuf, err = sgl.NextLine(lbuf, true)
 		if err != nil {
+			if i > 0 {
+				// warn and return partially filled page
+				nlog.Errorln("Warning:", err)
+				err = nil
+			}
 			break
 		}
 		line := strings.Split(string(lbuf), ",")
-		debug.Assertf(strings.Contains(line[invBucketPos], cloudBck.Name), "%q %d", line, ctx.Offset)
+		debug.Assert(strings.Contains(line[invBucketPos], cloudBck.Name), line)
 
 		objName := cmn.UnquoteCEV(line[invKeyPos])
 
+		if skip {
+			skip = false
+			if objName != msg.ContinuationToken {
+				nlog.Errorln("Warning: expecting to resume from the previously returned:", msg.ContinuationToken, "vs", objName)
+			}
+		}
+
 		// prefix
 		if msg.IsFlagSet(apc.LsNoRecursion) {
-			if _, err := cmn.HandleNoRecurs(msg.Prefix, objName); err != nil {
+			if _, errN := cmn.HandleNoRecurs(msg.Prefix, objName); errN != nil {
 				continue
 			}
 		} else if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {
 			continue
-		}
-
-		// skip
-		if skip && off > 0 {
-			// expecting fseek to position precisely at the next
-			debug.Assert(objName == msg.ContinuationToken, objName, " vs ", msg.ContinuationToken)
-		}
-		if skip && objName == msg.ContinuationToken {
-			skip = false
-		}
-		if skip {
-			continue
-		}
-
-		// have page?
-		if i >= msg.PageSize {
-			lst.ContinuationToken = objName
-			break
 		}
 
 		// next entry
@@ -358,7 +351,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, sgl *memsys.SGL, ctx *core.LsoInvC
 				size := cmn.UnquoteCEV(line[i])
 				entry.Size, err = strconv.ParseInt(size, 10, 64)
 				if err != nil {
-					return err
+					nlog.Errorln("failed to parse size", size, err)
 				}
 			case types.InventoryOptionalFieldETag:
 				if custom != nil {
@@ -376,7 +369,19 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, sgl *memsys.SGL, ctx *core.LsoInvC
 	}
 
 	lst.Entries = lst.Entries[:i]
-	return err
+
+	if eof {
+		return eof, err
+	}
+
+	// set next continuation token
+	lbuf, err = sgl.NextLine(lbuf, false /*advance roff*/)
+	if err == nil {
+		line := strings.Split(string(lbuf), ",")
+		debug.Assert(strings.Contains(line[invBucketPos], cloudBck.Name), line)
+		lst.ContinuationToken = cmn.UnquoteCEV(line[invKeyPos])
+	}
+	return eof, err
 }
 
 // GET, parse, and validate inventory manifest
@@ -407,7 +412,7 @@ func (s3bp *s3bp) _getManifest(cloudBck *cmn.Bck, svc *s3.Client, mname, csvname
 		cname      = cloudBck.Cname(mname)
 	)
 	for fileSchema == "" || size == 0 {
-		lbuf, err = sgl.ReadLine(lbuf) // reuse
+		lbuf, err = sgl.NextLine(lbuf, true)
 		if err != nil {
 			if err == io.EOF {
 				err = nil

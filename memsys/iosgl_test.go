@@ -50,7 +50,7 @@ var _ = Describe("SGL", func() {
 		}
 		i := 0
 		for {
-			line, err := sgl.ReadLine(nil)
+			line, err := sgl.NextLine(nil, true)
 			if err == io.EOF {
 				break
 			}

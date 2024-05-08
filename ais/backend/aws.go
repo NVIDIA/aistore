@@ -154,7 +154,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 		return 0, err
 	}
 
-	lsV2resp, csv, ecode, err := s3bp.initInventory(cloudBck, svc, ctx, prefix)
+	lsV2resp, csv, manifest, ecode, err := s3bp.initInventory(cloudBck, svc, ctx, prefix)
 	if err != nil {
 		lom.Unlock(false)
 		core.FreeLOM(lom)
@@ -220,7 +220,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 
 	// still under wlock: cleanup old, read and write as ctx.Lom
 
-	cleanupOldInventory(cloudBck, svc, lsV2resp, csv)
+	cleanupOldInventory(cloudBck, svc, lsV2resp, csv, manifest)
 
 	err = s3bp.getInventory(cloudBck, ctx, csv)
 
@@ -248,18 +248,26 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 // continue using local csv
 func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) error {
 	debug.Assert(ctx.Lom != nil && ctx.Lmfh != nil, ctx.Lom, " ", ctx.Lmfh)
-	debug.Assert(ctx.Size > 0 && ctx.Size >= ctx.Offset, ctx.Size, " vs ", ctx.Offset)
 
 	cloudBck := bck.RemoteBck()
-	siz := min(invPageSGL, ctx.Size-ctx.Offset /*remaining*/)
-	sgl := s3bp.mm.NewSGL(siz, memsys.MaxPageSlabSize/2)
-	err := s3bp.listInventory(cloudBck, sgl, ctx, msg, lst)
-	sgl.Free()
+
+	if ctx.SGL == nil {
+		ctx.SGL = s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
+	} else if l := ctx.SGL.Len(); l < invSwapSGL {
+		// swap SGLs
+		sgl := s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
+		written, err := io.CopyN(sgl, ctx.SGL, l)
+		debug.AssertNoErr(err)
+		debug.Assert(written == l && sgl.Len() == l, written, " vs ", l, " vs ", sgl.Len())
+		ctx.SGL.Free()
+		ctx.SGL = sgl
+	}
+	eof, err := s3bp.listInventory(cloudBck, ctx, msg, lst)
 
 	if err == nil {
 		return nil
 	}
-	if err == io.EOF {
+	if eof {
 		lst.ContinuationToken = ""
 		return nil
 	}
