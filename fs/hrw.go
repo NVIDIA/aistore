@@ -17,7 +17,7 @@ import (
 
 func Hrw(uname string) (mi *Mountpath, digest uint64, err error) {
 	var (
-		max   uint64
+		maxH  uint64
 		avail = GetAvail()
 	)
 	digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
@@ -26,8 +26,8 @@ func Hrw(uname string) (mi *Mountpath, digest uint64, err error) {
 			continue
 		}
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
-		if cs >= max {
-			max = cs
+		if cs >= maxH {
+			maxH = cs
 			mi = mpathInfo
 		}
 	}

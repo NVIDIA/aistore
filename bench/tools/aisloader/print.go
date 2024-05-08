@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -127,8 +127,8 @@ func prettyDuration(t int64) string {
 }
 
 // prettyLatency combines three latency min, avg and max into a string
-func prettyLatency(min, avg, max int64) string {
-	return fmt.Sprintf("%-11s%-11s%-11s", prettyDuration(min), prettyDuration(avg), prettyDuration(max))
+func prettyLatency(minL, avgL, maxL int64) string {
+	return fmt.Sprintf("%-11s%-11s%-11s", prettyDuration(minL), prettyDuration(avgL), prettyDuration(maxL))
 }
 
 func now() string {

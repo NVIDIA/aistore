@@ -563,10 +563,12 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, config *cmn.Config, sid string) {
 	fast := p.readyToFastKalive.Load()
 	if !fast {
-		now := mono.NanoTime()
-		cfg := config.Keepalive
-		min := max(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
-		if fast = p.keepalive.cluUptime(now) > min; fast {
+		var (
+			now       = mono.NanoTime()
+			cfg       = config.Keepalive
+			minUptime = max(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
+		)
+		if fast = p.keepalive.cluUptime(now) > minUptime; fast {
 			p.readyToFastKalive.Store(true) // not resetting upon a change of primary
 		}
 	}

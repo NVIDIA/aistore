@@ -1062,7 +1062,7 @@ func hrwProxyTest(smap *meta.Smap, idToSkip string) (pi string, err error) {
 		return
 	}
 	var (
-		max     uint64
+		maxH    uint64
 		skipped int
 	)
 	for id, snode := range smap.Pmap {
@@ -1081,8 +1081,8 @@ func hrwProxyTest(smap *meta.Smap, idToSkip string) (pi string, err error) {
 		}
 
 		cs := xxhash.Checksum64S(cos.UnsafeB(snode.ID()), cos.MLCG32)
-		if cs > max {
-			max = cs
+		if cs > maxH {
+			maxH = cs
 			pi = id
 		}
 	}

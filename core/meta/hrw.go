@@ -1,6 +1,6 @@
 // Package meta: cluster-level metadata
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package meta
 
@@ -44,14 +44,14 @@ func (smap *Smap) HrwMultiHome(uname string) (si *Snode, netName string, err err
 }
 
 func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {
-	var max uint64
+	var maxH uint64
 	for _, tsi := range smap.Tmap {
 		if tsi.InMaintOrDecomm() { // always skipping targets 'in maintenance mode'
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
-		if cs >= max {
-			max = cs
+		if cs >= maxH {
+			maxH = cs
 			si = tsi
 		}
 	}
@@ -63,11 +63,11 @@ func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {
 
 // NOTE: including targets 'in maintenance mode', if any
 func (smap *Smap) HrwHash2Tall(digest uint64) (si *Snode, err error) {
-	var max uint64
+	var maxH uint64
 	for _, tsi := range smap.Tmap {
 		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
-		if cs >= max {
-			max = cs
+		if cs >= maxH {
+			maxH = cs
 			si = tsi
 		}
 	}
@@ -78,7 +78,7 @@ func (smap *Smap) HrwHash2Tall(digest uint64) (si *Snode, err error) {
 }
 
 func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
-	var max uint64
+	var maxH uint64
 	for pid, psi := range smap.Pmap {
 		if pid == idToSkip {
 			continue
@@ -89,8 +89,8 @@ func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
 		if psi.InMaintOrDecomm() {
 			continue
 		}
-		if d := psi.Digest(); d >= max {
-			max = d
+		if d := psi.Digest(); d >= maxH {
+			maxH = d
 			pi = psi
 		}
 	}
@@ -102,7 +102,7 @@ func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
 
 func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 	var (
-		max    uint64
+		maxH   uint64
 		digest = xxhash.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
@@ -110,8 +110,8 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.Digest() ^ digest)
-		if cs >= max {
-			max = cs
+		if cs >= maxH {
+			maxH = cs
 			pi = psi
 		}
 	}
@@ -125,7 +125,7 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 // (we want only one target to do it).
 func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
 	var (
-		max    uint64
+		maxH   uint64
 		digest = xxhash.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
@@ -134,8 +134,8 @@ func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
 		}
 		// Assumes that sinfo.idDigest is initialized
 		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
-		if cs >= max {
-			max = cs
+		if cs >= maxH {
+			maxH = cs
 			si = tsi
 		}
 	}

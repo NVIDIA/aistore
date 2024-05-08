@@ -28,7 +28,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.57.2 ### NOTE: see also: Makefile lint-update-ci
+          version: v1.58.1 ### NOTE: see also: Makefile lint-update-ci
           args: --timeout=30m
       - name: Lint linux
         run: |

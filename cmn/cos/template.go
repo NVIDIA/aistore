@@ -117,20 +117,15 @@ func (pt *ParsedTemplate) Count() int64 {
 
 // maxLen specifies maximum objects to be returned
 func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
-	var ( //nolint:prealloc // objs is preallocated farther down
-		max  = math.MaxInt64
-		objs []string
-	)
+	var i, n int
 	if len(maxLen) > 0 && maxLen[0] >= 0 {
-		max = maxLen[0]
-		objs = make([]string, 0, max)
+		n = maxLen[0]
 	} else {
-		objs = make([]string, 0, pt.Count())
+		n = int(pt.Count())
 	}
-
+	objs := make([]string, 0, n)
 	pt.InitIter()
-	i := 0
-	for objName, hasNext := pt.Next(); hasNext && i < max; objName, hasNext = pt.Next() {
+	for objName, hasNext := pt.Next(); hasNext && i < n; objName, hasNext = pt.Next() {
 		objs = append(objs, objName)
 		i++
 	}

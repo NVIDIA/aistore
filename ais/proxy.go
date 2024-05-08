@@ -2573,12 +2573,12 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)
 	case apc.WhatSmap:
-		const max = 16
+		const retries = 16
 		var (
 			smap  = p.owner.smap.get()
 			sleep = cmn.Rom.CplaneOperation() / 2
 		)
-		for i := 0; smap.validate() != nil && i < max; i++ {
+		for i := 0; smap.validate() != nil && i < retries; i++ {
 			if !p.NodeStarted() {
 				time.Sleep(sleep)
 				smap = p.owner.smap.get()

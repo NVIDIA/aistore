@@ -1783,8 +1783,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	m.initAndSaveState(true /*cleanup*/)
 
-	max := cos.Max(numCopies...) + 1
-	skip := tools.SkipTestArgs{MinMountpaths: max}
+	skip := tools.SkipTestArgs{MinMountpaths: cos.Max(numCopies...) + 1}
 	tools.CheckSkip(t, &skip)
 
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)

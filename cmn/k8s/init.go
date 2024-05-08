@@ -1,6 +1,6 @@
 // Package k8s: initialization, client, and misc. helpers
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package k8s
 
@@ -101,15 +101,15 @@ func _ppvols(volumes []v1.Volume) {
 func IsK8s() bool { return NodeName != "" }
 
 func _short(err error) string {
-	const max = 20
+	const sizeLimit = 20
 	msg := err.Error()
 	idx := strings.IndexByte(msg, ',')
 	switch {
-	case len(msg) < max:
+	case len(msg) < sizeLimit:
 		return msg
-	case idx > max:
+	case idx > sizeLimit:
 		return msg[:idx]
 	default:
-		return msg[:max]
+		return msg[:sizeLimit]
 	}
 }
