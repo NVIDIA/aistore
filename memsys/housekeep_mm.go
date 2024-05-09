@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -44,7 +45,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 				x := s.cleanup()
 				if x > 0 {
 					freed += x
-					if verbose {
+					if cmn.Rom.FastV(5, cos.SmoduleMemsys) {
 						nlog.Infof("%s: idle for %v - cleanup", s.tag, idle)
 					}
 				}
@@ -192,7 +193,7 @@ func (r *MMSA) freeIdle() (total int64) {
 			continue
 		}
 		total += freed
-		if verbose && freed > 0 {
+		if freed > 0 && cmn.Rom.FastV(5, cos.SmoduleMemsys) {
 			nlog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.ToSizeIEC(freed, 1))
 		}
 	}

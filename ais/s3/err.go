@@ -86,7 +86,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
 	w.Header().Set(cos.HdrContentTypeOptions, "nosniff")
 
 	w.WriteHeader(in.Status)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 	if allocated {
 		cmn.FreeHterr(in)

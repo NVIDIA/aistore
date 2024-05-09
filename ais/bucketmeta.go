@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 	"net/textproto"
@@ -273,7 +272,7 @@ func (*bmdOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
 	}
 	var (
 		bmd *meta.BMD
-		wto = bytes.NewBuffer(bmdValue)
+		wto = cos.NewBuffer(bmdValue)
 		err = jsp.SaveMeta(fpath, bmd, wto)
 	)
 	done = err == nil

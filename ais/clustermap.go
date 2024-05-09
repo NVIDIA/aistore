@@ -5,10 +5,8 @@
 package ais
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -589,7 +587,7 @@ func (r *smapOwner) persistBytes(payload msPayload) (done bool) {
 	}
 	var (
 		smap *meta.Smap
-		wto  = bytes.NewBuffer(smapValue)
+		wto  = cos.NewBuffer(smapValue)
 		err  = jsp.SaveMeta(r.fpath, smap, wto)
 	)
 	done = err == nil
@@ -598,16 +596,13 @@ func (r *smapOwner) persistBytes(payload msPayload) (done bool) {
 
 // Must be called under lock
 func (r *smapOwner) persist(newSmap *smapX) error {
-	var wto io.WriterTo
-	if newSmap._sgl != nil {
-		wto = newSmap._sgl
-	} else {
-		sgl := newSmap._encode(r.immSize)
+	sgl := newSmap._sgl
+	if sgl == nil {
+		sgl = newSmap._encode(r.immSize)
 		r.immSize = max(r.immSize, sgl.Len())
 		defer sgl.Free()
-		wto = sgl
 	}
-	return jsp.SaveMeta(r.fpath, newSmap, wto)
+	return jsp.SaveMeta(r.fpath, newSmap, sgl)
 }
 
 // executes under lock

@@ -143,6 +143,15 @@ type (
 	// [-] copy_file_range (when writing local files)
 	// [+] use (reusable) buffer, reduce code path, reduce locking
 	WriterOnly struct{ io.Writer }
+
+	// common between `bytes.Buffer` and `memsys.SGL`
+	// (the latter does not implement io.WriterTo, provides simplified version instead)
+	WriterTo2 interface {
+		WriteTo2(dst io.Writer) error
+	}
+	Buffer struct {
+		b *bytes.Buffer
+	}
 )
 
 // interface guard
@@ -403,6 +412,19 @@ func (mw *WriterMulti) Write(b []byte) (n int, err error) {
 	}
 	n = l
 	return
+}
+
+////////////
+// Buffer //
+////////////
+
+func NewBuffer(b []byte) *Buffer {
+	return &Buffer{b: bytes.NewBuffer(b)}
+}
+
+func (w *Buffer) WriteTo2(dst io.Writer) (err error) {
+	_, err = w.b.WriteTo(dst)
+	return err
 }
 
 ///////////////////////

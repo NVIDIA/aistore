@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -138,7 +137,7 @@ func (*etlMDOwnerBase) persistBytes(payload msPayload, fpath string) (done bool)
 	}
 	var (
 		etlMD *etl.MD
-		wto   = bytes.NewBuffer(etlMDValue)
+		wto   = cos.NewBuffer(etlMDValue)
 		err   = jsp.SaveMeta(fpath, etlMD, wto)
 	)
 	done = err == nil

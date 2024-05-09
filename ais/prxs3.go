@@ -153,7 +153,7 @@ func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 
@@ -285,7 +285,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	sgl := p.gmm.NewSGL(0)
 	all.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 
@@ -369,7 +369,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 
 	// GC
@@ -594,7 +594,7 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 	sgl := p.gmm.NewSGL(0)
 	all.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 
@@ -680,7 +680,7 @@ func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 

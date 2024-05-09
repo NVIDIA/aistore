@@ -77,7 +77,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 
@@ -357,7 +357,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
 	w.Header().Set(cos.S3CksumHeader, etag)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 
@@ -444,7 +444,7 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 
@@ -467,7 +467,7 @@ func (t *target) listMptUploads(w http.ResponseWriter, bck *meta.Bck, q url.Valu
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 

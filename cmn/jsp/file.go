@@ -8,7 +8,6 @@ package jsp
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -32,11 +31,11 @@ const (
 // main methods //
 //////////////////
 
-func SaveMeta(filepath string, meta Opts, wto io.WriterTo) error {
+func SaveMeta(filepath string, meta Opts, wto cos.WriterTo2) error {
 	return Save(filepath, meta, meta.JspOpts(), wto)
 }
 
-func Save(filepath string, v any, opts Options, wto io.WriterTo) (err error) {
+func Save(filepath string, v any, opts Options, wto cos.WriterTo2) (err error) {
 	var (
 		file *os.File
 		tmp  = filepath + ".tmp." + cos.GenTie()
@@ -53,7 +52,7 @@ func Save(filepath string, v any, opts Options, wto io.WriterTo) (err error) {
 		}
 	}()
 	if wto != nil {
-		_, err = wto.WriteTo(file)
+		err = wto.WriteTo2(file)
 	} else {
 		debug.Assert(v != nil)
 		err = Encode(file, v, opts)

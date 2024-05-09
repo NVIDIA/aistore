@@ -26,7 +26,6 @@ var (
 	gmm              *MMSA     // page-based system allocator
 	smm              *MMSA     // slab allocator for small sizes in the range 1 - 4K
 	gmmOnce, smmOnce sync.Once // ensures singleton-ness
-	verbose          bool
 )
 
 func Init(gmmName, smmName string, config *cmn.Config) {
@@ -58,9 +57,6 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	smm.Init(0)
 	smm.sibling = gmm
 	gmm.sibling = smm
-
-	// verbosity
-	verbose = cmn.Rom.FastV(5, cos.SmoduleMemsys)
 }
 
 func NewMMSA(name string, silent bool) (mem *MMSA, err error) {

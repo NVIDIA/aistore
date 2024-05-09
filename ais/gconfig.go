@@ -5,8 +5,6 @@
 package ais
 
 import (
-	"bytes"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -162,16 +160,14 @@ func (co *configOwner) persist(clone *globalConfig, payload msPayload) error {
 	if co.persistBytes(payload, co.globalFpath) {
 		return nil
 	}
-	var wto io.WriterTo
-	if clone._sgl != nil {
-		wto = clone._sgl
-	} else {
-		sgl := clone._encode(co.immSize)
+
+	sgl := clone._sgl
+	if sgl == nil {
+		sgl = clone._encode(co.immSize)
 		co.immSize = max(co.immSize, sgl.Len())
 		defer sgl.Free()
-		wto = sgl
 	}
-	return jsp.SaveMeta(co.globalFpath, clone, wto)
+	return jsp.SaveMeta(co.globalFpath, clone, sgl)
 }
 
 func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bool) {
@@ -184,9 +180,9 @@ func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bo
 	}
 	var (
 		config globalConfig
-		wto    = bytes.NewBuffer(confValue)
-		err    = jsp.SaveMeta(globalFpath, &config, wto)
+		wto    = cos.NewBuffer(confValue)
 	)
+	err := jsp.SaveMeta(globalFpath, &config, wto)
 	done = err == nil
 	return
 }

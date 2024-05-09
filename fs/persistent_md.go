@@ -5,9 +5,7 @@
 package fs
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -97,7 +95,7 @@ func RemoveMarker(marker string) (err error) {
 // Returns how many times it has successfully stored a file.
 func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []byte, sgl *memsys.SGL) (cnt, availCnt int) {
 	var (
-		wto             io.WriterTo
+		wto             cos.WriterTo2
 		bcnt            int
 		availableMpaths = GetAvail()
 	)
@@ -116,7 +114,7 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []by
 			continue
 		}
 		if b != nil {
-			wto = bytes.NewBuffer(b)
+			wto = cos.NewBuffer(b)
 		} else if sgl != nil {
 			wto = sgl // not reopening - see sgl.WriteTo()
 		}

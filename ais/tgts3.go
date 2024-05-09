@@ -176,7 +176,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	sgl.WriteTo(w)
+	sgl.WriteTo2(w)
 	sgl.Free()
 }
 

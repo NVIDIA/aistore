@@ -12,6 +12,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -22,9 +23,9 @@ import (
 var (
 	_ cos.WriterAt = (*SGL)(nil)
 
-	_ io.ReaderFrom  = (*SGL)(nil) // NOTE: important interfaces
-	_ io.WriterTo    = (*SGL)(nil)
+	_ io.ReaderFrom  = (*SGL)(nil)
 	_ io.ByteScanner = (*SGL)(nil)
+	_ cos.WriterTo2  = (*SGL)(nil) // simplified io.WriteTo replacement
 
 	_ cos.ReadOpenCloser = (*SGL)(nil)
 	_ cos.ReadOpenCloser = (*Reader)(nil)
@@ -132,26 +133,25 @@ func (z *SGL) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 }
 
-// NOTE: not advancing roff here - see usage
-func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
-	var (
-		n0      int
-		toWrite = z.woff
-	)
+// NOTE: simplified for speed (disregards roff, usage is strictly limited to writing an _entire_ sgl)
+func (z *SGL) WriteTo2(dst io.Writer) error {
+	rem := z.woff
 	for _, buf := range z.sgl {
-		l := min(toWrite, int64(len(buf)))
+		l := min(rem, int64(len(buf)))
 		if l == 0 {
 			break
 		}
-		n0, err = dst.Write(buf[:l])
-		n += int64(n0)
-		toWrite -= l
-
+		written, err := dst.Write(buf[:l])
+		rem -= l
 		if err != nil {
-			return
+			if cmn.Rom.FastV(5, cos.SmoduleMemsys) {
+				nlog.Errorln(err)
+			}
+			return err
 		}
+		debug.Assert(written == int(l), written, " vs ", l)
 	}
-	return
+	return nil
 }
 
 func (z *SGL) Write(p []byte) (n int, err error) {
@@ -186,14 +186,14 @@ func (z *SGL) WriteByte(c byte) error {
 }
 
 func (z *SGL) Read(b []byte) (n int, err error) {
-	n, z.roff, err = z.readAtOffset(b, z.roff)
+	n, z.roff, err = z._readAt(b, z.roff)
 	return
 }
 
 func (z *SGL) ReadByte() (byte, error) {
 	var (
 		b           [1]byte
-		_, off, err = z.readAtOffset(b[:], z.roff)
+		_, off, err = z._readAt(b[:], z.roff)
 	)
 	z.roff = off
 	return b[0], err
@@ -207,11 +207,10 @@ func (z *SGL) UnreadByte() error {
 	return nil
 }
 
-func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error) {
+func (z *SGL) _readAt(b []byte, roffin int64) (n int, roff int64, err error) {
 	roff = roffin
 	if roff >= z.woff {
-		err = io.EOF
-		return
+		return 0, roff, io.EOF
 	}
 	var (
 		idx, off = int(roff / z.slab.Size()), roff % z.slab.Size()
@@ -231,7 +230,7 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 	if n < len(b) {
 		err = io.EOF
 	}
-	return
+	return n, roff, err
 }
 
 // ReadAll is a strictly _convenience_ method as it performs heap allocation.
@@ -371,8 +370,8 @@ func (r *Reader) Open() (cos.ReadOpenCloser, error) { return NewReader(r.z), nil
 func (*Reader) Close() error                        { return nil }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
-	n, r.roff, err = r.z.readAtOffset(b, r.roff)
-	return
+	n, r.roff, err = r.z._readAt(b, r.roff)
+	return n, err
 }
 
 func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {
