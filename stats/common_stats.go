@@ -175,7 +175,10 @@ var (
 	_ json.Unmarshaler = (*coreStats)(nil)
 )
 
-// helper: convert bytes to megabytes with a fixed rounding precision = 2 digits (NOTE: MB not MiB)
+// convert bytes to meGabytes with a fixed rounding precision = 2 digits
+// - KindThroughput and KindComputedThroughput only
+// - MB, not MiB
+// - math.Ceil wouldn't produce two decimals
 func roundMBs(val int64) (mbs float64) {
 	mbs = float64(val) / 1000 / 10
 	num := int(mbs + 0.5)
@@ -412,8 +415,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 					if v.label.comm == "dl" {
 						metricType = statsd.PersistentCounter
 					}
-					fv := roundMBs(val)
-					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: fv}, s.sgl)
+					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: float64(val)}, s.sgl)
 				}
 			}
 		case KindGauge:
@@ -739,7 +741,7 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		case KindCounter:
 			// do nothing
 		case KindSize:
-			fv = roundMBs(val)
+			fv = float64(val)
 		case KindLatency:
 			millis := cos.DivRound(val, int64(time.Millisecond))
 			fv = float64(millis)
