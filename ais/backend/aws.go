@@ -260,7 +260,7 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 	} else if l := ctx.SGL.Len(); l > 0 && l < invSwapSGL && !ctx.EOF {
 		// swap SGLs
 		sgl := s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
-		written, err := io.CopyN(sgl, ctx.SGL, l)
+		written, err := io.Copy(sgl, ctx.SGL) // buffering not needed - gets executed via sgl WriteTo()
 		debug.AssertNoErr(err)
 		debug.Assert(written == l && sgl.Len() == l, written, " vs ", l, " vs ", sgl.Len())
 		ctx.SGL.Free()

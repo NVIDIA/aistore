@@ -25,7 +25,8 @@ var (
 
 	_ io.ReaderFrom  = (*SGL)(nil)
 	_ io.ByteScanner = (*SGL)(nil)
-	_ cos.WriterTo2  = (*SGL)(nil) // simplified io.WriteTo replacement
+	_ io.WriterTo    = (*SGL)(nil)
+	_ cos.WriterTo2  = (*SGL)(nil) // simplified io.WriteTo to write entire (0 -:- woff) content
 
 	_ cos.ReadOpenCloser = (*SGL)(nil)
 	_ cos.ReadOpenCloser = (*Reader)(nil)
@@ -133,12 +134,15 @@ func (z *SGL) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 }
 
-// NOTE: simplified for speed (disregards roff, usage is strictly limited to writing an _entire_ sgl)
+// simplified for speed
+// - disregards roff, usage is strictly limited to writing an _entire_ sgl
+// - compare w/ WriteTo below
 func (z *SGL) WriteTo2(dst io.Writer) error {
 	rem := z.woff
+	siz := z.slab.Size()
 	for _, buf := range z.sgl {
-		l := min(rem, int64(len(buf)))
-		if l == 0 {
+		l := min(rem, siz)
+		if l <= 0 {
 			break
 		}
 		written, err := dst.Write(buf[:l])
@@ -152,6 +156,39 @@ func (z *SGL) WriteTo2(dst io.Writer) error {
 		debug.Assert(written == int(l), written, " vs ", l)
 	}
 	return nil
+}
+
+// compliant io.WriterTo interface impl-n (compare w/ WriteTo2)
+func (z *SGL) WriteTo(dst io.Writer) (n int64, _ error) {
+	var (
+		idx = int(z.roff / z.slab.Size())
+		off = z.roff % z.slab.Size()
+	)
+	for {
+		rem := z.Len()
+		if rem <= 0 {
+			break
+		}
+		buf := z.sgl[idx]
+		siz := min(z.slab.Size()-off, rem)
+		written, err := dst.Write(buf[off : off+siz])
+		m := int64(written)
+		n += m
+		z.roff += m
+		if m < siz && err == nil {
+			err = io.ErrShortWrite
+		}
+		if err != nil {
+			if cmn.Rom.FastV(5, cos.SmoduleMemsys) {
+				nlog.Errorln(err)
+			}
+			return n, err
+		}
+		debug.Assert(m == siz, m, " vs ", siz) // (unlikely m > siz)
+		idx++
+		off = 0
+	}
+	return n, nil
 }
 
 func (z *SGL) Write(p []byte) (n int, err error) {
@@ -266,17 +303,17 @@ func (z *SGL) ErrDumpAt() {
 }
 
 func (z *SGL) NextLine(lin []byte, advanceRoff bool) (lout []byte, err error) {
+	if z.roff >= z.woff {
+		return nil, io.EOF
+	}
+
 	var (
 		l        int
 		part     []byte
 		idx, off = int(z.roff / z.slab.Size()), int(z.roff % z.slab.Size())
 		buf      = z.sgl[idx]
+		i        = bytes.IndexRune(buf[off:], '\n')
 	)
-	if z.roff >= z.woff {
-		return nil, io.EOF
-	}
-
-	i := bytes.IndexRune(buf[off:], '\n')
 	if i <= 0 {
 		part = buf[off:]
 		l = len(part)
