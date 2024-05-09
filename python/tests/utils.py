@@ -3,6 +3,8 @@ import random
 import shutil
 import string
 import tempfile
+import tarfile
+import io
 from pathlib import Path
 
 from aistore.sdk import Client
@@ -75,3 +77,15 @@ def test_cases(*args):
         return wrapper
 
     return decorator
+
+
+def create_archive(archive_name, content_dict):
+    directory = os.path.dirname(archive_name)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    with tarfile.open(archive_name, "w") as tar:
+        for file_name, file_content in content_dict.items():
+            info = tarfile.TarInfo(name=file_name)
+            info.size = len(file_content)
+            tar.addfile(tarinfo=info, fileobj=io.BytesIO(file_content))

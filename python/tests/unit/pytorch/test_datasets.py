@@ -1,7 +1,6 @@
 import unittest
-from unittest.mock import patch, Mock
-from aistore.pytorch.dataset import AISDataset, AISIterDataset
-from aistore.sdk.object import Object
+from unittest.mock import patch, Mock, MagicMock
+from aistore.pytorch.dataset import AISDataset, AISIterDataset, AISMultiShardStream
 
 
 class TestAISDataset(unittest.TestCase):
@@ -51,3 +50,32 @@ class TestAISDataset(unittest.TestCase):
 
         for _, obj in ais_iter_dataset:
             self.assertEqual(obj, b"mock data")
+
+    def test_multi_shard_stream(self):
+        self.patcher = unittest.mock.patch(
+            "aistore.pytorch.dataset.list_shard_objects_iterator"
+        )
+        self.mock_list_shard_objects_iterator = self.patcher.start()
+
+        self.data1 = iter([b"data1_1", b"data1_2", b"data1_3"])
+        self.data2 = iter([b"data2_1", b"data2_2", b"data2_3"])
+        self.data3 = iter([b"data3_1", b"data3_2", b"data3_3"])
+        self.mock_list_shard_objects_iterator.side_effect = [
+            self.data1,
+            self.data2,
+            self.data3,
+        ]
+
+        self.shards = [MagicMock(), MagicMock(), MagicMock()]
+
+        stream = AISMultiShardStream(data_sorces=self.shards)
+
+        expected_results = [
+            (b"data1_1", b"data2_1", b"data3_1"),
+            (b"data1_2", b"data2_2", b"data3_2"),
+            (b"data1_3", b"data2_3", b"data3_3"),
+        ]
+
+        results = list(iter(stream))
+
+        self.assertEqual(results, expected_results)

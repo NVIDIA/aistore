@@ -3,7 +3,6 @@
 #
 import random
 import unittest
-import os
 import io
 import tarfile
 from datetime import datetime
@@ -26,6 +25,7 @@ from tests.utils import (
     random_string,
     cleanup_local,
     test_cases,
+    create_archive,
 )
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
 
@@ -278,7 +278,7 @@ class TestObjectOps(RemoteEnabledTest):
             "file2.cls": b"2",
             "file3.cls": b"3",
         }
-        self._create_archive(archive_path, content_dict)
+        create_archive(archive_path, content_dict)
         obj = self._create_object(archive_name)
         obj.put_file(archive_path)
         objs = self.bucket.list_objects_iter(
@@ -313,14 +313,3 @@ class TestObjectOps(RemoteEnabledTest):
             self.assertEqual(file_content, content_dict["file3.txt"])
             file_content = tar.extractfile("file3.cls").read()
             self.assertEqual(file_content, content_dict["file3.cls"])
-
-    def _create_archive(self, archive_name, content_dict):
-        directory = os.path.dirname(archive_name)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        with tarfile.open(archive_name, "w") as tar:
-            for file_name, file_content in content_dict.items():
-                info = tarfile.TarInfo(name=file_name)
-                info.size = len(file_content)
-                tar.addfile(tarinfo=info, fileobj=io.BytesIO(file_content))

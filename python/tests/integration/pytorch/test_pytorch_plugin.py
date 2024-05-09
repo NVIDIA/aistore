@@ -4,13 +4,27 @@ Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 
 import unittest
+from pathlib import Path
 import torchdata.datapipes.iter as torch_pipes
 
 from aistore.sdk import Client
 from aistore.sdk.errors import AISError, ErrBckNotFound
-from aistore.pytorch import AISFileLister, AISFileLoader
+from aistore.sdk.dataset.data_shard import DataShard
+from aistore.pytorch import (
+    AISFileLister,
+    AISFileLoader,
+    AISDataset,
+    AISIterDataset,
+    AISMultiShardStream,
+)
 from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_string, destroy_bucket
+from tests.utils import (
+    create_and_put_object,
+    random_string,
+    destroy_bucket,
+    cleanup_local,
+    create_archive,
+)
 
 
 # pylint: disable=unused-variable
@@ -23,12 +37,16 @@ class TestPytorchPlugin(unittest.TestCase):
         self.bck_name = random_string()
         self.client = Client(CLUSTER_ENDPOINT)
         self.client.bucket(self.bck_name).create()
+        self.local_test_files = (
+            Path().absolute().joinpath("pytorch-plugin-test-" + random_string(8))
+        )
 
     def tearDown(self) -> None:
         """
         Cleanup after each test, destroy the bucket if it exists
         """
         destroy_bucket(self.client, self.bck_name)
+        cleanup_local(str(self.local_test_files))
 
     def test_filelister_with_prefix_variations(self):
         num_objs = 10
@@ -85,6 +103,85 @@ class TestPytorchPlugin(unittest.TestCase):
         torch_pipes.AISFileLoader(
             url=CLUSTER_ENDPOINT, source_datapipe=["ais://" + self.bck_name]
         )
+
+    def test_ais_dataset(self):
+        num_objs = 10
+        content_dict = {}
+        for i in range(num_objs):
+            content = create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"temp/obj{ i }"
+            )
+            content_dict[i] = content
+
+        ais_dataset = AISDataset(
+            client_url=CLUSTER_ENDPOINT, urls_list=["ais://" + self.bck_name]
+        )
+        self.assertEqual(len(ais_dataset), num_objs)
+        for i in range(num_objs):
+            obj_name, content = ais_dataset[i]
+            self.assertEqual(obj_name, f"temp/obj{ i }")
+            self.assertEqual(content, content_dict[i])
+
+    def test_ais_iter_dataset(self):
+        num_objs = 10
+        content_dict = {}
+        for i in range(num_objs):
+            content = create_and_put_object(
+                self.client, bck_name=self.bck_name, obj_name=f"temp/obj{ i }"
+            )
+            content_dict[i] = content
+
+        ais_iter_dataset = AISIterDataset(
+            client_url=CLUSTER_ENDPOINT, urls_list=["ais://" + self.bck_name]
+        )
+        self.assertEqual(len(ais_iter_dataset), num_objs)
+        for i, (obj_name, content) in enumerate(ais_iter_dataset):
+            self.assertEqual(obj_name, f"temp/obj{ i }")
+            self.assertEqual(content, content_dict[i])
+
+    def test_multishard_stream(self):
+        self.local_test_files.mkdir()
+        bucket = self.client.bucket(self.bck_name)
+        # Create two shards and store them in the bucket
+        shard1_content_dict = {
+            "file1.txt": b"Content of file one",
+            "file2.txt": b"Content of file two",
+            "file3.txt": b"Content of file three",
+        }
+        shard1_archive_name = "test_multishard_shard1.tar"
+        shard1_archive_path = self.local_test_files.joinpath(shard1_archive_name)
+        create_archive(shard1_archive_path, shard1_content_dict)
+        shard1_obj = bucket.object(obj_name=shard1_archive_name)
+        shard1_obj.put_file(shard1_archive_path)
+
+        shard2_content_dict = {
+            "file1.cls": b"1",
+            "file2.cls": b"2",
+            "file3.cls": b"3",
+        }
+        shard2_archive_name = "test_multishard_shard2.tar"
+        shard2_archive_path = self.local_test_files.joinpath(shard2_archive_name)
+        create_archive(shard2_archive_path, shard2_content_dict)
+        shard2_obj = bucket.object(obj_name=shard2_archive_name)
+        shard2_obj.put_file(shard2_archive_path)
+
+        shard1 = DataShard(
+            client_url=CLUSTER_ENDPOINT,
+            bucket_name=self.bck_name,
+            prefix="test_multishard_shard1.tar",
+        )
+        shard2 = DataShard(
+            client_url=CLUSTER_ENDPOINT,
+            bucket_name=self.bck_name,
+            prefix="test_multishard_shard2.tar",
+        )
+        dataset = AISMultiShardStream(data_sorces=[shard1, shard2])
+        combined_content = list(
+            zip(shard1_content_dict.values(), shard2_content_dict.values())
+        )
+
+        for i, content in enumerate(dataset):
+            self.assertEqual(content, combined_content[i])
 
 
 if __name__ == "__main__":

@@ -6,12 +6,17 @@ PyTorch Dataset and DataLoader for AIS.
 Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Union
+from typing import Iterator, List, Union
 from torch.utils.data import Dataset, IterableDataset
 
 from aistore.sdk import Client
 from aistore.sdk.ais_source import AISSource
-from aistore.pytorch.utils import list_objects, list_objects_iterator
+from aistore.sdk.dataset.data_shard import DataShard
+from aistore.pytorch.utils import (
+    list_objects,
+    list_objects_iterator,
+    list_shard_objects_iterator,
+)
 
 
 class AISBaseClass:
@@ -59,7 +64,7 @@ class AISDataset(AISBaseClass, Dataset):
         client_url: str,
         urls_list: Union[str, List[str]] = [],
         ais_source_list: Union[AISSource, List[AISSource]] = [],
-        etl_name=None,
+        etl_name: str = None,
     ):
         if not urls_list and not ais_source_list:
             raise ValueError(
@@ -132,7 +137,7 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
         client_url: str,
         urls_list: Union[str, List[str]] = [],
         ais_source_list: Union[AISSource, List[AISSource]] = [],
-        etl_name=None,
+        etl_name: str = None,
     ):
         if not urls_list and not ais_source_list:
             raise ValueError(
@@ -157,3 +162,43 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
 
     def _calculate_len(self):
         return sum(1 for _ in self._object_iter)
+
+
+class AISMultiShardStream(IterableDataset):
+    """
+    A iterable style dataset which iterates over multiple shard streams and yields combined samples
+
+    Args:
+        data_sources (List[DataShard]): List of DataShard objects
+
+    Returns:
+        Iterable: Iterable over the combined samples, where each sample is a tuple of
+            one object bytes from each shard stream
+    """
+
+    def __init__(
+        self,
+        data_sorces: List[DataShard],
+    ):
+        self.data_sources = data_sorces
+
+    def __iter__(self) -> Iterator:
+        object_iter = self._combined_iterator()
+        for obj in object_iter:
+            yield obj
+
+    def _combined_iterator(self):
+        """
+        Combine multiple iterators into one
+        """
+        data_iterators = []
+        for data_source in self.data_sources:
+            bucket, prefix, etl_name = (
+                data_source.bucket,
+                data_source.prefix,
+                data_source.etl_name,
+            )
+            data_iterator = list_shard_objects_iterator(bucket, prefix, etl_name)
+            data_iterators.append(data_iterator)
+
+        return zip(*data_iterators)

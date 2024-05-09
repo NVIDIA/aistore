@@ -8,7 +8,10 @@ from typing import List, Tuple, Iterable
 from urllib.parse import urlparse, urlunparse, parse_qs
 from aistore.sdk import Client
 from aistore.sdk.ais_source import AISSource
+from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.object import Object
+from aistore.sdk.bucket import Bucket
+from aistore.sdk.types import ArchiveSettings
 
 
 def parse_url(url: str) -> Tuple[str, str, str]:
@@ -101,3 +104,34 @@ def list_objects_iterator(
     for item in ais_source_list:
         for obj in item.list_all_objects_iter():
             yield obj
+
+
+def list_shard_objects_iterator(
+    bucket: Bucket, prefix: str, etl_name: str
+) -> Iterable[Object]:
+    """
+    Create an iterable over all the objects in the given shards
+
+    Args:
+        bucket (Bucket): Bucket containing the shards
+        prefix (str): prefix of the object names
+        etl_name (str): etl name to apply on each object
+
+    Returns:
+        Iterable[Object]: iterable over all the objects in the given shards,
+            with each iteration returning a combined sample
+    """
+
+    shards_iter = bucket.list_objects_iter(prefix=prefix, props="name")
+    for shard in shards_iter:
+        path = shard.name
+        objects_iter = bucket.list_objects_iter(
+            prefix=path, props="name", flags=[ListObjectFlag.ARCH_DIR]
+        )
+        for obj in objects_iter:
+            if obj.name == path:
+                continue
+            obj_name = obj.name.replace(path + "/", "", 1)
+            yield bucket.object(path).get(
+                etl_name=etl_name, archive_settings=ArchiveSettings(archpath=obj_name)
+            ).read_all()

@@ -3,5 +3,4 @@ from aistore.pytorch.aisio import (
     AISFileLoaderIterDataPipe as AISFileLoader,
     AISSourceLister,
 )
-from aistore.pytorch.dataset import AISDataset
-from aistore.pytorch.dataset import AISIterDataset
+from aistore.pytorch.dataset import AISDataset, AISIterDataset, AISMultiShardStream
