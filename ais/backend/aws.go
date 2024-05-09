@@ -253,7 +253,7 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 
 	if ctx.SGL == nil {
 		ctx.SGL = s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
-	} else if l := ctx.SGL.Len(); l < invSwapSGL {
+	} else if l := ctx.SGL.Len(); l > 0 && l < invSwapSGL {
 		// swap SGLs
 		sgl := s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
 		written, err := io.CopyN(sgl, ctx.SGL, l)

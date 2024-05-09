@@ -260,7 +260,7 @@ func (r *LsoXact) stop() {
 		}
 		if r.ctx.SGL != nil {
 			if r.ctx.SGL.Len() > 0 {
-				nlog.Errorln("remains upon exit", r.ctx.SGL.Len()) // TODO -- FIXME: revisit
+				nlog.Errorln(r.String(), "non-paginated leftover upon exit (bytes)", r.ctx.SGL.Len())
 			}
 			r.ctx.SGL.Free()
 			r.ctx.SGL = nil

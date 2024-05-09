@@ -289,15 +289,15 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 	if sgl.Len() < 2*invSwapSGL {
 		// read some more: sgl <= csv file
 		_, err = io.CopyN(sgl, ctx.Lmfh, invPageSGL-sgl.Len()-256)
-		eof = err == io.EOF
-		if err != nil && !eof {
-			nlog.Errorln("Warning: error reading csv", err)
-			return eof, err
+		if err != nil {
+			if eof = err == io.EOF; !eof {
+				nlog.Errorln("Warning: error reading csv", err)
+				return false, err
+			}
+			if sgl.Len() == 0 {
+				return eof, err
+			}
 		}
-		if sgl.Len() == 0 && eof {
-			return eof, err
-		}
-		err = nil
 	}
 
 	if msg.WantProp(apc.GetPropsCustom) {
@@ -311,13 +311,9 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 	for i < msg.PageSize && (sgl.Len() > invSwapSGL || eof) { // NOTE: never want to have a line split across pages
 		lbuf, err = sgl.NextLine(lbuf, true)
 		if err != nil {
-			if i > 0 {
-				// warn and return partially filled page
-				nlog.Errorln("Warning:", err)
-				err = nil
-			}
 			break
 		}
+
 		line := strings.Split(string(lbuf), ",")
 		debug.Assert(strings.Contains(line[invBucketPos], cloudBck.Name), line)
 
@@ -370,16 +366,14 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 
 	lst.Entries = lst.Entries[:i]
 
-	if eof {
-		return eof, err
-	}
-
 	// set next continuation token
 	lbuf, err = sgl.NextLine(lbuf, false /*advance roff*/)
 	if err == nil {
 		line := strings.Split(string(lbuf), ",")
 		debug.Assert(strings.Contains(line[invBucketPos], cloudBck.Name), line)
 		lst.ContinuationToken = cmn.UnquoteCEV(line[invKeyPos])
+	} else if err == io.EOF {
+		err = nil
 	}
 	return eof, err
 }
