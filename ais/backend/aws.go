@@ -245,15 +245,19 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	return 0, nil // ok
 }
 
-// continue using local csv
-func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) error {
+// using local(ized) .csv
+func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *core.LsoInvCtx) (err error) {
 	debug.Assert(ctx.Lom != nil && ctx.Lmfh != nil, ctx.Lom, " ", ctx.Lmfh)
 
 	cloudBck := bck.RemoteBck()
 
 	if ctx.SGL == nil {
+		if ctx.EOF {
+			debug.Assert(false) // (unlikely)
+			goto none
+		}
 		ctx.SGL = s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
-	} else if l := ctx.SGL.Len(); l > 0 && l < invSwapSGL {
+	} else if l := ctx.SGL.Len(); l > 0 && l < invSwapSGL && !ctx.EOF {
 		// swap SGLs
 		sgl := s3bp.mm.NewSGL(invPageSGL, memsys.DefaultBuf2Size)
 		written, err := io.CopyN(sgl, ctx.SGL, l)
@@ -262,15 +266,12 @@ func (s3bp *s3bp) ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes
 		ctx.SGL.Free()
 		ctx.SGL = sgl
 	}
-	eof, err := s3bp.listInventory(cloudBck, ctx, msg, lst)
+	err = s3bp.listInventory(cloudBck, ctx, msg, lst)
 
-	if err == nil {
+	if err == nil || err == io.EOF {
 		return nil
 	}
-	if eof {
-		lst.ContinuationToken = ""
-		return nil
-	}
+none:
 	lst.Entries = lst.Entries[:0]
 	return err
 }

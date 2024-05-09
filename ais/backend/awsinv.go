@@ -275,27 +275,29 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	return _errInv("get-inv-gzr-uzw-fail", err)
 }
 
-func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) (eof bool, err error) {
+func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) (err error) {
+	var (
+		custom cos.StrKVs
+		i      int64
+	)
 	msg.PageSize = calcPageSize(msg.PageSize, invMaxPage)
 	for j := len(lst.Entries); j < int(msg.PageSize); j++ {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{})
 	}
+	lst.ContinuationToken = ""
 
-	var (
-		i      int64
-		custom cos.StrKVs
-		sgl    = ctx.SGL
-	)
-	if sgl.Len() < 2*invSwapSGL {
-		// read some more: sgl <= csv file
+	// when little remains: read some more unless eof
+	sgl := ctx.SGL
+	if sgl.Len() < 2*invSwapSGL && !ctx.EOF {
 		_, err = io.CopyN(sgl, ctx.Lmfh, invPageSGL-sgl.Len()-256)
 		if err != nil {
-			if eof = err == io.EOF; !eof {
+			ctx.EOF = err == io.EOF
+			if !ctx.EOF {
 				nlog.Errorln("Warning: error reading csv", err)
-				return false, err
+				return err
 			}
 			if sgl.Len() == 0 {
-				return eof, err
+				return err
 			}
 		}
 	}
@@ -304,11 +306,11 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 		custom = make(cos.StrKVs, 2)
 	}
 
-	lst.ContinuationToken = ""
+	skip := msg.ContinuationToken != "" // (tentatively)
+	lbuf := make([]byte, invMaxLine)    // reuse for all read lines
 
-	skip := msg.ContinuationToken != ""                       // (tentatively)
-	lbuf := make([]byte, invMaxLine)                          // reuse for all read lines
-	for i < msg.PageSize && (sgl.Len() > invSwapSGL || eof) { // NOTE: never want to have a line split across pages
+	// avoid having line split across SGLs
+	for i < msg.PageSize && (sgl.Len() > invSwapSGL || ctx.EOF) {
 		lbuf, err = sgl.NextLine(lbuf, true)
 		if err != nil {
 			break
@@ -322,7 +324,8 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 		if skip {
 			skip = false
 			if objName != msg.ContinuationToken {
-				nlog.Errorln("Warning: expecting to resume from the previously returned:", msg.ContinuationToken, "vs", objName)
+				nlog.Errorln("Warning: expecting to resume from the previously returned:",
+					msg.ContinuationToken, "vs", objName)
 			}
 		}
 
@@ -347,7 +350,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 				size := cmn.UnquoteCEV(line[i])
 				entry.Size, err = strconv.ParseInt(size, 10, 64)
 				if err != nil {
-					nlog.Errorln("failed to parse size", size, err)
+					nlog.Errorln(ctx.Lom.String(), "failed to parse size", size, err)
 				}
 			case types.InventoryOptionalFieldETag:
 				if custom != nil {
@@ -372,10 +375,8 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 		line := strings.Split(string(lbuf), ",")
 		debug.Assert(strings.Contains(line[invBucketPos], cloudBck.Name), line)
 		lst.ContinuationToken = cmn.UnquoteCEV(line[invKeyPos])
-	} else if err == io.EOF {
-		err = nil
 	}
-	return eof, err
+	return err
 }
 
 // GET, parse, and validate inventory manifest

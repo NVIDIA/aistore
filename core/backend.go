@@ -33,6 +33,7 @@ type (
 		Schema []string
 		SGL    *memsys.SGL
 		Size   int64
+		EOF    bool
 	}
 
 	Backend interface {
