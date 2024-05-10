@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -13,6 +13,13 @@ import (
 	"strings"
 	"unicode"
 )
+
+const (
+	WildcardMatchAll = "*"
+	EmptyMatchAll    = ""
+)
+
+func MatchAll(template string) bool { return template == EmptyMatchAll || template == WildcardMatchAll }
 
 // Supported syntax includes 3 standalone variations, 3 alternative formats:
 // 1. bash (or shell) brace expansion:
@@ -76,7 +83,7 @@ func (e *errTemplateInvalid) Error() string { return e.msg }
 ////////////////////
 
 func NewParsedTemplate(template string) (parsed ParsedTemplate, err error) {
-	if template == "" || template == "*" {
+	if MatchAll(template) {
 		err = ErrEmptyTemplate
 		return
 	}

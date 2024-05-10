@@ -305,7 +305,7 @@ func parseInputFormat(inputFormat apc.ListRange) (pit *parsedInputTemplate, err 
 	if err == cos.ErrEmptyTemplate {
 		// empty template => empty prefix (match any)
 		err = nil
-		pit.Prefix = ""
+		pit.Prefix = cos.EmptyMatchAll
 	} else if err == nil && len(pit.Template.Ranges) == 0 {
 		// prefix only
 		pit.Prefix = pit.Template.Prefix

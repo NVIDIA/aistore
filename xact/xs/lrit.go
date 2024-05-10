@@ -138,7 +138,7 @@ func (r *lriterator) _inipr(msg *apc.ListRange) error {
 	pt, err := cos.NewParsedTemplate(msg.Template)
 	if err != nil {
 		if err == cos.ErrEmptyTemplate {
-			pt.Prefix = ""
+			pt.Prefix = cos.EmptyMatchAll
 			goto pref
 		}
 		return err
