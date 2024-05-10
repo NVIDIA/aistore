@@ -721,22 +721,20 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 		goi.t = t
 		goi.lom = lom
+		goi.dpq = dpq
 		goi.req = r
 		goi.w = w
 		goi.ctx = context.Background()
 		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
-		goi.isGFN = dpq.isGFN                                    // apc.QparamIsGFNRequest
 		goi.latestVer = _validateWarmGet(goi.lom, dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
-		goi.isS3 = dpq.isS3
 	}
 	// apc.QparamArchpath & apc.QparamArchmime, respectively
-	if goi.archive.filename = dpq.arch.path; goi.archive.filename != "" {
-		if strings.HasPrefix(goi.archive.filename, lom.ObjName) {
-			if rel, err := filepath.Rel(lom.ObjName, goi.archive.filename); err == nil {
-				goi.archive.filename = rel
+	if dpq.arch.path != "" {
+		if strings.HasPrefix(dpq.arch.path, lom.ObjName) {
+			if rel, err := filepath.Rel(lom.ObjName, dpq.arch.path); err == nil {
+				dpq.arch.path = rel
 			}
 		}
-		goi.archive.mime = dpq.arch.mime
 	}
 	// apc.QparamOrigURL
 	if bck.IsHTTP() {

@@ -12,13 +12,13 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // RESTful API: datapath query parameters
 type dpq struct {
-	// embed. structs
 	bck struct {
 		provider, namespace string // bucket
 	}
@@ -26,17 +26,17 @@ type dpq struct {
 		ty, hdl string // QparamAppendType, QparamAppendHandle
 	}
 	arch struct {
-		path, mime, regx, mode string // QparamArchpath et al.
+		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below)
 	}
-	// strings
+
 	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
 	uuid        string // xaction
 	origURL     string // ht://url->
 	owt         string // object write transaction { OwtPut, ... }
 	fltPresence string // QparamFltPresence
 	etlName     string // QparamETLName
-	binfo       string // bucket info, with or without remote
-	// booleans
+	binfo       string // bucket info, with or without requirement to summarize remote obj-s
+
 	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
 	isGFN         bool // QparamIsGFNRequest
 	dontAddRemote bool // QparamDontAddRemote
@@ -93,12 +93,8 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 			dpq.ptime = value
 		case apc.QparamUUID:
 			dpq.uuid = value
-		case apc.QparamArchpath:
-			if dpq.arch.path, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		case apc.QparamArchmime:
-			if dpq.arch.mime, err = url.QueryUnescape(value); err != nil {
+		case apc.QparamArchpath, apc.QparamArchmime, apc.QparamArchregx, apc.QparamArchmode:
+			if err = dpq._arch(key, value); err != nil {
 				return
 			}
 		case apc.QparamIsGFNRequest:
@@ -151,6 +147,30 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		}
 	}
 	return
+}
+
+func (dpq *dpq) _arch(key, val string) (err error) {
+	switch key {
+	case apc.QparamArchpath:
+		dpq.arch.path, err = url.QueryUnescape(val)
+	case apc.QparamArchmime:
+		dpq.arch.mime, err = url.QueryUnescape(val)
+	case apc.QparamArchregx:
+		dpq.arch.regx, err = url.QueryUnescape(val)
+	case apc.QparamArchmode:
+		if !cos.MatchAll(val) && !cos.StringInSlice(val, archive.MatchMode) {
+			err = fmt.Errorf(archive.FmtErrMatchMode, val)
+		}
+		dpq.arch.mmode = val
+	}
+	if err != nil {
+		return err
+	}
+	// validate
+	if dpq.arch.path != "" && dpq.arch.regx != "" {
+		err = fmt.Errorf("query parameters %q and %q are mutually exclusive", apc.QparamArchpath, apc.QparamArchregx)
+	}
+	return err
 }
 
 func keyEQval(s string) (string, string, bool) {

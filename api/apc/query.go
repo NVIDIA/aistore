@@ -90,13 +90,14 @@ const (
 	// - "archmode", on the other hand, tells aistore whether to interpret "regx" string (above) as a
 	//   a gen-purpose regular expression or, alternatively, use it for a simple and fast string comparison;
 	// - the latter is further formalized as `MatchMode` enum in the cmn/archive package,
-	//   with enumerated values including: "prefix", "suffix", "substr", "wdskey".
+	//   with enumerated values including: "regexp", "prefix", "suffix", "substr", "wdskey".
 	// - for example:
 	// - given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
 	//   and "wdskey" = "subdir/aaa", aistore will match and return (subdir/aaa.jpg, subdir/aaa.json).
 	// See also:
-	// - https://github.com/webdataset/webdataset for WebDataset
-	// - docs/archive.md or cmn/archive/mime.go for the most recently updated list of supported serialization formats.
+	// - https://github.com/webdataset/webdataset - for WebDataset
+	// - docs/archive.md                          - for usage and examples
+	// - cmn/archive                              - for the most recently updated enumeration
 	QparamArchmode = "archmode" // see `MatchMode` enum in cmn/archive/read
 
 	// Skip loading existing object's metadata, in part to

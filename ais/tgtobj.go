@@ -73,18 +73,16 @@ type (
 		ctx        context.Context // context used when getting object from remote backend (access creds)
 		t          *target         // this
 		lom        *core.LOM       // obj
-		archive    archiveQuery    // archive query
-		ranges     byteRanges      // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
-		atime      int64           // access time.Now()
-		ltime      int64           // mono.NanoTime, to measure latency
-		isGFN      bool            // is GFN
-		chunked    bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
-		unlocked   bool            // internal
-		verchanged bool            // version changed
-		retry      bool            // once
-		cold       bool            // true if executed backend.Get
-		latestVer  bool            // QparamLatestVer || 'versioning.*_warm_get'
-		isS3       bool            // calling via /s3 API
+		dpq        *dpq
+		ranges     byteRanges // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
+		atime      int64      // access time.Now()
+		ltime      int64      // mono.NanoTime, to measure latency
+		chunked    bool       // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
+		unlocked   bool       // internal
+		verchanged bool       // version changed
+		retry      bool       // once
+		cold       bool       // true if executed backend.Get
+		latestVer  bool       // QparamLatestVer || 'versioning.*_warm_get'
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -630,7 +628,7 @@ do:
 		goi.cold = true
 
 		// 3 alternative ways to perform cold GET
-		if goi.archive.filename == "" &&
+		if goi.dpq.arch.path == "" && goi.dpq.arch.regx == "" &&
 			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange)) {
 			if goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET) {
 				err = goi.coldStream(&res)
@@ -966,7 +964,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		hrng *htrange
 		fqn  = goi.lom.FQN
 	)
-	if !goi.cold && !goi.isGFN {
+	if !goi.cold && !goi.dpq.isGFN {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
 	lmfh, err = os.Open(fqn)
@@ -991,8 +989,13 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		if hrng, ecode, err = goi.rngToHeader(whdr, rsize); err != nil {
 			goto ret
 		}
-		if goi.archive.filename != "" {
-			err = cmn.NewErrUnsupp("range-read archived file", goi.archive.filename)
+		if goi.dpq.arch.path != "" {
+			err = cmn.NewErrUnsupp("range-read archived file", goi.dpq.arch.path)
+			ecode = http.StatusRequestedRangeNotSatisfiable
+			goto ret
+		}
+		if goi.dpq.arch.regx != "" {
+			err = cmn.NewErrUnsupp("range-read matching archived files", goi.dpq.arch.regx)
 			ecode = http.StatusRequestedRangeNotSatisfiable
 			goto ret
 		}
@@ -1012,13 +1015,13 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 		cksum  *cos.Cksum
 	)
 	switch {
-	case goi.archive.filename != "": // archive
+	case goi.dpq.arch.path != "" || goi.dpq.arch.regx != "": // archive
 		var (
 			mime string
 			ar   archive.Reader
 			csl  cos.ReadCloseSizer
 		)
-		mime, err = archive.MimeFile(lmfh, goi.t.smm, goi.archive.mime, goi.lom.ObjName)
+		mime, err = archive.MimeFile(lmfh, goi.t.smm, goi.dpq.arch.mime, goi.lom.ObjName)
 		if err != nil {
 			return 0, err
 		}
@@ -1026,22 +1029,30 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 		if err != nil {
 			return 0, fmt.Errorf("failed to open %s: %w", goi.lom.Cname(), err)
 		}
-		csl, err = ar.ReadOne(goi.archive.filename)
-		if err != nil {
-			return 0, cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
+
+		if goi.dpq.arch.path != "" {
+			csl, err = ar.ReadOne(goi.dpq.arch.path)
+			if err != nil {
+				return 0, cmn.NewErrFailedTo(goi.t, "extract "+goi.dpq.arch.path+" from", goi.lom, err)
+			}
+			if csl == nil {
+				return http.StatusNotFound,
+					cos.NewErrNotFound(goi.t, goi.dpq.arch.path+" in "+goi.lom.Cname())
+			}
+			// found
+			defer func() {
+				csl.Close()
+			}()
+			reader, size = csl, csl.Size()
+			whdr.Set(apc.HdrArchmime, mime)
+			whdr.Set(apc.HdrArchpath, goi.dpq.arch.path)
+			cksum = cos.NoneCksum
+		} else {
+			// TODO: niy
+			return http.StatusNotImplemented,
+				cmn.NewErrNotImpl("GET multiple archived files matching", goi.dpq.arch.regx)
 		}
-		if csl == nil {
-			return http.StatusNotFound,
-				cos.NewErrNotFound(goi.t, goi.archive.filename+" in "+goi.lom.Cname())
-		}
-		// found
-		defer func() {
-			csl.Close()
-		}()
-		reader, size = csl, csl.Size()
-		whdr.Set(apc.HdrArchmime, mime)
-		whdr.Set(apc.HdrArchpath, goi.archive.filename)
-		cksum = cos.NoneCksum
+
 	case hrng != nil: // range
 		cksum = goi.lom.Checksum()
 		ckconf := goi.lom.CksumConf()
@@ -1069,7 +1080,7 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 	// set response header
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(goi.lom.ObjAttrs(), whdr, size, cksum)
-	if goi.isS3 {
+	if goi.dpq.isS3 {
 		// (expecting user to set bucket checksum = md5)
 		s3.SetEtag(whdr, goi.lom)
 	}
@@ -1098,7 +1109,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 	// Update objects sent during GFN. Thanks to this we will not
 	// have to resend them in rebalance. In case of a race between rebalance
 	// and GFN the former wins, resulting in duplicated transmission.
-	if goi.isGFN {
+	if goi.dpq.isGFN {
 		goi.t.reb.FilterAdd(cos.UnsafeB(goi.lom.Uname()))
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
 		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
@@ -1151,8 +1162,8 @@ func (goi *getOI) rngToHeader(resphdr http.Header, size int64) (hrng *htrange, e
 		ecode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}
-	if goi.archive.filename != "" {
-		err = cmn.NewErrUnsupp("range-read archived file", goi.archive.filename)
+	if goi.dpq.arch.path != "" {
+		err = cmn.NewErrUnsupp("range-read archived file", goi.dpq.arch.path)
 		ecode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}

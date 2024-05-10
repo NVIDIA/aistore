@@ -114,7 +114,7 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr, size)
-	if goi.isS3 {
+	if goi.dpq.isS3 {
 		// (expecting user to set bucket checksum = md5)
 		s3.SetEtag(whdr, goi.lom)
 	}
@@ -222,7 +222,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	// response header
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr, res.Size)
-	if goi.isS3 {
+	if goi.dpq.isS3 {
 		// (expecting user to set bucket checksum = md5)
 		s3.SetEtag(whdr, goi.lom)
 	}

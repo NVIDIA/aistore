@@ -135,7 +135,7 @@ func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
 	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
-	err = ar.ReadUntil(c.xtar, "", 0)
+	err = ar.ReadUntil(c.xtar, cos.EmptyMatchAll, "")
 	slab.Free(buf)
 	if err == nil {
 		cos.Close(c.tw)

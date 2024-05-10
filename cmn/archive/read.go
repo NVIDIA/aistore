@@ -20,26 +20,23 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
-type MatchMode int
-
 const (
-	Regexp MatchMode = iota // default (and slow)
-	Prefix
-	Suffix
-	Substr
-	WdsKey // WebDataset convention - pathname without extension (https://github.com/webdataset/webdataset#the-webdataset-format)
-
-	// ------------------ (m.b. the last)
-	_lastmode
+	_regexp = iota // default (and slow)
+	_prefix
+	_suffix
+	_substr
+	_wdskey
 )
 
-var MatchModeText = []string{
+var MatchMode = []string{
 	"regexp",
 	"prefix",
 	"suffix",
 	"substr",
-	"wdskey",
+	"wdskey", // WebDataset convention - pathname without extension (https://github.com/webdataset/webdataset#the-webdataset-format)
 }
+
+const FmtErrMatchMode = "archive: invalid matching-mode %q"
 
 // to use, construct (`NewReader`) and iterate (`RangeUntil`)
 // (all supported formats)
@@ -48,10 +45,12 @@ type (
 	ReadCB func(filename string, reader cos.ReadCloseSizer, hdr any) (bool /*stop*/, error)
 
 	Reader interface {
-		// - call rcb (reader's callback) with each matching archived file
-		//   (if `regex` is empty - each archived file);
+		// - call rcb (reader's callback) with each matching archived file, where:
+		//   - `regex` is the matching string that gets interpreted according
+		//      to one of the enumerated "matching modes" (see MatchMode);
+		//   - an empty `regex` is just another case of cos.EmptyMatchAll - i.e., matches all archived files
 		// - stop upon EOF, or when rcb returns true (ie., stop) or any error
-		ReadUntil(rcb ReadCB, regex string, mode MatchMode) error
+		ReadUntil(rcb ReadCB, regex, mmode string) error
 
 		// simple/single selection of a given archived filename (full path)
 		ReadOne(filename string) (cos.ReadCloseSizer, error)
@@ -65,7 +64,7 @@ type (
 type (
 	matcher struct {
 		regex string
-		mode  MatchMode
+		mmode string
 		// when (and if) compiled
 		re *regexp.Regexp
 	}
@@ -127,20 +126,20 @@ func (br *baseR) init(fh io.Reader) { br.fh = fh }
 // matcher
 
 func (m *matcher) init() (err error) {
-	if m.mode < 0 || m.mode >= _lastmode {
-		return fmt.Errorf("invalid match-mode %d", m.mode)
+	// making exception for match-all("", "*")
+	if cos.MatchAll(m.regex) {
+		m.mmode = MatchMode[_prefix]
 	}
-	switch {
-	case m.regex == "": // 1. empty match matches all archived filenames
-		debug.Assert(m.mode == 0)
-		return nil
-	case m.mode > 0: // 2. fast and simple string-based match: prefix, et al.
-		debug.Assert(m.regex == "")
-		return nil
-	default: // finally, 3. regex
+	switch m.mmode {
+	case MatchMode[_regexp]:
+		debug.Assert(!cos.MatchAll(m.regex)) // match-all("", "*") must use mmode == prefix
 		m.re, err = regexp.Compile(m.regex)
-		return err
+	case MatchMode[_prefix], MatchMode[_suffix], MatchMode[_substr], MatchMode[_wdskey]:
+		// do nothing
+	default:
+		err = fmt.Errorf(FmtErrMatchMode, m.mmode)
 	}
+	return err
 }
 
 func (m *matcher) do(filename string) bool {
@@ -150,15 +149,15 @@ func (m *matcher) do(filename string) bool {
 	if m.re != nil {
 		return m.re.MatchString(filename)
 	}
-	switch m.mode {
-	case Prefix:
+	switch m.mmode {
+	case MatchMode[_prefix]:
 		return strings.HasPrefix(filename, m.regex)
-	case Suffix:
+	case MatchMode[_suffix]:
 		return strings.HasSuffix(filename, m.regex)
-	case Substr:
+	case MatchMode[_substr]:
 		return strings.Contains(filename, m.regex)
 	default:
-		debug.Assert(m.mode == WdsKey, m.mode)
+		debug.Assert(m.mmode == MatchMode[_wdskey], m.mmode)
 		return m.regex == cos.WdsKey(filename)
 	}
 }
@@ -171,8 +170,8 @@ func (tr *tarReader) init(fh io.Reader) error {
 	return nil
 }
 
-func (tr *tarReader) ReadUntil(rcb ReadCB, regex string, mode MatchMode) (err error) {
-	matcher := matcher{regex: regex, mode: mode}
+func (tr *tarReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
+	matcher := matcher{regex: regex, mmode: mmode}
 	if err = matcher.init(); err != nil {
 		return err
 	}
@@ -222,8 +221,8 @@ func (tgr *tgzReader) init(fh io.Reader) (err error) {
 	return
 }
 
-func (tgr *tgzReader) ReadUntil(rcb ReadCB, regex string, mode MatchMode) (err error) {
-	err = tgr.tr.ReadUntil(rcb, regex, mode)
+func (tgr *tgzReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
+	err = tgr.tr.ReadUntil(rcb, regex, mmode)
 	erc := tgr.gzr.Close()
 	if err == nil {
 		err = erc
@@ -257,8 +256,8 @@ func (zr *zipReader) init(fh io.Reader) (err error) {
 	return
 }
 
-func (zr *zipReader) ReadUntil(rcb ReadCB, regex string, mode MatchMode) (err error) {
-	matcher := matcher{regex: regex, mode: mode}
+func (zr *zipReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
+	matcher := matcher{regex: regex, mmode: mmode}
 	if err = matcher.init(); err != nil {
 		return err
 	}
@@ -313,8 +312,8 @@ func (lzr *lz4Reader) init(fh io.Reader) error {
 	return nil
 }
 
-func (lzr *lz4Reader) ReadUntil(rcb ReadCB, regex string, mode MatchMode) error {
-	return lzr.tr.ReadUntil(rcb, regex, mode)
+func (lzr *lz4Reader) ReadUntil(rcb ReadCB, regex, mmode string) error {
+	return lzr.tr.ReadUntil(rcb, regex, mmode)
 }
 
 func (lzr *lz4Reader) ReadOne(filename string) (cos.ReadCloseSizer, error) {

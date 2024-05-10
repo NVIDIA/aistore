@@ -106,7 +106,7 @@ func listRecurs(path, trimPref, appendPref, pattern string) (fobjs, error) {
 // - a slice of matching triplets: {source fname or dirname, destination name, size in bytes}
 func lsFobj(c *cli.Context, path, trimPref, appendPref string, ndir *int, recurs, incl bool) (fobjs, error) {
 	var (
-		pattern    = "*" // default pattern: entire directory
+		pattern    = cos.WildcardMatchAll // default pattern: entire directory
 		finfo, err = os.Stat(path)
 	)
 	debug.Assert(trimPref == "" || strings.HasPrefix(path, trimPref))
