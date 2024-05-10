@@ -21,12 +21,12 @@ import (
 
 // interface guard
 var (
-	_ cos.WriterAt = (*SGL)(nil)
-
-	_ io.ReaderFrom  = (*SGL)(nil)
 	_ io.ByteScanner = (*SGL)(nil)
-	_ io.WriterTo    = (*SGL)(nil)
-	_ cos.WriterTo2  = (*SGL)(nil) // simplified io.WriteTo to write entire (0 -:- woff) content
+
+	_ io.ReaderFrom = (*SGL)(nil)
+	_ cos.WriterAt  = (*SGL)(nil)
+	_ io.WriterTo   = (*SGL)(nil)
+	_ cos.WriterTo2 = (*SGL)(nil) // simplified io.WriteTo to write entire (0 -:- woff) content
 
 	_ cos.ReadOpenCloser = (*SGL)(nil)
 	_ cos.ReadOpenCloser = (*Reader)(nil)
@@ -111,18 +111,18 @@ func (z *SGL) grow(toSize int64) {
 	z.slab.muget.Unlock()
 }
 
-func (z *SGL) ReadFrom(r io.Reader) (n int64, err error) {
+// usage via io.Copy(z, source), whereby `z` reads from the `source` until EOF
+// see also: WriteTo
+func (z *SGL) ReadFrom(r io.Reader) (n int64, _ error) {
 	for {
-		if z.woff > z.Cap()-128 {
-			z.grow(z.Cap() + max(2*z.slab.Size(), DefaultBufSize))
+		if c := z.Cap(); z.woff > c-128 {
+			z.grow(c + max(z.slab.Size(), DefaultBufSize))
 		}
-
 		idx := z.woff / z.slab.Size()
-		debug.Assertf(idx < int64(len(z.sgl)), "%d %d %d %d", idx, len(z.sgl), z.Cap(), z.woff)
 		off := z.woff % z.slab.Size()
-		buf := z.sgl[idx][off:]
+		buf := z.sgl[idx]
 
-		written, err := r.Read(buf)
+		written, err := r.Read(buf[off:])
 		z.woff += int64(written)
 		n += int64(written)
 		if err != nil {
@@ -159,6 +159,8 @@ func (z *SGL) WriteTo2(dst io.Writer) error {
 }
 
 // compliant io.WriterTo interface impl-n (compare w/ WriteTo2)
+// usage via io.Copy(dst, z), whereby `z` writes to the `dst` until EOF
+// see also: ReadFrom
 func (z *SGL) WriteTo(dst io.Writer) (n int64, _ error) {
 	var (
 		idx = int(z.roff / z.slab.Size())

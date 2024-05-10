@@ -144,8 +144,7 @@ type (
 	// [+] use (reusable) buffer, reduce code path, reduce locking
 	WriterOnly struct{ io.Writer }
 
-	// common between `bytes.Buffer` and `memsys.SGL`
-	// (the latter does not implement io.WriterTo, provides simplified version instead)
+	// common between `Buffer` (below) and `memsys.SGL`
 	WriterTo2 interface {
 		WriteTo2(dst io.Writer) error
 	}
