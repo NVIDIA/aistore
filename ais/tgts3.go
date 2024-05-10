@@ -208,7 +208,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		poi.t = t
 		poi.lom = lom
 		poi.config = config
-		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
+		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || dpq.skipVC // apc.QparamSkipVC
 		poi.restful = true
 	}
 	ecode, err := poi.do(nil /*response hdr*/, r, dpq)
@@ -266,7 +266,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	lom := core.AllocLOM(objName)
-	dpq.isS3 = "true"
+	dpq.isS3 = true
 	lom, err = t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
 

@@ -725,18 +725,18 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.w = w
 		goi.ctx = context.Background()
 		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
-		goi.isGFN = cos.IsParseBool(dpq.isGFN)                 // apc.QparamIsGFNRequest
-		goi.latestVer = goi.lom.ValidateWarmGet(dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
-		goi.isS3 = dpq.isS3 != ""
+		goi.isGFN = dpq.isGFN                                    // apc.QparamIsGFNRequest
+		goi.latestVer = _validateWarmGet(goi.lom, dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
+		goi.isS3 = dpq.isS3
 	}
 	// apc.QparamArchpath & apc.QparamArchmime, respectively
-	if goi.archive.filename = dpq.archpath; goi.archive.filename != "" {
+	if goi.archive.filename = dpq.arch.path; goi.archive.filename != "" {
 		if strings.HasPrefix(goi.archive.filename, lom.ObjName) {
 			if rel, err := filepath.Rel(lom.ObjName, goi.archive.filename); err == nil {
 				goi.archive.filename = rel
 			}
 		}
-		goi.archive.mime = dpq.archmime
+		goi.archive.mime = dpq.arch.mime
 	}
 	// apc.QparamOrigURL
 	if bck.IsHTTP() {
@@ -750,14 +750,13 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 		// handle right here, return nil
 		if err != errSendingResp {
-			if dpq.isS3 != "" {
+			if dpq.isS3 {
 				s3.WriteErr(w, r, err, ecode)
 			} else {
-				silent := dpq.silent
 				if ecode == http.StatusNotFound {
-					silent = "true"
+					dpq.silent = true
 				}
-				t._erris(w, r, silent, err, ecode)
+				t._erris(w, r, dpq.silent, err, ecode)
 			}
 		}
 	}
@@ -766,9 +765,20 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	return lom, nil
 }
 
+func _validateWarmGet(lom *core.LOM, latestVer bool /*apc.QparamLatestVer*/) bool {
+	switch {
+	case !lom.Bck().IsCloud() && !lom.Bck().IsRemoteAIS():
+		return false
+	case !latestVer:
+		return lom.VersionConf().ValidateWarmGet || lom.VersionConf().Sync // bucket prop
+	default:
+		return true
+	}
+}
+
 // err in silence
-func (t *target) _erris(w http.ResponseWriter, r *http.Request, silent string /*apc.QparamSilent*/, err error, code int) {
-	if cos.IsParseBool(silent) {
+func (t *target) _erris(w http.ResponseWriter, r *http.Request, silent bool /*apc.QparamSilent*/, err error, code int) {
+	if silent {
 		t.writeErr(w, r, err, code, Silent)
 	} else {
 		t.writeErr(w, r, err, code)
@@ -813,7 +823,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	// load (maybe)
-	skipVC := lom.IsFeatureSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC)
+	skipVC := lom.IsFeatureSet(feat.SkipVC) || apireq.dpq.skipVC
 	if !skipVC {
 		_ = lom.Load(true, false)
 	}
@@ -825,8 +835,8 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		ecode  int
 	)
 	switch {
-	case apireq.dpq.archpath != "": // apc.QparamArchpath
-		apireq.dpq.archmime, err = archive.MimeFQN(t.smm, apireq.dpq.archmime, lom.FQN)
+	case apireq.dpq.arch.path != "": // apc.QparamArchpath
+		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
 			break
 		}
@@ -834,16 +844,16 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		lom.Lock(true)
 		ecode, err = t.putApndArch(r, lom, started, apireq.dpq)
 		lom.Unlock(true)
-	case apireq.dpq.appendTy != "": // apc.QparamAppendType
+	case apireq.dpq.apnd.ty != "": // apc.QparamAppendType
 		a := &apndOI{
 			started: started,
 			t:       t,
 			config:  config,
 			lom:     lom,
 			r:       r.Body,
-			op:      apireq.dpq.appendTy, // apc.QparamAppendType
+			op:      apireq.dpq.apnd.ty, // apc.QparamAppendType
 		}
-		if err := a.parse(apireq.dpq.appendHdl /*apc.QparamAppendHandle*/); err != nil {
+		if err := a.parse(apireq.dpq.apnd.hdl /*apc.QparamAppendHandle*/); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -1000,7 +1010,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	ecode, err := t.objHead(w.Header(), query, bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
-		t._erris(w, r, query.Get(apc.QparamSilent), err, ecode)
+		t._erris(w, r, cos.IsParseBool(query.Get(apc.QparamSilent)), err, ecode)
 	}
 }
 
@@ -1258,8 +1268,8 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 // called under lock
 func (t *target) putApndArch(r *http.Request, lom *core.LOM, started int64, dpq *dpq) (int, error) {
 	var (
-		mime     = dpq.archmime // apc.QparamArchmime
-		filename = dpq.archpath // apc.QparamArchpath
+		mime     = dpq.arch.mime // apc.QparamArchmime
+		filename = dpq.arch.path // apc.QparamArchpath
 		flags    int64
 	)
 	if strings.HasPrefix(filename, lom.ObjName) {

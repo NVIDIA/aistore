@@ -56,9 +56,9 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, args BinfoArgs) (string, *cmn.Bpr
 	}
 	if args.Summarize {
 		if args.WithRemote {
-			q.Set(apc.QparamBsummRemote, "true")
+			q.Set(apc.QparamBinfoWithOrWithoutRemote, "true")
 		} else {
-			q.Set(apc.QparamBsummRemote, "false")
+			q.Set(apc.QparamBinfoWithOrWithoutRemote, "false")
 		}
 	}
 	bp.Method = http.MethodHead
@@ -100,7 +100,7 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args BinfoArgs) (xid string, p *c
 	}
 	xid = hdr.Get(apc.HdrXactionID)
 	if xid == "" {
-		debug.Assert(status == http.StatusOK && !args.Summarize)
+		debug.Assert(status == http.StatusOK && !args.Summarize, status, " ", args.Summarize)
 		return
 	}
 	debug.Assert(news || xid == args.UUID)

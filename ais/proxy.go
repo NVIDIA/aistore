@@ -763,13 +763,13 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	appendTyProvided := apireq.dpq.appendTy != "" // apc.QparamAppendType
+	appendTyProvided := apireq.dpq.apnd.ty != "" // apc.QparamAppendType
 	if !appendTyProvided {
 		perms = apc.AcePUT
 	} else {
 		perms = apc.AceAPPEND
-		if apireq.dpq.appendHdl != "" {
-			items, err := preParse(apireq.dpq.appendHdl) // apc.QparamAppendHandle
+		if apireq.dpq.apnd.hdl != "" {
+			items, err := preParse(apireq.dpq.apnd.hdl) // apc.QparamAppendHandle
 			if err != nil {
 				p.writeErr(w, r, err)
 				return
@@ -1864,7 +1864,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 	bckArgs := bctx{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD, dpq: apireq.dpq, query: apireq.query}
-	bckArgs.dontAddRemote = cos.IsParseBool(apireq.dpq.dontAddRemote) // QparamDontAddRemote
+	bckArgs.dontAddRemote = apireq.dpq.dontAddRemote // QparamDontAddRemote
 
 	var (
 		info        *cmn.BsummResult
@@ -1881,13 +1881,12 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 		bckArgs.dontHeadRemote = bckArgs.dontHeadRemote || apc.IsFltPresent(fltPresence)
 	}
-	if dpq.bsummRemote != "" { // QparamBsummRemote
-		// (+ bucket summary)
+	if dpq.binfo != "" { // QparamBinfoWithOrWithoutRemote
 		msg = apc.BsummCtrlMsg{
 			UUID:          dpq.uuid,
-			ObjCached:     !cos.IsParseBool(dpq.bsummRemote),
+			ObjCached:     !cos.IsParseBool(dpq.binfo),
 			BckPresent:    apc.IsFltPresent(fltPresence),
-			DontAddRemote: cos.IsParseBool(dpq.dontAddRemote),
+			DontAddRemote: dpq.dontAddRemote,
 		}
 		bckArgs.dontAddRemote = msg.DontAddRemote
 	}
@@ -1903,7 +1902,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if fltPresence == apc.FltExistsOutside {
 			nlog.Warningf("bucket %s is present, flt %d=\"outside\" not implemented yet", bck.Cname(""), fltPresence)
 		}
-		if dpq.bsummRemote != "" {
+		if dpq.binfo != "" {
 			info, status, err = p.bsummhead(bck, &msg)
 			if err != nil {
 				p.writeErr(w, r, err)
@@ -1937,7 +1936,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		bck.Props = bprops
 	} // otherwise, keep bck.Props as per (#18995)
 
-	if dpq.bsummRemote != "" {
+	if dpq.binfo != "" {
 		info, status, err = p.bsummhead(bck, &msg)
 		if err != nil {
 			p.writeErr(w, r, err)

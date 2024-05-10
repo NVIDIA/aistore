@@ -838,26 +838,26 @@ var (
 	// archive
 	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
 
-	archpathFlag = cli.StringFlag{ // PUT/append => shard
+	archpathFlag = cli.StringFlag{ // for apc.QparamArchpath; PUT/append => shard
 		Name:  "archpath",
 		Usage: "filename in an object (\"shard\") formatted as: " + archFormats,
 	}
-	archpathGetFlag = cli.StringFlag{ // GET from shard
+	archpathGetFlag = cli.StringFlag{ // for apc.QparamArchpath; GET from shard
 		Name: archpathFlag.Name,
 		Usage: "extract the specified file from an object (\"shard\") formatted as: " + archFormats + ";\n" +
 			indent4 + "\tsee also: '--archregx'",
 	}
-	archmimeFlag = cli.StringFlag{
+	archmimeFlag = cli.StringFlag{ // for apc.QparamArchmime
 		Name: "archmime",
 		Usage: "expected format (mime type) of an object (\"shard\") formatted as: " + archFormats + ";\n" +
 			indent4 + "\tespecially usable for shards with non-standard extensions\n",
 	}
-	archregxFlag = cli.StringFlag{
+	archregxFlag = cli.StringFlag{ // for apc.QparamArchregx
 		Name: "archregx",
 		Usage: "prefix, suffix, WebDataset key, or general-purpose regular expression to select possibly multiple matching archived files;\n" +
 			indent4 + "\tuse '--archmode' to specify the \"matching mode\" (that can be prefix, suffix, WebDataset key, or regex)",
 	}
-	archmodeFlag = cli.StringFlag{
+	archmodeFlag = cli.StringFlag{ // for apc.QparamArchmode
 		Name: "archmode",
 		Usage: "enumerated \"matching mode\" that tells aistore how to handle '--archregx', one of:\n" +
 			indent4 + "\t  * regexp - general purpose regular expression;\n" +

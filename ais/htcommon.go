@@ -849,8 +849,8 @@ func _bckFromQ(bckName string, query url.Values, dpq *dpq) *meta.Bck {
 		provider = query.Get(apc.QparamProvider)
 		namespace = cmn.ParseNsUname(query.Get(apc.QparamNamespace))
 	} else {
-		provider = dpq.provider
-		namespace = cmn.ParseNsUname(dpq.namespace)
+		provider = dpq.bck.provider
+		namespace = cmn.ParseNsUname(dpq.bck.namespace)
 	}
 	return &meta.Bck{Name: bckName, Provider: provider, Ns: namespace}
 }

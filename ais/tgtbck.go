@@ -74,7 +74,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		bck := meta.CloneBck((*cmn.Bck)(qbck))
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
-				if cos.IsParseBool(dpq.dontAddRemote) {
+				if dpq.dontAddRemote {
 					// don't add it - proceed anyway (TODO: assert(wantOnlyRemote) below)
 					err = nil
 				} else {
@@ -143,7 +143,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		if qbck.IsBucket() {
 			if err := bck.Init(t.owner.bmd); err != nil {
 				if cmn.IsErrRemoteBckNotFound(err) {
-					if bsumMsg.DontAddRemote || cos.IsParseBool(dpq.dontAddRemote) {
+					if bsumMsg.DontAddRemote || dpq.dontAddRemote {
 						// don't add it - proceed anyway
 						err = nil
 					} else {
@@ -509,7 +509,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 				t.writeErr(w, r, err, code, Silent)
 			} else {
 				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
-				t._erris(w, r, apireq.query.Get(apc.QparamSilent), err, code)
+				t._erris(w, r, cos.IsParseBool(apireq.query.Get(apc.QparamSilent)), err, code)
 			}
 			return
 		}

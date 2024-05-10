@@ -18,7 +18,7 @@ import (
 
 // in this source:
 // - bsummact  <= api.GetBucketSummary(query-bcks, ActMsg)
-// - bsummhead <= api.GetBucketInfo(bck, QparamBsummRemote)
+// - bsummhead <= api.GetBucketInfo(bck, QparamBinfoWithOrWithoutRemote)
 
 func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) {
 	news := msg.UUID == ""

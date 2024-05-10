@@ -50,7 +50,8 @@ const (
 	QparamKeepRemote = "keep_bck_md"
 
 	// (api.GetBucketInfo)
-	QparamBsummRemote = "bsumm_remote"
+	// NOTE: non-empty value indicates api.GetBucketInfo; "true" value further requires "with remote obj-s"
+	QparamBinfoWithOrWithoutRemote = "bsumm_remote"
 
 	// "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
 	// See also:

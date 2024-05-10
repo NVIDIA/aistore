@@ -12,29 +12,37 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// RESTful API parse context
+// RESTful API: datapath query parameters
 type dpq struct {
-	provider, namespace string // bucket
-	pid, ptime          string // proxy ID, timestamp
-	uuid                string // xaction
-	skipVC              string // (skip loading existing object's metadata)
-	archpath, archmime  string // archive
-	isGFN               string // ditto
-	origURL             string // ht://url->
-	appendTy, appendHdl string // APPEND { apc.AppendOp, ... }
-	owt                 string // object write transaction { OwtPut, ... }
-	fltPresence         string // QparamFltPresence
-	dontHeadRemote      string // QparamDontHeadRemote
-	dontAddRemote       string // QparamDontAddRemote
-	bsummRemote         string // QparamBsummRemote
-	etlName             string // QparamETLName
-	silent              string // QparamSilent
-	latestVer           string // QparamLatestVer
-	// special use: s3 only
-	isS3 string
+	// embed. structs
+	bck struct {
+		provider, namespace string // bucket
+	}
+	apnd struct {
+		ty, hdl string // QparamAppendType, QparamAppendHandle
+	}
+	arch struct {
+		path, mime, regx, mode string // QparamArchpath et al.
+	}
+	// strings
+	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
+	uuid        string // xaction
+	origURL     string // ht://url->
+	owt         string // object write transaction { OwtPut, ... }
+	fltPresence string // QparamFltPresence
+	etlName     string // QparamETLName
+	binfo       string // bucket info, with or without remote
+	// booleans
+	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
+	isGFN         bool // QparamIsGFNRequest
+	dontAddRemote bool // QparamDontAddRemote
+	silent        bool // QparamSilent
+	latestVer     bool // QparamLatestVer
+	isS3          bool // special use: frontend S3 API
 }
 
 var (
@@ -74,37 +82,35 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		// outside this list will fail
 		switch key {
 		case apc.QparamProvider:
-			dpq.provider = value
+			dpq.bck.provider = value
 		case apc.QparamNamespace:
-			if dpq.namespace, err = url.QueryUnescape(value); err != nil {
+			if dpq.bck.namespace, err = url.QueryUnescape(value); err != nil {
 				return
 			}
 		case apc.QparamSkipVC:
-			dpq.skipVC = value
-		case apc.QparamProxyID:
-			dpq.pid = value
+			dpq.skipVC = cos.IsParseBool(value)
 		case apc.QparamUnixTime:
 			dpq.ptime = value
 		case apc.QparamUUID:
 			dpq.uuid = value
 		case apc.QparamArchpath:
-			if dpq.archpath, err = url.QueryUnescape(value); err != nil {
+			if dpq.arch.path, err = url.QueryUnescape(value); err != nil {
 				return
 			}
 		case apc.QparamArchmime:
-			if dpq.archmime, err = url.QueryUnescape(value); err != nil {
+			if dpq.arch.mime, err = url.QueryUnescape(value); err != nil {
 				return
 			}
 		case apc.QparamIsGFNRequest:
-			dpq.isGFN = value
+			dpq.isGFN = cos.IsParseBool(value)
 		case apc.QparamOrigURL:
 			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
 				return
 			}
 		case apc.QparamAppendType:
-			dpq.appendTy = value
+			dpq.apnd.ty = value
 		case apc.QparamAppendHandle:
-			if dpq.appendHdl, err = url.QueryUnescape(value); err != nil {
+			if dpq.apnd.hdl, err = url.QueryUnescape(value); err != nil {
 				return
 			}
 		case apc.QparamOWT:
@@ -112,29 +118,31 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 
 		case apc.QparamFltPresence:
 			dpq.fltPresence = value
-		case apc.QparamDontHeadRemote:
-			dpq.dontHeadRemote = value
 		case apc.QparamDontAddRemote:
-			dpq.dontAddRemote = value
-		case apc.QparamBsummRemote:
-			dpq.bsummRemote = value
+			dpq.dontAddRemote = cos.IsParseBool(value)
+		case apc.QparamBinfoWithOrWithoutRemote:
+			dpq.binfo = value
 
 		case apc.QparamETLName:
 			dpq.etlName = value
 		case apc.QparamSilent:
-			dpq.silent = value
+			dpq.silent = cos.IsParseBool(value)
 		case apc.QparamLatestVer:
-			dpq.latestVer = value
+			dpq.latestVer = cos.IsParseBool(value)
 
 		default:
 			debug.Func(func() {
-				// Currently, those datapaths that utilize these particular keys
-				// perform conventional query parsing `r.URL.Query()`.
 				switch key {
+				// not used yet
+				case apc.QparamProxyID, apc.QparamDontHeadRemote:
+
+				// flows that utilize these particular keys perform conventional
+				// `r.URL.Query()` parsing
 				case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo,
 					s3.QparamAccessKeyID, s3.QparamExpires, s3.QparamSignature,
 					s3.HeaderAlgorithm, s3.HeaderCredentials, s3.HeaderDate,
 					s3.HeaderExpires, s3.HeaderSignedHeaders, s3.HeaderSignature, s3.QparamXID:
+
 				default:
 					err = fmt.Errorf("failed to fast-parse [%s], unknown key: %q", rawQuery, key)
 					debug.AssertNoErr(err)
