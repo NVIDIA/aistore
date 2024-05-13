@@ -61,11 +61,11 @@ func (zrw *zipRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExt
 	if err != nil {
 		return 0, 0, err
 	}
-	c := &rcbCtx{parent: zrw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	c := &rcbCtx{parent: zrw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk, fromTar: false}
 	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
-	err = ar.ReadUntil(c.xzip, cos.EmptyMatchAll, "")
+	err = ar.ReadUntil(c, cos.EmptyMatchAll, "")
 
 	slab.Free(buf)
 	return c.extractedSize, c.extractedCount, err

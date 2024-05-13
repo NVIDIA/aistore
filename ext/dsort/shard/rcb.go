@@ -17,6 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+// interface guard
+var _ archive.ArchRCB = (*rcbCtx)(nil)
+
 // `archive.Reader` rcb context and callback; uses `extractor` to extract
 type rcbCtx struct {
 	extractor      RecordExtractor
@@ -28,6 +31,15 @@ type rcbCtx struct {
 	extractedSize  int64
 	extractedCount int
 	toDisk         bool
+	fromTar        bool
+}
+
+// implements archive.ArchRCB callback
+func (c *rcbCtx) Call(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop*/, error) {
+	if c.fromTar {
+		return c.xtar("", reader, hdr)
+	}
+	return c.xzip("", reader, hdr)
 }
 
 // handles .tar, .targz, and .tarlz4 - anything and everything that has tar headers
@@ -135,7 +147,7 @@ func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
 	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
-	err = ar.ReadUntil(c.xtar, cos.EmptyMatchAll, "")
+	err = ar.ReadUntil(c, cos.EmptyMatchAll, "")
 	slab.Free(buf)
 	if err == nil {
 		cos.Close(c.tw)

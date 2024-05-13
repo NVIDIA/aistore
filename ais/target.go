@@ -1092,7 +1092,7 @@ func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 		oa, ecode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom, nil /*origReq*/)
 		if err != nil {
 			if ecode != http.StatusNotFound {
-				err = cmn.NewErrFailedTo(t, "HEAD", lom, err)
+				err = cmn.NewErrFailedTo(t, "HEAD", lom.Cname(), err)
 			}
 			return
 		}

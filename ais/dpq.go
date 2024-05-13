@@ -158,19 +158,24 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 	case apc.QparamArchregx:
 		dpq.arch.regx, err = url.QueryUnescape(val)
 	case apc.QparamArchmode:
-		if !cos.MatchAll(val) && !cos.StringInSlice(val, archive.MatchMode) {
-			err = fmt.Errorf(archive.FmtErrMatchMode, val)
-		}
-		dpq.arch.mmode = val
+		dpq.arch.mmode, err = archive.ValidateMatchMode(val)
 	}
 	if err != nil {
 		return err
 	}
-	// validate
-	if dpq.arch.path != "" && dpq.arch.regx != "" {
-		err = fmt.Errorf("query parameters %q and %q are mutually exclusive", apc.QparamArchpath, apc.QparamArchregx)
+	// either/or
+	if dpq.arch.path != "" && dpq.arch.mmode != "" { // (empty regx is fine, is EmptyMatchAny)
+		err = fmt.Errorf("query parameters archpath=%q (match one) and archregx=%q (match many) are mutually exclusive",
+			apc.QparamArchpath, apc.QparamArchregx)
 	}
 	return err
+}
+
+func (dpq *dpq) _archstr() string {
+	if dpq.arch.path != "" {
+		return "\"" + dpq.arch.path + "\""
+	}
+	return fmt.Sprintf("(archregx=%q, archmode=%q)", dpq.arch.regx, dpq.arch.mmode)
 }
 
 func keyEQval(s string) (string, string, bool) {

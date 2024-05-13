@@ -54,7 +54,7 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 		return &deferROC{fh, lom.LIF()}, nil
 	}
 	lom.Unlock(false)
-	return nil, cmn.NewErrFailedTo(T, "open", lom.FQN, err)
+	return nil, cmn.NewErrFailedTo(T, "open", lom.Cname(), err)
 }
 
 // (compare with ext/etl/dp.go)
@@ -68,7 +68,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 			if res.Err != nil {
 				lom.Unlock(false)
 				if !cos.IsNotExist(res.Err, res.ErrCode) {
-					res.Err = cmn.NewErrFailedTo(T, "head-latest", lom, res.Err)
+					res.Err = cmn.NewErrFailedTo(T, "head-latest", lom.Cname(), res.Err)
 				}
 				return nil, nil, res.Err
 			}
@@ -85,7 +85,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 
 	lom.Unlock(false)
 	if !cos.IsNotExist(loadErr, 0) {
-		return nil, nil, cmn.NewErrFailedTo(T, "ldp-load", lom, loadErr)
+		return nil, nil, cmn.NewErrFailedTo(T, "ldp-load", lom.Cname(), loadErr)
 	}
 	if !lom.Bck().IsRemote() {
 		return nil, nil, cos.NewErrNotFound(T, lom.Cname())

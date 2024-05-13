@@ -24,6 +24,11 @@ import (
 
 var pool1m, pool128k, pool32k sync.Pool
 
+var (
+	_ archive.ArchRCB = (*rcbCtx)(nil)
+	_ archive.ArchRCB = (*rcbDummy)(nil)
+)
+
 type (
 	FileContent struct {
 		Name    string
@@ -33,6 +38,13 @@ type (
 	dummyFile struct {
 		name string
 		size int64
+	}
+	rcbCtx struct {
+		files []FileContent
+		ext   string
+	}
+	rcbDummy struct {
+		files []os.FileInfo
 	}
 )
 
@@ -149,48 +161,54 @@ func newArchReader(mime string, buffer *bytes.Buffer) (ar archive.Reader, err er
 	return
 }
 
+func (rcb *rcbCtx) Call(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
+	var (
+		buf bytes.Buffer
+		ext = cos.Ext(filename)
+	)
+	defer reader.Close()
+	if rcb.ext == ext {
+		if _, err := io.Copy(&buf, reader); err != nil {
+			return true, err
+		}
+	}
+	rcb.files = append(rcb.files, FileContent{Name: filename, Ext: ext, Content: buf.Bytes()})
+	return false, nil
+}
+
 func GetFilesFromArchBuffer(mime string, buffer bytes.Buffer, extension string) ([]FileContent, error) {
 	var (
-		files   = make([]FileContent, 0, 10)
+		rcb = rcbCtx{
+			files: make([]FileContent, 0, 10),
+			ext:   extension,
+		}
 		ar, err = newArchReader(mime, &buffer)
 	)
 	if err != nil {
 		return nil, err
 	}
-	rcb := func(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
-		var (
-			buf bytes.Buffer
-			ext = cos.Ext(filename)
-		)
-		defer reader.Close()
-		if extension == ext {
-			if _, err := io.Copy(&buf, reader); err != nil {
-				return true, err
-			}
-		}
-		files = append(files, FileContent{Name: filename, Ext: ext, Content: buf.Bytes()})
-		return false, nil
-	}
+	err = ar.ReadUntil(&rcb, cos.EmptyMatchAll, "")
+	return rcb.files, err
+}
 
-	err = ar.ReadUntil(rcb, cos.EmptyMatchAll, "")
-	return files, err
+func (rcb *rcbDummy) Call(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
+	rcb.files = append(rcb.files, newDummyFile(filename, reader.Size()))
+	reader.Close()
+	return false, nil
 }
 
 func GetFileInfosFromArchBuffer(buffer bytes.Buffer, mime string) ([]os.FileInfo, error) {
 	var (
-		files   = make([]os.FileInfo, 0, 10)
+		rcb = rcbDummy{
+			files: make([]os.FileInfo, 0, 10),
+		}
 		ar, err = newArchReader(mime, &buffer)
 	)
 	if err != nil {
 		return nil, err
 	}
-	rcb := func(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
-		files = append(files, newDummyFile(filename, reader.Size()))
-		reader.Close()
-		return false, nil
-	}
-	err = ar.ReadUntil(rcb, cos.EmptyMatchAll, "")
-	return files, err
+	err = ar.ReadUntil(&rcb, cos.EmptyMatchAll, "")
+	return rcb.files, err
 }
 
 ///////////////

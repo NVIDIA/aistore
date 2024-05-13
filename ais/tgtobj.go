@@ -886,9 +886,9 @@ gfn:
 			nlog.Infoln(goi.t.String(), "EC-recovered", goi.lom.String())
 			return
 		}
-		err = cmn.NewErrFailedTo(goi.t, "load EC-recovered", goi.lom, ecErr)
+		err = cmn.NewErrFailedTo(goi.t, "load EC-recovered", goi.lom.Cname(), ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
-		err = cmn.NewErrFailedTo(goi.t, "EC-recover", goi.lom, ecErr)
+		err = cmn.NewErrFailedTo(goi.t, "EC-recover", goi.lom.Cname(), ecErr)
 		if cmn.IsErrCapExceeded(ecErr) {
 			ecode = http.StatusInsufficientStorage
 		}
@@ -896,7 +896,7 @@ gfn:
 	}
 
 	if err != nil {
-		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom, err)
+		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom.Cname(), err)
 	} else {
 		err = cos.NewErrNotFound(goi.t, goi.lom.Cname())
 	}
@@ -975,7 +975,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		} else {
 			goi.t.fsErr(err, fqn)
 			ecode = http.StatusInternalServerError
-			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", goi.lom, err, ecode)
+			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", goi.lom.Cname(), err, ecode)
 		}
 		return
 	}
@@ -1009,35 +1009,37 @@ ret:
 // in particular, setup reader and writer and set headers
 func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htrange) (ecode int, err error) {
 	var (
-		size   int64
 		reader io.Reader = lmfh
+		dpq              = goi.dpq
+		lom              = goi.lom
 		sgl    *memsys.SGL
 		cksum  *cos.Cksum
+		size   int64
 	)
 	switch {
-	case goi.dpq.arch.path != "" || goi.dpq.arch.regx != "": // archive
+	case dpq.arch.path != "" || dpq.arch.mmode != "": // archive
 		var (
 			mime string
 			ar   archive.Reader
-			csl  cos.ReadCloseSizer
 		)
-		mime, err = archive.MimeFile(lmfh, goi.t.smm, goi.dpq.arch.mime, goi.lom.ObjName)
+		mime, err = archive.MimeFile(lmfh, goi.t.smm, dpq.arch.mime, lom.ObjName)
 		if err != nil {
 			return 0, err
 		}
-		ar, err = archive.NewReader(mime, lmfh, goi.lom.SizeBytes())
+		ar, err = archive.NewReader(mime, lmfh, lom.SizeBytes())
 		if err != nil {
-			return 0, fmt.Errorf("failed to open %s: %w", goi.lom.Cname(), err)
+			return 0, fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
 		}
 
-		if goi.dpq.arch.path != "" {
-			csl, err = ar.ReadOne(goi.dpq.arch.path)
+		if dpq.arch.path != "" {
+			var csl cos.ReadCloseSizer
+			csl, err = ar.ReadOne(dpq.arch.path)
 			if err != nil {
-				return 0, cmn.NewErrFailedTo(goi.t, "extract "+goi.dpq.arch.path+" from", goi.lom, err)
+				return 0, cmn.NewErrFailedTo(goi.t, "extract "+dpq._archstr()+" from", lom.Cname(), err)
 			}
 			if csl == nil {
 				return http.StatusNotFound,
-					cos.NewErrNotFound(goi.t, goi.dpq.arch.path+" in "+goi.lom.Cname())
+					cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
 			}
 			// found
 			defer func() {
@@ -1045,17 +1047,20 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 			}()
 			reader, size = csl, csl.Size()
 			whdr.Set(apc.HdrArchmime, mime)
-			whdr.Set(apc.HdrArchpath, goi.dpq.arch.path)
+			whdr.Set(apc.HdrArchpath, dpq.arch.path)
 			cksum = cos.NoneCksum
 		} else {
-			// TODO: niy
-			return http.StatusNotImplemented,
-				cmn.NewErrNotImpl("GET multiple archived files matching", goi.dpq.arch.regx)
+			debug.Assert(dpq.arch.mmode != "")
+			err = ar.ReadUntil(nil, dpq.arch.regx, dpq.arch.mmode)
+			if err != nil {
+				err = cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
+				return 0, err
+			}
 		}
 
 	case hrng != nil: // range
-		cksum = goi.lom.Checksum()
-		ckconf := goi.lom.CksumConf()
+		cksum = lom.Checksum()
+		ckconf := lom.CksumConf()
 		cksumRange := ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
 		size = hrng.Length
 		reader = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
@@ -1072,17 +1077,17 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 			}
 		}
 	default:
-		// regular case
-		size = goi.lom.SizeBytes()
-		cksum = goi.lom.Checksum()
+		// regular (whole object) case
+		size = lom.SizeBytes()
+		cksum = lom.Checksum()
 	}
 
 	// set response header
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
-	cmn.ToHeader(goi.lom.ObjAttrs(), whdr, size, cksum)
-	if goi.dpq.isS3 {
+	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
+	if dpq.isS3 {
 		// (expecting user to set bucket checksum = md5)
-		s3.SetEtag(whdr, goi.lom)
+		s3.SetEtag(whdr, lom)
 	}
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
@@ -1437,7 +1442,7 @@ func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error)
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {
-			err = cmn.NewErrFailedTo(t, "coi-load", lom, err)
+			err = cmn.NewErrFailedTo(t, "coi-load", lom.Cname(), err)
 		}
 		return 0, err
 	}
@@ -1505,12 +1510,12 @@ func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64,
 			if os.IsNotExist(err) {
 				return 0, nil
 			}
-			return 0, cmn.NewErrFailedTo(t, "open", lom.FQN, err)
+			return 0, cmn.NewErrFailedTo(t, "open", lom.Cname(), err)
 		}
 		fi, err := fh.Stat()
 		if err != nil {
 			fh.Close()
-			return 0, cmn.NewErrFailedTo(t, "fstat", lom.FQN, err)
+			return 0, cmn.NewErrFailedTo(t, "fstat", lom.Cname(), err)
 		}
 		size = fi.Size()
 		sargs.reader, sargs.objAttrs = fh, lom

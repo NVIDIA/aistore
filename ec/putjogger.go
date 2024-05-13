@@ -133,7 +133,7 @@ func (c *putJogger) processRequest(req *request) {
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		err = cmn.NewErrFailedTo(core.T, req.Action, lom, err)
+		err = cmn.NewErrFailedTo(core.T, req.Action, lom.Cname(), err)
 		c.parent.AddErr(err, 0)
 	}
 }

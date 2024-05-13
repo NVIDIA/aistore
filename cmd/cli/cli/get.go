@@ -573,9 +573,11 @@ func (a *qparamArch) init(c *cli.Context) error {
 	}
 	if flagIsSet(c, archmodeFlag) {
 		a.archmode = parseStrFlag(c, archmodeFlag)
-		if !cos.StringInSlice(a.archmode, archive.MatchModeText) {
-			return fmt.Errorf("invalid matching mode %q, expecting one of: %v", a.archmode, archive.MatchModeText)
+		mmode, err := archive.ValidateMatchMode(a.archmode)
+		if err != nil {
+			return err
 		}
+		a.archmode = mmode
 	}
 	if a.archpath != "" && a.archregx != "" {
 		return fmt.Errorf(errFmtExclusive, qflprn(archpathGetFlag), qflprn(archregxFlag))
@@ -645,6 +647,8 @@ func (a *qparamArch) getQuery(c *cli.Context, bck *cmn.Bck) (q url.Values) {
 // post-GET local extraction
 //
 
+var _ archive.ArchRCB = (*extractor)(nil)
+
 type extractor struct {
 	shardName string
 	mime      string
@@ -666,12 +670,12 @@ func doExtract(objName, outFile string, objLen int64) (mime string, err error) {
 	}
 
 	ex := &extractor{outFile, mime}
-	err = ar.ReadUntil(ex.do, "", 0)
+	err = ar.ReadUntil(ex, cos.EmptyMatchAll, "")
 	rfh.Close()
 	return
 }
 
-func (ex *extractor) do(filename string, reader cos.ReadCloseSizer, _ any) (bool /*stop*/, error) {
+func (ex *extractor) Call(filename string, reader cos.ReadCloseSizer, _ any) (bool /*stop*/, error) {
 	fqn := filepath.Join(strings.TrimSuffix(ex.shardName, ex.mime), filename)
 
 	wfh, err := cos.CreateFile(fqn)

@@ -36,13 +36,13 @@ var MatchMode = []string{
 	"wdskey", // WebDataset convention - pathname without extension (https://github.com/webdataset/webdataset#the-webdataset-format)
 }
 
-const FmtErrMatchMode = "archive: invalid matching-mode %q"
-
 // to use, construct (`NewReader`) and iterate (`RangeUntil`)
 // (all supported formats)
 // simple/single selection is also supported (`ReadOne`)
 type (
-	ReadCB func(filename string, reader cos.ReadCloseSizer, hdr any) (bool /*stop*/, error)
+	ArchRCB interface {
+		Call(filename string, reader cos.ReadCloseSizer, hdr any) (bool /*stop*/, error)
+	}
 
 	Reader interface {
 		// - call rcb (reader's callback) with each matching archived file, where:
@@ -50,7 +50,7 @@ type (
 		//      to one of the enumerated "matching modes" (see MatchMode);
 		//   - an empty `regex` is just another case of cos.EmptyMatchAll - i.e., matches all archived files
 		// - stop upon EOF, or when rcb returns true (ie., stop) or any error
-		ReadUntil(rcb ReadCB, regex, mmode string) error
+		ReadUntil(rcb ArchRCB, regex, mmode string) error
 
 		// simple/single selection of a given archived filename (full path)
 		ReadOne(filename string) (cos.ReadCloseSizer, error)
@@ -60,7 +60,9 @@ type (
 	}
 )
 
-// private implementation
+type ErrMatchMode struct{ mmode string }
+
+// private
 type (
 	matcher struct {
 		regex string
@@ -137,7 +139,7 @@ func (m *matcher) init() (err error) {
 	case MatchMode[_prefix], MatchMode[_suffix], MatchMode[_substr], MatchMode[_wdskey]:
 		// do nothing
 	default:
-		err = fmt.Errorf(FmtErrMatchMode, m.mmode)
+		err = &ErrMatchMode{m.mmode}
 	}
 	return err
 }
@@ -170,7 +172,7 @@ func (tr *tarReader) init(fh io.Reader) error {
 	return nil
 }
 
-func (tr *tarReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
+func (tr *tarReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
 	matcher := matcher{regex: regex, mmode: mmode}
 	if err = matcher.init(); err != nil {
 		return err
@@ -187,7 +189,7 @@ func (tr *tarReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
 			continue
 		}
 		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}
-		if stop, err := rcb(hdr.Name, csl, hdr); stop || err != nil {
+		if stop, err := rcb.Call(hdr.Name, csl, hdr); stop || err != nil {
 			return err
 		}
 	}
@@ -221,7 +223,7 @@ func (tgr *tgzReader) init(fh io.Reader) (err error) {
 	return
 }
 
-func (tgr *tgzReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
+func (tgr *tgzReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
 	err = tgr.tr.ReadUntil(rcb, regex, mmode)
 	erc := tgr.gzr.Close()
 	if err == nil {
@@ -250,13 +252,13 @@ func (tgr *tgzReader) ReadOne(filename string) (cos.ReadCloseSizer, error) {
 
 func (zr *zipReader) init(fh io.Reader) (err error) {
 	readerAt, ok := fh.(io.ReaderAt)
-	debug.Assert(ok, "expecting io.ReaderAt")
+	debug.Assert(ok, "zipReader: expecting io.ReaderAt")
 	zr.baseR.init(fh)
 	zr.zr, err = zip.NewReader(readerAt, zr.size)
 	return
 }
 
-func (zr *zipReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
+func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
 	matcher := matcher{regex: regex, mmode: mmode}
 	if err = matcher.init(); err != nil {
 		return err
@@ -277,7 +279,7 @@ func (zr *zipReader) ReadUntil(rcb ReadCB, regex, mmode string) (err error) {
 		if csf.file, err = f.Open(); err != nil {
 			return err
 		}
-		if stop, err := rcb(f.FileHeader.Name, csf, &f.FileHeader); stop || err != nil {
+		if stop, err := rcb.Call(f.FileHeader.Name, csf, &f.FileHeader); stop || err != nil {
 			return err
 		}
 	}
@@ -312,7 +314,7 @@ func (lzr *lz4Reader) init(fh io.Reader) error {
 	return nil
 }
 
-func (lzr *lz4Reader) ReadUntil(rcb ReadCB, regex, mmode string) error {
+func (lzr *lz4Reader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 	return lzr.tr.ReadUntil(rcb, regex, mmode)
 }
 
@@ -363,4 +365,22 @@ func namesEq(n1, n2 string) bool {
 		n2 = n2[1:]
 	}
 	return n1 == n2
+}
+
+//////////////////
+// ErrMatchMode //
+//////////////////
+
+func (e *ErrMatchMode) Error() string {
+	return fmt.Sprintf("invalid matching mode %q, expecting one of: %v", e.mmode, MatchMode)
+}
+
+func ValidateMatchMode(mmode string) (_ string, err error) {
+	if cos.MatchAll(mmode) {
+		return MatchMode[_prefix], nil
+	}
+	if !cos.StringInSlice(mmode, MatchMode) {
+		err = &ErrMatchMode{mmode}
+	}
+	return mmode, err
 }
