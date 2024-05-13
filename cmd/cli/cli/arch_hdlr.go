@@ -304,6 +304,12 @@ func putApndArchHandler(c *cli.Context) (err error) {
 	//
 	// multi-file cases
 	//
+	if _, err := headBucket(a.dst.bck, false /*don't add*/); err != nil {
+		if _, ok := err.(*errDoesNotExist); ok {
+			return fmt.Errorf("destination %v", err)
+		}
+		return V(err)
+	}
 	if !a.appendOnly && !a.appendOrPut {
 		warn := fmt.Sprintf("multi-file 'archive put' operation requires either %s or %s option",
 			qflprn(archAppendOnlyFlag), qflprn(archAppendOrPutFlag))
