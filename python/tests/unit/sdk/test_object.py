@@ -9,6 +9,8 @@ from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_GET,
     QPARAM_ARCHPATH,
+    QPARAM_ARCHREGX,
+    QPARAM_ARCHMODE,
     QPARAM_ETL_NAME,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
@@ -28,7 +30,14 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.object import Object
 from aistore.sdk.object_reader import ObjectReader
-from aistore.sdk.types import ActionMsg, BlobMsg, PromoteAPIArgs
+from aistore.sdk.archive_mode import ArchiveMode
+from aistore.sdk.types import (
+    ActionMsg,
+    BlobMsg,
+    PromoteAPIArgs,
+    ArchiveSettings,
+    BlobDownloadSettings,
+)
 from tests.const import SMALL_FILE_SIZE, ETL_NAME
 
 BCK_NAME = "bucket_name"
@@ -62,23 +71,37 @@ class TestObject(unittest.TestCase):
         )
 
     def test_get_default_params(self):
-        self.expected_params[QPARAM_ARCHPATH] = ""
         self.get_exec_assert()
 
     def test_get(self):
         archpath_param = "archpath"
-        blob_chunk_size = "4mb"
-        blob_num_workers = 10
+        chunk_size = "4mb"
+        num_workers = 10
         self.expected_params[QPARAM_ARCHPATH] = archpath_param
+        self.expected_params[QPARAM_ARCHREGX] = ""
+        self.expected_params[QPARAM_ARCHMODE] = None
         self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
+        archive_settings = ArchiveSettings(archpath=archpath_param)
+        blob_download_settings = BlobDownloadSettings(
+            chunk_size=chunk_size,
+            num_workers=num_workers,
+        )
         self.get_exec_assert(
-            archpath=archpath_param,
+            archive_settings=archive_settings,
             chunk_size=3,
             etl_name=ETL_NAME,
             writer=self.mock_writer,
-            blob_chunk_size=blob_chunk_size,
-            blob_num_workers=blob_num_workers,
+            blob_download_settings=blob_download_settings,
         )
+
+    def test_get_archregex(self):
+        regex = "regex"
+        mode = ArchiveMode.PREFIX
+        self.expected_params[QPARAM_ARCHPATH] = ""
+        self.expected_params[QPARAM_ARCHREGX] = regex
+        self.expected_params[QPARAM_ARCHMODE] = mode.value
+        archive_settings = ArchiveSettings(regex=regex, mode=mode)
+        self.get_exec_assert(archive_settings=archive_settings)
 
     def get_exec_assert(self, **kwargs):
         content = b"123456789"
@@ -112,15 +135,18 @@ class TestObject(unittest.TestCase):
         self.mock_client.request.return_value = mock_response
 
         res = self.object.get(**kwargs)
-        blob_chunk_size = kwargs.get("blob_chunk_size")
-        blob_num_workers = kwargs.get("blob_num_workers")
+        blob_download_settings = kwargs.get(
+            "blob_download_settings", BlobDownloadSettings()
+        )
+        chunk_size = blob_download_settings.chunk_size
+        num_workers = blob_download_settings.num_workers
         headers = {}
-        if blob_chunk_size or blob_num_workers:
+        if chunk_size or num_workers:
             headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
-        if blob_chunk_size:
-            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
-        if blob_num_workers:
-            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_num_workers
+        if chunk_size:
+            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = chunk_size
+        if num_workers:
+            headers[HEADER_OBJECT_BLOB_WORKERS] = num_workers
 
         self.assertEqual(expected_obj.raw(), res.raw())
         self.assertEqual(content_length, res.attributes.size)

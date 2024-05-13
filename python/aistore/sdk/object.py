@@ -13,6 +13,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     HTTP_METHOD_PUT,
     QPARAM_ARCHPATH,
+    QPARAM_ARCHREGX,
+    QPARAM_ARCHMODE,
     QPARAM_ETL_NAME,
     QPARAM_LATEST,
     ACT_PROMOTE,
@@ -25,7 +27,13 @@ from aistore.sdk.const import (
     HEADER_OBJECT_BLOB_CHUNK_SIZE,
 )
 from aistore.sdk.object_reader import ObjectReader
-from aistore.sdk.types import ActionMsg, PromoteAPIArgs, BlobMsg
+from aistore.sdk.types import (
+    ActionMsg,
+    PromoteAPIArgs,
+    BlobMsg,
+    ArchiveSettings,
+    BlobDownloadSettings,
+)
 from aistore.sdk.utils import read_file_bytes, validate_file
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -83,21 +91,20 @@ class Object:
     # pylint: disable=too-many-arguments
     def get(
         self,
-        archpath: str = "",
+        archive_settings: ArchiveSettings = None,
+        blob_download_settings: BlobDownloadSettings = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
         writer: BufferedWriter = None,
         latest: bool = False,
         byte_range: str = None,
-        blob_chunk_size: str = None,
-        blob_num_workers: str = None,
     ) -> ObjectReader:
         """
         Reads an object
 
         Args:
-            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file
-                from the archive
+            archive_settings (ArchiveSettings, optional): Settings for archive extraction
+            blob_download_settings (BlobDownloadSettings, optional): Settings for using blob download
             chunk_size (int, optional): chunk_size to use while reading from stream
             etl_name (str, optional): Transforms an object based on ETL with etl_name
             writer (BufferedWriter, optional): User-provided writer for writing content output
@@ -105,10 +112,6 @@ class Object:
             latest (bool, optional): GET the latest object version from the associated remote bucket
             byte_range (str, optional): Specify a specific data segment of the object for transfer, including
                 both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
-            blob_chunk_size (str, optional):  Utilize built-in blob-downloader with the given chunk size in
-                IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k;)
-            blob_num_workers (str, optional): Utilize built-in blob-downloader with the given number of
-                concurrent blob-downloading workers (readers)
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -120,21 +123,26 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         params = self._qparams.copy()
-        params[QPARAM_ARCHPATH] = archpath
+        headers = {}
+        if archive_settings:
+            if archive_settings.mode:
+                archive_settings.mode = archive_settings.mode.value
+            params[QPARAM_ARCHPATH] = archive_settings.archpath
+            params[QPARAM_ARCHREGX] = archive_settings.regex
+            params[QPARAM_ARCHMODE] = archive_settings.mode
+
+        if blob_download_settings:
+            headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
+            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_download_settings.chunk_size
+            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_download_settings.num_workers
         if etl_name:
             params[QPARAM_ETL_NAME] = etl_name
         if latest:
             params[QPARAM_LATEST] = "true"
 
-        if byte_range and (blob_chunk_size or blob_num_workers):
+        if byte_range and blob_download_settings:
             raise ValueError("Cannot use Byte Range with Blob Download")
-        headers = {}
-        if blob_chunk_size or blob_num_workers:
-            headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
-        if blob_chunk_size:
-            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
-        if blob_num_workers:
-            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_num_workers
+
         if byte_range:
             # For range formatting, see the spec:
             # https://www.rfc-editor.org/rfc/rfc7233#section-2.1

@@ -3,10 +3,16 @@
 #
 import random
 import unittest
+import os
+import io
+import tarfile
 from datetime import datetime
 from pathlib import Path
 
 from aistore.sdk.const import AIS_VERSION, HEADER_CONTENT_LENGTH, UTF_ENCODING
+from aistore.sdk.list_object_flag import ListObjectFlag
+from aistore.sdk.archive_mode import ArchiveMode
+from aistore.sdk.types import ArchiveSettings, BlobDownloadSettings
 
 from tests.const import (
     SMALL_FILE_SIZE,
@@ -138,9 +144,12 @@ class TestObjectOps(RemoteEnabledTest):
 
         for obj_name, content in objects.items():
             start_time = datetime.now().time()
+            blob_download_settings = BlobDownloadSettings(
+                chunk_size=testcase, num_workers="4"
+            )
             resp = (
                 self.bucket.object(obj_name)
-                .get(blob_chunk_size=testcase, blob_num_workers="4")
+                .get(blob_download_settings=blob_download_settings)
                 .read_all()
             )
             self.assertEqual(content, resp)
@@ -256,3 +265,62 @@ class TestObjectOps(RemoteEnabledTest):
 
         objects = self.bucket.list_objects(props="name,cached", prefix=obj_name).entries
         self._validate_objects_cached(objects, True)
+
+    def test_get_archregex(self):
+        self.local_test_files.mkdir()
+        archive_name = "test_archive.tar"
+        archive_path = self.local_test_files.joinpath(archive_name)
+        content_dict = {
+            "file1.txt": b"Content of file one",
+            "file2.txt": b"Content of file two",
+            "file3.txt": b"Content of file three",
+            "file1.cls": b"1",
+            "file2.cls": b"2",
+            "file3.cls": b"3",
+        }
+        self._create_archive(archive_path, content_dict)
+        obj = self._create_object(archive_name)
+        obj.put_file(archive_path)
+        objs = self.bucket.list_objects_iter(
+            prefix=archive_name, props="name", flags=[ListObjectFlag.ARCH_DIR]
+        )
+        obj_names = [obj.name for obj in objs]
+        self.assertEqual(len(obj_names), 7)
+        archive_settings = ArchiveSettings(archpath="file1.txt")
+        extracted_content_archpath = obj.get(
+            archive_settings=archive_settings
+        ).read_all()
+        self.assertEqual(extracted_content_archpath, content_dict["file1.txt"])
+
+        # PREFIX Mode
+        archive_settings = ArchiveSettings(regex="file2", mode=ArchiveMode.PREFIX)
+        extracted_content_regx = obj.get(archive_settings=archive_settings).read_all()
+        file_like_object = io.BytesIO(extracted_content_regx)
+        with tarfile.open(fileobj=file_like_object, mode="r:") as tar:
+            self.assertEqual(tar.getnames(), ["file2.txt", "file2.cls"])
+            file_content = tar.extractfile("file2.txt").read()
+            self.assertEqual(file_content, content_dict["file2.txt"])
+            file_content = tar.extractfile("file2.cls").read()
+            self.assertEqual(file_content, content_dict["file2.cls"])
+
+        # WDSKEY Mode
+        archive_settings = ArchiveSettings(regex="file3", mode=ArchiveMode.WDSKEY)
+        extracted_content_regx = obj.get(archive_settings=archive_settings).read_all()
+        file_like_object = io.BytesIO(extracted_content_regx)
+        with tarfile.open(fileobj=file_like_object, mode="r:") as tar:
+            self.assertEqual(tar.getnames(), ["file3.txt", "file3.cls"])
+            file_content = tar.extractfile("file3.txt").read()
+            self.assertEqual(file_content, content_dict["file3.txt"])
+            file_content = tar.extractfile("file3.cls").read()
+            self.assertEqual(file_content, content_dict["file3.cls"])
+
+    def _create_archive(self, archive_name, content_dict):
+        directory = os.path.dirname(archive_name)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        with tarfile.open(archive_name, "w") as tar:
+            for file_name, file_content in content_dict.items():
+                info = tarfile.TarInfo(name=file_name)
+                info.size = len(file_content)
+                tar.addfile(tarinfo=info, fileobj=io.BytesIO(file_content))
