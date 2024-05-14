@@ -77,8 +77,9 @@ var (
 		cmdGenShards: {
 			cleanupFlag,
 			concurrencyFlag,
-			dsortFsizeFlag,
-			dsortFcountFlag,
+			fsizeFlag,
+			fcountFlag,
+			fextsFlag,
 		},
 	}
 
@@ -454,10 +455,6 @@ func listArchHandler(c *cli.Context) error {
 //
 
 func genShardsHandler(c *cli.Context) error {
-	var (
-		fileCnt   = parseIntFlag(c, dsortFcountFlag)
-		concLimit = parseIntFlag(c, concurrencyFlag)
-	)
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing destination bucket and BASH brace extension template")
 	}
@@ -475,14 +472,25 @@ func genShardsHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var (
-		ext      = mime
-		template = strings.TrimSuffix(objname, ext)
-	)
 
-	fileSize, err := parseSizeFlag(c, dsortFsizeFlag)
+	fileCnt := parseIntFlag(c, fcountFlag)
+
+	fileSize, err := parseSizeFlag(c, fsizeFlag)
 	if err != nil {
 		return err
+	}
+
+	fileExts := []string{dfltFext}
+	if flagIsSet(c, fextsFlag) {
+		s := parseStrFlag(c, fextsFlag)
+		fileExts = splitCsv(s)
+
+		// file extension must start with "."
+		for i := range fileExts {
+			if fileExts[i][0] != '.' {
+				fileExts[i] = "." + fileExts[i]
+			}
+		}
 	}
 
 	mm, err := memsys.NewMMSA("cli-gen-shards", true /*silent*/)
@@ -491,6 +499,8 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
+	ext := mime
+	template := strings.TrimSuffix(objname, ext)
 	pt, err := cos.ParseBashTemplate(template)
 	if err != nil {
 		return err
@@ -503,6 +513,7 @@ func genShardsHandler(c *cli.Context) error {
 	var (
 		shardNum      int
 		progress      = mpb.New(mpb.WithWidth(barWidth))
+		concLimit     = parseIntFlag(c, concurrencyFlag)
 		concSemaphore = make(chan struct{}, concLimit)
 		group, ctx    = errgroup.WithContext(context.Background())
 		text          = "Shards created: "
@@ -536,7 +547,7 @@ loop:
 				sgl := mm.NewSGL(fileSize * int64(fileCnt))
 				defer sgl.Free()
 
-				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, fileSize); err != nil {
+				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, int(fileSize), fileExts); err != nil {
 					return err
 				}
 				putArgs := api.PutArgs{
@@ -560,19 +571,22 @@ loop:
 	return nil
 }
 
-func genOne(w io.Writer, ext string, start, end, fileCnt int, fileSize int64) (err error) {
+func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string) (err error) {
 	var (
 		random = cos.NowRand()
 		prefix = make([]byte, 10)
 		width  = len(strconv.Itoa(fileCnt))
-		oah    = cos.SimpleOAH{Size: fileSize, Atime: time.Now().UnixNano()}
+		oah    = cos.SimpleOAH{Size: int64(fileSize), Atime: time.Now().UnixNano()}
 		opts   = archive.Opts{CB: archive.SetTarHeader, Serialize: false}
-		writer = archive.NewWriter(ext, w, nil /*cksum*/, &opts)
+		writer = archive.NewWriter(shardExt, w, nil /*cksum*/, &opts)
 	)
 	for idx := start; idx < end && err == nil; idx++ {
 		random.Read(prefix)
-		name := fmt.Sprintf("%s-%0*d.test", hex.EncodeToString(prefix), width, idx)
-		err = writer.Write(name, oah, io.LimitReader(random, fileSize))
+
+		for _, fext := range fileExts {
+			name := fmt.Sprintf("%s-%0*d"+fext, hex.EncodeToString(prefix), width, idx)
+			err = writer.Write(name, oah, io.LimitReader(random, int64(fileSize)))
+		}
 	}
 	writer.Fini()
 	return

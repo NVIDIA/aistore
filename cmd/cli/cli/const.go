@@ -634,11 +634,21 @@ var (
 			indent1 + "\t(see also: 'ais show bucket versioning' and the corresponding documentation)",
 	}
 
+	// gen-shards
+	fsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
+	fcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files in a shard"}
+
+	dfltFext  = ".test"
+	fextsFlag = cli.StringFlag{
+		Name: "fext",
+		Usage: "comma-separated list of file extensions (default \"" + dfltFext + "\"), e.g.:\n" +
+			indent4 + "\t--fext .mp3\n" +
+			indent4 + "\t--fext '.mp3,.json,.cls' (or, same: \".mp3,  .json,  .cls\")",
+	}
+
 	// dsort
-	dsortFsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
-	dsortLogFlag    = cli.StringFlag{Name: "log", Usage: "filename to log metrics (statistics)"}
-	dsortFcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files in a shard"}
-	dsortSpecFlag   = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to JSON or YAML job specification"}
+	dsortLogFlag  = cli.StringFlag{Name: "log", Usage: "filename to log metrics (statistics)"}
+	dsortSpecFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to JSON or YAML job specification"}
 
 	cleanupFlag = cli.BoolFlag{
 		Name:  "cleanup",

@@ -677,6 +677,7 @@ The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must 
 | --- | --- | --- | --- |
 | `--fsize` | `string` | Single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
 | `--fcount` | `int` | Number of files inside single shard | `5` |
+| `--fext` | `string` |  Comma-separated list of file extensions (default ".test"), e.g.: --fext '.mp3,.json,.cls' | `.test` |
 | `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
 | `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
 
@@ -722,5 +723,35 @@ super_shard_004_last.tgz	1.25MiB	1
 super_shard_005_last.tgz	1.25MiB	1
 super_shard_006_last.tgz	1.25MiB	1
 super_shard_007_last.tgz	1.25MiB	1
+...
+```
+
+#### Multi-extension example
+
+
+```console
+$ ais archive gen-shards 'ais://nnn/shard-{01..99}.tar' -fext ".mp3,  .json,  .cls"
+
+$ ais archive ls ais://nnn | head -n 20
+NAME                                             SIZE
+shard-01.tar                                     23.50KiB
+    shard-01.tar/541701ae863f76d0f7e0-0.cls      1.00KiB
+    shard-01.tar/541701ae863f76d0f7e0-0.json     1.00KiB
+    shard-01.tar/541701ae863f76d0f7e0-0.mp3      1.00KiB
+    shard-01.tar/8f8c5fa2934c90138833-1.cls      1.00KiB
+    shard-01.tar/8f8c5fa2934c90138833-1.json     1.00KiB
+    shard-01.tar/8f8c5fa2934c90138833-1.mp3      1.00KiB
+    shard-01.tar/9a42bd12d810d890ea86-3.cls      1.00KiB
+    shard-01.tar/9a42bd12d810d890ea86-3.json     1.00KiB
+    shard-01.tar/9a42bd12d810d890ea86-3.mp3      1.00KiB
+    shard-01.tar/c5bd7c7a34e12ebf3ad3-2.cls      1.00KiB
+    shard-01.tar/c5bd7c7a34e12ebf3ad3-2.json     1.00KiB
+    shard-01.tar/c5bd7c7a34e12ebf3ad3-2.mp3      1.00KiB
+    shard-01.tar/f13522533ecafbad4fe5-4.cls      1.00KiB
+    shard-01.tar/f13522533ecafbad4fe5-4.json     1.00KiB
+    shard-01.tar/f13522533ecafbad4fe5-4.mp3      1.00KiB
+shard-02.tar                                     23.50KiB
+    shard-02.tar/095e6ae644ff4fd1778b-7.cls      1.00KiB
+    shard-02.tar/095e6ae644ff4fd1778b-7.json     1.00KiB
 ...
 ```
