@@ -71,34 +71,39 @@ const (
 	QparamLogOff  = "offset"
 	QparamAllLogs = "all"
 
-	// - intended for usage with sharded datasets, whereby the shards are .tar, .tgz (or .tar.gz), .zip, or .tar.lz4
-	//   archives;
-	// - specifies archived pathname and expected format (mime type) of the containing shard; the latter is
-	//   especially usable with non-standard shard name extensions;
-	// See also:
-	// - next two query parameters (below)
-	// - docs/archive.md or cmn/archive/mime.go for the most recently updated list of supported serialization formats.
+	// The following 4 (four) QparamArch* parameters are all intended for usage with sharded datasets,
+	// whereby the shards are (.tar, .tgz (or .tar.gz), .zip, and/or .tar.lz4) formatted objects.
+	//
+	// For the most recently updated list of supported serialization formats, please see cmn/archive package.
+	//
+	// "archpath" and "archmime", respectively, specify archived pathname and expected format (mime type)
+	// of the containing shard; the latter is especially usable with non-standard shard name extensions;
 	QparamArchpath = "archpath"
 	QparamArchmime = "archmime"
 
-	// - the following two closely related query params intended for usage with sharded datasets - in particular:
-	// - "archregx" specifies prefix, suffix, WebDataset key, or gen-purpose regular expression
-	//   that can be used to match archived filenames, and select possibly multiple files
-	//   (that will be then return to user in one shot);
+	// In addition, the following two closely related parameters can be used to select multiple matching files
+	// from a given shard.
+	//
+	// In particular, "archregx" specifies prefix, suffix, WebDataset key, _or_ general-purpose regular expression
+	// that can be used to match archived filenames, and select possibly multiple files
+	// (that will be then archived as a TAR and returned in one shot);
 	QparamArchregx = "archregx"
 
-	// - "archmode", on the other hand, tells aistore whether to interpret "regx" string (above) as a
-	//   a gen-purpose regular expression or, alternatively, use it for a simple and fast string comparison;
-	// - the latter is further formalized as `MatchMode` enum in the cmn/archive package,
-	//   with enumerated values including: "regexp", "prefix", "suffix", "substr", "wdskey".
-	// - for example:
+	// "archmode", on the other hand, tells aistore whether to interpret "archregx" (above) as a
+	// a general-purpose regular expression or, alternatively, use it for a simple and fast string comparison;
+	// the latter is further formalized as `MatchMode` enum in the cmn/archive package,
+	// with enumerated values including: "regexp", "prefix", "suffix", "substr", "wdskey".
+	//
+	// for example:
 	// - given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
 	//   and "wdskey" = "subdir/aaa", aistore will match and return (subdir/aaa.jpg, subdir/aaa.json).
-	// See also:
-	// - https://github.com/webdataset/webdataset - for WebDataset
-	// - docs/archive.md                          - for usage and examples
-	// - cmn/archive                              - for the most recently updated enumeration
 	QparamArchmode = "archmode" // see `MatchMode` enum in cmn/archive/read
+
+	// See also:
+	// - https://github.com/webdataset/webdataset                     - for WebDataset
+	// - docs/cli/archive.md                                          - for usage and examples
+	// - docs/cli/archive.md#get-archived-content-multiple-selection  - multi-selection usage and examples
+	// - cmn/archive                                                  - the most recently updated "archmode" enumeration
 
 	// Skip loading existing object's metadata, in part to
 	// compare its Checksum and update its existing Version (if exists).

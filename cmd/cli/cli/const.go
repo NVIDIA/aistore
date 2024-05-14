@@ -854,7 +854,7 @@ var (
 	}
 	archregxFlag = cli.StringFlag{ // for apc.QparamArchregx
 		Name: "archregx",
-		Usage: "string that specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression\n" +
+		Usage: "specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression\n" +
 			indent4 + "\tto select possibly multiple matching archived files from a given shard;\n" +
 			indent4 + "\tis used in combination with '--archmode' (\"matching mode\") option",
 	}
