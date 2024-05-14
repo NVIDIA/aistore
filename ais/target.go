@@ -728,14 +728,20 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
 		goi.latestVer = _validateWarmGet(goi.lom, dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
 	}
-	// apc.QparamArchpath & apc.QparamArchmime, respectively
-	if dpq.arch.path != "" {
-		if strings.HasPrefix(dpq.arch.path, lom.ObjName) {
-			if rel, err := filepath.Rel(lom.ObjName, dpq.arch.path); err == nil {
-				dpq.arch.path = rel
+	if dpq.isArch() {
+		if goi.ranges.Range != "" {
+			details := fmt.Sprintf("range: %s, arch query: %s", goi.ranges.Range, goi.dpq._archstr())
+			return lom, cmn.NewErrUnsupp("range-read archived content", details)
+		}
+		if dpq.arch.path != "" {
+			if strings.HasPrefix(dpq.arch.path, lom.ObjName) {
+				if rel, err := filepath.Rel(lom.ObjName, dpq.arch.path); err == nil {
+					dpq.arch.path = rel
+				}
 			}
 		}
 	}
+
 	// apc.QparamOrigURL
 	if bck.IsHTTP() {
 		originalURL := dpq.origURL

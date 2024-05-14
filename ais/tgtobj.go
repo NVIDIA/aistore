@@ -963,10 +963,12 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		lmfh *os.File
 		hrng *htrange
 		fqn  = goi.lom.FQN
+		dpq  = goi.dpq
 	)
-	if !goi.cold && !goi.dpq.isGFN {
+	if !goi.cold && !dpq.isGFN {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
+	// open
 	lmfh, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -977,122 +979,79 @@ func (goi *getOI) txfini() (ecode int, err error) {
 			ecode = http.StatusInternalServerError
 			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", goi.lom.Cname(), err, ecode)
 		}
-		return
+		return ecode, err
 	}
 
 	whdr := goi.w.Header()
-	if goi.ranges.Range != "" {
+
+	// transmit (range, arch, regular)
+	switch {
+	case goi.ranges.Range != "":
+		debug.Assert(!dpq.isArch())
 		rsize := goi.lom.SizeBytes()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
 		}
 		if hrng, ecode, err = goi.rngToHeader(whdr, rsize); err != nil {
-			goto ret
+			break
 		}
-		if goi.dpq.arch.path != "" {
-			err = cmn.NewErrUnsupp("range-read archived file", goi.dpq.arch.path)
-			ecode = http.StatusRequestedRangeNotSatisfiable
-			goto ret
+		err = goi._txrng(fqn, lmfh, whdr, hrng)
+	case dpq.isArch():
+		err = goi._txarch(fqn, lmfh, whdr)
+	default:
+		err = goi._txreg(fqn, lmfh, whdr)
+	}
+
+	cos.Close(lmfh)
+	return ecode, err
+}
+
+func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htrange) (err error) {
+	var (
+		r     io.Reader
+		lom   = goi.lom
+		sgl   *memsys.SGL
+		cksum = lom.Checksum()
+		size  int64
+	)
+	ckconf := lom.CksumConf()
+	cksumRange := ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
+	size = hrng.Length
+	r = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
+	if cksumRange {
+		sgl = goi.t.gmm.NewSGL(size)
+		_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
+		if err != nil {
+			sgl.Free()
+			return err
 		}
-		if goi.dpq.arch.regx != "" {
-			err = cmn.NewErrUnsupp("range-read matching archived files", goi.dpq.arch.regx)
-			ecode = http.StatusRequestedRangeNotSatisfiable
-			goto ret
+		r = sgl
+		if cksumH != nil {
+			cksum = &cksumH.Cksum
 		}
 	}
-	err = goi._txfini(fqn, lmfh, whdr, hrng)
-ret:
-	cos.Close(lmfh)
-	return
+
+	// set response header
+	whdr.Set(cos.HdrContentType, cos.ContentBinary)
+	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
+
+	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
+	err = goi.transmit(r, buf, fqn)
+	slab.Free(buf)
+	if sgl != nil {
+		sgl.Free()
+	}
+	return err
 }
 
 // in particular, setup reader and writer and set headers
-func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htrange) (err error) {
+func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error) {
 	var (
-		reader io.Reader = lmfh
-		dpq              = goi.dpq
-		lom              = goi.lom
-		sgl    *memsys.SGL
-		cksum  *cos.Cksum
-		size   int64
+		dpq   = goi.dpq
+		lom   = goi.lom
+		cksum = lom.Checksum()
+		size  = lom.SizeBytes()
 	)
-	switch {
-	case dpq.arch.path != "" || dpq.arch.mmode != "": // archive
-		var (
-			mime string
-			ar   archive.Reader
-		)
-		mime, err = archive.MimeFile(lmfh, goi.t.smm, dpq.arch.mime, lom.ObjName)
-		if err != nil {
-			return err
-		}
-		ar, err = archive.NewReader(mime, lmfh, lom.SizeBytes())
-		if err != nil {
-			return fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
-		}
-
-		if dpq.arch.path != "" {
-			debug.Assert(dpq.arch.mmode == "", dpq.arch.mmode)
-			var csl cos.ReadCloseSizer
-			csl, err = ar.ReadOne(dpq.arch.path)
-			if err != nil {
-				return cmn.NewErrFailedTo(goi.t, "extract "+dpq._archstr()+" from", lom.Cname(), err)
-			}
-			if csl == nil {
-				return cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
-			}
-			// found
-			defer func() {
-				csl.Close()
-			}()
-			reader, size = csl, csl.Size()
-
-			// TODO -- FIXME: remove these two?
-			whdr.Set(apc.HdrArchmime, mime)
-			whdr.Set(apc.HdrArchpath, dpq.arch.path)
-
-			// NOTE: always none
-			cksum = cos.NoneCksum
-		} else {
-			// NOTE: TAR & transmit directly; return right away
-			debug.Assert(dpq.arch.mmode != "")
-			rcb := _newRcb(goi.w)
-			whdr.Set(cos.HdrContentType, cos.ContentTar)
-			err = ar.ReadUntil(rcb, dpq.arch.regx, dpq.arch.mmode)
-			if err != nil {
-				err = cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
-			}
-			if err == nil && rcb.num == 0 {
-				return cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
-			}
-			rcb.fini()
-			return err
-		}
-
-	case hrng != nil: // range
-		cksum = lom.Checksum()
-		ckconf := lom.CksumConf()
-		cksumRange := ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
-		size = hrng.Length
-		reader = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
-		if cksumRange {
-			sgl = goi.t.gmm.NewSGL(size)
-			_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, reader, nil, ckconf.Type)
-			if err != nil {
-				sgl.Free()
-				return err
-			}
-			reader = sgl
-			if cksumH != nil {
-				cksum = &cksumH.Cksum
-			}
-		}
-	default:
-		// regular (whole object) case
-		size = lom.SizeBytes()
-		cksum = lom.Checksum()
-	}
-
 	// set response header
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
@@ -1102,13 +1061,61 @@ func (goi *getOI) _txfini(fqn string, lmfh *os.File, whdr http.Header, hrng *htr
 	}
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
-	err = goi.transmit(reader, buf, fqn)
+	err = goi.transmit(lmfh, buf, fqn)
 	slab.Free(buf)
+	return err
+}
 
-	if sgl != nil {
-		sgl.Free()
+// TODO: checksum
+func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
+	var (
+		ar  archive.Reader
+		dpq = goi.dpq
+		lom = goi.lom
+	)
+	mime, err := archive.MimeFile(lmfh, goi.t.smm, dpq.arch.mime, lom.ObjName)
+	if err != nil {
+		return err
 	}
-	return nil
+	ar, err = archive.NewReader(mime, lmfh, lom.SizeBytes())
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
+	}
+
+	// single
+	if dpq.arch.path != "" {
+		debug.Assert(dpq.arch.mmode == "", dpq.arch.mmode)
+		var csl cos.ReadCloseSizer
+		csl, err = ar.ReadOne(dpq.arch.path)
+		if err != nil {
+			return cmn.NewErrFailedTo(goi.t, "extract "+dpq._archstr()+" from", lom.Cname(), err)
+		}
+		if csl == nil {
+			return cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
+		}
+		// found
+		whdr.Set(cos.HdrContentType, cos.ContentBinary)
+		buf, slab := goi.t.gmm.AllocSize(min(csl.Size(), memsys.DefaultBuf2Size))
+		err = goi.transmit(csl, buf, fqn)
+		slab.Free(buf)
+		csl.Close()
+		return err
+	}
+
+	// multi match; writing & streaming tar =>(directly)=> response writer
+	debug.Assert(dpq.arch.mmode != "")
+	rcb := _newRcb(goi.w)
+	whdr.Set(cos.HdrContentType, cos.ContentTar)
+	err = ar.ReadUntil(rcb, dpq.arch.regx, dpq.arch.mmode)
+	if err != nil {
+		err = cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
+	}
+	if err == nil && rcb.num == 0 {
+		// none found
+		return cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
+	}
+	rcb.fini()
+	return err
 }
 
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
@@ -1811,7 +1818,7 @@ func (t *target) putMirror(lom *core.LOM) {
 	xputlrep.Repl(lom)
 }
 
-// archive rcb // TODO:
+// TODO:
 // - CopyBuffer
 // - currently, only tar - add message pack (what else?)
 // - Call(..., *tar.Header) to avoid typecast
@@ -1826,11 +1833,14 @@ var _ archive.ArchRCB = (*rcbCtx)(nil)
 
 func _newRcb(w io.Writer) (c *rcbCtx) {
 	c = &rcbCtx{w: w}
-	c.tw = tar.NewWriter(c.w)
 	return c
 }
 
 func (c *rcbCtx) Call(_ string, reader cos.ReadCloseSizer, hdr any) (_ bool /*stop*/, err error) {
+	if c.tw == nil {
+		debug.Assert(c.num == 0)
+		c.tw = tar.NewWriter(c.w)
+	}
 	c.num++
 	tarHdr, ok := hdr.(*tar.Header)
 	debug.Assert(ok)
@@ -1841,7 +1851,10 @@ func (c *rcbCtx) Call(_ string, reader cos.ReadCloseSizer, hdr any) (_ bool /*st
 }
 
 func (c *rcbCtx) fini() {
-	c.tw.Close()
+	if c.tw != nil {
+		debug.Assert(c.num > 0)
+		c.tw.Close()
+	}
 }
 
 //

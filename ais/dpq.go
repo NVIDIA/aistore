@@ -75,7 +75,7 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		} else {
 			query = ""
 		}
-		if k, v, ok := keyEQval(key); ok {
+		if k, v, ok := _dpqKeqV(key); ok {
 			key, value = k, v
 		}
 		// supported URL query parameters explicitly named below; attempt to parse anything
@@ -149,6 +149,18 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 	return
 }
 
+func _dpqKeqV(s string) (string, string, bool) {
+	if i := strings.IndexByte(s, '='); i > 0 {
+		return s[:i], s[i+1:], true
+	}
+	return s, "", false
+}
+
+//
+// archive query
+//
+
+// parse & validate
 func (dpq *dpq) _arch(key, val string) (err error) {
 	switch key {
 	case apc.QparamArchpath:
@@ -164,23 +176,19 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 		return err
 	}
 	// either/or
-	if dpq.arch.path != "" && dpq.arch.mmode != "" { // (empty regx is fine, is EmptyMatchAny)
+	if dpq.arch.path != "" && dpq.arch.mmode != "" { // (empty arch.regx is fine - is EmptyMatchAny)
 		err = fmt.Errorf("query parameters archpath=%q (match one) and archregx=%q (match many) are mutually exclusive",
 			apc.QparamArchpath, apc.QparamArchregx)
 	}
 	return err
 }
 
+func (dpq *dpq) isArch() bool { return dpq.arch.path != "" || dpq.arch.mmode != "" }
+
+// err & log
 func (dpq *dpq) _archstr() string {
 	if dpq.arch.path != "" {
-		return "\"" + dpq.arch.path + "\""
+		return fmt.Sprintf("(%s=%s)", apc.QparamArchpath, dpq.arch.path)
 	}
-	return fmt.Sprintf("(archregx=%q, archmode=%q)", dpq.arch.regx, dpq.arch.mmode)
-}
-
-func keyEQval(s string) (string, string, bool) {
-	if i := strings.IndexByte(s, '='); i > 0 {
-		return s[:i], s[i+1:], true
-	}
-	return s, "", false
+	return fmt.Sprintf("(%s=%s, %s=%s)", apc.QparamArchregx, dpq.arch.regx, apc.QparamArchmode, dpq.arch.mmode)
 }

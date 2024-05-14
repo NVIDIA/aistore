@@ -14,9 +14,12 @@ const (
 	ContentXML            = "application/xml"
 	ContentBinary         = "application/octet-stream"
 
-	// not currently used:
+	// not present in IANA registry
+	// mozilla.org has it though, and also https://en.wikipedia.org/wiki/List_of_archive_formats
+	ContentTar = "application/x-tar"
+
+	// not currently used
 	ContentZip = "application/zip"
-	ContentTar = "application/x-tar" // not present in IANA reg, mozilla.org has it though
 )
 
 // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers

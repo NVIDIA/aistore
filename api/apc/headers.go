@@ -55,10 +55,6 @@ const (
 	HdrObjCustomMD  = HeaderPrefix + "custom-md"      // Object custom metadata.
 	HdrObjVersion   = HeaderPrefix + "version"        // Object version/generation - ais or cloud.
 
-	// Archive filename and format (mime type)
-	HdrArchpath = HeaderPrefix + "archpath"
-	HdrArchmime = HeaderPrefix + "archmime"
-
 	// Append object header.
 	HdrAppendHandle = HeaderPrefix + "append-handle"
 
