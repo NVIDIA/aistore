@@ -284,8 +284,8 @@ var _ = Describe("Common file", func() {
 
 	Context("ParseBool", func() {
 		It("should correctly parse different values into bools", func() {
-			trues := []string{"1", "ON", "yes", "Y", "trUe"}
-			falses := []string{"0", "off", "No", "n", "falsE", ""}
+			trues := []string{"y", "yes", "on", "1", "t", "T", "true", "TRUE", "True"}
+			falses := []string{"n", "no", "off", "0", "f", "F", "false", "FALSE", "False", ""}
 			errs := []string{"2", "enable", "nothing"}
 
 			for _, s := range trues {

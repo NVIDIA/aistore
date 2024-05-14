@@ -118,18 +118,27 @@ func getHandler(c *cli.Context) error {
 	if err := a.init(c); err != nil {
 		return err
 	}
-	if actionIsHandler(c.Command.Action, getArchHandler) {
-		extract = true // extractFlag is implied unless:
 
-		if a.archpath != "" {
-			extract = false
-		} else if oname, fname := splitObjnameShardBoundary(objName); fname != "" {
-			objName = oname
-			a.archpath = fname
-			extract = false
+	extract = flagIsSet(c, extractFlag)
+
+	// NOTE: unlike 'ais get' 'ais archive get' further implies:
+	// - full extraction of the source shard when neither single- nor multi-selection specified;
+	// - implicit archpath given one of the supported archival extensions in the source name
+
+	if actionIsHandler(c.Command.Action, getArchHandler) {
+		if a.archpath == "" {
+			if oname, fname := splitObjnameShardBoundary(objName); fname != "" {
+				objName = oname
+				a.archpath = fname
+				// revalidate
+				if _, err := archive.ValidateMatchMode(a.archmode); err != nil {
+					return err
+				}
+			}
 		}
-	} else {
-		extract = flagIsSet(c, extractFlag)
+		if a.archpath == "" && a.archmode == "" {
+			extract = true
+		}
 	}
 
 	// validate '--extract' and '--archpath' vs other command line

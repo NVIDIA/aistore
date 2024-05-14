@@ -117,11 +117,15 @@ var (
 			indent4 + "\t- '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);\n" +
 			indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
 			indent4 + "\t- '-v' to produce verbose output when getting multiple objects.\n" +
-			indent1 + "Examples:\n" +
-			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4 /tmp/out - extract entire shard to /tmp/out/trunk...\n" +
-			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4/file456 /tmp/out - extract one named file\n" +
-			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4 --archpath file456 /tmp/out - same as above\n" +
-			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4/file456 /tmp/out/file456.new - same as above w/ rename",
+			indent1 + "'ais archive get' examples:\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar.lz4 /tmp/out - get and extract entire shard to /tmp/out/trunk/*\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar.lz4 --archpath file45.jpeg /tmp/out - extract one named file\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar.lz4/file45.jpeg /tmp/out - same as above (and note that '--archpath' is implied)\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar.lz4/file45 /tmp/out/file456.new - same as above, with destination explicitly (re)named\n" +
+			indent1 + "'ais archive get' multi-selection examples:\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar 111.tar --archregx=jpeg --archmode=suffix - return 111.tar with all *.jpeg files from a given shard\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar 222.tar --archregx=file45 --archmode=wdskey - return 222.tar with all file45.* files --/--\n" +
+			indent4 + "\t- ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--",
 		ArgsUsage:    getShardArgument,
 		Flags:        rmFlags(objectCmdGet.Flags, headObjPresentFlag, lengthFlag, offsetFlag),
 		Action:       getArchHandler,
