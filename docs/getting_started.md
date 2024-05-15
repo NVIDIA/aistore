@@ -121,43 +121,112 @@ To install Go(lang) on Linux:
 
 Next, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
-Here's an additional [5-minute introduction](/deploy/dev/local/README.md) that talks about setting up the Go environment and also includes:
+Here's an additional [5-minute introduction](/deploy/dev/local/README.md) that talks more in-depth about setting up the Go environment variables.
 
-* provisioning data drives for AIS deployment, and
-* running a single-node AIS cluster locally.
+Once done, we can run AIS as follows:
 
-Once done, run AIS as follows:
 
-### From source
+## Step 1: Clone the AIStore repository and preload dependencies
 
-The steps:
+We want to clone the repository into the following path so we can access
+some of the associated binaries through the environment variables we set up earlier.
 
 ```console
 $ cd $GOPATH/src/github.com/NVIDIA
 $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore
 # Optionally, run `make mod-tidy` to preload dependencies
-$ ./scripts/clean_deploy.sh
-
-$ ais show cluster
 ```
-where:
 
-* [`clean_deploy.sh`](/docs/development.md#clean-deploy) with no arguments builds AIStore binaries (such as `aisnode` and `ais` CLI)
-and then deploys a local cluster with 5 proxies and 5 targets. Examples:
+## Step 2: Deploy cluster and verify the running status using `ais` cli
+
+> **NOTE**: For a local deployment, we do not need production filesystem paths. For more information, read about [configuration basics](/docs/configuration.md#rest-of-this-document-is-structured-as-follows). If you need a physical disk or virtual block device, you must add them to the fspaths config. See [running local playground with emulated disks](#running-local-playground-with-emulated-disks) for more information.
+> 
+
+Now, we can use AIS's build system `make` to deploy a basic local cluster. Run 
 
 ```console
-# Deploy 7 targets and 1 proxy:
-$ clean_deploy.sh --proxy-cnt 1 --target-cnt 7
-
-# Same as above, plus built-in support for GCP (cloud storage):
-$ clean_deploy.sh --proxy-cnt 1 --target-cnt 7 --gcp
+# Deploy 1 target and 1 proxy AIS cluster
+$ make kill clean cli deploy <<< $'1\n1\n1\nn\nn\nn\n0\n'
+```
+OR
+```console
+$ make kill clean # kill previous cluster and clean any binaries
+$ make cli # build ais cli
+$ make deploy
+Enter number of storage targets:
+1
+Enter number of proxies (gateways):
+1
+Number of local mountpaths (enter 0 for preconfigured filesystems):
+1
+Select backend providers:
+Amazon S3: (y/n) ?
+n
+Google Cloud Storage: (y/n) ?
+n
+Azure: (y/n) ?
+n
+Loopback device size, e.g. 10G, 100M (press Enter to skip):
 ```
 
-For more options and usage examples:
+You should see a successful deployment in the output when the AIS proxy is listening on port 8080 (unless changed in config).
 
-* run `make help`
-* see [`clean_deploy.sh`](/docs/development.md#clean-deploy).
+```
+Building aisnode 2ce1aaeb1 [build tags: mono]
+done.
+Proxy is listening on port: 8080
+Primary endpoint: http://localhost:8080
+```
+
+Note that [`clean_deploy.sh`](/docs/development.md#clean-deploy) with no arguments also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses.
+
+```console
+$ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1 --deployment local
+```
+
+We can verify that the cluster is running using:
+
+```console
+$ ais show cluster
+
+# Example output below
+PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION                 BUILD TIME
+p[FAEp8080][P]   0.13%           29.31GiB        [0.4 0.2 0.2]   -       online  3.23.rc3.2ce1aaeb1      2024-05-15T16:19:05-0700
+
+TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       LOAD AVERAGE    REBALANCE       UPTIME  STATUS  VERSION                 BUILD TIME
+t[hgjt8081]      0.13%           29.31GiB        39%             21.999GiB       [0.4 0.2 0.2]   -               -       online  3.23.rc3.2ce1aaeb1      2024-05-15T16:19:05-0700
+
+Summary:
+   Proxies:             1
+   Targets:             1 (one disk)
+   Capacity:            used 14.61GiB (39%), available 22.00GiB
+   Cluster Map:         version 5, UUID PrVDVYkcT, primary p[FAEp8080]
+   Deployment:          dev
+   Status:              2 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.23.rc3.2ce1aaeb1
+   Build:               2024-05-15T16:19:05-0700
+```
+
+If you get repreated errors indicating that the cluster is taking a long time to start up, then your configuration is incorrect.
+
+## Step 3: Run `aisloader` tool
+
+We can now run the `aisloader` tool to benchmark our new cluster.
+
+```console
+$ make aisloader # build aisloader tool
+
+$ aisloader -bucket=ais://abc -duration 2m -numworkers=8 -minsize=1K -maxsize=1K -pctput=100 --cleanup=false # run aisloader for 2 minutes (8 workers, 1KB size, 100% write, no cleanup)
+```
+
+## Step 4: Run iostat (or use any of the multiple [documented](/docs/prometheus.md) ways to monitor AIS performance)
+
+```console
+$ iostat -dxm 10 sda sdb
+```
 
 ### Running Local Playground with emulated disks
 
