@@ -205,3 +205,14 @@ func TestRemaisBlobDownloadScript(t *testing.T) {
 	}
 	tassert.CheckFatal(t, err)
 }
+
+// get-archregx-wdskey.sh
+func TestGetArchregxWdskeyScript(t *testing.T) {
+	cmd := exec.Command("./scripts/get-archregx-wdskey.sh")
+
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
