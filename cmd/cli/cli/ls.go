@@ -24,6 +24,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+const listedText = "Listed"
+
 type (
 	lsbFooter struct {
 		pct        int
@@ -368,7 +370,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}
-	pageSize, limit, err := _setPage(c, bck)
+	pageSize, maxPages, limit, err := _setPage(c, bck)
 	if err != nil {
 		return err
 	}
@@ -394,7 +396,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 	// list (and immediately show) pages, one page at a time
 	if flagIsSet(c, pagedFlag) {
-		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), int(limit)
+		pageCounter, toShow := 0, int(limit)
 		for {
 			if catOnly {
 				now = mono.NanoTime()
@@ -426,7 +428,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 				return nil
 			}
 			pageCounter++
-			if maxPages > 0 && pageCounter >= maxPages {
+			if maxPages > 0 && pageCounter >= int(maxPages) {
 				return nil
 			}
 			if limit > 0 {
@@ -441,7 +443,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	// alternatively (when `--paged` not specified) list all pages up to a limit, show progress
 	var (
 		callAfter = listObjectsWaitTime
-		u         = &_listed{c: c, bck: &bck}
+		u         = &_listed{c: c, bck: &bck, limit: int(limit)}
 	)
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
@@ -469,7 +471,8 @@ func lsoErr(msg *apc.LsoMsg, err error) error {
 	return V(err)
 }
 
-func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int64, err error) {
+func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err error) {
+	maxPages = int64(parseIntFlag(c, maxPagesFlag))
 	b := meta.CloneBck(&bck)
 	if flagIsSet(c, pageSizeFlag) {
 		pageSize = int64(parseIntFlag(c, pageSizeFlag))
@@ -494,8 +497,11 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int64, err error) {
 
 	limit = int64(parseIntFlag(c, objLimitFlag))
 	if limit < 0 {
-		err = fmt.Errorf("invalid %s: max number of listed objects (%d) cannot be negative", qflprn(objLimitFlag), limit)
+		err = fmt.Errorf("invalid %s=%d: max number of objects to list cannot be negative", qflprn(objLimitFlag), limit)
 		return
+	}
+	if limit == 0 && maxPages > 0 {
+		limit = maxPages * b.MaxPageSize()
 	}
 	if limit == 0 {
 		return
@@ -542,10 +548,9 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	}
 
 	// count and time only
-	const listed = "Listed:"
 	if now > 0 {
 		elapsed := teb.FormatDuration(mono.Since(now))
-		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names (elapsed "+elapsed+")")
+		fmt.Fprintln(c.App.Writer, listedText, cos.FormatBigNum(len(matched)), "names in", elapsed)
 		return nil
 	}
 
@@ -557,7 +562,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	}
 
 	if !hideFooter && len(matched) > 10 {
-		fmt.Fprintln(c.App.Writer, fblue(listed), cos.FormatBigNum(len(matched)), "names")
+		fmt.Fprintln(c.App.Writer, fblue(listedText), cos.FormatBigNum(len(matched)), "names")
 	}
 	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
 		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))
@@ -668,37 +673,43 @@ func splitObjnameShardBoundary(fullName string) (objName, fileName string) {
 /////////////
 
 type _listed struct {
-	c   *cli.Context
-	bck *cmn.Bck
-	l   int
+	c     *cli.Context
+	bck   *cmn.Bck
+	limit int
+	l     int
+	done  bool
 }
 
 func (u *_listed) cb(ctx *api.LsoCounter) {
-	if ctx.Count() < 0 {
+	if ctx.Count() < 0 || u.done {
 		return
 	}
-	if !ctx.IsFinished() {
-		s := "Listed " + cos.FormatBigNum(ctx.Count()) + " objects"
-		if u.l == 0 {
-			u.l = len(s) + 3
-			if u.bck.IsRemote() {
-				var tip string
-				if flagIsSet(u.c, listObjCachedFlag) {
-					tip = fmt.Sprintf("use %s to show pages immediately - one page at a time", qflprn(pagedFlag))
-				} else {
-					tip = fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
-				}
-				note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
-				actionNote(u.c, note)
-			}
-		} else if len(s) > u.l {
-			u.l = len(s) + 2
+	if ctx.IsFinished() || (u.limit > 0 && u.limit <= ctx.Count()) {
+		u.done = true
+		if !flagIsSet(u.c, noFooterFlag) && !flagIsSet(u.c, countAndTimeFlag) {
+			elapsed := teb.FormatDuration(ctx.Elapsed())
+			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigNum(ctx.Count()), elapsed)
+			briefPause(1)
 		}
-		s += strings.Repeat(" ", u.l-len(s))
-		fmt.Fprintf(u.c.App.Writer, "\r%s", s)
-	} else if !flagIsSet(u.c, noFooterFlag) {
-		elapsed := teb.FormatDuration(ctx.Elapsed())
-		fmt.Fprintf(u.c.App.Writer, "\rListed %s objects in %v\n", cos.FormatBigNum(ctx.Count()), elapsed)
-		briefPause(1)
+		return
 	}
+
+	s := listedText + " " + cos.FormatBigNum(ctx.Count()) + " names"
+	if u.l == 0 {
+		u.l = len(s) + 3
+		if u.bck.IsRemote() {
+			var tip string
+			if flagIsSet(u.c, listObjCachedFlag) {
+				tip = fmt.Sprintf("use %s to show pages immediately - one page at a time", qflprn(pagedFlag))
+			} else {
+				tip = fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
+			}
+			note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
+			actionNote(u.c, note)
+		}
+	} else if len(s) > u.l {
+		u.l = len(s) + 2
+	}
+	s += strings.Repeat(" ", u.l-len(s))
+	fmt.Fprintf(u.c.App.Writer, "\r%s", s)
 }

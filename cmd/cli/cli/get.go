@@ -202,7 +202,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	if flagIsSet(c, getObjCachedFlag) {
 		msg.SetFlag(apc.LsObjCached)
 	}
-	pageSize, limit, err := _setPage(c, bck)
+	pageSize, _, limit, err := _setPage(c, bck)
 	if err != nil {
 		return err
 	}
