@@ -141,15 +141,16 @@ $ cd aistore
 ## Step 2: Deploy cluster and verify the running status using `ais` cli
 
 > **NOTE**: For a local deployment, we do not need production filesystem paths. For more information, read about [configuration basics](/docs/configuration.md#rest-of-this-document-is-structured-as-follows). If you need a physical disk or virtual block device, you must add them to the fspaths config. See [running local playground with emulated disks](#running-local-playground-with-emulated-disks) for more information.
-> 
 
-Now, we can use AIS's build system `make` to deploy a basic local cluster. Run 
+Many useful commands are provided via top [Makefile](https://github.com/NVIDIA/aistore/blob/main/Makefile) (for details, see [Make](#make) section below).
+
+In particular, we can use `make` to deploy our very first 1-node cluster:
 
 ```console
-# Deploy 1 target and 1 proxy AIS cluster
 $ make kill clean cli deploy <<< $'1\n1\n1\nn\nn\nn\n0\n'
 ```
-OR
+
+OR (same):
 ```console
 $ make kill clean # kill previous cluster and clean any binaries
 $ make cli # build ais cli
@@ -393,7 +394,7 @@ All [containerized deployments](/deploy/README.md) have their own separate `Make
 
 > This separation is typically small in size and easily readable and maintainable.
 
-Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](./../Makefile).
+Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](https://github.com/NVIDIA/aistore/blob/main/Makefile).
 
 In the software, _type of the deployment_ is also present in some minimal way. In particular, to overcome certain limitations of [Local Playground](#local-playground) (single disk shared by multiple targets, etc.) - we need to know the _type_. Which can be:
 
