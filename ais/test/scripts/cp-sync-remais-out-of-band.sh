@@ -3,10 +3,13 @@
 ## Prerequisites: #################################################################################
 # - cloud bucket
 # - aistore cluster
-# - remote aistore cluster (referred to as "remais")
+# - remote aistore cluster (referred to by its "remais" alias)
 #
-## Example usage:
-## ./ais/test/scripts/cp-sync-remais-out-of-band.sh --bucket s3://abc      ########################
+## Usage:
+## cp-sync-remais-out-of-band.sh --bucket BUCKET       ### NOTE: requires cloud bucket
+##
+## Example:
+## cp-sync-remais-out-of-band.sh --bucket s3://abc      ########################
 
 if ! [ -x "$(command -v ais)" ]; then
   echo "Error: ais (CLI) not installed" >&2

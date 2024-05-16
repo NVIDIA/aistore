@@ -6,13 +6,16 @@
 # - locally accessible (source) directory that MAY contain large files (see examples below)
 # - any aistore bucket
 #
-## Example usage:
+## Examples:
 ## 1. use existing large files and run 8 iterations
-##    ./ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 8
+##    s3-mpt-large-files.sh /tmp/largefiles s3://abc 8
+#
 ## 2. generate (the default number of) large files, run 16 iterations
-##    ./ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true
+##    s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true
+#
 ## 3. same as above w/ 10 generated large files
-##    ./ais/test/scripts/s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true 10
+##    s3-mpt-large-files.sh /tmp/largefiles s3://abc 16 true 10
+#
 # #######################################################################################################
 
 # command line

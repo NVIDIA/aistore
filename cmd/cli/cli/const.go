@@ -449,7 +449,7 @@ var (
 
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
-	noFooterFlag = cli.BoolFlag{Name: "no-footers", Usage: "display tables without footers"}
+	noFooterFlag = cli.BoolFlag{Name: "no-footers,F", Usage: "display tables without footers"}
 
 	progressFlag = cli.BoolFlag{Name: "progress", Usage: "show progress bar(s) and progress of execution in real time"}
 	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
@@ -520,6 +520,10 @@ var (
 		Name: "paged",
 		Usage: "list objects page by page - one page at a time (see also '--page-size' and '--limit')\n" +
 			indent4 + "\tnote: recommended for use with very large buckets",
+	}
+	countAndTimeFlag = cli.BoolFlag{
+		Name:  "count-and-time-only",
+		Usage: "print only the resulting number of listed objects and elapsed time",
 	}
 
 	// bucket summary

@@ -384,10 +384,21 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		}
 	}
 
+	var (
+		now     int64
+		catOnly = flagIsSet(c, countAndTimeFlag)
+	)
+	if catOnly && flagIsSet(c, noFooterFlag) {
+		warn := fmt.Sprintf(errFmtExclusive, qflprn(countAndTimeFlag), qflprn(noFooterFlag))
+		actionWarn(c, warn)
+	}
 	// list (and immediately show) pages, one page at a time
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), int(limit)
 		for {
+			if catOnly {
+				now = mono.NanoTime()
+			}
 			objList, err := api.ListObjectsPage(apiBP, bck, msg, lsargs)
 			if err != nil {
 				return lsoErr(msg, err)
@@ -401,7 +412,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printLso(c, toPrint, lstFilter, propsStr,
+			err = printLso(c, toPrint, lstFilter, propsStr, now,
 				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 			if err != nil {
 				return err
@@ -435,13 +446,16 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
 	}
+	if catOnly {
+		now = mono.NanoTime()
+	}
 	lsargs.Callback = u.cb
 	lsargs.CallAfter = callAfter
 	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	return printLso(c, objList.Entries, lstFilter, propsStr,
+	return printLso(c, objList.Entries, lstFilter, propsStr, now,
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 }
 
@@ -495,7 +509,7 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int64, err error) {
 }
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column
-func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string,
+func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, now int64,
 	addCachedCol, isRemote, addStatusCol bool) error {
 	var (
 		hideHeader     = flagIsSet(c, noHeaderFlag)
@@ -527,14 +541,23 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 		}
 	}
 
+	// count and time only
+	const listed = "Listed:"
+	if now > 0 {
+		elapsed := teb.FormatDuration(mono.Since(now))
+		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names (elapsed "+elapsed+")")
+		return nil
+	}
+
+	// otherwise, print names
 	tmpl := teb.LsoTemplate(propsList, hideHeader, addCachedCol, addStatusCol)
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
 	if err := teb.Print(matched, tmpl, opts); err != nil {
 		return err
 	}
+
 	if !hideFooter && len(matched) > 10 {
-		listed := fblue("Listed:")
-		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names")
+		fmt.Fprintln(c.App.Writer, fblue(listed), cos.FormatBigNum(len(matched)), "names")
 	}
 	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
 		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))

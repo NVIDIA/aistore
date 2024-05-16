@@ -6,17 +6,19 @@
 # - optionally, remais bucket (the bucket will be created if doesn't exist)
 # - ais (CLI)
 # - aisloader
-
+#
 # NOTE: max_num_downloads limit (hardcoded)
-
-## Example usage: first, make sure remote ais cluster is attached, e.g.:
+#
+## Example 1:
+## first, make sure remote ais cluster is attached:
 #  $ ais show remote-cluster -H
 #  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
 #
-## Examples:
-#  $./remais-blob-download.sh --bucket ais://@remais/abc --maxsize 10mb --totalsize 1G
+## second, run:
+#  $ remais-blob-download.sh --bucket ais://@remais/abc --maxsize 10mb --totalsize 1G
 #
-#  $./remais-blob-download.sh --bucket ais://@remais/abc --chunksize 500kb
+## Example 2:
+#  $ remais-blob-download.sh --bucket ais://@remais/abc --chunksize 500kb
 #################################################################################################
 
 if ! [ -x "$(command -v ais)" ]; then

@@ -5,8 +5,11 @@
 # - s3cmd, $PATH-executable and configured to access the bucket out-of-band
 # - aistore cluster, also configured to access the same bucket
 #
-## Example usage:
-## ./ais/test/scripts/s3-cp-latest-prefix.sh --bucket s3://abc             ########################
+## Usage:
+## s3-cp-latest-prefix.sh --bucket BUCKET
+#
+## Example:
+## s3-cp-latest-prefix.sh --bucket s3://abc
 
 lorem='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
 

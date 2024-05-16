@@ -141,6 +141,7 @@ var (
 			silentFlag,
 			dontWaitFlag,
 			verChangedFlag,
+			countAndTimeFlag,
 			// bucket inventory
 			useInventoryFlag,
 			invNameFlag,

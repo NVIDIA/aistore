@@ -4,10 +4,13 @@
 # - aistore cluster
 # - ais (CLI)
 #
-## Example usage:
-## 1. ./ais/test/scripts/get-archregx-wdskey.sh
-## 2. ./ais/test/scripts/get-archregx-wdskey.sh --bck ais://abc
-## 3. ./ais/test/scripts/get-archregx-wdskey.sh --bck ais://abc --dir /tmp/out
+## Usage:
+## get-archregx-wdskey.sh [--bck BUCKET] [--dir OUT-DIR]
+##
+## Examples:
+## 1. get-archregx-wdskey.sh
+## 2. get-archregx-wdskey.sh --bck ais://abc
+## 3. get-archregx-wdskey.sh --bck ais://abc --dir /tmp/out
 # #######################################################################################################
 
 # command line
@@ -28,6 +31,12 @@ rand=$RANDOM
 num=32
 
 ## establish existence
+
+if ! [ -x "$(command -v ais)" ]; then
+  echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+
 bck_check_rc=1
 if [ ! -z "$bck" ]; then
   ais show bucket $bck -c 1>/dev/null 2>&1

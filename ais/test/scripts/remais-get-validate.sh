@@ -6,12 +6,13 @@
 # - optionally, remais bucket (the bucket will be created if doesn't exist)
 # - ais (CLI)
 #
-## Example usage:
-## 1st, make sure remote ais cluster is attached, e.g.:
+## Example:
+## first, make sure remote ais cluster is attached:
+#
 #  $ ais show remote-cluster -H
 #  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
 #
-## 2nd, run:
+## second, run:
 #  $./ais/test/scripts/remais-get-validate.sh --bucket ais://@remais/abc     #####################
 
 if ! [ -x "$(command -v ais)" ]; then
