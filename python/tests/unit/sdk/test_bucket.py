@@ -111,6 +111,7 @@ class TestBucket(unittest.TestCase):
         self.assertRaises(InvalidBckProvider, self.amz_bck.create)
 
     def _assert_bucket_created(self, bck):
+        # Ensure that the last request was called with create args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -146,6 +147,7 @@ class TestBucket(unittest.TestCase):
         response = self.ais_bck.rename(new_bck_name)
 
         self.assertEqual(expected_response, response)
+        # Ensure that last request was called to with rename args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -159,6 +161,7 @@ class TestBucket(unittest.TestCase):
 
     def test_delete_success(self):
         self.ais_bck.delete()
+        # Ensure that last request was called with delete args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -171,6 +174,8 @@ class TestBucket(unittest.TestCase):
         with self.assertRaises(ErrBckNotFound):
             Bucket(client=self.mock_client, name="missing-bucket").delete()
         self.ais_bck.delete(missing_ok=True)
+
+        # Ensure that last request was called with delete args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -185,6 +190,8 @@ class TestBucket(unittest.TestCase):
         for keep_md in [True, False]:
             self.amz_bck_params[QPARAM_KEEP_REMOTE] = str(keep_md)
             self.amz_bck.evict(keep_md=keep_md)
+
+            # Ensure that last request was a delete and other args
             self.mock_client.request.assert_called_with(
                 HTTP_METHOD_DELETE,
                 path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -197,6 +204,7 @@ class TestBucket(unittest.TestCase):
         mock_header.headers = Header("value")
         self.mock_client.request.return_value = mock_header
         headers = self.ais_bck.head()
+        # Ensure that the last request was called with right args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_HEAD,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -259,6 +267,7 @@ class TestBucket(unittest.TestCase):
         job_id = self.ais_bck.copy(to_bck=to_bck, **kwargs)
 
         self.assertEqual(expected_response, job_id)
+        # Ensure that last request was called with right args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -324,10 +333,15 @@ class TestBucket(unittest.TestCase):
             json=action,
             params=self.ais_bck_params,
         )
+
+        # Ensure that the objects retrieved are the same as expected
         self.assertEqual(result, mock_list)
+
+        # Ensure that the object names are the same as names for each object entry
         self.assertEqual(object_names, [entry.object.name for entry in result.entries])
 
     def test_list_objects_iter(self):
+        # Ensure that iterator returned is correct type
         self.assertIsInstance(
             self.ais_bck.list_objects_iter(PREFIX_NAME, "obj props", 123),
             ObjectIterator,
@@ -428,6 +442,7 @@ class TestBucket(unittest.TestCase):
             [entry_1, entry_2, entry_3], self.ais_bck.list_all_objects(**kwargs)
         )
 
+        # Test client get calls match expected calls
         expected_calls = []
         for expected_val in [expected_act_value_1, expected_act_value_2]:
             expected_calls.append(
@@ -451,6 +466,7 @@ class TestBucket(unittest.TestCase):
         timeout = "4m"
         force = True
         dry_run = True
+        # Ensure that request has been made with specified arguments
         action_value = TCBckMsg(
             ext=ext,
             transform_msg=TransformBckMsg(etl_name=ETL_NAME, timeout=timeout),
@@ -500,6 +516,7 @@ class TestBucket(unittest.TestCase):
 
         result_id = self.ais_bck.transform(etl_name, to_bck, **kwargs)
 
+        # Ensure that request inside transform was given correct args
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -520,41 +537,44 @@ class TestBucket(unittest.TestCase):
         self, mock_glob, mock_validate_dir, mock_validate_file, mock_read
     ):
         path = "directory"
-        file_1_name = "file_1_name"
-        file_2_name = "file_2_name"
+        file_1 = ("file_1_name", b"bytes in the first file")
+        file_2 = ("file_2_name", b"bytes in the second file")
+
         path_1 = Mock()
         path_1.is_file.return_value = True
-        path_1.relative_to.return_value = file_1_name
+        path_1.relative_to.return_value = file_1[0]
         path_1.stat.return_value = Mock(st_size=123)
+
         path_2 = Mock()
-        path_2.relative_to.return_value = file_2_name
         path_2.is_file.return_value = True
+        path_2.relative_to.return_value = file_2[0]
         path_2.stat.return_value = Mock(st_size=4567)
-        file_1_data = b"bytes in the first file"
-        file_2_data = b"bytes in the second file"
+
         mock_glob.return_value = [path_1, path_2]
-        expected_obj_names = [file_1_name, file_2_name]
-        mock_read.side_effect = [file_1_data, file_2_data]
+        expected_obj_names = [file_1[0], file_2[0]]
+        mock_read.side_effect = [file_1[1], file_2[1]]
 
         res = self.ais_bck.put_files(path)
 
+        # Ensure that put_files is called for files for the directory at path
         mock_validate_dir.assert_called_with(path)
+        # Ensure that files have been created with the proper path
         mock_validate_file.assert_has_calls([call(str(path_1)), call(str(path_2))])
+        # Ensure that the files put in the bucket have the sane names
         self.assertEqual(expected_obj_names, res)
-        expected_calls = [
-            call(
-                HTTP_METHOD_PUT,
-                path=f"objects/{BCK_NAME}/{file_1_name}",
-                params=self.ais_bck_params,
-                data=file_1_data,
-            ),
-            call(
-                HTTP_METHOD_PUT,
-                path=f"objects/{BCK_NAME}/{file_2_name}",
-                params=self.ais_bck_params,
-                data=file_2_data,
-            ),
-        ]
+        expected_calls = []
+
+        for file_name, file_data in [file_1, file_2]:
+            expected_calls.append(
+                call(
+                    HTTP_METHOD_PUT,
+                    path=f"objects/{BCK_NAME}/{file_name}",
+                    params=self.ais_bck_params,
+                    data=file_data,
+                )
+            )
+
+        # Ensure that the file data and metadata is the same
         self.mock_client.request.assert_has_calls(expected_calls)
 
     def test_get_path(self):
@@ -586,6 +606,7 @@ class TestBucket(unittest.TestCase):
         object_names = ["obj_name", "obj_name2"]
         mock_list_obj.return_value = [BucketEntry(n=name) for name in object_names]
         objects_iter = self.ais_bck.list_all_objects_iter()
+        # Ensure that every object is in created iterator
         for obj in objects_iter:
             self.assertIsInstance(obj, Object)
 
@@ -598,6 +619,7 @@ class TestBucket(unittest.TestCase):
         method = "method"
         action = "action"
         self.ais_bck.make_request(method, action)
+        # Ensure that last call has been made with default arguments
         self.mock_client.request.assert_called_with(
             method,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -611,6 +633,7 @@ class TestBucket(unittest.TestCase):
         value = {"request_key": "value"}
         params = {"qparamkey": "qparamval"}
         self.ais_bck.make_request(method, action, value, params)
+        # Ensure that last call has been made with specified arguments
         self.mock_client.request.assert_called_with(
             method,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -648,24 +671,23 @@ class TestBucket(unittest.TestCase):
         bsumm_ctrl_msg_with_uuid = BsummCtrlMsg(
             uuid="job_id", prefix="", fast=True, cached=True, present=True
         ).dict()
-        calls = [
-            call(
-                HTTP_METHOD_GET,
-                path="buckets/bucket_name",
-                json={"action": ACT_SUMMARY_BCK, "name": "", "value": bsumm_ctrl_msg},
-                params=self.ais_bck.qparam,
-            ),
-            call(
-                HTTP_METHOD_GET,
-                path="buckets/bucket_name",
-                json={
-                    "action": ACT_SUMMARY_BCK,
-                    "name": "",
-                    "value": bsumm_ctrl_msg_with_uuid,
-                },
-                params=self.ais_bck.qparam,
-            ),
-        ]
+
+        calls = []
+
+        for msg in [bsumm_ctrl_msg, bsumm_ctrl_msg_with_uuid]:
+            calls.append(
+                call(
+                    HTTP_METHOD_GET,
+                    path="buckets/bucket_name",
+                    json={
+                        "action": ACT_SUMMARY_BCK,
+                        "name": "",
+                        "value": msg,
+                    },
+                    params=self.ais_bck.qparam,
+                ),
+            )
+
         self.mock_client.request.assert_has_calls(calls)
 
         # Assert that the result has the expected structure
@@ -716,29 +738,19 @@ class TestBucket(unittest.TestCase):
         # Call the info method
         bucket_props, bucket_summ = self.ais_bck.info()
 
-        calls = [
-            call(
-                HTTP_METHOD_HEAD,
-                path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
-                params={
-                    **self.ais_bck.qparam,
-                    QPARAM_FLT_PRESENCE: 0,
-                    QPARAM_BSUMM_REMOTE: True,
-                    QPARAM_UUID: "some-id",
-                },
-            ),
-            call(
-                HTTP_METHOD_HEAD,
-                path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
-                params={
-                    **self.ais_bck.qparam,
-                    QPARAM_FLT_PRESENCE: 0,
-                    QPARAM_BSUMM_REMOTE: True,
-                    QPARAM_UUID: "some-id",
-                },
-            ),
-        ]
-        self.mock_client.request.assert_has_calls(calls)
+        expected_call = call(
+            HTTP_METHOD_HEAD,
+            path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
+            params={
+                **self.ais_bck.qparam,
+                QPARAM_FLT_PRESENCE: 0,
+                QPARAM_BSUMM_REMOTE: True,
+                QPARAM_UUID: "some-id",
+            },
+        )
+
+        # Ensure two calls were made matching the expected call
+        self.mock_client.request.assert_has_calls([expected_call, expected_call])
 
         # Check the return values
         self.assertEqual(bucket_props, '{"some": "props"}')
@@ -756,7 +768,7 @@ class TestBucket(unittest.TestCase):
         )
 
         self.dataset_config.write_shards.assert_called()
-        args, kwargs = self.dataset_config.write_shards.call_args
+        _, kwargs = self.dataset_config.write_shards.call_args
         self.assertTrue(callable(kwargs["post"]))
 
     def test_write_dataset_successful(self):
@@ -764,5 +776,5 @@ class TestBucket(unittest.TestCase):
 
         self.ais_bck.write_dataset(self.dataset_config, skip_missing=True)
         self.dataset_config.write_shards.assert_called()
-        args, kwargs = self.dataset_config.write_shards.call_args
+        _, kwargs = self.dataset_config.write_shards.call_args
         self.assertTrue(callable(kwargs["post"]))
