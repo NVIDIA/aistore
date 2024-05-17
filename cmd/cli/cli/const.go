@@ -522,7 +522,7 @@ var (
 			indent4 + "\tnote: recommended for use with very large buckets",
 	}
 	countAndTimeFlag = cli.BoolFlag{
-		Name:  "count-and-time-only",
+		Name:  "count-only",
 		Usage: "print only the resulting number of listed objects and elapsed time",
 	}
 
