@@ -284,7 +284,7 @@ func (s *coreStats) initProm(node *meta.Snode) {
 		if strings.HasSuffix(v.label.prom, "_n") {
 			help = "total number of operations"
 		} else if strings.HasSuffix(v.label.prom, "_size") {
-			help = "total size (MB)"
+			help = "total size (bytes)"
 		} else if strings.HasSuffix(v.label.prom, "avg_rsize") {
 			help = "average read size (bytes)"
 		} else if strings.HasSuffix(v.label.prom, "avg_wsize") {
