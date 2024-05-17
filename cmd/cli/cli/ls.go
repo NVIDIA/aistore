@@ -317,6 +317,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	var (
 		props    []string
 		propsStr = parseStrFlag(c, objPropsFlag)
+		catOnly  = flagIsSet(c, countAndTimeFlag)
 	)
 	if propsStr != "" {
 		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
@@ -339,6 +340,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			msg.AddProps(apc.GetPropsName)
 			msg.AddProps(apc.GetPropsSize)
 			msg.SetFlag(apc.LsNameSize)
+		} else if catOnly {
+			msg.SetFlag(apc.LsNameOnly)
+			msg.Props = apc.GetPropsName
 		} else {
 			msg.AddProps(apc.GetPropsMinimal...)
 		}
@@ -387,8 +391,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	var (
-		now     int64
-		catOnly = flagIsSet(c, countAndTimeFlag)
+		now int64
 	)
 	if catOnly && flagIsSet(c, noFooterFlag) {
 		warn := fmt.Sprintf(errFmtExclusive, qflprn(countAndTimeFlag), qflprn(noFooterFlag))
@@ -414,7 +417,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printLso(c, toPrint, lstFilter, propsStr, now,
+			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, now,
 				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 			if err != nil {
 				return err
@@ -443,7 +446,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	// alternatively (when `--paged` not specified) list all pages up to a limit, show progress
 	var (
 		callAfter = listObjectsWaitTime
-		u         = &_listed{c: c, bck: &bck, limit: int(limit)}
+		_listed   = &_listed{c: c, bck: &bck, limit: int(limit)}
 	)
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
@@ -451,13 +454,13 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if catOnly {
 		now = mono.NanoTime()
 	}
-	lsargs.Callback = u.cb
+	lsargs.Callback = _listed.cb
 	lsargs.CallAfter = callAfter
 	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	return printLso(c, objList.Entries, lstFilter, propsStr, now,
+	return printLso(c, objList.Entries, lstFilter, propsStr, _listed, now,
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 }
 
@@ -515,7 +518,7 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err
 }
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column
-func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, now int64,
+func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, _listed *_listed, now int64,
 	addCachedCol, isRemote, addStatusCol bool) error {
 	var (
 		hideHeader     = flagIsSet(c, noHeaderFlag)
@@ -547,8 +550,12 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 		}
 	}
 
-	// count and time only
+	// count-and-time only
 	if now > 0 {
+		// unless caption already printed
+		if _listed != nil && _listed.cptn {
+			return nil
+		}
 		elapsed := teb.FormatDuration(mono.Since(now))
 		fmt.Fprintln(c.App.Writer, listedText, cos.FormatBigNum(len(matched)), "names in", elapsed)
 		return nil
@@ -678,6 +685,7 @@ type _listed struct {
 	limit int
 	l     int
 	done  bool
+	cptn  bool
 }
 
 func (u *_listed) cb(ctx *api.LsoCounter) {
@@ -686,9 +694,10 @@ func (u *_listed) cb(ctx *api.LsoCounter) {
 	}
 	if ctx.IsFinished() || (u.limit > 0 && u.limit <= ctx.Count()) {
 		u.done = true
-		if !flagIsSet(u.c, noFooterFlag) && !flagIsSet(u.c, countAndTimeFlag) {
+		if !flagIsSet(u.c, noFooterFlag) {
 			elapsed := teb.FormatDuration(ctx.Elapsed())
 			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigNum(ctx.Count()), elapsed)
+			u.cptn = true
 			briefPause(1)
 		}
 		return
