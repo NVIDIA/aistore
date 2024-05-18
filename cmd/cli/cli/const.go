@@ -181,7 +181,7 @@ const (
 )
 
 //
-// more constants
+// more constants (misc)
 //
 
 const flagPrefix = "--"
@@ -193,6 +193,10 @@ const (
 
 const (
 	dfltStdinChunkSize = 10 * cos.MiB
+)
+
+const (
+	NIY = "not implemented yet" // TODO potentially
 )
 
 const (

@@ -172,7 +172,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 		from, to     = bckFrom.Cname(""), bckTo.Cname("")
 	)
 	if showProgress && flagIsSet(c, copyDryRunFlag) {
-		warn := fmt.Sprintf("dry-run option is incompatible with %s - not implemented yet", qflprn(progressFlag))
+		warn := fmt.Sprintf("dry-run option is incompatible with %s - "+NIY, qflprn(progressFlag))
 		actionWarn(c, warn)
 		showProgress = false
 	}

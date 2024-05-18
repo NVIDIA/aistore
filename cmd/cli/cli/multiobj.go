@@ -29,7 +29,7 @@ type lrCtx struct {
 }
 
 func _warnProgress(c *cli.Context) {
-	actionWarn(c, "cannot show progress bar with an empty list/range type option - not implemented yet")
+	actionWarn(c, "cannot show progress bar with an empty list/range type option - "+NIY)
 }
 
 // x-TCO: multi-object transform or copy

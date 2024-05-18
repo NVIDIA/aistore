@@ -738,7 +738,7 @@ func stopJobHandler(c *cli.Context) error {
 			actionWarn(c, warn)
 		default:
 			if regex != "" {
-				warn := fmt.Sprintf("ignoring flag %s - not implemented yet", qflprn(regexJobsFlag))
+				warn := fmt.Sprintf("ignoring flag %s - "+NIY, qflprn(regexJobsFlag))
 				actionWarn(c, warn)
 			}
 		}

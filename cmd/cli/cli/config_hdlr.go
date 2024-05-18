@@ -282,7 +282,7 @@ func setcfg(c *cli.Context, nvs cos.StrKVs) error {
 		case k == "checksum" || strings.HasPrefix(k, "checksum."):
 			jsoniter.Unmarshal([]byte(v), &toUpdate.Cksum)
 		default:
-			return fmt.Errorf("cannot update config using JSON-formatted %q - not implemented yet", k)
+			return fmt.Errorf("cannot update config using JSON-formatted %q - "+NIY, k)
 		}
 		if err := api.SetClusterConfigUsingMsg(apiBP, toUpdate, flagIsSet(c, transientFlag)); err != nil {
 			return V(err)
@@ -369,7 +369,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	}
 	if useMsg {
 		// have api.SetClusterConfigUsingMsg but not "api.SetDaemonConfigUsingMsg"
-		return fmt.Errorf("cannot update node configuration using JSON-formatted %q - not implemented yet", jsonval)
+		return fmt.Errorf("cannot update node configuration using JSON-formatted %q - "+NIY, jsonval)
 	}
 	if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, flagIsSet(c, transientFlag)); err != nil {
 		return V(err)

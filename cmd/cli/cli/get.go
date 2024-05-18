@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 )
@@ -95,15 +96,14 @@ func getHandler(c *cli.Context) error {
 			return fmt.Errorf(errFmtExclusive, qflprn(getObjCachedFlag), qflprn(blobDownloadFlag))
 		}
 		if flagIsSet(c, archpathGetFlag) {
-			return errors.New("cannot use blob downloader to read archived files - not implemented yet")
+			return errors.New("cannot use blob downloader to read archived files - " + NIY)
 		}
 		if !bck.IsRemote() {
 			return fmt.Errorf("blob downloader: expecting remote bucket (have %s)", bck.Cname(""))
 		}
 		if flagIsSet(c, progressFlag) {
-			// TODO: niy
-			return fmt.Errorf("cannot show progress when running GET via blob-downloader (tip: try 'ais %s %s --progress')",
-				cmdBlobDownload, uri)
+			tip := fmt.Sprintf("Tip: try 'ais %s %s --progress')", cmdBlobDownload, uri)
+			return fmt.Errorf("cannot show progress when running GET via blob-downloader - "+NIY+"\n(%s)", tip)
 		}
 	}
 
@@ -147,8 +147,7 @@ func getHandler(c *cli.Context) error {
 			return fmt.Errorf(errFmtExclusive, extractVia, qflprn(headObjPresentFlag))
 		}
 		if flagIsSet(c, lengthFlag) {
-			return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
-				qflprn(lengthFlag), qflprn(offsetFlag), extractVia)
+			return errRangeReadArch(extractVia)
 		}
 	}
 	if err := a.validate(c); err != nil {
@@ -389,10 +388,10 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, ou
 // get one (main function)
 func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArch, quiet, extract bool) error {
 	if outFile == fileStdIO && extract {
-		return errors.New("cannot extract archived files to standard output - not implemented yet")
+		return errors.New("cannot extract archived files to standard output - " + NIY)
 	}
 	if discardOutput(outFile) && extract {
-		return errors.New("cannot extract and discard archived files - not implemented yet")
+		return errors.New("cannot extract and discard archived files - " + NIY)
 	}
 	if flagIsSet(c, listArchFlag) && a.archpath == "" {
 		if external, internal := splitPrefixShardBoundary(objName); internal != "" {
@@ -450,7 +449,10 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 		}
 	}
 
-	var hdr http.Header
+	var (
+		hdr http.Header
+		now int64
+	)
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
 		hdr = http.Header{cos.HdrRange: []string{rng}}
@@ -470,6 +472,10 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 				return fmt.Errorf("invalid %s=%d: expecting (1..128) range", flprn(numWorkersFlag), nw)
 			}
 			hdr.Set(apc.HdrBlobWorkers, strconv.Itoa(nw))
+		}
+
+		if !quiet {
+			now = mono.NanoTime()
 		}
 	} else if flagIsSet(c, chunkSizeFlag) || flagIsSet(c, numWorkersFlag) {
 		return fmt.Errorf("command line options (%s, %s) can be used only together with %s",
@@ -496,10 +502,9 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 		getArgs = api.GetArgs{Writer: file, Header: hdr}
 	}
 
-	// finally, http query
+	// finally: http query and API call
 	getArgs.Query = a.getQuery(c, &bck)
 
-	// do
 	var oah api.ObjAttrs
 	if flagIsSet(c, cksumFlag) {
 		oah, err = api.GetObjectWithValidation(apiBP, bck, objName, &getArgs)
@@ -537,12 +542,13 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 
 	var (
 		discard, out string
-		sz           = teb.FmtSize(objLen, units, 2)
+		elapsed      string
+		sz           string
 		bn           = bck.Cname("")
 	)
 	switch {
 	case discardOutput(outFile):
-		discard = " (and discard)"
+		discard = " and discard"
 	case outFile == fileStdIO:
 		out = " to standard output"
 	case extract:
@@ -553,15 +559,21 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 		out = " as " + outFile
 		out = cos.TrimLastB(out, filepath.Separator)
 	}
+	if now > 0 {
+		elapsed = " in " + teb.FormatDuration(mono.Since(now))
+	}
+	if objLen > 0 {
+		sz = " (" + teb.FmtSize(objLen, units, 2) + ")"
+	}
 	switch {
 	case flagIsSet(c, lengthFlag):
-		fmt.Fprintf(c.App.Writer, "Read%s range (length %s (%dB) at offset %d)%s\n", discard, sz, objLen, offset, out)
+		fmt.Fprintf(c.App.Writer, "Read%s range (length %d at offset %d)%s%s\n", discard, objLen, offset, out, elapsed)
 	case a.archpath != "":
-		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, a.archpath, bck.Cname(objName), out, sz)
+		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s%s%s\n", discard, a.archpath, bck.Cname(objName), out, sz, elapsed)
 	case extract:
-		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s) and extract%s\n", objName, bn, outFile, sz, out)
+		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q%s and extract%s%s\n", objName, bn, outFile, sz, out, elapsed)
 	default:
-		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, objName, bn, out, sz)
+		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s%s%s\n", discard, objName, bn, out, sz, elapsed)
 	}
 	return nil
 }
@@ -602,12 +614,11 @@ func (a *qparamArch) validate(c *cli.Context) error {
 		return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
 	}
 	if flagIsSet(c, headObjPresentFlag) {
-		return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
+		return fmt.Errorf("cannot check presence (%s) of archived file(s) (%s) - "+NIY,
 			qflprn(headObjPresentFlag), qflprn(archpathGetFlag))
 	}
 	if flagIsSet(c, lengthFlag) {
-		return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
-			qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
+		return errRangeReadArch(qflprn(archpathGetFlag))
 	}
 	return nil
 }
@@ -716,4 +727,9 @@ func (ex *extractor) _write(filename string, size int64, wfh *os.File, reader io
 // discard
 func discardOutput(outf string) bool {
 	return outf == "/dev/null" || outf == "dev/null" || outf == "dev/nil"
+}
+
+// rr
+func errRangeReadArch(what string) error {
+	return fmt.Errorf("cannot range-read (%s, %s) archived content (%s) - "+NIY, qflprn(lengthFlag), qflprn(offsetFlag), what)
 }

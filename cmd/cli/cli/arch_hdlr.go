@@ -441,7 +441,7 @@ func listArchHandler(c *cli.Context) error {
 	}
 	prefix := parseStrFlag(c, listObjPrefixFlag)
 	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
-		return fmt.Errorf("cannot handle object name ('%s') and prefix ('%s') simultaneously - not implemented yet",
+		return fmt.Errorf("cannot handle object name ('%s') and prefix ('%s') simultaneously - "+NIY,
 			objName, prefix)
 	}
 	if prefix == "" {
