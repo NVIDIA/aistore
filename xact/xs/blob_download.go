@@ -35,7 +35,7 @@ import (
 
 // default tunables (can override via apc.BlobMsg)
 const (
-	dfltChunkSize  = 2 * cos.MiB
+	dfltChunkSize  = 4 * cos.MiB
 	minChunkSize   = memsys.DefaultBufSize
 	maxChunkSize   = 16 * cos.MiB
 	dfltNumWorkers = 4
@@ -139,6 +139,9 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	}
 	if pre.numWorkers == 0 {
 		pre.numWorkers = dfltNumWorkers
+	}
+	if a := cmn.MaxParallelism(); a > pre.numWorkers+4 {
+		pre.numWorkers++
 	}
 	if int64(pre.numWorkers)*pre.chunkSize > pre.fullSize {
 		pre.numWorkers = int((pre.fullSize + pre.chunkSize - 1) / pre.chunkSize)
