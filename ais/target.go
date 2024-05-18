@@ -705,7 +705,12 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			Lom:  lom,
 			Msg:  &msg,
 		}
-		_, _, err := t.blobdl(args, nil /*oa*/)
+		xid, _, err := t.blobdl(args, nil /*oa*/)
+		if err != nil && xid != "" {
+			// (for the same reason as errSendingResp)
+			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
+			err = nil
+		}
 		return lom, err
 	}
 
@@ -1512,7 +1517,7 @@ func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl,
 	}
 	// b) via GET (blocking w/ simultaneous transmission)
 	xblob.Run(nil)
-	return "", nil, xblob.AbortErr()
+	return xblob.ID(), nil, xblob.AbortErr()
 }
 
 func (t *target) fsErr(err error, filepath string) {
