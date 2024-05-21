@@ -492,7 +492,7 @@ func startClusterRebalanceHandler(c *cli.Context) (err error) {
 
 func stopClusterRebalanceHandler(c *cli.Context) error {
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true}
-	_, snap, err := getXactSnap(&xargs)
+	_, snap, err := getAnyXactSnap(&xargs)
 	if err != nil {
 		return err
 	}

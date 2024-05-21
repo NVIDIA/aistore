@@ -30,6 +30,16 @@ const (
 	fmtXactSucceeded = "Done.\n"
 )
 
+type (
+	// queryXactions return
+	commonMultiSnap struct {
+		xid     string
+		bck     cmn.Bck
+		aborted bool
+		running bool
+	}
+)
+
 func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {
 	out = toShowMsg(c, xjid, "To monitor the progress", false)
 	if suffix != "" && out != "" {
@@ -93,7 +103,7 @@ func waitXactBlob(xargs *xact.ArgsMsg) error {
 	var sleep = xact.MinPollTime
 	for {
 		time.Sleep(sleep)
-		_, snap, errN := getXactSnap(xargs)
+		_, snap, errN := getAnyXactSnap(xargs)
 		if errN != nil {
 			return errN
 		}
@@ -118,7 +128,7 @@ func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 		// 2nd attempt assuming xaction in question `IdlesBeforeFinishing`
 		briefPause(1)
-		xs, err := queryXactions(&xargs)
+		xs, _, err := queryXactions(&xargs, false /*summarize*/)
 		if err != nil {
 			rerr = err
 			return
@@ -214,10 +224,10 @@ func flattenXactStats(snap *core.Snap, units string) nvpairList {
 	return props
 }
 
-func getXactSnap(xargs *xact.ArgsMsg) (string, *core.Snap, error) {
-	xs, err := api.QueryXactionSnaps(apiBP, xargs)
+func getAnyXactSnap(xargs *xact.ArgsMsg) (string, *core.Snap, error) {
+	xs, _, err := queryXactions(xargs, false)
 	if err != nil {
-		return "", nil, V(err)
+		return "", nil, err
 	}
 	for tid, snaps := range xs {
 		for _, snap := range snaps {
@@ -227,7 +237,7 @@ func getXactSnap(xargs *xact.ArgsMsg) (string, *core.Snap, error) {
 	return "", nil, nil
 }
 
-func queryXactions(xargs *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
+func queryXactions(xargs *xact.ArgsMsg, summarize bool) (xs xact.MultiSnap, cms commonMultiSnap, err error) {
 	orig := apiBP.Client.Timeout
 	if !xargs.OnlyRunning {
 		apiBP.Client.Timeout = min(orig, longClientTimeout)
@@ -237,42 +247,64 @@ func queryXactions(xargs *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
 	}
 	xs, err = api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
-		return
+		return xs, cms, V(err)
 	}
-	if xargs.OnlyRunning {
-		for tid, snaps := range xs {
-			if len(snaps) == 0 {
-				continue
-			}
-			runningStats := xs[tid][:0]
-			for _, xctn := range snaps {
-				if xctn.Running() {
-					runningStats = append(runningStats, xctn)
-				}
-			}
-			xs[tid] = runningStats
-		}
-	}
-
+	// filter
 	if xargs.DaemonID != "" {
-		var found bool
-		for tid := range xs {
-			if tid == xargs.DaemonID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return
-		}
-		// remove all other targets
 		for tid := range xs {
 			if tid != xargs.DaemonID {
 				delete(xs, tid)
 			}
 		}
 	}
-	return
+
+	if !summarize || len(xs) == 0 {
+		return xs, cms, nil
+	}
+
+	// summarize
+	// in part, check whether all x-snaps share the same xid and/or bucket
+	var (
+		first  = true
+		notID  bool // (no ID, multiple IDs)
+		notBck bool // (no bucket | multiple buckets)
+	)
+	for _, snaps := range xs {
+		for _, snap := range snaps {
+			if first {
+				cms.xid, cms.bck = snap.ID, snap.Bck
+				cms.aborted, cms.running = snap.IsAborted(), snap.Running()
+				if cms.bck.IsEmpty() {
+					notBck = true
+					debug.Assert(xargs.Bck.IsEmpty())
+				}
+				if cms.xid == "" {
+					notID = true
+				}
+				first = false
+				continue
+			}
+
+			if !notID && cms.xid != snap.ID {
+				cms.xid = ""
+				notID = true
+			}
+			if !notBck && !snap.Bck.Equal(&cms.bck) {
+				cms.bck = cmn.Bck{}
+				notBck = true
+			}
+			cms.aborted = cms.aborted && snap.IsAborted()
+			cms.running = cms.running || snap.Running() // NOTE: also true when idle (as in: snap.IsIdle())
+		}
+	}
+
+	// unlikely (see core/xaction); added for readability
+	if cms.aborted && cms.running {
+		debug.Assert(false)
+		cms.running = false
+	}
+
+	return xs, cms, nil
 }
 
 //

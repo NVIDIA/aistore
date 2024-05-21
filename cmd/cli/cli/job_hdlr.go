@@ -796,37 +796,30 @@ func stopJobHandler(c *cli.Context) error {
 	// query
 	msg := formatXactMsg(xactID, xname, bck)
 	xargs := xact.ArgsMsg{ID: xactID, Kind: xactKind}
-	_, snap, err := getXactSnap(&xargs)
+	xs, cms, err := queryXactions(&xargs, true /*summarize*/)
 	if err != nil {
 		return fmt.Errorf("cannot stop %s: %v", msg, err)
 	}
-	if snap == nil {
+	if len(xs) == 0 {
 		actionWarn(c, msg+" not found, nothing to do")
 		return nil
 	}
 
 	// reformat
-	if xactID == "" {
-		xactID = snap.ID
-		debug.Assert(xactKind == snap.Kind)
-		msg = formatXactMsg(xactID, xname, snap.Bck)
-	} else {
-		debug.Assert(xactID == snap.ID)
-		msg = formatXactMsg(xactID, xname, snap.Bck)
-	}
+	msg = formatXactMsg(xid, xname, bck)
 
-	// abort?
-	var s = "already finished"
-	if snap.IsAborted() {
-		s = "aborted"
+	// nothing to do?
+	if cms.aborted {
+		fmt.Fprintf(c.App.Writer, "%s is aborted, nothing to do\n", msg)
+		return nil
 	}
-	if snap.IsAborted() || snap.Finished() {
-		fmt.Fprintf(c.App.Writer, "%s is %s, nothing to do\n", msg, s)
+	if !cms.running {
+		fmt.Fprintf(c.App.Writer, "%s already finished, nothing to do\n", msg)
 		return nil
 	}
 
-	// abort
-	args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: snap.Bck}
+	// call to abort
+	args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
 	if err := api.AbortXaction(apiBP, &args); err != nil {
 		return V(err)
 	}
@@ -1014,7 +1007,7 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 
 	// find out the kind if not provided
 	if xargs.Kind == "" {
-		_, snap, err := getXactSnap(&xargs)
+		_, snap, err := getAnyXactSnap(&xargs)
 		if err != nil {
 			return err
 		}

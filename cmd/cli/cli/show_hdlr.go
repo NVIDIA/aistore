@@ -417,7 +417,7 @@ func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {
 		xargs.OnlyRunning = false
 	}
 
-	xs, err := queryXactions(xargs)
+	xs, _, err := queryXactions(xargs, false /*summarize*/)
 	if err != nil {
 		return 0, err
 	}

@@ -202,7 +202,7 @@ func _blobOneProgress(xid string, bar *mpb.Bar, errCh chan error, sleep time.Dur
 		done     bool
 	)
 	for {
-		daemonID, snap, errN := getXactSnap(&xargs)
+		daemonID, snap, errN := getAnyXactSnap(&xargs)
 		if errN != nil {
 			errCh <- errN
 			break

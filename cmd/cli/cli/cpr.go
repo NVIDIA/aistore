@@ -147,13 +147,14 @@ func (cpr *cprCtx) do(c *cli.Context) {
 		totalWait time.Duration
 		xargs     = xact.ArgsMsg{ID: cpr.xid}
 	)
-outer:
+
+	// main loop
 	for {
 		var (
 			size, objs int64
 			nrun       int
-			xs, err    = queryXactions(&xargs)
 		)
+		xs, cms, err := queryXactions(&xargs, true /*summarize*/)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 				time.Sleep(refreshRateMinDur)
@@ -162,24 +163,23 @@ outer:
 			rerr = fmt.Errorf("%s failed: %v", cpr.loghdr, err)
 			break
 		}
-		for _, snaps := range xs {
-			debug.Assert(len(snaps) < 2)
-			for _, xsnap := range snaps {
-				debug.Assertf(cpr.xid == xsnap.ID, "%q vs %q", cpr.xid, xsnap.ID)
-				size += xsnap.Stats.Bytes
-				objs += xsnap.Stats.Objs
-				if xsnap.IsAborted() {
-					rerr = fmt.Errorf("%s failed: aborted", cpr.loghdr)
-					break outer
-				}
-				if xsnap.Running() {
-					if xsnap.IsIdle() {
-						debug.Assert(xact.IdlesBeforeFinishing(cpr.xname))
-					} else {
-						nrun++
+		debug.Assert(cpr.xid == cms.xid, cpr.xid, " vs ", cms.xid)
+		if cms.running {
+			for _, snaps := range xs {
+				debug.Assert(len(snaps) < 2)
+				for _, xsnap := range snaps {
+					debug.Assertf(cpr.xid == xsnap.ID, "%q vs %q", cpr.xid, xsnap.ID)
+					size += xsnap.Stats.Bytes
+					objs += xsnap.Stats.Objs
+					if xsnap.Running() {
+						if xsnap.IsIdle() {
+							debug.Assert(xact.IdlesBeforeFinishing(cpr.xname))
+						} else {
+							nrun++
+						}
 					}
+					break // expecting one from target
 				}
-				break // expecting one from target
 			}
 		}
 		cpr.updObjs(objs)
@@ -207,6 +207,14 @@ outer:
 		}
 		if cpr.timeout != 0 && totalWait > cpr.timeout {
 			rerr = fmt.Errorf("%s: timeout %v (%s)", cpr.loghdr, cpr.timeout, cpr.log())
+			break
+		}
+		if cms.aborted {
+			if cpr.objs > 0 {
+				rerr = fmt.Errorf("%s: aborted (%s)", cpr.loghdr, cpr.log())
+			} else {
+				rerr = fmt.Errorf("%s: aborted", cpr.loghdr)
+			}
 			break
 		}
 	}
