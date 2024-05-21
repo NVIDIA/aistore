@@ -258,7 +258,7 @@ func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	var (
 		xprev   = prev.Get().(*XactBlobDl)
 		lomPrev = xprev.args.Lom
-		xcurr   = p.xctn
+		xcurr   = p.pre
 		lomCurr = xcurr.args.Lom
 	)
 	if lomPrev.Bucket().Equal(lomCurr.Bucket()) && lomPrev.ObjName == lomCurr.ObjName {

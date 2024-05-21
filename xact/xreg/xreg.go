@@ -303,22 +303,26 @@ func GetSnap(flt Flt) ([]*core.Snap, error) {
 		}
 
 		if onlyRunning {
-			matching := make([]*core.Snap, 0, 10)
+			var matching []*core.Snap
+
+			dreg.entries.mtx.RLock() // ----------
+			matching = make([]*core.Snap, 0, min(len(dreg.entries.active), 8))
 			if flt.Kind == "" {
-				dreg.entries.mtx.RLock()
 				for kind := range xact.Table {
 					entry := dreg.entries.findRunning(Flt{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Snap())
 					}
 				}
-				dreg.entries.mtx.RUnlock()
 			} else {
-				entry := dreg.getRunning(Flt{Kind: flt.Kind, Bck: flt.Bck})
-				if entry != nil {
-					matching = append(matching, entry.Get().Snap())
+				for _, entry := range dreg.entries.active {
+					if xctn := entry.Get(); flt.Matches(xctn) {
+						matching = append(matching, xctn.Snap())
+					}
 				}
 			}
+			dreg.entries.mtx.RUnlock() // ----------
+
 			return matching, nil
 		}
 		return dreg.matchingXactsStats(flt.Matches), nil
