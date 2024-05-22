@@ -62,8 +62,10 @@ func (msg *NotifMsg) String() (s string) {
 	sb.WriteByte('[')
 	sb.WriteString(msg.UUID)
 	sb.WriteByte(']')
-	sb.WriteString("<=")
-	sb.WriteString(msg.NodeID)
+	if msg.NodeID != "" {
+		sb.WriteString("<=")
+		sb.WriteString(msg.NodeID)
+	}
 	if msg.ErrMsg != "" {
 		sb.WriteString(", err: ")
 		sb.WriteString(msg.ErrMsg)
