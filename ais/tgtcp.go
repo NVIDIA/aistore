@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -321,7 +320,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		daeStats := t.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
 		ds.TargetCDF = daeStats.TargetCDF
-		t.ciiFill(&ds.Cluster)
+		t.fillNsti(&ds.Cluster)
 		t.writeJSON(w, r, ds, httpdaeWhat)
 	case apc.WhatNodeStatsAndStatusV322: // [ditto]
 		ds := t.statsAndStatusV322()
@@ -908,8 +907,8 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 // compare w/ p.metasyncHandler (NOTE: executes under regstate lock)
 func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	var (
-		err = &errMsync{}
-		cii = &err.Cii
+		err  = &errMsync{}
+		nsti = &err.Cii
 	)
 	if r.Method != http.MethodPut {
 		cmn.WriteErr405(w, r, http.MethodPut)
@@ -954,7 +953,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil {
 		return
 	}
-	t.ciiFill(cii)
+	t.fillNsti(nsti)
 	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, nil)
 	t.writeErr(w, r, retErr, http.StatusConflict)
 }
@@ -1071,9 +1070,9 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// piggyback [cluster info]
 	if getCii {
-		cii := &cifl.Info{}
-		t.ciiFill(cii)
-		t.writeJSON(w, r, cii, "cluster-info")
+		nsti := &cos.NodeStateInfo{}
+		t.fillNsti(nsti)
+		t.writeJSON(w, r, nsti, "cluster-info")
 		return
 	}
 	// valid?

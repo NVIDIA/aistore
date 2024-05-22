@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -288,14 +287,14 @@ func (p *proxy) gojoin(config *cmn.Config) {
 		pub = smap.Primary.URL(cmn.NetPublic)
 		ctrl = smap.Primary.URL(cmn.NetIntraControl)
 	}
-	cii := p.pollClusterStarted(config, smap.Primary)
+	nsti := p.pollClusterStarted(config, smap.Primary)
 	if nlog.Stopping() {
 		return
 	}
 
-	if cii != nil {
+	if nsti != nil {
 		// (primary changed)
-		pub, ctrl = cii.Smap.Primary.PubURL, cii.Smap.Primary.CtrlURL
+		pub, ctrl = nsti.Smap.Primary.PubURL, nsti.Smap.Primary.CtrlURL
 		if status, err := p.joinCluster(apc.ActSelfJoinProxy, ctrl, pub); err != nil {
 			nlog.Errorf(fmtFailedRejoin, p, err, status)
 			return
@@ -966,8 +965,8 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 // (compare with p.recvCluMeta and t.metasyncHandlerPut)
 func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		err = &errMsync{}
-		cii = &err.Cii
+		err  = &errMsync{}
+		nsti = &err.Cii
 	)
 	if r.Method != http.MethodPut {
 		cmn.WriteErr405(w, r, http.MethodPut)
@@ -979,7 +978,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		const txt = "cannot be on the receiving side of metasync"
 		xctn := voteInProgress()
 		maps := smap.StringEx()
-		p.ciiFill(cii)
+		p.fillNsti(nsti)
 		switch {
 		case !p.ClusterStarted():
 			err.Message = fmt.Sprintf("%s(self) %s, %s", p, "is starting up as primary, "+txt, maps)
@@ -989,7 +988,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 			err.Message = fmt.Sprintf("%s(self) %s, %s", p, "is primary, "+txt, maps)
 		}
 		nlog.Errorln(err.Message)
-		// marshal along with cii
+		// marshal along with nsti
 		p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict, Silent)
 		return
 	}
@@ -1032,7 +1031,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {
 		return
 	}
-	p.ciiFill(cii)
+	p.fillNsti(nsti)
 	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
 	p.writeErr(w, r, retErr, http.StatusConflict)
 }
@@ -1080,9 +1079,9 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// piggy-backing cluster info on health
 	if getCii {
 		debug.Assert(!prr)
-		cii := &cifl.Info{}
-		p.ciiFill(cii)
-		p.writeJSON(w, r, cii, "cluster-info")
+		nsti := &cos.NodeStateInfo{}
+		p.fillNsti(nsti)
+		p.writeJSON(w, r, nsti, "cluster-info")
 		return
 	}
 	smap := p.owner.smap.get()
@@ -2566,7 +2565,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds := p.statsAndStatus()
 		daeStats := p.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
-		p.ciiFill(&ds.Cluster)
+		p.fillNsti(&ds.Cluster)
 		p.writeJSON(w, r, ds, what)
 
 	case apc.WhatSysInfo:

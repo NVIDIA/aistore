@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -67,7 +66,7 @@ type (
 	// (includes stats.Node and more; NOTE: direct API call w/ no proxying)
 	NodeStatus struct {
 		Node
-		Cluster cifl.Info
+		Cluster cos.NodeStateInfo
 		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
 		// assorted props
 		Status         string         `json:"status"`

@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -79,7 +78,7 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 				Smap: &smapX{Smap: meta.Smap{Version: smapVersion}},
 				BMD:  &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 			}
-			cm.Flags = cm.Flags.Clear(cifl.VoteInProgress)
+			cm.Flags = cm.Flags.Clear(cos.VoteInProgress)
 			b, _ := jsoniter.Marshal(cm)
 			w.Write(b)
 		},
@@ -99,7 +98,7 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 			BMD:  &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 		}
 		if cnt == 1 {
-			cm.Flags = cm.Flags.Set(cifl.VoteInProgress)
+			cm.Flags = cm.Flags.Set(cos.VoteInProgress)
 		}
 		b, _ := jsoniter.Marshal(cm)
 		w.Write(b)
@@ -121,7 +120,7 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 				Smap: &smapX{Smap: meta.Smap{Version: smapVersion}},
 				BMD:  &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 			}
-			cm.Flags = cm.Flags.Clear(cifl.VoteInProgress)
+			cm.Flags = cm.Flags.Clear(cos.VoteInProgress)
 			b, _ := jsoniter.Marshal(cm)
 			w.Write(b)
 		} else {
@@ -149,7 +148,7 @@ func discoverServerVoteInProgressHandler(_, _ int64) *httptest.Server {
 				Smap: &smapX{Smap: meta.Smap{Version: 12345}},
 				BMD:  &bucketMD{BMD: meta.BMD{Version: 67890}},
 			}
-			cm.Flags = cm.Flags.Set(cifl.VoteInProgress)
+			cm.Flags = cm.Flags.Set(cos.VoteInProgress)
 			b, _ := jsoniter.Marshal(cm)
 			w.Write(b)
 		},

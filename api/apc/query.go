@@ -184,7 +184,7 @@ const (
 	QparamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	QparamRebStatus        = "rbs" // true: get detailed rebalancing status
 	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
-	QparamClusterInfo      = "cii" // true: /Health to return cluster info and status
+	QparamClusterInfo      = "cii" // true: /Health to return `cos.NodeStateInfo` including cluster metadata versions and state flags
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
 
 	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached

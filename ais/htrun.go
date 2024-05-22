@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -126,7 +125,7 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	cm := &cluMeta{SI: h.si}
 	if voteInProgress() != nil {
-		cm.Flags = cm.Flags.Set(cifl.VoteInProgress)
+		cm.Flags = cm.Flags.Set(cos.VoteInProgress)
 	}
 	if !opts.skipConfig {
 		var err error
@@ -152,10 +151,10 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	if h.si.IsTarget() && opts.fillRebMarker {
 		rebInterrupted, restarted := opts.htext.interruptedRestarted()
 		if rebInterrupted {
-			cm.Flags = cm.Flags.Set(cifl.RebalanceInterrupted)
+			cm.Flags = cm.Flags.Set(cos.RebalanceInterrupted)
 		}
 		if restarted {
-			cm.Flags = cm.Flags.Set(cifl.Restarted)
+			cm.Flags = cm.Flags.Set(cos.Restarted)
 		}
 	}
 	if !opts.skipPrimeTime && smap.IsPrimary(h.si) {
@@ -1379,26 +1378,26 @@ func (h *htrun) reqHealth(si *meta.Snode, timeout time.Duration, query url.Value
 // - via getMaxCii.do()
 // - checkAll: query all nodes
 // - consider adding max-ver BMD bit here as well (TODO)
-func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*cifl.Info, int /*num confirmations*/) {
+func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*cos.NodeStateInfo, int /*num confirmations*/) {
 	if !smap.isValid() {
 		nlog.Errorf("%s: cannot execute with invalid %s", h, smap)
 		return nil, 0
 	}
 	c := getMaxCii{
 		h:        h,
-		maxCii:   &cifl.Info{},
+		maxNsti:  &cos.NodeStateInfo{},
 		query:    url.Values{apc.QparamClusterInfo: []string{"true"}},
 		timeout:  cmn.Rom.CplaneOperation(),
 		checkAll: checkAll,
 	}
-	smap.fill(c.maxCii)
+	smap.fill(c.maxNsti)
 
 	h._bch(&c, smap, apc.Proxy)
 	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTs() > 0) {
 		h._bch(&c, smap, apc.Target)
 	}
-	nlog.Infoln(h.String()+":", c.maxCii.String())
-	return c.maxCii, c.cnt
+	nlog.Infoln(h.String()+":", c.maxNsti.String())
+	return c.maxNsti, c.cnt
 }
 
 func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
@@ -1814,11 +1813,11 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	}
 
 	// Failed to join cluster using config, try getting primary URL using existing smap.
-	cii, _ := h.bcastHealth(smap, false /*checkAll*/)
-	if cii == nil || cii.Smap.Version < smap.version() {
+	nsti, _ := h.bcastHealth(smap, false /*checkAll*/)
+	if nsti == nil || nsti.Smap.Version < smap.version() {
 		return
 	}
-	primaryURL = cii.Smap.Primary.PubURL
+	primaryURL = nsti.Smap.Primary.PubURL
 
 	// Daemon is stopping skip register
 	if nlog.Stopping() {
@@ -1935,7 +1934,7 @@ func (h *htrun) getPrimaryURLAndSI(smap *smapX, config *cmn.Config) (string, *me
 	return smap.Primary.URL(cmn.NetIntraControl), smap.Primary
 }
 
-func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii *cifl.Info) {
+func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti *cos.NodeStateInfo) {
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = config.Timeout.CplaneOperation.D()
@@ -1986,14 +1985,14 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 
 		if rediscover >= config.Timeout.Startup.D()/2 {
 			rediscover = 0
-			if cii, cnt := h.bcastHealth(smap, true /*checkAll*/); cii != nil && cii.Smap.Version > smap.version() {
+			if nsti, cnt := h.bcastHealth(smap, true /*checkAll*/); nsti != nil && nsti.Smap.Version > smap.version() {
 				var pid string
 				if psi != nil {
 					pid = psi.ID()
 				}
-				if cii.Smap.Primary.ID != pid && cnt >= maxVerConfirmations {
-					nlog.Warningf("%s: change of primary %s => %s - must rejoin", h.si, pid, cii.Smap.Primary.ID)
-					maxCii = cii
+				if nsti.Smap.Primary.ID != pid && cnt >= maxVerConfirmations {
+					nlog.Warningf("%s: change of primary %s => %s - must rejoin", h.si, pid, nsti.Smap.Primary.ID)
+					maxNsti = nsti
 					return
 				}
 			}

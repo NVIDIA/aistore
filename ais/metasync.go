@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -131,8 +130,8 @@ type (
 	}
 	// metasync Rx structured error
 	errMsync struct {
-		Message string    `json:"message"`
-		Cii     cifl.Info `json:"cii"`
+		Message string            `json:"message"`
+		Cii     cos.NodeStateInfo `json:"nsti"`
 	}
 )
 

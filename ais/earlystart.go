@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -125,16 +124,16 @@ func (p *proxy) determineRole(smap *smapX /*loaded*/, config *cmn.Config) (prim 
 		// 2. relying on local copy of Smap (double-checking its version though)
 		prim.isSmap = smap.isPrimary(p.si)
 		if prim.isSmap {
-			cii, cnt := p.bcastHealth(smap, true /*checkAll*/)
-			if cii != nil && cii.Smap.Version > smap.version() {
-				if cii.Smap.Primary.ID != p.SID() || cnt < maxVerConfirmations {
+			nsti, cnt := p.bcastHealth(smap, true /*checkAll*/)
+			if nsti != nil && nsti.Smap.Version > smap.version() {
+				if nsti.Smap.Primary.ID != p.SID() || cnt < maxVerConfirmations {
 					nlog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
-						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
+						p.si, smap, nsti.Smap.Version, nsti.Smap.Primary.ID, cnt)
 					prim.isSmap = false
-					prim.url = cii.Smap.Primary.PubURL
+					prim.url = nsti.Smap.Primary.PubURL
 				} else {
 					nlog.Warningf("%s: proceeding as primary even though local %s < v%d(%s, cnt=%d)",
-						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
+						p.si, smap, nsti.Smap.Version, nsti.Smap.Primary.ID, cnt)
 				}
 			}
 		}
@@ -770,7 +769,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 
 		// TODO: maxver of EtlMD
 
-		if cm.Smap != nil && cm.Flags.IsSet(cifl.VoteInProgress) {
+		if cm.Smap != nil && cm.Flags.IsSet(cos.VoteInProgress) {
 			var s string
 			if cm.Smap.Primary != nil {
 				s = " of the current one " + cm.Smap.Primary.ID()
@@ -833,7 +832,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta, forcePrimaryChange bool) (
 			nlog.Errorln("Warning:", err)
 			continue
 		}
-		voteInProgress = voteInProgress || regReq.Flags.IsSet(cifl.VoteInProgress)
+		voteInProgress = voteInProgress || regReq.Flags.IsSet(cos.VoteInProgress)
 		if regReq.Smap != nil && regReq.Smap.version() > 0 && cos.IsValidUUID(regReq.Smap.UUID) {
 			if after.Smap != nil && after.Smap.version() > 0 {
 				if cos.IsValidUUID(after.Smap.UUID) && after.Smap.UUID != regReq.Smap.UUID {

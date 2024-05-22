@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -60,14 +59,14 @@ type (
 	// cluster-wide control information - replicated, versioned, and synchronized
 	// usage: elect new primary, join cluster, ...
 	cluMeta struct {
-		Smap      *smapX        `json:"smap"`
-		BMD       *bucketMD     `json:"bmd"`
-		RMD       *rebMD        `json:"rmd"`
-		EtlMD     *etlMD        `json:"etlMD"`
-		Config    *globalConfig `json:"config"`
-		SI        *meta.Snode   `json:"si"`
-		PrimeTime int64         `json:"prime_time"`
-		Flags     cifl.Flags    `json:"flags"`
+		Smap      *smapX             `json:"smap"`
+		BMD       *bucketMD          `json:"bmd"`
+		RMD       *rebMD             `json:"rmd"`
+		EtlMD     *etlMD             `json:"etlMD"`
+		Config    *globalConfig      `json:"config"`
+		SI        *meta.Snode        `json:"si"`
+		PrimeTime int64              `json:"prime_time"`
+		Flags     cos.NodeStateFlags `json:"flags"`
 	}
 
 	// extend control msg: ActionMsg with an extra information for node <=> node control plane communications
@@ -161,7 +160,7 @@ type (
 
 	getMaxCii struct {
 		h          *htrun
-		maxCii     *cifl.Info
+		maxNsti    *cos.NodeStateInfo
 		query      url.Values
 		maxConfVer int64
 		timeout    time.Duration
@@ -643,66 +642,66 @@ func (m httpMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // clusterInfo //
 /////////////////
 
-func (p *proxy) ciiFill(cii *cifl.Info) {
-	p.htrun.fill(cii)
+func (p *proxy) fillNsti(nsti *cos.NodeStateInfo) {
+	p.htrun.fill(nsti)
 	onl := true
 	flt := nlFilter{Kind: apc.ActRebalance, OnlyRunning: &onl}
 	if nl := p.notifs.find(flt); nl != nil {
-		cii.Flags = cii.Flags.Set(cifl.Rebalancing)
+		nsti.Flags = nsti.Flags.Set(cos.Rebalancing)
 	}
 }
 
-func (t *target) ciiFill(cii *cifl.Info) {
-	t.htrun.fill(cii)
+func (t *target) fillNsti(nsti *cos.NodeStateInfo) {
+	t.htrun.fill(nsti)
 	marked := xreg.GetRebMarked()
 	if marked.Xact != nil {
-		cii.Flags = cii.Flags.Set(cifl.Rebalancing)
+		nsti.Flags = nsti.Flags.Set(cos.Rebalancing)
 	}
 	if marked.Interrupted {
-		cii.Flags = cii.Flags.Set(cifl.RebalanceInterrupted)
+		nsti.Flags = nsti.Flags.Set(cos.RebalanceInterrupted)
 	}
 	if marked.Restarted {
-		cii.Flags = cii.Flags.Set(cifl.Restarted)
+		nsti.Flags = nsti.Flags.Set(cos.Restarted)
 	}
 	marked = xreg.GetResilverMarked()
 	if marked.Xact != nil {
-		cii.Flags = cii.Flags.Set(cifl.Resilvering)
+		nsti.Flags = nsti.Flags.Set(cos.Resilvering)
 	}
 	if marked.Interrupted {
-		cii.Flags = cii.Flags.Set(cifl.ResilverInterrupted)
+		nsti.Flags = nsti.Flags.Set(cos.ResilverInterrupted)
 	}
 }
 
-func (h *htrun) fill(cii *cifl.Info) {
+func (h *htrun) fill(nsti *cos.NodeStateInfo) {
 	var (
 		smap = h.owner.smap.get()
 		bmd  = h.owner.bmd.get()
 		rmd  = h.owner.rmd.get()
 		etl  = h.owner.etl.get()
 	)
-	smap.fill(cii)
-	cii.BMD.Version = bmd.version()
-	cii.BMD.UUID = bmd.UUID
-	cii.RMD.Version = rmd.Version
-	cii.Config.Version = h.owner.config.version()
-	cii.EtlMD.Version = etl.version()
+	smap.fill(nsti)
+	nsti.BMD.Version = bmd.version()
+	nsti.BMD.UUID = bmd.UUID
+	nsti.RMD.Version = rmd.Version
+	nsti.Config.Version = h.owner.config.version()
+	nsti.EtlMD.Version = etl.version()
 	if h.ClusterStarted() {
-		cii.Flags = cii.Flags.Set(cifl.ClusterStarted)
+		nsti.Flags = nsti.Flags.Set(cos.ClusterStarted)
 	}
 	if h.NodeStarted() {
-		cii.Flags = cii.Flags.Set(cifl.NodeStarted)
+		nsti.Flags = nsti.Flags.Set(cos.NodeStarted)
 	}
 }
 
-func (smap *smapX) fill(cii *cifl.Info) {
-	cii.Smap.Version = smap.version()
-	cii.Smap.UUID = smap.UUID
+func (smap *smapX) fill(nsti *cos.NodeStateInfo) {
+	nsti.Smap.Version = smap.version()
+	nsti.Smap.UUID = smap.UUID
 	if smap.Primary != nil {
-		cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetIntraControl)
-		cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetPublic)
-		cii.Smap.Primary.ID = smap.Primary.ID()
+		nsti.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetIntraControl)
+		nsti.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetPublic)
+		nsti.Smap.Primary.ID = smap.Primary.ID()
 		if voteInProgress() != nil {
-			cii.Flags = cii.Flags.Set(cifl.VoteInProgress)
+			nsti.Flags = nsti.Flags.Set(cos.VoteInProgress)
 		}
 	}
 }
@@ -712,37 +711,37 @@ func (smap *smapX) fill(cii *cifl.Info) {
 ///////////////
 
 func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
-	var cii *cifl.Info
+	var nsti *cos.NodeStateInfo
 	body, _, err := c.h.reqHealth(si, c.timeout, c.query, smap)
 	if err != nil {
 		goto ret
 	}
-	if cii = extractCii(body, smap, c.h.si, si); cii == nil {
+	if nsti = extractCii(body, smap, c.h.si, si); nsti == nil {
 		goto ret
 	}
-	if cii.Smap.UUID != smap.UUID {
-		if cii.Smap.UUID == "" {
+	if nsti.Smap.UUID != smap.UUID {
+		if nsti.Smap.UUID == "" {
 			goto ret
 		}
 		if smap.UUID != "" {
 			// FATAL: cluster integrity error (cie)
-			cos.ExitLogf("%s: split-brain uuid [%s %s] vs %+v", ciError(10), c.h, smap.StringEx(), cii.Smap)
+			cos.ExitLogf("%s: split-brain uuid [%s %s] vs %+v", ciError(10), c.h, smap.StringEx(), nsti.Smap)
 		}
 	}
 	c.mu.Lock()
-	if c.maxCii.Smap.Version < cii.Smap.Version {
+	if c.maxNsti.Smap.Version < nsti.Smap.Version {
 		// reset confirmation count if there's any sign of disagreement
-		if c.maxCii.Smap.Primary.ID != cii.Smap.Primary.ID || cii.Flags.IsSet(cifl.VoteInProgress) {
+		if c.maxNsti.Smap.Primary.ID != nsti.Smap.Primary.ID || nsti.Flags.IsSet(cos.VoteInProgress) {
 			c.cnt = 1
 		} else {
 			c.cnt++
 		}
-		c.maxCii = cii
-	} else if c.maxCii.SmapEqual(cii) {
+		c.maxNsti = nsti
+	} else if c.maxNsti.SmapEqual(nsti) {
 		c.cnt++
 	}
-	if c.maxConfVer < cii.Config.Version {
-		c.maxConfVer = cii.Config.Version
+	if c.maxConfVer < nsti.Config.Version {
+		c.maxConfVer = nsti.Config.Version
 	}
 	c.mu.Unlock()
 ret:
@@ -757,17 +756,17 @@ func (c *getMaxCii) haveEnough() (yes bool) {
 	return
 }
 
-func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *cifl.Info {
-	var cii cifl.Info
-	if err := jsoniter.Unmarshal(body, &cii); err != nil {
+func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *cos.NodeStateInfo {
+	var nsti cos.NodeStateInfo
+	if err := jsoniter.Unmarshal(body, &nsti); err != nil {
 		nlog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
 		return nil
 	}
-	if smap.UUID != cii.Smap.UUID {
-		nlog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
+	if smap.UUID != nsti.Smap.UUID {
+		nlog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, nsti.Smap.UUID, si)
 		return nil
 	}
-	return &cii
+	return &nsti
 }
 
 ////////////////

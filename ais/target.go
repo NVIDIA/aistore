@@ -399,14 +399,14 @@ func (t *target) Run() error {
 // this method is otherwise identical to t.gojoin (TODO: unify)
 func (t *target) gojoin(config *cmn.Config) {
 	smap := t.owner.smap.get()
-	cii := t.pollClusterStarted(config, smap.Primary)
+	nsti := t.pollClusterStarted(config, smap.Primary)
 	if nlog.Stopping() {
 		return
 	}
 
-	if cii != nil {
+	if nsti != nil {
 		// (primary changed)
-		primary := cii.Smap.Primary
+		primary := nsti.Smap.Primary
 		if status, err := t.joinCluster(apc.ActSelfJoinTarget, primary.CtrlURL, primary.PubURL); err != nil {
 			nlog.Errorf(fmtFailedRejoin, t, err, status)
 			return

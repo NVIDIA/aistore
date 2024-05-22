@@ -17,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cifl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -501,10 +500,10 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !config.Rebalance.Enabled {
-		regReq.Flags = regReq.Flags.Clear(cifl.RebalanceInterrupted)
-		regReq.Flags = regReq.Flags.Clear(cifl.Restarted)
+		regReq.Flags = regReq.Flags.Clear(cos.RebalanceInterrupted)
+		regReq.Flags = regReq.Flags.Clear(cos.Restarted)
 	}
-	interrupted, restarted := regReq.Flags.IsSet(cifl.RebalanceInterrupted), regReq.Flags.IsSet(cifl.Restarted)
+	interrupted, restarted := regReq.Flags.IsSet(cos.RebalanceInterrupted), regReq.Flags.IsSet(cos.Restarted)
 	if nsi.IsTarget() && (interrupted || restarted) {
 		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			// handle via rmd.starting + resumeReb
@@ -639,7 +638,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 		}
 		if keepalive {
 			upd = p.kalive(nsi, osi)
-		} else if regReq.Flags.IsSet(cifl.Restarted) {
+		} else if regReq.Flags.IsSet(cos.Restarted) {
 			upd = true
 		} else {
 			upd = p.rereg(nsi, osi)
@@ -727,8 +726,8 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		nsi:         nsi,
 		msg:         msg,
 		flags:       flags,
-		interrupted: regReq.Flags.IsSet(cifl.RebalanceInterrupted),
-		restarted:   regReq.Flags.IsSet(cifl.Restarted),
+		interrupted: regReq.Flags.IsSet(cos.RebalanceInterrupted),
+		restarted:   regReq.Flags.IsSet(cos.Restarted),
 	}
 	if err = p._earlyGFN(ctx, ctx.nsi); err != nil {
 		return
