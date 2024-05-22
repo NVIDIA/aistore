@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -185,11 +186,13 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
+		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, true)
 		t.termKaliveX(msg.Action, true)
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
+		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, true)
 		t.termKaliveX(msg.Action, false)
 		t.shutdown(msg.Action)
 	case apc.ActRmNodeUnsafe:
@@ -762,7 +765,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		}
 		if msg.Action == apc.ActRebalance {
 			nlog.Infof("%s: starting user-requested rebalance[%s]", t, msg.UUID)
-			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
+			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
 			return
 		}
 
@@ -782,7 +785,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		default:
 			nlog.Infoln(t.String() + ": starting rebalance[" + xact.RebID2S(newRMD.Version) + "]")
 		}
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
+		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
 
 		if newRMD.Resilver != "" {
 			nlog.Infoln(t.String() + ": ... and resilver")

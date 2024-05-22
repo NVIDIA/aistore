@@ -78,6 +78,9 @@ const (
 
 	// KindSpecial
 	Uptime = "up.ns.time"
+
+	// KindGauge, cos.NodeStateFlags enum
+	NodeStateFlags = "state.flags"
 )
 
 // interfaces
@@ -641,6 +644,9 @@ func (r *runner) regCommon(node *meta.Snode) {
 
 	// special uptime
 	r.reg(node, Uptime, KindSpecial)
+
+	// node state flags
+	r.reg(node, NodeStateFlags, KindGauge)
 }
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
@@ -708,6 +714,21 @@ func (r *runner) AddMany(nvs ...cos.NamedVal64) {
 	for _, nv := range nvs {
 		r.core.update(nv)
 	}
+}
+
+func (r *runner) Flag(name string, fl cos.NodeStateFlags, set bool) {
+	var (
+		nval  cos.NodeStateFlags
+		v, ok = r.core.Tracker[name]
+	)
+	debug.Assertf(ok, "invalid metric name %q", name)
+	oval := cos.NodeStateFlags(ratomic.LoadInt64(&v.Value))
+	if set {
+		nval = oval.Set(fl)
+	} else {
+		nval = oval.Clear(fl)
+	}
+	ratomic.StoreInt64(&v.Value, int64(nval))
 }
 
 func (r *runner) IsPrometheus() bool { return r.core.isPrometheus() }

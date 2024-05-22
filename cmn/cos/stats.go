@@ -18,6 +18,7 @@ type (
 	StatsUpdater interface {
 		Inc(name string)
 		Add(name string, val int64)
+		Flag(name string, val NodeStateFlags, set bool)
 		Get(name string) int64
 		AddMany(namedVal64 ...NamedVal64)
 	}

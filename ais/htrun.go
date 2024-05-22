@@ -98,6 +98,7 @@ func (h *htrun) Sowner() meta.Sowner { return h.owner.smap }
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
+		h.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, false)
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }

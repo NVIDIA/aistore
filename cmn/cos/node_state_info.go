@@ -19,6 +19,7 @@ const (
 	Restarted
 	OOS
 	OOM
+	MaintenanceMode
 )
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }

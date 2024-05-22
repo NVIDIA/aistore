@@ -56,9 +56,6 @@ const (
 	ErrMetadataCount = "err.md.n"
 	ErrIOCount       = "err.io.n"
 
-	// target restarted (effectively, boolean)
-	RestartCount = "restart.n"
-
 	// KindLatency
 	PutLatency      = "put.ns"
 	AppendLatency   = "append.ns"
@@ -240,9 +237,6 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, cos.StreamsOutObjSize, KindSize)
 	r.reg(node, cos.StreamsInObjCount, KindCounter)
 	r.reg(node, cos.StreamsInObjSize, KindSize)
-
-	// node restarted
-	r.reg(node, RestartCount, KindCounter)
 
 	// download
 	r.reg(node, DownloadSize, KindSize)

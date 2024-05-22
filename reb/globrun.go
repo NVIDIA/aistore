@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -171,7 +172,7 @@ func (reb *Reb) unregRecv() {
 //  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
+func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, tstats cos.StatsUpdater) {
 	if reb.nxtID.Load() >= id {
 		return
 	}
@@ -223,6 +224,8 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 
 	onGFN()
 
+	tstats.Flag(stats.NodeStateFlags, cos.Rebalancing, true)
+
 	errCnt := 0
 	err := reb.run(rargs)
 	if err == nil {
@@ -237,6 +240,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 	}
 
 	reb.fini(rargs, logHdr, err)
+	tstats.Flag(stats.NodeStateFlags, cos.Rebalancing, false)
 
 	offGFN()
 }
