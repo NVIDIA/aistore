@@ -514,3 +514,13 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 	err = validateBckBID(lom.Bucket(), args.BID)
 	return
 }
+
+// lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
+func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *core.LOM, err error) {
+	lom = core.AllocLOM(hdr.ObjName)
+	if err = lom.InitBck(&hdr.Bck); err != nil {
+		return nil, err
+	}
+	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)
+	return lom, nil
+}

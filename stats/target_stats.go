@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/transport"
 )
 
 // Naming Convention:
@@ -50,12 +49,6 @@ const (
 
 	VerChangeCount = "ver.change.n"
 	VerChangeSize  = "ver.change.size"
-
-	// intra-cluster transmit & receive
-	StreamsOutObjCount = transport.OutObjCount
-	StreamsOutObjSize  = transport.OutObjSize
-	StreamsInObjCount  = transport.InObjCount
-	StreamsInObjSize   = transport.InObjSize
 
 	// errors
 	ErrCksumCount    = "err.cksum.n"
@@ -243,10 +236,10 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, ErrIOCount, KindCounter)
 
 	// streams
-	r.reg(node, StreamsOutObjCount, KindCounter)
-	r.reg(node, StreamsOutObjSize, KindSize)
-	r.reg(node, StreamsInObjCount, KindCounter)
-	r.reg(node, StreamsInObjSize, KindSize)
+	r.reg(node, cos.StreamsOutObjCount, KindCounter)
+	r.reg(node, cos.StreamsOutObjSize, KindSize)
+	r.reg(node, cos.StreamsInObjCount, KindCounter)
+	r.reg(node, cos.StreamsInObjSize, KindSize)
 
 	// node restarted
 	r.reg(node, RestartCount, KindCounter)

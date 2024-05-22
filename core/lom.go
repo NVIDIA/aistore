@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/transport"
 )
 
 // Local Object Metadata (LOM) is a locally stored object metadata comprising, in part:
@@ -159,16 +158,6 @@ func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
 
 func (lom *LOM) GetCustomKey(key string) (string, bool) { return lom.md.GetCustomKey(key) }
 func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(key, value) }
-
-// lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
-func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
-	lom = AllocLOM(hdr.ObjName)
-	if err = lom.InitBck(&hdr.Bck); err != nil {
-		return
-	}
-	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)
-	return
-}
 
 func (lom *LOM) IsHRW() bool { return lom.HrwFQN == lom.FQN } // subj to resilvering
 

@@ -1,10 +1,18 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
-// TODO: try resolve transport -> stats cyclic dep and move => stats/api.go
+// motivated by transport <-> stats cyclic dep (via core interfaces)
+
+// intra-cluster transmit & receive (cumulative counters)
+const (
+	StreamsOutObjCount = "stream.out.n"
+	StreamsOutObjSize  = "stream.out.size"
+	StreamsInObjCount  = "stream.in.n"
+	StreamsInObjSize   = "stream.in.size"
+)
 
 type (
 	StatsUpdater interface {

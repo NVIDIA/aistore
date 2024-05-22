@@ -9,14 +9,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 )
 
-// cumulative transport counters (this target)
-const (
-	OutObjCount = "stream.out.n"
-	OutObjSize  = "stream.out.size"
-	InObjCount  = "stream.in.n"
-	InObjSize   = "stream.in.size"
-)
-
 // stream (session) stats
 type Stats struct {
 	Num            atomic.Int64 // number of transferred objects including zero size (header-only) objects

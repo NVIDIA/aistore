@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -497,10 +496,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	// Step 0: Collect rebalance stats
 	clusterStats := tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount)
-		filesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsInObjCount)
-		bytesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize)
-		bytesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, stats.StreamsInObjSize)
+		filesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, cos.StreamsOutObjCount)
+		filesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, cos.StreamsInObjCount)
+		bytesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, cos.StreamsOutObjSize)
+		bytesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, cos.StreamsInObjSize)
 	}
 
 	// Step 1: Unregister multiple targets
@@ -554,10 +553,10 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 	clusterStats = tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
-		filesSent += tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjCount) - filesSentOrig[targetID]
-		filesRecv += tools.GetNamedStatsVal(targetStats, stats.StreamsInObjCount) - filesRecvOrig[targetID]
-		bytesSent += tools.GetNamedStatsVal(targetStats, stats.StreamsOutObjSize) - bytesSentOrig[targetID]
-		bytesRecv += tools.GetNamedStatsVal(targetStats, stats.StreamsInObjSize) - bytesRecvOrig[targetID]
+		filesSent += tools.GetNamedStatsVal(targetStats, cos.StreamsOutObjCount) - filesSentOrig[targetID]
+		filesRecv += tools.GetNamedStatsVal(targetStats, cos.StreamsInObjCount) - filesRecvOrig[targetID]
+		bytesSent += tools.GetNamedStatsVal(targetStats, cos.StreamsOutObjSize) - bytesSentOrig[targetID]
+		bytesRecv += tools.GetNamedStatsVal(targetStats, cos.StreamsInObjSize) - bytesRecvOrig[targetID]
 	}
 
 	// Step 5: Log rebalance stats

@@ -280,14 +280,14 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		}
 		// stats
 		if err == nil {
-			it.stats.incNum()        // 1. this stream stats
-			g.tstats.Inc(InObjCount) // 2. stats/target_stats.go
+			it.stats.incNum()                   // 1. this stream stats
+			g.tstats.Inc(cos.StreamsInObjCount) // 2. stats/target_stats.go
 
 			if size >= 0 {
-				g.tstats.Add(InObjSize, size)
+				g.tstats.Add(cos.StreamsInObjSize, size)
 			} else {
 				debug.Assert(size == SizeUnknown)
-				g.tstats.Add(InObjSize, obj.off-off)
+				g.tstats.Add(cos.StreamsInObjSize, obj.off-off)
 			}
 		}
 	} else if err != nil && err != io.EOF {

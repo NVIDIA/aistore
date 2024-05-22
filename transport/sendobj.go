@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -325,8 +325,8 @@ func (s *Stream) eoObj(err error) {
 	}
 
 	// target stats
-	g.tstats.Inc(OutObjCount)
-	g.tstats.Add(OutObjSize, objSize)
+	g.tstats.Inc(cos.StreamsOutObjCount)
+	g.tstats.Add(cos.StreamsOutObjSize, objSize)
 exit:
 	if err != nil {
 		nlog.Errorln(err)

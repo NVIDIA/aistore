@@ -181,7 +181,7 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 		err = ec.WriteSliceAndMeta(hdr, args)
 	} else {
 		var lom *core.LOM
-		lom, err = core.AllocLomFromHdr(hdr)
+		lom, err = ec.AllocLomFromHdr(hdr)
 		if err == nil {
 			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: reb.xctn()}
 			err = ec.WriteReplicaAndMeta(lom, args)
