@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -32,8 +31,6 @@ import (
 var _ core.Target = (*target)(nil)
 
 func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
-func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
-func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
 
 func (*target) DataClient() *http.Client { return g.client.data }
 

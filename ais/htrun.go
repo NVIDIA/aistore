@@ -95,6 +95,9 @@ func (h *htrun) String() string     { return h.si.String() }
 func (h *htrun) Bowner() meta.Bowner { return h.owner.bmd }
 func (h *htrun) Sowner() meta.Sowner { return h.owner.smap }
 
+func (h *htrun) PageMM() *memsys.MMSA { return h.gmm }
+func (h *htrun) ByteMM() *memsys.MMSA { return h.smm }
+
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {

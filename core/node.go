@@ -7,6 +7,7 @@ package core
 import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
@@ -28,6 +29,10 @@ type (
 
 		ClusterStarted() bool
 		NodeStarted() bool
+
+		// Memory allocators
+		PageMM() *memsys.MMSA
+		ByteMM() *memsys.MMSA
 	}
 )
 

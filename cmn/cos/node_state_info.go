@@ -21,6 +21,7 @@ const (
 	OOM                                              // red alert
 	MaintenanceMode                                  // warning
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
+	LowMemory                                        // ditto OOM
 )
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }

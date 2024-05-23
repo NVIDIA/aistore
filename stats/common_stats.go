@@ -25,10 +25,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
+	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -93,9 +95,6 @@ type (
 		statsTime(newval time.Duration)
 		standingBy() bool
 	}
-	runnerHost interface {
-		ClusterStarted() bool
-	}
 )
 
 // primitives: values and maps
@@ -134,7 +133,7 @@ type (
 
 	// Prunner and Trunner
 	runner struct {
-		daemon    runnerHost
+		node      core.Node
 		stopCh    chan struct{}
 		ticker    *time.Ticker
 		core      *coreStats
@@ -143,6 +142,7 @@ type (
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
 		next      int64       // mono.Nano
+		mem       sys.MemStat
 		startedUp atomic.Bool
 	}
 )
@@ -224,7 +224,7 @@ func (s *coreStats) promUnlock() {
 }
 
 // init MetricClient client: StatsD (default) or Prometheus
-func (s *coreStats) initMetricClient(node *meta.Snode, parent *runner) {
+func (s *coreStats) initMetricClient(snode *meta.Snode, parent *runner) {
 	// Either Prometheus
 	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" {
 		nlog.Infoln("Using Prometheus")
@@ -252,8 +252,8 @@ func (s *coreStats) initMetricClient(node *meta.Snode, parent *runner) {
 			probe = probeBool
 		}
 	}
-	id := strings.ReplaceAll(node.ID(), ":", "_") // ":" delineates name and value for StatsD
-	statsD, err := statsd.New("localhost", port, "ais"+node.Type()+"."+id, probe)
+	id := strings.ReplaceAll(snode.ID(), ":", "_") // ":" delineates name and value for StatsD
+	statsD, err := statsd.New("localhost", port, "ais"+snode.Type()+"."+id, probe)
 	if err != nil {
 		nlog.Errorf("Starting up without StatsD: %v", err)
 	} else {
@@ -264,11 +264,11 @@ func (s *coreStats) initMetricClient(node *meta.Snode, parent *runner) {
 
 // populate *prometheus.Desc and statsValue.label.prom
 // NOTE: naming; compare with statsTracker.register()
-func (s *coreStats) initProm(node *meta.Snode) {
+func (s *coreStats) initProm(snode *meta.Snode) {
 	if !s.isPrometheus() {
 		return
 	}
-	id := strings.ReplaceAll(node.ID(), ".", "_")
+	id := strings.ReplaceAll(snode.ID(), ".", "_")
 	for name, v := range s.Tracker {
 		var variableLabels []string
 		if isDiskMetric(name) {
@@ -307,7 +307,7 @@ func (s *coreStats) initProm(node *meta.Snode) {
 			help = "throughput (MB/s)"
 		}
 
-		fullqn := prometheus.BuildFQName("ais", node.Type(), v.label.prom)
+		fullqn := prometheus.BuildFQName("ais", snode.Type(), v.label.prom)
 		// e.g. metric: ais_target_disk_avg_wsize{disk="nvme0n1",node_id="fqWt8081"}
 		s.promDesc[name] = prometheus.NewDesc(fullqn, help, variableLabels, prometheus.Labels{"node_id": id})
 	}
@@ -614,43 +614,43 @@ func (r *runner) GetMetricNames() cos.StrKVs {
 }
 
 // common (target, proxy) metrics
-func (r *runner) regCommon(node *meta.Snode) {
+func (r *runner) regCommon(snode *meta.Snode) {
 	// basic counters
-	r.reg(node, GetCount, KindCounter)
-	r.reg(node, PutCount, KindCounter)
-	r.reg(node, AppendCount, KindCounter)
-	r.reg(node, DeleteCount, KindCounter)
-	r.reg(node, RenameCount, KindCounter)
-	r.reg(node, ListCount, KindCounter)
+	r.reg(snode, GetCount, KindCounter)
+	r.reg(snode, PutCount, KindCounter)
+	r.reg(snode, AppendCount, KindCounter)
+	r.reg(snode, DeleteCount, KindCounter)
+	r.reg(snode, RenameCount, KindCounter)
+	r.reg(snode, ListCount, KindCounter)
 
 	// basic error counters, respectively
-	r.reg(node, errPrefix+GetCount, KindCounter)
-	r.reg(node, errPrefix+PutCount, KindCounter)
-	r.reg(node, errPrefix+AppendCount, KindCounter)
-	r.reg(node, errPrefix+DeleteCount, KindCounter)
-	r.reg(node, errPrefix+RenameCount, KindCounter)
-	r.reg(node, errPrefix+ListCount, KindCounter)
+	r.reg(snode, errPrefix+GetCount, KindCounter)
+	r.reg(snode, errPrefix+PutCount, KindCounter)
+	r.reg(snode, errPrefix+AppendCount, KindCounter)
+	r.reg(snode, errPrefix+DeleteCount, KindCounter)
+	r.reg(snode, errPrefix+RenameCount, KindCounter)
+	r.reg(snode, errPrefix+ListCount, KindCounter)
 
 	// more error counters
-	r.reg(node, ErrHTTPWriteCount, KindCounter)
-	r.reg(node, ErrDownloadCount, KindCounter)
-	r.reg(node, ErrPutMirrorCount, KindCounter)
+	r.reg(snode, ErrHTTPWriteCount, KindCounter)
+	r.reg(snode, ErrDownloadCount, KindCounter)
+	r.reg(snode, ErrPutMirrorCount, KindCounter)
 
 	// latency
-	r.reg(node, GetLatency, KindLatency)
-	r.reg(node, ListLatency, KindLatency)
-	r.reg(node, KeepAliveLatency, KindLatency)
+	r.reg(snode, GetLatency, KindLatency)
+	r.reg(snode, ListLatency, KindLatency)
+	r.reg(snode, KeepAliveLatency, KindLatency)
 
 	// special uptime
-	r.reg(node, Uptime, KindSpecial)
+	r.reg(snode, Uptime, KindSpecial)
 
-	// node state flags
-	r.reg(node, NodeStateFlags, KindGauge)
+	// snode state flags
+	r.reg(snode, NodeStateFlags, KindGauge)
 }
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
 // compare with coreStats.initProm()
-func (r *runner) reg(node *meta.Snode, name, kind string) {
+func (r *runner) reg(snode *meta.Snode, name, kind string) {
 	v := &statsValue{kind: kind}
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
@@ -658,32 +658,32 @@ func (r *runner) reg(node *meta.Snode, name, kind string) {
 		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".n")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "count")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "count")
 	case KindSize:
 		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".size")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbytes")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbytes")
 	case KindLatency:
 		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".ns")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "ms")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "ms")
 	case KindThroughput, KindComputedThroughput:
 		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".bps")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbps")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbps")
 	default:
 		debug.Assert(kind == KindGauge || kind == KindSpecial)
 		v.label.comm = name
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		if name == Uptime {
 			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "seconds")
+			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "seconds")
 		} else {
-			v.label.stsd = fmt.Sprintf("%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm)
+			v.label.stsd = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
 		}
 	}
 	r.core.Tracker[name] = v
@@ -829,7 +829,7 @@ waitStartup:
 				nlog.Flush(nlog.ActNone)
 				k = 0
 			}
-			if r.daemon.ClusterStarted() {
+			if r.node.ClusterStarted() {
 				break waitStartup
 			}
 			if logger.standingBy() && sleep == startupSleep /*first time*/ {
@@ -1005,6 +1005,26 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 	if verbose {
 		nlog.Infoln(prefix + ": done")
 	}
+}
+
+// - check OOM, and
+// - set NodeStateFlags with both capacity and memory flags
+func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
+	_ = r.mem.Get()
+	pressure := mm.Pressure(&r.mem)
+
+	switch {
+	case pressure >= memsys.PressureExtreme:
+		set |= cos.OOM
+		nlog.Errorln(mm.Str(&r.mem))
+	case pressure >= memsys.PressureHigh:
+		set |= cos.LowMemory
+		clr |= cos.OOM
+		nlog.Warningln(mm.Str(&r.mem))
+	default:
+		clr |= cos.OOM | cos.LowMemory
+	}
+	r.Flag(NodeStateFlags, set, clr)
 }
 
 // debug.NewExpvar & debug.SetExpvar to visualize:

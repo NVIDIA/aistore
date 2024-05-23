@@ -79,12 +79,8 @@ type (
 )
 
 type (
-	NodeMemCap interface {
+	NodeCapacity interface {
 		Node
-
-		// Memory allocators
-		PageMM() *memsys.MMSA
-		ByteMM() *memsys.MMSA
 
 		// Space
 		OOS(*fs.CapStatus) fs.CapStatus
@@ -95,7 +91,7 @@ type (
 
 	// a node that can also write objects
 	TargetPut interface {
-		NodeMemCap
+		NodeCapacity
 
 		// PUT params.Reader => lom
 		PutObject(lom *LOM, params *PutParams) (err error)

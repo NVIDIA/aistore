@@ -50,7 +50,7 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 	r.ctracker = make(copyTracker, numProxyStats)
 
 	r.runner.name = "proxystats"
-	r.runner.daemon = p
+	r.runner.node = p
 
 	r.runner.stopCh = make(chan struct{}, 4)
 
@@ -85,6 +85,8 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 			r.next = now + maxStatsLogInterval
 		}
 	}
+
+	r._mem(r.node.PageMM(), 0, 0)
 }
 
 func (r *Prunner) statsTime(newval time.Duration) {

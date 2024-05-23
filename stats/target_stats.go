@@ -21,8 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/sys"
 )
 
 // Naming Convention:
@@ -100,7 +98,7 @@ const (
 type (
 	Trunner struct {
 		runner    // the base (compare w/ Prunner)
-		t         core.NodeMemCap
+		t         core.NodeCapacity
 		TargetCDF fs.TargetCDF `json:"cdf"`
 		disk      ios.AllDiskStats
 		xln       string
@@ -109,7 +107,6 @@ type (
 		}
 		lines   []string
 		fsIDs   []cos.FsID
-		mem     sys.MemStat
 		xallRun core.AllRunningInOut
 		standby bool
 	}
@@ -128,7 +125,7 @@ const (
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
 
-func NewTrunner(t core.NodeMemCap) *Trunner { return &Trunner{t: t} }
+func NewTrunner(t core.NodeCapacity) *Trunner { return &Trunner{t: t} }
 
 func (r *Trunner) Run() error     { return r._run(r /*as statsLogger*/) }
 func (r *Trunner) Standby(v bool) { r.standby = v }
@@ -148,7 +145,7 @@ func (r *Trunner) Init(t core.Target) *atomic.Bool {
 	r.core.statsTime = config.Periodic.StatsTime.D()
 
 	r.runner.name = "targetstats"
-	r.runner.daemon = t
+	r.runner.node = t
 
 	r.runner.stopCh = make(chan struct{}, 4)
 
@@ -202,78 +199,78 @@ func extractPromDiskMetricName(name string) (diskName, metricName string) {
 }
 
 // target-specific metrics, in addition to common and already added via regCommon()
-func (r *Trunner) RegMetrics(node *meta.Snode) {
-	r.reg(node, GetColdCount, KindCounter)
-	r.reg(node, GetColdSize, KindSize)
+func (r *Trunner) RegMetrics(snode *meta.Snode) {
+	r.reg(snode, GetColdCount, KindCounter)
+	r.reg(snode, GetColdSize, KindSize)
 
-	r.reg(node, LruEvictCount, KindCounter)
-	r.reg(node, LruEvictSize, KindSize)
+	r.reg(snode, LruEvictCount, KindCounter)
+	r.reg(snode, LruEvictSize, KindSize)
 
-	r.reg(node, CleanupStoreCount, KindCounter)
-	r.reg(node, CleanupStoreSize, KindSize)
+	r.reg(snode, CleanupStoreCount, KindCounter)
+	r.reg(snode, CleanupStoreSize, KindSize)
 
-	r.reg(node, VerChangeCount, KindCounter)
-	r.reg(node, VerChangeSize, KindSize)
+	r.reg(snode, VerChangeCount, KindCounter)
+	r.reg(snode, VerChangeSize, KindSize)
 
-	r.reg(node, PutLatency, KindLatency)
-	r.reg(node, AppendLatency, KindLatency)
-	r.reg(node, GetRedirLatency, KindLatency)
-	r.reg(node, PutRedirLatency, KindLatency)
-	r.reg(node, GetColdRwLatency, KindLatency)
+	r.reg(snode, PutLatency, KindLatency)
+	r.reg(snode, AppendLatency, KindLatency)
+	r.reg(snode, GetRedirLatency, KindLatency)
+	r.reg(snode, PutRedirLatency, KindLatency)
+	r.reg(snode, GetColdRwLatency, KindLatency)
 
 	// bps
-	r.reg(node, GetThroughput, KindThroughput)
-	r.reg(node, PutThroughput, KindThroughput)
+	r.reg(snode, GetThroughput, KindThroughput)
+	r.reg(snode, PutThroughput, KindThroughput)
 
-	r.reg(node, GetSize, KindSize)
-	r.reg(node, PutSize, KindSize)
+	r.reg(snode, GetSize, KindSize)
+	r.reg(snode, PutSize, KindSize)
 
 	// errors
-	r.reg(node, ErrCksumCount, KindCounter)
-	r.reg(node, ErrCksumSize, KindSize)
+	r.reg(snode, ErrCksumCount, KindCounter)
+	r.reg(snode, ErrCksumSize, KindSize)
 
-	r.reg(node, ErrMetadataCount, KindCounter)
-	r.reg(node, ErrIOCount, KindCounter)
+	r.reg(snode, ErrMetadataCount, KindCounter)
+	r.reg(snode, ErrIOCount, KindCounter)
 
 	// streams
-	r.reg(node, cos.StreamsOutObjCount, KindCounter)
-	r.reg(node, cos.StreamsOutObjSize, KindSize)
-	r.reg(node, cos.StreamsInObjCount, KindCounter)
-	r.reg(node, cos.StreamsInObjSize, KindSize)
+	r.reg(snode, cos.StreamsOutObjCount, KindCounter)
+	r.reg(snode, cos.StreamsOutObjSize, KindSize)
+	r.reg(snode, cos.StreamsInObjCount, KindCounter)
+	r.reg(snode, cos.StreamsInObjSize, KindSize)
 
 	// download
-	r.reg(node, DownloadSize, KindSize)
-	r.reg(node, DownloadLatency, KindLatency)
+	r.reg(snode, DownloadSize, KindSize)
+	r.reg(snode, DownloadLatency, KindLatency)
 
 	// dsort
-	r.reg(node, DsortCreationReqCount, KindCounter)
-	r.reg(node, DsortCreationRespCount, KindCounter)
-	r.reg(node, DsortCreationRespLatency, KindLatency)
-	r.reg(node, DsortExtractShardDskCnt, KindCounter)
-	r.reg(node, DsortExtractShardMemCnt, KindCounter)
-	r.reg(node, DsortExtractShardSize, KindSize)
+	r.reg(snode, DsortCreationReqCount, KindCounter)
+	r.reg(snode, DsortCreationRespCount, KindCounter)
+	r.reg(snode, DsortCreationRespLatency, KindLatency)
+	r.reg(snode, DsortExtractShardDskCnt, KindCounter)
+	r.reg(snode, DsortExtractShardMemCnt, KindCounter)
+	r.reg(snode, DsortExtractShardSize, KindSize)
 
 	// core
-	r.reg(node, RemoteDeletedDelCount, KindCounter)
-	r.reg(node, LcacheCollisionCount, KindCounter)
-	r.reg(node, LcacheEvictedCount, KindCounter)
-	r.reg(node, LcacheFlushColdCount, KindCounter)
+	r.reg(snode, RemoteDeletedDelCount, KindCounter)
+	r.reg(snode, LcacheCollisionCount, KindCounter)
+	r.reg(snode, LcacheEvictedCount, KindCounter)
+	r.reg(snode, LcacheFlushColdCount, KindCounter)
 
 	// Prometheus
-	r.core.initProm(node)
+	r.core.initProm(snode)
 }
 
-func (r *Trunner) RegDiskMetrics(node *meta.Snode, disk string) {
+func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {
 	s, n := r.core.Tracker, nameRbps(disk)
 	if _, ok := s[n]; ok { // must be config.TestingEnv()
 		return
 	}
-	r.reg(node, n, KindComputedThroughput)
-	r.reg(node, nameWbps(disk), KindComputedThroughput)
+	r.reg(snode, n, KindComputedThroughput)
+	r.reg(snode, nameWbps(disk), KindComputedThroughput)
 
-	r.reg(node, nameRavg(disk), KindGauge)
-	r.reg(node, nameWavg(disk), KindGauge)
-	r.reg(node, nameUtil(disk), KindGauge)
+	r.reg(snode, nameRavg(disk), KindGauge)
+	r.reg(snode, nameWavg(disk), KindGauge)
+	r.reg(snode, nameUtil(disk), KindGauge)
 }
 
 func (r *Trunner) GetStats() (ds *Node) {
@@ -345,7 +342,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 3. capacity
-	r.cap(config, now)
+	set, clr := r._cap(config, now)
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
 	r.logDiskStats(now)
@@ -384,24 +381,14 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 7. separately, memory
-	_ = r.mem.Get()
-	var (
-		mm       = r.t.PageMM()
-		pressure = mm.Pressure(&r.mem)
-	)
-	switch {
-	case pressure >= memsys.PressureExtreme:
-		nlog.Errorln(mm.Str(&r.mem))
-	case pressure >= memsys.PressureHigh:
-		nlog.Warningln(mm.Str(&r.mem))
-	}
+	r._mem(r.t.PageMM(), set, clr)
 
 	if now > r.next {
 		r.next = now + maxStatsLogInterval
 	}
 }
 
-func (r *Trunner) cap(config *cmn.Config, now int64) {
+func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags) {
 	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.TargetCDF)
 	if err != nil {
 		nlog.Errorln(err)
@@ -442,9 +429,6 @@ func (r *Trunner) cap(config *cmn.Config, now int64) {
 	}
 
 	// cap alert
-	var (
-		set, clr cos.NodeStateFlags
-	)
 	if cs.IsOOS() {
 		set = cos.OOS
 	} else if cs.Err() != nil {
@@ -453,7 +437,7 @@ func (r *Trunner) cap(config *cmn.Config, now int64) {
 	} else {
 		clr = cos.OOS | cos.LowCapacity
 	}
-	r.Flag(NodeStateFlags, set, clr)
+	return set, clr
 }
 
 // log formatted disk stats:
