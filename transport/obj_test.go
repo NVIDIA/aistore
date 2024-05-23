@@ -60,11 +60,11 @@ type dummyStatsTracker struct{}
 // interface guard
 var _ cos.StatsUpdater = (*dummyStatsTracker)(nil)
 
-func (*dummyStatsTracker) Add(string, int64)                     {}
-func (*dummyStatsTracker) Inc(string)                            {}
-func (*dummyStatsTracker) Get(string) int64                      { return 0 }
-func (*dummyStatsTracker) AddMany(...cos.NamedVal64)             {}
-func (*dummyStatsTracker) Flag(string, cos.NodeStateFlags, bool) {}
+func (*dummyStatsTracker) Add(string, int64)                                   {}
+func (*dummyStatsTracker) Inc(string)                                          {}
+func (*dummyStatsTracker) Get(string) int64                                    { return 0 }
+func (*dummyStatsTracker) AddMany(...cos.NamedVal64)                           {}
+func (*dummyStatsTracker) Flag(string, cos.NodeStateFlags, cos.NodeStateFlags) {}
 
 var (
 	objmux   *mux.ServeMux

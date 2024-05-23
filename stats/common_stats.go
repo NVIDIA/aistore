@@ -142,8 +142,7 @@ type (
 		sorted    []string    // sorted names
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
-		next      int64       // mono.NanoTime()
-		lastCap   int64       // ditto
+		next      int64       // mono.Nano
 		startedUp atomic.Bool
 	}
 )
@@ -716,19 +715,24 @@ func (r *runner) AddMany(nvs ...cos.NamedVal64) {
 	}
 }
 
-func (r *runner) Flag(name string, fl cos.NodeStateFlags, set bool) {
+func (r *runner) Flag(name string, set, clr cos.NodeStateFlags) {
 	var (
 		nval  cos.NodeStateFlags
 		v, ok = r.core.Tracker[name]
 	)
 	debug.Assertf(ok, "invalid metric name %q", name)
 	oval := cos.NodeStateFlags(ratomic.LoadInt64(&v.Value))
-	if set {
-		nval = oval.Set(fl)
-	} else {
-		nval = oval.Clear(fl)
+	if set != 0 {
+		nval = oval.Set(set)
+		if clr != 0 {
+			nval = nval.Clear(clr)
+		}
+	} else if clr != 0 {
+		nval = oval.Clear(clr)
 	}
-	ratomic.StoreInt64(&v.Value, int64(nval))
+	if nval != oval {
+		ratomic.StoreInt64(&v.Value, int64(nval))
+	}
 }
 
 func (r *runner) IsPrometheus() bool { return r.core.isPrometheus() }

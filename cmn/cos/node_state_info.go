@@ -9,17 +9,18 @@ import "fmt"
 type NodeStateFlags BitFlags
 
 const (
-	VoteInProgress = NodeStateFlags(1 << iota)
-	ClusterStarted
-	NodeStarted
-	Rebalancing
-	RebalanceInterrupted
-	Resilvering
-	ResilverInterrupted
-	Restarted
-	OOS
-	OOM
-	MaintenanceMode
+	VoteInProgress       = NodeStateFlags(1 << iota) // warning
+	ClusterStarted                                   // info
+	NodeStarted                                      // info
+	Rebalancing                                      // warning
+	RebalanceInterrupted                             // warning
+	Resilvering                                      // warning
+	ResilverInterrupted                              // warning
+	Restarted                                        // warning
+	OOS                                              // red alert
+	OOM                                              // red alert
+	MaintenanceMode                                  // warning
+	LowCapacity                                      // (used > high); warning: OOS possible soon..
 )
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }

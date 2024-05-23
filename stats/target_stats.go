@@ -99,16 +99,19 @@ const (
 
 type (
 	Trunner struct {
+		runner    // the base (compare w/ Prunner)
 		t         core.NodeMemCap
 		TargetCDF fs.TargetCDF `json:"cdf"`
 		disk      ios.AllDiskStats
 		xln       string
-		runner    // the base (compare w/ Prunner)
-		lines     []string
-		fsIDs     []cos.FsID
-		mem       sys.MemStat
-		xallRun   core.AllRunningInOut
-		standby   bool
+		cs        struct {
+			last int64 // mono.Nano
+		}
+		lines   []string
+		fsIDs   []cos.FsID
+		mem     sys.MemStat
+		xallRun core.AllRunningInOut
+		standby bool
 	}
 )
 
@@ -342,36 +345,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 3. capacity
-	var (
-		cs, updated, err, errCap = fs.CapPeriodic(now, config, &r.TargetCDF)
-	)
-	if err != nil {
-		nlog.Errorln(err)
-	} else if errCap != nil {
-		r.t.OOS(&cs)
-	} else if updated && cs.PctMax > int32(config.Space.CleanupWM) {
-		debug.Assert(!cs.IsOOS(), cs.String())
-		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
-		r.t.OOS(&cs)
-	}
-	if (updated && now >= r.next) || errCap != nil || now >= r.lastCap+maxCapLogInterval {
-		fast := fs.NoneShared(len(r.TargetCDF.Mountpaths))
-		unique := fast
-		if !fast {
-			r.fsIDs = r.fsIDs[:0]
-		}
-		for mpath, cdf := range r.TargetCDF.Mountpaths {
-			if !fast {
-				r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
-			}
-			if unique {
-				s := mpath + cdf.Label.ToLog() + ": used " + strconv.Itoa(int(cdf.Capacity.PctUsed)) + "%"
-				s += ", avail " + cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2)
-				r.lines = append(r.lines, s)
-			}
-		}
-		r.lastCap = now
-	}
+	r.cap(config, now)
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
 	r.logDiskStats(now)
@@ -425,6 +399,61 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	if now > r.next {
 		r.next = now + maxStatsLogInterval
 	}
+}
+
+func (r *Trunner) cap(config *cmn.Config, now int64) {
+	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.TargetCDF)
+	if err != nil {
+		nlog.Errorln(err)
+		debug.Assert(!updated && errCap == nil, updated, " ", errCap)
+		return
+	}
+	if !updated && errCap == nil { // nothing to do
+		return
+	}
+
+	// target to run x-space
+	if errCap != nil {
+		r.t.OOS(&cs)
+	} else if cs.PctMax > int32(config.Space.CleanupWM) { // remove deleted, other cleanup
+		debug.Assert(!cs.IsOOS(), cs.String())
+		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
+		r.t.OOS(&cs)
+	}
+
+	// periodically: log mountpaths cap
+	if now >= min(r.next, r.cs.last+maxCapLogInterval) || errCap != nil {
+		fast := fs.NoneShared(len(r.TargetCDF.Mountpaths))
+		unique := fast
+		if !fast {
+			r.fsIDs = r.fsIDs[:0]
+		}
+		for mpath, cdf := range r.TargetCDF.Mountpaths {
+			if !fast {
+				r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
+			}
+			if unique {
+				s := mpath + cdf.Label.ToLog() + ": used " + strconv.Itoa(int(cdf.Capacity.PctUsed)) + "%"
+				s += ", avail " + cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2)
+				r.lines = append(r.lines, s)
+			}
+		}
+		r.cs.last = now
+	}
+
+	// cap alert
+	var (
+		set, clr cos.NodeStateFlags
+	)
+	if cs.IsOOS() {
+		set = cos.OOS
+	} else if cs.Err() != nil {
+		clr = cos.OOS
+		set |= cos.LowCapacity
+	} else {
+		clr = cos.OOS | cos.LowCapacity
+	}
+	r.Flag(NodeStateFlags, set, clr)
 }
 
 // log formatted disk stats:

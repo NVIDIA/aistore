@@ -186,13 +186,13 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, true)
+		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, 0)
 		t.termKaliveX(msg.Action, true)
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, true)
+		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, 0)
 		t.termKaliveX(msg.Action, false)
 		t.shutdown(msg.Action)
 	case apc.ActRmNodeUnsafe:
@@ -989,6 +989,10 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 			nlog.Errorf("%s: cannot handle %s (%s => %s) - starting up...", t, msg, oldConfig, newConfig)
 		}
 		return
+	}
+
+	if oldConfig.Space != newConfig.Space {
+		fs.ExpireCapCache()
 	}
 
 	// special: remais update

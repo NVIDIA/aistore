@@ -224,7 +224,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	onGFN()
 
-	tstats.Flag(stats.NodeStateFlags, cos.Rebalancing, true)
+	tstats.Flag(stats.NodeStateFlags, cos.Rebalancing, 0)
 
 	errCnt := 0
 	err := reb.run(rargs)
@@ -240,7 +240,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	}
 
 	reb.fini(rargs, logHdr, err)
-	tstats.Flag(stats.NodeStateFlags, cos.Rebalancing, false)
+	tstats.Flag(stats.NodeStateFlags, 0, cos.Rebalancing)
 
 	offGFN()
 }

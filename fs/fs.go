@@ -1198,9 +1198,12 @@ func _either(cdf1, cdf2 *CDF) {
 	}
 }
 
+func ExpireCapCache() { mfs.csExpires.Store(0) } // upon any change in config.space
+
 // called only and exclusively by `stats.Trunner` providing `config.Periodic.StatsTime` tick
 func CapPeriodic(now int64, config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, updated bool, err, errCap error) {
 	if now < mfs.csExpires.Load() {
+		cs = Cap()
 		return
 	}
 	cs, err, errCap = CapRefresh(config, tcdf)
@@ -1255,8 +1258,8 @@ func (cs *CapStatus) String() (s string) {
 func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 	var (
 		util = int64(cs.PctMax)
-		umin = min(config.Space.HighWM-10, config.Space.LowWM)
-		umax = config.Space.OOS
+		umin = min(config.Space.LowWM-5, config.Space.CleanupWM)
+		umax = min(config.Space.OOS-5, config.Space.HighWM)
 		tmax = config.LRU.CapacityUpdTime.D()
 		tmin = config.Periodic.StatsTime.D()
 	)
