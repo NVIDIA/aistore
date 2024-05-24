@@ -7,7 +7,7 @@ package hrw
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -36,9 +36,9 @@ func randFileName(src *rand.Rand, nameLen int) string {
 
 	b := make([]byte, nameLen)
 	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := nameLen-1, src.Int63(), letterIdxMax; i >= 0; {
+	for i, cache, remain := nameLen-1, src.Int64(), letterIdxMax; i >= 0; {
 		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
+			cache, remain = src.Int64(), letterIdxMax
 		}
 		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
 			b[i] = letterBytes[idx]
@@ -61,12 +61,12 @@ func similarFileName(bucketName string, objNum int) string {
 func randNodeID(randGen *rand.Rand) string {
 	randIP := ""
 	for range 3 {
-		randIP += strconv.Itoa(randGen.Intn(255)) + "."
+		randIP += strconv.Itoa(randGen.IntN(255)) + "."
 	}
-	randIP += strconv.Itoa(randGen.Intn(255))
+	randIP += strconv.Itoa(randGen.IntN(255))
 	cksum := xxhash.Checksum32S(cos.UnsafeB(randIP), xxHashSeed)
 	nodeID := strconv.Itoa(int(cksum & 0xfffff))
-	randPort := strconv.Itoa(randGen.Intn(65535))
+	randPort := strconv.Itoa(randGen.IntN(65535))
 	return nodeID + "_" + randPort
 }
 

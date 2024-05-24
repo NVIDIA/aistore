@@ -10,7 +10,7 @@ package hrw
 import (
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"sync"
 	"testing"
@@ -20,7 +20,9 @@ import (
 var resultInt int
 
 func BenchmarkHRW(b *testing.B) {
-	randGen := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	seed := time.Now().UnixNano()
+	randGen := rand.New(rand.NewPCG(uint64(seed), 0)) // formerly (v1): rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+
 	hashFuncs := []hashFuncs{
 		{name: "hrwXXHash", hashF: hrwXXHash},
 		{name: "hrwXXHashWithAppend", hashF: hrwXXHashWithAppend},
@@ -127,7 +129,7 @@ func TestEqualDistribution(t *testing.T) {
 }
 
 func invokeHashFunctions(seed int64, numObjs, numNodes int, useSimilarNames bool, hashFuncs []hashFuncs, dist [][]int) {
-	randGen := rand.New(rand.NewSource(seed))
+	randGen := rand.New(rand.NewPCG(uint64(seed), uint64(seed))) // formerly (v1): rand.New(rand.NewSource(seed))
 	nodes := randNodeIDs(numNodes, randGen)
 	bucketName := randFileName(randGen, fqnMaxLen-objNameLen)
 	for n := range numObjs {
@@ -135,7 +137,7 @@ func invokeHashFunctions(seed int64, numObjs, numNodes int, useSimilarNames bool
 		if useSimilarNames {
 			fileName = similarFileName(bucketName, n)
 		} else {
-			nameLen := randGen.Intn((1<<10)-1) + 1
+			nameLen := randGen.IntN((1<<10)-1) + 1
 			fileName = randFileName(randGen, nameLen)
 		}
 		for idx, hashFunc := range hashFuncs {
