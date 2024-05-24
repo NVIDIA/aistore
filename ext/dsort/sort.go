@@ -5,7 +5,7 @@
 package dsort
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strconv"
 	"time"
@@ -59,9 +59,9 @@ func sortRecords(r *shard.Records, alg *Algorithm) (err error) {
 			seed, err = strconv.ParseInt(alg.Seed, 10, 64)
 			debug.AssertNoErr(err)
 		}
-		rnd = rand.New(rand.NewSource(seed))
+		rnd = rand.New(rand.NewPCG(uint64(seed), 0))
 		for i := range r.Len() { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-			j := rnd.Intn(i + 1)
+			j := rnd.IntN(i + 1)
 			r.Swap(i, j)
 		}
 	default:
