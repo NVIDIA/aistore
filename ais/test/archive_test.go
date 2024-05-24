@@ -7,7 +7,7 @@ package integration_test
 import (
 	"archive/tar"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/url"
 	"os"
 	"path"
@@ -106,7 +106,7 @@ func TestGetFromArch(t *testing.T) {
 				t.Run(path.Join(tname, "format-"+tarFormat.String()), func(t *testing.T) {
 					var (
 						err      error
-						fsize    = rand.Intn(10*cos.KiB) + 1
+						fsize    = rand.IntN(10*cos.KiB) + 1
 						archName = tmpDir + "/" + cos.GenTie() + test.ext
 						dirs     = []string{"a", "b", "c", "a/b", "a/c", "b/c", "a/b/c", "a/c/b", "b/a/c"}
 					)
@@ -312,7 +312,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
 					for range numInArch {
-						list = append(list, m.objNames[rand.Intn(m.num)])
+						list = append(list, m.objNames[rand.IntN(m.num)])
 					}
 					go func(archName string, list []string, i int) {
 						msg := cmn.ArchiveBckMsg{
@@ -330,7 +330,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			} else {
 				for i := range numArchs {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
-					start := rand.Intn(m.num - numInArch)
+					start := rand.IntN(m.num - numInArch)
 					go func(archName string, start, i int) {
 						msg := cmn.ArchiveBckMsg{
 							ToBck:      bckTo,
@@ -349,7 +349,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 			flt := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
 			if test.abrt {
-				time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
+				time.Sleep(time.Duration(rand.IntN(5)+1) * time.Second)
 				tlog.Logln("Aborting...")
 				api.AbortXaction(baseParams, &flt)
 			}
@@ -390,7 +390,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			// multi-object APPEND
 			if test.apnd {
 				for _, e := range lstToAppend.Entries {
-					start := rand.Intn(m.num - numInArch)
+					start := rand.IntN(m.num - numInArch)
 					go func(archName string, start int) {
 						msg := cmn.ArchiveBckMsg{
 							ToBck:      bckTo,
@@ -422,7 +422,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 					objName = en.Name
 					continue
 				}
-				if rand.Intn(3) > 0 {
+				if rand.IntN(3) > 0 {
 					continue
 				}
 
@@ -521,7 +521,7 @@ func TestAppendToArch(t *testing.T) {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				list := make([]string, 0, numInArch)
 				for range numInArch {
-					list = append(list, m.objNames[rand.Intn(m.num)])
+					list = append(list, m.objNames[rand.IntN(m.num)])
 				}
 				go func(archName string, list []string) {
 					msg := cmn.ArchiveBckMsg{
@@ -552,7 +552,7 @@ func TestAppendToArch(t *testing.T) {
 					tlog.Logf("APPEND multi-obj %s => %s/%s\n", bckFrom, bckTo, archName)
 					list := make([]string, 0, numAdd)
 					for range numAdd {
-						list = append(list, m.objNames[rand.Intn(m.num)])
+						list = append(list, m.objNames[rand.IntN(m.num)])
 					}
 					msg := cmn.ArchiveBckMsg{
 						ToBck:      bckTo,

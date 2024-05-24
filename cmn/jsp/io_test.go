@@ -8,7 +8,7 @@ package jsp_test
 import (
 	"bytes"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"strconv"
 	"testing"
@@ -42,17 +42,17 @@ func (ts *testStruct) equal(other testStruct) bool {
 }
 
 func makeRandStruct() (ts testStruct) {
-	if rand.Intn(2) == 0 {
+	if rand.IntN(2) == 0 {
 		ts.I = rand.Int()
 	}
-	ts.S = trand.String(rand.Intn(100))
-	if rand.Intn(2) == 0 {
-		ts.B = []byte(trand.String(rand.Intn(200)))
+	ts.S = trand.String(rand.IntN(100))
+	if rand.IntN(2) == 0 {
+		ts.B = []byte(trand.String(rand.IntN(200)))
 	}
-	ts.ST.I64 = rand.Int63()
-	if rand.Intn(2) == 0 {
+	ts.ST.I64 = rand.Int64()
+	if rand.IntN(2) == 0 {
 		ts.M = make(map[string]string)
-		for range rand.Intn(100) + 1 {
+		for range rand.IntN(100) + 1 {
 			ts.M[trand.String(10)] = trand.String(20)
 		}
 	}
@@ -63,7 +63,7 @@ func makeStaticStruct() (ts testStruct) {
 	ts.I = rand.Int()
 	ts.S = trand.String(100)
 	ts.B = []byte(trand.String(200))
-	ts.ST.I64 = rand.Int63()
+	ts.ST.I64 = rand.Int64()
 	ts.M = make(map[string]string, 10)
 	for range 10 {
 		ts.M[trand.String(10)] = trand.String(20)

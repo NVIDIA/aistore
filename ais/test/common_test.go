@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -735,7 +735,7 @@ func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 
 func (m *ioContext) setNonDefaultBucketProps() {
 	baseParams := tools.BaseAPIParams()
-	copies := int64(rand.Intn(2))
+	copies := int64(rand.IntN(2))
 	props := &cmn.BpropsToSet{
 		Mirror: &cmn.MirrorConfToSet{
 			Enabled: apc.Ptr(copies > 0),

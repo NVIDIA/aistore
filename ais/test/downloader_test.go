@@ -899,7 +899,7 @@ func TestDownloadMountpath(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(mpathList.Available) >= 2, "%s requires 2 or more mountpaths", t.Name())
 
-	mpathID := cos.NowRand().Intn(len(mpathList.Available))
+	mpathID := cos.NowRand().IntN(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tlog.Logf("Disabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
 	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath, true /*dont-resil*/)

@@ -5,7 +5,7 @@
 package trand
 
 import (
-	"math/rand"
+	"math/rand/v2"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -13,7 +13,7 @@ import (
 func String(n int) string {
 	b := make([]byte, n)
 	for i := range n {
-		b[i] = cos.LetterRunes[rand.Int63()%int64(cos.LenRunes)]
+		b[i] = cos.LetterRunes[rand.Int()%cos.LenRunes]
 	}
 	return string(b)
 }

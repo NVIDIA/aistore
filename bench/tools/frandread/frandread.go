@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
@@ -164,7 +165,7 @@ func newBench(fileNames []string) *bench {
 	if cliv.seed == 0 {
 		cliv.seed = mono.NanoTime()
 	}
-	rnd := rand.New(rand.NewSource(cliv.seed))
+	rnd := rand.New(cos.NewRandSource(uint64(cliv.seed)))
 	return &bench{
 		rnd:  rnd,
 		sema: make(chan struct{}, cliv.numWorkers),
@@ -216,7 +217,7 @@ func (b *bench) epoch() {
 					panic(err)
 				}
 
-				size := b.rnd.Intn(cliv.maxSize-cliv.minSize) + cliv.minSize
+				size := b.rnd.IntN(cliv.maxSize-cliv.minSize) + cliv.minSize
 				r := io.LimitReader(&nopReadCloser{}, int64(size))
 				written, err := io.Copy(f, r)
 				if err != nil {
@@ -293,7 +294,7 @@ func randString(n int) string {
 	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+		b[i] = letterRunes[rand.IntN(len(letterRunes))]
 	}
 	return string(b)
 }

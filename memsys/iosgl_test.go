@@ -39,13 +39,13 @@ var _ = Describe("SGL", func() {
 	It("should read lines from SGL", func() {
 		rnd := cos.NowRand()
 		sgl := mm.NewSGL(0)
-		num := int(rnd.Int63n(1000) + 1)
+		num := rnd.IntN(1000) + 1
 		arr := make([]string, num)
 		str := []byte("A")
 		for i := range num {
 			str[0] = byte('A' + i%26)
 			// NOTE in re (+1): skipping zero-length lines
-			arr[i] = strings.Repeat(string(str), int(rnd.Int63n(256)+1)) + "\n"
+			arr[i] = strings.Repeat(string(str), rnd.IntN(256)+1) + "\n"
 			sgl.Write([]byte(arr[i]))
 		}
 		i := 0

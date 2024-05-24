@@ -5,7 +5,7 @@
 package fs_test
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"reflect"

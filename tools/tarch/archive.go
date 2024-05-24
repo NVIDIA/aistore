@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"sync"
@@ -77,7 +77,7 @@ func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, f
 
 	var (
 		prevFileName string
-		dupIndex     = rand.Intn(fileCnt-1) + 1
+		dupIndex     = rand.IntN(fileCnt-1) + 1
 	)
 	if len(recExts) == 0 {
 		recExts = []string{".txt"}
@@ -116,7 +116,7 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 			return err
 		}
 		// If missingKeys enabled we should only add keys randomly
-		if !missingKeys || (missingKeys && rand.Intn(2) == 0) {
+		if !missingKeys || (missingKeys && rand.IntN(2) == 0) {
 			var buf []byte
 			// random content
 			if err := shard.ValidateContentKeyTy(customFileType); err != nil {

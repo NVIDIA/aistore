@@ -7,7 +7,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"sort"
 	"strconv"
@@ -129,7 +129,7 @@ func TestListBuckets(t *testing.T) {
 			}
 			bcks, i := pnums[provider], 0
 			if len(bcks) > 1 {
-				i = rand.Intn(len(bcks))
+				i = rand.IntN(len(bcks))
 			}
 			pbck := bcks[i]
 			_, err := api.HeadBucket(baseParams, pbck, false /* don't add */)
@@ -497,7 +497,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				if err := api.CreateBucket(baseParams, m.bck, nil); err != nil {
 					return err
 				}
-				if rand.Intn(iterCount) == 0 { // just test couple times, no need to flood
+				if rand.IntN(iterCount) == 0 { // just test couple times, no need to flood
 					if err := api.CreateBucket(baseParams, m.bck, nil); err == nil {
 						return fmt.Errorf("expected error to occur on bucket %q - create second time", m.bck)
 					}
@@ -510,7 +510,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				if err := api.DestroyBucket(baseParams, m.bck); err != nil {
 					return err
 				}
-				if rand.Intn(iterCount) == 0 { // just test couple times, no need to flood
+				if rand.IntN(iterCount) == 0 { // just test couple times, no need to flood
 					if err := api.DestroyBucket(baseParams, m.bck); err == nil {
 						return fmt.Errorf("expected error to occur on bucket %q - destroy second time", m.bck)
 					}
@@ -894,7 +894,7 @@ func TestListObjectsProps(t *testing.T) {
 			baseParams = tools.BaseAPIParams()
 			m          = ioContext{
 				t:                   t,
-				num:                 rand.Intn(5000) + 1000,
+				num:                 rand.IntN(5000) + 1000,
 				bck:                 bck.Clone(),
 				fileSize:            128,
 				deleteRemoteBckObjs: true,
@@ -903,7 +903,7 @@ func TestListObjectsProps(t *testing.T) {
 		)
 
 		if !bck.IsAIS() {
-			m.num = rand.Intn(250) + 100
+			m.num = rand.IntN(250) + 100
 		}
 
 		m.init(true /*cleanup*/)
@@ -1015,7 +1015,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		m          = ioContext{
 			t:        t,
 			bck:      cliBck,
-			num:      rand.Intn(100) + 10,
+			num:      rand.IntN(100) + 10,
 			fileSize: 128,
 		}
 
@@ -1075,7 +1075,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 			m = ioContext{
 				t:                   t,
 				bck:                 bck.Clone(),
-				num:                 rand.Intn(5000) + 1000,
+				num:                 rand.IntN(5000) + 1000,
 				fileSize:            5 * cos.KiB,
 				deleteRemoteBckObjs: true,
 			}
@@ -1085,7 +1085,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 		)
 
 		if !bck.IsAIS() {
-			m.num = rand.Intn(300) + 100
+			m.num = rand.IntN(300) + 100
 		}
 
 		m.init(true /*cleanup*/)
@@ -1118,14 +1118,14 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			m          = ioContext{
 				t:        t,
 				bck:      bck.Clone(),
-				num:      rand.Intn(5000) + 1000,
+				num:      rand.IntN(5000) + 1000,
 				fileSize: 128,
 			}
 			msg = &apc.LsoMsg{Flags: apc.LsObjCached}
 		)
 
 		if !bck.IsAIS() {
-			m.num = rand.Intn(200) + 100
+			m.num = rand.IntN(200) + 100
 		}
 
 		m.init(true /*cleanup*/)
@@ -1134,7 +1134,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			defer m.del()
 		}
 		for {
-			msg.PageSize = rand.Int63n(50) + 50
+			msg.PageSize = rand.Int64N(50) + 50
 
 			objList, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
@@ -1183,7 +1183,7 @@ func TestListObjects(t *testing.T) {
 	}{
 		{pageSize: 0},
 		{pageSize: 2000},
-		{pageSize: rand.Int63n(15000)},
+		{pageSize: rand.Int64N(15000)},
 	}
 
 	for _, test := range tests {
@@ -1206,13 +1206,13 @@ func TestListObjects(t *testing.T) {
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
 				tlog.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
-				objectCount := rand.Intn(800) + 1010
+				objectCount := rand.IntN(800) + 1010
 				totalObjects += objectCount
 				for wid := range workerCount {
 					wg.Add(1)
 					go func(wid int) {
 						defer wg.Done()
-						objectSize := int64(rand.Intn(256) + 20)
+						objectSize := int64(rand.IntN(256) + 20)
 						objDir := tools.RandomObjDir(dirLen, 5)
 						objectsToPut := objectCount / workerCount
 						if wid == workerCount-1 { // last worker puts leftovers
@@ -1458,14 +1458,14 @@ func TestListObjectsCache(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 		m          = ioContext{
 			t:        t,
-			num:      rand.Intn(3000) + 1481,
+			num:      rand.IntN(3000) + 1481,
 			fileSize: cos.KiB,
 		}
 		totalIters = 10
 	)
 
 	if testing.Short() {
-		m.num = 250 + rand.Intn(500)
+		m.num = 250 + rand.IntN(500)
 		totalIters = 5
 	}
 
@@ -1480,7 +1480,7 @@ func TestListObjectsCache(t *testing.T) {
 			for iter := range totalIters {
 				var (
 					started = time.Now()
-					msg     = &apc.LsoMsg{PageSize: rand.Int63n(20) + 4}
+					msg     = &apc.LsoMsg{PageSize: rand.Int64N(20) + 4}
 				)
 				if useCache {
 					msg.SetFlag(apc.UseListObjsCache)
@@ -2609,7 +2609,7 @@ func TestCopyBucketSync(t *testing.T) {
 	// 3. select random 10% to delete
 	num2del := max(m.num/10, 1)
 	nam2del := make([]string, 0, num2del)
-	strtpos := rand.Intn(m.num)
+	strtpos := rand.IntN(m.num)
 	for i := range num2del {
 		pos := (strtpos + i*3) % m.num
 		name := m.objNames[pos]
@@ -3151,9 +3151,9 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			t:               t,
 			num:             1000,
 			numGetsEachFile: 1,
-			fileSize:        uint64(cos.KiB + rand.Int63n(cos.KiB*10)),
+			fileSize:        uint64(cos.KiB + rand.Int64N(cos.KiB*10)),
 		}
-		numCorrupted = rand.Intn(m.num/100) + 2
+		numCorrupted = rand.IntN(m.num/100) + 2
 	)
 	if testing.Short() {
 		m.num = 40
@@ -3276,7 +3276,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	initMountpaths(t, proxyURL)
 	// corrupt random and read again
 	{
-		i := rand.Intn(len(bckObjs.Entries))
+		i := rand.IntN(len(bckObjs.Entries))
 		if i+numCorrupted > len(bckObjs.Entries) {
 			i -= numCorrupted
 		}
@@ -3456,7 +3456,7 @@ func TestListObjectsNoRecursion(t *testing.T) {
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	for _, nm := range objs {
-		objectSize := int64(rand.Intn(256) + 20)
+		objectSize := int64(rand.IntN(256) + 20)
 		reader, _ := readers.NewRand(objectSize, cos.ChecksumNone)
 		_, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,

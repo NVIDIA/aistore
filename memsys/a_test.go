@@ -59,14 +59,14 @@ func Test_Sleep(*testing.T) {
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
 	for i := range 100 {
-		ttl := time.Duration(random.Int63n(int64(time.Millisecond*100))) + time.Millisecond
+		ttl := time.Duration(random.Int64N(int64(time.Millisecond*100))) + time.Millisecond
 		var siz, tot int64
 		if i%2 == 0 {
-			siz = random.Int63n(cos.MiB*10) + cos.KiB
+			siz = random.Int64N(cos.MiB*10) + cos.KiB
 		} else {
-			siz = random.Int63n(cos.KiB*100) + cos.KiB
+			siz = random.Int64N(cos.KiB*100) + cos.KiB
 		}
-		tot = random.Int63n(cos.DivCeil(cos.MiB*50, siz))*siz + cos.KiB
+		tot = random.Int64N(cos.DivCeil(cos.MiB*50, siz))*siz + cos.KiB
 		wg.Add(1)
 		go memstress(mem, i, ttl, siz, tot, wg)
 	}
@@ -93,8 +93,8 @@ func Test_NoSleep(*testing.T) {
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
 	for i := range 500 {
-		siz := random.Int63n(cos.MiB) + cos.KiB
-		tot := random.Int63n(cos.DivCeil(cos.KiB*10, siz))*siz + cos.KiB
+		siz := random.Int64N(cos.MiB) + cos.KiB
+		tot := random.Int64N(cos.DivCeil(cos.KiB*10, siz))*siz + cos.KiB
 		wg.Add(1)
 		go memstress(mem, i, time.Millisecond, siz, tot, wg)
 	}

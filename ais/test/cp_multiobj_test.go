@@ -6,7 +6,7 @@ package integration_test
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -74,7 +74,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		}
 
-		rangeStart := 10 // rand.Intn(objCnt - copyCnt - 1)
+		rangeStart := 10 // rand.IntN(objCnt - copyCnt - 1)
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
 		tlog.Logf("[%s] %s => %s\n", template, bckFrom.Cname(""), bckTo.Cname(""))
 
@@ -92,7 +92,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 	lst, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == copyCnt, "%d != %d", copyCnt, len(lst.Entries))
-	rangeStart := 10 // rand.Intn(objCnt - copyCnt - 1)
+	rangeStart := 10 // rand.IntN(objCnt - copyCnt - 1)
 	for i := rangeStart; i < rangeStart+copyCnt; i++ {
 		objName := fmt.Sprintf("test/a-%04d", i)
 		err := api.DeleteObject(baseParams, bckTo, objName)
@@ -205,7 +205,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						}
 					}
 					for range numToCopy {
-						list = append(list, m.objNames[rand.Intn(m.num)])
+						list = append(list, m.objNames[rand.IntN(m.num)])
 					}
 					if !test.createDst && i == 0 {
 						// serialize the very first batch as it entails creating destination bucket
@@ -218,7 +218,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 				}
 			} else {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
-					start := rand.Intn(m.num - numToCopy)
+					start := rand.IntN(m.num - numToCopy)
 					ftmpl := func(start int, i int) {
 						var (
 							err      error

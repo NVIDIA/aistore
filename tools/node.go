@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -138,7 +138,7 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 
 func getRandomProxyURL(smap *meta.Smap) string {
 	proxies := smap.Pmap.ActiveNodes()
-	return proxies[rand.Intn(len(proxies))].URL(cmn.NetPublic)
+	return proxies[rand.IntN(len(proxies))].URL(cmn.NetPublic)
 }
 
 // Return the first proxy from smap that is IC member. The primary

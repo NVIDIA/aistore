@@ -7,7 +7,7 @@ package integration_test
 import (
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -1032,7 +1032,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 1. PUT
 	tlog.Logln("putting objects...")
 	for i := range numReaders {
-		size := rand.Int63n(cos.KiB*128) + cos.KiB/3
+		size := rand.Int64N(cos.KiB*128) + cos.KiB/3
 		tassert.CheckFatal(t, err)
 		reader, err := readers.NewRand(size, cksumType)
 		tassert.CheckFatal(t, err)

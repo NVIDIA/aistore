@@ -61,7 +61,7 @@ func postNewWorkOrder() (err error) {
 		if runParams.putPct == 50 {
 			put = mono.NanoTime()&1 == 1
 		} else {
-			put = runParams.putPct > rnd.Intn(99)
+			put = runParams.putPct > rnd.IntN(99)
 		}
 		if put {
 			wo, err = newPutWorkOrder()
@@ -295,7 +295,8 @@ func newPutWorkOrder() (*workOrder, error) {
 	}
 	size := runParams.minSize
 	if runParams.maxSize != runParams.minSize {
-		size = rnd.Int63n(runParams.maxSize+1-runParams.minSize) + runParams.minSize
+		d := rnd.Int64N(runParams.maxSize + 1 - runParams.minSize)
+		size = runParams.minSize + d
 	}
 	putPending++
 	return &workOrder{

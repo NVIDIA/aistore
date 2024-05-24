@@ -1,11 +1,11 @@
 // Package namegetter is utility to generate filenames for aisloader PUT requests
 /*
-* Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package namegetter
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -66,7 +66,7 @@ func (rung *RandomNameGetter) AddObjName(objName string) {
 }
 
 func (rung *RandomNameGetter) ObjName() string {
-	idx := rung.rnd.Intn(len(rung.names))
+	idx := rung.rnd.IntN(len(rung.names))
 	return rung.names[idx]
 }
 
@@ -100,7 +100,7 @@ func (rung *RandomUniqueNameGetter) ObjName() string {
 	}
 
 	for {
-		idx := rung.rnd.Intn(len(rung.names))
+		idx := rung.rnd.IntN(len(rung.names))
 		bitmaskID := idx / 64
 		bitmaskBit := uint64(1) << uint64(idx%64)
 		if rung.bitmask[bitmaskID]&bitmaskBit == 0 {
@@ -141,7 +141,7 @@ func (ruing *RandomUniqueIterNameGetter) ObjName() string {
 	}
 
 	namesLen := len(ruing.names)
-	idx := ruing.rnd.Intn(namesLen)
+	idx := ruing.rnd.IntN(namesLen)
 
 	for {
 		bitmaskID := idx / 64

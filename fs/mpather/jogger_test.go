@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -94,7 +94,7 @@ func TestJoggerGroupParallel(t *testing.T) {
 			_, err = b.WriteString(lom.FQN)
 			tassert.CheckFatal(t, err)
 
-			if rand.Intn(objectsCnt/mpathsCnt)%20 == 0 {
+			if rand.IntN(objectsCnt/mpathsCnt)%20 == 0 {
 				// Sometimes sleep a while, to check if in this time some other goroutine does not populate the buffer.
 				time.Sleep(10 * time.Millisecond)
 			}

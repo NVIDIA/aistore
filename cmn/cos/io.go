@@ -7,6 +7,7 @@ package cos
 import (
 	"bufio"
 	"bytes"
+	cryptorand "crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -706,7 +707,7 @@ func DrainReader(r io.Reader) {
 
 // FloodWriter writes `n` random bytes to provided writer.
 func FloodWriter(w io.Writer, n int64) error {
-	_, err := io.CopyN(w, NowRand(), n)
+	_, err := io.CopyN(w, cryptorand.Reader, n)
 	return err
 }
 

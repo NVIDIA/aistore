@@ -7,7 +7,7 @@ package integration_test
 import (
 	"fmt"
 	iofs "io/fs"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -224,7 +224,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	tlog.Logln("Running test case _not_ to overwrite destination...")
 	l := len(list.Entries)
 	numDel := max(l/100, 2)
-	idx := rand.Intn(l)
+	idx := rand.IntN(l)
 	if idx+numDel >= l {
 		if numDel >= l {
 			idx, numDel = 0, l

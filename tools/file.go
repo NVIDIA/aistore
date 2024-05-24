@@ -7,7 +7,7 @@ package tools
 import (
 	"bytes"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,7 +55,7 @@ type (
 )
 
 func RandomObjDir(dirLen, maxDepth int) (dir string) {
-	depth := rand.Intn(maxDepth)
+	depth := rand.IntN(maxDepth)
 	for range depth {
 		dir = filepath.Join(dir, trand.String(dirLen))
 	}

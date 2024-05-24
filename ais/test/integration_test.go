@@ -6,7 +6,7 @@ package integration_test
 
 import (
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -356,7 +356,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	m.initAndSaveState(true /*cleanup*/)
 
 	tgts := m.smap.Tmap.ActiveNodes()
-	i1 := rand.Intn(len(tgts))
+	i1 := rand.IntN(len(tgts))
 	i2 := (i1 + 1) % len(tgts)
 	target1, target2 := tgts[i1], tgts[i2]
 
@@ -385,7 +385,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 
 	// random sleep between the first and the second join
-	time.Sleep(time.Duration(rand.Intn(3)+1) * time.Second)
+	time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
 
 	err = tools.RestoreNode(cmd2, false, "the 2nd target")
 	tassert.CheckFatal(t, err)
@@ -463,7 +463,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	wg.Wait()
 
 	// Register target 1 to bring cluster to original state
-	sleep := time.Duration(rand.Intn(5))*time.Second + time.Millisecond
+	sleep := time.Duration(rand.IntN(5))*time.Second + time.Millisecond
 	time.Sleep(sleep)
 	tlog.Logf("Join %s back\n", target1.StringEx())
 	rebID, err := tools.JoinCluster(m.proxyURL, target1)

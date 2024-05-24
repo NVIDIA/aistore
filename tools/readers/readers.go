@@ -1,12 +1,13 @@
 // Package readers provides implementation for common reader types
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package readers
 
 import (
 	"archive/tar"
 	"bytes"
+	cryptorand "crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -227,7 +228,7 @@ func NewRandFile(filepath, name string, size int64, cksumType string) (Reader, e
 		}
 	} else {
 		// Write random file
-		cksumHash, err = copyRandWithHash(f, size, cksumType, cos.NowRand())
+		cksumHash, err = copyRandWithHash(f, size, cksumType)
 	}
 	if err == nil {
 		_, err = f.Seek(0, io.SeekStart)
@@ -274,7 +275,7 @@ func (r *fileReader) Cksum() *cos.Cksum {
 func NewSG(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
 	var cksum *cos.Cksum
 	if size > 0 {
-		cksumHash, err := copyRandWithHash(sgl, size, cksumType, cos.NowRand())
+		cksumHash, err := copyRandWithHash(sgl, size, cksumType)
 		if err != nil {
 			return nil, err
 		}
@@ -363,7 +364,7 @@ func New(p Params, cksumType string) (Reader, error) {
 // copyRandWithHash reads data from random source and writes it to a writer while
 // optionally computing xxhash
 // See related: memsys_test.copyRand
-func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand) (*cos.CksumHash, error) {
+func copyRandWithHash(w io.Writer, size int64, cksumType string) (*cos.CksumHash, error) {
 	var (
 		cksum   *cos.CksumHash
 		rem     = size
@@ -377,7 +378,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
 		n := int(min(blkSize, rem))
-		rnd.Read(buf[:n])
+		cryptorand.Read(buf[:n])
 		m, err := w.Write(buf[:n])
 		if err != nil {
 			return nil, err

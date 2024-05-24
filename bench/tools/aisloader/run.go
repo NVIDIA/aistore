@@ -29,7 +29,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -650,7 +650,7 @@ func _init(p *params) (err error) {
 	if p.seed == 0 {
 		p.seed = mono.NanoTime()
 	}
-	rnd = rand.New(rand.NewSource(p.seed))
+	rnd = rand.New(cos.NewRandSource(uint64(p.seed)))
 
 	if p.putSizeUpperBoundStr != "" {
 		if p.putSizeUpperBound, err = cos.ParseSize(p.putSizeUpperBoundStr, cos.UnitsIEC); err != nil {

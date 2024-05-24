@@ -5,10 +5,10 @@
 package nstlvl_test
 
 import (
+	cryptorand "crypto/rand"
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -42,7 +42,6 @@ const (
 
 type benchContext struct {
 	// internal
-	rnd       *rand.Rand
 	fileNames []string
 
 	// command line
@@ -76,7 +75,6 @@ func (bctx *benchContext) init() {
 	}
 	fmt.Printf("files: %d size: %d\n", bctx.fileCount, bctx.fileSize)
 	bctx.fileNames = make([]string, 0, bctx.fileCount)
-	bctx.rnd = cos.NowRand()
 	bctx.skipMod = skipModulo
 	if bctx.fileCount < skipModulo {
 		bctx.skipMod = bctx.fileCount/2 - 1
@@ -113,7 +111,7 @@ func benchNestedLevel(b *testing.B) {
 
 func (bctx *benchContext) createFiles(lvl int) {
 	var (
-		reader = &io.LimitedReader{R: bctx.rnd, N: bctx.fileSize}
+		reader = &io.LimitedReader{R: cryptorand.Reader, N: bctx.fileSize}
 		buf    = make([]byte, 32*cos.KiB)
 	)
 	for range bctx.fileCount {

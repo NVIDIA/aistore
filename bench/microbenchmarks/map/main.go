@@ -205,9 +205,9 @@ func createNodeList(size int) (nodeList []node) {
 func createList(nodeList []node, size int) (keys []int) {
 	nodeLen := len(nodeList)
 	keys = make([]int, 0, size)
-
+	rnd := cos.NowRand()
 	for range size {
-		keys = append(keys, cos.NowRand().Intn(nodeLen))
+		keys = append(keys, rnd.IntN(nodeLen))
 	}
 	return
 }

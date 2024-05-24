@@ -5,7 +5,7 @@
 package integration_test
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -88,7 +88,7 @@ func TestETLBucketAbort(t *testing.T) {
 
 	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
-	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
+	time.Sleep(time.Duration(rand.IntN(5)) * time.Second)
 
 	tlog.Logf("Aborting etl[%s]\n", xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck}

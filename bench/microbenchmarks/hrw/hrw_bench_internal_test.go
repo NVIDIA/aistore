@@ -15,13 +15,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 var resultInt int
 
 func BenchmarkHRW(b *testing.B) {
-	seed := time.Now().UnixNano()
-	randGen := rand.New(rand.NewPCG(uint64(seed), 0)) // formerly (v1): rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	randGen := cos.NowRand()
 
 	hashFuncs := []hashFuncs{
 		{name: "hrwXXHash", hashF: hrwXXHash},
@@ -63,7 +64,7 @@ func TestEqualDistribution(t *testing.T) {
 		{name: "hrwXXHash", hashF: hrwXXHash},
 	}
 
-	seed := time.Now().UTC().UnixNano()
+	seed := time.Now().UnixNano()
 	t.Logf("Seed: %d", seed)
 
 	numRoutines := 1000
@@ -129,7 +130,7 @@ func TestEqualDistribution(t *testing.T) {
 }
 
 func invokeHashFunctions(seed int64, numObjs, numNodes int, useSimilarNames bool, hashFuncs []hashFuncs, dist [][]int) {
-	randGen := rand.New(rand.NewPCG(uint64(seed), uint64(seed))) // formerly (v1): rand.New(rand.NewSource(seed))
+	randGen := rand.New(cos.NewRandSource(uint64(seed)))
 	nodes := randNodeIDs(numNodes, randGen)
 	bucketName := randFileName(randGen, fqnMaxLen-objNameLen)
 	for n := range numObjs {

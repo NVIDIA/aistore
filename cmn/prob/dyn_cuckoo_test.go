@@ -5,7 +5,7 @@
 package prob_test
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
@@ -26,7 +26,7 @@ var buckets = []string{
 }
 
 func randObjName(n int) []byte {
-	return []byte(buckets[rand.Intn(len(buckets))] + "/" + trand.String(n))
+	return []byte(buckets[rand.IntN(len(buckets))] + "/" + trand.String(n))
 }
 
 func genKeys(keysNum int) [][]byte {

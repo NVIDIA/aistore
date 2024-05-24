@@ -7,7 +7,6 @@ package tools
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"path"
 	"strconv"
@@ -341,12 +340,15 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	for i := 0; i < len(objNames); i += chunkSize {
 		group.Go(func(start, end int) func() error {
 			return func() error {
+				rnd := cos.NowRand()
 				for _, objName := range objNames[start:end] {
 					size := args.ObjSize
-					if size == 0 { // Size not specified so generate something.
-						size = uint64(cos.NowRand().Intn(cos.KiB)+1) * cos.KiB
-					} else if !args.FixedSize { // Randomize object size.
-						size += uint64(rand.Int63n(cos.KiB))
+
+					// size not specified | size not fixed
+					if size == 0 {
+						size = (rnd.Uint64N(cos.KiB) + 1) * cos.KiB
+					} else if !args.FixedSize {
+						size += rnd.Uint64N(cos.KiB)
 					}
 
 					if args.CksumType == "" {

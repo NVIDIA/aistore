@@ -438,7 +438,7 @@ func primaryAndProxyCrash(t *testing.T) {
 		}
 	}
 	tassert.Errorf(t, secondID != "", "not enough proxies (%d)", origProxyCount)
-	n := cos.NowRand().Intn(20)
+	n := cos.NowRand().IntN(20)
 	time.Sleep(time.Duration(n+1) * time.Second)
 
 	tlog.Logf("Killing non-primary: %s\n", secondNode.StringEx())
@@ -941,6 +941,7 @@ func proxyStress(t *testing.T) {
 	}()
 
 	// start all workers
+	rnd := cos.NowRand()
 	for i := range workerCnt {
 		errChs[i] = make(chan error, defaultChanSize)
 		stopChs[i] = make(chan struct{}, defaultChanSize)
@@ -950,7 +951,7 @@ func proxyStress(t *testing.T) {
 		go putGetDelWorker(proxyURL, stopChs[i], proxyURLChs[i], errChs[i], &wg)
 
 		// stagger the workers so they don't always do the same operation at the same time
-		n := cos.NowRand().Intn(999)
+		n := rnd.IntN(999)
 		time.Sleep(time.Duration(n+1) * time.Millisecond)
 	}
 

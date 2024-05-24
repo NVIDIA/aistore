@@ -6,7 +6,7 @@ package integration_test
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"path/filepath"
@@ -82,7 +82,7 @@ func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 		o.sema = cos.NewDynSemaphore(o.concurrency)
 	}
 	o.seed = time.Now().UnixNano()
-	o.rnd = rand.New(rand.NewSource(o.seed))
+	o.rnd = rand.New(cos.NewRandSource(uint64(o.seed)))
 	if o.dataCnt < 0 {
 		total := o.smap.CountActiveTs() - 2
 		o.parityCnt = total / 2
@@ -269,7 +269,7 @@ func randObjectSize(n, every int, o *ecOptions) (
 	// number of metafiles: parity+slices
 	// number of slices: slices+parity
 	totalCnt = 2 + (o.sliceTotal())*2
-	objSize = int64(ecMinBigSize + o.rnd.Intn(ecBigDelta))
+	objSize = int64(ecMinBigSize + o.rnd.IntN(ecBigDelta))
 	sliceSize = ec.SliceSize(objSize, o.dataCnt)
 	if (n+1)%every == 0 || o.objSizeLimit == cmn.ObjSizeToAlwaysReplicate {
 		// Small object case
@@ -277,7 +277,7 @@ func randObjectSize(n, every int, o *ecOptions) (
 		// number of metafiles: parity
 		// number of slices: parity
 		totalCnt = 2 + o.parityCnt*2
-		objSize = int64(ecMinSmallSize + o.rnd.Intn(ecSmallDelta))
+		objSize = int64(ecMinSmallSize + o.rnd.IntN(ecSmallDelta))
 		sliceSize = objSize
 	}
 	doEC = objSize >= o.objSizeLimit
@@ -624,7 +624,7 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 	defer o.sema.Release()
 
 	totalCnt := 2 + o.parityCnt*2
-	objSize := int64(ecMinSmallSize + o.rnd.Intn(ecSmallDelta))
+	objSize := int64(ecMinSmallSize + o.rnd.IntN(ecSmallDelta))
 	sliceSize := objSize
 
 	objPath := ecTestDir + objName
@@ -681,7 +681,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 	delSlice := false // delete only main object
 	deletedFiles := 1
-	if o.dataCnt+o.parityCnt > 2 && o.rnd.Intn(100) < sliceDelPct {
+	if o.dataCnt+o.parityCnt > 2 && o.rnd.IntN(100) < sliceDelPct {
 		// delete a random slice, too
 		delSlice = true
 		deletedFiles = 2
@@ -2025,7 +2025,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	}
 
 	// 2. Disable a random mountpath
-	mpathID := o.rnd.Intn(len(mpathList.Available))
+	mpathID := o.rnd.IntN(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tlog.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
 	err = api.DisableMountpath(baseParams, removeTarget, removeMpath, false /*dont-resil*/)
@@ -2713,7 +2713,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	// Choose `parity` random mpaths and disable them
 	i := 0
 	for tsi, paths := range allMpaths {
-		mpath := paths[rand.Intn(len(paths))]
+		mpath := paths[rand.IntN(len(paths))]
 		uid := tsi.ID() + "/" + mpath
 		if _, ok := removed[uid]; ok {
 			continue

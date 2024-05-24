@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -1372,14 +1372,14 @@ func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
 		b       = []byte{0}
 	)
 	tassert.CheckFatal(t, err)
-	off := rand.Int63n(fi.Size())
+	off := rand.Int64N(fi.Size())
 	file, err := os.OpenFile(fqn, os.O_RDWR, cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	_, err = file.Seek(off, 0)
 	tassert.CheckFatal(t, err)
 	_, err = file.Read(b)
 	tassert.CheckFatal(t, err)
-	bit := rand.Intn(8)
+	bit := rand.IntN(8)
 	b[0] ^= 1 << bit
 	_, err = file.Seek(off, 0)
 	tassert.CheckFatal(t, err)
