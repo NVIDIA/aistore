@@ -46,6 +46,7 @@ from aistore.sdk.const import (
     STATUS_OK,
     STATUS_PARTIAL_CONTENT,
 )
+from aistore.sdk.enums import FLTPresence
 from aistore.sdk.dataset.dataset_config import DatasetConfig
 
 from aistore.sdk.errors import (
@@ -357,21 +358,24 @@ class Bucket(AISSource):
 
         return json.loads(resp.content.decode("utf-8"))[0]
 
-    def info(self, flt_presence: int = 0, bsumm_remote: bool = True):
+    def info(
+        self, flt_presence: int = FLTPresence.FLT_EXISTS, bsumm_remote: bool = True
+    ):
         """
         Returns bucket summary and information/properties.
 
         Args:
-            flt_presence (int): Describes the presence of buckets and objects with respect to their existence
-                                or non-existence in the AIS cluster. Defaults to 0.
-
-                                Expected values are:
-                                0 - (object | bucket) exists inside and/or outside cluster
-                                1 - same as 0 but no need to return summary
-                                2 - bucket: is present | object: present and properly located
-                                3 - same as 2 but no need to return summary
-                                4 - objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
-                                5 - not present - exists _outside_ cluster
+            flt_presence (FLTPresence): Describes the presence of buckets and objects with respect to their existence
+                                or non-existence in the AIS cluster using the enum FLTPresence. Defaults to
+                                value FLT_EXISTS and values are:
+                                FLT_EXISTS - object or bucket exists inside and/or outside cluster
+                                FLT_EXISTS_NO_PROPS - same as FLT_EXISTS but no need to return summary
+                                FLT_PRESENT - bucket is present or object is present and properly
+                                located
+                                FLT_PRESENT_NO_PROPS - same as FLT_PRESENT but no need to return summary
+                                FLT_PRESENT_CLUSTER - objects present anywhere/how in
+                                the cluster as replica, ec-slices, misplaced
+                                FLT_EXISTS_OUTSIDE - not present; exists outside cluster
             bsumm_remote (bool): If True, returned bucket info will include remote objects as well
 
         Raises:
@@ -383,8 +387,12 @@ class Bucket(AISSource):
             ValueError: `flt_presence` is not one of the expected values
             aistore.sdk.errors.AISError: All other types of errors with AIStore
         """
-        if flt_presence not in range(6):
-            raise ValueError("`flt_presence` must be one of 0, 1, 2, 3, 4, or 5.")
+        try:
+            FLTPresence(flt_presence)
+        except Exception as err:
+            raise ValueError(
+                "`flt_presence` must be in values of enum FLTPresence"
+            ) from err
 
         params = self.qparam.copy()
         params.update({QPARAM_FLT_PRESENCE: flt_presence})

@@ -59,6 +59,7 @@ from aistore.sdk.types import (
     TransformBckMsg,
     CopyBckMsg,
 )
+from aistore.sdk.enums import FLTPresence
 from tests.const import ETL_NAME, PREFIX_NAME
 
 BCK_NAME = "bucket_name"
@@ -743,7 +744,7 @@ class TestBucket(unittest.TestCase):
             path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
             params={
                 **self.ais_bck.qparam,
-                QPARAM_FLT_PRESENCE: 0,
+                QPARAM_FLT_PRESENCE: FLTPresence.FLT_EXISTS,
                 QPARAM_BSUMM_REMOTE: True,
                 QPARAM_UUID: "some-id",
             },

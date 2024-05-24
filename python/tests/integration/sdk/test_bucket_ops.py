@@ -14,6 +14,7 @@ from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.dataset.data_attribute import DataAttribute
 from aistore.sdk.dataset.label_attribute import LabelAttribute
 from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
+from aistore.sdk.enums import FLTPresence
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
@@ -371,7 +372,7 @@ class TestBucketOps(RemoteEnabledTest):
         info_test_bck = self._create_bucket("info-test")
 
         # Initially, the bucket should be empty
-        _, bck_summ = info_test_bck.info(flt_presence=0)
+        _, bck_summ = info_test_bck.info(flt_presence=FLTPresence.FLT_EXISTS)
 
         # For an empty bucket, the object count and total size should be zero
         self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "0")

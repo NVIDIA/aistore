@@ -703,23 +703,25 @@ Returns bucket summary (starts xaction job and polls for results).
 ### info
 
 ```python
-def info(flt_presence: int = 0, bsumm_remote: bool = True)
+def info(flt_presence: int = FLTPresence.FLT_EXISTS,
+         bsumm_remote: bool = True)
 ```
 
 Returns bucket summary and information/properties.
 
 **Arguments**:
 
-- `flt_presence` _int_ - Describes the presence of buckets and objects with respect to their existence
-  or non-existence in the AIS cluster. Defaults to 0.
-  
-  Expected values are:
-  0 - (object | bucket) exists inside and/or outside cluster
-  1 - same as 0 but no need to return summary
-  2 - bucket: is present | object: present and properly located
-  3 - same as 2 but no need to return summary
-  4 - objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
-  5 - not present - exists _outside_ cluster
+- `flt_presence` _FLTPresence_ - Describes the presence of buckets and objects with respect to their existence
+  or non-existence in the AIS cluster using the enum FLTPresence. Defaults to
+  value FLT_EXISTS and values are:
+  FLT_EXISTS - object or bucket exists inside and/or outside cluster
+  FLT_EXISTS_NO_PROPS - same as FLT_EXISTS but no need to return summary
+  FLT_PRESENT - bucket is present or object is present and properly
+  located
+  FLT_PRESENT_NO_PROPS - same as FLT_PRESENT but no need to return summary
+  FLT_PRESENT_CLUSTER - objects present anywhere/how in
+  the cluster as replica, ec-slices, misplaced
+  FLT_EXISTS_OUTSIDE - not present; exists outside cluster
 - `bsumm_remote` _bool_ - If True, returned bucket info will include remote objects as well
   
 
@@ -1102,15 +1104,16 @@ Return a data-model of the bucket
 ### write\_dataset
 
 ```python
-def write_dataset(config: DatasetConfig, **kwargs)
+def write_dataset(config: DatasetConfig, skip_missing: bool = True, **kwargs)
 ```
 
-Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter
+Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter. Logs the missing attributes
 
 **Arguments**:
 
 - `config` _DatasetConfig_ - Configuration dict specifying how to process
   and store each part of the dataset item
+- `skip_missing` _bool, optional_ - Skip samples that are missing one or more attributes, defaults to True
 - `**kwargs` _optional_ - Optional keyword arguments to pass to the ShardWriter
 
 <a id="object.Object"></a>
@@ -1178,22 +1181,21 @@ Requests object properties.
 ### get
 
 ```python
-def get(archpath: str = "",
+def get(archive_settings: ArchiveSettings = None,
+        blob_download_settings: BlobDownloadSettings = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
         writer: BufferedWriter = None,
         latest: bool = False,
-        byte_range: str = None,
-        blob_chunk_size: str = None,
-        blob_num_workers: str = None) -> ObjectReader
+        byte_range: str = None) -> ObjectReader
 ```
 
 Reads an object
 
 **Arguments**:
 
-- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file
-  from the archive
+- `archive_settings` _ArchiveSettings, optional_ - Settings for archive extraction
+- `blob_download_settings` _BlobDownloadSettings, optional_ - Settings for using blob download
 - `chunk_size` _int, optional_ - chunk_size to use while reading from stream
 - `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
 - `writer` _BufferedWriter, optional_ - User-provided writer for writing content output
@@ -1201,10 +1203,6 @@ Reads an object
 - `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
 - `byte_range` _str, optional_ - Specify a specific data segment of the object for transfer, including
   both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
-- `blob_chunk_size` _str, optional_ - Utilize built-in blob-downloader with the given chunk size in
-  IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k;)
-- `blob_num_workers` _str, optional_ - Utilize built-in blob-downloader with the given number of
-  concurrent blob-downloading workers (readers)
   
 
 **Returns**:
