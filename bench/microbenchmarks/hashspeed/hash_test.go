@@ -1,12 +1,12 @@
 // Package hashspeed is a benchmark througput benchmark
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package hashspeed
 
 import (
+	cryptorand "crypto/rand"
 	"hash"
-	"math/rand"
 	"runtime"
 	"testing"
 	"unsafe"
@@ -46,10 +46,9 @@ var (
 // 6 3 [88 158 198 47 235 152 81 107 49 248 216 192 90 239 228 121]
 
 func BenchmarkID(b *testing.B) {
-	rnd := rand.New(rand.NewSource(0xa5a5a5a5a5a5))
 	for i := range vids {
 		vids[i] = make([]byte, sizeID+1) // NOTE: to force misalign
-		rnd.Read(vids[i])
+		cryptorand.Read(vids[i])
 
 		vecAligned[i] = make([]int32, 4)
 		bytes := (*[sizeID]byte)(unsafe.Pointer(&vecAligned[i][0]))
@@ -91,10 +90,9 @@ func na(b *testing.B) {
 }
 
 func BenchmarkThroughput(b *testing.B) {
-	rnd := rand.New(rand.NewSource(0xa5a5a5a5a5a5))
 	for i := range vec {
 		vec[i] = make([]byte, numThr)
-		rnd.Read(vec[i])
+		cryptorand.Read(vec[i])
 	}
 	tests := []struct {
 		name    string

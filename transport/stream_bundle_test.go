@@ -6,6 +6,7 @@
 package transport_test
 
 import (
+	cryptorand "crypto/rand"
 	"fmt"
 	"io"
 	"net/http/httptest"
@@ -160,7 +161,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		wbuf, slab     = mmsa.Alloc()
 		extra          = &transport.Extra{Compression: nvs["compression"]}
 		size, prevsize int64
-		multiplier     = int(random.Int63()%13) + 4
+		multiplier     = int(random.Int64()%13) + 4
 		num            int
 		usePDU         bool
 	)
@@ -178,7 +179,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		extra.SizePDU = memsys.DefaultBufSize
 	}
 	extra.Config = config
-	_, _ = random.Read(wbuf)
+	_, _ = cryptorand.Read(wbuf)
 	sb := bundle.New(httpclient,
 		bundle.Args{Net: network, Trname: trname, Multiplier: multiplier, Extra: extra})
 	var numGs int64 = 6
@@ -195,7 +196,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		} else {
 			reader := &randReader{buf: wbuf, hdr: hdr, slab: slab, clone: true} // FIXME: multiplier reopen
 			if hdr.IsUnsized() {
-				reader.offEOF = int64(random.Int31()>>1) + 1
+				reader.offEOF = int64(random.Int32()>>1) + 1
 				objSize = reader.offEOF
 			}
 			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, reader)

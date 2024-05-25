@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path"
 
@@ -43,7 +42,7 @@ type (
 	}
 	randReader struct {
 		seed   int64
-		rnd    *rand.Rand
+		rnd    *seededReader
 		size   int64
 		offset int64
 		cksum  *cos.Cksum
@@ -54,7 +53,7 @@ type (
 		cksum *cos.Cksum
 	}
 	rrLimited struct {
-		random *rand.Rand
+		random *seededReader
 		size   int64
 		off    int64
 	}
@@ -99,7 +98,7 @@ func NewRand(size int64, cksumType string) (Reader, error) {
 		cksum *cos.Cksum
 		seed  = mono.NanoTime()
 	)
-	rand1 := rand.New(rand.NewSource(seed))
+	rand1 := newSeededReader(uint64(seed))
 	if cksumType != cos.ChecksumNone {
 		rr := &rrLimited{rand1, size, 0}
 		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, cksumType)
@@ -108,7 +107,7 @@ func NewRand(size int64, cksumType string) (Reader, error) {
 		}
 		cksum = cksumHash.Clone()
 	}
-	rand1dup := rand.New(rand.NewSource(seed))
+	rand1dup := newSeededReader(uint64(seed))
 	return &randReader{
 		seed:  seed,
 		rnd:   rand1dup,
@@ -139,7 +138,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 func (r *randReader) Open() (cos.ReadOpenCloser, error) {
 	return &randReader{
 		seed:  r.seed,
-		rnd:   rand.New(rand.NewSource(r.seed)),
+		rnd:   newSeededReader(uint64(r.seed)),
 		size:  r.size,
 		cksum: r.cksum,
 	}, nil
@@ -172,7 +171,7 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 		return r.offset, nil
 	}
 
-	r.rnd = rand.New(rand.NewSource(r.seed))
+	r.rnd = newSeededReader(uint64(r.seed))
 	r.offset = 0
 	actual, err := io.CopyN(io.Discard, r, abs)
 	if err != nil {

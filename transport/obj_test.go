@@ -14,12 +14,13 @@ package transport_test
 // go test -v -run=Multi -tags=debug
 
 import (
+	cryptorand "crypto/rand"
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -476,7 +477,7 @@ func TestCompressedOne(t *testing.T) {
 	slab, _ := memsys.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(mono.NanoTime())
 	buf := slab.Alloc()
-	_, _ = random.Read(buf)
+	_, _ = cryptorand.Read(buf)
 	hdr := genStaticHeader(random)
 	size, prevsize, num, numhdr, numGs := int64(0), int64(0), 0, 0, int64(16)
 	if testing.Short() {
@@ -490,11 +491,11 @@ func TestCompressedOne(t *testing.T) {
 		} else {
 			var reader io.ReadCloser
 			if num%3 == 0 {
-				hdr.ObjAttrs.Size = int64(random.Intn(100) + 1)
+				hdr.ObjAttrs.Size = int64(random.IntN(100) + 1)
 				// fully random to prevent compression
-				reader = io.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size})
+				reader = io.NopCloser(&io.LimitedReader{R: cryptorand.Reader, N: hdr.ObjAttrs.Size})
 			} else {
-				hdr.ObjAttrs.Size = int64(random.Intn(cos.GiB) + 1)
+				hdr.ObjAttrs.Size = int64(random.IntN(cos.GiB) + 1)
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}
 			}
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: reader})
@@ -531,7 +532,7 @@ func TestDryRun(t *testing.T) {
 	buf, slab := memsys.PageMM().AllocSize(cos.KiB * 128)
 	defer slab.Free(buf)
 	for sgl.Len() < cos.MiB {
-		random.Read(buf)
+		cryptorand.Read(buf)
 		sgl.Write(buf)
 	}
 
@@ -600,7 +601,7 @@ func TestCompletionCount(t *testing.T) {
 			hdr.ObjAttrs.Size = 0
 			hdr.Opaque = []byte(strconv.FormatInt(104729*int64(idx), 10))
 			stream.Send(&transport.Obj{Hdr: hdr, Callback: callback})
-			rem = random.Int63() % 13
+			rem = random.Int64() % 13
 		} else {
 			hdr, rr := makeRandReader(random, false)
 			stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: callback})
@@ -687,7 +688,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		if size-prevsize >= cos.GiB*4 {
 			tlog.Logf("%s: %d GiB\n", stream, size/cos.GiB)
 			prevsize = size
-			if random.Int63()%7 == 0 {
+			if random.Int64()%7 == 0 {
 				time.Sleep(time.Second * 2) // simulate occasional timeout
 			}
 		}
@@ -730,7 +731,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.RecvObj) {
 }
 
 func newRand(seed int64) *rand.Rand {
-	src := rand.NewSource(seed)
+	src := cos.NewRandSource(uint64(seed))
 	random := rand.New(src)
 	return random
 }
@@ -740,17 +741,17 @@ func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 		Name:     "a",
 		Provider: apc.AIS,
 	}
-	hdr.ObjName = strconv.FormatInt(random.Int63(), 10)
+	hdr.ObjName = strconv.FormatInt(random.Int64(), 10)
 	hdr.Opaque = []byte("123456789abcdef")
 	hdr.ObjAttrs.Size = cos.GiB
-	hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), "d")
+	hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), "d")
 	hdr.ObjAttrs.SetCustomKey("e", "")
 	hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
 	return
 }
 
 func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
-	x := random.Int63()
+	x := random.Int64()
 	hdr.Bck.Name = strconv.FormatInt(x, 10)
 	hdr.Bck.Provider = apc.AIS
 	hdr.ObjName = path.Join(hdr.Bck.Name, strconv.FormatInt(math.MaxInt64-x, 10))
@@ -772,14 +773,14 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 		} else {
 			hdr.ObjAttrs.Size = (x & 0xfffff) + 1
 		}
-		hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), s)
+		hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), s)
 		hdr.ObjAttrs.SetCustomKey(s, "")
 		hdr.ObjAttrs.SetCksum(cos.ChecksumMD5, "md5")
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
 		hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
 		for range int(x & 0x1f) {
-			hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int63(), 10), s)
+			hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), s)
 		}
 	default:
 		hdr.ObjAttrs.Size = 0
@@ -807,13 +808,13 @@ type randReader struct {
 //nolint:gocritic // can do (hdr) hugeParam
 func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *randReader {
 	buf := slab.Alloc()
-	_, err := random.Read(buf)
+	_, err := cryptorand.Read(buf)
 	if err != nil {
 		panic("Failed read rand: " + err.Error())
 	}
 	r := &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
 	if hdr.IsUnsized() {
-		r.offEOF = int64(random.Int31()>>1) + 1
+		r.offEOF = int64(random.Int32()>>1) + 1
 	}
 	return r
 }

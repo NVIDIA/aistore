@@ -26,7 +26,10 @@ const (
 // crand //
 ///////////
 
-type crand struct{}
+type (
+	// cryptorand
+	crand struct{}
+)
 
 var crnd rand.Source = &crand{}
 

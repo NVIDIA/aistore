@@ -6,6 +6,7 @@ package readers_test
 
 import (
 	"io"
+	"math/rand/v2"
 	"os"
 	"path"
 	"reflect"
@@ -245,7 +246,7 @@ func TestSGReader(t *testing.T) {
 	defer mmsa.Terminate(false)
 	{
 		// Basic read
-		size := int64(1024)
+		size := rand.Int64N(cos.MiB)
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
@@ -254,23 +255,25 @@ func TestSGReader(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		lenHeader := rand.IntN(cos.KiB)
 		buf := make([]byte, size)
-		n, err := r.Read(buf[:512])
+		n, err := r.Read(buf[:lenHeader])
 		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
 
-		if n != 512 {
-			t.Fatalf("Read returned wrong number of bytes, expected = %d, actual = %d", 512, n)
+		if n != lenHeader {
+			t.Fatalf("Read returned wrong number of bytes, expected = %d, actual = %d", lenHeader, n)
 		}
 
+		// read the rest
 		n, err = r.Read(buf)
 		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
 
-		if n != 512 {
-			t.Fatalf("Read returned wrong number of bytes, expected = %d, actual = %d", 512, n)
+		if n != int(size)-lenHeader {
+			t.Fatalf("Read returned wrong number of bytes, expected = %d, actual = %d", int(size)-lenHeader, n)
 		}
 
 		r.Close()
