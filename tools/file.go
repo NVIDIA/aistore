@@ -6,6 +6,7 @@ package tools
 
 import (
 	"bytes"
+	cryptorand "crypto/rand"
 	"io"
 	"math/rand/v2"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/tools/cryptorand"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 )

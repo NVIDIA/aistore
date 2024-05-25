@@ -7,6 +7,7 @@ package tarch
 import (
 	"archive/tar"
 	"bytes"
+	cryptorand "crypto/rand"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -19,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
-	"github.com/NVIDIA/aistore/tools/cryptorand"
 )
 
 var pool1m, pool128k, pool32k sync.Pool

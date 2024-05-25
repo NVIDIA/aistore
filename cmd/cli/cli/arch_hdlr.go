@@ -7,6 +7,7 @@ package cli
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -573,7 +574,6 @@ loop:
 
 func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string) (err error) {
 	var (
-		random = cos.NowRand()
 		prefix = make([]byte, 10)
 		width  = len(strconv.Itoa(fileCnt))
 		oah    = cos.SimpleOAH{Size: int64(fileSize), Atime: time.Now().UnixNano()}
@@ -581,11 +581,11 @@ func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fil
 		writer = archive.NewWriter(shardExt, w, nil /*cksum*/, &opts)
 	)
 	for idx := start; idx < end && err == nil; idx++ {
-		random.Read(prefix)
+		cryptorand.Read(prefix)
 
 		for _, fext := range fileExts {
 			name := fmt.Sprintf("%s-%0*d"+fext, hex.EncodeToString(prefix), width, idx)
-			err = writer.Write(name, oah, io.LimitReader(random, int64(fileSize)))
+			err = writer.Write(name, oah, io.LimitReader(cryptorand.Reader, int64(fileSize)))
 		}
 	}
 	writer.Fini()

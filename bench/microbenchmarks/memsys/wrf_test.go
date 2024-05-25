@@ -5,12 +5,12 @@
 package memsys_test
 
 import (
+	cryptorand "crypto/rand"
 	rdebug "runtime/debug"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tools/cryptorand"
 )
 
 // 1. Run with all defaults:
