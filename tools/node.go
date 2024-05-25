@@ -182,6 +182,13 @@ func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxy
 	}
 }
 
+func _minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}
+
 // WaitForClusterState waits until a cluster reaches specified state, meaning:
 // - smap has version larger than origVersion
 // - number of active proxies is equal proxyCnt, unless proxyCnt == 0
@@ -248,7 +255,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			}
 		}
 		if smap.Version != lastVer && lastVer != 0 {
-			deadline = cos.MinTime(time.Now().Add(maxWait), opDeadline)
+			deadline = _minTime(time.Now().Add(maxWait), opDeadline)
 		}
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if ok {

@@ -114,7 +114,7 @@ func ValidateDaemonID(id string) error { return ValidateNiceID(id, lenDaemonID, 
 
 // (when config.TestingEnv)
 func GenTestingDaemonID(suffix string) string {
-	l := Max(lenDaemonID-len(suffix), 3)
+	l := max(lenDaemonID-len(suffix), 3)
 	return CryptoRandS(l) + suffix
 }
 

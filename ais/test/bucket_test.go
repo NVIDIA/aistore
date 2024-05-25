@@ -1743,7 +1743,7 @@ func TestBucketInvalidName(t *testing.T) {
 
 func TestLocalMirror(t *testing.T) {
 	tests := []struct {
-		numCopies []int // each of the number in the list represents the number of copies enforced on the bucket
+		numCopies []int // each of the numbers in the list represents the number of copies enforced on the bucket
 		tag       string
 		skipArgs  tools.SkipTestArgs
 	}{
@@ -1783,7 +1783,11 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	m.initAndSaveState(true /*cleanup*/)
 
-	skip := tools.SkipTestArgs{MinMountpaths: cos.Max(numCopies...) + 1}
+	copies := numCopies[0]
+	for i := 1; i < len(numCopies); i++ {
+		copies = max(copies, numCopies[i])
+	}
+	skip := tools.SkipTestArgs{MinMountpaths: copies}
 	tools.CheckSkip(t, &skip)
 
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)

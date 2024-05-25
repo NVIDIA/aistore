@@ -932,7 +932,7 @@ func isDirectS3() bool {
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
 	// take first bigger power of 2, then take first bigger or equal number
 	// divisible by 4. This makes loaderID more visible in hex object name
-	return cos.CeilAlign(cos.FastLog2Ceil(totalLoaders), 4)
+	return cos.CeilAlign(fastLog2Ceil(totalLoaders), 4)
 }
 
 func printArguments(set *flag.FlagSet) {

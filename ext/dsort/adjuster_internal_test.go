@@ -50,6 +50,13 @@ func calcSemaLimit(acquire, release func()) int {
 	return int(res)
 }
 
+func _abs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
 var _ = Describe("newConcAdjuster", func() {
 	mios := mock.NewIOS()
 
@@ -116,7 +123,7 @@ var _ = Describe("newConcAdjuster", func() {
 			})
 
 			// If we get enough close we can just break
-			if cos.Abs(curLimit-perfectLimit) <= 1 {
+			if _abs(curLimit-perfectLimit) <= 1 {
 				break
 			}
 

@@ -274,7 +274,7 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 				return
 			}
 			tr.Step = 1
-			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
+			tr.DigitCount = min(len(numbers[0]), len(numbers[1]))
 		} else if len(numbers) == 3 { // {0001..0999..2} case
 			if tr.Start, err = strconv.ParseInt(numbers[0], 10, 64); err != nil {
 				return
@@ -285,7 +285,7 @@ func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 			if tr.Step, err = strconv.ParseInt(numbers[2], 10, 64); err != nil {
 				return
 			}
-			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
+			tr.DigitCount = min(len(numbers[0]), len(numbers[1]))
 		}
 		if err = validateBoundaries("bash", template, tr.Start, tr.End, tr.Step); err != nil {
 			return

@@ -190,7 +190,7 @@ func (r *nopReader) Read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	toRead := Min(len(b), left)
+	toRead := min(len(b), left)
 	r.offset += toRead
 	return toRead, nil
 }
