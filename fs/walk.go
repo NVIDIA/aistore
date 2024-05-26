@@ -165,11 +165,17 @@ func Walk(opts *WalkOpts) error {
 }
 
 func _join(bdir, prefix string) string {
-	sub := bdir + cos.PathSeparator + prefix
 	if cos.IsLastB(prefix, filepath.Separator) {
-		return sub
+		// easy choice: is the sub-directory to walk
+		// (ie., not walking the entire parent - just this one)
+		return bdir + cos.PathSeparator + prefix
 	}
 	if !cmn.Rom.Features().IsSet(feat.DontOptimizeVirtualDir) {
+		sub := bdir + cos.PathSeparator + prefix
+		// uneasy choice: if `sub` is an actual directory we further assume
+		// (unless user says otherwise via feature flag)
+		// _not_ to have the names that contain it as a prefix substring
+		// (as in: "subdir/foo" and "subdir_bar")
 		if finfo, err := os.Stat(sub); err == nil && finfo.IsDir() {
 			return sub
 		}
