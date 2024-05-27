@@ -7,6 +7,7 @@ package apc
 import (
 	"fmt"
 	"net/http"
+	"net/textproto"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -21,24 +22,32 @@ type BlobMsg struct {
 	LatestVer  bool  `json:"latest-ver"`
 }
 
+// using textproto.CanonicalMIMEHeaderKey() to check presence -
+// if a given key is present and is an empty string, it's an error
 func (msg *BlobMsg) FromHeader(hdr http.Header) error {
-	snw, schunk := hdr.Get(HdrBlobWorkers), hdr.Get(HdrBlobChunk)
-	if snw != "" {
-		nw, err := strconv.ParseInt(snw, 10, 16)
+	canWorkers := textproto.CanonicalMIMEHeaderKey(HdrBlobWorkers)
+	valWorkers, okw := hdr[canWorkers]
+	if okw {
+		// single value
+		nw, err := strconv.ParseInt(valWorkers[0], 10, 16)
 		if err != nil {
-			return fmt.Errorf("%s: failed to parse %s=%s: %v", _bldl, HdrBlobWorkers, snw, err)
+			return fmt.Errorf("%s: failed to parse %s=%s: %v", _bldl, HdrBlobWorkers, valWorkers[0], err)
 		}
 		if nw < 0 || nw > 128 {
-			return fmt.Errorf("%s: invalid %s=%s: expecting (0..128) range", _bldl, HdrBlobWorkers, snw)
+			return fmt.Errorf("%s: invalid %s=%s: expecting (0..128) range", _bldl, HdrBlobWorkers, valWorkers[0])
 		}
 		msg.NumWorkers = int(nw)
 	}
-	if schunk == "" {
+
+	canChunkSz := textproto.CanonicalMIMEHeaderKey(HdrBlobChunk)
+	valChunkSz, okz := hdr[canChunkSz]
+	if !okz {
 		return nil
 	}
-	chunk, err := cos.ParseSize(schunk, "")
+	// single value
+	chunk, err := cos.ParseSize(valChunkSz[0], "")
 	if err != nil {
-		return fmt.Errorf("%s: failed to parse %s=%s: %v", _bldl, HdrBlobChunk, schunk, err)
+		return fmt.Errorf("%s: failed to parse %s=%s: %v", _bldl, HdrBlobChunk, valChunkSz[0], err)
 	}
 	msg.ChunkSize = chunk
 	return nil

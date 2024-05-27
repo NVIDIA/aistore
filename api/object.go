@@ -334,12 +334,13 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, fltPresence int, sil
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := apc.PropToHeader(tag)
-		// skip the missing ones
-		if _, ok := hdr[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
+		// get values, skip the missing ones
+		v, ok := hdr[textproto.CanonicalMIMEHeaderKey(headerName)]
+		if !ok {
 			return nil, false
 		}
 		// single-value
-		return field.SetValue(hdr.Get(headerName), true /*force*/), false
+		return field.SetValue(v[0], true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
 	if err != nil {
 		return nil, err

@@ -5,11 +5,13 @@ linters:
     - revive
     - asciicheck
     - bodyclose
+    - canonicalheader
     - dogsled
     - dupl
     - durationcheck
     - errcheck
     - exportloopref
+    - fatcontext
     - gci
     - gocritic
     - gofmt
