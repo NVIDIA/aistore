@@ -2304,15 +2304,18 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 			return nil, cmn.NewErrUnsupp("list (via bucket inventory) non-S3 bucket", bck.Cname(""))
 		}
 		if lsmsg.ContinuationToken == "" /*first page*/ {
-			timeout = config.Client.TimeoutLong.D()
-
 			// override _lsofc selection (see above)
-			_, objName := s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrInvID))
-			tsi, err := smap.HrwName2T(bck.MakeUname(objName))
+			var (
+				err        error
+				_, objName = s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrInvID))
+			)
+			tsi, err = smap.HrwName2T(bck.MakeUname(objName))
 			if err != nil {
 				return nil, err
 			}
 			lsmsg.SID = tsi.ID()
+
+			timeout = config.Client.TimeoutLong.D()
 		}
 	}
 	args.req = cmn.HreqArgs{

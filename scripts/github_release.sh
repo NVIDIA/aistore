@@ -35,7 +35,7 @@ GITHUB_RELEASE_ID=$(curl -H  "Authorization: token ${GITHUB_OAUTH_TOKEN}" "https
 os="linux"
 arch="amd64"
 echo "Building binaries"
-pushd ../../
+pushd ../
 make cli
 make aisloader
 make authn
