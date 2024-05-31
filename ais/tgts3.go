@@ -197,9 +197,9 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	// TODO: dual checksumming, e.g. lom.SetCustom(apc.AWS, ...)
 
 	dpq := dpqAlloc()
-	defer dpqFree(dpq)
 	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		s3.WriteErr(w, r, err, 0)
+		dpqFree(dpq)
 		return
 	}
 	poi := allocPOI()
@@ -216,9 +216,10 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	if err != nil {
 		t.fsErr(err, lom.FQN)
 		s3.WriteErr(w, r, err, ecode)
-		return
+	} else {
+		s3.SetEtag(w.Header(), lom)
 	}
-	s3.SetEtag(w.Header(), lom)
+	dpqFree(dpq)
 }
 
 // GET s3/<bucket-name[/<object-name>]

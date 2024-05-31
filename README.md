@@ -85,7 +85,7 @@ AIStore supports multiple ways to populate itself with existing datasets, includ
 
 > The on-demand "way" is maybe the most popular, whereby users just start running their workloads against a [remote bucket](docs/providers.md) with AIS cluster positioned as an intermediate fast tier.
 
-But there's more. In v3.22, we introduce [blob downloader](docs/blob_downloader.md), a special facility to download very large remote objects (BLOBs).
+But there's more. In [v3.22](https://github.com/NVIDIA/aistore/releases/tag/v1.3.22), we introduce [blob downloader](/docs/blob_downloader.md), a special facility to download very large remote objects (BLOBs). And in [v3.23](https://github.com/NVIDIA/aistore/releases/tag/v1.3.23), there's a new capability, dubbed [bucket inventory](/docs/s3inventory.md), to list very large S3 buckets _fast_.
 
 ## Installing from release binaries
 

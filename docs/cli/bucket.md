@@ -167,7 +167,7 @@ Operation "destroy-bck" is not supported by "aws://bucket_name"
 
 `ais ls [command options] PROVIDER:[//BUCKET_NAME]`
 
-Notice the optional `[//BUCKET_NAME]`. When there's no bucket, `ais ls` will list **buckets**. Otherwise, it'll list **objects**.
+**Notice** the optional `[//BUCKET_NAME]`. When there's no bucket, `ais ls` will list **buckets**. Otherwise, it'll list **objects**.
 
 ## Usage
 
@@ -264,7 +264,6 @@ Notice the optional `[//BUCKET_NAME]`. When there's no bucket, `ais ls` will lis
 The command's inline help is also quite extensive, with (inline) examples followed by numerous supported options:
 
 ```console
-$ ais ls --help
 NAME:
    ais ls - (alias for "bucket ls") list buckets, objects in buckets, and files in (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects,
    e.g.:
@@ -281,9 +280,9 @@ NAME:
      * ais ls gs://abc --template images/                     - list all objects from the virtual subdirectory called "images";
      * ais ls gs://abc --prefix images/                       - same as above (for more examples, see '--template' below);
    with in-cluster vs remote content comparison (diff):
-     * ais ls s3://abc --check-versions           - for each remote object in s3://abc: check whether it has identical in-cluster copy,
+     * ais ls s3://abc --check-versions           - for each remote object in s3://abc: check whether it has identical in-cluster copy
                                                     and show missing objects
-     * ais ls s3://abc --check-versions --cached  - for each in-cluster object in s3://abc: check whether it has identical remote copy,
+     * ais ls s3://abc --check-versions --cached  - for each in-cluster object in s3://abc: check whether it has identical remote copy
                                                     and show deleted objects
    with summary (stats):
      * ais ls s3 --summary                   - for each s3 bucket in the cluster: print object numbers and total size(s);
@@ -294,63 +293,78 @@ USAGE:
    ais ls [command options] PROVIDER:[//BUCKET_NAME]
 
 OPTIONS:
-   --all                depending on the context, list:
-                        - all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster
-                        - all objects in a given accessible (visible) bucket, including remote objects and misplaced copies
-   --cached             list only those objects from a remote bucket that are present ("cached")
-   --name-only          faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)
-   --props value        comma-separated list of object properties including name, size, version, copies, and more; e.g.:
-                        --props all
-                        --props name,size,cached
-                        --props "ec, copies, custom, location"
-   --regex value        regular expression; use it to match either bucket names or objects in a given bucket, e.g.:
-                        ais ls --regex "(m|n)"         - match buckets such as ais://nnn, s3://mmm, etc.;
-                        ais ls ais://nnn --regex "^A"  - match object names starting with letter A
-   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
-                        (with optional steps and gaps), e.g.:
-                        --template "" # (an empty or '*' template matches eveything)
-                        --template 'dir/subdir/'
-                        --template 'shard-{1000..9999}.tar'
-                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                        and similarly, when specifying files and directories:
-                        --template '/home/dir/subdir/'
-                        --template "/abc/prefix-{0010..9999..2}-suffix"
-   --prefix value       list objects that have names starting with the specified prefix, e.g.:
-                        '--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory
-                        a/b that have their names (relative to this directory) starting with the letter 'c'
-   --page-size value    maximum number of names per page (0 - the maximum is defined by the corresponding backend) (default: 0)
-   --paged              list objects page by page, one page at a time (see also '--page-size' and '--limit')
-   --limit value        limit object name count (0 - unlimited) (default: 0)
-   --refresh value      interval for continuous monitoring;
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --show-unmatched     list also objects that were _not_ matched by regex and/or template (range)
-   --no-headers, -H     display tables without headers
-   --no-footers         display tables without footers
-   --max-pages value    display up to this number pages of bucket objects (default: 0)
-   --start-after value  list bucket's content alphabetically starting with the first name _after_ the specified
-   --summary            show object numbers, bucket sizes, and used capacity;
-                        note: applies only to buckets and objects that are _present_ in the cluster
-   --skip-lookup        do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
-                         1) adding remote bucket to aistore without first checking the bucket's accessibility
-                            (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
-                         2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
-   --dont-add           list remote bucket without adding it to cluster's metadata
-                          - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);
-                          - then, if we ask aistore to list remote buckets: `ais ls s3://abc --all'
-                            the bucket will be added (in effect, it'll be created);
-                          - to prevent this from happening, either use this '--dont-add' flag or run 'ais evict' command later
-   --archive            list archived content (see docs/archive.md for details)
-   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                        si  - SI (metric) format, e.g.: KB, MB, GB
-                        raw - do not convert to (or from) human-readable format
-   --silent             server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
-   --dont-wait          when _summarizing_ buckets do not wait for the respective job to finish -
-                        use the job's UUID to query the results interactively
-   --check-versions     check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions
-                        - applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag)
-                        - see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'
-   --help, -h           show help
+   --all                  depending on the context, list:
+                          - all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster
+                          - all objects in a given accessible (visible) bucket, including remote objects and misplaced copies
+   --cached               list only in-cluster objects - only those objects from a remote bucket that are present ("cached")
+   --name-only            faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)
+
+   --props value          comma-separated list of object properties including name, size, version, copies, and more; e.g.:
+                          --props all
+                          --props name,size,cached
+                          --props "ec, copies, custom, location"
+   --regex value          regular expression; use it to match either bucket names or objects in a given bucket, e.g.:
+                          ais ls --regex "(m|n)"         - match buckets such as ais://nnn, s3://mmm, etc.;
+                          ais ls ais://nnn --regex "^A"  - match object names starting with letter A
+   --template value       template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                          (with optional steps and gaps), e.g.:
+                          --template "" # (an empty or '*' template matches eveything)
+                          --template 'dir/subdir/'
+                          --template 'shard-{1000..9999}.tar'
+                          --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                          and similarly, when specifying files and directories:
+                          --template '/home/dir/subdir/'
+                          --template "/abc/prefix-{0010..9999..2}-suffix"
+   --prefix value         list objects that have names starting with the specified prefix, e.g.:
+                          '--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory
+                          a/b that have their names (relative to this directory) starting with the letter 'c'
+   --page-size value      maximum number of object names per page; when the flag is omitted or 0 (zero)
+                          the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged' (default: 0)
+   --paged                list objects page by page - one page at a time (see also '--page-size' and '--limit')
+                          note: recommended for use with very large buckets
+   --limit value          maximum number of object names to display (0 - unlimited; see also '--max-pages')
+                          e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
+   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --show-unmatched       list also objects that were _not_ matched by regex and/or template (range)
+   --no-headers, -H       display tables without headers
+   --no-footers, -F       display tables without footers
+   --max-pages value      maximum number of pages to display (see also '--page-size' and '--limit')
+                          e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
+   --start-after value    list bucket's content alphabetically starting with the first name _after_ the specified
+   --summary              show object numbers, bucket sizes, and used capacity;
+                          note: applies only to buckets and objects that are _present_ in the cluster
+   --non-recursive, --nr  list objects without including nested virtual subdirectories
+
+   --skip-lookup          do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                           1) adding remote bucket to aistore without first checking the bucket's accessibility
+                              (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                           2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --dont-add             list remote bucket without adding it to cluster's metadata - e.g.:
+                            - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);
+                            - then, if we ask aistore to list remote buckets: `ais ls s3://abc --all'
+                              the bucket will be added (in effect, it'll be created);
+                            - to prevent this from happening, either use this '--dont-add' flag or run 'ais evict' command later
+   --archive              list archived content (see docs/archive.md for details)
+   --units value          show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                          iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                          si  - SI (metric) format, e.g.: KB, MB, GB
+                          raw - do not convert to (or from) human-readable format
+   --silent               server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
+   --dont-wait            when _summarizing_ buckets do not wait for the respective job to finish -
+                          use the job's UUID to query the results interactively
+   --check-versions       check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions
+                          - applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag)
+                          - see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'
+   --count-only           print only the resulting number of listed objects and elapsed time
+   --inventory            list objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+                          boost when used with very large s3 buckets; e.g. usage:
+                            1) 'ais ls s3://abc --inventory'
+                            2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
+                          (see also: docs/s3inventory.md)
+   --inv-name value       bucket inventory name (optional; system default name is '.inventory')
+   --inv-id value         bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
+   --help, -h             show help
 ```
 
 ### Assorted options
@@ -436,6 +450,38 @@ $ ais ls ais://bucket_name --prefix "shard-1"
 NAME		SIZE		VERSION
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
+```
+
+#### Bucket inventory
+
+Here's a quick 4-steps sequence to demonstrate the functionality:
+
+**1**. In the beginning, the bucket is accessible (notice `--all`) and empty, as far as its in-cluster content
+```console
+$ ais ls s3://abc --cached --all
+NAME                     SIZE
+```
+
+**2**. The first (remote) list-objects will have the side-effect of loading remote inventory
+```console
+$ ais ls s3://abc --inventory --count-only
+Note: listing remote objects in s3://abc may take a while
+(Tip: use '--cached' to speed up and/or '--paged' to show pages)
+
+Listed 2,319,231 names in 23.91s
+```
+
+**3**. The second and later list-objects will run much faster
+```console
+$ ais ls s3://abc --inventory --count-only
+Listed 2,319,231 names in 4.18s
+```
+
+**4**. Finally, observe that at in-cluster content now includes the inventory (.csv) itself
+```console
+$ ais ls s3://abc --cached
+NAME                     SIZE
+.inventory/ais-vm.csv    143.61MiB
 ```
 
 #### List archived contect
