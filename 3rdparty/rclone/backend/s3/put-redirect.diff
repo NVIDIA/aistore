@@ -1,0 +1,72 @@
+diff --git a/backend/s3/s3.go b/backend/s3/s3.go
+index a17446f9f..f7f293d51 100644
+--- a/backend/s3/s3.go
++++ b/backend/s3/s3.go
+@@ -5983,16 +5983,65 @@ func unWrapAwsError(err error) (found bool, outErr error) {
+ 	return true, err
+ }
+ 
++// NOTE: part of the brute force HACK below and, simultaneously, a minor fork of the io.ReadAll to preallocate the right size
++func _readAll(r io.Reader, size int) ([]byte, error) {
++	b := make([]byte, 0, size)
++	for {
++		n, err := r.Read(b[len(b):cap(b)])
++		b = b[:len(b)+n]
++		if err != nil {
++			if err == io.EOF {
++				err = nil
++			}
++			return b, err
++		}
++
++		if len(b) == cap(b) {
++			// Add more capacity (let append pick how much).
++			b = append(b, 0)[:len(b)]
++		}
++	}
++}
++
+ // Upload a single part using PutObject
+-func (o *Object) uploadSinglepartPutObject(ctx context.Context, req *s3.PutObjectInput, size int64, in io.Reader) (etag string, lastModified time.Time, versionID *string, err error) {
++func (o *Object) uploadSinglepartPutObject(ctx context.Context, req *s3.PutObjectInput, _ int64, in io.Reader) (etag string, lastModified time.Time, versionID *string, err error) {
+ 	r, resp := o.fs.c.PutObjectRequest(req)
+-	if req.ContentLength != nil && *req.ContentLength == 0 {
++
++	if true {
++		// BEGIN brute force HACK to facilitate PUT redirect
++		var (
++			payload []byte
++			size    int64 // NOTE: in the typedef uploadSinglepartPutObject(..., size, ...) the 'size' arg was never used
++			n       int
++		)
++		if req.ContentLength != nil {
++			size = *req.ContentLength
++		}
++		if size > 0 {
++			n = int(size)
++		} else {
++			n = 128 * 1024
++		}
++		payload, err = _readAll(in, n)
++		if err != nil {
++			return
++		}
++		if size > 0 && len(payload) != n {
++			err = fmt.Errorf("expected size (ContentLength) %d, got %d", size, len(payload))
++			return
++		}
++		r.Body = bytes.NewReader(payload)
++		// END brute force HACK ------------------------------------------------
++
++	} else if req.ContentLength != nil && *req.ContentLength == 0 {
+ 		// Can't upload zero length files like this for some reason
+ 		r.Body = bytes.NewReader([]byte{})
+ 	} else {
+ 		r.SetStreamingBody(io.NopCloser(in))
+ 	}
++
+ 	r.SetContext(ctx)
++	r.DisableFollowRedirects = false
+ 	r.HTTPRequest.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
+ 
+ 	err = o.fs.pacer.CallNoRetry(func() (bool, error) {
