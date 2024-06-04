@@ -210,27 +210,6 @@ test:short:pytorch:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
       - $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/
 
-test:short:python-etl:
-  <<: *test_short_def
-  tags:
-    - ais-k8s
-  script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
-    - cd python
-    - make python_etl_tests
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-      - $CI_MERGE_REQUEST_LABELS !~ /.*etl.*/
-  retry:
-    max: 2
-    when:
-      - unknown_failure
-      - api_failure
-      - stuck_or_timeout_failure
-      - runner_system_failure
-      - job_execution_timeout
-
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
   <<: *test_short_def
@@ -441,6 +420,26 @@ test:short:k8s:
     RE: "TestETL|TestConfig|TestMountpath"
   script:
     - make test-short
+
+test:short:python-etl:
+  extends: .test_k8s_short_template
+  <<: *default_only_def
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+      - $CI_MERGE_REQUEST_LABELS !~ /.*etl.*/
+  retry:
+    max: 2
+    when:
+      - unknown_failure
+      - api_failure
+      - stuck_or_timeout_failure
+      - runner_system_failure
+      - job_execution_timeout
+  script:
+    - cd python
+    - make python_etl_tests
+    
 
 #  e.g. RE: "ETLBucket|ETLConnectionError|ETLInitCode" (or any other regex to select tests)
 test:short:assorted:k8s:
