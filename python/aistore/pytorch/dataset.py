@@ -21,18 +21,18 @@ from aistore.pytorch.utils import (
 
 class AISBaseClass:
     """
-    A base class for creating AIS Datasets for PyTorch
+    A base class for creating AIS Datasets for PyTorch.
 
     Args:
-        client_url(str): AIS endpoint URL
-        urls_list (str, List[str]): single or list of url prefixes objects to load data
-        ais_source_list (AISSource, List[AISSource]): single or list of AISSource objects to load data
+        client_url (str): AIS endpoint URL
+        urls_list (Union[str, List[str]]): Single or list of URL prefixes to load data
+        ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
     """
 
     def __init__(
         self,
         client_url: str,
-        urls_list: Union[str, List],
+        urls_list: Union[str, List[str]],
         ais_source_list: Union[AISSource, List[AISSource]],
     ) -> None:
         self.client = Client(client_url)
@@ -40,23 +40,22 @@ class AISBaseClass:
             urls_list = [urls_list]
         if isinstance(ais_source_list, AISSource):
             ais_source_list = [ais_source_list]
-
         self._objects = list_objects(self.client, urls_list, ais_source_list)
 
 
 class AISDataset(AISBaseClass, Dataset):
     """
-    A map-style dataset for objects in AIS
-    If `etl_name` is provided, that ETL must already exist on the AIStore cluster
+    A map-style dataset for objects in AIS.
+    If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
         client_url (str): AIS endpoint URL
-        urls_list (str, List[str]): single or list of url prefixes objects to load data
-        ais_source_list (AISSource, List[AISSource]): single or list of AISSource objects to load data
-        etl_name (str, optional): Optional etl on the AIS cluster to apply to each object
+        urls_list (Union[str, List[str]]): Single or list of URL prefixes to load data
+        ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
+        etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
 
     Note:
-        Each object is represented as a tuple of object_name(str) and object_content(bytes)
+        Each object is represented as a tuple of object_name (str) and object_content (bytes)
     """
 
     def __init__(
@@ -70,7 +69,7 @@ class AISDataset(AISBaseClass, Dataset):
             raise ValueError(
                 "At least one of urls_list or ais_source_list must be provided"
             )
-        AISBaseClass.__init__(self, client_url, urls_list, ais_source_list)
+        super().__init__(client_url, urls_list, ais_source_list)
         self.etl_name = etl_name
 
     def __len__(self):
@@ -78,19 +77,18 @@ class AISDataset(AISBaseClass, Dataset):
 
     def __getitem__(self, index: int):
         obj = self._objects[index]
-        obj_name = self._objects[index].name
         content = obj.get(etl_name=self.etl_name).read_all()
-        return obj_name, content
+        return obj.name, content
 
 
 class AISBaseClassIter:
     """
-    A base class for creating AIS Iterable Datasets for PyTorch
+    A base class for creating AIS Iterable Datasets for PyTorch.
 
     Args:
         client_url (str): AIS endpoint URL
-        urls_list (str, List[str]): single or list of url prefixes objects to load data
-        ais_source_list (AISSource, List[AISSource]): single or list of AISSource objects to load data
+        urls_list (Union[str, List[str]]): Single or list of URL prefixes to load data
+        ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
     """
 
     def __init__(
@@ -109,9 +107,7 @@ class AISBaseClassIter:
         self._reset_iterator()
 
     def _reset_iterator(self):
-        """
-        Reset the object iterator to start from the beginning
-        """
+        """Reset the object iterator to start from the beginning"""
         self._object_iter = list_objects_iterator(
             self.client, self.urls_list, self.ais_source_list
         )
@@ -119,17 +115,17 @@ class AISBaseClassIter:
 
 class AISIterDataset(AISBaseClassIter, IterableDataset):
     """
-    A iterable style dataset which iterates over objects in AIS
-    If `etl_name` is provided, that ETL must already exist on the AIStore cluster
+    An iterable-style dataset that iterates over objects in AIS.
+    If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
         client_url (str): AIS endpoint URL
-        urls_list (str, List[str]): single or list of url prefixes objects to load data
-        ais_source_list (AISSource, List[AISSource]): single or list of AISSource objects to load data
-        etl_name (str, optional): Optional etl on the AIS cluster to apply to each object
+        urls_list (Union[str, List[str]]): Single or list of URL prefixes to load data
+        ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
+        etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
 
     Note:
-        Each object is represented as a tuple of object_name(str) and object_content(bytes)
+        Each object is represented as a tuple of object_name (str) and object_content (bytes)
     """
 
     def __init__(
@@ -141,9 +137,9 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
     ):
         if not urls_list and not ais_source_list:
             raise ValueError(
-                "At least one of urls_list or ais_source_list must be provided"
+                "At least one of urls_list or ais_source_list must be provided."
             )
-        AISBaseClassIter.__init__(self, client_url, urls_list, ais_source_list)
+        super().__init__(client_url, urls_list, ais_source_list)
         self.etl_name = etl_name
         self.length = None
 
@@ -155,7 +151,7 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
             yield obj_name, content
 
     def __len__(self):
-        if not self.length:
+        if self.length is None:
             self._reset_iterator()
             self.length = self._calculate_len()
         return self.length
@@ -166,7 +162,7 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
 
 class AISMultiShardStream(IterableDataset):
     """
-    A iterable style dataset which iterates over multiple shard streams and yields combined samples
+    An iterable-style dataset that iterates over multiple shard streams and yields combined samples.
 
     Args:
         data_sources (List[DataShard]): List of DataShard objects
@@ -176,29 +172,12 @@ class AISMultiShardStream(IterableDataset):
             one object bytes from each shard stream
     """
 
-    def __init__(
-        self,
-        data_sorces: List[DataShard],
-    ):
-        self.data_sources = data_sorces
+    def __init__(self, data_sources: List[DataShard]):
+        self.data_sources = data_sources
 
     def __iter__(self) -> Iterator:
-        object_iter = self._combined_iterator()
-        for obj in object_iter:
-            yield obj
-
-    def _combined_iterator(self):
-        """
-        Combine multiple iterators into one
-        """
-        data_iterators = []
-        for data_source in self.data_sources:
-            bucket, prefix, etl_name = (
-                data_source.bucket,
-                data_source.prefix,
-                data_source.etl_name,
-            )
-            data_iterator = list_shard_objects_iterator(bucket, prefix, etl_name)
-            data_iterators.append(data_iterator)
-
+        data_iterators = (
+            list_shard_objects_iterator(ds.bucket, ds.prefix, ds.etl_name)
+            for ds in self.data_sources
+        )
         return zip(*data_iterators)

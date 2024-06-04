@@ -2,7 +2,6 @@
 
 ## PyTorch Dataset and DataLoader for AIS
 
-
 AIS plugin is a PyTorch dataset library to access datasets stored on AIStore.
 
 PyTorch comes with powerful data loading capabilities, but loading data in PyTorch is fairly complex. One of the best ways to handle it is to start small and then add complexities as and when you need them. Below are some of the ways one can import data stored on AIS in PyTorch.
@@ -13,13 +12,13 @@ The PyTorch DataLoader class gives you an iterable over a Dataset. It can be use
 
 ### PyTorch Dataset
 
-But, to create a DataLoader you have to first create a Dataset, which is a class to read samples into memory. Most of the logic of the DataLoader resides on the Dataset.
+To create a DataLoader, you need to first create a Dataset, which is a class to read samples into memory. Most of the logic of the DataLoader resides on the Dataset.
 
 PyTorch offers two styles of Dataset class: Map-style and Iterable-style.
 
 **Note:** Both datasets can be initialized with a urls_list parameter and/or an ais_source_list parameter that defines which objects to reference in AIS.
 ```urls_list``` can be a single prefix url or a list of prefixes. Eg. ```"ais://bucket1/file-"``` or ```["aws://bucket2/train/", "ais://bucket3/train/"]```.
-Likewise ```ais_source_list``` can be a single [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) object or a list of [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) objects. Eg. ```"Client.bucket()``` or ```[Client.bucket.objects(), Client.bucket()]```.
+Likewise ```ais_source_list``` can be a single [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) object or a list of [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) objects. Eg. ```"Client.bucket()``` or ```[Client.bucket("bucket1"), Client.bucket("bucket2")]```.
 
 #### ***Map-style Dataset***
 
@@ -27,13 +26,21 @@ A map-style dataset in PyTorch implements the `__getitem__()` and `__len__()` fu
 
 For example, we can access the i-th index label and its corresponding image by dataset[i] from a bucket in AIStore.
 
-```
+```python
 from aistore.pytorch.dataset import AISDataset
+from aistore.sdk import Client
+import os
 
-dataset = AISDataset(client_url="http://ais-gateway-url:8080", urls_list='ais://bucket1/')
+ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
 
-for i in range(len(dataset)): # calculate length of all items present using len() function
-    print(dataset[i]) # get object url and byte array of the object
+dataset = AISDataset(client_url=ais_url, urls_list='ais://bucket1/')
+
+# or, if using ais_source_list
+# client = Client(ais_url)
+# dataset = AISDataset(client_url=ais_url, ais_source_list=[client.bucket(bck_name="bucket1"), client.bucket(bck_name="bucket2")])
+
+for i in range(len(dataset)):
+    print(dataset[i])  # Get object URL and byte array of the object
 
 ```
 
@@ -48,15 +55,16 @@ We have extended support for iterable-style datasets to AIStore (AIS) backends, 
 
 Here's how you can use an iterable-style dataset with AIStore:
 
-```
+```python
 from aistore.pytorch.dataset import AISIterDataset
 from aistore.sdk import Client
+import os
 
 ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
 client = Client(ais_url)
 bucket = client.bucket("my-bck").create(exist_ok=True)
 
-# Creating objects in our bucket 
+# Creating objects in our bucket
 object_names = [f"example_obj_{i}" for i in range(10)]
 for name in object_names:
     bucket.object(name).put_content("object content".encode("utf-8"))
@@ -65,7 +73,7 @@ for name in object_names:
 my_objects = bucket.objects(obj_names=object_names)
 
 # Initialize the dataset with the AIS client URL and the data source location
-dataset = AISIterDataset(client_url=ais_url, urls_list="ais://bucket1/", ais_source_list=my_objects)
+dataset = AISIterDataset(client_url=ais_url, urls_list="ais://my-bck/", ais_source_list=my_objects)
 
 # Iterate over the dataset to fetch data samples as a stream
 for data_sample in dataset:
@@ -75,7 +83,7 @@ for data_sample in dataset:
 
 
 **Creating DataLoader from AISDataset**
-```
+```python
 from aistore.pytorch.dataset import AISDataset
 
 train_loader = torch.utils.data.DataLoader(
@@ -108,7 +116,7 @@ Iterable Datapipe that loads files from the AIS backends with the given list of 
 3) This internally uses [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk).
 
 ### Example
-```
+```python
 from aistore.pytorch.aisio import AISFileListerIterDataPipe, AISFileLoaderIterDataPipe
 
 prefixes = ['ais://bucket1/train/', 'aws://bucket2/train/']

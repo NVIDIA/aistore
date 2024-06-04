@@ -1,11 +1,11 @@
 """
 Utils for AIS PyTorch Plugin
 
-Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import List, Tuple, Iterable
-from urllib.parse import urlparse, urlunparse, parse_qs
+from urllib.parse import urlparse, urlunparse
 from aistore.sdk import Client
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.list_object_flag import ListObjectFlag
@@ -16,122 +16,112 @@ from aistore.sdk.types import ArchiveSettings
 
 def parse_url(url: str) -> Tuple[str, str, str]:
     """
-    Parse AIS urls for bucket and object names
+    Parse AIS URLs for bucket and object names.
+
     Args:
-        url (str): Complete URL of the object (eg. "ais://bucket1/file.txt")
+        url (str): Complete URL of the object (e.g., "ais://bucket1/file.txt")
+
     Returns:
-        provider (str): AIS Backend
-        bck_name (str): Bucket name identifier
-        obj_name (str):  Object name with extension
+        Tuple[str, str, str]: Provider, bucket name, and object name
     """
     parsed_url = urlparse(url)
-    path = parsed_url.path
-    if len(path) > 0 and path.startswith("/"):
-        path = path[1:]
-
-    # returns provider, bck_name, path
+    path = parsed_url.path.lstrip("/")
     return parsed_url.scheme, parsed_url.netloc, path
 
 
-# pylint: disable=unused-variable
 def list_objects(
     client: Client, urls_list: List[str], ais_source_list: List[AISSource]
 ) -> List[Object]:
     """
-    Create list of all the objects in the given urls and AISSources
+    Create a list of all the objects in the given URLs and AIS sources.
 
     Args:
-        client (Client): AIStore client object of the calling method
-        urls_list (List[str]): list of urls
-        ais_source_list (AISSource, List[AISSource]): list of AISSource objects to load data
+        client (Client): AIStore client object
+        urls_list (List[str]): List of URLs
+        ais_source_list (List[AISSource]): List of AISSource objects to load data
 
     Returns:
-        List[Object]: list of all the objects in the given urls and AISSources
+        List[Object]: List of all the objects in the given URLs and AIS sources
     """
     samples = []
-    for item in urls_list:
-        provider, bck_name, path = parse_url(item)
-        objects_iter = client.bucket(
-            bck_name=bck_name, provider=provider
-        ).list_all_objects_iter(prefix=path)
-        for obj in objects_iter:
-            samples.append(obj)
 
-    for item in ais_source_list:
-        for obj in item.list_all_objects_iter():
-            samples.append(obj)
+    for url in urls_list:
+        provider, bck_name, path = parse_url(url)
+        bucket = client.bucket(bck_name=bck_name, provider=provider)
+        samples.extend([obj.name for obj in bucket.list_all_objects_iter(prefix=path)])
+
+    for source in ais_source_list:
+        samples.extend([obj.name for obj in source.list_all_objects_iter()])
 
     return samples
 
 
 def unparse_url(provider: str, bck_name: str, obj_name: str) -> str:
     """
-    To generate URL based on provider, bck_name and object name
+    Generate URL based on provider, bucket name, and object name.
+
     Args:
-        provider(str): Provider name ('ais', 'gcp', etc)
-        bck_name(str): Bucket name
-        obj_name(str): Object name with extension.
+        provider (str): Provider name ('ais', 'gcp', etc.)
+        bck_name (str): Bucket name
+        obj_name (str): Object name with extension
+
     Returns:
-        unparsed_url(str): Unparsed url (complete url)
+        str: Complete URL
     """
     return urlunparse([provider, bck_name, obj_name, "", "", ""])
 
 
 def list_objects_iterator(
-    client: Client,
-    urls_list: List[str],
-    ais_source_list: List[AISSource],
+    client: Client, urls_list: List[str] = [], ais_source_list: List[AISSource] = []
 ) -> Iterable[Object]:
     """
-    Create an iterable over all the objects in the given urls and AISSources
+    Create an iterable over all the objects in the given URLs and AIS sources.
 
     Args:
-        client (Client): AIStore client object of the calling method
-        urls_list (List[str]): list of urls
-        ais_source_list (AISSource, List[AISSource]): list of AISSource objects to load data
+        client (Client): AIStore client object
+        urls_list (List[str]): List of URLs
+        ais_source_list (List[AISSource]): List of AISSource objects to load data
 
     Returns:
-        Iterable[Object]: iterable over all the objects in the given urls and AISSources
+        Iterable[Object]: Iterable over all the objects in the given URLs and AIS sources
     """
-    for item in urls_list:
-        provider, bck_name, path = parse_url(item)
-        objects_iter = client.bucket(
-            bck_name=bck_name, provider=provider
-        ).list_all_objects_iter(prefix=path)
-        for obj in objects_iter:
-            yield obj
+    for url in urls_list:
+        provider, bck_name, path = parse_url(url)
+        bucket = client.bucket(bck_name=bck_name, provider=provider)
+        yield from bucket.list_all_objects_iter(prefix=path)
 
-    for item in ais_source_list:
-        for obj in item.list_all_objects_iter():
-            yield obj
+    for source in ais_source_list:
+        yield from source.list_all_objects_iter()
 
 
 def list_shard_objects_iterator(
-    bucket: Bucket, prefix: str, etl_name: str
+    bucket: Bucket, prefix: str = "", etl_name: str = ""
 ) -> Iterable[Object]:
     """
-    Create an iterable over all the objects in the given shards
+    Create an iterable over all the objects in the given shards.
 
     Args:
         bucket (Bucket): Bucket containing the shards
-        prefix (str): prefix of the object names
-        etl_name (str): etl name to apply on each object
+        prefix (str): Prefix of the object names
+        etl_name (str): ETL name to apply on each object
 
     Returns:
-        Iterable[Object]: iterable over all the objects in the given shards,
-            with each iteration returning a combined sample
+        Iterable[Object]: Iterable over all the objects in the given shards,
+                          with each iteration returning a combined sample
     """
-
     shards_iter = bucket.list_objects_iter(prefix=prefix, props="name")
+
     for shard in shards_iter:
         path = shard.name
         objects_iter = bucket.list_objects_iter(
             prefix=path, props="name", flags=[ListObjectFlag.ARCH_DIR]
         )
+
         for obj in objects_iter:
             if obj.name == path:
                 continue
-            obj_name = obj.name.replace(path + "/", "", 1)
+            obj_name = obj.name.replace(f"{path}/", "", 1)
             yield bucket.object(path).get(
-                etl_name=etl_name, archive_settings=ArchiveSettings(archpath=obj_name)
+                etl_name=etl_name,
+                archive_settings=ArchiveSettings(archpath=obj_name),
             ).read_all()
