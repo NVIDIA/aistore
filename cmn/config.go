@@ -165,8 +165,9 @@ type (
 	}
 
 	BackendConf struct {
-		// provider implementation-dependent
-		Conf map[string]any `json:"conf,omitempty"`
+		// Provider implementation-dependent. We are using custom marshaling
+		// which populates this field.
+		Conf map[string]any `json:"-"`
 		// 3rd party Cloud(s) -- set during validation
 		Providers map[string]Ns `json:"-"`
 	}
