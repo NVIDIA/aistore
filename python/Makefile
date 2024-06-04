@@ -1,6 +1,7 @@
 
 SHELL := /bin/bash
 PYTHON = python3
+PYTEST = $(PYTHON) -m pytest
 PIP = pip3
 DOCFILE := ../docs/python_sdk.md
 PYAISLOADER_TEST_TYPE ?= short
@@ -61,15 +62,15 @@ python_sdk_tests: common_deps python_sdk_unit_tests python_sdk_integration_tests
 
 .PHONY: python_sdk_integration_tests
 python_sdk_integration_tests: common_deps
-	pytest -v tests/integration/sdk -m "not etl"
+	$(PYTEST) -v tests/integration/sdk -m "not etl"
 
 .PHONY: python_sdk_unit_tests
 python_sdk_unit_tests: common_deps
-	pytest -v tests/unit/sdk
+	$(PYTEST) -v tests/unit/sdk
 
 .PHONY: python_etl_tests
 python_etl_tests: common_deps
-	pytest -v -s tests/integration/sdk/ -m etl
+	$(PYTEST) -v -s tests/integration/sdk/ -m etl
 
 .PHONY: python_s3_compat_test
 python_s3_compat_test: s3_test_deps
@@ -81,16 +82,16 @@ python_botocore_tests: common_deps botocore_deps python_botocore_unit_tests pyth
 
 .PHONY: python_botocore_unit_tests
 python_botocore_unit_tests: common_deps botocore_deps
-	pytest -v -n $(BOTO_UNIT_TEST_COUNT) --dist loadfile  tests/unit/botocore_patch
+	$(PYTEST) -v -n $(BOTO_UNIT_TEST_COUNT) --dist loadfile  tests/unit/botocore_patch
 
 .PHONY: python_botocore_integration_tests
 python_botocore_integration_tests: common_deps botocore_deps
-	pytest -v tests/integration/botocore_patch tests/integration/boto3
+	$(PYTEST) -v tests/integration/botocore_patch tests/integration/boto3
 
 # Tests for aistore.pytorch
 .PHONY: python_pytorch_unit_tests
 python_pytorch_unit_tests: common_deps dev_deps
-	pytest -v tests/unit/pytorch
+	$(PYTEST) -v tests/unit/pytorch
 
 .PHONY: lint
 lint: common_deps

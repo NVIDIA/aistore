@@ -263,10 +263,10 @@ class Job:
         for snapshot in snapshots:
             if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
                 snapshot_start_time = datetime.fromisoformat(
-                    snapshot.start_time.rstrip("Z")
+                    snapshot.start_time[:26]
                 ).time()
                 snapshot_end_time = datetime.fromisoformat(
-                    snapshot.end_time.rstrip("Z")
+                    snapshot.end_time[:26]
                 ).time()
                 if snapshot_start_time >= start_time and snapshot_end_time <= end_time:
                     jobs_found.append(snapshot)

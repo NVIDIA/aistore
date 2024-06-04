@@ -388,7 +388,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
         """
         try:
-            FLTPresence(flt_presence)
+            flt_presence = int(FLTPresence(flt_presence))
         except Exception as err:
             raise ValueError(
                 "`flt_presence` must be in values of enum FLTPresence"
