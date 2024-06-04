@@ -180,10 +180,12 @@ Proxy is listening on port: 8080
 Primary endpoint: http://localhost:8080
 ```
 
-Note that [`clean_deploy.sh`](/docs/development.md#clean-deploy) with no arguments also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses.
+Note that [`clean_deploy.sh`](/docs/development.md#clean-deploy) with no arguments also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses. 
+
+> WARNING: Note that the `--cleanup` option will wipe all AIS related files and binaries. You do not need to use the --cleanup option if you just want to run the local playground with a different number of nodes or proxies. The same warning applies to running `make clean` as well. If you'd like to just restart the cluster without loss of data, just kill the cluster using `make kill` and `make run` to restart cluster without recreating daemon configs.
 
 ```console
-$ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1 --deployment local
+$ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1 --deployment local --cleanup
 ```
 
 We can verify that the cluster is running using:
