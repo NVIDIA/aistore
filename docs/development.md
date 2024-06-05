@@ -83,11 +83,12 @@ $ make help
 
 ### Clean deploy
 
-```
-./clean_deploy.sh [--target-cnt TARGET_CNT] [--proxy-cnt PROXY_CNT] [--mountpath-cnt MOUNTPATH_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]] [--loopback SIZE]
+```console
+./clean_deploy.sh [--target-cnt TARGET_CNT] [--proxy-cnt PROXY_CNT] [--mountpath-cnt MOUNTPATH_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]] [--loopback SIZE] [--cleanup] [--dir]
+[--override_backends] [--standby] [--transient] [--debug]
 ```
 
-Performs cleanup and then deploys a new instance of an AIS cluster.
+Deploys a new instance of an AIS cluster after killing any current instances.
 To make it even more convenient, consider setting up an alias:
 
 ```bash

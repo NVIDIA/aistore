@@ -62,10 +62,17 @@ OPTIONS:
 # NOTE: `AIS_USE_HTTPS` and other system environment variables are listed in the `env` package:
 # https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 
-export MODE="debug"
-
 # NOTE: additional `aisnode` command-line (run `aisnode --help`)
 export RUN_ARGS=""
+
+function validate_arg {
+  local arg_name=$1
+  local arg_value=$2
+  if [ -z "$arg_value" ] || [[ "$arg_value" == -* ]]; then
+    echo "Error: ${arg_name} option requires a non-empty value."
+    exit 1
+  fi
+}
 
 while (( "$#" )); do
   case "${1}" in
@@ -74,13 +81,58 @@ while (( "$#" )); do
     --aws)   aws_provider="y";   shift;;
     --azure) azure_provider="y"; shift;;
     --gcp)   gcp_provider="y";   shift;;
-    --loopback) loopback=$2;  shift; shift;;
-    --dir) root_dir=$2; shift; shift;;
-    --deployment) deployment=$2; shift; shift;;
-    --remote-alias) remote_alias=$2; shift; shift;;
-    --target-cnt) target_cnt=$2; shift; shift;;
-    --proxy-cnt) proxy_cnt=$2; shift; shift;;
-    --mountpath-cnt) mountpath_cnt=$2; shift; shift;;
+    --loopback) loopback=$2;
+    
+      # if loopback is empty stop and notify
+      validate_arg $1 $2
+
+      shift 2;;
+    --dir) root_dir=$2;
+
+      # if dir is empty stop and notify
+      if [ -z "$root_dir" ] || [[ "$root_dir" == -* ]]; then
+        echo "Error: --dir option requires a non-empty value."
+        exit 1
+      fi
+
+      shift 2;;
+    --deployment) deployment=$2;
+
+      # if deployment is empty stop and notify
+      validate_arg $1 $2
+
+      # if deployment is invalid stop and notify
+      if [[ "$deployment" != "local" && "$deployment" != "remote" && "$deployment" != "all" ]]; then
+        echo "fatal: unknown --deployment argument value '${deployment}' (expected one of: 'local', 'remote', 'all')"
+        exit 1
+      fi
+
+      shift 2;;
+    --remote-alias) remote_alias=$2;
+
+      # if remote-alias is empty stop and notify
+      validate_arg $1 $2
+
+      shift 2;;
+    --target-cnt) target_cnt=$2;
+
+      # if the target-cnt is empty stop and notify
+      validate_arg $1 $2
+
+      shift 2;;
+    --proxy-cnt) proxy_cnt=$2;
+
+      # if the proxy-cnt is empty stop and notify
+      validate_arg $1 $2
+
+      shift 2;;
+    --mountpath-cnt) mountpath_cnt=$2;
+
+      # if the mountpath-cnt is empty stop and notify
+      validate_arg $1 $2
+
+      shift 2;;
+    --debug) export MODE="debug"; shift;;
     --cleanup) cleanup="true"; shift;;
     --transient) RUN_ARGS="$RUN_ARGS -transient"; shift;;
     --standby) RUN_ARGS="$RUN_ARGS -standby"; shift;;
@@ -98,15 +150,6 @@ while (( "$#" )); do
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
 done
-
-case "${deployment}" in
-  local|remote|all)
-    ;;
-  *)
-    echo "fatal: unknown --deployment argument value '${deployment}' (expected one of: 'local', 'remote', 'all')"
-    exit 1
-    ;;
-esac
 
 pushd "${root_dir}" 1>/dev/null
 
