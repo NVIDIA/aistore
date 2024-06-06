@@ -107,3 +107,14 @@ class UnexpectedHTTPStatusCode(Exception):
                 f"but received: {received_status_code}"
             )
         )
+
+
+class InvalidURLException(Exception):
+    """
+    Raised when the URL is invalid or any part of it is missing.
+    """
+
+    def __init__(self, url):
+        super().__init__(
+            f"Invalid URL: '{url}'. Ensure it follows the format 'provider://bucket/object'."
+        )

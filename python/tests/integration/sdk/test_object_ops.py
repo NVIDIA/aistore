@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
 #
 import random
 import unittest
@@ -313,3 +313,11 @@ class TestObjectOps(RemoteEnabledTest):
             self.assertEqual(file_content, content_dict["file3.txt"])
             file_content = tar.extractfile("file3.cls").read()
             self.assertEqual(file_content, content_dict["file3.cls"])
+
+    def test_fetch_object_by_url(self):
+        objects = self._put_objects(5)
+        for obj_name, content in objects.items():
+            url = f"{self.bucket.provider}://{self.bucket.name}/{obj_name}"
+            fetched_obj = self.client.fetch_object_by_url(url)
+            fetched_content = fetched_obj.get().read_all()
+            self.assertEqual(content, fetched_content)

@@ -4,29 +4,15 @@ Utils for AIS PyTorch Plugin
 Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Tuple, Iterable
-from urllib.parse import urlparse, urlunparse
+from typing import List, Iterable
+from urllib.parse import urlunparse
 from aistore.sdk import Client
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.object import Object
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.types import ArchiveSettings
-
-
-def parse_url(url: str) -> Tuple[str, str, str]:
-    """
-    Parse AIS URLs for bucket and object names.
-
-    Args:
-        url (str): Complete URL of the object (e.g., "ais://bucket1/file.txt")
-
-    Returns:
-        Tuple[str, str, str]: Provider, bucket name, and object name
-    """
-    parsed_url = urlparse(url)
-    path = parsed_url.path.lstrip("/")
-    return parsed_url.scheme, parsed_url.netloc, path
+from aistore.sdk.utils import parse_url
 
 
 def list_objects(

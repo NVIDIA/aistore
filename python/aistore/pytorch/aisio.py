@@ -15,7 +15,8 @@ from aistore.sdk.ais_source import AISSource
 
 try:
     from aistore.sdk import Client
-    from aistore.pytorch.utils import parse_url, unparse_url
+    from aistore.sdk.utils import parse_url
+    from aistore.pytorch.utils import unparse_url
 
     HAS_AIS = True
 except ImportError:

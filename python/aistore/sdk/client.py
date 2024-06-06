@@ -14,6 +14,9 @@ from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
 from aistore.sdk.etl import Etl
+from aistore.sdk.utils import parse_url
+from aistore.sdk.object import Object
+from aistore.sdk.errors import InvalidURLException
 
 
 # pylint: disable=unused-variable, duplicate-code
@@ -107,3 +110,21 @@ class Client:
             dSort object created
         """
         return Dsort(client=self._request_client, dsort_id=dsort_id)
+
+    def fetch_object_by_url(self, url: str) -> Object:
+        """
+        Retrieve an object based on its URL.
+
+        Args:
+            url (str): Full URL of the object (e.g., "ais://bucket1/file.txt")
+
+        Returns:
+            Object: The object retrieved from the specified URL
+        """
+        try:
+            provider, bck_name, obj_name = parse_url(url)
+            if not provider or not bck_name or not obj_name:
+                raise InvalidURLException(url)
+            return self.bucket(bck_name, provider=provider).object(obj_name)
+        except InvalidURLException as err:
+            raise err

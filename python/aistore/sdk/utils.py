@@ -2,7 +2,8 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
-from typing import Iterator, Type, TypeVar
+from typing import Iterator, Tuple, Type, TypeVar
+from urllib.parse import urlparse
 
 import braceexpand
 import humanize
@@ -179,3 +180,18 @@ def decode_response(
     if resp.headers.get(HEADER_CONTENT_TYPE) == MSGPACK_CONTENT_TYPE:
         return msgpack.decode(resp.content, type=res_model)
     return parse_raw_as(res_model, resp.text)
+
+
+def parse_url(url: str) -> Tuple[str, str, str]:
+    """
+    Parse AIS URLs for bucket and object names.
+
+    Args:
+        url (str): Complete URL of the object (e.g., "ais://bucket1/file.txt")
+
+    Returns:
+        Tuple[str, str, str]: Provider, bucket name, and object name
+    """
+    parsed_url = urlparse(url)
+    path = parsed_url.path.lstrip("/")
+    return parsed_url.scheme, parsed_url.netloc, path
