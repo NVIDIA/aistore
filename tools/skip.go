@@ -68,7 +68,7 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 		proxyURL := GetPrimaryURL()
 		if !isCloudBucket(tb, proxyURL, args.Bck) {
 			tb.Skipf("%s requires a cloud bucket", tb.Name())
-		} else if args.RequiredCloudProvider != args.Bck.Provider {
+		} else if args.RequiredCloudProvider != "" && args.RequiredCloudProvider != args.Bck.Provider {
 			tb.Skipf("%s requires a cloud bucket with %s provider", tb.Name(), args.RequiredCloudProvider)
 		}
 	}
