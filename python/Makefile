@@ -89,9 +89,16 @@ python_botocore_integration_tests: common_deps botocore_deps
 	$(PYTEST) -v tests/integration/botocore_patch tests/integration/boto3
 
 # Tests for aistore.pytorch
+.PHONY: python_pytorch_tests
+python_pytorch_tests: common_deps dev_deps python_pytorch_unit_tests python_pytorch_integration_tests
+
 .PHONY: python_pytorch_unit_tests
 python_pytorch_unit_tests: common_deps dev_deps
 	$(PYTEST) -v tests/unit/pytorch
+
+.PHONY: python_pytorch_integration_tests
+python_pytorch_integration_tests: common_deps dev_deps
+	$(PYTEST) -v tests/integration/pytorch
 
 .PHONY: lint
 lint: common_deps
