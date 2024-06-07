@@ -68,7 +68,7 @@ class TestAISDataset(unittest.TestCase):
 
         self.shards = [MagicMock(), MagicMock(), MagicMock()]
 
-        stream = AISMultiShardStream(data_sorces=self.shards)
+        stream = AISMultiShardStream(data_sources=self.shards)
 
         expected_results = [
             (b"data1_1", b"data2_1", b"data3_1"),

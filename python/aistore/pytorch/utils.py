@@ -34,7 +34,7 @@ def list_objects(
     for url in urls_list:
         provider, bck_name, path = parse_url(url)
         bucket = client.bucket(bck_name=bck_name, provider=provider)
-        samples.extend([obj.name for obj in bucket.list_all_objects_iter(prefix=path)])
+        samples.extend([obj for obj in bucket.list_all_objects_iter(prefix=path)])
 
     for source in ais_source_list:
         samples.extend([obj.name for obj in source.list_all_objects_iter()])

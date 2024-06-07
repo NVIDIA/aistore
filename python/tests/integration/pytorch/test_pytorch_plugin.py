@@ -175,7 +175,7 @@ class TestPytorchPlugin(unittest.TestCase):
             bucket_name=self.bck_name,
             prefix="test_multishard_shard2.tar",
         )
-        dataset = AISMultiShardStream(data_sorces=[shard1, shard2])
+        dataset = AISMultiShardStream(data_sources=[shard1, shard2])
         combined_content = list(
             zip(shard1_content_dict.values(), shard2_content_dict.values())
         )
