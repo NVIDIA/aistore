@@ -294,6 +294,79 @@ class TestETLOps(unittest.TestCase):
         self.assertTrue(self.bucket.name in result_url)
         self.assertTrue(self.obj_name in result_url)
 
+    @pytest.mark.etl
+    def test_etl_with_various_sizes(self):
+        obj_sizes = [128, 1024, 1048576]
+
+        def transform(input_bytes):
+            md5 = hashlib.md5()
+            md5.update(input_bytes)
+            return md5.hexdigest().encode()
+
+        for obj_size in obj_sizes:
+            obj_name = f"obj-{obj_size}.jpg"
+            content = create_and_put_object(
+                client=self.client,
+                bck_name=self.bck_name,
+                obj_name=obj_name,
+                obj_size=obj_size,
+            )
+
+            etl = self.client.etl(f"etl-{random_string(5)}")
+            etl.init_code(transform=transform)
+
+            obj = self.bucket.object(obj_name).get(etl_name=etl.name).read_all()
+            self.assertEqual(obj, transform(bytes(content)))
+
+    @pytest.mark.etl
+    def test_etl_concurrent_transformations(self):
+        def transform(input_bytes):
+            md5 = hashlib.md5()
+            md5.update(input_bytes)
+            return md5.hexdigest().encode()
+
+        num_transformations = 5
+        num_objects = 5
+        etl_jobs = []
+        contents_in_bucket = []
+
+        start_time = time.time()
+        for i in range(num_transformations):
+            content = {}
+            src_bck_name = f"src-bck{i}"
+            dst_bck_name = f"dst-bck{i}"
+            bck = self.client.bucket(src_bck_name).create()
+            for j in range(num_objects):
+                obj_name = f"obj{j}.jpg"
+                content[obj_name] = create_and_put_object(
+                    client=self.client,
+                    bck_name=src_bck_name,
+                    obj_name=obj_name,
+                    obj_size=self.obj_size,
+                )
+            contents_in_bucket.append((bck, content))
+
+            etl = self.client.etl(f"etl-{src_bck_name}")
+            etl.init_code(transform=transform)
+
+            job_id = bck.transform(etl_name=etl.name, to_bck=Bucket(dst_bck_name))
+            etl_jobs.append(job_id)
+
+        for job_id in etl_jobs:
+            self.client.job(job_id).wait()
+
+        print(
+            f"Transform {num_transformations} buckets with {num_objects} objects took ",
+            time.time() - start_time,
+        )
+
+        for src_bck, content in contents_in_bucket:
+            for key, value in content.items():
+                transformed_obj = (
+                    src_bck.object(key).get(etl_name=f"etl-{src_bck.name}").read_all()
+                )
+                self.assertEqual(transform(bytes(value)), transformed_obj)
+
 
 if __name__ == "__main__":
     unittest.main()
