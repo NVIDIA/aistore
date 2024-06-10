@@ -71,6 +71,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [promote](#object.Object.promote)
     * [delete](#object.Object.delete)
     * [blob\_download](#object.Object.blob_download)
+    * [append\_content](#object.Object.append_content)
 * [multiobj.object\_group](#multiobj.object_group)
   * [ObjectGroup](#multiobj.object_group.ObjectGroup)
     * [list\_urls](#multiobj.object_group.ObjectGroup.list_urls)
@@ -1393,6 +1394,34 @@ Returns job ID that for the blob download operation.
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+
+<a id="object.Object.append_content"></a>
+
+### append\_content
+
+```python
+def append_content(content: bytes, handle: str = "", flush: bool = False) -> str:
+```
+
+Append bytes as an object to a bucket in AIS storage.
+
+**Arguments**:
+
+- `content` _bytes_: Bytes to append to the object
+- `handle` _str_: Handle string to use for subsequent appends or flush (empty for the first append)
+- `flush` _bool_: Whether to flush and finalize the append operation, making the object accessible
+
+**Returns**:
+
+  The handle string for subsequent appends or flush (empty on flush)
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `requests.exceptions.HTTPError(404)` - The object does not exist
 
 <a id="multiobj.object_group.ObjectGroup"></a>
 

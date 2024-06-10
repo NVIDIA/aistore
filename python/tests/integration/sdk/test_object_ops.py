@@ -109,6 +109,32 @@ class TestObjectOps(RemoteEnabledTest):
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
 
+    def test_append_content(self):
+        content = b"object head before append"
+        obj = self._create_object(OBJ_NAME)
+        obj.put_content(content)
+
+        obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
+        next_handle = ""
+        for data in obj_partitions:
+            next_handle = obj.append_content(data, next_handle)
+        flushed = obj.append_content(b"", next_handle, True)
+        res = obj.get()
+        self.assertEqual(content + bytearray().join(obj_partitions), res.read_all())
+        self.assertEqual(flushed, "")
+
+    def test_get_object_appended_without_flush(self):
+        original_content = b"object head before append"
+        obj = self._create_object(OBJ_NAME)
+        obj.put_content(original_content)
+
+        obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
+        next_handle = ""
+        for data in obj_partitions:
+            next_handle = obj.append_content(data, next_handle)
+        res = obj.get()
+        self.assertEqual(original_content, res.read_all())
+
     def test_get_with_writer(self):
         self.local_test_files.mkdir()
         filename = self.local_test_files.joinpath("test_get_with_writer.txt")

@@ -290,8 +290,8 @@ and more.
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -s -L --head 'http://G/v1/objects/mybucket/myobject'` | `api.HeadObject` |
 | Set object's custom (user-defined) properties | (to be added) | (to be added) | `api.SetObjectCustomProps` |
 | PUT object | PUT /v1/objects/bucket-name/object-name | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` | `api.PutObject` |
-| APPEND to object | PUT /v1/objects/bucket-name/object-name?appendty=append&handle= | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=append&handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> | `api.AppendObject` |
-| Finalize APPEND | PUT /v1/objects/bucket-name/object-name?appendty=flush&handle=obj-handle | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?appendty=flush&handle=obj-handle'`  <sup>[8](#ft8)</sup> | `api.FlushObject` |
+| APPEND to object | PUT /v1/objects/bucket-name/object-name?append_type=append&append_handle= | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?append_type=append&append_handle=' -T filenameToUpload-partN`  <sup>[8](#ft8)</sup> | `api.AppendObject` |
+| Finalize APPEND | PUT /v1/objects/bucket-name/object-name?append_type=flush&append_handle=obj-handle | `curl -s -L -X PUT 'http://G/v1/objects/myS3bucket/myobject?append_type=flush&append_handle=obj-handle'`  <sup>[8](#ft8)</sup> | `api.FlushObject` |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'` | `api.DeleteObject` |
 | Set [bucket properties](/docs/bucket.md#bucket-properties) (proxy) | PATCH {"action": "set-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"set-bprops", "value": {"checksum": {"type": "sha256"}, "mirror": {"enable": true}, "force": false}' 'http://G/v1/buckets/abc'`  <sup id="a9">[9](#ft9)</sup> | `api.SetBucketProps` |
 | Reset [bucket properties](/docs/bucket.md#bucket-properties) (proxy) | PATCH {"action": "reset-bprops"} /v1/buckets/bucket-name | `curl -i -X PATCH -H 'Content-Type: application/json' -d '{"action":"reset-bprops"}' 'http://G/v1/buckets/abc'` | `api.ResetBucketProps` |
@@ -737,6 +737,6 @@ For API Reference of ETL please refer to [ETL Readme](/docs/etl.md#api-reference
 
 <a name="ft7">7</a>) The request promotes files to objects; note that the files must be present inside AIStore targets and be referenceable via local directories or fully qualified names. The example request promotes recursively all files of a directory `/user/dir` that is on the target with ID `234ed78` to objects of a bucket `abc`. As `trim_prefix` is set, the names of objects are the file paths with the base trimmed: `dir/file1`, `dir/file2`, `dir/subdir/file3` etc. [↩](#a7)
 
-<a name="ft8">8</a>) When putting the first part of an object, `handle` value must be empty string or omitted. On success, the first request returns an object handle. The subsequent `AppendObject` and `FlushObject` requests must pass the handle to the API calls. The object gets accessible and appears in a bucket only after `FlushObject` is done.
+<a name="ft8">8</a>) When putting the first part of an object, `append_handle` value must be empty string or omitted. On success, the first request returns an object handle. The subsequent `AppendObject` and `FlushObject` requests must pass the handle to the API calls. The object gets accessible and appears in a bucket only after `FlushObject` is done.
 
 <a name="ft9">9</a>) Use option `"force": true` to ignore non-critical errors. E.g, to modify `ec.objsize_limit` when EC is already enabled, or to enable EC if the number of target is less than `ec.data_slices + ec.parity_slices + 1`. [↩](#a9)

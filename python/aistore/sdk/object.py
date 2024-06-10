@@ -15,12 +15,15 @@ from aistore.sdk.const import (
     QPARAM_ARCHPATH,
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
+    QPARAM_OBJ_APPEND,
+    QPARAM_OBJ_APPEND_HANDLE,
     QPARAM_ETL_NAME,
     QPARAM_LATEST,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
     HEADER_RANGE,
+    HEADER_OBJECT_APPEND_HANDLE,
     ACT_BLOB_DOWNLOAD,
     HEADER_OBJECT_BLOB_DOWNLOAD,
     HEADER_OBJECT_BLOB_WORKERS,
@@ -343,3 +346,39 @@ class Object:
         return self._client.request(
             HTTP_METHOD_POST, path=url, params=params, json=json_val
         ).text
+
+    def append_content(
+        self, content: bytes, handle: str = "", flush: bool = False
+    ) -> str:
+        """
+        Append bytes as an object to a bucket in AIS storage.
+
+        Args:
+            content (bytes): Bytes to append to the object.
+            handle (str): Handle string to use for subsequent appends or flush (empty for the first append).
+            flush (bool): Whether to flush and finalize the append operation, making the object accessible.
+
+        Returns:
+            handle (str): Handle string to pass for subsequent appends or flush.
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            requests.exceptions.HTTPError(404): The object does not exist
+        """
+
+        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }"
+        params = self._qparams.copy()
+        params[QPARAM_OBJ_APPEND] = "append" if not flush else "flush"
+        params[QPARAM_OBJ_APPEND_HANDLE] = handle
+
+        resp_headers = self._client.request(
+            HTTP_METHOD_PUT,
+            path=url,
+            params=params,
+            data=content,
+        ).headers
+
+        return resp_headers.get(HEADER_OBJECT_APPEND_HANDLE, "")

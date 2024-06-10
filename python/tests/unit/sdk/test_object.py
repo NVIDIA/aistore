@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch, mock_open
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 
+
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
@@ -12,9 +13,12 @@ from aistore.sdk.const import (
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
     QPARAM_ETL_NAME,
+    QPARAM_OBJ_APPEND,
+    QPARAM_OBJ_APPEND_HANDLE,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
     HEADER_CONTENT_LENGTH,
+    HEADER_OBJECT_APPEND_HANDLE,
     AIS_CHECKSUM_VALUE,
     AIS_CHECKSUM_TYPE,
     AIS_ACCESS_TIME,
@@ -210,6 +214,46 @@ class TestObject(unittest.TestCase):
             params=self.expected_params,
             data=content,
         )
+
+    def test_append_content(self):
+        content = b"content-to-append"
+        expected_handle = "TEST_HANDLE"
+        self.expected_params[QPARAM_OBJ_APPEND] = "append"
+        self.expected_params[QPARAM_OBJ_APPEND_HANDLE] = ""
+        resp_headers = CaseInsensitiveDict(
+            {HEADER_OBJECT_APPEND_HANDLE: expected_handle}
+        )
+        mock_response = Mock(Response)
+        mock_response.headers = resp_headers
+        self.mock_client.request.return_value = mock_response
+
+        next_handle = self.object.append_content(content)
+        self.mock_client.request.assert_called_once_with(
+            HTTP_METHOD_PUT,
+            path=REQUEST_PATH,
+            params=self.expected_params,
+            data=content,
+        )
+        self.assertEqual(next_handle, expected_handle)
+
+    def test_append_flush(self):
+        expected_handle = ""
+        prev_handle = "prev_handle"
+        self.expected_params[QPARAM_OBJ_APPEND] = "flush"
+        self.expected_params[QPARAM_OBJ_APPEND_HANDLE] = prev_handle
+        resp_headers = CaseInsensitiveDict({})
+        mock_response = Mock(Response)
+        mock_response.headers = resp_headers
+        self.mock_client.request.return_value = mock_response
+
+        next_handle = self.object.append_content(b"", prev_handle, True)
+        self.mock_client.request.assert_called_once_with(
+            HTTP_METHOD_PUT,
+            path=REQUEST_PATH,
+            params=self.expected_params,
+            data=b"",
+        )
+        self.assertEqual(next_handle, expected_handle)
 
     def test_promote_default_args(self):
         filename = "promoted file"
