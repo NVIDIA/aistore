@@ -17,7 +17,7 @@ def underline(msg):
 
 
 def print_sep():
-    print("\n" + "=" * 101)
+    print("\n" + "=" * 101 + "\n")
 
 
 def print_in_progress(msg, icon="\U0001F552"):

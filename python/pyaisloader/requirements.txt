@@ -2,3 +2,5 @@ colorama
 humanfriendly
 pendulum
 tabulate
+torch
+torchdata

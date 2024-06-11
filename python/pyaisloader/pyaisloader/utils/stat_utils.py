@@ -3,6 +3,8 @@ from tabulate import tabulate
 from pyaisloader.const import BOLD, END
 from pyaisloader.utils.parse_utils import format_size, format_time
 
+from pyaisloader.utils.cli_utils import bold, underline
+
 
 def combine_results(results, num_workers):
     result = {
@@ -17,7 +19,10 @@ def combine_results(results, num_workers):
     return result
 
 
-def print_results(result):
+def print_results(result, title=None):
+    if title is not None:
+        print(underline(bold(f"Benchmark Results ({title}):")))
+
     headers_values = [
         ("# Ops Completed", result["ops"]),
         ("Total Size", format_size(result["bytes"])),

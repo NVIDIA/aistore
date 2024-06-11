@@ -190,7 +190,6 @@ test:short:python:
     - cd python
     - make python_sdk_tests
     - make python_botocore_tests
-    - make PYAISLOADER_TEST_TYPE=short test-pyaisloader
 
   except:
     variables:
@@ -346,14 +345,16 @@ test:long:aisloader:
   stage: test-long
   tags:
     - ais
-  timeout: 10m
+  timeout: 15m
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
-    - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
+    - cd ./python
+    - make PYAISLOADER_TEST_TYPE=short test-pyaisloader
+    - make PYAISLOADER_TEST_TYPE=long test-pyaisloader
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual

@@ -14,5 +14,7 @@ setup(
         "humanfriendly>=10.0",
         "pendulum>=2.1.2",
         "tabulate>=0.9.0",
+        "torch>=2.1.1",
+        "torchdata>=0.7.1",
     ],
 )

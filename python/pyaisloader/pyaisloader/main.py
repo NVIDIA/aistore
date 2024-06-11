@@ -2,6 +2,7 @@ import argparse
 import pkg_resources
 
 from pyaisloader.benchmark import PutGetMixedBenchmark, ListBenchmark
+from pyaisloader.pytorch_benchmark import AISDatasetBenchmark, AISIterDatasetBenchmark
 from pyaisloader.const import PROVIDERS
 from pyaisloader.client_config import client
 
@@ -84,11 +85,25 @@ def main():
         help="LIST objects benchmark",
         description="This command runs a LIST benchmark.",
     )
+    ais_dataset_parser = subparsers.add_parser(
+        "AIS_DATASET",
+        aliases=["ais_dataset"],
+        help="Map-style AISDataset benchmark",
+        description="This command runs an AISDataset benchmark",
+    )
+    ais_iter_dataset_parser = subparsers.add_parser(
+        "AIS_ITER_DATASET",
+        aliases=["ais_iter_dataset"],
+        help="Iteratable-style AISIterDataset benchmark",
+        description="This command runs an AISDataset benchmark",
+    )
 
     put_parser = prepend_default_arguments(put_parser)
     get_parser = prepend_default_arguments(get_parser)
     mixed_parser = prepend_default_arguments(mixed_parser)
     list_parser = prepend_default_arguments(list_parser)
+    ais_dataset_parser = prepend_default_arguments(ais_dataset_parser)
+    ais_iter_dataset_parser = prepend_default_arguments(ais_iter_dataset_parser)
 
     put_parser.add_argument(
         "-min",
@@ -187,10 +202,77 @@ def main():
         help="Number of objects bucket should contain prior to benchmark start",
     )
 
+    ais_dataset_parser.add_argument(
+        "-min",
+        "--minsize",
+        type=parse_size,
+        required=False,
+        help="Minimum size of objects to be PUT in bucket (if bucket is smaller than total size)",
+    )
+    ais_dataset_parser.add_argument(
+        "-max",
+        "--maxsize",
+        type=parse_size,
+        required=False,
+        help="Maximum size of objects to be PUT in bucket (if bucket is smaller than total size)",
+    )
+    ais_dataset_parser.add_argument(
+        "-s",
+        "--totalsize",
+        type=parse_size,
+        required=False,
+        help="Total size to which the bucket should be filled prior to start",
+    )
+    ais_dataset_parser.add_argument(
+        "-d",
+        "--duration",
+        type=parse_time,
+        required=True,
+        help="Duration for which benchmark should be run",
+    )
+
+    ais_iter_dataset_parser.add_argument(
+        "-min",
+        "--minsize",
+        type=parse_size,
+        required=False,
+        help="Minimum size of objects to be PUT in bucket (if bucket is smaller than total size)",
+    )
+    ais_iter_dataset_parser.add_argument(
+        "-max",
+        "--maxsize",
+        type=parse_size,
+        required=False,
+        help="Maximum size of objects to be PUT in bucket (if bucket is smaller than total size)",
+    )
+    ais_iter_dataset_parser.add_argument(
+        "-s",
+        "--totalsize",
+        type=parse_size,
+        required=False,
+        help="Total size to which the bucket should be filled prior to start",
+    )
+    ais_iter_dataset_parser.add_argument(
+        "-d",
+        "--duration",
+        type=parse_time,
+        required=True,
+        help="Duration for which benchmark should be run",
+    )
+    ais_iter_dataset_parser.add_argument(
+        "-i",
+        "--iterations",
+        type=int,
+        required=False,
+        help="Iterations over the dataset for which benchmark should be run",
+    )
+
     put_parser = append_default_arguments(put_parser)
     get_parser = append_default_arguments(get_parser)
     mixed_parser = append_default_arguments(mixed_parser)
     list_parser = append_default_arguments(list_parser)
+    ais_dataset_parser = append_default_arguments(ais_dataset_parser)
+    ais_iter_dataset_parser = append_default_arguments(ais_iter_dataset_parser)
 
     args = parser.parse_args()
 
@@ -221,7 +303,16 @@ def main():
 
     benchmark_type = args.type.lower()
 
-    if benchmark_type in ["put", "get", "mixed", "p", "g", "m"]:
+    if benchmark_type in [
+        "put",
+        "get",
+        "mixed",
+        "p",
+        "g",
+        "m",
+        "ais_dataset",
+        "ais_iter_dataset",
+    ]:
         if benchmark_type in ["put", "p"]:
             benchmark = PutGetMixedBenchmark(
                 put_pct=100,
@@ -239,6 +330,27 @@ def main():
                 minsize=args.minsize,
                 maxsize=args.maxsize,
                 duration=args.duration,
+                totalsize=args.totalsize,
+                bucket=bucket,
+                workers=args.workers,
+                cleanup=args.cleanup,
+            )
+        elif benchmark_type == "ais_dataset":
+            benchmark = AISDatasetBenchmark(
+                minsize=args.minsize,
+                maxsize=args.maxsize,
+                duration=args.duration,
+                totalsize=args.totalsize,
+                bucket=bucket,
+                workers=args.workers,
+                cleanup=args.cleanup,
+            )
+        elif benchmark_type == "ais_iter_dataset":
+            benchmark = AISIterDatasetBenchmark(
+                minsize=args.minsize,
+                maxsize=args.maxsize,
+                duration=args.duration,
+                iterations=args.iterations,
                 totalsize=args.totalsize,
                 bucket=bucket,
                 workers=args.workers,

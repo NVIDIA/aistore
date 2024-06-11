@@ -197,7 +197,7 @@ class PutGetMixedBenchmark(Benchmark):
             self.__run_put()
         elif self.put_pct == 0:
             if self.totalsize is not None:
-                self.__run_prepopulate()
+                self._run_prepopulate()
             self.__run_get()
         else:
             self.__run_mixed()
@@ -217,8 +217,7 @@ class PutGetMixedBenchmark(Benchmark):
         if self.cleanup:
             self.clean_up()
         print_sep()
-        print("\n" + underline(bold("Benchmark Results (100% PUT):")))
-        print_results(result)
+        print_results(result, title="Benchmark Results (100% PUT):")
 
     def __run_get(self):
         if bucket_obj_count(self.bucket) == 0:
@@ -231,8 +230,7 @@ class PutGetMixedBenchmark(Benchmark):
         if self.cleanup:
             self.clean_up()
         print_sep()
-        print("\n" + underline(bold("Benchmark Results (100% GET):")))
-        print_results(result)
+        print_results(result, title="Benchmark Results (100% GET):")
 
     def __run_mixed(self):
         if bucket_obj_count(self.bucket) == 0:
@@ -251,12 +249,10 @@ class PutGetMixedBenchmark(Benchmark):
         if self.cleanup:
             self.clean_up()
         print_sep()
-        print("\n" + underline(bold("Benchmark Results for PUT operations:")))
-        print_results(result_put)
-        print("\n" + underline(bold("Benchmark Results for GET operations:")))
-        print_results(result_get)
+        print_results(result_put, title="Benchmark Results for PUT operations:")
+        print_results(result_get, title="Benchmark Results for GET operations:")
 
-    def __run_prepopulate(self):
+    def _run_prepopulate(self):
         print_in_progress("Starting Pre-Population")
         curr_bck_size = bucket_size(self.bucket)
         if curr_bck_size < self.totalsize:

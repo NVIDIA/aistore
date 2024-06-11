@@ -85,6 +85,39 @@ Runs a benchmark to LIST objects in the bucket.
 | --objects      | -o      | Number of objects bucket should contain prior to benchmark start                      | No       | N/A           |
 | --workers      | -w      | Number of workers (only for pre-population of bucket)                                 | Yes      | N/A           |
 
+#### Type: AISDataset
+
+Runs a time-based benchmark to randomly get objects in the bucket through AISDataset.
+
+> **Note:** If you want your AISDataset benchmark to include a more intensive GET load, you should consider using a pre-filled bucket. 
+
+| Option     | Aliases | Description                                                                                                 | Required | Default Value |
+|------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
+| --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
+| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
+| --minsize  | -min    | Minimum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
+| --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
+| --putpct   | -p      | Percentage for PUT operations in MIXED benchmark                                                            | Yes      | N/A           |
+| --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
+| --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+
+#### Type: AISIterDataset
+
+Runs a time-based benchmark to sequentially iterate over objects in the bucket through AISIterDataset.
+
+> **Note:** If you want your AISIterDataset benchmark to include a more intensive GET load, you should consider using a pre-filled bucket. 
+
+| Option     | Aliases | Description                                                                                                 | Required | Default Value |
+|------------|---------|-------------------------------------------------------------------------------------------------------------|----------|---------------|
+| --bucket   | -b      | Bucket (e.g. ais://mybck, s3://mybck, gs://mybck)                                                           | Yes      | N/A           |
+| --cleanup  | -c      | Whether bucket (or objects) should be destroyed or not upon benchmark completion                                         | Yes      | N/A           |
+| --minsize  | -min    | Minimum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
+| --maxsize  | -max    | Maximum size of objects to be PUT in bucket during the benchmark                                            | Yes      | N/A           |
+| --putpct   | -p      | Percentage for PUT operations in MIXED benchmark                                                            | Yes      | N/A           |
+| --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
+| --iterations  | -i      | Number of iterations over the dataset should be run (only for AISIterDataset)                            | No       | N/A           |
+| --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+
 ### Examples
 
 There are a few sample benchmarks in the provided Makefile. Run `make help` for more information on the sample benchmarks.
@@ -106,17 +139,23 @@ This command runs a short `MIXED` benchmark on the ais://abc bucket. The paramet
 5. `short_list`
 This command runs a short `LIST` benchmark on the bucket `ais://abc`. If there are less than `objects` amount of objects in the bucket, the bucket will be pre-populated to contain `objects` number of objects.
 
-6. `long_put`
+6. `short_ais_dataset`
+This command runs a short benchmark to randomly get objects in the bucket `ais://abc` through AISDataset, an AIS Plugin for PyTorch map-style dataset. If the total size of contents of `ais://abc` are smaller than the specified `totalsize`, the bucket will be pre-populated up to `totalsize`, with the size of individual objects ranging from `minsize` to `maxsize`. The benchmark will terminate when `duration` amount of time has passed.
+
+7. `short_ais_iter_dataset`
+This command runs a short benchmark to sequentially iterate over objects in the bucket `ais://abc` through AISIterDataset, an AIS Plugin for PyTorch iteratable-style dataset. If the total size of contents of `ais://abc` are smaller than the specified `totalsize`, the bucket will be pre-populated up to `totalsize`, with the size of individual objects ranging from `minsize` to `maxsize`. The benchmark will terminate when the specified duration is reached or when the defined number of iterations is completed.
+
+8. `long_put`
 This command runs a long `PUT` benchmark on the bucket `ais://abc`. The benchmark will stop when the specified `duration` of 30 minutes has elapsed or when the total size of data `PUT` into the bucket reaches `totalsize` of 10GB. The size of individual objects ranges from `minsize` of 50MB to `maxsize` of 100MB, and the number of `worker` threads used is increased to 32 compared to the short `PUT` benchmark.
 
-7. `long_get`
+9. `long_get`
 This command runs a long `GET` benchmark on the bucket `ais://abc`. The primary differences are that this benchmark runs for a longer `duration` (30 minutes as opposed to 30 seconds) and uses more `worker` threads (32 instead of 16).
 
-8. `long_mixed`
+10. `long_mixed`
 This command runs a long `MIXED` benchmark on the bucket `ais://abc`. The `putpct` parameter still determines the ratio of `PUT` operations to `GET` operations. The differences here are the longer `duration` of 30 minutes and and the increased number of `worker` threads (32 instead of 16).
 
-9. `long_list`
+11. `long_list`
 This command runs a long `LIST` benchmark on the bucket `ais://abc`. If there are fewer than `objects` amount of objects in the bucket, the bucket will be pre-populated to contain `objects` number of objects. The `long_list` benchmark differs from `short_list` in the number of `objects` (500,000 instead of 50,000) and the number of `worker` threads used (32 instead of 16).
 
-10. `help`
+12. `help`
 This command displays a list of available targets in the Makefile along with their descriptions, providing a helpful guide for understanding and using the available commands.
