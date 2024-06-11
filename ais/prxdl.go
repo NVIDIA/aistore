@@ -128,7 +128,8 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
 		nl := p.notifs.entry(msg.ID)
 		if nl != nil {
-			return p.dlstatus(nl, config)
+			respBytes := p.dlstatus(nl, config)
+			return respBytes, http.StatusOK, nil
 		}
 	}
 	var (
@@ -220,7 +221,7 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 	}
 }
 
-func (p *proxy) dlstatus(nl nl.Listener, config *cmn.Config) ([]byte, int, error) {
+func (p *proxy) dlstatus(nl nl.Listener, config *cmn.Config) []byte {
 	// bcast
 	p.notifs.bcastGetStats(nl, config.Periodic.NotifTime.D())
 	stats := nl.NodeStats()
@@ -242,8 +243,7 @@ func (p *proxy) dlstatus(nl nl.Listener, config *cmn.Config) ([]byte, int, error
 		return true
 	})
 
-	respJSON := cos.MustMarshal(resp)
-	return respJSON, http.StatusOK, nil
+	return cos.MustMarshal(resp)
 }
 
 func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (ecode int, err error) {
