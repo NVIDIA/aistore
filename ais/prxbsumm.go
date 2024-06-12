@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // in this source:
@@ -60,6 +61,11 @@ func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error)
 		Query:  q,
 		Body:   cos.MustMarshal(aisMsg),
 	}
+	// not using default control-plane timeout -
+	// returning only _after_ all targets start running this new job
+	// (see Run() in nsumm.go)
+	args.timeout = apc.DefaultTimeout
+
 	args.smap = p.owner.smap.get()
 	if cnt := args.smap.CountActiveTs(); cnt < 1 {
 		return cmn.NewErrNoNodes(apc.Target, args.smap.CountTargets())
@@ -67,15 +73,18 @@ func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error)
 	results := p.bcastGroup(args)
 	for _, res := range results {
 		if res.err != nil {
+			if res.details == "" || res.details == dfltDetail {
+				res.details = xact.Cname(apc.ActSummaryBck, msg.UUID)
+			}
 			err = res.toErr()
 			break
 		}
 	}
 	freeBcastRes(results)
-	return
+	return err
 }
 
-func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.AllBsummResults, status int, _ error) {
+func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.AllBsummResults, status int, err error) {
 	var (
 		q      = make(url.Values, 4)
 		aisMsg = p.newAmsgActVal(apc.ActSummaryBck, msg)
@@ -99,8 +108,12 @@ func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.
 	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
+			if res.details == "" || res.details == dfltDetail {
+				res.details = xact.Cname(apc.ActSummaryBck, msg.UUID)
+			}
+			err = res.toErr()
 			freeBcastRes(results)
-			return nil, 0, res.toErr()
+			return nil, 0, err
 		}
 	}
 
@@ -148,11 +161,11 @@ func (p *proxy) bsummhead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.Bsumm
 		if err = p.bsummNew(qbck, msg); err == nil {
 			status = http.StatusAccepted
 		}
-		return
+		return info, status, err
 	}
 	summaries, status, err = p.bsummCollect(qbck, msg)
 	if err == nil && (status == http.StatusOK || status == http.StatusPartialContent) {
 		info = summaries[0]
 	}
-	return
+	return info, status, err
 }

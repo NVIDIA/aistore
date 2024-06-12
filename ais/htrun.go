@@ -56,6 +56,8 @@ To troubleshoot:
 4. restart %s
 -----------------`
 
+const dfltDetail = "[control-plane]"
+
 // extra or extended state - currently, target only
 type htext interface {
 	interruptedRestarted() (bool, bool)
@@ -602,13 +604,13 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		if res.err != nil {
 			break
 		}
-		client = g.client.control
+		client = g.client.control // timeout = config.Client.Timeout ("client.client_timeout")
 	case apc.LongTimeout:
 		req, res.err = args.req.Req()
 		if res.err != nil {
 			break
 		}
-		client = g.client.data
+		client = g.client.data // timeout = config.Client.TimeoutLong ("client.client_long_timeout")
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
@@ -648,7 +650,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 
 	resp, res.err = client.Do(req)
 	if res.err != nil {
-		res.details = "[control-plane]" // tcp level, e.g.: connection refused
+		res.details = dfltDetail // tcp level, e.g.: connection refused
 		return
 	}
 	defer resp.Body.Close()

@@ -188,7 +188,7 @@ func (e *entries) getAllRunning(inout *core.AllRunningInOut, periodic bool) {
 			continue
 		}
 		var (
-			xqn    = k + xact.LeftID + xctn.ID() + xact.RightID // e.g. "make-n-copies[fGhuvvn7t]"
+			xqn    = xctn.Cname() // e.g. "make-n-copies[fGhuvvn7t]"
 			isIdle bool
 		)
 		if inout.Idle != nil {

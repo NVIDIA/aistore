@@ -2243,6 +2243,9 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
+			if res.details == "" || res.details == dfltDetail {
+				res.details = xact.Cname(apc.ActList, lsmsg.UUID)
+			}
 			err = res.toErr()
 			freeBcastRes(results)
 			return nil, err
@@ -2357,6 +2360,9 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	resLists := make([]*cmn.LsoRes, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
+			if res.details == "" || res.details == dfltDetail {
+				res.details = xact.Cname(apc.ActList, lsmsg.UUID)
+			}
 			err := res.toErr()
 			freeBcastRes(results)
 			return nil, err
