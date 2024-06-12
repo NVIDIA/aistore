@@ -11,7 +11,8 @@ from pyaisloader.utils.stat_utils import combine_results, print_results
 from pyaisloader.client_config import ENDPOINT
 from pyaisloader.benchmark import PutGetMixedBenchmark, BenchmarkStats
 
-from aistore.pytorch.dataset import AISDataset, AISIterDataset
+from aistore.pytorch.dataset import AISDataset
+from aistore.pytorch.iter_dataset import AISIterDataset
 
 
 class AISDatasetBenchmark(PutGetMixedBenchmark):

@@ -198,3 +198,40 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE, path=f"etl/{ self.etl_name }"
         )
+
+    def test_valid_names(self):
+        valid_names = [
+            "validname",
+            "valid-name",
+            "name123",
+            "123name",
+            "name-123",
+            "validname123",
+            "a" * 6,  # exactly 6 characters
+            "a" * 32,  # exactly 32 characters
+        ]
+        for name in valid_names:
+            try:
+                Etl.validate_etl_name(name)
+            except ValueError:
+                self.fail(f"Valid name '{name}' raised ValueError unexpectedly!")
+
+    def test_invalid_names(self):
+        invalid_names = [
+            "",
+            "a" * 5,  # 5 characters, too short
+            "a" * 33,  # 33 characters, too long
+            "InvalidName",
+            "invalid_name",
+            "invalid name",
+            "invalid-name-",
+            "-invalid-name",
+            "-invalid-name-",
+            "------------",
+            "invalid$name",
+            "invalid@name",
+        ]
+
+        for name in invalid_names:
+            with self.assertRaises(ValueError):
+                Etl.validate_etl_name(name)

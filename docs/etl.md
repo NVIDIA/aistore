@@ -351,8 +351,9 @@ This section describes how to interact with ETLs via RESTful API.
 | List ETLs | Lists all running ETLs. | GET /v1/etl | `curl -L -X GET 'http://G/v1/etl'` |
 | View ETLs Init spec/code | View code/spec of ETL by `ETL_NAME` | GET /v1/etl/ETL_NAME | `curl -L -X GET 'http://G/v1/etl/ETL_NAME'` |
 | Transform object | Transforms an object based on ETL with `ETL_NAME`. | GET /v1/objects/<bucket>/<objname>?etl_name=ETL_NAME | `curl -L -X GET 'http://G/v1/objects/shards/shard01.tar?etl_name=ETL_NAME' -o transformed_shard01.tar` |
-| Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etl-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"ext":"destext", "prefix":"prefix", "suffix": "suffix"}}' 'http://G/v1/buckets/from-name'` |
-| Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etl-bck"} /v1/buckets/from-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"ext":"destext", "dry_run": true}}' 'http://G/v1/buckets/from-name'` |
+| Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "ext":{"SRC_EXT": "DEST_EXT"}, "prefix":"PREFIX_FILTER", "prepend":"PREPEND_NAME"}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
+| Transform and synchronize bucket | Synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "synchronize": true}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
+| Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "dry_run": true}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
 | Stop ETL | Stops ETL with given `ETL_NAME`. | DELETE /v1/etl/ETL_NAME/stop | `curl -X POST 'http://G/v1/etl/ETL_NAME/stop'` |
 | Delete ETL | Delete ETL spec/code with given `ETL_NAME` | DELETE /v1/etl/<ETL_NAME> | `curl -X DELETE 'http://G/v1/etl/ETL_NAME' |
 
@@ -378,11 +379,10 @@ $ ais etl init spec --name=etl-md5 --from-file=spec.yaml --comm-type hpull
 ```
 
 Below are specifications for a valid `ETL_NAME`:
-1. Starts with an alphabet 'A' to 'Z' or 'a' to 'z'.
-2. Can contain alphabets, numbers, underscore ('_'), or hyphen ('-').
-3. Should have a length greater than 5 and less than 21.
-4. Shouldn't contain special characters, except for underscore and hyphen.
-
+1. Must start and end with a lowercase alphabet ('a' to 'z') or a number ('1' to '9').
+2. Can contain lowercase alphabets, numbers, or hyphen ('-').
+3. Should have a length greater than 5 and less than 33.
+4. Shouldn't contain special characters except for hyphen (no capitals or underscore).
 
 ## References
 

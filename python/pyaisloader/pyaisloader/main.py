@@ -8,6 +8,7 @@ from pyaisloader.client_config import client
 
 from pyaisloader.utils.parse_utils import parse_size, parse_time
 from pyaisloader.utils.print_utils import bold
+from pyaisloader.utils.etl_utils import init_etl, cleanup_etls
 
 
 VERSION = pkg_resources.require("pyaisloader")[0].version
@@ -35,6 +36,13 @@ def append_default_arguments(parser):
     )
     parser.add_argument(
         "-w", "--workers", type=int, required=True, help="Number of workers"
+    )
+    parser.add_argument(
+        "-e",
+        "--etl",
+        # choices=["tar2tf", "md5", "echo"],
+        required=False,
+        help="The built-in ETL transformation (one of tar2tf, md5, or echo) that each object from aisloader GETs undergoes",
     )
 
     return parser
@@ -297,9 +305,10 @@ def main():
                     "If pre-populating bucket, --totalsize, --minsize, and --maxsize are all required."
                 )
 
-    # Instantiate client and bucket object
+    # Instantiate bucket and etl objects for the benchmark
     provider, bck_name = args.bucket.split("://")
     bucket = client.bucket(bck_name, provider=PROVIDERS[provider])
+    etl = init_etl(client=client, spec_type=args.etl)
 
     benchmark_type = args.type.lower()
 
@@ -321,6 +330,7 @@ def main():
                 duration=args.duration,
                 totalsize=args.totalsize,
                 bucket=bucket,
+                etl=etl,
                 workers=args.workers,
                 cleanup=args.cleanup,
             )
@@ -330,6 +340,28 @@ def main():
                 minsize=args.minsize,
                 maxsize=args.maxsize,
                 duration=args.duration,
+                totalsize=args.totalsize,
+                bucket=bucket,
+                etl=etl,
+                workers=args.workers,
+                cleanup=args.cleanup,
+            )
+        elif benchmark_type == "ais_dataset":
+            benchmark = AISDatasetBenchmark(
+                minsize=args.minsize,
+                maxsize=args.maxsize,
+                duration=args.duration,
+                totalsize=args.totalsize,
+                bucket=bucket,
+                workers=args.workers,
+                cleanup=args.cleanup,
+            )
+        elif benchmark_type == "ais_iter_dataset":
+            benchmark = AISIterDatasetBenchmark(
+                minsize=args.minsize,
+                maxsize=args.maxsize,
+                duration=args.duration,
+                iterations=args.iterations,
                 totalsize=args.totalsize,
                 bucket=bucket,
                 workers=args.workers,
@@ -363,6 +395,7 @@ def main():
                 maxsize=args.maxsize,
                 duration=args.duration,
                 bucket=bucket,
+                etl=etl,
                 workers=args.workers,
                 cleanup=args.cleanup,
             )
@@ -375,6 +408,8 @@ def main():
             cleanup=args.cleanup,
         )
         benchmark.run()
+
+    cleanup_etls()
 
 
 if __name__ == "__main__":

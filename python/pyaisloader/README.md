@@ -55,6 +55,7 @@ Runs a time-based benchmark with 100% GET workload.
 | --maxsize  | -max    | Maximum size of objects to be PUT in bucket (if bucket is smaller than total size)                          | No      | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+| --etl  | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                                                                                           | No      | N/A           |
 
 #### Type: MIXED
 
@@ -71,6 +72,7 @@ Runs a time-based benchmark with a mixed load of GETs and PUTs (based on `putpct
 | --putpct   | -p      | Percentage for PUT operations in MIXED benchmark                                                            | Yes      | N/A           |
 | --duration | -d      | Duration for which benchmark should be run                                                                  | Yes      | N/A           |
 | --workers  | -w      | Number of workers                                                                                           | Yes      | N/A           |
+| --etl  | -e      | Whether objects from aisloader GETs should undergoes the specified ETL transformation                                                                                           | No      | N/A           |
 
 #### Type: LIST
 

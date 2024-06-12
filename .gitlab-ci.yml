@@ -352,14 +352,26 @@ test:long:aisloader:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
-    - cd ./python
-    - make PYAISLOADER_TEST_TYPE=short test-pyaisloader
-    - make PYAISLOADER_TEST_TYPE=long test-pyaisloader
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
 
+test:long:pyaisloader:
+  stage: test-long
+  tags:
+    - ais
+  timeout: 15m
+  variables:
+    AIS_ENDPOINT: "http://localhost:8080"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - sleep 10 # make sure that cluster properly starts
+    - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
 
 #
 # Kubernetes stages
@@ -493,6 +505,18 @@ test:long:k8s:aisloader:
     - sleep 10 # Give some time for the cluster to stabilize.
     - make aisloader
     - BUCKET="ais://test" FLAGS="--duration=2m --etl" make test-aisloader
+
+test:long:k8s:pyaisloader:
+  extends: .test_k8s_long_template
+  timeout: 15m
+  rules:
+    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+  script:
+    - sleep 10 # Give some time for the cluster to stabilize.
+    - cd ./python; make PYAISLOADER_TEST_TYPE=etl test-pyaisloader
 
 test:long:k8s:all:
   extends: .test_k8s_long_template

@@ -4,7 +4,7 @@ import string
 
 
 def generate_random_str():
-    chars = string.ascii_letters + string.digits
+    chars = string.ascii_lowercase + string.digits
     return "".join(random.choice(chars) for _ in range(5))
 
 

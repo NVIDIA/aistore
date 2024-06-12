@@ -2,6 +2,7 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 import sys
+import re
 
 import base64
 from typing import Callable, List
@@ -56,6 +57,7 @@ class Etl:
     def __init__(self, client: "Client", name: str):
         self._client = client
         self._name = name
+        self.validate_etl_name(name)
 
     @property
     def name(self) -> str:
@@ -219,3 +221,31 @@ class Etl:
         dependencies.append("cloudpickle==2.2.0")
         deps = "\n".join(dependencies).encode(UTF_ENCODING)
         return base64.b64encode(deps).decode(UTF_ENCODING)
+
+    @staticmethod
+    def validate_etl_name(name: str):
+        """
+        Validate the ETL name based on specific criteria.
+
+        Args:
+            name (str): The name of the ETL to validate.
+
+        Raises:
+            ValueError: If the name is too short (less than 6 characters),
+                        too long (more than 32 characters),
+                        or contains invalid characters (anything other than lowercase letters, digits, or hyphens).
+        """
+        prefix = f"ETL name '{name}' "
+        short_name_etl = 6
+        long_name_etl = 32
+
+        length = len(name)
+        if length < short_name_etl:
+            raise ValueError(f"{prefix}is too short")
+        if length > long_name_etl:
+            raise ValueError(f"{prefix}is too long")
+
+        if not re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])", name):
+            raise ValueError(
+                f"{prefix}is invalid: must start/end with a lowercase letter/number, and can only contain [a-z0-9-]"
+            )
