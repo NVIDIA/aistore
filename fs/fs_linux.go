@@ -5,9 +5,10 @@
 package fs
 
 import (
+	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
@@ -29,17 +30,45 @@ func (mi *Mountpath) resolveFS() error {
 }
 
 // fqn2FsInfo is used only at startup to store file systems for each mountpath.
-func fqn2FsInfo(fqn string) (fs, fsType string, err error) {
-	getFSCommand := fmt.Sprintf("df -PT '%s' | awk 'END{print $1,$2}'", fqn)
-	outputBytes, err := exec.Command("sh", "-c", getFSCommand).Output()
-	if err != nil || len(outputBytes) == 0 {
-		return "", "", fmt.Errorf("failed to retrieve FS info from path %q, err: %v", fqn, err)
+func fqn2FsInfo(path string) (fs, fsType string, err error) {
+	file, err := os.Open("/proc/mounts")
+	if err != nil {
+		return "", "", err
 	}
-	info := strings.Split(string(outputBytes), " ")
-	if len(info) != 2 {
-		return "", "", fmt.Errorf("failed to retrieve FS info from path %q, err: invalid format", fqn)
+	defer file.Close()
+
+	var (
+		bestMatch string
+		scanner   = bufio.NewScanner(file)
+	)
+
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 3 {
+			continue
+		}
+		mountPoint := fields[1]
+		rel, err := filepath.Rel(path, mountPoint)
+		if err != nil {
+			continue
+		}
+		if bestMatch == "" || len(rel) < len(bestMatch) {
+			bestMatch = rel
+			fs = fields[0]
+			fsType = fields[2]
+		}
 	}
-	return strings.TrimSpace(info[0]), strings.TrimSpace(info[1]), nil
+
+	if err := scanner.Err(); err != nil {
+		return "", "", err
+	}
+
+	// NOTE: `filepath.Rel` returns `.` (not an empty string) when there is an exact match.
+	if bestMatch == "" {
+		return "", "", fmt.Errorf("mount point not found for path: %q", path)
+	}
+
+	return
 }
 
 // DirectOpen opens a file with direct disk access (with OS caching disabled).
