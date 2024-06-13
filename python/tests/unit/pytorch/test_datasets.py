@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch, Mock, MagicMock
-from aistore.pytorch.dataset import AISDataset, AISIterDataset, AISMultiShardStream
+from aistore.pytorch.dataset import AISDataset
+from aistore.pytorch.multishard_dataset import AISMultiShardStream
+from aistore.pytorch.iter_dataset import AISIterDataset
 
 
 class TestAISDataset(unittest.TestCase):
@@ -15,14 +17,14 @@ class TestAISDataset(unittest.TestCase):
         ]
 
         self.patcher_list_objects_iterator = patch(
-            "aistore.pytorch.dataset.list_objects_iterator",
+            "aistore.pytorch.base_dataset.list_objects_iterator",
             return_value=iter(self.mock_objects),
         )
         self.patcher_list_objects = patch(
-            "aistore.pytorch.dataset.list_objects", return_value=self.mock_objects
+            "aistore.pytorch.base_dataset.list_objects", return_value=self.mock_objects
         )
         self.patcher_client = patch(
-            "aistore.pytorch.dataset.Client", return_value=self.mock_client
+            "aistore.pytorch.base_dataset.Client", return_value=self.mock_client
         )
         self.patcher_list_objects_iterator.start()
         self.patcher_list_objects.start()
@@ -53,7 +55,7 @@ class TestAISDataset(unittest.TestCase):
 
     def test_multi_shard_stream(self):
         self.patcher = unittest.mock.patch(
-            "aistore.pytorch.dataset.list_shard_objects_iterator"
+            "aistore.pytorch.multishard_dataset.list_shard_objects_iterator"
         )
         self.mock_list_shard_objects_iterator = self.patcher.start()
 

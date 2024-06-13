@@ -1,18 +1,18 @@
 """
-PyTorch Dataset for AIS.
+Iterable Dataset for AIS
 
-Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
+from aistore.pytorch.base_dataset import AISBaseClassIter
+from torch.utils.data import IterableDataset
 from typing import List, Union
-from torch.utils.data import Dataset
 from aistore.sdk.ais_source import AISSource
-from aistore.pytorch.base_dataset import AISBaseClass
 
 
-class AISDataset(AISBaseClass, Dataset):
+class AISIterDataset(AISBaseClassIter, IterableDataset):
     """
-    A map-style dataset for objects in AIS.
+    An iterable-style dataset that iterates over objects in AIS.
     If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
@@ -34,15 +34,24 @@ class AISDataset(AISBaseClass, Dataset):
     ):
         if not urls_list and not ais_source_list:
             raise ValueError(
-                "At least one of urls_list or ais_source_list must be provided"
+                "At least one of urls_list or ais_source_list must be provided."
             )
         super().__init__(client_url, urls_list, ais_source_list)
         self.etl_name = etl_name
+        self.length = None
+
+    def __iter__(self):
+        self._reset_iterator()
+        for obj in self._object_iter:
+            obj_name = obj.name
+            content = obj.get(etl_name=self.etl_name).read_all()
+            yield obj_name, content
 
     def __len__(self):
-        return len(self._objects)
+        if self.length is None:
+            self._reset_iterator()
+            self.length = self._calculate_len()
+        return self.length
 
-    def __getitem__(self, index: int):
-        obj = self._objects[index]
-        content = obj.get(etl_name=self.etl_name).read_all()
-        return obj.name, content
+    def _calculate_len(self):
+        return sum(1 for _ in self._object_iter)
