@@ -28,10 +28,6 @@ redirect_from:
 
 {% include youtubePlayer.html id="VPIhQm2sMD8" %}
 
-## Deployment: Google Cloud
-
-![ais-k8s-deploy](images/ais-k8s-deploy.gif)
-
 ## Minimal All-In-One Standalone Docker
 
 * [README](/deploy/prod/docker/single/README.md)

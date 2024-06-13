@@ -132,7 +132,7 @@ t[fXbarEnn]    3.08%         367.66GiB     51%           8.414TiB      [0.9 1.1 
 ```
 
 See related:
-* [AIS K8s Operator: environment variables](https://github.com/NVIDIA/ais-k8s/blob/master/operator/pkg/resources/cmn/env.go)
+* [AIS K8s Operator: environment variables](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go)
 
 ## AWS S3
 

@@ -41,7 +41,7 @@ The test setup used for benchmarking our AIS cluster with multihoming is shown b
 
 ## Deploying with Multihoming
 
-For a full walkthrough of a multi-homed AIS deployment, check [the documentation in the AIS K8s repository](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/ais-deployment/docs/deploy_with_multihome.md). 
+For a full walkthrough of a multi-homed AIS deployment, check [the documentation in the AIS K8s repository](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/ais-deployment/docs/deploy_with_multihome.md). 
 
 Before taking advantage of AIS multihoming, the systems themselves must be configured with multiple IPs on multiple interfaces. In our case, this involved adding a second VNIC in OCI and configuring the OS routing rules using their provided scripts, following this OCI [guide](https://docs.oracle.com/iaas/compute-cloud-at-customer/topics/network/creating-and-attaching-a-secondary-vnic.htm).
 
@@ -60,7 +60,7 @@ By default, K8s pods do not allow multiple IPs. To add this, we'll need to use [
 
 Once the additional hosts have been added to the hosts file and the network attachment definition has been created, all that is needed is a standard AIS deployment. The AIS [K8s operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) will take care of connecting each AIS pod to the specified additional hosts through Multus.
 
-Below is a simple network diagram of how the AIS pods work with Multus in our cluster. We are using a macvlan bridge to connect the pod to the second interface. This is configured in the network attachment definition created by our `create_network_definition` playbook. AIS can also be configured to use other Multus network attachment definitions. See our [multihome deployment doc](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/ais-deployment/docs/deploy_with_multihome.md) and the Multus [usage guide](https://github.com/k8snetworkplumbingwg/multus-cni/blob/master/docs/how-to-use.md) for details on using this playbook and configuring network attachment definitions. 
+Below is a simple network diagram of how the AIS pods work with Multus in our cluster. We are using a macvlan bridge to connect the pod to the second interface. This is configured in the network attachment definition created by our `create_network_definition` playbook. AIS can also be configured to use other Multus network attachment definitions. See our [multihome deployment doc](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/ais-deployment/docs/deploy_with_multihome.md) and the Multus [usage guide](https://github.com/k8snetworkplumbingwg/multus-cni/blob/master/docs/how-to-use.md) for details on using this playbook and configuring network attachment definitions. 
 
 ![Multus Network Diagram](/assets/multihome_bench/multus_diagram.png)
 

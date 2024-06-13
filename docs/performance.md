@@ -48,11 +48,11 @@ The question, then, is how to get the maximum out of the underlying hardware? Ho
 
 Specifically, `sysctl` selected system variables, such as `net.core.wmem_max`, `net.core.rmem_max`, `vm.swappiness`, and more - here's the approximate list:
 
-* [https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/host-config/vars/host_config_sysctl.yml](sysctl)
+* [https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/host-config/vars/host_config_sysctl.yml](sysctl)
 
-The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of [playbooks](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/README.md) to assist in a full deployment of AIStore.
+The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of [playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md) to assist in a full deployment of AIStore.
 
-In particular, there is a section of pre-deployment playbooks to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/host-config/README.md)
+In particular, there is a section of pre-deployment playbooks to [prepare AIS nodes for deployment on bare-metal Kubernetes](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/host-config/README.md)
 
 General references:
 
@@ -218,7 +218,7 @@ More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Featur
 Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
 Tuning the corresponding IO scheduler can prove to be important:
 
-* [ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/host-config/docs/ais_enable_multiqueue.md)
+* [ais_enable_multiqueue](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/host-config/docs/ais_enable_multiqueue.md)
 
 Other related references:
 

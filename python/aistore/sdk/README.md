@@ -90,8 +90,8 @@ Please note that certain operations do **not** support external cloud storage bu
 
 The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTPS. To start using HTTPS:
 
-1. Set up HTTPS on your cluster: [Guide for K8s cluster](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_https_configuration.md)
-2. If using a self-signed certificate with your own CA, copy the CA certificate to your local machine. If using our built-in cert-manager config to generate your certificates, you can use [our playbook](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_generate_https_cert.md)
+1. Set up HTTPS on your cluster: [Guide for K8s cluster](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/docs/ais_https_configuration.md)
+2. If using a self-signed certificate with your own CA, copy the CA certificate to your local machine. If using our built-in cert-manager config to generate your certificates, you can use [our playbook](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/docs/ais_generate_https_cert.md)
 3. Options to configure the SDK for HTTPS connectivity:
     - Skip verification (for testing, insecure):
       - `client = Client(skip_verify=True)`

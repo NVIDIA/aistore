@@ -18,7 +18,7 @@ AIS features linear scalability with each added storage node - in fact, with eac
 
 ## Background and Requirements
 
-AIStore's essential prerequisite is a Linux machine with disks. While not a requirement, a managed Kubernetes (K8s) environment is highly recommended to streamline [deployment](https://github.com/NVIDIA/ais-K8s/blob/master/docs/README.md) and management. Direct deployment on bare-metal instances is possible, but managed K8s is advised for efficiency and ease of use given the complexities associated with K8s management.
+AIStore's essential prerequisite is a Linux machine with disks. While not a requirement, a managed Kubernetes (K8s) environment is highly recommended to streamline [deployment](https://github.com/NVIDIA/ais-K8s/blob/main/docs/README.md) and management. Direct deployment on bare-metal instances is possible, but managed K8s is advised for efficiency and ease of use given the complexities associated with K8s management.
 
 In an AIS cluster, proxies (gateways) and targets (storage nodes) efficiently manage data requests from clients. When a client issues a GET request, a proxy, chosen randomly or specifically for load balancing, directs the request to an appropriate target based on the current cluster map. If the target has the data, it's directly sent to the client — a 'warm GET'. For unavailable data, AIS executes a 'cold GET', involving a series of steps: remote GET through the vendor's SDK, local storage of the object, validation of checksums for end-to-end protection (if enabled), storage of metadata (both local and remote, such as ETag, version, checksums, custom), making the object visible (only at this stage), and finally, creating additional copies or slices as per bucket properties, like n-way replication or erasure coding.
 
@@ -184,7 +184,7 @@ In summary, AIS demonstrated linear scalability in a particular setup, effective
 1. GitHub:
     - [AIStore](https://github.com/NVIDIA/aistore)
     - [AIS-K8S](https://github.com/NVIDIA/ais-K8s)
-    - [Deploying AIStore on K8s](https://github.com/NVIDIA/ais-K8s/blob/master/docs/README.md)
+    - [Deploying AIStore on K8s](https://github.com/NVIDIA/ais-K8s/blob/main/docs/README.md)
 2. Documentation, blogs, videos:
     - https://aiatscale.org
     - https://github.com/NVIDIA/aistore/tree/main/docs

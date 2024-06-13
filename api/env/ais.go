@@ -52,7 +52,7 @@ var (
 
 		// via ais-k8s repo
 		// see also:
-		// * https://github.com/NVIDIA/ais-k8s/blob/master/operator/pkg/resources/cmn/env.go
+		// * https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go
 		// * docs/environment-vars.md
 		K8sPod:       "MY_POD",
 		K8sNode:      "MY_NODE",
