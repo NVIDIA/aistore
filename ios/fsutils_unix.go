@@ -65,29 +65,3 @@ func _parseTotal(s string) (size int64) {
 	}
 	return
 }
-
-func DirFileCount(dirPath string) (int, error) {
-	cmd := fmt.Sprintf("find %s -type f | wc -l", dirPath)
-	outputBytes, err := exec.Command("/bin/sh", "-c", cmd).Output()
-	out := string(outputBytes)
-	if err != nil || out == "" {
-		return 0, fmt.Errorf("failed to count the number of files in %q: %v", dirPath, err)
-	}
-	out = strings.TrimSpace(out)
-	return strconv.Atoi(out)
-}
-
-func DirSumFileSizes(dirPath string) (uint64, error) {
-	cmd := fmt.Sprintf("find %s -type f | xargs wc -c | tail -1", dirPath)
-	outputBytes, err := exec.Command("/bin/sh", "-c", cmd).Output()
-	out := string(outputBytes)
-	if err != nil || out == "" {
-		return 0, fmt.Errorf("failed to correctly sum file sizes in %q: %v", dirPath, err)
-	}
-	i := strings.IndexByte(out, ' ')
-	if i < 0 {
-		debug.Assertf(out[0] == '0', "failed to sum file sizes in %q: [%s]", dirPath, out)
-		return 0, nil
-	}
-	return strconv.ParseUint(out[:i], 10, 0)
-}
