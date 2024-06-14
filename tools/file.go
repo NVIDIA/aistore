@@ -28,11 +28,12 @@ import (
 
 type (
 	DirTreeDesc struct {
-		InitDir string // Directory where the tree is created (can be empty).
-		Dirs    int    // Number of (initially empty) directories at each depth (we recurse into single directory at each depth).
-		Files   int    // Number of files at each depth.
-		Depth   int    // Depth of tree/nesting.
-		Empty   bool   // Determines if there is a file somewhere in the directories.
+		InitDir  string // Directory where the tree is created (can be empty).
+		Dirs     int    // Number of (initially empty) directories at each depth (we recurse into single directory at each depth).
+		Files    int    // Number of files at each depth.
+		FileSize int64  // Size of each file.
+		Depth    int    // Depth of tree/nesting.
+		Empty    bool   // Determines if there is a file somewhere in the directories.
 	}
 
 	ContentTypeDesc struct {
@@ -106,8 +107,12 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 		for i := 1; i <= desc.Files; i++ {
 			f, err := os.CreateTemp(nestedDirectoryName, "")
 			tassert.CheckFatal(tb, err)
+			if desc.FileSize > 0 {
+				io.Copy(f, io.LimitReader(cryptorand.Reader, desc.FileSize))
+			}
 			fileNames = append(fileNames, f.Name())
-			f.Close()
+			err = f.Close()
+			tassert.CheckFatal(tb, err)
 		}
 		sort.Strings(names)
 		if desc.Dirs > 0 {
@@ -119,8 +124,12 @@ func PrepareDirTree(tb testing.TB, desc DirTreeDesc) (string, []string) {
 	if !desc.Empty {
 		f, err := os.CreateTemp(nestedDirectoryName, "")
 		tassert.CheckFatal(tb, err)
+		if desc.FileSize > 0 {
+			io.Copy(f, io.LimitReader(cryptorand.Reader, desc.FileSize))
+		}
 		fileNames = append(fileNames, f.Name())
-		f.Close()
+		err = f.Close()
+		tassert.CheckFatal(tb, err)
 	}
 	return topDirName, fileNames
 }

@@ -1,24 +1,42 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
 import (
 	"os"
-	"os/exec"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/karrick/godirwalk"
 	"golang.org/x/sys/unix"
 )
 
-func DirSizeOnDisk(dirPath string, withNonDirPrefix bool) (uint64, error) {
-	// BSD implementation of du uses -A option for apparent size and -c to show a total
-	cmd := exec.Command("du", "-Ac", dirPath)
-	// Output block size with -A option will be 512
-	return executeDU(cmd, dirPath, withNonDirPrefix, 512)
+func DirSizeOnDisk(originalDirPath string, withNonDirPrefix bool) (size uint64, err error) {
+	dirPath := originalDirPath
+	if withNonDirPrefix {
+		dirPath, _ = filepath.Split(originalDirPath)
+	}
+	err = godirwalk.Walk(dirPath, &godirwalk.Options{Callback: func(osPathname string, entry *godirwalk.Dirent) error {
+		if !entry.IsDir() && !entry.IsRegular() {
+			return nil
+		}
+		// If prefix is set we should skip all the names that do not have the prefix.
+		if withNonDirPrefix && !strings.HasPrefix(osPathname, originalDirPath) {
+			return nil
+		}
+		stat, err := os.Lstat(osPathname)
+		if err != nil {
+			return err
+		}
+		size += uint64(stat.Size())
+		return nil
+	}})
+	return
 }
 
 func GetFSStats(path string) (blocks, bavail uint64, bsize int64, err error) {

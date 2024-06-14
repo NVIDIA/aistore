@@ -467,7 +467,6 @@ func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 	} else {
 		dirPath = filepath.Join(mi.MakePathCT(bck, ObjectType), prefix)
 		if cos.Stat(dirPath) != nil {
-			dirPath += "*"          // prefix is _not_ a directory
 			withNonDirPrefix = true // ok to fail matching
 		}
 	}
@@ -1062,7 +1061,7 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 		sz, err := mi.onDiskSize(bck, prefix)
 		if err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleFS) {
-				nlog.Warningln("failed to 'du':", err, "["+mi.String(), bck.String(), prefix+"]")
+				nlog.Warningln("failed to calculate size on disk:", err, "["+mi.String(), bck.String(), prefix+"]")
 			}
 			return 0
 		}
