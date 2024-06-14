@@ -349,21 +349,18 @@ func (lom *LOM) ComputeSetCksum() (*cos.Cksum, error) {
 	return cksum, nil
 }
 
-func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error) {
-	var file *os.File
+func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, _ error) {
 	if cksumType == cos.ChecksumNone {
-		return
+		return nil, nil
 	}
-	if file, err = lom.OpenFile(); err != nil {
-		return
-	}
-	// No need to allocate `buf` as `io.Discard` has efficient `io.ReaderFrom` implementation.
-	_, cksum, err = cos.CopyAndChecksum(io.Discard, file, nil, cksumType)
-	cos.Close(file)
+	lmfh, err := lom.OpenFile()
 	if err != nil {
 		return nil, err
 	}
-	return
+	// No need to allocate `buf` as `io.Discard` has efficient `io.ReaderFrom` implementation.
+	_, cksum, err = cos.CopyAndChecksum(io.Discard, lmfh, nil, cksumType)
+	cos.Close(lmfh)
+	return cksum, err
 }
 
 // no lock is taken when locked by an immediate caller, or otherwise is known to be locked
@@ -552,12 +549,12 @@ func (lom *LOM) whingeSize(size int64) error {
 
 func lomCaches() []*sync.Map {
 	var (
-		i              int
-		availablePaths = fs.GetAvail()
-		cachesCnt      = len(availablePaths) * cos.MultiSyncMapCount
-		caches         = make([]*sync.Map, cachesCnt)
+		i         int
+		avail     = fs.GetAvail()
+		cachesCnt = len(avail) * cos.MultiSyncMapCount
+		caches    = make([]*sync.Map, cachesCnt)
 	)
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		for idx := range cos.MultiSyncMapCount {
 			caches[i] = mi.LomCache(idx)
 			i++

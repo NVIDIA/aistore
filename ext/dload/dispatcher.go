@@ -95,14 +95,14 @@ func (d *dispatcher) run() (err error) {
 		sema       = cos.NewSemaphore(5 * fs.NumAvail())
 		group, ctx = errgroup.WithContext(context.Background())
 	)
-	availablePaths := fs.GetAvail()
-	for mpath := range availablePaths {
+	avail := fs.GetAvail()
+	for mpath := range avail {
 		d.addJogger(mpath)
 	}
 	// allow other goroutines to run
 	d.startupSema.markStarted()
 
-	nlog.Infoln(d.xdl.Name(), "started, cnt:", len(availablePaths))
+	nlog.Infoln(d.xdl.Name(), "started, cnt:", len(avail))
 mloop:
 	for {
 		select {

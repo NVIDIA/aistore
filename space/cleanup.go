@@ -119,12 +119,12 @@ func (*clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, er
 
 func RunCleanup(ini *IniCln) fs.CapStatus {
 	var (
-		xcln           = ini.Xaction
-		config         = cmn.GCO.Get()
-		availablePaths = fs.GetAvail()
-		num            = len(availablePaths)
-		joggers        = make(map[string]*clnJ, num)
-		parent         = &clnP{joggers: joggers, ini: *ini}
+		xcln    = ini.Xaction
+		config  = cmn.GCO.Get()
+		avail   = fs.GetAvail()
+		num     = len(avail)
+		joggers = make(map[string]*clnJ, num)
+		parent  = &clnP{joggers: joggers, ini: *ini}
 	)
 	defer func() {
 		if ini.WG != nil {
@@ -136,7 +136,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		xcln.Finish()
 		return fs.CapStatus{}
 	}
-	for mpath, mi := range availablePaths {
+	for mpath, mi := range avail {
 		joggers[mpath] = &clnJ{
 			oldWork: make([]string, 0, 64),
 			stopCh:  make(chan struct{}, 1),

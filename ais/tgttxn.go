@@ -487,8 +487,8 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *aisMsg) error 
 	if _, present := bmd.Get(bckTo); present {
 		return cmn.NewErrBckAlreadyExists(bckTo.Bucket())
 	}
-	availablePaths := fs.GetAvail()
-	for _, mi := range availablePaths {
+	avail := fs.GetAvail()
+	for _, mi := range avail {
 		path := mi.MakePathCT(bckTo.Bucket(), fs.ObjectType)
 		if err := cos.Stat(path); err != nil {
 			if !os.IsNotExist(err) {

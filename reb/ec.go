@@ -47,12 +47,12 @@ import (
 
 func (reb *Reb) runECjoggers() {
 	var (
-		wg             = &sync.WaitGroup{}
-		availablePaths = fs.GetAvail()
-		cfg            = cmn.GCO.Get()
-		b              = reb.xctn().Bck()
+		wg    = &sync.WaitGroup{}
+		avail = fs.GetAvail()
+		cfg   = cmn.GCO.Get()
+		b     = reb.xctn().Bck()
 	)
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		bck := cmn.Bck{Provider: apc.AIS}
 		if b != nil {
 			bck = cmn.Bck{Name: b.Name, Provider: apc.AIS, Ns: b.Ns}
@@ -61,7 +61,7 @@ func (reb *Reb) runECjoggers() {
 		go reb.jogEC(mi, &bck, wg)
 	}
 	for _, provider := range cfg.Backend.Providers {
-		for _, mi := range availablePaths {
+		for _, mi := range avail {
 			bck := cmn.Bck{Provider: provider.Name}
 			if b != nil {
 				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}

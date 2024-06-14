@@ -107,8 +107,8 @@ var _ = Describe("newConcAdjuster", func() {
 			perfectLimit = 13
 			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
 		)
-		availablePaths := fs.GetAvail()
-		mi := availablePaths[testingConfigDir]
+		avail := fs.GetAvail()
+		mi := avail[testingConfigDir]
 
 		adjuster := newConcAdjuster(0, 1)
 

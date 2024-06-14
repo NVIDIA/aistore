@@ -304,12 +304,12 @@ func (t *target) Run() error {
 	core.Tinit(t, tstats, true /*run hk*/)
 
 	// metrics, disks first
-	availablePaths, disabledPaths := fs.Get()
-	if len(availablePaths) == 0 {
+	avail, disabled := fs.Get()
+	if len(avail) == 0 {
 		cos.ExitLog(cmn.ErrNoMountpaths)
 	}
-	regDiskMetrics(t.si, tstats, availablePaths)
-	regDiskMetrics(t.si, tstats, disabledPaths)
+	regDiskMetrics(t.si, tstats, avail)
+	regDiskMetrics(t.si, tstats, disabled)
 	t.statsT.RegMetrics(t.si) // + Prometheus, if configured
 
 	fatalErr, writeErr := t.checkRestarted(config)

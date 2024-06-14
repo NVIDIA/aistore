@@ -85,10 +85,10 @@ type (
 )
 
 func calcMaxLimit() int {
-	availablePaths := fs.GetAvail()
+	avail := fs.GetAvail()
 	maxLimitPerDisk := min(
 		maxConcFuncPerDiskLimit,
-		maxConcFuncPerDsortLimit/max(len(availablePaths), 1),
+		maxConcFuncPerDsortLimit/max(len(avail), 1),
 	)
 	return maxLimitPerDisk
 }
@@ -104,20 +104,20 @@ func newMpathAdjuster(limit, maxLimit int) *mpathAdjuster {
 }
 
 func newConcAdjuster(maxLimit, goroutineLimitCoef int) (ca *concAdjuster) {
-	availablePaths := fs.GetAvail()
-	adjusters := make(map[string]*mpathAdjuster, len(availablePaths))
+	avail := fs.GetAvail()
+	adjusters := make(map[string]*mpathAdjuster, len(avail))
 	if maxLimit == 0 {
 		maxLimit = calcMaxLimit()
 	}
 	limit := min(defaultConcFuncLimit, maxLimit)
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		adjusters[mi.Path] = newMpathAdjuster(limit, maxLimit)
 	}
 	ca = &concAdjuster{
 		defaultLimit:       limit,
 		adjusters:          adjusters,
 		goroutineLimitCoef: goroutineLimitCoef,
-		gorountinesSema:    cos.NewDynSemaphore(goroutineLimitCoef * len(availablePaths) * limit),
+		gorountinesSema:    cos.NewDynSemaphore(goroutineLimitCoef * len(avail) * limit),
 	}
 	ca.stopCh.Init()
 	return

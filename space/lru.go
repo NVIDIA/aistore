@@ -134,12 +134,12 @@ func (*lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, er
 
 func RunLRU(ini *IniLRU) {
 	var (
-		xlru           = ini.Xaction
-		config         = cmn.GCO.Get()
-		availablePaths = fs.GetAvail()
-		num            = len(availablePaths)
-		joggers        = make(map[string]*lruJ, num)
-		parent         = &lruP{joggers: joggers, ini: *ini}
+		xlru    = ini.Xaction
+		config  = cmn.GCO.Get()
+		avail   = fs.GetAvail()
+		num     = len(avail)
+		joggers = make(map[string]*lruJ, num)
+		parent  = &lruP{joggers: joggers, ini: *ini}
 	)
 	defer func() {
 		if ini.WG != nil {
@@ -151,7 +151,7 @@ func RunLRU(ini *IniLRU) {
 		xlru.Finish()
 		return
 	}
-	for mpath, mi := range availablePaths {
+	for mpath, mi := range avail {
 		h := make(minHeap, 0, 64)
 		joggers[mpath] = &lruJ{
 			heap:   &h,

@@ -68,11 +68,11 @@ var _ = Describe("space evict/cleanup tests", func() {
 			initConfig()
 			createAndAddMountpath(basePath)
 			core.T = newTargetLRUMock()
-			availablePaths := fs.GetAvail()
+			avail := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.AIS, Ns: cmn.NsGlobal}
-			filesPath = availablePaths[basePath].MakePathCT(&bck, fs.ObjectType)
-			fpAnother = availablePaths[basePath].MakePathCT(&bckAnother, fs.ObjectType)
+			filesPath = avail[basePath].MakePathCT(&bck, fs.ObjectType)
+			fpAnother = avail[basePath].MakePathCT(&bckAnother, fs.ObjectType)
 			cos.CreateDir(filesPath)
 			cos.CreateDir(fpAnother)
 		})
@@ -261,8 +261,8 @@ var _ = Describe("space evict/cleanup tests", func() {
 			})
 			It("should remove all deleted items", func() {
 				var (
-					availablePaths = fs.GetAvail()
-					mi             = availablePaths[basePath]
+					avail = fs.GetAvail()
+					mi    = avail[basePath]
 				)
 
 				saveRandomFiles(filesPath, 10)

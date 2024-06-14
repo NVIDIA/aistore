@@ -120,8 +120,8 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 	if lom.whingeCopy() {
 		return
 	}
-	availablePaths := fs.GetAvail()
-	for _, mi := range availablePaths {
+	avail := fs.GetAvail()
+	for _, mi := range avail {
 		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
@@ -176,11 +176,11 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 		return true // nothing to do
 	}
 	var (
-		saved          = lom.md.pushrt()
-		availablePaths = fs.GetAvail()
-		buf, slab      = g.pmm.Alloc()
+		saved     = lom.md.pushrt()
+		avail     = fs.GetAvail()
+		buf, slab = g.pmm.Alloc()
 	)
-	for path, mi := range availablePaths {
+	for path, mi := range avail {
 		if path == lom.mi.Path {
 			continue
 		}
@@ -377,11 +377,11 @@ func (lom *LOM) leastUtilCopy() (fqn string) {
 // (compare with leastUtilCopy())
 func (lom *LOM) LeastUtilNoCopy() (mi *fs.Mountpath) {
 	var (
-		availablePaths = fs.GetAvail()
-		mpathUtils     = fs.GetAllMpathUtils()
-		minUtil        = int64(101) // to motivate the first assignment
+		avail      = fs.GetAvail()
+		mpathUtils = fs.GetAllMpathUtils()
+		minUtil    = int64(101) // to motivate the first assignment
 	)
-	for mpath, mpathInfo := range availablePaths {
+	for mpath, mpathInfo := range avail {
 		if lom.haveMpath(mpath) || mpathInfo.IsAnySet(fs.FlagWaitingDD) {
 			continue
 		}
@@ -411,8 +411,8 @@ func (lom *LOM) haveMpath(mpath string) bool {
 // - does not check `fstat` in either case (TODO: configurable or scrub);
 func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 	var (
-		availablePaths = fs.GetAvail()
-		hrwMi, _, err  = fs.Hrw(lom.md.uname)
+		avail         = fs.GetAvail()
+		hrwMi, _, err = fs.Hrw(lom.md.uname)
 	)
 	if err != nil {
 		nlog.Errorln(err)
@@ -430,7 +430,7 @@ func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 	// take into account mountpath flags but stop short of `fstat`-ing
 	expCopies, gotCopies := int(mirror.Copies), 0
 	for fqn, mpi := range lom.md.copies {
-		mpathInfo, ok := availablePaths[mpi.Path]
+		mpathInfo, ok := avail[mpi.Path]
 		if !ok || mpathInfo.IsAnySet(fs.FlagWaitingDD) {
 			lom.delCopyMd(fqn)
 		} else {

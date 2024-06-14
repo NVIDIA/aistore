@@ -84,8 +84,8 @@ func (res *Res) RunResilver(args Args) {
 		nlog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
 	}
-	availablePaths, _ := fs.Get()
-	if len(availablePaths) < 1 {
+	avail, _ := fs.Get()
+	if len(avail) < 1 {
 		nlog.Errorln(cmn.ErrNoMountpaths)
 		return
 	}

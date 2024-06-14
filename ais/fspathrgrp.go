@@ -181,8 +181,8 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 
 	// 3. the case of multiple overlapping detach _or_ disable operations
 	//    (ie., commit previously aborted xs.Resilver, if any)
-	availablePaths := fs.GetAvail()
-	for _, mi := range availablePaths {
+	avail := fs.GetAvail()
+	for _, mi := range avail {
 		if !mi.IsAnySet(fs.FlagWaitingDD) {
 			continue
 		}
@@ -259,8 +259,8 @@ func (g *fsprungroup) redistributeMD() {
 }
 
 func (g *fsprungroup) checkEnable(action string, mi *fs.Mountpath) {
-	availablePaths := fs.GetAvail()
-	if len(availablePaths) > 1 {
+	avail := fs.GetAvail()
+	if len(avail) > 1 {
 		nlog.Infoln(action, mi.String())
 	} else {
 		nlog.Infoln(action, "the first mountpath", mi.String())
