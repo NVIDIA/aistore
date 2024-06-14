@@ -341,7 +341,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 	case apc.GetPropsAtime:
 		v = cos.FormatNanoTime(op.Atime, "")
 	case apc.GetPropsVersion:
-		v = op.Ver
+		v = op.Version()
 	case apc.GetPropsCached:
 		if op.Bck.IsAIS() {
 			debug.Assert(op.Present)

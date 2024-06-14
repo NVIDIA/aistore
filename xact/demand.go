@@ -35,8 +35,8 @@ type (
 		hkName string
 		idle   struct {
 			ticks cos.StopCh
-			d     time.Duration // hk idle
-			last  atomic.Int64  // mono.NanoTime
+			d     atomic.Int64 // duration hk idle
+			last  atomic.Int64 // mono.NanoTime
 		}
 
 		Base
@@ -58,9 +58,10 @@ func (r *DemandBase) IsIdle() bool {
 
 func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duration) {
 	r.hkName = kind + "/" + uuid
-	r.idle.d = IdleDefault
 	if idleDur > 0 {
-		r.idle.d = idleDur
+		r.idle.d.Store(int64(idleDur))
+	} else {
+		r.idle.d.Store(int64(IdleDefault))
 	}
 	r.idle.ticks.Init()
 	r.InitBase(uuid, kind, bck)
@@ -71,15 +72,16 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duratio
 }
 
 // (e.g. usage: listed last page)
-func (r *DemandBase) Reset(idleTime time.Duration) { r.idle.d = idleTime }
+func (r *DemandBase) Reset(idleTime time.Duration) { r.idle.d.Store(int64(idleTime)) }
 
 func (r *DemandBase) hkcb() time.Duration {
 	last := r.idle.last.Load()
-	if last != 0 && mono.Since(last) >= r.idle.d {
+	idle := r.idle.d.Load()
+	if last != 0 && mono.SinceNano(last) >= idle {
 		// signal parent xaction to finish and exit (via `IdleTimer` chan)
 		r.idle.ticks.Close()
 	}
-	return r.idle.d
+	return time.Duration(idle)
 }
 
 func (r *DemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
