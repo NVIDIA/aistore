@@ -1,13 +1,12 @@
 """
 Test class for AIStore PyTorch Plugin
-Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 """
 
 import unittest
 from pathlib import Path
 import torchdata.datapipes.iter as torch_pipes
-
-from aistore.sdk import Client
+from aistore.sdk import Client, Bucket
 from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.sdk.dataset.data_shard import DataShard
 from aistore.pytorch import (
@@ -17,6 +16,7 @@ from aistore.pytorch import (
     AISIterDataset,
     AISMultiShardStream,
 )
+from aistore.pytorch.shard_reader import AISShardReader
 from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import (
     create_and_put_object,
@@ -182,6 +182,86 @@ class TestPytorchPlugin(unittest.TestCase):
 
         for i, content in enumerate(dataset):
             self.assertEqual(content, combined_content[i])
+
+    def test_shard_reader(self):
+
+        self.local_test_files.mkdir()
+
+        bucket: Bucket = self.client.bucket(self.bck_name)
+
+        shard_one_dict = {
+            "sample_1.cls": b"Class content of sample one",
+            "sample_1.jpg": b"Jpg content of sample one",
+            "sample_1.png": b"Png content of sample one",
+            "sample_2.cls": b"Class content of sample two",
+            "sample_2.jpg": b"Jpg content of sample two",
+            "sample_2.png": b"Png content of sample two",
+        }
+        shard_one_archive_name = "shard_1.tar"
+        shard_one_archive_path = self.local_test_files.joinpath(shard_one_archive_name)
+        create_archive(shard_one_archive_path, shard_one_dict)
+        shard_one_obj = bucket.object(obj_name=shard_one_archive_name)
+        shard_one_obj.put_file(shard_one_archive_path)
+
+        shard_two_dict = {
+            "sample_3.cls": b"Class content of sample three",
+            "sample_3.jpg": b"Jpg content of sample three",
+            "sample_3.png": b"Png content of sample three",
+            "sample_4.cls": b"Class content of sample four",
+            "sample_4.jpg": b"Jpg content of sample four",
+            "sample_4.png": b"Png content of sample four",
+        }
+        shard_two_archive_name = "shard_2.tar"
+        shard_two_archive_path = self.local_test_files.joinpath(shard_two_archive_name)
+        create_archive(shard_two_archive_path, shard_two_dict)
+        shard_two_obj = bucket.object(obj_name=shard_two_archive_name)
+        shard_two_obj.put_file(shard_two_archive_path)
+
+        # Expected output from the reader
+        expected_sample_dicts = [
+            {
+                "cls": b"Class content of sample one",
+                "jpg": b"Jpg content of sample one",
+                "png": b"Png content of sample one",
+            },
+            {
+                "cls": b"Class content of sample two",
+                "jpg": b"Jpg content of sample two",
+                "png": b"Png content of sample two",
+            },
+            {
+                "cls": b"Class content of sample three",
+                "jpg": b"Jpg content of sample three",
+                "png": b"Png content of sample three",
+            },
+            {
+                "cls": b"Class content of sample four",
+                "jpg": b"Jpg content of sample four",
+                "png": b"Png content of sample four",
+            },
+        ]
+
+        sample_basenames = ["sample_1", "sample_2", "sample_3", "sample_4"]
+
+        # Test shard_reader with url params
+        url_one = f"{bucket.provider}://{bucket.name}/{shard_one_obj.name}"
+        url_two = f"{bucket.provider}://{bucket.name}/{shard_two_obj.name}"
+        url_shard_reader = AISShardReader(
+            client_url=CLUSTER_ENDPOINT, urls_list=[url_one, url_two]
+        )
+
+        for i, (basename, content_dict) in enumerate(url_shard_reader):
+            self.assertEqual(basename, sample_basenames[i])
+            self.assertEqual(content_dict, expected_sample_dicts[i])
+
+        # Test shard_reader with bucket_params
+        bck_shard_reader = AISShardReader(
+            client_url=CLUSTER_ENDPOINT, bucket_list=[bucket]
+        )
+
+        for i, (basename, content_dict) in enumerate(bck_shard_reader):
+            self.assertEqual(basename, sample_basenames[i])
+            self.assertEqual(content_dict, expected_sample_dicts[i])
 
 
 if __name__ == "__main__":

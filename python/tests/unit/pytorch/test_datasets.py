@@ -1,14 +1,21 @@
+"""
+Test class for AIStore PyTorch Plugin
+Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+"""
+
 import unittest
 from unittest.mock import patch, Mock, MagicMock
 from aistore.pytorch.dataset import AISDataset
-from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.iter_dataset import AISIterDataset
+from aistore.pytorch.multishard_dataset import AISMultiShardStream
+from aistore.pytorch.shard_reader import AISShardReader
+from aistore.pytorch.utils import list_wds_samples_iter
+from aistore.sdk.list_object_flag import ListObjectFlag
 
 
 class TestAISDataset(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock()
-        self.mock_bucket = Mock()
         mock_obj = Mock()
         mock_obj.get.return_value.read_all.return_value = b"mock data"
         self.mock_objects = [
@@ -81,3 +88,49 @@ class TestAISDataset(unittest.TestCase):
         results = list(iter(stream))
 
         self.assertEqual(results, expected_results)
+
+    @patch("aistore.sdk.bucket")
+    def test_list_wds_sample_iter(self, mock_bucket):
+        # Mock the list_objects_iter method
+        mock_shard = Mock()
+        mock_shard.name = "shard.tar"
+        mock_shard.list_objects_iter.return_value = iter([])
+        mock_bucket.list_objects_iter.return_value = [mock_shard]
+
+        # Call the function under test
+        list(list_wds_samples_iter(None, [], [mock_bucket], None))
+
+        # Assert that list_objects_iter was called exactly once for the shard
+        mock_bucket.list_objects_iter.assert_any_call()
+
+        # Assert that list_objects_iter was called exactly once with arch params
+        mock_bucket.list_objects_iter.assert_called_with(
+            prefix=mock_shard.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
+        )
+
+    @patch("aistore.pytorch.shard_reader.list_wds_samples_iter")
+    def test_shard_reader(self, mock_list_wds_samples_iter):
+        # Mock list_wds_samples_iter
+        mock_list_wds_samples_iter.return_value = [
+            ("sample_1", {"cls": b"Content of class"}),
+            ("sample_2", {"png": b"Content of class"}),
+            ("sample_3", {"jpg": b"Content of class"}),
+        ]
+
+        # Create shard reader and get results and compare
+        shard_reader = AISShardReader(
+            client_url="http://example.com", urls_list="http://example.com/data"
+        )
+
+        result = list(shard_reader)
+
+        expected_result = [
+            ("sample_1", {"cls": b"Content of class"}),
+            ("sample_2", {"png": b"Content of class"}),
+            ("sample_3", {"jpg": b"Content of class"}),
+        ]
+
+        self.assertEqual(result, expected_result)
+
+        # Ensure the iter is called correctly
+        mock_list_wds_samples_iter.assert_called()

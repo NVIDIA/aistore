@@ -4,7 +4,7 @@ Utils for AIS PyTorch Plugin
 Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Iterable
+from typing import List, Iterable, Tuple
 from urllib.parse import urlunparse
 from aistore.sdk import Client
 from aistore.sdk.ais_source import AISSource
@@ -82,7 +82,7 @@ def list_objects_iterator(
 
 def list_shard_objects_iterator(
     bucket: Bucket, prefix: str = "", etl_name: str = ""
-) -> Iterable[Object]:
+) -> Iterable[bytes]:
     """
     Create an iterable over all the objects in the given shards.
 
@@ -104,10 +104,98 @@ def list_shard_objects_iterator(
         )
 
         for obj in objects_iter:
-            if obj.name == path:
-                continue
-            obj_name = obj.name.replace(f"{path}/", "", 1)
-            yield bucket.object(path).get(
-                etl_name=etl_name,
-                archive_settings=ArchiveSettings(archpath=obj_name),
+            if obj.name != path:
+                obj_name = obj.name.replace(f"{path}/", "", 1)
+                yield bucket.object(path).get(
+                    etl_name=etl_name,
+                    archive_settings=ArchiveSettings(archpath=obj_name),
+                ).read_all()
+
+
+def get_basename(name: str) -> str:
+    """
+    Get the basename of the object name by stripping any directory information and suffix.
+
+    Args:
+        name (str): Complete object name
+
+    Returns:
+        str: Basename of the object
+    """
+
+    return name.split("/")[-1].split(".")[0]
+
+
+def __samples_from_bck_iter(shard_name: str, bucket: Bucket, etl_name: str):
+    """
+    Helper function to create an iterator for all samples and contents over the given shard name.
+
+    Args:
+        name (str): Name of shard object
+        bucket (Bucket): Bucket where the shard object is stored
+        etl_name (str): Name of ETL (Extract, Transform, Load) to apply to each object
+
+    Returns:
+        Iterable[Tuple[str, dict(str, bytes)]]: Iterator over all the WDS basenames and content (file extension, data)
+        in shards from the given shard
+    """
+    # get iterator of all objects in the shard
+    objects_iter = bucket.list_objects_iter(
+        prefix=shard_name, props="name", flags=[ListObjectFlag.ARCH_DIR]
+    )
+
+    # pool all files with the same basename into dictionary (basename, [file names])
+    samples_dict = {}
+    for obj in objects_iter:
+        basename = get_basename(obj.name)
+
+        # Original tar is included in basenames so only yield actual files
+        if basename != shard_name.split(".")[0]:
+            if basename not in samples_dict:
+                samples_dict[basename] = []
+            samples_dict[basename].append(obj.name)
+
+    # for each basename, get the byte data for each file and yield in dictionary
+    shard = bucket.object(shard_name)
+    for basename, files in samples_dict.items():
+        content_dict = {}
+        for file_name in files:
+            file_prefix = file_name.split(".")[-1]
+            content_dict[file_prefix] = shard.get(
+                etl_name=etl_name, archive_settings=ArchiveSettings(archpath=file_name)
             ).read_all()
+        yield basename, content_dict
+
+
+def list_wds_samples_iter(
+    client: Client,
+    urls_list: List[str],
+    bucket_list: List[Bucket],
+    etl_name: str,
+) -> Iterable[Tuple[str, bytes]]:
+    """
+    Create an iterator over all of the shard sample basenames and sample contents.
+
+    Args:
+        client (Client): AIStore Client for accessing buckets and objects
+        urls_list (List[str]): List of URLs, can be URLS for buckets and/or objects
+        bucket_list (List[Bucket]): List of Bucket objects containing the shards to load data
+        etl_name (str): Name of ETL (Extract, Transform, Load) to apply to each object
+
+    Returns:
+        Iterable[Tuple[str, dict(str, bytes)]]: Iterator over all the WDS basenames and content (file extension, data)
+        in shards from the given URLs and buckets
+    """
+
+    for item in urls_list:
+        provider, bck_name, path = parse_url(item)
+        bucket = client.bucket(bck_name=bck_name, provider=provider)
+        if path == None or path == "":
+            for shard in bucket.list_objects_iter():
+                yield from __samples_from_bck_iter(shard.name, bucket, etl_name)
+        else:
+            yield from __samples_from_bck_iter(path, bucket, etl_name)
+
+    for bucket in bucket_list:
+        for shard in bucket.list_objects_iter():
+            yield from __samples_from_bck_iter(shard.name, bucket, etl_name)
