@@ -42,10 +42,10 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
 
     def __iter__(self):
         self._reset_iterator()
+        self.length = 0
         for obj in self._object_iter:
-            obj_name = obj.name
-            content = obj.get(etl_name=self.etl_name).read_all()
-            yield obj_name, content
+            self.length += 1
+            yield obj.name, obj.get(etl_name=self.etl_name).read_all()
 
     def __len__(self):
         if self.length is None:
