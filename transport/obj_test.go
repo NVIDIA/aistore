@@ -122,7 +122,7 @@ func Example_headers() {
 				break
 			}
 
-			fmt.Printf("%+v (%d)\n", hdr, hlen)
+			fmt.Printf("Bck:%s ObjName:%s SID:%s Opaque:%v ObjAttrs:{%s} (%d)\n", hdr.Bck, hdr.ObjName, hdr.SID, hdr.Opaque, hdr.ObjAttrs.String(), hlen)
 			off += hlen + int(hdr.ObjAttrs.Size)
 		}
 	}
@@ -137,8 +137,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bck:s3://@uuid#namespace/abc ObjName:X SID: Opaque:[] ObjAttrs:{Cksum:xxhash[h1] CustomMD:map[] Ver:1 Atime:663346294 Size:231} Opcode:0} (69)
-	// {Bck:ais://abracadabra ObjName:p/q/s SID: Opaque:[49 50 51] ObjAttrs:{Cksum:xxhash[h2] CustomMD:map[xx:11 yy:22] Ver:222222222222222222222222 Atime:663346294 Size:213} Opcode:0} (110)
+	// Bck:s3://@uuid#namespace/abc ObjName:X SID: Opaque:[] ObjAttrs:{231B, v"1", xxhash[h1], map[]} (69)
+	// Bck:ais://abracadabra ObjName:p/q/s SID: Opaque:[49 50 51] ObjAttrs:{213B, v"222222222222222222222222", xxhash[h2], map[xx:11 yy:22]} (110)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -159,10 +159,10 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Size:  sgl1.Size(),
 			Atime: 663346294,
 			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h1"),
-			Ver:   "1",
 		},
 		Opaque: nil,
 	}
+	hdr.ObjAttrs.SetVersion("1")
 	wg.Add(1)
 	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
 	wg.Wait()
@@ -180,10 +180,10 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Size:  sgl2.Size(),
 			Atime: 663346294,
 			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h2"),
-			Ver:   "222222222222222222222222",
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
+	hdr.ObjAttrs.SetVersion("222222222222222222222222")
 	hdr.ObjAttrs.SetCustomMD(cos.StrKVs{"xx": "11", "yy": "22"})
 	wg.Add(1)
 	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
@@ -366,25 +366,27 @@ func TestSendCallback(t *testing.T) {
 	}
 }
 
+func _ptrstr(s string) *string { return &s }
+
 func TestObjAttrs(t *testing.T) {
 	testAttrs := []cmn.ObjAttrs{
 		{
 			Size:  1024,
 			Atime: 1024,
 			Cksum: cos.NewCksum("", ""),
-			Ver:   "102.44",
+			Ver:   _ptrstr("102.44"),
 		},
 		{
 			Size:  1024,
 			Atime: math.MaxInt64,
 			Cksum: cos.NewCksum(cos.ChecksumXXHash, "120421"),
-			Ver:   "102.44",
+			Ver:   _ptrstr("102.44"),
 		},
 		{
 			Size:  0,
 			Atime: 0,
 			Cksum: cos.NewCksum(cos.ChecksumNone, "120421"),
-			Ver:   "",
+			Ver:   nil, // NOTE: "" becomes nil via ObjAttrs.SetVersion()
 		},
 	}
 
@@ -765,7 +767,7 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 	switch y {
 	case 0:
 		hdr.ObjAttrs.Size = (x & 0xffffff) + 1
-		hdr.ObjAttrs.Ver = s
+		hdr.ObjAttrs.SetVersion(s)
 		hdr.ObjAttrs.SetCksum(cos.ChecksumNone, "")
 	case 1:
 		if usePDU {
@@ -784,7 +786,7 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 		}
 	default:
 		hdr.ObjAttrs.Size = 0
-		hdr.ObjAttrs.Ver = s
+		hdr.ObjAttrs.SetVersion(s)
 		hdr.ObjAttrs.SetCustomKey(s, "")
 		hdr.ObjAttrs.SetCksum(cos.ChecksumNone, "")
 	}

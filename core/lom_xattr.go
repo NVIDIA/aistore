@@ -349,7 +349,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 			if haveVersion {
 				return errors.New(invalid + " #3")
 			}
-			md.Ver = val
+			md.SetVersion(val)
 			haveVersion = true
 		case lomObjSize:
 			if haveSize {
@@ -415,8 +415,8 @@ func (md *lmeta) marshal(mdSize int64) (buf []byte) {
 	// serialize
 	buf = _marshRecord(buf, lomCksumType, cksumType, true)
 	buf = _marshRecord(buf, lomCksumValue, cksumValue, true)
-	if md.Ver != "" {
-		buf = _marshRecord(buf, lomObjVersion, md.Ver, true)
+	if v := md.Version(); v != "" {
+		buf = _marshRecord(buf, lomObjVersion, v, true)
 	}
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
 	buf = _marshRecord(buf, lomObjSize, string(b8[:]), false)

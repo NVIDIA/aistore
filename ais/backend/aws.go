@@ -473,7 +473,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	oa.Size = *headOutput.ContentLength
 	if v, ok := h.EncodeVersion(headOutput.VersionId); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)
-		oa.Ver = v
+		oa.SetVersion(v)
 	}
 	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
 		oa.SetCustomKey(cmn.ETag, v)

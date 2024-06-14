@@ -71,7 +71,7 @@ func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (cos.ReadOpenCl
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	oah := &cmn.ObjAttrs{
 		Size:  r.Size(),
-		Ver:   "",            // transformed object - current version does not apply
+		Ver:   nil,           // NOTE: transformed object - current version does not apply
 		Cksum: cos.NoneCksum, // TODO: checksum
 		Atime: lom.AtimeUnix(),
 	}

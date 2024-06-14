@@ -387,7 +387,7 @@ func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	etag := azEncodeEtag(*resp.ETag)
 	oa.SetCustomKey(cmn.ETag, etag)
 
-	oa.Ver = etag // TODO #200224
+	oa.SetVersion(etag) // TODO #200224
 
 	if md5 := azEncodeChecksum(resp.ContentMD5); md5 != "" {
 		oa.SetCustomKey(cmn.MD5ObjMD, md5)

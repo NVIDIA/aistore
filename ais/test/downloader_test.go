@@ -231,9 +231,10 @@ func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version 
 		t, objProps.Size == size,
 		"size mismatch (%d vs %d)", objProps.Size, size,
 	)
+	v := objProps.Version()
 	tassert.Errorf(
-		t, objProps.Ver == version || objProps.Ver == "",
-		"version mismatch (%s vs %s)", objProps.Ver, version,
+		t, v == version || v == "",
+		"version mismatch (%q vs %q)", v, version,
 	)
 	return objProps
 }

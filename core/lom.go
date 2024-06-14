@@ -135,14 +135,17 @@ func (lom *LOM) SizeBytes(special ...bool) int64 {
 
 func (lom *LOM) Version(special ...bool) string {
 	debug.Assert(len(special) > 0 || lom.loaded())
-	return lom.md.Ver
+	return lom.md.Version()
 }
+
+func (lom *LOM) VersionPtr() *string     { return lom.md.Ver }
+func (lom *LOM) SetVersion(ver string)   { lom.md.SetVersion(ver) }
+func (lom *LOM) CopyVersion(oah cos.OAH) { lom.md.CopyVersion(oah) }
 
 func (lom *LOM) Uname() string  { return lom.md.uname }
 func (lom *LOM) Digest() uint64 { return lom.digest }
 
-func (lom *LOM) SetSize(size int64)    { lom.md.Size = size }
-func (lom *LOM) SetVersion(ver string) { lom.md.Ver = ver }
+func (lom *LOM) SetSize(size int64) { lom.md.Size = size }
 
 func (lom *LOM) Checksum() *cos.Cksum          { return lom.md.Cksum }
 func (lom *LOM) SetCksum(cksum *cos.Cksum)     { lom.md.Cksum = cksum }
@@ -209,11 +212,12 @@ func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err err
 
 func (lom *LOM) IncVersion() error {
 	debug.Assert(lom.Bck().IsAIS())
-	if lom.md.Ver == "" {
+	v := lom.md.Version()
+	if v == "" {
 		lom.SetVersion(lomInitialVersion)
 		return nil
 	}
-	ver, err := strconv.Atoi(lom.md.Ver)
+	ver, err := strconv.Atoi(v)
 	if err != nil {
 		return fmt.Errorf("%s: %v", lom, err)
 	}
@@ -269,7 +273,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 		return nil
 	}
 	// different versions may have different checksums
-	if md.Ver == lom.md.Ver && !lom.EqCksum(md.Cksum) {
+	if md.Version() == lom.md.Version() && !lom.EqCksum(md.Cksum) {
 		err = cos.NewErrDataCksum(lom.md.Cksum, md.Cksum, lom.String())
 		lom.Uncache()
 	}

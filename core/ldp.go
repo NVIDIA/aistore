@@ -96,7 +96,7 @@ remote:
 	// (compare w/ T.GetCold)
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	oah := &cmn.ObjAttrs{
-		Ver:   "",            // TODO: differentiate between copying (same version) vs. transforming
+		Ver:   nil,           // TODO: differentiate between copying (same version) vs. transforming
 		Cksum: cos.NoneCksum, // will likely reassign (below)
 		Atime: lom.AtimeUnix(),
 	}

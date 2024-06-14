@@ -109,7 +109,7 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 ////////////////
 
 func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
-	attrs.Ver = md.ObjVersion
+	attrs.SetVersion(md.ObjVersion)
 	attrs.Cksum = cos.NewCksum(md.CksumType, md.CksumValue)
 
 	stat, err := os.Stat(fqn)
@@ -144,7 +144,7 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (rea
 		return nil, nil
 	}
 	attrs.Size = lom.SizeBytes()
-	attrs.Ver = lom.Version()
+	attrs.CopyVersion(lom.ObjAttrs())
 	attrs.Atime = lom.AtimeUnix()
 	attrs.Cksum = lom.Checksum()
 	return reader, nil
@@ -324,13 +324,13 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *core.LOM, src *dataSou
 	putData := req.NewPack(g.smm)
 	objAttrs := cmn.ObjAttrs{
 		Size:  src.size,
-		Ver:   lom.Version(),
 		Atime: lom.AtimeUnix(),
 	}
+	objAttrs.CopyVersion(lom.ObjAttrs())
 	if src.metadata != nil && src.metadata.SliceID != 0 {
 		// for a slice read everything from slice's metadata
 		if src.metadata.ObjVersion != "" {
-			objAttrs.Ver = src.metadata.ObjVersion
+			objAttrs.SetVersion(src.metadata.ObjVersion)
 		}
 		objAttrs.Cksum = cos.NewCksum(src.metadata.CksumType, src.metadata.CksumValue)
 	} else {
@@ -375,8 +375,8 @@ func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io
 	buf, slab := g.pmm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
 	writer.cksum = objAttrs.Cksum
-	if writer.version == "" && objAttrs.Ver != "" {
-		writer.version = objAttrs.Ver
+	if v := objAttrs.Version(); writer.version == "" && v != "" {
+		writer.version = v
 	}
 
 	writer.twg.Done()

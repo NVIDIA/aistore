@@ -559,13 +559,14 @@ func TestObjProps(t *testing.T) {
 					} else {
 						tassert.Errorf(t, props.Present, "object should be present (cached)")
 					}
+					v := props.Version()
 					if defaultBckProp.Versioning.Enabled && (test.verEnabled || test.evict) {
-						tassert.Errorf(t, props.Ver != "", "%s object version should not be empty", test.bucketType)
+						tassert.Errorf(t, v != "", "%s object version should not be empty", test.bucketType)
 					} else {
-						tassert.Errorf(t, props.Ver == "" || defaultBckProp.Versioning.Enabled ||
+						tassert.Errorf(t, v == "" || defaultBckProp.Versioning.Enabled ||
 							test.bucketType == typeRemoteAIS,
 							"%s object version should be empty, have %q (enabled=%t)",
-							test.bucketType, props.Ver, defaultBckProp.Versioning.Enabled)
+							test.bucketType, v, defaultBckProp.Versioning.Enabled)
 					}
 					if test.evict {
 						tassert.Errorf(t, props.Atime == 0,
@@ -579,13 +580,14 @@ func TestObjProps(t *testing.T) {
 						t, props.Mirror.Copies == 1,
 						"number of copies (%d) is different than 1", props.Mirror.Copies,
 					)
+					v := props.Version()
 					if test.verEnabled {
 						tassert.Errorf(
-							t, props.Ver == "1",
-							"object version (%s) different than expected (1)", props.Ver,
+							t, v == "1",
+							"object version (%s) different than expected (1)", v,
 						)
 					} else {
-						tassert.Errorf(t, props.Ver == "", "object version should be empty")
+						tassert.Errorf(t, v == "", "object version should be empty")
 					}
 					tassert.Errorf(t, props.Atime != 0, "expected access time to be set")
 				}

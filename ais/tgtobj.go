@@ -1423,7 +1423,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 		return 0, 0, errN
 	}
 	if lom.Bck().Equal(coi.BckTo, true, true) {
-		dst.SetVersion(oah.Version())
+		dst.CopyVersion(oah)
 	}
 
 	poi := allocPOI()

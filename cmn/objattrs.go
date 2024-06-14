@@ -64,7 +64,7 @@ type ObjectProps struct {
 type ObjAttrs struct {
 	Cksum    *cos.Cksum `json:"checksum,omitempty"`  // object checksum (cloned)
 	CustomMD cos.StrKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
-	Ver      string     `json:"version,omitempty"`   // object version
+	Ver      *string    `json:"version,omitempty"`   // object version
 	Atime    int64      `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
 	Size     int64      `json:"size,omitempty"`      // object size (bytes)
 }
@@ -73,14 +73,31 @@ type ObjAttrs struct {
 var _ cos.OAH = (*ObjAttrs)(nil)
 
 func (oa *ObjAttrs) String() string {
-	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Ver, oa.Cksum, oa.CustomMD)
+	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Version(), oa.Cksum, oa.CustomMD)
 }
 
 func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
-func (oa *ObjAttrs) Version(_ ...bool) string  { return oa.Ver }
 func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
 func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
+
+func (oa *ObjAttrs) Version(_ ...bool) string {
+	if oa.Ver == nil {
+		return ""
+	}
+	return *oa.Ver
+}
+
+func (oa *ObjAttrs) VersionPtr() *string     { return oa.Ver }
+func (oa *ObjAttrs) CopyVersion(oah cos.OAH) { oa.Ver = oah.VersionPtr() }
+
+func (oa *ObjAttrs) SetVersion(ver string) {
+	if ver == "" {
+		oa.Ver = nil
+	} else {
+		oa.Ver = &ver
+	}
+}
 
 func (oa *ObjAttrs) SetSize(size int64) {
 	debug.Assert(oa.Size == 0)
@@ -144,7 +161,7 @@ func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
 func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 	oa.Atime = oah.AtimeUnix()
 	oa.Size = oah.SizeBytes()
-	oa.Ver = oah.Version()
+	oa.CopyVersion(oah)
 	if !skipCksum {
 		oa.Cksum = oah.Checksum().Clone()
 	}
@@ -211,7 +228,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 		oa.Size = size
 	}
 	if v := hdr.Get(apc.HdrObjVersion); v != "" {
-		oa.Ver = v
+		oa.Ver = &v
 	}
 	custom := hdr[http.CanonicalHeaderKey(apc.HdrObjCustomMD)]
 	for _, v := range custom {
@@ -224,7 +241,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 
 func (oa *ObjAttrs) FromLsoEntry(e *LsoEnt) {
 	oa.Size = e.Size
-	oa.Ver = e.Version
+	oa.SetVersion(e.Version)
 
 	// entry.Custom = cmn.CustomMD2S(custom)
 	_ = CustomMD2S(nil)
@@ -255,11 +272,11 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	}
 
 	// version check
-	if remVer := rem.Version(true); oa.Ver != "" && remVer != "" {
-		if oa.Ver != remVer {
+	if remVer, v := rem.Version(true), oa.Version(); remVer != "" && v != "" {
+		if v != remVer {
 			return false
 		}
-		ver = oa.Ver
+		ver = v
 		// NOTE: ais own version is, currently, a nonunique sequence number - not counting
 		if remSrc, _ := rem.GetCustomKey(SourceObjMD); remSrc != apc.AIS {
 			count++

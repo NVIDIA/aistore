@@ -290,7 +290,7 @@ func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *c
 	oa.Size = attrs.Size
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		oa.SetCustomKey(cmn.VersionObjMD, v)
-		oa.Ver = v
+		oa.SetVersion(v)
 	}
 	if v, ok := h.EncodeCksum(attrs.MD5); ok {
 		oa.SetCustomKey(cmn.MD5ObjMD, v)

@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -10,6 +10,7 @@ type (
 	OAH interface {
 		SizeBytes(special ...bool) int64
 		Version(special ...bool) string
+		VersionPtr() *string
 		Checksum() *Cksum
 		AtimeUnix() int64
 		GetCustomMD() StrKVs
@@ -24,10 +25,14 @@ type (
 	}
 )
 
+// interface guard
+var _ OAH = (*SimpleOAH)(nil)
+
 func (s SimpleOAH) SizeBytes(...bool) int64 { return s.Size }
 func (s SimpleOAH) AtimeUnix() int64        { return s.Atime }
 
 func (SimpleOAH) Version(...bool) string             { return "" }
+func (SimpleOAH) VersionPtr() *string                { return nil }
 func (SimpleOAH) Checksum() *Cksum                   { return nil }
 func (SimpleOAH) GetCustomMD() StrKVs                { return nil }
 func (SimpleOAH) GetCustomKey(string) (string, bool) { return "", false }

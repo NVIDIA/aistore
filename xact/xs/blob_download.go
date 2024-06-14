@@ -113,7 +113,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	}
 	// fill-in custom MD
 	lom.SetCustomMD(oa.CustomMD)
-	lom.SetVersion(oa.Ver)
+	lom.CopyVersion(oa)
 	lom.SetAtimeUnix(oa.Atime)
 	// and separately:
 	debug.Assert(oa.Size > 0)
