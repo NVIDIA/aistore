@@ -95,6 +95,21 @@ train_loader = torch.utils.data.DataLoader(
 
 ```
 
+**Using ShardReader to read WebDataset Formatted Shards**
+```python
+from aistore.pytorch.dataset import ShardReader
+
+shard_reader = AISShardReader(
+    client_url="http://ais-gateway-url:8080", urls_list=["ais://dataset1/example.tar/", "ais://dataset2/example.tar/"] # bucket_list=[bucket] can also pass in other sources
+)
+
+for basename, content_dict in shard_reader:
+    # We now have the basenames and content dictionary (file extension, bytes) for every sample
+    # Since you know the file extension, we can load the file content in the appropriate way
+```
+
+See the [ShardReader example notebook](../../examples/aisio-pytorch/shard_reader_example.ipynb) for more examples. Since the shard reader is also an iterable dataset, you can also use it with the `torch.utils.data.DataLoader` class for additional features.
+
 ## AIS IO Datapipe
 
 ### AIS File Lister
