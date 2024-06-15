@@ -178,7 +178,7 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	if local {
 		// check hrw mountpath location
 		hlom := &core.LOM{}
-		if err := hlom.InitFQN(lom.HrwFQN, lom.Bucket()); err != nil {
+		if err := hlom.InitFQN(*lom.HrwFQN, lom.Bucket()); err != nil {
 			return nil, err
 		}
 		if err := hlom.Load(true /*cache it*/, false /*locked*/); err != nil {

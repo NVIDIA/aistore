@@ -255,7 +255,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	var metaOldPath, metaNewPath string
 	if !lom.IsHRW() && lom.ECEnabled() {
 		var parsed fs.ParsedFQN
-		_, err := core.ResolveFQN(lom.HrwFQN, &parsed)
+		_, err := core.ResolveFQN(*lom.HrwFQN, &parsed)
 		if err != nil {
 			nlog.Warningf("%s: %s %v", xname, lom, err)
 			return nil

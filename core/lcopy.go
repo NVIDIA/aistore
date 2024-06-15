@@ -22,7 +22,7 @@ func (lom *LOM) whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
 		return
 	}
-	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, lom.HrwFQN, lom.md.copies)
+	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, *lom.HrwFQN, lom.md.copies)
 	debug.Assert(false, msg)
 	nlog.Errorln(msg)
 	return true

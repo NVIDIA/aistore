@@ -58,9 +58,9 @@ type (
 		bck     meta.Bck
 		ObjName string
 		FQN     string
-		HrwFQN  string // (=> main replica)
-		md      lmeta  // on-disk metadata
-		digest  uint64 // uname digest
+		HrwFQN  *string // (=> main replica)
+		md      lmeta   // on-disk metadata
+		digest  uint64  // uname digest
 	}
 )
 
@@ -163,7 +163,11 @@ func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
 func (lom *LOM) GetCustomKey(key string) (string, bool) { return lom.md.GetCustomKey(key) }
 func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(key, value) }
 
-func (lom *LOM) IsHRW() bool { return lom.HrwFQN == lom.FQN } // subj to resilvering
+// subj to resilvering
+func (lom *LOM) IsHRW() bool {
+	p := &lom.FQN
+	return lom.HrwFQN == p || lom.FQN == *lom.HrwFQN
+}
 
 func (lom *LOM) Bprops() *cmn.Bprops { return lom.bck.Props }
 

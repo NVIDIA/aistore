@@ -32,13 +32,16 @@ import (
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 
 // NOTE: to facilitate fast path filtering-out
-func (lom *LOM) PreInit(fqn string) (err error) {
-	var parsed fs.ParsedFQN
-	lom.HrwFQN, err = ResolveFQN(fqn, &parsed)
+func (lom *LOM) PreInit(fqn string) error {
+	var (
+		parsed      fs.ParsedFQN
+		hrwFQN, err = ResolveFQN(fqn, &parsed)
+	)
 	if err != nil {
-		return
+		return err
 	}
 	debug.Assert(parsed.ContentType == fs.ObjectType)
+	lom.HrwFQN = &hrwFQN
 	lom.FQN = fqn
 	lom.mi = parsed.Mountpath
 	lom.digest = parsed.Digest
@@ -92,7 +95,7 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 		return
 	}
 	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-	lom.HrwFQN = lom.FQN
+	lom.HrwFQN = &lom.FQN
 	return
 }
 

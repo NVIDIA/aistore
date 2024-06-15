@@ -22,7 +22,7 @@ type CT struct {
 	fqn         string
 	objName     string
 	contentType string
-	hrwFQN      string
+	hrwFQN      *string
 	bck         *meta.Bck
 	mi          *fs.Mountpath
 	uname       *string
@@ -99,7 +99,7 @@ func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 		fqn:         fqn,
 		objName:     parsed.ObjName,
 		contentType: parsed.ContentType,
-		hrwFQN:      hrwFQN,
+		hrwFQN:      &hrwFQN,
 		bck:         meta.CloneBck(&parsed.Bck),
 		mi:          parsed.Mountpath,
 		digest:      parsed.Digest,
