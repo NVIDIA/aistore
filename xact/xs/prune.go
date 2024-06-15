@@ -106,9 +106,10 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	}
 
 	// skip objects already copied by rp.parent (compare w/ reb)
-	uname := cos.UnsafeB(src.Uname())
-	if rp.filter != nil && rp.filter.Lookup(uname) { // TODO -- FIXME: rm filter nil check once x-tco supports prob. filtering
-		rp.filter.Delete(uname)
+	uname := src.UnamePtr()
+	bname := cos.UnsafeBptr(uname)
+	if rp.filter != nil && rp.filter.Lookup(*bname) { // TODO -- FIXME: rm filter nil check once x-tco supports prob. filtering
+		rp.filter.Delete(*bname)
 		return nil
 	}
 

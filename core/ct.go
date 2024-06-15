@@ -25,7 +25,7 @@ type CT struct {
 	hrwFQN      string
 	bck         *meta.Bck
 	mi          *fs.Mountpath
-	uname       string
+	uname       *string
 	digest      uint64
 	size        int64
 	mtime       int64
@@ -54,9 +54,10 @@ func (ct *CT) LoadFromFS() error {
 	return nil
 }
 
-func (ct *CT) Uname() string {
-	if ct.uname == "" {
-		ct.uname = ct.bck.MakeUname(ct.objName)
+func (ct *CT) UnamePtr() *string {
+	if ct.uname == nil {
+		uname := ct.bck.MakeUname(ct.objName)
+		ct.uname = cos.UnsafeSptr(uname)
 	}
 	return ct.uname
 }
@@ -66,12 +67,14 @@ func (ct *CT) getLomLocker() *nlc { return &g.locker[ct.CacheIdx()] }
 
 func (ct *CT) Lock(exclusive bool) {
 	nlc := ct.getLomLocker()
-	nlc.Lock(ct.Uname(), exclusive)
+	uname := ct.UnamePtr()
+	nlc.Lock(*uname, exclusive)
 }
 
 func (ct *CT) Unlock(exclusive bool) {
 	nlc := ct.getLomLocker()
-	nlc.Unlock(ct.Uname(), exclusive)
+	uname := ct.UnamePtr()
+	nlc.Unlock(*uname, exclusive)
 }
 
 // e.g.: generate workfile FQN from object FQN:

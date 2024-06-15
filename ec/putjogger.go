@@ -252,7 +252,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	if err != nil {
 		return err
 	}
-	targets, err := smap.HrwTargetList(ctx.lom.Uname(), reqTargets)
+	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), reqTargets)
 	if err != nil {
 		return err
 	}

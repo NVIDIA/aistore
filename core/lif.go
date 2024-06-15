@@ -13,8 +13,8 @@ import (
 // LOM In Flight (LIF)
 type (
 	LIF struct {
-		Uname  string
-		BID    uint64
+		uname  string
+		bid    uint64
 		digest uint64
 	}
 	lifUnlocker interface {
@@ -28,28 +28,28 @@ var _ lifUnlocker = (*LIF)(nil)
 
 // constructor
 func (lom *LOM) LIF() (lif LIF) {
-	debug.Assert(lom.md.uname != "")
+	debug.Assert(lom.md.uname != nil)
 	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
 	return LIF{
-		Uname:  lom.md.uname,
-		BID:    lom.Bprops().BID,
+		uname:  *lom.md.uname,
+		bid:    lom.Bprops().BID,
 		digest: lom.digest,
 	}
 }
 
 // LIF => LOF with a check for bucket existence
 func (lif *LIF) LOM() (lom *LOM, err error) {
-	b, objName := cmn.ParseUname(lif.Uname)
+	b, objName := cmn.ParseUname(lif.uname)
 	lom = AllocLOM(objName)
 	if err = lom.InitBck(&b); err != nil {
 		FreeLOM(lom)
 		return
 	}
 	if bprops := lom.Bprops(); bprops == nil {
-		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.BID)
+		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.bid)
 		FreeLOM(lom)
-	} else if bprops.BID != lif.BID {
-		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.BID)
+	} else if bprops.BID != lif.bid {
+		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.bid)
 		FreeLOM(lom)
 	}
 	return
@@ -62,5 +62,5 @@ func (lif *LIF) getLocker() *nlc { return &g.locker[lif.CacheIdx()] }
 
 func (lif *LIF) Unlock(exclusive bool) {
 	nlc := lif.getLocker()
-	nlc.Unlock(lif.Uname, exclusive)
+	nlc.Unlock(lif.uname, exclusive)
 }

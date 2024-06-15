@@ -245,10 +245,10 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 var _ NLP = (*nlp)(nil)
 
 // NOTE: currently, is only used to lock buckets
-func NewNLP(name string) NLP {
+func NewNLP(name []byte) NLP {
 	var (
-		nlp  = &nlp{uname: name}
-		hash = xxhash.Checksum64S(cos.UnsafeB(name), cos.MLCG32)
+		nlp  = &nlp{uname: cos.UnsafeS(name)}
+		hash = xxhash.Checksum64S(name, cos.MLCG32)
 		idx  = int(hash & cos.MultiSyncMapMask)
 	)
 	nlp.nlc = &bckLocker[idx] // NOTE: bckLocker

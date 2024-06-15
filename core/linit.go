@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -50,7 +51,8 @@ func (lom *LOM) PostInit() (err error) {
 	if err = lom.bck.InitFast(T.Bowner()); err != nil {
 		return err
 	}
-	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
+	uname := lom.bck.MakeUname(lom.ObjName)
+	lom.md.uname = cos.UnsafeSptr(uname)
 	return nil
 }
 
@@ -75,7 +77,7 @@ func (lom *LOM) InitCT(ct *CT) {
 	lom.digest = ct.digest
 	lom.ObjName = ct.objName
 	lom.bck = *ct.bck
-	lom.md.uname = ct.Uname()
+	lom.md.uname = ct.UnamePtr()
 }
 
 func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
@@ -83,8 +85,9 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 	if err = lom.bck.InitFast(T.Bowner()); err != nil {
 		return
 	}
-	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
-	lom.mi, lom.digest, err = fs.Hrw(lom.md.uname)
+	uname := lom.bck.MakeUname(lom.ObjName)
+	lom.md.uname = cos.UnsafeSptr(uname)
+	lom.mi, lom.digest, err = fs.Hrw(uname)
 	if err != nil {
 		return
 	}

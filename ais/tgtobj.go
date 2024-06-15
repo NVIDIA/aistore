@@ -1133,7 +1133,9 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 	// have to resend them in rebalance. In case of a race between rebalance
 	// and GFN the former wins, resulting in duplicated transmission.
 	if goi.dpq.isGFN {
-		goi.t.reb.FilterAdd(cos.UnsafeB(goi.lom.Uname()))
+		uname := goi.lom.UnamePtr()
+		bname := cos.UnsafeBptr(uname)
+		goi.t.reb.FilterAdd(*bname)
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
 		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			nlog.Errorf("%s: GET post-transmission failure: %v", goi.t, err)
@@ -1389,7 +1391,8 @@ func (coi *copyOI) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int6
 
 func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
 	if coi.DP == nil {
-		if lom.Uname() != coi.BckTo.MakeUname(objnameTo) {
+		uname := coi.BckTo.MakeUname(objnameTo)
+		if lom.Uname() != cos.UnsafeS(uname) {
 			size = lom.SizeBytes()
 		}
 		return size, nil

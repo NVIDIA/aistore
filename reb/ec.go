@@ -210,7 +210,8 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 	var (
 		sliceCnt     = md.Data + md.Parity + 2
 		smap         = reb.smap.Load()
-		hrwList, err = smap.HrwTargetList(ct.Bck().MakeUname(ct.ObjectName()), sliceCnt)
+		uname        = ct.UnamePtr()
+		hrwList, err = smap.HrwTargetList(uname, sliceCnt)
 	)
 	if err != nil {
 		return nil, err

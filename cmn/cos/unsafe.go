@@ -33,6 +33,16 @@ func UnsafeB(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+// bytes to *string
+func UnsafeSptr(b []byte) *string {
+	return (*string)(unsafe.Pointer(&b))
+}
+
+// *string to *[]bytes
+func UnsafeBptr(s *string) *[]byte {
+	return (*[]byte)(unsafe.Pointer(s))
+}
+
 // shallow copy
 func CopyStruct(dst, src any) {
 	x := reflect.ValueOf(src)

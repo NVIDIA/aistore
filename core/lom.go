@@ -48,7 +48,7 @@ const (
 type (
 	lmeta struct {
 		copies fs.MPI
-		uname  string
+		uname  *string
 		cmn.ObjAttrs
 		atimefs uint64 // NOTE: high bit is reserved for `dirty`
 		bckID   uint64
@@ -142,8 +142,9 @@ func (lom *LOM) VersionPtr() *string     { return lom.md.Ver }
 func (lom *LOM) SetVersion(ver string)   { lom.md.SetVersion(ver) }
 func (lom *LOM) CopyVersion(oah cos.OAH) { lom.md.CopyVersion(oah) }
 
-func (lom *LOM) Uname() string  { return lom.md.uname }
-func (lom *LOM) Digest() uint64 { return lom.digest }
+func (lom *LOM) Uname() string     { return *lom.md.uname }
+func (lom *LOM) UnamePtr() *string { return lom.md.uname }
+func (lom *LOM) Digest() uint64    { return lom.digest }
 
 func (lom *LOM) SetSize(size int64) { lom.md.Size = size }
 

@@ -15,12 +15,12 @@ import (
 // aka highest random weight (HRW)
 // See also: core/meta/hrw.go
 
-func Hrw(uname string) (mi *Mountpath, digest uint64, err error) {
+func Hrw(uname []byte) (mi *Mountpath, digest uint64, err error) {
 	var (
 		maxH  uint64
 		avail = GetAvail()
 	)
-	digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
+	digest = xxhash.Checksum64S(uname, cos.MLCG32)
 	for _, mpathInfo := range avail {
 		if mpathInfo.IsAnySet(FlagWaitingDD) {
 			continue

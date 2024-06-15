@@ -829,9 +829,10 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering
 	// false-positives, albeit rare, are still possible)
-	uname := cos.UnsafeB(lom.Uname())
-	if rj.m.filterGFN.Lookup(uname) {
-		rj.m.filterGFN.Delete(uname)
+	uname := lom.UnamePtr()
+	bname := cos.UnsafeBptr(uname)
+	if rj.m.filterGFN.Lookup(*bname) {
+		rj.m.filterGFN.Delete(*bname)
 		return cmn.ErrSkip
 	}
 	// prepare to send: rlock, load, new roc

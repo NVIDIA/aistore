@@ -7,6 +7,7 @@ package meta_test
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -19,7 +20,7 @@ var _ = Describe("Bck", func() {
 				bck := meta.NewBck(bckName, bckProvider, bckNs)
 				uname := bck.MakeUname(objName)
 
-				gotBck, gotObjName := cmn.ParseUname(uname)
+				gotBck, gotObjName := cmn.ParseUname(cos.UnsafeS(uname))
 				Expect(gotBck.Name).To(Equal(bckName))
 				Expect(gotBck.Provider).To(Equal(bckProvider))
 				Expect(gotBck.Ns).To(Equal(bckNs))

@@ -62,7 +62,7 @@ func UncacheBck(b *meta.Bck) {
 		go func(cache *sync.Map) {
 			cache.Range(func(hkey, value any) bool {
 				lmd := value.(*lmeta)
-				bck, _ := cmn.ParseUname(lmd.uname)
+				bck, _ := cmn.ParseUname(*lmd.uname)
 				if bck.Equal((*cmn.Bck)(b)) {
 					cache.Delete(hkey)
 				}
@@ -199,7 +199,7 @@ func (lchk *lchk) frun(hkey, value any) bool {
 }
 
 func (lchk *lchk) flush(md *lmeta, atime time.Time) {
-	lif := LIF{Uname: md.uname, BID: md.bckID}
+	lif := LIF{uname: *md.uname, bid: md.bckID}
 	lom, err := lif.LOM()
 	if err == nil {
 		lom.Lock(true)

@@ -468,7 +468,8 @@ func pruneQuery(rawQuery string) string {
 // - Bck().Name + "/" + lom.ObjName - see pushComm above - versus
 // - bck.AddToQuery() elsewhere
 func transformerPath(bck *meta.Bck, objName string) string {
-	return "/" + url.PathEscape(bck.MakeUname(objName))
+	uname := bck.MakeUname(objName)
+	return "/" + url.PathEscape(cos.UnsafeS(uname))
 }
 
 func lomLoad(lom *core.LOM, bck *meta.Bck) (size int64, err error) {

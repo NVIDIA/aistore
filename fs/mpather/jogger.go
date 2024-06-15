@@ -120,7 +120,8 @@ func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, mpath string) *Jgroup 
 			nopts.Bck = bck
 			uname := bck.MakeUname("")
 			for _, mi := range avail {
-				joggers[mi.Path+"|"+uname] = newJogger(ctx, &nopts, mi, config)
+				k := mi.Path + "|" + cos.UnsafeS(uname)
+				joggers[k] = newJogger(ctx, &nopts, mi, config)
 			}
 		}
 	default:

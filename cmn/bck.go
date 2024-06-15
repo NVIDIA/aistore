@@ -317,7 +317,7 @@ func (b *Bck) LenUnameGlob(objName string) int {
 }
 
 // Bck => unique name (use ParseUname below to translate back)
-func (b *Bck) MakeUname(objName string) string {
+func (b *Bck) MakeUname(objName string) []byte {
 	var (
 		// TODO: non-global case can be optimized via b.Ns._copy(buf)
 		nsUname = b.Ns.Uname()
@@ -327,7 +327,7 @@ func (b *Bck) MakeUname(objName string) string {
 	return b.ubuf(buf, nsUname, objName)
 }
 
-func (b *Bck) ubuf(buf []byte, nsUname, objName string) string {
+func (b *Bck) ubuf(buf []byte, nsUname, objName string) []byte {
 	buf = append(buf, b.Provider...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, nsUname...)
@@ -335,7 +335,7 @@ func (b *Bck) ubuf(buf []byte, nsUname, objName string) string {
 	buf = append(buf, b.Name...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
-	return cos.UnsafeS(buf)
+	return buf
 }
 
 //
@@ -436,7 +436,7 @@ func (b *Bck) AddUnameToQuery(query url.Values, uparam string) url.Values {
 		query = make(url.Values)
 	}
 	uname := b.MakeUname("")
-	query.Set(uparam, uname)
+	query.Set(uparam, cos.UnsafeS(uname))
 	return query
 }
 

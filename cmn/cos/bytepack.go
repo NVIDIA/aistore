@@ -94,6 +94,10 @@ func PackedStrLen(s string) int {
 	return SizeofLen + len(s)
 }
 
+func PackedBytesLen(b []byte) int {
+	return SizeofLen + len(b)
+}
+
 func NewUnpacker(buf []byte) *ByteUnpack {
 	return &ByteUnpack{b: buf}
 }

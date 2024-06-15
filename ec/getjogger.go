@@ -112,7 +112,12 @@ func (c *getJogger) stop() {
 // Finalize the EC restore: report an error to a caller, do housekeeping.
 func (*getJogger) finalizeReq(req *request, err error) {
 	if err != nil {
-		nlog.Errorf("Error restoring %s: %v", req.LIF.Uname, err)
+		if lom, e := req.LIF.LOM(); e == nil {
+			nlog.Errorf("Error restoring %s: %v", lom, err)
+			core.FreeLOM(lom)
+		} else {
+			nlog.Errorf("Error restoring %+v: %v (%v)", req.LIF, err, e)
+		}
 	}
 	if req.ErrCh != nil {
 		if err != nil {
@@ -149,7 +154,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 		return err
 	}
 	smap := core.T.Sowner().Get()
-	targets, err := smap.HrwTargetList(ctx.lom.Uname(), ctx.meta.Parity+1)
+	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), ctx.meta.Parity+1)
 	if err != nil {
 		return err
 	}
@@ -628,7 +633,7 @@ func (*getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	}
 	// Generate the list of targets that should have a slice.
 	smap := core.T.Sowner().Get()
-	targets, err := smap.HrwTargetList(ctx.lom.Uname(), sliceCnt+1)
+	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), sliceCnt+1)
 	if err != nil {
 		nlog.Warningln(err)
 		return nil, err

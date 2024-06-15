@@ -412,7 +412,7 @@ func (lom *LOM) haveMpath(mpath string) bool {
 func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 	var (
 		avail         = fs.GetAvail()
-		hrwMi, _, err = fs.Hrw(lom.md.uname)
+		hrwMi, _, err = fs.Hrw(cos.UnsafeB(*lom.md.uname))
 	)
 	if err != nil {
 		nlog.Errorln(err)

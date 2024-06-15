@@ -309,7 +309,9 @@ func TestBeid(t *testing.T) {
 
 	var (
 		ids  = make(map[string]struct{}, num)
-		tags = []string{"tag1", "tag2"}
+		tag1 = []byte{'t', 'a', 'g', '1'}
+		tag2 = []byte{'t', 'a', 'g', '2'}
+		tags = [][]byte{tag1, tag2}
 		cnt  int
 	)
 	for i := range num {

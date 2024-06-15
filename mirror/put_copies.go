@@ -59,6 +59,18 @@ func (*putFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
+func (p *putFactory) _tag(bck *meta.Bck) []byte {
+	var (
+		uname = bck.MakeUname("")
+		l     = cos.PackedStrLen(p.Kind()) + 1 + cos.PackedBytesLen(uname)
+		pack  = cos.NewPacker(nil, l)
+	)
+	pack.WriteString(p.Kind())
+	pack.WriteByte('|')
+	pack.WriteBytes(uname)
+	return pack.Bytes()
+}
+
 func (p *putFactory) Start() error {
 	lom := p.lom
 	slab, err := core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
@@ -78,7 +90,7 @@ func (p *putFactory) Start() error {
 	// target-local generation of a global UUID
 	//
 	div := uint64(xact.IdleDefault)
-	beid, _, _ := xreg.GenBEID(div, p.Kind()+"|"+bck.MakeUname(""))
+	beid, _, _ := xreg.GenBEID(div, p._tag(bck))
 	if beid == "" {
 		// is Ok (compare with x-archive, x-tco)
 		beid = cos.GenUUID()

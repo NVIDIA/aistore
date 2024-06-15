@@ -1891,7 +1891,8 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		objName := fmt.Sprintf(o.pattern, i)
 		// 1) hack: calculate which targets stored a replica
 		cbck := meta.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
-		targets, err := o.smap.HrwTargetList(cbck.MakeUname(ecTestDir+objName), o.parityCnt+1)
+		uname := cbck.MakeUname(ecTestDir + objName)
+		targets, err := o.smap.HrwTargetList(cos.UnsafeSptr(uname), o.parityCnt+1)
 		tassert.CheckFatal(t, err)
 
 		mainTarget := targets[0]
