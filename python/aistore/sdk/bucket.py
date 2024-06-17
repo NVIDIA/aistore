@@ -149,19 +149,23 @@ class Bucket(AISSource):
         for entry in self.list_objects_iter(prefix=prefix, props="name"):
             yield self.object(entry.name).get_url(etl_name=etl_name)
 
-    def list_all_objects_iter(self, prefix: str = "") -> Iterable[Object]:
+    def list_all_objects_iter(
+        self, prefix: str = "", props: str = "name,size"
+    ) -> Iterable[Object]:
         """
         Implementation of the abstract method from AISSource that provides an iterator
-        of all the objects in this bucket matching the specified prefix
+        of all the objects in this bucket matching the specified prefix.
 
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
+            props (str, optional): Comma-separated list of object properties to return.
+                Default value includes all properties: "name,size"
 
         Returns:
             Iterator of all object URLs matching the prefix
         """
-        for entry in self.list_objects_iter(prefix=prefix, props="name"):
-            yield self.object(entry.name)
+        for entry in self.list_objects_iter(prefix=prefix, props=props):
+            yield self.object(entry.name, entry.size)
 
     def create(self, exist_ok=False):
         """
@@ -812,21 +816,19 @@ class Bucket(AISSource):
             return prepend + obj_name
         return obj_name
 
-    def object(self, obj_name: str) -> Object:
+    def object(self, obj_name: str, size: int = None) -> Object:
         """
         Factory constructor for an object in this bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
         Args:
             obj_name (str): Name of object
+            size (int, optional): Size of object in bytes
 
         Returns:
             The object created.
         """
-        return Object(
-            bucket=self,
-            name=obj_name,
-        )
+        return Object(bucket=self, name=obj_name, size=size)
 
     def objects(
         self,

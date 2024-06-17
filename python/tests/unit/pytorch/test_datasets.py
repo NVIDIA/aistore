@@ -15,7 +15,6 @@ from aistore.sdk import Bucket
 
 class TestAISDataset(unittest.TestCase):
     def setUp(self) -> None:
-        self.mock_client = Mock()
         mock_obj = Mock()
         mock_obj.get.return_value.read_all.return_value = b"mock data"
         self.mock_objects = [

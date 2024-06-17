@@ -282,5 +282,5 @@ class TestObjectGroup(unittest.TestCase):
         self.mock_bck.object.assert_has_calls(expected_obj_calls)
 
     def test_list_all_objects_iter(self):
-        res = self.object_group.list_all_objects_iter()
+        res = self.object_group.list_all_objects_iter(props=None)
         self.assertEqual(len(list(res)), len(self.obj_names))

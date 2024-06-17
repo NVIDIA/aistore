@@ -7,6 +7,35 @@ Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 from urllib.parse import urlunparse
 from typing import Tuple
 from aistore.sdk.utils import parse_url as sdk_parse_url
+from math import floor
+
+MB_TO_B = 1000000
+
+
+def convert_mb_to_bytes(megabytes: float) -> int:
+    """
+    Converts megabytes to bytes and truncates any extra bytes (floor).
+
+    Args:
+        megabytes (float): number of megabytes to convert
+
+    Returns:
+        int: number of bytes after conversion (floor of actual byte value)
+    """
+    return floor(megabytes * MB_TO_B)
+
+
+def convert_bytes_to_mb(bytes: int) -> float:
+    """
+    Converts byes to megabytes.
+
+    Args:
+        bytes (int): number of bytes to convert to megabytes
+
+    Returns:
+        float: number of megabytes after conversion
+    """
+    return bytes / MB_TO_B
 
 
 def unparse_url(provider: str, bck_name: str, obj_name: str) -> str:

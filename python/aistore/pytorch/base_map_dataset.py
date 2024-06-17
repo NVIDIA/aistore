@@ -16,7 +16,7 @@ class AISBaseMapDataset(ABC, Dataset):
     """
     A base class for creating map-style AIS Datasets. Should not be instantiated directly. Subclasses
     should implement :meth:`__getitem__` which fetches a samples given a key from the dataset and can optionally
-    override other methods from torch IterableDataset such as :meth:`__len__`.  Additionally,
+    override other methods from torch Dataset such as :meth:`__len__` and :meth:`__getitems__`.  Additionally,
     to modify the behavior of loading samples from a source, override :meth:`_get_sample_list_from_source`.
 
     Args:
@@ -87,3 +87,6 @@ class AISBaseMapDataset(ABC, Dataset):
     @abstractmethod
     def __getitem__(self, index):
         pass
+
+    def __getitems__(self, indices: List[int]):
+        return [self.__getitem__(index) for index in indices]

@@ -94,19 +94,31 @@ class ObjectGroup(AISSource):
         for obj_name in self._obj_collection:
             yield self.bck.object(obj_name).get_url(etl_name=etl_name)
 
-    def list_all_objects_iter(self, prefix: str = "") -> Iterable[Object]:
+    def list_all_objects_iter(
+        self, prefix: str = "", props: str = "name,size"
+    ) -> Iterable[Object]:
         """
         Implementation of the abstract method from AISSource that provides an iterator
-        of all the objects in this bucket matching the specified prefix
+        of all the objects in this bucket matching the specified prefix.
 
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
+            props (str, optional): Comma-separated list of object properties to return.
+                Default value includes all properties: "name,size"
 
         Returns:
             Iterator of all the objects in the group
         """
         for obj_name in self._obj_collection:
-            yield self.bck.object(obj_name)
+
+            obj = self.bck.object(obj_name)
+
+            # TODO: Use the head object API to pass an object of requested props
+            if props is not None and "size" in props.split(","):
+                size = obj.head()["Content-Length"]
+                obj.size = size
+
+            yield obj
 
     def delete(self):
         """

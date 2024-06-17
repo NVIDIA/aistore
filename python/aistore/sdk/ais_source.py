@@ -19,12 +19,16 @@ class AISSource(ABC):
         """The client bound to the AISSource."""
 
     @abstractmethod
-    def list_all_objects_iter(self, prefix: str = "") -> Iterable[Object]:
+    def list_all_objects_iter(
+        self, prefix: str = "", props: str = "name,size"
+    ) -> Iterable[Object]:
         """
         Get an iterable of all the objects contained in this source (bucket, group, etc.)
 
         Args:
             prefix (str, optional): Only include objects with names matching this prefix
+            props (str, optional): Comma-separated list of object properties to return.
+                Default value includes all properties: "name,size"
 
         Returns:
             Iterable over selected objects

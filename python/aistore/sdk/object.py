@@ -50,16 +50,17 @@ class Object:
     Args:
         bucket (Bucket): Bucket to which this object belongs
         name (str): name of object
-
+        size (int, optional): size of object in bytes
     """
 
-    def __init__(self, bucket: "Bucket", name: str):
+    def __init__(self, bucket: "Bucket", name: str, size: int = None):
         self._bucket = bucket
         self._client = bucket.client
         self._bck_name = bucket.name
         self._qparams = bucket.qparam
         self._name = name
         self._object_path = f"{URL_PATH_OBJECTS}/{ self._bck_name}/{ self.name }"
+        self._size = size
 
     @property
     def bucket(self):
@@ -70,6 +71,11 @@ class Object:
     def name(self):
         """Name of this object"""
         return self._name
+
+    @property
+    def size(self):
+        """Size of this object in bytes"""
+        return self._size
 
     def head(self) -> Header:
         """
