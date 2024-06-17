@@ -45,6 +45,7 @@ from aistore.sdk.const import (
     STATUS_ACCEPTED,
     STATUS_OK,
     STATUS_PARTIAL_CONTENT,
+    DEFAULT_JOB_POLL_TIME,
 )
 from aistore.sdk.enums import FLTPresence
 from aistore.sdk.dataset.dataset_config import DatasetConfig
@@ -329,8 +330,8 @@ class Bucket(AISSource):
         # Update the uuid in the control message
         bsumm_ctrl_msg.uuid = job_id
 
-        # Sleep and request frequency in sec (starts at 200 ms)
-        sleep_time = 0.2
+        # Sleep and request frequency in sec (starts at 0.2s)
+        sleep_time = DEFAULT_JOB_POLL_TIME
 
         # Poll async task for http.StatusOK completion
         while True:
@@ -344,17 +345,19 @@ class Bucket(AISSource):
             # If task completed successfully, break the loop
             if resp.status_code == STATUS_OK:
                 break
+            # If status code received is neither STATUS_ACCEPTED nor STATUS_PARTIAL_CONTENT, raise an exception
+            if resp.status_code not in (STATUS_ACCEPTED, STATUS_PARTIAL_CONTENT):
+                raise UnexpectedHTTPStatusCode(
+                    [STATUS_OK, STATUS_ACCEPTED, STATUS_PARTIAL_CONTENT],
+                    resp.status_code,
+                )
+
             # If task is still running, wait for some time and try again
-            if resp.status_code == STATUS_ACCEPTED:
-                time.sleep(sleep_time)
+            time.sleep(sleep_time)
+            if resp.status_code != STATUS_PARTIAL_CONTENT:
                 sleep_time = min(
                     10, sleep_time * 1.5
                 )  # Increase sleep_time by 50%, but don't exceed 10 seconds
-            # Otherwise, if status code received is neither STATUS_OK or STATUS_ACCEPTED, raise an exception
-            else:
-                raise UnexpectedHTTPStatusCode(
-                    [STATUS_OK, STATUS_ACCEPTED], resp.status_code
-                )
 
         return json.loads(resp.content.decode("utf-8"))[0]
 
