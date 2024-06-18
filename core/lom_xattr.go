@@ -188,7 +188,7 @@ func (lom *LOM) Persist() (err error) {
 			if !lom.IsCopy() {
 				lom.Recache()
 			}
-			lom.md.bckID = lom.Bprops().BID
+			lom.setbid(lom.Bprops().BID)
 		}
 		return
 	}
@@ -203,7 +203,7 @@ func (lom *LOM) Persist() (err error) {
 			if !lom.IsCopy() {
 				lom.Recache()
 			}
-			lom.md.bckID = lom.Bprops().BID
+			lom.setbid(lom.Bprops().BID)
 		}
 	}
 	g.smm.Free(buf)

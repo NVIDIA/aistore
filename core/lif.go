@@ -30,9 +30,14 @@ var _ lifUnlocker = (*LIF)(nil)
 func (lom *LOM) LIF() (lif LIF) {
 	debug.Assert(lom.md.uname != nil)
 	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
+	bid := lom.bid()
+	if bid == 0 {
+		bid = lom.Bprops().BID
+	}
+	debug.Assert(bid == lom.Bprops().BID, bid, " vs ", lom.Bprops().BID) // TODO -- FIXME: 52 bits
 	return LIF{
 		uname:  *lom.md.uname,
-		bid:    lom.Bprops().BID,
+		bid:    bid,
 		digest: lom.digest,
 	}
 }
@@ -48,7 +53,7 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 	if bprops := lom.Bprops(); bprops == nil {
 		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.bid)
 		FreeLOM(lom)
-	} else if bprops.BID != lif.bid {
+	} else if bprops.BID != lif.bid { // TODO -- FIXME: 52 bits
 		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.bid)
 		FreeLOM(lom)
 	}

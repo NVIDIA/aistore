@@ -156,6 +156,9 @@ func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
 func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
 
+func (lom *LOM) bid() uint64             { return lom.md.bckID }
+func (lom *LOM) setbid(bpropsBID uint64) { lom.md.bckID = bpropsBID } // TODO -- FIXME: 52 bits
+
 // custom metadata
 func (lom *LOM) GetCustomMD() cos.StrKVs   { return lom.md.GetCustomMD() }
 func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
@@ -394,12 +397,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	if err := lom.FromFS(); err != nil {
 		return err
 	}
-	bid := lom.Bprops().BID
-	debug.Assert(bid != 0, lom.Cname())
-	if bid == 0 {
-		return nil
-	}
-	lom.md.bckID = bid
+	lom.setbid(lom.Bprops().BID) // TODO -- FIXME: remove
 	if err := lom._checkBucket(bmd); err != nil {
 		return err
 	}
@@ -411,8 +409,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 }
 
 func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
-	bck, bckID := &lom.bck, lom.md.bckID
-	debug.Assert(bckID != 0)
+	bck := &lom.bck
 	bprops, present := bmd.Get(bck)
 	if !present {
 		if bck.IsRemote() {
@@ -420,11 +417,10 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
 		}
 		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
-	if bckID == bprops.BID {
-		return nil // ok
+	if lom.bid() != bprops.BID { // TODO -- FIXME: 52 bits
+		err = cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
 	}
-	err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
-	return
+	return err
 }
 
 // usage: fast (and unsafe) loading object metadata except atime - no locks
@@ -437,22 +433,15 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	// fast path
 	if lmd != nil {
 		lom.md = *lmd
-		err = lom._checkBucket(bmd)
-		return
+		return lom._checkBucket(bmd)
 	}
+
 	// read and decode xattr; NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
 	// either a) handled or b) benign from the caller's perspective
-	if _, err = lom.lmfs(true); err != nil {
-		return
+	if _, err = lom.lmfs(true); err == nil {
+		err = lom._checkBucket(bmd)
 	}
-	// check bucket
-	bid := lom.Bprops().BID
-	debug.Assert(bid != 0, lom.Cname())
-	if bid == 0 {
-		return
-	}
-	lom.md.bckID = bid
-	return lom._checkBucket(bmd)
+	return err
 }
 
 //
@@ -462,10 +451,9 @@ func (lom *LOM) LoadUnsafe() (err error) {
 // store new or refresh existing
 func (lom *LOM) Recache() {
 	debug.Assert(!lom.IsCopy())
+	lom.setbid(lom.Bprops().BID) // TODO -- FIXME: 52 bits
+
 	md := lom.md
-	bid := lom.Bprops().BID
-	debug.Assert(bid != 0)
-	md.bckID, lom.md.bckID = bid, bid
 
 	lcache := lom.lcache()
 	val, ok := lcache.Swap(lom.digest, &md)
