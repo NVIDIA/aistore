@@ -201,7 +201,7 @@ func TestGetBucketInfo(t *testing.T) {
 		isPresent  bool
 	)
 	if bck.IsRemote() {
-		_, _, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
+		_, _, _, err := api.GetBucketInfo(baseParams, bck, &api.BinfoArgs{FltPresence: apc.FltPresent})
 		isPresent = err == nil
 	}
 	for _, fltPresence := range fltPresentEnum {
@@ -219,7 +219,7 @@ func TestGetBucketInfo(t *testing.T) {
 			args.WithRemote = bck.IsRemote()
 		}
 
-		xid, props, info, err := api.GetBucketInfo(baseParams, bck, args)
+		xid, props, info, err := api.GetBucketInfo(baseParams, bck, &args)
 		if err != nil {
 			if herr := cmn.Str2HTTPErr(err.Error()); herr != nil {
 				tlog.Logln(herr.TypeCode + ": " + herr.Message)
@@ -246,7 +246,7 @@ func TestGetBucketInfo(t *testing.T) {
 		tlog.Logln("")
 	}
 	if bck.IsRemote() {
-		_, _, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
+		_, _, _, err := api.GetBucketInfo(baseParams, bck, &api.BinfoArgs{FltPresence: apc.FltPresent})
 		isPresentEnd := err == nil
 		tassert.Errorf(t, isPresent == isPresentEnd, "presence in the beginning (%t) != (%t) at the end",
 			isPresent, isPresentEnd)

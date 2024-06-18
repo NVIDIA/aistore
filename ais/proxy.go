@@ -1856,8 +1856,23 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 }
 
-// HEAD /v1/buckets/bucket-name
+// HEAD /v1/buckets/bucket-name[/prefix]
+// with additional preparsing step to support api.GetBucketInfo prefix (as in: ais ls --summary)
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
+	var prefix string
+
+	// preparse
+	if items, err := p.parseURL(w, r, apireq.prefix, apireq.after, true); err == nil {
+		debug.Assert(apireq.bckIdx == 0, "expecting bucket name at idx = 0")
+		if len(items) > 1 {
+			prefix = items[1]
+			for _, s := range items[2:] {
+				prefix += "/" + s
+			}
+			apireq.after = 2
+		}
+	}
+
 	err := p.parseReq(w, r, apireq)
 	if err != nil {
 		return
@@ -1883,11 +1898,17 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if dpq.binfo != "" { // QparamBinfoWithOrWithoutRemote
 		msg = apc.BsummCtrlMsg{
 			UUID:          dpq.uuid,
+			Prefix:        prefix,
 			ObjCached:     !cos.IsParseBool(dpq.binfo),
 			BckPresent:    apc.IsFltPresent(fltPresence),
 			DontAddRemote: dpq.dontAddRemote,
 		}
 		bckArgs.dontAddRemote = msg.DontAddRemote
+	} else if prefix != "" {
+		err := fmt.Errorf("invalid URL '%s': expecting just the bucket name, got '%s' and '%s'",
+			r.URL.Path, apireq.bck.Name, prefix)
+		p.writeErr(w, r, err)
+		return
 	}
 	bckArgs.createAIS = false
 

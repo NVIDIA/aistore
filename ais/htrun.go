@@ -112,17 +112,21 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	debug.Assert(len(apireq.prefix) != 0)
 	apireq.items, err = h.parseURL(w, r, apireq.prefix, apireq.after, false)
 	if err != nil {
-		return
+		return err
 	}
 	debug.Assert(len(apireq.items) > apireq.bckIdx)
 	bckName := apireq.items[apireq.bckIdx]
-	if apireq.dpq == nil {
+
+	if apireq.dpq != nil {
+		if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
+			h.writeErr(w, r, err)
+			return err
+		}
+	} else {
 		apireq.query = r.URL.Query()
-	} else if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
-		return
 	}
-	apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq)
-	if err != nil {
+
+	if apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq); err != nil {
 		h.writeErr(w, r, err)
 	}
 	return err

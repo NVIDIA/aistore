@@ -34,6 +34,7 @@ type (
 	BinfoArgs struct {
 		BsummArgs
 		UUID          string
+		Prefix        string
 		FltPresence   int
 		Summarize     bool
 		WithRemote    bool
@@ -47,7 +48,7 @@ type (
 // - is obtained via GetBucketInfo() API
 // - and delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
 // The API uses http.MethodHead and can be considered an extension of HeadBucket (above)
-func GetBucketInfo(bp BaseParams, bck cmn.Bck, args BinfoArgs) (string, *cmn.Bprops, *cmn.BsummResult, error) {
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, args *BinfoArgs) (string, *cmn.Bprops, *cmn.BsummResult, error) {
 	q := make(url.Values, 4)
 	q = bck.AddToQuery(q)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(args.FltPresence))
@@ -65,7 +66,11 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, args BinfoArgs) (string, *cmn.Bpr
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
+		if args.Prefix != "" {
+			reqParams.Path = apc.URLPathBuckets.Join(bck.Name, args.Prefix)
+		} else {
+			reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
+		}
 		reqParams.Query = q
 	}
 	xid, p, info, err := _binfo(reqParams, bck, args)
@@ -75,7 +80,7 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, args BinfoArgs) (string, *cmn.Bpr
 
 // compare w/ _bsumm
 // TODO: _binfoDontWait w/ ref
-func _binfo(reqParams *ReqParams, bck cmn.Bck, args BinfoArgs) (xid string, p *cmn.Bprops, info *cmn.BsummResult, err error) {
+func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *cmn.Bprops, info *cmn.BsummResult, err error) {
 	var (
 		hdr          http.Header
 		status       int

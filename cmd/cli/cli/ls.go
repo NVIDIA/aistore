@@ -150,6 +150,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 	// because api.BinfoArgs (left) contains api.BsummArgs (right)
 	args.CallAfter = ctx.args.CallAfter
 	args.Callback = ctx.args.Callback
+	args.Prefix = prefix
 
 	// one at a time
 	prev := ctx.started
@@ -161,7 +162,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 			continue
 		}
 		ctx.qbck = cmn.QueryBcks(bck)
-		xid, props, info, err := api.GetBucketInfo(apiBP, bck, args)
+		xid, props, info, err := api.GetBucketInfo(apiBP, bck, &args)
 		if err != nil {
 			var partial bool
 			if herr, ok := err.(*cmn.ErrHTTP); ok {
