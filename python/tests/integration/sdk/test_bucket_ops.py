@@ -21,7 +21,7 @@ from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
 
 from tests.utils import random_string, cleanup_local, test_cases
-from tests.const import OBJ_NAME, OBJECT_COUNT, OBJ_CONTENT, PREFIX_NAME
+from tests.const import OBJECT_COUNT, OBJ_CONTENT, PREFIX_NAME
 from tests.integration import REMOTE_SET
 
 INNER_DIR = "directory"
@@ -354,13 +354,31 @@ class TestBucketOps(RemoteEnabledTest):
         self.assertEqual(bucket_summary["TotalSize"]["size_all_remote_objs"], "0")
         self.assertEqual(bucket_summary["used_pct"], 0)
 
-        summ_test_bck.object(OBJ_NAME).put_content(OBJ_CONTENT)
+        # Upload objects to the bucket with different prefixes
+        obj_names = ["prefix1_obj1", "prefix1_obj2", "prefix2_obj1", "prefix2_obj2"]
+        for obj_name in obj_names:
+            summ_test_bck.object(obj_name).put_content(OBJ_CONTENT)
 
-        bucket_summary = summ_test_bck.summary()
+        # Verify the info with no prefix (should include all objects)
+        bck_summ = summ_test_bck.summary()
+        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "4")
+        self.assertNotEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_summ["used_pct"], 0)
 
-        # Now, the bucket should have 1 object
-        self.assertEqual(bucket_summary["ObjCount"]["obj_count_present"], "1")
-        self.assertNotEqual(bucket_summary["TotalSize"]["size_all_present_objs"], "0")
+        # Verify the info with prefix1
+        bck_summ = summ_test_bck.summary(prefix="prefix1")
+        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "2")
+        self.assertNotEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_summ["used_pct"], 0)
+
+        # Verify the info with prefix2
+        bck_summ = summ_test_bck.summary(prefix="prefix2")
+        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "2")
+        self.assertNotEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_summ["used_pct"], 0)
 
         summ_test_bck.delete()
 
@@ -372,26 +390,43 @@ class TestBucketOps(RemoteEnabledTest):
         info_test_bck = self._create_bucket("info-test")
 
         # Initially, the bucket should be empty
-        _, bck_summ = info_test_bck.info(flt_presence=FLTPresence.FLT_EXISTS)
+        _, bck_info = info_test_bck.info(flt_presence=FLTPresence.FLT_EXISTS)
 
         # For an empty bucket, the object count and total size should be zero
-        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "0")
-        self.assertEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
-        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
-        self.assertEqual(bck_summ["provider"], "ais")
-        self.assertEqual(bck_summ["name"], "info-test")
+        self.assertEqual(bck_info["ObjCount"]["obj_count_present"], "0")
+        self.assertEqual(bck_info["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_info["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_info["provider"], "ais")
+        self.assertEqual(bck_info["name"], "info-test")
 
-        # Upload an object to the bucket
-        info_test_bck.object(OBJ_NAME).put_content(OBJ_CONTENT)
+        # Upload objects to the bucket with different prefixes
+        obj_names = ["prefix1_obj1", "prefix1_obj2", "prefix2_obj1", "prefix2_obj2"]
+        for obj_name in obj_names:
+            info_test_bck.object(obj_name).put_content(OBJ_CONTENT)
 
-        _, bck_summ = info_test_bck.info()
+        # Verify the info with no prefix (should include all objects)
+        _, bck_info = info_test_bck.info()
+        self.assertEqual(bck_info["ObjCount"]["obj_count_present"], "4")
+        self.assertNotEqual(bck_info["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_info["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_info["provider"], "ais")
+        self.assertEqual(bck_info["name"], "info-test")
 
-        # Now the bucket should have one object and non-zero size
-        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "1")
-        self.assertNotEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
-        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
-        self.assertEqual(bck_summ["provider"], "ais")
-        self.assertEqual(bck_summ["name"], "info-test")
+        # Verify the info with prefix1
+        _, bck_info = info_test_bck.info(prefix="prefix1")
+        self.assertEqual(bck_info["ObjCount"]["obj_count_present"], "2")
+        self.assertNotEqual(bck_info["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_info["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_info["provider"], "ais")
+        self.assertEqual(bck_info["name"], "info-test")
+
+        # Verify the info with prefix2
+        _, bck_info = info_test_bck.info(prefix="prefix2")
+        self.assertEqual(bck_info["ObjCount"]["obj_count_present"], "2")
+        self.assertNotEqual(bck_info["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_info["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_info["provider"], "ais")
+        self.assertEqual(bck_info["name"], "info-test")
 
         info_test_bck.delete()
 

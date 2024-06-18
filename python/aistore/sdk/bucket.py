@@ -362,7 +362,10 @@ class Bucket(AISSource):
         return json.loads(resp.content.decode("utf-8"))[0]
 
     def info(
-        self, flt_presence: int = FLTPresence.FLT_EXISTS, bsumm_remote: bool = True
+        self,
+        flt_presence: int = FLTPresence.FLT_EXISTS,
+        bsumm_remote: bool = True,
+        prefix: str = "",
     ):
         """
         Returns bucket summary and information/properties.
@@ -380,6 +383,7 @@ class Bucket(AISSource):
                                 the cluster as replica, ec-slices, misplaced
                                 FLT_EXISTS_OUTSIDE - not present; exists outside cluster
             bsumm_remote (bool): If True, returned bucket info will include remote objects as well
+            prefix (str): Only include objects with the given prefix in the bucket
 
         Raises:
             requests.ConnectionError: Connection error
@@ -401,9 +405,13 @@ class Bucket(AISSource):
         params.update({QPARAM_FLT_PRESENCE: flt_presence})
         params[QPARAM_BSUMM_REMOTE] = bsumm_remote
 
+        path = f"{URL_PATH_BUCKETS}/{self.name}"
+        if prefix:
+            path += f"/{prefix}"
+
         response = self.client.request(
             HTTP_METHOD_HEAD,
-            path=f"{URL_PATH_BUCKETS}/{self.name}",
+            path=path,
             params=params,
         )
 
