@@ -623,12 +623,10 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 ## Assorted command lines
 
-AIStore targets may execute (and parse the output of) the following 3 commands:
+AIStore targets may execute (and parse the output of) the following command:
 
 ```console
-$ du -bc
 $ lsblk -Jt
-$ df -PT    # e.g., `df -PT /tmp/foo`
 ```
 
 **Tip**:

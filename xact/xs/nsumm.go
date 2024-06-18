@@ -171,7 +171,7 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 		}
 	}
 
-	// (II) on disk size (formerly, 'du')
+	// (II) calculate on-disk size.
 	if r.single {
 		lwg = &sync.WaitGroup{}
 		lwg.Add(1)

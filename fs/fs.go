@@ -456,7 +456,7 @@ func (mi *Mountpath) diskSize() (size uint64) {
 	return
 }
 
-// bucket and bucket+prefix on-disk sizing (uses 'du')
+// Calculates on-disk size of bucket or bucket+prefix.
 func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 	var (
 		dirPath          string
