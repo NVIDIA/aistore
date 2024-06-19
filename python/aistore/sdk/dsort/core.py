@@ -1,7 +1,7 @@
-import json
 import logging
 import time
-from typing import Dict
+from typing import Dict, Union
+from pathlib import Path
 
 from aistore.sdk.const import (
     HTTP_METHOD_POST,
@@ -12,7 +12,8 @@ from aistore.sdk.const import (
     DSORT_ABORT,
     DSORT_UUID,
 )
-from aistore.sdk.dsort_types import JobInfo
+from aistore.sdk.dsort.framework import DsortFramework
+from aistore.sdk.dsort.types import JobInfo
 from aistore.sdk.errors import Timeout
 from aistore.sdk.utils import validate_file, probing_frequency
 
@@ -33,18 +34,27 @@ class Dsort:
         """
         return self._dsort_id
 
-    def start(self, spec_file: str) -> str:
+    def start(self, spec: Union[str, Path, DsortFramework]) -> str:
         """
-        Start a dSort job with a provided spec file location
+        Start a dSort job with a provided spec file location or defined framework
+
+        Args:
+            spec (Union[str, Path, DsortFramework]): Path to the spec file or a DsortFramework instance
+
         Returns:
             dSort job ID
         """
-        validate_file(spec_file)
-        with open(spec_file, "r", encoding="utf-8") as file_data:
-            spec = json.load(file_data)
-            self._dsort_id = self._client.request(
-                HTTP_METHOD_POST, path=URL_PATH_DSORT, json=spec
-            ).text
+        if isinstance(spec, (Path, str)):
+            validate_file(spec)
+            dsort_framework = DsortFramework.from_file(spec)
+        elif isinstance(spec, DsortFramework):
+            dsort_framework = spec
+        else:
+            raise ValueError("spec must be a Path or a DsortFramework instance")
+
+        self._dsort_id = self._client.request(
+            HTTP_METHOD_POST, path=URL_PATH_DSORT, json=dsort_framework.to_spec()
+        ).text
         return self._dsort_id
 
     def abort(self):

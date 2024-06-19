@@ -4,8 +4,11 @@ import shutil
 import tarfile
 import unittest
 from pathlib import Path
+import yaml
 
 from aistore import Client
+from aistore.sdk.dsort import DsortFramework, DsortShardsGroup
+from aistore.sdk.types import BucketModel
 from tests.integration import CLUSTER_ENDPOINT
 from tests.const import TEST_TIMEOUT
 from tests.utils import test_cases, random_string
@@ -69,7 +72,9 @@ class TestDsortOps(unittest.TestCase):
                     ).read()
         return expected_contents
 
-    def _start_with_spec(self, input_bck_name, out_bck_name, input_object_prefix):
+    def _start_with_spec(
+        self, input_bck_name, out_bck_name, input_object_prefix, spec_type
+    ):
         spec = {
             "input_extension": ".tar",
             "input_bck": {"name": input_bck_name},
@@ -79,15 +84,54 @@ class TestDsortOps(unittest.TestCase):
             "output_shard_size": "20MB",
             "description": "Dsort Integration Test",
         }
-        spec_file = self.temp_dir.joinpath("spec.json")
-        with open(spec_file, "w", encoding="utf-8") as outfile:
-            outfile.write(json.dumps(spec, indent=4))
+
+        if spec_type == "json":
+            spec_file = Path(self.temp_dir.name).joinpath("spec.json")
+            with open(spec_file, "w", encoding="utf-8") as outfile:
+                outfile.write(json.dumps(spec, indent=4))
+        elif spec_type == "yaml":
+            spec_file = Path(self.temp_dir.name).joinpath("spec.yaml")
+            with open(spec_file, "w", encoding="utf-8") as outfile:
+                yaml.dump(spec, outfile, default_flow_style=False)
+        elif spec_type == "dsort_framework":
+            input_shards = DsortShardsGroup(
+                bck=BucketModel(**spec["input_bck"]),
+                role="input",
+                format=spec["input_format"],
+                extension=spec["input_extension"],
+            )
+            output_shards = DsortShardsGroup(
+                bck=BucketModel(**spec["output_bck"]),
+                role="output",
+                format=spec["output_format"],
+                extension="",
+            )
+            dsort_framework = DsortFramework(
+                input_shards=input_shards,
+                output_shards=output_shards,
+                description=spec["description"],
+                output_shard_size=spec["output_shard_size"],
+            )
+            spec_file = dsort_framework
+
         dsort = self.client.dsort()
         dsort.start(spec_file)
         return dsort
 
+    # pylint: disable=too-many-locals
     @test_cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
-    def test_dsort(self, test_case):
+    def test_dsort_json(self, test_case):
+        self._test_dsort(test_case, spec_type="json")
+
+    @test_cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
+    def test_dsort_yaml(self, test_case):
+        self._test_dsort(test_case, spec_type="yaml")
+
+    @test_cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
+    def test_dsort_framework(self, test_case):
+        self._test_dsort(test_case, spec_type="dsort_framework")
+
+    def _test_dsort(self, test_case, spec_type):
         tar_type, tar_format, num_shards, num_files = test_case
         # create bucket for output
         out_bck_name = tar_type + "-out"
@@ -99,10 +143,12 @@ class TestDsortOps(unittest.TestCase):
         expected_contents = self._get_object_content_map(
             bucket_name=tar_type, object_names=shards
         )
+
         dsort = self._start_with_spec(
             input_bck_name=tar_type,
             out_bck_name=out_bck_name,
             input_object_prefix=tar_type,
+            spec_type=spec_type,
         )
         dsort.wait(timeout=TEST_TIMEOUT)
         output_bytes = (
@@ -125,13 +171,16 @@ class TestDsortOps(unittest.TestCase):
         self.buckets.append(out_bck_name)
         # Create enough files to make the dSort job slow enough to abort
         self._generate_shards(input_bck_name, tarfile.GNU_FORMAT, 10, 1000)
-        dsort = self._start_with_spec(
-            input_bck_name=input_bck_name,
-            out_bck_name=out_bck_name,
-            input_object_prefix=input_bck_name,
-        )
-        dsort.abort()
-        dsort.wait(timeout=TEST_TIMEOUT)
-        for job_info in dsort.get_job_info().values():
-            self.assertTrue(job_info.metrics.aborted)
-            self.assertEqual(1, len(job_info.metrics.errors))
+        for spec_type in ["json", "yaml", "dsort_framework"]:
+            with self.subTest(spec_type=spec_type):
+                dsort = self._start_with_spec(
+                    input_bck_name=input_bck_name,
+                    out_bck_name=out_bck_name,
+                    input_object_prefix=input_bck_name,
+                    spec_type=spec_type,
+                )
+                dsort.abort()
+                dsort.wait(timeout=TEST_TIMEOUT)
+                for job_info in dsort.get_job_info().values():
+                    self.assertTrue(job_info.metrics.aborted)
+                    self.assertEqual(1, len(job_info.metrics.errors))

@@ -117,7 +117,10 @@ def validate_file(path: str):
         ValueError: If path does not exist or is not a file
     """
     _check_path_exists(path)
-    if not Path(path).is_file():
+    path_obj = Path(path)
+    if not path_obj.exists():
+        raise ValueError(f"Path: {path} does not exist")
+    if not path_obj.is_file():
         raise ValueError(f"Path: {path} is a directory, not a file")
 
 
