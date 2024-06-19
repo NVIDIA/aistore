@@ -113,11 +113,11 @@ func (lom *LOM) String() string {
 }
 
 // allocates and copies metadata (in particular, atime and uname)
+// NOTE: cloned lom.bid() == 0 is possible - copying/transforming scenarios
 func (lom *LOM) CloneMD(fqn string) *LOM {
 	dst := AllocLOM("")
 	*dst = *lom
 	dst.md = lom.md
-	dst.md.bckID = 0
 	dst.md.copies = nil
 	dst.FQN = fqn
 	return dst

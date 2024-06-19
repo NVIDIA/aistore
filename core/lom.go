@@ -397,7 +397,10 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	if err := lom.FromFS(); err != nil {
 		return err
 	}
-	lom.setbid(lom.Bprops().BID) // TODO -- FIXME: remove
+	if lom.bid() == 0 {
+		// copies, etc.
+		lom.setbid(lom.Bprops().BID)
+	}
 	if err := lom._checkBucket(bmd); err != nil {
 		return err
 	}
@@ -439,6 +442,10 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	// read and decode xattr; NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
 	// either a) handled or b) benign from the caller's perspective
 	if _, err = lom.lmfs(true); err == nil {
+		if lom.bid() == 0 {
+			// copies, etc.
+			lom.setbid(lom.Bprops().BID)
+		}
 		err = lom._checkBucket(bmd)
 	}
 	return err
