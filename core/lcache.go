@@ -199,7 +199,7 @@ func (lchk *lchk) frun(hkey, value any) bool {
 }
 
 func (lchk *lchk) flush(md *lmeta, atime time.Time) {
-	lif := LIF{uname: *md.uname, bid: md.bckID}
+	lif := LIF{uname: *md.uname, lid: md.lid}
 	lom, err := lif.LOM()
 	if err == nil {
 		lom.Lock(true)

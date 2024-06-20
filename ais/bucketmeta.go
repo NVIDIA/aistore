@@ -133,7 +133,7 @@ func (m *bucketMD) add(bck *meta.Bck, p *cmn.Bprops) bool {
 		m.Version = 1 // on-the-fly (e.g. via PUT remote) w/ brand-new cluster
 	}
 	p.SetProvider(bck.Provider)
-	p.BID = bck.MaskBID(m.Version)
+	p.BID = meta.NewBID(m.Version, bck.IsAIS())
 	p.Created = time.Now().UnixNano()
 	bck.Props = p
 

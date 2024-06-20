@@ -285,11 +285,11 @@ func (md *lmeta) clearDirty()   { md.atimefs &= ^lomDirtyMask }
 func (md *lmeta) isDirty() bool { return md.atimefs&lomDirtyMask == lomDirtyMask }
 
 func (md *lmeta) pushrt() []uint64 {
-	return []uint64{uint64(md.Atime), md.atimefs, md.bckID}
+	return []uint64{uint64(md.Atime), md.atimefs, uint64(md.lid)}
 }
 
 func (md *lmeta) poprt(saved []uint64) {
-	md.Atime, md.atimefs, md.bckID = int64(saved[0]), saved[1], saved[2]
+	md.Atime, md.atimefs, md.lid = int64(saved[0]), saved[1], lomBID(saved[2])
 }
 
 func (md *lmeta) unmarshal(buf []byte) error {

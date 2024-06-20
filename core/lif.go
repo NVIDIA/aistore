@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -14,7 +14,7 @@ import (
 type (
 	LIF struct {
 		uname  string
-		bid    uint64
+		lid    lomBID
 		digest uint64
 	}
 	lifUnlocker interface {
@@ -29,15 +29,16 @@ var _ lifUnlocker = (*LIF)(nil)
 // constructor
 func (lom *LOM) LIF() (lif LIF) {
 	debug.Assert(lom.md.uname != nil)
-	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
-	bid := lom.bid()
-	if bid == 0 {
-		bid = lom.Bprops().BID
+	bprops := lom.Bprops()
+	debug.Assert(bprops != nil && bprops.BID != 0)
+	lid := lom.md.lid
+	if lid == 0 {
+		lid = lomBID(bprops.BID)
 	}
-	debug.Assert(bid == lom.Bprops().BID, bid, " vs ", lom.Bprops().BID) // TODO -- FIXME: 52 bits
+	debug.Assert(lid.bid() == bprops.BID, lid.bid(), " vs ", bprops.BID)
 	return LIF{
 		uname:  *lom.md.uname,
-		bid:    bid,
+		lid:    lid,
 		digest: lom.digest,
 	}
 }
@@ -48,16 +49,20 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 	lom = AllocLOM(objName)
 	if err = lom.InitBck(&b); err != nil {
 		FreeLOM(lom)
-		return
+		return nil, err
 	}
-	if bprops := lom.Bprops(); bprops == nil {
-		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.bid)
+	bprops := lom.Bprops()
+	if bprops == nil {
+		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.lid.bid())
 		FreeLOM(lom)
-	} else if bprops.BID != lif.bid { // TODO -- FIXME: 52 bits
-		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.bid)
-		FreeLOM(lom)
+		return nil, err
 	}
-	return
+	if lif.lid.bid() != bprops.BID {
+		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.lid.bid())
+		FreeLOM(lom)
+		return nil, err
+	}
+	return lom, nil
 }
 
 // deferred unlocking

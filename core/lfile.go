@@ -65,7 +65,7 @@ func (lom *LOM) Remove(force ...bool) (err error) {
 			err = erc
 		}
 	}
-	lom.md.bckID = 0
+	lom.md.lid = 0
 	return err
 }
 

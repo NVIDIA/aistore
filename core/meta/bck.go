@@ -78,40 +78,22 @@ func (b *Bck) AddUnameToQuery(q url.Values, uparam string) url.Values {
 	return bck.AddUnameToQuery(q, uparam)
 }
 
-const aisBIDmask = uint64(1 << 63)
-
-func (b *Bck) MaskBID(i int64) uint64 {
-	bck := (*cmn.Bck)(b)
-	if bck.IsAIS() {
-		return uint64(i) | aisBIDmask
-	}
-	return uint64(i)
-}
-
-func (b *Bck) unmaskBID() uint64 {
-	if b.Props == nil || b.Props.BID == 0 {
-		return 0
-	}
-	bck := (*cmn.Bck)(b)
-	if bck.IsAIS() {
-		return b.Props.BID ^ aisBIDmask
-	}
-	return b.Props.BID
-}
-
 func (b *Bck) String() string {
 	var (
 		s   string
-		bid = b.unmaskBID()
+		bid uint64
+		bck = (*cmn.Bck)(b)
 	)
-	bck := (*cmn.Bck)(b)
+	if bck.Props != nil {
+		bid = b.Props.BID
+	}
 	if bid == 0 {
 		return bck.String()
 	}
 	if backend := bck.Backend(); backend != nil {
 		s = ", backend=" + backend.String()
 	}
-	return fmt.Sprintf("%s(%#x%s)", bck, bid, s)
+	return fmt.Sprintf("%s(%#x%s)", bck, BID(bid).serial(), s)
 }
 
 func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {

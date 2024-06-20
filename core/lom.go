@@ -51,7 +51,7 @@ type (
 		uname  *string
 		cmn.ObjAttrs
 		atimefs uint64 // NOTE: high bit is reserved for `dirty`
-		bckID   uint64
+		lid     lomBID
 	}
 	LOM struct {
 		mi      *fs.Mountpath
@@ -156,8 +156,8 @@ func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
 func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
 
-func (lom *LOM) bid() uint64             { return lom.md.bckID }
-func (lom *LOM) setbid(bpropsBID uint64) { lom.md.bckID = bpropsBID } // TODO -- FIXME: 52 bits
+func (lom *LOM) bid() uint64             { return lom.md.lid.bid() }
+func (lom *LOM) setbid(bpropsBID uint64) { lom.md.lid = lom.md.lid.setbid(bpropsBID) }
 
 // custom metadata
 func (lom *LOM) GetCustomMD() cos.StrKVs   { return lom.md.GetCustomMD() }
@@ -207,7 +207,7 @@ func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 	return
 }
 
-func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
+func (lom *LOM) loaded() bool { return lom.md.lid != 0 }
 
 func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err error) {
 	tsi, err = smap.HrwHash2T(lom.digest)

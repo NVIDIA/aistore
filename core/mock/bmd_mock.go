@@ -32,7 +32,8 @@ func NewBaseBownerMock(bcks ...*meta.Bck) *BownerMock {
 
 	owner := &BownerMock{BMD: meta.BMD{Version: 1, Providers: providers}}
 	for _, bck := range bcks {
-		bck.Props.BID = bck.MaskBID(owner.BMD.Version)
+		isAis := bck.IsAIS()
+		bck.Props.BID = meta.NewBID(owner.BMD.Version, isAis)
 		owner.Add(bck)
 	}
 	return owner
