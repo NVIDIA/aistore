@@ -1,9 +1,12 @@
 import unittest
 from typing import Dict
+from pathlib import Path
 from unittest.mock import Mock, patch, mock_open, call
 
 import json
 import yaml
+
+from pydantic import ValidationError
 
 from aistore.sdk.const import (
     URL_PATH_DSORT,
@@ -13,7 +16,7 @@ from aistore.sdk.const import (
     DSORT_UUID,
     HTTP_METHOD_GET,
 )
-from aistore.sdk.dsort import Dsort, DsortFramework, DsortShardsGroup
+from aistore.sdk.dsort import Dsort, DsortFramework, DsortShardsGroup, DsortAlgorithm
 from aistore.sdk.dsort.types import DsortMetrics, JobInfo
 
 from aistore.sdk.types import BucketModel
@@ -28,6 +31,7 @@ VALID_JSON_SPEC = """
     "output_format": "output_template",
     "input_extension": ".txt",
     "output_extension": ".txt",
+    "algorithm": {"kind": "alphanumeric", "decreasing": false, "seed": ""},
     "output_shard_size": "10MB",
     "description": ""
 }
@@ -42,9 +46,10 @@ output_bck:
     provider: aws
 input_format:
     template: input_template
-output_format:
-    template: output_template
+output_format: output_template
 input_extension: .txt
+algorithm:
+    kind: alphanumeric
 output_extension: .txt
 output_shard_size: 10MB
 """
@@ -76,8 +81,20 @@ class TestDsort(unittest.TestCase):
         mock_validate_file.return_value = None
         self.mock_client.request.return_value = mock_request_return_val
 
+        # Test with regular file path
         with patch("builtins.open", mock_open(read_data=VALID_JSON_SPEC)):
             res = self.dsort.start("spec_file.json")
+
+        self.assertEqual(new_id, res)
+        self.assertEqual(new_id, self.dsort.dsort_id)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_POST, path=URL_PATH_DSORT, json=json.loads(VALID_JSON_SPEC)
+        )
+
+        # Test with Path from pathlib
+        with patch("builtins.open", mock_open(read_data=VALID_JSON_SPEC)):
+            spec_path = Path("spec_file.json")
+            res = self.dsort.start(spec_path)
 
         self.assertEqual(new_id, res)
         self.assertEqual(new_id, self.dsort.dsort_id)
@@ -230,6 +247,7 @@ class TestDsort(unittest.TestCase):
         self.assertEqual(spec.output_shards.bck.name, "output_bucket")
         self.assertEqual(spec.output_shards.extension, ".txt")
         self.assertEqual(spec.output_shard_size, "10MB")
+        self.assertEqual(spec.algorithm.kind, "alphanumeric")
         self.assertIsNone(spec.description)
 
     @patch("aistore.sdk.dsort.framework.yaml")
@@ -243,6 +261,7 @@ class TestDsort(unittest.TestCase):
         self.assertEqual(spec.output_shards.bck.name, "output_bucket")
         self.assertEqual(spec.output_shards.extension, ".txt")
         self.assertEqual(spec.output_shard_size, "10MB")
+        self.assertEqual(spec.algorithm.kind, "alphanumeric")
         self.assertIsNone(spec.description)
 
     def test_to_spec(self):
@@ -255,13 +274,14 @@ class TestDsort(unittest.TestCase):
         output_shards = DsortShardsGroup(
             bck=BucketModel(name="output_bucket"),
             role="output",
-            format={"template": "template_output"},
+            format="template_output",
             extension="txt",
         )
         dsort_framework = DsortFramework(
             input_shards=input_shards,
             output_shards=output_shards,
             output_shard_size="10GB",
+            algorithm=DsortAlgorithm(),
             description="Test description",
         )
 
@@ -274,3 +294,57 @@ class TestDsort(unittest.TestCase):
         self.assertEqual(spec["output_extension"], "txt")
         self.assertEqual(spec["output_shard_size"], "10GB")
         self.assertEqual(spec["description"], "Test description")
+
+    def test_invalid_dsort_shards_group(self):
+        invalid_input = {
+            "bck": BucketModel(name="test_bucket", provider="aws"),
+            "role": "input",
+            "format": "input_template",
+            "extension": ".txt",
+        }
+        with self.assertRaises(ValueError):
+            DsortShardsGroup(**invalid_input)
+
+        invalid_output = {
+            "bck": BucketModel(name="test_bucket", provider="aws"),
+            "role": "output",
+            "format": {"template": "output_template"},
+            "extension": ".txt",
+        }
+        with self.assertRaises(ValidationError):
+            DsortShardsGroup(**invalid_output)
+
+        invalid_role = {
+            "bck": BucketModel(name="test_bucket", provider="aws"),
+            "role": "invalid",
+            "format": {"template": "output_template"},
+            "extension": ".txt",
+        }
+        with self.assertRaises(ValueError):
+            DsortShardsGroup(**invalid_role)
+
+    def test_invalid_dsort_algorithm(self):
+        invalid_algo_content_missing_ext = {
+            "kind": "content",
+            "decreasing": True,
+            "content_key_type": "int",
+        }
+        with self.assertRaises(ValueError):
+            DsortAlgorithm(**invalid_algo_content_missing_ext)
+
+        invalid_algo_content_missing_key_type = {
+            "kind": "content",
+            "decreasing": True,
+            "extension": ".txt",
+        }
+        with self.assertRaises(ValueError):
+            DsortAlgorithm(**invalid_algo_content_missing_key_type)
+
+        invalid_algo_content_extra_fields = {
+            "kind": "alphanumeric",
+            "decreasing": False,
+            "extension": ".txt",
+            "content_key_type": "int",
+        }
+        with self.assertRaises(ValueError):
+            DsortAlgorithm(**invalid_algo_content_extra_fields)
