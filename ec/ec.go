@@ -507,7 +507,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 		if err == nil {
 			return
 		}
-		if rmErr := cos.RemoveFile(lom.FQN); rmErr != nil {
+		if rmErr := lom.RemoveMain(); rmErr != nil {
 			nlog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
 		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {

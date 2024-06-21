@@ -202,7 +202,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	lom.SetSize(csv.size)
 
 	wfqn := fs.CSM.Gen(ctx.Lom, fs.WorkfileType, "")
-	wfh, err := ctx.Lom.CreateFile(wfqn)
+	wfh, err := ctx.Lom.CreateWork(wfqn)
 	if err != nil {
 		return _errInv("create-file", err)
 	}
@@ -248,7 +248,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	// finalize (NOTE a lighter version of FinalizeObj - no redundancy, no locks)
 	if err == nil {
 		lom := ctx.Lom
-		if err = lom.RenameFrom(wfqn); err == nil {
+		if err = lom.RenameFinalize(wfqn); err == nil {
 			if err = os.Chtimes(lom.FQN, csv.mtime, csv.mtime); err == nil {
 				nlog.Infoln("new", invTag+":", lom.Cname(), ctx.Schema)
 

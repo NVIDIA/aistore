@@ -144,7 +144,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	}
 	err = dst.Load(false, true)
 	if err == nil {
-		err = dst.Remove()
+		err = dst.RemoveObj()
 	}
 	dst.Unlock(true)
 

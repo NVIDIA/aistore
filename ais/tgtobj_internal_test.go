@@ -123,7 +123,7 @@ func BenchmarkObjPut(b *testing.B) {
 					workFQN: path.Join(testMountpath, "objname.work"),
 					config:  cmn.GCO.Get(),
 				}
-				os.Remove(lom.FQN)
+				lom.RemoveMain()
 				b.StartTimer()
 
 				_, err := poi.putObject()
@@ -132,7 +132,7 @@ func BenchmarkObjPut(b *testing.B) {
 				}
 			}
 			b.StopTimer()
-			os.Remove(lom.FQN)
+			lom.RemoveMain()
 		})
 	}
 }
@@ -173,7 +173,7 @@ func BenchmarkObjAppend(b *testing.B) {
 					op:      apc.AppendOp,
 					hdl:     hdl,
 				}
-				os.Remove(lom.FQN)
+				lom.RemoveMain()
 				b.StartTimer()
 
 				newHandle, _, err := aoi.apnd(buf)
@@ -186,7 +186,7 @@ func BenchmarkObjAppend(b *testing.B) {
 				}
 			}
 			b.StopTimer()
-			os.Remove(lom.FQN)
+			lom.RemoveMain()
 			os.Remove(hdl.workFQN)
 		})
 	}
@@ -261,7 +261,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			b.StopTimer()
-			os.Remove(lom.FQN)
+			lom.RemoveMain()
 		})
 	}
 }

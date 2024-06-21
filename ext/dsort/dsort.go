@@ -954,7 +954,7 @@ func (es *extractShard) _do(lom *core.LOM) error {
 	}
 
 	lom.Lock(false)
-	fh, err := lom.OpenFile()
+	fh, err := lom.Open()
 	if err != nil {
 		phaseInfo.adjuster.releaseSema(lom.Mountpath())
 		lom.Unlock(false)

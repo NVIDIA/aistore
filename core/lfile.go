@@ -14,52 +14,71 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-func (lom *LOM) OpenFile() (*os.File, error) {
+//
+// open
+//
+
+func (lom *LOM) Open() (*os.File, error) {
 	return os.Open(lom.FQN)
 }
 
-// (compare with cos.CreateFile)
-func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
-	if err == nil || !os.IsNotExist(err) {
-		return
-	}
-	return lom._cf(fqn, os.O_WRONLY)
+//
+// create
+//
+
+func (lom *LOM) Create() (*os.File, error) {
+	debug.Assert(lom.isLockedExcl(), lom.Cname()) // caller must wlock
+	return lom._cf(lom.FQN, os.O_WRONLY)
 }
 
-// slow path
+func (lom *LOM) CreateWork(wfqn string) (*os.File, error) {
+	return lom._cf(wfqn, os.O_WRONLY)
+}
+
+func (lom *LOM) CreateWorkRW(wfqn string) (*os.File, error) {
+	return lom._cf(wfqn, os.O_RDWR)
+}
+
 func (lom *LOM) _cf(fqn string, mode int) (fh *os.File, err error) {
+	fh, err = os.OpenFile(fqn, os.O_CREATE|mode|os.O_TRUNC, cos.PermRWR)
+	if err == nil || !os.IsNotExist(err) {
+		return fh, err
+	}
+
+	// slow path: create sub-directories
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err = cos.Stat(bdir); err != nil {
 		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
 	}
 	fdir := filepath.Dir(fqn)
 	if err = cos.CreateDir(fdir); err != nil {
-		return
+		return nil, err
 	}
-	fh, err = os.OpenFile(fqn, os.O_CREATE|mode|os.O_TRUNC, cos.PermRWR)
-	return
+	return os.OpenFile(fqn, os.O_CREATE|mode|os.O_TRUNC, cos.PermRWR)
 }
 
-func (lom *LOM) CreateFileRW(fqn string) (fh *os.File, err error) {
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_RDWR|os.O_TRUNC, cos.PermRWR)
-	if err == nil || !os.IsNotExist(err) {
-		return
-	}
-	return lom._cf(fqn, os.O_RDWR)
-}
+//
+// remove
+//
 
-func (lom *LOM) Remove(force ...bool) (err error) {
-	// making "rlock" exception to be able to (forcefully) remove corrupted obj in the GET path
-	debug.AssertFunc(func() bool {
-		rc, exclusive := lom.IsLocked()
-		return exclusive || (len(force) > 0 && force[0] && rc > 0)
-	})
-	lom.Uncache()
+func (lom *LOM) RemoveMain() (err error) {
 	err = cos.RemoveFile(lom.FQN)
 	if os.IsNotExist(err) {
 		err = nil
 	}
+	return err
+}
+
+func (lom *LOM) RemoveObj(force ...bool) (err error) {
+	debug.AssertFunc(func() bool {
+		if lom.isLockedExcl() {
+			return true
+		}
+		// NOTE: making "rlock" exception to be able to forcefully rm corrupted object in the GET path
+		return len(force) > 0 && force[0] && lom.isLockedRW()
+	})
+	lom.Uncache()
+	err = lom.RemoveMain()
 	for copyFQN := range lom.md.copies {
 		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) {
 			err = erc
@@ -69,13 +88,24 @@ func (lom *LOM) Remove(force ...bool) (err error) {
 	return err
 }
 
-// (compare with cos.Rename)
-func (lom *LOM) RenameFrom(workfqn string) error {
+//
+// rename
+//
+
+func (lom *LOM) RenameMainTo(wfqn string) error {
+	return cos.Rename(lom.FQN, wfqn)
+}
+
+func (lom *LOM) RenameToMain(wfqn string) error {
+	return cos.Rename(wfqn, lom.FQN)
+}
+
+func (lom *LOM) RenameFinalize(wfqn string) error {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
 		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)
 	}
-	if err := cos.Rename(workfqn, lom.FQN); err != nil {
+	if err := lom.RenameToMain(wfqn); err != nil {
 		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 	}
 	return nil

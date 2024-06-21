@@ -432,7 +432,7 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 // remove local copies that "belong" to different LRU joggers (space accounting may be temporarily not precise)
 func (j *lruJ) evictObj(lom *core.LOM) bool {
 	lom.Lock(true)
-	err := lom.Remove()
+	err := lom.RemoveObj()
 	lom.Unlock(true)
 	if err != nil {
 		nlog.Errorf("%s: failed to evict %s: %v", j, lom, err)

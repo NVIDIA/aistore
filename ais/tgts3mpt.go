@@ -122,7 +122,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	// workfile name format: <upload-id>.<part-number>.<obj-name>
 	prefix := uploadID + "." + strconv.FormatInt(int64(partNum), 10)
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
-	partFh, errC := lom.CreateFileRW(wfqn)
+	partFh, errC := lom.CreateWorkRW(wfqn)
 	if errC != nil {
 		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
 		return
@@ -274,7 +274,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	// 2. <upload-id>.complete.<obj-name>
 	prefix := uploadID + ".complete"
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
-	wfh, errC := lom.CreateFile(wfqn)
+	wfh, errC := lom.CreateWork(wfqn)
 	if errC != nil {
 		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
 		return
@@ -493,7 +493,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	if err != nil {
 		s3.WriteErr(w, r, err, status)
 	}
-	fh, err := lom.OpenFile()
+	fh, err := lom.Open()
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

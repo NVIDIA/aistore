@@ -1374,7 +1374,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	}
 	if delFromAIS {
 		size := lom.SizeBytes()
-		aisErr = lom.Remove()
+		aisErr = lom.RemoveObj()
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {
 				if backendErr != nil {
@@ -1430,7 +1430,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 
 	// TODO: combine copy+delete under a single write lock
 	lom.Lock(true)
-	if err := lom.Remove(); err != nil {
+	if err := lom.RemoveObj(); err != nil {
 		nlog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t, lom, msg.Name, err)
 	}
 	lom.Unlock(true)
@@ -1487,7 +1487,7 @@ func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl,
 	if params.WriteSGL == nil {
 		// regular lom save (custom writer not present)
 		wfqn := fs.CSM.Gen(params.Lom, fs.WorkfileType, "blob-dl")
-		lmfh, err := params.Lom.CreateFile(wfqn)
+		lmfh, err := params.Lom.CreateWork(wfqn)
 		if err != nil {
 			return "", nil, err
 		}

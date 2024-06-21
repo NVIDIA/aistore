@@ -31,12 +31,12 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	)
 	if goi.verchanged {
 		revert = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
-		if err := os.Rename(lom.FQN, revert); err != nil {
+		if err := lom.RenameMainTo(revert); err != nil {
 			nlog.Errorln("failed to rename prev. version - proceeding anyway", lom.FQN, "=>", revert)
 			revert = ""
 		}
 	}
-	lmfh, err := lom.CreateFile(lom.FQN)
+	lmfh, err := lom.Create()
 	if err != nil {
 		cos.Close(res.R)
 		goi._cleanup(revert, nil, nil, nil, err, "(fcreate)")
@@ -88,7 +88,7 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	}
 
 	// reopen & transmit ---
-	if lmfh, err = lom.OpenFile(); err != nil {
+	if lmfh, err = lom.Open(); err != nil {
 		goi._cleanup(revert, nil, buf, slab, err, "(seek)")
 		return err
 	}
@@ -176,9 +176,9 @@ func (goi *getOI) _cleanup(revert string, lmfh *os.File, buf []byte, slab *memsy
 		slab.Free(buf)
 	}
 	if err != nil {
-		goi.lom.Remove()
+		goi.lom.RemoveObj()
 		if revert != "" {
-			if errV := os.Rename(revert, goi.lom.FQN); errV != nil {
+			if errV := goi.lom.RenameToMain(revert); errV != nil {
 				nlog.Infoln(ftcg+tag+"(revert)", errV)
 			}
 		}
@@ -197,12 +197,12 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	)
 	if goi.verchanged {
 		revert = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
-		if err := os.Rename(lom.FQN, revert); err != nil {
+		if err := lom.RenameMainTo(revert); err != nil {
 			nlog.Errorln("failed to rename prev. version - proceeding anyway", lom.FQN, "=>", revert)
 			revert = ""
 		}
 	}
-	lmfh, err := lom.CreateFile(lom.FQN)
+	lmfh, err := lom.Create()
 	if err != nil {
 		cos.Close(res.R)
 		goi._cleanup(revert, nil, nil, nil, err, "(fcreate)")

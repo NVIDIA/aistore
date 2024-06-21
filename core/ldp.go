@@ -141,7 +141,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 
 	// rm remotely-deleted
 	if cos.IsNotExist(err, ecode) && (lom.VersionConf().Sync || sync) {
-		errDel := lom.Remove(locked /*force through rlock*/)
+		errDel := lom.RemoveObj(locked /*force through rlock*/)
 		if errDel != nil {
 			ecode, err = 0, errDel
 		} else {
@@ -155,12 +155,10 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 	return CRMD{ErrCode: ecode, Err: err}
 }
 
-// NOTE: must be locked; NOTE: Sync == false (ie., not deleting)
+// NOTE: Sync is false (ie., not deleting)
 func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err error) {
-	debug.AssertFunc(func() bool {
-		rc, exclusive := lom.IsLocked()
-		return exclusive || rc > 0
-	})
+	debug.Assert(lom.isLockedRW(), lom.Cname()) // caller must take a lock
+
 	err = lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
 		if !cmn.IsErrObjNought(err) || !latest {

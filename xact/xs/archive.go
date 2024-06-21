@@ -156,7 +156,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 			s = " append"
 			lmfh, err = wi.beginAppend()
 		} else {
-			wi.wfh, err = wi.archlom.CreateFile(wi.fqn)
+			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
 		}
 		if err != nil {
 			return
@@ -440,11 +440,11 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 	}
 	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
 	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
-	lmfh, err = wi.archlom.OpenFile()
+	lmfh, err = wi.archlom.Open()
 	if err != nil {
 		return
 	}
-	if wi.wfh, err = wi.archlom.CreateFile(wi.fqn); err != nil {
+	if wi.wfh, err = wi.archlom.CreateWork(wi.fqn); err != nil {
 		cos.Close(lmfh)
 		lmfh = nil
 	}
@@ -452,7 +452,7 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 }
 
 func (wi *archwi) openTarForAppend() (err error) {
-	if err = os.Rename(wi.archlom.FQN, wi.fqn); err != nil {
+	if err = wi.archlom.RenameMainTo(wi.fqn); err != nil {
 		return
 	}
 	// open (rw) lom itself
@@ -468,7 +468,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 	cos.Close(wi.wfh)
 	wi.wfh = nil
 roll:
-	if errV := wi.archlom.RenameFrom(wi.fqn); errV != nil {
+	if errV := wi.archlom.RenameToMain(wi.fqn); errV != nil {
 		nlog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
 			wi.tsi, wi.archlom, err, wi.fqn, errV)
 	} else {

@@ -438,14 +438,14 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			return
 		}
 		if cmn.IsErrLmetaCorrupted(err) {
-			if err := cos.RemoveFile(lom.FQN); err != nil {
+			if err := lom.RemoveMain(); err != nil {
 				nlog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
 				j.ini.Xaction.AddErr(err)
 			} else {
 				nlog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
 			}
 		} else if cmn.IsErrLmetaNotFound(err) {
-			if err := cos.RemoveFile(lom.FQN); err != nil {
+			if err := lom.RemoveMain(); err != nil {
 				nlog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
 				j.ini.Xaction.AddErr(err)
 			} else {

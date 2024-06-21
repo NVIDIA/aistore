@@ -275,7 +275,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	for node := range ctx.nodes {
 		uname := unique(node, ctx.lom.Bck(), ctx.lom.ObjName)
 
-		w, err := ctx.lom.CreateFile(tmpFQN)
+		w, err := ctx.lom.CreateWork(tmpFQN)
 		if err != nil {
 			nlog.Errorf("Failed to create file: %v", err)
 			break
@@ -307,7 +307,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	if writer == nil {
 		return errors.New("failed to read a replica from any target")
 	}
-	if err := ctx.lom.RenameFrom(tmpFQN); err != nil {
+	if err := ctx.lom.RenameFinalize(tmpFQN); err != nil {
 		return err
 	}
 
@@ -362,7 +362,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		if ctx.toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
 			fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
-			fh, err := ctx.lom.CreateFile(fqn)
+			fh, err := ctx.lom.CreateWork(fqn)
 			if err != nil {
 				return err
 			}
@@ -420,7 +420,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	if ctx.toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", idx)
 		fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
-		file, err := ctx.lom.CreateFile(fqn)
+		file, err := ctx.lom.CreateWork(fqn)
 		if err != nil {
 			return err
 		}

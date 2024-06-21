@@ -302,7 +302,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	// (see GetCold() implementation and cmn.OWT enum)
 	switch poi.owt {
 	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
-		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
+		// do nothing: lom is already wlocked
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
@@ -334,7 +334,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	}
 
 	// done
-	if err = lom.RenameFrom(poi.workFQN); err != nil {
+	if err = lom.RenameFinalize(poi.workFQN); err != nil {
 		return
 	}
 	if lom.HasCopies() {
@@ -385,7 +385,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 		}{}
 		ckconf = poi.lom.CksumConf()
 	)
-	if lmfh, err = poi.lom.CreateFile(poi.workFQN); err != nil {
+	if lmfh, err = poi.lom.CreateWork(poi.workFQN); err != nil {
 		return
 	}
 	if poi.size <= 0 {
@@ -772,7 +772,7 @@ validate:
 		//
 		// TODO: mark `deleted` and postpone actual deletion
 		//
-		if erl := lom.Remove(true /*force through rlock*/); erl != nil {
+		if erl := lom.RemoveObj(true /*force through rlock*/); erl != nil {
 			nlog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 		}
 		return
@@ -780,7 +780,7 @@ validate:
 	//
 	// try to recover from BAD CHECKSUM
 	//
-	cos.RemoveFile(lom.FQN) // TODO: ditto
+	lom.RemoveMain()
 
 	if lom.HasCopies() {
 		retried = true
@@ -797,7 +797,7 @@ validate:
 	if lom.ECEnabled() {
 		retried = true
 		goi.lom.Unlock(false)
-		cos.RemoveFile(lom.FQN)
+		lom.RemoveMain()
 		_, code, err = goi.restoreFromAny(true /*skipLomRestore*/)
 		goi.lom.Lock(false)
 		if err == nil {
@@ -808,7 +808,7 @@ validate:
 	}
 
 	// TODO: ditto
-	if erl := lom.Remove(true /*force through rlock*/); erl != nil {
+	if erl := lom.RemoveObj(true /*force through rlock*/); erl != nil {
 		nlog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 	}
 	return
@@ -1255,7 +1255,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 		} else {
 			a.lom.Unlock(false)
 			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
-			fh, err = a.lom.CreateFile(workFQN)
+			fh, err = a.lom.CreateWork(workFQN)
 		}
 	} else {
 		fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
@@ -1655,12 +1655,12 @@ func (a *putA2I) do() (int, error) {
 			tarFormat tar.Format
 			workFQN   = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 		)
-		if err = os.Rename(a.lom.FQN, workFQN); err != nil {
+		if err = a.lom.RenameMainTo(workFQN); err != nil {
 			return http.StatusInternalServerError, err
 		}
 		fh, tarFormat, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
 		if err != nil {
-			if errV := a.lom.RenameFrom(workFQN); errV != nil {
+			if errV := a.lom.RenameToMain(workFQN); errV != nil {
 				return http.StatusInternalServerError, errV
 			}
 			if err == archive.ErrTarIsEmpty {
@@ -1675,8 +1675,7 @@ func (a *putA2I) do() (int, error) {
 			if err = a.finalize(size, cos.NoneCksum, workFQN); err == nil {
 				return http.StatusInternalServerError, nil // ok
 			}
-		}
-		if errV := a.lom.RenameFrom(workFQN); errV != nil {
+		} else if errV := a.lom.RenameToMain(workFQN); errV != nil {
 			nlog.Errorf(fmtNested, a.t, err, "append and rename back", workFQN, errV)
 		}
 		return http.StatusInternalServerError, err
@@ -1705,7 +1704,7 @@ cpap: // copy + append
 		aw.Fini()
 	} else {
 		// copy + append
-		lmfh, err = a.lom.OpenFile()
+		lmfh, err = a.lom.Open()
 		if err != nil {
 			cos.Close(wfh)
 			return http.StatusNotFound, err
@@ -1771,7 +1770,7 @@ func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 		debug.Assertf(finfo.Size() == size, "%d != %d", finfo.Size(), size)
 	})
 	// done
-	if err := a.lom.RenameFrom(fqn); err != nil {
+	if err := a.lom.RenameFinalize(fqn); err != nil {
 		return err
 	}
 	a.lom.SetSize(size)

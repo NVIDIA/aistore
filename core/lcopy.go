@@ -32,12 +32,10 @@ func (lom *LOM) HasCopies() bool { return len(lom.md.copies) > 1 }
 func (lom *LOM) NumCopies() int  { return max(len(lom.md.copies), 1) } // metadata-wise
 
 // GetCopies returns all copies
-// NOTE: a) copies include lom.FQN aka "main repl.", and b) caller must take a lock
+// - copies include lom.FQN aka "main repl."
+// - caller must take a lock
 func (lom *LOM) GetCopies() fs.MPI {
-	debug.AssertFunc(func() bool {
-		rc, exclusive := lom.IsLocked()
-		return exclusive || rc > 0
-	})
+	debug.Assert(lom.isLockedRW(), lom.Cname())
 	return lom.md.copies
 }
 
@@ -145,11 +143,9 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 	if !lom.HasCopies() {
 		return nil
 	}
-	// NOTE: caller is responsible for write-locking
-	debug.AssertFunc(func() bool {
-		_, exclusive := lom.IsLocked()
-		return exclusive
-	})
+	// caller is responsible for write-locking
+	debug.Assert(lom.isLockedExcl(), lom.Cname())
+
 	if !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
 		return nil

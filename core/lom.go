@@ -365,7 +365,7 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, _ error) {
 	if cksumType == cos.ChecksumNone {
 		return nil, nil
 	}
-	lmfh, err := lom.OpenFile()
+	lmfh, err := lom.Open()
 	if err != nil {
 		return nil, err
 	}
@@ -573,9 +573,16 @@ func lomCaches() []*sync.Map {
 
 func (lom *LOM) getLocker() *nlc { return &g.locker[lom.CacheIdx()] } // (lif.getLocker())
 
-func (lom *LOM) IsLocked() (int /*rc*/, bool /*exclusive*/) {
+func (lom *LOM) isLockedExcl() (exclusive bool) {
 	nlc := lom.getLocker()
-	return nlc.IsLocked(lom.Uname())
+	_, exclusive = nlc.IsLocked(lom.Uname())
+	return exclusive
+}
+
+func (lom *LOM) isLockedRW() (locked bool) {
+	nlc := lom.getLocker()
+	rc, exclusive := nlc.IsLocked(lom.Uname())
+	return exclusive || rc > 0
 }
 
 func (lom *LOM) TryLock(exclusive bool) bool {
