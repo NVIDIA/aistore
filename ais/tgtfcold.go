@@ -26,17 +26,21 @@ const ftcg = "Warning: failed to cold-GET"
 
 func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	var (
-		t, lom = goi.t, goi.lom
+		err    error
+		lmfh   cos.LomReader
+		wfh    *os.File
+		t      = goi.t
+		lom    = goi.lom
 		revert string
 	)
 	if goi.verchanged {
 		revert = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
-		if err := lom.RenameMainTo(revert); err != nil {
-			nlog.Errorln("failed to rename prev. version - proceeding anyway", lom.FQN, "=>", revert)
+		if errV := lom.RenameMainTo(revert); errV != nil {
+			nlog.Errorln("failed to rename prev. version - proceeding anyway", lom.Cname(), "=>", revert)
 			revert = ""
 		}
 	}
-	lmfh, err := lom.Create()
+	wfh, err = lom.Create()
 	if err != nil {
 		cos.Close(res.R)
 		goi._cleanup(revert, nil, nil, nil, err, "(fcreate)")
@@ -48,28 +52,28 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 		written   int64
 		buf, slab = t.gmm.AllocSize(min(res.Size, memsys.DefaultBuf2Size))
 		cksumH    = cos.NewCksumHash(lom.CksumConf().Type)
-		mw        = cos.NewWriterMulti(lmfh, cksumH.H)
+		mw        = cos.NewWriterMulti(wfh, cksumH.H)
 	)
 	written, err = cos.CopyBuffer(mw, res.R, buf)
 	cos.Close(res.R)
 
 	if err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")
+		goi._cleanup(revert, wfh, buf, slab, err, "(rr/wl)")
 		return err
 	}
 	debug.Assertf(written == res.Size, "%s: remote-size %d != %d written", lom.Cname(), res.Size, written)
 
 	if lom.IsFeatureSet(feat.FsyncPUT) {
 		// fsync (flush)
-		if err = lmfh.Sync(); err != nil {
-			goi._cleanup(revert, lmfh, buf, slab, err, "(fsync)")
+		if err = wfh.Sync(); err != nil {
+			goi._cleanup(revert, wfh, buf, slab, err, "(fsync)")
 			return err
 		}
 	}
-	err = lmfh.Close()
-	lmfh = nil
+	err = wfh.Close()
+	wfh = nil
 	if err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(fclose)")
+		goi._cleanup(revert, wfh, buf, slab, err, "(fclose)")
 		return err
 	}
 
@@ -83,12 +87,13 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 		}
 	}
 	if err = lom.PersistMain(); err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(persist)")
+		goi._cleanup(revert, wfh, buf, slab, err, "(persist)")
 		return err
 	}
 
 	// reopen & transmit ---
-	if lmfh, err = lom.Open(); err != nil {
+	lmfh, err = lom.Open()
+	if err != nil {
 		goi._cleanup(revert, nil, buf, slab, err, "(seek)")
 		return err
 	}
@@ -168,7 +173,7 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 	return nil
 }
 
-func (goi *getOI) _cleanup(revert string, lmfh *os.File, buf []byte, slab *memsys.Slab, err error, tag string) {
+func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *memsys.Slab, err error, tag string) {
 	if lmfh != nil {
 		lmfh.Close()
 	}

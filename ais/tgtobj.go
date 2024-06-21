@@ -1683,11 +1683,12 @@ func (a *putA2I) do() (int, error) {
 
 cpap: // copy + append
 	var (
-		err       error
-		lmfh, wfh *os.File
-		workFQN   string
-		cksum     cos.CksumHashSize
-		aw        archive.Writer
+		err     error
+		wfh     *os.File
+		lmfh    cos.LomReader
+		workFQN string
+		cksum   cos.CksumHashSize
+		aw      archive.Writer
 	)
 	workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	wfh, err = os.OpenFile(workFQN, os.O_CREATE|os.O_WRONLY, cos.PermRWR)

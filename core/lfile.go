@@ -18,7 +18,7 @@ import (
 // open
 //
 
-func (lom *LOM) Open() (*os.File, error) {
+func (lom *LOM) Open() (cos.LomReader, error) {
 	return os.Open(lom.FQN)
 }
 

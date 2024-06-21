@@ -8,7 +8,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"os"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -27,7 +26,7 @@ type (
 	}
 	LsoInvCtx struct {
 		Lom    *LOM
-		Lmfh   *os.File
+		Lmfh   cos.LomReader
 		Name   string
 		ID     string
 		Schema []string

@@ -59,15 +59,20 @@ type (
 		size int64
 	}
 
+	ReadReaderAt interface {
+		io.Reader
+		io.ReaderAt
+	}
+	LomReader interface {
+		io.ReadCloser
+		io.ReaderAt
+	}
+
 	// implementations
 
 	nopReader struct {
 		size   int
 		offset int
-	}
-	ReadReaderAt interface {
-		io.Reader
-		io.ReaderAt
 	}
 	deferRCS struct {
 		ReadCloseSizer

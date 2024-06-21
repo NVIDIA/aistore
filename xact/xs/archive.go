@@ -148,7 +148,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 	if core.T.SID() == wi.tsi.ID() {
 		var (
 			s           string
-			lmfh        *os.File
+			lmfh        cos.LomReader
 			finfo, errX = os.Stat(wi.archlom.FQN)
 			exists      = errX == nil
 		)
@@ -431,7 +431,7 @@ func (r *XactArch) Snap() (snap *core.Snap) {
 // archwi //
 ////////////
 
-func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
+func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	msg := wi.msg
 	if msg.Mime == archive.ExtTar {
 		if err = wi.openTarForAppend(); err == nil || err != archive.ErrTarIsEmpty {
