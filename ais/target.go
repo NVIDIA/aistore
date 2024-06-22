@@ -690,7 +690,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// two special flows
 	if dpq.etlName != "" {
-		t.getETL(w, r, dpq.etlName, bck, lom.ObjName)
+		t.getETL(w, r, dpq.etlName, lom)
 		return lom, nil
 	}
 	if cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)) {

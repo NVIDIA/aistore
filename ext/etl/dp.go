@@ -49,7 +49,7 @@ func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (cos.ReadOpenCl
 	)
 	debug.Assert(!latestVer && !sync, "NIY") // TODO -- FIXME
 	call := func() (int, error) {
-		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
+		r, err = dp.comm.OfflineTransform(lom, dp.requestTimeout)
 		return 0, err
 	}
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).

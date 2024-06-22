@@ -52,7 +52,7 @@ type (
 		apc.PromoteArgs             // all of the above
 	}
 	CopyParams struct {
-		DP        DP // transform via: ext/etl/dp.go or core/ldp.go
+		DP        DP // copy or transform via data provider, see impl-s: (ext/etl/dp.go, core/ldp.go)
 		Xact      Xact
 		Config    *cmn.Config
 		BckTo     *meta.Bck

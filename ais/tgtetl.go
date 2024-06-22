@@ -152,7 +152,7 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 	}
 }
 
-func (t *target) getETL(w http.ResponseWriter, r *http.Request, etlName string, bck *meta.Bck, objName string) {
+func (t *target) getETL(w http.ResponseWriter, r *http.Request, etlName string, lom *core.LOM) {
 	var (
 		comm etl.Communicator
 		err  error
@@ -169,7 +169,7 @@ func (t *target) getETL(w http.ResponseWriter, r *http.Request, etlName string, 
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := comm.InlineTransform(w, r, bck, objName); err != nil {
+	if err := comm.InlineTransform(w, r, lom); err != nil {
 		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: etlName, PodName: comm.PodName(), SvcName: comm.SvcName()},
 			err.Error())
 		xetl := comm.Xact()
