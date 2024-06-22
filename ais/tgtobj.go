@@ -374,7 +374,7 @@ func (poi *putOI) putRemote() (ecode int, err error) {
 
 // LOM is updated at the end of this call with size and checksum.
 // `poi.r` (reader) is also closed upon exit.
-func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
+func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, err error) {
 	var (
 		written int64
 		cksums  = struct {
@@ -461,7 +461,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 }
 
 // post-write close & cleanup
-func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
+func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, err error) {
 	if buf != nil {
 		slab.Free(buf)
 	}
@@ -1238,7 +1238,7 @@ func (a *apndOI) do(r *http.Request) (packedHdl string, ecode int, err error) {
 
 func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 	var (
-		fh      *os.File
+		fh      cos.LomWriter
 		workFQN = a.hdl.workFQN
 	)
 	if workFQN == "" {
@@ -1251,14 +1251,14 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 				ecode = http.StatusInternalServerError
 				return
 			}
-			fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR) // O_APPEND
+			fh, err = a.lom.AppendWork(workFQN)
 		} else {
 			a.lom.Unlock(false)
 			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
 			fh, err = a.lom.CreateWork(workFQN)
 		}
 	} else {
-		fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR) // O_APPEND
+		fh, err = a.lom.AppendWork(workFQN)
 		debug.Assert(a.hdl.partialCksum != nil)
 	}
 	if err != nil { // failed to open or create
@@ -1647,7 +1647,7 @@ func (a *putA2I) do() (int, error) {
 	}
 	// standard library does not support appending to tgz, zip, and such;
 	// for TAR there is an optimizing workaround not requiring a full copy
-	if a.mime == archive.ExtTar && !a.put {
+	if a.mime == archive.ExtTar && !a.put /*append*/ && !a.lom.IsChunked() {
 		var (
 			err       error
 			fh        *os.File
@@ -1659,7 +1659,7 @@ func (a *putA2I) do() (int, error) {
 		if err = a.lom.RenameMainTo(workFQN); err != nil {
 			return http.StatusInternalServerError, err
 		}
-		fh, tarFormat, offset, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
+		fh, tarFormat, offset, err = archive.OpenTarForAppend(a.lom.Cname(), workFQN)
 		if err != nil {
 			if errV := a.lom.RenameToMain(workFQN); errV != nil {
 				return http.StatusInternalServerError, errV
@@ -1672,7 +1672,7 @@ func (a *putA2I) do() (int, error) {
 		}
 		// do - fast
 		if size, err = a.fast(fh, tarFormat, offset); err == nil {
-			// NOTE: checksum traded off
+			// TODO: checksum NIY
 			if err = a.finalize(size, cos.NoneCksum, workFQN); err == nil {
 				return http.StatusInternalServerError, nil // ok
 			}

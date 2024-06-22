@@ -14,6 +14,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+const (
+	_openFlags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	_apndFlags = os.O_APPEND | os.O_WRONLY
+)
+
 //
 // open
 //
@@ -31,11 +36,9 @@ func (lom *LOM) Create() (cos.LomWriter, error) {
 	return lom._cf(lom.FQN)
 }
 
-func (lom *LOM) CreateWork(wfqn string) (*os.File, error)  { return lom._cf(wfqn) } // -> lom
-func (lom *LOM) CreatePart(wfqn string) (*os.File, error)  { return lom._cf(wfqn) } // TODO: differentiate
-func (lom *LOM) CreateSlice(wfqn string) (*os.File, error) { return lom._cf(wfqn) } // TODO: ditto
-
-const _openFlags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+func (lom *LOM) CreateWork(wfqn string) (cos.LomWriter, error) { return lom._cf(wfqn) } // -> lom
+func (lom *LOM) CreatePart(wfqn string) (*os.File, error)      { return lom._cf(wfqn) } // TODO: differentiate
+func (lom *LOM) CreateSlice(wfqn string) (*os.File, error)     { return lom._cf(wfqn) } // TODO: ditto
 
 func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, _openFlags, cos.PermRWR)
@@ -53,6 +56,12 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		return nil, err
 	}
 	return os.OpenFile(fqn, _openFlags, cos.PermRWR)
+}
+
+// append
+func (*LOM) AppendWork(wfqn string) (fh cos.LomWriter, err error) {
+	fh, err = os.OpenFile(wfqn, _apndFlags, cos.PermRWR)
+	return fh, err
 }
 
 //

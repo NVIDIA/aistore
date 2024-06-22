@@ -177,7 +177,7 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
     if [[ -n ${AIS_USE_HTTPS} ]]; then
       tier_endpoint="https://127.0.0.1:11080"
     fi
-    sleep 5
+    sleep 7
     if [[ ${AIS_AUTHN_ENABLED} == "true" ]]; then
        tokenfile=$(mktemp -q /tmp/ais.auth.token.XXXXXX)
        ais auth login admin -p admin -f ${tokenfile}

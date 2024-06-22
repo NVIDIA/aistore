@@ -45,8 +45,8 @@ type (
 		msg     *cmn.ArchiveBckMsg
 		tsi     *meta.Snode
 		archlom *core.LOM
-		fqn     string   // workFQN --/--
-		wfh     *os.File // --/--
+		fqn     string        // workFQN --/--
+		wfh     cos.LomWriter // -> workFQN
 		cksum   cos.CksumHashSize
 		cnt     atomic.Int32 // num archived
 		// tar only
@@ -147,16 +147,16 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 	// fcreate at BEGIN time
 	if core.T.SID() == wi.tsi.ID() {
 		var (
-			s           string
-			lmfh        cos.LomReader
-			finfo, errX = os.Stat(wi.archlom.FQN)
-			exists      = errX == nil
+			s    string
+			lmfh cos.LomReader
 		)
-		if exists && wi.msg.AppendIfExists {
-			s = " append"
-			lmfh, err = wi.beginAppend()
-		} else {
+		if !wi.msg.AppendIfExists {
 			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
+		} else if errX := wi.archlom.Load(false, false); errX == nil {
+			if !wi.archlom.IsChunked() {
+				s = " append"
+				lmfh, err = wi.beginAppend()
+			}
 		}
 		if err != nil {
 			return err
@@ -171,7 +171,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 
 		// append case (above)
 		if lmfh != nil {
-			err = wi.writer.Copy(lmfh, finfo.Size())
+			err = wi.writer.Copy(lmfh, wi.archlom.SizeBytes())
 			if err != nil {
 				wi.writer.Fini()
 				wi.cleanup()
@@ -382,14 +382,13 @@ func (r *XactArch) fini(wi *archwi) (ecode int, err error) {
 		ecode = http.StatusInternalServerError
 		return
 	}
+	debug.Assert(wi.wfh == nil)
 
 	wi.archlom.SetSize(size)
-	cos.Close(wi.wfh)
-	wi.wfh = nil
-
 	ecode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive)
 	core.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
+
 	return
 }
 
@@ -435,11 +434,12 @@ func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	msg := wi.msg
 	if msg.Mime == archive.ExtTar {
 		err = wi.openTarForAppend()
-		if err == nil /*can append*/ || err != archive.ErrTarIsEmpty /*fail Begin*/ {
+		if err == nil /*can append*/ || err != archive.ErrTarIsEmpty /*fail XactArch.Begin*/ {
 			return nil, err
 		}
 	}
 
+	// <extra copy>
 	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
 	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
 	lmfh, err = wi.archlom.Open()
@@ -458,7 +458,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 		return err
 	}
 	// open (rw) lom itself
-	wi.wfh, wi.tarFormat, wi.appendPos, err = archive.OpenTarSeekEnd(wi.archlom.Cname(), wi.fqn)
+	wi.wfh, wi.tarFormat, wi.appendPos, err = archive.OpenTarForAppend(wi.archlom.Cname(), wi.fqn)
 	if err == nil {
 		return nil // can append
 	}
@@ -555,16 +555,23 @@ func (wi *archwi) cleanup() {
 }
 
 func (wi *archwi) finalize() (int64, error) {
+	err := wi.wfh.Close()
+	wi.wfh = nil
+	if err != nil {
+		debug.AssertNoErr(err)
+		return 0, err
+	}
+	// tar append
 	if wi.appendPos > 0 {
-		size, err := wi.wfh.Seek(0, io.SeekCurrent)
+		finfo, err := os.Stat(wi.fqn)
 		if err != nil {
+			debug.AssertNoErr(err)
 			return 0, err
 		}
-		debug.Assert(size > wi.appendPos, size, " vs ", wi.appendPos)
-		// checksum traded off
-		wi.archlom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
-		return size, nil
+		wi.archlom.SetCksum(cos.NewCksum(cos.ChecksumNone, "")) // TODO: checksum NIY
+		return finfo.Size(), nil
 	}
+	// default
 	wi.cksum.Finalize()
 	wi.archlom.SetCksum(&wi.cksum.Cksum)
 	return wi.cksum.Size, nil

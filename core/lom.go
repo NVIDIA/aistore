@@ -189,6 +189,12 @@ func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
 func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
+// chunks vs whole // TODO -- FIXME: NIY
+func (lom *LOM) IsChunked() bool {
+	debug.Assert(lom.loaded())
+	return false
+}
+
 func ParseObjLoc(loc string) (tname, mpname string) {
 	i := strings.IndexByte(loc, apc.LocationPropSepa[0])
 	tname, mpname = loc[:i], loc[i+1:]

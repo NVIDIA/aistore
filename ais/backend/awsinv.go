@@ -502,7 +502,7 @@ type (
 	}
 	unzipWriter struct {
 		r   *reader
-		wfh *os.File
+		wfh cos.LomWriter
 	}
 )
 

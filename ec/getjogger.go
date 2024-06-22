@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -211,7 +212,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	return c.parent.writeRemote(daemons, ctx.lom, src, cb)
 }
 
-func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
+func (c *getJogger) restoreReplicaFromMem(ctx *restoreCtx) error {
 	var (
 		writer *memsys.SGL
 	)
@@ -264,53 +265,66 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	return err
 }
 
-func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
+func (c *getJogger) restoreReplicaFromDsk(ctx *restoreCtx) error {
 	var (
-		writer *os.File
-		n      int64
+		writer cos.LomWriter
+		size   int64
 	)
-	// Try to read a replica from targets one by one until the replica is downloaded
+	// for each target: check for the ctx.lom replica, break loop if found
 	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, "ec-restore-repl")
 
+loop: //nolint:gocritic // keeping label for readability
 	for node := range ctx.nodes {
 		uname := unique(node, ctx.lom.Bck(), ctx.lom.ObjName)
 
-		w, err := ctx.lom.CreateWork(tmpFQN)
+		wfh, err := ctx.lom.CreateWork(tmpFQN)
 		if err != nil {
 			nlog.Errorf("failed to create file: %v", err)
-			break
+			break loop
 		}
 		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(g.smm)
-		n, err = c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w)
+		size, err = c.parent.readRemote(ctx.lom, node, uname, iReqBuf, wfh)
 		g.smm.Free(iReqBuf)
 
-		if err == nil && n != 0 {
+		if err == nil && size > 0 {
 			// found valid replica
-			err = cos.FlushClose(w)
-			if err != nil {
-				nlog.Errorf("failed to flush and close: %v", err)
-				break
+			if ctx.lom.IsFeatureSet(feat.FsyncPUT) {
+				err = wfh.Sync()
 			}
-			ctx.lom.SetSize(n)
-			writer = w
-			break
+			errC := wfh.Close()
+			if err == nil {
+				err = errC
+			}
+			if err == nil {
+				ctx.lom.SetSize(size)
+				writer = wfh
+			} else {
+				debug.AssertNoErr(err)
+				nlog.Errorln("failed to [fsync] and close:", err)
+			}
+			break loop
 		}
 
-		cos.Close(w)
+		// cleanup & continue
+		cos.Close(wfh)
 		errRm := cos.RemoveFile(tmpFQN)
 		debug.AssertNoErr(errRm)
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
-		nlog.Infof("Found meta -> obj get %s, writer found: %v", ctx.lom, writer != nil)
-	}
 
 	if writer == nil {
-		return errors.New("failed to read a replica from any target")
+		err := errors.New("failed to discover " + ctx.lom.Cname())
+		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+			nlog.Errorln(err)
+		}
+		return err
+	}
+
+	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+		nlog.Infoln("found meta -> obj get", ctx.lom.Cname())
 	}
 	if err := ctx.lom.RenameFinalize(tmpFQN); err != nil {
 		return err
 	}
-
 	if err := ctx.lom.Persist(); err != nil {
 		return err
 	}
@@ -805,9 +819,9 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 	ctx.lom.SetAtimeUnix(time.Now().UnixNano())
 	if ctx.meta.IsCopy {
 		if ctx.toDisk {
-			return c.restoreReplicatedFromDisk(ctx)
+			return c.restoreReplicaFromDsk(ctx)
 		}
-		return c.restoreReplicatedFromMemory(ctx)
+		return c.restoreReplicaFromMem(ctx)
 	}
 
 	if len(ctx.nodes) < ctx.meta.Data {

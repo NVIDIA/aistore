@@ -15,9 +15,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// fast.go provides "fast append"
-
-// Opens TAR and uses its reader's Next() to skip to the position
+// Fast Append -------------------------------------------------------
+// Standard library does not support appending to tgz, zip, and such;
+// for TAR there is an optimizing workaround not requiring a full copy.
+//
+// Execution:
+// OpensTAR and use its reader's Next() to skip to the position
 // right _after_ the last file in the TAR (padding bytes including).
 //
 // Background:
@@ -25,7 +28,9 @@ import (
 // The blocks must be overwritten, otherwise newly added files won't be
 // accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
 // write different number of zero blocks.
-func OpenTarSeekEnd(cname, workFQN string) (rwfh *os.File, tarFormat tar.Format, offset int64, err error) {
+// --------------------------------------------------------------------
+
+func OpenTarForAppend(cname, workFQN string) (rwfh *os.File, tarFormat tar.Format, offset int64, err error) {
 	if rwfh, err = os.OpenFile(workFQN, os.O_RDWR, cos.PermRWR); err != nil {
 		return
 	}

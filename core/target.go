@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -69,10 +68,10 @@ type (
 	WriteSGL func(*memsys.SGL) error
 
 	BlobParams struct {
+		Lmfh     cos.LomWriter
 		RspW     http.ResponseWriter // (GET)
 		WriteSGL WriteSGL            // custom write
 		Lom      *LOM
-		Lmfh     *os.File
 		Msg      *apc.BlobMsg
 		Wfqn     string
 	}
