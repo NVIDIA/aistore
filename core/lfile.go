@@ -26,21 +26,19 @@ func (lom *LOM) Open() (cos.LomReader, error) {
 // create
 //
 
-func (lom *LOM) Create() (*os.File, error) {
+func (lom *LOM) Create() (cos.LomWriter, error) {
 	debug.Assert(lom.isLockedExcl(), lom.Cname()) // caller must wlock
-	return lom._cf(lom.FQN, os.O_WRONLY)
+	return lom._cf(lom.FQN)
 }
 
-func (lom *LOM) CreateWork(wfqn string) (*os.File, error) {
-	return lom._cf(wfqn, os.O_WRONLY)
-}
+func (lom *LOM) CreateWork(wfqn string) (*os.File, error)  { return lom._cf(wfqn) } // -> lom
+func (lom *LOM) CreatePart(wfqn string) (*os.File, error)  { return lom._cf(wfqn) } // TODO: differentiate
+func (lom *LOM) CreateSlice(wfqn string) (*os.File, error) { return lom._cf(wfqn) } // TODO: ditto
 
-func (lom *LOM) CreateWorkRW(wfqn string) (*os.File, error) {
-	return lom._cf(wfqn, os.O_RDWR)
-}
+const _openFlags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
-func (lom *LOM) _cf(fqn string, mode int) (fh *os.File, err error) {
-	fh, err = os.OpenFile(fqn, os.O_CREATE|mode|os.O_TRUNC, cos.PermRWR)
+func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
+	fh, err = os.OpenFile(fqn, _openFlags, cos.PermRWR)
 	if err == nil || !os.IsNotExist(err) {
 		return fh, err
 	}
@@ -54,7 +52,7 @@ func (lom *LOM) _cf(fqn string, mode int) (fh *os.File, err error) {
 	if err = cos.CreateDir(fdir); err != nil {
 		return nil, err
 	}
-	return os.OpenFile(fqn, os.O_CREATE|mode|os.O_TRUNC, cos.PermRWR)
+	return os.OpenFile(fqn, _openFlags, cos.PermRWR)
 }
 
 //

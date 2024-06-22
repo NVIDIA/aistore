@@ -6,7 +6,6 @@ package ais
 
 import (
 	"io"
-	"os"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
@@ -28,7 +27,7 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	var (
 		err    error
 		lmfh   cos.LomReader
-		wfh    *os.File
+		wfh    cos.LomWriter
 		t      = goi.t
 		lom    = goi.lom
 		revert string

@@ -448,7 +448,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 	cksumType := ctx.lom.CksumType()
 	for i := range ctx.paritySlices {
 		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
-		writer, err := ctx.lom.CreateWork(workFQN)
+		writer, err := ctx.lom.CreateSlice(workFQN)
 		if err != nil {
 			return err
 		}
@@ -495,7 +495,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *meta.Snode, idx
 			data.release()
 		}
 		if err != nil {
-			nlog.Errorln("Failed to send", hdr.Cname()+": ", err)
+			nlog.Errorln("failed to send", hdr.Cname()+": ", err)
 		}
 	}
 

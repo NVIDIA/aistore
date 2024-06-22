@@ -215,7 +215,7 @@ func (r *XactPut) encode(req *request, lom *core.LOM) {
 	now := time.Now()
 	req.putTime, req.tm = now, now
 	if err := r.dispatchRequest(req, lom); err != nil {
-		nlog.Errorf("Failed to encode %s: %v", lom, err)
+		nlog.Errorf("failed to encode %s: %v", lom, err)
 		freeReq(req)
 	}
 }
@@ -226,7 +226,7 @@ func (r *XactPut) cleanup(req *request, lom *core.LOM) {
 	req.putTime, req.tm = now, now
 
 	if err := r.dispatchRequest(req, lom); err != nil {
-		nlog.Errorf("Failed to cleanup %s: %v", lom, err)
+		nlog.Errorf("failed to cleanup %s: %v", lom, err)
 		freeReq(req)
 	}
 }

@@ -33,32 +33,30 @@ const ContentLengthUnknown = -1
 
 const PathSeparator = string(filepath.Separator)
 
-// readers
+// follows below:
+// - readers: interfaces
+// - readers: implementations
+// - handles
+// - writers
+
+// readers: interfaces
 type (
 	ReadOpenCloser interface {
 		io.ReadCloser
 		Open() (ReadOpenCloser, error)
 	}
-	// ReadSizer is the interface that adds Size method to io.Reader.
 	ReadSizer interface {
 		io.Reader
 		Size() int64
 	}
-	// ReadCloseSizer is the interface that adds Size method to io.ReadCloser.
 	ReadCloseSizer interface {
 		io.ReadCloser
 		Size() int64
 	}
-	// ReadOpenCloseSizer is the interface that adds Size method to ReadOpenCloser.
-	ReadOpenCloseSizer interface {
+	ReadOpenCloseSizer interface { // see sizedReader below
 		ReadOpenCloser
 		Size() int64
 	}
-	sizedReader struct {
-		io.Reader
-		size int64
-	}
-
 	ReadReaderAt interface {
 		io.Reader
 		io.ReaderAt
@@ -67,8 +65,18 @@ type (
 		io.ReadCloser
 		io.ReaderAt
 	}
+	LomWriter interface {
+		io.WriteCloser
+		Sync() error
+	}
+)
 
-	// implementations
+// readers: implementations
+type (
+	sizedReader struct {
+		io.Reader
+		size int64
+	}
 
 	nopReader struct {
 		size   int
@@ -100,7 +108,7 @@ type (
 	nopOpener struct{ io.ReadCloser }
 )
 
-// handles (and more readers)
+// handles (and even more readers)
 type (
 	FileHandle struct {
 		*os.File

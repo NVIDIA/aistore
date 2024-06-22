@@ -207,7 +207,7 @@ func Init() {
 	xreg.RegBckXact(&encFactory{})
 
 	if err := initManager(); err != nil {
-		cos.ExitLogf("Failed to init manager: %v", err)
+		cos.ExitLog("Failed to init manager:", err)
 	}
 }
 

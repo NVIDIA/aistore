@@ -250,7 +250,7 @@ func (r *XactGet) decode(req *request, lom *core.LOM) {
 	req.tm = time.Now()
 
 	if err := r.dispatchRequest(req, lom); err != nil {
-		nlog.Errorf("Failed to restore %s: %v", lom, err)
+		nlog.Errorf("failed to restore %s: %v", lom, err)
 		freeReq(req)
 	}
 }

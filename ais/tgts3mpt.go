@@ -122,7 +122,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	// workfile name format: <upload-id>.<part-number>.<obj-name>
 	prefix := uploadID + "." + strconv.FormatInt(int64(partNum), 10)
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
-	partFh, errC := lom.CreateWorkRW(wfqn)
+	partFh, errC := lom.CreatePart(wfqn)
 	if errC != nil {
 		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
 		return

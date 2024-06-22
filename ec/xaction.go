@@ -119,7 +119,7 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 	attrs.Size = stat.Size()
 	reader, err = cos.NewFileHandle(fqn)
 	if err != nil {
-		nlog.Warningf("Failed to read file stats: %s", err)
+		nlog.Warningln("failed to read file stats:", err)
 		return nil, err
 	}
 	return reader, nil

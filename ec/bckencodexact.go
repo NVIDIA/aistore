@@ -123,7 +123,7 @@ func (r *XactBckEncode) afterECObj(lom *core.LOM, err error) {
 	if err == nil {
 		r.LomAdd(lom)
 	} else if err != errSkipped {
-		nlog.Errorf("Failed to erasure-code %s: %v", lom.Cname(), err)
+		nlog.Errorf("failed to erasure-code %s: %v", lom.Cname(), err)
 	}
 
 	r.wg.Done()

@@ -146,7 +146,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if !populate {
 		md = &lmeta{}
 	}
-	err = md.unmarshal(read)
+	err = md.unpack(read)
 	if err == nil {
 		_recomputeMdSize(size, mdSize)
 	} else {
@@ -165,7 +165,7 @@ func (lom *LOM) PersistMain() (err error) {
 		return
 	}
 	// write-immediate (default)
-	buf := lom.marshal()
+	buf := lom.pack()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		lom.Uncache()
 		T.FSHC(err, lom.FQN)
@@ -193,7 +193,7 @@ func (lom *LOM) Persist() (err error) {
 		return
 	}
 
-	buf := lom.marshal()
+	buf := lom.pack()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		lom.Uncache()
 		T.FSHC(err, lom.FQN)
@@ -211,7 +211,7 @@ func (lom *LOM) Persist() (err error) {
 }
 
 func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
-	buf := lom.marshal()
+	buf := lom.pack()
 	// replicate across copies
 	for copyFQN = range lom.md.copies {
 		if copyFQN == lom.FQN {
@@ -237,7 +237,7 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 	if err := lom.syncMetaWithCopies(); err != nil {
 		return
 	}
-	buf := lom.marshal()
+	buf := lom.pack()
 	if err := fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		T.FSHC(err, lom.FQN)
 	}
@@ -253,9 +253,9 @@ func (lom *LOM) flushAtime(atime time.Time) error {
 	return os.Chtimes(lom.FQN, atime, mtime)
 }
 
-func (lom *LOM) marshal() (buf []byte) {
+func (lom *LOM) pack() (buf []byte) {
 	lmsize := g.maxLmeta.Load()
-	buf = lom.md.marshal(lmsize)
+	buf = lom.md.pack(lmsize)
 	size := int64(len(buf))
 	debug.Assert(size <= xattrMaxSize)
 	_recomputeMdSize(size, lmsize)
@@ -292,7 +292,7 @@ func (md *lmeta) poprt(saved []uint64) {
 	md.Atime, md.atimefs, md.lid = int64(saved[0]), saved[1], lomBID(saved[2])
 }
 
-func (md *lmeta) unmarshal(buf []byte) error {
+func (md *lmeta) unpack(buf []byte) error {
 	const invalid = "invalid lmeta"
 	var (
 		payload                           string
@@ -404,7 +404,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 	return nil
 }
 
-func (md *lmeta) marshal(mdSize int64) (buf []byte) {
+func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	var (
 		b8                    [cos.SizeofI64]byte
 		cksumType, cksumValue = md.Cksum.Get()

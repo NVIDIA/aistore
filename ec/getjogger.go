@@ -277,7 +277,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 
 		w, err := ctx.lom.CreateWork(tmpFQN)
 		if err != nil {
-			nlog.Errorf("Failed to create file: %v", err)
+			nlog.Errorf("failed to create file: %v", err)
 			break
 		}
 		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(g.smm)
@@ -285,10 +285,10 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		g.smm.Free(iReqBuf)
 
 		if err == nil && n != 0 {
-			// A valid replica is found - break and do close file handle
+			// found valid replica
 			err = cos.FlushClose(w)
 			if err != nil {
-				nlog.Errorf("Failed to flush and close: %v", err)
+				nlog.Errorf("failed to flush and close: %v", err)
 				break
 			}
 			ctx.lom.SetSize(n)
@@ -362,7 +362,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		if ctx.toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
 			fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
-			fh, err := ctx.lom.CreateWork(fqn)
+			fh, err := ctx.lom.CreateSlice(fqn)
 			if err != nil {
 				return err
 			}
@@ -420,7 +420,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	if ctx.toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", idx)
 		fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
-		file, err := ctx.lom.CreateWork(fqn)
+		file, err := ctx.lom.CreateSlice(fqn)
 		if err != nil {
 			return err
 		}
@@ -776,9 +776,9 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 
 	// main replica is ready to download by a client.
 	if err := c.uploadRestoredSlices(ctx, restored); err != nil {
-		nlog.Errorf("Failed to upload restored slices of %s: %v", ctx.lom, err)
+		nlog.Errorf("failed to upload restored slices of %s: %v", ctx.lom, err)
 	} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
-		nlog.Infof("Slices %s restored successfully", ctx.lom)
+		nlog.Infof("slices %s restored successfully", ctx.lom)
 	}
 
 	c.freeDownloaded(ctx)

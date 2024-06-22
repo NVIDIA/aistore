@@ -1251,14 +1251,14 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 				ecode = http.StatusInternalServerError
 				return
 			}
-			fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
+			fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR) // O_APPEND
 		} else {
 			a.lom.Unlock(false)
 			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
 			fh, err = a.lom.CreateWork(workFQN)
 		}
 	} else {
-		fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
+		fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR) // O_APPEND
 		debug.Assert(a.hdl.partialCksum != nil)
 	}
 	if err != nil { // failed to open or create
