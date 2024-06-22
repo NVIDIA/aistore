@@ -133,7 +133,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
 	smap := core.T.Sowner().Get()
 	if err = core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
-		return
+		return err
 	}
 	nat := smap.CountActiveTs()
 	wi.refc.Store(int32(nat - 1))
@@ -141,7 +141,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 	wi.tsi, err = smap.HrwName2T(msg.ToBck.MakeUname(msg.ArchName))
 	if err != nil {
 		r.AddErr(err, 4, cos.SmoduleXs)
-		return
+		return err
 	}
 
 	// fcreate at BEGIN time
@@ -159,7 +159,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
 		}
 		if err != nil {
-			return
+			return err
 		}
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
@@ -175,7 +175,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 			if err != nil {
 				wi.writer.Fini()
 				wi.cleanup()
-				return
+				return err
 			}
 		}
 	}
@@ -191,7 +191,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
 	r.pending.Unlock()
-	return
+	return nil
 }
 
 func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
@@ -434,47 +434,43 @@ func (r *XactArch) Snap() (snap *core.Snap) {
 func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	msg := wi.msg
 	if msg.Mime == archive.ExtTar {
-		if err = wi.openTarForAppend(); err == nil || err != archive.ErrTarIsEmpty {
-			return
+		err = wi.openTarForAppend()
+		if err == nil /*can append*/ || err != archive.ErrTarIsEmpty /*fail Begin*/ {
+			return nil, err
 		}
 	}
-	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
+
 	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
+	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
 	lmfh, err = wi.archlom.Open()
 	if err != nil {
-		return
+		return nil, err
 	}
 	if wi.wfh, err = wi.archlom.CreateWork(wi.fqn); err != nil {
 		cos.Close(lmfh)
 		lmfh = nil
 	}
-	return
+	return lmfh, err
 }
 
 func (wi *archwi) openTarForAppend() (err error) {
 	if err = wi.archlom.RenameMainTo(wi.fqn); err != nil {
-		return
+		return err
 	}
 	// open (rw) lom itself
-	wi.wfh, wi.tarFormat, err = archive.OpenTarSeekEnd(wi.archlom.ObjName, wi.fqn)
-	if err != nil {
-		goto roll
-	}
-	wi.appendPos, err = wi.wfh.Seek(0, io.SeekCurrent)
+	wi.wfh, wi.tarFormat, wi.appendPos, err = archive.OpenTarSeekEnd(wi.archlom.Cname(), wi.fqn)
 	if err == nil {
-		return // can append
+		return nil // can append
 	}
-	wi.appendPos, wi.tarFormat = 0, tar.FormatUnknown // reset
-	cos.Close(wi.wfh)
-	wi.wfh = nil
-roll:
+
+	// back
 	if errV := wi.archlom.RenameToMain(wi.fqn); errV != nil {
 		nlog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
 			wi.tsi, wi.archlom, err, wi.fqn, errV)
 	} else {
 		wi.fqn = ""
 	}
-	return
+	return err
 }
 
 // multi-object iterator i/f: "handle work item"
@@ -564,7 +560,7 @@ func (wi *archwi) finalize() (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		debug.Assertf(size > wi.appendPos, "%d vs %d", size, wi.appendPos)
+		debug.Assert(size > wi.appendPos, size, " vs ", wi.appendPos)
 		// checksum traded off
 		wi.archlom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
 		return size, nil

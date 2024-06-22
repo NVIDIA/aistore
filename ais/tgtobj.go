@@ -1651,6 +1651,7 @@ func (a *putA2I) do() (int, error) {
 		var (
 			err       error
 			fh        *os.File
+			offset    int64
 			size      int64
 			tarFormat tar.Format
 			workFQN   = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
@@ -1658,7 +1659,7 @@ func (a *putA2I) do() (int, error) {
 		if err = a.lom.RenameMainTo(workFQN); err != nil {
 			return http.StatusInternalServerError, err
 		}
-		fh, tarFormat, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
+		fh, tarFormat, offset, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
 		if err != nil {
 			if errV := a.lom.RenameToMain(workFQN); errV != nil {
 				return http.StatusInternalServerError, errV
@@ -1670,7 +1671,7 @@ func (a *putA2I) do() (int, error) {
 			return http.StatusInternalServerError, err
 		}
 		// do - fast
-		if size, err = a.fast(fh, tarFormat); err == nil {
+		if size, err = a.fast(fh, tarFormat, offset); err == nil {
 			// NOTE: checksum traded off
 			if err = a.finalize(size, cos.NoneCksum, workFQN); err == nil {
 				return http.StatusInternalServerError, nil // ok
@@ -1732,7 +1733,7 @@ cpap: // copy + append
 }
 
 // TAR only - fast & direct
-func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format) (size int64, err error) {
+func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format, offset int64) (size int64, err error) {
 	var (
 		buf, slab = a.t.gmm.AllocSize(a.size)
 		tw        = tar.NewWriter(rwfh)
@@ -1750,6 +1751,7 @@ func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format) (size int64, err erro
 	cos.Close(tw)
 	if err == nil {
 		size, err = rwfh.Seek(0, io.SeekCurrent)
+		debug.Assert(err != nil || size > offset, size, " vs ", offset)
 	}
 	slab.Free(buf)
 	cos.Close(rwfh)
