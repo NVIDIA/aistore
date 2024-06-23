@@ -318,7 +318,7 @@ func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {
 	if !lom.IsCopy() {
 		ratomic.AddUint64(&res.ObjCount.Present, 1)
 	}
-	size := lom.SizeBytes()
+	size := lom.Lsize()
 	if cmin := ratomic.LoadInt64(&res.ObjSize.Min); cmin > size {
 		ratomic.CompareAndSwapInt64(&res.ObjSize.Min, cmin, size)
 	}

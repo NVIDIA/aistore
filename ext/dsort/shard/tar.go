@@ -105,7 +105,7 @@ func (trw *tarRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExt
 		return 0, 0, err
 	}
 	c := &rcbCtx{parent: trw, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk, fromTar: true}
-	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := core.T.PageMM().AllocSize(lom.Lsize())
 	c.buf = buf
 
 	err = ar.ReadUntil(c, cos.EmptyMatchAll, "")

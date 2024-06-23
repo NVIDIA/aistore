@@ -8,7 +8,7 @@ package cos
 
 type (
 	OAH interface {
-		SizeBytes(special ...bool) int64
+		Lsize(special ...bool) int64
 		Version(special ...bool) string
 		VersionPtr() *string
 		Checksum() *Cksum
@@ -28,8 +28,8 @@ type (
 // interface guard
 var _ OAH = (*SimpleOAH)(nil)
 
-func (s SimpleOAH) SizeBytes(...bool) int64 { return s.Size }
-func (s SimpleOAH) AtimeUnix() int64        { return s.Atime }
+func (s SimpleOAH) Lsize(...bool) int64 { return s.Size }
+func (s SimpleOAH) AtimeUnix() int64    { return s.Atime }
 
 func (SimpleOAH) Version(...bool) string             { return "" }
 func (SimpleOAH) VersionPtr() *string                { return nil }

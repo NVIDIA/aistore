@@ -194,28 +194,25 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 
 	// acquired wlock: check for write/write race
 
-	finfo, err := os.Stat(ctx.Lom.FQN)
-	if err == nil {
-		newMtime := finfo.ModTime()
-		if newMtime.Sub(mtime) > time.Hour {
-			// updated by smbd else
-			// reload the lom and return
-			ctx.Lom.Uncache()
-			_, usable = checkInvLom(newMtime, ctx)
-			debug.Assert(usable)
+	_, _, newMtime, err := ctx.Lom.Fstat(false /*get-atime*/)
+	if err == nil && newMtime.Sub(mtime) > time.Hour {
+		// updated by smbd else
+		// reload the lom and return
+		ctx.Lom.Uncache()
+		_, usable = checkInvLom(newMtime, ctx)
+		debug.Assert(usable)
 
-			// wlock --> rlock must succeed
-			lom.Unlock(true)
-			lom.Lock(false)
+		// wlock --> rlock must succeed
+		lom.Unlock(true)
+		lom.Lock(false)
 
-			if ctx.Lmfh, err = ctx.Lom.Open(); err != nil {
-				lom.Unlock(false)
-				core.FreeLOM(lom)
-				ctx.Lom = nil
-				return 0, _errInv("reload-inv-open", err)
-			}
-			return 0, nil // ok
+		if ctx.Lmfh, err = ctx.Lom.Open(); err != nil {
+			lom.Unlock(false)
+			core.FreeLOM(lom)
+			ctx.Lom = nil
+			return 0, _errInv("reload-inv-open", err)
 		}
+		return 0, nil // ok
 	}
 
 	// still under wlock: cleanup old, read and write as ctx.Lom

@@ -1373,7 +1373,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(lom)
 	}
 	if delFromAIS {
-		size := lom.SizeBytes()
+		size := lom.Lsize()
 		aisErr = lom.RemoveObj()
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {

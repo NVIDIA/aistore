@@ -235,7 +235,7 @@ func (mgr *Manager) EncodeObject(lom *core.LOM, cb core.OnFinishObj) error {
 	}
 
 	req := allocateReq(ActSplit, lom.LIF())
-	req.IsCopy = IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
+	req.IsCopy = IsECCopy(lom.Lsize(), &lom.Bprops().EC)
 	if cb != nil {
 		req.rebuild = true
 		req.Callback = cb

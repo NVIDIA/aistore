@@ -490,7 +490,7 @@ func (azbp *azbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, 
 	cloudBck := lom.Bck().RemoteBck()
 
 	opts := azblob.UploadStreamOptions{}
-	if size := lom.SizeBytes(true); size > cos.MiB {
+	if size := lom.Lsize(true); size > cos.MiB {
 		opts.Concurrency = int(min((size+cos.MiB-1)/cos.MiB, 8))
 	}
 

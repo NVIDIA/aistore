@@ -365,7 +365,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 			return err
 		}
 
-		if lom.SizeBytes() <= 0 {
+		if lom.Lsize() <= 0 {
 			goto exit
 		}
 
@@ -377,7 +377,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 		o := transport.AllocSend()
 		o.Hdr = transport.ObjHdr{
 			ObjName:  shardName,
-			ObjAttrs: cmn.ObjAttrs{Size: lom.SizeBytes(), Cksum: lom.Checksum()},
+			ObjAttrs: cmn.ObjAttrs{Size: lom.Lsize(), Cksum: lom.Checksum()},
 		}
 		o.Hdr.Bck.Copy(lom.Bucket())
 
@@ -961,13 +961,13 @@ func (es *extractShard) _do(lom *core.LOM) error {
 		return errors.Errorf("unable to open %s: %v", lom.Cname(), err)
 	}
 
-	expectedExtractedSize := uint64(float64(lom.SizeBytes()) / m.compressionRatio())
+	expectedExtractedSize := uint64(float64(lom.Lsize()) / m.compressionRatio())
 	toDisk := m.dsorter.preShardExtraction(expectedExtractedSize)
 
 	extractedSize, extractedCount, err := shardRW.Extract(lom, fh, m.recm, toDisk)
 	cos.Close(fh)
 
-	m.addSizes(lom.SizeBytes(), extractedSize) // update compression rate
+	m.addSizes(lom.Lsize(), extractedSize) // update compression rate
 
 	phaseInfo.adjuster.releaseSema(lom.Mountpath())
 	lom.Unlock(false)

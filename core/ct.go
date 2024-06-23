@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -40,11 +41,12 @@ func (ct *CT) ContentType() string      { return ct.contentType }
 func (ct *CT) Bck() *meta.Bck           { return ct.bck }
 func (ct *CT) Bucket() *cmn.Bck         { return (*cmn.Bck)(ct.bck) }
 func (ct *CT) Mountpath() *fs.Mountpath { return ct.mi }
-func (ct *CT) SizeBytes() int64         { return ct.size }
+func (ct *CT) Lsize() int64             { return ct.size }
 func (ct *CT) MtimeUnix() int64         { return ct.mtime }
 func (ct *CT) Digest() uint64           { return ct.digest }
 
-func (ct *CT) LoadFromFS() error {
+func (ct *CT) LoadSliceFromFS() error {
+	debug.Assert(ct.ContentType() == fs.ECSliceType, "unexpected content type: ", ct.ContentType())
 	st, err := os.Stat(ct.FQN())
 	if err != nil {
 		return err

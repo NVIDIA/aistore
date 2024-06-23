@@ -88,7 +88,7 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 	}
 	_, err := poi.putObject()
 	freePOI(poi)
-	debug.Assert(err != nil || params.Size <= 0 || params.Size == lom.SizeBytes(true), lom.String(), params.Size, lom.SizeBytes(true))
+	debug.Assert(err != nil || params.Size <= 0 || params.Size == lom.Lsize(true), lom.String(), params.Size, lom.Lsize(true))
 	return err
 }
 
@@ -196,7 +196,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	// 4. stats
 	t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
+		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.Lsize()},
 		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(now)},
 	)
 	return 0, nil

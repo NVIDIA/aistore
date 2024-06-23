@@ -38,7 +38,7 @@ const (
 
 type ParsedFQN struct {
 	Mountpath   *Mountpath
-	ContentType string
+	ContentType string // enum: { ObjectType, WorkfileType, ECSliceType, ... }
 	ObjName     string
 	Digest      uint64
 	Bck         cmn.Bck

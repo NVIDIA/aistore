@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -74,26 +73,26 @@ const getxattr = "getxattr" // syscall
 
 // used in tests
 func (lom *LOM) AcquireAtimefs() error {
-	_, atime, err := ios.FinfoAtime(lom.FQN)
+	_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
 		return err
 	}
-	lom.md.Atime = atime
-	lom.md.atimefs = uint64(atime)
+	lom.md.Atime = atimefs
+	lom.md.atimefs = uint64(atimefs)
 	return nil
 }
 
 // NOTE: used in tests, ignores `dirty`
 func (lom *LOM) LoadMetaFromFS() error {
-	_, atime, err := ios.FinfoAtime(lom.FQN)
+	_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
 		return err
 	}
 	if _, err := lom.lmfs(true); err != nil {
 		return err
 	}
-	lom.md.Atime = atime
-	lom.md.atimefs = uint64(atime)
+	lom.md.Atime = atimefs
+	lom.md.atimefs = uint64(atimefs)
 	return nil
 }
 
@@ -245,11 +244,10 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 }
 
 func (lom *LOM) flushAtime(atime time.Time) error {
-	finfo, err := os.Stat(lom.FQN)
+	_, _, mtime, err := lom.Fstat(false /*get-atime*/)
 	if err != nil {
 		return err
 	}
-	mtime := finfo.ModTime()
 	return os.Chtimes(lom.FQN, atime, mtime)
 }
 

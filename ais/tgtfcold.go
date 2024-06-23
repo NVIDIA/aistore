@@ -98,13 +98,13 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	}
 	var (
 		hrng   *htrange
-		size             = lom.SizeBytes()
+		size             = lom.Lsize()
 		reader io.Reader = lmfh
 		whdr             = goi.w.Header()
 	)
 	if goi.ranges.Range != "" {
 		// (not here if range checksum enabled)
-		rsize := goi.lom.SizeBytes()
+		rsize := goi.lom.Lsize()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
 		}
@@ -164,7 +164,7 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 		nlog.InfoDepth(1, ftcg+"(load)", lom, err) // (unlikely)
 		return errSendingResp
 	}
-	debug.Assert(lom.SizeBytes() == fullSize)
+	debug.Assert(lom.Lsize() == fullSize)
 	goi.lom.Unlock(true)
 
 	// regular get stats

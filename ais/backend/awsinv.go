@@ -165,27 +165,25 @@ func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObj
 }
 
 func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
-	finfo, err := os.Stat(ctx.Lom.FQN)
+	size, _, mtime, err := ctx.Lom.Fstat(false /*get-atime*/)
 	if err != nil {
 		debug.Assert(os.IsNotExist(err), err)
 		nlog.Infoln(invTag, "does not exist, getting a new one for the timestamp:", latest)
 		return time.Time{}, false
 	}
+
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln(core.T.String(), "checking", ctx.Lom.String(), ctx.Lom.FQN, ctx.Lom.HrwFQN)
 	}
-	mtime := finfo.ModTime()
 	abs := _sinceAbs(mtime, latest)
 	if abs < time.Second {
-		debug.Assert(ctx.Size == 0 || ctx.Size == finfo.Size())
-		ctx.Size = finfo.Size()
+		debug.Assert(ctx.Size == 0 || ctx.Size == size)
+		ctx.Size = size
 
 		// start (or rather, keep) using this one
 		errN := ctx.Lom.Load(true, true)
 		debug.AssertNoErr(errN)
-		debug.Assert(ctx.Lom.SizeBytes() == finfo.Size(), ctx.Lom.SizeBytes(), finfo.Size())
-		// TODO -- FIXME: revisit
-		// debug.Assert(_sinceAbs(mtime, ctx.Lom.Atime()) < time.Second, mtime.String(), ctx.Lom.Atime().String())
+		debug.Assert(ctx.Lom.Lsize() == size, ctx.Lom.Lsize(), size)
 		return time.Time{}, true
 	}
 

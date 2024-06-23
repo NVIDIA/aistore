@@ -273,7 +273,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil
 	}
-	size = lom.SizeBytes()
+	size = lom.Lsize()
 	// 2. fix hrw location; fail and subsequently abort if unsuccessful
 	var (
 		retries   int

@@ -610,7 +610,7 @@ func (m *AISbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode i
 		return
 	}
 	unsetUUID(&remoteBck)
-	size := lom.SizeBytes(true) // _special_ as it's still a workfile at this point
+	size := lom.Lsize(true) // _special_ as it's still a workfile at this point
 	args := api.PutArgs{
 		BaseParams: remAis.bp,
 		Bck:        remoteBck,

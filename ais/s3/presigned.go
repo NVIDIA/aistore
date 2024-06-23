@@ -101,7 +101,7 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 		nreq.ContentLength = pts.oreq.ContentLength
 		if nreq.ContentLength == -1 {
 			debug.Assert(false) // FIXME: remove, or catch in debug mode
-			nreq.ContentLength = pts.lom.SizeBytes()
+			nreq.ContentLength = pts.lom.Lsize()
 		}
 	}
 

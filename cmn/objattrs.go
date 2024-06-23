@@ -76,10 +76,10 @@ func (oa *ObjAttrs) String() string {
 	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Version(), oa.Cksum, oa.CustomMD)
 }
 
-func (oa *ObjAttrs) SizeBytes(_ ...bool) int64 { return oa.Size }
-func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
-func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
-func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
+func (oa *ObjAttrs) Lsize(_ ...bool) int64   { return oa.Size }
+func (oa *ObjAttrs) AtimeUnix() int64        { return oa.Atime }
+func (oa *ObjAttrs) Checksum() *cos.Cksum    { return oa.Cksum }
+func (oa *ObjAttrs) SetCksum(ty, val string) { oa.Cksum = cos.NewCksum(ty, val) }
 
 func (oa *ObjAttrs) Version(_ ...bool) string {
 	if oa.Ver == nil {
@@ -160,7 +160,7 @@ func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
 // clone OAH => ObjAttrs (see also lom.CopyAttrs)
 func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 	oa.Atime = oah.AtimeUnix()
-	oa.Size = oah.SizeBytes()
+	oa.Size = oah.Lsize()
 	oa.CopyVersion(oah)
 	if !skipCksum {
 		oa.Cksum = oah.Checksum().Clone()
@@ -267,7 +267,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 		sameEtag bool
 	)
 	// size check
-	if remSize := rem.SizeBytes(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
+	if remSize := rem.Lsize(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
 		return false
 	}
 

@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-func TestFoo(t *testing.T) {
+func TestLomBid(t *testing.T) {
 	tests := []struct {
 		bid1, bid2 uint64
 		flags      uint16

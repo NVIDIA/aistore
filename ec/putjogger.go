@@ -87,9 +87,9 @@ func (*putJogger) newCtx(lom *core.LOM, meta *Metadata) (ctx *encodeCtx, err err
 	ctx.meta = meta
 
 	totalCnt := ctx.paritySlices + ctx.dataSlices
-	ctx.sliceSize = SliceSize(ctx.lom.SizeBytes(), ctx.dataSlices)
+	ctx.sliceSize = SliceSize(ctx.lom.Lsize(), ctx.dataSlices)
 	ctx.slices = make([]*slice, totalCnt)
-	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.SizeBytes()
+	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Lsize()
 
 	ctx.fh, err = cos.NewFileHandle(lom.FQN)
 	return ctx, err
@@ -126,7 +126,7 @@ func (c *putJogger) processRequest(req *request) {
 			return
 		}
 		ecConf := lom.Bprops().EC
-		memRequired := lom.SizeBytes() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+		memRequired := lom.Lsize() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 		c.toDisk = useDisk(memRequired, c.parent.config)
 	}
 
@@ -235,7 +235,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	meta := &Metadata{
 		MDVersion:   MDVersionLast,
 		Generation:  generation,
-		Size:        lom.SizeBytes(),
+		Size:        lom.Lsize(),
 		Data:        ecConf.DataSlices,
 		Parity:      ecConf.ParitySlices,
 		IsCopy:      req.IsCopy,
@@ -333,7 +333,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 	// broadcast the replica to the targets
 	src := &dataSource{
 		reader:   ctx.fh,
-		size:     ctx.lom.SizeBytes(),
+		size:     ctx.lom.Lsize(),
 		metadata: ctx.meta,
 		reqType:  reqPut,
 	}
@@ -377,7 +377,7 @@ func generateSlicesToMemory(ctx *encodeCtx) error {
 func initializeSlices(ctx *encodeCtx) (err error) {
 	// readers are slices of original object(no memory allocated)
 	cksmReaders := make([]io.Reader, ctx.dataSlices)
-	sizeLeft := ctx.lom.SizeBytes()
+	sizeLeft := ctx.lom.Lsize()
 	for i := range ctx.dataSlices {
 		var (
 			reader     cos.ReadOpenCloser

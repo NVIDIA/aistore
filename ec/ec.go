@@ -490,7 +490,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 	}
 	lom.Unlock(false)
 
-	if err = writeObject(lom, args.Reader, lom.SizeBytes(true), args.Xact); err != nil {
+	if err = writeObject(lom, args.Reader, lom.Lsize(true), args.Xact); err != nil {
 		return
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value

@@ -353,7 +353,7 @@ func (xctn *Base) ObjsAdd(cnt int, size int64) {
 }
 
 // oft. used
-func (xctn *Base) LomAdd(lom *core.LOM) { xctn.ObjsAdd(1, lom.SizeBytes(true)) }
+func (xctn *Base) LomAdd(lom *core.LOM) { xctn.ObjsAdd(1, lom.Lsize(true)) }
 
 // base stats: transmit
 func (xctn *Base) OutObjs() int64  { return xctn.stats.outobjs.Load() }

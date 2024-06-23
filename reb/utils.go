@@ -165,7 +165,7 @@ func (reb *Reb) delLomAck(lom *core.LOM, rebID int64, freeLOM bool) {
 			if freeLOM {
 				// counting acknowledged migrations (as initiator)
 				xreb := reb.xctn()
-				xreb.ObjsAdd(1, lomOrig.SizeBytes())
+				xreb.ObjsAdd(1, lomOrig.Lsize())
 
 				core.FreeLOM(lomOrig)
 			}

@@ -171,7 +171,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 
 		// append case (above)
 		if lmfh != nil {
-			err = wi.writer.Copy(lmfh, wi.archlom.SizeBytes())
+			err = wi.writer.Copy(lmfh, wi.archlom.Lsize())
 			if err != nil {
 				wi.writer.Fini()
 				wi.cleanup()

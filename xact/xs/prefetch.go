@@ -165,7 +165,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	} else {
 		ecode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 		if err == nil { // done
-			r.ObjsAdd(1, lom.SizeBytes())
+			r.ObjsAdd(1, lom.Lsize())
 		}
 	}
 

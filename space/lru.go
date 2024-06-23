@@ -334,7 +334,7 @@ func (j *lruJ) _visit(lom *core.LOM) (pushed bool) {
 		return
 	}
 	heap.Push(j.heap, lom)
-	j.curSize += lom.SizeBytes()
+	j.curSize += lom.Lsize()
 	if lom.AtimeUnix() > j.newest {
 		j.newest = lom.AtimeUnix()
 	}
@@ -374,7 +374,7 @@ func (j *lruJ) evict() (size int64, err error) {
 			core.FreeLOM(lom)
 			continue
 		}
-		objSize := lom.SizeBytes(true /*not loaded*/)
+		objSize := lom.Lsize(true /*not loaded*/)
 		core.FreeLOM(lom)
 		bevicted += objSize
 		size += objSize
@@ -439,7 +439,7 @@ func (j *lruJ) evictObj(lom *core.LOM) bool {
 		return false
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-		nlog.Infof("%s: evicted %s, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
+		nlog.Infof("%s: evicted %s, size=%d", j, lom, lom.Lsize(true /*not loaded*/))
 	}
 	return true
 }

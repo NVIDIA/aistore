@@ -140,7 +140,7 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 	hdr := tar.Header{
 		Typeflag: tar.TypeReg,
 		Name:     fullname,
-		Size:     oah.SizeBytes(),
+		Size:     oah.Lsize(),
 		ModTime:  time.Unix(0, oah.AtimeUnix()),
 		Mode:     int64(cos.PermRWRR),
 		Format:   tw.format,
@@ -215,7 +215,7 @@ func (zw *zipWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error
 	ziphdr := zip.FileHeader{
 		Name:               fullname,
 		Comment:            fullname,
-		UncompressedSize64: uint64(oah.SizeBytes()),
+		UncompressedSize64: uint64(oah.Lsize()),
 		Modified:           time.Unix(0, oah.AtimeUnix()),
 	}
 	zw.cb(&ziphdr)

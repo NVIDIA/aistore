@@ -194,7 +194,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
 			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
-			size := poi.lom.SizeBytes()
+			size := poi.lom.Lsize()
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
 				cos.NamedVal64{Name: stats.PutSize, Value: size},
@@ -208,7 +208,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		}
 	} else if poi.xctn != nil && poi.owt == cmn.OwtPromote {
 		// xaction in-objs counters, promote first
-		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
+		poi.xctn.InObjsAdd(1, poi.lom.Lsize())
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(poi.loghdr())
@@ -450,7 +450,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 	cos.Close(lmfh)
 	lmfh = nil
 
-	poi.lom.SetSize(written) // TODO: compare with non-zero lom.SizeBytes() that may have been set via oa.FromHeader()
+	poi.lom.SetSize(written) // TODO: compare with non-zero lom.Lsize() that may have been set via oa.FromHeader()
 	if cksums.store != nil {
 		if !cksums.finalized {
 			cksums.store.Finalize()
@@ -988,7 +988,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	switch {
 	case goi.ranges.Range != "":
 		debug.Assert(!dpq.isArch())
-		rsize := goi.lom.SizeBytes()
+		rsize := goi.lom.Lsize()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
 		}
@@ -1050,7 +1050,7 @@ func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error
 		dpq   = goi.dpq
 		lom   = goi.lom
 		cksum = lom.Checksum()
-		size  = lom.SizeBytes()
+		size  = lom.Lsize()
 	)
 	// set response header
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
@@ -1077,7 +1077,7 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 	if err != nil {
 		return err
 	}
-	ar, err = archive.NewReader(mime, lmfh, lom.SizeBytes())
+	ar, err = archive.NewReader(mime, lmfh, lom.Lsize())
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
 	}
@@ -1161,7 +1161,7 @@ func (goi *getOI) stats(written int64) {
 	if goi.verchanged {
 		goi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1},
-			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.SizeBytes()},
+			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.Lsize()},
 		)
 	}
 }
@@ -1393,7 +1393,7 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 	if coi.DP == nil {
 		uname := coi.BckTo.MakeUname(objnameTo)
 		if lom.Uname() != cos.UnsafeS(uname) {
-			size = lom.SizeBytes()
+			size = lom.Lsize()
 		}
 		return size, nil
 	}
@@ -1448,7 +1448,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 	freePOI(poi)
 	if err == nil {
 		// xaction stats: inc locally processed (and see data mover for in and out objs)
-		size = oah.SizeBytes()
+		size = oah.Lsize()
 	}
 	return size, ecode, err
 }
@@ -1482,7 +1482,7 @@ func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error)
 	}
 	dst2, err := lom.Copy2FQN(dst.FQN, coi.Buf)
 	if err == nil {
-		size = lom.SizeBytes()
+		size = lom.Lsize()
 		if coi.Finalize {
 			t.putMirror(dst2)
 		}
@@ -1552,7 +1552,7 @@ func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64,
 		if err != nil {
 			return 0, err
 		}
-		size = lom.SizeBytes()
+		size = lom.Lsize()
 		sargs.reader, sargs.objAttrs = reader, lom
 	default:
 		// 3. DP transform (possibly, no-op)
@@ -1562,7 +1562,7 @@ func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64,
 			return
 		}
 		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
-		size = oah.SizeBytes()
+		size = oah.Lsize()
 		sargs.reader, sargs.objAttrs = reader, oah
 	}
 
@@ -1602,7 +1602,7 @@ func (coi *copyOI) put(t *target, sargs *sendArgs) error {
 		hdr   = make(http.Header, 8)
 		query = sargs.bckTo.NewQuery()
 	)
-	cmn.ToHeader(sargs.objAttrs, hdr, sargs.objAttrs.SizeBytes(true))
+	cmn.ToHeader(sargs.objAttrs, hdr, sargs.objAttrs.Lsize(true))
 	hdr.Set(apc.HdrT2TPutterID, t.SID())
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
@@ -1713,7 +1713,7 @@ cpap: // copy + append
 		}
 		cksum.Init(a.lom.CksumType())
 		aw = archive.NewWriter(a.mime, wfh, &cksum, nil)
-		err = aw.Copy(lmfh, a.lom.SizeBytes())
+		err = aw.Copy(lmfh, a.lom.Lsize())
 		if err == nil {
 			err = aw.Write(a.filename, oah, a.r)
 		}

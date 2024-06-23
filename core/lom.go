@@ -128,9 +128,22 @@ func (lom *LOM) CopyAttrs(oah cos.OAH, skipCksum bool) {
 }
 
 // special a) when a new version is being created b) for usage in unit tests
-func (lom *LOM) SizeBytes(special ...bool) int64 {
+func (lom *LOM) Lsize(special ...bool) int64 {
 	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
 	return lom.md.Size
+}
+
+// low-level access to the os.FileInfo of a chunk or whole file
+func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ error) {
+	finfo, err := os.Stat(lom.FQN)
+	if err == nil {
+		size = finfo.Size() // NOTE: chunk?
+		mtime = finfo.ModTime()
+		if getAtime {
+			atimefs = ios.GetATime(finfo).UnixNano()
+		}
+	}
+	return size, atimefs, mtime, err
 }
 
 func (lom *LOM) Version(special ...bool) string {
@@ -523,7 +536,7 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 }
 
 func (lom *LOM) FromFS() error {
-	finfo, atimefs, err := ios.FinfoAtime(lom.FQN)
+	size, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			err = os.NewSyscallError("stat", err)
@@ -545,8 +558,8 @@ func (lom *LOM) FromFS() error {
 		return err
 	}
 	// fstat & atime
-	if lom.md.Size != finfo.Size() { // corruption or tampering
-		return cmn.NewErrLmetaCorrupted(lom.whingeSize(finfo.Size()))
+	if lom.md.Size != size { // corruption or tampering
+		return cmn.NewErrLmetaCorrupted(lom.whingeSize(size))
 	}
 	lom.md.Atime = atimefs
 	lom.md.atimefs = uint64(atimefs)

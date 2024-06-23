@@ -140,10 +140,10 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (rea
 	if err != nil {
 		return nil, err
 	}
-	if lom.SizeBytes() == 0 {
+	if lom.Lsize() == 0 {
 		return nil, nil
 	}
-	attrs.Size = lom.SizeBytes()
+	attrs.Size = lom.Lsize()
 	attrs.CopyVersion(lom.ObjAttrs())
 	attrs.Atime = lom.AtimeUnix()
 	attrs.Cksum = lom.Checksum()

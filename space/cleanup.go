@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -379,7 +378,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 			j.oldWork = append(j.oldWork, fqn)
 			return
 		}
-		if err := ct.LoadFromFS(); err != nil {
+		if err := ct.LoadSliceFromFS(); err != nil {
 			return
 		}
 		// Saving a CT is not atomic: first it saves CT, then its metafile
@@ -424,7 +423,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 	// handle load err
 	if errLoad := lom.Load(false /*cache it*/, false /*locked*/); errLoad != nil {
-		_, atime, err := ios.FinfoAtime(lom.FQN)
+		_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
@@ -434,7 +433,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			return
 		}
 		// too early to remove anything
-		if atime+int64(j.config.LRU.DontEvictTime) < j.now {
+		if atimefs+int64(j.config.LRU.DontEvictTime) < j.now {
 			return
 		}
 		if cmn.IsErrLmetaCorrupted(err) {
@@ -571,9 +570,9 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 			core.FreeLOM(lom)
 			if removed {
 				fevicted++
-				bevicted += mlom.SizeBytes(true /*not loaded*/)
+				bevicted += mlom.Lsize(true /*not loaded*/)
 				if cmn.Rom.FastV(4, cos.SmoduleSpace) {
-					nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.SizeBytes(true /*not loaded*/))
+					nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.Lsize(true /*not loaded*/))
 				}
 				if err = j.yieldTerm(); err != nil {
 					return
@@ -591,7 +590,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		}
 		if os.Remove(ct.FQN()) == nil {
 			fevicted++
-			bevicted += ct.SizeBytes()
+			bevicted += ct.Lsize()
 			if err = j.yieldTerm(); err != nil {
 				return
 			}

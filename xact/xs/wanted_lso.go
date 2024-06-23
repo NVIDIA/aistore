@@ -52,10 +52,10 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEnt, lom *core.LOM) {
 		case apc.GetPropsCached: // via obj.SetPresent()
 
 		case apc.GetPropsSize:
-			if e.Size > 0 && lom.SizeBytes() != e.Size {
+			if e.Size > 0 && lom.Lsize() != e.Size {
 				e.SetVerChanged()
 			}
-			e.Size = lom.SizeBytes()
+			e.Size = lom.Lsize()
 		case apc.GetPropsVersion:
 			e.Version = lom.Version()
 		case apc.GetPropsChecksum:

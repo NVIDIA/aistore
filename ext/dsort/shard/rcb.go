@@ -144,7 +144,7 @@ func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
 	}
 
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := core.T.PageMM().AllocSize(lom.Lsize())
 	c.buf = buf
 
 	err = ar.ReadUntil(c, cos.EmptyMatchAll, "")

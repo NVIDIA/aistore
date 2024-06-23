@@ -37,7 +37,7 @@ func delCopies(lom *core.LOM, copies int) (size int64, err error) {
 		}
 	}
 
-	size = int64(len(copiesFQN)) * lom.SizeBytes()
+	size = int64(len(copiesFQN)) * lom.Lsize()
 	if err = lom.DelCopies(copiesFQN...); err != nil {
 		return
 	}
@@ -71,7 +71,7 @@ func addCopies(lom *core.LOM, copies int, buf []byte) (size int64, err error) {
 			nlog.Errorln(err)
 			return
 		}
-		size += lom.SizeBytes()
+		size += lom.Lsize()
 	}
 	return
 }

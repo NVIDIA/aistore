@@ -205,7 +205,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	}
 	src := &dataSource{
 		reader:   srcReader,
-		size:     ctx.lom.SizeBytes(),
+		size:     ctx.lom.Lsize(),
 		metadata: ctx.meta,
 		reqType:  reqPut,
 	}

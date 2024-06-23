@@ -234,7 +234,7 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSiz
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil, 0, err
 	}
-	size := lom.SizeBytes()
+	size := lom.Lsize()
 
 	switch pc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
@@ -465,7 +465,7 @@ func lomLoad(lom *core.LOM) (size int64, err error) {
 			err = nil // NOTE: size == 0
 		}
 	} else {
-		size = lom.SizeBytes()
+		size = lom.Lsize()
 	}
 	return size, err
 }
