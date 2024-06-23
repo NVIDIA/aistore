@@ -120,12 +120,14 @@ func TestPrefetchLatestRemaisUsingScript(t *testing.T) {
 }
 
 func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
+	bck := cliBck
 	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Bck:                   bck,
 		Long:                  true,
 		RequiresRemoteCluster: true,
+		CloudBck:              true,
 	})
 
-	bck := cliBck
 	var (
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/cp-sync-remais-out-of-band.sh", "--bucket", bucketName)

@@ -111,17 +111,8 @@ func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 	return false, err
 }
 
-func isRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
+func isRemoteAndPresentBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 	if !bck.IsRemote() {
-		return false
-	}
-	exists, err := BucketExists(tb, proxyURL, bck)
-	tassert.CheckFatal(tb, err)
-	return exists
-}
-
-func isCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
-	if !bck.IsCloud() {
 		return false
 	}
 	exists, err := BucketExists(tb, proxyURL, bck)
