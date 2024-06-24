@@ -1,25 +1,10 @@
 # Using the DsortFramework in Python SDK
 
-The `DsortFramework` class in the Python SDK provides a way to define and manage dSort jobs. Below is an instruction on how to construct a `DsortFramework` instance and start a dSort job directly from the Python SDK.
+## DsortFramework
 
-## Key Fields
+The `DsortFramework` class in the Python SDK enables you to define and manage dSort jobs. As a framework, `DsortFramework` itself does not make any HTTP requests until it is passed to the `Client.dsort` instance. It provides an abstracted way to configure your desired dSort job in a Pythonic manner, consistent with the AIStore SDK style. Below are instructions on how to construct a `DsortFramework` instance and start a dSort job directly from the Python SDK.
 
-- **extension**: The extension of input and output shards (either .tar, .tgz or .zip).
-- **input_format.template**: Name template for input shard.
-- **output_format**: Name template for output shard.
-- **input_bck.name**: Bucket name where shards objects are stored.
-- **input_bck.provider**: Bucket backend provider.
-- **output_bck.name**: Bucket name where new output shards will be saved.
-- **output_bck.provider**: Bucket backend provider.
-- **description**: Description of the dSort job.
-- **output_shard_size**: Size (in bytes) of the output shard, can be in the form of raw numbers (e.g., 10240) or suffixed (e.g., 10KB).
-- **algorithm.kind**: Determines which sorting algorithm dSort job uses. Available options are: "alphanumeric", "shuffle", "content".
-- **algorithm.decreasing**: Determines if the algorithm should sort the records in decreasing or increasing order, used for kind=alphanumeric or kind=content.
-- **algorithm.seed**: Seed provided to the random generator, used when kind=shuffle.
-- **algorithm.extension**: Content of the file with the provided extension will be used as the sorting key, used when kind=content.
-- **algorithm.content_key_type**: Content key type; may have one of the following values: "int", "float", or "string"; used exclusively with kind=content sorting.
-
-## Example Usage
+### Example Usage
 
 1. **Creating a DsortFramework from a JSON/YAML Specification File:**
 
@@ -30,63 +15,146 @@ The `DsortFramework` class in the Python SDK provides a way to define and manage
    dsort_framework = DsortFramework.from_file("path/to/spec.json")
 
    # Start the dSort job
-   dsort_job_id = client.dsort().start(dsort_framework)
+   client.dsort().start(dsort_framework)
    ```
 
 2. **Creating a DsortFramework Directly:**
 
    ```python
-   from aistore.sdk.dsort import DsortFramework, DsortShardsGroup, DsortAlgorithm
-   from aistore.sdk.types import BucketModel
+    from aistore.sdk import Client, BucketModel
+    from aistore.sdk.multiobj import ObjectNames, ObjectRange
+    from aistore.sdk.dsort import DsortFramework, DsortShardsGroup, ExternalKeyMap
 
-   # Define the input and output shard configurations
-   input_shards = DsortShardsGroup(
-       bck=BucketModel(name="input_bucket", provider="aws"),
-       role="input",
-       format={"template": "input_template"},
-       extension=".tar"
-   )
+    # Initialize the AIStore client
+    client = Client("http://your-aistore-url:8080")
 
-   output_shards = DsortShardsGroup(
-       bck=BucketModel(name="output_bucket", provider="aws"),
-       role="output",
-       format="output_template",
-       extension=".tar"
-   )
+    # Define the input bucket
+    input_bucket = BucketModel(name="input-bucket", provider="ais")
 
-   # Define the algorithm configuration
-   algorithm = DsortAlgorithm(
-       kind="content",
-       decreasing=False,
-       seed="",
-       extension=".key",
-       content_key_type="int"
-   )
+    # Define the output bucket
+    output_bucket = BucketModel(name="output-bucket", provider="ais")
 
-   # Create a DsortFramework instance
-   dsort_framework = DsortFramework(
-       input_shards=input_shards,
-       output_shards=output_shards,
-       algorithm=algorithm,
-       description="Dsort Job Description",
-       output_shard_size="10MB"
-   )
+    # Define the input format as ObjectRange
+    input_format = ObjectRange(
+        prefix="input-shard-",
+        min_index=0,
+        max_index=99,
+        pad_width=2,
+        suffix=".tar",
+    )
 
-   # Start the dSort job
-   dsort_job_id = client.dsort().start(dsort_framework)
+    # Define the output format as ExternalKeyMap
+    output_format = ExternalKeyMap()
+    output_format["output-shard-0"] = ObjectNames(objnames=["file1.txt", "file2.txt"])
+    output_format["output-shard-1"] = ObjectNames(objnames=["file3.txt", "file4.txt"])
+
+    # Define the input shards group
+    input_shards_group = DsortShardsGroup(
+        bck=input_bucket,
+        role="input",
+        format=input_format,
+        extension=".tar",
+    )
+
+    # Define the output shards group
+    output_shards_group = DsortShardsGroup(
+        bck=output_bucket,
+        role="output",
+        format=output_format,
+        extension=".tar",
+    )
+
+    # Define the dSort framework
+    dsort_framework = DsortFramework(
+        input_shards=input_shards_group,
+        output_shards=output_shards_group,
+        description="Example dSort job with ObjectRange and ExternalKeyMap",
+        output_shard_size="100KiB",
+    )
+
+    # Convert the framework to a dictionary
+    dsort_spec = dsort_framework.to_spec()
+
+    # Start the dSort job
+    client.dsort().start(dsort_spec)
    ```
 
-## Important Notes
+   ```bash
+   # Input shards structure
+   input-shard-00.tar
+    ├── file1.txt
+    ├── file3.txt
+    └── file4.txt
+   input-shard-01.tar
+    └── file2.txt
 
-- **Input and Output Formats:**
-  - The `input_format` must be a dictionary containing the key "template".
-  - The `output_format` must be a string.
-  
-- **Algorithm Kind:**
-  - For the `content` kind, `extension` and `content_key_type` fields are required.
-  - For other kinds, these fields should not be provided.
+    # Expected output shards structure
+    output-shard-0.tar
+    ├── file1.txt
+    └── file2.txt
+    output-shard-1.tar
+    ├── file3.txt
+    └── file4.txt
+   ```
 
-- **Error Handling:**
-  - Validation errors are raised if the required fields are missing or incorrectly formatted.
-  
+## DsortShardsGroup
+
+The `DsortShardsGroup` class represents a set of shards (either input end or output end) involved during the dSort transformation. There are four fields to fully describe such a set of shards:
+- `role`: Specifies whether this instance represents the input set or output set of the dSort job. Valid values are "input" or "output".
+- `bck`: Indicates the source (for input) or destination (for output) bucket where the data of the dSort job should reside in AIStore.
+- `extension`: Specifies the file extension used for the shards (e.g., .tar, .tgz, .zip).
+- `format` Provides a template for a dSort job to acquire (for input) or generate (for output) target shards. The format can be one of the following types:
+  - For the `input` role, AIStore currently supports `ObjectNames` or `ObjectRange` formats.
+  - For the `output` role, AIStore currently supports `ObjectRange` or `ExternalKeyMap` formats.
+
+### Example Usage
+
+```python
+from aistore.sdk.types import BucketModel
+from aistore.sdk.multiobj import ObjectNames, ObjectRange
+
+input_bucket = BucketModel(name="input_bucket", provider="aws")
+output_bucket = BucketModel(name="output_bucket", provider="aws")
+
+input_format = ObjectNames(objnames=["input-shard-1", "input-shard-2"])
+output_format = ObjectRange(prefix="output-shard-", min_index=0, max_index=99, pad_width=2)
+
+input_shards_group = DsortShardsGroup(
+    bck=input_bucket,
+    role="input",
+    format=input_format,
+    extension=".tar"
+)
+
+output_shards_group = DsortShardsGroup(
+    bck=output_bucket,
+    role="output",
+    format=output_format,
+    extension=".tar"
+)
+
+print(input_shards_group.as_dict())
+print(output_shards_group.as_dict())
+```
+
+## ExternalKeyMap
+
+The `ExternalKeyMap` (EKM) class provides users with an interface to specify the exact mapping from the record key to the output shard. Specifically, `ExternalKeyMap` is a dictionary that specifies which `ObjectNames` belong to which output shard (named as a template string). For each entry of the `ExternalKeyMap`, objects within the `ObjectNames` instance that appear in the input `DsortShardsGroup` will be collected into one of the specified output shards, according to the order defined by the specified algorithm and the size specified in `output_shard_size`.
+
+### Example Usage
+
+```python
+from aistore.sdk.multiobj import ObjectNames
+
+# Create an instance of ExternalKeyMap
+ekm = ExternalKeyMap()
+
+# Add ObjectNames instances to the ExternalKeyMap with corresponding shard formats
+ekm["output-shard-0"] = ObjectNames(objnames=["file1.txt", "file2.txt"])
+ekm["output-shard-1"] = ObjectNames(objnames=["file3.txt", "file4.txt"])
+
+# Convert to dictionary representation
+print(ekm.as_dict())
+```
+
 For more detailed information, refer to the original [dSort documentation](https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md). Also see the [dSort CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli/dsort.md).

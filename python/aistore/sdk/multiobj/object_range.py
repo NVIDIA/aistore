@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
 #
+import re
+
 from typing import Iterator
 
 from aistore.sdk import utils
@@ -44,6 +46,31 @@ class ObjectRange(ObjectCollection):
         self._max_index = (
             str(max_index).zfill(pad_width) if isinstance(min_index, int) else None
         )
+
+    @classmethod
+    def from_string(cls, range_string: str):
+        """
+        Construct an ObjectRange instance from a valid range string like 'input-{00..99..1}.txt'
+
+        Args:
+            range_string (str): The range string to parse
+
+        Returns:
+            ObjectRange: An instance of the ObjectRange class
+        """
+        pattern = r"(?P<prefix>.*)\{(?P<min_index>\d+)\.\.(?P<max_index>\d+)(?:\.\.(?P<step>\d+))?\}(?P<suffix>.*)?"
+        match = re.match(pattern, range_string)
+        if not match:
+            raise ValueError(f"Invalid range string format: {range_string}")
+        parts = match.groupdict()
+        min_index = int(parts["min_index"])
+        max_index = int(parts["max_index"])
+        prefix = parts["prefix"]
+        step = int(parts["step"]) if parts["step"] else 1
+        suffix = parts["suffix"] if parts["suffix"] else ""
+        pad_width = len(parts["min_index"])
+
+        return cls(prefix, min_index, max_index, pad_width, step, suffix)
 
     @staticmethod
     def _validate_indices(min_index, max_index, pad_width):

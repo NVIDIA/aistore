@@ -18,6 +18,9 @@ class ObjectNames(ObjectCollection):
     def __init__(self, names: List[str]):
         self._names = names
 
+    def __str__(self):
+        return self._names
+
     def get_value(self) -> Dict[str, any]:
         return {"objnames": self._names}
 

@@ -1,4 +1,4 @@
-from typing import Literal, Dict, Union, Optional
+from typing import Literal, Union, Optional
 from pathlib import Path
 
 import json
@@ -7,38 +7,38 @@ import yaml
 from pydantic import BaseModel, root_validator
 
 from aistore.sdk.types import BucketModel
+from aistore.sdk.multiobj import ObjectNames, ObjectRange
+from aistore.sdk.dsort.ekm import ExternalKeyMap
 
 
-class DsortShardsGroup(BaseModel):
+# pylint: disable=redefined-builtin,too-few-public-methods
+class DsortShardsGroup:
     """
     Represents the configuration for the input or output of a shard group in a dSort job
     """
 
-    bck: BucketModel
-    role: Literal["input", "output"]
-    format: Union[Dict[str, str], str]
-    extension: str
+    def __init__(
+        self,
+        bck: BucketModel,
+        role: Literal["input", "output"],
+        format: Union[ObjectNames, ObjectRange, ExternalKeyMap],
+        extension: str,
+    ):
+        if role not in ["input", "output"]:
+            raise ValueError('role must be either "input" or "output"')
+        if role == "input" and not isinstance(format, (ObjectNames, ObjectRange)):
+            raise ValueError(
+                'format of input role must be an instance of "ObjectNames" or "ObjectRange"'
+            )
+        if role == "output" and not isinstance(format, (ObjectRange, ExternalKeyMap)):
+            raise ValueError(
+                'format of output role must be an instance of "ObjectRange" or "ExternalKeyMap"'
+            )
 
-    # pylint: disable=no-self-argument
-    @root_validator(allow_reuse=True)
-    def check_key(cls, values):
-        """
-        Validates that if the role contains required key fields
-        """
-
-        role = values.get("role")
-        format_value = values.get("format")
-
-        if role == "input":
-            if not isinstance(format_value, dict) or "template" not in format_value:
-                raise ValueError(
-                    'For input shards, format must be a dictionary containing the key "template".'
-                )
-        elif role == "output":
-            if not isinstance(format_value, str):
-                raise ValueError("For output shards, format must be a string.")
-
-        return values
+        self.bck = bck
+        self.role = role
+        self.extension = extension
+        self.format = format
 
     def as_dict(self):
         """
@@ -47,7 +47,9 @@ class DsortShardsGroup(BaseModel):
 
         return {
             f"{self.role}_bck": self.bck.as_dict(),
-            f"{self.role}_format": self.format,
+            f"{self.role}_format": (
+                self.format.get_value() if self.role == "input" else str(self.format)
+            ),
             f"{self.role}_extension": self.extension,
         }
 
@@ -111,15 +113,20 @@ class DsortFramework:
         self,
         input_shards: DsortShardsGroup,
         output_shards: DsortShardsGroup,
-        algorithm: DsortAlgorithm,
+        algorithm: DsortAlgorithm = None,
         description=None,
         output_shard_size=None,
     ) -> None:
         self.input_shards = input_shards
         self.output_shards = output_shards
         self.output_shard_size = output_shard_size
+        if algorithm is None:
+            algorithm = DsortAlgorithm()
         self.algorithm = algorithm
         self.description = description
+
+        self.order_file = None
+        self.order_sep = None
 
     @classmethod
     def from_file(cls, spec):
@@ -144,22 +151,53 @@ class DsortFramework:
         load_func = json.load if ext == ".json" else yaml.safe_load
         with open(spec, "r", encoding="utf-8") as file_data:
             spec_data = load_func(file_data)
-            return cls(
+
+            # Parse and validate input_format
+            input_format = spec_data.get("input_format", None)
+            if not isinstance(input_format, dict):
+                raise ValueError("input_format must be a dictionary")
+
+            if "template" in input_format:
+                input_format = ObjectRange.from_string(input_format["template"])
+            elif "objnames" in input_format:
+                input_format = ObjectNames(input_format["objnames"])
+            else:
+                raise ValueError(
+                    '"input_format" dictionary must contain either the key "template" or "objnames"'
+                )
+
+            # Parse and validate output_format
+            output_format = spec_data.get("output_format", None)
+            if isinstance(output_format, list):
+                output_format = ObjectNames(output_format)
+            elif isinstance(output_format, str):
+                output_format = ObjectRange.from_string(output_format)
+            else:
+                raise ValueError(
+                    '"input_format" string must be either a list or a range string'
+                )
+
+            framework = cls(
                 input_shards=DsortShardsGroup(
                     bck=BucketModel(**spec_data.get("input_bck")),
                     role="input",
-                    format=spec_data.get("input_format", {}),
+                    format=input_format,
                     extension=spec_data.get("input_extension", ""),
                 ),
                 output_shards=DsortShardsGroup(
                     bck=BucketModel(**spec_data.get("output_bck")),
                     role="output",
-                    format=spec_data.get("output_format", ""),
+                    format=output_format,
                     extension=spec_data.get("output_extension", ""),
                 ),
                 algorithm=DsortAlgorithm(**spec_data.get("algorithm", {})),
                 output_shard_size=spec_data.get("output_shard_size", ""),
             )
+
+            framework.order_file = spec_data.get("order_file", "")
+            framework.order_sep = spec_data.get("order_sep", "")
+
+            return framework
 
     def to_spec(self):
         """
@@ -173,4 +211,9 @@ class DsortFramework:
         spec["description"] = self.description if self.description else ""
         if self.output_shard_size:
             spec["output_shard_size"] = self.output_shard_size
+
+        if self.order_file:
+            spec["order_file"] = self.order_file
+            spec["order_sep"] = self.order_sep
+
         return spec

@@ -6,11 +6,11 @@ from unittest.mock import Mock, patch, mock_open, call
 import json
 import yaml
 
-from pydantic import ValidationError
-
 from aistore.sdk.const import (
     URL_PATH_DSORT,
+    URL_PATH_OBJECTS,
     HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
     DSORT_ABORT,
     HTTP_METHOD_DELETE,
     DSORT_UUID,
@@ -18,6 +18,8 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.dsort import Dsort, DsortFramework, DsortShardsGroup, DsortAlgorithm
 from aistore.sdk.dsort.types import DsortMetrics, JobInfo
+from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_ORDER_FILE_NAME
+from aistore.sdk.multiobj import ObjectNames, ObjectRange
 
 from aistore.sdk.types import BucketModel
 from aistore.sdk.errors import Timeout
@@ -27,8 +29,8 @@ VALID_JSON_SPEC = """
 {
     "input_bck": {"name": "input_bucket", "provider": "aws"},
     "output_bck": {"name": "output_bucket", "provider": "aws"},
-    "input_format": {"template": "input_template"},
-    "output_format": "output_template",
+    "input_format": {"template": "input-shard-{00..99..1}"},
+    "output_format": "output-shard-{000..999..1}",
     "input_extension": ".txt",
     "output_extension": ".txt",
     "algorithm": {"kind": "alphanumeric", "decreasing": false, "seed": ""},
@@ -45,8 +47,8 @@ output_bck:
     name: output_bucket
     provider: aws
 input_format:
-    template: input_template
-output_format: output_template
+    template: input-shard-{00..99..1}
+output_format: output-shard-{000..999..1}
 input_extension: .txt
 algorithm:
     kind: alphanumeric
@@ -61,6 +63,12 @@ class TestDsort(unittest.TestCase):
         self.mock_client = Mock()
         self.dsort_id = "123"
         self.dsort = Dsort(client=self.mock_client, dsort_id=self.dsort_id)
+
+        # For testing ExternalKeyMap
+        self.valid_key = "valid_key"
+        self.valid_value = Mock(spec=ObjectNames)  # Mocking ObjectNames for the tests
+        self.invalid_key = 123
+        self.invalid_value = "invalid_value"
 
     @staticmethod
     def _get_mock_job_info(finished, aborted=False):
@@ -100,6 +108,112 @@ class TestDsort(unittest.TestCase):
         self.assertEqual(new_id, self.dsort.dsort_id)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST, path=URL_PATH_DSORT, json=json.loads(VALID_JSON_SPEC)
+        )
+
+    def test_start_from_framework(self):
+        new_id = "789"
+        mock_request_return_val = Mock(text=new_id)
+        self.mock_client.request.return_value = mock_request_return_val
+
+        input_shards = DsortShardsGroup(
+            bck=BucketModel(name="input_bucket"),
+            role="input",
+            format=ObjectRange("input-", 0, 99),
+            extension="txt",
+        )
+        output_shards = DsortShardsGroup(
+            bck=BucketModel(name="output_bucket"),
+            role="output",
+            format=ObjectRange("output-", 0, 99),
+            extension="txt",
+        )
+        dsort_framework = DsortFramework(
+            input_shards=input_shards,
+            output_shards=output_shards,
+            output_shard_size="10GB",
+            algorithm=DsortAlgorithm(),
+            description="Test description",
+        )
+        res = self.dsort.start(dsort_framework)
+
+        self.assertEqual(new_id, res)
+        self.assertEqual(new_id, self.dsort.dsort_id)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_POST, path=URL_PATH_DSORT, json=dsort_framework.to_spec()
+        )
+
+    @patch("aistore.sdk.object.Object.get_url")
+    def test_start_from_framework_with_ekm(self, mock_get_url):
+        new_id = "789"
+        mock_request_return_val = Mock(text=new_id)
+        self.mock_client.request.return_value = mock_request_return_val
+
+        input_shards = DsortShardsGroup(
+            bck=BucketModel(name="input_bucket"),
+            role="input",
+            format=ObjectRange("input-", 0, 99),
+            extension="txt",
+        )
+        ekm = ExternalKeyMap()
+        ekm["shard-%d-suf"] = ObjectNames(
+            [
+                "2854426993101776575.txt",
+                "2618707812048272555.txt",
+                "1741850460848810679.txt",
+                "5802693705337902329.txt",
+            ]
+        )
+        ekm["input-%d-pref"] = ObjectNames(
+            [
+                "5572318253765218801.txt",
+                "2616544611865131484.txt",
+                "1066141796602636610.txt",
+                "4083990031653643606.txt",
+            ]
+        )
+        ekm["smth-%d"] = ObjectNames(
+            [
+                "4540068038224404716.txt",
+                "4657933324577966298.txt",
+                "2972823983340349521.txt",
+                "7151198881742927530.txt",
+            ]
+        )
+
+        output_shards = DsortShardsGroup(
+            bck=BucketModel(name="output_bucket"),
+            role="output",
+            format=ekm,
+            extension="txt",
+        )
+        dsort_framework = DsortFramework(
+            input_shards=input_shards,
+            output_shards=output_shards,
+            output_shard_size="10GB",
+            algorithm=DsortAlgorithm(),
+            description="Test description",
+        )
+        ekm_url = f"{URL_PATH_OBJECTS}/input_bucket/{ EKM_ORDER_FILE_NAME }"
+        mock_get_url.return_value = ekm_url
+
+        res = self.dsort.start(dsort_framework)
+        self.assertEqual(new_id, res)
+        self.assertEqual(new_id, self.dsort.dsort_id)
+        spec = dsort_framework.to_spec()
+        spec["order_file"] = ekm_url
+        spec["order_file_sep"] = ""
+
+        # Ensure object.put_content and dsort.start are called
+        self.mock_client.request.assert_has_calls(
+            [
+                call(
+                    HTTP_METHOD_PUT,
+                    path=ekm_url,
+                    params={"provider": "ais"},
+                    data=json.dumps(ekm.as_dict()).encode("utf-8"),
+                ),
+                call(HTTP_METHOD_POST, path=URL_PATH_DSORT, json=spec),
+            ]
         )
 
     def test_abort(self):
@@ -268,13 +382,13 @@ class TestDsort(unittest.TestCase):
         input_shards = DsortShardsGroup(
             bck=BucketModel(name="input_bucket"),
             role="input",
-            format={"template": "template_input"},
+            format=ObjectRange("input-", 0, 99),
             extension="txt",
         )
         output_shards = DsortShardsGroup(
             bck=BucketModel(name="output_bucket"),
             role="output",
-            format="template_output",
+            format=ObjectRange("output-", 0, 99),
             extension="txt",
         )
         dsort_framework = DsortFramework(
@@ -288,10 +402,12 @@ class TestDsort(unittest.TestCase):
         spec = dsort_framework.to_spec()
         self.assertEqual(spec["input_bck"], {"name": "input_bucket", "provider": "ais"})
         self.assertEqual(spec["input_extension"], "txt")
+        self.assertDictEqual(spec["input_format"], {"template": "input-{0..99..1}"})
         self.assertEqual(
             spec["output_bck"], {"name": "output_bucket", "provider": "ais"}
         )
         self.assertEqual(spec["output_extension"], "txt")
+        self.assertEqual(spec["output_format"], "output-{0..99..1}")
         self.assertEqual(spec["output_shard_size"], "10GB")
         self.assertEqual(spec["description"], "Test description")
 
@@ -299,7 +415,7 @@ class TestDsort(unittest.TestCase):
         invalid_input = {
             "bck": BucketModel(name="test_bucket", provider="aws"),
             "role": "input",
-            "format": "input_template",
+            "format": "palne_string",
             "extension": ".txt",
         }
         with self.assertRaises(ValueError):
@@ -308,16 +424,16 @@ class TestDsort(unittest.TestCase):
         invalid_output = {
             "bck": BucketModel(name="test_bucket", provider="aws"),
             "role": "output",
-            "format": {"template": "output_template"},
+            "format": "palne_string",
             "extension": ".txt",
         }
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValueError):
             DsortShardsGroup(**invalid_output)
 
         invalid_role = {
             "bck": BucketModel(name="test_bucket", provider="aws"),
             "role": "invalid",
-            "format": {"template": "output_template"},
+            "format": ObjectRange("output-", 0, 99),
             "extension": ".txt",
         }
         with self.assertRaises(ValueError):
@@ -348,3 +464,22 @@ class TestDsort(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             DsortAlgorithm(**invalid_algo_content_extra_fields)
+
+    def test_ekm_setitem_valid(self):
+        ekm = ExternalKeyMap()
+        ekm[self.valid_key] = self.valid_value
+        self.assertEqual(ekm[self.valid_key], self.valid_value)
+
+    def test_ekm_setitem_invalid_key(self):
+        ekm = ExternalKeyMap()
+        with self.assertRaises(TypeError) as context:
+            ekm[self.invalid_key] = self.valid_value
+        self.assertEqual(str(context.exception), "Key must be a string, got int")
+
+    def test_ekm_setitem_invalid_value(self):
+        ekm = ExternalKeyMap()
+        with self.assertRaises(TypeError) as context:
+            ekm[self.valid_key] = self.invalid_value
+        self.assertEqual(
+            str(context.exception), "Value must be an instance of ObjectNames, got str"
+        )

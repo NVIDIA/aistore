@@ -1,5 +1,6 @@
 import logging
 import time
+import json
 from typing import Dict, Union
 from pathlib import Path
 
@@ -13,7 +14,9 @@ from aistore.sdk.const import (
     DSORT_UUID,
 )
 from aistore.sdk.dsort.framework import DsortFramework
+from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_ORDER_FILE_NAME
 from aistore.sdk.dsort.types import JobInfo
+from aistore.sdk.bucket import Bucket
 from aistore.sdk.errors import Timeout
 from aistore.sdk.utils import validate_file, probing_frequency
 
@@ -47,13 +50,27 @@ class Dsort:
         if isinstance(spec, (Path, str)):
             validate_file(spec)
             dsort_framework = DsortFramework.from_file(spec)
+            spec = dsort_framework.to_spec()
         elif isinstance(spec, DsortFramework):
             dsort_framework = spec
+            spec = dsort_framework.to_spec()
+
+            # If output format is an ExternalKeyMap, generate and PUT the order file before starting dsort
+            output_format = dsort_framework.output_shards.format
+            if isinstance(output_format, ExternalKeyMap):
+                input_bck_name = dsort_framework.input_shards.bck.name
+                input_bck = Bucket(name=input_bck_name, client=self._client)
+                order_file_obj = input_bck.object(EKM_ORDER_FILE_NAME)
+                order_file_obj.put_content(
+                    json.dumps(output_format.as_dict()).encode("utf-8")
+                )
+                spec["order_file"] = order_file_obj.get_url()
+                spec["order_file_sep"] = ""
         else:
             raise ValueError("spec must be a Path or a DsortFramework instance")
 
         self._dsort_id = self._client.request(
-            HTTP_METHOD_POST, path=URL_PATH_DSORT, json=dsort_framework.to_spec()
+            HTTP_METHOD_POST, path=URL_PATH_DSORT, json=spec
         ).text
         return self._dsort_id
 
