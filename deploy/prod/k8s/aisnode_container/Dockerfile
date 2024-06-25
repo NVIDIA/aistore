@@ -2,22 +2,23 @@
 # Dockerfile to build an aisnode Docker image
 #
 
-FROM golang:1.22 AS builder
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.22 AS builder
+
+WORKDIR /go/src/aistore
+
+COPY . .
 
 ARG mode
 ARG providers
+ARG TARGETOS
+ARG TARGETARCH
 
-ENV GOPATH="/go"
-ENV PATH="${GOPATH}/bin:${PATH}"
-
-RUN mkdir -p /go/src/github.com/NVIDIA/aistore
-WORKDIR /go/src/github.com/NVIDIA/aistore
-COPY . .
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} \
+    make node cli xmeta
 
 
-RUN MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} make node cli xmeta
-
-FROM ubuntu:22.04
+FROM ubuntu:22.04 as base
 
 RUN apt-get update -yq && apt-get dist-upgrade -y
 RUN apt-get install -y --no-install-recommends \
@@ -34,11 +35,8 @@ RUN apt-get install -y --no-install-recommends \
 
 RUN cd /opt && git clone https://github.com/etsy/statsd.git
 
-RUN mkdir -p /usr/local/bin
-ENV PATH="/usr/local/bin:${PATH}"
-
 # Copy over the binaries.
-COPY --from=builder /go/bin /usr/local/bin/
+COPY --from=builder /go/bin /usr/bin/
 
 COPY deploy/prod/k8s/aisnode_container/ais_docker_start.sh /ais_docker_start.sh
 RUN chmod a+x /ais_docker_start.sh
