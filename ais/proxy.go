@@ -2308,7 +2308,7 @@ end:
 	// the (`cmn.LsoRes`) result _may_ include duplicated names of the virtual subdirectories
 	// - that's why:
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
-		allEntries.Entries = cmn.DedupLso(allEntries.Entries, len(entries))
+		allEntries.Entries = cmn.DedupLso(allEntries.Entries, len(entries), false /*no-dirs*/)
 	}
 
 	return allEntries, nil
@@ -2392,7 +2392,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	}
 	freeBcastRes(results)
 
-	return cmn.MergeLso(resLists, 0), nil
+	return cmn.MergeLso(resLists, lsmsg, 0), nil
 }
 
 func (p *proxy) redirectObjAction(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, msg *apc.ActMsg) {

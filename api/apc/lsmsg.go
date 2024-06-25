@@ -75,6 +75,13 @@ const (
 	// and if it does:
 	// - check whether remote version differs from its in-cluster copy
 	LsVerChanged
+
+	// Do not return virtual subdirectories.
+	// Background:
+	// Currently,    `list-objects(ais://BUCKET)` never returns virtual subdirectories - while,
+	// for instance, `list-objects(aws://BUCKET)` MAY return the latter.
+	// To prevent this from happening, specify LsNoDirs flag.
+	LsNoDirs
 )
 
 // max page sizes

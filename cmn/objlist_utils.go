@@ -112,13 +112,16 @@ func (be *LsoEnt) CopyWithProps(propsSet cos.StrSet) (ne *LsoEnt) {
 
 func SortLso(entries LsoEntries) { sort.Slice(entries, entries.cmp) }
 
-func DedupLso(entries LsoEntries, maxSize int) []*LsoEnt {
+func DedupLso(entries LsoEntries, maxSize int, noDirs bool) []*LsoEnt {
 	var j int
-	for _, obj := range entries {
-		if j > 0 && entries[j-1].Name == obj.Name {
+	for _, en := range entries {
+		if j > 0 && entries[j-1].Name == en.Name {
 			continue
 		}
-		entries[j] = obj
+		if noDirs && cos.IsLastB(en.Name, '/') {
+			continue
+		}
+		entries[j] = en
 		j++
 
 		if maxSize > 0 && j == maxSize {
@@ -132,7 +135,8 @@ func DedupLso(entries LsoEntries, maxSize int) []*LsoEnt {
 // MergeLso merges list-objects results received from targets. For the same
 // object name (ie., the same object) the corresponding properties are merged.
 // If maxSize is greater than 0, the resulting list is sorted and truncated.
-func MergeLso(lists []*LsoRes, maxSize int) *LsoRes {
+func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
+	noDirs := lsmsg.IsFlagSet(apc.LsNoDirs)
 	if len(lists) == 0 {
 		return &LsoRes{}
 	}
@@ -140,7 +144,7 @@ func MergeLso(lists []*LsoRes, maxSize int) *LsoRes {
 	token := resList.ContinuationToken
 	if len(lists) == 1 {
 		SortLso(resList.Entries)
-		resList.Entries = DedupLso(resList.Entries, maxSize)
+		resList.Entries = DedupLso(resList.Entries, maxSize, noDirs)
 		resList.ContinuationToken = token
 		return resList
 	}
@@ -151,19 +155,24 @@ func MergeLso(lists []*LsoRes, maxSize int) *LsoRes {
 		if token < l.ContinuationToken {
 			token = l.ContinuationToken
 		}
-		for _, e := range l.Entries {
-			entry, exists := tmp[e.Name]
-			if !exists {
-				tmp[e.Name] = e
+		for _, en := range l.Entries {
+			// drop
+			if noDirs && cos.IsLastB(en.Name, '/') {
 				continue
 			}
-			// merge the props
-			if !entry.IsPresent() && e.IsPresent() {
-				e.Version = cos.Either(e.Version, entry.Version)
-				tmp[e.Name] = e
+			// add new
+			entry, exists := tmp[en.Name]
+			if !exists {
+				tmp[en.Name] = en
+				continue
+			}
+			// merge existing w/ new props
+			if !entry.IsPresent() && en.IsPresent() {
+				en.Version = cos.Either(en.Version, entry.Version)
+				tmp[en.Name] = en
 			} else {
-				entry.Location = cos.Either(entry.Location, e.Location)
-				entry.Version = cos.Either(entry.Version, e.Version)
+				entry.Location = cos.Either(entry.Location, en.Location)
+				entry.Version = cos.Either(entry.Version, en.Version)
 			}
 		}
 	}

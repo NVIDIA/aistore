@@ -134,6 +134,7 @@ var (
 			startAfterFlag,
 			bckSummaryFlag,
 			noRecursFlag,
+			noDirsFlag,
 			dontHeadRemoteFlag,
 			dontAddRemoteFlag,
 			listArchFlag,

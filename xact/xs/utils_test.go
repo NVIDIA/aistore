@@ -101,7 +101,7 @@ func concatLso(lists []*cmn.LsoRes, maxSize int) (objs *cmn.LsoRes) {
 	cmn.SortLso(objs.Entries)
 
 	// Remove duplicates
-	objs.Entries = cmn.DedupLso(objs.Entries, maxSize)
+	objs.Entries = cmn.DedupLso(objs.Entries, maxSize, false /*no-dirs*/)
 	l := len(objs.Entries)
 	if maxSize > 0 && l >= maxSize {
 		objs.ContinuationToken = objs.Entries[l-1].Name

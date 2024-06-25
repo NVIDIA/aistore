@@ -314,6 +314,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, noRecursFlag) {
 		msg.SetFlag(apc.LsNoRecursion)
 	}
+	if flagIsSet(c, noDirsFlag) {
+		msg.SetFlag(apc.LsNoDirs)
+	}
 
 	var (
 		props    []string

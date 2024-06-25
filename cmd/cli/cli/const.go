@@ -788,6 +788,7 @@ var (
 	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 
 	noRecursFlag = cli.BoolFlag{Name: "non-recursive,nr", Usage: "list objects without including nested virtual subdirectories"}
+	noDirsFlag   = cli.BoolFlag{Name: "no-dirs", Usage: "do not return virtual subdirectories (applies to remote buckets only)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
