@@ -41,7 +41,6 @@ ENV PATH="/usr/local/bin:${PATH}"
 COPY --from=builder /go/bin /usr/local/bin/
 
 COPY deploy/prod/k8s/aisnode_container/ais_docker_start.sh /ais_docker_start.sh
-COPY deploy/prod/k8s/aisnode_container/ais_readiness.sh /ais_readiness.sh
-RUN chmod a+x /ais_docker_start.sh /ais_readiness.sh
+RUN chmod a+x /ais_docker_start.sh
 
 CMD ["bash", "-c", "/ais_docker_start.sh"]
