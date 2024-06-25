@@ -15,32 +15,22 @@ ARG TARGETARCH
 
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} \
-    make node cli xmeta
+    make node
+
+# TODO -- FIXME: remove statsd
+RUN cd /opt && git clone https://github.com/etsy/statsd.git && rm -rf statsd/.git
 
 
 FROM ubuntu:22.04 as base
 
-RUN apt-get update -yq && apt-get dist-upgrade -y && \
-    apt-get install -y --no-install-recommends \
-    sysstat \
-    attr \
-    git \
-    make \
-    coreutils \
-    lsof \
-    util-linux \
-    bash \
-    ca-certificates \
-    curl && \
-    # Clean up the apt cache to reduce the image size
-    rm -rf /var/lib/apt/lists/*
-
-RUN cd /opt && git clone https://github.com/etsy/statsd.git
+# TODO: move ca-certs installation to a different stage?
+RUN apt-get update -yq \
+	&& apt-get install -y --no-install-recommends \
+	ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Copy over the binaries.
 COPY --from=builder /go/bin /usr/bin/
+COPY --from=builder /opt/statsd /opt
 
-COPY deploy/prod/k8s/aisnode_container/ais_docker_start.sh /ais_docker_start.sh
-RUN chmod a+x /ais_docker_start.sh
-
-CMD ["bash", "-c", "/ais_docker_start.sh"]
+ENTRYPOINT ["aisnode"]

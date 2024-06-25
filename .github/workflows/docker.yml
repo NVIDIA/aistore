@@ -33,12 +33,6 @@ on:
         type: boolean
         default: true
 
-      build_ais_init_image:
-        description: 'Build ais-init image (aistorage/ais-init)'
-        required: true
-        type: boolean
-        default: true
-
       image_tag:
         description: 'Tag of all the selected images'
         required: true
@@ -47,7 +41,6 @@ on:
 env:
   ADMIN_IMAGE: 'aistorage/admin'
   AISNODE_IMAGE: 'aistorage/aisnode'
-  AISINIT_IMAGE: 'aistorage/ais-init'
   CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
   CI_IMAGE: 'aistorage/ci'
   AISNODE_MINIKUBE_IMAGE: 'aistorage/aisnode-minikube'
@@ -77,13 +70,6 @@ jobs:
       run: |
         pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
         IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
-        popd
-
-    - name: ais-init image
-      if: ${{ inputs.build_ais_init_image }}
-      run: |
-        pushd $GITHUB_WORKSPACE/deploy/prod/k8s/init_container
-        IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
         popd
 
     - name: cluster-minimal image
