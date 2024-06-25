@@ -50,7 +50,7 @@ type (
 		copies fs.MPI
 		uname  *string
 		cmn.ObjAttrs
-		atimefs uint64 // NOTE: high bit is reserved for `dirty`
+		atimefs uint64 // (high bit `lomDirtyMask` | int64: atime)
 		lid     lomBID
 	}
 	LOM struct {
@@ -203,8 +203,8 @@ func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
 func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
 // chunks vs whole // TODO -- FIXME: NIY
-func (lom *LOM) IsChunked() bool {
-	debug.Assert(lom.loaded())
+func (lom *LOM) IsChunked(special ...bool) bool {
+	debug.Assert(len(special) > 0 || lom.loaded())
 	return false
 }
 
@@ -563,6 +563,7 @@ func (lom *LOM) FromFS() error {
 	}
 	lom.md.Atime = atimefs
 	lom.md.atimefs = uint64(atimefs)
+
 	return nil
 }
 

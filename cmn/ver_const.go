@@ -39,7 +39,8 @@ const (
 	MetaverVMD   = 2 // Volume MD (jsp)
 	MetaverEtlMD = 1 // ETL MD (jsp)
 
-	MetaverLOM = 1 // LOM
+	MetaverLOM   = 1 // LOM
+	MetaverChunk = 2 // LOM chunk
 
 	MetaverConfig      = 4 // Global Configuration (jsp)
 	MetaverAuthNConfig = 1 // Authn config (jsp) // ditto

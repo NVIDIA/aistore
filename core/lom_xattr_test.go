@@ -311,7 +311,7 @@ var _ = Describe("LOM Xattributes", func() {
 					b[1] = 200 // corrupting checksum type
 					Expect(fs.SetXattr(localFQN, core.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: unknown checksum 200"))
+					Expect(err).To(MatchError("bad lmeta: unknown checksum 200"))
 
 					b, err = fs.GetXattr(localFQN, core.XattrLOM)
 					Expect(err).NotTo(HaveOccurred())
@@ -319,7 +319,7 @@ var _ = Describe("LOM Xattributes", func() {
 					b[1] = 0 // corrupting checksum type
 					Expect(fs.SetXattr(localFQN, core.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: unknown checksum 0"))
+					Expect(err).To(MatchError("bad lmeta: unknown checksum 0"))
 				})
 
 				It("should fail when metadata version is invalid", func() {
@@ -329,12 +329,12 @@ var _ = Describe("LOM Xattributes", func() {
 					b[0] = 128 // corrupting metadata version
 					Expect(fs.SetXattr(localFQN, core.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: unknown version 128"))
+					Expect(err).To(MatchError("bad lmeta: unknown version 128"))
 
 					b[0] = 0 // corrupting metadata version
 					Expect(fs.SetXattr(localFQN, core.XattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: unknown version 0"))
+					Expect(err).To(MatchError("bad lmeta: unknown version 0"))
 				})
 
 				It("should fail when metadata is too short", func() {
@@ -344,7 +344,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 					Expect(fs.SetXattr(localFQN, core.XattrLOM, []byte{1, 1, 2})).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("invalid lmeta: too short (3)"))
+					Expect(err).To(MatchError("bad lmeta: too short (3)"))
 				})
 
 				It("should fail when meta is corrupted", func() {

@@ -40,31 +40,51 @@ import (
 //   on the version of the layout.
 
 // the one and only currently supported checksum type == xxhash;
-// NOTE: adding more checksums will likely require a new cmn.MetaverLOM version
+// adding more checksums will likely require a new cmn.MetaverLOM version
 const mdCksumTyXXHash = 1
 
+// on-disk xattr names
 const (
-	XattrLOM      = "user.ais.lom" // on-disk xattr name
-	xattrMaxSize  = memsys.MaxSmallSlabSize
+	XattrLOM   = "user.ais.lom"
+	xattrChunk = "user.ais.chunk"
+)
+
+const (
+	xattrMaxSize = memsys.MaxSmallSlabSize // lom and chunk, both
+)
+
+// cmd/xmeta support
+const (
 	DumpLomEnvVar = "AIS_DUMP_LOM"
 )
 
-// packing format internal attrs
+const lomDirtyMask = uint64(1 << 63)
+
 const (
-	lomCksumType = iota
-	lomCksumValue
-	lomObjVersion
-	lomObjSize
-	lomObjCopies
-	lomCustomMD
+	badLmeta = "bad lmeta"
+	badChunk = "bad lchunk"
 )
 
-// packing format separators
+// packing format: enum internal attrs
 const (
-	copyFQNSepa  = "\x00"
-	customMDSepa = "\x01"
-	recordSepa   = "\xe3/\xbd"
-	lenRecSepa   = len(recordSepa)
+	packedCksumT = iota
+	packedCksumV
+	packedVer
+	packedSize
+	packedCopies
+	packedCustom
+	packedNum
+	packedChunk
+)
+
+// packing format: separators
+const (
+	stringSepa = "\x00"
+	customSepa = "\x01"
+	recordSepa = "\xe3/\xbd"
+
+	lenStrSepa = len(stringSepa)
+	lenRecSepa = len(recordSepa)
 )
 
 const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
@@ -115,11 +135,11 @@ func (lom *LOM) lmfsReload(populate bool) (md *lmeta, err error) {
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	var (
 		size      int64
-		read      []byte
+		b         []byte
 		mdSize    = g.maxLmeta.Load()
 		buf, slab = g.smm.AllocSize(mdSize)
 	)
-	read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
+	b, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 	if err != nil {
 		slab.Free(buf)
 		if err != syscall.ERANGE {
@@ -128,13 +148,13 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
 		buf, slab = g.smm.AllocSize(xattrMaxSize)
-		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
+		b, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 		if err != nil {
 			slab.Free(buf)
 			return whingeLmeta(err)
 		}
 	}
-	size = int64(len(read))
+	size = int64(len(b))
 	if size == 0 {
 		nlog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
 		err = os.NewSyscallError(getxattr, syscall.ENOENT)
@@ -145,9 +165,9 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if !populate {
 		md = &lmeta{}
 	}
-	err = md.unpack(read)
+	err = md.unpack(b)
 	if err == nil {
-		_recomputeMdSize(size, mdSize)
+		_mdsize(size, mdSize)
 	} else {
 		err = cmn.NewErrLmetaCorrupted(err)
 	}
@@ -256,11 +276,11 @@ func (lom *LOM) pack() (buf []byte) {
 	buf = lom.md.pack(lmsize)
 	size := int64(len(buf))
 	debug.Assert(size <= xattrMaxSize)
-	_recomputeMdSize(size, lmsize)
+	_mdsize(size, lmsize)
 	return
 }
 
-func _recomputeMdSize(size, mdSize int64) {
+func _mdsize(size, mdSize int64) {
 	const grow = memsys.SmallSlabIncStep
 	var nsize int64
 	if size > mdSize {
@@ -276,8 +296,6 @@ func _recomputeMdSize(size, mdSize int64) {
 // lmeta //
 ///////////
 
-const lomDirtyMask = uint64(1 << 63)
-
 func (md *lmeta) makeDirty()    { md.atimefs |= lomDirtyMask }
 func (md *lmeta) clearDirty()   { md.atimefs &= ^lomDirtyMask }
 func (md *lmeta) isDirty() bool { return md.atimefs&lomDirtyMask == lomDirtyMask }
@@ -291,7 +309,6 @@ func (md *lmeta) poprt(saved []uint64) {
 }
 
 func (md *lmeta) unpack(buf []byte) error {
-	const invalid = "invalid lmeta"
 	var (
 		payload                           string
 		expectedCksum, actualCksum        uint64
@@ -301,13 +318,13 @@ func (md *lmeta) unpack(buf []byte) error {
 		last                              bool
 	)
 	if len(buf) < prefLen {
-		return fmt.Errorf("%s: too short (%d)", invalid, len(buf))
+		return fmt.Errorf("%s: too short (%d)", badLmeta, len(buf))
 	}
 	if buf[0] != cmn.MetaverLOM {
-		return fmt.Errorf("%s: unknown version %d", invalid, buf[0])
+		return fmt.Errorf("%s: unknown version %d", badLmeta, buf[0])
 	}
 	if buf[1] != mdCksumTyXXHash {
-		return fmt.Errorf("%s: unknown checksum %d", invalid, buf[1])
+		return fmt.Errorf("%s: unknown checksum %d", badLmeta, buf[1])
 	}
 	payload = string(buf[prefLen:])
 	actualCksum = xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
@@ -327,44 +344,44 @@ func (md *lmeta) unpack(buf []byte) error {
 		} else {
 			record = payload[off : off+i]
 		}
-		key := int(binary.BigEndian.Uint16([]byte(record)))
+		key := int(binary.BigEndian.Uint16(cos.UnsafeB(record)))
 		val := record[cos.SizeofI16:]
 		off += i + lenRecSepa
 		switch key {
-		case lomCksumValue:
+		case packedCksumV:
 			if haveCksumValue {
-				return errors.New(invalid + " #1")
+				return errors.New(badLmeta + " #1")
 			}
 			cksumValue = val
 			haveCksumValue = true
-		case lomCksumType:
+		case packedCksumT:
 			if haveCksumType {
-				return errors.New(invalid + " #2")
+				return errors.New(badLmeta + " #2")
 			}
 			cksumType = val
 			haveCksumType = true
-		case lomObjVersion:
+		case packedVer:
 			if haveVersion {
-				return errors.New(invalid + " #3")
+				return errors.New(badLmeta + " #3")
 			}
 			md.SetVersion(val)
 			haveVersion = true
-		case lomObjSize:
+		case packedSize:
 			if haveSize {
-				return errors.New(invalid + " #4")
+				return errors.New(badLmeta + " #4")
 			}
-			md.Size = int64(binary.BigEndian.Uint64([]byte(val)))
+			md.Size = int64(binary.BigEndian.Uint64(cos.UnsafeB(val)))
 			haveSize = true
-		case lomObjCopies:
+		case packedCopies:
 			if haveCopies {
-				return errors.New(invalid + " #5")
+				return errors.New(badLmeta + " #5")
 			}
-			copyFQNs := strings.Split(val, copyFQNSepa)
+			copyFQNs := strings.Split(val, stringSepa)
 			haveCopies = true
 			md.copies = make(fs.MPI, len(copyFQNs))
 			for _, copyFQN := range copyFQNs {
 				if copyFQN == "" {
-					return errors.New(invalid + " #5.1")
+					return errors.New(badLmeta + " #5.1")
 				}
 
 				mpathInfo, _, err := fs.FQN2Mpath(copyFQN)
@@ -381,52 +398,58 @@ func (md *lmeta) unpack(buf []byte) error {
 				}
 				md.copies[copyFQN] = mpathInfo
 			}
-		case lomCustomMD:
-			entries := strings.Split(val, customMDSepa)
+		case packedCustom:
+			entries := strings.Split(val, customSepa)
 			custom := make(cos.StrKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
 				custom[entries[i]] = entries[i+1]
 			}
 			md.SetCustomMD(custom)
 		default:
-			return errors.New(invalid + " #6")
+			return errors.New(badLmeta + " #6")
 		}
 	}
 	if haveCksumType != haveCksumValue {
-		return errors.New(invalid + " #7")
+		return errors.New(badLmeta + " #7")
 	}
 	md.Cksum = cos.NewCksum(cksumType, cksumValue)
 	if !haveSize {
-		return errors.New(invalid + " #8")
+		return errors.New(badLmeta + " #8")
 	}
 	return nil
 }
 
 func (md *lmeta) pack(mdSize int64) (buf []byte) {
-	var (
-		b8                    [cos.SizeofI64]byte
-		cksumType, cksumValue = md.Cksum.Get()
-	)
 	buf, _ = g.smm.AllocSize(mdSize)
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
 
-	// serialize
-	buf = _marshRecord(buf, lomCksumType, cksumType, true)
-	buf = _marshRecord(buf, lomCksumValue, cksumValue, true)
+	// checksum
+	cksumType, cksumValue := md.Cksum.Get()
+	buf = _packRecord(buf, packedCksumT, cksumType, true)
+	buf = _packRecord(buf, packedCksumV, cksumValue, true)
+
+	// version
 	if v := md.Version(); v != "" {
-		buf = _marshRecord(buf, lomObjVersion, v, true)
+		buf = _packRecord(buf, packedVer, v, true)
 	}
+
+	// size
+	var b8 [cos.SizeofI64]byte
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
-	buf = _marshRecord(buf, lomObjSize, string(b8[:]), false)
+	buf = _packRecord(buf, packedSize, cos.UnsafeS(b8[:]), false)
+
+	// copies
 	if len(md.copies) > 0 {
 		buf = g.smm.Append(buf, recordSepa)
-		buf = _marshRecord(buf, lomObjCopies, "", false)
-		buf = _marshCopies(buf, md.copies)
+		buf = _packRecord(buf, packedCopies, "", false)
+		buf = _packCopies(buf, md.copies)
 	}
+
+	// custom md
 	if custom := md.GetCustomMD(); len(custom) > 0 {
 		buf = g.smm.Append(buf, recordSepa)
-		buf = _marshRecord(buf, lomCustomMD, "", false)
-		buf = _marshCustomMD(buf, custom)
+		buf = _packRecord(buf, packedCustom, "", false)
+		buf = _packCustomMD(buf, custom)
 	}
 
 	// checksum, prepend, and return
@@ -437,10 +460,10 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	return
 }
 
-func _marshRecord(buf []byte, key int, value string, sepa bool) []byte {
+func _packRecord(buf []byte, key int, value string, sepa bool) []byte {
 	var bkey [cos.SizeofI16]byte
 	binary.BigEndian.PutUint16(bkey[:], uint16(key))
-	buf = g.smm.Append(buf, string(bkey[:]))
+	buf = g.smm.Append(buf, cos.UnsafeS(bkey[:]))
 	buf = g.smm.Append(buf, value)
 	if sepa {
 		buf = g.smm.Append(buf, recordSepa)
@@ -448,7 +471,7 @@ func _marshRecord(buf []byte, key int, value string, sepa bool) []byte {
 	return buf
 }
 
-func _marshCopies(buf []byte, copies fs.MPI) []byte {
+func _packCopies(buf []byte, copies fs.MPI) []byte {
 	var (
 		i   int
 		num = len(copies)
@@ -458,13 +481,13 @@ func _marshCopies(buf []byte, copies fs.MPI) []byte {
 		i++
 		buf = g.smm.Append(buf, copyFQN)
 		if i < num {
-			buf = g.smm.Append(buf, copyFQNSepa)
+			buf = g.smm.Append(buf, stringSepa)
 		}
 	}
 	return buf
 }
 
-func _marshCustomMD(buf []byte, md cos.StrKVs) []byte {
+func _packCustomMD(buf []byte, md cos.StrKVs) []byte {
 	var (
 		i   int
 		num = len(md)
@@ -473,16 +496,16 @@ func _marshCustomMD(buf []byte, md cos.StrKVs) []byte {
 		debug.Assert(k != "")
 		i++
 		buf = g.smm.Append(buf, k)
-		buf = g.smm.Append(buf, customMDSepa)
+		buf = g.smm.Append(buf, customSepa)
 		buf = g.smm.Append(buf, v)
 		if i < num {
-			buf = g.smm.Append(buf, customMDSepa)
+			buf = g.smm.Append(buf, customSepa)
 		}
 	}
 	return buf
 }
 
-// copy atime IFF valid and more recent
+// copy atime _iff_ valid and more recent
 func (md *lmeta) cpAtime(from *lmeta) {
 	if !cos.IsValidAtime(from.Atime) {
 		return
