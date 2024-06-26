@@ -5,6 +5,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -134,7 +135,6 @@ func (lom *LOM) lmfsReload(populate bool) (md *lmeta, err error) {
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	var (
-		size      int64
 		b         []byte
 		mdSize    = g.maxLmeta.Load()
 		buf, slab = g.smm.AllocSize(mdSize)
@@ -154,12 +154,16 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 			return whingeLmeta(err)
 		}
 	}
-	size = int64(len(b))
+	md, err = lom.unpack(b, mdSize, populate)
+	slab.Free(buf)
+	return md, err
+}
+
+func (lom *LOM) unpack(b []byte, mdSize int64, populate bool) (md *lmeta, err error) {
+	size := int64(len(b))
 	if size == 0 {
 		nlog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
-		err = os.NewSyscallError(getxattr, syscall.ENOENT)
-		slab.Free(buf)
-		return
+		return nil, os.NewSyscallError(getxattr, syscall.ENOENT)
 	}
 	md = &lom.md
 	if !populate {
@@ -171,8 +175,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	} else {
 		err = cmn.NewErrLmetaCorrupted(err)
 	}
-	slab.Free(buf)
-	return
+	return md, err
 }
 
 func (lom *LOM) PersistMain() (err error) {
@@ -310,7 +313,7 @@ func (md *lmeta) poprt(saved []uint64) {
 
 func (md *lmeta) unpack(buf []byte) error {
 	var (
-		payload                           string
+		payload                           []byte
 		expectedCksum, actualCksum        uint64
 		cksumType, cksumValue             string
 		haveSize, haveVersion, haveCopies bool
@@ -326,7 +329,7 @@ func (md *lmeta) unpack(buf []byte) error {
 	if buf[1] != mdCksumTyXXHash {
 		return fmt.Errorf("%s: unknown checksum %d", badLmeta, buf[1])
 	}
-	payload = string(buf[prefLen:])
+	payload = buf[prefLen:]
 	actualCksum = xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
 	expectedCksum = binary.BigEndian.Uint64(buf[2:])
 	if expectedCksum != actualCksum {
@@ -335,8 +338,8 @@ func (md *lmeta) unpack(buf []byte) error {
 
 	for off := 0; !last; {
 		var (
-			record string
-			i      = strings.Index(payload[off:], recordSepa)
+			record []byte
+			i      = bytes.Index(payload[off:], recdupSepa[:])
 		)
 		if i < 0 {
 			record = payload[off:]
@@ -344,38 +347,38 @@ func (md *lmeta) unpack(buf []byte) error {
 		} else {
 			record = payload[off : off+i]
 		}
-		key := int(binary.BigEndian.Uint16(cos.UnsafeB(record)))
-		val := record[cos.SizeofI16:]
+		key := int(binary.BigEndian.Uint16(record)) // the corresponding 'val' is at rec[cos.SizeofI16:]
 		off += i + lenRecSepa
 		switch key {
 		case packedCksumV:
 			if haveCksumValue {
 				return errors.New(badLmeta + " #1")
 			}
-			cksumValue = val
+			cksumValue = string(record[cos.SizeofI16:])
 			haveCksumValue = true
 		case packedCksumT:
 			if haveCksumType {
 				return errors.New(badLmeta + " #2")
 			}
-			cksumType = val
+			cksumType = string(record[cos.SizeofI16:])
 			haveCksumType = true
 		case packedVer:
 			if haveVersion {
 				return errors.New(badLmeta + " #3")
 			}
-			md.SetVersion(val)
+			md.SetVersion(string(record[cos.SizeofI16:]))
 			haveVersion = true
 		case packedSize:
 			if haveSize {
 				return errors.New(badLmeta + " #4")
 			}
-			md.Size = int64(binary.BigEndian.Uint64(cos.UnsafeB(val)))
+			md.Size = int64(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
 			haveSize = true
 		case packedCopies:
 			if haveCopies {
 				return errors.New(badLmeta + " #5")
 			}
+			val := string(record[cos.SizeofI16:])
 			copyFQNs := strings.Split(val, stringSepa)
 			haveCopies = true
 			md.copies = make(fs.MPI, len(copyFQNs))
@@ -399,6 +402,7 @@ func (md *lmeta) unpack(buf []byte) error {
 				md.copies[copyFQN] = mpathInfo
 			}
 		case packedCustom:
+			val := string(record[cos.SizeofI16:])
 			entries := strings.Split(val, customSepa)
 			custom := make(cos.StrKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
@@ -449,7 +453,7 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	if custom := md.GetCustomMD(); len(custom) > 0 {
 		buf = g.smm.Append(buf, recordSepa)
 		buf = _packRecord(buf, packedCustom, "", false)
-		buf = _packCustomMD(buf, custom)
+		buf = _packCustom(buf, custom)
 	}
 
 	// checksum, prepend, and return
@@ -487,7 +491,7 @@ func _packCopies(buf []byte, copies fs.MPI) []byte {
 	return buf
 }
 
-func _packCustomMD(buf []byte, md cos.StrKVs) []byte {
+func _packCustom(buf []byte, md cos.StrKVs) []byte {
 	var (
 		i   int
 		num = len(md)

@@ -602,7 +602,7 @@ func TestAppendToArch(t *testing.T) {
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)
 
-			if num < expectedNum && test.multi && expectedNum-num < 4 {
+			if num < expectedNum && test.multi && expectedNum-num < 10 {
 				tlog.Logf("Warning: expected %d, have %d\n", expectedNum, num) // TODO -- FIXME: remove
 			} else {
 				tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)

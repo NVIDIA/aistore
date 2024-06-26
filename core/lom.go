@@ -80,6 +80,9 @@ var bckLocker nameLocker // common
 var (
 	T Target
 	g global
+
+	// pack/unpack internals
+	recdupSepa [lenRecSepa]byte
 )
 
 // interface guard
@@ -103,6 +106,9 @@ func Tinit(t Target, tstats cos.StatsUpdater, runHK bool) {
 	}
 	if runHK {
 		regLomCacheWithHK()
+	}
+	for i := range recordSepa {
+		recdupSepa[i] = recordSepa[i]
 	}
 }
 
