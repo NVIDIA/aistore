@@ -81,6 +81,9 @@ minikube addons enable registry
 # Apply RBAC to allow the default service account admin privileges
 kubectl apply -f minikube_rbac.yaml
 
+# Install local path provisioner to allow dynamic local storage for state (used by k8s operator tests)
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.28/deploy/local-path-storage.yaml
+
 # Apply modified coredns config to allow for faster DNS updates
 # Useful for tests where we create and destroy new services rapidly
 kubectl replace -f coredns_config.yaml
