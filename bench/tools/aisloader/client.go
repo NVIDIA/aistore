@@ -438,14 +438,22 @@ func listObjCallback(ctx *api.LsoCounter) {
 }
 
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
-func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string, cached bool) ([]string, error) {
-	msg := &apc.LsoMsg{Prefix: prefix}
-	// if bck is remote then check for cached flag
+func listObjectNames(p *params) ([]string, error) {
+	var (
+		bp       = p.bp
+		bck      = p.bck
+		cached   = p.cached
+		listDirs = p.listDirs
+		msg      = &apc.LsoMsg{Prefix: p.subDir}
+	)
 	if cached {
-		msg.Flags |= apc.LsObjCached
+		msg.Flags |= apc.LsObjCached // remote bucket: in-cluster objects only
+	}
+	if !listDirs {
+		msg.Flags |= apc.LsNoDirs // aisloader's default (to override, use --list-dirs)
 	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
-	objList, err := api.ListObjects(baseParams, bck, msg, args)
+	objList, err := api.ListObjects(bp, bck, msg, args)
 	if err != nil {
 		return nil, err
 	}

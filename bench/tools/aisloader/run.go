@@ -141,6 +141,7 @@ type (
 		traceHTTP     bool // trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
 		latest        bool // check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
 		cached        bool // list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")
+		listDirs      bool // do list virtual subdirectories (applies to remote buckets only)
 	}
 
 	// sts records accumulated puts/gets information.
@@ -309,7 +310,10 @@ func Start(version, buildtime string) (err error) {
 
 		objsLen := bucketObjsNames.Len()
 		if runParams.putPct == 0 && objsLen == 0 {
-			return errors.New("nothing to read, the bucket is empty")
+			if runParams.subDir == "" {
+				return errors.New("the bucket is empty, cannot run 100% read benchmark")
+			}
+			return errors.New("no objects with prefix '" + runParams.subDir + "' in the bucket, cannot run 100% read benchmark")
 		}
 
 		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigNum(objsLen), cos.Plural(objsLen))
@@ -579,7 +583,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 		"when true, generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.BoolVar(&p.randomProxy, "randomproxy", false,
 		"when true, select random gateway (\"proxy\") to execute I/O request")
-	f.StringVar(&p.subDir, "subdir", "", "virtual destination directory for all aisloader-generated objects")
+	f.StringVar(&p.subDir, "subdir", "", "when writing: virtual destination directory for all aisloader-generated objects;\n"+
+		"when listing: list objects with names that have the specified prefix (that may or may not be a virtual directory")
 	f.Uint64Var(&p.putShards, "putshards", 0, "spread generated objects over this many subdirectories (max 100k)")
 	f.BoolVar(&p.uniqueGETs, "uniquegets", true,
 		"when true, GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
@@ -596,6 +601,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&p.cksumType, "cksum-type", cos.ChecksumXXHash, "cksum type to use for put object requests")
 	f.BoolVar(&p.latest, "latest", false, "when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket")
 	f.BoolVar(&p.cached, "cached", false, "list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")")
+	f.BoolVar(&p.listDirs, "list-dirs", false, "list virtual subdirectories (remote buckets only)")
 
 	// ETL
 	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
@@ -1007,7 +1013,10 @@ func setupBucket(runParams *params, created *bool) error {
 		return nil
 	}
 	if runParams.cached && !runParams.bck.IsRemote() {
-		return fmt.Errorf(cachedText+"applies to remote buckets (have %s)", runParams.bck.Cname(""))
+		return fmt.Errorf(cachedText+"applies to remote buckets only (have %s)", runParams.bck.Cname(""))
+	}
+	if runParams.listDirs && !runParams.bck.IsRemote() {
+		return fmt.Errorf("--list-dirs option applies to remote buckets only (have %s)", runParams.bck.Cname(""))
 	}
 
 	//
@@ -1178,7 +1187,7 @@ func listObjects() error {
 	case isDirectS3():
 		names, err = s3ListObjects()
 	default:
-		names, err = listObjectNames(runParams.bp, runParams.bck, runParams.subDir, runParams.cached)
+		names, err = listObjectNames(runParams)
 	}
 	if err != nil {
 		return err
