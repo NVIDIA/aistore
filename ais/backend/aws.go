@@ -292,13 +292,10 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		return 0, err
 	}
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
+	if msg.IsFlagSet(apc.LsNoRecursion) {
+		params.Delimiter = aws.String("/")
+	}
 	if prefix := msg.Prefix; prefix != "" {
-		if msg.IsFlagSet(apc.LsNoRecursion) {
-			// NOTE: important to indicate subdirectory with trailing '/'
-			if cos.IsLastB(prefix, '/') {
-				params.Delimiter = aws.String("/")
-			}
-		}
 		params.Prefix = aws.String(prefix)
 	}
 	if msg.ContinuationToken != "" {
@@ -350,6 +347,13 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		}
 	}
 	lst.Entries = lst.Entries[:l]
+
+	// append virtual directories if:
+	if msg.IsFlagSet(apc.LsNoRecursion) {
+		for _, dir := range resp.CommonPrefixes {
+			lst.Entries = append(lst.Entries, &cmn.LsoEnt{Name: *dir.Prefix, Flags: apc.EntryIsDir})
+		}
+	}
 
 	if *resp.IsTruncated {
 		lst.ContinuationToken = *resp.NextContinuationToken
