@@ -20,18 +20,20 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 FROM ubuntu:22.04 as base
 
-RUN apt-get update -yq && apt-get dist-upgrade -y
-RUN apt-get install -y --no-install-recommends \
-	sysstat \
-	attr \
-	git \
-	make \
-	coreutils \
-	lsof \
-	util-linux \
-	bash \
-	ca-certificates \
-	curl
+RUN apt-get update -yq && apt-get dist-upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    sysstat \
+    attr \
+    git \
+    make \
+    coreutils \
+    lsof \
+    util-linux \
+    bash \
+    ca-certificates \
+    curl && \
+    # Clean up the apt cache to reduce the image size
+    rm -rf /var/lib/apt/lists/*
 
 RUN cd /opt && git clone https://github.com/etsy/statsd.git
 

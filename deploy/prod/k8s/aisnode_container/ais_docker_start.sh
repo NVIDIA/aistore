@@ -10,26 +10,17 @@ cp -fv $AIS_CONF_FILE /etc/ais || exit 1
 cp -fv $AIS_LOCAL_CONF_FILE /etc/ais || exit 1
 cp -fv $STATSD_CONF_FILE /opt/statsd/statsd.conf || exit 1
 
-#
-# Somewhere to dump anything of interest that will be picked up but the
-# gather_log.sh script.
-#
-mkdir /var/log/aismisc
-
-#
 # Use environment variables from /var/ais_env/env file
 env_file=/var/ais_env/env
-if [[ -f  ${env_file} ]]; then
+if [[ -f ${env_file} ]]; then
     source ${env_file}
 fi
 
-#
-# Informational
-#
+# Display cached .ais.smap file if it exists
 if [[ -f /etc/ais/.ais.smap ]]; then
     cat <<-EOM
      --- BEGIN cached .ais.smap ---
-     $(usr/local/bin/xmeta -x -in=/etc/ais/.ais.smap)
+     $(xmeta -x -in=/etc/ais/.ais.smap)
      --- END cached .ais.smap ---
 EOM
 else
@@ -48,26 +39,20 @@ echo "aisnode args: $ARGS"
 
 while :
 do
-    if [[ -e /usr/local/bin/aisnode ]]; then
+    if [[ -e /usr/bin/aisnode ]]; then
         # the production Dockerfile places ais here
-        /usr/local/bin/aisnode $ARGS
-    elif [[ -e /go/bin/aisnode ]]; then
-        # debug/source image with a built binary, use that
-        /go/bin/aisnode $ARGS
-    elif [[ -d /go/src/github.com/NVIDIA/aistore/ais ]]; then
-        # if running from source tree then add flags to assist the debugger
-        (cd /go/src/github.com/NVIDIA/aistore/ais && go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
+        aisnode $ARGS
     else
         echo "Cannot find an ais binary or source tree"
-    exit 2
+        exit 2
     fi
 
     rc=$?   # exit code from aisnode
 
-    # logs will be present in `logsDir` directory of host
+    # Logs will be present in `logsDir` directory of host
 
     # If the shutdown marker is present wait for the container to receive kill signal.
-    # This is to ensure that the ais deamon scheduled to terminate isn't restarted by K8s.
+    # This is to ensure that the ais daemon scheduled to terminate isn't restarted by K8s.
     while [[ -f /var/ais_config/.ais.shutdown ]]; do
         echo "Waiting to receive kill signal"
         sleep 10
