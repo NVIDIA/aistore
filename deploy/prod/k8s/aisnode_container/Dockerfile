@@ -23,12 +23,6 @@ RUN cd /opt && git clone https://github.com/etsy/statsd.git && rm -rf statsd/.gi
 
 FROM ubuntu:22.04 as base
 
-# TODO: move ca-certs installation to a different stage?
-RUN apt-get update -yq \
-	&& apt-get install -y --no-install-recommends \
-	ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
-
 # Copy over the binaries.
 COPY --from=builder /go/bin /usr/bin/
 COPY --from=builder /opt/statsd /opt
