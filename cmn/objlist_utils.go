@@ -21,16 +21,23 @@ var nilEntry LsoEnt
 // LsoEntries //
 ////////////////
 
-func (entries LsoEntries) cmp(i, j int) bool { return entries[i].less(entries[j]) }
+func (entries LsoEntries) cmp(i, j int) bool {
+	eni, enj := entries[i], entries[j]
+	return eni.less(enj)
+}
 
 func appSorted(entries LsoEntries, ne *LsoEnt) LsoEntries {
-	for i := range entries {
-		if ne.Name > entries[i].Name {
+	for i, eni := range entries {
+		if eni.IsDir() != ne.IsDir() {
+			if eni.IsDir() {
+				continue
+			}
+		} else if ne.Name > eni.Name {
 			continue
 		}
 		// dedup
-		if ne.Name == entries[i].Name {
-			if ne.Status() < entries[i].Status() {
+		if ne.Name == eni.Name {
+			if ne.Status() < eni.Status() {
 				entries[i] = ne
 			}
 			return entries
@@ -74,6 +81,15 @@ func (be *LsoEnt) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 
 func (be *LsoEnt) String() string     { return "{" + be.Name + "}" }
 
 func (be *LsoEnt) less(oe *LsoEnt) bool {
+	if be.IsDir() {
+		if oe.IsDir() {
+			return be.Name < oe.Name
+		}
+		return true
+	}
+	if oe.IsDir() {
+		return false
+	}
 	if be.Name == oe.Name {
 		return be.Status() < oe.Status()
 	}
@@ -186,8 +202,6 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 	clear(resList.Entries)
 	resList.Entries = resList.Entries[:0]
 	resList.ContinuationToken = token
-
-	// TODO -- FIXME: sort virtual dirs separately =====================
 
 	for _, entry := range tmp {
 		resList.Entries = appSorted(resList.Entries, entry)
