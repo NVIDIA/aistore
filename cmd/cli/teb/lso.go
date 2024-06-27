@@ -15,7 +15,7 @@ import (
 var (
 	// ObjectPropsMap matches ObjEntry field
 	ObjectPropsMap = map[string]string{
-		apc.GetPropsName:     "{{FormatNameArch $obj.Name $obj.Flags}}",
+		apc.GetPropsName:     "{{FormatNameDirArch $obj.Name $obj.Flags}}",
 		apc.GetPropsSize:     "{{FormatBytesSig2 $obj.Size 2 $obj.Flags}}",
 		apc.GetPropsChecksum: "{{$obj.Checksum}}",
 		apc.GetPropsAtime:    "{{$obj.Atime}}",
@@ -109,5 +109,8 @@ func fmtLsObjStatus(e *cmn.LsoEnt) string {
 }
 
 func fmtLsObjIsCached(e *cmn.LsoEnt) string {
+	if e.IsDir() {
+		return ""
+	}
 	return FmtBool(e.IsPresent())
 }

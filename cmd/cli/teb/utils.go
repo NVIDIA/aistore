@@ -206,10 +206,13 @@ func fmtACL(acl apc.AccessAttrs) string {
 	return acl.Describe(true /*incl. all*/)
 }
 
-func fmtNameArch(val string, flags uint16) string {
+func fmtNameDirArch(val string, flags uint16) string {
 	if flags&apc.EntryInArch == 0 {
-		if flags&apc.EntryIsDir != 0 && !cos.IsLastB(val, '/') {
-			return val + "/"
+		if flags&apc.EntryIsDir != 0 {
+			if !cos.IsLastB(val, '/') {
+				val += "/"
+			}
+			return fgreen(val)
 		}
 		return val
 	}

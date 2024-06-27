@@ -425,7 +425,7 @@ var (
 		"FormatBool":          FmtBool,
 		"FormatBckName":       func(bck cmn.Bck) string { return bck.Cname("") },
 		"FormatACL":           fmtACL,
-		"FormatNameArch":      fmtNameArch,
+		"FormatNameDirArch":   fmtNameDirArch,
 		"FormatXactState":     FmtXactStatus,
 		//  misc. helpers
 		"IsUnsetTime":   isUnsetTime,
