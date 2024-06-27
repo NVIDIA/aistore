@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -157,14 +158,12 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 
 	if prefix := msg.Prefix; prefix != "" {
-		var delim string
+		query = &storage.Query{Prefix: prefix}
 		if msg.IsFlagSet(apc.LsNoRecursion) {
-			// NOTE: important to indicate subdirectory with trailing '/'
-			if cos.IsLastB(prefix, '/') {
-				delim = "/"
-			}
+			query.Delimiter = "/"
 		}
-		query = &storage.Query{Prefix: prefix, Delimiter: delim}
+	} else if msg.IsFlagSet(apc.LsNoRecursion) {
+		query = &storage.Query{Delimiter: "/"}
 	}
 
 	var (
@@ -185,47 +184,42 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 
 	var (
 		custom     cos.StrKVs
-		i          int
-		l          = len(objs)
 		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
-	for j := len(lst.Entries); j < l; j++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
-	}
 	if wantCustom {
 		custom = make(cos.StrKVs, 3) // reuse
 	}
+	lst.Entries = lst.Entries[:0]
 	for _, attrs := range objs {
-		if msg.IsFlagSet(apc.LsNoRecursion) {
-			if attrs.Name == "" {
-				entry := lst.Entries[i]
-				entry.Name = attrs.Prefix
-				entry.Flags = apc.EntryIsDir
-				i++
+		en := cmn.LsoEnt{Name: attrs.Name, Size: attrs.Size}
+		if attrs.Prefix != "" {
+			// see "Prefix"
+			// ref: https://github.com/googleapis/google-cloud-go/blob/main/storage/storage.go#L1407-L1411
+			debug.Assert(attrs.Name == "", attrs.Prefix, " vs ", attrs.Name)
+			debug.Assert(query != nil && query.Delimiter != "")
+
+			if msg.IsFlagSet(apc.LsNoDirs) {
 				continue
 			}
+			en.Name = attrs.Prefix
+			en.Flags = apc.EntryIsDir
+		} else if !msg.IsFlagSet(apc.LsNameOnly) && !msg.IsFlagSet(apc.LsNameSize) {
+			if v, ok := h.EncodeCksum(attrs.MD5); ok {
+				en.Checksum = v
+			}
+			if v, ok := h.EncodeVersion(attrs.Generation); ok {
+				en.Version = v
+			}
+			// custom
+			if wantCustom {
+				custom[cmn.ETag], _ = h.EncodeCksum(attrs.Etag)
+				custom[cmn.LastModified] = fmtTime(attrs.Updated)
+				custom[cos.HdrContentType] = attrs.ContentType
+				en.Custom = cmn.CustomMD2S(custom)
+			}
 		}
-		entry := lst.Entries[i]
-		i++
-		entry.Name, entry.Size = attrs.Name, attrs.Size
-		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
-			continue
-		}
-		if v, ok := h.EncodeCksum(attrs.MD5); ok {
-			entry.Checksum = v
-		}
-		if v, ok := h.EncodeVersion(attrs.Generation); ok {
-			entry.Version = v
-		}
-		// custom
-		if wantCustom {
-			custom[cmn.ETag], _ = h.EncodeCksum(attrs.Etag)
-			custom[cmn.LastModified] = fmtTime(attrs.Updated)
-			custom[cos.HdrContentType] = attrs.ContentType
-			entry.Custom = cmn.CustomMD2S(custom)
-		}
+		lst.Entries = append(lst.Entries, &en)
 	}
-	lst.Entries = lst.Entries[:i]
 
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[list_objects] count %d", len(lst.Entries))

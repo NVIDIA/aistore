@@ -247,6 +247,7 @@ func (azbp *azbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 
 // TODO: support non-recursive (apc.LsNoRecursion) operation, as in:
 // $ az storage blob list -c abc --prefix sub/ --delimiter /
+// TODO: research "hierarchical namespaces"
 // See also: aws.go, gcp.go
 func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
@@ -275,32 +276,26 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 
 	var (
 		custom     cos.StrKVs
-		l          = len(resp.Segment.BlobItems)
 		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
-	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
-	}
 	if wantCustom {
 		custom = make(cos.StrKVs, 4) // reuse
 	}
-	for idx := range resp.Segment.BlobItems {
-		var (
-			blob  = resp.Segment.BlobItems[idx]
-			entry = lst.Entries[idx]
-		)
-		entry.Name = *blob.Name
-		entry.Size = *blob.Properties.ContentLength
+	lst.Entries = lst.Entries[:0]
+	for _, blob := range resp.Segment.BlobItems {
+		en := cmn.LsoEnt{Name: *blob.Name, Size: *blob.Properties.ContentLength}
+
+		// not expecting directories
+		debug.Assert(en.Name != "" && !cos.IsLastB(en.Name, '/'), en.Name)
+
 		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
+			lst.Entries = append(lst.Entries, &en)
 			continue
 		}
 
-		entry.Checksum = azEncodeChecksum(blob.Properties.ContentMD5)
-
+		en.Checksum = azEncodeChecksum(blob.Properties.ContentMD5)
 		etag := azEncodeEtag(*blob.Properties.ETag)
-		entry.Version = etag // (TODO a the top)
-
-		// custom
+		en.Version = etag // (TODO a the top)
 		if wantCustom {
 			clear(custom)
 			custom[cmn.ETag] = etag
@@ -313,10 +308,10 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 			if blob.VersionID != nil {
 				custom[cmn.VersionObjMD] = *blob.VersionID
 			}
-			entry.Custom = cmn.CustomMD2S(custom)
+			en.Custom = cmn.CustomMD2S(custom)
 		}
+		lst.Entries = append(lst.Entries, &en)
 	}
-	lst.Entries = lst.Entries[:l]
 
 	if resp.NextMarker != nil {
 		lst.ContinuationToken = *resp.NextMarker

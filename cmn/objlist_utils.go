@@ -118,9 +118,9 @@ func DedupLso(entries LsoEntries, maxSize int, noDirs bool) []*LsoEnt {
 		if j > 0 && entries[j-1].Name == en.Name {
 			continue
 		}
-		if noDirs && cos.IsLastB(en.Name, '/') {
-			continue
-		}
+
+		debug.Assert(!(noDirs && en.IsDir())) // expecting backends for filter out accordingly
+
 		entries[j] = en
 		j++
 
@@ -156,10 +156,9 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 			token = l.ContinuationToken
 		}
 		for _, en := range l.Entries {
-			// drop
-			if noDirs && cos.IsLastB(en.Name, '/') {
-				continue
-			}
+			// expecting backends for filter out
+			debug.Assert(!(noDirs && en.IsDir()))
+
 			// add new
 			entry, exists := tmp[en.Name]
 			if !exists {
@@ -187,6 +186,8 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 	clear(resList.Entries)
 	resList.Entries = resList.Entries[:0]
 	resList.ContinuationToken = token
+
+	// TODO -- FIXME: sort virtual dirs separately =====================
 
 	for _, entry := range tmp {
 		resList.Entries = appSorted(resList.Entries, entry)

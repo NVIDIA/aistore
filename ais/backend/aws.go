@@ -320,36 +320,36 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 
 	var (
 		custom     cos.StrKVs
-		l          = len(resp.Contents)
 		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
-	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEnt{}) // add missing empty
-	}
 	if wantCustom {
 		custom = make(cos.StrKVs, 2) // reuse
 	}
-	for i, obj := range resp.Contents {
-		entry := lst.Entries[i]
-		entry.Name = *obj.Key
-		entry.Size = *obj.Size
-		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
-			continue
+	lst.Entries = lst.Entries[:0]
+	for _, obj := range resp.Contents {
+		en := cmn.LsoEnt{Name: *obj.Key, Size: *obj.Size}
+		// rarely
+		if en.Size == 0 && cos.IsLastB(en.Name, '/') {
+			if msg.IsFlagSet(apc.LsNoDirs) {
+				continue
+			}
+			en.Flags = apc.EntryIsDir
+		} else if !msg.IsFlagSet(apc.LsNameOnly) && !msg.IsFlagSet(apc.LsNameSize) {
+			if v, ok := h.EncodeCksum(obj.ETag); ok {
+				en.Checksum = v
+			}
+			if wantCustom {
+				custom[cmn.ETag] = en.Checksum
+				mtime := *(obj.LastModified)
+				custom[cmn.LastModified] = fmtTime(mtime)
+				en.Custom = cmn.CustomMD2S(custom)
+			}
 		}
-		if v, ok := h.EncodeCksum(obj.ETag); ok {
-			entry.Checksum = v
-		}
-		if wantCustom {
-			custom[cmn.ETag] = entry.Checksum
-			mtime := *(obj.LastModified)
-			custom[cmn.LastModified] = fmtTime(mtime)
-			entry.Custom = cmn.CustomMD2S(custom)
-		}
+		lst.Entries = append(lst.Entries, &en)
 	}
-	lst.Entries = lst.Entries[:l]
 
-	// append virtual directories if:
-	if msg.IsFlagSet(apc.LsNoRecursion) {
+	// append virtual directories unless '--no-dirs'
+	if !msg.IsFlagSet(apc.LsNoDirs) {
 		for _, dir := range resp.CommonPrefixes {
 			lst.Entries = append(lst.Entries, &cmn.LsoEnt{Name: *dir.Prefix, Flags: apc.EntryIsDir})
 		}
@@ -373,8 +373,8 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		verParams = &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
 		num       int
 	)
-	for _, entry := range lst.Entries {
-		verParams.Prefix = aws.String(entry.Name)
+	for _, en := range lst.Entries {
+		verParams.Prefix = aws.String(en.Name)
 		verResp, err := svc.ListObjectVersions(context.Background(), verParams)
 		if err != nil {
 			return awsErrorToAISError(err, cloudBck, "")
@@ -383,10 +383,10 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			if latest := *(vers.IsLatest); !latest {
 				continue
 			}
-			if key := *(vers.Key); key == entry.Name {
+			if key := *(vers.Key); key == en.Name {
 				v, ok := h.EncodeVersion(vers.VersionId)
-				debug.Assert(ok, entry.Name+": "+*(vers.VersionId))
-				entry.Version = v
+				debug.Assert(ok, en.Name+": "+*(vers.VersionId))
+				en.Version = v
 				num++
 			}
 		}

@@ -259,7 +259,7 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 			if !be.IsStatusOK() {
 				continue
 			}
-			if be.IsDir() || cos.IsLastB(be.Name, '/') { // skip virtual dir (apc.EntryIsDir)
+			if be.IsDir() { // NOTE: always skip virtual dirs (apc.EntryIsDir)
 				continue
 			}
 			if r.done() {

@@ -97,7 +97,7 @@ func (c *lstcx) do() (string, error) {
 		Props:    apc.GetPropsName,
 		PageSize: 0, // i.e., backend.MaxPageSize()
 	}
-	c.lsmsg.SetFlag(apc.LsNameOnly)
+	c.lsmsg.SetFlag(apc.LsNameOnly | apc.LsNoDirs)
 	c.smap = c.p.owner.smap.get()
 	tsi, err := c.smap.HrwTargetTask(c.lsmsg.UUID)
 	if err != nil {
@@ -126,7 +126,7 @@ func (c *lstcx) do() (string, error) {
 	lr, cnt := &c.tcomsg.ListRange, len(lst.Entries)
 	lr.ObjNames = make([]string, 0, cnt)
 	for _, e := range lst.Entries {
-		if e.IsDir() || cos.IsLastB(e.Name, '/') { // skip virtual dir (apc.EntryIsDir)
+		if e.IsDir() { // NOTE: always skip virtual dir (apc.EntryIsDir)
 			continue
 		}
 		lr.ObjNames = append(lr.ObjNames, e.Name)
@@ -190,7 +190,7 @@ func (c *lstcx) _page() (int, error) {
 	clear(lr.ObjNames)
 	lr.ObjNames = lr.ObjNames[:0]
 	for _, e := range lst.Entries {
-		if e.IsDir() || cos.IsLastB(e.Name, '/') { // skip virtual dir (apc.EntryIsDir)
+		if e.IsDir() { // NOTE: always skip virtual dir (apc.EntryIsDir)
 			continue
 		}
 		lr.ObjNames = append(lr.ObjNames, e.Name)
