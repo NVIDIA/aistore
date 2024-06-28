@@ -12,7 +12,7 @@ from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.object import Object
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.types import ArchiveSettings
-from aistore.sdk.utils import parse_url
+from aistore.sdk.utils import parse_url as sdk_parse_url
 
 
 def list_objects(
@@ -199,3 +199,17 @@ def list_wds_samples_iter(
     for bucket in bucket_list:
         for shard in bucket.list_objects_iter():
             yield from __samples_from_bck_iter(shard.name, bucket, etl_name)
+
+
+def parse_url(url: str) -> Tuple[str, str, str]:
+    """
+    Wrapper of sdk/utils.py parse_url. Parse AIS URLs for bucket and object names.
+    TODO: This can be removed once the upstream torch package for aiso is updated.
+
+    Args:
+        url (str): Complete URL of the object (e.g., "ais://bucket1/file.txt")
+
+    Returns:
+        Tuple[str, str, str]: Provider, bucket name, and object name
+    """
+    return sdk_parse_url(url)
