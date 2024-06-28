@@ -205,6 +205,7 @@ With a little effort, they all could be extracted and used outside.
     - [download remote BLOBs](/docs/cli/blob-downloader.md)
     - [promote NFS or SMB share](https://aiatscale.org/blog/2022/03/17/promote), and more
 - Assorted Topics
+  - [Virtual directories](/docs/howto_virt_dirs.md)
   - [System files](/docs/sysfiles.md)
   - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
   - [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
