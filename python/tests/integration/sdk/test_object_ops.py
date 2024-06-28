@@ -217,7 +217,8 @@ class TestObjectOps(RemoteEnabledTest):
 
         # Promote to AIS bucket
         obj_name = "promoted_obj/"
-        self.bucket.object(obj_name).promote(str(local_files_path))
+        promote_job = self.bucket.object(obj_name).promote(str(local_files_path))
+        self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
@@ -232,12 +233,14 @@ class TestObjectOps(RemoteEnabledTest):
             file.write(top_item_updated_contents)
 
         # Promote with recursion, delete source, overwrite destination
-        self.bucket.object(obj_name).promote(
+        promote_job = self.bucket.object(obj_name).promote(
             str(local_files_path),
             recursive=True,
             delete_source=True,
             overwrite_dest=True,
         )
+        self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))
         expected_top_obj = obj_name + top_item

@@ -1308,7 +1308,7 @@ def promote(path: str,
             recursive: bool = False,
             overwrite_dest: bool = False,
             delete_source: bool = False,
-            src_not_file_share: bool = False) -> Header
+            src_not_file_share: bool = False) -> str
 ```
 
 Promotes a file or folder an AIS target can access to a bucket in AIS storage.
@@ -1328,7 +1328,7 @@ See more info here: https://aiatscale.org/blog/2022/03/17/promote
 
 **Returns**:
 
-  Object properties
+  Job ID (as str) that can be used to check the status of the operation
   
 
 **Raises**:

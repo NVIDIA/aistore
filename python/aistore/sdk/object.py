@@ -247,7 +247,7 @@ class Object:
         overwrite_dest: bool = False,
         delete_source: bool = False,
         src_not_file_share: bool = False,
-    ) -> Header:
+    ) -> str:
         """
         Promotes a file or folder an AIS target can access to a bucket in AIS storage.
         These files can be either on the physical disk of an AIS target itself or on a network file system
@@ -263,7 +263,7 @@ class Object:
             src_not_file_share (bool, optional): Optimize if the source is guaranteed to not be on a file share
 
         Returns:
-            Object properties
+            Job ID (as str) that can be used to check the status of the operation
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -286,7 +286,7 @@ class Object:
 
         return self._client.request(
             HTTP_METHOD_POST, path=url, params=self._qparams, json=json_val
-        ).headers
+        ).text
 
     def delete(self):
         """
