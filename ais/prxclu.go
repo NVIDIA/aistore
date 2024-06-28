@@ -943,9 +943,12 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
+	// m.b. admin
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
+
 	if nlog.Stopping() {
 		p.writeErr(w, r, fmt.Errorf("%s is stopping", p), http.StatusServiceUnavailable)
 		return
@@ -955,13 +958,13 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) == 0 {
-		p.cluputJSON(w, r)
+		p.cluputActMsg(w, r)
 	} else {
-		p.cluputQuery(w, r, apiItems[0])
+		p.cluputItems(w, r, apiItems)
 	}
 }
 
-func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) cluputActMsg(w http.ResponseWriter, r *http.Request) {
 	msg, err := p.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -1631,7 +1634,8 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 }
 
-func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
+func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []string) {
+	action := items[0]
 	if p.forwardCP(w, r, &apc.ActMsg{Action: action}, "") {
 		return
 	}
@@ -1664,6 +1668,54 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 		}
 	case apc.ActAttachRemAis, apc.ActDetachRemAis:
 		p.attachDetachRemAis(w, r, action, r.URL.Query())
+	case apc.ActEnableBackend, apc.ActDisableBackend:
+		//
+		// TODO -- FIXME: must be two-phase begin/commit
+		//
+		if len(items) < 2 {
+			p.writeErrf(w, r, "invalid URL '%s': expected 2 items, got %d", r.URL.Path, len(items))
+			return
+		}
+		var (
+			provider = items[1]
+			np       = apc.NormalizeProvider(provider)
+			tag      = "enable"
+		)
+		if action == apc.ActDisableBackend {
+			tag = "disable"
+		}
+		if !apc.IsCloudProvider(np) {
+			p.writeErrf(w, r, "can only %s cloud backend (have %q)", tag, provider)
+			return
+		}
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			nlog.Infoln(action, provider, "...")
+		}
+		// bcast
+		args := allocBcArgs()
+		path := apc.URLPathDaeBendDisable.Join(np)
+		if action == apc.ActEnableBackend {
+			path = apc.URLPathDaeBendEnable.Join(np)
+		}
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: path}
+		args.to = core.Targets
+		results := p.bcastGroup(args)
+		freeBcArgs(args)
+
+		for _, res := range results {
+			if res.err == nil {
+				continue
+			}
+			err := res.errorf("node %s failed to %s %q backend", res.si, tag, provider)
+			p.writeErr(w, r, err)
+			freeBcastRes(results)
+			return
+		}
+		freeBcastRes(results)
+
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			nlog.Infoln("done:", action, provider)
+		}
 	}
 }
 

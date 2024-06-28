@@ -321,6 +321,40 @@ func DetachRemoteAIS(bp BaseParams, alias string) error {
 }
 
 //
+// Backend (enable | disable)
+//
+
+func EnableBackend(bp BaseParams, provider string) error {
+	np := apc.NormalizeProvider(provider)
+	if !apc.IsCloudProvider(np) {
+		return fmt.Errorf("can only enable cloud backend (have %q)", provider)
+	}
+	path := apc.URLPathCluBendEnable.Join(np)
+	return _backend(bp, path)
+}
+
+func DisableBackend(bp BaseParams, provider string) error {
+	np := apc.NormalizeProvider(provider)
+	if !apc.IsCloudProvider(np) {
+		return fmt.Errorf("can only disable cloud backend (have %q)", provider)
+	}
+	path := apc.URLPathCluBendDisable.Join(np)
+	return _backend(bp, path)
+}
+
+func _backend(bp BaseParams, path string) error {
+	bp.Method = http.MethodPut
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = path
+	}
+	err := reqParams.DoRequest()
+	FreeRp(reqParams)
+	return err
+}
+
+//
 // Maintenance API
 //
 

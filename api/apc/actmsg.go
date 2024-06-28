@@ -77,6 +77,9 @@ const (
 	ActAttachRemAis = "attach"
 	ActDetachRemAis = "detach"
 
+	ActEnableBackend  = "enable-bend"
+	ActDisableBackend = "disable-bend"
+
 	// Node maintenance & cluster membership (see also ActRmNodeUnsafe below)
 	ActStartMaintenance = "start-maintenance" // put into maintenance state
 	ActStopMaintenance  = "stop-maintenance"  // cancel maintenance state

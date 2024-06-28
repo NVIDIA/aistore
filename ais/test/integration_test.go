@@ -27,6 +27,30 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
+func TestDisableEnableBackend(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: cliBck, CloudBck: true})
+
+	_backend(t, "disable")
+	time.Sleep(time.Second >> 1)
+
+	_backend(t, "enable")
+	time.Sleep(time.Second >> 1)
+}
+
+func _backend(t *testing.T, action string) {
+	var (
+		err        error
+		baseParams = tools.BaseAPIParams()
+	)
+	tlog.Logf("%s %s\n", action, cliBck.Provider)
+	if action == "disable" {
+		err = api.DisableBackend(baseParams, cliBck.Provider)
+	} else {
+		err = api.EnableBackend(baseParams, cliBck.Provider)
+	}
+	tassert.CheckFatal(t, err)
+}
+
 // Intended for a deployment with multiple targets
 // 1. Create ais bucket
 // 2. Unregister target T

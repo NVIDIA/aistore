@@ -158,13 +158,13 @@ func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) == 0 {
-		t.daeputJSON(w, r)
+		t.daeputActMsg(w, r)
 	} else {
-		t.daeputQuery(w, r, apiItems)
+		t.daeputItems(w, r, apiItems)
 	}
 }
 
-func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
+func (t *target) daeputActMsg(w http.ResponseWriter, r *http.Request) {
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -226,7 +226,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []string) {
+func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []string) {
 	switch apiItems[0] {
 	case apc.Proxy:
 		// PUT /v1/daemon/proxy/newprimaryproxyid
@@ -244,6 +244,67 @@ func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []
 		t.handleMountpathReq(w, r)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		t.setDaemonConfigQuery(w, r)
+	case apc.ActEnableBackend:
+		t.enableBackend(w, r, apiItems[1])
+	case apc.ActDisableBackend:
+		t.disableBackend(w, r, apiItems[1])
+	}
+}
+
+func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, provider string) {
+	debug.Assert(apc.IsCloudProvider(provider), provider)
+
+	config := cmn.GCO.Get()
+	_, ok := config.Backend.Providers[provider]
+	if !ok {
+		t.writeErrf(w, r, "backend %q is not configured, cannot enable", provider)
+		return
+	}
+	bp, k := t.backend[provider]
+	debug.Assert(k, provider)
+	if bp != nil {
+		t.writeErrf(w, r, "backend %q is already enabled, nothing to do", provider)
+		return
+	}
+	var err error
+	switch provider {
+	case apc.AWS:
+		bp, err = backend.NewAWS(t)
+	case apc.GCP:
+		bp, err = backend.NewGCP(t)
+	case apc.Azure:
+		bp, err = backend.NewAzure(t)
+	}
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	t.backend[provider] = bp
+
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		nlog.Infoln("done: enabled", provider)
+	}
+}
+
+func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, provider string) {
+	debug.Assert(apc.IsCloudProvider(provider), provider)
+
+	config := cmn.GCO.Get()
+	_, ok := config.Backend.Providers[provider]
+	if !ok {
+		t.writeErrf(w, r, "backend %q is not configured, nothing to do", provider)
+		return
+	}
+	bp, k := t.backend[provider]
+	debug.Assert(k, provider)
+	if bp == nil {
+		t.writeErrf(w, r, "backend %q is already disabled, nothing to do", provider)
+		return
+	}
+	t.backend[provider] = nil
+
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		nlog.Infoln("done: disabled", provider)
 	}
 }
 

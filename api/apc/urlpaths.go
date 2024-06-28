@@ -119,10 +119,16 @@ var (
 	URLPathCluAttach  = urlpath(Version, Cluster, ActAttachRemAis)
 	URLPathCluDetach  = urlpath(Version, Cluster, ActDetachRemAis)
 
+	URLPathCluBendDisable = urlpath(Version, Cluster, ActDisableBackend)
+	URLPathCluBendEnable  = urlpath(Version, Cluster, ActEnableBackend)
+
 	URLPathDae          = urlpath(Version, Daemon)
 	URLPathDaeProxy     = urlpath(Version, Daemon, Proxy)
 	URLPathDaeSetConf   = urlpath(Version, Daemon, ActSetConfig)
 	URLPathDaeAdminJoin = urlpath(Version, Daemon, AdminJoin)
+
+	URLPathDaeBendDisable = urlpath(Version, Daemon, ActDisableBackend)
+	URLPathDaeBendEnable  = urlpath(Version, Daemon, ActEnableBackend)
 
 	URLPathReverse    = urlpath(Version, Reverse)
 	URLPathReverseDae = urlpath(Version, Reverse, Daemon)

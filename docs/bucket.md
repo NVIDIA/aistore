@@ -689,9 +689,13 @@ For background and usage examples, please see [CLI: AWS-specific bucket configur
 
 # List Objects
 
-> Note: some of the following content **may be outdated**. For the most recent updates, please check [`ais ls`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/bucket.md#list-objects) CLI.
+**Note**: some of the following content **may be outdated**. For the most recent updates, please check:
 
-ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
+- [List objects](/docs/cli/bucket.md#list-objects)
+* [`ais ls`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/bucket.md#list-objects)
+* [Virtual directories](/docs/howto_virt_dirs.md)
+
+`ListObjects` API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
 
 > Go [ListObjects](https://github.com/NVIDIA/aistore/blob/main/api/bucket.go) API
 
