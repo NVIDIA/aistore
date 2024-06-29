@@ -124,6 +124,10 @@ const (
 	cmdMpathDetach  = cmdDetach
 	cmdMpathDisable = "disable"
 
+	// backend enable/disable (advanced use only)
+	cmdBackendEnable  = "enable-backend"
+	cmdBackendDisable = "disable-backend"
+
 	// Node subcommands
 	cmdJoin                = "join"
 	cmdStartMaint          = "start-maintenance"
@@ -303,6 +307,9 @@ const (
 
 	startDownloadArgument = "SOURCE DESTINATION"
 	showStatsArgument     = "[NODE_ID]"
+
+	// backend enable/disable
+	cloudProviderArg = "CLOUD_PROVIDER"
 
 	// List command
 	listAnyCommandArgument = "PROVIDER:[//BUCKET_NAME]"

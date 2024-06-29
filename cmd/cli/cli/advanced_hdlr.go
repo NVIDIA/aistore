@@ -58,6 +58,20 @@ var (
 				Action:       rotateLogs,
 				BashComplete: suggestAllNodes,
 			},
+			{
+				Name:         cmdBackendEnable,
+				Usage:        "(re)enable cloud backend",
+				ArgsUsage:    cloudProviderArg,
+				Action:       backendEnableHandler,
+				BashComplete: suggestCloudProvider,
+			},
+			{
+				Name:         cmdBackendDisable,
+				Usage:        "disable cloud backend",
+				ArgsUsage:    cloudProviderArg,
+				Action:       backendDisableHandler,
+				BashComplete: suggestCloudProvider,
+			},
 		},
 	}
 )
@@ -160,5 +174,29 @@ func rotateLogs(c *cli.Context) error {
 		return V(err)
 	}
 	actionDone(c, "cluster: rotated all logs")
+	return nil
+}
+
+func backendEnableHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, c.Command.ArgsUsage)
+	}
+	cloudProvider := c.Args().Get(0)
+	if err := api.EnableBackend(apiBP, cloudProvider); err != nil {
+		return err
+	}
+	actionDone(c, "cluster: enabled "+cloudProvider+" backend")
+	return nil
+}
+
+func backendDisableHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, c.Command.ArgsUsage)
+	}
+	cloudProvider := c.Args().Get(0)
+	if err := api.DisableBackend(apiBP, cloudProvider); err != nil {
+		return err
+	}
+	actionDone(c, "cluster: disabled "+cloudProvider+" backend")
 	return nil
 }

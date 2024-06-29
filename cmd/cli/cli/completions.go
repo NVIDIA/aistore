@@ -888,3 +888,14 @@ func suggestTargetMpath(c *cli.Context, cmd string) {
 		}
 	}
 }
+
+func suggestCloudProvider(c *cli.Context) {
+	if c.NArg() > 0 {
+		return
+	}
+	for provider := range apc.Providers {
+		if apc.IsCloudProvider(provider) {
+			fmt.Println(provider)
+		}
+	}
+}

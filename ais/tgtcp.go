@@ -245,16 +245,25 @@ func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		t.setDaemonConfigQuery(w, r)
 	case apc.ActEnableBackend:
-		t.enableBackend(w, r, apiItems[1])
+		t.regstate.mu.Lock()
+		t.enableBackend(w, r, apiItems)
+		t.regstate.mu.Unlock()
 	case apc.ActDisableBackend:
-		t.disableBackend(w, r, apiItems[1])
+		t.regstate.mu.Lock()
+		t.disableBackend(w, r, apiItems)
+		t.regstate.mu.Unlock()
 	}
 }
 
-func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, provider string) {
+func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []string) {
+	var (
+		provider = items[1]
+		phase    = items[2]
+		config   = cmn.GCO.Get()
+	)
 	debug.Assert(apc.IsCloudProvider(provider), provider)
+	debug.Assert(phase == apc.ActBegin || phase == apc.ActCommit, phase)
 
-	config := cmn.GCO.Get()
 	_, ok := config.Backend.Providers[provider]
 	if !ok {
 		t.writeErrf(w, r, "backend %q is not configured, cannot enable", provider)
@@ -266,30 +275,35 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, provider 
 		t.writeErrf(w, r, "backend %q is already enabled, nothing to do", provider)
 		return
 	}
-	var err error
-	switch provider {
-	case apc.AWS:
-		bp, err = backend.NewAWS(t)
-	case apc.GCP:
-		bp, err = backend.NewGCP(t)
-	case apc.Azure:
-		bp, err = backend.NewAzure(t)
+	if phase == apc.ActCommit {
+		var err error
+		switch provider {
+		case apc.AWS:
+			bp, err = backend.NewAWS(t)
+		case apc.GCP:
+			bp, err = backend.NewGCP(t)
+		case apc.Azure:
+			bp, err = backend.NewAzure(t)
+		}
+		if err != nil {
+			debug.AssertNoErr(err) // (unlikely)
+			t.writeErr(w, r, err)
+			return
+		}
+		t.backend[provider] = bp
 	}
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	t.backend[provider] = bp
-
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		nlog.Infoln("done: enabled", provider)
-	}
+	nlog.Infoln(phase+":", "enable", provider)
 }
 
-func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, provider string) {
+func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, items []string) {
+	var (
+		provider = items[1]
+		phase    = items[2]
+		config   = cmn.GCO.Get()
+	)
 	debug.Assert(apc.IsCloudProvider(provider), provider)
+	debug.Assert(phase == apc.ActBegin || phase == apc.ActCommit, phase)
 
-	config := cmn.GCO.Get()
 	_, ok := config.Backend.Providers[provider]
 	if !ok {
 		t.writeErrf(w, r, "backend %q is not configured, nothing to do", provider)
@@ -301,11 +315,10 @@ func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, provider
 		t.writeErrf(w, r, "backend %q is already disabled, nothing to do", provider)
 		return
 	}
-	t.backend[provider] = nil
-
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		nlog.Infoln("done: disabled", provider)
+	if phase == apc.ActCommit {
+		t.backend[provider] = nil
 	}
+	nlog.Infoln(phase+":", "disable", provider)
 }
 
 func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems []string) {

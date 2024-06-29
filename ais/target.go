@@ -56,7 +56,7 @@ const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 
 type (
 	regstate struct {
-		mu       sync.Mutex  // serialize metasync Rx, stopping, and transitioning to standby
+		mu       sync.Mutex  // serialize metasync Rx, shutdown, transition to standby; enable/disable backend
 		disabled atomic.Bool // true: standing by
 		prevbmd  atomic.Bool // special
 	}

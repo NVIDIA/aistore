@@ -1670,7 +1670,7 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 		p.attachDetachRemAis(w, r, action, r.URL.Query())
 	case apc.ActEnableBackend, apc.ActDisableBackend:
 		//
-		// TODO -- FIXME: must be two-phase begin/commit
+		// (two-phase commit)
 		//
 		if len(items) < 2 {
 			p.writeErrf(w, r, "invalid URL '%s': expected 2 items, got %d", r.URL.Path, len(items))
@@ -1691,31 +1691,34 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Infoln(action, provider, "...")
 		}
-		// bcast
-		args := allocBcArgs()
-		path := apc.URLPathDaeBendDisable.Join(np)
-		if action == apc.ActEnableBackend {
-			path = apc.URLPathDaeBendEnable.Join(np)
-		}
-		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: path}
-		args.to = core.Targets
-		results := p.bcastGroup(args)
-		freeBcArgs(args)
+		for _, phase := range []string{apc.ActBegin, apc.ActCommit} {
+			nlog.Infoln(phase+":", tag, provider)
 
-		for _, res := range results {
-			if res.err == nil {
-				continue
+			// bcast
+			args := allocBcArgs()
+			path := apc.URLPathDaeBendDisable.Join(np)
+			if action == apc.ActEnableBackend {
+				path = apc.URLPathDaeBendEnable.Join(np)
 			}
-			err := res.errorf("node %s failed to %s %q backend", res.si, tag, provider)
-			p.writeErr(w, r, err)
-			freeBcastRes(results)
-			return
-		}
-		freeBcastRes(results)
+			path = cos.JoinWords(path, phase)
+			args.req = cmn.HreqArgs{Method: http.MethodPut, Path: path}
+			args.to = core.Targets
+			results := p.bcastGroup(args)
+			freeBcArgs(args)
 
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Infoln("done:", action, provider)
+			for _, res := range results {
+				if res.err == nil {
+					continue
+				}
+				err := res.errorf("node %s failed to %s %q backend (phase %s)", res.si, tag, provider, phase)
+				p.writeErr(w, r, err)
+				freeBcastRes(results)
+				return
+			}
+			freeBcastRes(results)
 		}
+
+		nlog.Infoln("done:", tag, provider)
 	}
 }
 
