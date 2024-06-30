@@ -848,6 +848,7 @@ func showNodeConfig(c *cli.Context) error {
 	return err
 }
 
+// TODO -- FIXME: check backend.conf <new JSON formatted value>
 func showRemoteAISHandler(c *cli.Context) error {
 	const (
 		warnRemAisOffline = `remote ais cluster at %s is currently unreachable.

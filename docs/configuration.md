@@ -34,25 +34,60 @@ The [same document](docs/cli/config.md) also contains a brief theory of operatio
 > **Important:** as an input, CLI accepts both plain text and JSON-formatted values. For the latter, make sure to embed the (JSON value) argument into single quotes, e.g.:
 
 ```console
-$ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'
+$ ais config cluster checksum.type='{"type":"md5"}'
 ```
 
-To show the update in plain text and JSON:
+However, plain-text updating is more common, e.g.:
+
+```console
+$ ais config cluster log.level 4
+
+$ ais config cluster log.modules <TAB-TAB>
+transport    memsys       fs           ec           ios          backend      mirror       downloader   s3
+ais          cluster      reb          stats        xs           space        dsort        etl          none
+
+$ ais config cluster log.modules space,s3
+```
+
+To show the current cluster config in plain text and JSON:
+
+```console
+$ ais config cluster log
+PROPERTY         VALUE
+log.level        4 (modules: space,s3)
+log.max_size     4MiB
+log.max_total    128MiB
+log.flush_time   40s
+log.stats_time   1m
+log.to_stderr    false
+```
+
+And the same in JSON:
+
+```console
+$ ais config cluster log --json
+
+    "log": {
+        "level": "540676",
+        "max_size": "4MiB",
+        "max_total": "128MiB",
+        "flush_time": "40s",
+        "stats_time": "1m",
+        "to_stderr": false
+    }
+```
+
+**Note:** some config values are read-only or otherwise protected and can be only listed, e.g.:
 
 ```console
 $ ais config cluster backend.conf --json
-
-    "backend": {"aws":{},"gcp":{}}
-
-$ ais config cluster backend.conf
-PROPERTY         VALUE
-backend.conf     map[aws:map[] gcp:map[]]
+    "backend": {"aws":{},"azure":{},"gcp":{}}
 ```
 
 See also:
 
 * [Backend providers and supported backends](/docs/providers.md)
-
+* [Disable/Enable cloud backend at runtime](/docs/cli/advanced.mdi#disableenable-cloud-backend-at-runtime)
 
 ## Configuring for production
 

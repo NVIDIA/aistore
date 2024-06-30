@@ -95,7 +95,7 @@ The rest of this document is structured as follows:
   - [Testing your cluster](#testing-your-cluster)
 - [Kubernetes Playground](#kubernetes-playground)
 - [Setting Up HTTPS Locally](#setting-up-https-locally)
-- [Build, Make and Development Tools](#build-make-and-development-tools)
+- [Build, Make, and Development Tools](#build-make-and-development-tools)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [Assorted command lines](#assorted-command-lines)
 
@@ -589,7 +589,7 @@ On the other hand, `ais/test/tls-env/client.conf` contains environment variables
 
 > See also: [Client-side TLS environment](/docs/cli.md#environment-variables)
 
-## Build, Make and Development Tools
+## Build, Make, and Development Tools
 
 As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
@@ -602,6 +602,24 @@ In particular, the `make` provides a growing number of developer-friendly comman
 * **deploy** the AIS cluster on your local development machine;
 * **run** all or selected tests;
 * **instrument** AIS binary with race detection, CPU and/or memory profiling, and more.
+
+Of course, local build is intended for development only. For production, there is a separate dedicated repository (noted below).
+
+In summary:
+
+* for development using _local playground_, please also see [local playground](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/local);
+* for docker and minikube builds supported by _this_ repository, see [docker and minikube](https://github.com/NVIDIA/aistore/tree/main/deploy) deployments;
+* finally, for production build and deployment, please refer to the [ais-k8s repository](https://github.com/NVIDIA/ais-k8s).
+
+### A note on conditional linkage
+
+AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-2024.png).
+
+> For the most recently updated list, please see [3rd party Backend providers](/docs/providers.md).
+
+To access remote data (and store it in-cluster), AIStore utilizes the respective provider's SDK.
+
+> For Amazon S3, that would be `aws-sdk-go-v2`, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into `aisnode` executable - the decision to link or not to link is made prior to deployment.
 
 ## Containerized Deployments: Host Resource Sharing
 

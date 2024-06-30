@@ -248,9 +248,7 @@ func parseLogModules(v string) (string, error) {
 }
 
 // E.g.:
-// ais config cluster backend.conf='{"aws":{}}'
-// ais config cluster backend.conf '{"gcp":{}, "aws":{}}'
-// ais config cluster checksum.type='{"type":"md5"}'
+// $ ais config cluster checksum.type='{"type":"md5"}'
 func isFmtJSON(nvs cos.StrKVs) (val string, ans bool, err error) {
 	jsonRe := regexp.MustCompile(`^{.*}$`)
 	for _, v := range nvs {

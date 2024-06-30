@@ -30,14 +30,14 @@ var (
 			},
 			{
 				Name:         cmdRmSmap,
-				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss!)",
+				Usage:        "immediately remove node from cluster map (beware: potential data loss!)",
 				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
 				BashComplete: suggestAllNodes,
 			},
 			{
 				Name:   cmdRandNode,
-				Usage:  "print random node ID (by default, random target)",
+				Usage:  "print random node ID (by default, ID of a randomly selected target)",
 				Action: randNode,
 				BashComplete: func(c *cli.Context) {
 					if c.NArg() == 0 {
@@ -53,7 +53,7 @@ var (
 			},
 			{
 				Name:         cmdRotateLogs,
-				Usage:        "rotate logs",
+				Usage:        "rotate aistore logs",
 				ArgsUsage:    optionalNodeIDArgument,
 				Action:       rotateLogs,
 				BashComplete: suggestAllNodes,

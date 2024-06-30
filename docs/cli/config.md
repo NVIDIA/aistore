@@ -45,25 +45,59 @@ Here's a couple quick usage examples:
 # show `ais config` subcommands:
 $ ais config <TAB-TAB>
 cli    cluster    node    reset    show
+```
 
+```console
 # select `cluster` configuration and see usage and options
 $ ais config cluster --help
+```
 
+```console
 # show the entire cluster configuration in JSON
 $ ais config cluster --json
+```
 
+```console
 # show one selected section (e.g., checksum) from the cluster config
 $ ais config cluster checksum
+```
 
+```console
 # update one value (e.g., checksum type)
 $ ais config cluster checksum=md5
 
-# using JSON-formatted values, update backend configuration;
-# for supported backend providers, see docs/providers.md
-$ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'
+# same using JSON-formatted values, update backend configuration;
+$ ais config cluster checksum.type='{"type":"md5"}'
+```
 
-# e.g., to remove all backends, run:
-# ais config cluster backend.conf='{}'
+More cluster-config-updating examples:
+
+```console
+$ ais config cluster log.level 4
+PROPERTY         VALUE
+log.level        4
+log.max_size     4MiB
+log.max_total    128MiB
+log.flush_time   40s
+log.stats_time   1m
+log.to_stderr    false
+
+Cluster config updated
+
+$ ais config cluster log.modules <TAB-TAB>
+transport    memsys       fs           ec           ios          backend      mirror       downloader   s3
+ais          cluster      reb          stats        xs           space        dsort        etl          none
+
+$ ais config cluster log.modules space,s3
+PROPERTY         VALUE
+log.level        4 (modules: space,s3)
+log.max_size     4MiB
+log.max_total    128MiB
+log.flush_time   40s
+log.stats_time   1m
+log.to_stderr    false
+
+Cluster config updated
 ```
 
 > **Notice** single quotes above. Single or double quotes are required when the value contains spaces and/or wildcards. But single quotes, in particular, are strongly recommended when the value itself contains double quotes.
