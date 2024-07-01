@@ -218,7 +218,10 @@ class TestObjectOps(RemoteEnabledTest):
         # Promote to AIS bucket
         obj_name = "promoted_obj/"
         promote_job = self.bucket.object(obj_name).promote(str(local_files_path))
-        self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
+        # If the promote is executed as an asynchronous job, wait until it completes
+        if promote_job:
+            self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
@@ -239,7 +242,10 @@ class TestObjectOps(RemoteEnabledTest):
             delete_source=True,
             overwrite_dest=True,
         )
-        self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
+        # If the promote is executed as an asynchronous job, wait until it completes
+        if promote_job:
+            self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))

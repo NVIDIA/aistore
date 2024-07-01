@@ -1328,7 +1328,7 @@ See more info here: https://aiatscale.org/blog/2022/03/17/promote
 
 **Returns**:
 
-  Job ID (as str) that can be used to check the status of the operation
+  Job ID (as str) that can be used to check the job's status; empty ("") if the job failed or executed synchronously
   
 
 **Raises**:

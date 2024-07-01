@@ -263,7 +263,7 @@ class Object:
             src_not_file_share (bool, optional): Optimize if the source is guaranteed to not be on a file share
 
         Returns:
-            Job ID (as str) that can be used to check the status of the operation
+            Job ID (as str) that can be used to check the status of the operation, or empty if job is done synchronously
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
