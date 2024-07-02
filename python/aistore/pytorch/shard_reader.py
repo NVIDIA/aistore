@@ -7,20 +7,22 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
 from aistore.sdk.bucket import Bucket
-from torch.utils.data import IterableDataset
-from typing import Iterator, List, Union
-from aistore.pytorch.utils import list_wds_samples_iter
-from aistore.sdk import Client
+from typing import Dict, Iterator, List, Union, Iterable
+from aistore.sdk.list_object_flag import ListObjectFlag
+from aistore.pytorch.utils import get_basename
+from aistore.sdk.types import ArchiveSettings
+from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 
 
-class AISShardReader(IterableDataset):
+class AISShardReader(AISBaseIterDataset):
     """
     An iterable-style dataset that iterates over objects stored as Webdataset shards.
 
     Args:
         client_url (str): AIS endpoint URL
-        urls_list (Union[str, List[str]]): Single or list of URLs, can be URLS for buckets and/or objects
         bucket_list (Union[Bucket, List[Bucket]]): Single or list of Bucket objects to load data
+        prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of Bucket objects to list of prefixes that only allows
+        objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
 
     Yields:
@@ -31,47 +33,64 @@ class AISShardReader(IterableDataset):
     def __init__(
         self,
         client_url: str,
-        urls_list: Union[str, List[str]] = [],
-        bucket_list: Union[Bucket, List[Bucket]] = [],
+        bucket_list: Union[Bucket, List[Bucket]],
+        prefix_map: Dict[Bucket, Union[str, List[str]]] = {},
         etl_name: str = None,
     ):
-        if not urls_list and not bucket_list:
-            raise ValueError(
-                "At least one of urls_list or bucket_list must be provided"
+        super().__init__(client_url, bucket_list, prefix_map)
+        self._etl_name = etl_name
+        self._length = None
+
+    def _get_sample_iter_from_source(self, source: Bucket, prefix: str) -> Iterable:
+        """
+        Creates an iterable for all samples and contents over each shard from a bucket.
+
+        Args:
+            name (str): Name of shard object
+            source (Bucket): Bucket where the shard object is stored
+            prefix (str): Prefix of objects in bucket which are shards
+
+        Returns:
+            Iterable[Tuple[str, dict(str, bytes)]]: Iterator over all the WDS basenames and content (file extension, data)
+            in shards from the given shard
+        """
+        for entry in source.list_objects_iter(prefix=prefix):
+            # get iterator of all objects in the shard
+            objects_iter = source.list_objects_iter(
+                prefix=entry.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
             )
 
-        self.client = Client(client_url)
-        self.urls_list = [urls_list] if isinstance(urls_list, str) else urls_list
-        self.bucket_list = (
-            [bucket_list] if isinstance(bucket_list, Bucket) else bucket_list
-        )
-        self.etl_name = etl_name
-        self.length = None
-        self._reset_iterator()
+            # pool all files with the same basename into dictionary (basename, [file names])
+            samples_dict = {}
+            for obj in objects_iter:
+                basename = get_basename(obj.name)
+
+                # Original tar is included in basenames so only yield actual files
+                if basename != entry.name.split(".")[0]:
+                    if basename not in samples_dict:
+                        samples_dict[basename] = []
+                    samples_dict[basename].append(obj.name)
+
+            # for each basename, get the byte data for each file and yield in dictionary
+            shard = source.object(entry.name)
+            for basename, files in samples_dict.items():
+                content_dict = {}
+                for file_name in files:
+                    file_prefix = file_name.split(".")[-1]
+                    content_dict[file_prefix] = shard.get(
+                        etl_name=self._etl_name,
+                        archive_settings=ArchiveSettings(archpath=file_name),
+                    ).read_all()
+                self._length += 1
+                yield basename, content_dict
 
     def __iter__(self) -> Iterator:
         self._reset_iterator()
-        self.length = 0
-        for basename, content_dict in self._samples_iter:
-            self.length += 1
-            yield basename, content_dict
-
-    def _reset_iterator(self):
-        """
-        Reset the iterator to start from the beginning
-        """
-        self._samples_iter = list_wds_samples_iter(
-            client=self.client,
-            urls_list=self.urls_list,
-            bucket_list=self.bucket_list,
-            etl_name=self.etl_name,
-        )
+        self._length = 0
+        yield from self._iterator
 
     def __len__(self):
-        if self.length is None:
+        if self._length is None:
+            self._length = 0
             self._reset_iterator()
-            self.length = self._calculate_len()
-        return self.length
-
-    def _calculate_len(self):
-        return sum(1 for _ in self._samples_iter)
+        return self._length

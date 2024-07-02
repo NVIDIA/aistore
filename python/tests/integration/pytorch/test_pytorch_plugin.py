@@ -12,11 +12,11 @@ from aistore.sdk.dataset.data_shard import DataShard
 from aistore.pytorch import (
     AISFileLister,
     AISFileLoader,
-    AISDataset,
+    AISMapDataset,
     AISIterDataset,
     AISMultiShardStream,
+    AISShardReader,
 )
-from aistore.pytorch.shard_reader import AISShardReader
 from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import (
     create_and_put_object,
@@ -36,7 +36,8 @@ class TestPytorchPlugin(unittest.TestCase):
     def setUp(self) -> None:
         self.bck_name = random_string()
         self.client = Client(CLUSTER_ENDPOINT)
-        self.client.bucket(self.bck_name).create()
+        self.bck = self.client.bucket(self.bck_name)
+        self.bck.create()
         self.local_test_files = (
             Path().absolute().joinpath("pytorch-plugin-test-" + random_string(8))
         )
@@ -113,8 +114,8 @@ class TestPytorchPlugin(unittest.TestCase):
             )
             content_dict[i] = content
 
-        ais_dataset = AISDataset(
-            client_url=CLUSTER_ENDPOINT, urls_list=["ais://" + self.bck_name]
+        ais_dataset = AISMapDataset(
+            client_url=CLUSTER_ENDPOINT, ais_source_list=[self.bck]
         )
         self.assertEqual(len(ais_dataset), num_objs)
         for i in range(num_objs):
@@ -132,7 +133,7 @@ class TestPytorchPlugin(unittest.TestCase):
             content_dict[i] = content
 
         ais_iter_dataset = AISIterDataset(
-            client_url=CLUSTER_ENDPOINT, urls_list=["ais://" + self.bck_name]
+            client_url=CLUSTER_ENDPOINT, ais_source_list=self.bck
         )
         self.assertEqual(len(ais_iter_dataset), num_objs)
         for i, (obj_name, content) in enumerate(ais_iter_dataset):
@@ -243,11 +244,12 @@ class TestPytorchPlugin(unittest.TestCase):
 
         sample_basenames = ["sample_1", "sample_2", "sample_3", "sample_4"]
 
-        # Test shard_reader with url params
-        url_one = f"{bucket.provider}://{bucket.name}/{shard_one_obj.name}"
-        url_two = f"{bucket.provider}://{bucket.name}/{shard_two_obj.name}"
+        # Test shard_reader with prefixes
+
         url_shard_reader = AISShardReader(
-            client_url=CLUSTER_ENDPOINT, urls_list=[url_one, url_two]
+            client_url=CLUSTER_ENDPOINT,
+            bucket_list=[bucket],
+            prefix_map={bucket: "shard_1.tar"},
         )
 
         for i, (basename, content_dict) in enumerate(url_shard_reader):

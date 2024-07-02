@@ -4,21 +4,21 @@ Iterable Dataset for AIS
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from aistore.pytorch.base_dataset import AISBaseClassIter
-from torch.utils.data import IterableDataset
-from typing import List, Union
+from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
+from typing import List, Union, Dict
 from aistore.sdk.ais_source import AISSource
 
 
-class AISIterDataset(AISBaseClassIter, IterableDataset):
+class AISIterDataset(AISBaseIterDataset):
     """
     An iterable-style dataset that iterates over objects in AIS.
     If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
         client_url (str): AIS endpoint URL
-        urls_list (Union[str, List[str]]): Single or list of URL prefixes to load data
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
+        prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of AISSource objects to list of prefixes that only allows
+        objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
 
     Note:
@@ -28,30 +28,22 @@ class AISIterDataset(AISBaseClassIter, IterableDataset):
     def __init__(
         self,
         client_url: str,
-        urls_list: Union[str, List[str]] = [],
-        ais_source_list: Union[AISSource, List[AISSource]] = [],
+        ais_source_list: Union[AISSource, List[AISSource]],
+        prefix_map: Dict[AISSource, Union[str, List[str]]] = {},
         etl_name: str = None,
     ):
-        if not urls_list and not ais_source_list:
-            raise ValueError(
-                "At least one of urls_list or ais_source_list must be provided."
-            )
-        super().__init__(client_url, urls_list, ais_source_list)
-        self.etl_name = etl_name
-        self.length = None
+        super().__init__(client_url, ais_source_list, prefix_map)
+        self._etl_name = etl_name
+        self._length = None
 
     def __iter__(self):
         self._reset_iterator()
-        self.length = 0
-        for obj in self._object_iter:
-            self.length += 1
-            yield obj.name, obj.get(etl_name=self.etl_name).read_all()
+        self._length = 0
+        for obj in self._iterator:
+            yield obj.name, obj.get(etl_name=self._etl_name).read_all()
 
     def __len__(self):
-        if self.length is None:
+        if self._length is None:
             self._reset_iterator()
-            self.length = self._calculate_len()
-        return self.length
-
-    def _calculate_len(self):
-        return sum(1 for _ in self._object_iter)
+            self._length = sum(1 for _ in self._iterator)
+        return self._length

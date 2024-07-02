@@ -4,21 +4,21 @@ PyTorch Dataset for AIS.
 Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Union
-from torch.utils.data import Dataset
+from typing import List, Union, Dict
 from aistore.sdk.ais_source import AISSource
-from aistore.pytorch.base_dataset import AISBaseClass
+from aistore.pytorch.base_map_dataset import AISBaseMapDataset
 
 
-class AISDataset(AISBaseClass, Dataset):
+class AISMapDataset(AISBaseMapDataset):
     """
     A map-style dataset for objects in AIS.
     If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
         client_url (str): AIS endpoint URL
-        urls_list (Union[str, List[str]]): Single or list of URL prefixes to load data
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
+        prefix_map (Dict(AISSource, List[str]), optional): Map of AISSource objects to list of prefixes that only allows
+        objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
 
     Note:
@@ -28,21 +28,17 @@ class AISDataset(AISBaseClass, Dataset):
     def __init__(
         self,
         client_url: str,
-        urls_list: Union[str, List[str]] = [],
         ais_source_list: Union[AISSource, List[AISSource]] = [],
+        prefix_map: Dict[AISSource, Union[str, List[str]]] = {},
         etl_name: str = None,
     ):
-        if not urls_list and not ais_source_list:
-            raise ValueError(
-                "At least one of urls_list or ais_source_list must be provided"
-            )
-        super().__init__(client_url, urls_list, ais_source_list)
-        self.etl_name = etl_name
+        super().__init__(client_url, ais_source_list, prefix_map)
+        self._etl_name = etl_name
 
     def __len__(self):
-        return len(self._objects)
+        return len(self._samples)
 
     def __getitem__(self, index: int):
-        obj = self._objects[index]
-        content = obj.get(etl_name=self.etl_name).read_all()
+        obj = self._samples[index]
+        content = obj.get(etl_name=self._etl_name).read_all()
         return obj.name, content

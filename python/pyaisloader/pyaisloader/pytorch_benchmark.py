@@ -11,8 +11,7 @@ from pyaisloader.utils.stat_utils import combine_results, print_results
 from pyaisloader.client_config import ENDPOINT
 from pyaisloader.benchmark import PutGetMixedBenchmark, BenchmarkStats
 
-from aistore.pytorch.dataset import AISDataset
-from aistore.pytorch.iter_dataset import AISIterDataset
+from aistore.pytorch import AISMapDataset, AISIterDataset
 
 
 class AISDatasetBenchmark(PutGetMixedBenchmark):
@@ -32,7 +31,7 @@ class AISDatasetBenchmark(PutGetMixedBenchmark):
         print_results(result, title=self.__class__.__name__)
 
     def get_benchmark(self, duration):
-        dataset = AISDataset(
+        dataset = AISMapDataset(
             client_url=ENDPOINT,
             urls_list=f"{self.bucket.provider}://{self.bucket.name}",
         )
