@@ -14,36 +14,35 @@ The PyTorch DataLoader class gives you an iterable over a Dataset. It can be use
 
 To create a DataLoader, you need to first create a Dataset, which is a class to read samples into memory. Most of the logic of the DataLoader resides on the Dataset.
 
-PyTorch offers two styles of Dataset class: Map-style and Iterable-style.
+PyTorch offers two styles of Dataset class: Map-style and Iterable-style. We have implemented ```AISMapDataset``` and ```AISIterDataset``` to load objects and their data for you.
 
-**Note:** Both datasets can be initialized with a urls_list parameter and/or an ais_source_list parameter that defines which objects to reference in AIS.
-```urls_list``` can be a single prefix url or a list of prefixes. Eg. ```"ais://bucket1/file-"``` or ```["aws://bucket2/train/", "ais://bucket3/train/"]```.
-Likewise ```ais_source_list``` can be a single [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) object or a list of [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) objects. Eg. ```"Client.bucket()``` or ```[Client.bucket("bucket1"), Client.bucket("bucket2")]```.
+**Note:** Both datasets can be initialized with an ais_source_list parameter that defines which objects to reference in AIS.
+ An AISSource is any AIS SDK object that defines a set of storage objects. Currently, this includes buckets and object groups.
+```ais_source_list``` can be a single [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) object or a list of [AISSource](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/ais_source.py) objects. Eg. ```"Client.bucket()``` or ```[Client.bucket("bucket1"), Client.bucket("bucket2")]```.
+
+Additionally, if you want to create your own custom datasets,
+extend ```AISBaseMapDataset``` and ```AISBaseIterDataset``` depending on the style you want.
+Note that for all datasets, you can override ```_get_sample_iter_from_source(self, source: AISSource, prefix: str)``` to change the behavior of how data is obtained from the source. For example, this is used in ```ShardReader``` as the sources contain WebDataset formatted objects.
 
 #### ***Map-style Dataset***
 
 A map-style dataset in PyTorch implements the `__getitem__()` and `__len__()` functions and provides the user a map from indices/keys to data samples.
 
-For example, we can access the i-th index label and its corresponding image by dataset[i] from a bucket in AIStore.
+For example, we can access the i-th index label and its corresponding image by ```dataset[i]``` from a bucket in AIStore.
 
 ```python
-from aistore.pytorch.dataset import AISDataset
+from aistore.pytorch import AISMapDataset
 from aistore.sdk import Client
 import os
 
 ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
+client = Client(ais_url)
 
-dataset = AISDataset(client_url=ais_url, urls_list='ais://bucket1/')
-
-# or, if using ais_source_list
-# client = Client(ais_url)
-# dataset = AISDataset(client_url=ais_url, ais_source_list=[client.bucket(bck_name="bucket1"), client.bucket(bck_name="bucket2")])
+dataset = AISMapDataset(ais_source_list=[client.bucket(bck_name="bucket1"), client.bucket(bck_name="bucket2")])
 
 for i in range(len(dataset)):
     print(dataset[i])  # Get object URL and byte array of the object
-
 ```
-
 
 #### ***Iterable-style datasets***
 
@@ -73,34 +72,49 @@ for name in object_names:
 my_objects = bucket.objects(obj_names=object_names)
 
 # Initialize the dataset with the AIS client URL and the data source location
-dataset = AISIterDataset(client_url=ais_url, urls_list="ais://my-bck/", ais_source_list=my_objects)
+dataset = AISIterDataset(ais_source_list=my_objects)
 
 # Iterate over the dataset to fetch data samples as a stream
 for data_sample in dataset:
     print(data_sample)  # Each iteration fetches a data sample (object name and byte array)
-
 ```
 
+For more examples on how to use AISMapDataset and AISIterDataset, see the [Dataset Example Notebook](../../examples/aisio-pytorch/dataset_example.ipynb).
 
-**Creating DataLoader from AISDataset**
+
+**Creating DataLoader from AISMapDataset**
 ```python
-from aistore.pytorch.dataset import AISDataset
+from aistore.pytorch import AISMapDataset
+from aistore.sdk import Client
+import os
+
+ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
+client = Client(ais_url)
+dataset1_bck = client.bucket("dataset1").create(exist_ok=True)
+dataset2_bck = client.bucket("dataset2").create(exist_ok=True)
 
 train_loader = torch.utils.data.DataLoader(
-    AISDataset(
-        "http://ais-gateway-url:8080", urls_list=["ais://dataset1/train/", "ais://dataset2/train/"]),
+    AISMapDataset(
+        ais_source_list = [dataset1_bck, dataset2_bck]
+    ),
     batch_size=args.batch_size, shuffle=True,
     num_workers=args.workers, pin_memory=True,
 )
-
 ```
 
 **Using ShardReader to read WebDataset Formatted Shards**
 ```python
-from aistore.pytorch.dataset import ShardReader
+from aistore.pytorch import AISShardReader
+from aistore.sdk import Client
+import os
 
+ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
+client = Client(ais_url)
+bucket = client.bucket("dataset-example").create(exist_ok=True)
+
+# Note that shard_reader currently only supports buckets
 shard_reader = AISShardReader(
-    client_url="http://ais-gateway-url:8080", urls_list=["ais://dataset1/example.tar/", "ais://dataset2/example.tar/"] # bucket_list=[bucket] can also pass in other sources
+    bucket_list=bucket
 )
 
 for basename, content_dict in shard_reader:
