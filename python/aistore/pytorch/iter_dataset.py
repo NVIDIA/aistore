@@ -15,7 +15,6 @@ class AISIterDataset(AISBaseIterDataset):
     If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
-        client_url (str): AIS endpoint URL
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
         prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of AISSource objects to list of prefixes that only allows
         objects with the specified prefixes to be used from each source
@@ -27,12 +26,11 @@ class AISIterDataset(AISBaseIterDataset):
 
     def __init__(
         self,
-        client_url: str,
         ais_source_list: Union[AISSource, List[AISSource]],
         prefix_map: Dict[AISSource, Union[str, List[str]]] = {},
         etl_name: str = None,
     ):
-        super().__init__(client_url, ais_source_list, prefix_map)
+        super().__init__(ais_source_list, prefix_map)
         self._etl_name = etl_name
         self._length = None
 

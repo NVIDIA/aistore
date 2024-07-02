@@ -19,7 +19,6 @@ class AISShardReader(AISBaseIterDataset):
     An iterable-style dataset that iterates over objects stored as Webdataset shards.
 
     Args:
-        client_url (str): AIS endpoint URL
         bucket_list (Union[Bucket, List[Bucket]]): Single or list of Bucket objects to load data
         prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of Bucket objects to list of prefixes that only allows
         objects with the specified prefixes to be used from each source
@@ -32,12 +31,11 @@ class AISShardReader(AISBaseIterDataset):
 
     def __init__(
         self,
-        client_url: str,
         bucket_list: Union[Bucket, List[Bucket]],
         prefix_map: Dict[Bucket, Union[str, List[str]]] = {},
         etl_name: str = None,
     ):
-        super().__init__(client_url, bucket_list, prefix_map)
+        super().__init__(bucket_list, prefix_map)
         self._etl_name = etl_name
         self._length = None
 

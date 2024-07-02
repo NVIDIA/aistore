@@ -32,29 +32,17 @@ class TestAISDataset(unittest.TestCase):
             "aistore.pytorch.base_map_dataset.AISBaseMapDataset._create_samples_list",
             return_value=self.mock_objects,
         )
-        self.patcher_client_map = patch(
-            "aistore.pytorch.base_map_dataset.Client", return_value=self.mock_client
-        )
-        self.patcher_client_iter = patch(
-            "aistore.pytorch.base_iter_dataset.Client", return_value=self.mock_client
-        )
         self.patcher_get_objects_iterator.start()
         self.patcher_get_objects.start()
-        self.patcher_client_map.start()
-        self.patcher_client_iter.start()
 
     def tearDown(self) -> None:
         self.patcher_get_objects_iterator.stop()
         self.patcher_get_objects.stop()
-        self.patcher_client_map.stop()
-        self.patcher_client_iter.stop()
 
     def test_map_dataset(self):
         self.mock_bck.list_all_objects_iter.return_value = iter(self.mock_objects)
 
-        ais_dataset = AISMapDataset(
-            client_url="mock_client_url", ais_source_list=self.mock_bck
-        )
+        ais_dataset = AISMapDataset(ais_source_list=self.mock_bck)
 
         self.assertIsNone(ais_dataset._etl_name)
 
@@ -62,9 +50,7 @@ class TestAISDataset(unittest.TestCase):
         self.assertEqual(ais_dataset[0][1], b"mock data")
 
     def test_iter_dataset(self):
-        ais_iter_dataset = AISIterDataset(
-            client_url="mock_client_url", ais_source_list=self.mock_bck
-        )
+        ais_iter_dataset = AISIterDataset(ais_source_list=self.mock_bck)
         self.assertIsNone(ais_iter_dataset._etl_name)
 
         self.assertEqual(len(ais_iter_dataset), 2)
@@ -115,9 +101,7 @@ class TestAISDataset(unittest.TestCase):
         ]
 
         # Create shard reader and get results and compare
-        shard_reader = AISShardReader(
-            client_url="http://example.com", bucket_list=self.mock_bck
-        )
+        shard_reader = AISShardReader(bucket_list=self.mock_bck)
 
         result = list(shard_reader)
 

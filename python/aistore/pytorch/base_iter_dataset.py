@@ -6,7 +6,6 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
 from typing import List, Union, Iterable, Dict, Iterator
 from aistore.sdk.ais_source import AISSource
-from aistore.sdk import Client
 from torch.utils.data import IterableDataset
 from abc import ABC, abstractmethod
 
@@ -19,7 +18,6 @@ class AISBaseIterDataset(ABC, IterableDataset):
     to modify the behavior of loading samples from a source, override :meth:`_get_sample_iter_from_source`.
 
     Args:
-        client_url (str): AIS endpoint URL
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
         prefix_map (Dict(AISSource, List[str]), optional): Map of AISSource objects to list of prefixes that only allows
         objects with the specified prefixes to be used from each source
@@ -27,13 +25,13 @@ class AISBaseIterDataset(ABC, IterableDataset):
 
     def __init__(
         self,
-        client_url: str,
         ais_source_list: Union[AISSource, List[AISSource]],
         prefix_map: Dict[AISSource, Union[str, List[str]]] = {},
     ) -> None:
         if not ais_source_list:
-            raise ValueError("ais_source_list must be provided")
-        self._client = Client(client_url)
+            raise ValueError(
+                f"<{self.__class__.__name__}> ais_source_list must be provided"
+            )
         self._ais_source_list = (
             [ais_source_list]
             if isinstance(ais_source_list, AISSource)

@@ -114,9 +114,7 @@ class TestPytorchPlugin(unittest.TestCase):
             )
             content_dict[i] = content
 
-        ais_dataset = AISMapDataset(
-            client_url=CLUSTER_ENDPOINT, ais_source_list=[self.bck]
-        )
+        ais_dataset = AISMapDataset(ais_source_list=[self.bck])
         self.assertEqual(len(ais_dataset), num_objs)
         for i in range(num_objs):
             obj_name, content = ais_dataset[i]
@@ -132,9 +130,7 @@ class TestPytorchPlugin(unittest.TestCase):
             )
             content_dict[i] = content
 
-        ais_iter_dataset = AISIterDataset(
-            client_url=CLUSTER_ENDPOINT, ais_source_list=self.bck
-        )
+        ais_iter_dataset = AISIterDataset(ais_source_list=self.bck)
         self.assertEqual(len(ais_iter_dataset), num_objs)
         for i, (obj_name, content) in enumerate(ais_iter_dataset):
             self.assertEqual(obj_name, f"temp/obj{ i }")
@@ -247,7 +243,6 @@ class TestPytorchPlugin(unittest.TestCase):
         # Test shard_reader with prefixes
 
         url_shard_reader = AISShardReader(
-            client_url=CLUSTER_ENDPOINT,
             bucket_list=[bucket],
             prefix_map={bucket: "shard_1.tar"},
         )
@@ -257,9 +252,7 @@ class TestPytorchPlugin(unittest.TestCase):
             self.assertEqual(content_dict, expected_sample_dicts[i])
 
         # Test shard_reader with bucket_params
-        bck_shard_reader = AISShardReader(
-            client_url=CLUSTER_ENDPOINT, bucket_list=[bucket]
-        )
+        bck_shard_reader = AISShardReader(bucket_list=[bucket])
 
         for i, (basename, content_dict) in enumerate(bck_shard_reader):
             self.assertEqual(basename, sample_basenames[i])
