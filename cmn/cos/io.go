@@ -480,15 +480,25 @@ func CreateFile(fqn string) (*os.File, error) {
 // (creates destination directory if doesn't exist)
 func Rename(src, dst string) (err error) {
 	err = os.Rename(src, dst)
-	if err == nil || !os.IsNotExist(err) {
-		return
+	if err == nil {
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		if os.IsExist(err) {
+			if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
+				// [design tradeoff]
+				// keeping objects under their respective sha256 would avoid this one
+				return fmt.Errorf("destination %q is a (virtual) directory", dst)
+			}
+		}
+		return err
 	}
 	// create and retry (slow path)
 	err = CreateDir(filepath.Dir(dst))
 	if err == nil {
 		err = os.Rename(src, dst)
 	}
-	return
+	return err
 }
 
 // RemoveFile removes path; returns nil upon success or if the path does not exist.

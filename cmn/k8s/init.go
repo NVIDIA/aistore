@@ -38,7 +38,7 @@ func Init() {
 	_initClient()
 	client, err := GetClient()
 	if err != nil {
-		nlog.Infoln(nonK8s, "(init k8s-client returned:", _short(err)+")")
+		nlog.Infoln(nonK8s, "(init k8s-client returned: '"+_short(err)+"')")
 		return
 	}
 
@@ -101,7 +101,7 @@ func _ppvols(volumes []v1.Volume) {
 func IsK8s() bool { return NodeName != "" }
 
 func _short(err error) string {
-	const sizeLimit = 20
+	const sizeLimit = 32
 	msg := err.Error()
 	idx := strings.IndexByte(msg, ',')
 	switch {
@@ -110,6 +110,6 @@ func _short(err error) string {
 	case idx > sizeLimit:
 		return msg[:idx]
 	default:
-		return msg[:sizeLimit]
+		return msg[:sizeLimit] + " ..."
 	}
 }

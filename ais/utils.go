@@ -70,12 +70,22 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 		return
 	}
 
+	var skip, warned bool
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
 		if ipnet, ok := addr.(*net.IPNet); ok {
-			// production or K8s: skip loopbacks
-			if ipnet.IP.IsLoopback() && (!config.TestingEnv() || k8s.IsK8s()) {
-				continue
+			if ipnet.IP.IsLoopback() {
+				// K8s: always skip (ie, exclude) 127.0.0.1 loopback
+				if k8s.IsK8s() {
+					continue
+				}
+				// non K8s and fspaths: skip?
+				if !config.TestingEnv() {
+					skip, warned = haveFspathsSkipLoopback(config, warned)
+					if skip {
+						continue
+					}
+				}
 			}
 			if ipnet.IP.To4() == nil {
 				continue
@@ -105,6 +115,21 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 		return addrlist, errors.New("the host does not have any IPv4 addresses")
 	}
 	return addrlist, nil
+}
+
+func haveFspathsSkipLoopback(config *cmn.Config, warned bool) (bool, bool) { //nolint:unparam // be warned
+	const haveFspaths = "deployment type is not K8s and not dev"
+	if config.HostNet.Hostname != "" {
+		if !warned {
+			nlog.Warningln(haveFspaths+", pub host is configured:", config.HostNet.Hostname)
+			nlog.Warningln("- not including loopback in the list of local unicast IPv4")
+		}
+		return true /*skip*/, true
+	}
+	if !warned {
+		nlog.Warningln(haveFspaths + " but still including loopback in the list of local unicast IPv4")
+	}
+	return false /*skip*/, true
 }
 
 // given configured list of hostnames, return the first one matching local unicast IPv4
