@@ -2,13 +2,18 @@
 # Dockerfile to build an aisnode Docker image
 #
 
-FROM ubuntu:22.04 as installer
+ARG INSTALLER_IMAGE=debian:bookworm
+ARG BUILDER_IMAGE=golang:1.22
+ARG BASE_IMAGE=gcr.io/distroless/base-debian12
 
-RUN apt-get update -yq \
-    && apt-get install -y --no-install-recommends \
+
+FROM --platform=${TARGETPLATFORM:-linux/amd64} ${INSTALLER_IMAGE} as installer
+
+RUN apt-get update -yq && apt-get install -y --no-install-recommends \
     ca-certificates
 
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.22 AS builder
+
+FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILDER_IMAGE} AS builder
 
 WORKDIR /go/src/aistore
 
@@ -24,10 +29,21 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     make node
 
 
-FROM ubuntu:22.04 as base
+FROM --platform=${TARGETPLATFORM:-linux/amd64} ${BASE_IMAGE} as base
 
-# Copy over the binaries.
-COPY --from=builder /go/bin /usr/bin/
-COPY --from=installer /etc/ssl /etc/ssl
+FROM base AS base-amd64
+ENV LIB_PATH "x86_64-linux-gnu"
+
+FROM base AS base-arm64
+ENV LIB_PATH "aarch64-linux-gnu"
+
+FROM base-${TARGETARCH:-amd64}
+
+COPY --from=installer /usr/lib/${LIB_PATH} /usr/lib/${LIB_PATH}
+COPY --from=installer /lib/${LIB_PATH} /lib/${LIB_PATH}
+COPY --from=installer /bin/lsblk /bin/lsblk
+COPY --from=installer /etc/ssl/certs /etc/ssl/certs
+
+COPY --from=builder /go/bin/aisnode /usr/bin/aisnode
 
 ENTRYPOINT ["aisnode"]
