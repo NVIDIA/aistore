@@ -29,6 +29,7 @@ type (
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
 		AddMpath(mpath, fs string, label Label, config *cmn.Config) (FsDisks, error)
+		HealthMpath(mpath string) error
 		RemoveMpath(mpath string, testingEnv bool)
 		FillDiskStats(m AllDiskStats)
 	}
@@ -492,4 +493,13 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 func (disks FsDisks) _str() string {
 	s := fmt.Sprintf("%v", disks) // with sector sizes
 	return strings.TrimPrefix(s, "map")
+}
+
+//
+// to support Filesystem Health Checker (FSHC)
+//
+
+func (*ios) HealthMpath(string) error {
+	// TODO -- FIXME: niy
+	return nil
 }

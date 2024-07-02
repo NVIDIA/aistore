@@ -214,7 +214,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	ecode, err := poi.do(nil /*response hdr*/, r, dpq)
 	freePOI(poi)
 	if err != nil {
-		t.fsErr(err, lom.FQN)
+		t.FSHC(err, lom.Mountpath(), lom.FQN)
 		s3.WriteErr(w, r, err, ecode)
 	} else {
 		s3.SetEtag(w.Header(), lom)

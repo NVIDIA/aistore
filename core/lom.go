@@ -546,7 +546,7 @@ func (lom *LOM) FromFS() error {
 	if err != nil {
 		if !os.IsNotExist(err) {
 			err = os.NewSyscallError("stat", err)
-			T.FSHC(err, lom.FQN)
+			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		}
 		return err
 	}
@@ -559,7 +559,7 @@ func (lom *LOM) FromFS() error {
 	}
 	if err != nil {
 		if !cmn.IsErrLmetaNotFound(err) {
-			T.FSHC(err, lom.FQN)
+			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		}
 		return err
 	}

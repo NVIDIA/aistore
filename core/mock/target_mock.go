@@ -55,7 +55,7 @@ func (*TargetMock) Promote(*core.PromoteParams) (int, error)                    
 func (*TargetMock) Backend(*meta.Bck) core.Backend                                 { return nil }
 func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode) bool                         { return false }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                      {}
-func (*TargetMock) FSHC(error, string)                                             {}
+func (*TargetMock) FSHC(error, *fs.Mountpath, string)                              {}
 func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                                 { return fs.CapStatus{} }
 
 func (*TargetMock) CopyObject(*core.LOM, core.DM, *core.CopyParams) (int64, error) {

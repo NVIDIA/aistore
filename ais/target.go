@@ -221,9 +221,7 @@ func (t *target) init(config *cmn.Config) {
 	sc := transport.Init(ts, config) // init transport sub-system; new stream collector
 	daemon.rg.add(sc)
 
-	fshc := health.NewFSHC(t)
-	daemon.rg.add(fshc)
-	t.fshc = fshc
+	t.fshc = health.NewFSHC(t)
 
 	if err := ts.InitCDF(); err != nil {
 		cos.ExitLog(err)
@@ -892,7 +890,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		freePOI(poi)
 	}
 	if err != nil {
-		t.fsErr(err, lom.FQN)
+		t.FSHC(err, lom.Mountpath(), "") // TODO -- FIXME: removed from the place where happened, fqn missing...
 		t.writeErr(w, r, err, ecode)
 	}
 }
@@ -1261,7 +1259,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	}
 	file, err := os.Open(sliceFQN)
 	if err != nil {
-		t.fsErr(err, sliceFQN)
+		t.FSHC(err, lom.Mountpath(), sliceFQN)
 		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -1518,24 +1516,4 @@ func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl,
 	// b) via GET (blocking w/ simultaneous transmission)
 	xblob.Run(nil)
 	return xblob.ID(), nil, xblob.AbortErr()
-}
-
-func (t *target) fsErr(err error, filepath string) {
-	if !cmn.GCO.Get().FSHC.Enabled || !cos.IsIOError(err) {
-		return
-	}
-	mi, _ := fs.Path2Mpath(filepath)
-	if mi == nil {
-		return
-	}
-	if cos.IsErrOOS(err) {
-		cs := t.OOS(nil)
-		nlog.Errorf("%s: fsErr %s", t, cs.String())
-		return
-	}
-	nlog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)
-	keyName := mi.Path
-	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
-	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
-	t.fshc.OnErr(filepath)
 }

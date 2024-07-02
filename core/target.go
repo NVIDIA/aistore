@@ -106,8 +106,10 @@ type (
 		// backend
 		Backend(*meta.Bck) Backend
 
-		// FS health and Health
-		FSHC(err error, path string)
+		// FS health
+		FSHC(err error, mi *fs.Mountpath, fqn string)
+
+		// Node health
 		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, ecode int, err error)
 	}
 

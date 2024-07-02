@@ -486,8 +486,8 @@ func Rename(src, dst string) (err error) {
 	if !os.IsNotExist(err) {
 		if os.IsExist(err) {
 			if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
-				// [design tradeoff]
-				// keeping objects under their respective sha256 would avoid this one
+				// [design tradeoff] keeping objects under (e.g.) their respective sha256
+				// would eliminate this one, in part
 				return fmt.Errorf("destination %q is a (virtual) directory", dst)
 			}
 		}

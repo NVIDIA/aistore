@@ -30,8 +30,6 @@ import (
 // interface guard
 var _ core.Target = (*target)(nil)
 
-func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
-
 func (*target) DataClient() *http.Client { return g.client.data }
 
 func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
@@ -346,14 +344,4 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	core.FreeCOI(coiParams)
 
 	return size, err
-}
-
-//
-// implements health.fspathDispatcher interface
-//
-
-func (t *target) DisableMpath(mpath, reason string) (err error) {
-	nlog.Warningf("Disabling mountpath %s: %s", mpath, reason)
-	_, err = t.fsprg.disableMpath(mpath, true /*dont-resilver*/) // NOTE: not resilvering upon FSCH calling
-	return
 }

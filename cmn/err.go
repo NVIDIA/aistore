@@ -472,6 +472,9 @@ func (e *ErrMountpathNotFound) Error() string {
 	return "mountpath for fqn " + e.fqn + " does not exist"
 }
 
+func (e *ErrMountpathNotFound) Mpath() string  { return e.mpath }
+func (e *ErrMountpathNotFound) Disabled() bool { return e.disabled }
+
 func NewErrMountpathNotFound(mpath, fqn string, disabled bool) *ErrMountpathNotFound {
 	return &ErrMountpathNotFound{mpath: mpath, fqn: fqn, disabled: disabled}
 }

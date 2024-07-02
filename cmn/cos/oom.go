@@ -39,11 +39,11 @@ func FreeMemToOS(force bool) bool {
 
 	now := mono.NanoTime()
 	if elapsed := time.Duration(now - prev); elapsed < ival {
-		nlog.Infoln("not running - only " + elapsed.String() + " passed since the previous run")
+		nlog.Infoln("not running - only", elapsed.String(), "passed since the previous run")
 		return false
 	}
 	if ratomic.CompareAndSwapInt64(&runningOOM, 0, now) {
-		nlog.Infoln("not running - running now")
+		nlog.Infoln("already running, nothing to do")
 		return false
 	}
 

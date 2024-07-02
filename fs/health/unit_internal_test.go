@@ -1,16 +1,18 @@
 // Package health provides a basic mountpath health monitor.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package health
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -54,53 +56,9 @@ func updateTestConfig() {
 	cmn.GCO.CommitUpdate(config)
 }
 
-type MockFSDispatcher struct {
-	faultyPaths   []string
-	faultDetected bool
-}
-
-func newMockFSDispatcher(mpathsToFail ...string) *MockFSDispatcher {
-	return &MockFSDispatcher{
-		faultyPaths: mpathsToFail,
-	}
-}
-
-func (d *MockFSDispatcher) DisableMpath(mpath, reason string) (err error) {
-	d.faultDetected = cos.StringInSlice(mpath, d.faultyPaths)
-	if d.faultDetected {
-		err = fmt.Errorf("fault detected: %s", reason)
-	}
-	return
-}
-
 func setupTests(t *testing.T) {
 	updateTestConfig()
 	initMountpaths(t)
-}
-
-func TestFSCheckerInaccessibleMountpath(t *testing.T) {
-	setupTests(t)
-
-	var (
-		failedMpath = fsCheckerTmpDir + "/3"
-		filePath    = failedMpath + "/testfile"
-	)
-	_, _, exists := testMountpath(cmn.GCO.Get(), filePath, failedMpath, cos.KiB)
-	tassert.Errorf(t, !exists, "testing non-existing mountpath must fail")
-}
-
-func TestFSCheckerFailedMountpath(t *testing.T) {
-	setupTests(t)
-
-	var (
-		failedMpath = fsCheckerTmpDir + "/3"
-
-		dispatcher = newMockFSDispatcher(failedMpath)
-		fshc       = NewFSHC(dispatcher)
-	)
-	// Failed mountpath must be disabled.
-	fshc.runMpathTest(failedMpath, failedMpath+"/dir/testfile")
-	tassert.Errorf(t, dispatcher.faultDetected, "faulty mountpath %s was not detected", failedMpath)
 }
 
 func TestFSCheckerDecisionFn(t *testing.T) {
@@ -131,6 +89,25 @@ func TestFSCheckerDecisionFn(t *testing.T) {
 	}
 }
 
+func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (passed bool, err error) {
+	config := &cmn.GCO.Get().FSHC
+	nlog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
+		mpath, available,
+		readErrors, config.ErrorLimit, fshcFileSize,
+		writeErrors, config.ErrorLimit)
+
+	if !available {
+		return false, errors.New("mountpath is unavailable")
+	}
+
+	passed = readErrors < config.ErrorLimit && writeErrors < config.ErrorLimit
+	if !passed {
+		err = fmt.Errorf("too many errors: %d read error%s, %d write error%s",
+			readErrors, cos.Plural(readErrors), writeErrors, cos.Plural(writeErrors))
+	}
+	return passed, err
+}
+
 func TestFSCheckerTryReadFile(t *testing.T) {
 	setupTests(t)
 
@@ -146,13 +123,13 @@ func TestFSCheckerTryReadFile(t *testing.T) {
 	file.Close()
 	tassert.CheckFatal(t, err)
 
-	err = tryReadFile(filePath)
+	err = _read(filePath)
 	tassert.CheckFatal(t, err)
 }
 
 func TestFSCheckerTryWriteFile(t *testing.T) {
 	setupTests(t)
 	mpath := fsCheckerTmpDir + "/1"
-	err := tryWriteFile(mpath, cos.KiB)
+	err := _write(mpath, cos.KiB)
 	tassert.CheckFatal(t, err)
 }

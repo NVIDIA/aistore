@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -49,7 +50,15 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	// slow path: create sub-directories
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err = cos.Stat(bdir); err != nil {
-		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
+		var (
+			err        = fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
+			bmd        = T.Bowner().Get()
+			_, present = bmd.Get(&lom.bck)
+		)
+		if present {
+			err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
+		}
+		return nil, err
 	}
 	fdir := filepath.Dir(fqn)
 	if err = cos.CreateDir(fdir); err != nil {

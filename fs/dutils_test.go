@@ -6,6 +6,7 @@ package fs_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,6 +19,11 @@ import (
 // test file for ios/dutils_linux.go
 // placed here because it requires fs to set up the testing environment
 
+func path2Mpath(path string) (mi *fs.Mountpath, err error) {
+	mi, _, err = fs.FQN2Mpath(filepath.Clean(path))
+	return mi, err
+}
+
 func TestMountpathSearchValid(t *testing.T) {
 	fs.TestNew(nil)
 
@@ -26,7 +32,7 @@ func TestMountpathSearchValid(t *testing.T) {
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(t, mpath)
-	mi, err := fs.Path2Mpath("/tmp/abc/test")
+	mi, err := path2Mpath("/tmp/abc/test")
 	tassert.Errorf(t, err == nil && mi.Path == mpath, "Actual: [%s]. Expected: [%s]", mi.Path, mpath)
 	setAvailableMountPaths(t, oldMPs...)
 }
@@ -39,7 +45,7 @@ func TestMountpathSearchInvalid(t *testing.T) {
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(t, mpath)
-	mi, err := fs.Path2Mpath("xabc")
+	mi, err := path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
 	setAvailableMountPaths(t, oldMPs...)
 }
@@ -47,7 +53,7 @@ func TestMountpathSearchInvalid(t *testing.T) {
 func TestMountpathSearchWhenNoAvailable(t *testing.T) {
 	fs.TestNew(nil)
 	oldMPs := setAvailableMountPaths(t, "")
-	mi, err := fs.Path2Mpath("xabc")
+	mi, err := path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
 	setAvailableMountPaths(t, oldMPs...)
 }
@@ -64,14 +70,14 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 
 	oldMPs := setAvailableMountPaths(t, "/tmp/x/y", "/tmp/x/z")
 
-	mi, err := fs.Path2Mpath("z/abc")
+	mi, err := path2Mpath("z/abc")
 	tassert.Errorf(t, err != nil && mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "z/abc", err)
 
-	mi, err = fs.Path2Mpath("/tmp/../tmp/x/z/abc")
+	mi, err = path2Mpath("/tmp/../tmp/x/z/abc")
 	tassert.Errorf(t, err == nil && mi.Path == "/tmp/x/z", "Actual: [%s]. Expected: [%s] (%v)",
 		mi, "/tmp/x/z", err)
 
-	mi, err = fs.Path2Mpath("/tmp/../tmp/x/y/abc")
+	mi, err = path2Mpath("/tmp/../tmp/x/y/abc")
 	tassert.Errorf(t, err == nil && mi.Path == "/tmp/x/y", "Actual: [%s]. Expected: [%s] (%v)",
 		mi, "/tmp/x/y", err)
 	setAvailableMountPaths(t, oldMPs...)
@@ -85,11 +91,11 @@ func TestSimilarCases(t *testing.T) {
 
 	oldMPs := setAvailableMountPaths(t, "/tmp/abc")
 
-	mi, err := fs.Path2Mpath("/tmp/abc/q")
+	mi, err := path2Mpath("/tmp/abc/q")
 	mpath := mi.Path
 	tassert.Errorf(t, err == nil && mpath == "/tmp/abc", "Actual: [%s]. Expected: [%s] (%v)", mpath, "/tmp/abc", err)
 
-	mi, err = fs.Path2Mpath("/abx")
+	mi, err = path2Mpath("/abx")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "/abx", err)
 	setAvailableMountPaths(t, oldMPs...)
 }

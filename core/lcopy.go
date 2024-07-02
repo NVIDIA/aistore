@@ -156,7 +156,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		}
 		lom.delCopyMd(copyFQN)
 		if err1 := cos.Stat(copyFQN); err1 != nil && !os.IsNotExist(err1) {
-			T.FSHC(err, copyFQN) // TODO: notify scrubber
+			T.FSHC(err, nil, copyFQN) // TODO: notify scrubber
 		}
 	}
 	return

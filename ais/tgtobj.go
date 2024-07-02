@@ -223,7 +223,7 @@ rerr:
 
 // verbose only
 func (poi *putOI) loghdr() string {
-	sb := strings.Builder{}
+	var sb strings.Builder
 	sb.WriteString(poi.owt.String())
 	sb.WriteString(", ")
 	sb.WriteString(poi.lom.String())
@@ -249,7 +249,7 @@ func (poi *putOI) finalize() (ecode int, err error) {
 			if err1 == nil {
 				err1 = err
 			}
-			poi.t.fsErr(err1, poi.workFQN)
+			poi.t.FSHC(err1, poi.lom.Mountpath(), poi.workFQN)
 			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil && !os.IsNotExist(err2) {
 				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
@@ -975,7 +975,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 			ecode = http.StatusNotFound
 			goi.retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
-			goi.t.fsErr(err, fqn)
+			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
 			ecode = http.StatusInternalServerError
 			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", goi.lom.Cname(), err, ecode)
 		}
@@ -1122,7 +1122,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil {
 		if !cos.IsRetriableConnErr(err) {
-			goi.t.fsErr(err, fqn)
+			mi := goi.lom.Mountpath()
+			if fqn != goi.lom.FQN {
+				mi = nil
+			}
+			goi.t.FSHC(err, mi, fqn)
 		}
 		nlog.Errorln(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
 		// at this point, error is already written into the response -

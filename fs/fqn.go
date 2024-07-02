@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // for background, see: docs/on_disk_layout.md
@@ -136,38 +137,27 @@ func (parsed *ParsedFQN) Init(fqn string) (err error) {
 
 // match FQN to mountpath and return the former and the relative path
 func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
+	debug.Assert(fqn != "")
 	avail := GetAvail()
 	if len(avail) == 0 {
-		err = cmn.ErrNoMountpaths
-		return
+		return nil, "", cmn.ErrNoMountpaths
 	}
 	for mpath, mi := range avail {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
-			found = mi
-			relativePath = fqn[l+1:]
-			return
+			return mi, fqn[l+1:], nil
 		}
 	}
 
 	// make an extra effort to lookup in disabled
-	_, disabled := Get()
+	disabled := getDisabled()
 	for mpath := range disabled {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
-			err = cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, true /*disabled*/)
-			return
+			return nil, "", cmn.NewErrMountpathNotFound(mpath, fqn, true /*disabled*/)
 		}
 	}
-	err = cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, false /*disabled*/)
-	return
-}
-
-// Path2Mpath takes in any file path (e.g., ../../a/b/c) and returns the matching `mi`,
-// if exists
-func Path2Mpath(path string) (found *Mountpath, err error) {
-	found, _, err = FQN2Mpath(filepath.Clean(path))
-	return
+	return nil, "", cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, false /*disabled*/)
 }
 
 func CleanPathErr(err error) {

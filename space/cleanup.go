@@ -428,7 +428,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			if !os.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
 				j.ini.Xaction.AddErr(err)
-				core.T.FSHC(err, lom.FQN)
+				core.T.FSHC(err, lom.Mountpath(), lom.FQN)
 			}
 			return
 		}

@@ -35,6 +35,7 @@ const nodeXattrID = "user.ais.daemon_id"
 const (
 	FlagBeingDisabled uint64 = 1 << iota
 	FlagBeingDetached
+	FlagDisabledByFSHC // TODO -- FIXME: niy
 )
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
@@ -150,6 +151,12 @@ func LcacheIdx(digest uint64) int { return int(digest & cos.MultiSyncMapMask) }
 func (mi *Mountpath) IsIdle(config *cmn.Config) bool {
 	curr := mfs.ios.GetMpathUtil(mi.Path)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
+}
+
+func (mi *Mountpath) IsDisabled() bool {
+	disabled := getDisabled()
+	_, isdis := disabled[mi.Path]
+	return isdis
 }
 
 func (mi *Mountpath) CreateMissingBckDirs(bck *cmn.Bck) (err error) {
@@ -847,6 +854,12 @@ func GetAvail() MPI {
 	avail := mfs.available.Load()
 	debug.Assert(avail != nil)
 	return *avail
+}
+
+func getDisabled() MPI {
+	disabled := mfs.disabled.Load()
+	debug.Assert(disabled != nil)
+	return *disabled
 }
 
 func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
