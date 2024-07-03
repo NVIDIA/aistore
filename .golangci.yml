@@ -1,11 +1,10 @@
 linters:
-  enable-all: false
   disable-all: true
   enable:
-    - revive
     - asciicheck
     - bodyclose
     - canonicalheader
+    - depguard
     - dogsled
     - dupl
     - durationcheck
@@ -13,10 +12,10 @@ linters:
     - exportloopref
     - fatcontext
     - gci
+    - gochecksumtype
     - gocritic
     - gofmt
     - goheader
-    - gochecksumtype
     - goimports
     - gomoddirectives
     - goprintffuncname
@@ -24,14 +23,15 @@ linters:
     - gosimple
     - govet
     - importas
-    - intrange
     - ineffassign
+    - intrange
     - misspell
     - nolintlint
     - perfsprint
     - prealloc
     - protogetter
     - reassign
+    - revive
     - staticcheck
     - testifylint
     - testpackage
@@ -42,7 +42,6 @@ linters:
     - whitespace
 
 # See: https://golangci-lint.run/usage/linters/
-
 linters-settings:
   revive:
     ignore-generated-header: true
@@ -60,7 +59,6 @@ linters-settings:
       - name: error-strings
       - name: exported
       - name: if-return
-      - name: imports-blacklist
       - name: increment-decrement
       - name: indent-error-flow
       - name: modifies-value-receiver
@@ -88,8 +86,6 @@ linters-settings:
     disable:
       - fieldalignment # TODO: Enable, for now reports a lot of problems.
       - shadow # Reports a lot of false-positives and conflicts with other linters.
-  golint:
-    min-confidence: 0
   errcheck:
     check-blank: true
     check-type-assertions: false
@@ -115,6 +111,12 @@ linters-settings:
     # Default is to use a neutral variety of English.
     # Setting locale to US will correct the British spelling of 'colour' to 'color'.
     locale: US
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: 'math/rand$'
+            desc: "`math/rand` package has been deprecated use `math/rand/v2`"
 
 issues:
   # use default exclude rules
@@ -122,25 +124,25 @@ issues:
 
   # additional exclude rules
   exclude-rules:
-    - linters: errcheck
+    - linters: [errcheck]
       text: "Error return value of" # ignores 'error return value of ... is unchecked'
 
-    - linters: golint
+    - linters: [golint]
       text: "and that stutters; consider calling this"
 
-    - linters: golint
+    - linters: [golint]
       text: "don't use an underscore in package name"
 
-    - linters: revive
+    - linters: [revive]
       text: "or a comment on this block"
 
-    - linters: unused
+    - linters: [unused]
       text: "`noCopy` is unused"
 
-    - linters: gocritic
+    - linters: [gocritic]
       text: "importShadow: shadow of imported"
 
-    - linters: gocritic
+    - linters: [gocritic]
       text: "builtinShadow: shadowing of predeclared identifier: new"
 
     - linters: [gocritic, gofmt, goimports]
@@ -149,31 +151,35 @@ issues:
     - linters: [gocritic, gofmt, goimports]
       source: "//==" # commentFormatting
 
-    - linters: staticcheck
+    - linters: [staticcheck]
       text: "SA5011:" # produces a lot of false-positives; hopefully in the future we could enable it!
 
-    - linters: interfacer
+    - linters: [interfacer]
       text: "k8s.io/client-go/rest.HTTPClient" # suggests to change `*http.Client` to `rest.HTTPClient`...
 
-    - linters: staticcheck
+    - linters: [staticcheck]
       text: "SA3000: TestMain should call os.Exit to set exit code" # This is not true for Go1.15 or later.
 
-    - linters: gocritic
+    - linters: [gocritic]
       text: "block doesn't have definitions" # Sometimes blocks are useful for better readability.
 
-    - linters: golint
+    - linters: [golint]
       source: "embed" # Justification for `import _ "embed"` is not needed.
 
   # Set to 0 to disable limit
   max-same-issues: 0
-  max-per-linter: 0
+  max-issues-per-linter: 0
 
 run:
   go: '1.22.3'
-  tests: true # enable linting test files
-
-  build-tags:
-    - hrw aws azure gcp # Build hrw and backend providers so that staticcheck doesn't complain about unused export functions.
-
+  tests: true # Enable linting test files.
   concurrency: 4
-  deadline: 6m
+  timeout: 6m
+
+  # Build hrw and backend providers so that staticcheck doesn't complain about unused export functions.
+  build-tags:
+    - hrw
+    - aws
+    - azure
+    - gcp
+
