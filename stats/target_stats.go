@@ -304,6 +304,7 @@ func (r *Trunner) GetStatsV322() (out *NodeV322) {
 	return out
 }
 
+// log _and_ update various low-level states
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
@@ -341,8 +342,16 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		}
 	}
 
-	// 3. capacity
-	set, clr := r._cap(config, now)
+	// 3. capacity and associated node state flags
+	set, clr, hasAlerts := r._cap(config, now)
+
+	// 3.5. TODO -- FIXME: revisit
+	flags := r.nodeStateFlags()
+	if hasAlerts {
+		r.lines = append(r.lines, "Warning: check for mountpath alerts, node-flags: "+flags.String())
+	} else if flags.IsSet(cos.DiskFault) {
+		clr |= cos.DiskFault
+	}
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
 	r.logDiskStats(now)
@@ -380,7 +389,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		nlog.Infoln(ln)
 	}
 
-	// 7. separately, memory
+	// 7. separately, memory w/ set/clr flags cumulative
 	r._mem(r.t.PageMM(), set, clr)
 
 	if now > r.next {
@@ -388,28 +397,36 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 }
 
-func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags) {
+func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags, hasAlerts bool) {
 	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.TargetCDF)
 	if err != nil {
 		nlog.Errorln(err)
 		debug.Assert(!updated && errCap == nil, updated, " ", errCap)
-		return
+		return 0, 0, false
 	}
 	if !updated && errCap == nil { // nothing to do
-		return
+		return 0, 0, false
+	}
+	pcs := &cs
+	if !updated {
+		pcs = nil // to possibly force refresh via t.OOS
+	} else {
+		hasAlerts = r.TargetCDF.HasAlerts()
 	}
 
 	// target to run x-space
 	if errCap != nil {
-		r.t.OOS(&cs)
+		r.t.OOS(pcs, config, &r.TargetCDF)
 	} else if cs.PctMax > int32(config.Space.CleanupWM) { // remove deleted, other cleanup
 		debug.Assert(!cs.IsOOS(), cs.String())
 		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
-		r.t.OOS(&cs)
+		r.t.OOS(pcs, config, &r.TargetCDF)
 	}
 
-	// periodically: log mountpaths cap
-	if now >= min(r.next, r.cs.last+maxCapLogInterval) || errCap != nil {
+	//
+	// (periodically | on error): log mountpath cap and state
+	//
+	if now >= min(r.next, r.cs.last+maxCapLogInterval) || errCap != nil || hasAlerts {
 		fast := fs.NoneShared(len(r.TargetCDF.Mountpaths))
 		unique := fast
 		if !fast {
@@ -419,10 +436,21 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 			if !fast {
 				r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
 			}
-			if unique {
-				s := mpath + cdf.Label.ToLog() + ": used " + strconv.Itoa(int(cdf.Capacity.PctUsed)) + "%"
-				s += ", avail " + cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2)
-				r.lines = append(r.lines, s)
+			if unique { // to avoid log duplication
+				var sb strings.Builder
+				sb.WriteString(mpath)
+				sb.WriteString(cdf.Label.ToLog())
+				if alert, _ := cdf.HasAlert(); alert != "" {
+					sb.WriteString(": ")
+					sb.WriteString(alert)
+				} else {
+					sb.WriteString(": used ")
+					sb.WriteString(strconv.Itoa(int(cdf.Capacity.PctUsed)))
+					sb.WriteByte('%')
+					sb.WriteString(", avail ")
+					sb.WriteString(cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2))
+				}
+				r.lines = append(r.lines, sb.String())
 			}
 		}
 		r.cs.last = now
@@ -437,7 +465,7 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 	} else {
 		clr = cos.OOS | cos.LowCapacity
 	}
-	return set, clr
+	return set, clr, hasAlerts
 }
 
 // log formatted disk stats:

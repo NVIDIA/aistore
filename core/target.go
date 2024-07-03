@@ -82,7 +82,7 @@ type (
 		Node
 
 		// Space
-		OOS(*fs.CapStatus) fs.CapStatus
+		OOS(*fs.CapStatus, *cmn.Config, *fs.TargetCDF) fs.CapStatus
 
 		// xactions (jobs) now
 		GetAllRunning(inout *AllRunningInOut, periodic bool)

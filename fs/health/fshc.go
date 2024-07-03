@@ -60,6 +60,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 		nlog.Errorf("%s: failed to disable, err: %v", mi, err)
 	} else {
 		nlog.Infoln(mi.String(), "now disabled")
+		mi.SetFlags(fs.FlagDisabledByFSHC)
 	}
 }
 

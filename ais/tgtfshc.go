@@ -16,10 +16,12 @@ import (
 )
 
 func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
-	if !cmn.GCO.Get().FSHC.Enabled {
+	config := cmn.GCO.Get()
+	if !config.FSHC.Enabled {
 		return
 	}
 	if !cos.IsIOError(err) { // TODO -- FIXME: review the selection
+		debug.Assert(!cos.IsErrOOS(err)) // is checked below
 		return
 	}
 
@@ -44,7 +46,7 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 	}
 
 	if cos.IsErrOOS(err) {
-		cs := t.OOS(nil)
+		cs := t.oos(config)
 		nlog.Errorf("%s: OOS (%s), not %s", t, cs.String(), s)
 		return
 	}
@@ -67,7 +69,6 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 func (t *target) DisableMpath(mi *fs.Mountpath) (err error) {
 	_, err = t.fsprg.disableMpath(mi.Path, true /*dont-resilver*/)
 
-	// TODO -- FIXME: Prometheus alert
-
+	t.statsT.Flag(stats.NodeStateFlags, cos.DiskFault, 0)
 	return err
 }

@@ -441,7 +441,7 @@ func (e *ErrCapExceeded) Error() string {
 
 func IsErrCapExceeded(err error) bool {
 	_, ok := err.(*ErrCapExceeded)
-	return ok
+	return ok || cos.IsErrOOS(err)
 }
 
 // ErrInvalidCksum

@@ -28,7 +28,7 @@ const (
 	MaintenanceMode                                  // warning
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
-	DiskFault                                        // red & critical // TODO -- FIXME: NIY
+	DiskFault                                        // red
 )
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }

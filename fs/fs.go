@@ -117,7 +117,7 @@ func NewMountpath(mpath string, label ios.Label) (*Mountpath, error) {
 }
 
 // flags
-func (mi *Mountpath) setFlags(flags uint64) (ok bool) {
+func (mi *Mountpath) SetFlags(flags uint64) (ok bool) {
 	return cos.SetfAtomic(&mi.flags, flags)
 }
 
@@ -365,7 +365,7 @@ func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config) (err 
 	if err = mi._addEnabled(tid, avail, config); err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
-	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
+	cos.ClearfAtomic(&mi.flags, FlagWaitingDD|FlagDisabledByFSHC)
 	return
 }
 
@@ -779,7 +779,7 @@ func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail i
 	// dd active
 	clone := _cloneOne(avail)
 	mi = clone[mpath]
-	ok := mi.setFlags(flags)
+	ok := mi.SetFlags(flags)
 	debug.Assert(ok, mi.String()) // under lock
 	putAvailMPI(clone)
 	numAvail = len(clone) - 1
@@ -1150,6 +1150,21 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 		if tcdf != nil {
 			cdf := mi._cdf(tcdf)
 			cdf.Capacity = c
+
+			// add alerts
+			// (not mutually exclusive, but we add only one here in order of priority)
+			switch {
+			case mi.IsAnySet(FlagDisabledByFSHC):
+				cdf._alert(DiskFaulted)
+			case c.PctUsed > int32(config.Space.OOS):
+				cdf._alert(DiskOOS)
+			case mi.IsAnySet(FlagBeingDetached):
+				cdf._alert(DiskDetach)
+			case mi.IsAnySet(FlagBeingDisabled):
+				cdf._alert(DiskDisable)
+			case c.PctUsed >= int32(config.Space.HighWM):
+				cdf._alert(DiskHighWM)
+			}
 		}
 
 		// recompute totals

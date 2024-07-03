@@ -809,7 +809,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil || cs.PctMax > int32(config.Space.CleanupWM) {
-		cs = t.OOS(nil)
+		cs = t.oos(config)
 		if cs.IsOOS() {
 			// fail this write
 			t.writeErr(w, r, errCap, http.StatusInsufficientStorage)
@@ -1440,7 +1440,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
-		cs = t.OOS(nil)
+		cs = t.oos(nil)
 		if err := cs.Err(); err != nil {
 			return "", nil, err
 		}

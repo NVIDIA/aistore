@@ -803,7 +803,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	// since some buckets may have been destroyed
 	cs := fs.Cap()
 	if cs.Err() != nil {
-		_ = t.OOS(nil)
+		_ = t.oos(nil)
 	}
 }
 

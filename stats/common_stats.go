@@ -802,6 +802,11 @@ func (r *runner) Name() string { return r.name }
 
 func (r *runner) Get(name string) (val int64) { return r.core.get(name) }
 
+func (r *runner) nodeStateFlags() cos.NodeStateFlags {
+	val := r.Get(NodeStateFlags)
+	return cos.NodeStateFlags(val)
+}
+
 func (r *runner) _run(logger statsLogger /* Prunner or Trunner */) error {
 	var (
 		i, j, k time.Duration

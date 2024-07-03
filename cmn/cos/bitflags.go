@@ -26,6 +26,7 @@ func (f BitFlags) IsAnySet(flags BitFlags) bool {
 
 // atomic
 
+// "set" as in: "add"
 func SetfAtomic(f *uint64, flags uint64) (ok bool) {
 	return atomic.CompareAndSwapUint64(f, *f, *f|flags)
 }

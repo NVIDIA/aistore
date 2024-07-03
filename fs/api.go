@@ -5,8 +5,21 @@
 package fs
 
 import (
+	"strings"
+
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
+)
+
+// disk name suffix (see HasAlert below)
+const (
+	DiskFaulted = "(faulted)"      // disabled by FSHC
+	DiskOOS     = "(out-of-space)" // (capacity)
+	DiskDisable = "(->disabled)"   // FlagBeingDisabled (in transition)
+	DiskDetach  = "(->detach)"     // FlagBeingDetached (ditto)
+	DiskHighWM  = "(low-on-space)" // (capacity)
+
+	// NOTE: when adding/updating see "must contain" below
 )
 
 type (
@@ -18,7 +31,7 @@ type (
 	// Capacity, Disks, Filesystem (CDF)
 	CDF struct {
 		Capacity
-		Disks []string  `json:"disks"` // owned or shared disks (ios.FsDisks map => slice)
+		Disks []string  `json:"disks"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
 		Label ios.Label `json:"mountpath_label"`
 		FS    cos.FS    `json:"fs"`
 	}
@@ -30,7 +43,7 @@ type (
 		PctMax     int32           `json:"pct_max"`            // max used (%)
 		PctAvg     int32           `json:"pct_avg"`            // avg used (%)
 		PctMin     int32           `json:"pct_min"`            // min used (%)
-		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message
+		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message; disk fault
 	}
 )
 
@@ -55,5 +68,35 @@ func InitCDF(tcdf *TargetCDF) {
 	tcdf.Mountpaths = make(map[string]*CDF, len(avail))
 	for mpath := range avail {
 		tcdf.Mountpaths[mpath] = &CDF{}
+	}
+}
+
+func (tcdf *TargetCDF) HasAlerts() bool {
+	for _, cdf := range tcdf.Mountpaths {
+		if alert, _ := cdf.HasAlert(); alert != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// Returns "" and (-1) when no alerts found;
+// otherwise, returns alert name and its index in the string, which is formatted as follows:
+// <DISK-NAME>[<ALERT-NAME>]
+func (cdf *CDF) HasAlert() (alert string, idx int) {
+	var alerts = []string{DiskFaulted, DiskOOS, DiskDisable, DiskDetach, DiskHighWM} // NOTE: must contain all flags
+	for _, disk := range cdf.Disks {
+		for _, a := range alerts {
+			if idx = strings.Index(disk, a); idx > 0 {
+				return disk[idx:], idx
+			}
+		}
+	}
+	return "", -1
+}
+
+func (cdf *CDF) _alert(a string) {
+	for i, d := range cdf.Disks {
+		cdf.Disks[i] = d + a
 	}
 }

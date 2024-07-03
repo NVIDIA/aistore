@@ -167,7 +167,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	t.transactions.find(c.uuid, ActCleanup)
 
 	if cmn.IsErrCapExceeded(err) {
-		cs := t.OOS(nil)
+		cs := t.oos(nil)
 		t.writeErrStatusf(w, r, http.StatusInsufficientStorage, "%s: %v", cs.String(), err)
 	} else {
 		t.writeErr(w, r, err)

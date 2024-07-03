@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -36,14 +36,17 @@ var (
 )
 
 // triggers by an out-of-space condition or a suspicion of thereof
-func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
+
+func (t *target) oos(config *cmn.Config) fs.CapStatus { return t.OOS(nil, config, nil) }
+
+func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.TargetCDF) (cs fs.CapStatus) {
 	var errCap error
 	if csRefreshed != nil {
 		cs = *csRefreshed
 		errCap = cs.Err()
 	} else {
 		var err error
-		cs, err, errCap = fs.CapRefresh(nil, nil)
+		cs, err, errCap = fs.CapRefresh(config, tcdf)
 		if err != nil {
 			nlog.Errorln(t.String(), "failed to update capacity stats:", err)
 			return
