@@ -76,7 +76,6 @@ func TestNoRecordsSplit(t *testing.T) {
 
 			tassert.CheckError(t, ishard.Init(cfg))
 			tassert.CheckError(t, ishard.Start())
-			time.Sleep(time.Second * 3) // wait for api.ArchiveMultiObj to complete
 
 			shardContents, err := getShardContents(baseParams, cfg.DstBck)
 			tassert.CheckError(t, err)
@@ -89,11 +88,11 @@ func TestNoRecordsSplit(t *testing.T) {
 					totalFileNum++
 					record := getRecordName(file)
 					existingTarball, exists := recordToTarballs[record]
-					tassert.Fatalf(t, !exists || existingTarball == tarball, "Found split records")
+					tassert.Fatalf(t, !exists || existingTarball == tarball, "Found split record: %s in output shards: %s and %s", record, existingTarball, tarball)
 					recordToTarballs[record] = tarball
 				}
 			}
-			tassert.Fatalf(t, totalFileNum == tc.numRecords*tc.numExtensions, "The total number of files in output shards doesn't match to the initially generated amount")
+			tassert.Fatalf(t, totalFileNum == tc.numRecords*tc.numExtensions, "The total number of files in output shards (%d) doesn't match to the initially generated amount (%d)", totalFileNum, tc.numRecords*tc.numExtensions)
 		})
 	}
 }

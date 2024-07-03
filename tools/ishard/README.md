@@ -31,7 +31,7 @@ $ go build -o ishard .
 Correct Usage
 
 ```sh
-$ ./ishard -max_shard_size=1024000 -src_bck=source_bucket -dst_bck=destination_bucket -collapse -shard_template="prefix-{0000..1023..8}-suffix"
+$ ./ishard -max_shard_size=1024000 -src_bck=ais://sample-medium -dst_bck=ais://sample-medium-out -collapse -shard_template="prefix-{0000..1023..8}-suffix"
 $ ais archive ls ais://destination_bucket
 
 NAME                     SIZE            
@@ -73,11 +73,11 @@ go test -v
    - [X] Utilize existing name template tools
 - [ ] goroutine
 - [ ] configurable record key, extensions
+   - [ ] upon missing extension in a record: (abort | warn | ignore)
 - [ ] logging (timestamp, nlog)
-- [ ] reports missing member in a record
-- [ ] allow user to specify target directories to include/exclude
-- [ ] E2E testing from CLI
+- [ ] allow user to specify source directories to include/exclude
 
 ### GOOD TO HAVE
 - [ ] progress bar (later)
 - [ ] integration into aistore (later)
+- [ ] E2E testing from CLI

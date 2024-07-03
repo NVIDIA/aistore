@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools/ishard/config"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 var (
@@ -86,77 +87,93 @@ func (n *Node) Print(prefix string) {
 }
 
 // Archive objects from this node into shards according to subdirectories structure
-func (n *Node) Archive() error {
-	paths := []string{}
-	if _, err := archiveNode(n, "", &paths); err != nil {
-		return err
-	}
+func (n *Node) archive(path string) (parentRecords *shard.Records, _ int64, _ error) {
+	var (
+		totalSize int64
+		recs      = shard.NewRecords(16)
+		errCh     = make(chan error, 1)
+	)
 
-	if cfg.Collapse && len(paths) != 0 {
-		if err := generateShard(paths); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func archiveNode(node *Node, path string, parentPaths *[]string) (int64, error) {
-	totalSize := int64(0)
-	paths := []string{}
-
-	for name, child := range node.children {
+	for name, child := range n.children {
 		fullPath := path + "/" + name
 		if path == "" {
 			fullPath = name
 		}
-		subtreeSize, err := archiveNode(child, fullPath, &paths)
+		childRecords, subtreeSize, err := child.archive(fullPath)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
+		}
+		if childRecords != nil && childRecords.Len() != 0 {
+			recs.Insert(childRecords.All()...)
 		}
 		totalSize += subtreeSize
 	}
 
-	node.records.Lock()
-	for _, record := range node.records.All() {
+	wg := cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 0)
+	n.records.Lock()
+	for _, record := range n.records.All() {
 		totalSize += record.TotalSize()
+		recs.Insert(record)
+
+		if totalSize < cfg.MaxShardSize {
+			continue
+		}
+
+		name, hasNext := shardIter.Next()
+		if !hasNext {
+			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+		}
+		wg.Add(1)
+		go func(recs *shard.Records, name string) {
+			generateShard(recs, name, errCh)
+			wg.Done()
+		}(recs, name)
+
+		totalSize = 0
+		recs = shard.NewRecords(16)
+	}
+	n.records.Unlock()
+
+	// if cfg.Collapse is not set, or no parent to collapse to (root level), archive all remaining objects regardless the current total size
+	if !cfg.Collapse || path == "" {
+		name, hasNext := shardIter.Next()
+		if !hasNext {
+			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+		}
+
+		wg.Add(1)
+		go func(recs *shard.Records, name string) {
+			generateShard(recs, name, errCh)
+			wg.Done()
+		}(recs, name)
+
+		defer recs.Drain()
+	}
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		return nil, 0, err
+	}
+
+	return recs, totalSize, nil
+}
+
+func generateShard(recs *shard.Records, name string, errCh chan error) {
+	defer recs.Drain()
+
+	if recs.Len() == 0 {
+		return
+	}
+
+	paths := []string{}
+	recs.Lock()
+	for _, record := range recs.All() {
 		for _, obj := range record.Objects {
 			paths = append(paths, record.MakeUniqueName(obj))
 		}
-		if totalSize > cfg.MaxShardSize {
-			if err := generateShard(paths); err != nil {
-				return 0, err
-			}
-			totalSize = 0
-			paths = []string{}
-		}
 	}
-	node.records.Unlock()
-
-	if len(paths) == 0 {
-		return 0, nil
-	}
-
-	// Allow to flatten remaining objects into parent directory
-	if cfg.Collapse {
-		*parentPaths = append(*parentPaths, paths...)
-		paths = nil
-		return totalSize, nil
-	}
-
-	// Otherwise, archive all remaining objects regardless the current total size
-	if err := generateShard(paths); err != nil {
-		return 0, err
-	}
-
-	return totalSize, nil
-}
-
-func generateShard(paths []string) error {
-	name, hasNext := shardIter.Next()
-	if !hasNext {
-		return fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
-	}
+	recs.Unlock()
 
 	msg := cmn.ArchiveBckMsg{
 		ToBck: cfg.DstBck,
@@ -168,11 +185,10 @@ func generateShard(paths []string) error {
 		},
 	}
 
-	if _, err := api.ArchiveMultiObj(baseParams, cfg.SrcBck, &msg); err != nil {
-		return fmt.Errorf("failed to archive shard %s: %w", name, err)
+	_, err := api.ArchiveMultiObj(baseParams, cfg.SrcBck, &msg)
+	if err != nil {
+		errCh <- fmt.Errorf("failed to archive shard %s: %w", name, err)
 	}
-
-	return nil
 }
 
 // Init sets the configuration for ishard. If a config is provided, it uses that;
@@ -216,5 +232,13 @@ func Start() error {
 		root.Insert(en.Name, en.Size)
 	}
 
-	return root.Archive()
+	if _, _, err := root.archive(""); err != nil {
+		return err
+	}
+
+	if err := api.WaitForXactionIdle(baseParams, &xact.ArgsMsg{Kind: apc.ActArchive, Bck: cfg.SrcBck}); err != nil {
+		return err
+	}
+
+	return err
 }
