@@ -97,6 +97,8 @@ func (cdf *CDF) HasAlert() (alert string, idx int) {
 
 func (cdf *CDF) _alert(a string) {
 	for i, d := range cdf.Disks {
-		cdf.Disks[i] = d + a
+		if !strings.Contains(d, a) {
+			cdf.Disks[i] = d + a
+		}
 	}
 }

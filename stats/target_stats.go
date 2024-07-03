@@ -342,16 +342,8 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		}
 	}
 
-	// 3. capacity and associated node state flags
-	set, clr, hasAlerts := r._cap(config, now)
-
-	// 3.5. TODO -- FIXME: revisit
-	flags := r.nodeStateFlags()
-	if hasAlerts {
-		r.lines = append(r.lines, "Warning: check for mountpath alerts, node-flags: "+flags.String())
-	} else if flags.IsSet(cos.DiskFault) {
-		clr |= cos.DiskFault
-	}
+	// 3. capacity, mountpath alerts, and associated node state flags
+	set, clr := r._cap(config, now)
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
 	r.logDiskStats(now)
@@ -397,17 +389,21 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 }
 
-func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags, hasAlerts bool) {
+func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags) {
 	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.TargetCDF)
 	if err != nil {
 		nlog.Errorln(err)
 		debug.Assert(!updated && errCap == nil, updated, " ", errCap)
-		return 0, 0, false
+		return 0, 0
 	}
 	if !updated && errCap == nil { // nothing to do
-		return 0, 0, false
+		return 0, 0
 	}
-	pcs := &cs
+
+	var (
+		pcs       = &cs
+		hasAlerts bool
+	)
 	if !updated {
 		pcs = nil // to possibly force refresh via t.OOS
 	} else {
@@ -456,6 +452,14 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 		r.cs.last = now
 	}
 
+	// and more
+	flags := r.nodeStateFlags()
+	if hasAlerts {
+		r.lines = append(r.lines, "Warning: node-state-flags", flags.String(), "(check mountpath alerts!)")
+	} else if flags.IsSet(cos.DiskFault) && updated {
+		clr |= cos.DiskFault
+	}
+
 	// cap alert
 	if cs.IsOOS() {
 		set = cos.OOS
@@ -465,7 +469,7 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 	} else {
 		clr = cos.OOS | cos.LowCapacity
 	}
-	return set, clr, hasAlerts
+	return set, clr
 }
 
 // log formatted disk stats:

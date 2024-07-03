@@ -346,7 +346,7 @@ See '--help' and docs/cli for details.`
 		"\t\t{{ $mp }} " +
 
 		"{{range $k, $v := $p.TargetCDF.Mountpaths}}" +
-		"{{if (IsEqS $k $mp)}}{{$v.FS}}{{end}}" +
+		"{{if (IsEqS $k $mp)}}{{FormatCDFDisks $v}}{{end}}" +
 		"{{end}}\n" +
 
 		"{{end}}{{end}}" +
@@ -421,6 +421,7 @@ var (
 		"FormatProxiesSumm":   fmtProxiesSumm,
 		"FormatTargetsSumm":   fmtTargetsSumm,
 		"FormatCapPctMAM":     fmtCapPctMAM,
+		"FormatCDFDisks":      fmtCDFDisks,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          FmtBool,
 		"FormatBckName":       func(bck cmn.Bck) string { return bck.Cname("") },

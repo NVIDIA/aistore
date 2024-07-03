@@ -1152,7 +1152,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 			cdf.Capacity = c
 
 			// add alerts
-			// (not mutually exclusive, but we add only one here in order of priority)
+			// (the bits are not mutually exclusive, but we add only one here in the order of priority)
 			switch {
 			case mi.IsAnySet(FlagDisabledByFSHC):
 				cdf._alert(DiskFaulted)

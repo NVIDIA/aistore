@@ -165,6 +165,14 @@ func fmtCapPctMAM(tcdf *fs.TargetCDF, list bool) string {
 	return fmt.Sprintf("%s%2d%%%s %s%2d%%%s %s%2d%%", a, tcdf.PctMin, sepa, b, tcdf.PctAvg, sepa, c, tcdf.PctMax)
 }
 
+func fmtCDFDisks(cdf *fs.CDF) string {
+	alert, _ := cdf.HasAlert()
+	if alert == "" {
+		return cdf.FS.String() // fs.Fs + "(" + fs.FsType + ")"
+	}
+	return cdf.FS.Fs + fred(alert)
+}
+
 func fmtSmap(smap *meta.Smap) string {
 	return fmt.Sprintf("version %d, UUID %s, primary %s", smap.Version, smap.UUID, smap.Primary.StringEx())
 }
