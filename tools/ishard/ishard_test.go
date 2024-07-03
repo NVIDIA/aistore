@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -52,12 +53,10 @@ func TestNoRecordsSplit(t *testing.T) {
 						Provider: apc.AIS,
 					},
 					IshardConfig: config.IshardConfig{
-						MaxShardSize: 102400,
-						Collapse:     tc.collapse,
-						StartIdx:     0,
-						IdxDigits:    4,
-						Ext:          ".tar",
-						Prefix:       "shard-",
+						MaxShardSize:  102400,
+						Collapse:      tc.collapse,
+						ShardTemplate: "shard-%d",
+						Ext:           ".tar",
 					},
 					ClusterConfig: config.DefaultConfig.ClusterConfig,
 				}
@@ -71,11 +70,12 @@ func TestNoRecordsSplit(t *testing.T) {
 			tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
 			t.Logf("using %s as output bucket\n", cfg.DstBck)
 			tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
-			tassert.CheckError(t, generateNestedStructure(baseParams, cfg.SrcBck, tc.numRecords, tc.numExtensions, tc.fileSize))
+
+			err := generateNestedStructure(baseParams, cfg.SrcBck, tc.numRecords, tc.numExtensions, tc.fileSize)
+			tassert.CheckError(t, err)
 
 			tassert.CheckError(t, ishard.Init(cfg))
 			tassert.CheckError(t, ishard.Start())
-
 			time.Sleep(time.Second * 3) // wait for api.ArchiveMultiObj to complete
 
 			shardContents, err := getShardContents(baseParams, cfg.DstBck)
@@ -123,12 +123,10 @@ func TestMaxShardSize(t *testing.T) {
 						Provider: apc.AIS,
 					},
 					IshardConfig: config.IshardConfig{
-						MaxShardSize: tc.maxShardSize,
-						Collapse:     true,
-						StartIdx:     0,
-						IdxDigits:    4,
-						Ext:          ".tar",
-						Prefix:       "shard-",
+						MaxShardSize:  tc.maxShardSize,
+						Collapse:      true,
+						ShardTemplate: "shard-%d",
+						Ext:           ".tar",
 					},
 					ClusterConfig: config.DefaultConfig.ClusterConfig,
 				}
@@ -143,7 +141,9 @@ func TestMaxShardSize(t *testing.T) {
 			tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
 			t.Logf("using %s as output bucket\n", cfg.DstBck)
 			tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
-			tassert.CheckError(t, generateNestedStructure(baseParams, cfg.SrcBck, tc.numRecords, numExtensions, tc.fileSize))
+
+			err := generateNestedStructure(baseParams, cfg.SrcBck, tc.numRecords, numExtensions, tc.fileSize)
+			tassert.CheckError(t, err)
 
 			tassert.CheckError(t, ishard.Init(cfg))
 			tassert.CheckError(t, ishard.Start())
@@ -158,6 +158,80 @@ func TestMaxShardSize(t *testing.T) {
 				if i < len(tarballs.Entries)-1 {
 					tassert.Fatalf(t, en.Size > tc.maxShardSize, "The output shard size doesn't reach to the desired amount. en.Size: %d, tc.maxShardSize: %d, i: %d, len(tarballs.Entries): %d", en.Size, tc.maxShardSize, i, len(tarballs.Entries))
 				}
+			}
+		})
+	}
+}
+
+func TestShardTemplate(t *testing.T) {
+	testCases := []struct {
+		numRecords    int
+		fileSize      int64
+		maxShardSize  int64
+		shardTemplate string
+	}{
+		{numRecords: 50, fileSize: 32 * cos.KiB, maxShardSize: 128 * cos.KiB, shardTemplate: "prefix{0000..9999}-suffix"},
+		{numRecords: 100, fileSize: 96 * cos.KiB, maxShardSize: 256 * cos.KiB, shardTemplate: "prefix-%06d-suffix"},
+		{numRecords: 200, fileSize: 24 * cos.KiB, maxShardSize: 16 * cos.KiB, shardTemplate: "prefix-@00001-gap-@100-suffix"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("Records:%d/FileSize:%d/MaxShardSize:%d/Template:%s", tc.numRecords, tc.fileSize, tc.maxShardSize, tc.shardTemplate), func(t *testing.T) {
+			var (
+				cfg = &config.Config{
+					SrcBck: cmn.Bck{
+						Name:     trand.String(15),
+						Provider: apc.AIS,
+					},
+					DstBck: cmn.Bck{
+						Name:     trand.String(15),
+						Provider: apc.AIS,
+					},
+					IshardConfig: config.IshardConfig{
+						MaxShardSize:  tc.maxShardSize,
+						Collapse:      true,
+						ShardTemplate: tc.shardTemplate,
+						Ext:           ".tar",
+					},
+					ClusterConfig: config.DefaultConfig.ClusterConfig,
+				}
+				baseParams = api.BaseParams{
+					URL:    cfg.URL,
+					Client: cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true}),
+				}
+				numExtensions = 3
+			)
+
+			t.Logf("using %s as input bucket\n", cfg.SrcBck)
+			tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+			t.Logf("using %s as output bucket\n", cfg.DstBck)
+			tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
+
+			err := generateNestedStructure(baseParams, cfg.SrcBck, tc.numRecords, numExtensions, tc.fileSize)
+			tassert.CheckError(t, err)
+
+			tassert.CheckError(t, ishard.Init(cfg))
+			tassert.CheckError(t, ishard.Start())
+			time.Sleep(time.Second * 3) // wait for api.ArchiveMultiObj to complete
+
+			tarballs, err := api.ListObjects(baseParams, cfg.DstBck, &apc.LsoMsg{}, api.ListArgs{})
+			tassert.CheckError(t, err)
+
+			for _, en := range tarballs.Entries {
+				var expectedFormat string
+				switch tc.shardTemplate {
+				case "prefix{0000..9999}-suffix":
+					expectedFormat = `^prefix\d{4}-suffix\.tar$`
+				case "prefix-%06d-suffix":
+					expectedFormat = `^prefix-\d{6}-suffix\.tar$`
+				case "prefix-@00001-gap-@100-suffix":
+					expectedFormat = `^prefix-\d+-gap-\d+-suffix\.tar$`
+				default:
+					t.Fatalf("Unsupported shard template: %s", tc.shardTemplate)
+				}
+
+				re := regexp.MustCompile(expectedFormat)
+				tassert.Fatalf(t, re.MatchString(en.Name), fmt.Sprintf("expected %s to match %s", en.Name, expectedFormat))
 			}
 		})
 	}

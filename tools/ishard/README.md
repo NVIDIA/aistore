@@ -13,8 +13,8 @@ This package provides a utility for archiving objects from a bucket into shard f
 - `-shard_size`: The desired size of each output shard in bytes. Default is `1024000`.
 - `-src_bck`: The source bucket name or URI. If empty, a bucket with a random name will be created.
 - `-dst_bck`: The destination bucket name or URI. If empty, a bucket with a random name will be created.
-- `-src_bck_provider`: The provider for the source bucket (`ais`, `aws`, `azure`, `gcp`). Default is `ais`.
-- `-dst_bck_provider`: The provider for the destination bucket (`ais`, `aws`, `azure`, `gcp`). Default is `ais`.
+- `-shard_template`: the template used for generating output shards. Accepts Bash, Fmt, or At formats.
+- `-ext`: the extension used for generating output shards.
 - `-collapse`: If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.
 
 ## Initial Setup
@@ -22,13 +22,42 @@ This package provides a utility for archiving objects from a bucket into shard f
 **Build the Package:**
 
 ```sh
-go build -o ishard .
+$ cd cmd/ishard
+$ go build -o ishard .
 ```
 
 ## Sample Usage
 
+Correct Usage
+
 ```sh
-./ishard -shard_size=10240 -src_bck=source_bucket -dst_bck=destination_bucket -src_bck_provider=ais -dst_bck_provider=ais
+$ ./ishard -max_shard_size=1024000 -src_bck=source_bucket -dst_bck=destination_bucket -collapse -shard_template="prefix-{0000..1023..8}-suffix"
+$ ais archive ls ais://destination_bucket
+
+NAME                     SIZE            
+prefix-0000-suffix.tar   1.01MiB         
+prefix-0008-suffix.tar   1.41MiB         
+prefix-0016-suffix.tar   1.00MiB         
+prefix-0024-suffix.tar   1.00MiB         
+prefix-0032-suffix.tar   1.05MiB         
+prefix-0040-suffix.tar   1.09MiB         
+prefix-0048-suffix.tar   1.04MiB         
+prefix-0056-suffix.tar   1.02MiB         
+prefix-0064-suffix.tar   1.02MiB         
+prefix-0072-suffix.tar   1.04MiB         
+prefix-0080-suffix.tar   1.03MiB         
+prefix-0088-suffix.tar   1.01MiB         
+prefix-0096-suffix.tar   1.02MiB         
+prefix-0104-suffix.tar   1.06MiB         
+...
+```
+
+Incorrect Usage
+```
+$ ./ishard -max_shard_size=1024000 -src_bck=source_bucket -dst_bck=destination_bucket -collapse -shard_template="prefix-{0000..0050..8}-suffix"
+Error: number of shards to be created exceeds expected number of shards (7)
+
+
 ```
 
 ## Running the Tests
@@ -40,8 +69,8 @@ go test -v
 ## TODO List
 
 ### MUST HAVE/DESIRABLE
-- [ ] Shard name patterns
-   - [ ] Utilize existing name template tools
+- [X] Shard name patterns
+   - [X] Utilize existing name template tools
 - [ ] goroutine
 - [ ] configurable record key, extensions
 - [ ] logging (timestamp, nlog)

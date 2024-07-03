@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools/ishard/config"
@@ -23,7 +24,8 @@ var (
 )
 
 var (
-	shardIdx = 0
+	shardIter  cos.ParsedTemplate
+	shardCount int64
 )
 
 // Represents the hierarchical structure of virtual directories within a bucket
@@ -86,24 +88,17 @@ func (n *Node) Print(prefix string) {
 // Archive objects from this node into shards according to subdirectories structure
 func (n *Node) Archive() error {
 	paths := []string{}
-	_, err := archiveNode(n, "", &paths)
+	if _, err := archiveNode(n, "", &paths); err != nil {
+		return err
+	}
 
 	if cfg.Collapse && len(paths) != 0 {
-		msg := cmn.ArchiveBckMsg{
-			ToBck: cfg.DstBck,
-			ArchiveMsg: apc.ArchiveMsg{
-				ArchName: fmt.Sprintf("%s%0*d%s", cfg.Prefix, cfg.IdxDigits, shardIdx, cfg.Ext),
-				ListRange: apc.ListRange{
-					ObjNames: paths,
-				},
-			},
-		}
-
-		if _, err := api.ArchiveMultiObj(baseParams, cfg.SrcBck, &msg); err != nil {
-			return fmt.Errorf("failed to archive shard %d: %w", shardIdx, err)
+		if err := generateShard(paths); err != nil {
+			return err
 		}
 	}
-	return err
+
+	return nil
 }
 
 func archiveNode(node *Node, path string, parentPaths *[]string) (int64, error) {
@@ -129,21 +124,9 @@ func archiveNode(node *Node, path string, parentPaths *[]string) (int64, error) 
 			paths = append(paths, record.MakeUniqueName(obj))
 		}
 		if totalSize > cfg.MaxShardSize {
-			msg := cmn.ArchiveBckMsg{
-				ToBck: cfg.DstBck,
-				ArchiveMsg: apc.ArchiveMsg{
-					ArchName: fmt.Sprintf("%s%0*d%s", cfg.Prefix, cfg.IdxDigits, shardIdx, cfg.Ext),
-					ListRange: apc.ListRange{
-						ObjNames: paths,
-					},
-				},
+			if err := generateShard(paths); err != nil {
+				return 0, err
 			}
-
-			if _, err := api.ArchiveMultiObj(baseParams, cfg.SrcBck, &msg); err != nil {
-				return 0, fmt.Errorf("failed to archive shard %d: %w", shardIdx, err)
-			}
-
-			shardIdx++
 			totalSize = 0
 			paths = []string{}
 		}
@@ -162,10 +145,23 @@ func archiveNode(node *Node, path string, parentPaths *[]string) (int64, error) 
 	}
 
 	// Otherwise, archive all remaining objects regardless the current total size
+	if err := generateShard(paths); err != nil {
+		return 0, err
+	}
+
+	return totalSize, nil
+}
+
+func generateShard(paths []string) error {
+	name, hasNext := shardIter.Next()
+	if !hasNext {
+		return fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+	}
+
 	msg := cmn.ArchiveBckMsg{
 		ToBck: cfg.DstBck,
 		ArchiveMsg: apc.ArchiveMsg{
-			ArchName: fmt.Sprintf("%s%0*d%s", cfg.Prefix, cfg.IdxDigits, shardIdx, cfg.Ext),
+			ArchName: name + cfg.Ext,
 			ListRange: apc.ListRange{
 				ObjNames: paths,
 			},
@@ -173,10 +169,10 @@ func archiveNode(node *Node, path string, parentPaths *[]string) (int64, error) 
 	}
 
 	if _, err := api.ArchiveMultiObj(baseParams, cfg.SrcBck, &msg); err != nil {
-		return 0, fmt.Errorf("failed to archive shard %d: %w", shardIdx, err)
+		return fmt.Errorf("failed to archive shard %s: %w", name, err)
 	}
-	shardIdx++
-	return totalSize, nil
+
+	return nil
 }
 
 // Init sets the configuration for ishard. If a config is provided, it uses that;
@@ -198,6 +194,13 @@ func Init(cfgArg *config.Config) error {
 
 	baseParams = api.BaseParams{URL: cfg.URL}
 	baseParams.Client = cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true})
+
+	if shardIter, err = cos.NewParsedTemplate(strings.TrimSpace(cfg.ShardTemplate)); err != nil {
+		return err
+	}
+	shardIter.InitIter()
+	shardCount = shardIter.Count()
+
 	return err
 }
 

@@ -16,12 +16,10 @@ type (
 		URL string
 	}
 	IshardConfig struct {
-		MaxShardSize int64
-		StartIdx     int
-		IdxDigits    int
-		Ext          string
-		Prefix       string
-		Collapse     bool
+		MaxShardSize  int64
+		Ext           string
+		ShardTemplate string
+		Collapse      bool
 	}
 	Config struct {
 		ClusterConfig
@@ -38,7 +36,7 @@ const (
 
 var DefaultConfig = Config{
 	ClusterConfig: ClusterConfig{URL: "http://" + defaultClusterIPv4 + ":" + defaultProxyPort},
-	IshardConfig:  IshardConfig{MaxShardSize: 102400, StartIdx: 0, IdxDigits: 4, Ext: ".tar", Prefix: "shard-", Collapse: false},
+	IshardConfig:  IshardConfig{MaxShardSize: 102400, Ext: ".tar", ShardTemplate: "shard-%d", Collapse: false},
 	SrcBck:        cmn.Bck{Name: "src_bck", Provider: apc.AIS},
 	DstBck:        cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
 }
@@ -54,6 +52,8 @@ func parseCliParams(cfg *Config) {
 	flag.Int64Var(&cfg.MaxShardSize, "max_shard_size", 1024000, "desired size of each output shard")
 	flag.StringVar(&cfg.SrcBck.Name, "src_bck", "", "the source bucket name or URI. If empty, a bucket with random name will be created")
 	flag.StringVar(&cfg.DstBck.Name, "dst_bck", "", "the destination bucket name or URI. If empty, a bucket with random name will be created")
+	flag.StringVar(&cfg.ShardTemplate, "shard_template", "shard-%d", "the template used for generating output shards. Accepts Bash (prefix{0001..0010}suffix), Fmt (prefix-%06d-suffix), or At (prefix-@00001-gap-@100-suffix) templates")
+	flag.StringVar(&cfg.Ext, "ext", ".tar", "the extension used for generating output shards.")
 	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.")
 	flag.Parse()
 
