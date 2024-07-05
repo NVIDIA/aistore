@@ -12,6 +12,7 @@ from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.pytorch.utils import get_basename
 from aistore.sdk.types import ArchiveSettings
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
+from alive_progress import alive_it
 
 
 class AISShardReader(AISBaseIterDataset):
@@ -23,6 +24,7 @@ class AISShardReader(AISBaseIterDataset):
         prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of Bucket objects to list of prefixes that only allows
         objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
+        disable_output (bool, optional): Disables console shard reading progress indicator
 
     Yields:
         Tuple[str, List[bytes]]: Each item is a tuple where the first element is the basename of the shard
@@ -34,9 +36,11 @@ class AISShardReader(AISBaseIterDataset):
         bucket_list: Union[Bucket, List[Bucket]],
         prefix_map: Dict[Bucket, Union[str, List[str]]] = {},
         etl_name: str = None,
+        show_progress: bool = False,
     ):
         super().__init__(bucket_list, prefix_map)
         self._etl_name = etl_name
+        self._show_progress = show_progress
 
     def _get_sample_iter_from_source(self, source: Bucket, prefix: str) -> Iterable:
         """
@@ -70,7 +74,9 @@ class AISShardReader(AISBaseIterDataset):
 
             # for each basename, get the byte data for each file and yield in dictionary
             shard = source.object(entry.name)
-            for basename, files in samples_dict.items():
+            for basename, files in alive_it(
+                samples_dict.items(), title=entry.name, disable=not self._show_progress
+            ):
                 content_dict = {}
                 for file_name in files:
                     file_prefix = file_name.split(".")[-1]

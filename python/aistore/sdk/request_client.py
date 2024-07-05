@@ -51,14 +51,10 @@ class RequestClient:
         """
         request_session = session()
         if "https" in self._endpoint:
-            self._set_session_verification(
-                request_session, self._skip_verify, self._ca_cert
-            )
+            self._set_session_verification(request_session)
         return request_session
 
-    def _set_session_verification(
-        self, request_session: Session, skip_verify: bool, ca_cert: str
-    ):
+    def _set_session_verification(self, request_session: Session):
         """
         Set session verify value for validating the server's SSL certificate
         The requests library allows this to be a boolean or a string path to the cert
@@ -67,11 +63,11 @@ class RequestClient:
           2. Cert path from env var.
           3. True (verify with system's approved CA list)
         """
-        if skip_verify:
+        if self._skip_verify:
             request_session.verify = False
             return
-        if ca_cert:
-            request_session.verify = ca_cert
+        if self._ca_cert:
+            request_session.verify = self._ca_cert
             return
         env_crt = os.getenv(AIS_SERVER_CRT)
         request_session.verify = env_crt if env_crt else True
