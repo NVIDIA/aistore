@@ -195,11 +195,13 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		if poi.owt == cmn.OwtPut && poi.restful {
 			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
 			size := poi.lom.Lsize()
+			delta := mono.SinceNano(poi.ltime)
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
 				cos.NamedVal64{Name: stats.PutSize, Value: size},
 				cos.NamedVal64{Name: stats.PutThroughput, Value: size},
-				cos.NamedVal64{Name: stats.PutLatency, Value: mono.SinceNano(poi.ltime)},
+				cos.NamedVal64{Name: stats.PutLatency, Value: delta},
+				cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
 			)
 			// RESTful PUT response header
 			if poi.resphdr != nil {
@@ -1156,11 +1158,13 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 }
 
 func (goi *getOI) stats(written int64) {
+	delta := mono.SinceNano(goi.ltime)
 	goi.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetSize, Value: written},
-		cos.NamedVal64{Name: stats.GetThroughput, Value: written},                // vis-à-vis user (as written m.b. range)
-		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.ltime)}, // see also: stats.GetColdRwLatency
+		cos.NamedVal64{Name: stats.GetThroughput, Value: written}, // vis-à-vis user (as written m.b. range)
+		cos.NamedVal64{Name: stats.GetLatency, Value: delta},      // see also: stats.GetColdRwLatency
+		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: delta}, // see also: stats.GetColdRwLatency
 	)
 	if goi.verchanged {
 		goi.t.statsT.AddMany(

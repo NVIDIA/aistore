@@ -56,6 +56,7 @@ const (
 
 	// KindLatency
 	PutLatency      = "put.ns"
+	PutLatencyTotal = "put.ns.total"
 	AppendLatency   = "append.ns"
 	GetRedirLatency = "get.redir.ns"
 	PutRedirLatency = "put.redir.ns"
@@ -184,6 +185,7 @@ func nameUtil(disk string) string { return diskMetricName(disk, "util") }
 func isDiskMetric(name string) bool {
 	return strings.HasPrefix(name, "disk.")
 }
+
 func isDiskUtilMetric(name string) bool {
 	return isDiskMetric(name) && strings.HasSuffix(name, ".util")
 }
@@ -213,6 +215,7 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, VerChangeSize, KindSize)
 
 	r.reg(snode, PutLatency, KindLatency)
+	r.reg(snode, PutLatencyTotal, KindTotal)
 	r.reg(snode, AppendLatency, KindLatency)
 	r.reg(snode, GetRedirLatency, KindLatency)
 	r.reg(snode, PutRedirLatency, KindLatency)

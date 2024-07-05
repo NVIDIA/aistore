@@ -75,6 +75,7 @@ const (
 
 	// KindLatency
 	GetLatency       = "get.ns"
+	GetLatencyTotal  = "get.ns.total"
 	ListLatency      = "lst.ns"
 	KeepAliveLatency = "kalive.ns"
 
@@ -294,6 +295,8 @@ func (s *coreStats) initProm(snode *meta.Snode) {
 		} else if strings.HasSuffix(v.label.prom, "_ns") {
 			v.label.prom = strings.TrimSuffix(v.label.prom, "_ns") + "_ms"
 			help = "latency (milliseconds)"
+		} else if strings.HasSuffix(v.label.prom, "_ns_total") {
+			help = "cumulative latency (nanoseconds)"
 		} else if strings.Contains(v.label.prom, "_ns_") {
 			v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "_ms_")
 			if name == Uptime {
@@ -337,7 +340,7 @@ func (s *coreStats) update(nv cos.NamedVal64) {
 	case KindThroughput:
 		ratomic.AddInt64(&v.Value, nv.Value)
 		ratomic.AddInt64(&v.cumulative, nv.Value)
-	case KindCounter, KindSize:
+	case KindCounter, KindSize, KindTotal:
 		ratomic.AddInt64(&v.Value, nv.Value)
 		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
 		// - suffix is an arbitrary string that can be defined at runtime;
@@ -393,7 +396,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
 				}
 			}
-		case KindCounter, KindSize:
+		case KindCounter, KindSize, KindTotal:
 			var (
 				val     = ratomic.LoadInt64(&v.Value)
 				changed bool
@@ -455,7 +458,7 @@ func (s *coreStats) copyCumulative(ctracker copyTracker) {
 			// as statsValue.cumulative _is_ the total size (aka, KindSize)
 			n := name[:len(name)-3] + "size"
 			ctracker[n] = val
-		case KindCounter, KindSize:
+		case KindCounter, KindSize, KindTotal:
 			if val := ratomic.LoadInt64(&v.Value); val > 0 {
 				ctracker[name] = copyValue{val}
 			}
@@ -484,7 +487,7 @@ func (s *coreStats) reset(errorsOnly bool) {
 		case KindThroughput:
 			ratomic.StoreInt64(&v.Value, 0)
 			ratomic.StoreInt64(&v.cumulative, 0)
-		case KindCounter, KindSize, KindComputedThroughput, KindGauge:
+		case KindCounter, KindSize, KindComputedThroughput, KindGauge, KindTotal:
 			ratomic.StoreInt64(&v.Value, 0)
 		default: // KindSpecial - do nothing
 		}
@@ -638,6 +641,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 
 	// latency
 	r.reg(snode, GetLatency, KindLatency)
+	r.reg(snode, GetLatencyTotal, KindTotal)
 	r.reg(snode, ListLatency, KindLatency)
 	r.reg(snode, KeepAliveLatency, KindLatency)
 
@@ -659,6 +663,10 @@ func (r *runner) reg(snode *meta.Snode, name, kind string) {
 		v.label.comm = strings.TrimSuffix(name, ".n")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "count")
+	case KindTotal:
+		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "total")
 	case KindSize:
 		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".size")
@@ -763,7 +771,7 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		fv = float64(val)
 		// 1. convert units
 		switch v.kind {
-		case KindCounter:
+		case KindCounter, KindTotal:
 			// do nothing
 		case KindSize:
 			fv = float64(val)
@@ -780,7 +788,7 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		}
 		// 2. convert kind
 		promMetricType := prometheus.GaugeValue
-		if v.kind == KindCounter || v.kind == KindSize {
+		if v.kind == KindCounter || v.kind == KindSize || v.kind == KindTotal {
 			promMetricType = prometheus.CounterValue
 		}
 		if isDiskMetric(name) {

@@ -19,6 +19,7 @@ import (
 const (
 	// lockless
 	KindCounter            = "counter"
+	KindTotal              = "total"
 	KindSize               = "size"
 	KindGauge              = "gauge"
 	KindSpecial            = "special"
