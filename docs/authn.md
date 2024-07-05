@@ -56,7 +56,7 @@ To deploy an AIS cluster with AuthN enabled, follow these steps:
     make kill clean
     ```
     
-> **Note:** When deploying AIStore with AuthN, an admin user is created by default with admin privileges. The default password for the admin user is `admin`. Be sure to [change this password](../cmd/authn/const.go#L22) before starting the server, as it cannot be updated after deployment.
+> **Note:** When deploying AIStore with AuthN, an admin user is created by default with admin privileges. The default password for the admin user is `admin`. You can override it by setting the environment variable `AIS_AUTHN_ADMIN_PASSWORD` before deployment, as the password cannot be updated after deployment. For a list of other important environment variables, refer to the [Environment and Configuration](#environment-and-configuration) section.
 
 2. Deploy the cluster with AuthN enabled:
     ```sh

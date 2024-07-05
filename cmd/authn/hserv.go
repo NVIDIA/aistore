@@ -249,16 +249,6 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uInfo.Password = ""
-	clus, err := h.mgr.clus()
-	if err != nil {
-		cmn.WriteErr(w, r, err)
-		return
-	}
-	for _, clu := range uInfo.ClusterACLs {
-		if cInfo, ok := clus[clu.ID]; ok {
-			clu.Alias = cInfo.Alias
-		}
-	}
 	writeJSON(w, uInfo, "user info")
 }
 
@@ -412,7 +402,7 @@ func (h *hserv) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cluList = &authn.RegisteredClusters{
-			M: map[string]*authn.CluACL{clu.ID: clu},
+			Clusters: map[string]*authn.CluACL{clu.ID: clu},
 		}
 	} else {
 		clus, err := h.mgr.clus()
@@ -420,7 +410,7 @@ func (h *hserv) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		cluList = &authn.RegisteredClusters{M: clus}
+		cluList = &authn.RegisteredClusters{Clusters: clus}
 	}
 	writeJSON(w, cluList, "auth")
 }

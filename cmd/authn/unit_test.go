@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
@@ -17,8 +18,15 @@ import (
 )
 
 var (
-	users = []string{"user1", "user2", "user3"}
-	passs = []string{"pass2", "pass1", "passs"}
+	users     = []string{"user1", "user2", "user3"}
+	passs     = []string{"pass2", "pass1", "passs"}
+	guestRole = &authn.Role{
+		Name:        GuestRole,
+		Description: "Read-only access to buckets",
+		ClusterACLs: []*authn.CluACL{
+			{ID: "test-clu-id", Access: apc.AccessRO},
+		},
+	}
 )
 
 func init() {
@@ -30,49 +38,46 @@ func init() {
 
 func createUsers(mgr *mgr, t *testing.T) {
 	for idx := range users {
-		user := &authn.User{ID: users[idx], Password: passs[idx], Roles: []string{GuestRole}}
+		user := &authn.User{ID: users[idx], Password: passs[idx], Roles: []*authn.Role{guestRole}}
 		err := mgr.addUser(user)
 		if err != nil {
-			t.Errorf("Failed to create a user %s: %v", users[idx], err)
+			t.Errorf("Failed to create user %s: %v", users[idx], err)
 		}
 	}
 
 	srvUsers, err := mgr.userList()
 	tassert.CheckFatal(t, err)
-	if len(srvUsers) != len(users)+1 {
-		t.Errorf("User count mismatch. Found %d users instead of %d", len(srvUsers), len(users)+1)
+	expectedUsersCount := len(users) + 1 // including the admin user
+	if len(srvUsers) != expectedUsersCount {
+		t.Errorf("User count mismatch. Found %d users instead of %d", len(srvUsers), expectedUsersCount)
 	}
 	for _, username := range users {
-		_, ok := srvUsers[username]
-		if !ok {
+		if _, ok := srvUsers[username]; !ok {
 			t.Errorf("User %q not found", username)
 		}
 	}
 }
 
 func deleteUsers(mgr *mgr, skipNotExist bool, t *testing.T) {
-	var err error
 	for _, username := range users {
-		err = mgr.delUser(username)
-		if err != nil {
-			if !cos.IsErrNotFound(err) || !skipNotExist {
-				t.Errorf("Failed to delete user %s: %v", username, err)
-			}
+		err := mgr.delUser(username)
+		if err != nil && (!cos.IsErrNotFound(err) || !skipNotExist) {
+			t.Errorf("Failed to delete user %s: %v", username, err)
 		}
 	}
 }
 
 func testInvalidUser(mgr *mgr, t *testing.T) {
-	user := &authn.User{ID: users[0], Password: passs[1], Roles: []string{GuestRole}}
+	user := &authn.User{ID: users[0], Password: passs[1], Roles: []*authn.Role{guestRole}}
 	err := mgr.addUser(user)
 	if err == nil {
-		t.Errorf("User with the existing name %s was created: %v", users[0], err)
+		t.Errorf("User with the existing name %s was created", users[0])
 	}
 
 	nonexisting := "someuser"
 	err = mgr.delUser(nonexisting)
 	if err == nil {
-		t.Errorf("Non-existing user %s was deleted: %v", nonexisting, err)
+		t.Errorf("Non-existing user %s was deleted", nonexisting)
 	}
 }
 
@@ -81,15 +86,16 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 		username = "newuser"
 		userpass = "newpass"
 	)
-	user := &authn.User{ID: username, Password: userpass, Roles: []string{GuestRole}}
+	user := &authn.User{ID: username, Password: userpass, Roles: []*authn.Role{guestRole}}
 	err := mgr.addUser(user)
 	if err != nil {
-		t.Errorf("Failed to create a user %s: %v", username, err)
+		t.Errorf("Failed to create user %s: %v", username, err)
 	}
 	srvUsers, err := mgr.userList()
 	tassert.CheckFatal(t, err)
-	if len(srvUsers) != len(users)+2 {
-		t.Errorf("Expected %d users but found %d", len(users)+2, len(srvUsers))
+	expectedUsersCount := len(users) + 2 // including the admin user and the new user
+	if len(srvUsers) != expectedUsersCount {
+		t.Errorf("Expected %d users but found %d", expectedUsersCount, len(srvUsers))
 	}
 
 	clu := authn.CluACL{
@@ -102,7 +108,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	}
 	defer mgr.delCluster(clu.ID)
 
-	loginMsg := &authn.LoginMsg{ClusterID: clu.Alias}
+	loginMsg := &authn.LoginMsg{}
 	token, err := mgr.issueToken(username, userpass, loginMsg)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", username, err)
@@ -114,12 +120,13 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	}
 	srvUsers, err = mgr.userList()
 	tassert.CheckFatal(t, err)
-	if len(srvUsers) != len(users)+1 {
-		t.Errorf("Expected %d users but found %d", len(users)+1, len(srvUsers))
+	expectedUsersCount = len(users) + 1 // including the admin user
+	if len(srvUsers) != expectedUsersCount {
+		t.Errorf("Expected %d users but found %d", expectedUsersCount, len(srvUsers))
 	}
 	token, err = mgr.issueToken(username, userpass, loginMsg)
 	if err == nil {
-		t.Errorf("Token issued for deleted user  %s: %v", username, token)
+		t.Errorf("Token issued for deleted user %s: %v", username, token)
 	} else if err != errInvalidCredentials {
 		t.Errorf("Invalid error: %v", err)
 	}
@@ -127,7 +134,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
-	// NOTE: new manager initailizes users DB and adds a default user as a Guest
+	// NOTE: new manager initializes users DB and adds a default user as a Guest
 	mgr, err := newMgr(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
@@ -164,14 +171,14 @@ func TestToken(t *testing.T) {
 
 	// correct user creds
 	shortExpiration := 2 * time.Second
-	loginMsg := &authn.LoginMsg{ClusterID: clu.Alias, ExpiresIn: &shortExpiration}
+	loginMsg := &authn.LoginMsg{ExpiresIn: &shortExpiration}
 	token, err = mgr.issueToken(users[1], passs[1], loginMsg)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
 	info, err := tok.DecryptToken(token, secret)
 	if err != nil {
-		t.Fatalf("Failed to decript token %v: %v", token, err)
+		t.Fatalf("Failed to decrypt token %v: %v", token, err)
 	}
 	if info.UserID != users[1] {
 		t.Errorf("Invalid user %s returned for token of %s", info.UserID, users[1])

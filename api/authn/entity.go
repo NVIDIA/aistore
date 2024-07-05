@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -18,37 +18,39 @@ const (
 
 type (
 	User struct {
-		ID          string    `json:"id"`
-		Password    string    `json:"pass,omitempty"`
-		Roles       []string  `json:"roles"`
-		ClusterACLs []*CluACL `json:"clusters"`
-		BucketACLs  []*BckACL `json:"buckets"` // list of buckets with special permissions
+		ID       string  `json:"id"`
+		Password string  `json:"pass,omitempty"`
+		Roles    []*Role `json:"roles"`
 	}
+
 	CluACL struct {
 		ID     string          `json:"id"`
 		Alias  string          `json:"alias,omitempty"`
 		Access apc.AccessAttrs `json:"perm,string,omitempty"`
 		URLs   []string        `json:"urls,omitempty"`
 	}
+
 	BckACL struct {
 		Bck    cmn.Bck         `json:"bck"`
 		Access apc.AccessAttrs `json:"perm,string"`
 	}
+
 	TokenMsg struct {
 		Token string `json:"token"`
 	}
+
 	LoginMsg struct {
 		Password  string         `json:"password"`
 		ExpiresIn *time.Duration `json:"expires_in"`
-		ClusterID string         `json:"cluster_id"`
 	}
+
 	RegisteredClusters struct {
-		M map[string]*CluACL `json:"clusters,omitempty"`
+		Clusters map[string]*CluACL `json:"clusters,omitempty"`
 	}
+
 	Role struct {
-		ID          string    `json:"name"`
-		Desc        string    `json:"desc"`
-		Roles       []string  `json:"roles"`
+		Name        string    `json:"name"`
+		Description string    `json:"desc"`
 		ClusterACLs []*CluACL `json:"clusters"`
 		BucketACLs  []*BckACL `json:"buckets"`
 		IsAdmin     bool      `json:"admin"`
@@ -60,10 +62,10 @@ type (
 //////////
 
 // IsAdmin returns true if the user is an admin or super-user,
-// i.e. the user has the full access to everything.
-func (uInfo *User) IsAdmin() bool {
-	for _, r := range uInfo.Roles {
-		if r == AdminRole {
+// i.e. the user has full access to everything.
+func (u *User) IsAdmin() bool {
+	for _, r := range u.Roles {
+		if r.Name == AdminRole {
 			return true
 		}
 	}

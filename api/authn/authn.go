@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -61,9 +61,9 @@ func DeleteUser(bp api.BaseParams, userID string) error {
 // Authorize a user and return a user token in case of success.
 // The token expires in `expire` time. If `expire` is `nil` the expiration
 // time is set by AuthN (default AuthN expiration time is 24 hours)
-func LoginUser(bp api.BaseParams, userID, pass, clusterID string, expire *time.Duration) (token *TokenMsg, err error) {
+func LoginUser(bp api.BaseParams, userID, pass string, expire *time.Duration) (token *TokenMsg, err error) {
 	bp.Method = http.MethodPost
-	rec := LoginMsg{Password: pass, ExpiresIn: expire, ClusterID: clusterID}
+	rec := LoginMsg{Password: pass, ExpiresIn: expire}
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
 	{
@@ -135,8 +135,8 @@ func GetRegisteredClusters(bp api.BaseParams, spec CluACL) ([]*CluACL, error) {
 
 	clusters := &RegisteredClusters{}
 	_, err := reqParams.DoReqAny(clusters)
-	rec := make([]*CluACL, 0, len(clusters.M))
-	for _, clu := range clusters.M {
+	rec := make([]*CluACL, 0, len(clusters.Clusters))
+	for _, clu := range clusters.Clusters {
 		rec = append(rec, clu)
 	}
 	less := func(i, j int) bool { return rec[i].ID < rec[j].ID }
@@ -174,7 +174,7 @@ func GetAllRoles(bp api.BaseParams) ([]*Role, error) {
 	roles := make([]*Role, 0)
 	_, err := reqParams.DoReqAny(&roles)
 
-	less := func(i, j int) bool { return roles[i].ID < roles[j].ID }
+	less := func(i, j int) bool { return roles[i].Name < roles[j].Name }
 	sort.Slice(roles, less)
 	return roles, err
 }
@@ -240,7 +240,7 @@ func UpdateRole(bp api.BaseParams, roleSpec *Role) error {
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathRoles.Join(roleSpec.ID)
+		reqParams.Path = apc.URLPathRoles.Join(roleSpec.Name)
 		reqParams.Body = msg
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
