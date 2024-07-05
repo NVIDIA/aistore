@@ -107,6 +107,7 @@ func TestMaxShardSize(t *testing.T) {
 		{numRecords: 50, fileSize: 32 * cos.KiB, maxShardSize: 128 * cos.KiB},
 		{numRecords: 100, fileSize: 96 * cos.KiB, maxShardSize: 256 * cos.KiB},
 		{numRecords: 200, fileSize: 24 * cos.KiB, maxShardSize: 16 * cos.KiB},
+		{numRecords: 2000, fileSize: 24 * cos.KiB, maxShardSize: 160000 * cos.KiB},
 	}
 
 	for _, tc := range testCases {
@@ -151,8 +152,12 @@ func TestMaxShardSize(t *testing.T) {
 			tarballs, err := api.ListObjects(baseParams, cfg.DstBck, &apc.LsoMsg{}, api.ListArgs{})
 			tassert.CheckError(t, err)
 
-			for _, en := range tarballs.Entries {
-				tassert.Fatalf(t, en.Size > tc.maxShardSize, "The output shard size doesn't reach to the desired amount")
+			for i, en := range tarballs.Entries {
+				// With collapse enabled, all output shards should reach `maxShardSize`,
+				// except the last one, which may contain only the remaining data.
+				if i < len(tarballs.Entries)-1 {
+					tassert.Fatalf(t, en.Size > tc.maxShardSize, "The output shard size doesn't reach to the desired amount. en.Size: %d, tc.maxShardSize: %d, i: %d, len(tarballs.Entries): %d", en.Size, tc.maxShardSize, i, len(tarballs.Entries))
+				}
 			}
 		})
 	}
