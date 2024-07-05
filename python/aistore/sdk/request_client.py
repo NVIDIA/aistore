@@ -4,8 +4,7 @@
 import os
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict
-
-import requests
+from requests import session, Session, Response
 
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
@@ -23,7 +22,7 @@ T = TypeVar("T")
 # pylint: disable=unused-variable, duplicate-code
 class RequestClient:
     """
-    Internal client for buckets, objects, jobs, etc. to use for making requests to an AIS cluster
+    Internal client for buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
 
     Args:
         endpoint (str): AIStore endpoint
@@ -38,12 +37,28 @@ class RequestClient:
     ):
         self._endpoint = endpoint
         self._base_url = urljoin(endpoint, "v1")
-        self._session = requests.sessions.session()
         self._timeout = timeout
-        if "https" in self._endpoint:
-            self._set_session_verification(skip_verify, ca_cert)
+        self._skip_verify = skip_verify
+        self._ca_cert = ca_cert
+        self._session = self.create_new_session()
 
-    def _set_session_verification(self, skip_verify: bool, ca_cert: str):
+    def create_new_session(self) -> Session:
+        """
+        Creates a new requests session for HTTP requests.
+
+        Returns:
+            New HTTP request Session
+        """
+        request_session = session()
+        if "https" in self._endpoint:
+            self._set_session_verification(
+                request_session, self._skip_verify, self._ca_cert
+            )
+        return request_session
+
+    def _set_session_verification(
+        self, request_session: Session, skip_verify: bool, ca_cert: str
+    ):
         """
         Set session verify value for validating the server's SSL certificate
         The requests library allows this to be a boolean or a string path to the cert
@@ -53,13 +68,13 @@ class RequestClient:
           3. True (verify with system's approved CA list)
         """
         if skip_verify:
-            self._session.verify = False
+            request_session.verify = False
             return
         if ca_cert:
-            self._session.verify = ca_cert
+            request_session.verify = ca_cert
             return
         env_crt = os.getenv(AIS_SERVER_CRT)
-        self._session.verify = env_crt if env_crt else True
+        request_session.verify = env_crt if env_crt else True
 
     @property
     def base_url(self):
@@ -106,7 +121,7 @@ class RequestClient:
         endpoint: str = None,
         headers: dict = None,
         **kwargs,
-    ) -> requests.Response:
+    ) -> Response:
         """
         Make a request to the AIS cluster
         Args:
@@ -125,7 +140,7 @@ class RequestClient:
             headers = {}
         headers[HEADER_CONTENT_TYPE] = JSON_CONTENT_TYPE
         headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
-        resp = self._session.request(
+        resp = self.session.request(
             method,
             url,
             headers=headers,

@@ -29,6 +29,7 @@ from aistore.sdk.types import (
     ArchiveMultiObj,
     PrefetchMsg,
 )
+from aistore.sdk.request_client import RequestClient
 
 
 # pylint: disable=unused-variable
@@ -68,6 +69,16 @@ class ObjectGroup(AISSource):
             self._obj_collection = ObjectNames(obj_names)
         else:
             self._obj_collection = ObjectTemplate(obj_template)
+
+    @property
+    def client(self) -> RequestClient:
+        """The client bound to the bucket used by the ObjectGroup."""
+        return self.bck.client
+
+    @client.setter
+    def client(self, client) -> RequestClient:
+        """Update the client bound to the bucket used by the ObjectGroup."""
+        self.bck.client = client
 
     def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
         """

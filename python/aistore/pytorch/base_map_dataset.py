@@ -9,6 +9,7 @@ from aistore.sdk.ais_source import AISSource
 from aistore.sdk.object import Object
 from torch.utils.data import Dataset
 from abc import ABC, abstractmethod
+from aistore.pytorch.worker_request_client import WorkerRequestClient
 
 
 class AISBaseMapDataset(ABC, Dataset):
@@ -68,6 +69,8 @@ class AISBaseMapDataset(ABC, Dataset):
         samples = []
 
         for source in self._ais_source_list:
+            # Add pytorch worker support to the internal request client
+            source.client = WorkerRequestClient(source.client)
             if source not in self._prefix_map or self._prefix_map[source] is None:
                 samples.extend(self._get_sample_list_from_source(source, ""))
             else:

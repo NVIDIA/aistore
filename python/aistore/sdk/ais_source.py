@@ -4,6 +4,7 @@
 from abc import ABC, abstractmethod
 from typing import Iterable
 from aistore.sdk.object import Object
+from aistore.sdk.request_client import RequestClient
 
 
 # pylint: disable=too-few-public-methods
@@ -11,6 +12,11 @@ class AISSource(ABC):
     """
     Interface for all AIS class types providing access to AIS objects via URLs
     """
+
+    @property
+    @abstractmethod
+    def client(self) -> RequestClient:
+        """The client bound to the AISSource."""
 
     @abstractmethod
     def list_all_objects_iter(self, prefix: str = "") -> Iterable[Object]:

@@ -37,7 +37,6 @@ class AISShardReader(AISBaseIterDataset):
     ):
         super().__init__(bucket_list, prefix_map)
         self._etl_name = etl_name
-        self._length = None
 
     def _get_sample_iter_from_source(self, source: Bucket, prefix: str) -> Iterable:
         """
@@ -79,16 +78,8 @@ class AISShardReader(AISBaseIterDataset):
                         etl_name=self._etl_name,
                         archive_settings=ArchiveSettings(archpath=file_name),
                     ).read_all()
-                self._length += 1
                 yield basename, content_dict
 
     def __iter__(self) -> Iterator:
         self._reset_iterator()
-        self._length = 0
         yield from self._iterator
-
-    def __len__(self):
-        if self._length is None:
-            self._length = 0
-            self._reset_iterator()
-        return self._length

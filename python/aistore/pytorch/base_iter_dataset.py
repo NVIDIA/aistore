@@ -8,6 +8,7 @@ from typing import List, Union, Iterable, Dict, Iterator
 from aistore.sdk.ais_source import AISSource
 from torch.utils.data import IterableDataset
 from abc import ABC, abstractmethod
+from aistore.pytorch.worker_request_client import WorkerRequestClient
 
 
 class AISBaseIterDataset(ABC, IterableDataset):
@@ -39,6 +40,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
         )
         self._prefix_map = prefix_map
         self._iterator = None
+        self._length = None
         self._reset_iterator()
 
     def _get_sample_iter_from_source(self, source: AISSource, prefix: str) -> Iterable:
@@ -65,9 +67,15 @@ class AISBaseIterDataset(ABC, IterableDataset):
         Returns:
             Iterable: Iterable over the samples of the dataset
         """
+        length = 0
+
         for source in self._ais_source_list:
+            # Add pytorch worker support to the internal request client
+            source.client = WorkerRequestClient(source.client)
             if source not in self._prefix_map or self._prefix_map[source] is None:
-                yield from self._get_sample_iter_from_source(source, "")
+                for sample in self._get_sample_iter_from_source(source, ""):
+                    length += 1
+                    yield sample
             else:
                 prefixes = (
                     [self._prefix_map[source]]
@@ -75,7 +83,11 @@ class AISBaseIterDataset(ABC, IterableDataset):
                     else self._prefix_map[source]
                 )
                 for prefix in prefixes:
-                    yield from self._get_sample_iter_from_source(source, prefix)
+                    for sample in self._get_sample_iter_from_source(source, prefix):
+                        length += 1
+                        yield sample
+
+        self._length = length
 
     @abstractmethod
     def __iter__(self) -> Iterator:
@@ -88,5 +100,12 @@ class AISBaseIterDataset(ABC, IterableDataset):
         pass
 
     def _reset_iterator(self):
-        """Reset the iterator to start from the beginning"""
+        """Reset the iterator to start from the beginning. Also updates length."""
+        # Generates the total length from a fresh iterator (COST)
         self._iterator = self._create_samples_iter()
+
+    def __len__(self):
+        if self._length is None:
+            self._length = sum(1 for _ in self._iterator)
+            self._reset_iterator()
+        return self._length

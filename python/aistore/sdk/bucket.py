@@ -109,6 +109,11 @@ class Bucket(AISSource):
         """The client bound to this bucket."""
         return self._client
 
+    @client.setter
+    def client(self, client) -> RequestClient:
+        """Update the client bound to this bucket."""
+        self._client = client
+
     @property
     def qparam(self) -> Dict:
         """Default query parameters to use with API calls from this bucket."""

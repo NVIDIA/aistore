@@ -7,6 +7,8 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from typing import List, Union, Dict
 from aistore.sdk.ais_source import AISSource
+from torch.utils.data import get_worker_info
+from itertools import islice
 
 
 class AISIterDataset(AISBaseIterDataset):
@@ -32,16 +34,18 @@ class AISIterDataset(AISBaseIterDataset):
     ):
         super().__init__(ais_source_list, prefix_map)
         self._etl_name = etl_name
-        self._length = None
 
     def __iter__(self):
-        self._reset_iterator()
-        self._length = 0
-        for obj in self._iterator:
-            yield obj.name, obj.get(etl_name=self._etl_name).read_all()
+        worker_info = get_worker_info()
 
-    def __len__(self):
-        if self._length is None:
-            self._reset_iterator()
-            self._length = sum(1 for _ in self._iterator)
-        return self._length
+        if worker_info is None:
+            # If not using multiple workers, load directly
+            for obj in self._iterator:
+                yield obj.name, obj.get(etl_name=self._etl_name).read_all()
+        else:
+            # Slice iterator based on worker id as starting index (0, 1, 2, ..) and steps of total workers
+            for obj in islice(
+                self._iterator, worker_info.id, None, worker_info.num_workers
+            ):
+                # Update each object to use WorkerRequestSession for multithreading support
+                yield obj.name, obj.get(etl_name=self._etl_name).read_all()

@@ -19,8 +19,8 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.endpoint = "https://aistore-endpoint"
         self.mock_session = Mock()
-        with patch("aistore.sdk.request_client.requests") as mock_requests_lib:
-            mock_requests_lib.sessions.session.return_value = self.mock_session
+        with patch("aistore.sdk.request_client.session") as mock_session:
+            mock_session.return_value = self.mock_session
             self.request_client = RequestClient(
                 self.endpoint, skip_verify=True, ca_cert=""
             )
