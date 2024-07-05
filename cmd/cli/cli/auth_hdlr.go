@@ -313,20 +313,26 @@ func cliAuthnUserPassword(c *cli.Context, omitEmpty bool) string {
 	return pass
 }
 
-func updateAuthUserHandler(c *cli.Context) (err error) {
-	user := userFromArgsOrStdin(c, true)
-	return authn.UpdateUser(authParams, user)
-}
-
-func addAuthUserHandler(c *cli.Context) (err error) {
-	user := userFromArgsOrStdin(c, false /*omitEmpty*/)
-	list, err := authn.GetAllUsers(authParams)
+func updateAuthUserHandler(c *cli.Context) error {
+	user, err := userFromArgsOrStdin(c, true)
 	if err != nil {
 		return err
 	}
-	for _, uInfo := range list {
-		if uInfo.ID == user.ID {
-			return fmt.Errorf("user %q already exists", uInfo.ID)
+	return authn.UpdateUser(authParams, user)
+}
+
+func addAuthUserHandler(c *cli.Context) error {
+	user, err := userFromArgsOrStdin(c, false)
+	if err != nil {
+		return err
+	}
+	existingUsers, err := authn.GetAllUsers(authParams)
+	if err != nil {
+		return err
+	}
+	for _, u := range existingUsers {
+		if u.ID == user.ID {
+			return fmt.Errorf("user %q already exists", u.ID)
 		}
 	}
 	fmt.Fprintln(c.App.Writer)
@@ -364,7 +370,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 			return err
 		}
 	}
-	token, err := authn.LoginUser(authParams, name, password, cluID, expireIn)
+	token, err := authn.LoginUser(authParams, name, password, expireIn)
 	if err != nil {
 		return err
 	}
@@ -510,9 +516,9 @@ func showAuthAllRoles(c *cli.Context) error {
 	// non-verbose is the implicit default when showing all
 	if flagIsSet(c, verboseFlag) {
 		for i, role := range list {
-			rInfo, err := authn.GetRole(authParams, role.ID)
+			rInfo, err := authn.GetRole(authParams, role.Name)
 			if err != nil {
-				color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", role.ID, err)
+				color.New(color.FgRed).Fprintf(c.App.Writer, "%s: %v\n", role.Name, err)
 			} else {
 				if i > 0 {
 					fmt.Fprintln(c.App.Writer)
@@ -628,8 +634,8 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		perms |= p
 	}
 	roleACL := &authn.Role{
-		ID:   role,
-		Desc: parseStrFlag(c, descRoleFlag),
+		Name:        role,
+		Description: parseStrFlag(c, descRoleFlag),
 	}
 	if bucket != "" {
 		bck, err := parseBckURI(c, bucket, false)
@@ -655,13 +661,24 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 	return roleACL, nil
 }
 
-func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) *authn.User {
+func userFromArgsOrStdin(c *cli.Context, omitEmpty bool) (*authn.User, error) {
 	var (
 		username = cliAuthnUserName(c)
 		userpass = cliAuthnUserPassword(c, omitEmpty)
-		roles    = c.Args().Tail()
+		args     = c.Args().Tail()
 	)
-	return &authn.User{ID: username, Password: userpass, Roles: roles}
+
+	roles := make([]*authn.Role, 0, len(args))
+	for _, roleName := range args {
+		roleName = strings.TrimSpace(roleName)
+		roleInfo, err := authn.GetRole(authParams, roleName)
+		if err != nil {
+			fmt.Fprintf(c.App.Writer, "Role %q not found\n", roleName)
+			return nil, err
+		}
+		roles = append(roles, roleInfo)
+	}
+	return &authn.User{ID: username, Password: userpass, Roles: roles}, nil
 }
 
 func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {

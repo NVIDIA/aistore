@@ -293,15 +293,17 @@ See '--help' and docs/cli for details.`
 
 	AuthNRoleTmpl = "ROLE\tDESCRIPTION\n" +
 		"{{ range $role := . }}" +
-		"{{ $role.ID }}\t{{ $role.Desc }}\n" +
+		"{{ $role.Name }}\t{{ $role.Description }}\n" +
 		"{{end}}"
 
 	AuthNUserTmpl = "NAME\tROLES\n" +
 		"{{ range $user := . }}" +
-		"{{ $user.ID }}\t{{ JoinList $user.Roles }}\n" +
+		"{{ $user.ID }}\t{{ range $i, $role := $user.Roles }}" +
+		"{{ if $i }}, {{ end }}{{ $role.Name }}" +
+		"{{end}}\n" +
 		"{{end}}"
 
-	AuthNUserVerboseTmpl = "Name\t{{ .ID }}\n" +
+	AuthNUserVerboseTmpl = "Name\t{{ .Name }}\n" +
 		"Roles\t{{ JoinList .Roles }}\n" +
 		"{{ if ne (len .ClusterACLs) 0 }}" +
 		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
@@ -314,8 +316,8 @@ See '--help' and docs/cli for details.`
 		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
 
-	AuthNRoleVerboseTmpl = "Role\t{{ .ID }}\n" +
-		"Description\t{{ .Desc }}\n" +
+	AuthNRoleVerboseTmpl = "Role\t{{ .Name }}\n" +
+		"Description\t{{ .Description }}\n" +
 		"{{ if ne (len .Roles) 0 }}" +
 		"Roles\t{{ JoinList .Roles }}\n" +
 		"{{ end }}" +

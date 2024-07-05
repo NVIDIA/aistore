@@ -731,12 +731,12 @@ func oneRoleCompletions(c *cli.Context) {
 		return
 	}
 	for _, role := range roleList {
-		if role.ID == c.Args().Get(0) {
+		if role.Name == c.Args().Get(0) {
 			return
 		}
 	}
 	for _, role := range roleList {
-		fmt.Println(role.ID)
+		fmt.Println(role.Name)
 	}
 }
 
@@ -747,10 +747,10 @@ func multiRoleCompletions(c *cli.Context) {
 	}
 	args := c.Args()
 	for _, role := range roleList {
-		if cos.StringInSlice(role.ID, args) {
+		if cos.StringInSlice(role.Name, args) {
 			continue
 		}
-		fmt.Println(role.ID)
+		fmt.Println(role.Name)
 	}
 }
 
