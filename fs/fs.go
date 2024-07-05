@@ -493,11 +493,29 @@ func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
 	return cdf
 }
 
+// return mountpath alert (suffix)
+// NOTE: the bits are not mutually exclusive; returning only one alert in the order of priority
+func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
+	flags := ratomic.LoadUint64(&mi.flags)
+	switch {
+	case (flags & FlagDisabledByFSHC) == FlagDisabledByFSHC:
+		return DiskFault
+	case c.PctUsed > int32(config.Space.OOS):
+		return DiskOOS
+	case (flags & FlagBeingDetached) == FlagBeingDetached:
+		return Disk2Detach
+	case (flags & FlagBeingDisabled) == FlagBeingDisabled:
+		return Disk2Disable
+	case c.PctUsed >= int32(config.Space.HighWM):
+		return DiskHighWM
+	}
+	return ""
+}
+
 //
-// MFS & MPI
+// MFS global
 //
 
-// create a new singleton
 func New(num int) {
 	mfs = &MFS{fsIDs: make(map[cos.FsID]string, 10)}
 	mfs.ios = ios.New(num)
@@ -519,7 +537,6 @@ func TestNew(iostater ios.IOS) {
 func Clblk()                                   { ios.Clblk(mfs.ios) }
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
-func FillDiskStats(m ios.AllDiskStats)         { mfs.ios.FillDiskStats(m) }
 
 func putAvailMPI(available MPI) { mfs.available.Store(&available) }
 func putDisabMPI(disabled MPI)  { mfs.disabled.Store(&disabled) }
@@ -880,7 +897,7 @@ func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
 	return
 }
 
-// NOTE: caller must make sure to evict LOM cache
+// NOTE: caller must evict LOM cache
 func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 	var (
 		n     int
@@ -1029,26 +1046,6 @@ func _loadXattrID(mpath string) (daeID string, err error) {
 	return
 }
 
-/////////
-// MPI //
-/////////
-
-func (mpi MPI) String() string {
-	return fmt.Sprintf("%v", mpi.toSlice())
-}
-
-func (mpi MPI) toSlice() []string {
-	var (
-		paths = make([]string, len(mpi))
-		idx   int
-	)
-	for key := range mpi {
-		paths[idx] = key
-		idx++
-	}
-	return paths
-}
-
 //
 // capacity management/reporting
 //
@@ -1083,7 +1080,39 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 	return
 }
 
+// via (`apc.WhatDiskStats`, target_stats)
+func DiskStats(m ios.AllDiskStats, config *cmn.Config) {
+	// iops and bw
+	mfs.ios.DiskStats(m)
+
+	// alerts
+	avail := GetAvail()
+	for _, mi := range avail {
+		var a string
+		// refresh, not to report numbers but to check free space
+		c, err := mi.getCapacity(config, true /*refresh*/)
+		if err != nil {
+			nlog.Errorln(mi.String()+":", err)
+			a = "(" + err.Error() + ")" // unlikely
+		} else {
+			a = mi._alert(config, c)
+		}
+		if a == "" {
+			continue
+		}
+		for _, d := range mi.Disks {
+			if dstats, ok := m[d]; ok {
+				// [convention] alert name suffix: <DISK NAME>[(alert)]
+				delete(m, d)
+				m[d+a] = dstats
+			}
+		}
+	}
+}
+
+//
 // cap status: get, refresh, periodic
+//
 
 func Cap() (cs CapStatus) {
 	// config
@@ -1151,19 +1180,9 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 			cdf := mi._cdf(tcdf)
 			cdf.Capacity = c
 
-			// add alerts
-			// (the bits are not mutually exclusive, but we add only one here in the order of priority)
-			switch {
-			case mi.IsAnySet(FlagDisabledByFSHC):
-				cdf._alert(DiskFaulted)
-			case c.PctUsed > int32(config.Space.OOS):
-				cdf._alert(DiskOOS)
-			case mi.IsAnySet(FlagBeingDetached):
-				cdf._alert(DiskDetach)
-			case mi.IsAnySet(FlagBeingDisabled):
-				cdf._alert(DiskDisable)
-			case c.PctUsed >= int32(config.Space.HighWM):
-				cdf._alert(DiskHighWM)
+			if a := mi._alert(config, c); a != "" {
+				// [convention] alert name suffix: <DISK NAME>[(alert)]
+				cdf._alert(a)
 			}
 		}
 
@@ -1245,6 +1264,26 @@ func CapStatusGetWhat() (fsInfo apc.CapacityInfo) {
 	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
 	fsInfo.PctUsed = float64(cs.PctAvg)
 	return
+}
+
+/////////
+// MPI //
+/////////
+
+func (mpi MPI) String() string {
+	return fmt.Sprintf("%v", mpi.toSlice())
+}
+
+func (mpi MPI) toSlice() []string {
+	var (
+		paths = make([]string, len(mpi))
+		idx   int
+	)
+	for key := range mpi {
+		paths[idx] = key
+		idx++
+	}
+	return paths
 }
 
 ///////////////

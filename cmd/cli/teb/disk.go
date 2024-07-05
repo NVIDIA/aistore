@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -64,9 +65,13 @@ func NewDiskTab(dsh []DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, un
 			row = append(row, FmtStatValue("", "", stat.Util, units)+"%")
 		}
 
-		if ds.TargetID == totalsHdr {
+		// (alert | total)
+		if a, i := fs.HasAlert([]string{ds.DiskName}); i > 0 {
+			row[len(row)-1] += fred(" <--- " + a)
+		} else if ds.TargetID == totalsHdr { // (cluTotal = "--- Cluster:")
 			row[len(row)-1] += fcyan(" ---")
 		}
+
 		table.addRow(row)
 	}
 	return table

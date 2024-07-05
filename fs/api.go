@@ -8,18 +8,24 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 )
 
-// disk name suffix (see HasAlert below)
+// available mountpaths: disk name suffix
+// NOTE: when adding/updating, check HasAlert below
 const (
-	DiskFaulted = "(faulted)"      // disabled by FSHC
-	DiskOOS     = "(out-of-space)" // (capacity)
-	DiskDisable = "(->disabled)"   // FlagBeingDisabled (in transition)
-	DiskDetach  = "(->detach)"     // FlagBeingDetached (ditto)
-	DiskHighWM  = "(low-on-space)" // (capacity)
+	DiskFault    = "(faulted)"        // disabled by FSHC
+	DiskOOS      = "(out-of-space)"   // (capacity)
+	Disk2Disable = "(->disabled)"     // FlagBeingDisabled (in transition)
+	Disk2Detach  = "(->detach)"       // FlagBeingDetached (ditto)
+	DiskHighWM   = "(low-free-space)" // (capacity)
+)
 
-	// NOTE: when adding/updating see "must contain" below
+// !available mountpath // TODO: not yet used; readability
+const (
+	DiskDisabled = "(mp-disabled)"
+	DiskDetached = "(mp-detached)"
 )
 
 type (
@@ -73,32 +79,41 @@ func InitCDF(tcdf *TargetCDF) {
 
 func (tcdf *TargetCDF) HasAlerts() bool {
 	for _, cdf := range tcdf.Mountpaths {
-		if alert, _ := cdf.HasAlert(); alert != "" {
+		if alert, _ := HasAlert(cdf.Disks); alert != "" {
 			return true
 		}
 	}
 	return false
 }
 
-// Returns "" and (-1) when no alerts found;
-// otherwise, returns alert name and its index in the string, which is formatted as follows:
-// <DISK-NAME>[<ALERT-NAME>]
-func (cdf *CDF) HasAlert() (alert string, idx int) {
-	var alerts = []string{DiskFaulted, DiskOOS, DiskDisable, DiskDetach, DiskHighWM} // NOTE: must contain all flags
-	for _, disk := range cdf.Disks {
+// [convention] <DISK-NAME>[(<alert>)]
+// Returns "" and (-1) when no alerts found otherwise, returns alert name and its index in the DISK-NAME string
+func HasAlert(disks []string) (alert string, idx int) {
+	var alerts = []string{DiskFault, DiskOOS, Disk2Disable, Disk2Detach, DiskHighWM}
+	for _, disk := range disks {
 		for _, a := range alerts {
 			if idx = strings.Index(disk, a); idx > 0 {
 				return disk[idx:], idx
 			}
+			// expecting TargetCDF to contain only _available_ mountpaths
+			debug.Assert(!strings.Contains(disk, DiskDisabled), disk)
+			debug.Assert(!strings.Contains(disk, DiskDetached), disk)
 		}
 	}
 	return "", -1
 }
 
 func (cdf *CDF) _alert(a string) {
+	disks := cdf.Disks
+	if _, idx := HasAlert(disks); idx < 0 {
+		// clone just once upon the first alert
+		disks = make([]string, len(cdf.Disks))
+	}
 	for i, d := range cdf.Disks {
+		disks[i] = d
 		if !strings.Contains(d, a) {
-			cdf.Disks[i] = d + a
+			disks[i] = d + a
 		}
 	}
+	cdf.Disks = disks
 }

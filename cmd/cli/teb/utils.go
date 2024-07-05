@@ -166,7 +166,7 @@ func fmtCapPctMAM(tcdf *fs.TargetCDF, list bool) string {
 }
 
 func fmtCDFDisks(cdf *fs.CDF) string {
-	alert, _ := cdf.HasAlert()
+	alert, _ := fs.HasAlert(cdf.Disks)
 	if alert == "" {
 		return cdf.FS.String() // fs.Fs + "(" + fs.FsType + ")"
 	}

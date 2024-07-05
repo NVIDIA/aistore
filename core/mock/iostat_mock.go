@@ -24,4 +24,4 @@ func (*IOS) AddMpath(string, string, ios.Label, *cmn.Config) (ios.FsDisks, error
 func (*IOS) HealthMpath(string) error                                             { return nil }
 func (*IOS) RemoveMpath(string, bool)                                             {}
 func (*IOS) LogAppend(l []string) []string                                        { return l }
-func (*IOS) FillDiskStats(ios.AllDiskStats)                                       {}
+func (*IOS) DiskStats(ios.AllDiskStats)                                           {}

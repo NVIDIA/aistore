@@ -310,9 +310,13 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 1. collect disk stats and populate the tracker
 	s := r.core
-	fs.FillDiskStats(r.disk)
+	fs.DiskStats(r.disk, config)
 	for disk, stats := range r.disk {
 		v := s.Tracker[nameRbps(disk)]
+		if v == nil {
+			nlog.Warningln("missing:", nameRbps(disk))
+			continue
+		}
 		v.Value = stats.RBps
 		v = s.Tracker[nameRavg(disk)]
 		v.Value = stats.Ravg
@@ -436,7 +440,7 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 				var sb strings.Builder
 				sb.WriteString(mpath)
 				sb.WriteString(cdf.Label.ToLog())
-				if alert, _ := cdf.HasAlert(); alert != "" {
+				if alert, _ := fs.HasAlert(cdf.Disks); alert != "" {
 					sb.WriteString(": ")
 					sb.WriteString(alert)
 				} else {

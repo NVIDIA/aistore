@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# e.g. two disks:
+# deploy/dev/loopback.sh --mountpath /tmp/ais/mp1 --size 1G
+# deploy/dev/loopback.sh --mountpath /tmp/ais/mp2 --size 1G
+
 if ! [ -x "$(command -v losetup)" ]; then
   echo "Error: losetup not installed (apt-get mount or klibc-utils)" >&2
   exit 1

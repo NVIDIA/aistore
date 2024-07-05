@@ -31,7 +31,7 @@ type (
 		AddMpath(mpath, fs string, label Label, config *cmn.Config) (FsDisks, error)
 		HealthMpath(mpath string) error
 		RemoveMpath(mpath string, testingEnv bool)
-		FillDiskStats(m AllDiskStats)
+		DiskStats(m AllDiskStats)
 	}
 	FsDisks   map[string]int64 // disk name => sector size
 	MpathUtil sync.Map
@@ -310,7 +310,7 @@ func (ios *ios) GetMpathUtil(mpath string) int64 {
 	return ios.GetAllMpathUtils().Get(mpath)
 }
 
-func (ios *ios) FillDiskStats(m AllDiskStats) {
+func (ios *ios) DiskStats(m AllDiskStats) {
 	cache := ios.refresh()
 	for disk := range cache.ioms {
 		m[disk] = DiskStats{

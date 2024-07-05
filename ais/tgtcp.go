@@ -408,11 +408,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, ds, httpdaeWhat)
 
 	case apc.WhatDiskStats:
-		diskStats := make(ios.AllDiskStats)
-		fs.FillDiskStats(diskStats)
+		var (
+			diskStats = make(ios.AllDiskStats, fs.NumAvail())
+			config    = cmn.GCO.Get()
+		)
+		fs.DiskStats(diskStats, config)
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.WhatRemoteAIS:
 		var (
+			config  = cmn.GCO.Get()
 			aisbp   = t.aisbp()
 			refresh = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 		)
@@ -420,8 +424,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			t.writeJSON(w, r, aisbp.GetInfoInternal(), httpdaeWhat)
 			return
 		}
-
-		anyConf := cmn.GCO.Get().Backend.Get(apc.AIS)
+		anyConf := config.Backend.Get(apc.AIS)
 		if anyConf == nil {
 			t.writeJSON(w, r, meta.RemAisVec{}, httpdaeWhat)
 			return

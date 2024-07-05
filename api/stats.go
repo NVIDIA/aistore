@@ -69,7 +69,7 @@ func anyStats(bp BaseParams, sid, what string, out any) (err error) {
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
 		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{sid}}
 	}
@@ -78,6 +78,7 @@ func anyStats(bp BaseParams, sid, what string, out any) (err error) {
 	return err
 }
 
+// NOTE: direct call used only in tests (remove?)
 func GetDaemonStats(bp BaseParams, node *meta.Snode) (ds *stats.Node, err error) {
 	ds = &stats.Node{}
 	err = anyStats(bp, node.ID(), apc.WhatNodeStats, ds)
