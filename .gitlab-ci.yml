@@ -232,7 +232,7 @@ test:short:s3-compat:
 
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
-    - ais config cluster features Provide-S3-API-via-Root
+    - ais config cluster features S3-API-via-Root
     - ais config cluster checksum.type=md5
     - cd python
     - make python_s3_compat_test
