@@ -70,7 +70,6 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 		return
 	}
 
-	var skip, warned bool
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
 		if ipnet, ok := addr.(*net.IPNet); ok {
@@ -79,10 +78,9 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 				if k8s.IsK8s() {
 					continue
 				}
-				// non K8s and fspaths: skip?
+				// non K8s and fspaths:
 				if !config.TestingEnv() {
-					skip, warned = haveFspathsSkipLoopback(config, warned)
-					if skip {
+					if excludeLoopbackIP() {
 						continue
 					}
 				}
@@ -117,19 +115,12 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 	return addrlist, nil
 }
 
-func haveFspathsSkipLoopback(config *cmn.Config, warned bool) (bool, bool) { //nolint:unparam // be warned
-	const haveFspaths = "deployment type is not K8s and not dev"
-	if config.HostNet.Hostname != "" {
-		if !warned {
-			nlog.Warningln(haveFspaths+", pub host is configured:", config.HostNet.Hostname)
-			nlog.Warningln("- not including loopback in the list of local unicast IPv4")
-		}
-		return true /*skip*/, true
+// HACK, to accommodate non-K8s docker deployments and non-containerized
+func excludeLoopbackIP() bool {
+	if _, present := os.LookupEnv("AIS_LOCAL_PLAYGROUND"); present {
+		return false
 	}
-	if !warned {
-		nlog.Warningln(haveFspaths + " but still including loopback in the list of local unicast IPv4")
-	}
-	return false /*skip*/, true
+	return true
 }
 
 // given configured list of hostnames, return the first one matching local unicast IPv4
