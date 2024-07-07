@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -20,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
@@ -186,15 +188,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 	}
 
 	daemon.version, daemon.buildTime = version, buildTime
-	loghdr := fmt.Sprintf("Version %s, build time %s, debug %t", version, buildTime, debug.ON())
-	cpus := sys.NumCPU()
-	if containerized := sys.Containerized(); containerized {
-		loghdr += fmt.Sprintf(", CPUs(%d, runtime=%d), containerized", cpus, runtime.NumCPU())
-	} else {
-		loghdr += fmt.Sprintf(", CPUs(%d, runtime=%d)", cpus, runtime.NumCPU())
-	}
-	nlog.Infoln(loghdr) // redundant (see below), prior to start/init
-	sys.SetMaxProcs()
+	loghdr := _loghdr()
+	sys.GoEnvMaxprocs()
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
 	hk.Init()
@@ -241,7 +236,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		xs.Xreg(true /* x-ele only */)
 		p := newProxy(co)
 		p.init(config)
-		title := "Node " + p.si.Name() + ", " + loghdr + "\n"
+		title := _loghdr2(p.si, loghdr)
 		nlog.Infoln(title)
 
 		// aux plumbing
@@ -256,7 +251,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	t := newTarget(co)
 	t.init(config)
-	title := "Node " + t.si.Name() + ", " + loghdr + "\n"
+	title := _loghdr2(t.si, loghdr)
 	nlog.Infoln(title)
 
 	// aux plumbing
@@ -264,6 +259,42 @@ func initDaemon(version, buildTime string) cos.Runner {
 	cmn.InitErrs(t.si.Name(), fs.CleanPathErr)
 
 	return t
+}
+
+func _loghdr2(si *meta.Snode, loghdr string) string {
+	var sb strings.Builder
+	sb.WriteString("Node ")
+	sb.WriteString(si.Name())
+	sb.WriteString(", ")
+	sb.WriteString(loghdr)
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func _loghdr() (loghdr string) {
+	var sb strings.Builder
+	sb.WriteString("Version ")
+	sb.WriteString(daemon.version)
+	if debug.ON() {
+		sb.WriteString(", DEBUG build ")
+	} else {
+		sb.WriteString(", build ")
+	}
+	sb.WriteString(daemon.buildTime)
+
+	cpus := sys.NumCPU()
+	sb.WriteString(", CPUs(")
+	sb.WriteString(strconv.Itoa(cpus))
+	sb.WriteString(", runtime=")
+	sb.WriteString(strconv.Itoa(runtime.NumCPU()))
+	sb.WriteByte(')')
+
+	if sys.Containerized() {
+		sb.WriteString(", containerized")
+	}
+	loghdr = sb.String()
+	nlog.Infoln(loghdr) // redundant (see below), prior to start/init
+	return loghdr
 }
 
 func newProxy(co *configOwner) *proxy {

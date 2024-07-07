@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -15,11 +15,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-// isContainerized returns true if the application is running
-// inside a container(docker/lxc/k8s)
+// NOTE (July 2024):
+// Reading /proc/1/cgroup cannot be relied on - does not always produce "docker", etc. strings that indicate "containerization."
+// One plausible, albeit still somewhat hacky approach could be detecting filesystem type of the root ("/"),
+// as in:
 //
-// How to detect being inside a container:
-// https://stackoverflow.com/questions/20010199/how-to-determine-if-a-process-runs-inside-lxc-docker
+// var mi = fs.Mountpath{Path: "/"}
+// if mi.resolveFS() == nil {
+// 	if mi.FsType == "overlay" {
+// 		containerized = true
+// 		...
+// 	}
+// }
+
+// TODO: either amend, OR introduce env var and remove auto-detection altogether
 func isContainerized() (yes bool) {
 	err := cos.ReadLines(rootProcess, func(line string) error {
 		if strings.Contains(line, "docker") || strings.Contains(line, "lxc") || strings.Contains(line, "kube") {

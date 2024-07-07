@@ -39,14 +39,13 @@ func TestLoadAvg(t *testing.T) {
 		"All load average must be positive ones")
 }
 
-func TestLimitMaxProc(t *testing.T) {
-	prev := runtime.GOMAXPROCS(0)
-	defer runtime.GOMAXPROCS(prev)
+func TestMaxProcs(t *testing.T) {
+	newval := 4
+	prev := runtime.GOMAXPROCS(newval)
+	tassert.Errorf(t, runtime.GOMAXPROCS(0) == newval, "Failed to set GOMAXPROCS to %d", newval)
 
-	ncpu := sys.NumCPU()
-	sys.SetMaxProcs()
-	curr := runtime.GOMAXPROCS(0)
-	tassert.Errorf(t, ncpu == curr, "Failed to set GOMAXPROCS to %d, current value is %d", ncpu, curr)
+	runtime.GOMAXPROCS(prev)
+	tassert.Errorf(t, runtime.GOMAXPROCS(0) == prev, "Failed to restore GOMAXPROCS to %d", prev)
 }
 
 func TestMemoryStats(t *testing.T) {
