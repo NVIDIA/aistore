@@ -24,7 +24,7 @@ class AISShardReader(AISBaseIterDataset):
         prefix_map (Dict(AISSource, Union[str, List[str]]), optional): Map of Bucket objects to list of prefixes that only allows
         objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
-        disable_output (bool, optional): Disables console shard reading progress indicator
+        show_progress (bool, optional): Enables console shard reading progress indicator
 
     Yields:
         Tuple[str, List[bytes]]: Each item is a tuple where the first element is the basename of the shard

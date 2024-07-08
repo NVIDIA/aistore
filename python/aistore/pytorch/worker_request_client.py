@@ -1,3 +1,13 @@
+"""
+Worker Supported Request Client for PyTorch
+
+This client allows Pytorch workers to have separate request sessions per thread
+which is needed in order to use workers in a DataLoader as
+the default implementation of RequestClient and requests is not thread-safe.
+
+Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+"""
+
 from aistore.sdk.request_client import RequestClient
 from torch.utils.data import get_worker_info
 
@@ -23,7 +33,7 @@ class WorkerRequestClient(RequestClient):
     @property
     def session(self):
         """
-        Returns: Active request session give worker information
+        Returns: Active request session acquired for a specific Pytorch dataloader worker
         """
         # sessions are not thread safe, so we must return different sessions for each worker
         worker_info = get_worker_info()
