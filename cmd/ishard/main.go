@@ -12,9 +12,14 @@ import (
 )
 
 func main() {
-	ishard.Init(nil)
-	if err := ishard.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "ishard exited with error: %v\n", err)
+	isharder, err := ishard.NewISharder(nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ishard initialization failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := isharder.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "ishard execution failed: %v\n", err)
 		os.Exit(1)
 	}
 }

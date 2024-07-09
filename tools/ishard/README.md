@@ -62,8 +62,28 @@ Error: number of shards to be created exceeds expected number of shards (7)
 
 ## Running the Tests
 
+Test in Short Mode
+
+```sh
+go test -v -short
+```
+
+Test in Complete Mode
+
 ```sh
 go test -v
+```
+
+Test in Debug Mode
+
+```sh
+go test -v -short -tags=debug
+```
+
+Test for a Specific Case
+
+```sh
+go test -v -short -tags=debug -run=TestIshardMaxShardSize
 ```
 
 ## TODO List
@@ -71,11 +91,12 @@ go test -v
 ### MUST HAVE/DESIRABLE
 - [X] Shard name patterns
    - [X] Utilize existing name template tools
-- [ ] goroutine
+- [X] goroutine
 - [ ] configurable record key, extensions
    - [ ] upon missing extension in a record: (abort | warn | ignore)
 - [ ] logging (timestamp, nlog)
 - [ ] allow user to specify source directories to include/exclude
+- [X] Long stress tests
 
 ### GOOD TO HAVE
 - [ ] progress bar (later)

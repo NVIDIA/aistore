@@ -19,30 +19,24 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-var (
-	cfg        *config.Config
-	baseParams api.BaseParams
-)
-
-var (
-	shardIter  cos.ParsedTemplate
-	shardCount int64
-)
+/////////////
+// dirNode //
+/////////////
 
 // Represents the hierarchical structure of virtual directories within a bucket
-type Node struct {
-	children map[string]*Node
+type dirNode struct {
+	children map[string]*dirNode
 	records  *shard.Records
 }
 
-func NewNode() *Node {
-	return &Node{
-		children: make(map[string]*Node),
+func newDirNode() *dirNode {
+	return &dirNode{
+		children: make(map[string]*dirNode),
 		records:  shard.NewRecords(16),
 	}
 }
 
-func (n *Node) Insert(path string, size int64) {
+func (n *dirNode) insert(path string, size int64) {
 	parts := strings.Split(path, "/")
 	current := n
 
@@ -64,14 +58,15 @@ func (n *Node) Insert(path string, size int64) {
 					}},
 				})
 			} else {
-				current.children[part] = NewNode()
+				current.children[part] = newDirNode()
 			}
 		}
 		current = current.children[part]
 	}
 }
 
-func (n *Node) Print(prefix string) {
+//lint:ignore U1000 Ignore unused function temporarily for debugging
+func (n *dirNode) print(prefix string) {
 	for name, child := range n.children {
 		fmt.Printf("%s%s/", prefix, name)
 		names := []string{}
@@ -82,12 +77,24 @@ func (n *Node) Print(prefix string) {
 		child.records.Unlock()
 		fmt.Println(names)
 
-		child.Print(prefix + "  ")
+		child.print(prefix + "  ")
 	}
 }
 
-// Archive objects from this node into shards according to subdirectories structure
-func (n *Node) archive(path string) (parentRecords *shard.Records, _ int64, _ error) {
+//////////////
+// ISharder //
+//////////////
+
+// ISharder executes an initial sharding job with given configuration
+type ISharder struct {
+	cfg        *config.Config
+	shardIter  cos.ParsedTemplate
+	baseParams api.BaseParams
+}
+
+// archive traverses through nodes and collects records on the way. Once it reaches
+// the desired amount, it runs a goroutine to archive those collected records
+func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Records, _ int64, _ error) {
 	var (
 		totalSize int64
 		recs      = shard.NewRecords(16)
@@ -99,7 +106,7 @@ func (n *Node) archive(path string) (parentRecords *shard.Records, _ int64, _ er
 		if path == "" {
 			fullPath = name
 		}
-		childRecords, subtreeSize, err := child.archive(fullPath)
+		childRecords, subtreeSize, err := is.archive(child, fullPath)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -115,17 +122,17 @@ func (n *Node) archive(path string) (parentRecords *shard.Records, _ int64, _ er
 		totalSize += record.TotalSize()
 		recs.Insert(record)
 
-		if totalSize < cfg.MaxShardSize {
+		if totalSize < is.cfg.MaxShardSize {
 			continue
 		}
 
-		name, hasNext := shardIter.Next()
+		name, hasNext := is.shardIter.Next()
 		if !hasNext {
-			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", is.shardIter.Count())
 		}
 		wg.Add(1)
 		go func(recs *shard.Records, name string) {
-			generateShard(recs, name, errCh)
+			is.generateShard(recs, name, errCh)
 			wg.Done()
 		}(recs, name)
 
@@ -135,15 +142,15 @@ func (n *Node) archive(path string) (parentRecords *shard.Records, _ int64, _ er
 	n.records.Unlock()
 
 	// if cfg.Collapse is not set, or no parent to collapse to (root level), archive all remaining objects regardless the current total size
-	if !cfg.Collapse || path == "" {
-		name, hasNext := shardIter.Next()
+	if !is.cfg.Collapse || path == "" {
+		name, hasNext := is.shardIter.Next()
 		if !hasNext {
-			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", is.shardIter.Count())
 		}
 
 		wg.Add(1)
 		go func(recs *shard.Records, name string) {
-			generateShard(recs, name, errCh)
+			is.generateShard(recs, name, errCh)
 			wg.Done()
 		}(recs, name)
 
@@ -159,7 +166,7 @@ func (n *Node) archive(path string) (parentRecords *shard.Records, _ int64, _ er
 	return recs, totalSize, nil
 }
 
-func generateShard(recs *shard.Records, name string, errCh chan error) {
+func (is *ISharder) generateShard(recs *shard.Records, name string, errCh chan error) {
 	defer recs.Drain()
 
 	if recs.Len() == 0 {
@@ -176,67 +183,66 @@ func generateShard(recs *shard.Records, name string, errCh chan error) {
 	recs.Unlock()
 
 	msg := cmn.ArchiveBckMsg{
-		ToBck: cfg.DstBck,
+		ToBck: is.cfg.DstBck,
 		ArchiveMsg: apc.ArchiveMsg{
-			ArchName: name + cfg.Ext,
+			ArchName: name + is.cfg.Ext,
 			ListRange: apc.ListRange{
 				ObjNames: paths,
 			},
 		},
 	}
 
-	_, err := api.ArchiveMultiObj(baseParams, cfg.SrcBck, &msg)
+	_, err := api.ArchiveMultiObj(is.baseParams, is.cfg.SrcBck, &msg)
 	if err != nil {
 		errCh <- fmt.Errorf("failed to archive shard %s: %w", name, err)
 	}
 }
 
-// Init sets the configuration for ishard. If a config is provided, it uses that;
+// NewISharder instantiates an ISharder with the configuration if provided;
 // otherwise, it loads from CLI or uses the default config.
-func Init(cfgArg *config.Config) error {
-	var err error
+func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
+	is = &ISharder{}
 
 	// Use provided config if given
 	if cfgArg != nil {
-		cfg = cfgArg
+		is.cfg = cfgArg
 	} else {
-		cfg, err = config.Load()
+		is.cfg, err = config.Load()
 		if err != nil {
 			nlog.Errorf("Error initializing config: %v. Using default config.", err)
 			defaultCfg := config.DefaultConfig
-			cfg = &defaultCfg
+			is.cfg = &defaultCfg
 		}
 	}
 
-	baseParams = api.BaseParams{URL: cfg.URL}
-	baseParams.Client = cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true})
+	is.baseParams = api.BaseParams{URL: is.cfg.URL}
+	is.baseParams.Client = cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true})
 
-	if shardIter, err = cos.NewParsedTemplate(strings.TrimSpace(cfg.ShardTemplate)); err != nil {
-		return err
+	if is.shardIter, err = cos.NewParsedTemplate(strings.TrimSpace(is.cfg.ShardTemplate)); err != nil {
+		return nil, err
 	}
-	shardIter.InitIter()
-	shardCount = shardIter.Count()
+	is.shardIter.InitIter()
 
-	return err
+	return is, err
 }
 
-func Start() error {
+func (is *ISharder) Start() error {
 	msg := &apc.LsoMsg{}
-	objList, err := api.ListObjects(baseParams, cfg.SrcBck, msg, api.ListArgs{})
+	objList, err := api.ListObjects(is.baseParams, is.cfg.SrcBck, msg, api.ListArgs{})
 	if err != nil {
 		return err
 	}
 
-	root := NewNode()
+	root := newDirNode()
 	for _, en := range objList.Entries {
-		root.Insert(en.Name, en.Size)
+		root.insert(en.Name, en.Size)
 	}
 
-	if _, _, err := root.archive(""); err != nil {
+	if _, _, err := is.archive(root, ""); err != nil {
 		return err
 	}
 
-	if err := api.WaitForXactionIdle(baseParams, &xact.ArgsMsg{Kind: apc.ActArchive, Bck: cfg.SrcBck}); err != nil {
+	if err := api.WaitForXactionIdle(is.baseParams, &xact.ArgsMsg{Kind: apc.ActArchive, Bck: is.cfg.SrcBck}); err != nil {
 		return err
 	}
 

@@ -373,6 +373,22 @@ test:long:pyaisloader:
       when: manual
       allow_failure: true
 
+test:long:ishard:
+  stage: test-long
+  tags:
+    - ais
+  timeout: 1h
+  variables:
+    AIS_ENDPOINT: "http://localhost:8080"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - sleep 10 # make sure that cluster properly starts
+    - cd ./tools/ishard; go test -v -timeout=1h -run=^TestIshard
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+
 #
 # Kubernetes stages
 #
