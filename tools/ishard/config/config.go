@@ -24,8 +24,9 @@ type (
 	Config struct {
 		ClusterConfig
 		IshardConfig
-		SrcBck cmn.Bck
-		DstBck cmn.Bck
+		SrcBck   cmn.Bck
+		DstBck   cmn.Bck
+		Progress bool
 	}
 )
 
@@ -55,6 +56,7 @@ func parseCliParams(cfg *Config) {
 	flag.StringVar(&cfg.ShardTemplate, "shard_template", "shard-%d", "the template used for generating output shards. Accepts Bash (prefix{0001..0010}suffix), Fmt (prefix-%06d-suffix), or At (prefix-@00001-gap-@100-suffix) templates")
 	flag.StringVar(&cfg.Ext, "ext", ".tar", "the extension used for generating output shards.")
 	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.")
+	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket.")
 	flag.Parse()
 
 	if cfg.SrcBck.Provider, cfg.SrcBck.Name = cmn.ParseURLScheme(cfg.SrcBck.Name); cfg.SrcBck.Provider == "" {

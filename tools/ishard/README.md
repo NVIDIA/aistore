@@ -16,6 +16,7 @@ This package provides a utility for archiving objects from a bucket into shard f
 - `-shard_template`: the template used for generating output shards. Accepts Bash, Fmt, or At formats.
 - `-ext`: the extension used for generating output shards.
 - `-collapse`: If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.
+- `-progress`: If true, display the progress of processing objects in the source bucket.
 
 ## Initial Setup
 
@@ -31,7 +32,10 @@ $ go build -o ishard .
 Correct Usage
 
 ```sh
-$ ./ishard -max_shard_size=1024000 -src_bck=ais://sample-medium -dst_bck=ais://sample-medium-out -collapse -shard_template="prefix-{0000..1023..8}-suffix"
+$ ./ishard -max_shard_size=1024000 -src_bck=ais://sample-medium -dst_bck=ais://sample-medium-out -collapse -progress -shard_template="prefix-{0000..1023..8}-suffix"
+
+Objects Processed: 225100/225100 [======================] 100% 1m0s
+
 $ ais archive ls ais://destination_bucket
 
 NAME                     SIZE            
@@ -56,8 +60,6 @@ Incorrect Usage
 ```
 $ ./ishard -max_shard_size=1024000 -src_bck=source_bucket -dst_bck=destination_bucket -collapse -shard_template="prefix-{0000..0050..8}-suffix"
 Error: number of shards to be created exceeds expected number of shards (7)
-
-
 ```
 
 ## Running the Tests
@@ -99,6 +101,7 @@ go test -v -short -tags=debug -run=TestIshardMaxShardSize
 - [X] Long stress tests
 
 ### GOOD TO HAVE
-- [ ] progress bar (later)
+- [X] progress bar (later)
+- [ ] polling for completion of archive xactions
 - [ ] integration into aistore (later)
 - [ ] E2E testing from CLI

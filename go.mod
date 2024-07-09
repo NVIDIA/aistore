@@ -28,6 +28,7 @@ require (
 	github.com/tidwall/buntdb v1.3.1
 	github.com/tinylib/msgp v1.1.9
 	github.com/valyala/fasthttp v1.54.0
+	github.com/vbauerster/mpb/v4 v4.12.2
 	golang.org/x/crypto v0.24.0
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.21.0
@@ -45,6 +46,8 @@ require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	cloud.google.com/go/iam v1.1.8 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.9.0 // indirect
+	github.com/VividCortex/ewma v1.1.1 // indirect
+	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.18 // indirect

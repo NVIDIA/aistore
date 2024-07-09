@@ -17,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools/ishard/config"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
 )
 
 /////////////
@@ -87,9 +89,10 @@ func (n *dirNode) print(prefix string) {
 
 // ISharder executes an initial sharding job with given configuration
 type ISharder struct {
-	cfg        *config.Config
-	shardIter  cos.ParsedTemplate
-	baseParams api.BaseParams
+	cfg         *config.Config
+	shardIter   cos.ParsedTemplate
+	baseParams  api.BaseParams
+	progressBar *mpb.Bar
 }
 
 // archive traverses through nodes and collects records on the way. Once it reaches
@@ -196,6 +199,10 @@ func (is *ISharder) generateShard(recs *shard.Records, name string, errCh chan e
 	if err != nil {
 		errCh <- fmt.Errorf("failed to archive shard %s: %w", name, err)
 	}
+
+	if is.progressBar != nil {
+		is.progressBar.IncrBy(len(paths))
+	}
 }
 
 // NewISharder instantiates an ISharder with the configuration if provided;
@@ -223,6 +230,8 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 	}
 	is.shardIter.InitIter()
 
+	is.progressBar = nil
+
 	return is, err
 }
 
@@ -233,6 +242,27 @@ func (is *ISharder) Start() error {
 		return err
 	}
 
+	// Configure progress bar
+	if is.cfg.Progress {
+		var (
+			text     = "Objects Processed: "
+			progress = mpb.New(mpb.WithWidth(64))
+			total    = int64(len(objList.Entries))
+			options  = []mpb.BarOption{
+				mpb.PrependDecorators(
+					decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
+					decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+				),
+				mpb.AppendDecorators(
+					decor.NewPercentage("%d", decor.WCSyncSpaceR),
+					decor.Elapsed(decor.ET_STYLE_GO, decor.WCSyncWidth),
+				),
+			}
+		)
+		is.progressBar = progress.AddBar(total, options...)
+	}
+
+	// Parse object list
 	root := newDirNode()
 	for _, en := range objList.Entries {
 		root.insert(en.Name, en.Size)
