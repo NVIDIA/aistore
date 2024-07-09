@@ -197,7 +197,7 @@ cat > $AIS_LOCAL_CONF_FILE <<EOL
 		"port_intra_control": "${PORT_INTRA_CONTROL:-9080}",
 		"port_intra_data":    "${PORT_INTRA_DATA:-10080}"
 	},
-	"fspaths": {"/tmp/ais/mp8": "disk1", "/tmp/ais/mp9": "disk2"},
+	"fspaths": {"/tmp/ais/mp1": "disk1", "/tmp/ais/mp2": "disk2", "/tmp/ais/mp3": "disk3"},
 	"test_fspaths": {
 		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
 		"count":    0,
