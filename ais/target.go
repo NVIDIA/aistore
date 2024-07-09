@@ -1014,18 +1014,18 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	}
 	lom := core.AllocLOM(objName)
-	ecode, err := t.objHead(w.Header(), query, bck, lom)
+	ecode, err := t.objHead(r, w.Header(), query, bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
 		t._erris(w, r, cos.IsParseBool(query.Get(apc.QparamSilent)), err, ecode)
 	}
 }
 
-func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
+func (t *target) objHead(r *http.Request, hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
 	var (
 		fltPresence int
-		exists      = true
 		hasEC       bool
+		exists      = true
 	)
 	if tmp := query.Get(apc.QparamFltPresence); tmp != "" {
 		var erp error
@@ -1098,7 +1098,7 @@ func (t *target) objHead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 	} else {
 		// cold HEAD
 		var oa *cmn.ObjAttrs
-		oa, ecode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom, nil /*origReq*/)
+		oa, ecode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom, r)
 		if err != nil {
 			if ecode != http.StatusNotFound {
 				err = cmn.NewErrFailedTo(t, "HEAD", lom.Cname(), err)
