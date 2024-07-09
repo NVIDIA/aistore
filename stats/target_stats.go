@@ -190,16 +190,6 @@ func isDiskUtilMetric(name string) bool {
 	return isDiskMetric(name) && strings.HasSuffix(name, ".util")
 }
 
-// extractPromDiskMetricName returns prometheus friendly metrics name
-// from disk tracker name of format `disk.<disk-name>.<metric-name>`
-// it returns, two strings:
-//  1. <disk-name> used as prometheus variable label
-//  2. `disk.<metric-name>` used for prometheus metric name
-func extractPromDiskMetricName(name string) (diskName, metricName string) {
-	diskName = strings.Split(name, ".")[1]
-	return diskName, strings.ReplaceAll(name, "."+diskName+".", ".")
-}
-
 // target-specific metrics, in addition to common and already added via regCommon()
 func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, GetColdCount, KindCounter)

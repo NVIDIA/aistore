@@ -207,13 +207,35 @@ AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/in
 
 In addition and separately, AIStore supports [StatsD](https://github.com/etsy/statsd), and via StatsD - Graphite (collection) and Grafana (graphics).
 
-The corresponding binary choice between StatsD and Prometheus is a **deployment-time** switch controlled by a single environment variable: **AIS_PROMETHEUS**.
+The corresponding binary choice between StatsD and Prometheus is a **build-time** switch controlled by a single build tag: **statsd**.
 
-Namely:
+> Generally, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
+
+```console
+# 1) no build tags, no debug
+MODE="" make node
+
+# 2) no build tags, debug
+MODE="debug" make node
+
+# 3) cloud backends, no debug
+AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+
+# 4) cloud backends, debug
+AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+
+# 5) cloud backends, debug, statsd
+# (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
+TAGS="aws azure gcp statsd debug" make node
+
+# 6) statsd, debug, nethttp (note that fasthttp is used by default)
+TAGS="nethttp statsd debug" make node
+```
+
+As far as, specifically, StatsD alternative, additional environment includes:
 
 | name | comment |
 | ---- | ------- |
-| `AIS_PROMETHEUS` | e.g. usage: `export AIS_PROMETHEUS=true` |
 | `AIS_STATSD_PORT` | use it to override the default `8125` (see https://github.com/etsy/stats) |
 | `AIS_STATSD_PROBE` | a startup option that, when true, tells an ais node to _probe_ whether StatsD server exists (and responds); if the probe fails, the node will disable its StatsD functionality completely - i.e., will not be sending any metrics to the StatsD port (above) |
 

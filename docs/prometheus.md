@@ -28,14 +28,40 @@ This document mostly talks about the "Prometheus" option. Other related document
 
 AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/) that natively supports [Prometheus](https://prometheus.io/) stats collection. There's no special configuration - the only thing required to enable the corresponding integration is letting AIStore know whether to publish its stats via StatsD **or** Prometheus.
 
-The corresponding binary choice between StatsD and Prometheus is a **deployment-time** switch that is a single environment variable: **AIS_PROMETHEUS**. When a starting-up AIS node (gateway or storage target) sees `AIS_PROMETHEUS` in the environment it registers all its metric descriptions (names, labels, and helps) with Prometheus and provides HTTP endpoint `/metrics` for subsequent collection (aka "scraping") by Prometheus.
+The corresponding binary choice between StatsD and Prometheus is a **build-time** switch that is a single build tag: `statsd`.
 
-> With no `AIS_PROMETHEUS` in the environment, AIS nodes default to StatsD.
+> Generally, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
+
+```console
+# 1) no build tags, no debug
+MODE="" make node
+
+# 2) no build tags, debug
+MODE="debug" make node
+
+# 3) cloud backends, no debug
+AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+
+# 4) cloud backends, debug
+AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+
+# 5) cloud backends, debug, statsd
+# (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
+TAGS="aws azure gcp statsd debug" make node
+
+# 6) statsd, debug, nethttp (note that fasthttp is used by default)
+TAGS="nethttp statsd debug" make node
+```
+
+When a starting-up AIS node (gateway or storage target) is built with Prometheus support (ie., **without** build tag `statsd`) it will:
+
+* register all its metric descriptions (names, labels, and helps) with Prometheus, and
+* provide HTTP endpoint `/metrics` for subsequent collection (aka "scraping") by Prometheus.
 
 Here's a simplified example:
 
 ```console
-$ AIS_PROMETHEUS=true aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=target
+$ aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=target
 
 # Assuming the target with hostname "hostname" listens on port 8081:
 $ curl http://hostname:8081/metrics | grep ais

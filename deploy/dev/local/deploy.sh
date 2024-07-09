@@ -168,7 +168,8 @@ parse_backend_providers
 
 create_loopbacks
 
-if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}  make --no-print-directory -C ${AISTORE_PATH} node; then
+## NOTE: statsd is Local Playground's default
+if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS} TAGS=statsd make --no-print-directory -C ${AISTORE_PATH} node; then
   exit_error "failed to compile 'aisnode' binary"
 fi
 

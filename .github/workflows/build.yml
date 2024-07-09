@@ -30,12 +30,22 @@ jobs:
     - name: Build AIStore on ${{ matrix.os }}
       run: |
         export GOPATH="$(go env GOPATH)"
-        MODE="" make node # Build node without backends in production mode.
-        MODE="debug" make node # Build node without backends in debug mode.
-        AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node # Build with all backends (production mode).
-        AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node # Build with all backends (debug mode).
-        MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
-        TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
+        # 1) no build tags, no debug
+        MODE="" make node
+        # 2) no build tags, debug
+        MODE="debug" make node
+        # 3) cloud backends, no debug
+        AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+        # 4) cloud backends, debug
+        AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+        # 5) cloud backends, debug, statsd
+        # (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
+        TAGS="aws azure gcp statsd debug" make node
+        # 6) statsd, debug, nethttp (note that fasthttp is used by default)
+        TAGS="nethttp statsd debug" make node
+        # 7) w/ mem profile (see cmd/aisnodeprofile)
+        MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node
+        # 8) authn, cli, aisloader
         make authn
         make cli
         make aisloader
