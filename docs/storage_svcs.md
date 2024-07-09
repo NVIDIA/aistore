@@ -12,7 +12,11 @@ redirect_from:
 - [Storage Services](#storage-services)
   - [Notation](#notation)
 - [Checksumming](#checksumming)
-- [LRU](#lru)
+- [LRU and Space](#lru-and-space)
+  - [Space watermarks](#space-watermarks)
+  - [LRU configuration](#lru-configuration)
+  - [Example setting space properties](#example-setting-space-properties)
+  - [Example enabling LRU eviction for a given bucket](#example-enabling-lru-eviction-for-a-given-bucket)
 - [Erasure coding](#erasure-coding)
 - [N-way mirror](#n-way-mirror)
   - [Read load balancing](#read-load-balancing)
@@ -41,23 +45,89 @@ $ ais bucket props <bucket-name> checksum.validate_cold_get=true checksum.valida
 
 For more examples, please to refer to [supported checksums and brief theory of operations](checksum.md).
 
-## LRU
+## LRU and Space
 
-The LRU (Least Recently Used) configuration is for managing storage space across the entire cluster, not just individual buckets. It helps keep the cluster running smoothly by making sure it doesn't run out of storage. The settings are split into two parts: `space` and `lru`.
+LRU (Least Recently Used) configuration contains the following 3 (three) knobs:
 
-> Note: The LRU watermarks (`space.lowwm`, `space.highwm`, and `space.out_of_space`) apply to the entire cluster, not to individual buckets. Therefore, all settings starting with `space.*` must be configured at the cluster level.
+```console
+$ ais config cluster lru
 
-* `space.lowwm`: integer in the range [0, 100], if filesystem usage exceeds `highwm` (high water mark %) LRU tries to evict objects so the filesystem usage drops to `lowwm` (low water mark %)
-* `space.highwm`: integer in the range [0, 100], LRU starts immediately if a filesystem usage exceeds the value representing `highwm` (high water mark %)
-* `space.out_of_space`: integer in the range [0, 100], `out_of_space` (%) if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`
-* `lru.dont_evict_time`: string that indicates eviction-free period [atime, atime + dont]
+PROPERTY                 VALUE
+lru.dont_evict_time      2h0m
+lru.capacity_upd_time    10m
+lru.enabled              true
+```
+
+Most importantly, cluster-wide default in the example above is `true`.
+What it means is that every newly added remote bucket will be "evictable` upon reaching certain space-utilization threshold.
+
+Speaking of which, here's the Space section of the configuration (and again, the actual values below are the defaults that we currently have for [local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground):
+
+```console
+$ ais config cluster space --json
+
+    "space": {
+        "cleanupwm": 65,
+        "lowwm": 75,
+        "highwm": 90,
+        "out_of_space": 95
+    }
+```
+
+Note that "space" watermarks (`space.cleanupwm`, `space.lowwm`, `space.highwm`, and `space.out_of_space`) apply to the entire cluster, not to individual buckets.
+
+On the other hand, LRU can be configured on a per-bucket basis:
+
+* [example enabling LRU eviction for a given bucket](#example-enabling-lru-eviction-for-a-given-bucket)
+
+### Space watermarks
+
+* `space.cleanupwm`: integer in the range `[0, 100]`, used capacity (%) that triggers cleanup (deleted objects and buckets, extra copies, etc.) (storage cleanup watermark %)
+* `space.lowwm`: integer in the range `[0, 100]`, if filesystem usage exceeds `highwm` (high watermark %) LRU tries to evict objects so the filesystem usage drops to `lowwm` (low watermark %)
+* `space.highwm`: integer in the range `[0, 100]`, LRU starts immediately if a filesystem usage exceeds the value representing `highwm` (high watermark %)
+* `space.out_of_space`: integer in the range `[0, 100]`, `out_of_space` (%) if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`
+
+See also:
+
+* [example setting space properties](#example-setting-space-properties)
+
+### LRU configuration
+
+* `lru.dont_evict_time`: string that indicates eviction-free period `[atime, atime + dont]`
 * `lru.capacity_upd_time`: string indicating the minimum time to update capacity
 * `lru.enabled`: bool that determines whether LRU is run or not; only runs when true
 
-Example of setting lru/space properties:
+Note the one, maybe subtle, difference between `ais://` buckets and remote buckets (the latter including, of course, Cloud buckets):
+
+> LRU enabled/disabled default in the cluster config only affects remote buckets - buckets that, effectively, have a backup. For in-cluster `ais://` buckets LRU is always by default disabled (and "lru.enabled" knob from the cluster configuration is ignored).
+
+You can still enable LRU for the `ais://` buckets but that must be done explicitly:
+
+* [example enabling LRU eviction for a given bucket](#example-enabling-lru-eviction-for-a-given-bucket)
+
+### Example setting space properties
 
 ```console
 $ ais config cluster space.cleanupwm=40 lru.enabled=true space.lowwm=45 space.highwm=47.15 lru.dont_evict_time=1s
+```
+
+### Example enabling LRU eviction for a given bucket
+
+```console
+$ ais create ais://nnn
+"ais://nnn" created
+
+$ ais bucket props <TAB-TAB>
+set     reset   show
+
+$ ais bucket props set ais://nnn lru.enabled
+PROPERTY         VALUE
+lru.enabled      false
+
+$ ais bucket props set ais://nnn lru.enabled true
+"lru.enabled" set to: "true" (was: "false")
+
+Bucket props successfully updated.
 ```
 
 ## Erasure coding
