@@ -6,22 +6,28 @@
 package stats
 
 import (
+	"encoding/json"
 	rfs "io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Linkage:
@@ -110,6 +116,23 @@ type (
 		Value int64 `json:"v,string"`
 	}
 	copyTracker map[string]copyValue // aggregated every statsTime interval
+)
+
+// Prunner and Trunner
+type (
+	runner struct {
+		node      core.Node
+		stopCh    chan struct{}
+		ticker    *time.Ticker
+		core      *coreStats
+		ctracker  copyTracker // to avoid making it at runtime
+		sorted    []string    // sorted names
+		name      string      // this stats-runner's name
+		prev      string      // prev ctracker.write
+		next      int64       // mono.Nano
+		mem       sys.MemStat
+		startedUp atomic.Bool
+	}
 )
 
 // sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
@@ -339,6 +362,119 @@ func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 		clr |= cos.OOM | cos.LowMemory
 	}
 	r.Flag(NodeStateFlags, set, clr)
+}
+
+func (r *runner) GetStats() *Node {
+	ctracker := make(copyTracker, 48)
+	r.core.copyCumulative(ctracker)
+	return &Node{Tracker: ctracker}
+}
+
+func (r *runner) GetStatsV322() (out *NodeV322) {
+	ds := r.GetStats()
+
+	out = &NodeV322{}
+	out.Snode = ds.Snode
+	out.Tracker = ds.Tracker
+	return out
+}
+
+func (r *runner) ResetStats(errorsOnly bool) {
+	r.core.reset(errorsOnly)
+}
+
+func (r *runner) GetMetricNames() cos.StrKVs {
+	out := make(cos.StrKVs, 32)
+	for name, v := range r.core.Tracker {
+		out[name] = v.kind
+	}
+	return out
+}
+
+////////////////
+// statsValue //
+////////////////
+
+// interface guard
+var (
+	_ json.Marshaler   = (*statsValue)(nil)
+	_ json.Unmarshaler = (*statsValue)(nil)
+)
+
+func (v *statsValue) MarshalJSON() ([]byte, error) {
+	s := strconv.FormatInt(ratomic.LoadInt64(&v.Value), 10)
+	return cos.UnsafeB(s), nil
+}
+
+func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &v.Value) }
+
+///////////////
+// copyValue //
+///////////////
+
+// interface guard
+var (
+	_ json.Marshaler   = (*copyValue)(nil)
+	_ json.Unmarshaler = (*copyValue)(nil)
+)
+
+func (v copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
+func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarshal(b, &v.Value) }
+
+/////////////////
+// copyTracker //
+/////////////////
+
+// serialize itself (slightly more efficiently than JSON)
+func (ctracker copyTracker) write(sgl *memsys.SGL, sorted []string, target, idle bool) {
+	var (
+		next  bool
+		disks bool // whether to write target disk metrics
+	)
+	if len(sorted) == 0 {
+		for n := range ctracker {
+			sorted = append(sorted, n)
+		}
+		sort.Strings(sorted)
+	}
+	sgl.WriteByte('{')
+	for _, n := range sorted {
+		v := ctracker[n]
+		// exclude
+		if v.Value == 0 || n == Uptime { // always skip zeros and uptime
+			continue
+		}
+		if isDiskMetric(n) {
+			if isDiskUtilMetric(n) && v.Value > minLogDiskUtil {
+				disks = true // not idle - all all
+			}
+			continue
+		}
+		if idle && n == KeepAliveLatency {
+			continue
+		}
+		// add
+		if next {
+			sgl.WriteByte(',')
+		}
+		sgl.Write(cos.UnsafeB(n))
+		sgl.WriteByte(':')
+		sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10))) // raw value
+		next = true
+	}
+	if disks {
+		debug.Assert(target)
+		for n, v := range ctracker {
+			if v.Value == 0 || !isDiskMetric(n) {
+				continue
+			}
+			sgl.WriteByte(',')
+			sgl.Write(cos.UnsafeB(n))
+			sgl.WriteByte(':')
+			sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10))) // ditto
+		}
+	}
+	sgl.WriteByte('}')
 }
 
 //
