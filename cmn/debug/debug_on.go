@@ -39,22 +39,22 @@ func _panic(a ...any) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 1024))
 	buffer.WriteString(msg)
 	for i := 2; i < 9; i++ {
-		if _, file, line, ok := runtime.Caller(i); !ok {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
 			break
-		} else {
-			// alternatively, the entire stack w/ full pathnames
-			if !strings.Contains(file, "aistore") {
-				break
-			}
-			f := filepath.Base(file)
-			if l := len(f); l > 3 {
-				f = f[:l-3]
-			}
-			if buffer.Len() > len(msg) {
-				buffer.WriteString(" <- ")
-			}
-			fmt.Fprintf(buffer, "%s:%d", f, line)
 		}
+		// alternatively, the entire stack w/ full pathnames
+		if !strings.Contains(file, "aistore") {
+			break
+		}
+		f := filepath.Base(file)
+		if l := len(f); l > 3 {
+			f = f[:l-3]
+		}
+		if buffer.Len() > len(msg) {
+			buffer.WriteString(" <- ")
+		}
+		fmt.Fprintf(buffer, "%s:%d", f, line)
 	}
 	if flag.Parsed() {
 		nlog.Errorln(buffer.String())
@@ -140,14 +140,4 @@ func Handlers() map[string]http.HandlerFunc {
 		"/debug/pprof/goroutine":    pprof.Handler("goroutine").ServeHTTP,
 		"/debug/pprof/threadcreate": pprof.Handler("threadcreate").ServeHTTP,
 	}
-}
-
-func fatalMsg(f string, v ...any) {
-	s := fmt.Sprintf(f, v...)
-	if s == "" || s[len(s)-1] != '\n' {
-		fmt.Fprintln(os.Stderr, s)
-	} else {
-		fmt.Fprint(os.Stderr, s)
-	}
-	os.Exit(1)
 }
