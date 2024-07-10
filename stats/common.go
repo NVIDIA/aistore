@@ -35,6 +35,7 @@ import (
 // - one of the two pairs (common, common_prom) OR (common, common_statsd) gets compiled with
 //   both Proxy (proxy_stats.go) and Target (target_stats.go)
 
+// defaults and tunables
 const (
 	dfltPeriodicFlushTime = time.Minute            // when `config.Log.FlushTime` is 0 (zero)
 	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
@@ -42,14 +43,14 @@ const (
 	maxCapLogInterval     = int64(4 * time.Hour)   // to see capacity at least few times a day (when idle)
 )
 
-// more periodic
+// periodic
 const (
 	maxLogSizeCheckTime = 48 * time.Minute       // periodically check the logs for max accumulated size
 	startupSleep        = 300 * time.Millisecond // periodically poll ClusterStarted()
 	numGorHighCheckTime = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
 )
 
-// number-of-goroutines watermarks expressed as multipliers over the number of available logical CPUs (GOMAXPROCS)
+// number-of-goroutines watermarks expressed as multipliers over the number of CPUs (GOMAXPROCS)
 const (
 	numGorHigh    = 100
 	numGorExtreme = 1000
@@ -105,8 +106,7 @@ type (
 		kind  string // enum { KindCounter, ..., KindSpecial }
 		label struct {
 			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
-			stsd string // StatsD label
-			prom string // Prometheus label
+			stpr string // StatsD _or_ Prometheus label (depending on build tag)
 		}
 		Value      int64 `json:"v,string"`
 		numSamples int64 // (log + StatsD) only
@@ -118,7 +118,7 @@ type (
 	copyTracker map[string]copyValue // aggregated every statsTime interval
 )
 
-// Prunner and Trunner
+// common part: Prunner and Trunner, both
 type (
 	runner struct {
 		node      core.Node
@@ -139,26 +139,6 @@ type (
 var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
 
 var ignoreIdle = []string{"kalive", Uptime, "disk."}
-
-func ignore(s string) bool {
-	for _, p := range ignoreIdle {
-		if strings.HasPrefix(s, p) {
-			return true
-		}
-	}
-	return false
-}
-
-// convert bytes to meGabytes with a fixed rounding precision = 2 digits
-// - KindThroughput and KindComputedThroughput only
-// - MB, not MiB
-// - math.Ceil wouldn't produce two decimals
-func roundMBs(val int64) (mbs float64) {
-	mbs = float64(val) / 1000 / 10
-	num := int(mbs + 0.5)
-	mbs = float64(num) / 100
-	return
-}
 
 ////////////
 // runner //
@@ -290,7 +270,7 @@ waitStartup:
 			now := mono.NanoTime()
 			config = cmn.GCO.Get()
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
-			checkNumGorHigh = _whingeGoroutines(now, checkNumGorHigh, goMaxProcs)
+			checkNumGorHigh = _checkGor(now, checkNumGorHigh, goMaxProcs)
 
 			if statsTime != config.Periodic.StatsTime.D() {
 				statsTime = config.Periodic.StatsTime.D()
@@ -317,29 +297,6 @@ waitStartup:
 			return nil
 		}
 	}
-}
-
-func _whingeGoroutines(now, checkNumGorHigh int64, goMaxProcs int) int64 {
-	var (
-		ngr     = runtime.NumGoroutine()
-		extreme bool
-	)
-	if ngr < goMaxProcs*numGorHigh {
-		return 0
-	}
-	if ngr >= goMaxProcs*numGorExtreme {
-		extreme = true
-		nlog.Errorf("Extremely high number of goroutines: %d", ngr)
-	}
-	if checkNumGorHigh == 0 {
-		checkNumGorHigh = now
-	} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
-		if !extreme {
-			nlog.Warningf("High number of goroutines: %d", ngr)
-		}
-		checkNumGorHigh = 0
-	}
-	return checkNumGorHigh
 }
 
 func (r *runner) StartedUp() bool { return r.startedUp.Load() }
@@ -550,4 +507,51 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 	if verbose {
 		nlog.Infoln(prefix + ": done")
 	}
+}
+
+//
+// common helpers
+//
+
+func ignore(s string) bool {
+	for _, p := range ignoreIdle {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// convert bytes to meGabytes with a fixed rounding precision = 2 digits
+// - KindThroughput and KindComputedThroughput only
+// - MB, not MiB
+// - math.Ceil wouldn't produce two decimals
+func roundMBs(val int64) (mbs float64) {
+	mbs = float64(val) / 1000 / 10
+	num := int(mbs + 0.5)
+	mbs = float64(num) / 100
+	return
+}
+
+func _checkGor(now, checkNumGorHigh int64, goMaxProcs int) int64 {
+	var (
+		ngr     = runtime.NumGoroutine()
+		extreme bool
+	)
+	if ngr < goMaxProcs*numGorHigh {
+		return 0
+	}
+	if ngr >= goMaxProcs*numGorExtreme {
+		extreme = true
+		nlog.Errorf("Extremely high number of goroutines: %d", ngr)
+	}
+	if checkNumGorHigh == 0 {
+		checkNumGorHigh = now
+	} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
+		if !extreme {
+			nlog.Warningf("High number of goroutines: %d", ngr)
+		}
+		checkNumGorHigh = 0
+	}
+	return checkNumGorHigh
 }

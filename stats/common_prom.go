@@ -9,7 +9,6 @@ package stats
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -71,8 +70,7 @@ func (*coreStats) initMetricClient(_ *meta.Snode, parent *runner) {
 	prometheus.MustRegister(parent) // as prometheus.Collector
 }
 
-// populate *prometheus.Desc and statsValue.label.prom
-// NOTE: naming; compare with statsTracker.register()
+// populate *prometheus.Desc and statsValue.label.stpr
 func (s *coreStats) initProm(snode *meta.Snode) {
 	id := strings.ReplaceAll(snode.ID(), ".", "_")
 	for name, v := range s.Tracker {
@@ -86,36 +84,36 @@ func (s *coreStats) initProm(snode *meta.Snode) {
 		label := strings.ReplaceAll(name, ".", "_")
 		// prometheus metrics names shouldn't include daemonID.
 		label = strings.ReplaceAll(label, "_"+id+"_", "_")
-		v.label.prom = strings.ReplaceAll(label, ":", "_")
+		v.label.stpr = strings.ReplaceAll(label, ":", "_")
 
 		help := v.kind
-		if strings.HasSuffix(v.label.prom, "_n") {
+		if strings.HasSuffix(v.label.stpr, "_n") {
 			help = "total number of operations"
-		} else if strings.HasSuffix(v.label.prom, "_size") {
+		} else if strings.HasSuffix(v.label.stpr, "_size") {
 			help = "total size (bytes)"
-		} else if strings.HasSuffix(v.label.prom, "avg_rsize") {
+		} else if strings.HasSuffix(v.label.stpr, "avg_rsize") {
 			help = "average read size (bytes)"
-		} else if strings.HasSuffix(v.label.prom, "avg_wsize") {
+		} else if strings.HasSuffix(v.label.stpr, "avg_wsize") {
 			help = "average write size (bytes)"
-		} else if strings.HasSuffix(v.label.prom, "_ns") {
-			v.label.prom = strings.TrimSuffix(v.label.prom, "_ns") + "_ms"
+		} else if strings.HasSuffix(v.label.stpr, "_ns") {
+			v.label.stpr = strings.TrimSuffix(v.label.stpr, "_ns") + "_ms"
 			help = "latency (milliseconds)"
-		} else if strings.HasSuffix(v.label.prom, "_ns_total") {
+		} else if strings.HasSuffix(v.label.stpr, "_ns_total") {
 			help = "cumulative latency (nanoseconds)"
-		} else if strings.Contains(v.label.prom, "_ns_") {
-			v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "_ms_")
+		} else if strings.Contains(v.label.stpr, "_ns_") {
+			v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "_ms_")
 			if name == Uptime {
-				v.label.prom = strings.ReplaceAll(v.label.prom, "_ns_", "")
+				v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "")
 				help = "uptime (seconds)"
 			} else {
 				help = "latency (milliseconds)"
 			}
-		} else if strings.HasSuffix(v.label.prom, "_bps") {
-			v.label.prom = strings.TrimSuffix(v.label.prom, "_bps") + "_mbps"
+		} else if strings.HasSuffix(v.label.stpr, "_bps") {
+			v.label.stpr = strings.TrimSuffix(v.label.stpr, "_bps") + "_mbps"
 			help = "throughput (MB/s)"
 		}
 
-		fullqn := prometheus.BuildFQName("ais", snode.Type(), v.label.prom)
+		fullqn := prometheus.BuildFQName("ais", snode.Type(), v.label.stpr)
 		// e.g. metric: ais_target_disk_avg_wsize{disk="nvme0n1",node_id="fqWt8081"}
 		s.promDesc[name] = prometheus.NewDesc(fullqn, help, variableLabels, prometheus.Labels{"node_id": id})
 	}
@@ -307,7 +305,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
 // compare with coreStats.initProm()
-func (r *runner) reg(snode *meta.Snode, name, kind string) {
+func (r *runner) reg(_ *meta.Snode, name, kind string) {
 	v := &statsValue{kind: kind}
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
@@ -315,36 +313,28 @@ func (r *runner) reg(snode *meta.Snode, name, kind string) {
 		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".n")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "count")
 	case KindTotal:
 		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "total")
 	case KindSize:
 		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".size")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbytes")
 	case KindLatency:
 		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".ns")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "ms")
 	case KindThroughput, KindComputedThroughput:
 		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".bps")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbps")
 	default:
 		debug.Assert(kind == KindGauge || kind == KindSpecial)
 		v.label.comm = name
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		if name == Uptime {
 			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "seconds")
-		} else {
-			v.label.stsd = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
 		}
 	}
 	r.core.Tracker[name] = v

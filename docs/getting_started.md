@@ -96,6 +96,7 @@ The rest of this document is structured as follows:
 - [Kubernetes Playground](#kubernetes-playground)
 - [Setting Up HTTPS Locally](#setting-up-https-locally)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
+  - [A note on conditional linkage](#a-note-on-conditional-linkage)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [Assorted command lines](#assorted-command-lines)
 
@@ -276,8 +277,8 @@ $ ais show cluster
 PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION         BUILD TIME
 p[BOxqibgv][P]   0.14%           27.28GiB        [1.2 1.1 1.1]   -       online  3.22.bf26375e5  2024-02-29T11:11:52-0500
 
-TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       LOAD AVERAGE    REBALANCE       UPTIME  STATUS  VERSION
-t[IwzSpiIm]      0.14%           27.28GiB        6%              1.770GiB        [1.2 1.1 1.1]   -               -       online  3.22.bf26375e5
+TARGET           MEM USED(%)     MEM AVAIL    CAP USED(%)  CAP AVAIL    LOAD AVERAGE    REBALANCE   UPTIME  STATUS  VERSION
+t[IwzSpiIm]      0.14%           27.28GiB     6%           1.770GiB     [1.2 1.1 1.1]   -           -       online  3.22.bf26375e5
 
 Summary:
    Proxies:             1
@@ -603,7 +604,7 @@ In particular, the `make` provides a growing number of developer-friendly comman
 * **run** all or selected tests;
 * **instrument** AIS binary with race detection, CPU and/or memory profiling, and more.
 
-Of course, local build is intended for development only. For production, there is a separate dedicated repository (noted below).
+Of course, local build is intended for development only. For production, there is a separate [dedicated repository](https://github.com/NVIDIA/ais-k8s) noted below.
 
 In summary:
 
@@ -620,6 +621,39 @@ AIStore build supports conditional linkage of the supported remote backends: [S3
 To access remote data (and store it in-cluster), AIStore utilizes the respective provider's SDK.
 
 > For Amazon S3, that would be `aws-sdk-go-v2`, for Azure - `azure-storage-blob-go`, and so on. Each SDK can be **conditionally linked** into `aisnode` executable - the decision to link or not to link is made prior to deployment.
+
+But not only supported remote backends are conditionally linked. Overall, the following list of commented examples presents almost all supported build tags (with maybe one minor exception):
+
+```console
+# 1) build aisnode with no build tags, no debug
+$ MODE="" make node
+
+# 2) build aisnode with no build tags but with debug
+$ MODE="debug" make node
+
+# 3) all 3 cloud backends, no debug
+$ AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+
+# 4) cloud backends, with debug
+$ AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+
+# 5) cloud backends, debug, statsd
+## Note: if `statsd` build tag is not specified `aisnode` will get built with Prometheus support.
+## For more information (including the binary choice between StatsD and Prometheus), please see docs/metrics.md and docs/prometheus.md
+$ TAGS="aws azure gcp statsd debug" make node
+
+# 6) statsd, debug, nethttp (note that fasthttp is used by default)
+$ TAGS="nethttp statsd debug" make node
+```
+
+In addition, to build [AuthN](/docs/authn.md), [CLI](/docs/cli.md), and/or [aisloader](/docs/aisloader.md), run:
+
+* `make authn`
+* `make cli`
+* `make aisloader`
+
+respectively. With each of these `make`s, you can also use `MODE=debug` - debug mode is universally supported.
+
 
 ## Containerized Deployments: Host Resource Sharing
 

@@ -46,7 +46,8 @@ AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
 AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
 
 # 5) cloud backends, debug, statsd
-# (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
+## Note: if `statsd` build tag is not specified `aisnode` will get built with Prometheus support.
+## For additional information (including the binary choice between StatsD and Prometheus), please see docs/metrics.md
 TAGS="aws azure gcp statsd debug" make node
 
 # 6) statsd, debug, nethttp (note that fasthttp is used by default)

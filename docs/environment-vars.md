@@ -209,7 +209,7 @@ In addition and separately, AIStore supports [StatsD](https://github.com/etsy/st
 
 The corresponding binary choice between StatsD and Prometheus is a **build-time** switch controlled by a single build tag: **statsd**.
 
-> Generally, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
+> As a side note, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
 
 ```console
 # 1) no build tags, no debug
@@ -225,7 +225,7 @@ AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
 AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
 
 # 5) cloud backends, debug, statsd
-# (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
+# (build with StatsD, and note that Prometheus is the default choice when `statsd` tag is not defined)
 TAGS="aws azure gcp statsd debug" make node
 
 # 6) statsd, debug, nethttp (note that fasthttp is used by default)

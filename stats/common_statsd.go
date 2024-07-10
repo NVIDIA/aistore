@@ -154,7 +154,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			// NOTE: ns => ms, and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if !s.statsdDisabled() && millis > 0 {
-				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stsd, Value: float64(millis)}, s.sgl)
+				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stpr, Value: float64(millis)}, s.sgl)
 			}
 		case KindThroughput:
 			var throughput int64
@@ -167,14 +167,14 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			out[name] = copyValue{throughput}
 			if !s.statsdDisabled() && throughput > 0 {
 				fv := roundMBs(throughput)
-				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
+				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: fv}, s.sgl)
 			}
 		case KindComputedThroughput:
 			if throughput := ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
 				out[name] = copyValue{throughput}
 				if !s.statsdDisabled() {
 					fv := roundMBs(throughput)
-					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
+					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: fv}, s.sgl)
 				}
 			}
 		case KindCounter, KindSize, KindTotal:
@@ -194,21 +194,21 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			// StatsD iff changed
 			if !s.statsdDisabled() && changed {
 				if v.kind == KindCounter {
-					s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: val}, s.sgl)
+					s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stpr, Value: val}, s.sgl)
 				} else {
 					// target only suffix
 					metricType := statsd.Counter
 					if v.label.comm == "dl" {
 						metricType = statsd.PersistentCounter
 					}
-					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: float64(val)}, s.sgl)
+					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stpr, Value: float64(val)}, s.sgl)
 				}
 			}
 		case KindGauge:
 			val := ratomic.LoadInt64(&v.Value)
 			out[name] = copyValue{val}
 			if !s.statsdDisabled() {
-				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: float64(val)}, s.sgl)
+				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: float64(val)}, s.sgl)
 			}
 			if isDiskUtilMetric(name) && val > diskLowUtil[0] {
 				idle = false
@@ -325,36 +325,36 @@ func (r *runner) reg(snode *meta.Snode, name, kind string) {
 		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".n")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "count")
+		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "count")
 	case KindTotal:
 		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "total")
+		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "total")
 	case KindSize:
 		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
 		v.label.comm = strings.TrimSuffix(name, ".size")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbytes")
+		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbytes")
 	case KindLatency:
 		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".ns")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "ms")
+		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "ms")
 	case KindThroughput, KindComputedThroughput:
 		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".bps")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbps")
+		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbps")
 	default:
 		debug.Assert(kind == KindGauge || kind == KindSpecial)
 		v.label.comm = name
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		if name == Uptime {
 			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "seconds")
+			v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "seconds")
 		} else {
-			v.label.stsd = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
+			v.label.stpr = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
 		}
 	}
 	r.core.Tracker[name] = v
