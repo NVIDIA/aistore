@@ -30,27 +30,20 @@ AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/in
 
 The corresponding binary choice between StatsD and Prometheus is a **build-time** switch that is a single build tag: `statsd`.
 
-> Generally, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
+> As a side note, the entire assortment of supported build tags is demonstrated by the following `aisnode`-building examples:
 
 ```console
 # 1) no build tags, no debug
 MODE="" make node
-
 # 2) no build tags, debug
 MODE="debug" make node
-
 # 3) cloud backends, no debug
 AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
-
-# 4) cloud backends, debug
-AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
-
-# 5) cloud backends, debug, statsd
+# 4) cloud backends, debug, statsd
 ## Note: if `statsd` build tag is not specified `aisnode` will get built with Prometheus support.
 ## For additional information (including the binary choice between StatsD and Prometheus), please see docs/metrics.md
 TAGS="aws azure gcp statsd debug" make node
-
-# 6) statsd, debug, nethttp (note that fasthttp is used by default)
+# 5) statsd, debug, nethttp (note that fasthttp is used by default)
 TAGS="nethttp statsd debug" make node
 ```
 
@@ -59,7 +52,9 @@ When a starting-up AIS node (gateway or storage target) is built with Prometheus
 * register all its metric descriptions (names, labels, and helps) with Prometheus, and
 * provide HTTP endpoint `/metrics` for subsequent collection (aka "scraping") by Prometheus.
 
-Here's a simplified example:
+Here's a few
+
+### Simplified Examples
 
 ```console
 $ aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=target
@@ -105,7 +100,13 @@ $ curl http://hostname:8081/metrics | grep ais
   ...
 ```
 
-References:
+And for continuous monitoring of any given subset of metrics (still _without_ using actual Prometheus installation) one could also run something like:
+
+```console
+for i in {1..99999}; do curl http://hostname:8081/metrics --silent | grep "ais_target_get_n.*node"; sleep 1; done
+```
+
+### References:
 
 * https://prometheus.io/docs/instrumenting/writing_exporters/
 * https://prometheus.io/docs/concepts/data_model/
