@@ -21,8 +21,9 @@ const mockID = "mock-id"
 
 // TargetMock provides cluster.Target interface with mocked return values.
 type TargetMock struct {
-	BO meta.Bowner
-	SO meta.Sowner
+	BO       meta.Bowner
+	SO       meta.Sowner
+	Backends map[string]core.Backend
 }
 
 // interface guard
@@ -52,7 +53,7 @@ func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact, cmn.OWT) (int, erro
 func (*TargetMock) EvictObject(*core.LOM) (int, error)                             { return 0, nil }
 func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)                      { return 0, nil }
 func (*TargetMock) Promote(*core.PromoteParams) (int, error)                       { return 0, nil }
-func (*TargetMock) Backend(*meta.Bck) core.Backend                                 { return nil }
+func (t *TargetMock) Backend(bck *meta.Bck) core.Backend                           { return t.Backends[bck.Provider] }
 func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode) bool                         { return false }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                      {}
 func (*TargetMock) FSHC(error, *fs.Mountpath, string)                              {}

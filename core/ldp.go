@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 )
 
 // NOTE: compare with ext/etl/dp.go
@@ -127,8 +128,14 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 
 	oa, ecode, err := T.Backend(bck).HeadObj(context.Background(), lom, origReq)
 	if err == nil {
-		debug.Assert(ecode == 0, ecode)
-		return CRMD{ObjAttrs: oa, Eq: lom.Equal(oa), ErrCode: ecode}
+		if !lom.IsFeatureSet(feat.DisableColdGET) || lom.Equal(oa) {
+			debug.Assert(ecode == 0, ecode)
+			return CRMD{ObjAttrs: oa, Eq: lom.Equal(oa), ErrCode: ecode}
+		}
+		// Cold Get disabled and metadata doesn't match, so we must treat
+		// it as if the object doesn't really exist.
+		err = cmn.NewErrRemoteMetadataMismatch(lom.GetCustomMD(), oa.GetCustomMD())
+		ecode = http.StatusNotFound
 	}
 
 	if ecode == http.StatusNotFound {

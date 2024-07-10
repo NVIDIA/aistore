@@ -93,6 +93,11 @@ type (
 	ErrInvalidBackendProvider struct {
 		bck Bck
 	}
+	ErrRemoteMetadataMismatch struct {
+		localMD  map[string]string
+		remoteMD map[string]string
+	}
+
 	ErrCapExceeded struct {
 		totalBytes     uint64
 		totalBytesUsed uint64
@@ -370,6 +375,15 @@ func (e *ErrInvalidBackendProvider) Error() string {
 func (*ErrInvalidBackendProvider) Is(target error) bool {
 	_, ok := target.(*ErrInvalidBackendProvider)
 	return ok
+}
+
+// ErrRemoteMetadataMismatch
+
+func NewErrRemoteMetadataMismatch(localMD, remoteMD map[string]string) error {
+	return &ErrRemoteMetadataMismatch{localMD: localMD, remoteMD: remoteMD}
+}
+func (e *ErrRemoteMetadataMismatch) Error() string {
+	return fmt.Sprintf("mismatch between local (%v) and remote (%v) metadata", e.localMD, e.remoteMD)
 }
 
 // ErrBusy

@@ -19,10 +19,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/tools"
@@ -788,7 +791,6 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	m.init(true /*cleanup*/)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-
 	if docker.IsRunning() {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
@@ -819,7 +821,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		m.del()
 	})
 
-	objName := m.objNames[0]
+	objName := m.nextObjName()
 	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
 	tassert.CheckError(t, err)
 
@@ -844,7 +846,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
 	// Test when the xxHash of the file is changed
-	objName = m.objNames[1]
+	objName = m.nextObjName()
 	fqn = findObjOnDisk(m.bck, objName)
 	tools.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
@@ -855,7 +857,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
 	// Test for no checksum algo
-	objName = m.objNames[2]
+	objName = m.nextObjName()
 	fqn = findObjOnDisk(m.bck, objName)
 
 	if p.Cksum.Type != cos.ChecksumNone {
@@ -874,6 +876,140 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	_, err = api.GetObject(baseParams, m.bck, objName, nil)
 	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
+}
+
+func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
+	var (
+		m = ioContext{
+			t:        t,
+			bck:      cliBck,
+			num:      10,
+			fileSize: cos.KiB,
+			prefix:   "validate/obj-",
+		}
+
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+	)
+
+	m.init(true /*cleanup*/)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	if docker.IsRunning() {
+		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
+	}
+
+	p, err := api.HeadBucket(baseParams, m.bck, false /*don't add*/)
+	tassert.CheckFatal(t, err)
+
+	tMock := mock.NewTarget(mock.NewBaseBownerMock(
+		meta.NewBck(
+			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
+		),
+	))
+	// FIXME: How to make this cleaner?
+	aws, _ := backend.NewAWS(tMock)
+	tMock.Backends = map[string]core.Backend{apc.AWS: aws}
+
+	initMountpaths(t, proxyURL)
+
+	m.puts()
+
+	if !p.Cksum.ValidateWarmGet {
+		propsToSet := &cmn.BpropsToSet{
+			Versioning: &cmn.VersionConfToSet{ValidateWarmGet: apc.Ptr(true)},
+			Cksum: &cmn.CksumConfToSet{
+				Type:            apc.Ptr(cos.ChecksumXXHash),
+				ValidateWarmGet: apc.Ptr(true),
+			},
+		}
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToSet)
+		tassert.CheckFatal(t, err)
+	}
+	t.Cleanup(func() {
+		propsToSet := &cmn.BpropsToSet{
+			Versioning: &cmn.VersionConfToSet{
+				ValidateWarmGet: apc.Ptr(p.Versioning.ValidateWarmGet),
+			},
+			Cksum: &cmn.CksumConfToSet{
+				Type:            apc.Ptr(p.Cksum.Type),
+				ValidateWarmGet: apc.Ptr(p.Cksum.ValidateWarmGet),
+			},
+		}
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToSet)
+		tassert.CheckError(t, err)
+		m.del()
+	})
+
+	// FIXME: We should also have tests for `ColdGetEnabled`.
+
+	t.Run("ColdGetDisabled", func(t *testing.T) {
+		propsToSet := &cmn.BpropsToSet{Features: apc.Ptr(feat.DisableColdGET)}
+		_, err = api.SetBucketProps(baseParams, m.bck, propsToSet)
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() {
+			propsToSet := &cmn.BpropsToSet{Features: apc.Ptr(p.Features)}
+			_, err = api.SetBucketProps(baseParams, m.bck, propsToSet)
+			tassert.CheckError(t, err)
+		})
+
+		for name, test := range map[string]struct {
+			beforeTest func(*testing.T)
+			modify     func(*testing.T, *core.LOM)
+		}{
+			"checksum": {modify: func(_ *testing.T, lom *core.LOM) {
+				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "01234"))
+			}},
+			"local_content": {modify: func(t *testing.T, lom *core.LOM) {
+				err := os.WriteFile(lom.FQN, []byte("modified"), cos.PermRWR)
+				tassert.CheckFatal(t, err)
+			}},
+			"remote_content": {
+				modify: func(t *testing.T, lom *core.LOM) {
+					if tMock.Backend(lom.Bck()) == nil {
+						t.Skipf(`Skipping because tests are not built with '-tags="%s"' option`, lom.Bck().Provider)
+					}
+
+					r := io.NopCloser(bytes.NewReader([]byte("modified")))
+					_, err := tMock.Backend(lom.Bck()).PutObj(r, lom, nil)
+					tassert.CheckFatal(t, err)
+				},
+			},
+			"remote_version": {
+				beforeTest: func(t *testing.T) {
+					if !p.Versioning.Enabled {
+						t.Skip("Validation is not enabled for this bucket")
+					}
+				},
+				modify: func(t *testing.T, lom *core.LOM) {
+					// We override remote object with the same content - it should
+					// bump the version without changing the other metadata.
+					data, err := os.ReadFile(lom.FQN)
+					tassert.CheckFatal(t, err)
+					r := io.NopCloser(bytes.NewReader(data))
+					_, err = tMock.Backend(lom.Bck()).PutObj(r, lom, nil)
+					tassert.CheckFatal(t, err)
+				},
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				if test.beforeTest != nil {
+					test.beforeTest(t)
+				}
+
+				objName := m.nextObjName()
+
+				// Modify local version.
+				fqn := findObjOnDisk(m.bck, objName)
+				tools.ModifyLOM(t, fqn, m.bck, test.modify)
+
+				// Make sure that object is not returned.
+				_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
+				tassert.Fatalf(t, err != nil, "Expected error to occur")
+			})
+		}
+	})
 }
 
 func TestEvictRemoteBucket(t *testing.T) {

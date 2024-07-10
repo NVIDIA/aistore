@@ -76,6 +76,8 @@ type ioContext struct {
 
 	numGetErrs atomic.Uint64
 	numPutErrs int
+
+	objIdx int // Used in `m.nextObjName`
 }
 
 func (m *ioContext) initAndSaveState(cleanup bool) {
@@ -630,6 +632,16 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 			m.t.Errorf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
 		}
 	}
+}
+
+func (m *ioContext) nextObjName() string {
+	if m.objIdx >= len(m.objNames) {
+		m.t.Fatal("not enough objects to get next object name")
+		return ""
+	}
+	objName := m.objNames[m.objIdx]
+	m.objIdx++
+	return objName
 }
 
 func (m *ioContext) ensureNoGetErrors() {

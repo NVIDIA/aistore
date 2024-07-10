@@ -740,9 +740,11 @@ func (goi *getOI) _coldPut(res *core.GetReaderResult) (int, error) {
 	return 0, nil
 }
 
-// - validate checksums
-// - if corrupted and IsAIS, try to recover from redundant replicas or EC slices
-// - otherwise, rely on the remote backend for recovery (tradeoff; TODO: make it configurable)
+// validateRecover first validates and tries to recover a corrupted object:
+//   - validate checksums
+//   - if corrupted and IsAIS or coldGET not permitted, try to recover from redundant
+//     replicas or EC slices
+//   - otherwise, rely on the remote backend for recovery (tradeoff; TODO: make it configurable)
 func (goi *getOI) validateRecover() (coldGet bool, code int, err error) {
 	var (
 		lom     = goi.lom
@@ -760,7 +762,7 @@ validate:
 	if _, ok := err.(*cos.ErrBadCksum); !ok {
 		return
 	}
-	if !lom.Bck().IsAIS() {
+	if !lom.Bck().IsAIS() && !goi.lom.IsFeatureSet(feat.DisableColdGET) {
 		coldGet = true
 		return
 	}
