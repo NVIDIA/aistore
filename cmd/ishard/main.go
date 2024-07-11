@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NVIDIA/aistore/tools/ishard"
+	"github.com/NVIDIA/aistore/cmd/ishard/ishard"
 )
 
 func main() {
