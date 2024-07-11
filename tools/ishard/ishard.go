@@ -5,8 +5,10 @@
 package ishard
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -38,20 +40,20 @@ func newDirNode() *dirNode {
 	}
 }
 
-func (n *dirNode) insert(path string, size int64) {
-	parts := strings.Split(path, "/")
+func (n *dirNode) insert(keyPath, fullPath string, size int64) {
+	parts := strings.Split(keyPath, "/")
 	current := n
 
 	for i, part := range parts {
 		if _, exists := current.children[part]; !exists {
 			if i == len(parts)-1 {
-				ext := filepath.Ext(path)
-				base := strings.TrimSuffix(path, ext)
+				ext := filepath.Ext(fullPath)
+				base := strings.TrimSuffix(keyPath, ext)
 				current.records.Insert(&shard.Record{
 					Key:  base,
 					Name: base,
 					Objects: []*shard.RecordObj{{
-						ContentPath:  path,
+						ContentPath:  fullPath,
 						StoreType:    shard.SGLStoreType,
 						Offset:       0,
 						MetadataSize: 0,
@@ -89,10 +91,12 @@ func (n *dirNode) print(prefix string) {
 
 // ISharder executes an initial sharding job with given configuration
 type ISharder struct {
-	cfg         *config.Config
-	shardIter   cos.ParsedTemplate
-	baseParams  api.BaseParams
-	progressBar *mpb.Bar
+	cfg            *config.Config
+	shardIter      cos.ParsedTemplate
+	baseParams     api.BaseParams
+	progressBar    *mpb.Bar
+	missingExtAct  config.MissingExtFunc
+	sampleKeyRegex *regexp.Regexp
 }
 
 // archive traverses through nodes and collects records on the way. Once it reaches
@@ -180,7 +184,7 @@ func (is *ISharder) generateShard(recs *shard.Records, name string, errCh chan e
 	recs.Lock()
 	for _, record := range recs.All() {
 		for _, obj := range record.Objects {
-			paths = append(paths, record.MakeUniqueName(obj))
+			paths = append(paths, obj.ContentPath)
 		}
 	}
 	recs.Unlock()
@@ -203,6 +207,43 @@ func (is *ISharder) generateShard(recs *shard.Records, name string, errCh chan e
 	if is.progressBar != nil {
 		is.progressBar.IncrBy(len(paths))
 	}
+}
+
+func (is *ISharder) findMissingExt(node *dirNode, recursive bool) error {
+	if node == nil {
+		return nil
+	}
+
+	node.records.Lock()
+	for _, record := range node.records.All() {
+		extSet := make(map[string]struct{}, len(is.cfg.SampleExtensions))
+		for _, ext := range is.cfg.SampleExtensions {
+			extSet[ext] = struct{}{}
+		}
+
+		for _, obj := range record.Objects {
+			delete(extSet, obj.Extension)
+		}
+
+		if len(extSet) > 0 {
+			for ext := range extSet {
+				if err := is.missingExtAct(ext); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	node.records.Unlock()
+
+	if recursive {
+		for _, child := range node.children {
+			if err := is.findMissingExt(child, recursive); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // NewISharder instantiates an ISharder with the configuration if provided;
@@ -231,6 +272,12 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 	is.shardIter.InitIter()
 
 	is.progressBar = nil
+
+	if len(is.cfg.SampleExtensions) > 0 && is.cfg.MissingExtAction == "" {
+		return nil, errors.New("MissingExtAction must be specified if SampleExtensions are provided")
+	}
+	is.missingExtAct = config.MissingExtActMap[is.cfg.MissingExtAction]
+	is.sampleKeyRegex = regexp.MustCompile(is.cfg.SampleKeyPattern.Regex)
 
 	return is, err
 }
@@ -265,7 +312,15 @@ func (is *ISharder) Start() error {
 	// Parse object list
 	root := newDirNode()
 	for _, en := range objList.Entries {
-		root.insert(en.Name, en.Size)
+		sampleKey := is.sampleKeyRegex.ReplaceAllString(en.Name, is.cfg.SampleKeyPattern.CaptureGroup)
+		root.insert(sampleKey, en.Name, en.Size)
+	}
+
+	// Check missing extensions
+	if len(is.cfg.SampleExtensions) > 0 {
+		if err := is.findMissingExt(root, true); err != nil {
+			return err
+		}
 	}
 
 	if _, _, err := is.archive(root, ""); err != nil {
