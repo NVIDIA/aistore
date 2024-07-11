@@ -25,7 +25,11 @@ Today AIS equally supports formats: TAR, TGZ (TAR.GZ), TAR.LZ4, ZIP, where:
 
 AIS can natively read, write, append(**), and list archives.
 
-All sharding formats are equally supported across the entire set of AIS APIs. For instance, `list-objects` API supports "opening" objects formatted as one of the supported archival types and including contents of archived directories into generated result sets. Clients can run concurrent multi-object (source bucket => destination bucket) transactions to en masse generate new archives from [selected](/docs/batch.md) subsets of files, and more.
+All sharding formats are equally supported across the entire set of AIS APIs. For instance, `list-objects` API supports "opening" _shards_
+
+> ie., objects formatted as .tar, .tgz, etc. - see above
+
+and including the corresponding pathnames into generated result sets. Clients can run concurrent multi-object (source bucket => destination bucket) transactions to en masse generate new archives from [selected](/docs/batch.md) subsets of files, and more.
 
 APPEND to existing archives is also provided but limited to [TAR only](https://aiatscale.org/blog/2021/08/10/tar-append).
 
