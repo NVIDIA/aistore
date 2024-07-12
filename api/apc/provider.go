@@ -32,6 +32,8 @@ const (
 	AISScheme     = "ais"
 )
 
+const RemAIS = "remais" // to differentiate ais vs ais; also, default (remote ais cluster) alias
+
 var Providers = cos.NewStrSet(AIS, GCP, AWS, Azure, HTTP)
 
 func IsProvider(p string) bool { return Providers.Contains(p) }
@@ -40,7 +42,7 @@ func IsCloudProvider(p string) bool {
 	return p == AWS || p == GCP || p == Azure
 }
 
-// not to confuse w/ bck.IsRemote()
+// NOTE: not to confuse w/ bck.IsRemote() which also includes remote AIS
 func IsRemoteProvider(p string) bool {
 	return IsCloudProvider(p) || p == HTTP
 }

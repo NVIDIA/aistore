@@ -909,7 +909,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 		),
 	))
 	// FIXME: How to make this cleaner?
-	aws, _ := backend.NewAWS(tMock)
+	aws, _ := backend.NewAWS(tMock, nil)
 	tMock.Backends = map[string]core.Backend{apc.AWS: aws}
 
 	initMountpaths(t, proxyURL)

@@ -6,7 +6,6 @@
 package stats
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -36,8 +35,6 @@ const (
 	// NOTE semantics:
 	// - counts all instances when remote GET is followed by storing of the new object (version) locally
 	// - does _not_ count assorted calls to `GetObjReader` (e.g., via tcb/tco -> LDP.Reader)
-	GetColdCount = "get.cold.n"
-	GetColdSize  = "get.cold.size"
 
 	LruEvictCount = "lru.evict.n"
 	LruEvictSize  = "lru.evict.size"
@@ -124,7 +121,10 @@ const (
 /////////////
 
 // interface guard
-var _ cos.Runner = (*Trunner)(nil)
+var (
+	_ cos.Runner = (*Trunner)(nil)
+	_ Tracker    = (*Trunner)(nil)
+)
 
 func NewTrunner(t core.Target) *Trunner { return &Trunner{t: t} }
 
@@ -172,14 +172,22 @@ func (r *Trunner) InitCDF() error {
 	return nil
 }
 
-func diskMetricName(disk, metric string) string {
-	return fmt.Sprintf("%s.%s.%s", diskMetricLabel, disk, metric)
+// TODO: use map
+func _dmetric(disk, metric string) string {
+	var sb strings.Builder
+	sb.WriteString(diskMetricLabel)
+	sb.WriteByte('.')
+	sb.WriteString(disk)
+	sb.WriteByte('.')
+	sb.WriteString(metric)
+	return sb.String()
 }
-func nameRbps(disk string) string { return diskMetricName(disk, "read.bps") }
-func nameRavg(disk string) string { return diskMetricName(disk, "avg.rsize") }
-func nameWbps(disk string) string { return diskMetricName(disk, "write.bps") }
-func nameWavg(disk string) string { return diskMetricName(disk, "avg.wsize") }
-func nameUtil(disk string) string { return diskMetricName(disk, "util") }
+
+func nameRbps(disk string) string { return _dmetric(disk, "read.bps") }
+func nameRavg(disk string) string { return _dmetric(disk, "avg.rsize") }
+func nameWbps(disk string) string { return _dmetric(disk, "write.bps") }
+func nameWavg(disk string) string { return _dmetric(disk, "avg.wsize") }
+func nameUtil(disk string) string { return _dmetric(disk, "util") }
 
 // log vs idle logic
 func isDiskMetric(name string) bool {
@@ -192,9 +200,6 @@ func isDiskUtilMetric(name string) bool {
 
 // target-specific metrics, in addition to common and already added via regCommon()
 func (r *Trunner) RegMetrics(snode *meta.Snode) {
-	r.reg(snode, GetColdCount, KindCounter)
-	r.reg(snode, GetColdSize, KindSize)
-
 	r.reg(snode, LruEvictCount, KindCounter)
 	r.reg(snode, LruEvictSize, KindSize)
 
@@ -209,7 +214,8 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, AppendLatency, KindLatency)
 	r.reg(snode, GetRedirLatency, KindLatency)
 	r.reg(snode, PutRedirLatency, KindLatency)
-	r.reg(snode, GetColdRwLatency, KindLatency)
+
+	r.reg(snode, GetColdRwLatency, KindLatency) // + backend metrics (see ais/backend/common)
 
 	// bps
 	r.reg(snode, GetThroughput, KindThroughput)
@@ -248,9 +254,6 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, LcacheCollisionCount, KindCounter)
 	r.reg(snode, LcacheEvictedCount, KindCounter)
 	r.reg(snode, LcacheFlushColdCount, KindCounter)
-
-	// Prometheus
-	r.core.initProm(snode)
 }
 
 func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {

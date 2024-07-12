@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 // NOTE: some of the methods here are part of the of the *extended* native AIS API outside
@@ -62,16 +63,18 @@ var (
 	preg, treg *regexp.Regexp
 )
 
-func NewAIS(t core.TargetPut) *AISbp {
+func NewAIS(t core.TargetPut, tstats stats.Tracker) *AISbp {
 	suff := regexp.QuoteMeta(meta.SnameSuffix)
 	preg = regexp.MustCompile(regexp.QuoteMeta(meta.PnamePrefix) + `\S*` + suff + ": ")
 	treg = regexp.MustCompile(regexp.QuoteMeta(meta.TnamePrefix) + `\S*` + suff + ": ")
-	return &AISbp{
+	bp := &AISbp{
 		t:      t,
 		remote: make(map[string]*remAis),
 		alias:  make(cos.StrKVs),
-		base:   base{apc.AIS},
+		base:   base{provider: apc.AIS},
 	}
+	bp.base.init(t.Snode(), tstats)
+	return bp
 }
 
 func (r *remAis) String() string {

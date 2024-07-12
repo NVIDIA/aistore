@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -64,14 +65,16 @@ var _ core.Backend = (*s3bp)(nil)
 
 // environment variables => static defaults that can still be overridden via bck.Props.Extra.AWS
 // in addition to these two (below), default bucket region = env.AwsDefaultRegion()
-func NewAWS(t core.TargetPut) (core.Backend, error) {
+func NewAWS(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
 	s3Endpoint = os.Getenv(env.AWS.Endpoint)
 	awsProfile = os.Getenv(env.AWS.Profile)
-	return &s3bp{
+	bp := &s3bp{
 		t:    t,
 		mm:   t.PageMM(),
-		base: base{apc.AWS},
-	}, nil
+		base: base{provider: apc.AWS},
+	}
+	bp.base.init(t.Snode(), tstats)
+	return bp, nil
 }
 
 // as core.Backend --------------------------------------------------------------

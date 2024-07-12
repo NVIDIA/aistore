@@ -108,7 +108,7 @@ func (p *proxy) init(config *cmn.Config) {
 	daemon.rg.add(p)
 
 	ps := &stats.Prunner{}
-	startedUp := ps.Init(p)
+	startedUp := ps.Init(p) // (+ reg common metrics)
 	daemon.rg.add(ps)
 	p.statsT = ps
 
@@ -191,7 +191,7 @@ func (p *proxy) Run() error {
 
 	core.Pinit()
 
-	p.statsT.RegMetrics(p.si) // reg target metrics to common; init Prometheus if used
+	p.statsT.InitPrometheus(p.si)
 
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()

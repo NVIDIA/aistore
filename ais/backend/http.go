@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 type (
@@ -31,13 +32,14 @@ type (
 // interface guard
 var _ core.Backend = (*htbp)(nil)
 
-func NewHTTP(t core.TargetPut, config *cmn.Config) core.Backend {
-	htbp := &htbp{
+func NewHTTP(t core.TargetPut, config *cmn.Config, tstats stats.Tracker) core.Backend {
+	bp := &htbp{
 		t:    t,
-		base: base{apc.HTTP},
+		base: base{provider: apc.HTTP},
 	}
-	htbp.cliH, htbp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
-	return htbp
+	bp.cliH, bp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
+	bp.init(t.Snode(), tstats)
+	return bp
 }
 
 func (htbp *htbp) client(u string) *http.Client {

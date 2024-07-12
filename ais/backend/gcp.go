@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -61,16 +62,15 @@ var (
 	_ core.Backend = (*gsbp)(nil)
 )
 
-func NewGCP(t core.TargetPut) (bp core.Backend, err error) {
+func NewGCP(t core.TargetPut, tstats stats.Tracker) (_ core.Backend, err error) {
 	var (
 		projectID     string
 		credProjectID = readCredFile()
 		envProjectID  = os.Getenv(projectIDEnvVar)
 	)
 	if credProjectID != "" && envProjectID != "" && credProjectID != envProjectID {
-		err = fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
+		return nil, fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
 			projectIDEnvVar, credPathEnvVar, projectIDField)
-		return
 	}
 	switch {
 	case credProjectID != "":
@@ -82,16 +82,18 @@ func NewGCP(t core.TargetPut) (bp core.Backend, err error) {
 	default:
 		nlog.Warningln("unauthenticated client")
 	}
-	gsbp := &gsbp{
+
+	bp := &gsbp{
 		t:         t,
 		projectID: projectID,
-		base:      base{apc.GCP},
+		base:      base{provider: apc.GCP},
 	}
-	bp = gsbp
+	bp.base.init(t.Snode(), tstats)
 
 	gctx = context.Background()
-	gcpClient, err = gsbp.createClient(gctx)
-	return
+	gcpClient, err = bp.createClient(gctx)
+
+	return bp, err
 }
 
 func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {

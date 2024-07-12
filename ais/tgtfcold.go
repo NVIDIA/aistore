@@ -12,13 +12,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/stats"
 )
 
 const ftcg = "Warning: failed to cold-GET"
@@ -139,11 +137,8 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 // stats and redundancy (compare w/ goi.txfini)
 func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 	// cold get stats
-	goi.t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetColdSize, Value: fullSize},
-		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(goi.ltime)},
-	)
+	backend := goi.t.Backend(goi.lom.Bck())
+	goi.t.coldstats(backend, fullSize, goi.ltime)
 
 	lom := goi.lom
 	if revert != "" {

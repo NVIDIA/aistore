@@ -36,6 +36,8 @@ type (
 		cos.StatsUpdater
 
 		StartedUp() bool
+
+		InitPrometheus(node *meta.Snode)
 		IsPrometheus() bool
 
 		IncErr(metric string)
@@ -46,7 +48,7 @@ type (
 		ResetStats(errorsOnly bool)
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
-		RegMetrics(node *meta.Snode) // + init Prometheus, if configured
+		RegExtMetric(node *meta.Snode, name, kind string)
 	}
 
 	// REST API

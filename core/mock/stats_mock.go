@@ -28,7 +28,8 @@ func (*StatsTracker) Inc(string)                                          {}
 func (*StatsTracker) Add(string, int64)                                   {}
 func (*StatsTracker) Flag(string, cos.NodeStateFlags, cos.NodeStateFlags) {}
 func (*StatsTracker) AddMany(...cos.NamedVal64)                           {}
-func (*StatsTracker) RegMetrics(*meta.Snode)                              {}
+func (*StatsTracker) InitPrometheus(*meta.Snode)                          {}
+func (*StatsTracker) RegExtMetric(*meta.Snode, string, string)            {}
 func (*StatsTracker) GetMetricNames() cos.StrKVs                          { return nil }
 func (*StatsTracker) GetStats() *stats.Node                               { return nil }
 func (*StatsTracker) GetStatsV322() *stats.NodeV322                       { return nil }

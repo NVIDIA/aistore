@@ -2,15 +2,16 @@
 
 ## Prerequisites: #################################################################################
 # - aistore cluster
-# - remote aistore cluster (a.k.a. "remais")
-# - optionally, remais bucket (the bucket will be created if doesn't exist)
+# - remote aistore cluster (referred to as "remais")
+# - optionally, remais bucket (if doesn't exist
+#   the bucket will be created and removed upon exit)
 # - ais (CLI)
 #
 ## Example:
 ## first, make sure remote ais cluster is attached:
 ##
 #  $ ais show remote-cluster -H
-#  $ JcHy3JUrL  http://127.0.0.1:11080  remais    v9  1  11m22.312048996s
+#  $ JcHy3JUrL http://127.0.0.1:11080 remais  v9  1  11m22.312048996s
 #
 ## and run:
 #  $ remais-prefetch-latest.sh --bucket ais://@remais/abc
@@ -30,6 +31,9 @@ bucket="ais://@remais/abc"
 ## constants
 sum1="xxhash[ad97df912d23103f]"
 sum2="xxhash[ecb5ed42299ea74d]"
+
+## the one metric that we closely check in this test
+cold_counter="REMAIS-GET"
 
 while (( "$#" )); do
   case "${1}" in
@@ -77,7 +81,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e
-ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(REMAIS_GET$|VERSION-CHANGE$|DELETE)"
 echo -e
 
 echo "1. out-of-band PUT: 1st version"
@@ -97,7 +101,7 @@ checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print
 [[ "$checksum" != "$sum2"  ]] || { echo "FAIL: $checksum == $sum2"; exit 1; }
 
 echo "5. query cold-get count (statistics)"
-cnt1=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
+cnt1=$(ais show performance counters --regex $cold_counter -H | awk '{sum+=$2;}END{print sum;}')
 
 echo "6. prefetch latest: detect version change and update in-cluster copy"
 ais prefetch "$bucket/lorem-duis" --latest --wait
@@ -105,7 +109,7 @@ checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
 echo "7. cold-get counter must increment"
-cnt2=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
+cnt2=$(ais show performance counters --regex $cold_counter -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt2 == $(($cnt1+1)) ]] || { echo "FAIL: $cnt2 != $(($cnt1+1))"; exit 1; }
 
 echo "8. warm GET must remain \"warm\" and cold-get-count must not increment"
@@ -113,7 +117,7 @@ ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
-cnt3=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
+cnt3=$(ais show performance counters --regex $cold_counter -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt3 == $cnt2 ]] || { echo "FAIL: $cnt3 != $cnt2"; exit 1; }
 
 echo "9. out-of-band DELETE"

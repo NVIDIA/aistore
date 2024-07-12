@@ -35,12 +35,6 @@ type (
 	}
 )
 
-// interface guard
-var (
-	_ Tracker = (*Prunner)(nil)
-	_ Tracker = (*Trunner)(nil)
-)
-
 ///////////////
 // coreStats //
 ///////////////
@@ -266,42 +260,6 @@ func (s *coreStats) reset(errorsOnly bool) {
 var (
 	_ prometheus.Collector = (*runner)(nil)
 )
-
-// common (target, proxy) metrics
-func (r *runner) regCommon(snode *meta.Snode) {
-	// basic counters
-	r.reg(snode, GetCount, KindCounter)
-	r.reg(snode, PutCount, KindCounter)
-	r.reg(snode, AppendCount, KindCounter)
-	r.reg(snode, DeleteCount, KindCounter)
-	r.reg(snode, RenameCount, KindCounter)
-	r.reg(snode, ListCount, KindCounter)
-
-	// basic error counters, respectively
-	r.reg(snode, errPrefix+GetCount, KindCounter)
-	r.reg(snode, errPrefix+PutCount, KindCounter)
-	r.reg(snode, errPrefix+AppendCount, KindCounter)
-	r.reg(snode, errPrefix+DeleteCount, KindCounter)
-	r.reg(snode, errPrefix+RenameCount, KindCounter)
-	r.reg(snode, errPrefix+ListCount, KindCounter)
-
-	// more error counters
-	r.reg(snode, ErrHTTPWriteCount, KindCounter)
-	r.reg(snode, ErrDownloadCount, KindCounter)
-	r.reg(snode, ErrPutMirrorCount, KindCounter)
-
-	// latency
-	r.reg(snode, GetLatency, KindLatency)
-	r.reg(snode, GetLatencyTotal, KindTotal)
-	r.reg(snode, ListLatency, KindLatency)
-	r.reg(snode, KeepAliveLatency, KindLatency)
-
-	// special uptime
-	r.reg(snode, Uptime, KindSpecial)
-
-	// snode state flags
-	r.reg(snode, NodeStateFlags, KindGauge)
-}
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
 // compare with coreStats.initProm()

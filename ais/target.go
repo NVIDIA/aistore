@@ -100,11 +100,11 @@ func (*target) interruptedRestarted() (interrupted, restarted bool) {
 // target
 //
 
-func (t *target) initBackends() {
+func (t *target) initBackends(tstats *stats.Trunner) {
 	config := cmn.GCO.Get()
-	aisbp := backend.NewAIS(t)
-	t.backend[apc.AIS] = aisbp                       // always present
-	t.backend[apc.HTTP] = backend.NewHTTP(t, config) // ditto
+	aisbp := backend.NewAIS(t, tstats)
+	t.backend[apc.AIS] = aisbp                               // always present
+	t.backend[apc.HTTP] = backend.NewHTTP(t, config, tstats) // ditto
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
 		if err := aisbp.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
@@ -114,7 +114,7 @@ func (t *target) initBackends() {
 		}
 	}
 
-	if err := t._initBuiltin(); err != nil {
+	if err := t._initBuiltin(tstats); err != nil {
 		cos.ExitLog(err)
 	}
 }
@@ -122,7 +122,7 @@ func (t *target) initBackends() {
 // init built-in (via build tags) backends
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
-func (t *target) _initBuiltin() error {
+func (t *target) _initBuiltin(tstats *stats.Trunner) error {
 	var (
 		enabled, disabled, notlinked []string
 		config                       = cmn.GCO.Get()
@@ -134,11 +134,11 @@ func (t *target) _initBuiltin() error {
 		)
 		switch provider {
 		case apc.AWS:
-			add, err = backend.NewAWS(t)
+			add, err = backend.NewAWS(t, tstats)
 		case apc.GCP:
-			add, err = backend.NewGCP(t)
+			add, err = backend.NewGCP(t, tstats)
 		case apc.Azure:
-			add, err = backend.NewAzure(t)
+			add, err = backend.NewAzure(t, tstats)
 		case apc.AIS, apc.HTTP:
 			continue
 		default:
@@ -208,9 +208,9 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(t)
 
 	ts := stats.NewTrunner(t) // iostat below
-	startedUp := ts.Init()    // reg common metrics (and target-only - via RegMetrics/regDiskMetrics below)
+	startedUp := ts.Init()    // reg common metrics (see also: "begin target metrics" below)
 	daemon.rg.add(ts)
-	t.statsT = ts // stats tracker
+	t.statsT = ts
 
 	k := newTalive(t, ts, startedUp)
 	daemon.rg.add(k)
@@ -301,15 +301,6 @@ func (t *target) Run() error {
 
 	core.Tinit(t, tstats, true /*run hk*/)
 
-	// metrics, disks first
-	avail, disabled := fs.Get()
-	if len(avail) == 0 {
-		cos.ExitLog(cmn.ErrNoMountpaths)
-	}
-	regDiskMetrics(t.si, tstats, avail)
-	regDiskMetrics(t.si, tstats, disabled)
-	t.statsT.RegMetrics(t.si) // + Prometheus, if configured
-
 	fatalErr, writeErr := t.checkRestarted(config)
 	if fatalErr != nil {
 		cos.ExitLog(fatalErr)
@@ -356,7 +347,22 @@ func (t *target) Run() error {
 		go t.gojoin(config)
 	}
 
-	t.initBackends()
+	// begin target metrics, disks first -------
+
+	avail, disabled := fs.Get()
+	if len(avail) == 0 {
+		cos.ExitLog(cmn.ErrNoMountpaths)
+	}
+	regDiskMetrics(t.si, tstats, avail)
+	regDiskMetrics(t.si, tstats, disabled)
+
+	tstats.RegMetrics(t.si)
+
+	t.initBackends(tstats) // (+ reg backend metrics)
+
+	t.statsT.InitPrometheus(t.si) // must be last
+
+	// end target metrics -----------------------
 
 	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {

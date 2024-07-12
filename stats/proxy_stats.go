@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -29,7 +29,10 @@ type Prunner struct {
 /////////////
 
 // interface guard
-var _ cos.Runner = (*Prunner)(nil)
+var (
+	_ cos.Runner = (*Prunner)(nil)
+	_ Tracker    = (*Prunner)(nil)
+)
 
 func (r *Prunner) Run() error { return r._run(r /*as statsLogger*/) }
 

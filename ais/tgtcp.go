@@ -279,11 +279,11 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 		var err error
 		switch provider {
 		case apc.AWS:
-			bp, err = backend.NewAWS(t)
+			bp, err = backend.NewAWS(t, t.statsT)
 		case apc.GCP:
-			bp, err = backend.NewGCP(t)
+			bp, err = backend.NewGCP(t, t.statsT)
 		case apc.Azure:
-			bp, err = backend.NewAzure(t)
+			bp, err = backend.NewAzure(t, t.statsT)
 		}
 		if err != nil {
 			debug.AssertNoErr(err) // (unlikely)
@@ -1083,7 +1083,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
 			err = t.attachDetachRemAis(newConfig, msg)
 		} else {
-			t.backend[apc.AIS] = backend.NewAIS(t)
+			t.backend[apc.AIS] = backend.NewAIS(t, t.statsT)
 		}
 	}
 	return

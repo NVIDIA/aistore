@@ -39,6 +39,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 type (
@@ -101,7 +102,7 @@ func asEndpoint() string {
 	}
 }
 
-func NewAzure(t core.TargetPut) (core.Backend, error) {
+func NewAzure(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
 	blurl := asEndpoint()
 
 	// NOTE: NewSharedKeyCredential requires account name and its primary or secondary key
@@ -109,13 +110,14 @@ func NewAzure(t core.TargetPut) (core.Backend, error) {
 	if err != nil {
 		return nil, cmn.NewErrFailedTo(nil, azErrPrefix+": init]", "credentials", err)
 	}
-
-	return &azbp{
+	bp := &azbp{
 		t:     t,
 		creds: creds,
 		u:     blurl,
-		base:  base{apc.Azure},
-	}, nil
+		base:  base{provider: apc.Azure},
+	}
+	bp.base.init(t.Snode(), tstats)
+	return bp, nil
 }
 
 // (compare w/ cmn/backend)

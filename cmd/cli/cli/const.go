@@ -451,7 +451,8 @@ var (
 		Usage: "regular expression select table columns (case-insensitive), e.g.:\n" +
 			indent4 + "\t --regex \"put|err\" - show PUT (count), PUT (total size), and all supported error counters;\n" +
 			indent4 + "\t --regex \"[a-z]\" - show all supported metrics, including those that have zero values across all nodes;\n" +
-			indent4 + "\t --regex \"(GET-COLD$|VERSION-CHANGE$)\" - show the number of cold GETs and object version changes (updates)",
+			indent4 + "\t --regex \"(AWS-GET$|VERSION-CHANGE$)\" - show the number object version changes (updates) and cold GETs from AWS\n" +
+			indent4 + "\t --regex \"(GCP-GET$|VERSION-CHANGE$)\" - same as above for GCP ('gs://')",
 	}
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,

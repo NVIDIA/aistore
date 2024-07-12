@@ -21,6 +21,9 @@ sum2="xxhash[ecb5ed42299ea74d]"
 
 host="--host=s3.amazonaws.com"
 
+## the metric that we closely check in this test
+cold_counter="AWS-GET"
+
 while (( "$#" )); do
   case "${1}" in
     --bucket) bucket=$2; shift; shift;;
@@ -57,7 +60,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e
-ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(${cold_counter}$|VERSION-CHANGE$|DELETE)"
 echo -e
 
 echo "1. out-of-band PUT: 1st version"
@@ -77,7 +80,7 @@ checksum=$(ais ls "$bucket/shard-001" --cached -H -props checksum | awk '{print 
 [[ "$checksum" != "$sum2"  ]] || { echo "FAIL: $checksum == $sum2"; exit 1; }
 
 echo "5. query cold-get count (statistics)"
-cnt1=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
+cnt1=$(ais show performance counters --regex ${cold_counter} -H | awk '{sum+=$2;}END{print sum;}')
 
 echo "6. prefetch latest: detect version change and update in-cluster copy"
 ais prefetch "$bucket/shard-{001..009}" --latest --wait
@@ -85,7 +88,7 @@ checksum=$(ais ls "$bucket/shard-001" --cached -H -props checksum | awk '{print 
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
 echo "7. cold-get counter must increment"
-cnt2=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
+cnt2=$(ais show performance counters --regex ${cold_counter} -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt2 == $(($cnt1+1)) ]] || { echo "FAIL: $cnt2 != $(($cnt1+1))"; exit 1; }
 
 echo "8. warm GET must remain \"warm\" and cold-get-count must not increment"
@@ -93,7 +96,7 @@ ais get "$bucket/shard-001" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/shard-001" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
-cnt3=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
+cnt3=$(ais show performance counters --regex ${cold_counter} -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt3 == $cnt2 ]] || { echo "FAIL: $cnt3 != $cnt2"; exit 1; }
 
 echo "9. out-of-band DELETE"
@@ -120,4 +123,4 @@ ais ls "$bucket/shard-001" --cached --silent -H 2>/dev/null
 [[ $? != 0 ]] || { echo "FAIL: expecting 'show object' error, got $?"; exit 1; }
 
 echo -e
-ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
+ais show performance counters --regex "(${cold_counter}$|VERSION-CHANGE$|DELETE)"

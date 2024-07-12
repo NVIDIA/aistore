@@ -60,7 +60,7 @@ func (t *target) Backend(bck *meta.Bck) core.Backend {
 		}
 		// nil when configured & not-built
 	}
-	c, _ := backend.NewDummyBackend(t)
+	c, _ := backend.NewDummyBackend(t, nil)
 	return c
 }
 
@@ -174,8 +174,11 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	}
 
 	// 2. GET remote object and store it
-	now := mono.NanoTime()
-	if ecode, err = t.Backend(lom.Bck()).GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
+	var (
+		now     = mono.NanoTime()
+		backend = t.Backend(lom.Bck())
+	)
+	if ecode, err = backend.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
@@ -192,12 +195,18 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	}
 
 	// 4. stats
-	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.Lsize()},
-		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(now)},
-	)
+	t.coldstats(backend, lom.Lsize(), now)
 	return 0, nil
+}
+
+func (t *target) coldstats(backend core.Backend, size, started int64) {
+	delta := mono.SinceNano(started)
+	t.statsT.AddMany(
+		cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1},
+		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: delta},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: delta},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: size},
+	)
 }
 
 func (t *target) GetColdBlob(params *core.BlobParams, oa *cmn.ObjAttrs) (xctn core.Xact, err error) {

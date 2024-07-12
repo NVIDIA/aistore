@@ -14,13 +14,39 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 type base struct {
 	provider string
+	metrics  map[string]string // this backend's metric names (below)
 }
 
-func (b *base) Provider() string { return b.provider }
+func (b *base) init(snode *meta.Snode, tstats stats.Tracker) {
+	prefix := b.provider
+	if prefix == apc.AIS {
+		prefix = apc.RemAIS
+	}
+	b.metrics = make(map[string]string, 8)
+	b.metrics[stats.GetCount] = prefix + "." + stats.GetCount
+	b.metrics[stats.GetLatencyTotal] = prefix + "." + stats.GetLatencyTotal
+	b.metrics[stats.GetSize] = prefix + "." + stats.GetSize
+
+	tstats.RegExtMetric(snode, b.metrics[stats.GetCount], stats.KindCounter)
+	tstats.RegExtMetric(snode, b.metrics[stats.GetLatencyTotal], stats.KindTotal)
+	tstats.RegExtMetric(snode, b.metrics[stats.GetSize], stats.KindSize)
+
+	b.metrics[stats.PutCount] = prefix + "." + stats.PutCount
+	b.metrics[stats.PutLatencyTotal] = prefix + "." + stats.PutLatencyTotal
+	b.metrics[stats.PutSize] = prefix + "." + stats.PutSize
+
+	tstats.RegExtMetric(snode, b.metrics[stats.PutCount], stats.KindCounter)
+	tstats.RegExtMetric(snode, b.metrics[stats.PutLatencyTotal], stats.KindTotal)
+	tstats.RegExtMetric(snode, b.metrics[stats.PutSize], stats.KindSize)
+}
+
+func (b *base) Provider() string              { return b.provider }
+func (b *base) MetricName(name string) string { return b.metrics[name] }
 
 func (b *base) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrUnsupp("create", b.provider+" bucket")

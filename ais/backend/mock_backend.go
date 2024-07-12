@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 const mock = "mock-backend"
@@ -27,10 +28,10 @@ type mockbp struct {
 // interface guard
 var _ core.Backend = (*mockbp)(nil)
 
-func NewDummyBackend(t core.TargetPut) (core.Backend, error) {
+func NewDummyBackend(t core.TargetPut, _ stats.Tracker) (core.Backend, error) {
 	return &mockbp{
 		t:    t,
-		base: base{mock},
+		base: base{provider: mock},
 	}, nil
 }
 

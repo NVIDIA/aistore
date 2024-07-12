@@ -15,9 +15,10 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewAWS(_ core.TargetPut) (core.Backend, error) {
+func NewAWS(_ core.TargetPut, _ stats.Tracker) (core.Backend, error) {
 	return nil, newErrInitBackend(apc.AWS)
 }
 

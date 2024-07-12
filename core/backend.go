@@ -37,6 +37,7 @@ type (
 
 	Backend interface {
 		Provider() string
+		MetricName(string) string
 
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)

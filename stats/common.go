@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
@@ -143,6 +144,48 @@ var ignoreIdle = []string{"kalive", Uptime, "disk."}
 ////////////
 // runner //
 ////////////
+
+func (r *runner) InitPrometheus(snode *meta.Snode) {
+	r.core.initProm(snode)
+}
+
+func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string) { r.reg(snode, name, kind) }
+
+// common (target, proxy) metrics
+func (r *runner) regCommon(snode *meta.Snode) {
+	// basic counters
+	r.reg(snode, GetCount, KindCounter)
+	r.reg(snode, PutCount, KindCounter)
+	r.reg(snode, AppendCount, KindCounter)
+	r.reg(snode, DeleteCount, KindCounter)
+	r.reg(snode, RenameCount, KindCounter)
+	r.reg(snode, ListCount, KindCounter)
+
+	// basic error counters, respectively
+	r.reg(snode, errPrefix+GetCount, KindCounter)
+	r.reg(snode, errPrefix+PutCount, KindCounter)
+	r.reg(snode, errPrefix+AppendCount, KindCounter)
+	r.reg(snode, errPrefix+DeleteCount, KindCounter)
+	r.reg(snode, errPrefix+RenameCount, KindCounter)
+	r.reg(snode, errPrefix+ListCount, KindCounter)
+
+	// more error counters
+	r.reg(snode, ErrHTTPWriteCount, KindCounter)
+	r.reg(snode, ErrDownloadCount, KindCounter)
+	r.reg(snode, ErrPutMirrorCount, KindCounter)
+
+	// latency
+	r.reg(snode, GetLatency, KindLatency)
+	r.reg(snode, GetLatencyTotal, KindTotal)
+	r.reg(snode, ListLatency, KindLatency)
+	r.reg(snode, KeepAliveLatency, KindLatency)
+
+	// special uptime
+	r.reg(snode, Uptime, KindSpecial)
+
+	// snode state flags
+	r.reg(snode, NodeStateFlags, KindGauge)
+}
 
 //
 // as cos.StatsUpdater

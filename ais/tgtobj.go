@@ -58,6 +58,7 @@ type (
 		workFQN    string        // temp fqn to be renamed
 		atime      int64         // access time.Now()
 		ltime      int64         // mono.NanoTime, to measure latency
+		rltime     int64         // mono.NanoTime, to measure remote bucket latency
 		size       int64         // aka Content-Length
 		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
 		restful    bool          // being invoked via RESTful API
@@ -194,15 +195,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
 			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
-			size := poi.lom.Lsize()
-			delta := mono.SinceNano(poi.ltime)
-			poi.t.statsT.AddMany(
-				cos.NamedVal64{Name: stats.PutCount, Value: 1},
-				cos.NamedVal64{Name: stats.PutSize, Value: size},
-				cos.NamedVal64{Name: stats.PutThroughput, Value: size},
-				cos.NamedVal64{Name: stats.PutLatency, Value: delta},
-				cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
-			)
+			poi.stats()
 			// RESTful PUT response header
 			if poi.resphdr != nil {
 				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr, 0 /*skip setting content-length*/)
@@ -221,6 +214,30 @@ rerr:
 		poi.t.statsT.IncErr(stats.PutCount)
 	}
 	return
+}
+
+func (poi *putOI) stats() {
+	var (
+		bck   = poi.lom.Bck()
+		size  = poi.lom.Lsize()
+		delta = mono.SinceNano(poi.ltime)
+	)
+	poi.t.statsT.AddMany(
+		cos.NamedVal64{Name: stats.PutCount, Value: 1},
+		cos.NamedVal64{Name: stats.PutSize, Value: size},
+		cos.NamedVal64{Name: stats.PutThroughput, Value: size},
+		cos.NamedVal64{Name: stats.PutLatency, Value: delta},
+		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
+	)
+	if poi.rltime > 0 {
+		debug.Assert(bck.IsRemote())
+		backend := poi.t.Backend(bck)
+		poi.t.statsT.AddMany(
+			cos.NamedVal64{Name: backend.MetricName(stats.PutCount), Value: 1},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutLatencyTotal), Value: poi.rltime},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutSize), Value: size},
+		)
+	}
 }
 
 // verbose only
@@ -352,26 +369,31 @@ func (poi *putOI) fini() (ecode int, err error) {
 }
 
 // via backend.PutObj()
-func (poi *putOI) putRemote() (ecode int, err error) {
+func (poi *putOI) putRemote() (int, error) {
 	var (
-		lom     = poi.lom
-		backend = poi.t.Backend(lom.Bck())
+		lom       = poi.lom
+		startTime = mono.NanoTime()
 	)
 	lmfh, err := cos.NewFileHandle(poi.workFQN)
 	if err != nil {
-		err = cmn.NewErrFailedTo(poi.t, "open", poi.workFQN, err)
-		return
+		return 0, cmn.NewErrFailedTo(poi.t, "open", poi.workFQN, err)
 	}
 	if poi.owt == cmn.OwtPut && !lom.Bck().IsRemoteAIS() {
 		// some/all of those are set by the backend.PutObj()
 		lom.ObjAttrs().DelCustomKeys(cmn.SourceObjMD, cmn.CRC32CObjMD, cmn.ETag, cmn.MD5ObjMD, cmn.VersionObjMD)
 	}
-
+	var (
+		ecode   int
+		backend = poi.t.Backend(lom.Bck())
+	)
 	ecode, err = backend.PutObj(lmfh, lom, poi.oreq)
-	if err == nil && !lom.Bck().IsRemoteAIS() {
-		lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
+	if err == nil {
+		if !lom.Bck().IsRemoteAIS() {
+			lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
+		}
+		poi.rltime = mono.SinceNano(startTime)
 	}
-	return
+	return ecode, err
 }
 
 // LOM is updated at the end of this call with size and checksum.
@@ -595,9 +617,10 @@ do:
 	// cold-GET: upgrade rlock => wlock, call t.Backend.GetObjReader
 	if cold {
 		var (
-			res    core.GetReaderResult
-			ckconf = goi.lom.CksumConf()
-			loaded bool
+			res     core.GetReaderResult
+			ckconf  = goi.lom.CksumConf()
+			backend = goi.t.Backend(goi.lom.Bck())
+			loaded  bool
 		)
 		if cs.IsNil() {
 			cs = fs.Cap()
@@ -618,7 +641,7 @@ do:
 		goi.lom.SetCustomMD(nil)
 
 		// get remote reader (compare w/ t.GetCold)
-		res = goi.t.Backend(goi.lom.Bck()).GetObjReader(goi.ctx, goi.lom, 0, 0)
+		res = backend.GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
 			goi.unlocked = true
@@ -647,11 +670,7 @@ do:
 			return ecode, err
 		}
 		// with remaining stats via goi.stats()
-		goi.t.statsT.AddMany(
-			cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
-			cos.NamedVal64{Name: stats.GetColdSize, Value: res.Size},
-			cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(goi.ltime)},
-		)
+		goi.t.coldstats(backend, res.Size, goi.ltime)
 	}
 
 	// read locally and stream back
