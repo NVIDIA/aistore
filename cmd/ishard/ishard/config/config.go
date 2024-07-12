@@ -33,6 +33,7 @@ type (
 		SrcBck   cmn.Bck
 		DstBck   cmn.Bck
 		Progress bool
+		DryRun   bool
 	}
 )
 
@@ -47,6 +48,7 @@ var DefaultConfig = Config{
 	SrcBck:        cmn.Bck{Name: "src_bck", Provider: apc.AIS},
 	DstBck:        cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
 	Progress:      false,
+	DryRun:        false,
 }
 
 // Load configuration for ishard from cli, or spec files (TODO)
@@ -65,6 +67,7 @@ func parseCliParams(cfg *Config) {
 	flag.StringVar(&cfg.MissingExtAction, "missing_extension_action", "ignore", "Action to take when an extension is missing: abort | warn | ignore")
 	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.")
 	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket.")
+	flag.BoolVar(&cfg.DryRun, "dry_run", false, "If true, only shows the layout of resulting output shards without actually executing archive jobs.")
 
 	var (
 		sampleExts          string
@@ -91,7 +94,7 @@ func parseCliParams(cfg *Config) {
 	if pattern, ok := commonPatterns[sampleKeyPatternStr]; ok {
 		cfg.SampleKeyPattern = pattern
 	} else {
-		log.Printf("`sample_key_pattern` %s is not built-in (`base_file_name` | `no_op` | `collapse_all_dir`), compiled as custom regex.", sampleKeyPatternStr)
+		log.Printf("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.", sampleKeyPatternStr)
 		if _, err := regexp.Compile(sampleKeyPatternStr); err != nil {
 			log.Fatalf("Invalid regex pattern: %s. Error: %v", cfg.SampleKeyPattern, err)
 		}

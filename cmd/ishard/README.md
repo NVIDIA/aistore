@@ -16,6 +16,12 @@ On top of these basic capabilities, there's the already mentioned [WebDataset](h
 
 To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an original dataset are considered part of the same sample (a.k.a. _record_) and must be stored together in one shard.
 
+## Terms
+
+- **File**: Represents individual files in the source bucket. The file names are substituted into sample keys based on a configurable rule called `sample_key_pattern`.
+- **Sample**: Groups multiple files with the same sample key into a single structure. After `ishard` execution, samples are indivisible and will always be included together in the same output shard.
+- **Shard**: Represents the output of `ishard`, which is a collection of files archived in `.tar`, `.tgz` or `.tar.gz`, `.zip`, or `.tar.lz4` formats.
+
 ## CLI Parameters
 
 - `-sample_key_pattern`: The pattern used to substitute source file names to sample keys. This ensures that objects with the same sample key are always merged into the same output shard.
@@ -42,6 +48,7 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
 
 ```sh
 $ cd cmd/ishard
+$ go mod tidy
 $ go build -o ishard .
 ```
 
@@ -125,6 +132,8 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 ```
 
 ### Correct Usages
+
+> Sharding a large dataset can take hours to complete. Therefore, it is highly recommended to first perform a `dry-run` of your `ishard` command to ensure it performs the desired sample key substitution and produces the expected output shard composition. See the Dry Run section below for more details.
 
 1. **Execute `ishard` with `base_file_name` as the sample key**:
 
@@ -217,7 +226,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
    ```sh
    $ ./ishard -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -progress --sample_key_pattern=".*/([^/]+)/[^/]+$" -shard_template="pre-{0000..8192..8}-suf"
 
-   2024/07/11 11:34:26 `sample_key_pattern` .*/([^/]+)/[^/]+$ is not built-in (`base_file_name` | `no_op` | `collapse_all_dir`), compiled as custom regex.
+   2024/07/11 11:34:26 `sample_key_pattern` .*/([^/]+)/[^/]+$ is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.
 
    $ ais archive ls ais://ImageNet-out | less
 
@@ -257,6 +266,37 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
    Invalid regex pattern: (.*'. Error: error parsing regexp: missing closing ): `(.*'`
    ```
 
+## Dry Run
+
+The `-dry_run` flag in the CLI parameters allows `ishard` to only print a preview of the output shards composition without performing the actual archiving tasks. This is especially useful when working with large datasets, where the full execution of `ishard` can take hours to complete. The string inside `[]` in the output represents the sample key of the sample to which the following files belong.
+
+```sh
+$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out --sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run | less
+
+pre-0000-suf.tar                120.68KiB
+  [n00000333_01]
+    pre-0000-suf/ImageNet/Annotations/n00000333/n00000333_01.xml        100B
+    pre-0000-suf/ImageNet/Data/train/n00000333/n00000333_01.JPEG        30.00KiB
+  [n00000333_02]
+    pre-0000-suf/ImageNet/Annotations/n00000333/n00000333_02.xml        100B
+    pre-0000-suf/ImageNet/Data/train/n00000333/n00000333_02.JPEG        30.00KiB
+    pre-0000-suf/ImageNet/Data/train/n00000333/n00000333_02.loss        100B
+  [n00000369_01]
+    pre-0000-suf/ImageNet/Annotations/n00000369/n00000369_01.xml        100B
+    pre-0000-suf/ImageNet/Data/train/n00000369/n00000369_01.JPEG        30.00KiB
+    pre-0000-suf/ImageNet/Data/train/n00000369/n00000369_01.loss        100B
+  [n00000369_02]
+    pre-0000-suf/ImageNet/Annotations/n00000369/n00000369_02.xml        100B
+    pre-0000-suf/ImageNet/Data/train/n00000369/n00000369_02.JPEG        30.00KiB
+    pre-0000-suf/ImageNet/Data/train/n00000369/n00000369_02.loss        100B
+pre-0008-suf.tar                120.59KiB
+  [n00000369_03]
+    pre-0008-suf/ImageNet/Annotations/n00000369/n00000369_03.xml        100B
+    pre-0008-suf/ImageNet/Data/train/n00000369/n00000369_03.JPEG        30.00KiB
+  [n00000369_04]
+...
+```
+
 ## Running the Tests
 
 Test in Short Mode
@@ -291,7 +331,7 @@ go test -v -short -tags=debug -run=TestIshardMaxShardSize
 - [X] goroutine
 - [X] configurable record key, extensions
    - [X] upon missing extension in a record: (abort | warn | ignore)
-- [ ] dry run
+- [X] dry run
 - [ ] version 0.9 (github checksum, git cmd)
 - [ ] go install
 - [ ] debug build

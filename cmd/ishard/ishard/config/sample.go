@@ -16,7 +16,7 @@ type SampleKeyPattern struct {
 // Define some commonly used sample key patterns
 var (
 	BaseFileNamePattern   = SampleKeyPattern{Regex: `.*/([^/]+)$`, CaptureGroup: "$1"}
-	FullNamePattern       = SampleKeyPattern{Regex: `^.*$`, CaptureGroup: "$0"}
+	FullNamePattern       = SampleKeyPattern{Regex: `^(.*)$`, CaptureGroup: "$1"}
 	CollapseAllDirPattern = SampleKeyPattern{Regex: `/`, CaptureGroup: ""}
 )
 

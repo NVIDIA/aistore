@@ -7,9 +7,12 @@ package ishard
 import (
 	"errors"
 	"fmt"
+	"html/template"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -97,6 +100,7 @@ type ISharder struct {
 	progressBar    *mpb.Bar
 	missingExtAct  config.MissingExtFunc
 	sampleKeyRegex *regexp.Regexp
+	CLItemplate    *template.Template
 }
 
 // archive traverses through nodes and collects records on the way. Once it reaches
@@ -137,14 +141,25 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		if !hasNext {
 			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", is.shardIter.Count())
 		}
-		wg.Add(1)
-		go func(recs *shard.Records, name string) {
-			is.generateShard(recs, name, errCh)
-			wg.Done()
-		}(recs, name)
 
+		sh := &shard.Shard{
+			Size:    totalSize,
+			Records: recs,
+			Name:    name,
+		}
 		totalSize = 0
 		recs = shard.NewRecords(16)
+
+		if is.cfg.DryRun {
+			is.printShard(sh)
+			continue
+		}
+
+		wg.Add(1)
+		go func(sh *shard.Shard) {
+			is.generateShard(sh, errCh)
+			wg.Done()
+		}(sh)
 	}
 	n.records.Unlock()
 
@@ -155,44 +170,57 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", is.shardIter.Count())
 		}
 
-		wg.Add(1)
-		go func(recs *shard.Records, name string) {
-			is.generateShard(recs, name, errCh)
-			wg.Done()
-		}(recs, name)
+		sh := &shard.Shard{
+			Size:    totalSize,
+			Records: recs,
+			Name:    name,
+		}
 
-		defer recs.Drain()
+		if is.cfg.DryRun {
+			is.printShard(sh)
+		} else {
+			wg.Add(1)
+			go func(sh *shard.Shard) {
+				is.generateShard(sh, errCh)
+				wg.Done()
+			}(sh)
+		}
 	}
 
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case err := <-errCh:
 		return nil, 0, err
+	case <-done:
+		return recs, totalSize, nil
 	}
-
-	return recs, totalSize, nil
 }
 
-func (is *ISharder) generateShard(recs *shard.Records, name string, errCh chan error) {
-	defer recs.Drain()
-
-	if recs.Len() == 0 {
+func (is *ISharder) generateShard(sh *shard.Shard, errCh chan error) {
+	if sh.Records.Len() == 0 {
 		return
 	}
 
+	defer sh.Records.Drain()
+
 	paths := []string{}
-	recs.Lock()
-	for _, record := range recs.All() {
+	sh.Records.Lock()
+	for _, record := range sh.Records.All() {
 		for _, obj := range record.Objects {
 			paths = append(paths, obj.ContentPath)
 		}
 	}
-	recs.Unlock()
+	sh.Records.Unlock()
 
 	msg := cmn.ArchiveBckMsg{
 		ToBck: is.cfg.DstBck,
 		ArchiveMsg: apc.ArchiveMsg{
-			ArchName: name + is.cfg.Ext,
+			ArchName: sh.Name + is.cfg.Ext,
 			ListRange: apc.ListRange{
 				ObjNames: paths,
 			},
@@ -201,7 +229,7 @@ func (is *ISharder) generateShard(recs *shard.Records, name string, errCh chan e
 
 	_, err := api.ArchiveMultiObj(is.baseParams, is.cfg.SrcBck, &msg)
 	if err != nil {
-		errCh <- fmt.Errorf("failed to archive shard %s: %w", name, err)
+		errCh <- fmt.Errorf("failed to archive shard %s: %w", sh.Name, err)
 	}
 
 	if is.progressBar != nil {
@@ -246,6 +274,15 @@ func (is *ISharder) findMissingExt(node *dirNode, recursive bool) error {
 	return nil
 }
 
+func (is *ISharder) printShard(sh *shard.Shard) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
+	if err := is.CLItemplate.Execute(w, sh); err != nil {
+		fmt.Println("error executing template: %w", err)
+	}
+	w.Flush()
+	sh.Records.Drain()
+}
+
 // NewISharder instantiates an ISharder with the configuration if provided;
 // otherwise, it loads from CLI or uses the default config.
 func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
@@ -278,6 +315,19 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 	}
 	is.missingExtAct = config.MissingExtActMap[is.cfg.MissingExtAction]
 	is.sampleKeyRegex = regexp.MustCompile(is.cfg.SampleKeyPattern.Regex)
+
+	if is.cfg.DryRun {
+		tmplWithSampleKey := `{{$shard := .}}{{appendExt $shard.Name}}		{{formatSize $shard.Size}}
+{{range $rec := .Records.All}}  {{sampleKey $rec.Name}}
+{{range $obj := .Objects}}    {{contentPath $shard.Name $obj.ContentPath}}	{{formatSize .Size}}
+{{end}}{{end}}`
+		is.CLItemplate = template.Must(template.New("shard").Funcs(template.FuncMap{
+			"formatSize":  func(size int64) string { return cos.ToSizeIEC(size, 2) },
+			"sampleKey":   func(sampleKey string) string { return "[" + sampleKey + "]" },
+			"contentPath": func(shardName, objContentPath string) string { return filepath.Join(shardName, objContentPath) },
+			"appendExt":   func(shardName string) string { return shardName + is.cfg.Ext },
+		}).Parse(tmplWithSampleKey))
+	}
 
 	return is, err
 }
@@ -327,9 +377,10 @@ func (is *ISharder) Start() error {
 		return err
 	}
 
-	if err := api.WaitForXactionIdle(is.baseParams, &xact.ArgsMsg{Kind: apc.ActArchive, Bck: is.cfg.SrcBck}); err != nil {
-		return err
+	if is.cfg.DryRun {
+		return nil
 	}
 
-	return err
+	// Wait until all archive xactions reach to idle stage
+	return api.WaitForXactionIdle(is.baseParams, &xact.ArgsMsg{Kind: apc.ActArchive, Bck: is.cfg.SrcBck})
 }
