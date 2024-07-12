@@ -78,7 +78,8 @@ type (
 )
 
 type (
-	NodeCapacity interface {
+	// a node that can also write objects
+	TargetPut interface {
 		Node
 
 		// Space
@@ -86,11 +87,6 @@ type (
 
 		// xactions (jobs) now
 		GetAllRunning(inout *AllRunningInOut, periodic bool)
-	}
-
-	// a node that can also write objects
-	TargetPut interface {
-		NodeCapacity
 
 		// PUT params.Reader => lom
 		PutObject(lom *LOM, params *PutParams) (err error)

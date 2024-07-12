@@ -208,7 +208,7 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(t)
 
 	ts := stats.NewTrunner(t) // iostat below
-	startedUp := ts.Init(t)   // reg common metrics (and target-only - via RegMetrics/regDiskMetrics below)
+	startedUp := ts.Init()    // reg common metrics (and target-only - via RegMetrics/regDiskMetrics below)
 	daemon.rg.add(ts)
 	t.statsT = ts // stats tracker
 

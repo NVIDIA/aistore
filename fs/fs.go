@@ -316,12 +316,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 }
 
 func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
-	mi.Disks = make([]string, len(fsdisks))
-	var i int
-	for d := range fsdisks {
-		mi.Disks[i] = d
-		i++
-	}
+	mi.Disks = fsdisks.ToSlice()
 }
 
 // available/used capacity
@@ -406,7 +401,7 @@ func (mi *Mountpath) _validate(avail MPI, config *cmn.Config) error {
 }
 
 func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) error {
-	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config)
+	fsdisks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config)
 	if err != nil {
 		return err
 	}
@@ -415,7 +410,7 @@ func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) erro
 			return err
 		}
 	}
-	mi._setDisks(disks)
+	mi._setDisks(fsdisks)
 	_ = mi.String() // assign mi.info if not yet
 	avail[mi.Path] = mi
 	return nil
@@ -493,6 +488,35 @@ func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
 	return cdf
 }
 
+func (mi *Mountpath) RefreshDisks() error {
+	// not "refreshing" when any of the following conditions is true
+	if len(mi.Disks) == 0 || mi.IsDisabled() {
+		nlog.Warningln("skipping refresh-disks call:", mi.Disks, mi.IsDisabled())
+		return nil
+	}
+
+	res := mfs.ios.RefreshDisks(mi.Path, mi.Fs, mi.Disks)
+	if res.Fatal != nil {
+		return res.Fatal
+	}
+
+	if res.Attached == nil && res.Lost == nil {
+		return nil
+	}
+
+	if l := len(res.Attached); l > 0 {
+		nlog.Warningf("newly attached disk%ss: %v", cos.Plural(l), res.Attached)
+	}
+	if l := len(res.Lost); l > 0 {
+		nlog.Warningf("lost disk%ss: %v", cos.Plural(l), res.Lost)
+	}
+
+	// TODO -- FIXME: NIY; in part, mountpath getting new disk(s) must trigger resilvering
+	mi._setDisks(res.FsDisks)
+
+	return nil
+}
+
 // return mountpath alert (suffix)
 // NOTE: the bits are not mutually exclusive; returning only one alert in the order of priority
 func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
@@ -534,7 +558,7 @@ func TestNew(iostater ios.IOS) {
 }
 
 // `ios` delegations
-func Clblk()                                   { ios.Clblk(mfs.ios) }
+func Clblk()                                   { mfs.ios.Clblk() }
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
 
@@ -1081,19 +1105,24 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 }
 
 // via (`apc.WhatDiskStats`, target_stats)
-func DiskStats(m ios.AllDiskStats, config *cmn.Config) {
+func DiskStats(m ios.AllDiskStats, config *cmn.Config) (faultedMi *Mountpath, err error) {
 	// iops and bw
 	mfs.ios.DiskStats(m)
 
 	// alerts
 	avail := GetAvail()
 	for _, mi := range avail {
-		var a string
-		// refresh, not to report numbers but to check free space
-		c, err := mi.getCapacity(config, true /*refresh*/)
+		var (
+			c Capacity
+			a string // alert suffix
+		)
+		// refresh=true - not to report numbers but to check free space
+		c, err = mi.getCapacity(config, true /*refresh*/)
 		if err != nil {
 			nlog.Errorln(mi.String()+":", err)
 			a = "(" + err.Error() + ")" // unlikely
+			faultedMi = mi
+			err = cmn.NewErrGetCap(err)
 		} else {
 			a = mi._alert(config, c)
 		}
@@ -1108,6 +1137,7 @@ func DiskStats(m ios.AllDiskStats, config *cmn.Config) {
 			}
 		}
 	}
+	return faultedMi, err
 }
 
 //

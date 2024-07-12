@@ -17,11 +17,16 @@ type IOS struct {
 }
 
 func NewIOS() *IOS                              { return &IOS{} }
+func (*IOS) Clblk()                             {}
 func (m *IOS) GetAllMpathUtils() *ios.MpathUtil { return &m.Utils }
 func (m *IOS) GetMpathUtil(mpath string) int64  { return m.Utils.Get(mpath) }
 
 func (*IOS) AddMpath(string, string, ios.Label, *cmn.Config) (ios.FsDisks, error) { return nil, nil }
-func (*IOS) HealthMpath(string) error                                             { return nil }
-func (*IOS) RemoveMpath(string, bool)                                             {}
-func (*IOS) LogAppend(l []string) []string                                        { return l }
-func (*IOS) DiskStats(ios.AllDiskStats)                                           {}
+
+func (*IOS) RefreshDisks(string, string, []string) ios.RefreshDisksResult {
+	return ios.RefreshDisksResult{}
+}
+
+func (*IOS) RemoveMpath(string, bool)      {}
+func (*IOS) LogAppend(l []string) []string { return l }
+func (*IOS) DiskStats(ios.AllDiskStats)    {}

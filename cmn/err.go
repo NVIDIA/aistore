@@ -106,6 +106,10 @@ type (
 		usedPct        int32
 		oos            bool
 	}
+	ErrGetCap struct {
+		err error
+	}
+
 	ErrBucketAccessDenied struct{ errAccessDenied }
 	ErrObjectAccessDenied struct{ errAccessDenied }
 	errAccessDenied       struct {
@@ -128,6 +132,25 @@ type (
 		mpath string
 		cause string
 	}
+	ErrMountpathNoDisks struct {
+		mpath string
+		fs    string
+		err   error
+	}
+	ErrMountpathLostDisk struct {
+		mpath   string
+		fs      string
+		lostd   string
+		disks   []string
+		fsdisks []string
+	}
+	ErrMountpathNewDisk struct {
+		mpath   string
+		fs      string
+		disks   []string
+		fsdisks []string
+	}
+
 	ErrInvalidFSPathsConf struct {
 		err error
 	}
@@ -455,7 +478,22 @@ func (e *ErrCapExceeded) Error() string {
 
 func IsErrCapExceeded(err error) bool {
 	_, ok := err.(*ErrCapExceeded)
-	return ok || cos.IsErrOOS(err)
+	return ok || cos.IsErrOOS(err) // NOTE: a superset
+}
+
+// ErrGetCap
+
+func NewErrGetCap(err error) *ErrGetCap {
+	return &ErrGetCap{err: err}
+}
+
+func (e *ErrGetCap) Error() string {
+	return fmt.Sprintf("failed to update capacity: %v", e.err)
+}
+
+func IsErrGetCap(err error) bool {
+	_, ok := err.(*ErrGetCap)
+	return ok
 }
 
 // ErrInvalidCksum
@@ -506,6 +544,43 @@ func (e *ErrInvalidMountpath) Error() string {
 
 func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
 	return &ErrInvalidMountpath{mpath: mpath, cause: cause}
+}
+
+// ErrMountpathNoDisks
+
+func NewErrMountpathNoDisks(mpath, fs string, err error) *ErrMountpathNoDisks {
+	return &ErrMountpathNoDisks{mpath: mpath, fs: fs, err: err}
+}
+
+func (e *ErrMountpathNoDisks) Error() string {
+	return fmt.Sprintf("mp[%s, fs=%s] has no disks, err: %v", e.mpath, e.fs, e.err)
+}
+
+// ErrMountpathLostDisk
+
+func NewErrMountpathLostDisk(mpath, fs, lostd string, disks, fsdisks []string) *ErrMountpathLostDisk {
+	return &ErrMountpathLostDisk{mpath: mpath, fs: fs, lostd: lostd, disks: disks, fsdisks: fsdisks}
+}
+
+func (e *ErrMountpathLostDisk) Error() string {
+	return fmt.Sprintf("mp[%s, fs=%s]: disk %q is lost (orig: %v, available now: %v)", e.mpath, e.fs, e.lostd, e.disks, e.fsdisks)
+}
+
+// ErrMountpathNewDisk
+
+func NewErrMountpathNewDisk(mpath, fs string, disks, fsdisks []string) *ErrMountpathNewDisk {
+	return &ErrMountpathNewDisk{mpath: mpath, fs: fs, disks: disks, fsdisks: fsdisks}
+}
+
+func (e *ErrMountpathNewDisk) Error() string {
+	plural := len(e.fsdisks) - len(e.disks)
+	return fmt.Sprintf("mp[%s, fs=%s]: newly attached disk%s (orig: %v, available now: %v)",
+		e.mpath, e.fs, cos.Plural(plural), e.disks, e.fsdisks)
+}
+
+func IsErrMountpathNewDisk(err error) bool {
+	_, ok := err.(*ErrMountpathNewDisk)
+	return ok
 }
 
 // ErrInvalidFSPathsConf

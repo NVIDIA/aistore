@@ -17,15 +17,24 @@ import (
 
 func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 	config := cmn.GCO.Get()
-	if !config.FSHC.Enabled {
-		return
-	}
-	if !cos.IsIOError(err) { // TODO -- FIXME: review the selection
-		debug.Assert(!cos.IsErrOOS(err)) // is checked below
+
+	if cmn.IsErrCapExceeded(err) {
+		cs := t.oos(config)
+		nlog.Errorf("%s: OOS (%s) via FSHC", t, cs.String())
 		return
 	}
 
-	s := fmt.Sprintf("waking up FSHC to check %q for err [%v]", fqn, err) // or maybe not (waking up)
+	if !config.FSHC.Enabled {
+		return
+	}
+	if !t.fshc.IsErr(err) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			nlog.Warningln(err, "is not one of the error types to trigger FSHC, ignoring...")
+		}
+		return
+	}
+
+	s := fmt.Sprintf("waking up FSHC to check %s for [%v]", mi, err) // or maybe not (waking up)
 
 	if mi == nil {
 		mi, _, err = fs.FQN2Mpath(fqn)
@@ -45,19 +54,13 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 		return
 	}
 
-	if cos.IsErrOOS(err) {
-		cs := t.oos(config)
-		nlog.Errorf("%s: OOS (%s), not %s", t, cs.String(), s)
-		return
-	}
-
 	if err := cos.Stat(mi.Path); err != nil {
-		// FATAL (unlikely)
-		cos.ExitLogf("%s: available %s fails fstat: %v", t, mi, err)
+		nlog.Errorf("[FATAL %s]: available %s is not: %v", t, mi, err)
 	}
 
 	// yes "waking up"
 	nlog.Errorln(t.String()+":", s)
+
 	//
 	// metrics: counting I/O errors on a per mountpath (`NameSuffix` below) basis
 	//

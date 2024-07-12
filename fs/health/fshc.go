@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -21,6 +22,12 @@ import (
 // - the mountpath appears to be unavailable, or
 // - configured error limit is exceeded
 // the mountpath is disabled - effectively, removed from the operation henceforth.
+
+// TODO -- FIXME: revisit all tunables
+
+const (
+	ival = 4 * time.Minute
+)
 
 const (
 	fshcFileSize    = 10 * cos.MiB // size of temporary file which will test writing and reading the mountpath
@@ -39,6 +46,14 @@ type (
 func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
 
 func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
+	if err := mi.RefreshDisks(); err != nil {
+		nlog.Errorln(err, "- proceeding to disable")
+		f._disable(mi)
+		return
+	}
+	//
+	// read/write tests
+	//
 	config := cmn.GCO.Get()
 	rerrs, werrs := _rwMpath(mi, fqn, config.FSHC.TestFileCount, fshcFileSize)
 
@@ -56,6 +71,10 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 
 	nlog.Errorln(mi.String(), "exceeded I/O error limit, proceeding to disable")
 
+	f._disable(mi)
+}
+
+func (f *FSHC) _disable(mi *fs.Mountpath) {
 	if err := f.t.DisableMpath(mi); err != nil {
 		nlog.Errorf("%s: failed to disable, err: %v", mi, err)
 	} else {
@@ -78,6 +97,7 @@ func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs i
 
 	// 1. Read the fqn that caused the error, if defined and is a file.
 	if fqn != "" {
+		nlog.Infoln("1. read failed fqn", fqn)
 		if finfo, err := os.Stat(fqn); err == nil && !finfo.IsDir() {
 			numReads++
 			if err := _read(fqn); err != nil && !os.IsNotExist(err) {
@@ -90,10 +110,11 @@ func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs i
 	}
 
 	// 2. Read up to numFiles files.
+	nlog.Infoln("2. read randomly up to", numFiles, "existing files")
 	for numReads < numFiles {
 		fqn, err := getRandomFname(mi.Path)
 		if err == io.EOF {
-			nlog.Infoln(mi.String(), "is empty, procedeeding to write-test")
+			nlog.Warningln(mi.String(), "is suspiciously empty (???)")
 			break
 		}
 		numReads++
@@ -112,7 +133,7 @@ func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs i
 		}
 	}
 
-	// 3. Create temp dir under the mountpath (under $deleted).
+	// Create temp dir under the mountpath (under $deleted).
 	tmpDir := mi.TempDir("fshc-on-err")
 	if err := cos.CreateDir(tmpDir); err != nil {
 		if cos.IsIOError(err) {
@@ -122,7 +143,8 @@ func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs i
 		return rerrs, werrs
 	}
 
-	// 4. Generate and write numFiles files.
+	// 3. Generate and write numFiles files.
+	nlog.Infoln("3. write", numFiles, "temp files to", tmpDir)
 	for numWrites := 1; numWrites <= numFiles; numWrites++ {
 		if err := _write(tmpDir, fsize); err != nil {
 			if cos.IsIOError(err) {
@@ -132,7 +154,8 @@ func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs i
 		}
 	}
 
-	// 5. Remove temp dir
+	// 4. Remove temp dir
+	nlog.Infoln("4. remove", tmpDir)
 	if err := os.RemoveAll(tmpDir); err != nil {
 		if cos.IsIOError(err) {
 			werrs++

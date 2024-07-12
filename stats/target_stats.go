@@ -99,7 +99,7 @@ const (
 type (
 	Trunner struct {
 		runner    // the base (compare w/ Prunner)
-		t         core.NodeCapacity
+		t         core.Target
 		TargetCDF fs.TargetCDF `json:"cdf"`
 		disk      ios.AllDiskStats
 		xln       string
@@ -126,17 +126,17 @@ const (
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
 
-func NewTrunner(t core.NodeCapacity) *Trunner { return &Trunner{t: t} }
+func NewTrunner(t core.Target) *Trunner { return &Trunner{t: t} }
 
 func (r *Trunner) Run() error     { return r._run(r /*as statsLogger*/) }
 func (r *Trunner) Standby(v bool) { r.standby = v }
 
-func (r *Trunner) Init(t core.Target) *atomic.Bool {
+func (r *Trunner) Init() *atomic.Bool {
 	r.core = &coreStats{}
 
 	r.core.init(numTargetStats)
 
-	r.regCommon(t.Snode())
+	r.regCommon(r.t.Snode())
 
 	r.ctracker = make(copyTracker, numTargetStats) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
@@ -146,11 +146,11 @@ func (r *Trunner) Init(t core.Target) *atomic.Bool {
 	r.core.statsTime = config.Periodic.StatsTime.D()
 
 	r.runner.name = "targetstats"
-	r.runner.node = t
+	r.runner.node = r.t
 
 	r.runner.stopCh = make(chan struct{}, 4)
 
-	r.core.initMetricClient(t.Snode(), &r.runner)
+	r.core.initMetricClient(r.t.Snode(), &r.runner)
 
 	r.sorted = make([]string, 0, numTargetStats)
 
@@ -303,7 +303,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 1. collect disk stats and populate the tracker
 	s := r.core
-	fs.DiskStats(r.disk, config)
+	if mi, err := fs.DiskStats(r.disk, config); err != nil {
+		r.t.FSHC(err, mi, "")
+	}
 	for disk, stats := range r.disk {
 		v := s.Tracker[nameRbps(disk)]
 		if v == nil {

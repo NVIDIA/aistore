@@ -28,12 +28,7 @@ type (
 		Msg  string
 		Code int // Sie* enum above
 	}
-	ErrMountpathNoDisks struct {
-		Mi *Mountpath
-	}
 )
-
-func (e *ErrMountpathNoDisks) Error() string { return fmt.Sprintf("%s has no disks", e.Mi) }
 
 func (sie *ErrStorageIntegrity) Error() string {
 	err := fmt.Errorf(cmn.FmtErrIntegrity, siePrefix, sie.Code, cmn.GitHubHome)

@@ -9,14 +9,12 @@ import (
 	ratomic "sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-)
-
-const (
-	ival = 10 * time.Minute // TODO -- FIXME
 )
 
 // per mountpath: recent-or-running
@@ -25,13 +23,17 @@ type ror struct {
 	running int64
 }
 
-var all sync.Map
+var all sync.Map // [mpath => ror]
+
+func (*FSHC) IsErr(err error) bool {
+	return cmn.IsErrGetCap(err) || cos.IsIOError(err)
+}
 
 func (f *FSHC) OnErr(mi *fs.Mountpath, fqn string) {
 	var (
-		r         *ror
 		now       = mono.NanoTime()
-		a, loaded = all.LoadOrStore(mi.Path, &ror{last: now, running: now})
+		r         = &ror{last: now, running: now}
+		a, loaded = all.LoadOrStore(mi.Path, r)
 	)
 	if loaded {
 		r = a.(*ror)

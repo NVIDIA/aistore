@@ -25,16 +25,26 @@ const statsdir = "/sys/class/block"
 
 // public
 type (
+	FsDisks map[string]int64 // disk name => sector size
+
 	IOS interface {
+		Clblk()
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
 		AddMpath(mpath, fs string, label Label, config *cmn.Config) (FsDisks, error)
-		HealthMpath(mpath string) error
+		RefreshDisks(mpath, fs string, disks []string) RefreshDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
 		DiskStats(m AllDiskStats)
 	}
-	FsDisks   map[string]int64 // disk name => sector size
+
 	MpathUtil sync.Map
+
+	RefreshDisksResult struct {
+		FsDisks  FsDisks
+		Fatal    error
+		Lost     []error
+		Attached []error
+	}
 )
 
 // internal
@@ -64,7 +74,7 @@ type (
 		disk2mpath  cos.StrKVs
 		disk2sysfn  cos.StrKVs
 		blockStats  allBlockStats
-		lsblk       ratomic.Pointer[LsBlk]
+		lsblk       ratomic.Pointer[LsBlk] // used only during target startup
 		cache       ratomic.Pointer[cache]
 		cacheHst    [16]*cache
 		cacheIdx    int
@@ -111,16 +121,15 @@ func New(num int) IOS {
 	ios.busy.Store(false) // redundant on purpose
 
 	// once (cleared via Clblk)
-	if res := lsblk("new-ios", true); res != nil {
+	res, err := lsblk("new-ios", true)
+	if err != nil {
+		nlog.Errorln("new IOS:", err)
+	} else {
+		debug.Assert(res != nil)
 		ios.lsblk.Store(res)
 	}
 
 	return ios
-}
-
-func Clblk(i IOS) {
-	ios := i.(*ios)
-	ios.lsblk.Store(nil)
 }
 
 func newCache(num int) *cache {
@@ -141,6 +150,9 @@ func newCache(num int) *cache {
 	}
 }
 
+// zero-out lsblk cache (reusing it during target startup, clearing right after)
+func (ios *ios) Clblk() { ios.lsblk.Store(nil) }
+
 func (ios *ios) _get() *cache      { return ios.cache.Load() }
 func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 
@@ -156,11 +168,16 @@ func (ios *ios) AddMpath(mpath, fs string, label Label, config *cmn.Config) (fsd
 	)
 	if pres := ios.lsblk.Load(); pres != nil {
 		res := *pres
-		fsdisks, err = fs2disks(&res, fs, label, len(fspaths), testingEnv)
+		fsdisks, err = fs2disks(&res, mpath, fs, label, len(fspaths), testingEnv /*no-disks is ok*/)
 	} else {
-		res := lsblk(fs, testingEnv)
-		if res != nil {
-			fsdisks, err = fs2disks(res, fs, label, len(fspaths), testingEnv)
+		res, errInfo := lsblk(fs, testingEnv /*err is not fatal*/)
+		if errInfo != nil {
+			nlog.Errorln("add-mpath:", errInfo)
+		} else {
+			fsdisks, err = fs2disks(res, mpath, fs, label, len(fspaths), testingEnv /*no-disks is ok*/)
+			if err == nil {
+				ios.lsblk.Store(res)
+			}
 		}
 	}
 	if len(fsdisks) == 0 || err != nil {
@@ -238,6 +255,47 @@ func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.Str
 		}
 	}
 	return warn, nil
+}
+
+// at runtime:
+// - resolve (mpath, filesystem) => disks
+// - revalidate disk(s)
+// - note: part of the alerting mechanism, via filesystem health checker (FSHC)
+func (ios *ios) RefreshDisks(mpath, fs string, disks []string) (out RefreshDisksResult) {
+	debug.Assert(len(disks) > 0)
+	res, err := lsblk(fs, true /*err is not fatal*/)
+	if err != nil {
+		out.Fatal = cmn.NewErrMountpathNoDisks(mpath, fs, err)
+		return out
+	}
+
+	out.FsDisks, err = fs2disks(res, mpath, fs, Label(""), len(disks), false /*no-disks is ok*/)
+	if err != nil {
+		out.Fatal = err
+		return out
+	}
+	fsdisks := out.FsDisks
+	for _, d := range disks {
+		if _, ok := fsdisks[d]; !ok {
+			out.Lost = append(out.Lost, cmn.NewErrMountpathLostDisk(mpath, fs, d, disks, fsdisks.ToSlice()))
+		}
+	}
+	for d := range fsdisks {
+		if !cos.StringInSlice(d, disks) {
+			out.Attached = append(out.Attached, cmn.NewErrMountpathNewDisk(mpath, fs, disks, fsdisks.ToSlice()))
+
+			// TODO -- FIXME: under lock: update ios.mpath2disks and related state; log
+			ios._update(mpath, fsdisks, disks)
+		}
+	}
+
+	// TODO -- FIXME: read/write a few bytes, and check that block stats increment
+
+	return out
+}
+
+func (ios *ios) _update(mpath string, fsdisks FsDisks, disks []string) {
+	debug.Assert(false, "not implemented yet", mpath, fsdisks, disks, ios.mpath2disks)
 }
 
 //
@@ -490,16 +548,21 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 	return
 }
 
-func (disks FsDisks) _str() string {
-	s := fmt.Sprintf("%v", disks) // with sector sizes
-	return strings.TrimPrefix(s, "map")
+/////////////
+// FsDisks //
+/////////////
+
+func (fsdisks FsDisks) ToSlice() (disks []string) {
+	disks = make([]string, len(fsdisks))
+	var i int
+	for d := range fsdisks {
+		disks[i] = d
+		i++
+	}
+	return disks
 }
 
-//
-// to support Filesystem Health Checker (FSHC)
-//
-
-func (*ios) HealthMpath(string) error {
-	// TODO -- FIXME: niy
-	return nil
+func (fsdisks FsDisks) _str() string {
+	s := fmt.Sprintf("%v", fsdisks) // with sector sizes
+	return strings.TrimPrefix(s, "map")
 }

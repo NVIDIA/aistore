@@ -13,9 +13,9 @@ import (
 
 type LsBlk struct{}
 
-func lsblk(string, bool) *LsBlk { return nil }
+func lsblk(string, bool) (*LsBlk, error) { return nil, nil }
 
-func fs2disks(*LsBlk, string, Label, int, bool) (FsDisks, error) {
+func fs2disks(*LsBlk, string, string, Label, int, bool) (FsDisks, error) {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil || len(driveStats) == 0 {
 		return nil, err

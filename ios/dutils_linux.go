@@ -1,7 +1,7 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
@@ -38,10 +38,10 @@ type (
 	}
 )
 
-func lsblk(fs string, testingEnv bool) (res *LsBlk) {
+func lsblk(fs string, testingEnv bool /*err is not fatal*/) (res *LsBlk, _ error) {
 	// skip docker union mounts
 	if fs == "overlay" {
-		return
+		return nil, errors.New("overlay filesystem (docker?)")
 	}
 	var (
 		cmd      = exec.Command("lsblk", "-Jt") // JSON output format (TODO: '-e7' to skip loopbacks)
@@ -58,12 +58,10 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
-		nlog.Errorln(err)
-		return
+		return nil, err
 	}
 	if len(out) == 0 {
-		nlog.Errorf("%s: no disks (empty lsblk output)", fs)
-		return
+		return nil, errors.New("empty lsblk output")
 	}
 
 	// unmarshal
@@ -73,16 +71,16 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
-		nlog.Errorln(err)
-		res = nil
+		return nil, err
 	}
-	return
+
+	return res, nil
 }
 
 // given parsed lsblk and `fs` (filesystem) fs2disks retrieves the underlying
 // disk or disks; it may return multiple disks but only if the filesystem is
 // RAID; it is called upong adding/enabling mountpath
-func fs2disks(res *LsBlk, fs string, label Label, num int, testingEnv bool) (disks FsDisks, err error) {
+func fs2disks(res *LsBlk, mpath, fs string, label Label, num int, testingEnv bool /*no-disks is ok*/) (disks FsDisks, err error) {
 	var trimmedFS string
 	if strings.HasPrefix(fs, devPrefixLVM) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixLVM)
@@ -103,7 +101,9 @@ func fs2disks(res *LsBlk, fs string, label Label, num int, testingEnv bool) (dis
 	case testingEnv || cmn.AllowSharedDisksAndNoDisks:
 		// anything goes
 	case label.IsNil():
-		err = fmt.Errorf("No disks for %s(%q) (empty label implies _resolvable_ underlying disk(s))", fs, trimmedFS)
+		// empty label implies _resolvable_ underlying disk or disks
+		e := errors.New("empty label implies _resolvable_ underlying disk (" + trimmedFS + ")")
+		err = cmn.NewErrMountpathNoDisks(mpath, fs, e)
 		nlog.Errorln(err)
 		dump, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
 		nlog.Infoln("Begin lsblk output ================================")

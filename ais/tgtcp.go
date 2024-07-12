@@ -412,7 +412,9 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			diskStats = make(ios.AllDiskStats, fs.NumAvail())
 			config    = cmn.GCO.Get()
 		)
-		fs.DiskStats(diskStats, config)
+		if mi, err := fs.DiskStats(diskStats, config); err != nil {
+			t.FSHC(err, mi, "")
+		}
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
 	case apc.WhatRemoteAIS:
 		var (
