@@ -41,7 +41,6 @@ class AISBaseIterDataset(ABC, IterableDataset):
         self._prefix_map = prefix_map
         self._iterator = None
         self._length = None
-        self._reset_iterator()
 
     def _get_sample_iter_from_source(self, source: AISSource, prefix: str) -> Iterable:
         """
@@ -100,8 +99,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
         pass
 
     def _reset_iterator(self):
-        """Reset the iterator to start from the beginning. Also updates length."""
-        # Generates the total length from a fresh iterator (COST)
+        """Reset the iterator to start from the beginning."""
         self._iterator = self._create_samples_iter()
 
     def __len__(self):

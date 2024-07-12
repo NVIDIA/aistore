@@ -13,6 +13,8 @@ from aistore.pytorch.utils import get_basename
 from aistore.sdk.types import ArchiveSettings
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from alive_progress import alive_it
+from torch.utils.data import get_worker_info
+from itertools import islice
 
 
 class AISShardReader(AISBaseIterDataset):
@@ -55,7 +57,8 @@ class AISShardReader(AISBaseIterDataset):
             Iterable[Tuple[str, dict(str, bytes)]]: Iterator over all the WDS basenames and content (file extension, data)
             in shards from the given shard
         """
-        for entry in source.list_objects_iter(prefix=prefix):
+        for entry in source.list_all_objects_iter(prefix=prefix):
+
             # get iterator of all objects in the shard
             objects_iter = source.list_objects_iter(
                 prefix=entry.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
@@ -72,10 +75,24 @@ class AISShardReader(AISBaseIterDataset):
                         samples_dict[basename] = []
                     samples_dict[basename].append(obj.name)
 
+            # if workers are present, then slice iterator
+            worker_info = get_worker_info()
+            if worker_info is None or worker_info.num_workers == 1:
+                worker_items = samples_dict.items()
+                worker_name = ""
+            else:
+                worker_items = islice(
+                    samples_dict.items(), worker_info.id, None, worker_info.num_workers
+                )
+                worker_name = f" (Worker {worker_info.id})"
+
             # for each basename, get the byte data for each file and yield in dictionary
             shard = source.object(entry.name)
             for basename, files in alive_it(
-                samples_dict.items(), title=entry.name, disable=not self._show_progress
+                worker_items,
+                title=entry.name + worker_name,
+                disable=not self._show_progress,
+                force_tty=worker_info is None or worker_info.num_workers == 1,
             ):
                 content_dict = {}
                 for file_name in files:

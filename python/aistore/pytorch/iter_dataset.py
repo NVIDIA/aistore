@@ -38,6 +38,7 @@ class AISIterDataset(AISBaseIterDataset):
         super().__init__(ais_source_list, prefix_map)
         self._etl_name = etl_name
         self._show_progress = show_progress
+        self._reset_iterator()
 
     def __iter__(self):
         worker_info = get_worker_info()
