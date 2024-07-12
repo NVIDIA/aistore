@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -282,6 +283,7 @@ func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error), report
 
 func (r *CallbackROC) Read(p []byte) (n int, err error) {
 	n, err = r.roc.Read(p)
+	debug.Assert(r.readBytes > math.MaxInt-n)
 	r.readBytes += n
 	if r.readBytes > r.reportedBytes {
 		diff := r.readBytes - r.reportedBytes
@@ -336,6 +338,7 @@ func (r *ReaderWithArgs) Close() (err error) {
 ///////////////////
 
 func NewSectionHandle(r io.ReaderAt, offset, size, padding int64) *SectionHandle {
+	debug.Assert(padding >= 0)
 	sec := io.NewSectionReader(r, offset, size)
 	return &SectionHandle{r, sec, offset, size, padding, 0}
 }
@@ -373,6 +376,9 @@ func (f *SectionHandle) Read(buf []byte) (n int, err error) {
 		buf[idx] = 0
 	}
 	n += int(fromPad)
+
+	// check for integer overflow
+	debug.Assert(f.padOffset <= math.MaxInt-fromPad)
 	f.padOffset += fromPad
 
 	if f.padOffset < f.padding {

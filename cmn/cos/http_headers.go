@@ -43,6 +43,8 @@ const (
 	HdrLocation  = "Location"
 	HdrServer    = "Server"
 	HdrETag      = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+
+	HdrHSTS = "Strict-Transport-Security"
 )
 
 //

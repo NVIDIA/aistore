@@ -952,11 +952,14 @@ func (h *htrun) writeJS(w http.ResponseWriter, r *http.Request, v any, tag strin
 }
 
 func _writejs(w http.ResponseWriter, r *http.Request, v any) (err error) {
-	w.Header().Set(cos.HdrContentType, cos.ContentJSONCharsetUTF)
+	hdr := w.Header()
+	hdr.Set(cos.HdrContentType, cos.ContentJSONCharsetUTF)
 	if isBrowser(r.Header.Get(cos.HdrUserAgent)) {
 		var out []byte
 		if out, err = jsoniter.MarshalIndent(v, "", "    "); err == nil {
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(out)))
+			hdr.Set(cos.HdrContentLength, strconv.Itoa(len(out)))
+			// NOTE: Strict-Transport-Security
+			hdr.Set(cos.HdrHSTS, "max-age=31536000; includeSubDomains")
 			_, err = w.Write(out)
 		}
 	} else { // previously: new-encoder(w).encode(v) (non-browser client)
@@ -965,7 +968,7 @@ func _writejs(w http.ResponseWriter, r *http.Request, v any) (err error) {
 		j.WriteRaw("\n")
 		if err = j.Error; err == nil {
 			b := j.Buffer()
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
+			hdr.Set(cos.HdrContentLength, strconv.Itoa(len(b)))
 			_, err = w.Write(b)
 
 			// NOTE: consider http.NewResponseController(w).Flush()

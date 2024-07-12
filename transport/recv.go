@@ -334,8 +334,11 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 				if err != nil {
 					break
 				}
+				// Check for potential overflow before adding
+				debug.Assert(n <= math.MaxInt-m)
 				n += m
-				if n == hlen {
+				if n >= hlen {
+					debug.Assert(n == hlen)
 					break
 				}
 			}

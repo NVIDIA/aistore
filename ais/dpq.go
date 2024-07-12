@@ -67,7 +67,7 @@ func dpqFree(dpq *dpq) {
 // (This is a faster alternative to the conventional and RFC-compliant URL.Query()
 // to be used narrowly to handle those few (keys) and nothing else.)
 func (dpq *dpq) parse(rawQuery string) (err error) {
-	query := rawQuery
+	query := rawQuery // r.URL.RawQuery
 	for query != "" {
 		key, value := query, ""
 		if i := strings.IndexByte(key, '&'); i >= 0 {

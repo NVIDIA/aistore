@@ -90,6 +90,7 @@ func (*putJogger) newCtx(lom *core.LOM, meta *Metadata) (ctx *encodeCtx, err err
 	ctx.sliceSize = SliceSize(ctx.lom.Lsize(), ctx.dataSlices)
 	ctx.slices = make([]*slice, totalCnt)
 	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Lsize()
+	debug.Assert(ctx.padSize >= 0)
 
 	ctx.fh, err = cos.NewFileHandle(lom.FQN)
 	return ctx, err

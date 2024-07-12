@@ -73,6 +73,10 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 	if errU != nil {
 		return errU
 	}
+	if totalSize == 0 {
+		return fmt.Errorf("total size of all files is zero (%s, %v)", wop.verb(), fobjs)
+	}
+
 	if err := teb.Print(extSizes, tmpl, opts); err != nil {
 		return err
 	}
