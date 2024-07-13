@@ -27,9 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// interface guard
-var _ core.Target = (*target)(nil)
-
 func (*target) DataClient() *http.Client { return g.client.data }
 
 func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {

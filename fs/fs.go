@@ -47,6 +47,11 @@ const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 //   (different mountpaths map onto different filesystems, and vise versa);
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
+// filesystem Health Check
+type HC interface {
+	FSHC(err error, mi *Mountpath, fqn string)
+}
+
 type (
 	Mountpath struct {
 		lomCaches  cos.MultiSyncMap // LOM caches
@@ -63,6 +68,8 @@ type (
 
 	MFS struct {
 		ios ios.IOS
+
+		hc HC
 
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
 		// determining if there are any duplications of file system - we allow
@@ -153,10 +160,10 @@ func (mi *Mountpath) IsIdle(config *cmn.Config) bool {
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
-func (mi *Mountpath) IsDisabled() bool {
-	disabled := getDisabled()
-	_, isdis := disabled[mi.Path]
-	return isdis
+func (mi *Mountpath) IsAvail() bool {
+	avail := GetAvail()
+	_, ok := avail[mi.Path]
+	return ok
 }
 
 func (mi *Mountpath) CreateMissingBckDirs(bck *cmn.Bck) (err error) {
@@ -319,18 +326,18 @@ func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 	mi.Disks = fsdisks.ToSlice()
 }
 
-// available/used capacity
-
+// CapRefresh: available/used capacity
 func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, err error) {
 	if !refresh {
 		c.Used = ratomic.LoadUint64(&mi.capacity.Used)
 		c.Avail = ratomic.LoadUint64(&mi.capacity.Avail)
 		c.PctUsed = ratomic.LoadInt32(&mi.capacity.PctUsed)
-		return
+		return c, nil
 	}
 	statfs := &syscall.Statfs_t{}
 	if err = syscall.Statfs(mi.Path, statfs); err != nil {
-		return
+		mfs.hc.FSHC(err, mi, "")
+		return c, err
 	}
 	bused := statfs.Blocks - statfs.Bavail
 	pct := bused * 100 / statfs.Blocks
@@ -346,7 +353,7 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 	c.Avail = a
 	ratomic.StoreInt32(&mi.capacity.PctUsed, int32(pct))
 	c.PctUsed = int32(pct)
-	return
+	return c, nil
 }
 
 //
@@ -452,6 +459,7 @@ func (mi *Mountpath) diskSize() (size uint64) {
 	numBlocks, _, blockSize, err := ios.GetFSStats(mi.Path)
 	if err != nil {
 		nlog.Errorln(mi.String(), "total disk size err:", err, strings.Repeat("<", 50))
+		mfs.hc.FSHC(err, mi, "")
 	} else {
 		size = numBlocks * uint64(blockSize)
 	}
@@ -490,8 +498,12 @@ func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
 
 func (mi *Mountpath) RefreshDisks() error {
 	// not "refreshing" when any of the following conditions is true
-	if len(mi.Disks) == 0 || mi.IsDisabled() {
-		nlog.Warningln("skipping refresh-disks call:", mi.Disks, mi.IsDisabled())
+	if len(mi.Disks) == 0 {
+		nlog.Warningln("skipping refresh-disks call:", mi.String(), "has no disks")
+		return nil
+	}
+	if !mi.IsAvail() {
+		nlog.Warningln("skipping refresh-disks call:", mi.String(), "is not available")
 		return nil
 	}
 
@@ -508,7 +520,9 @@ func (mi *Mountpath) RefreshDisks() error {
 		nlog.Warningf("newly attached disk%ss: %v", cos.Plural(l), res.Attached)
 	}
 	if l := len(res.Lost); l > 0 {
-		nlog.Warningf("lost disk%ss: %v", cos.Plural(l), res.Lost)
+		err := fmt.Errorf("Warning: lost disk%ss: %v", cos.Plural(l), res.Lost)
+		nlog.Errorln(err)
+		mfs.hc.FSHC(err, mi, "")
 	}
 
 	// TODO -- FIXME: NIY; in part, mountpath getting new disk(s) must trigger resilvering
@@ -540,8 +554,8 @@ func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
 // MFS global
 //
 
-func New(num int) {
-	mfs = &MFS{fsIDs: make(map[cos.FsID]string, 10)}
+func New(fshc HC, num int) {
+	mfs = &MFS{hc: fshc, fsIDs: make(map[cos.FsID]string, 10)}
 	mfs.ios = ios.New(num)
 }
 
@@ -570,7 +584,7 @@ func PutMPI(available, disabled MPI) {
 	putDisabMPI(disabled)
 }
 
-func MountpathsToLists() (mpl *apc.MountpathList) {
+func ToMPL() (mpl *apc.MountpathList) {
 	avail, disabled := Get()
 	mpl = &apc.MountpathList{
 		Available: make([]string, 0, len(avail)),
@@ -951,7 +965,7 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 		dir := mi.makeDelPathBck(bck)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
 			nlog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)
-			// TODO: call fshc
+			mfs.hc.FSHC(errMv, mi, "")
 		} else {
 			n++
 		}
@@ -988,6 +1002,7 @@ func RenameBucketDirs(bckFrom, bckTo *cmn.Bck) (err error) {
 		toPath := mi.MakePathBck(bckFrom)
 		if erd := os.Rename(fromPath, toPath); erd != nil {
 			nlog.Errorln(erd)
+			mfs.hc.FSHC(erd, mi, "")
 		}
 	}
 	return
@@ -1022,6 +1037,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
 			if err != nil && os.IsNotExist(err) {
 				nlog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
+				mfs.hc.FSHC(err, mi, "")
 				ok = false
 			}
 		}
@@ -1105,23 +1121,22 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 }
 
 // via (`apc.WhatDiskStats`, target_stats)
-func DiskStats(m ios.AllDiskStats, config *cmn.Config) (faultedMi *Mountpath, err error) {
+func DiskStats(m ios.AllDiskStats, config *cmn.Config, refreshCap bool) {
 	// iops and bw
 	mfs.ios.DiskStats(m)
 
-	// alerts
+	if !refreshCap {
+		return
+	}
+
+	// ios.AllDiskStats <= alert suffixex, if any
 	avail := GetAvail()
 	for _, mi := range avail {
-		var (
-			c Capacity
-			a string // alert suffix
-		)
-		// refresh=true - not to report numbers but to check free space
-		c, err = mi.getCapacity(config, true /*refresh*/)
+		var a string // alert suffix
+		c, err := mi.getCapacity(config, true /*refresh*/)
 		if err != nil {
 			nlog.Errorln(mi.String()+":", err)
 			a = "(" + err.Error() + ")" // unlikely
-			faultedMi = mi
 			err = cmn.NewErrGetCap(err)
 		} else {
 			a = mi._alert(config, c)
@@ -1137,7 +1152,6 @@ func DiskStats(m ios.AllDiskStats, config *cmn.Config) (faultedMi *Mountpath, er
 			}
 		}
 	}
-	return faultedMi, err
 }
 
 //
@@ -1183,9 +1197,6 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 		fsIDs = make([]cos.FsID, 0, l)
 	}
 
-	if config == nil {
-		config = cmn.GCO.Get()
-	}
 	cs.HighWM, cs.OOS = config.Space.HighWM, config.Space.OOS
 	cs.PctMin = 101
 	for _, mi := range avail {
@@ -1204,6 +1215,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap er
 		c, err := mi.getCapacity(config, true)
 		if err != nil {
 			nlog.Errorln(mi.String()+":", err)
+			mfs.hc.FSHC(err, mi, "")
 			return cs, err, nil
 		}
 		if tcdf != nil {

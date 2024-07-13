@@ -160,9 +160,9 @@ func (r *Trunner) Init() *atomic.Bool {
 	return &r.runner.startedUp
 }
 
-func (r *Trunner) InitCDF() error {
+func (r *Trunner) InitCDF(config *cmn.Config) error {
 	fs.InitCDF(&r.TargetCDF)
-	_, err, errCap := fs.CapRefresh(nil, &r.TargetCDF)
+	_, err, errCap := fs.CapRefresh(config, &r.TargetCDF)
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func (r *Trunner) GetStats() (ds *Node) {
 	ds = r.runner.GetStats()
 
 	fs.InitCDF(&ds.TargetCDF)
-	fs.CapRefresh(nil, &ds.TargetCDF)
+	fs.CapRefresh(cmn.GCO.Get(), &ds.TargetCDF)
 	return ds
 }
 
@@ -304,11 +304,11 @@ func (r *Trunner) GetStatsV322() (out *NodeV322) {
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
-	// 1. collect disk stats and populate the tracker
+	// 1. disk stats
+	refreshCap := r.TargetCDF.HasAlerts()
+	fs.DiskStats(r.disk, config, refreshCap)
+
 	s := r.core
-	if mi, err := fs.DiskStats(r.disk, config); err != nil {
-		r.t.FSHC(err, mi, "")
-	}
 	for disk, stats := range r.disk {
 		v := s.Tracker[nameRbps(disk)]
 		if v == nil {
@@ -346,6 +346,11 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 3. capacity, mountpath alerts, and associated node state flags
 	set, clr := r._cap(config, now)
+
+	if !refreshCap && set != 0 {
+		// refill r.disk (ios.AllDiskStats) prior to logging
+		fs.DiskStats(r.disk, config, true /*refresh cap*/)
+	}
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
 	r.logDiskStats(now)

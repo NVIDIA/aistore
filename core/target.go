@@ -99,11 +99,10 @@ type (
 	TargetLoc interface {
 		TargetPut
 
+		fs.HC
+
 		// backend
 		Backend(*meta.Bck) Backend
-
-		// FS health
-		FSHC(err error, mi *fs.Mountpath, fqn string)
 
 		// Node health
 		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, ecode int, err error)

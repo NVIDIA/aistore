@@ -40,11 +40,11 @@ func (f *FSHC) OnErr(mi *fs.Mountpath, fqn string) {
 		debug.Assert(r != nil)
 		prev := ratomic.LoadInt64(&r.last)
 		if elapsed := time.Duration(now - prev); elapsed < ival {
-			nlog.Infoln(mi.String()+":", "not running - only", elapsed.String(), "passed since the previous run")
+			nlog.Infoln("not enough time passed since the previous run:", elapsed)
 			return
 		}
 		if ratomic.CompareAndSwapInt64(&r.running, 0, now) {
-			nlog.Infoln(mi.String()+":", "already running, nothing to do")
+			nlog.Infoln(mi.String(), "running, nothing to do")
 			return
 		}
 	}

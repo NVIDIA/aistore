@@ -367,19 +367,16 @@ func (t *target) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
 func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query       = r.URL.Query()
-		getWhat     = query.Get(apc.QparamWhat)
-		httpdaeWhat = "httpdaeget-" + getWhat
+		what        = query.Get(apc.QparamWhat)
+		httpdaeWhat = "httpdaeget-" + what
 	)
-	switch getWhat {
+	switch what {
 	case apc.WhatNodeConfig, apc.WhatSmap, apc.WhatBMD, apc.WhatSmapVote,
 		apc.WhatSnode, apc.WhatLog, apc.WhatMetricNames:
 		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	case apc.WhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: apc.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
-	case apc.WhatMountpaths:
-		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
-
 	case apc.WhatNodeStats:
 		ds := t.statsAndStatus()
 		daeStats := t.statsT.GetStats()
@@ -407,15 +404,23 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.TargetCDF = daeStats.TargetCDF
 		t.writeJSON(w, r, ds, httpdaeWhat)
 
-	case apc.WhatDiskStats:
+	case apc.WhatMountpaths, apc.WhatDiskStats:
 		var (
-			diskStats = make(ios.AllDiskStats, fs.NumAvail())
-			config    = cmn.GCO.Get()
+			num    = fs.NumAvail()
+			dstats = make(ios.AllDiskStats, num)
+			config = cmn.GCO.Get()
 		)
-		if mi, err := fs.DiskStats(diskStats, config); err != nil {
-			t.FSHC(err, mi, "")
+		if num == 0 {
+			nlog.Warningln(t.String(), cmn.ErrNoMountpaths)
 		}
-		t.writeJSON(w, r, diskStats, httpdaeWhat)
+		fs.DiskStats(dstats, config, true /*refresh cap - may call FSHC*/)
+		if what == apc.WhatMountpaths {
+			mpl := fs.ToMPL()
+			t.writeJSON(w, r, mpl, httpdaeWhat)
+		} else {
+			t.writeJSON(w, r, dstats, httpdaeWhat)
+		}
+
 	case apc.WhatRemoteAIS:
 		var (
 			config  = cmn.GCO.Get()

@@ -83,8 +83,10 @@ type redial struct {
 
 // interface guard
 var (
-	_ cos.Runner = (*target)(nil)
-	_ htext      = (*target)(nil)
+	_ cos.Runner  = (*target)(nil)
+	_ htext       = (*target)(nil)
+	_ core.Target = (*target)(nil)
+	_ fs.HC       = (*target)(nil)
 )
 
 func (*target) Name() string { return apc.Target } // as cos.Runner
@@ -223,7 +225,7 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fshc = health.NewFSHC(t)
 
-	if err := ts.InitCDF(); err != nil {
+	if err := ts.InitCDF(config); err != nil {
 		cos.ExitLog(err)
 	}
 	fs.Clblk()

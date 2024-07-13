@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -46,16 +47,44 @@ type (
 func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
 
 func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
+	var (
+		statfsN int
+		statfs  = &syscall.Statfs_t{}
+		config  = cmn.GCO.Get()
+	)
+	// 1. fstat
+	if err := cos.Stat(mi.Path); err != nil {
+		nlog.Errorln("fstat err #1:", err)
+		time.Sleep(time.Second)
+		if _, err := os.Stat(mi.Path); err != nil {
+			nlog.Errorln("fstat err #2:", err, "- proceeding to disable")
+			f._disable(mi)
+			return
+		}
+	}
+
+	// 2. statfs
+	if err := syscall.Statfs(mi.Path, statfs); err != nil {
+		nlog.Errorln("statfs err:", err)
+		statfsN = max(config.FSHC.ErrorLimit/2, 1)
+	}
+
+	// 3. refresh disks
 	if err := mi.RefreshDisks(); err != nil {
 		nlog.Errorln(err, "- proceeding to disable")
 		f._disable(mi)
 		return
 	}
-	//
-	// read/write tests
-	//
-	config := cmn.GCO.Get()
+
+	// double-check
+	if !mi.IsAvail() {
+		nlog.Warningln(mi.String(), "is not available, nothing to do")
+	}
+
+	// 4. read/write tests
 	rerrs, werrs := _rwMpath(mi, fqn, config.FSHC.TestFileCount, fshcFileSize)
+	rerrs += statfsN
+	werrs += statfsN
 
 	if rerrs == 0 && werrs == 0 {
 		nlog.Infoln(mi.String(), "is healthy")

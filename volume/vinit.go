@@ -39,7 +39,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 		fspaths = config.FSP.Paths.Keys()
 	)
 	// new and empty
-	fs.New(len(config.FSP.Paths))
+	fs.New(t, len(config.FSP.Paths))
 
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)

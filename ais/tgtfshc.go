@@ -34,7 +34,7 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 		return
 	}
 
-	s := fmt.Sprintf("waking up FSHC to check %s for [%v]", mi, err) // or maybe not (waking up)
+	s := fmt.Sprintf("waking up FSHC to check %s, err: %v", mi, err) // or maybe not (waking up)
 
 	if mi == nil {
 		mi, _, err = fs.FQN2Mpath(fqn)
@@ -49,13 +49,10 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 			return
 		}
 		debug.Assert(mi != nil)
-	} else if mi.IsDisabled() {
-		nlog.Errorf("%s: %s is disabled, not %s", t, mi, s)
-		return
 	}
-
-	if err := cos.Stat(mi.Path); err != nil {
-		nlog.Errorf("[FATAL %s]: available %s is not: %v", t, mi, err)
+	if !mi.IsAvail() {
+		nlog.Warningln(mi.String(), "is not available, skipping FSHC")
+		return
 	}
 
 	// yes "waking up"
