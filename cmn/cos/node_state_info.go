@@ -16,8 +16,8 @@ type NodeStateFlags BitFlags
 
 const (
 	VoteInProgress       = NodeStateFlags(1 << iota) // warning
-	ClusterStarted                                   // info
-	NodeStarted                                      // info
+	ClusterStarted                                   // info: (primary: cluster-started | all other nodes: joined-cluster)
+	NodeStarted                                      // info: (started; possibly, not joined yet)
 	Rebalancing                                      // warning
 	RebalanceInterrupted                             // warning
 	Resilvering                                      // warning
@@ -31,6 +31,8 @@ const (
 	DiskFault                                        // red
 	NoMountpaths                                     // red
 )
+
+func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
 
@@ -47,14 +49,17 @@ func (f NodeStateFlags) String() string {
 	if f == 0 {
 		return ""
 	}
+	if f.IsOK() {
+		return "ok"
+	}
 	if f&VoteInProgress == VoteInProgress {
 		sb.WriteString("vote-in-progress,")
 	}
 	if f&ClusterStarted == 0 {
-		sb.WriteString("(primary:cluster-not-started-yet; other:not-joined-yet),")
+		sb.WriteString("cluster-not-started-yet,") // NOTE: not set when !(primary: cluster-started | all other nodes: joined-cluster)
 	}
 	if f&NodeStarted == 0 {
-		sb.WriteString("starting-up,")
+		sb.WriteString("node-not-started-yet,")
 	}
 	if f&Rebalancing == Rebalancing {
 		sb.WriteString("rebalancing,")
@@ -94,7 +99,7 @@ func (f NodeStateFlags) String() string {
 	}
 	s := sb.String()
 	if s == "" {
-		err := fmt.Errorf("unknown flag %x", int64(f))
+		err := fmt.Errorf("unknown flag %b", int64(f))
 		nlog.Errorln(err)
 		debug.Assert(false, err)
 		return ""

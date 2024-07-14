@@ -61,9 +61,9 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tar
 	}
 
 	if cs.IsOOS() {
-		t.statsT.Flag(stats.NodeStateFlags, cos.OOS, 0)
+		t.statsT.SetFlag(stats.NodeStateFlags, cos.OOS)
 	} else {
-		t.statsT.Flag(stats.NodeStateFlags, cos.LowCapacity, 0)
+		t.statsT.SetFlag(stats.NodeStateFlags, cos.LowCapacity)
 	}
 	nlog.Warningln(t.String(), "running store cleanup:", cs.String())
 	// run serially, cleanup first and LRU second, iff out-of-space persists

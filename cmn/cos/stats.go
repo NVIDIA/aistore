@@ -18,7 +18,8 @@ type (
 	StatsUpdater interface {
 		Inc(name string)
 		Add(name string, val int64)
-		Flag(name string, set, clr NodeStateFlags)
+		SetFlag(name string, set NodeStateFlags)
+		SetClrFlag(name string, set, clr NodeStateFlags)
 		Get(name string) int64
 		AddMany(namedVal64 ...NamedVal64)
 	}

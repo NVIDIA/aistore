@@ -213,24 +213,22 @@ func (r *runner) AddMany(nvs ...cos.NamedVal64) {
 	}
 }
 
-func (r *runner) Flag(name string, set, clr cos.NodeStateFlags) {
-	var (
-		nval  cos.NodeStateFlags
-		v, ok = r.core.Tracker[name]
-	)
-	debug.Assertf(ok, "invalid metric name %q", name)
-	oval := cos.NodeStateFlags(ratomic.LoadInt64(&v.Value))
-	if set != 0 {
-		nval = oval.Set(set)
-		if clr != 0 {
-			nval = nval.Clear(clr)
-		}
-	} else if clr != 0 {
-		nval = oval.Clear(clr)
+func (r *runner) SetFlag(name string, set cos.NodeStateFlags) {
+	v := r.core.Tracker[name]
+	oval := cos.BitFlags(ratomic.LoadInt64(&v.Value))
+	nval := oval | cos.BitFlags(set)
+	ratomic.StoreInt64(&v.Value, int64(nval))
+}
+
+func (r *runner) SetClrFlag(name string, set, clr cos.NodeStateFlags) {
+	v := r.core.Tracker[name]
+	oval := cos.BitFlags(ratomic.LoadInt64(&v.Value))
+	nval := oval | cos.BitFlags(set)
+	if cos.NodeStateFlags(nval).IsOK() && cos.NodeStateFlags(oval).IsOK() {
+		return
 	}
-	if nval != oval {
-		ratomic.StoreInt64(&v.Value, int64(nval))
-	}
+	nval &^= cos.BitFlags(clr)
+	ratomic.StoreInt64(&v.Value, int64(nval))
 }
 
 func (r *runner) Name() string { return r.name }
@@ -361,7 +359,7 @@ func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 	default:
 		clr |= cos.OOM | cos.LowMemory
 	}
-	r.Flag(NodeStateFlags, set, clr)
+	r.SetClrFlag(NodeStateFlags, set, clr)
 }
 
 func (r *runner) GetStats() *Node {

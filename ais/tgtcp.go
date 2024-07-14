@@ -186,13 +186,13 @@ func (t *target) daeputActMsg(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, 0)
+		t.statsT.SetFlag(stats.NodeStateFlags, cos.MaintenanceMode)
 		t.termKaliveX(msg.Action, true)
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.statsT.Flag(stats.NodeStateFlags, cos.MaintenanceMode, 0)
+		t.statsT.SetFlag(stats.NodeStateFlags, cos.MaintenanceMode)
 		t.termKaliveX(msg.Action, false)
 		t.shutdown(msg.Action)
 	case apc.ActRmNodeUnsafe:

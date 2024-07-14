@@ -103,7 +103,7 @@ func (h *htrun) ByteMM() *memsys.MMSA { return h.smm }
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
-		h.statsT.Flag(stats.NodeStateFlags, 0, cos.MaintenanceMode)
+		h.statsT.SetClrFlag(stats.NodeStateFlags, 0, cos.MaintenanceMode)
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }
@@ -190,10 +190,18 @@ func (h *htrun) cluStartedWithRetry() bool {
 }
 
 func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() > 0 } // see also: p.ready()
-func (h *htrun) markClusterStarted()  { h.startup.cluster.Store(mono.NanoTime()) }
+
+func (h *htrun) markClusterStarted() {
+	h.startup.cluster.Store(mono.NanoTime())
+	h.statsT.SetFlag(stats.NodeStateFlags, cos.ClusterStarted)
+}
 
 func (h *htrun) NodeStarted() bool { return h.startup.node.Load() > 0 }
-func (h *htrun) markNodeStarted()  { h.startup.node.Store(mono.NanoTime()) }
+
+func (h *htrun) markNodeStarted() {
+	h.startup.node.Store(mono.NanoTime())
+	h.statsT.SetFlag(stats.NodeStateFlags, cos.NodeStarted)
+}
 
 func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 	var (

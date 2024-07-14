@@ -501,7 +501,7 @@ func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, red.inUse)
 			return
 		}
-		t.statsT.Flag(stats.NodeStateFlags, cos.Restarted, 0)
+		t.statsT.SetFlag(stats.NodeStateFlags, cos.Restarted)
 		fs.PersistMarker(fname.NodeRestartedPrev)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
