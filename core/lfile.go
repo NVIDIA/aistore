@@ -24,8 +24,15 @@ const (
 // open
 //
 
-func (lom *LOM) Open() (cos.LomReader, error) {
-	return os.Open(lom.FQN)
+func (lom *LOM) Open() (fh cos.LomReader, err error) {
+	fh, err = os.Open(lom.FQN)
+	if err == nil || !os.IsNotExist(err) {
+		return fh, err
+	}
+	if e := lom._checkBdir(); e != nil {
+		return nil, e
+	}
+	return nil, err
 }
 
 //
@@ -48,16 +55,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	}
 
 	// slow path: create sub-directories
-	bdir := lom.mi.MakePathBck(lom.Bucket())
-	if err = cos.Stat(bdir); err != nil {
-		var (
-			err        = fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
-			bmd        = T.Bowner().Get()
-			_, present = bmd.Get(&lom.bck)
-		)
-		if present {
-			err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
-		}
+	if err = lom._checkBdir(); err != nil {
 		return nil, err
 	}
 	fdir := filepath.Dir(fqn)
@@ -65,6 +63,19 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		return nil, err
 	}
 	return os.OpenFile(fqn, _openFlags, cos.PermRWR)
+}
+
+func (lom *LOM) _checkBdir() (err error) {
+	bdir := lom.mi.MakePathBck(lom.Bucket())
+	if err = cos.Stat(bdir); err == nil {
+		return nil
+	}
+	err = fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
+	bmd := T.Bowner().Get()
+	if _, present := bmd.Get(&lom.bck); present {
+		err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
+	}
+	return err
 }
 
 // append

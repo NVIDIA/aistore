@@ -19,31 +19,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	unknownVal = "-"
-	NotSetVal  = "-"
-
-	UnknownStatusVal = "n/a"
-)
-
-const rebalanceForgetTime = 5 * time.Minute
-
-const (
-	primarySuffix       = "[P]"
-	nonElectableSuffix  = "[n/e]"
-	offlineStatusSuffix = "[x]" // (daeStatus, via apc.WhatNodeStatsAndStatus)
-
-	NodeOnline = "online"
-)
-
-const (
-	xfinished     = "Finished"
-	xfinishedErrs = "Finished with errors"
-	xrunning      = "Running"
-	xidle         = "Idle"
-	xaborted      = "Aborted"
-)
-
 // output templates
 const (
 	// Smap
@@ -193,7 +168,7 @@ const (
 	xactECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECGetStatsBody + "{{end}}"
 	xactECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
-		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
+		"{{FormatBckName $xctn.Bck.Name}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 
@@ -213,7 +188,7 @@ const (
 	xactECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECPutStatsBody + "{{end}}"
 	xactECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
-		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
+		"{{FormatBckName $xctn.Bck.Name}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 
@@ -426,7 +401,7 @@ var (
 		"FormatCDFDisks":      fmtCDFDisks,
 		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":          FmtBool,
-		"FormatBckName":       func(bck cmn.Bck) string { return bck.Cname("") },
+		"FormatBckName":       fmtBckName,
 		"FormatACL":           fmtACL,
 		"FormatNameDirArch":   fmtNameDirArch,
 		"FormatXactState":     FmtXactStatus,

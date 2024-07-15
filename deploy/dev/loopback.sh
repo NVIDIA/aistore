@@ -33,6 +33,6 @@ dd if=/dev/zero of="${mountpath}.img" bs=1M count=1024
 losetup -fP "${mountpath}.img"
 mkfs.ext4 "${mountpath}.img" > /dev/null
 
-set -x
 device=$(losetup -l | grep "${mountpath}.img" | awk '{print $1}')
-mount -o loop "${device}" $mountpath
+set -x
+mount "${device}" $mountpath

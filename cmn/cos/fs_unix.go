@@ -18,7 +18,7 @@ func (fs *FS) Equal(otherFs FS) bool {
 	if fs.Fs == "" || otherFs.Fs == "" || fs.FsType == "" || otherFs.FsType == "" {
 		return false
 	}
-	return fs.FsID == otherFs.FsID
+	return fs.FsType == otherFs.FsType && fs.FsID == otherFs.FsID
 }
 
 // syscall to check that path exists (see bench/lstat)

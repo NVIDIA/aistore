@@ -191,11 +191,6 @@ const (
 const flagPrefix = "--"
 
 const (
-	cluTotal = "--- Cluster:"
-	tgtTotal = "------- Sum:"
-)
-
-const (
 	dfltStdinChunkSize = 10 * cos.MiB
 )
 

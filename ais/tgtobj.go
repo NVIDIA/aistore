@@ -677,18 +677,16 @@ do:
 fin:
 	ecode, err = goi.txfini()
 	if err == nil {
-		debug.Assert(ecode == 0, ecode)
 		return 0, nil
 	}
 	goi.lom.Uncache()
 	if goi.retry {
 		goi.retry = false
 		if !retried {
-			nlog.Warningf("GET %s: retrying...", goi.lom)
-			retried = true // only once
+			nlog.Warningln("retrying", goi.lom.String(), err)
+			retried = true
 			goto do
 		}
-		nlog.Warningf("GET %s: failed retrying %v(%d)", goi.lom, err, ecode)
 	}
 	return ecode, err
 }
@@ -988,15 +986,17 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		fqn  = goi.lom.FQN
 		dpq  = goi.dpq
 	)
-	if !goi.cold && !dpq.isGFN {
+	if !goi.cold && !dpq.isGFN && !goi.lom.IsChunked() {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
 	// open
+	// TODO -- FIXME: use lom.Open() instead of os.Open(), and check TestECChecksum
 	lmfh, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// NOTE: retry only once and only when ec-enabled - see goi.restoreFromAny()
 			ecode = http.StatusNotFound
-			goi.retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
+			goi.retry = goi.lom.ECEnabled()
 		} else {
 			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
 			ecode = http.StatusInternalServerError

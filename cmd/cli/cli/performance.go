@@ -416,7 +416,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		perfCptn(c, tag)
 
 		// tally up recomputed
-		totalsHdr := cluTotal
+		totalsHdr := teb.ClusterTotal
 		if totals != nil {
 			for _, begin := range mapBegin {
 				for name, v := range begin.Tracker {

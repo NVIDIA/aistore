@@ -305,9 +305,9 @@ func showDiskStats(c *cli.Context, tid string) error {
 	// TODO: check config.TestingEnv (or DeploymentType == apc.DeploymentDev)
 	var totalsHdr string
 	if l := int64(len(dsh)); l > 1 {
-		totalsHdr = cluTotal
+		totalsHdr = teb.ClusterTotal
 		if tid != "" {
-			totalsHdr = tgtTotal
+			totalsHdr = teb.TargetTotal
 		}
 		tally := teb.DiskStatsHelper{TargetID: totalsHdr}
 		for _, ds := range dsh {

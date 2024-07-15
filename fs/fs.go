@@ -119,7 +119,7 @@ func NewMountpath(mpath string, label ios.Label) (*Mountpath, error) {
 		Label:      label,
 		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
-	err = mi.resolveFS()
+	err = mi.ResolveFS()
 	return mi, err
 }
 

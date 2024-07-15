@@ -207,6 +207,17 @@ func toString(lst []string) string {
 	}
 }
 
+// "FormatBckName"
+func fmtBckName(bck cmn.Bck) string {
+	if bck.IsQuery() {
+		if bck.IsEmpty() {
+			return NotSetVal
+		}
+		return fmt.Sprintf("match[%s]:", bck.Cname(""))
+	}
+	return bck.Cname("")
+}
+
 func fmtACL(acl apc.AccessAttrs) string {
 	if acl == 0 {
 		return unknownVal
@@ -243,6 +254,8 @@ func dsortJobInfoStatus(j *dsort.JobInfo) string {
 //
 // core.Snap helpers
 //
+
+const rebalanceForgetTime = 5 * time.Minute
 
 func fmtRebStatus(snap *core.Snap) string {
 	if snap == nil {

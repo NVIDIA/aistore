@@ -5,10 +5,10 @@
 package health
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -48,32 +48,38 @@ func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
 
 func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	var (
-		statfsN int
-		statfs  = &syscall.Statfs_t{}
-		config  = cmn.GCO.Get()
+		serr         string
+		rerrs, werrs int
+		cfg          = cmn.GCO.Get().FSHC
+		dup          = fs.Mountpath{Path: mi.Path}
 	)
 	// 1. fstat
-	if err := cos.Stat(mi.Path); err != nil {
+	err := cos.Stat(mi.Path)
+	if err != nil {
 		nlog.Errorln("fstat err #1:", err)
 		time.Sleep(time.Second)
 		if _, err := os.Stat(mi.Path); err != nil {
-			nlog.Errorln("fstat err #2:", err, "- proceeding to disable")
-			f._disable(mi)
-			return
+			nlog.Errorln("critical fstat err #2:", err)
+			goto disable
 		}
 	}
 
-	// 2. statfs
-	if err := syscall.Statfs(mi.Path, statfs); err != nil {
-		nlog.Errorln("statfs err:", err)
-		statfsN = max(config.FSHC.ErrorLimit/2, 1)
+	// 2. resolve FS
+	err = dup.ResolveFS()
+	if err == nil {
+		if !dup.FS.Equal(mi.FS) {
+			err = fmt.Errorf("%s: detected filesystem change (%s => %s) at runtime", mi, mi.FS.String(), dup.FS.String())
+		}
+	}
+	if err != nil {
+		nlog.Errorln(err)
+		goto disable
 	}
 
 	// 3. refresh disks
-	if err := mi.RefreshDisks(); err != nil {
-		nlog.Errorln(err, "- proceeding to disable")
-		f._disable(mi)
-		return
+	if err = mi.RefreshDisks(); err != nil {
+		nlog.Errorln(err)
+		goto disable
 	}
 
 	// double-check
@@ -82,24 +88,21 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	}
 
 	// 4. read/write tests
-	rerrs, werrs := _rwMpath(mi, fqn, config.FSHC.TestFileCount, fshcFileSize)
-	rerrs += statfsN
-	werrs += statfsN
+	rerrs, werrs = _rwMpath(mi, fqn, cfg.TestFileCount, fshcFileSize)
 
 	if rerrs == 0 && werrs == 0 {
 		nlog.Infoln(mi.String(), "is healthy")
 		return
 	}
-	nlog.Errorf("%s has I/O errors: read %d, write %d (err-limit=%d, write-size=%s)",
-		mi, rerrs, werrs, config.FSHC.ErrorLimit, cos.ToSizeIEC(fshcFileSize, 0))
+	serr = fmt.Sprintf("(read %d, write %d, err-limit %d, write-size %s)", rerrs, werrs, cfg.ErrorLimit, cos.ToSizeIEC(fshcFileSize, 0))
 
-	warn := rerrs < config.FSHC.ErrorLimit && werrs < config.FSHC.ErrorLimit
-	if warn {
+	if rerrs < cfg.ErrorLimit && werrs < cfg.ErrorLimit {
+		nlog.Errorln("Warning: detected errors reading/writing", mi.String(), serr)
 		return
 	}
+	nlog.Errorln("exceeded I/O error limit, proceeding to disable", mi.String(), serr)
 
-	nlog.Errorln(mi.String(), "exceeded I/O error limit, proceeding to disable")
-
+disable:
 	f._disable(mi)
 }
 
