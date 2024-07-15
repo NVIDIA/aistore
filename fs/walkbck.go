@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -43,6 +44,7 @@ type (
 	wbeHeap []wbeInfo
 )
 
+// lso and tests
 func WalkBck(opts *WalkBckOpts) error {
 	debug.Assert(opts.Mi == nil && opts.Sorted) // TODO: support `opts.Sorted == false`
 	var (
@@ -100,9 +102,14 @@ func WalkBck(opts *WalkBckOpts) error {
 ///////////////
 
 func (jg *joggerBck) walk() (err error) {
-	err = Walk(&jg.opts)
+	if err = jg.opts.Mi.CheckFS(); err != nil {
+		nlog.Errorln(err)
+		mfs.hc.FSHC(cmn.NewErrMountpathChangeRT(err), jg.opts.Mi, "")
+	} else {
+		err = Walk(&jg.opts)
+	}
 	close(jg.workCh)
-	return
+	return err
 }
 
 func (jg *joggerBck) cb(fqn string, de DirEntry) error {

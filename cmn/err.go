@@ -150,6 +150,9 @@ type (
 		disks   []string
 		fsdisks []string
 	}
+	ErrMountpathChangeRT struct {
+		err error
+	}
 
 	ErrInvalidFSPathsConf struct {
 		err error
@@ -580,6 +583,21 @@ func (e *ErrMountpathNewDisk) Error() string {
 
 func IsErrMountpathNewDisk(err error) bool {
 	_, ok := err.(*ErrMountpathNewDisk)
+	return ok
+}
+
+// ErrMountpathChangeRT
+
+func NewErrMountpathChangeRT(err error) *ErrMountpathChangeRT {
+	return &ErrMountpathChangeRT{err: err}
+}
+
+func (e *ErrMountpathChangeRT) Error() string {
+	return e.err.Error()
+}
+
+func IsErrMountpathChangeRT(err error) bool {
+	_, ok := err.(*ErrMountpathChangeRT)
 	return ok
 }
 

@@ -283,7 +283,7 @@ func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error), report
 
 func (r *CallbackROC) Read(p []byte) (n int, err error) {
 	n, err = r.roc.Read(p)
-	debug.Assert(r.readBytes > math.MaxInt-n)
+	debug.Assert(r.readBytes < math.MaxInt-n)
 	r.readBytes += n
 	if r.readBytes > r.reportedBytes {
 		diff := r.readBytes - r.reportedBytes

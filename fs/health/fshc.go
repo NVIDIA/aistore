@@ -51,7 +51,6 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 		serr         string
 		rerrs, werrs int
 		cfg          = cmn.GCO.Get().FSHC
-		dup          = fs.Mountpath{Path: mi.Path}
 	)
 	// 1. fstat
 	err := cos.Stat(mi.Path)
@@ -65,13 +64,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	}
 
 	// 2. resolve FS
-	err = dup.ResolveFS()
-	if err == nil {
-		if !dup.FS.Equal(mi.FS) {
-			err = fmt.Errorf("%s: detected filesystem change (%s => %s) at runtime", mi, mi.FS.String(), dup.FS.String())
-		}
-	}
-	if err != nil {
+	if err = mi.CheckFS(); err != nil {
 		nlog.Errorln(err)
 		goto disable
 	}

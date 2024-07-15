@@ -13,7 +13,7 @@ import (
 	"syscall"
 )
 
-func (mi *Mountpath) ResolveFS() error {
+func (mi *Mountpath) resolveFS() error {
 	var fsStats syscall.Statfs_t
 	if err := syscall.Statfs(mi.Path, &fsStats); err != nil {
 		return fmt.Errorf("cannot statfs fspath %q, err: %w", mi.Path, err)

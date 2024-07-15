@@ -26,7 +26,7 @@ type ror struct {
 var all sync.Map // [mpath => ror]
 
 func (*FSHC) IsErr(err error) bool {
-	return cmn.IsErrGetCap(err) || cos.IsIOError(err)
+	return cmn.IsErrGetCap(err) || cmn.IsErrMountpathChangeRT(err) || cos.IsIOError(err)
 }
 
 func (f *FSHC) OnErr(mi *fs.Mountpath, fqn string) {

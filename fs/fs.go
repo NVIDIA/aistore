@@ -119,8 +119,19 @@ func NewMountpath(mpath string, label ios.Label) (*Mountpath, error) {
 		Label:      label,
 		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
-	err = mi.ResolveFS()
+	err = mi.resolveFS()
 	return mi, err
+}
+
+func (mi *Mountpath) CheckFS() (err error) {
+	dup := Mountpath{Path: mi.Path}
+	err = dup.resolveFS()
+	if err == nil {
+		if !dup.FS.Equal(mi.FS) {
+			err = fmt.Errorf("%s: detected filesystem change at runtime: %s => %s ", mi, mi.FS.String(), dup.FS.String())
+		}
+	}
+	return err
 }
 
 // flags
