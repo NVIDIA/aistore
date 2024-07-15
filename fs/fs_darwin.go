@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-func (mi *Mountpath) resolveFS() error {
+func (mi *Mountpath) ResolveFS() error {
 	var fsStats syscall.Statfs_t
 	if err := syscall.Statfs(mi.Path, &fsStats); err != nil {
 		return fmt.Errorf("cannot statfs fspath %q, err: %w", mi.Path, err)
