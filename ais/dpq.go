@@ -5,8 +5,10 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -66,18 +68,26 @@ func dpqFree(dpq *dpq) {
 // Parse URL query for a selected few parameters used in the datapath.
 // (This is a faster alternative to the conventional and RFC-compliant URL.Query()
 // to be used narrowly to handle those few (keys) and nothing else.)
+
+const maxNumQparams = 100
+
 func (dpq *dpq) parse(rawQuery string) (err error) {
-	query := rawQuery // r.URL.RawQuery
-	for query != "" {
+	var (
+		iters int
+		query = rawQuery // r.URL.RawQuery
+	)
+	for query != "" && iters < maxNumQparams {
 		key, value := query, ""
 		if i := strings.IndexByte(key, '&'); i >= 0 {
 			key, query = key[:i], key[i+1:]
+			iters++
 		} else {
-			query = ""
+			query = "" // last iter
 		}
 		if k, v, ok := _dpqKeqV(key); ok {
 			key, value = k, v
 		}
+
 		// supported URL query parameters explicitly named below; attempt to parse anything
 		// outside this list will fail
 		switch key {
@@ -146,7 +156,10 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 			})
 		}
 	}
-	return
+	if err == nil && iters >= maxNumQparams {
+		err = errors.New("dpq: exceeded max number of iterations: " + strconv.Itoa(iters))
+	}
+	return err
 }
 
 func _dpqKeqV(s string) (string, string, bool) {
