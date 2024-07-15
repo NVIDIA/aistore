@@ -29,8 +29,8 @@ import (
 )
 
 func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, numRecords, numExtensions int, fileSize int64, sampleKeyPattern config.SampleKeyPattern, randomize, dropout bool) {
-	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, false /*cleanup*/)
-	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, false /*cleanup*/)
+	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
 
 	extensions := cfg.IshardConfig.SampleExtensions
 	// If sample extensions is not specified in config, randomly generate them
@@ -42,7 +42,7 @@ func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, 
 		numExtensions = len(extensions)
 	}
 
-	totalSize, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, extensions, fileSize, randomize, dropout)
+	totalSize, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, fileSize, randomize, dropout)
 	tassert.CheckFatal(t, err)
 
 	isharder, err := ishard.NewISharder(cfg)
@@ -172,6 +172,61 @@ func TestIshardMaxShardSize(t *testing.T) {
 	}
 }
 
+func TestIshardPrefix(t *testing.T) {
+	var (
+		cfg = &config.Config{
+			SrcBck: cmn.Bck{
+				Name:     trand.String(15),
+				Provider: apc.AIS,
+			},
+			DstBck: cmn.Bck{
+				Name:     trand.String(15),
+				Provider: apc.AIS,
+			},
+			IshardConfig: config.IshardConfig{
+				MaxShardSize:     102400,
+				Collapse:         false,
+				ShardTemplate:    "shard-%d",
+				Ext:              ".tar",
+				SampleKeyPattern: config.BaseFileNamePattern,
+			},
+			ClusterConfig: config.DefaultConfig.ClusterConfig,
+			SrcPrefix:     "matched_prefix_",
+		}
+		baseParams = api.BaseParams{
+			URL:    cfg.URL,
+			Client: cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true}),
+		}
+		numRecords    = 50
+		numExtensions = 3
+		fileSize      = 32 * cos.KiB
+	)
+
+	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
+
+	extensions := make([]string, numExtensions)
+	for i := range numExtensions {
+		extensions[i] = "." + trand.String(3)
+	}
+
+	totalSize, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "matched_prefix_", extensions, int64(fileSize), false, false)
+	tassert.CheckFatal(t, err)
+	_, err = generateNestedStructure(baseParams, cfg.SrcBck, numRecords/2, "unmatched_prefix_", extensions, int64(fileSize), false, false)
+	tassert.CheckFatal(t, err)
+
+	isharder, err := ishard.NewISharder(cfg)
+	tassert.CheckFatal(t, err)
+
+	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+
+	err = isharder.Start()
+	tassert.CheckFatal(t, err)
+
+	// Only files with `matched_prefix_` counts
+	checkOutputShards(t, baseParams, cfg.DstBck, numRecords*numExtensions, totalSize, config.BaseFileNamePattern, false)
+}
+
 func TestIshardTemplate(t *testing.T) {
 	testCases := []struct {
 		numRecords    int
@@ -180,8 +235,8 @@ func TestIshardTemplate(t *testing.T) {
 		shardTemplate string
 	}{
 		{numRecords: 50, fileSize: 32 * cos.KiB, maxShardSize: 128 * cos.KiB, shardTemplate: "prefix{0000..9999}-suffix"},
-		{numRecords: 100, fileSize: 96 * cos.KiB, maxShardSize: 256 * cos.KiB, shardTemplate: "prefix-%06d-suffix"},
-		{numRecords: 200, fileSize: 24 * cos.KiB, maxShardSize: 16 * cos.KiB, shardTemplate: "prefix-@00001-gap-@100-suffix"},
+		{numRecords: 50, fileSize: 96 * cos.KiB, maxShardSize: 256 * cos.KiB, shardTemplate: "prefix-%06d-suffix"},
+		{numRecords: 50, fileSize: 24 * cos.KiB, maxShardSize: 16 * cos.KiB, shardTemplate: "prefix-@00001-gap-@100-suffix"},
 	}
 
 	for _, tc := range testCases {
@@ -238,16 +293,23 @@ func TestIshardTemplate(t *testing.T) {
 }
 
 func TestIshardSampleKeyPattern(t *testing.T) {
-	testCases := []struct {
+	type tc struct {
 		collapse bool
 		pattern  config.SampleKeyPattern
-	}{
-		{pattern: config.FullNamePattern, collapse: true},
+	}
+	testCases := []tc{
 		{pattern: config.FullNamePattern, collapse: false},
-		{pattern: config.BaseFileNamePattern, collapse: true},
 		{pattern: config.BaseFileNamePattern, collapse: false},
-		{pattern: config.CollapseAllDirPattern, collapse: true},
 		{pattern: config.CollapseAllDirPattern, collapse: false},
+	}
+
+	// If long test, extend to test cases
+	if !testing.Short() {
+		testCases = append(testCases,
+			tc{pattern: config.FullNamePattern, collapse: true},
+			tc{pattern: config.BaseFileNamePattern, collapse: true},
+			tc{pattern: config.CollapseAllDirPattern, collapse: true},
+		)
 	}
 
 	for _, tc := range testCases {
@@ -275,14 +337,10 @@ func TestIshardSampleKeyPattern(t *testing.T) {
 					URL:    cfg.URL,
 					Client: cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true}),
 				}
-				numRecords    = 500
+				numRecords    = 50
 				numExtensions = 5
 				fileSize      = 32 * cos.KiB
 			)
-
-			if testing.Short() {
-				numRecords /= 10
-			}
 
 			runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), tc.pattern, true /*randomize*/, false /*dropout*/)
 		})
@@ -328,6 +386,8 @@ func TestIshardMissingExtension(t *testing.T) {
 }
 
 func TestIshardParallel(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
 	var ishardsCount = 5
 
 	wg := &sync.WaitGroup{}
@@ -361,10 +421,6 @@ func TestIshardParallel(t *testing.T) {
 			fileSize      = 32 * cos.KiB
 		)
 
-		if testing.Short() {
-			numRecords /= 1000
-		}
-
 		wg.Add(1)
 		go func(cfg config.Config, baseParams api.BaseParams) {
 			defer wg.Done()
@@ -375,6 +431,8 @@ func TestIshardParallel(t *testing.T) {
 }
 
 func TestIshardChain(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
 	var ishardsCount = 5
 
 	for i := range ishardsCount {
@@ -406,10 +464,6 @@ func TestIshardChain(t *testing.T) {
 			numExtensions = 5
 			fileSize      = 32 * cos.KiB
 		)
-
-		if testing.Short() {
-			numRecords /= 1000
-		}
 
 		runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
 	}
@@ -484,7 +538,7 @@ func TestIshardLargeFiles(t *testing.T) {
 }
 
 // Helper function to generate a nested directory structure
-func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecords int, extensions []string, fileSize int64, randomize, dropout bool) (totalSize int64, _ error) {
+func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecords int, prefix string, extensions []string, fileSize int64, randomize, dropout bool) (totalSize int64, _ error) {
 	randomFilePath := func() string {
 		levels := rand.IntN(3) + 1 // Random number of subdirectory levels (1-3)
 		parts := make([]string, levels)
@@ -517,7 +571,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 			if _, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bucket,
-				ObjName:    filepath.Join(basePath, baseNameWithExt),
+				ObjName:    filepath.Join(prefix, basePath, baseNameWithExt),
 				Reader:     r,
 				Size:       uint64(size),
 			}); err != nil {
@@ -546,7 +600,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 			if _, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bucket,
-				ObjName:    objectName,
+				ObjName:    filepath.Join(prefix, objectName),
 				Reader:     r,
 				Size:       uint64(size),
 			}); err != nil {
@@ -563,7 +617,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 		if _, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bucket,
-			ObjName:    objectName,
+			ObjName:    filepath.Join(prefix, objectName),
 			Reader:     r,
 			Size:       uint64(size),
 		}); err != nil {

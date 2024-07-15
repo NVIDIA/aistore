@@ -7,6 +7,7 @@ package config
 import (
 	"flag"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 
@@ -27,13 +28,18 @@ type (
 		MissingExtAction string
 		Collapse         bool
 	}
+	DryRunFlag struct {
+		IsSet bool
+		Mode  string
+	}
 	Config struct {
 		ClusterConfig
 		IshardConfig
-		SrcBck   cmn.Bck
-		DstBck   cmn.Bck
-		Progress bool
-		DryRun   bool
+		DryRunFlag
+		SrcBck    cmn.Bck
+		SrcPrefix string
+		DstBck    cmn.Bck
+		Progress  bool
 	}
 )
 
@@ -48,7 +54,26 @@ var DefaultConfig = Config{
 	SrcBck:        cmn.Bck{Name: "src_bck", Provider: apc.AIS},
 	DstBck:        cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
 	Progress:      false,
-	DryRun:        false,
+	DryRunFlag:    DryRunFlag{IsSet: false},
+}
+
+func (d *DryRunFlag) String() string {
+	return d.Mode
+}
+
+func (d *DryRunFlag) Set(value string) error {
+	if value == "true" || value == "false" {
+		d.IsSet = value == "true"
+		d.Mode = ""
+	} else {
+		d.IsSet = true
+		d.Mode = value
+	}
+	return nil
+}
+
+func (d *DryRunFlag) IsBoolFlag() bool {
+	return true
 }
 
 // Load configuration for ishard from cli, or spec files (TODO)
@@ -60,14 +85,14 @@ func Load() (*Config, error) {
 
 func parseCliParams(cfg *Config) {
 	flag.Int64Var(&cfg.MaxShardSize, "max_shard_size", 1024000, "Desired size of each output shard")
-	flag.StringVar(&cfg.SrcBck.Name, "src_bck", "", "Source bucket name or URI. If empty, a bucket with random name will be created")
-	flag.StringVar(&cfg.DstBck.Name, "dst_bck", "", "Destination bucket name or URI. If empty, a bucket with random name will be created")
+	flag.StringVar(&cfg.SrcBck.Name, "src_bck", "", "Source bucket name or URI.")
+	flag.StringVar(&cfg.DstBck.Name, "dst_bck", "", "Destination bucket name or URI.")
 	flag.StringVar(&cfg.ShardTemplate, "shard_template", "shard-%d", "Template used for generating output shards. Accepts Bash (prefix{0001..0010}suffix), Fmt (prefix-%06d-suffix), or At (prefix-@00001-gap-@100-suffix) templates")
 	flag.StringVar(&cfg.Ext, "ext", ".tar", "Extension used for generating output shards.")
 	flag.StringVar(&cfg.MissingExtAction, "missing_extension_action", "ignore", "Action to take when an extension is missing: abort | warn | ignore")
 	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.")
 	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket.")
-	flag.BoolVar(&cfg.DryRun, "dry_run", false, "If true, only shows the layout of resulting output shards without actually executing archive jobs.")
+	flag.Var(&cfg.DryRunFlag, "dry_run", "If set, only shows the layout of resulting output shards without actually executing archive jobs. Use 'show_keys' to include sample keys.")
 
 	var (
 		sampleExts          string
@@ -91,20 +116,37 @@ func parseCliParams(cfg *Config) {
 		"full_name":        FullNamePattern,
 		"collapse_all_dir": CollapseAllDirPattern,
 	}
-	if pattern, ok := commonPatterns[sampleKeyPatternStr]; ok {
+
+	if sampleKeyPatternStr == "" {
+		log.Printf("`sample_key_pattern` is not specified, use `base_file_name` as sample key by default.")
+		cfg.SampleKeyPattern = BaseFileNamePattern
+	} else if pattern, ok := commonPatterns[sampleKeyPatternStr]; ok {
 		cfg.SampleKeyPattern = pattern
 	} else {
 		log.Printf("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.", sampleKeyPatternStr)
 		if _, err := regexp.Compile(sampleKeyPatternStr); err != nil {
-			log.Fatalf("Invalid regex pattern: %s. Error: %v", cfg.SampleKeyPattern, err)
+			log.Printf("Invalid regex pattern: %s. Error: %v", cfg.SampleKeyPattern, err)
+			flag.Usage()
+			os.Exit(1)
 		}
 		cfg.SampleKeyPattern = SampleKeyPattern{Regex: sampleKeyPatternStr, CaptureGroup: "$1"}
 	}
 
-	if cfg.SrcBck.Provider, cfg.SrcBck.Name = cmn.ParseURLScheme(cfg.SrcBck.Name); cfg.SrcBck.Provider == "" {
-		cfg.SrcBck.Provider = apc.AIS
+	if cfg.SrcBck.Name == "" || cfg.DstBck.Name == "" {
+		log.Println("Error: src_bck and dst_bck are required parameters.")
+		flag.Usage()
+		os.Exit(1)
 	}
-	if cfg.DstBck.Provider, cfg.DstBck.Name = cmn.ParseURLScheme(cfg.DstBck.Name); cfg.DstBck.Provider == "" {
-		cfg.DstBck.Provider = apc.AIS
+
+	var err error
+	if cfg.SrcBck, cfg.SrcPrefix, err = cmn.ParseBckObjectURI(cfg.SrcBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
+		log.Printf("Error on parsing source bucket: %s. Error: %v", cfg.SrcBck.Name, err)
+		flag.Usage()
+		os.Exit(1)
+	}
+	if cfg.DstBck, _, err = cmn.ParseBckObjectURI(cfg.DstBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
+		log.Printf("Error on parsing destination bucket: %s. Error: %v", cfg.SrcBck.Name, err)
+		flag.Usage()
+		os.Exit(1)
 	}
 }

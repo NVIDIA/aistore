@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/ishard/ishard/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/vbauerster/mpb/v4"
@@ -110,6 +109,7 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		totalSize int64
 		recs      = shard.NewRecords(16)
 		errCh     = make(chan error, 1)
+		wg        = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 0)
 	)
 
 	for name, child := range n.children {
@@ -125,9 +125,36 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 			recs.Insert(childRecords.All()...)
 		}
 		totalSize += subtreeSize
+
+		if totalSize < is.cfg.MaxShardSize {
+			continue
+		}
+
+		name, hasNext := is.shardIter.Next()
+		if !hasNext {
+			return nil, 0, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", is.shardIter.Count())
+		}
+
+		sh := &shard.Shard{
+			Size:    totalSize,
+			Records: recs,
+			Name:    name,
+		}
+		totalSize = 0
+		recs = shard.NewRecords(16)
+
+		if is.cfg.DryRunFlag.IsSet {
+			is.printShard(sh)
+			continue
+		}
+
+		wg.Add(1)
+		go func(sh *shard.Shard) {
+			is.generateShard(sh, errCh)
+			wg.Done()
+		}(sh)
 	}
 
-	wg := cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 0)
 	n.records.Lock()
 	for _, record := range n.records.All() {
 		totalSize += record.TotalSize()
@@ -150,7 +177,7 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		totalSize = 0
 		recs = shard.NewRecords(16)
 
-		if is.cfg.DryRun {
+		if is.cfg.DryRunFlag.IsSet {
 			is.printShard(sh)
 			continue
 		}
@@ -176,7 +203,7 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 			Name:    name,
 		}
 
-		if is.cfg.DryRun {
+		if is.cfg.DryRunFlag.IsSet {
 			is.printShard(sh)
 		} else {
 			wg.Add(1)
@@ -202,11 +229,10 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 }
 
 func (is *ISharder) generateShard(sh *shard.Shard, errCh chan error) {
+	defer sh.Records.Drain()
 	if sh.Records.Len() == 0 {
 		return
 	}
-
-	defer sh.Records.Drain()
 
 	paths := []string{}
 	sh.Records.Lock()
@@ -275,12 +301,16 @@ func (is *ISharder) findMissingExt(node *dirNode, recursive bool) error {
 }
 
 func (is *ISharder) printShard(sh *shard.Shard) {
+	defer sh.Records.Drain()
+	if sh.Records.Len() == 0 {
+		return
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
 	if err := is.CLItemplate.Execute(w, sh); err != nil {
 		fmt.Println("error executing template: %w", err)
 	}
 	w.Flush()
-	sh.Records.Drain()
 }
 
 // NewISharder instantiates an ISharder with the configuration if provided;
@@ -294,7 +324,6 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 	} else {
 		is.cfg, err = config.Load()
 		if err != nil {
-			nlog.Errorf("Error initializing config: %v. Using default config.", err)
 			defaultCfg := config.DefaultConfig
 			is.cfg = &defaultCfg
 		}
@@ -316,24 +345,29 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 	is.missingExtAct = config.MissingExtActMap[is.cfg.MissingExtAction]
 	is.sampleKeyRegex = regexp.MustCompile(is.cfg.SampleKeyPattern.Regex)
 
-	if is.cfg.DryRun {
-		tmplWithSampleKey := `{{$shard := .}}{{appendExt $shard.Name}}		{{formatSize $shard.Size}}
-{{range $rec := .Records.All}}  {{sampleKey $rec.Name}}
-{{range $obj := .Objects}}    {{contentPath $shard.Name $obj.ContentPath}}	{{formatSize .Size}}
-{{end}}{{end}}`
+	if is.cfg.DryRunFlag.IsSet {
+		var sb strings.Builder
+		sb.WriteString("{{$shard := .}}{{appendExt $shard.Name}}\t{{formatSize $shard.Size}}\n")
+		sb.WriteString("{{range $rec := .Records.All}}")
+		if is.cfg.DryRunFlag.Mode == "show_keys" {
+			sb.WriteString("  {{sampleKey $rec.Name}}\t\n")
+		}
+		sb.WriteString("{{range $obj := .Objects}}    {{contentPath $shard.Name $obj.ContentPath}}\t{{formatSize $obj.Size}}\n")
+		sb.WriteString("{{end}}{{end}}")
+
 		is.CLItemplate = template.Must(template.New("shard").Funcs(template.FuncMap{
 			"formatSize":  func(size int64) string { return cos.ToSizeIEC(size, 2) },
 			"sampleKey":   func(sampleKey string) string { return "[" + sampleKey + "]" },
 			"contentPath": func(shardName, objContentPath string) string { return filepath.Join(shardName, objContentPath) },
 			"appendExt":   func(shardName string) string { return shardName + is.cfg.Ext },
-		}).Parse(tmplWithSampleKey))
+		}).Parse(sb.String()))
 	}
 
 	return is, err
 }
 
 func (is *ISharder) Start() error {
-	msg := &apc.LsoMsg{}
+	msg := &apc.LsoMsg{Prefix: is.cfg.SrcPrefix, Flags: apc.LsNameSize}
 	objList, err := api.ListObjects(is.baseParams, is.cfg.SrcBck, msg, api.ListArgs{})
 	if err != nil {
 		return err
@@ -377,7 +411,7 @@ func (is *ISharder) Start() error {
 		return err
 	}
 
-	if is.cfg.DryRun {
+	if is.cfg.DryRunFlag.IsSet {
 		return nil
 	}
 
