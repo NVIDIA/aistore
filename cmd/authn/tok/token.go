@@ -37,7 +37,7 @@ var (
 	ErrTokenRevoked  = errors.New("token revoked")
 )
 
-func IssueAdminJWT(expires time.Time, userID, secret string) (string, error) {
+func AdminJWT(expires time.Time, userID, secret string) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"expires":  expires,
 		"username": userID,
@@ -46,7 +46,7 @@ func IssueAdminJWT(expires time.Time, userID, secret string) (string, error) {
 	return t.SignedString([]byte(secret))
 }
 
-func IssueJWT(expires time.Time, userID string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL,
+func JWT(expires time.Time, userID string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL,
 	secret string) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"expires":  expires,

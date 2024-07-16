@@ -1,8 +1,12 @@
-// Package authn is authentication server for AIStore.
+//go:build debug
+
+// Package authn
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package main
+
+// NOTE go:build debug (above) =====================================
 
 import (
 	"testing"
@@ -30,9 +34,9 @@ var (
 )
 
 func init() {
-	// Set default expiration time to 30 minutes
-	if Conf.Server.ExpirePeriod == 0 {
-		Conf.Server.ExpirePeriod = cos.Duration(time.Minute * 30)
+	Conf.Init()
+	if Conf.Server.Expire == 0 {
+		Conf.Server.Expire = cos.Duration(time.Minute * 30) // NOTE: default token expiration time
 	}
 }
 
@@ -150,7 +154,7 @@ func TestToken(t *testing.T) {
 	var (
 		err    error
 		token  string
-		secret = Conf.Server.Secret
+		secret = Conf.Secret()
 	)
 
 	driver := mock.NewDBDriver()

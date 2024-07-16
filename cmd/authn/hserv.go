@@ -249,7 +249,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uInfo.Password = ""
-	writeJSON(w, uInfo, "user info")
+	writeJSON(w, uInfo, "get user")
 }
 
 // Checks if the request header contains valid admin credentials.
@@ -283,7 +283,6 @@ func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
 // If h token is already issued and it is not expired yet then the old
 // token is returned
 func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
-	var err error
 	apiItems, err := parseURL(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
@@ -293,39 +292,36 @@ func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.Password == "" {
-		cmn.WriteErrMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.WriteErrMsg(w, r, "empty password", http.StatusUnauthorized)
 		return
 	}
-	userID := apiItems[0]
-	pass := msg.Password
 
-	tokenString, err := h.mgr.issueToken(userID, pass, msg)
-	if err != nil {
-		nlog.Errorf("Failed to generate token for user %q: %v\n", userID, err)
+	var (
+		token  string
+		userID = apiItems[0]
+	)
+	if token, err = h.mgr.issueToken(userID, msg.Password, msg); err != nil {
+		nlog.Errorf("failed to generate token for user %q: %v\n", userID, err)
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 
-	repl := fmt.Sprintf(`{"token": %q}`, tokenString)
-	writeBytes(w, []byte(repl), "auth")
+	repl := fmt.Sprintf(`{"token": %q}`, token)
+	writeBytes(w, cos.UnsafeB(repl), "login")
 }
 
 func writeJSON(w http.ResponseWriter, val any, tag string) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	var err error
-	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
-		return
+	if err := jsoniter.NewEncoder(w).Encode(val); err != nil {
+		nlog.Errorf("%s: failed to write response: %v", tag, err)
 	}
-	nlog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
 func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
-	var err error
-	if _, err = w.Write(jsbytes); err == nil {
-		return
+	if _, err := w.Write(jsbytes); err != nil {
+		nlog.Errorf("%s: failed to write response: %v", tag, err)
 	}
-	nlog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
 func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
@@ -412,7 +408,7 @@ func (h *hserv) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 		}
 		cluList = &authn.RegisteredClusters{Clusters: clus}
 	}
-	writeJSON(w, cluList, "auth")
+	writeJSON(w, cluList, "get cluster")
 }
 
 func (h *hserv) roleHandler(w http.ResponseWriter, r *http.Request) {
@@ -446,7 +442,7 @@ func (h *hserv) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 			cmn.WriteErr(w, r, err)
 			return
 		}
-		writeJSON(w, roles, "rolelist")
+		writeJSON(w, roles, "list roles")
 		return
 	}
 
@@ -465,7 +461,7 @@ func (h *hserv) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 			clu.Alias = cInfo.Alias
 		}
 	}
-	writeJSON(w, role, "role")
+	writeJSON(w, role, "get role")
 }
 
 func (h *hserv) httpRoleDel(w http.ResponseWriter, r *http.Request) {

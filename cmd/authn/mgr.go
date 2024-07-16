@@ -349,53 +349,55 @@ func (m *mgr) delCluster(cluID string) error {
 // already generated and is not expired yet the existing token is returned.
 // Token includes user ID, permissions, and token expiration time.
 // If a new token was generated then it sends the proxy a new valid token list
-func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error) {
+func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, err error) {
 	var (
-		err     error
-		expires time.Time
-		token   string
 		uInfo   = &authn.User{}
 		cid     string
 		cluACLs []*authn.CluACL
 		bckACLs []*authn.BckACL
 	)
-
-	err = m.db.Get(usersCollection, userID, uInfo)
+	err = m.db.Get(usersCollection, uid, uInfo)
 	if err != nil {
 		nlog.Errorln(err)
 		return "", errInvalidCredentials
 	}
+
+	debug.Assert(uid == uInfo.ID, uid, " vs ", uInfo.ID)
+
 	if !isSamePassword(pwd, uInfo.Password) {
 		return "", errInvalidCredentials
 	}
 
-	// update ACLs with roles's ones
+	// update ACLs with roles' ones
 	for _, role := range uInfo.Roles {
 		cluACLs = mergeClusterACLs(cluACLs, role.ClusterACLs, cid)
 		bckACLs = mergeBckACLs(bckACLs, role.BucketACLs, cid)
 	}
 
 	// generate token
-	Conf.RLock()
-	defer Conf.RUnlock()
-	issued := time.Now()
-	expDelta := time.Duration(Conf.Server.ExpirePeriod)
+	token, err = m._token(msg, uInfo, cluACLs, bckACLs)
+	return token, err
+}
+
+func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (token string, err error) {
+	expDelta := Conf.Expire()
 	if msg.ExpiresIn != nil {
 		expDelta = *msg.ExpiresIn
 	}
 	if expDelta == 0 {
 		expDelta = foreverTokenTime
 	}
-	expires = issued.Add(expDelta)
 
 	// put all useful info into token: who owns the token, when it was issued,
 	// when it expires and credentials to log in AWS, GCP etc.
 	// If a user is a super user, it is enough to pass only isAdmin marker
+	expires := time.Now().Add(expDelta)
+	uid := uInfo.ID
 	if uInfo.IsAdmin() {
-		token, err = tok.IssueAdminJWT(expires, userID, Conf.Server.Secret)
+		token, err = tok.AdminJWT(expires, uid, Conf.Secret())
 	} else {
 		m.fixClusterIDs(cluACLs)
-		token, err = tok.IssueJWT(expires, userID, bckACLs, cluACLs, Conf.Server.Secret)
+		token, err = tok.JWT(expires, uid, bckACLs, cluACLs, Conf.Secret())
 	}
 	return token, err
 }

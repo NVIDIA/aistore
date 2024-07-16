@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -18,11 +18,12 @@ import (
 
 type (
 	Config struct {
-		sync.RWMutex `list:"omit"` // for cmn.IterFields
-		Log          LogConf       `json:"log"`
-		Net          NetConf       `json:"net"`
-		Server       ServerConf    `json:"auth"`
-		Timeout      TimeoutConf   `json:"timeout"`
+		Log     LogConf     `json:"log"`
+		Net     NetConf     `json:"net"`
+		Server  ServerConf  `json:"auth"`
+		Timeout TimeoutConf `json:"timeout"`
+		// private
+		mu sync.RWMutex
 	}
 	LogConf struct {
 		Dir   string `json:"dir"`
@@ -32,14 +33,17 @@ type (
 		HTTP HTTPConf `json:"http"`
 	}
 	HTTPConf struct {
-		Port        int    `json:"port"`
-		UseHTTPS    bool   `json:"use_https"`
 		Certificate string `json:"server_crt"`
 		Key         string `json:"server_key"`
+		Port        int    `json:"port"`
+		UseHTTPS    bool   `json:"use_https"`
 	}
 	ServerConf struct {
-		Secret       string       `json:"secret"`
-		ExpirePeriod cos.Duration `json:"expiration_time"`
+		Secret string       `json:"secret"`
+		Expire cos.Duration `json:"expiration_time"`
+		// private
+		psecret *string
+		pexpire *cos.Duration
 	}
 	TimeoutConf struct {
 		Default cos.Duration `json:"default_timeout"`
@@ -48,8 +52,8 @@ type (
 		Server *ServerConfToSet `json:"auth"`
 	}
 	ServerConfToSet struct {
-		Secret       *string `json:"secret"`
-		ExpirePeriod *string `json:"expiration_time"`
+		Secret *string `json:"secret,omitempty"`
+		Expire *string `json:"expiration_time,omitempty"`
 	}
 	// TokenList is a list of tokens pushed by authn
 	TokenList struct {
@@ -67,11 +71,12 @@ var (
 
 func (*Config) JspOpts() jsp.Options { return authcfgJspOpts }
 
-func (c *Config) Secret() (secret string) {
-	c.RLock()
-	secret = c.Server.Secret
-	c.RUnlock()
-	return
+func (c *Config) Lock()   { c.mu.Lock() }
+func (c *Config) Unlock() { c.mu.Unlock() }
+
+func (c *Config) Init() {
+	c.Server.psecret = &c.Server.Secret
+	c.Server.pexpire = &c.Server.Expire
 }
 
 func (c *Config) Verbose() bool {
@@ -80,24 +85,32 @@ func (c *Config) Verbose() bool {
 	return level > 3
 }
 
+func (c *Config) Secret() string        { return *c.Server.psecret }
+func (c *Config) Expire() time.Duration { return time.Duration(*c.Server.pexpire) }
+
+func (c *Config) SetSecret(val *string) {
+	c.Server.Secret = *val
+	c.Server.psecret = val
+}
+
 func (c *Config) ApplyUpdate(cu *ConfigToUpdate) error {
 	if cu.Server == nil {
 		return errors.New("configuration is empty")
 	}
-	c.Lock()
-	defer c.Unlock()
 	if cu.Server.Secret != nil {
 		if *cu.Server.Secret == "" {
 			return errors.New("secret not defined")
 		}
-		c.Server.Secret = *cu.Server.Secret
+		c.SetSecret(cu.Server.Secret)
 	}
-	if cu.Server.ExpirePeriod != nil {
-		dur, err := time.ParseDuration(*cu.Server.ExpirePeriod)
+	if cu.Server.Expire != nil {
+		dur, err := time.ParseDuration(*cu.Server.Expire)
 		if err != nil {
-			return fmt.Errorf("invalid time format %s, err: %v", *cu.Server.ExpirePeriod, err)
+			return fmt.Errorf("invalid time format %s: %v", *cu.Server.Expire, err)
 		}
-		c.Server.ExpirePeriod = cos.Duration(dur)
+		v := cos.Duration(dur)
+		c.Server.Expire = v
+		c.Server.pexpire = &v
 	}
 	return nil
 }

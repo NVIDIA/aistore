@@ -72,8 +72,9 @@ func main() {
 	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
+	Conf.Init()
 	if val := os.Getenv(secretKeyPodEnv); val != "" {
-		Conf.Server.Secret = val
+		Conf.SetSecret(&val)
 	}
 	if err := updateLogOptions(); err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
