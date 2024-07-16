@@ -125,13 +125,15 @@ func NewMountpath(mpath string, label ios.Label) (*Mountpath, error) {
 
 func (mi *Mountpath) CheckFS() (err error) {
 	dup := Mountpath{Path: mi.Path}
-	err = dup.resolveFS()
-	if err == nil {
-		if !dup.FS.Equal(mi.FS) {
-			err = fmt.Errorf("%s: detected filesystem change at runtime: %s => %s ", mi, mi.FS.String(), dup.FS.String())
-		}
+	if err = dup.resolveFS(); err != nil {
+		err = fmt.Errorf("failed to resolve filesystem for the %s: %w", mi, err)
+		return cmn.NewErrMpathCheck(err)
 	}
-	return err
+	if !dup.FS.Equal(mi.FS) {
+		err = fmt.Errorf("%s: detected filesystem change at runtime: %s => %s", mi, mi.FS.String(), dup.FS.String())
+		return cmn.NewErrMpathCheck(err)
+	}
+	return nil
 }
 
 // flags
@@ -587,11 +589,11 @@ func Clblk()                                   { mfs.ios.Clblk() }
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
 
-func putAvailMPI(available MPI) { mfs.available.Store(&available) }
-func putDisabMPI(disabled MPI)  { mfs.disabled.Store(&disabled) }
+func putAvailMPI(avail MPI)    { mfs.available.Store(&avail) }
+func putDisabMPI(disabled MPI) { mfs.disabled.Store(&disabled) }
 
-func PutMPI(available, disabled MPI) {
-	putAvailMPI(available)
+func PutMPI(avail, disabled MPI) {
+	putAvailMPI(avail)
 	putDisabMPI(disabled)
 }
 
@@ -736,7 +738,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	// re-enable
 	mi, ok = disabled[cleanMpath]
 	if !ok {
-		err = cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
+		err = cmn.NewErrMpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 		return
 	}
 	debug.Assert(cleanMpath == mi.Path)
@@ -771,7 +773,7 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 	mi, exists := avail[cleanMpath]
 	if !exists {
 		if mi, exists = disabled[cleanMpath]; !exists {
-			return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
+			return nil, cmn.NewErrMpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 		}
 		debug.Assert(cleanMpath == mi.Path)
 		disabledCopy := _cloneOne(disabled)
@@ -832,7 +834,7 @@ func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail i
 	if _, exists = avail[mpath]; !exists {
 		noResil = true
 		if mi, exists = disabled[mpath]; !exists {
-			err = cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
+			err = cmn.NewErrMpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 			return
 		}
 		if action == apc.ActMountpathDisable {
@@ -897,7 +899,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 	if _, ok := disabled[cleanMpath]; ok {
 		return nil, nil // nothing to do
 	}
-	return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
+	return nil, cmn.NewErrMpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 }
 
 func NumAvail() int {
@@ -1019,7 +1021,7 @@ func RenameBucketDirs(bckFrom, bckTo *cmn.Bck) (err error) {
 	return
 }
 
-func moveMarkers(available MPI, from *Mountpath) {
+func moveMarkers(avail MPI, from *Mountpath) {
 	var (
 		fromPath    = filepath.Join(from.Path, fname.MarkersDir)
 		finfos, err = os.ReadDir(fromPath)
@@ -1035,9 +1037,9 @@ func moveMarkers(available MPI, from *Mountpath) {
 	}
 
 	// NOTE: `from` path must no longer be in the available mountpaths
-	_, ok := available[from.Path]
+	_, ok := avail[from.Path]
 	debug.Assert(!ok, from.String())
-	for _, mi := range available {
+	for _, mi := range avail {
 		ok = true
 		for _, fi := range finfos {
 			debug.Assert(!fi.IsDir(), fname.MarkersDir+cos.PathSeparator+fi.Name()) // marker is a file

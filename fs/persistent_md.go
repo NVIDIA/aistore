@@ -37,15 +37,15 @@ func MarkerExists(marker string) bool {
 
 func PersistMarker(marker string) (fatalErr, writeErr error) {
 	var (
-		cnt             int
-		relname         = filepath.Join(fname.MarkersDir, marker)
-		availableMpaths = GetAvail()
+		cnt     int
+		relname = filepath.Join(fname.MarkersDir, marker)
+		avail   = GetAvail()
 	)
-	if len(availableMpaths) == 0 {
+	if len(avail) == 0 {
 		fatalErr = cmn.ErrNoMountpaths
-		return
+		return fatalErr, writeErr
 	}
-	for _, mi := range availableMpaths {
+	for _, mi := range avail {
 		fpath := filepath.Join(mi.Path, relname)
 		if err := cos.Stat(fpath); err == nil {
 			cnt++
@@ -70,17 +70,17 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 		}
 	}
 	if cnt == 0 {
-		fatalErr = fmt.Errorf("failed to persist %q marker (%d)", marker, len(availableMpaths))
+		fatalErr = fmt.Errorf("failed to persist %q marker (%d)", marker, len(avail))
 	}
-	return
+	return fatalErr, writeErr
 }
 
 func RemoveMarker(marker string) (err error) {
 	var (
-		availableMpaths = GetAvail()
-		relname         = filepath.Join(fname.MarkersDir, marker)
+		avail   = GetAvail()
+		relname = filepath.Join(fname.MarkersDir, marker)
 	)
-	for _, mi := range availableMpaths {
+	for _, mi := range avail {
 		if er1 := cos.RemoveFile(filepath.Join(mi.Path, relname)); er1 != nil {
 			nlog.Errorf("Failed to remove %q marker from %q: %v", relname, mi.Path, er1)
 			err = er1
@@ -95,16 +95,16 @@ func RemoveMarker(marker string) (err error) {
 // Returns how many times it has successfully stored a file.
 func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []byte, sgl *memsys.SGL) (cnt, availCnt int) {
 	var (
-		wto             cos.WriterTo2
-		bcnt            int
-		availableMpaths = GetAvail()
+		wto   cos.WriterTo2
+		bcnt  int
+		avail = GetAvail()
 	)
-	availCnt = len(availableMpaths)
+	availCnt = len(avail)
 	debug.Assert(atMost > 0)
 	if atMost > availCnt {
 		atMost = availCnt
 	}
-	for _, mi := range availableMpaths {
+	for _, mi := range avail {
 		if backupName != "" {
 			bcnt = mi.backupAtmost(fname, backupName, bcnt, atMost)
 		}
@@ -133,12 +133,12 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []by
 }
 
 func CountPersisted(fname string) (cnt int) {
-	available := GetAvail()
-	for mpath := range available {
+	avail := GetAvail()
+	for mpath := range avail {
 		fpath := filepath.Join(mpath, fname)
 		if err := cos.Stat(fpath); err == nil {
 			cnt++
 		}
 	}
-	return
+	return cnt
 }

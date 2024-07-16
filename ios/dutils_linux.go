@@ -103,7 +103,7 @@ func fs2disks(res *LsBlk, mpath, fs string, label Label, num int, testingEnv boo
 	case label.IsNil():
 		// empty label implies _resolvable_ underlying disk or disks
 		e := errors.New("empty label implies _resolvable_ underlying disk (" + trimmedFS + ")")
-		err = cmn.NewErrMountpathNoDisks(mpath, fs, e)
+		err = cmn.NewErrMpathNoDisks(mpath, fs, e)
 		nlog.Errorln(err)
 		dump, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
 		nlog.Infoln("Begin lsblk output ================================")

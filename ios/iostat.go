@@ -265,7 +265,7 @@ func (ios *ios) RefreshDisks(mpath, fs string, disks []string) (out RefreshDisks
 	debug.Assert(len(disks) > 0)
 	res, err := lsblk(fs, true /*err is not fatal*/)
 	if err != nil {
-		out.Fatal = cmn.NewErrMountpathNoDisks(mpath, fs, err)
+		out.Fatal = cmn.NewErrMpathNoDisks(mpath, fs, err)
 		return out
 	}
 
@@ -277,12 +277,12 @@ func (ios *ios) RefreshDisks(mpath, fs string, disks []string) (out RefreshDisks
 	fsdisks := out.FsDisks
 	for _, d := range disks {
 		if _, ok := fsdisks[d]; !ok {
-			out.Lost = append(out.Lost, cmn.NewErrMountpathLostDisk(mpath, fs, d, disks, fsdisks.ToSlice()))
+			out.Lost = append(out.Lost, cmn.NewErrMpathLostDisk(mpath, fs, d, disks, fsdisks.ToSlice()))
 		}
 	}
 	for d := range fsdisks {
 		if !cos.StringInSlice(d, disks) {
-			out.Attached = append(out.Attached, cmn.NewErrMountpathNewDisk(mpath, fs, disks, fsdisks.ToSlice()))
+			out.Attached = append(out.Attached, cmn.NewErrMpathNewDisk(mpath, fs, disks, fsdisks.ToSlice()))
 
 			// TODO -- FIXME: under lock: update ios.mpath2disks and related state; log
 			ios._update(mpath, fsdisks, disks)

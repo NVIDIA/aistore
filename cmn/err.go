@@ -123,7 +123,7 @@ type (
 		actualHash   string
 	}
 
-	ErrMountpathNotFound struct {
+	ErrMpathNotFound struct {
 		mpath    string
 		fqn      string
 		disabled bool
@@ -132,25 +132,25 @@ type (
 		mpath string
 		cause string
 	}
-	ErrMountpathNoDisks struct {
+	ErrMpathNoDisks struct {
 		mpath string
 		fs    string
 		err   error
 	}
-	ErrMountpathLostDisk struct {
+	ErrMpathLostDisk struct {
 		mpath   string
 		fs      string
 		lostd   string
 		disks   []string
 		fsdisks []string
 	}
-	ErrMountpathNewDisk struct {
+	ErrMpathNewDisk struct {
 		mpath   string
 		fs      string
 		disks   []string
 		fsdisks []string
 	}
-	ErrMountpathChangeRT struct {
+	ErrMpathCheck struct {
 		err error
 	}
 
@@ -511,9 +511,9 @@ func NewErrInvalidCksum(eHash, aHash string) *ErrInvalidCksum {
 
 func (e *ErrInvalidCksum) Expected() string { return e.expectedHash }
 
-// ErrMountpathNotFound
+// ErrMpathNotFound
 
-func (e *ErrMountpathNotFound) Error() string {
+func (e *ErrMpathNotFound) Error() string {
 	if e.mpath != "" {
 		if e.disabled {
 			return "mountpath " + e.mpath + " is disabled"
@@ -527,15 +527,15 @@ func (e *ErrMountpathNotFound) Error() string {
 	return "mountpath for fqn " + e.fqn + " does not exist"
 }
 
-func (e *ErrMountpathNotFound) Mpath() string  { return e.mpath }
-func (e *ErrMountpathNotFound) Disabled() bool { return e.disabled }
+func (e *ErrMpathNotFound) Mpath() string  { return e.mpath }
+func (e *ErrMpathNotFound) Disabled() bool { return e.disabled }
 
-func NewErrMountpathNotFound(mpath, fqn string, disabled bool) *ErrMountpathNotFound {
-	return &ErrMountpathNotFound{mpath: mpath, fqn: fqn, disabled: disabled}
+func NewErrMpathNotFound(mpath, fqn string, disabled bool) *ErrMpathNotFound {
+	return &ErrMpathNotFound{mpath: mpath, fqn: fqn, disabled: disabled}
 }
 
-func IsErrMountpathNotFound(err error) bool {
-	_, ok := err.(*ErrMountpathNotFound)
+func IsErrMpathNotFound(err error) bool {
+	_, ok := err.(*ErrMpathNotFound)
 	return ok
 }
 
@@ -549,55 +549,55 @@ func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
 	return &ErrInvalidMountpath{mpath: mpath, cause: cause}
 }
 
-// ErrMountpathNoDisks
+// ErrMpathNoDisks
 
-func NewErrMountpathNoDisks(mpath, fs string, err error) *ErrMountpathNoDisks {
-	return &ErrMountpathNoDisks{mpath: mpath, fs: fs, err: err}
+func NewErrMpathNoDisks(mpath, fs string, err error) *ErrMpathNoDisks {
+	return &ErrMpathNoDisks{mpath: mpath, fs: fs, err: err}
 }
 
-func (e *ErrMountpathNoDisks) Error() string {
+func (e *ErrMpathNoDisks) Error() string {
 	return fmt.Sprintf("mp[%s, fs=%s] has no disks, err: %v", e.mpath, e.fs, e.err)
 }
 
-// ErrMountpathLostDisk
+// ErrMpathLostDisk
 
-func NewErrMountpathLostDisk(mpath, fs, lostd string, disks, fsdisks []string) *ErrMountpathLostDisk {
-	return &ErrMountpathLostDisk{mpath: mpath, fs: fs, lostd: lostd, disks: disks, fsdisks: fsdisks}
+func NewErrMpathLostDisk(mpath, fs, lostd string, disks, fsdisks []string) *ErrMpathLostDisk {
+	return &ErrMpathLostDisk{mpath: mpath, fs: fs, lostd: lostd, disks: disks, fsdisks: fsdisks}
 }
 
-func (e *ErrMountpathLostDisk) Error() string {
+func (e *ErrMpathLostDisk) Error() string {
 	return fmt.Sprintf("mp[%s, fs=%s]: disk %q is lost (orig: %v, available now: %v)", e.mpath, e.fs, e.lostd, e.disks, e.fsdisks)
 }
 
-// ErrMountpathNewDisk
+// ErrMpathNewDisk
 
-func NewErrMountpathNewDisk(mpath, fs string, disks, fsdisks []string) *ErrMountpathNewDisk {
-	return &ErrMountpathNewDisk{mpath: mpath, fs: fs, disks: disks, fsdisks: fsdisks}
+func NewErrMpathNewDisk(mpath, fs string, disks, fsdisks []string) *ErrMpathNewDisk {
+	return &ErrMpathNewDisk{mpath: mpath, fs: fs, disks: disks, fsdisks: fsdisks}
 }
 
-func (e *ErrMountpathNewDisk) Error() string {
+func (e *ErrMpathNewDisk) Error() string {
 	plural := len(e.fsdisks) - len(e.disks)
 	return fmt.Sprintf("mp[%s, fs=%s]: newly attached disk%s (orig: %v, available now: %v)",
 		e.mpath, e.fs, cos.Plural(plural), e.disks, e.fsdisks)
 }
 
-func IsErrMountpathNewDisk(err error) bool {
-	_, ok := err.(*ErrMountpathNewDisk)
+func IsErrMpathNewDisk(err error) bool {
+	_, ok := err.(*ErrMpathNewDisk)
 	return ok
 }
 
-// ErrMountpathChangeRT
+// ErrMpathCheck
 
-func NewErrMountpathChangeRT(err error) *ErrMountpathChangeRT {
-	return &ErrMountpathChangeRT{err: err}
+func NewErrMpathCheck(err error) *ErrMpathCheck {
+	return &ErrMpathCheck{err: err}
 }
 
-func (e *ErrMountpathChangeRT) Error() string {
+func (e *ErrMpathCheck) Error() string {
 	return e.err.Error()
 }
 
-func IsErrMountpathChangeRT(err error) bool {
-	_, ok := err.(*ErrMountpathChangeRT)
+func IsErrMpathCheck(err error) bool {
+	_, ok := err.(*ErrMpathCheck)
 	return ok
 }
 
@@ -923,7 +923,7 @@ func IsErrObjNought(err error) bool {
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)
 func isErrNotFoundExtended(err error, status int) bool {
 	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
-		IsErrMountpathNotFound(err) || IsErrXactNotFound(err) ||
+		IsErrMpathNotFound(err) || IsErrXactNotFound(err) ||
 		cos.IsNotExist(err, status)
 }
 

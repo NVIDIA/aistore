@@ -574,7 +574,7 @@ func (t *target) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
 func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	enabledMi, err := t.fsprg.enableMpath(mpath)
 	if err != nil {
-		if cmn.IsErrMountpathNotFound(err) {
+		if cmn.IsErrMpathNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.ErrInvalidMountpath
@@ -626,7 +626,7 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
 	disabledMi, err := t.fsprg.disableMpath(mpath, dontResilver)
 	if err != nil {
-		if cmn.IsErrMountpathNotFound(err) {
+		if cmn.IsErrMpathNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			// cmn.ErrInvalidMountpath

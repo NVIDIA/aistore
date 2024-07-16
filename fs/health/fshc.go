@@ -32,7 +32,7 @@ const (
 
 const (
 	fshcFileSize    = 10 * cos.MiB // size of temporary file which will test writing and reading the mountpath
-	fshcMaxFileList = 100          // maximum number of files to read by Readdir
+	fshcMaxFileList = 100          // maximum number of existing files to read
 )
 
 type (
@@ -48,9 +48,10 @@ func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
 
 func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	var (
+		cfg          = cmn.GCO.Get().FSHC
 		serr         string
 		rerrs, werrs int
-		cfg          = cmn.GCO.Get().FSHC
+		maxerrs      = cfg.ErrorLimit
 	)
 	// 1. fstat
 	err := cos.Stat(mi.Path)
@@ -63,37 +64,43 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 		}
 	}
 
-	// 2. resolve FS
+	// 2. resolve FS and check it vs mi.FS
 	if err = mi.CheckFS(); err != nil {
 		nlog.Errorln(err)
 		goto disable
 	}
 
-	// 3. refresh disks
-	if err = mi.RefreshDisks(); err != nil {
-		nlog.Errorln(err)
-		goto disable
-	}
+	// 3. mi.RefreshDisks (TODO: needed?)
 
-	// double-check
+	// double-check before reading/writing
 	if !mi.IsAvail() {
 		nlog.Warningln(mi.String(), "is not available, nothing to do")
 	}
 
 	// 4. read/write tests
-	rerrs, werrs = _rwMpath(mi, fqn, cfg.TestFileCount, fshcFileSize)
+	for range 2 {
+		re, we := _rwMpath(mi, fqn, cfg.TestFileCount, fshcFileSize)
+		rerrs += re
+		werrs += we
 
-	if rerrs == 0 && werrs == 0 {
-		nlog.Infoln(mi.String(), "is healthy")
-		return
-	}
-	serr = fmt.Sprintf("(read %d, write %d, err-limit %d, write-size %s)", rerrs, werrs, cfg.ErrorLimit, cos.ToSizeIEC(fshcFileSize, 0))
+		if rerrs == 0 && werrs == 0 {
+			nlog.Infoln(mi.String(), "is healthy")
+			return
+		}
+		serr = fmt.Sprintf("(read %d, write %d (max-errors %d, write-size %s))",
+			rerrs, werrs, maxerrs, cos.ToSizeIEC(fshcFileSize, 0))
 
-	if rerrs < cfg.ErrorLimit && werrs < cfg.ErrorLimit {
-		nlog.Errorln("Warning: detected errors reading/writing", mi.String(), serr)
-		return
+		if rerrs+werrs < maxerrs {
+			nlog.Errorln("Warning: detected read/write errors", mi.String(), serr)
+			nlog.Warningln("Warning: ignoring, _not_ disabling", mi.String())
+			return
+		}
+		// repeat once
+		maxerrs++
+		time.Sleep(2 * time.Second)
 	}
-	nlog.Errorln("exceeded I/O error limit, proceeding to disable", mi.String(), serr)
+	nlog.Errorln("exceeded I/O error limit:", serr)
+	nlog.Errorln("proceeding to disable", mi.String())
 
 disable:
 	f._disable(mi)

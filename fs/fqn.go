@@ -154,10 +154,10 @@ func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
 	for mpath := range disabled {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
-			return nil, "", cmn.NewErrMountpathNotFound(mpath, fqn, true /*disabled*/)
+			return nil, "", cmn.NewErrMpathNotFound(mpath, fqn, true /*disabled*/)
 		}
 	}
-	return nil, "", cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, false /*disabled*/)
+	return nil, "", cmn.NewErrMpathNotFound("" /*mpath*/, fqn, false /*disabled*/)
 }
 
 func CleanPathErr(err error) {

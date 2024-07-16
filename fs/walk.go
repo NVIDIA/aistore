@@ -143,7 +143,7 @@ func Walk(opts *WalkOpts) error {
 			continue
 		}
 		// NOTE: mountpath is getting detached or disabled
-		if cmn.IsErrMountpathNotFound(err1) {
+		if cmn.IsErrMpathNotFound(err1) {
 			nlog.Errorln(err1)
 			continue
 		}

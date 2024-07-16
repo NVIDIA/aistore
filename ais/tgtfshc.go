@@ -39,7 +39,7 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 	if mi == nil {
 		mi, _, err = fs.FQN2Mpath(fqn)
 		if err != nil {
-			if e, ok := err.(*cmn.ErrMountpathNotFound); ok {
+			if e, ok := err.(*cmn.ErrMpathNotFound); ok {
 				if e.Disabled() {
 					nlog.Errorf("%s: %s is disabled, not %s", t, e.Mpath(), s)
 					return

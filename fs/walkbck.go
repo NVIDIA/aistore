@@ -104,7 +104,7 @@ func WalkBck(opts *WalkBckOpts) error {
 func (jg *joggerBck) walk() (err error) {
 	if err = jg.opts.Mi.CheckFS(); err != nil {
 		nlog.Errorln(err)
-		mfs.hc.FSHC(cmn.NewErrMountpathChangeRT(err), jg.opts.Mi, "")
+		mfs.hc.FSHC(err, jg.opts.Mi, "")
 	} else {
 		err = Walk(&jg.opts)
 	}
