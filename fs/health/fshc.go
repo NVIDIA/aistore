@@ -78,7 +78,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	}
 
 	// 4. read/write tests
-	for range 2 {
+	for i := range 2 {
 		re, we := _rwMpath(mi, fqn, cfg.TestFileCount, fshcFileSize)
 		rerrs += re
 		werrs += we
@@ -96,8 +96,10 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 			return
 		}
 		// repeat once
-		maxerrs++
-		time.Sleep(2 * time.Second)
+		if i == 0 {
+			maxerrs++
+			time.Sleep(2 * time.Second)
+		}
 	}
 	nlog.Errorln("exceeded I/O error limit:", serr)
 	nlog.Errorln("proceeding to disable", mi.String())
