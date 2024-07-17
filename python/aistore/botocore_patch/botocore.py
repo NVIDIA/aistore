@@ -47,6 +47,10 @@ def _ais_redirect_wrapper(wrapped, instance, args, kwargs):
     response = kwargs.get("response")
     request_dict = kwargs.get("request_dict")
 
+    # Initialize s3_redirect context if not present
+    if 's3_redirect' not in request_dict['context']:
+        request_dict['context']['s3_redirect'] = {}
+
     intercept_criteria = [
         lambda: response is not None,
         lambda: isinstance(response, tuple) and isinstance(request_dict, dict),
