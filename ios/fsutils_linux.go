@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"golang.org/x/sys/unix"
 )
 
@@ -135,12 +136,14 @@ func nameHasPrefix(name *[256]int8, s string) bool {
 }
 
 func GetFSStats(path string) (blocks, bavail uint64, bsize int64, err error) {
-	var fsStats unix.Statfs_t
-	fsStats, err = getFSStats(path)
+	var statfs unix.Statfs_t
+	statfs, err = getFSStats(path)
 	if err != nil {
 		return
 	}
-	return fsStats.Blocks, fsStats.Bavail, fsStats.Bsize, nil
+	debug.Assert(statfs.Blocks > 0)
+	debug.Assert(statfs.Bsize > 0)
+	return statfs.Blocks, statfs.Bavail, statfs.Bsize, nil
 }
 
 func GetATime(osfi os.FileInfo) time.Time {

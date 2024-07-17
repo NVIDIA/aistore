@@ -79,6 +79,11 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	r = &XactNsumm{p: p}
 
 	r.totalDiskSize = fs.GetDiskSize()
+	if r.totalDiskSize < cos.KiB {
+		err = fmt.Errorf("invalid disk size (%d bytes)", r.totalDiskSize)
+		debug.AssertNoErr(err)
+		return nil, err
+	}
 
 	listRemote := p.Bck.IsCloud() && !p.msg.ObjCached
 	if listRemote {

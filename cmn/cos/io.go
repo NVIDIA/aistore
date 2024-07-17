@@ -367,14 +367,17 @@ func (f *SectionHandle) Read(buf []byte) (n int, err error) {
 	}
 
 	// either buffer is full or end of padding is reached. Nothing to read
-	if fromPad == 0 {
+	if fromPad <= 0 {
+		debug.Assert(fromPad == 0)
 		return n, io.EOF
 	}
 
-	// the number of remained bytes in padding is enough to complete read request
+	// the number of remaining bytes in padding is enough to complete read request
 	for idx := n; idx < n+int(fromPad); idx++ {
 		buf[idx] = 0
 	}
+
+	debug.Assert(n < math.MaxInt-int(fromPad))
 	n += int(fromPad)
 
 	// check for integer overflow

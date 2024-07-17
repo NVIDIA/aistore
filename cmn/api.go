@@ -334,6 +334,7 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 	var totalDisksSize uint64
 	for _, tsiz := range dsize {
 		totalDisksSize += tsiz
+		// TODO -- FIXME: (local-playground + losetup, etc.)
 		if testingEnv {
 			break
 		}
@@ -342,7 +343,9 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 		if summ.ObjCount.Present > 0 {
 			summ.ObjSize.Avg = int64(cos.DivRoundU64(summ.TotalSize.PresentObjs, summ.ObjCount.Present))
 		}
-		summ.UsedPct = cos.DivRoundU64(summ.TotalSize.OnDisk*100, totalDisksSize)
+		if totalDisksSize > 0 {
+			summ.UsedPct = cos.DivRoundU64(summ.TotalSize.OnDisk*100, totalDisksSize)
+		}
 	}
 }
 

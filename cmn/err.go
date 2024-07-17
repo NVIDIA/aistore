@@ -990,12 +990,13 @@ func InitErrHTTP(r *http.Request, err error, ecode int) (e *ErrHTTP) {
 }
 
 func (e *ErrHTTP) init(r *http.Request, err error, ecode int) {
+	const maxlen = 100
 	e.Status = http.StatusBadRequest
 	if ecode != 0 {
 		e.Status = ecode
 	}
 	tcode := fmt.Sprintf("%T", err)
-	if i := strings.Index(tcode, "."); i > 0 {
+	if i := strings.Index(tcode, "."); i > 0 && i < maxlen && len(tcode)-i < maxlen {
 		if pkg := tcode[:i]; pkg != "*errors" && pkg != "errors" {
 			e.TypeCode = tcode[i+1:]
 		}

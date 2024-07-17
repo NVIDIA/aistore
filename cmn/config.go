@@ -1840,9 +1840,9 @@ func ValidateRemAlias(alias string) (err error) {
 		return fmt.Errorf("cannot use %q as an alias", apc.QparamWhat)
 	}
 	if len(alias) < 2 {
-		err = fmt.Errorf("alias %q is too short: must have at least 2 letters", alias)
-	} else if !cos.IsAlphaPlus(alias) {
-		err = fmt.Errorf("alias %q is invalid: use only letters, numbers, dashes (-), and underscores (_)", alias)
+		err = fmt.Errorf(apc.RemAIS+" alias %q is too short: must have at least 2 letters", alias)
+	} else {
+		err = cos.CheckAlphaPlus(alias, apc.RemAIS+" alias")
 	}
-	return
+	return err
 }

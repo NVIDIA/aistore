@@ -90,6 +90,9 @@ func MakeRangeHdr(start, length int64) string {
 // - splitAfter == true:  strings.Split() the entire path;
 // - splitAfter == false: strings.SplitN(len(itemsPresent)+itemsAfter)
 // Returns all items that follow the specified `items`.
+
+const maxItems = 1000
+
 func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter bool) ([]string, error) {
 	var (
 		split []string
@@ -99,7 +102,7 @@ func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter boo
 		path = path[1:] // remove leading slash
 	}
 	if splitAfter {
-		split = strings.Split(path, "/")
+		split = strings.SplitN(path, "/", maxItems)
 	} else {
 		split = strings.SplitN(path, "/", l+max(1, itemsAfter))
 	}

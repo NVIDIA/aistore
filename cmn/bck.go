@@ -169,14 +169,17 @@ func (n Ns) _copy(b []byte, l int) int {
 	return off
 }
 
-func (n Ns) validate() error {
+func (n Ns) validate() (err error) {
 	if n.IsGlobal() {
 		return nil
 	}
-	if cos.IsAlphaNice(n.UUID) && cos.IsAlphaPlus(n.Name) {
-		return nil
+	if err = cos.CheckAlphaPlus(n.Name, "namepace"); err == nil {
+		if cos.IsAlphaNice(n.UUID) {
+			return nil
+		}
+		return fmt.Errorf(fmtErrNamespace, n.UUID, n.Name)
 	}
-	return fmt.Errorf(fmtErrNamespace, n.UUID, n.Name)
+	return err
 }
 
 func (n Ns) contains(other Ns) bool {
@@ -270,17 +273,14 @@ func (b *Bck) Validate() (err error) {
 	return
 }
 
-func (b *Bck) ValidateName() (err error) {
+func (b *Bck) ValidateName() error {
 	if b.Name == "" {
 		return errors.New("bucket name is missing")
 	}
 	if b.Name == "." {
 		return fmt.Errorf(fmtErrBckName, b.Name)
 	}
-	if !cos.IsAlphaPlus(b.Name) {
-		err = fmt.Errorf(fmtErrBckName, b.Name)
-	}
-	return
+	return cos.CheckAlphaPlus(b.Name, "bucket name")
 }
 
 // ditto
