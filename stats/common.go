@@ -76,10 +76,11 @@ const (
 	ErrPutMirrorCount = errPrefix + "put.mirror.n"
 
 	// KindLatency
-	GetLatency       = "get.ns"
-	GetLatencyTotal  = "get.ns.total"
-	ListLatency      = "lst.ns"
-	KeepAliveLatency = "kalive.ns"
+	GetLatency         = "get.ns"
+	GetLatencyTotal    = "get.ns.total"
+	GetE2ELatencyTotal = "e2e.get.ns.total" // // e2e cold-GET latency
+	ListLatency        = "lst.ns"
+	KeepAliveLatency   = "kalive.ns"
 
 	// KindSpecial
 	Uptime = "up.ns.time"

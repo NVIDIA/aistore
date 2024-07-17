@@ -52,12 +52,13 @@ const (
 	ErrIOCount       = "err.io.n"
 
 	// KindLatency
-	PutLatency      = "put.ns"
-	PutLatencyTotal = "put.ns.total"
-	AppendLatency   = "append.ns"
-	GetRedirLatency = "get.redir.ns"
-	PutRedirLatency = "put.redir.ns"
-	DownloadLatency = "dl.ns"
+	PutLatency         = "put.ns"
+	PutLatencyTotal    = "put.ns.total"
+	PutE2ELatencyTotal = "e2e.put.ns.total" // e2e write-through PUT latency
+	AppendLatency      = "append.ns"
+	GetRedirLatency    = "get.redir.ns"
+	PutRedirLatency    = "put.redir.ns"
+	DownloadLatency    = "dl.ns"
 
 	// (read remote, write local) latency (and note that cold-GET's "pure"
 	// transmit-response latency = GetLatency - GetColdRwLatency)

@@ -30,19 +30,29 @@ func (b *base) init(snode *meta.Snode, tstats stats.Tracker) {
 	b.metrics = make(map[string]string, 8)
 	b.metrics[stats.GetCount] = prefix + "." + stats.GetCount
 	b.metrics[stats.GetLatencyTotal] = prefix + "." + stats.GetLatencyTotal
+	b.metrics[stats.GetE2ELatencyTotal] = prefix + "." + stats.GetE2ELatencyTotal
 	b.metrics[stats.GetSize] = prefix + "." + stats.GetSize
 
 	tstats.RegExtMetric(snode, b.metrics[stats.GetCount], stats.KindCounter)
 	tstats.RegExtMetric(snode, b.metrics[stats.GetLatencyTotal], stats.KindTotal)
+	tstats.RegExtMetric(snode, b.metrics[stats.GetE2ELatencyTotal], stats.KindTotal)
 	tstats.RegExtMetric(snode, b.metrics[stats.GetSize], stats.KindSize)
 
 	b.metrics[stats.PutCount] = prefix + "." + stats.PutCount
 	b.metrics[stats.PutLatencyTotal] = prefix + "." + stats.PutLatencyTotal
+	b.metrics[stats.PutE2ELatencyTotal] = prefix + "." + stats.PutE2ELatencyTotal
 	b.metrics[stats.PutSize] = prefix + "." + stats.PutSize
 
 	tstats.RegExtMetric(snode, b.metrics[stats.PutCount], stats.KindCounter)
 	tstats.RegExtMetric(snode, b.metrics[stats.PutLatencyTotal], stats.KindTotal)
+	tstats.RegExtMetric(snode, b.metrics[stats.PutE2ELatencyTotal], stats.KindTotal)
 	tstats.RegExtMetric(snode, b.metrics[stats.PutSize], stats.KindSize)
+
+	b.metrics[stats.VerChangeCount] = prefix + "." + stats.VerChangeCount
+	b.metrics[stats.VerChangeSize] = prefix + "." + stats.VerChangeSize
+
+	tstats.RegExtMetric(snode, b.metrics[stats.VerChangeCount], stats.KindCounter)
+	tstats.RegExtMetric(snode, b.metrics[stats.VerChangeSize], stats.KindSize)
 }
 
 func (b *base) Provider() string              { return b.provider }

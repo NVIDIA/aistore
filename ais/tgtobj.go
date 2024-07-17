@@ -78,6 +78,8 @@ type (
 		ranges     byteRanges // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 		atime      int64      // access time.Now()
 		ltime      int64      // mono.NanoTime, to measure latency
+		rstarttime int64      // mono.NanoTime, mark start of remote GET to measure latency
+		rltime     int64      // mono.NanoTime, to measure remote bucket latency
 		chunked    bool       // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 		unlocked   bool       // internal
 		verchanged bool       // version changed
@@ -235,6 +237,7 @@ func (poi *putOI) stats() {
 		poi.t.statsT.AddMany(
 			cos.NamedVal64{Name: backend.MetricName(stats.PutCount), Value: 1},
 			cos.NamedVal64{Name: backend.MetricName(stats.PutLatencyTotal), Value: poi.rltime},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutE2ELatencyTotal), Value: delta},
 			cos.NamedVal64{Name: backend.MetricName(stats.PutSize), Value: size},
 		)
 	}
@@ -640,6 +643,7 @@ do:
 		// zero-out prev. version custom metadata, if any
 		goi.lom.SetCustomMD(nil)
 
+		goi.rstarttime = mono.NanoTime()
 		// get remote reader (compare w/ t.GetCold)
 		res = backend.GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
@@ -669,8 +673,7 @@ do:
 			goi.unlocked = true
 			return ecode, err
 		}
-		// with remaining stats via goi.stats()
-		goi.t.coldstats(backend, res.Size, goi.ltime)
+		goi.rltime = mono.SinceNano(goi.rstarttime)
 	}
 
 	// read locally and stream back
@@ -1192,6 +1195,25 @@ func (goi *getOI) stats(written int64) {
 			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1},
 			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.Lsize()},
 		)
+	}
+
+	if goi.rltime > 0 {
+		bck := goi.lom.Bck()
+		debug.Assert(bck.IsRemote())
+		backend := goi.t.Backend(bck)
+		goi.t.statsT.AddMany(
+			cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1},
+			cos.NamedVal64{Name: stats.GetColdRwLatency, Value: goi.rltime},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written},
+		)
+		if goi.verchanged {
+			goi.t.statsT.AddMany(
+				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeCount), Value: 1},
+				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize()},
+			)
+		}
 	}
 }
 
