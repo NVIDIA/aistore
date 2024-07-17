@@ -29,14 +29,17 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
    - `-sample_key_pattern="full_name"`: Performs no substitution, using the entire file name without extension as the sample key.
    - `-sample_key_pattern="collapse_all_dir"`: Removes all '/' characters from the file name, using the resulting string as the sample key.
    - `-sample_key_pattern="custom_regex"`: Applies a custom regex pattern to substitute the file names to sample keys for your specific requirements.
-- `-max_shard_size`: The desired size of each output shard in bytes. Default is `1024000`.
+- `-max_shard_size`: Maximum size of each output shard. Default is `1MiB`. Accept following _units_ formats:
+   - IEC format, e.g.: KiB, MiB, GiB
+   - SI format, e.g.: KB, MB, GB
+   - raw format (in bytes), e.g.: 1024000
 - `-src_bck`: The source bucket name or URI.
 - `-dst_bck`: The destination bucket name or URI.
 - `-shard_template`: The template used for generating output shards. Accepts Bash, Fmt, or At formats.
    - `-shard_template="prefix-{0000..4096..8}-suffix"`: generate output shards `prefix-0000-suffix`, `prefix-0008-suffix`, `prefix-00016-suffix`, and so on.
    - `-shard_template="prefix-%06d-suffix"`: generate output shards `prefix-000000-suffix`, `prefix-000001-suffix`, `prefix-000002-suffix`, and so on.
    - `-shard_template="prefix-@00001-gap-@100-suffix"`: generate output shards `prefix-00001-gap-001-suffix`, `prefix-00001-gap-002-suffix`, and so on.
-- `-ext`: The extension used for generating output shards.
+- `-ext`: The extension used for generating output shards. Supports `.tar`, `.tgz`, `.tar.gz`, `.zip`, and `.tar.lz4` formats.
 - `-sample_exts`: A comma-separated list of extensions that should exists in the dataset. Also see `missing_extension_action`.
 - `-missing_extension_action`: Action to take when an extension is missing at any sample: `abort` | `warn` | `ignore`, if `sample_exts` is set.
 - `-collapse`: If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.
@@ -170,7 +173,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
    
    They have the same full name `ImageNet/Data/train/n00005739/n00005739_01` and therefore will always present in the same output shard. But file `ImageNet/Annotations/n00005739/n00005739_01.xml` has different full name `ImageNet/Annotations/n00005739/n00005739_01`, and therefore will be sharded separately.
    ```sh
-   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out --sample_key_pattern="full_name"
+   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="full_name"
 
    NAME                                                            SIZE            
    ...
@@ -193,7 +196,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
    To disable this default setting and compact each output shard's size closer to `max_shard_size`, regardless of virtual directories, you can specify `-collapse` flag. This will to flatten samples into its parent virtual directory if their overall size doesn't reach `max_shard_size`.
 
    ```sh
-   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out --sample_key_pattern="full_name" -collapse
+   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="full_name" -collapse
 
    NAME                                                                    SIZE            
    shard-0.tar                                                             1.03MiB
@@ -220,7 +223,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 3. **Customized regex sample key:** You can also provide your own `sample_key_pattern` as regex for sample key substitution. For example, the following demonstrates how to only extract the last level of virtual directory name `n00000333` as sample key using custom regex `.*/([^/]+)/[^/]+$`.
 
    ```sh
-   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -progress --sample_key_pattern=".*/([^/]+)/[^/]+$"
+   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern=".*/([^/]+)/[^/]+$"
 
    2024/07/11 11:34:26 `sample_key_pattern` .*/([^/]+)/[^/]+$ is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.
 
@@ -290,14 +293,14 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 
 1. The number of generated output shards can't fit into specified `shard-template`.
    ```sh
-   $ ./ishard -max_shard_size=256000 -src_bck=ais://sample -dst_bck=ais://sample-out -collapse --sample_key_pattern="base_filename" -shard_template="pre-{0000..50..8}-suf"
+   $ ./ishard -max_shard_size=256000 -src_bck=ais://sample -dst_bck=ais://sample-out -collapse -sample_key_pattern="base_filename" -shard_template="pre-{0000..50..8}-suf"
 
    Error: number of shards to be created exceeds expected number of shards (7)
    ```
 
 2. Provides invalid regex `sample_key_pattern`.
    ```sh
-   $ ./ishard -max_shard_size=256000 -src_bck=ais://sample -dst_bck=ais://sample-out -collapse --sample_key_pattern="(.*'" -shard_template="pre-{0000..8192..8}-suf"
+   $ ./ishard -max_shard_size=256000 -src_bck=ais://sample -dst_bck=ais://sample-out -collapse -sample_key_pattern="(.*'" -shard_template="pre-{0000..8192..8}-suf"
 
    Invalid regex pattern: (.*'. Error: error parsing regexp: missing closing ): `(.*'`
    ```
@@ -307,7 +310,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 The `-dry_run` flag in the CLI parameters allows `ishard` to only print a preview of the output shards composition without performing the actual archiving tasks. This is especially useful when working with large datasets, where the full execution of `ishard` can take hours to complete.
 
 ```sh
-$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out --sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run | less
+$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run | less
 
 pre-0000-suf.tar                                                        120.68KiB
     pre-0000-suf/ImageNet/Annotations/n00000333/n00000333_01.xml        100B
@@ -329,7 +332,7 @@ pre-0008-suf.tar                                                        120.59Ki
 You can also apply `-dry_run="show_keys"` to display the key of each group of samples after `sample_key_pattern` substitution. The string inside `[]` in the output represents the sample key of the sample to which the following files belong.
 
 ```sh
-$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out --sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run="show_keys" | less
+$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run="show_keys" | less
 
 pre-0000-suf.tar                                                        120.68KiB
   [n00000333_01]                                                        

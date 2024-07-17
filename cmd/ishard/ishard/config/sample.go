@@ -6,6 +6,8 @@ package config
 
 import (
 	"fmt"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 type SampleKeyPattern struct {
@@ -38,7 +40,7 @@ func ignoreAction(missingExt string) error {
 type MissingExtFunc func(missingExt string) error
 
 var MissingExtActMap = map[string]MissingExtFunc{
-	"abort":  abortAction,
-	"warn":   warnAction,
-	"ignore": ignoreAction,
+	cmn.AbortReaction:  abortAction,
+	cmn.WarnReaction:   warnAction,
+	cmn.IgnoreReaction: ignoreAction,
 }

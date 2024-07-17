@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -84,7 +85,6 @@ func Load() (*Config, error) {
 }
 
 func parseCliParams(cfg *Config) {
-	flag.Int64Var(&cfg.MaxShardSize, "max_shard_size", 1024000, "Desired size of each output shard")
 	flag.StringVar(&cfg.SrcBck.Name, "src_bck", "", "Source bucket name or URI.")
 	flag.StringVar(&cfg.DstBck.Name, "dst_bck", "", "Destination bucket name or URI.")
 	flag.StringVar(&cfg.ShardTemplate, "shard_template", "shard-%d", "Template used for generating output shards. Accepts Bash (prefix{0001..0010}suffix), Fmt (prefix-%06d-suffix), or At (prefix-@00001-gap-@100-suffix) templates")
@@ -95,17 +95,28 @@ func parseCliParams(cfg *Config) {
 	flag.Var(&cfg.DryRunFlag, "dry_run", "If set, only shows the layout of resulting output shards without actually executing archive jobs. Use 'show_keys' to include sample keys.")
 
 	var (
+		err                 error
+		maxShardSizeStr     string
 		sampleExts          string
 		sampleKeyPatternStr string
 	)
 
+	flag.StringVar(&maxShardSizeStr, "max_shard_size", "1MiB", "Maximum size of each output shard. Accepts IEC, SI, and raw formats.")
 	flag.StringVar(&sampleExts, "sample_exts", "", "Comma-separated list of extensions that should exists in the dataset.")
 	flag.StringVar(&sampleKeyPatternStr, "sample_key_pattern", "", "The regex pattern used to transform object names in the source bucket to sample keys. This ensures that objects with the same sample key are always sharded into the same output shard.")
 
 	flag.Parse()
 
+	if cfg.MaxShardSize, err = cos.ParseSize(maxShardSizeStr, cos.UnitsIEC); err != nil {
+		log.Printf("Invalid max_shard_size format: %s. Error: %v\n", maxShardSizeStr, err)
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	if _, ok := MissingExtActMap[cfg.MissingExtAction]; !ok {
-		log.Fatalf("Invalid action: %s. Accepted values are: abort, warn, ignore\n", cfg.MissingExtAction)
+		log.Printf("Invalid action: %s. Accepted values are: abort, warn, ignore\n", cfg.MissingExtAction)
+		flag.Usage()
+		os.Exit(1)
 	}
 	if sampleExts != "" {
 		cfg.SampleExtensions = strings.Split(sampleExts, ",")
@@ -138,7 +149,6 @@ func parseCliParams(cfg *Config) {
 		os.Exit(1)
 	}
 
-	var err error
 	if cfg.SrcBck, cfg.SrcPrefix, err = cmn.ParseBckObjectURI(cfg.SrcBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
 		log.Printf("Error on parsing source bucket: %s. Error: %v", cfg.SrcBck.Name, err)
 		flag.Usage()
