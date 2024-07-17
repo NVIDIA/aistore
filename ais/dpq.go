@@ -47,6 +47,26 @@ type dpq struct {
 	isS3          bool // special use: frontend S3 API
 }
 
+var _except = map[string]bool{
+	apc.QparamProxyID:        false,
+	apc.QparamDontHeadRemote: false,
+
+	// flows that utilize the following query parameters perform conventional r.URL.Query()
+	s3.QparamMptUploadID:   false,
+	s3.QparamMptUploads:    false,
+	s3.QparamMptPartNo:     false,
+	s3.QparamAccessKeyID:   false,
+	s3.QparamExpires:       false,
+	s3.QparamSignature:     false,
+	s3.HeaderAlgorithm:     false,
+	s3.HeaderCredentials:   false,
+	s3.HeaderDate:          false,
+	s3.HeaderExpires:       false,
+	s3.HeaderSignedHeaders: false,
+	s3.HeaderSignature:     false,
+	s3.QparamXID:           false,
+}
+
 var (
 	dpqPool sync.Pool
 	dpq0    dpq
@@ -137,27 +157,16 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 			dpq.latestVer = cos.IsParseBool(value)
 
 		default:
-			debug.Func(func() {
-				switch key {
-				// not used yet
-				case apc.QparamProxyID, apc.QparamDontHeadRemote:
-
-				// flows that utilize these particular keys perform conventional
-				// `r.URL.Query()` parsing
-				case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo,
-					s3.QparamAccessKeyID, s3.QparamExpires, s3.QparamSignature,
-					s3.HeaderAlgorithm, s3.HeaderCredentials, s3.HeaderDate,
-					s3.HeaderExpires, s3.HeaderSignedHeaders, s3.HeaderSignature, s3.QparamXID:
-
-				default:
-					err = fmt.Errorf("failed to fast-parse [%s], unknown key: %q", rawQuery, key)
-					debug.AssertNoErr(err)
-				}
-			})
+			// the key must be known or _except-ed
+			if _, ok := _except[key]; !ok {
+				err = fmt.Errorf("invalid query parameter: %q", key)
+				debug.AssertNoErr(err)
+				return err
+			}
 		}
 	}
 	if err == nil && iters >= maxNumQparams {
-		err = errors.New("dpq: exceeded max number of iterations: " + strconv.Itoa(iters))
+		err = errors.New("exceeded max number of dpq iterations: " + strconv.Itoa(iters))
 	}
 	return err
 }
