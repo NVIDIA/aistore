@@ -6,6 +6,7 @@
 package stats
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -46,10 +47,9 @@ const (
 	VerChangeSize  = "ver.change.size"
 
 	// errors
-	ErrCksumCount    = "err.cksum.n"
-	ErrCksumSize     = "err.cksum.size"
-	ErrMetadataCount = "err.md.n"
-	ErrIOCount       = "err.io.n"
+	ErrCksumCount = "err.cksum.n"
+	ErrCksumSize  = "err.cksum.size"
+	ErrIOCount    = "err.io.n"
 
 	// KindLatency
 	PutLatency         = "put.ns"
@@ -104,10 +104,11 @@ type (
 		cs        struct {
 			last int64 // mono.Nano
 		}
-		lines   []string
-		fsIDs   []cos.FsID
-		xallRun core.AllRunningInOut
-		standby bool
+		softErrs int64 // numSoftErrs(); to monitor the change
+		lines    []string
+		fsIDs    []cos.FsID
+		xallRun  core.AllRunningInOut
+		standby  bool
 	}
 )
 
@@ -229,7 +230,6 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, ErrCksumCount, KindCounter)
 	r.reg(snode, ErrCksumSize, KindSize)
 
-	r.reg(snode, ErrMetadataCount, KindCounter)
 	r.reg(snode, ErrIOCount, KindCounter)
 
 	// streams
@@ -301,8 +301,35 @@ func (r *Trunner) GetStatsV322() (out *NodeV322) {
 	return out
 }
 
+func (r *Trunner) _softErrs(config *cmn.Config) {
+	c := config.FSHC
+	if !c.Enabled {
+		return
+	}
+	if r.core.statsTime < 5*time.Second {
+		return // TODO: cannot reliably recompute to c.SoftErrTime (10s and larger)
+	}
+	debug.Assert(c.NumSoftErrs > 0 && c.SoftErrTime > 0)
+
+	n := r.numSoftErrs()
+	d := n - r.softErrs
+	r.softErrs = n
+
+	j := d * int64(c.SoftErrTime) / int64(r.core.statsTime)
+	if j < int64(c.NumSoftErrs) {
+		return
+	}
+	err := fmt.Errorf("number of soft errors (%d) raised during the last (%d) seconds exceeded the limit (%d)",
+		d, c.SoftErrTime, c.NumSoftErrs)
+	nlog.Errorln(err)
+	nlog.Warningln("waking up FSHC to check all mountpaths")
+	r.t.SoftFSHC()
+}
+
 // log _and_ update various low-level states
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
+	r._softErrs(config)
+
 	r.lines = r.lines[:0]
 
 	// 1. disk stats

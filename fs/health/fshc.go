@@ -7,6 +7,7 @@ package health
 import (
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"time"
@@ -48,10 +49,10 @@ func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
 
 func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	var (
-		cfg          = cmn.GCO.Get().FSHC
-		serr         string
-		rerrs, werrs int
-		maxerrs      = cfg.ErrorLimit
+		serr, pass string
+		cfg        = cmn.GCO.Get().FSHC
+		maxerrs    = cfg.HardErrs
+		numFiles   = cfg.TestFileCount
 	)
 	// 1. fstat
 	err := cos.Stat(mi.Path)
@@ -79,30 +80,36 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 
 	// 4. read/write tests
 	for i := range 2 {
-		re, we := _rwMpath(mi, fqn, cfg.TestFileCount, fshcFileSize)
-		rerrs += re
-		werrs += we
+		rerrs, werrs := _rw(mi, fqn, numFiles, fshcFileSize)
 
 		if rerrs == 0 && werrs == 0 {
-			nlog.Infoln(mi.String(), "is healthy")
+			if i == 0 {
+				nlog.Infoln(mi.String(), "appears to be healthy")
+				return
+			}
+			nlog.Infoln(mi.String(), "- no read/write errors on a 2nd pass")
 			return
 		}
-		serr = fmt.Sprintf("(read %d, write %d (max-errors %d, write-size %s))",
-			rerrs, werrs, maxerrs, cos.ToSizeIEC(fshcFileSize, 0))
+		serr = fmt.Sprintf("(read %d, write %d (max-errors %d, write-size %s%s))",
+			rerrs, werrs, maxerrs, cos.ToSizeIEC(fshcFileSize, 0), pass)
 
 		if rerrs+werrs < maxerrs {
 			nlog.Errorln("Warning: detected read/write errors", mi.String(), serr)
 			nlog.Warningln("Warning: ignoring, _not_ disabling", mi.String())
 			return
 		}
-		// repeat once
+		// repeat just once
 		if i == 0 {
-			maxerrs++
+			numFiles = max(min(numFiles*2, fshcMaxFileList), numFiles+2)
+			if numFiles >= 2*cfg.TestFileCount {
+				maxerrs++
+			}
+			pass = ", pass two"
 			time.Sleep(2 * time.Second)
 		}
 	}
 	nlog.Errorln("exceeded I/O error limit:", serr)
-	nlog.Errorln("proceeding to disable", mi.String())
+	nlog.Warningln("proceeding to disable", mi.String())
 
 disable:
 	f._disable(mi)
@@ -126,12 +133,12 @@ func (f *FSHC) _disable(mi *fs.Mountpath) {
 //
 //	is accessible. When the specified local directory is inaccessible the
 //	function returns immediately without any read/write operations
-func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs int) {
+func _rw(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs int) {
 	var numReads int
 
 	// 1. Read the fqn that caused the error, if defined and is a file.
 	if fqn != "" {
-		nlog.Infoln("1. read failed fqn", fqn)
+		nlog.Infoln("1. read one failed fqn:", fqn)
 		if finfo, err := os.Stat(fqn); err == nil && !finfo.IsDir() {
 			numReads++
 			if err := _read(fqn); err != nil && !os.IsNotExist(err) {
@@ -146,25 +153,26 @@ func _rwMpath(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs i
 	// 2. Read up to numFiles files.
 	nlog.Infoln("2. read randomly up to", numFiles, "existing files")
 	for numReads < numFiles {
-		fqn, err := getRandomFname(mi.Path)
+		fqn, err := getRandFname(mi.Path, 0 /*recurs depth*/)
 		if err == io.EOF {
-			nlog.Warningln(mi.String(), "is suspiciously empty (???)")
+			if numReads == 0 {
+				nlog.Warningln(mi.String(), "is suspiciously empty (???)")
+			}
 			break
 		}
-		numReads++
 		if err != nil {
 			if cos.IsIOError(err) {
 				rerrs++
 			}
-			nlog.Errorf("%s: failed to select random (%d, %v)", mi, rerrs, err)
+			nlog.Errorf("%s: failed to select a random file to read: (%d, %d, %v)", mi, numReads, rerrs, err)
 			continue
 		}
 		if err = _read(fqn); err != nil {
-			if cos.IsIOError(err) {
-				rerrs++
-			}
-			nlog.Errorf("%s: failed to read (%s, %d, %v)", mi, fqn, rerrs, err)
+			rerrs++
+			nlog.Errorf("%s: failed to read %s (%d, %d, %v)", mi, fqn, numReads, rerrs, err)
+			continue
 		}
+		numReads++
 	}
 
 	// Create temp dir under the mountpath (under $deleted).
@@ -210,11 +218,12 @@ func _read(fqn string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(io.Discard, file); err != nil {
-		_ = file.Close()
-		return err
+	_, err = io.Copy(io.Discard, file)
+	errC := file.Close()
+	if err == nil {
+		err = errC
 	}
-	return file.Close()
+	return err
 }
 
 // Write random file under `tmpDir`.
@@ -256,35 +265,49 @@ cleanup:
 	return erd
 }
 
+const maxDepth = 16
+
 // Look up a random file to read inside `basePath`.
-func getRandomFname(basePath string) (string, error) {
-	file, err := os.Open(basePath)
+func getRandFname(basePath string, depth int) (string, error) {
+	file, errN := os.Open(basePath)
+	if errN != nil {
+		return "", errN
+	}
+
+	dentries, err := file.ReadDir(fshcMaxFileList)
 	if err != nil {
 		return "", err
 	}
-
-	files, err := file.ReadDir(fshcMaxFileList)
-	if err == nil {
-		fmap := make(map[string]os.DirEntry, len(files))
-		for _, ff := range files {
-			fmap[ff.Name()] = ff
-		}
-
-		// look for a non-empty random entry
-		for k, info := range fmap {
-			// it is a file - return its fqn
-			if !info.IsDir() {
-				return filepath.Join(basePath, k), nil
-			}
-			// it is a directory - return a random file from it
-			chosen, err := getRandomFname(filepath.Join(basePath, k))
-			if err != nil {
-				return "", err
-			}
-			if chosen != "" {
-				return chosen, nil
-			}
-		}
+	l := len(dentries)
+	if l == 0 {
+		return "", io.EOF
 	}
-	return "", err
+	pos := rand.IntN(l)
+	for i := range l {
+		j := (pos + i) % l
+		de := dentries[j]
+		fqn := filepath.Join(basePath, de.Name())
+		if de.Type().IsRegular() {
+			return fqn, nil
+		}
+		if !de.IsDir() {
+			nlog.Warningln("not a directory and not a file:", fqn, "(???)")
+			continue
+		}
+		// recurs in
+		depth++
+		if depth > maxDepth {
+			continue
+		}
+		fqn, err = getRandFname(fqn, depth)
+		if err != nil {
+			if err == io.EOF {
+				continue
+			}
+			return "", err
+		}
+		return fqn, nil
+	}
+
+	return "", io.EOF
 }

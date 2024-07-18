@@ -50,6 +50,7 @@ const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 // filesystem Health Check
 type HC interface {
 	FSHC(err error, mi *Mountpath, fqn string)
+	SoftFSHC()
 }
 
 type (

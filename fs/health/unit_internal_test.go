@@ -50,7 +50,7 @@ func initMountpaths(t *testing.T) {
 func updateTestConfig() {
 	config := cmn.GCO.BeginUpdate()
 	config.FSHC.Enabled = true
-	config.FSHC.ErrorLimit = 2
+	config.FSHC.HardErrs = 2
 	config.FSHC.TestFileCount = 4
 	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
@@ -93,14 +93,14 @@ func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (pa
 	config := &cmn.GCO.Get().FSHC
 	nlog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
-		readErrors, config.ErrorLimit, fshcFileSize,
-		writeErrors, config.ErrorLimit)
+		readErrors, config.HardErrs, fshcFileSize,
+		writeErrors, config.HardErrs)
 
 	if !available {
 		return false, errors.New("mountpath is unavailable")
 	}
 
-	passed = readErrors < config.ErrorLimit && writeErrors < config.ErrorLimit
+	passed = readErrors < config.HardErrs && writeErrors < config.HardErrs
 	if !passed {
 		err = fmt.Errorf("too many errors: %d read error%s, %d write error%s",
 			readErrors, cos.Plural(readErrors), writeErrors, cos.Plural(writeErrors))

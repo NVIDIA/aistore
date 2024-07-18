@@ -15,6 +15,13 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+func (t *target) SoftFSHC() {
+	avail := fs.GetAvail()
+	for _, mi := range avail {
+		t.fshc.OnErr(mi, "")
+	}
+}
+
 func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 	config := cmn.GCO.Get()
 

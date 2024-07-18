@@ -62,7 +62,9 @@ const (
 	// KindCounter:
 	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
 	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
+	//
 	// See also: `IncErr`, `regCommon`
+	// See also: `softErrNames`
 	GetCount    = "get.n"    // GET(object) count = (cold + warm)
 	PutCount    = "put.n"    // ditto PUT
 	AppendCount = "append.n" // ditto etc.
@@ -141,6 +143,8 @@ type (
 var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
 
 var ignoreIdle = []string{"kalive", Uptime, "disk."}
+
+var softErrNames = []string{errPrefix + GetCount, errPrefix + PutCount, errPrefix + DeleteCount, errPrefix + RenameCount}
 
 ////////////
 // runner //
@@ -239,6 +243,13 @@ func (r *runner) Get(name string) (val int64) { return r.core.get(name) }
 func (r *runner) nodeStateFlags() cos.NodeStateFlags {
 	val := r.Get(NodeStateFlags)
 	return cos.NodeStateFlags(val)
+}
+
+func (r *runner) numSoftErrs() (n int64) {
+	for _, name := range softErrNames {
+		n += r.Get(name)
+	}
+	return n
 }
 
 func (r *runner) _run(logger statsLogger /* Prunner or Trunner */) error {

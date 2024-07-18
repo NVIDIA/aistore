@@ -131,9 +131,11 @@ cat > $AIS_CONF_FILE <<EOL
 		}
 	},
 	"fshc": {
-		"enabled":     true,
-		"test_files":  4,
-		"error_limit": 2
+		"test_files":     4,
+		"error_limit":    2,
+		"soft_err_limit": 100,
+		"soft_err_time":  "10s",
+		"enabled":        true
 	},
 	"auth": {
 		"secret":      "$AIS_SECRET_KEY",

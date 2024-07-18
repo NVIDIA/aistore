@@ -475,14 +475,25 @@ type (
 	}
 
 	FSHCConf struct {
-		TestFileCount int  `json:"test_files"`  // number of files to read/write
-		ErrorLimit    int  `json:"error_limit"` // exceeding err limit causes disabling mountpath
-		Enabled       bool `json:"enabled"`
+		TestFileCount int `json:"test_files"` // number of files to read/write
+		// critical and unexpected errors; exceeding the limit "triggers" FSHC that may, in turn,
+		// disable the corresponding mountpath
+		HardErrs int `json:"error_limit"`
+		// maximum number of non-critical errors during the last `SoftErrTime`;
+		// exceeding this limit is also an FSHC-trggering event
+		NumSoftErrs int `json:"soft_err_limit"`
+		// time interval (in seconds) to accumulate soft errors;
+		// the total number by the end of the interval must not exceed `NumSoftErrs` (above)
+		SoftErrTime cos.Duration `json:"soft_err_time"`
+		// note: disabling FSHC is _not_ recommended
+		Enabled bool `json:"enabled"`
 	}
 	FSHCConfToSet struct {
-		TestFileCount *int  `json:"test_files,omitempty"`
-		ErrorLimit    *int  `json:"error_limit,omitempty"`
-		Enabled       *bool `json:"enabled,omitempty"`
+		TestFileCount *int          `json:"test_files,omitempty"`
+		HardErrs      *int          `json:"error_limit,omitempty"`
+		NumSoftErrs   *int          `json:"soft_err_limit,omitempty"`
+		SoftErrTime   *cos.Duration `json:"soft_err_time,omitempty"`
+		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
 	AuthConf struct {
@@ -655,6 +666,7 @@ var (
 	_ Validator = (*RebalanceConf)(nil)
 	_ Validator = (*ResilverConf)(nil)
 	_ Validator = (*NetConf)(nil)
+	_ Validator = (*FSHCConf)(nil)
 	_ Validator = (*HTTPConf)(nil)
 	_ Validator = (*DownloaderConf)(nil)
 	_ Validator = (*DsortConf)(nil)
@@ -1204,7 +1216,7 @@ func (c *KeepaliveConf) Validate() (err error) {
 	} else if c.RetryFactor < 1 || c.RetryFactor > 10 {
 		err = fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting 1 thru 10)", c.RetryFactor)
 	}
-	return
+	return err
 }
 
 func KeepaliveRetryDuration(c *Config) time.Duration {
@@ -1246,6 +1258,29 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 		ClientCA:    c.ClientCA,
 		SkipVerify:  c.SkipVerifyCrt,
 	}
+}
+
+/////////////
+// FSHCConf //
+/////////////
+
+func (c *FSHCConf) Validate() error {
+	if c.TestFileCount < 4 {
+		return fmt.Errorf("invalid fshc.test_files %d (expecting >= %d)", c.TestFileCount, 4)
+	}
+	if c.HardErrs < 2 {
+		return fmt.Errorf("invalid fshc.error_limit %d (expecting >= %d)", c.HardErrs, 2)
+	}
+	if c.NumSoftErrs < 10 {
+		return fmt.Errorf("invalid fshc.soft_err_limit %d (expecting >= %d)", c.NumSoftErrs, 10)
+	}
+	if c.SoftErrTime < cos.Duration(10*time.Second) {
+		return fmt.Errorf("invalid fshc.soft_err_time %d (expecting >= %v)", c.SoftErrTime, 10*time.Second)
+	}
+	if c.SoftErrTime > cos.Duration(60*time.Second) {
+		return fmt.Errorf("invalid fshc.soft_err_time %d (expecting <= %v)", c.SoftErrTime, 60*time.Second)
+	}
+	return nil
 }
 
 ////////////////////
