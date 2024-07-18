@@ -26,13 +26,6 @@ type (
 		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
 )
 
-// _statically_ defined addition for the `latency` table (compare with counter and throughput tabs)
-var addLatencyTab = []string{
-	stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize,
-	stats.PutSize, stats.PutCount,
-	stats.AppendCount,
-}
-
 // true when called by top-level handler
 var allPerfTabs bool
 
@@ -176,14 +169,20 @@ func showThroughputHandler(c *cli.Context) error {
 
 	selected := make(cos.StrKVs, len(metrics))
 	for name, kind := range metrics {
+		switch name {
+		case stats.GetSize, stats.GetCount, stats.PutSize, stats.PutCount:
+			selected[name] = kind
+			continue
+		}
+
 		switch {
 		case kind == stats.KindThroughput:
 			// 1. all throughput
 			selected[name] = kind
 			totals[name] = 0
-		case name == stats.GetSize || name == stats.GetColdSize || name == stats.PutSize ||
-			name == stats.GetCount || name == stats.GetColdCount || name == stats.PutCount:
-			// 2. to show average get/put sizes
+		case strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.GetSize):
+			selected[name] = kind
+		case strings.HasSuffix(name, "."+stats.PutCount) || strings.HasSuffix(name, "."+stats.PutSize):
 			selected[name] = kind
 		case stats.IsErrMetric(name):
 			// 3. errors
@@ -231,6 +230,8 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 	return
 }
 
+// TODO -- FIXME: transition to using totals (ais/backend/common.go)
+
 // NOTE: two built-in assumptions: one cosmetic, another major
 // - ".ns" => ".n" correspondence is the cosmetic one
 // - the naive way to recompute latency using the total elapsed, not the actual, time to execute so many requests...
@@ -243,10 +244,18 @@ func showLatencyHandler(c *cli.Context) error {
 	_warnThruLatIters(c)
 
 	// statically filter metrics (names)
-	selected := make(cos.StrKVs, 20)
+	selected := make(cos.StrKVs, len(metrics))
 	for name, kind := range metrics {
+		switch name {
+		case stats.GetSize, stats.GetCount, stats.PutSize, stats.PutCount, stats.AppendCount:
+			selected[name] = kind
+			continue
+		}
+
 		switch {
-		case cos.StringInSlice(name, addLatencyTab):
+		case strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.GetSize):
+			selected[name] = kind
+		case strings.HasSuffix(name, "."+stats.PutCount) || strings.HasSuffix(name, "."+stats.PutSize):
 			selected[name] = kind
 		case strings.HasSuffix(name, ".ns") && name != stats.Uptime: // NOTE: not including and not handling "*.ns.total"
 			selected[name] = kind
@@ -279,8 +288,20 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 			switch name {
 			case stats.GetLatency, stats.GetRedirLatency:
 				ncounter = stats.GetCount
+
+			// TODO -- FIXME: transition to using totals (ais/backend/common.go)
 			case stats.GetColdRwLatency:
-				ncounter = stats.GetColdCount
+				if _, ok := metrics["aws."+stats.GetCount]; ok {
+					ncounter = "aws." + stats.GetCount
+				} else if _, ok := metrics["gcp."+stats.GetCount]; ok {
+					ncounter = "gcp." + stats.GetCount
+				} else if _, ok := metrics["azure."+stats.GetCount]; ok {
+					ncounter = "azure." + stats.GetCount
+				} else {
+					v.Value = 0
+					begin.Tracker[name] = v
+					continue
+				}
 			case stats.PutLatency, stats.PutRedirLatency:
 				ncounter = stats.PutCount
 			case stats.AppendLatency:

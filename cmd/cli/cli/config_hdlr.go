@@ -208,7 +208,7 @@ func setCluConfigHandler(c *cli.Context) error {
 
 	// assorted named fields that require (cluster | node) restart
 	// for the change to take an effect
-	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
+	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired[:]); name != "" {
 		warn := fmt.Sprintf("cluster restart required for the change '%s=%s' to take an effect.", name, nvs[name])
 		actionWarn(c, warn)
 	}
@@ -355,7 +355,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 
 	// assorted named fields that'll require (cluster | node) restart
 	// for the change to take an effect
-	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired); name != "" {
+	if name := nvs.ContainsAnyMatch(cmn.ConfigRestartRequired[:]); name != "" {
 		warn := fmt.Sprintf("for the change '%s=%s' to take an effect node %q must be restarted.",
 			name, nvs[name], sname)
 		actionWarn(c, warn)

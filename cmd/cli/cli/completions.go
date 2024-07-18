@@ -38,21 +38,21 @@ var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
 		// log modules
-		confLogModules: append(cos.Smodules, apc.NilValue),
+		confLogModules: append(cos.Smodules[:], apc.NilValue),
 		// checksums
 		apc.HdrObjCksumType: cos.SupportedChecksums(),
 		// access
 		cmn.PropBucketAccessAttrs: apc.SupportedPermissions(),
 		// feature flags
-		"cluster.features": append(feat.Cluster, apc.NilValue),
-		"bucket.features":  append(feat.Bucket, apc.NilValue),
+		"cluster.features": append(feat.Cluster[:], apc.NilValue),
+		"bucket.features":  append(feat.Bucket[:], apc.NilValue),
 		// rest
-		"write_policy.data":                   apc.SupportedWritePolicy,
-		"write_policy.md":                     apc.SupportedWritePolicy,
-		"ec.compression":                      apc.SupportedCompression,
-		"compression.checksum":                apc.SupportedCompression,
-		"rebalance.compression":               apc.SupportedCompression,
-		"distributed_sort.compression":        apc.SupportedCompression,
+		"write_policy.data":                   apc.SupportedWritePolicy[:],
+		"write_policy.md":                     apc.SupportedWritePolicy[:],
+		"ec.compression":                      apc.SupportedCompression[:],
+		"compression.checksum":                apc.SupportedCompression[:],
+		"rebalance.compression":               apc.SupportedCompression[:],
+		"distributed_sort.compression":        apc.SupportedCompression[:],
 		"distributed_sort.duplicated_records": cmn.SupportedReactions,
 		"distributed_sort.ekm_malformed_line": cmn.SupportedReactions,
 		"distributed_sort.ekm_missing_key":    cmn.SupportedReactions,
