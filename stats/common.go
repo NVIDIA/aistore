@@ -63,6 +63,8 @@ const (
 	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
 	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
 	//
+	// NOTE: IncNonIOErr() correction, to filter out those GET and PUT errors that are cause by client "going away"
+	//
 	// See also: `IncErr`, `regCommon`
 	// See also: `softErrNames`
 	GetCount    = "get.n"    // GET(object) count = (cold + warm)
@@ -134,6 +136,7 @@ type (
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
 		next      int64       // mono.Nano
+		nonIOErr  int64
 		mem       sys.MemStat
 		startedUp atomic.Bool
 	}
@@ -149,6 +152,8 @@ var softErrNames = [...]string{errPrefix + GetCount, errPrefix + PutCount, errPr
 ////////////
 // runner //
 ////////////
+
+func (r *runner) IncNonIOErr() { ratomic.AddInt64(&r.nonIOErr, 1) }
 
 func (r *runner) InitPrometheus(snode *meta.Snode) {
 	r.core.initProm(snode)

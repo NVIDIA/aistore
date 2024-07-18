@@ -41,6 +41,7 @@ type (
 		IsPrometheus() bool
 
 		IncErr(metric string)
+		IncNonIOErr()
 
 		GetStats() *Node
 		GetStatsV322() *NodeV322 // [backward compatibility]

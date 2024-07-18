@@ -213,6 +213,9 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	return
 rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
+		if err == io.ErrUnexpectedEOF || cos.IsRetriableConnErr(err) {
+			poi.t.statsT.IncNonIOErr()
+		}
 		poi.t.statsT.IncErr(stats.PutCount)
 	}
 	return

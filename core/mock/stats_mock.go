@@ -24,6 +24,7 @@ func NewStatsTracker() stats.Tracker {
 func (*StatsTracker) StartedUp() bool                                           { return true }
 func (*StatsTracker) Get(string) int64                                          { return 0 }
 func (*StatsTracker) IncErr(string)                                             {}
+func (*StatsTracker) IncNonIOErr()                                              {}
 func (*StatsTracker) Inc(string)                                                {}
 func (*StatsTracker) Add(string, int64)                                         {}
 func (*StatsTracker) SetFlag(string, cos.NodeStateFlags)                        {}

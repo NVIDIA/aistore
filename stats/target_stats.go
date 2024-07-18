@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	ratomic "sync/atomic"
 	"time"
 	"unsafe"
 
@@ -307,22 +308,24 @@ func (r *Trunner) _softErrs(config *cmn.Config) {
 		return
 	}
 	if r.core.statsTime < 5*time.Second {
-		return // TODO: cannot reliably recompute to c.SoftErrTime (10s and larger)
+		return // cannot reliably recompute to c.SoftErrTime (which is 10s or greater)
 	}
-	debug.Assert(c.NumSoftErrs > 0 && c.SoftErrTime > 0)
+	debug.Assert(c.SoftErrs > 0 && c.SoftErrTime > 0)
 
-	n := r.numSoftErrs()
+	n := r.numSoftErrs() - ratomic.LoadInt64(&r.nonIOErr) // correction
 	d := n - r.softErrs
+	debug.Assert(d >= 0 && n >= 0)
 	r.softErrs = n
 
 	j := d * int64(c.SoftErrTime) / int64(r.core.statsTime)
-	if j < int64(c.NumSoftErrs) {
+	if j < int64(c.SoftErrs) {
 		return
 	}
-	err := fmt.Errorf("number of soft errors (%d) raised during the last (%d) seconds exceeded the limit (%d)",
-		d, c.SoftErrTime, c.NumSoftErrs)
+	err := fmt.Errorf("number of soft errors (%d) raised during the last (%v) exceeded configured limit (%d)",
+		d, c.SoftErrTime, c.SoftErrs)
 	nlog.Errorln(err)
-	nlog.Warningln("waking up FSHC to check all mountpaths")
+	nlog.Warningln("waking up FSHC to check _all_ mountpaths")
+
 	r.t.SoftFSHC()
 }
 

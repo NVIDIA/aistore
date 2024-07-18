@@ -476,14 +476,14 @@ type (
 
 	FSHCConf struct {
 		TestFileCount int `json:"test_files"` // number of files to read/write
-		// critical and unexpected errors; exceeding the limit "triggers" FSHC that may, in turn,
-		// disable the corresponding mountpath
+		// critical and unexpected errors during FSHC run;
+		// exceeding the limit "triggers" FSHC that may, in turn, disable the corresponding mountpath
 		HardErrs int `json:"error_limit"`
-		// maximum number of non-critical errors during the last `SoftErrTime`;
-		// exceeding this limit is also an FSHC-trggering event
-		NumSoftErrs int `json:"soft_err_limit"`
+		// maximum number of non-critical errors during the last `SoftErrTime` interval;
+		// exceeding this limit is also FSHC-trggering event
+		SoftErrs int `json:"soft_err_limit"`
 		// time interval (in seconds) to accumulate soft errors;
-		// the total number by the end of the interval must not exceed `NumSoftErrs` (above)
+		// the total number by the end of the interval must not exceed `SoftErrs` (above)
 		SoftErrTime cos.Duration `json:"soft_err_time"`
 		// note: disabling FSHC is _not_ recommended
 		Enabled bool `json:"enabled"`
@@ -491,7 +491,7 @@ type (
 	FSHCConfToSet struct {
 		TestFileCount *int          `json:"test_files,omitempty"`
 		HardErrs      *int          `json:"error_limit,omitempty"`
-		NumSoftErrs   *int          `json:"soft_err_limit,omitempty"`
+		SoftErrs      *int          `json:"soft_err_limit,omitempty"`
 		SoftErrTime   *cos.Duration `json:"soft_err_time,omitempty"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
@@ -1271,8 +1271,8 @@ func (c *FSHCConf) Validate() error {
 	if c.HardErrs < 2 {
 		return fmt.Errorf("invalid fshc.error_limit %d (expecting >= %d)", c.HardErrs, 2)
 	}
-	if c.NumSoftErrs < 10 {
-		return fmt.Errorf("invalid fshc.soft_err_limit %d (expecting >= %d)", c.NumSoftErrs, 10)
+	if c.SoftErrs < 10 {
+		return fmt.Errorf("invalid fshc.soft_err_limit %d (expecting >= %d)", c.SoftErrs, 10)
 	}
 	if c.SoftErrTime < cos.Duration(10*time.Second) {
 		return fmt.Errorf("invalid fshc.soft_err_time %d (expecting >= %v)", c.SoftErrTime, 10*time.Second)
