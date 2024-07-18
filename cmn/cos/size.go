@@ -34,7 +34,7 @@ const (
 	TB = 1000 * GB
 )
 
-var suffX = []string{"KIB", "MIB", "GIB", "TIB", "KB", "MB", "GB", "TB", "K", "M", "G", "T", "B"}
+var unitx = [...]string{"KIB", "MIB", "GIB", "TIB", "KB", "MB", "GB", "TB", "K", "M", "G", "T", "B"}
 
 /////////////
 // SizeIEC //
@@ -130,7 +130,7 @@ func ParseSize(size, units string) (int64, error) {
 }
 
 func _suffix(s string) string {
-	for _, suffix := range suffX {
+	for _, suffix := range unitx {
 		if strings.HasSuffix(s, suffix) {
 			return suffix
 		}

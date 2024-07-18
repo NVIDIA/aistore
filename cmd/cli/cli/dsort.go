@@ -102,7 +102,7 @@ var dsortStartCmd = cli.Command{
 	Action:    startDsortHandler,
 }
 
-var phasesOrdered = []string{
+var phasesOrdered = [...]string{
 	dsort.ExtractionPhase,
 	dsort.SortingPhase,
 	dsort.CreationPhase,

@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -47,7 +47,7 @@ type detect struct {
 	offset int
 }
 
-var FileExtensions = []string{ExtTar, ExtTgz, ExtTarGz, ExtZip, ExtTarLz4}
+var FileExtensions = [...]string{ExtTar, ExtTgz, ExtTarGz, ExtZip, ExtTarLz4}
 
 // standard file signatures
 var (

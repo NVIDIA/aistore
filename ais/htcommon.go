@@ -213,7 +213,7 @@ type (
 	}
 )
 
-var allHTTPverbs = []string{
+var htverbs = [...]string{
 	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
 	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
 }
@@ -621,8 +621,8 @@ func (server *netServer) shutdown(config *cmn.Config) {
 var _ http.Handler = (*httpMuxers)(nil)
 
 func newMuxers() httpMuxers {
-	m := make(httpMuxers, len(allHTTPverbs))
-	for _, v := range allHTTPverbs {
+	m := make(httpMuxers, len(htverbs))
+	for _, v := range htverbs {
 		m[v] = mux.NewServeMux()
 	}
 	return m

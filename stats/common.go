@@ -140,11 +140,11 @@ type (
 )
 
 // sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+var logtypes = [...]string{".INFO.", ".WARNING.", ".ERROR."}
 
-var ignoreIdle = []string{"kalive", Uptime, "disk."}
+var ignoreIdle = [...]string{"kalive", Uptime, "disk."}
 
-var softErrNames = []string{errPrefix + GetCount, errPrefix + PutCount, errPrefix + DeleteCount, errPrefix + RenameCount}
+var softErrNames = [...]string{errPrefix + GetCount, errPrefix + PutCount, errPrefix + DeleteCount, errPrefix + RenameCount}
 
 ////////////
 // runner //

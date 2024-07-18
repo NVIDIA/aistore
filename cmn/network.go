@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -36,7 +36,7 @@ const (
 	DefaultSendRecvBufferSize  = 128 * cos.KiB
 )
 
-var KnownNetworks = []string{NetPublic, NetIntraControl, NetIntraData}
+var KnownNetworks = [...]string{NetPublic, NetIntraControl, NetIntraData}
 
 func NetworkIsKnown(net string) bool {
 	return net == NetPublic || net == NetIntraControl || net == NetIntraData

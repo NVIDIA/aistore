@@ -27,7 +27,7 @@ type global struct {
 var g global
 
 func handlePub(path string, handler func(http.ResponseWriter, *http.Request)) {
-	for _, v := range allHTTPverbs {
+	for _, v := range htverbs {
 		g.netServ.pub.muxers[v].HandleFunc(path, handler)
 		if !cos.IsLastB(path, '/') {
 			g.netServ.pub.muxers[v].HandleFunc(path+"/", handler)
@@ -36,7 +36,7 @@ func handlePub(path string, handler func(http.ResponseWriter, *http.Request)) {
 }
 
 func handleControl(path string, handler func(http.ResponseWriter, *http.Request)) {
-	for _, v := range allHTTPverbs {
+	for _, v := range htverbs {
 		g.netServ.control.muxers[v].HandleFunc(path, handler)
 		if !cos.IsLastB(path, '/') {
 			g.netServ.control.muxers[v].HandleFunc(path+"/", handler)
@@ -45,7 +45,7 @@ func handleControl(path string, handler func(http.ResponseWriter, *http.Request)
 }
 
 func handleData(path string, handler func(http.ResponseWriter, *http.Request)) {
-	for _, v := range allHTTPverbs {
+	for _, v := range htverbs {
 		g.netServ.data.muxers[v].HandleFunc(path, handler)
 		if !cos.IsLastB(path, '/') {
 			g.netServ.data.muxers[v].HandleFunc(path+"/", handler)

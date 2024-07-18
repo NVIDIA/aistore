@@ -618,7 +618,7 @@ type (
 )
 
 // assorted named fields that require (cluster | node) restart for changes to make an effect
-var ConfigRestartRequired = []string{"auth", "memsys", "net"}
+var ConfigRestartRequired = [...]string{"auth", "memsys", "net"}
 
 // dsort
 const (

@@ -22,6 +22,8 @@ const (
 	DiskHighWM   = "(low-free-space)" // (capacity)
 )
 
+var alerts = [...]string{DiskFault, DiskOOS, Disk2Disable, Disk2Detach, DiskHighWM}
+
 // !available mountpath // TODO: not yet used; readability
 const (
 	DiskDisabled = "(mp-disabled)"
@@ -89,7 +91,6 @@ func (tcdf *TargetCDF) HasAlerts() bool {
 // [convention] <DISK-NAME>[(<alert>)]
 // Returns "" and (-1) when no alerts found otherwise, returns alert name and its index in the DISK-NAME string
 func HasAlert(disks []string) (alert string, idx int) {
-	var alerts = []string{DiskFault, DiskOOS, Disk2Disable, Disk2Detach, DiskHighWM}
 	for _, disk := range disks {
 		for _, a := range alerts {
 			if idx = strings.Index(disk, a); idx > 0 {

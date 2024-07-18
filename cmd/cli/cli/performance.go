@@ -26,11 +26,11 @@ type (
 		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
 )
 
-// _statically_ defined for `latency` table (compare with counter and throughput tabs)
-var selectedLatency = []string{
-	stats.GetLatency, stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize, stats.GetRedirLatency, stats.GetColdRwLatency,
-	stats.PutLatency, stats.PutSize, stats.PutCount, stats.PutRedirLatency,
-	stats.AppendLatency, stats.AppendCount,
+// _statically_ defined addition for the `latency` table (compare with counter and throughput tabs)
+var addLatencyTab = []string{
+	stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize,
+	stats.PutSize, stats.PutCount,
+	stats.AppendCount,
 }
 
 // true when called by top-level handler
@@ -243,11 +243,14 @@ func showLatencyHandler(c *cli.Context) error {
 	_warnThruLatIters(c)
 
 	// statically filter metrics (names)
-	selected := make(cos.StrKVs, len(selectedLatency))
+	selected := make(cos.StrKVs, 20)
 	for name, kind := range metrics {
-		if cos.StringInSlice(name, selectedLatency) {
+		switch {
+		case cos.StringInSlice(name, addLatencyTab):
 			selected[name] = kind
-		} else if stats.IsErrMetric(name) {
+		case strings.HasSuffix(name, ".ns") && name != stats.Uptime: // NOTE: not including and not handling "*.ns.total"
+			selected[name] = kind
+		case stats.IsErrMetric(name):
 			if strings.Contains(name, "get") || strings.Contains(name, "put") || strings.Contains(name, "append") {
 				selected[name] = kind
 			}

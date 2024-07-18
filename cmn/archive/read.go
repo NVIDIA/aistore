@@ -28,7 +28,7 @@ const (
 	_wdskey
 )
 
-var MatchMode = []string{
+var MatchMode = [...]string{
 	"regexp",
 	"prefix",
 	"suffix",
@@ -379,8 +379,10 @@ func ValidateMatchMode(mmode string) (_ string, err error) {
 	if cos.MatchAll(mmode) {
 		return MatchMode[_prefix], nil
 	}
-	if !cos.StringInSlice(mmode, MatchMode) {
-		err = &ErrMatchMode{mmode}
+	for i := range MatchMode {
+		if MatchMode[i] == mmode {
+			return mmode, nil
+		}
 	}
-	return mmode, err
+	return "", &ErrMatchMode{mmode}
 }

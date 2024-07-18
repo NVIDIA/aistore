@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -18,15 +18,14 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+// NOTE: tunable
 const numMarkers = 1
 
 // List of AIS metadata files and directories (basenames only)
-var mdFilesDirs = []string{
+var mdFilesDirs = [...]string{
 	fname.MarkersDir,
-
 	fname.Bmd,
 	fname.BmdPrevious,
-
 	fname.Vmd,
 }
 

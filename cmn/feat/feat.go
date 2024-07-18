@@ -40,7 +40,7 @@ const (
 	S3UsePathStyle            // use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
 )
 
-var Cluster = []string{
+var Cluster = [...]string{
 	"Enforce-IntraCluster-Access",
 	"Skip-Loading-VersionChecksum-MD",
 	"Do-not-Auto-Detect-FileShare",
@@ -59,7 +59,7 @@ var Cluster = []string{
 	// "none" ====================
 }
 
-var Bucket = []string{
+var Bucket = [...]string{
 	"Skip-Loading-VersionChecksum-MD",
 	"Fsync-PUT",
 	"S3-Presigned-Request",
@@ -73,7 +73,14 @@ func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlag
 func (f Flags) Set(flags Flags) Flags { return Flags(cos.BitFlags(f).Set(cos.BitFlags(flags))) }
 func (f Flags) String() string        { return strconv.FormatUint(uint64(f), 10) }
 
-func IsBucketScope(name string) bool { return cos.StringInSlice(name, Bucket) }
+func IsBucketScope(name string) bool {
+	for i := range Bucket {
+		if name == Bucket[i] {
+			return true
+		}
+	}
+	return false
+}
 
 func CSV2Feat(s string) (Flags, error) {
 	if s == "" || s == "none" {

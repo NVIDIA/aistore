@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -18,7 +18,7 @@ const (
 	WriteDefault = WritePolicy("") // same as `WriteImmediate` - see IsImmediate() below
 )
 
-var SupportedWritePolicy = []string{string(WriteImmediate), string(WriteDelayed), string(WriteNever)}
+var SupportedWritePolicy = [...]string{string(WriteImmediate), string(WriteDelayed), string(WriteNever)}
 
 func (wp WritePolicy) IsImmediate() bool { return wp == WriteDefault || wp == WriteImmediate }
 
