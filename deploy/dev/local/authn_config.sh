@@ -13,7 +13,7 @@ cat > "$AIS_AUTHN_CONF_DIR/authn.json" <<EOL
 		}
 	},
 	"auth": {
-		"secret": "$AIS_SECRET_KEY",
+		"secret": "$AIS_AUTHN_SECRET_KEY",
 		"expiration_time": "${AIS_AUTHN_TTL:-24h}"
 	},
 	"timeout": {

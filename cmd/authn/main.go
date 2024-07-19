@@ -23,8 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-const secretKeyPodEnv = "SECRETKEY" // via https://kubernetes.io/docs/concepts/configuration/secret
-
 var (
 	build     string
 	buildtime string
@@ -73,7 +71,7 @@ func main() {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
 	Conf.Init()
-	if val := os.Getenv(secretKeyPodEnv); val != "" {
+	if val := os.Getenv(env.AuthN.SecretKey); val != "" {
 		Conf.SetSecret(&val)
 	}
 	if err := updateLogOptions(); err != nil {

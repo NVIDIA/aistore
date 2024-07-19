@@ -176,17 +176,19 @@ Further references:
 
 Environment variables used by the deployment script to set up the AuthN server:
 
-| Variable             | Default Value       | Description                                                   |
-|----------------------|---------------------|---------------------------------------------------------------|
-| AIS_SECRET_KEY       | `aBitLongSecretKey` | A secret key to sign tokens                                   |
-| AIS_AUTHN_ENABLED    | `false`             | Set it to `true` to enable AuthN server and token-based access in AIStore proxy |
-| AIS_AUTHN_PORT       | `52001`             | Port on which AuthN listens to requests                       |
-| AIS_AUTHN_TTL        | `24h`               | A token expiration time. Can be set to 0 which means "no expiration time" |
-| AIS_AUTHN_USE_HTTPS  | `false`             | Enable HTTPS for AuthN server. If `true`, AuthN server requires also `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
-| AIS_SERVER_CRT       | ``                  | OpenSSL certificate. Optional: set it only when secure HTTP is enabled |
-| AIS_SERVER_KEY       | ``                  | OpenSSL key. Optional: set it only when secure HTTP is enabled |
+| Variable             | Default Value       | Description                                                                                     |
+|----------------------|---------------------|-------------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_SECRET_KEY` | `aBitLongSecretKey` | Secret key used to sign tokens                                                                  |
+| `AIS_AUTHN_ENABLED`    | `false`             | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)                  |
+| `AIS_AUTHN_PORT`       | `52001`             | Port on which AuthN listens to requests                                                         |
+| `AIS_AUTHN_TTL`        | `24h`               | Token expiration time. Can be set to `0` for no expiration                                      |
+| `AIS_AUTHN_USE_HTTPS`  | `false`             | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
+| `AIS_SERVER_CRT`       | `""`                 | OpenSSL certificate. Required when `AIS_AUTHN_USE_HTTPS` is `true`                              |
+| `AIS_SERVER_KEY`       | `""`                 | OpenSSL key. Required when `AIS_AUTHN_USE_HTTPS` is `true`                                      |
+| `AIS_AUTHN_SU_NAME`    | `admin`             | Superuser (admin) name for AuthN                                                                        |
+| `AIS_AUTHN_SU_PASS`    | `admin`             | Superuser (admin) password for AuthN                                                                    |
 
-All variables can be set at AIStore cluster deployment.
+All variables can be set at AIStore cluster deployment and will override values in the config.
 Example of starting a cluster with AuthN enabled:
 
 ```sh

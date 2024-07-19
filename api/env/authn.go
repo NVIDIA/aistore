@@ -19,6 +19,8 @@ var (
 		TTL           string
 		UseHTTPS      string
 		AdminPassword string
+		AdminUsername string
+		SecretKey     string
 	}{
 		Enabled:       "AIS_AUTHN_ENABLED",
 		URL:           "AIS_AUTHN_URL",
@@ -29,6 +31,8 @@ var (
 		Port:          "AIS_AUTHN_PORT",
 		TTL:           "AIS_AUTHN_TTL",
 		UseHTTPS:      "AIS_AUTHN_USE_HTTPS",
-		AdminPassword: "AIS_AUTHN_ADMIN_PASSWORD",
+		SecretKey:     "AIS_AUTHN_SECRET_KEY",
+		AdminUsername: "AIS_AUTHN_SU_NAME",
+		AdminPassword: "AIS_AUTHN_SU_PASS",
 	}
 )

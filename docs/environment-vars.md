@@ -262,15 +262,17 @@ AIStore Authentication Server (**AuthN**) provides OAuth 2.0 compliant [JSON Web
 
 AuthN supports multiple AIS clusters; in fact, there's no limit on the number of clusters a given AuthN instance can provide authentication and access control service for.
 
-| name | comment |
-| ---- | ------- |
-| `AIS_AUTHN_ENABLED` | aistore cluster itself must "know" whether it is being authenticated; see usage and references below |
-| `AIS_AUTHN_CONF_DIR` | AuthN server configuration directory, e.g. `"$HOME/.config/ais/authn` |
-| `AIS_AUTHN_LOG_DIR` | usage: deployment scripts and integration tests |
-| `AIS_AUTHN_LOG_LEVEL` | ditto |
-| `AIS_AUTHN_PORT` | can be used to override `52001` default |
-| `AIS_AUTHN_TTL` | authentication token expiration time; 0 (zero) means "never expires" |
-| `AIS_AUTHN_USE_HTTPS` | when true, tells a starting-up AuthN to use HTTPS |
+| Variable             | Default Value       | Description                                                                                     |
+|----------------------|---------------------|-------------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_SECRET_KEY` | `aBitLongSecretKey` | Secret key used to sign tokens                                                                  |
+| `AIS_AUTHN_ENABLED`    | `false`             | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)                  |
+| `AIS_AUTHN_PORT`       | `52001`             | Port on which AuthN listens to requests                                                         |
+| `AIS_AUTHN_TTL`        | `24h`               | Token expiration time. Can be set to `0` for no expiration                                      |
+| `AIS_AUTHN_USE_HTTPS`  | `false`             | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
+| `AIS_SERVER_CRT`       | `""`                 | OpenSSL certificate. Required when `AIS_AUTHN_USE_HTTPS` is `true`                              |
+| `AIS_SERVER_KEY`       | `""`                 | OpenSSL key. Required when `AIS_AUTHN_USE_HTTPS` is `true`                                      |
+| `AIS_AUTHN_SU_NAME`    | `admin`             | Superuser (admin) name for AuthN                                                                        |
+| `AIS_AUTHN_SU_PASS`    | `admin`             | Superuser (admin) password for AuthN                                                                    |
 
 Separately, there's also client-side AuthN environment that includes:
 
