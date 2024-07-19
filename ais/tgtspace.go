@@ -37,7 +37,10 @@ var (
 
 // triggers by an out-of-space condition or a suspicion of thereof
 
-func (t *target) oos(config *cmn.Config) fs.CapStatus { return t.OOS(nil, config, nil) }
+func (t *target) oos(config *cmn.Config) fs.CapStatus {
+	debug.Assert(config != nil)
+	return t.OOS(nil, config, nil)
+}
 
 func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.TargetCDF) (cs fs.CapStatus) {
 	var errCap error

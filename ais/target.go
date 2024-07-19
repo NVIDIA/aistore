@@ -1452,7 +1452,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
-		cs = t.oos(nil)
+		cs = t.oos(cmn.GCO.Get())
 		if err := cs.Err(); err != nil {
 			return "", nil, err
 		}
