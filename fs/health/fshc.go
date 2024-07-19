@@ -25,15 +25,18 @@ import (
 // - configured error limit is exceeded
 // the mountpath is disabled - effectively, removed from the operation henceforth.
 
-// TODO -- FIXME: revisit all tunables
-
+// constants and tunables
 const (
-	ival = 4 * time.Minute
+	tmpSize     = cos.MiB // write: temp file size
+	maxNumFiles = 100     // read:  upto so many existing files
 )
 
 const (
-	fshcFileSize    = 10 * cos.MiB // size of temporary file which will test writing and reading the mountpath
-	fshcMaxFileList = 100          // maximum number of existing files to read
+	minTimeBetweenRuns = 4 * time.Minute
+)
+
+const (
+	maxDepth = 16 // recurs read
 )
 
 type (
@@ -80,7 +83,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 
 	// 4. read/write tests
 	for i := range 2 {
-		rerrs, werrs := _rw(mi, fqn, numFiles, fshcFileSize)
+		rerrs, werrs := _rw(mi, fqn, numFiles, tmpSize)
 
 		if rerrs == 0 && werrs == 0 {
 			if i == 0 {
@@ -91,7 +94,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 			return
 		}
 		serr = fmt.Sprintf("(read %d, write %d (max-errors %d, write-size %s%s))",
-			rerrs, werrs, maxerrs, cos.ToSizeIEC(fshcFileSize, 0), pass)
+			rerrs, werrs, maxerrs, cos.ToSizeIEC(tmpSize, 0), pass)
 
 		if rerrs+werrs < maxerrs {
 			nlog.Errorln("Warning: detected read/write errors", mi.String(), serr)
@@ -100,7 +103,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 		}
 		// repeat just once
 		if i == 0 {
-			numFiles = max(min(numFiles*2, fshcMaxFileList), numFiles+2)
+			numFiles = max(min(numFiles*2, maxNumFiles), numFiles+2)
 			if numFiles >= 2*cfg.TestFileCount {
 				maxerrs++
 			}
@@ -265,8 +268,6 @@ cleanup:
 	return erd
 }
 
-const maxDepth = 16
-
 // Look up a random file to read inside `basePath`.
 func getRandFname(basePath string, depth int) (string, error) {
 	file, errN := os.Open(basePath)
@@ -274,7 +275,7 @@ func getRandFname(basePath string, depth int) (string, error) {
 		return "", errN
 	}
 
-	dentries, err := file.ReadDir(fshcMaxFileList)
+	dentries, err := file.ReadDir(maxNumFiles)
 	if err != nil {
 		return "", err
 	}

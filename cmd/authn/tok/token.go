@@ -37,6 +37,8 @@ var (
 	ErrTokenRevoked  = errors.New("token revoked")
 )
 
+// TODO: cos.Unsafe* and other micro-optimization and refactoring
+
 func AdminJWT(expires time.Time, userID, secret string) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"expires":  expires,

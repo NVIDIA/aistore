@@ -93,7 +93,7 @@ func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (pa
 	config := &cmn.GCO.Get().FSHC
 	nlog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
-		readErrors, config.HardErrs, fshcFileSize,
+		readErrors, config.HardErrs, tmpSize,
 		writeErrors, config.HardErrs)
 
 	if !available {

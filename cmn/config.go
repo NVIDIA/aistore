@@ -1264,6 +1264,11 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 // FSHCConf //
 /////////////
 
+const (
+	SoftErrTimeDflt = 10 * time.Second
+	SoftErrsLimit   = 100
+)
+
 func (c *FSHCConf) Validate() error {
 	if c.TestFileCount < 4 {
 		return fmt.Errorf("invalid fshc.test_files %d (expecting >= %d)", c.TestFileCount, 4)
@@ -1271,6 +1276,13 @@ func (c *FSHCConf) Validate() error {
 	if c.HardErrs < 2 {
 		return fmt.Errorf("invalid fshc.error_limit %d (expecting >= %d)", c.HardErrs, 2)
 	}
+
+	// [backward compatibility] when both "soft" knobs are missing
+	if c.SoftErrs == 0 && c.SoftErrTime == 0 {
+		c.SoftErrs = SoftErrsLimit
+		c.SoftErrTime = cos.Duration(SoftErrTimeDflt)
+	}
+
 	if c.SoftErrs < 10 {
 		return fmt.Errorf("invalid fshc.soft_err_limit %d (expecting >= %d)", c.SoftErrs, 10)
 	}
