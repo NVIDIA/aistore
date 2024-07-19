@@ -312,12 +312,12 @@ func (r *Trunner) _softErrs(config *cmn.Config) {
 	}
 	debug.Assert(c.SoftErrs > 0 && c.SoftErrTime > 0)
 
-	n := r.numSoftErrs() - ratomic.LoadInt64(&r.nonIOErr) // correction
-	d := n - r.softErrs
+	n := r.numSoftErrs() - ratomic.LoadInt64(&r.nonIOErr) // num soft excluding non-IO
+	d := n - r.softErrs                                   // the delta
+	r.softErrs = n                                        // until next periodic call
 	debug.Assert(d >= 0 && n >= 0)
-	r.softErrs = n
 
-	j := d * int64(c.SoftErrTime) / int64(r.core.statsTime)
+	j := d * int64(c.SoftErrTime) / int64(r.core.statsTime) // recompute
 	if j < int64(c.SoftErrs) {
 		return
 	}

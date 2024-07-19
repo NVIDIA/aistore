@@ -21,7 +21,7 @@ is equivalent to:
 $ ais <command> show
 ```
 
-> For instance, `ais performance show` is an alias for `ais show performance` - both can be used interchangeably.
+> For instance, `ais show performance` is an alias for `ais performance` - both can be used interchangeably.
 
 > As a general rule, instead of remembering any of the above (as well as any of the below), type (e.g.) `ais perf<TAB-TAB>` and press `Enter`.
 

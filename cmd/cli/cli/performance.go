@@ -39,14 +39,6 @@ var (
 		nonverboseFlag,
 	)
 
-	// alias
-	perfCmd = cli.Command{
-		Name:  commandPerf,
-		Usage: showPerfArgument,
-		Subcommands: []cli.Command{
-			makeAlias(showCmdPeformance, "", true, commandShow),
-		},
-	}
 	// `show performance` command
 	showCmdPeformance = cli.Command{
 		Name:      commandPerf,
