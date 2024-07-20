@@ -894,7 +894,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 
 	m.init(true /*cleanup*/)
 
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 	if docker.IsRunning() {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
 	}
@@ -908,9 +908,20 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
 		),
 	))
-	// FIXME: How to make this cleaner?
-	aws, _ := backend.NewAWS(tMock, nil)
-	tMock.Backends = map[string]core.Backend{apc.AWS: aws}
+
+	// add mock backend
+	var mockBackend core.Backend
+	switch m.bck.Provider {
+	case apc.AWS:
+		mockBackend, _ = backend.NewAWS(tMock, mock.NewStatsTracker())
+	case apc.GCP:
+		mockBackend, _ = backend.NewGCP(tMock, mock.NewStatsTracker())
+	case apc.Azure:
+		mockBackend, _ = backend.NewAzure(tMock, mock.NewStatsTracker())
+	default:
+		t.Fatalf("unexpected backend provider %q", m.bck.Provider)
+	}
+	tMock.Backends = map[string]core.Backend{m.bck.Provider: mockBackend}
 
 	initMountpaths(t, proxyURL)
 
@@ -988,7 +999,14 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 					data, err := os.ReadFile(lom.FQN)
 					tassert.CheckFatal(t, err)
 					r := io.NopCloser(bytes.NewReader(data))
-					_, err = tMock.Backend(lom.Bck()).PutObj(r, lom, nil)
+					backend := tMock.Backend(lom.Bck())
+
+					if backend == nil {
+						t.Skipf("Warning: mock backend is nil, most likely reason: missing build tag\n"+
+							"(try running this test with -tags=%q)\n\n", "debug,aws,gcp,azure")
+					}
+
+					_, err = backend.PutObj(r, lom, nil)
 					tassert.CheckFatal(t, err)
 				},
 			},
