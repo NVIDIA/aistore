@@ -440,7 +440,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 						totals[name] += v.Value
 					}
 				}
-				// TODO: avoid summing up with oneself - check TargetCDF mountpaths
+				// TODO: avoid summing up with oneself - check Tcdf mountpaths
 			}
 		}
 

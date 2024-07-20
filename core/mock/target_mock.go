@@ -60,7 +60,7 @@ func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                   
 func (*TargetMock) SoftFSHC()                         {}
 func (*TargetMock) FSHC(error, *fs.Mountpath, string) {}
 
-func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.TargetCDF) fs.CapStatus {
+func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.Tcdf) fs.CapStatus {
 	return fs.CapStatus{}
 }
 

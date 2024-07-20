@@ -97,12 +97,12 @@ const (
 
 type (
 	Trunner struct {
-		runner    // the base (compare w/ Prunner)
-		t         core.Target
-		TargetCDF fs.TargetCDF `json:"cdf"`
-		disk      ios.AllDiskStats
-		xln       string
-		cs        struct {
+		runner // the base (compare w/ Prunner)
+		t      core.Target
+		Tcdf   fs.Tcdf `json:"cdf"`
+		disk   ios.AllDiskStats
+		xln    string
+		cs     struct {
 			last int64 // mono.Nano
 		}
 		softErrs int64 // numSoftErrs(); to monitor the change
@@ -164,8 +164,8 @@ func (r *Trunner) Init() *atomic.Bool {
 }
 
 func (r *Trunner) InitCDF(config *cmn.Config) error {
-	fs.InitCDF(&r.TargetCDF)
-	_, err, errCap := fs.CapRefresh(config, &r.TargetCDF)
+	fs.InitCDF(&r.Tcdf)
+	_, err, errCap := fs.CapRefresh(config, &r.Tcdf)
 	if err != nil {
 		return err
 	}
@@ -274,8 +274,8 @@ func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {
 func (r *Trunner) GetStats() (ds *Node) {
 	ds = r.runner.GetStats()
 
-	fs.InitCDF(&ds.TargetCDF)
-	fs.CapRefresh(cmn.GCO.Get(), &ds.TargetCDF)
+	fs.InitCDF(&ds.Tcdf)
+	fs.CapRefresh(cmn.GCO.Get(), &ds.Tcdf)
 	return ds
 }
 
@@ -286,18 +286,18 @@ func (r *Trunner) GetStatsV322() (out *NodeV322) {
 	out = &NodeV322{}
 	out.Snode = ds.Snode
 	out.Tracker = ds.Tracker
-	out.TargetCDF.PctMax = ds.TargetCDF.PctMax
-	out.TargetCDF.PctAvg = ds.TargetCDF.PctAvg
-	out.TargetCDF.PctMin = ds.TargetCDF.PctMin
-	out.TargetCDF.CsErr = ds.TargetCDF.CsErr
-	out.TargetCDF.Mountpaths = make(map[string]*fs.CDFv322, len(ds.TargetCDF.Mountpaths))
-	for mpath := range ds.TargetCDF.Mountpaths {
+	out.Tcdf.PctMax = ds.Tcdf.PctMax
+	out.Tcdf.PctAvg = ds.Tcdf.PctAvg
+	out.Tcdf.PctMin = ds.Tcdf.PctMin
+	out.Tcdf.CsErr = ds.Tcdf.CsErr
+	out.Tcdf.Mountpaths = make(map[string]*fs.CDFv322, len(ds.Tcdf.Mountpaths))
+	for mpath := range ds.Tcdf.Mountpaths {
 		cdf := &fs.CDFv322{
-			Capacity: ds.TargetCDF.Mountpaths[mpath].Capacity,
-			Disks:    ds.TargetCDF.Mountpaths[mpath].Disks,
-			FS:       ds.TargetCDF.Mountpaths[mpath].FS.String(),
+			Capacity: ds.Tcdf.Mountpaths[mpath].Capacity,
+			Disks:    ds.Tcdf.Mountpaths[mpath].Disks,
+			FS:       ds.Tcdf.Mountpaths[mpath].FS.String(),
 		}
-		out.TargetCDF.Mountpaths[mpath] = cdf
+		out.Tcdf.Mountpaths[mpath] = cdf
 	}
 	return out
 }
@@ -336,8 +336,8 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
 	// 1. disk stats
-	refreshCap := r.TargetCDF.HasAlerts()
-	fs.DiskStats(r.disk, config, refreshCap)
+	refreshCap := r.Tcdf.HasAlerts()
+	fs.DiskStats(r.disk, nil /*fs.TcdfExt*/, config, refreshCap)
 
 	s := r.core
 	for disk, stats := range r.disk {
@@ -380,7 +380,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	if !refreshCap && set != 0 {
 		// refill r.disk (ios.AllDiskStats) prior to logging
-		fs.DiskStats(r.disk, config, true /*refresh cap*/)
+		fs.DiskStats(r.disk, nil /*fs.TcdfExt*/, config, true /*refresh cap*/)
 	}
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
@@ -428,7 +428,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 }
 
 func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags) {
-	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.TargetCDF)
+	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.Tcdf)
 	if err != nil {
 		nlog.Errorln(err)
 		debug.Assert(!updated && errCap == nil, updated, " ", errCap)
@@ -445,28 +445,28 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 	if !updated {
 		pcs = nil // to possibly force refresh via t.OOS
 	} else {
-		hasAlerts = r.TargetCDF.HasAlerts()
+		hasAlerts = r.Tcdf.HasAlerts()
 	}
 
 	// target to run x-space
 	if errCap != nil {
-		r.t.OOS(pcs, config, &r.TargetCDF)
+		r.t.OOS(pcs, config, &r.Tcdf)
 	} else if cs.PctMax > int32(config.Space.CleanupWM) { // remove deleted, other cleanup
 		debug.Assert(!cs.IsOOS(), cs.String())
 		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
-		r.t.OOS(pcs, config, &r.TargetCDF)
+		r.t.OOS(pcs, config, &r.Tcdf)
 	}
 
 	//
 	// (periodically | on error): log mountpath cap and state
 	//
 	if now >= min(r.next, r.cs.last+maxCapLogInterval) || errCap != nil || hasAlerts {
-		fast := fs.NoneShared(len(r.TargetCDF.Mountpaths))
+		fast := fs.NoneShared(len(r.Tcdf.Mountpaths))
 		unique := fast
 		if !fast {
 			r.fsIDs = r.fsIDs[:0]
 		}
-		for mpath, cdf := range r.TargetCDF.Mountpaths {
+		for mpath, cdf := range r.Tcdf.Mountpaths {
 			if !fast {
 				r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
 			}

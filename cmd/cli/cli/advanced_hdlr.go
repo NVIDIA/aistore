@@ -148,7 +148,7 @@ func randMountpath(c *cli.Context) error {
 	if err != nil {
 		return V(err)
 	}
-	cdf := daeStatus.Node.TargetCDF
+	cdf := daeStatus.Node.Tcdf
 	for mpath := range cdf.Mountpaths {
 		fmt.Fprintln(c.App.Writer, mpath)
 		break

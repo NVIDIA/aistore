@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
@@ -317,12 +318,12 @@ See '--help' and docs/cli for details.`
 		"\tNo mountpaths\n" +
 		"{{else}}" +
 		"{{if ne (len $p.Mpl.Available) 0}}" +
-		"\tUsed: {{FormatCapPctMAM $p.TargetCDF true}}\t " +
-		"{{if (IsEqS $p.TargetCDF.CsErr \"\")}}{{else}}{{$p.TargetCDF.CsErr}}{{end}}\n" +
+		"\tUsed: {{FormatCapPctMAM $p.Tcdf true}}\t " +
+		"{{if (IsEqS $p.Tcdf.CsErr \"\")}}{{else}}{{$p.Tcdf.CsErr}}{{end}}\n" +
 		"{{range $mp := $p.Mpl.Available }}" +
 		"\t\t{{ $mp }} " +
 
-		"{{range $k, $v := $p.TargetCDF.Mountpaths}}" +
+		"{{range $k, $v := $p.Tcdf.Mountpaths}}" +
 		"{{if (IsEqS $k $mp)}}{{FormatCDFDisks $v}}{{end}}" +
 		"{{end}}\n" +
 
@@ -350,6 +351,7 @@ type (
 		TargetID string
 		DiskName string
 		Stat     ios.DiskStats
+		Tcdf     *fs.Tcdf
 	}
 	SmapHelper struct {
 		Smap         *meta.Smap
@@ -447,7 +449,7 @@ func (sth SmapHelper) forMarshal() any {
 //
 
 func calcCap(daemon *stats.NodeStatus) (total uint64) {
-	for _, cdf := range daemon.TargetCDF.Mountpaths {
+	for _, cdf := range daemon.Tcdf.Mountpaths {
 		total += cdf.Capacity.Avail
 	}
 	return total

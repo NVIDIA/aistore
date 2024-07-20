@@ -44,7 +44,7 @@ type (
 		FS    cos.FS    `json:"fs"`
 	}
 	// Target (cumulative) CDF
-	TargetCDF struct {
+	Tcdf struct {
 		Mountpaths map[string]*CDF // mpath => [Capacity, Disks, FS (CDF)]
 		TotalUsed  uint64          `json:"total_used,string"`  // bytes
 		TotalAvail uint64          `json:"total_avail,string"` // bytes
@@ -52,6 +52,10 @@ type (
 		PctAvg     int32           `json:"pct_avg"`            // avg used (%)
 		PctMin     int32           `json:"pct_min"`            // min used (%)
 		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message; disk fault
+	}
+	TcdfExt struct {
+		ios.AllDiskStats
+		Tcdf
 	}
 )
 
@@ -71,7 +75,7 @@ type (
 	}
 )
 
-func InitCDF(tcdf *TargetCDF) {
+func InitCDF(tcdf *Tcdf) {
 	avail := GetAvail()
 	tcdf.Mountpaths = make(map[string]*CDF, len(avail))
 	for mpath := range avail {
@@ -79,7 +83,7 @@ func InitCDF(tcdf *TargetCDF) {
 	}
 }
 
-func (tcdf *TargetCDF) HasAlerts() bool {
+func (tcdf *Tcdf) HasAlerts() bool {
 	for _, cdf := range tcdf.Mountpaths {
 		if alert, _ := HasAlert(cdf.Disks); alert != "" {
 			return true
@@ -96,7 +100,7 @@ func HasAlert(disks []string) (alert string, idx int) {
 			if idx = strings.Index(disk, a); idx > 0 {
 				return disk[idx:], idx
 			}
-			// expecting TargetCDF to contain only _available_ mountpaths
+			// expecting Tcdf to contain only _available_ mountpaths
 			debug.Assert(!strings.Contains(disk, DiskDisabled), disk)
 			debug.Assert(!strings.Contains(disk, DiskDetached), disk)
 		}

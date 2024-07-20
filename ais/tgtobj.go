@@ -996,7 +996,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
 	// open
-	// TODO -- FIXME: use lom.Open() instead of os.Open(), and check TestECChecksum
+	// TODO -- FIXME: use lom.Open() instead of os.Open(); TestECChecksum
 	lmfh, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {

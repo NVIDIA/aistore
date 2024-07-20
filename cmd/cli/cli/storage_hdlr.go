@@ -291,7 +291,7 @@ func showDiskStats(c *cli.Context, tid string) error {
 		}
 	}
 
-	dsh, err := getDiskStats(smap, tid)
+	dsh, withCap, err := getDiskStats(smap, tid)
 	if err != nil {
 		return err
 	}
@@ -321,10 +321,10 @@ func showDiskStats(c *cli.Context, tid string) error {
 		tally.Stat.Wavg = cos.DivRound(tally.Stat.Wavg, l)
 		tally.Stat.Util = cos.DivRound(tally.Stat.Util, l)
 
-		dsh = append(dsh, tally)
+		dsh = append(dsh, &tally)
 	}
 
-	table := teb.NewDiskTab(dsh, smap, regex, units, totalsHdr)
+	table := teb.NewDiskTab(dsh, smap, regex, units, totalsHdr, withCap)
 	out := table.Template(hideHeader)
 	return teb.Print(dsh, out)
 }
@@ -545,9 +545,9 @@ func showMpathHandler(c *cli.Context) error {
 				erCh <- err
 			} else {
 				mpCh <- &targetMpath{
-					DaemonID:  node.ID(),
-					Mpl:       mpl,
-					TargetCDF: tstatusMap[node.ID()].TargetCDF,
+					DaemonID: node.ID(),
+					Mpl:      mpl,
+					Tcdf:     tstatusMap[node.ID()].Tcdf,
 				}
 			}
 			wg.Done()

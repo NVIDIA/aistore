@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains implementation of the top-level `show` command.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -11,11 +11,14 @@ import (
 	"sort"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -23,6 +26,7 @@ type (
 	dstats struct {
 		tid   string
 		stats ios.AllDiskStats
+		tcdf  *fs.Tcdf
 	}
 	dstatsCtx struct {
 		tid string
@@ -30,29 +34,49 @@ type (
 	}
 )
 
+// NOTE: [backward compatibility] v3.23
 func (ctx *dstatsCtx) get() error {
-	diskStats, err := api.GetDiskStats(apiBP, ctx.tid)
+	// 1. get any stats
+	out, err := api.GetAnyStats(apiBP, ctx.tid, apc.WhatDiskRWUtilCap)
 	if err != nil {
 		return V(err)
 	}
-	ctx.ch <- dstats{stats: diskStats, tid: ctx.tid}
+
+	// 2. current version
+	var tcdfExt fs.TcdfExt
+	err = jsoniter.Unmarshal(out, &tcdfExt)
+	if err == nil && tcdfExt.AllDiskStats != nil {
+		ctx.ch <- dstats{tid: ctx.tid, stats: tcdfExt.AllDiskStats, tcdf: &tcdfExt.Tcdf}
+		return nil
+	}
+
+	// 3. v3.23 and older
+	var stats ios.AllDiskStats
+	err = jsoniter.Unmarshal(out, &stats)
+	if err != nil {
+		return err
+	}
+	ctx.ch <- dstats{tid: ctx.tid, stats: stats}
 	return nil
 }
 
-func getDiskStats(smap *meta.Smap, tid string) ([]teb.DiskStatsHelper, error) {
+func getDiskStats(smap *meta.Smap, tid string) (_ []*teb.DiskStatsHelper, withCap bool, err error) {
 	var (
 		targets = smap.Tmap
 		l       = smap.CountActiveTs()
 	)
 	if tid != "" {
 		tsi := smap.GetNode(tid)
+		if tsi.InMaint() {
+			return nil, false, fmt.Errorf("target %s is currently in maintenance", tsi.StringEx())
+		}
 		if tsi.InMaintOrDecomm() {
-			return nil, fmt.Errorf("target %s is unaivailable at this point", tsi.StringEx())
+			return nil, false, fmt.Errorf("target %s is being decommissioned", tsi.StringEx())
 		}
 		targets = meta.NodeMap{tid: tsi}
 		l = 1
 	}
-	dsh := make([]teb.DiskStatsHelper, 0, l)
+	dsh := make([]*teb.DiskStatsHelper, 0, l)
 	ch := make(chan dstats, l)
 
 	wg, _ := errgroup.WithContext(context.Background())
@@ -61,17 +85,27 @@ func getDiskStats(smap *meta.Smap, tid string) ([]teb.DiskStatsHelper, error) {
 			continue
 		}
 		ctx := &dstatsCtx{ch: ch, tid: tid}
-		wg.Go(ctx.get) // api.GetDiskStats
+		wg.Go(ctx.get) // api.GetAnyStats
 	}
 
-	err := wg.Wait()
+	err = wg.Wait()
 	close(ch)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	for res := range ch {
 		for name, stat := range res.stats {
-			dsh = append(dsh, teb.DiskStatsHelper{TargetID: res.tid, DiskName: name, Stat: stat})
+			ds := &teb.DiskStatsHelper{TargetID: res.tid, DiskName: name, Stat: stat}
+			if res.tcdf != nil {
+				for _, mi := range res.tcdf.Mountpaths {
+					// TODO: multi-disk mountpath
+					if mi.Disks[0] == ds.DiskName {
+						ds.Tcdf = res.tcdf
+						withCap = true
+					}
+				}
+			}
+			dsh = append(dsh, ds)
 		}
 	}
 
@@ -85,10 +119,10 @@ func getDiskStats(smap *meta.Smap, tid string) ([]teb.DiskStatsHelper, error) {
 		return dsh[i].Stat.Util > dsh[j].Stat.Util
 	})
 
-	return dsh, nil
+	return dsh, withCap, nil
 }
 
-func collapseDisks(dsh []teb.DiskStatsHelper, numTs int) {
+func collapseDisks(dsh []*teb.DiskStatsHelper, numTs int) {
 	dnums := make(map[string]int, numTs)
 	for _, src := range dsh {
 		if _, ok := dnums[src.TargetID]; !ok {
@@ -112,6 +146,8 @@ func collapseDisks(dsh []teb.DiskStatsHelper, numTs int) {
 		dst.Stat.WBps += src.Stat.WBps
 		dst.Stat.Wavg += src.Stat.Wavg
 		dst.Stat.Util += src.Stat.Util
+
+		dst.Tcdf = src.Tcdf
 	}
 	for tid, dst := range tsums {
 		dn := int64(dnums[tid])
@@ -119,11 +155,11 @@ func collapseDisks(dsh []teb.DiskStatsHelper, numTs int) {
 		dst.Stat.Wavg = cos.DivRound(dst.Stat.Wavg, dn)
 		dst.Stat.Util = cos.DivRound(dst.Stat.Util, dn)
 	}
-	// finally, reappend & re-sort
+	// finally, re-append & sort
 	dsh = dsh[:0]
 	for tid, dst := range tsums {
 		debug.Assert(tid == dst.TargetID)
-		dsh = append(dsh, *dst)
+		dsh = append(dsh, dst)
 	}
 	sort.Slice(dsh, func(i, j int) bool {
 		return dsh[i].TargetID < dsh[j].TargetID

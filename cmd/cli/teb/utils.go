@@ -144,7 +144,7 @@ func fmtTargetsSumm(smap *meta.Smap, numDisks int) string {
 	return fmt.Sprintf("%d%s", cnt, s)
 }
 
-func fmtCapPctMAM(tcdf *fs.TargetCDF, list bool) string {
+func fmtCapPctMAM(tcdf *fs.Tcdf, list bool) string {
 	var (
 		a, b, c string
 		skipMin = " -    " // len(sepa) + len("min%,")

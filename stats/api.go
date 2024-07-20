@@ -54,9 +54,9 @@ type (
 
 	// REST API
 	Node struct {
-		Snode     *meta.Snode  `json:"snode"`
-		Tracker   copyTracker  `json:"tracker"`
-		TargetCDF fs.TargetCDF `json:"capacity"`
+		Snode   *meta.Snode `json:"snode"`
+		Tracker copyTracker `json:"tracker"`
+		Tcdf    fs.Tcdf     `json:"capacity"`
 	}
 	Cluster struct {
 		Proxy  *Node            `json:"proxy"`
@@ -90,9 +90,9 @@ type (
 // [backward compatibility]: includes v3.22 cdf* structures
 type (
 	NodeV322 struct {
-		Snode     *meta.Snode      `json:"snode"`
-		Tracker   copyTracker      `json:"tracker"`
-		TargetCDF fs.TargetCDFv322 `json:"capacity"`
+		Snode   *meta.Snode      `json:"snode"`
+		Tracker copyTracker      `json:"tracker"`
+		Tcdf    fs.TargetCDFv322 `json:"capacity"`
 	}
 	NodeStatusV322 struct {
 		NodeV322

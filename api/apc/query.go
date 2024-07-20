@@ -221,9 +221,10 @@ const (
 	WhatNodeStatsAndStatusV322 = "status" // [ ditto ]
 	WhatNodeStats              = "node_stats"
 	WhatNodeStatsAndStatus     = "node_status"
+	WhatDiskRWUtilCap          = "disk" // read/write stats, disk utilization, capacity
 
 	WhatMetricNames = "metrics"
-	WhatDiskStats   = "disk"
+
 	// assorted
 	WhatMountpaths = "mountpaths"
 	WhatRemoteAIS  = "remote"

@@ -1,4 +1,10 @@
 #!/bin/bash
+
+# Examples:
+# $ install_from_binaries.sh --dstdir /tmp/www --release v1.3.23   # install a given version
+# $ install_from_binaries.sh --dstdir /tmp/www                     # install latest release
+# (more options below)
+
 set -e
 
 # Command line options and their respective defaults
@@ -21,7 +27,7 @@ USAGE:
 OPTIONS:
   --tmpdir <dir>  	work directory, e.g. $HOME/tmp
   --dstdir <dir>  	installation destination
-  --release      	e.g., 3.10, 3.11, latest (default: latest)
+  --release      	release tag, e.g. v1.3.22, v1.3.23, latest (default: latest)
   --completions		install and enable _only_ CLI autocompletions (ie., skip installing binaries)
   -h, --help      	show this help
 "
@@ -99,8 +105,8 @@ case ${release} in
     tar -xzvf aisloader-linux-amd64.tar.gz
     ;;
   *)
-    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-linux-amd64
-    chmod +x aisloader
+    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-linux-amd64.tar.gz
+    tar -xzvf aisloader-linux-amd64.tar.gz
     ;;
 esac
 $SUDO mv ./aisloader $dstdir/.
@@ -116,8 +122,8 @@ case ${release} in
     tar -xzvf ais-linux-amd64.tar.gz
     ;;
   *)
-    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/ais-linux-amd64
-    chmod +x ais
+    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/ais-linux-amd64.tar.gz
+    tar -xzvf ais-linux-amd64.tar.gz
     ;;
 esac
 $SUDO mv ./ais $dstdir/.

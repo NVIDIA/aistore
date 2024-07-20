@@ -213,7 +213,7 @@ func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
 	mu.Unlock()
 }
 
-// [backward compatibility] v3.22
+// NOTE: [backward compatibility] v3.22
 func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {
 	ds, err = api.GetStatsAndStatus(apiBP, node)
 	if err == nil || !strings.Contains(err.Error(), "what=node_status") {
@@ -235,14 +235,14 @@ func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {
 	}
 	ds.Node.Snode = v.NodeV322.Snode
 	ds.Node.Tracker = v.NodeV322.Tracker
-	ds.Node.TargetCDF.PctMax = v.NodeV322.TargetCDF.PctMax
-	ds.Node.TargetCDF.PctAvg = v.NodeV322.TargetCDF.PctAvg
-	ds.Node.TargetCDF.PctMin = v.NodeV322.TargetCDF.PctMin
-	ds.Node.TargetCDF.CsErr = v.NodeV322.TargetCDF.CsErr
-	ds.Node.TargetCDF.Mountpaths = make(map[string]*fs.CDF, len(v.NodeV322.TargetCDF.Mountpaths))
+	ds.Node.Tcdf.PctMax = v.NodeV322.Tcdf.PctMax
+	ds.Node.Tcdf.PctAvg = v.NodeV322.Tcdf.PctAvg
+	ds.Node.Tcdf.PctMin = v.NodeV322.Tcdf.PctMin
+	ds.Node.Tcdf.CsErr = v.NodeV322.Tcdf.CsErr
+	ds.Node.Tcdf.Mountpaths = make(map[string]*fs.CDF, len(v.NodeV322.Tcdf.Mountpaths))
 
 	var used, avail uint64
-	for mpath, cdfv322 := range v.NodeV322.TargetCDF.Mountpaths {
+	for mpath, cdfv322 := range v.NodeV322.Tcdf.Mountpaths {
 		cdf := &fs.CDF{}
 		cdf.Capacity = cdfv322.Capacity
 		used += cdf.Capacity.Used
@@ -254,10 +254,10 @@ func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {
 				cdf.FS.FsType = cdfv322.FS[i+1 : j]
 			}
 		}
-		ds.Node.TargetCDF.Mountpaths[mpath] = cdf
+		ds.Node.Tcdf.Mountpaths[mpath] = cdf
 	}
-	ds.Node.TargetCDF.TotalUsed = used
-	ds.Node.TargetCDF.TotalAvail = avail
+	ds.Node.Tcdf.TotalUsed = used
+	ds.Node.Tcdf.TotalAvail = avail
 	return ds, nil
 }
 

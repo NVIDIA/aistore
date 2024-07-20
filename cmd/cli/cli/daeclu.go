@@ -86,7 +86,7 @@ func _totals(tmap teb.StstMap, units string, cfg *cmn.ClusterConfig) (num int, c
 outer:
 	for _, ds := range tmap {
 		var (
-			tcdf   = ds.TargetCDF
+			tcdf   = ds.Tcdf
 			fsIDs  = make([]cos.FsID, 0, len(tcdf.Mountpaths))
 			unique bool
 		)

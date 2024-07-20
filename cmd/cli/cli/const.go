@@ -140,7 +140,7 @@ const (
 	cmdShowStats      = "stats"
 	cmdMountpath      = "mountpath"
 	cmdCapacity       = "capacity"
-	cmdShowDisk       = apc.WhatDiskStats
+	cmdShowDisk       = "disk"
 	cmdShowCounters   = "counters"
 	cmdShowThroughput = "throughput"
 	cmdShowLatency    = "latency"

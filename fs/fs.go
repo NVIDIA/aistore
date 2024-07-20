@@ -497,7 +497,7 @@ func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 	return ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 }
 
-func (mi *Mountpath) _cdf(tcdf *TargetCDF) *CDF {
+func (mi *Mountpath) _cdf(tcdf *Tcdf) *CDF {
 	cdf := tcdf.Mountpaths[mi.Path]
 	if cdf == nil {
 		tcdf.Mountpaths[mi.Path] = &CDF{}
@@ -1135,12 +1135,15 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 }
 
 // via (`apc.WhatDiskStats`, target_stats)
-func DiskStats(m ios.AllDiskStats, config *cmn.Config, refreshCap bool) {
+func DiskStats(allds ios.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCap bool) {
 	// iops and bw
-	mfs.ios.DiskStats(m)
+	mfs.ios.DiskStats(allds)
 
 	if !refreshCap {
-		return
+		if tcdf == nil {
+			return
+		}
+		debug.Assert(false)
 	}
 
 	// ios.AllDiskStats <= alert suffixex, if any
@@ -1148,21 +1151,27 @@ func DiskStats(m ios.AllDiskStats, config *cmn.Config, refreshCap bool) {
 	for _, mi := range avail {
 		var a string // alert suffix
 		c, err := mi.getCapacity(config, true /*refresh*/)
+
 		if err != nil {
 			nlog.Errorln(mi.String()+":", err)
 			a = "(" + err.Error() + ")" // unlikely
 			err = cmn.NewErrGetCap(err)
 		} else {
 			a = mi._alert(config, c)
+
+			if tcdf != nil {
+				cdf := mi._cdf(tcdf)
+				cdf.Capacity = c
+			}
 		}
 		if a == "" {
 			continue
 		}
 		for _, d := range mi.Disks {
-			if dstats, ok := m[d]; ok {
+			if dstats, ok := allds[d]; ok {
 				// [convention] alert name suffix: <DISK NAME>[(alert)]
-				delete(m, d)
-				m[d+a] = dstats
+				delete(allds, d)
+				allds[d+a] = dstats
 			}
 		}
 	}
@@ -1188,7 +1197,7 @@ func Cap() (cs CapStatus) {
 func NoneShared(numMpaths int) bool { return len(mfs.fsIDs) >= numMpaths }
 
 // sum up && compute %% capacities while skipping already _counted_ filesystems
-func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, _, errCap error) {
+func CapRefresh(config *cmn.Config, tcdf *Tcdf) (cs CapStatus, _, errCap error) {
 	var (
 		fsIDs  []cos.FsID
 		avail  = GetAvail()
@@ -1303,7 +1312,7 @@ func _either(cdf1, cdf2 *CDF) {
 func ExpireCapCache() { mfs.csExpires.Store(0) } // upon any change in config.space
 
 // called only and exclusively by `stats.Trunner` providing `config.Periodic.StatsTime` tick
-func CapPeriodic(now int64, config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, updated bool, err, errCap error) {
+func CapPeriodic(now int64, config *cmn.Config, tcdf *Tcdf) (cs CapStatus, updated bool, err, errCap error) {
 	if now < mfs.csExpires.Load() {
 		cs = Cap()
 		return

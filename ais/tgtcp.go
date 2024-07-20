@@ -381,7 +381,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds := t.statsAndStatus()
 		daeStats := t.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
-		ds.TargetCDF = daeStats.TargetCDF
+		ds.Tcdf = daeStats.Tcdf
 		t.writeJSON(w, r, ds, httpdaeWhat)
 	case apc.WhatNodeStatsV322: // [backward compatibility] v3.22 and prior
 		ds := t.statsAndStatusV322()
@@ -393,7 +393,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.RebSnap = _rebSnap()
 		daeStats := t.statsT.GetStats()
 		ds.Tracker = daeStats.Tracker
-		ds.TargetCDF = daeStats.TargetCDF
+		ds.Tcdf = daeStats.Tcdf
 		t.fillNsti(&ds.Cluster)
 		t.writeJSON(w, r, ds, httpdaeWhat)
 	case apc.WhatNodeStatsAndStatusV322: // [ditto]
@@ -401,10 +401,10 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.RebSnap = _rebSnap()
 		daeStats := t.statsT.GetStatsV322()
 		ds.Tracker = daeStats.Tracker
-		ds.TargetCDF = daeStats.TargetCDF
+		ds.Tcdf = daeStats.Tcdf
 		t.writeJSON(w, r, ds, httpdaeWhat)
 
-	case apc.WhatMountpaths, apc.WhatDiskStats:
+	case apc.WhatMountpaths:
 		var (
 			num    = fs.NumAvail()
 			dstats = make(ios.AllDiskStats, num)
@@ -413,13 +413,22 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		if num == 0 {
 			nlog.Warningln(t.String(), cmn.ErrNoMountpaths)
 		}
-		fs.DiskStats(dstats, config, true /*refresh cap - may call FSHC*/)
-		if what == apc.WhatMountpaths {
-			mpl := fs.ToMPL()
-			t.writeJSON(w, r, mpl, httpdaeWhat)
-		} else {
-			t.writeJSON(w, r, dstats, httpdaeWhat)
+		fs.DiskStats(dstats, nil, config, true /*refresh cap*/)
+		mpl := fs.ToMPL()
+		t.writeJSON(w, r, mpl, httpdaeWhat)
+	case apc.WhatDiskRWUtilCap:
+		var (
+			tcdfExt fs.TcdfExt
+			num     = fs.NumAvail()
+			config  = cmn.GCO.Get()
+		)
+		tcdfExt.AllDiskStats = make(ios.AllDiskStats, num)
+		tcdfExt.Mountpaths = make(map[string]*fs.CDF, num)
+		if num == 0 {
+			nlog.Warningln(t.String(), cmn.ErrNoMountpaths)
 		}
+		fs.DiskStats(tcdfExt.AllDiskStats, &tcdfExt.Tcdf, config, true)
+		t.writeJSON(w, r, tcdfExt, httpdaeWhat)
 
 	case apc.WhatRemoteAIS:
 		var (

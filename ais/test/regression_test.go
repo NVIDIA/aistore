@@ -599,8 +599,8 @@ func TestGetClusterStats(t *testing.T) {
 		tStats, err := api.GetDaemonStats(baseParams, tsi)
 		tassert.CheckFatal(t, err)
 
-		vCDF := vStats.TargetCDF
-		tCDF := tStats.TargetCDF
+		vCDF := vStats.Tcdf
+		tCDF := tStats.Tcdf
 		if vCDF.PctMax != tCDF.PctMax || vCDF.PctAvg != tCDF.PctAvg {
 			t.Errorf("%s: stats are different: [%+v] vs [%+v]\n", tname, vCDF, tCDF)
 		}
@@ -647,7 +647,7 @@ func TestLRU(t *testing.T) {
 	for tid, v := range cluStats.Target {
 		filesEvicted[tid] = tools.GetNamedStatsVal(v, "lru.evict.n")
 		bytesEvicted[tid] = tools.GetNamedStatsVal(v, "lru.evict.size")
-		for _, c := range v.TargetCDF.Mountpaths {
+		for _, c := range v.Tcdf.Mountpaths {
 			usedPct = min(usedPct, c.PctUsed)
 		}
 	}

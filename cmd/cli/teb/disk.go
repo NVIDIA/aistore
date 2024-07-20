@@ -22,7 +22,7 @@ const (
 	colUtil     = "UTIL(%)"
 )
 
-func NewDiskTab(dsh []DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, units, totalsHdr string) *Table {
+func NewDiskTab(dsh []*DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, units, totalsHdr string, withCap bool) *Table {
 	// 1. columns
 	cols := []*header{
 		{name: colTarget},
@@ -32,6 +32,9 @@ func NewDiskTab(dsh []DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, un
 		{name: colWrite},
 		{name: colWriteAvg},
 		{name: colUtil},
+	}
+	if withCap {
+		cols = append(cols, &header{name: colCapUsed}, &header{name: colCapAvail})
 	}
 	if regex != nil {
 		cols = _flt(cols, regex)
@@ -63,6 +66,27 @@ func NewDiskTab(dsh []DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, un
 		}
 		if _idx(cols, colUtil) >= 0 {
 			row = append(row, FmtStatValue("", "", stat.Util, units)+"%")
+		}
+
+		var haveCap bool
+		if withCap {
+			// this disk (used%, avail)
+			if ds.Tcdf != nil {
+				for _, cdf := range ds.Tcdf.Mountpaths {
+					// TODO: multi-disk mountpath
+					if cdf.Disks[0] != ds.DiskName {
+						continue
+					}
+					used := FmtStatValue("", "", int64(cdf.PctUsed), units) + "%"
+					avail := FmtSize(int64(cdf.Avail), units, 2)
+					row = append(row, used, avail)
+					haveCap = true
+					break
+				}
+			}
+		}
+		if withCap && !haveCap {
+			row = append(row, unknownVal, unknownVal)
 		}
 
 		// (alert | total)

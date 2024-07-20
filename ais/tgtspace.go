@@ -42,7 +42,7 @@ func (t *target) oos(config *cmn.Config) fs.CapStatus {
 	return t.OOS(nil, config, nil)
 }
 
-func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.TargetCDF) (cs fs.CapStatus) {
+func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcdf) (cs fs.CapStatus) {
 	var errCap error
 	if csRefreshed != nil {
 		cs = *csRefreshed

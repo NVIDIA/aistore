@@ -225,7 +225,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 		if ds.MemCPUInfo.LoadAvg.One == 0 && ds.MemCPUInfo.LoadAvg.Five == 0 && ds.MemCPUInfo.LoadAvg.Fifteen == 0 {
 			load = UnknownStatusVal
 		}
-		capUsed := fmt.Sprintf("%d%%", ds.TargetCDF.PctAvg)
+		capUsed := fmt.Sprintf("%d%%", ds.Tcdf.PctAvg)
 		v := calcCap(ds)
 		capAvail := FmtSize(int64(v), units, 3)
 		if v == 0 {

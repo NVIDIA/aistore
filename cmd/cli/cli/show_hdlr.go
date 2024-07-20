@@ -35,9 +35,9 @@ type (
 	}
 
 	targetMpath struct {
-		DaemonID  string
-		Mpl       *apc.MountpathList
-		TargetCDF fs.TargetCDF
+		DaemonID string
+		Mpl      *apc.MountpathList
+		Tcdf     fs.Tcdf
 	}
 )
 
