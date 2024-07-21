@@ -24,27 +24,31 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
 
 ## CLI Parameters
 
-- `-sample_key_pattern`: The pattern used to substitute source file names to sample keys. This ensures that objects with the same sample key are always merged into the same output shard.
+- `-sample_key_pattern`: The pattern used to substitute source file names to sample keys. This ensures that files with the same sample key are always merged into the same output shard.
    - `-sample_key_pattern="base_filename"`: The default option. Extracts and uses only the base filename as the sample key to merge. Removes all directory paths and extensions.
    - `-sample_key_pattern="full_name"`: Performs no substitution, using the entire file name without extension as the sample key.
    - `-sample_key_pattern="collapse_all_dir"`: Removes all '/' characters from the file name, using the resulting string as the sample key.
    - `-sample_key_pattern="custom_regex"`: Applies a custom regex pattern to substitute the file names to sample keys for your specific requirements.
 - `-max_shard_size`: Maximum size of each output shard. Default is `1MiB`. Accept following _units_ formats:
-   - IEC format, e.g.: KiB, MiB, GiB
-   - SI format, e.g.: KB, MB, GB
+   - IEC format, e.g.: 4KiB, 16MiB, 2GiB
+   - SI format, e.g.: 4KB, 16MB, 2GB
    - raw format (in bytes), e.g.: 1024000
 - `-src_bck`: The source bucket name or URI.
 - `-dst_bck`: The destination bucket name or URI.
 - `-shard_template`: The template used for generating output shards. Accepts Bash, Fmt, or At formats.
-   - `-shard_template="prefix-{0000..4096..8}-suffix"`: generate output shards `prefix-0000-suffix`, `prefix-0008-suffix`, `prefix-00016-suffix`, and so on.
-   - `-shard_template="prefix-%06d-suffix"`: generate output shards `prefix-000000-suffix`, `prefix-000001-suffix`, `prefix-000002-suffix`, and so on.
-   - `-shard_template="prefix-@00001-gap-@100-suffix"`: generate output shards `prefix-00001-gap-001-suffix`, `prefix-00001-gap-002-suffix`, and so on.
+   - `-shard_template="prefix-{0000..4096..8}-suffix"`: Generate output shards `prefix-0000-suffix`, `prefix-0008-suffix`, `prefix-00016-suffix`, and so on.
+   - `-shard_template="prefix-%06d-suffix"`: Generate output shards `prefix-000000-suffix`, `prefix-000001-suffix`, `prefix-000002-suffix`, and so on.
+   - `-shard_template="prefix-@00001-gap-@100-suffix"`: Generate output shards `prefix-00001-gap-001-suffix`, `prefix-00001-gap-002-suffix`, and so on.
 - `-ext`: The extension used for generating output shards. Supports `.tar`, `.tgz`, `.tar.gz`, `.zip`, and `.tar.lz4` formats.
-- `-sample_exts`: A comma-separated list of extensions that should exists in the dataset. Also see `missing_extension_action`.
-- `-missing_extension_action`: Action to take when an extension is missing at any sample: `abort` | `warn` | `ignore`, if `sample_exts` is set.
+- `-sample_exts`: A comma-separated list of required extensions for all samples in the dataset. See -missing_extension_action for handling missing extensions.
+- `-missing_extension_action`: Specifies the action to take when an expected extension is missing from a sample. Options are: `abort` | `warn` | `ignore` | `exclude`.
+   - `-missing_extension_action="ignore"`: Do nothing when an expected extension is missing.
+   - `-missing_extension_action="warn"`: Print a warning if a sample contains an unspecified extension.
+   - `-missing_extension_action="abort"`: Stop the process if a sample contains an unspecified extension.
+   - `-missing_extension_action="exclude"`: Exclude any incomplete records and remove unnecessary extensions.
 - `-collapse`: If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.
 - `-progress`: If true, display the progress of processing objects in the source bucket.
-- `-dry_run`: If set, only shows the layout of resulting output shards without actually executing archive jobs. Use 'show_keys' to include sample keys.
+- `-dry_run`: If set, only shows the layout of resulting output shards without actually executing archive jobs. Use -dry_run="show_keys" to include sample keys.
 - `-sort`: Specifies the sorting algorithm for files within shards. Also see [dSort](/docs/dsort.md)
    - `-sort="alpha:inc"`: Sorts the items in alphanumeric order in ascending (increasing) order.
    - `-sort="alpha:dec"`: Sorts the items in alphanumeric order in descending (decreasing) order.
@@ -390,12 +394,11 @@ go test -v -short -tags=debug -run=TestIshardMaxShardSize
 - [X] configurable record key, extensions
    - [X] upon missing extension in a record: (abort | warn | ignore)
 - [X] dry run
-- [ ] version 0.9 (github checksum, git cmd)
-- [ ] go install
 - [ ] debug build
 - [X] allow user to specify source directories to include/exclude (achieved by prefix option)
-- [ ] logging (timestamp, nlog)
+- [X] logging (timestamp, nlog)
 - [ ] Large list of objects, need to swap MEM temporary
+- [ ] Dry run with Dsort
 - [X] Long stress tests
 - [X] Dsort integration
    - [ ] Dry run with Dsort
@@ -404,6 +407,6 @@ go test -v -short -tags=debug -run=TestIshardMaxShardSize
 - [X] progress bar (later)
 - [X] polling for completion of archive xactions (necessary to show the progress)
 - [ ] substitute the original file name
-- [ ] multi-worker archive xact
+- [X] multi-worker archive xact
 - [ ] integration into aistore (later)
 - [ ] E2E testing from CLI

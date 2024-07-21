@@ -32,14 +32,9 @@ func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, 
 	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
 	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
 
-	extensions := cfg.IshardConfig.SampleExtensions
-	// If sample extensions is not specified in config, randomly generate them
-	if len(extensions) == 0 {
-		for range numExtensions {
-			extensions = append(extensions, "."+trand.String(3))
-		}
-	} else {
-		numExtensions = len(extensions)
+	var extensions []string
+	for range numExtensions {
+		extensions = append(extensions, "."+trand.String(3))
 	}
 
 	totalSize, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, fileSize, randomize, dropout)
@@ -51,13 +46,7 @@ func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, 
 	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 
 	err = isharder.Start()
-	if dropout {
-		if err == nil || !strings.HasPrefix(err.Error(), "missing extension: ") {
-			tassert.Fatalf(t, false, "expected error with 'missing extension:', but got: %v", err)
-		}
-	} else {
-		tassert.CheckFatal(t, err)
-	}
+	tassert.CheckFatal(t, err)
 
 	checkOutputShards(t, baseParams, cfg.DstBck, numRecords*numExtensions, totalSize, sampleKeyPattern, dropout)
 }
@@ -350,22 +339,12 @@ func TestIshardSampleKeyPattern(t *testing.T) {
 func TestIshardMissingExtension(t *testing.T) {
 	var (
 		cfg = &config.Config{
-			SrcBck: cmn.Bck{
-				Name:     trand.String(15),
-				Provider: apc.AIS,
-			},
-			DstBck: cmn.Bck{
-				Name:     trand.String(15),
-				Provider: apc.AIS,
-			},
 			IshardConfig: config.IshardConfig{
 				MaxShardSize:     102400,
 				Collapse:         true,
 				ShardTemplate:    "shard-%d",
 				Ext:              ".tar",
 				SampleKeyPattern: config.BaseFileNamePattern,
-				SampleExtensions: []string{".jpeg", ".cls", ".json"},
-				MissingExtAction: "abort",
 			},
 			ClusterConfig: config.DefaultConfig.ClusterConfig,
 		}
@@ -373,16 +352,102 @@ func TestIshardMissingExtension(t *testing.T) {
 			URL:    cfg.URL,
 			Client: cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true}),
 		}
-		numRecords    = 500
-		numExtensions = 5
-		fileSize      = 32 * cos.KiB
+		numRecords = 500
+		fileSize   = 32 * cos.KiB
 	)
 
 	if testing.Short() {
 		numRecords /= 10
 	}
 
-	runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, true /*randomize*/, true /*dropout*/)
+	t.Run("TestIshardMissingExtension/action=abort", func(t *testing.T) {
+		cfg.SrcBck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+		cfg.DstBck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+
+		tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+		tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
+
+		var err error
+		expectedExts := []string{".jpeg", ".cls", ".json"}
+		cfg.MissingExtAction, err = config.NewMissExtReact("abort", expectedExts)
+		tassert.CheckFatal(t, err)
+
+		_, err = generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", expectedExts, int64(fileSize), true /*randomize*/, true /*dropout*/)
+		tassert.CheckFatal(t, err)
+
+		isharder, err := ishard.NewISharder(cfg)
+		tassert.CheckFatal(t, err)
+
+		tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+
+		err = isharder.Start() // error is expected to occur since `dropout` is set, ishard should abort
+		if err == nil || !strings.HasPrefix(err.Error(), "missing extension: ") {
+			tassert.Fatalf(t, false, "expected error with 'missing extension:', but got: %v", err)
+		}
+	})
+
+	t.Run("TestIshardMissingExtension/action=exclude", func(t *testing.T) {
+		cfg.SrcBck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+		cfg.DstBck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+		tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+		tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
+
+		expectedExts := []string{".jpeg", ".cls", ".json"}
+		var err error
+		cfg.MissingExtAction, err = config.NewMissExtReact("exclude", expectedExts)
+		tassert.CheckFatal(t, err)
+
+		_, err = generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", expectedExts, int64(fileSize), true /*randomize*/, true /*dropout*/)
+		tassert.CheckFatal(t, err)
+
+		isharder, err := ishard.NewISharder(cfg)
+		tassert.CheckFatal(t, err)
+
+		tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+
+		err = isharder.Start()
+		tassert.CheckFatal(t, err)
+
+		re := regexp.MustCompile(cfg.SampleKeyPattern.Regex)
+
+		// all incomplete samples should be excluded
+		shardContents, err := getShardContents(baseParams, cfg.DstBck)
+		for _, files := range shardContents {
+			// map to store the set of extensions for each base filename
+			baseFiles := make(map[string]map[string]struct{})
+			for _, file := range files {
+				base := strings.TrimSuffix(file, filepath.Ext(file))
+				ext := filepath.Ext(file)
+				base = re.ReplaceAllString(base, cfg.SampleKeyPattern.CaptureGroup)
+
+				if _, exists := baseFiles[base]; !exists {
+					baseFiles[base] = make(map[string]struct{})
+				}
+				baseFiles[base][ext] = struct{}{}
+			}
+
+			for base, exts := range baseFiles {
+				for _, desiredExt := range expectedExts {
+					if _, exists := exts[desiredExt]; !exists {
+						tassert.Fatalf(t, false, "Base file %s is missing extension %s\n", base, desiredExt)
+					}
+				}
+			}
+		}
+		tassert.CheckFatal(t, err)
+	})
 }
 
 func TestIshardParallel(t *testing.T) {

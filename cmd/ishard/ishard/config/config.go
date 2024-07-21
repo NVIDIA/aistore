@@ -27,8 +27,7 @@ type (
 		Ext              string
 		ShardTemplate    string
 		SampleKeyPattern SampleKeyPattern
-		SampleExtensions []string
-		MissingExtAction string
+		MissingExtAction *MissExtReact
 		Collapse         bool
 	}
 	DryRunFlag struct {
@@ -54,12 +53,19 @@ const (
 
 var DefaultConfig = Config{
 	ClusterConfig: ClusterConfig{URL: "http://" + defaultClusterIPv4 + ":" + defaultProxyPort},
-	IshardConfig:  IshardConfig{MaxShardSize: 102400, Ext: ".tar", ShardTemplate: "shard-%d", Collapse: false, SampleKeyPattern: BaseFileNamePattern, MissingExtAction: "ignore"},
-	SrcBck:        cmn.Bck{Name: "src_bck", Provider: apc.AIS},
-	DstBck:        cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
-	Progress:      false,
-	DryRunFlag:    DryRunFlag{IsSet: false},
-	SortFlag:      SortFlag{IsSet: false},
+	IshardConfig: IshardConfig{
+		MaxShardSize:     102400,
+		Ext:              ".tar",
+		ShardTemplate:    "shard-%d",
+		Collapse:         false,
+		SampleKeyPattern: BaseFileNamePattern,
+		MissingExtAction: nil,
+	},
+	SrcBck:     cmn.Bck{Name: "src_bck", Provider: apc.AIS},
+	DstBck:     cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
+	Progress:   false,
+	DryRunFlag: DryRunFlag{IsSet: false},
+	SortFlag:   SortFlag{IsSet: false},
 }
 
 ////////////////////////
@@ -156,24 +162,44 @@ func Load() (*Config, error) {
 func parseCliParams(cfg *Config) {
 	flag.StringVar(&cfg.SrcBck.Name, "src_bck", "", "Source bucket name or URI.")
 	flag.StringVar(&cfg.DstBck.Name, "dst_bck", "", "Destination bucket name or URI.")
-	flag.StringVar(&cfg.ShardTemplate, "shard_template", "shard-%d", "Template used for generating output shards. Accepts Bash (prefix{0001..0010}suffix), Fmt (prefix-%06d-suffix), or At (prefix-@00001-gap-@100-suffix) templates")
-	flag.StringVar(&cfg.Ext, "ext", ".tar", "Extension used for generating output shards.")
-	flag.StringVar(&cfg.MissingExtAction, "missing_extension_action", "ignore", "Action to take when an extension is missing: abort | warn | ignore")
-	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.")
-	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket.")
-	flag.Var(&cfg.DryRunFlag, "dry_run", "If set, only shows the layout of resulting output shards without actually executing archive jobs. Use 'show_keys' to include sample keys.")
-	flag.Var(&cfg.SortFlag, "sort", "sorting algorithm (e.g., alpha:inc, alpha:dec, shuffle, shuffle:seed)")
+	flag.StringVar(&cfg.ShardTemplate, "shard_template", "shard-%06d", "The template used for generating output shards. Default is `\"shard-%06d\"`. Accepts Bash, Fmt, or At formats.\n"+
+		"  -shard_template=\"prefix-{0000..4096..8}-suffix\": Generate output shards prefix-0000-suffix, prefix-0008-suffix, prefix-0016-suffix, and so on.\n"+
+		"  -shard_template=\"prefix-%06d-suffix\": Generate output shards prefix-000000-suffix, prefix-000001-suffix, prefix-000002-suffix, and so on.\n"+
+		"  -shard_template=\"prefix-@00001-gap-@100-suffix\": Generate output shards prefix-00001-gap-001-suffix, prefix-00001-gap-002-suffix, and so on.")
+
+	flag.StringVar(&cfg.Ext, "ext", ".tar", "Extension used for generating output shards. Default is `\".tar\"`. Options are \".tar\" | \".tgz\" | \".tar.gz\" | \".zip\" | \".tar.lz4\" formats.")
+	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size. Default is `false`.")
+	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket. Default is `false`.")
+	flag.Var(&cfg.DryRunFlag, "dry_run", "If set, only shows the layout of resulting output shards without actually executing archive jobs. Use -dry_run=\"show_keys\" to include sample keys.")
+	flag.Var(&cfg.SortFlag, "sort", "If set, sorting algorithm will be performed on files within shards\n"+
+		"  -sort=\"alpha:inc\": Sorts the items in alphanumeric order in ascending (increasing) order.\n"+
+		"  -sort=\"shuffle:124123\": Randomly shuffles the items using the specified seed 124123 for reproducibility. If the seed cannot be parsed as an integer, the flag is rejected.")
 
 	var (
 		err                 error
 		maxShardSizeStr     string
 		sampleExts          string
 		sampleKeyPatternStr string
+		missingExtActStr    string
 	)
 
-	flag.StringVar(&maxShardSizeStr, "max_shard_size", "1MiB", "Maximum size of each output shard. Accepts IEC, SI, and raw formats.")
-	flag.StringVar(&sampleExts, "sample_exts", "", "Comma-separated list of extensions that should exists in the dataset.")
-	flag.StringVar(&sampleKeyPatternStr, "sample_key_pattern", "", "The regex pattern used to transform object names in the source bucket to sample keys. This ensures that objects with the same sample key are always sharded into the same output shard.")
+	flag.StringVar(&maxShardSizeStr, "max_shard_size", "1MiB", "Maximum size of each output shard. Default is `\"1MiB\"`. Accepts the following units formats:\n"+
+		"  - IEC format, e.g.: 4KiB, 16MiB, 2GiB\n"+
+		"  - SI format, e.g.: 4KB, 16MB, 2GB\n"+
+		"  - raw format (in bytes), e.g.: 1024000")
+	flag.StringVar(&sampleExts, "sample_exts", "", "Comma-separated list of extensions that should exists in the dataset. e.g. -sample=\".JPEG,.xml,.json\". See -missing_extension_action for handling missing extensions")
+	flag.StringVar(&sampleKeyPatternStr, "sample_key_pattern", "", "The pattern used to substitute source file names to sample keys. Default it `\"base_filename\"`. Options are \"base_file_name\" | \"full_name\" | \"collapse_all_dir\" | \"any other valid regex\" \n"+
+		"This ensures that files with the same sample key are always sharded into the same output shard.\n"+
+		"  -sample_key_pattern=\"base_filename\": The default option. Extracts and uses only the base filename as the sample key to merge. Removes all directory paths and extensions.\n"+
+		"  -sample_key_pattern=\"full_name\": Performs no substitution, using the entire file name without extension as the sample key.\n"+
+		"  -sample_key_pattern=\"collapse_all_dir\": Removes all '/' characters from the file name, using the resulting string as the sample key.\n"+
+		"  -sample_key_pattern=\".*/([^/]+)/[^/]+$\": Applies a custom regex pattern to substitute the file names to their last level of directory names.")
+
+	flag.StringVar(&missingExtActStr, "missing_extension_action", "ignore", "Specifies the action to take when an expected extension is missing from a sample. Default is `\"ignore\"`. Options are: \"abort\" | \"warn\" | \"ignore\" | \"exclude\".\n"+
+		"  -missing_extension_action=\"ignore\": Do nothing when an expected extension is missing.\n"+
+		"  -missing_extension_action=\"warn\": Print a warning if a sample contains an unspecified extension.\n"+
+		"  -missing_extension_action=\"abort\": Stop the process if a sample contains an unspecified extension.\n"+
+		"  -missing_extension_action=\"exclude\": Exclude any incomplete records and remove unnecessary extensions.")
 
 	flag.Parse()
 
@@ -183,13 +209,18 @@ func parseCliParams(cfg *Config) {
 		os.Exit(1)
 	}
 
-	if _, ok := MissingExtActMap[cfg.MissingExtAction]; !ok {
-		fmt.Fprintf(os.Stderr, "Invalid action: %s. Accepted values are: abort, warn, ignore\n", cfg.MissingExtAction)
+	var reactions = []string{"ignore", "warn", "abort", "exclude"}
+	if !cos.StringInSlice(missingExtActStr, reactions) {
+		fmt.Printf("Invalid action: %s. Accepted values are: abort, warn, ignore, exclude\n", missingExtActStr)
 		flag.Usage()
 		os.Exit(1)
 	}
-	if sampleExts != "" {
-		cfg.SampleExtensions = strings.Split(sampleExts, ",")
+
+	cfg.MissingExtAction, err = NewMissExtReact(missingExtActStr, strings.Split(sampleExts, ","))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	var commonPatterns = map[string]SampleKeyPattern{
@@ -199,12 +230,12 @@ func parseCliParams(cfg *Config) {
 	}
 
 	if sampleKeyPatternStr == "" {
-		fmt.Println("`sample_key_pattern` is not specified, use `base_file_name` as sample key by default.")
+		fmt.Println("\"sample_key_pattern\" is not specified, use \"base_file_name\" as sample key by default.")
 		cfg.SampleKeyPattern = BaseFileNamePattern
 	} else if pattern, ok := commonPatterns[sampleKeyPatternStr]; ok {
 		cfg.SampleKeyPattern = pattern
 	} else {
-		fmt.Printf("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex\n", sampleKeyPatternStr)
+		fmt.Printf("\"sample_key_pattern\" %s is not built-in (\"base_file_name\" | \"full_name\" | \"collapse_all_dir\"), compiled as custom regex\n", sampleKeyPatternStr)
 		if _, err := regexp.Compile(sampleKeyPatternStr); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			flag.Usage()

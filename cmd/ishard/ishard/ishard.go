@@ -5,7 +5,6 @@
 package ishard
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -66,20 +65,33 @@ func (n *dirNode) insert(keyPath, fullPath string, size int64) {
 	}
 }
 
-//lint:ignore U1000 Ignore unused function temporarily for debugging
-func (n *dirNode) print(prefix string) {
-	for name, child := range n.children {
-		fmt.Printf("%s%s/", prefix, name)
-		names := []string{}
-		child.records.Lock()
-		for _, r := range child.records.All() {
-			names = append(names, r.Name)
-		}
-		child.records.Unlock()
-		fmt.Println(names)
-
-		child.print(prefix + "  ")
+// apply performs a preorder traversal through the tree starting from the node `n`,
+// applying the given reaction `act` to the Records of each node. The traversal stops if an error occurs.
+func (n *dirNode) apply(act *config.MissExtReact, recursive bool) error {
+	if n == nil {
+		return nil
 	}
+
+	newRecs, err := act.React(n.records)
+	if err != nil {
+		return err
+	}
+	if newRecs != nil {
+		n.records.Drain()
+		n.records = newRecs
+	}
+
+	if !recursive {
+		return nil
+	}
+
+	for _, child := range n.children {
+		if err := child.apply(act, recursive); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 //////////////
@@ -90,7 +102,6 @@ func (n *dirNode) print(prefix string) {
 type ISharder struct {
 	cfg            *config.Config
 	baseParams     api.BaseParams
-	missingExtAct  config.MissingExtFunc
 	sampleKeyRegex *regexp.Regexp
 
 	shardFactory *factory.ShardFactory
@@ -189,43 +200,6 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 	}
 }
 
-func (is *ISharder) findMissingExt(node *dirNode, recursive bool) error {
-	if node == nil {
-		return nil
-	}
-
-	node.records.Lock()
-	for _, record := range node.records.All() {
-		extSet := make(map[string]struct{}, len(is.cfg.SampleExtensions))
-		for _, ext := range is.cfg.SampleExtensions {
-			extSet[ext] = struct{}{}
-		}
-
-		for _, obj := range record.Objects {
-			delete(extSet, obj.Extension)
-		}
-
-		if len(extSet) > 0 {
-			for ext := range extSet {
-				if err := is.missingExtAct(ext); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	node.records.Unlock()
-
-	if recursive {
-		for _, child := range node.children {
-			if err := is.findMissingExt(child, recursive); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 // NewISharder instantiates an ISharder with the configuration if provided;
 // otherwise, it loads from CLI or uses the default config.
 func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
@@ -245,10 +219,6 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 	is.baseParams = api.BaseParams{URL: is.cfg.URL}
 	is.baseParams.Client = cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true})
 
-	if len(is.cfg.SampleExtensions) > 0 && is.cfg.MissingExtAction == "" {
-		return nil, errors.New("MissingExtAction must be specified if SampleExtensions are provided")
-	}
-	is.missingExtAct = config.MissingExtActMap[is.cfg.MissingExtAction]
 	is.sampleKeyRegex = regexp.MustCompile(is.cfg.SampleKeyPattern.Regex)
 
 	return is, err
@@ -277,7 +247,9 @@ func (is *ISharder) Start() error {
 			objTotalSize += en.Size
 		}
 
-		fmt.Printf("Listed Object Total Size: %s\n", cos.ToSizeIEC(objTotalSize, 2))
+		if is.cfg.Progress {
+			fmt.Printf("\rSource Objects: %s", cos.ToSizeIEC(objTotalSize, 2))
+		}
 
 		if objListPage.ContinuationToken == "" {
 			break
@@ -294,8 +266,8 @@ func (is *ISharder) Start() error {
 	}
 
 	// Check missing extensions
-	if len(is.cfg.SampleExtensions) > 0 {
-		if err := is.findMissingExt(root, true); err != nil {
+	if is.cfg.MissingExtAction != nil {
+		if err := root.apply(is.cfg.MissingExtAction, true); err != nil {
 			return err
 		}
 	}
