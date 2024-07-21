@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -138,7 +137,7 @@ var _ = Describe("Notifications xaction test", func() {
 			writer := httptest.NewRecorder()
 			n.handler(writer, req)
 			resp := writer.Result()
-			respBody, _ := io.ReadAll(resp.Body)
+			respBody, _ := cos.ReadAllN(resp.Body, resp.ContentLength)
 			resp.Body.Close()
 			Expect(resp.StatusCode).To(BeEquivalentTo(expectedStatus))
 			return respBody

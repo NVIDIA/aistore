@@ -135,7 +135,7 @@ func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter boo
 func ReadBytes(r *http.Request) (b []byte, err error) {
 	var e error
 
-	b, e = io.ReadAll(r.Body)
+	b, e = cos.ReadAllN(r.Body, r.ContentLength)
 	if e != nil {
 		err = fmt.Errorf("failed to read %s request, err: %v", r.Method, e)
 		if e == io.EOF {

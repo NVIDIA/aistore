@@ -5,7 +5,6 @@
 package dsort
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -67,7 +66,7 @@ func call(reqArgs *cmn.HreqArgs) response {
 	if err != nil {
 		return response{err: err, statusCode: http.StatusInternalServerError}
 	}
-	out, err := io.ReadAll(resp.Body)
+	out, err := cos.ReadAll(resp.Body)
 	cos.Close(resp.Body)
 	return response{res: out, err: err, statusCode: resp.StatusCode}
 }

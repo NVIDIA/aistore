@@ -273,7 +273,7 @@ func (z *SGL) _readAt(b []byte, roffin int64) (n int, roff int64, err error) {
 }
 
 // ReadAll is a strictly _convenience_ method as it performs heap allocation.
-// Still, it's an optimized alternative to the generic io.ReadAll which
+// Still, it's an optimized alternative to the generic cos.ReadAll which
 // normally returns err == nil (and not io.EOF) upon successful reading until EOF.
 // ReadAll always returns err == nil.
 func (z *SGL) ReadAll() (b []byte) {

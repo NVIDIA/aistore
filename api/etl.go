@@ -62,7 +62,7 @@ func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
 	}
 	defer cos.Close(r)
 
-	b, err := io.ReadAll(r)
+	b, err := cos.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}

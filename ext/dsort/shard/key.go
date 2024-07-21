@@ -109,7 +109,7 @@ func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) 
 	if ske == nil {
 		return nil, nil
 	}
-	b, err := io.ReadAll(ske.buf)
+	b, err := cos.ReadAll(ske.buf)
 	ske.buf = nil
 	if err != nil {
 		return nil, err

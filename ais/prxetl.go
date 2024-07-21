@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -100,7 +99,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
+	b, err := cos.ReadAll(r.Body)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return

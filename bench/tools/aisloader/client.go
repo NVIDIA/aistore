@@ -557,7 +557,7 @@ func readDiscard(r *http.Response, tag, cksumType string) (int64, string, error)
 		cksumValue string
 	)
 	if r.StatusCode >= http.StatusBadRequest {
-		bytes, err := io.ReadAll(r.Body)
+		bytes, err := cos.ReadAll(r.Body)
 		if err == nil {
 			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, tag, string(bytes))
 		}

@@ -215,7 +215,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 
-	output, err := io.ReadAll(r.Body)
+	output, err := cos.ReadAllN(r.Body, r.ContentLength)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return

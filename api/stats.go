@@ -5,7 +5,6 @@
 package api
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 
@@ -112,7 +111,7 @@ func GetAnyStats(bp BaseParams, sid, what string) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err = io.ReadAll(resp.Body)
+	out, err = cos.ReadAllN(resp.Body, resp.ContentLength)
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	FreeRp(reqParams)

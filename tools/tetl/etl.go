@@ -7,7 +7,6 @@ package tetl
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -92,7 +91,7 @@ func GetTransformYaml(etlName string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	b, err := io.ReadAll(resp.Body)
+	b, err := cos.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

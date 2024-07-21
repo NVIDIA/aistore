@@ -153,7 +153,7 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		// We have already parsed `v` but there is still the possibility that `\n` remains
 		// not read. Therefore, we read it to include it into the final checksum.
 		var b []byte
-		if b, err = io.ReadAll(r); err != nil {
+		if b, err = cos.ReadAll(r); err != nil {
 			return
 		}
 		// To be sure that this is exactly the case...

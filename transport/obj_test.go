@@ -103,7 +103,7 @@ func TestMain(t *testing.M) {
 
 func Example_headers() {
 	f := func(_ http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
+		body, err := cos.ReadAll(r.Body)
 		if err != nil {
 			panic(err)
 		}
@@ -194,7 +194,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 func Example_obj() {
 	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
-		object, err := io.ReadAll(objReader)
+		object, err := cos.ReadAll(objReader)
 		if err != nil {
 			panic(err)
 		}

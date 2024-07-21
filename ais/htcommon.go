@@ -412,8 +412,13 @@ var (
 	_ cresv = cresBsumm{}
 )
 
-func (res *callResult) read(body io.Reader)  { res.bytes, res.err = io.ReadAll(body) }
-func (res *callResult) jread(body io.Reader) { res.err = jsoniter.NewDecoder(body).Decode(res.v) }
+func (res *callResult) read(body io.Reader, size int64) {
+	res.bytes, res.err = cos.ReadAllN(body, size)
+}
+
+func (res *callResult) jread(body io.Reader) {
+	res.err = jsoniter.NewDecoder(body).Decode(res.v)
+}
 
 func (res *callResult) mread(body io.Reader) {
 	vv, ok := res.v.(msgp.Decodable)

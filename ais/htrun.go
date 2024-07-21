@@ -647,7 +647,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	if res.err != nil {
 		res.details = fmt.Sprintf("FATAL: failed to create HTTP request %s %s: %v",
 			args.req.Method, args.req.URL(), res.err)
-		return
+		return res
 	}
 
 	req.Header.Set(apc.HdrCallerID, h.SID())
@@ -663,9 +663,19 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	resp, res.err = client.Do(req)
 	if res.err != nil {
 		res.details = dfltDetail // tcp level, e.g.: connection refused
-		return
+		return res
 	}
-	defer resp.Body.Close()
+
+	_doResp(args, req, resp, res)
+	resp.Body.Close()
+
+	if sid != unknownDaemonID {
+		h.keepalive.heardFrom(sid)
+	}
+	return res
+}
+
+func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callResult) {
 	res.status = resp.StatusCode
 	res.header = resp.Header
 
@@ -684,25 +694,14 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		return
 	}
 
-	// read and decode via call result value (`cresv`), if provided
+	// read and decode via call-result-value (`cresv`), if provided;
 	// othwerwise, read and return bytes for the caller to unmarshal
 	if args.cresv != nil {
 		res.v = args.cresv.newV()
 		args.cresv.read(res, resp.Body)
-		if res.err != nil {
-			return
-		}
 	} else {
-		res.read(resp.Body)
-		if res.err != nil {
-			return
-		}
+		res.read(resp.Body, resp.ContentLength)
 	}
-
-	if sid != unknownDaemonID {
-		h.keepalive.heardFrom(sid)
-	}
-	return
 }
 
 //

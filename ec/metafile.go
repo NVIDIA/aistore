@@ -62,7 +62,7 @@ func LoadMetadata(fqn string) (*Metadata, error) {
 }
 
 func MetaFromReader(reader io.Reader) (*Metadata, error) {
-	b, err := io.ReadAll(reader)
+	b, err := cos.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

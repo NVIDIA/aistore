@@ -6,7 +6,6 @@ package ais
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -87,7 +86,7 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 
 	jobID := dload.PrefixJobID + cos.GenUUID() // prefix to visually differentiate vs. xaction IDs
 
-	body, err := io.ReadAll(r.Body)
+	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	if err != nil {
 		p.writeErrStatusf(w, r, http.StatusInternalServerError, "failed to receive download request: %v", err)
 		return

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -59,7 +60,7 @@ func TestSGLStressN(t *testing.T) {
 
 			// read SGL from destination and compare with the original
 			var bufW []byte
-			bufW, err = io.ReadAll(memsys.NewReader(sglW))
+			bufW, err = cos.ReadAll(memsys.NewReader(sglW))
 			tassert.CheckFatal(t, err)
 			for j := range objsize {
 				if bufW[j] != bufR[j] {

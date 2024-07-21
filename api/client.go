@@ -279,7 +279,7 @@ func (reqParams *ReqParams) readStr(resp *http.Response, out *string) error {
 	if err := reqParams.checkResp(resp); err != nil {
 		return err
 	}
-	b, err := io.ReadAll(resp.Body)
+	b, err := cos.ReadAllN(resp.Body, resp.ContentLength)
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
@@ -351,7 +351,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 		}
 	}
 
-	b, _ := io.ReadAll(resp.Body)
+	b, _ := cos.ReadAllN(resp.Body, resp.ContentLength)
 	if len(b) == 0 {
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			msg := fmt.Sprintf("[%s]: starting up, please try again later...", http.StatusText(http.StatusServiceUnavailable))

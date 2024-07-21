@@ -161,7 +161,7 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 	// command requests should not have a body, but if it has,
 	// the body must be drained to avoid errors
 	if hdr.ObjAttrs.Size != 0 {
-		if _, err := io.ReadAll(objReader); err != nil {
+		if _, err := cos.ReadAll(objReader); err != nil {
 			nlog.Errorf("failed to read request body: %v", err)
 			return err
 		}

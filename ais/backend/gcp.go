@@ -462,7 +462,7 @@ func readCredFile() (projectID string) {
 	if err != nil {
 		return
 	}
-	b, err := io.ReadAll(credFile)
+	b, err := cos.ReadAll(credFile)
 	credFile.Close()
 	if err != nil {
 		return

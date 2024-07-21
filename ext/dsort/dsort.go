@@ -858,7 +858,7 @@ func (m *Manager) _do(reqArgs *cmn.HreqArgs, tsi *meta.Snode, act string) error 
 	}
 	if resp.StatusCode != http.StatusOK {
 		var b []byte
-		b, err = io.ReadAll(resp.Body)
+		b, err = cos.ReadAll(resp.Body)
 		if err == nil {
 			err = fmt.Errorf("%s: %s failed to %s: %s", core.T, m.ManagerUUID, act, strings.TrimSuffix(string(b), "\n"))
 		} else {

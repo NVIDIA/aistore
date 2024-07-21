@@ -27,7 +27,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -816,7 +815,7 @@ func _init(p *params) (err error) {
 		if err != nil {
 			return err
 		}
-		etlSpec, err := io.ReadAll(fh)
+		etlSpec, err := cos.ReadAll(fh)
 		fh.Close()
 		if err != nil {
 			return err

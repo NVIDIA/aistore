@@ -6,7 +6,6 @@ package dsort
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -442,7 +441,7 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var (
 		pars   *parsedReqSpec
-		b, err = io.ReadAll(r.Body)
+		b, err = cos.ReadAll(r.Body)
 	)
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("[dsort]: failed to receive request: %w", err))

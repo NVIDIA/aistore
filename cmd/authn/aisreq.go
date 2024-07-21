@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -125,7 +124,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 		resp, err := client.Do(req)
 		if resp != nil {
 			if resp.Body != nil {
-				msg, _ = io.ReadAll(resp.Body)
+				msg, _ = cos.ReadAll(resp.Body)
 				resp.Body.Close()
 			}
 		}

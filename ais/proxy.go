@@ -7,7 +7,6 @@ package ais
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -3007,7 +3006,7 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// - validate request, check input_bck and output_bck
 		// - start dsort
-		body, err := io.ReadAll(r.Body)
+		body, err := cos.ReadAllN(r.Body, r.ContentLength)
 		if err != nil {
 			p.writeErrStatusf(w, r, http.StatusInternalServerError, "failed to receive dsort request: %v", err)
 			return

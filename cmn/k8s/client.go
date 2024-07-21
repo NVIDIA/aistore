@@ -6,11 +6,11 @@ package k8s
 
 import (
 	"context"
-	"io"
 	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -191,7 +191,7 @@ func (c *defaultClient) Logs(podName string) ([]byte, error) {
 		return nil, err
 	}
 	defer logStream.Close()
-	return io.ReadAll(logStream)
+	return cos.ReadAll(logStream)
 }
 
 func (c *defaultClient) CheckMetricsAvailability() error {

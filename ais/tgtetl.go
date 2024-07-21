@@ -6,7 +6,6 @@ package ais
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -56,7 +55,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
+	b, err := cos.ReadAll(r.Body)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
