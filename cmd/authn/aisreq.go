@@ -122,10 +122,12 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 		}
 		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
 		resp, err := client.Do(req)
-		if resp != nil {
-			if resp.Body != nil {
-				msg, _ = cos.ReadAll(resp.Body)
-				resp.Body.Close()
+		if resp != nil && resp.Body != nil {
+			var e error
+			msg, e = cos.ReadAllN(resp.Body, resp.ContentLength)
+			resp.Body.Close()
+			if err == nil {
+				err = e
 			}
 		}
 		if err == nil {

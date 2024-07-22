@@ -699,7 +699,7 @@ func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callRe
 	if args.cresv != nil {
 		res.v = args.cresv.newV()
 		args.cresv.read(res, resp.Body)
-	} else {
+	} else if args.req.Method != http.MethodHead { // ref: "response to a HEAD method should not have a body"
 		res.read(resp.Body, resp.ContentLength)
 	}
 }

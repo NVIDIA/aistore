@@ -401,7 +401,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 	if resp.StatusCode != http.StatusOK {
 		return nil, cmn.NewErrFailedTo(core.T, "request ec md", bck.Cname(objName), err)
 	}
-	return MetaFromReader(resp.Body)
+	return MetaFromReader(resp.Body, resp.ContentLength)
 }
 
 // Saves the main replica to local drives

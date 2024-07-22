@@ -1033,7 +1033,8 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 }
 
-func (t *target) objHead(r *http.Request, hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
+// NOTE: sets whdr.ContentLength = obj-size, with no response body
+func (t *target) objHead(r *http.Request, whdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
 	var (
 		fltPresence int
 		hasEC       bool
@@ -1125,7 +1126,7 @@ func (t *target) objHead(r *http.Request, hdr http.Header, query url.Values, bck
 	}
 
 	// to header
-	cmn.ToHeader(&op.ObjAttrs, hdr, op.ObjAttrs.Size)
+	cmn.ToHeader(&op.ObjAttrs, whdr, op.ObjAttrs.Size)
 	if op.ObjAttrs.Cksum == nil {
 		// cos.Cksum does not have default nil/zero value (reflection)
 		op.ObjAttrs.Cksum = cos.NewCksum("", "")
@@ -1144,10 +1145,10 @@ func (t *target) objHead(r *http.Request, hdr http.Header, query url.Values, bck
 		}
 		name := apc.PropToHeader(tag)
 		debug.Func(func() {
-			vv := hdr.Get(name)
+			vv := whdr.Get(name)
 			debug.Assertf(vv == "", "not expecting duplications: %s=(%q, %q)", name, v, vv)
 		})
-		hdr.Set(name, v)
+		whdr.Set(name, v)
 		return nil, false
 	})
 	debug.AssertNoErr(errIter)

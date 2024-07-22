@@ -339,7 +339,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 		return nil
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
-		// HEAD request does not return body
+		// "A response to a HEAD method should not have a body."
 		if msg := resp.Header.Get(apc.HdrError); msg != "" {
 			return &cmn.ErrHTTP{
 				TypeCode: cmn.TypeCodeHTTPErr(msg),

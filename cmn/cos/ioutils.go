@@ -22,32 +22,29 @@ import (
 
 // instead of os.ReadAll
 func ReadAllN(r io.Reader, size int64) (b []byte, err error) {
-	switch size {
-	case 0:
-	case ContentLengthUnknown:
-		buf := bytes.NewBuffer(nil)
-		_, err = io.Copy(buf, r)
-		b = buf.Bytes()
-	default:
-		buf := bytes.NewBuffer(make([]byte, 0, size))
-		_, err = io.Copy(buf, r)
-		b = buf.Bytes()
+	if size == 0 {
+		debug.Func(func() {
+			n, _ := io.Copy(io.Discard, r)
+			debug.Assert(n == 0, "expected zero, got ", n)
+		})
+		return nil, nil
 	}
+	buf := &bytes.Buffer{}
+	if size != ContentLengthUnknown {
+		buf = bytes.NewBuffer(make([]byte, 0, size))
+	}
+	_, err = io.Copy(buf, r)
 	debug.Func(func() {
-		n, _ := io.Copy(io.Discard, r)
-		debug.Assert(n == 0)
+		if err == nil && size != ContentLengthUnknown {
+			debug.Assert(buf.Len() == int(size), buf.Len(), " vs ", size)
+		}
 	})
-	return b, err
+	return buf.Bytes(), err
 }
 
 func ReadAll(r io.Reader) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	_, err := io.Copy(buf, r)
-
-	// DEBUG
-	// b := buf.Bytes()
-	// nlog.ErrorDepth(1, ">>>>>> len =", len(b))
-
 	return buf.Bytes(), err
 }
 

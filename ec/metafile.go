@@ -61,8 +61,8 @@ func LoadMetadata(fqn string) (*Metadata, error) {
 	return md, nil
 }
 
-func MetaFromReader(reader io.Reader) (*Metadata, error) {
-	b, err := cos.ReadAll(reader)
+func MetaFromReader(reader io.Reader, size int64) (*Metadata, error) {
+	b, err := cos.ReadAllN(reader, size)
 	if err != nil {
 		return nil, err
 	}

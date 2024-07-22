@@ -207,7 +207,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	for hardErrCnt, softErrCnt, iter = uint(0), uint(0), uint(1); ; iter++ {
 		if status, err = args.Call(); err == nil {
 			if args.Verbosity == RetryLogVerbose && (hardErrCnt > 0 || softErrCnt > 0) {
-				nlog.Warningf("%s Successful %s after (soft/hard errors: %d/%d, last: %v)",
+				nlog.Warningf("%s successful %s after (soft/hard errors: %d/%d, last: %v)",
 					callerStr, args.Action, softErrCnt, hardErrCnt, nonEmptyErr)
 			}
 			return
@@ -218,7 +218,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 			return
 		}
 		if args.Verbosity == RetryLogVerbose {
-			nlog.Errorf("%s Failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, status)
+			nlog.Errorf("%s failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, status)
 		}
 		if cos.IsRetriableConnErr(err) {
 			softErrCnt++
@@ -239,7 +239,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	}
 	// Quiet: print once the summary (Verbose: no need)
 	if args.Verbosity == RetryLogQuiet {
-		nlog.Errorf("%sFailed to %s (soft/hard errors: %d/%d, last: %v)",
+		nlog.Errorf("%sfailed to %s (soft/hard errors: %d/%d, last: %v)",
 			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return

@@ -195,6 +195,10 @@ func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
 		hdr.Set(apc.HdrObjAtime, cos.UnixNano2S(at))
 	}
 	if size > 0 {
+		// "response to a HEAD method should not have a body", and so
+		// using "Content-Length" to deliver object size (attribute)
+		// may look controversial (and it is), but s3 does it, etc.
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
 		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	}
 	if v := oah.Version(true); v != "" {

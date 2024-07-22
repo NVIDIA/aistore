@@ -6,6 +6,7 @@ package k8s
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 
@@ -185,13 +186,22 @@ func (c *defaultClient) Node(name string) (*corev1.Node, error) {
 	return c.client.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
 }
 
-func (c *defaultClient) Logs(podName string) ([]byte, error) {
-	logStream, err := c.pods().GetLogs(podName, &corev1.PodLogOptions{}).Stream(context.Background())
+func (c *defaultClient) Logs(podName string) (b []byte, err error) {
+	var (
+		logStream io.ReadCloser
+		req       = c.pods().GetLogs(podName, &corev1.PodLogOptions{})
+	)
+	// ref: "Stream formats and executes the request, and offers streaming of the response."
+	logStream, err = req.Stream(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	defer logStream.Close()
-	return cos.ReadAll(logStream)
+	b, err = cos.ReadAllN(logStream, cos.ContentLengthUnknown)
+	e := logStream.Close()
+	if err == nil {
+		err = e
+	}
+	return b, err
 }
 
 func (c *defaultClient) CheckMetricsAvailability() error {

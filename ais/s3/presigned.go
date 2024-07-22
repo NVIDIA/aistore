@@ -61,24 +61,28 @@ func parseSignatureV4(query url.Values, header http.Header) (region string) {
 	return region
 }
 
+// (used by ais/backend/aws)
 func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
-	resp, err := pts.DoReader(client)
-	if err != nil {
-		return resp, err
-	} else if resp == nil {
+	resp, errN := pts.DoReader(client)
+	if errN != nil {
+		return resp, errN
+	}
+	if resp == nil {
 		return nil, nil
 	}
 	defer resp.BodyR.Close()
 
-	output, err := cos.ReadAll(resp.BodyR)
+	output, err := cos.ReadAllN(resp.BodyR, resp.Size)
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response body: %v", err)
 	}
-	return &PresignedResp{Body: output, Size: int64(len(output)), Header: resp.Header, StatusCode: resp.StatusCode}, nil
+	nsize := int64(len(output)) // == ContentLength == resp.Size
+	return &PresignedResp{Body: output, Size: nsize, Header: resp.Header, StatusCode: resp.StatusCode}, nil
 }
 
 // DoReader sends request and returns opened body/reader if successful.
 // Caller is responsible for closing the reader.
+// (used by ais/backend/aws)
 func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	region := parseSignatureV4(pts.query, pts.oreq.Header)
 	if region == "" {
