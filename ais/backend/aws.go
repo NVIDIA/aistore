@@ -449,7 +449,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		q := oreq.URL.Query() // TODO: optimize-out
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
-		resp, err := pts.Do(core.T.DataClient())
+		resp, err := pts.DoHead(core.T.DataClient())
 		if err != nil {
 			return nil, resp.StatusCode, err
 		}

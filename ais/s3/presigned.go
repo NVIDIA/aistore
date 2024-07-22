@@ -62,20 +62,28 @@ func parseSignatureV4(query url.Values, header http.Header) (region string) {
 }
 
 // (used by ais/backend/aws)
-func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
-	resp, errN := pts.DoReader(client)
-	if errN != nil {
-		return resp, errN
+func (pts *PresignedReq) DoHead(client *http.Client) (*PresignedResp, error) {
+	resp, err := pts.DoReader(client)
+	if err != nil || resp == nil {
+		return resp, err
 	}
-	if resp == nil {
-		return nil, nil
-	}
-	defer resp.BodyR.Close()
+	return &PresignedResp{Header: resp.Header, StatusCode: resp.StatusCode}, nil
+}
 
-	output, err := cos.ReadAllN(resp.BodyR, resp.Size)
+// (used by ais/backend/aws)
+func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
+	resp, err := pts.DoReader(client)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+
+	var output []byte
+	output, err = cos.ReadAllN(resp.BodyR, resp.Size)
+	resp.BodyR.Close()
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response body: %v", err)
 	}
+
 	nsize := int64(len(output)) // == ContentLength == resp.Size
 	return &PresignedResp{Body: output, Size: nsize, Header: resp.Header, StatusCode: resp.StatusCode}, nil
 }
