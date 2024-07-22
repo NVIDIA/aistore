@@ -392,9 +392,12 @@ go test -v -short -tags=debug -run=TestIshardMaxShardSize
 - [ ] logging (timestamp, nlog)
 - [ ] Large list of objects, need to swap MEM temporary
 - [X] Long stress tests
+- [ ] Dsort integration
 
 ### GOOD TO HAVE
 - [X] progress bar (later)
-- [ ] polling for completion of archive xactions
+- [X] polling for completion of archive xactions (necessary to show the progress)
+- [ ] substitute the original file name
+- [ ] multi-worker archive xact
 - [ ] integration into aistore (later)
 - [ ] E2E testing from CLI

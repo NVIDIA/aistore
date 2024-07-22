@@ -98,9 +98,9 @@ func (p *archFactory) Start() (err error) {
 	//
 	// new x-archive
 	//
-	workCh := make(chan *cmn.ArchiveBckMsg, maxNumInParallel)
+	workCh := make(chan *cmn.ArchiveBckMsg, maxNumInParallel*2)
 	r := &XactArch{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, workCh: workCh}
-	r.pending.m = make(map[string]*archwi, maxNumInParallel)
+	r.pending.m = make(map[string]*archwi, maxNumInParallel*2)
 	p.xctn = r
 	r.DemandBase.Init(p.UUID() /*== p.Args.UUID above*/, p.kind, p.Bck /*from*/, xact.IdleDefault)
 
