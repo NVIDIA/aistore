@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -110,4 +110,38 @@ type (
 
 func IsErrMetric(name string) bool {
 	return strings.HasPrefix(name, errPrefix) // e.g. name = ErrHTTPWriteCount
+}
+
+// compare with base.init() at ais/backend/common
+func LatencyToCounter(latency string) string {
+	// 1. basics first
+	switch latency {
+	case GetLatency, GetRedirLatency:
+		return GetCount
+	case PutLatency, PutRedirLatency:
+		return PutCount
+	case ListLatency:
+		return ListCount
+	case AppendLatency:
+		return AppendCount
+	}
+	// 2. filter out
+	if !strings.Contains(latency, "get.") && !strings.Contains(latency, "put.") {
+		return ""
+	}
+	// backend first
+	if strings.HasSuffix(latency, ".ns.total") {
+		for prefix := range apc.Providers {
+			if prefix == apc.AIS {
+				prefix = apc.RemAIS
+			}
+			if strings.HasPrefix(latency, prefix) {
+				if strings.Contains(latency, ".get.") {
+					return prefix + "." + GetCount
+				}
+				return prefix + "." + PutCount
+			}
+		}
+	}
+	return ""
 }

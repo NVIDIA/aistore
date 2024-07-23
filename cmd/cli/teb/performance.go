@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -312,24 +312,28 @@ func _metricToPrintedColName(mname string, cols []*header, metrics, n2n cos.StrK
 		printedName = strings.ToUpper(parts[0])
 	}
 
-	// middle name (is every name in-between)
-	for j := 1; j < len(parts)-1; j++ {
+	// middle name
+	l := len(parts) - 1
+	if parts[l] == "total" { // latency; see related: `stats.LatencyToCounter`
+		l--
+	}
+	for j := 1; j < l; j++ {
 		printedName += "-" + strings.ToUpper(parts[j])
 	}
 
 	// suffix
-	switch {
-	case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
+	switch kind {
+	case stats.KindThroughput, stats.KindComputedThroughput:
 		printedName += "(bw)"
-	case kind == stats.KindLatency:
+	case stats.KindLatency, stats.KindTotal:
 		printedName += "(t)"
-	case kind == stats.KindSize:
+	case stats.KindSize:
 		if n2n != nil && _present(cols, metrics, mname, n2n) {
 			printedName += "(total/avg size)"
 		} else {
 			printedName += "(size)"
 		}
-	case kind == stats.KindCounter:
+	case stats.KindCounter:
 		printedName += "(n)"
 	}
 	return

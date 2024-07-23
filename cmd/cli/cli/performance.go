@@ -235,28 +235,26 @@ func showLatencyHandler(c *cli.Context) error {
 
 	_warnThruLatIters(c)
 
-	// statically filter metrics (names)
+	// statically filter metrics (names):
+	// take sizes and latencies that _map_ to their respective counters
+
 	selected := make(cos.StrKVs, len(metrics))
 	for name, kind := range metrics {
-		switch name {
-		case stats.GetSize, stats.GetCount, stats.PutSize, stats.PutCount, stats.AppendCount:
+		if name == stats.GetSize || name == stats.PutSize {
 			selected[name] = kind
 			continue
 		}
-
-		switch {
-		case strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.GetSize):
-			selected[name] = kind
-		case strings.HasSuffix(name, "."+stats.PutCount) || strings.HasSuffix(name, "."+stats.PutSize):
-			selected[name] = kind
-		case strings.HasSuffix(name, ".ns") && name != stats.Uptime: // NOTE: not including and not handling "*.ns.total"
-			selected[name] = kind
-		case stats.IsErrMetric(name):
-			if strings.Contains(name, "get") || strings.Contains(name, "put") || strings.Contains(name, "append") {
-				selected[name] = kind
-			}
+		if kind != stats.KindLatency && kind != stats.KindTotal {
+			continue
 		}
+		ncounter := stats.LatencyToCounter(name)
+		if ncounter == "" {
+			continue
+		}
+		selected[name] = kind
+		selected[ncounter] = stats.KindCounter
 	}
+
 	// `true` to show (and put request latency numbers in perspective)
 	return showPerfTab(c, selected, _latency, cmdShowLatency, nil, true)
 }
@@ -272,32 +270,17 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 			continue
 		}
 		for name, v := range begin.Tracker {
-			if kind, ok := metrics[name]; !ok || kind != stats.KindLatency {
+			kind, ok := metrics[name]
+			if !ok {
+				continue
+			}
+			if kind != stats.KindLatency && kind != stats.KindTotal {
 				continue
 			}
 			vend := end.Tracker[name]
-			ncounter := name[:len(name)-1] // ".ns" => ".n"
-			switch name {
-			case stats.GetLatency, stats.GetRedirLatency:
-				ncounter = stats.GetCount
-
-			// TODO -- FIXME: transition to using totals (ais/backend/common.go)
-			case stats.GetColdRwLatency:
-				if _, ok := metrics["aws."+stats.GetCount]; ok {
-					ncounter = "aws." + stats.GetCount
-				} else if _, ok := metrics["gcp."+stats.GetCount]; ok {
-					ncounter = "gcp." + stats.GetCount
-				} else if _, ok := metrics["azure."+stats.GetCount]; ok {
-					ncounter = "azure." + stats.GetCount
-				} else {
-					v.Value = 0
-					begin.Tracker[name] = v
-					continue
-				}
-			case stats.PutLatency, stats.PutRedirLatency:
-				ncounter = stats.PutCount
-			case stats.AppendLatency:
-				ncounter = stats.AppendCount
+			ncounter := stats.LatencyToCounter(name)
+			if ncounter == "" {
+				continue
 			}
 			if cntBegin, ok1 := begin.Tracker[ncounter]; ok1 {
 				if cntEnd, ok2 := end.Tracker[ncounter]; ok2 && cntEnd.Value > cntBegin.Value {

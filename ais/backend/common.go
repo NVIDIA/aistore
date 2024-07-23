@@ -22,12 +22,13 @@ type base struct {
 	metrics  map[string]string // this backend's metric names (below)
 }
 
+// NOTE: `stats.LatencyToCounter()` - a public helper that relies on the naming convention below
 func (b *base) init(snode *meta.Snode, tstats stats.Tracker) {
 	prefix := b.provider
 	if prefix == apc.AIS {
 		prefix = apc.RemAIS
 	}
-	b.metrics = make(map[string]string, 8)
+	b.metrics = make(map[string]string, 12)
 	b.metrics[stats.GetCount] = prefix + "." + stats.GetCount
 	b.metrics[stats.GetLatencyTotal] = prefix + "." + stats.GetLatencyTotal
 	b.metrics[stats.GetE2ELatencyTotal] = prefix + "." + stats.GetE2ELatencyTotal

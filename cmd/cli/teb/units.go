@@ -108,7 +108,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		return "0"
 	}
 	// uptime
-	if strings.HasSuffix(name, ".time") || kind == stats.KindLatency {
+	if strings.HasSuffix(name, ".time") || kind == stats.KindLatency || kind == stats.KindTotal {
 		return FmtDuration(value, units)
 	}
 	// units (enum)
