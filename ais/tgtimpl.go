@@ -197,11 +197,9 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 }
 
 func (t *target) coldstats(backend core.Backend, size, started int64) {
-	delta := mono.SinceNano(started)
 	t.statsT.AddMany(
 		cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1},
-		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: delta},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: delta},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(started)},
 		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: size},
 	)
 }

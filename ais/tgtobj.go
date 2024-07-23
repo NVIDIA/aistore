@@ -1190,8 +1190,8 @@ func (goi *getOI) stats(written int64) {
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetSize, Value: written},
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written}, // vis-à-vis user (as written m.b. range)
-		cos.NamedVal64{Name: stats.GetLatency, Value: delta},      // see also: stats.GetColdRwLatency
-		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: delta}, // see also: stats.GetColdRwLatency
+		cos.NamedVal64{Name: stats.GetLatency, Value: delta},      // see also: per-backend *LatencyTotal below
+		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: delta}, // ditto
 	)
 	if goi.verchanged {
 		goi.t.statsT.AddMany(
@@ -1202,11 +1202,9 @@ func (goi *getOI) stats(written int64) {
 
 	if goi.rltime > 0 {
 		bck := goi.lom.Bck()
-		debug.Assert(bck.IsRemote())
 		backend := goi.t.Backend(bck)
 		goi.t.statsT.AddMany(
 			cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1},
-			cos.NamedVal64{Name: stats.GetColdRwLatency, Value: goi.rltime},
 			cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta},
 			cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime},
 			cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written},
