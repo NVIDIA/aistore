@@ -228,7 +228,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 			err = pv.ValidateAsProps()
 		}
 		if err != nil {
-			if !IsErrSoft(err) {
+			if !IsErrWarning(err) {
 				return err
 			}
 			softErr = err

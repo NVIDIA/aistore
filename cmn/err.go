@@ -191,7 +191,7 @@ type (
 		PodName string
 		SvcName string
 	}
-	ErrSoft struct {
+	ErrWarning struct {
 		what string
 	}
 
@@ -398,8 +398,8 @@ func (e *ErrInvalidBackendProvider) Error() string {
 	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, apc.AllProviders)
 }
 
-func (*ErrInvalidBackendProvider) Is(target error) bool {
-	_, ok := target.(*ErrInvalidBackendProvider)
+func (*ErrInvalidBackendProvider) Is(err error) bool {
+	_, ok := err.(*ErrInvalidBackendProvider)
 	return ok
 }
 
@@ -696,9 +696,9 @@ func AsErrAborted(err error) (errAborted *ErrAborted) {
 	if errAborted, ok = err.(*ErrAborted); ok {
 		return
 	}
-	target := &ErrAborted{}
-	if errors.As(err, &target) {
-		errAborted = target
+	wrapped := &ErrAborted{}
+	if errors.As(err, &wrapped) {
+		errAborted = wrapped
 	}
 	return
 }
@@ -784,23 +784,23 @@ func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 		withSvcName(ctx.SvcName)
 }
 
-// ErrSoft
-// non-critical and can be ignored in certain cases (e.g, when `--force` is set)
+// ErrWarning
+// non-critical errors that can be ignored e.g, when `--force`-ed
 
-func NewErrSoft(what string) *ErrSoft {
-	return &ErrSoft{what}
+func NewErrWarning(what string) *ErrWarning {
+	return &ErrWarning{what}
 }
 
-func (e *ErrSoft) Error() string {
+func (e *ErrWarning) Error() string {
 	return e.what
 }
 
-func IsErrSoft(err error) bool {
-	if _, ok := err.(*ErrSoft); ok {
+func IsErrWarning(err error) bool {
+	if _, ok := err.(*ErrWarning); ok {
 		return true
 	}
-	target := &ErrSoft{}
-	return errors.As(err, &target)
+	wrapped := &ErrWarning{}
+	return errors.As(err, &wrapped)
 }
 
 // ErrLmetaCorrupted & ErrLmetaNotFound

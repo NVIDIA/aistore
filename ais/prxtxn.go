@@ -1133,7 +1133,7 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 		return
 	}
 	err = nprops.Validate(targetCnt)
-	if cmn.IsErrSoft(err) && propsToUpdate.Force {
+	if cmn.IsErrWarning(err) && propsToUpdate.Force {
 		nlog.Warningln("Ignoring soft error:", err)
 		err = nil
 	}

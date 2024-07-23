@@ -1161,7 +1161,7 @@ func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
 	if c.ObjSizeLimit == ObjSizeToAlwaysReplicate || c.ParitySlices > targetCnt {
 		return
 	}
-	return NewErrSoft(err.Error())
+	return NewErrWarning(err.Error())
 }
 
 func (c *ECConf) String() string {

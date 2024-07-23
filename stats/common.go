@@ -63,9 +63,7 @@ const (
 	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
 	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
 	//
-	// NOTE: IncNonIOErr() correction, to filter out those GET and PUT errors that are cause by client "going away"
-	//
-	// See also: `IncErr`, `regCommon`
+	// See also: `IncErr`, `IncNonIOErr`, `regCommon`
 	// See also: `softErrNames`
 	GetCount    = "get.n"    // GET(object) count = (cold + warm)
 	PutCount    = "put.n"    // ditto PUT
@@ -147,12 +145,14 @@ var logtypes = [...]string{".INFO.", ".WARNING.", ".ERROR."}
 
 var ignoreIdle = [...]string{"kalive", Uptime, "disk."}
 
-var softErrNames = [...]string{errPrefix + GetCount, errPrefix + PutCount, errPrefix + DeleteCount, errPrefix + RenameCount}
+var softErrNames = [...]string{errPrefix + GetCount, errPrefix + PutCount, errPrefix + DeleteCount}
 
 ////////////
 // runner //
 ////////////
 
+// soft IO error correction, whereby (the corrected)
+// number of soft IO errors = number of (GET, PUT, DELETE errors) - r.nonIOErr
 func (r *runner) IncNonIOErr() { ratomic.AddInt64(&r.nonIOErr, 1) }
 
 func (r *runner) InitPrometheus(snode *meta.Snode) {

@@ -50,8 +50,12 @@ func (lom *LOM) CreateSlice(wfqn string) (*os.File, error)     { return lom._cf(
 
 func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, _openFlags, cos.PermRWR)
-	if err == nil || !os.IsNotExist(err) {
-		return fh, err
+	if err == nil {
+		return fh, nil
+	}
+	if !os.IsNotExist(err) {
+		T.FSHC(err, lom.Mountpath(), "")
+		return nil, err
 	}
 
 	// slow path: create sub-directories
@@ -107,7 +111,7 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 	lom.Uncache()
 	err = lom.RemoveMain()
 	for copyFQN := range lom.md.copies {
-		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) {
+		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) && err == nil {
 			err = erc
 		}
 	}
@@ -133,6 +137,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)
 	}
 	if err := lom.RenameToMain(wfqn); err != nil {
+		T.FSHC(err, lom.Mountpath(), wfqn)
 		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 	}
 	return nil

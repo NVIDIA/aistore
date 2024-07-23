@@ -761,7 +761,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// do
 	if ecode, err := goi.getObject(); err != nil {
-		if err == errSendingResp || cos.IsRetriableConnErr(err) {
+		if !goi.softIOErr {
+			debug.Assert(err != errSendingResp && !cos.IsRetriableConnErr(err), err)
 			t.statsT.IncNonIOErr()
 		}
 
@@ -1355,7 +1356,10 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	if err == nil {
 		t.statsT.Inc(stats.DeleteCount)
 	} else {
-		t.statsT.IncErr(stats.DeleteCount) // TODO: count GET/PUT/DELETE remote errors separately..
+		if isback {
+			t.statsT.IncNonIOErr()
+		}
+		t.statsT.IncErr(stats.DeleteCount) // TODO: count GET/PUT/DELETE remote errors on a per-backend...
 	}
 	return
 }
@@ -1389,12 +1393,13 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 		if aisErr != nil {
 			if !os.IsNotExist(aisErr) {
 				if backendErr != nil {
-					// unlikely
+					// (unlikely)
 					nlog.Errorf("double-failure to delete %s: ais err %v, backend err %v(%d)",
 						lom, aisErr, backendErr, backendErrCode)
 				}
 				return 0, aisErr, false
 			}
+			debug.Assert(aisErr == nil) // expecting lom.RemoveObj() to return nil when IsNotExist
 		} else if evict {
 			debug.Assert(lom.Bck().IsRemote())
 			t.statsT.AddMany(

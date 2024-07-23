@@ -66,6 +66,7 @@ type (
 		skipEC     bool          // do not erasure-encode when finalizing
 		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
 		coldGET    bool          // (one implication: proceed to write)
+		remoteErr  bool          // to exclude `putRemote` errors when counting soft IO errors
 	}
 
 	getOI struct {
@@ -86,6 +87,7 @@ type (
 		retry      bool       // once
 		cold       bool       // true if executed backend.Get
 		latestVer  bool       // QparamLatestVer || 'versioning.*_warm_get'
+		softIOErr  bool       // to count GET error as a "soft IO error"
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -210,15 +212,18 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(poi.loghdr())
 	}
-	return
+
+	return 0, nil
 rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
-		if err == io.ErrUnexpectedEOF || cos.IsRetriableConnErr(err) {
+		// non-IO error when:
+		// (skip | returned by remote backend | failure to transmit)
+		if err == cmn.ErrSkip || poi.remoteErr || err == io.ErrUnexpectedEOF || cos.IsRetriableConnErr(err) {
 			poi.t.statsT.IncNonIOErr()
 		}
 		poi.t.statsT.IncErr(stats.PutCount)
 	}
-	return
+	return ecode, err
 }
 
 func (poi *putOI) stats() {
@@ -271,10 +276,10 @@ func (poi *putOI) loghdr() string {
 func (poi *putOI) finalize() (ecode int, err error) {
 	if ecode, err = poi.fini(); err != nil {
 		if err1 := cos.Stat(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
+			// cleanup: rm work-fqn
 			if err1 == nil {
 				err1 = err
 			}
-			poi.t.FSHC(err1, poi.lom.Mountpath(), poi.workFQN)
 			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil && !os.IsNotExist(err2) {
 				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
@@ -311,13 +316,14 @@ func (poi *putOI) fini() (ecode int, err error) {
 			loghdr := poi.loghdr()
 			nlog.Errorf("PUT (%s): %v(%d)", loghdr, err, ecode)
 			if ecode != http.StatusServiceUnavailable {
-				return
+				return ecode, err
 			}
+			// retry 503 only once; e.g. error message:
 			// (googleapi: "Error 503: We encountered an internal error. Please try again.")
 			time.Sleep(time.Second)
 			ecode, err = poi.putRemote()
 			if err != nil {
-				return
+				return ecode, err
 			}
 			nlog.Infof("PUT (%s): retried OK", loghdr)
 		}
@@ -337,8 +343,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 		}
 		defer lom.Unlock(true)
 	default:
-		// expecting valid atime passed with `poi`
-		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
+		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime) // expecting valid atime
 		lom.Lock(true)
 		defer lom.Unlock(true)
 		lom.SetAtimeUnix(poi.atime)
@@ -352,7 +357,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 				debug.AssertNoErr(err)
 			} else if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 				if err = lom.IncVersion(); err != nil {
-					nlog.Errorln(err)
+					nlog.Errorln(err) // (unlikely)
 				}
 			}
 		}
@@ -360,7 +365,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 
 	// done
 	if err = lom.RenameFinalize(poi.workFQN); err != nil {
-		return
+		return 0, err
 	}
 	if lom.HasCopies() {
 		if errdc := lom.DelAllCopies(); errdc != nil {
@@ -370,8 +375,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster; prefetch special case)
 		lom.SetAtimeUnix(poi.atime)
 	}
-	err = lom.PersistMain()
-	return
+	return 0, lom.PersistMain()
 }
 
 // via backend.PutObj()
@@ -398,7 +402,9 @@ func (poi *putOI) putRemote() (int, error) {
 			lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
 		}
 		poi.rltime = mono.SinceNano(startTime)
+		return 0, nil
 	}
+	poi.remoteErr = true
 	return ecode, err
 }
 
@@ -552,6 +558,7 @@ do:
 	if err != nil {
 		cold = cos.IsNotExist(err, 0)
 		if !cold {
+			goi.softIOErr = true
 			return http.StatusInternalServerError, err
 		}
 		if goi.lom.IsFeatureSet(feat.DisableColdGET) && goi.lom.Bck().IsRemote() {
@@ -576,6 +583,7 @@ do:
 			er2 := lom2.InitBck(goi.lom.Bucket())
 			if er2 == nil {
 				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
+				goi.softIOErr = true
 			}
 			if er2 == nil {
 				core.FreeLOM(goi.lom)
@@ -591,6 +599,7 @@ do:
 		}
 		goi.lom.Lock(false)
 		if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+			goi.softIOErr = true
 			return 0, err
 		}
 		goto fin // ok, done
@@ -616,7 +625,7 @@ do:
 				nlog.Errorln(err)
 				return ecode, err
 			}
-			nlog.Errorf("%v - proceeding to cold-GET from %s", err, goi.lom.Bck())
+			nlog.Errorln(err, "- proceeding to cold-GET from", goi.lom.Bck().Cname(""))
 		}
 	}
 
@@ -1052,6 +1061,7 @@ func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htra
 		_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
 		if err != nil {
 			sgl.Free()
+			goi.softIOErr = true
 			return err
 		}
 		r = sgl
@@ -1117,6 +1127,7 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 		var csl cos.ReadCloseSizer
 		csl, err = ar.ReadOne(dpq.arch.path)
 		if err != nil {
+			goi.softIOErr = true
 			return cmn.NewErrFailedTo(goi.t, "extract "+dpq._archstr()+" from", lom.Cname(), err)
 		}
 		if csl == nil {
@@ -1137,6 +1148,7 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 	whdr.Set(cos.HdrContentType, cos.ContentTar)
 	err = ar.ReadUntil(rcb, dpq.arch.regx, dpq.arch.mmode)
 	if err != nil {
+		goi.softIOErr = true
 		err = cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
 	}
 	if err == nil && rcb.num == 0 {
