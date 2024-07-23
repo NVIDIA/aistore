@@ -711,7 +711,7 @@ func (sls *sls) notify(ver int64) {
 		return
 	}
 	sls.postCh <- ver
-	if len(sls.postCh) == cap(sls.postCh) {
-		nlog.ErrorDepth(1, "sls channel full: Smap v", ver) // unlikely
+	if l, c := len(sls.postCh), cap(sls.postCh); l > c/2 {
+		nlog.ErrorDepth(1, cos.ErrWorkChanFull, l, c, "Smap version:", ver) // unlikely
 	}
 }

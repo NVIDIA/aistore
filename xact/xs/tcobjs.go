@@ -222,7 +222,7 @@ func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 		if l == c {
 			cnt := r.chanFull.Inc()
 			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleXs)) {
-				nlog.Errorln("work channel full", r.Name())
+				nlog.Errorln(cos.ErrWorkChanFull, r.Name(), "cnt", cnt)
 			}
 		}
 	}
