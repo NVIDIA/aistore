@@ -729,7 +729,7 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		interrupted: regReq.Flags.IsSet(cos.RebalanceInterrupted),
 		restarted:   regReq.Flags.IsSet(cos.Restarted),
 	}
-	if err = p._earlyGFN(ctx, ctx.nsi); err != nil {
+	if err = p._earlyGFN(ctx, ctx.nsi, msg.Action, true /*joining*/); err != nil {
 		return
 	}
 	if err = p.owner.smap.modify(ctx); err != nil {
@@ -755,10 +755,10 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 	return
 }
 
-func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode /*being added or removed*/) error {
+func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, joining bool) error {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot add %s", si))
+		return newErrNotPrimary(p.si, smap, "cannot "+action+" "+si.StringEx())
 	}
 	if si.IsProxy() {
 		return nil
@@ -768,6 +768,13 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode /*being added or rem
 			err = nil
 		}
 		return err
+	}
+
+	if smap.CountActiveTs() == 0 {
+		return nil
+	}
+	if !joining && smap.CountActiveTs() == 1 {
+		return nil
 	}
 
 	// early-GFN notification with an empty (version-only and not yet updated) Smap and
@@ -1539,7 +1546,7 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bo
 		msg:     msg,
 		skipReb: !reb,
 	}
-	if err = p._earlyGFN(ctx, si); err != nil {
+	if err = p._earlyGFN(ctx, si, msg.Action, false /*joining*/); err != nil {
 		return
 	}
 	if err = p.owner.smap.modify(ctx); err != nil {

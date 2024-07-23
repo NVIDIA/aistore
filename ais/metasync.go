@@ -94,6 +94,8 @@ const (
 
 const failsync = "failing to sync"
 
+const retryConnRefused = 4
+
 type (
 	revs interface {
 		tag() string         // enum { revsSmapTag, ... }
@@ -218,7 +220,7 @@ func (y *metasyncer) Stop(err error) {
 func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 	var (
 		failedCntAtomic = atomic.NewInt32(0)
-		req             = revsReq{pairs: []revsPair{pair}}
+		req             = revsReq{pairs: []revsPair{pair}, reqType: reqNotify}
 	)
 	if y.isPrimary() != nil {
 		return
@@ -227,7 +229,6 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 		req.wg = &sync.WaitGroup{}
 		req.wg.Add(1)
 		req.failedCnt = failedCntAtomic
-		req.reqType = reqNotify
 	}
 	y.workCh <- req
 
@@ -369,7 +370,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	freeBcastRes(results)
 	// step: handle connection-refused right away
 	lr := len(refused)
-	for range 4 { // retry
+	for range retryConnRefused {
 		if len(refused) == 0 {
 			if lr > 0 {
 				nlog.Infof("%s: %d node%s sync-ed", y.p, lr, cos.Plural(lr))
