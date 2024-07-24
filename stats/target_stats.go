@@ -92,13 +92,18 @@ const (
 )
 
 type (
+	dmetric map[string]string // "read.bps" => full metric name, etc.
+
 	Trunner struct {
 		runner // the base (compare w/ Prunner)
 		t      core.Target
 		Tcdf   fs.Tcdf `json:"cdf"`
-		disk   ios.AllDiskStats
-		xln    string
-		cs     struct {
+		disk   struct {
+			stats   ios.AllDiskStats   // numbers
+			metrics map[string]dmetric // respective names
+		}
+		xln string
+		cs  struct {
 			last int64 // mono.Nano
 		}
 		softErrs int64 // numSoftErrs(); to monitor the change
@@ -139,7 +144,9 @@ func (r *Trunner) Init() *atomic.Bool {
 
 	r.ctracker = make(copyTracker, numTargetStats) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
-	r.disk = make(ios.AllDiskStats, 16)
+
+	r.disk.stats = make(ios.AllDiskStats, 16)
+	r.disk.metrics = make(map[string]dmetric, 16)
 
 	config := cmn.GCO.Get()
 	r.core.statsTime = config.Periodic.StatsTime.D()
@@ -171,22 +178,44 @@ func (r *Trunner) InitCDF(config *cmn.Config) error {
 	return nil
 }
 
-// TODO: use map
-func _dmetric(disk, metric string) string {
+func (r *Trunner) _dmetric(disk, metric string) string {
 	var sb strings.Builder
 	sb.WriteString(diskMetricLabel)
 	sb.WriteByte('.')
 	sb.WriteString(disk)
 	sb.WriteByte('.')
 	sb.WriteString(metric)
-	return sb.String()
+	fullname := sb.String()
+
+	m, ok := r.disk.metrics[disk]
+	if !ok {
+		debug.Assert(metric == "read.bps", metric)
+		m = make(map[string]string, 5)
+		r.disk.metrics[disk] = m
+
+		// init all the rest, as per ios.DiskStats
+		r._dmetric(disk, "avg.rsize")
+		r._dmetric(disk, "write.bps")
+		r._dmetric(disk, "avg.wsize")
+		r._dmetric(disk, "util")
+	}
+	m[metric] = fullname
+	return fullname
 }
 
-func nameRbps(disk string) string { return _dmetric(disk, "read.bps") }
-func nameRavg(disk string) string { return _dmetric(disk, "avg.rsize") }
-func nameWbps(disk string) string { return _dmetric(disk, "write.bps") }
-func nameWavg(disk string) string { return _dmetric(disk, "avg.wsize") }
-func nameUtil(disk string) string { return _dmetric(disk, "util") }
+// NOTE: must always be called first and prior to all the other disk-naming metrics (below)
+func (r *Trunner) nameRbps(disk string) string {
+	if dmetric, ok := r.disk.metrics[disk]; ok {
+		return dmetric["read.bps"]
+	}
+	// init & slow path
+	return r._dmetric(disk, "read.bps")
+}
+
+func (r *Trunner) nameRavg(disk string) string { return r.disk.metrics[disk]["avg.rsize"] }
+func (r *Trunner) nameWbps(disk string) string { return r.disk.metrics[disk]["write.bps"] }
+func (r *Trunner) nameWavg(disk string) string { return r.disk.metrics[disk]["avg.wsize"] }
+func (r *Trunner) nameUtil(disk string) string { return r.disk.metrics[disk]["util"] }
 
 // log vs idle logic
 func isDiskMetric(name string) bool {
@@ -253,16 +282,18 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 }
 
 func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {
-	s, n := r.core.Tracker, nameRbps(disk)
-	if _, ok := s[n]; ok { // must be config.TestingEnv()
+	s := r.core.Tracker
+	rbps := r.nameRbps(disk)
+	if _, ok := s[rbps]; ok { // must be config.TestingEnv()
 		return
 	}
-	r.reg(snode, n, KindComputedThroughput)
-	r.reg(snode, nameWbps(disk), KindComputedThroughput)
+	r.reg(snode, rbps, KindComputedThroughput)
+	r.reg(snode, r.nameRavg(disk), KindGauge)
 
-	r.reg(snode, nameRavg(disk), KindGauge)
-	r.reg(snode, nameWavg(disk), KindGauge)
-	r.reg(snode, nameUtil(disk), KindGauge)
+	r.reg(snode, r.nameWbps(disk), KindComputedThroughput)
+	r.reg(snode, r.nameWavg(disk), KindGauge)
+
+	r.reg(snode, r.nameUtil(disk), KindGauge)
 }
 
 func (r *Trunner) GetStats() (ds *Node) {
@@ -331,23 +362,24 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 1. disk stats
 	refreshCap := r.Tcdf.HasAlerts()
-	fs.DiskStats(r.disk, nil /*fs.TcdfExt*/, config, refreshCap)
+	fs.DiskStats(r.disk.stats, nil /*fs.TcdfExt*/, config, refreshCap)
 
 	s := r.core
-	for disk, stats := range r.disk {
-		v := s.Tracker[nameRbps(disk)]
+	for disk, stats := range r.disk.stats {
+		n := r.nameRbps(disk)
+		v := s.Tracker[n]
 		if v == nil {
-			nlog.Warningln("missing:", nameRbps(disk))
+			nlog.Warningln("missing:", n)
 			continue
 		}
 		v.Value = stats.RBps
-		v = s.Tracker[nameRavg(disk)]
+		v = s.Tracker[r.nameRavg(disk)]
 		v.Value = stats.Ravg
-		v = s.Tracker[nameWbps(disk)]
+		v = s.Tracker[r.nameWbps(disk)]
 		v.Value = stats.WBps
-		v = s.Tracker[nameWavg(disk)]
+		v = s.Tracker[r.nameWavg(disk)]
 		v.Value = stats.Wavg
-		v = s.Tracker[nameUtil(disk)]
+		v = s.Tracker[r.nameUtil(disk)]
 		v.Value = stats.Util
 	}
 
@@ -374,7 +406,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	if !refreshCap && set != 0 {
 		// refill r.disk (ios.AllDiskStats) prior to logging
-		fs.DiskStats(r.disk, nil /*fs.TcdfExt*/, config, true /*refresh cap*/)
+		fs.DiskStats(r.disk.stats, nil /*fs.TcdfExt*/, config, true /*refresh cap*/)
 	}
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
@@ -508,7 +540,7 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 // [ disk: read throughput, average read size, write throughput, average write size, disk utilization ]
 // e.g.: [ sda: 94MiB/s, 68KiB, 25MiB/s, 21KiB, 82% ]
 func (r *Trunner) logDiskStats(now int64) {
-	for disk, stats := range r.disk {
+	for disk, stats := range r.disk.stats {
 		if stats.Util < minLogDiskUtil/2 || (stats.Util < minLogDiskUtil && now < r.next) {
 			continue
 		}

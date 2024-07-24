@@ -87,7 +87,7 @@ type (
 		retry      bool       // once
 		cold       bool       // true if executed backend.Get
 		latestVer  bool       // QparamLatestVer || 'versioning.*_warm_get'
-		softIOErr  bool       // to count GET error as a "soft IO error"
+		isIOErr    bool       // to count GET error as a "IO error"; see `Trunner._softErrs()`
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -558,7 +558,7 @@ do:
 	if err != nil {
 		cold = cos.IsNotExist(err, 0)
 		if !cold {
-			goi.softIOErr = true
+			goi.isIOErr = true
 			return http.StatusInternalServerError, err
 		}
 		if goi.lom.IsFeatureSet(feat.DisableColdGET) && goi.lom.Bck().IsRemote() {
@@ -583,7 +583,7 @@ do:
 			er2 := lom2.InitBck(goi.lom.Bucket())
 			if er2 == nil {
 				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
-				goi.softIOErr = true
+				goi.isIOErr = true
 			}
 			if er2 == nil {
 				core.FreeLOM(goi.lom)
@@ -599,7 +599,7 @@ do:
 		}
 		goi.lom.Lock(false)
 		if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-			goi.softIOErr = true
+			goi.isIOErr = true
 			return 0, err
 		}
 		goto fin // ok, done
@@ -1061,7 +1061,7 @@ func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htra
 		_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
 		if err != nil {
 			sgl.Free()
-			goi.softIOErr = true
+			goi.isIOErr = true
 			return err
 		}
 		r = sgl
@@ -1127,7 +1127,7 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 		var csl cos.ReadCloseSizer
 		csl, err = ar.ReadOne(dpq.arch.path)
 		if err != nil {
-			goi.softIOErr = true
+			goi.isIOErr = true
 			return cmn.NewErrFailedTo(goi.t, "extract "+dpq._archstr()+" from", lom.Cname(), err)
 		}
 		if csl == nil {
@@ -1148,7 +1148,7 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 	whdr.Set(cos.HdrContentType, cos.ContentTar)
 	err = ar.ReadUntil(rcb, dpq.arch.regx, dpq.arch.mmode)
 	if err != nil {
-		goi.softIOErr = true
+		goi.isIOErr = true
 		err = cmn.NewErrFailedTo(goi.t, "extract files that match "+dpq._archstr()+" from", lom.Cname(), err)
 	}
 	if err == nil && rcb.num == 0 {

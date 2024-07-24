@@ -96,6 +96,8 @@ func isRebalancing(tstatusMap teb.StstMap) bool {
 }
 
 func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstMap) bool {
+	const fmtEmptyVer = "empty version from %s (in maintenance mode?)"
+
 	expected := mmc[0] + versionSepa + mmc[1]
 	minc, err := strconv.Atoi(mmc[1])
 	if err != nil {
@@ -106,7 +108,10 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 	}
 	for _, ds := range stmap {
 		if ds.Version == "" {
-			warn := fmt.Sprintf("empty version from %s (in maintenance mode?)", ds.Node.Snode.StringEx())
+			if ds.Node.Snode.InMaintOrDecomm() {
+				continue
+			}
+			warn := fmt.Sprintf(fmtEmptyVer, ds.Node.Snode.StringEx())
 			actionWarn(c, warn)
 			continue
 		}
@@ -140,6 +145,14 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 			// ditto
 			var cnt int
 			for _, ds2 := range stmap {
+				if ds2.Node.Snode.InMaintOrDecomm() {
+					continue
+				}
+				if ds2.Version == "" {
+					warn := fmt.Sprintf(fmtEmptyVer, ds2.Node.Snode.StringEx())
+					actionWarn(c, warn)
+					continue
+				}
 				if ds.Node.Snode.ID() != ds2.Node.Snode.ID() {
 					mmx2 := strings.Split(ds2.Version, versionSepa)
 					minx2, _ := strconv.Atoi(mmx2[1])

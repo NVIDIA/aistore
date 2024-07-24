@@ -29,6 +29,16 @@ type (
 // true when called by top-level handler
 var allPerfTabs bool
 
+var verboseCounters = [...]string{
+	stats.LcacheCollisionCount,
+	stats.LcacheEvictedCount,
+	stats.LcacheFlushColdCount,
+	cos.StreamsOutObjCount,
+	cos.StreamsOutObjSize,
+	cos.StreamsInObjCount,
+	cos.StreamsInObjSize,
+}
+
 var (
 	showPerfFlags = append(
 		longRunFlags,
@@ -37,6 +47,7 @@ var (
 		unitsFlag,
 		averageSizeFlag,
 		nonverboseFlag,
+		verboseFlag,
 	)
 
 	// `show performance` command
@@ -142,6 +153,14 @@ func showCountersHandler(c *cli.Context) error {
 
 	for name, kind := range metrics {
 		if metrics[name] == stats.KindCounter || metrics[name] == stats.KindSize {
+			//
+			// skip assorted internal counters and sizes, unless verbose
+			//
+			if !flagIsSet(c, verboseFlag) {
+				if cos.StringInSlice(name, verboseCounters[:]) {
+					continue
+				}
+			}
 			selected[name] = kind
 		}
 	}
