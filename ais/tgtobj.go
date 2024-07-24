@@ -1163,13 +1163,12 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil {
 		if !cos.IsRetriableConnErr(err) {
-			mi := goi.lom.Mountpath()
-			if fqn != goi.lom.FQN {
-				mi = nil
-			}
-			goi.t.FSHC(err, mi, fqn)
+			nlog.Errorln("failed to GET", goi.lom.String()+":", err)
+			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
+		} else if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			nlog.Warningln("failed to GET", goi.lom.String()+":", err)
 		}
-		nlog.Errorln(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
+
 		// at this point, error is already written into the response -
 		// return special code to indicate just that
 		return errSendingResp

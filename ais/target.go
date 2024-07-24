@@ -762,7 +762,6 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	// do
 	if ecode, err := goi.getObject(); err != nil {
 		if !goi.isIOErr {
-			debug.Assert(err != errSendingResp && !cos.IsRetriableConnErr(err), err)
 			t.statsT.IncNonIOErr()
 		}
 

@@ -5,8 +5,6 @@
 package ais
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -23,17 +21,20 @@ func (t *target) SoftFSHC() {
 }
 
 func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
-	config := cmn.GCO.Get()
+	debug.Assert(mi != nil)
 
+	config := cmn.GCO.Get()
 	if cmn.IsErrCapExceeded(err) {
 		cs := t.oos(config)
-		nlog.Errorf("%s: OOS (%s) via FSHC", t, cs.String())
+		nlog.Errorf("%s: OOS (%s) via FSHC, %s", t, cs.String(), mi)
 		return
 	}
 
 	if !config.FSHC.Enabled {
 		return
 	}
+
+	// NOTE: filter-out non-IO errors
 	if !t.fshc.IsErr(err) {
 		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Warningln(err, "is not one of the error types to trigger FSHC, ignoring...")
@@ -41,32 +42,16 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 		return
 	}
 
-	s := fmt.Sprintf("waking up FSHC to check %s, err: %v", mi, err) // or maybe not (waking up)
-
-	if mi == nil {
-		mi, _, err = fs.FQN2Mpath(fqn)
-		if err != nil {
-			if e, ok := err.(*cmn.ErrMpathNotFound); ok {
-				if e.Disabled() {
-					nlog.Errorf("%s: %s is disabled, not %s", t, e.Mpath(), s)
-					return
-				}
-			}
-			nlog.Errorf("%s: %v, %s", t, err, s)
-			return
-		}
-		debug.Assert(mi != nil)
-	}
 	if !mi.IsAvail() {
-		nlog.Warningln(mi.String(), "is not available, skipping FSHC")
+		nlog.Warningln(mi.String(), "is not available (possibly disabled or detached), skipping FSHC")
 		return
 	}
 
-	// yes "waking up"
-	nlog.Errorln(t.String()+":", s)
+	nlog.Errorf("%s: waking up FSHC to check %s, err: %v", t, mi, err)
 
 	//
-	// metrics: counting I/O errors on a per mountpath (`NameSuffix` below) basis
+	// counting I/O errors on a per mountpath
+	// TODO -- FIXME: remove `NameSuffix`
 	//
 	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: mi.Path, Value: 1})
 	t.fshc.OnErr(mi, fqn)
