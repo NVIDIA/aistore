@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	aistls "github.com/NVIDIA/aistore/cmn/tls"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
@@ -558,7 +559,8 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 retry:
 	if config.Net.HTTP.UseHTTPS {
 		tag = "HTTPS"
-		err = server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey)
+		// Listen and Serve TLS using certificates provided using the GetCertificate() instead of static files.
+		err = server.s.ListenAndServeTLS("", "")
 	} else {
 		err = server.s.ListenAndServe()
 	}
@@ -581,6 +583,9 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 		caCert     []byte
 		clientAuth = tls.ClientAuthType(conf.ClientAuthTLS)
 	)
+	tlsConf = &tls.Config{
+		ClientAuth: clientAuth,
+	}
 	if clientAuth > tls.RequestClientCert {
 		if caCert, err = os.ReadFile(conf.ClientCA); err != nil {
 			return
@@ -589,8 +594,14 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 		if ok := pool.AppendCertsFromPEM(caCert); !ok {
 			return nil, fmt.Errorf("tls: failed to append CA certs from PEM: %q", conf.ClientCA)
 		}
+		tlsConf.ClientCAs = pool
 	}
-	tlsConf = &tls.Config{ClientAuth: clientAuth, ClientCAs: pool}
+	if conf.Certificate != "" && conf.CertKey != "" {
+		if !aistls.IsLoaderSet() {
+			return nil, errors.New("tls: certificate manager not set")
+		}
+		tlsConf.GetCertificate = aistls.GetCert()
+	}
 	return
 }
 

@@ -50,7 +50,7 @@ func newMgr(driver kvdb.Driver) (m *mgr, err error) {
 	m = &mgr{
 		db: driver,
 	}
-	m.clientH, m.clientTLS = cmn.NewDefaultClients(time.Duration(Conf.Timeout.Default))
+	m.clientH, m.clientTLS = cmn.NewDefaultClients(time.Duration(Conf.Timeout.Default), nil)
 	err = initializeDB(driver)
 	return
 }

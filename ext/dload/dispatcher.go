@@ -60,7 +60,7 @@ type (
 var g global
 
 func Init(tstats stats.Tracker, db kvdb.Driver, clientConf *cmn.ClientConf) {
-	g.clientH, g.clientTLS = cmn.NewDefaultClients(clientConf.TimeoutLong.D())
+	g.clientH, g.clientTLS = cmn.NewDefaultClients(clientConf.TimeoutLong.D(), nil)
 
 	if db == nil { // unit tests only
 		return

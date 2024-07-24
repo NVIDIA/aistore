@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	aistls "github.com/NVIDIA/aistore/cmn/tls"
 )
 
 type (
@@ -105,24 +106,36 @@ func NewTLS(sargs TLSArgs) (tlsConf *tls.Config, _ error) {
 		}
 	}
 	tlsConf = &tls.Config{RootCAs: pool, InsecureSkipVerify: sargs.SkipVerify}
-	if sargs.Certificate != "" {
-		cert, err := tls.LoadX509KeyPair(sargs.Certificate, sargs.Key)
-		if err != nil {
-			var hint string
-			if os.IsNotExist(err) {
-				hint = "\n(hint: check the two filenames for existence/accessibility)"
+	if sargs.Certificate != "" && sargs.Key != "" {
+		if aistls.IsLoaderSet() {
+			// Certificate Manager initiated as part of service startup
+			tlsConf.GetClientCertificate = aistls.GetClientCert()
+		} else {
+			// One-shot client probably
+			cert, err := tls.LoadX509KeyPair(sargs.Certificate, sargs.Key)
+			if err != nil {
+				var hint string
+				if os.IsNotExist(err) {
+					hint = "\n(hint: check the two filenames for existence/accessibility)"
+				}
+				return nil, fmt.Errorf("client tls: failed to load public/private key pair: (%q, %q)%s",
+					sargs.Certificate, sargs.Key, hint)
 			}
-			return nil, fmt.Errorf("client tls: failed to load public/private key pair: (%q, %q)%s",
-				sargs.Certificate, sargs.Key, hint)
+			tlsConf.Certificates = []tls.Certificate{cert}
 		}
-		tlsConf.Certificates = []tls.Certificate{cert}
 	}
 	return tlsConf, nil
 }
 
-func NewDefaultClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
+// NewDefaultClients creates and returns a pair of HTTP clients: one without TLS and one with TLS.
+// If the provided TLSArgs (sargs) is nil, the clientTLS will be a standard HTTP client without TLS.
+func NewDefaultClients(timeout time.Duration, sargs *TLSArgs) (clientH, clientTLS *http.Client) {
 	clientH = NewClient(TransportArgs{Timeout: timeout})
-	clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, TLSArgs{SkipVerify: true})
+	if sargs != nil {
+		clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, *sargs)
+	} else {
+		clientTLS = NewClient(TransportArgs{Timeout: timeout})
+	}
 	return
 }
 
@@ -158,6 +171,8 @@ func EnvToTLS(sargs *TLSArgs) {
 		sargs.Key = s
 	}
 	if s := os.Getenv(env.AIS.ClientCA); s != "" {
+		// XXX This should be RootCA for clients
+		// https://pkg.go.dev/crypto/tls
 		sargs.ClientCA = s
 	}
 	if s := os.Getenv(env.AIS.SkipVerifyCrt); s != "" {

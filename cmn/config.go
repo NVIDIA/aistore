@@ -455,6 +455,7 @@ type (
 		UseHTTPS        bool   `json:"use_https"`         // use HTTPS
 		SkipVerifyCrt   bool   `json:"skip_verify"`       // skip X509 cert verification (used with self-signed certs)
 		Chunked         bool   `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
+		Port            int    `json:"port"`              // AuthN port
 	}
 	HTTPConfToSet struct {
 		Certificate     *string `json:"server_crt,omitempty"`

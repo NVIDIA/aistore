@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/tls"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -200,6 +201,13 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// declared xactions, as per xact/api.go
 	xreg.Init()
+
+	if config.Net.HTTP.UseHTTPS {
+		err = tls.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey)
+		if err != nil {
+			cos.ExitLogf("failed to initialize Certificate Manager: %v", err)
+		}
+	}
 
 	// primary 'host[:port]' endpoint or URL from the environment
 	if daemon.EP = os.Getenv(env.AIS.PrimaryEP); daemon.EP != "" {
