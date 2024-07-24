@@ -17,4 +17,4 @@ FROM --platform=${TARGETPLATFORM:-linux/amd64} ${BASE_IMAGE} as base
 
 COPY --from=builder /go/bin/authn /usr/bin/authn
 
-ENTRYPOINT ["authn", "-config=/etc/authn"]
+ENTRYPOINT ["authn", "-config=/etc/ais/authn"]
