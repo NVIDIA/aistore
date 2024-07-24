@@ -222,6 +222,9 @@ killRestore:
 	if nodeType == apc.Target {
 		tools.WaitForRebalAndResil(t, tools.BaseAPIParams(proxyURL))
 	}
+
+	_, err = tools.WaitForClusterState(proxyURL, "wait for original node counts", 0, origProxyCnt, origTargetCount)
+	tassert.CheckFatal(t, err)
 }
 
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
@@ -285,12 +288,13 @@ func primaryAndTargetCrash(t *testing.T) {
 func proxyCrash(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+	origProxyCount := smap.CountActivePs()
+	origTargetCount := smap.CountActiveTs()
+	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
 
 	primaryURL := smap.Primary.URL(cmn.NetPublic)
 	tlog.Logf("Primary: %s\n", smap.Primary.StringEx())
 
-	origProxyCount := smap.CountActivePs()
 	secondNode, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
@@ -304,7 +308,7 @@ func proxyCrash(t *testing.T) {
 	err = tools.RestoreNode(secondCmd, false, "proxy")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tools.WaitForClusterState(primaryURL, "proxy restoreid", smap.Version, origProxyCount, 0)
+	smap, err = tools.WaitForClusterState(primaryURL, "proxy restoreid", smap.Version, origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Pmap[secondNode.ID()]; !ok {
@@ -381,10 +385,10 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
-		proxyURL = tools.GetPrimaryURL()
-		smap     = tools.GetClusterMap(t, proxyURL)
-		node     *meta.Snode
-		err      error
+		primaryURL = tools.GetPrimaryURL()
+		smap       = tools.GetClusterMap(t, primaryURL)
+		node       *meta.Snode
+		err        error
 	)
 
 	if nodeType == apc.Proxy {
@@ -411,14 +415,15 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 // and restore them afterwards
 func primaryAndProxyCrash(t *testing.T) {
 	var (
-		proxyURL                    = tools.RandomProxyURL(t)
-		smap                        = tools.GetClusterMap(t, proxyURL)
+		randProxyURL                = tools.RandomProxyURL(t)
+		smap                        = tools.GetClusterMap(t, randProxyURL)
 		origProxyCount              = smap.CountActivePs()
+		origTargetCount             = smap.CountActiveTs()
 		oldPrimaryURL, oldPrimaryID = smap.Primary.URL(cmn.NetPublic), smap.Primary.ID()
 		secondNode                  *meta.Snode
 		secondID                    string
 	)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
 
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
@@ -460,7 +465,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "join back non-primary "+secondID,
-		smap.Version, origProxyCount, 0)
+		smap.Version, origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
 
 	if smap.Primary.ID() != newPrimaryID {
@@ -479,28 +484,32 @@ func primaryAndProxyCrash(t *testing.T) {
 // targetRejoin kills a random selected target, wait for it to rejoin and verifies it
 func targetRejoin(t *testing.T) {
 	var (
-		id       string
-		proxyURL = tools.RandomProxyURL(t)
+		id              string
+		randProxyURL    = tools.RandomProxyURL(t)
+		smap            = tools.GetClusterMap(t, randProxyURL)
+		origProxyCount  = smap.CountActivePs()
+		origTargetCount = smap.CountActiveTs()
 	)
-
-	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
 
 	node, err := smap.GetRandTarget()
 	if err != nil {
 		tlog.Logf("Warning: %v\n", err)
-		tlog.Logln("Retrying...")
+		tlog.Logln("Waiting for a while and retrying...")
 		// retry once
-		time.Sleep(10 * time.Second)
-		smap = tools.GetClusterMap(t, proxyURL)
+		time.Sleep(25 * time.Second)
+		randProxyURL = tools.RandomProxyURL(t)
+		smap = tools.GetClusterMap(t, randProxyURL)
 		node, err = smap.GetRandTarget()
 		tassert.CheckFatal(t, err)
+		origProxyCount = smap.CountActivePs()
+		origTargetCount = smap.CountActiveTs()
 	}
 	id = node.ID()
 
 	cmd, err := tools.KillNode(node)
 	tassert.CheckFatal(t, err)
-	smap, err = tools.WaitForClusterState(proxyURL, "target crashed", smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
+	smap, err = tools.WaitForClusterState(randProxyURL, "target crashed", smap.Version, origProxyCount, origTargetCount-1)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; ok {
@@ -510,25 +519,28 @@ func targetRejoin(t *testing.T) {
 	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tools.WaitForClusterState(proxyURL, "target rejoined",
-		smap.Version, smap.CountActivePs(), smap.CountActiveTs()+1)
+	smap, err = tools.WaitForClusterState(randProxyURL, "target rejoined", smap.Version, origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; !ok {
 		t.Fatalf("Restarted target %s did not rejoin the cluster", id)
 	}
-	tools.WaitForRebalAndResil(t, tools.BaseAPIParams(proxyURL))
+	tools.WaitForRebalAndResil(t, tools.BaseAPIParams(randProxyURL))
 }
 
 // crashAndFastRestore kills the primary and restores it before a new leader is elected
 func crashAndFastRestore(t *testing.T) {
-	var err error
-	proxyURL := tools.RandomProxyURL(t)
-	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+	var (
+		randProxyURL    = tools.RandomProxyURL(t)
+		smap            = tools.GetClusterMap(t, randProxyURL)
+		origProxyCount  = smap.CountActivePs()
+		origTargetCount = smap.CountActiveTs()
+	)
+
+	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
 
 	// Make sure proxyURL is not primary URL.
-	_, proxyURL, err = chooseNextProxy(smap)
+	_, randProxyURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 	oldPrimaryID := smap.Primary.ID()
 	tlog.Logf("The current primary %s, Smap version %d\n", oldPrimaryID, smap.Version)
@@ -543,10 +555,12 @@ func crashAndFastRestore(t *testing.T) {
 
 	tlog.Logf("The %s is currently restarting\n", oldPrimaryID)
 
-	// NOTE: using (version - 1) because the primary will restart with its old version,
-	//       there will be no version change for this restore, so force beginning version to 1 less
-	//       than the original version in order to use WaitForClusterState.
-	smap, err = tools.WaitForClusterState(proxyURL, "restore", smap.Version-1, 0, 0)
+	// NOTE:
+	// using (version - 1) because the primary will restart with its old version,
+	// there will be no version change for this restore, so force beginning version to 1 less
+	// than the original version in order to use WaitForClusterState.
+	time.Sleep(5 * time.Second)
+	smap, err = tools.WaitForClusterState(randProxyURL, "restore", smap.Version-1, origProxyCount, origTargetCount)
 	tassert.CheckFatal(t, err)
 
 	if smap.Primary.ID() != oldPrimaryID {
@@ -573,16 +587,16 @@ func joinWhileVoteInProgress(t *testing.T) {
 
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
-	proxyURL := proxy.URL(cmn.NetPublic)
+	randProxyURL := proxy.URL(cmn.NetPublic)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	go runMockTarget(t, proxyURL, mocktgt, stopch, smap, wg)
+	go runMockTarget(t, randProxyURL, mocktgt, stopch, smap, wg)
 
-	_, err = tools.WaitForClusterState(proxyURL, "mock target joined", smap.Version, oldProxyCnt, oldTargetCnt+1)
+	_, err = tools.WaitForClusterState(randProxyURL, "mock target joined", smap.Version, oldProxyCnt, oldTargetCnt+1)
 	tassert.CheckFatal(t, err)
 
-	smap = killRestorePrimary(t, proxyURL, false, nil)
+	smap = killRestorePrimary(t, randProxyURL, false, nil)
 	//
 	// FIXME: election is in progress if and only when xaction(apc.ActElection) is running -
 	//        simulating the scenario via mocktgt.voteInProgress = true is incorrect
@@ -615,19 +629,19 @@ func joinWhileVoteInProgress(t *testing.T) {
 }
 
 func minorityTargetMapVersionMismatch(t *testing.T) {
-	proxyURL := tools.RandomProxyURL(t)
+	randProxyURL := tools.RandomProxyURL(t)
 	targetMapVersionMismatch(
 		func(i int) int {
 			return i/4 + 1
-		}, t, proxyURL)
+		}, t, randProxyURL)
 }
 
 func majorityTargetMapVersionMismatch(t *testing.T) {
-	proxyURL := tools.RandomProxyURL(t)
+	randProxyURL := tools.RandomProxyURL(t)
 	targetMapVersionMismatch(
 		func(i int) int {
 			return i/2 + 1
-		}, t, proxyURL)
+		}, t, randProxyURL)
 }
 
 // targetMapVersionMismatch updates map version of a few targets, kill the primary proxy
@@ -664,8 +678,8 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 func concurrentPutGetDel(t *testing.T) {
 	_ = tools.RandomProxyURL(t)
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
-		proxyURL := tools.RandomProxyURL(t)
-		smap := tools.GetClusterMap(t, proxyURL)
+		randProxyURL := tools.RandomProxyURL(t)
+		smap := tools.GetClusterMap(t, randProxyURL)
 		tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
 		var (
