@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
@@ -179,13 +178,13 @@ func parseCliParams(cfg *Config) {
 	flag.Parse()
 
 	if cfg.MaxShardSize, err = cos.ParseSize(maxShardSizeStr, cos.UnitsIEC); err != nil {
-		nlog.Errorf("Invalid max_shard_size format: %s. Error: %v", maxShardSizeStr, err)
+		fmt.Fprintln(os.Stderr, err)
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	if _, ok := MissingExtActMap[cfg.MissingExtAction]; !ok {
-		nlog.Errorf("Invalid action: %s. Accepted values are: abort, warn, ignore", cfg.MissingExtAction)
+		fmt.Fprintf(os.Stderr, "Invalid action: %s. Accepted values are: abort, warn, ignore\n", cfg.MissingExtAction)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -200,14 +199,14 @@ func parseCliParams(cfg *Config) {
 	}
 
 	if sampleKeyPatternStr == "" {
-		nlog.Infoln("`sample_key_pattern` is not specified, use `base_file_name` as sample key by default.")
+		fmt.Println("`sample_key_pattern` is not specified, use `base_file_name` as sample key by default.")
 		cfg.SampleKeyPattern = BaseFileNamePattern
 	} else if pattern, ok := commonPatterns[sampleKeyPatternStr]; ok {
 		cfg.SampleKeyPattern = pattern
 	} else {
-		nlog.Infof("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.", sampleKeyPatternStr)
+		fmt.Printf("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex\n", sampleKeyPatternStr)
 		if _, err := regexp.Compile(sampleKeyPatternStr); err != nil {
-			nlog.Errorf("Invalid regex pattern: %s. Error: %v", cfg.SampleKeyPattern, err)
+			fmt.Fprintln(os.Stderr, err)
 			flag.Usage()
 			os.Exit(1)
 		}
@@ -215,18 +214,18 @@ func parseCliParams(cfg *Config) {
 	}
 
 	if cfg.SrcBck.Name == "" || cfg.DstBck.Name == "" {
-		nlog.Errorln("Error: src_bck and dst_bck are required parameters.")
+		fmt.Fprintln(os.Stderr, "Error: src_bck and dst_bck are required parameters.")
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	if cfg.SrcBck, cfg.SrcPrefix, err = cmn.ParseBckObjectURI(cfg.SrcBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
-		nlog.Errorf("Error on parsing source bucket: %s. Error: %v", cfg.SrcBck.Name, err)
+		fmt.Fprintln(os.Stderr, err)
 		flag.Usage()
 		os.Exit(1)
 	}
 	if cfg.DstBck, _, err = cmn.ParseBckObjectURI(cfg.DstBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
-		nlog.Errorf("Error on parsing destination bucket: %s. Error: %v", cfg.SrcBck.Name, err)
+		fmt.Fprintln(os.Stderr, err)
 		flag.Usage()
 		os.Exit(1)
 	}

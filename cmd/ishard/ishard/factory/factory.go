@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/ishard/ishard/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/vbauerster/mpb/v4"
 )
@@ -124,7 +123,7 @@ func (sf *ShardFactory) Create(recs *shard.Records, size int64, errCh chan error
 		sf.dryRunCLIMu.Lock()
 		w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
 		if err := sf.CLItemplate.Execute(w, sh); err != nil {
-			fmt.Println("error executing template: %w", err)
+			fmt.Fprintln(os.Stderr, err)
 		}
 		w.Flush()
 		sf.dryRunCLIMu.Unlock()
@@ -167,7 +166,7 @@ func (sf *ShardFactory) poll() {
 			time.Sleep(backoff)
 			shardList, err := api.ListObjects(sf.baseParams, sf.toBck, &apc.LsoMsg{Prefix: sf.shardIter.Prefix, Flags: apc.LsNameSize}, api.ListArgs{})
 			if err != nil {
-				nlog.Errorln(err)
+				fmt.Fprintln(os.Stderr, err)
 				continue
 			}
 			for _, entry := range shardList.Entries {

@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/ishard/ishard/factory"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 )
 
@@ -108,6 +107,12 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 	)
 
 	for name, child := range n.children {
+		select {
+		case err := <-errCh:
+			return nil, 0, err
+		default:
+		}
+
 		fullPath := path + "/" + name
 		if path == "" {
 			fullPath = name
@@ -137,6 +142,12 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 
 	n.records.Lock()
 	for _, record := range n.records.All() {
+		select {
+		case err := <-errCh:
+			return nil, 0, err
+		default:
+		}
+
 		totalSize += record.TotalSize()
 		recs.Insert(record)
 
@@ -266,12 +277,12 @@ func (is *ISharder) Start() error {
 			objTotalSize += en.Size
 		}
 
+		fmt.Printf("Listed Object Total Size: %s\n", cos.ToSizeIEC(objTotalSize, 2))
+
 		if objListPage.ContinuationToken == "" {
 			break
 		}
 		msg.ContinuationToken = objListPage.ContinuationToken
-
-		nlog.Infof("Listed Object Total Size: %s\n", cos.ToSizeIEC(objTotalSize, 2))
 	}
 
 	if is.shardFactory, err = factory.NewShardFactory(is.baseParams, is.cfg.SrcBck, is.cfg.DstBck, is.cfg.Ext, is.cfg.ShardTemplate, is.cfg.DryRunFlag); err != nil {

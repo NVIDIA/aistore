@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
@@ -35,13 +34,13 @@ func (is *ISharder) sort(shardNames []string) (string, error) {
 		Algorithm: is.cfg.Algorithm,
 	}
 
-	nlog.Infoln("dsort started...")
+	fmt.Println("dsort started...")
 	return api.StartDsort(is.baseParams, &spec)
 }
 
 // Helper function to wait for the dsort job with a given UUID and timeout
 func (is *ISharder) waitSort(dsortManagerUUID string, timeout *time.Duration) error {
-	nlog.Infof("waiting for dsort[%s]\n", dsortManagerUUID)
+	fmt.Printf("waiting for dsort[%s]\n", dsortManagerUUID)
 
 	waitTimeout := DsortDefaultTimeout
 	if timeout != nil {
