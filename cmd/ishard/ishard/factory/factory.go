@@ -35,6 +35,9 @@ type ShardFactory struct {
 	shardIterMu sync.Mutex
 	shardIter   cos.ParsedTemplate
 
+	// Dsort
+	OutShardNames []string
+
 	// Poll
 	pollCh       chan *shard.Shard
 	pollWg       sync.WaitGroup
@@ -48,10 +51,11 @@ type ShardFactory struct {
 
 func NewShardFactory(baseParams api.BaseParams, fromBck, toBck cmn.Bck, ext, shardTmpl string, dryRun config.DryRunFlag) (sf *ShardFactory, err error) {
 	sf = &ShardFactory{
-		baseParams: baseParams,
-		fromBck:    fromBck,
-		toBck:      toBck,
-		ext:        ext,
+		baseParams:    baseParams,
+		fromBck:       fromBck,
+		toBck:         toBck,
+		ext:           ext,
+		OutShardNames: make([]string, 0),
 
 		// block when number of creating shards reaches to archive xacts's workCh size. otherwise xact commit may timeout. see xact/xs/archive.go
 		pollCh:    make(chan *shard.Shard, 512),
@@ -153,6 +157,7 @@ func (sf *ShardFactory) poll() {
 		backoff := time.Second
 		for {
 			if _, exists := pool[sh.Name+sf.ext]; exists {
+				sf.OutShardNames = append(sf.OutShardNames, sh.Name+sf.ext)
 				if sf.pollProgress != nil {
 					sf.pollProgress.IncrInt64(sh.Size)
 				}

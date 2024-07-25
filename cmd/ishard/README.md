@@ -45,6 +45,11 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
 - `-collapse`: If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.
 - `-progress`: If true, display the progress of processing objects in the source bucket.
 - `-dry_run`: If set, only shows the layout of resulting output shards without actually executing archive jobs. Use 'show_keys' to include sample keys.
+- `-sort`: Specifies the sorting algorithm for files within shards. Also see [dSort](/docs/dsort.md)
+   - `-sort="alpha:inc"`: Sorts the items in alphanumeric order in ascending (increasing) order.
+   - `-sort="alpha:dec"`: Sorts the items in alphanumeric order in descending (decreasing) order.
+   - `-sort="shuffle"`: Randomly shuffles the items without a specific seed.
+   - `-sort="shuffle:124123"`: Randomly shuffles the items using the specified seed 124123 for reproducibility. If the seed cannot be parsed as an integer, the flag is rejected.
 
 ## Initial Setup
 
@@ -392,7 +397,8 @@ go test -v -short -tags=debug -run=TestIshardMaxShardSize
 - [ ] logging (timestamp, nlog)
 - [ ] Large list of objects, need to swap MEM temporary
 - [X] Long stress tests
-- [ ] Dsort integration
+- [X] Dsort integration
+   - [ ] Dry run with Dsort
 
 ### GOOD TO HAVE
 - [X] progress bar (later)

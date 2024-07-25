@@ -298,5 +298,16 @@ func (is *ISharder) Start() error {
 	}
 
 	is.shardFactory.Wait()
+
+	if is.cfg.SortFlag.IsSet {
+		dsortUUID, err := is.sort(is.shardFactory.OutShardNames)
+		if err != nil {
+			return err
+		}
+
+		if err := is.waitSort(dsortUUID, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }

@@ -6,14 +6,17 @@ package config
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
 type (
@@ -37,6 +40,7 @@ type (
 		ClusterConfig
 		IshardConfig
 		DryRunFlag
+		SortFlag
 		SrcBck    cmn.Bck
 		SrcPrefix string
 		DstBck    cmn.Bck
@@ -56,7 +60,73 @@ var DefaultConfig = Config{
 	DstBck:        cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
 	Progress:      false,
 	DryRunFlag:    DryRunFlag{IsSet: false},
+	SortFlag:      SortFlag{IsSet: false},
 }
+
+////////////////////////
+// Parse `-sort` flag //
+////////////////////////
+
+type SortFlag struct {
+	dsort.Algorithm
+	IsSet bool
+}
+
+func (alg *SortFlag) Set(value string) error {
+	parts := strings.Split(value, ":")
+	if len(parts) == 0 {
+		return fmt.Errorf("invalid sort flag format")
+	}
+
+	alg.IsSet = true
+
+	switch parts[0] {
+	case "alpha", "alphanumeric":
+		alg.Kind = "alphanumeric"
+		if len(parts) > 1 {
+			if parts[1] == "inc" {
+				alg.Decreasing = false
+			} else if parts[1] == "dec" {
+				alg.Decreasing = true
+			} else {
+				return fmt.Errorf("invalid alphanumeric sort option, expected 'inc' or 'dec'")
+			}
+		}
+	case "shuffle":
+		alg.Kind = "shuffle"
+		if len(parts) > 1 {
+			alg.Seed = parts[1]
+			if _, err := strconv.ParseInt(alg.Seed, 10, 64); err != nil {
+				return fmt.Errorf("invalid shuffle seed, must be a valid integer")
+			}
+		}
+	default:
+		return fmt.Errorf("invalid sort kind, expected 'alpha' or 'shuffle'")
+	}
+
+	return nil
+}
+
+func (alg *SortFlag) String() string {
+	switch alg.Kind {
+	case "alpha", "alphanumeric":
+		if alg.Decreasing {
+			return "alpha:dec"
+		}
+		return "alpha:inc"
+	case "shuffle":
+		if alg.Seed != "" {
+			return "shuffle:" + alg.Seed
+		}
+		return "shuffle"
+	default:
+		return ""
+	}
+}
+
+///////////////////////////
+// Parse `-dry_run` flag //
+///////////////////////////
 
 func (d *DryRunFlag) String() string {
 	return d.Mode
@@ -93,6 +163,7 @@ func parseCliParams(cfg *Config) {
 	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size.")
 	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket.")
 	flag.Var(&cfg.DryRunFlag, "dry_run", "If set, only shows the layout of resulting output shards without actually executing archive jobs. Use 'show_keys' to include sample keys.")
+	flag.Var(&cfg.SortFlag, "sort", "sorting algorithm (e.g., alpha:inc, alpha:dec, shuffle, shuffle:seed)")
 
 	var (
 		err                 error
@@ -108,13 +179,13 @@ func parseCliParams(cfg *Config) {
 	flag.Parse()
 
 	if cfg.MaxShardSize, err = cos.ParseSize(maxShardSizeStr, cos.UnitsIEC); err != nil {
-		log.Printf("Invalid max_shard_size format: %s. Error: %v\n", maxShardSizeStr, err)
+		nlog.Errorf("Invalid max_shard_size format: %s. Error: %v", maxShardSizeStr, err)
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	if _, ok := MissingExtActMap[cfg.MissingExtAction]; !ok {
-		log.Printf("Invalid action: %s. Accepted values are: abort, warn, ignore\n", cfg.MissingExtAction)
+		nlog.Errorf("Invalid action: %s. Accepted values are: abort, warn, ignore", cfg.MissingExtAction)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -129,14 +200,14 @@ func parseCliParams(cfg *Config) {
 	}
 
 	if sampleKeyPatternStr == "" {
-		log.Printf("`sample_key_pattern` is not specified, use `base_file_name` as sample key by default.")
+		nlog.Infoln("`sample_key_pattern` is not specified, use `base_file_name` as sample key by default.")
 		cfg.SampleKeyPattern = BaseFileNamePattern
 	} else if pattern, ok := commonPatterns[sampleKeyPatternStr]; ok {
 		cfg.SampleKeyPattern = pattern
 	} else {
-		log.Printf("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.", sampleKeyPatternStr)
+		nlog.Infof("`sample_key_pattern` %s is not built-in (`base_file_name` | `full_name` | `collapse_all_dir`), compiled as custom regex.", sampleKeyPatternStr)
 		if _, err := regexp.Compile(sampleKeyPatternStr); err != nil {
-			log.Printf("Invalid regex pattern: %s. Error: %v", cfg.SampleKeyPattern, err)
+			nlog.Errorf("Invalid regex pattern: %s. Error: %v", cfg.SampleKeyPattern, err)
 			flag.Usage()
 			os.Exit(1)
 		}
@@ -144,18 +215,18 @@ func parseCliParams(cfg *Config) {
 	}
 
 	if cfg.SrcBck.Name == "" || cfg.DstBck.Name == "" {
-		log.Println("Error: src_bck and dst_bck are required parameters.")
+		nlog.Errorln("Error: src_bck and dst_bck are required parameters.")
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	if cfg.SrcBck, cfg.SrcPrefix, err = cmn.ParseBckObjectURI(cfg.SrcBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
-		log.Printf("Error on parsing source bucket: %s. Error: %v", cfg.SrcBck.Name, err)
+		nlog.Errorf("Error on parsing source bucket: %s. Error: %v", cfg.SrcBck.Name, err)
 		flag.Usage()
 		os.Exit(1)
 	}
 	if cfg.DstBck, _, err = cmn.ParseBckObjectURI(cfg.DstBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {
-		log.Printf("Error on parsing destination bucket: %s. Error: %v", cfg.SrcBck.Name, err)
+		nlog.Errorf("Error on parsing destination bucket: %s. Error: %v", cfg.SrcBck.Name, err)
 		flag.Usage()
 		os.Exit(1)
 	}
