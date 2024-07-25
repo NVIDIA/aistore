@@ -17,4 +17,6 @@ FROM --platform=${TARGETPLATFORM:-linux/amd64} ${BASE_IMAGE} as base
 
 COPY --from=builder /go/bin/authn /usr/bin/authn
 
+COPY ./deploy/prod/k8s/authn_container/authn-default.json /etc/ais/authn/authn.json
+
 ENTRYPOINT ["authn", "-config=/etc/ais/authn"]

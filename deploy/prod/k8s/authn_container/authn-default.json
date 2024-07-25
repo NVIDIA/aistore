@@ -1,0 +1,21 @@
+{
+    "log": {
+        "dir": "/var/log/ais/authn/",
+        "level": "3"
+    },
+    "net": {
+        "http": {
+        "port": 52001,
+        "use_https": false,
+        "server_crt": "",
+        "server_key": ""
+        }
+    },
+    "auth": {
+        "secret": "aBitLongSecretKey",
+        "expiration_time": "24h"
+    },
+    "timeout": {
+        "default_timeout": "30s"
+    }
+}
