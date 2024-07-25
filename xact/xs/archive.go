@@ -531,6 +531,9 @@ func (wi *archwi) quiesce() core.QuiRes {
 }
 
 func (wi *archwi) nameInArch(objName string) string {
+	if wi.msg.BaseNameOnly {
+		objName = filepath.Base(objName)
+	}
 	if !wi.msg.InclSrcBname {
 		return objName
 	}
