@@ -110,9 +110,9 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	dsort.Managers.AbortAll(fmt.Errorf("%q %s", action, rmi))
 
 	if numAvail == 0 {
-		s := fmt.Sprintf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
+		nlog.Errorf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // go ahead to disable/detach
-		g.t.disable(s)
+		g.t.disable()
 		return rmi, nil
 	}
 

@@ -2050,18 +2050,28 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.isIntraCall(r.Header, false /*from primary*/); err != nil {
-		err = fmt.Errorf("expecting intra-cluster call for self-initiated removal, got %w", err)
+		err = fmt.Errorf("expecting intra-cluster call for %q, got %w", apc.ActSelfRemove, err)
 		p.writeErr(w, r, err)
 		return
 	}
+
 	cid := r.Header.Get(apc.HdrCallerID)
 	if cid != sid {
-		err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
+		err = fmt.Errorf("expecting %s by %s, got a wrong node ID (%s != %s)", apc.ActSelfRemove, node.StringEx(), cid, sid)
 		p.writeErr(w, r, err)
 		return
 	}
-	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node); err != nil {
+
+	if ecode, err := p.mcastUnreg(&apc.ActMsg{Action: apc.ActSelfRemove}, node); err != nil {
 		p.writeErr(w, r, err, ecode)
+	} else {
+		v := &p.rproxy.removed
+		v.mu.Lock()
+		if v.m == nil {
+			v.m = make(meta.NodeMap, 4)
+		}
+		v.m[node.ID()] = node
+		v.mu.Unlock()
 	}
 }
 

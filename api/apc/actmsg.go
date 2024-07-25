@@ -103,11 +103,12 @@ const (
 
 // internal use
 const (
-	ActAddRemoteBck   = "add-remote-bck" // add to BMD existing remote bucket, usually on the fly
-	ActRmNodeUnsafe   = "rm-unsafe"      // primary => the node to be removed
-	ActStartGFN       = "start-gfn"      // get-from-neighbor
-	ActStopGFN        = "stop-gfn"       // off
-	ActCleanupMarkers = "cleanup-markers"
+	ActAddRemoteBck   = "add-remote-bck"         // add to BMD existing remote bucket, usually on the fly
+	ActRmNodeUnsafe   = "rm-unsafe"              // primary => the node to be removed
+	ActStartGFN       = "start-gfn"              // get-from-neighbor
+	ActStopGFN        = "stop-gfn"               // off
+	ActCleanupMarkers = "cleanup-markers"        // part of the target joining sequence
+	ActSelfRemove     = "self-initiated-removal" // e.g., when losing last mountpath
 )
 
 const (

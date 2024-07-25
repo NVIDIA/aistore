@@ -1213,43 +1213,6 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// unregisters the target and marks it as disabled by an internal event
-func (t *target) disable(msg string) {
-	t.regstate.mu.Lock()
-
-	if t.regstate.disabled.Load() {
-		t.regstate.mu.Unlock()
-		return // nothing to do
-	}
-	if err := t.unregisterSelf(false); err != nil {
-		t.regstate.mu.Unlock()
-		nlog.Errorf("%s but failed to remove self from Smap: %v", msg, err)
-		return
-	}
-	t.regstate.disabled.Store(true)
-	t.regstate.mu.Unlock()
-	nlog.Errorf("Warning: %s => disabled and removed self from Smap", msg)
-}
-
-// registers the target again if it was disabled by and internal event
-func (t *target) enable() error {
-	t.regstate.mu.Lock()
-
-	if !t.regstate.disabled.Load() {
-		t.regstate.mu.Unlock()
-		return nil
-	}
-	if _, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
-		t.regstate.mu.Unlock()
-		nlog.Infof("%s failed to re-join: %v", t, err)
-		return err
-	}
-	t.regstate.disabled.Store(false)
-	t.regstate.mu.Unlock()
-	nlog.Infof("%s is now active", t)
-	return nil
-}
-
 // checks with a given target to see if it has the object.
 // target acts as a client - compare with api.HeadObject
 func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX) (ok bool) {
@@ -1347,6 +1310,44 @@ func (t *target) decommission(action string, opts *apc.ActValRmNode) {
 	if !opts.NoShutdown {
 		t.Stop(&errNoUnregister{action})
 	}
+}
+
+// disable and remove self from cluster map
+func (t *target) disable() {
+	t.regstate.mu.Lock()
+
+	if t.regstate.disabled.Load() {
+		t.regstate.mu.Unlock()
+		return // nothing to do
+	}
+	smap := t.owner.smap.get()
+	if err := t.rmSelf(smap, false); err != nil {
+		t.regstate.mu.Unlock()
+		nlog.Errorln(t.String(), "failed to remove self from", smap.String()+":", err, "action:", apc.ActSelfRemove)
+		return
+	}
+	t.regstate.disabled.Store(true)
+	t.regstate.mu.Unlock()
+	nlog.Warningln(t.String(), "disabled and removed self from", smap.String(), "action:", apc.ActSelfRemove)
+}
+
+// registers the target again if it was disabled by and internal event
+func (t *target) enable() error {
+	t.regstate.mu.Lock()
+
+	if !t.regstate.disabled.Load() {
+		t.regstate.mu.Unlock()
+		return nil
+	}
+	if _, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
+		t.regstate.mu.Unlock()
+		nlog.Infoln(t.String(), "failed to re-join:", err)
+		return err
+	}
+	t.regstate.disabled.Store(false)
+	t.regstate.mu.Unlock()
+	nlog.Infoln(t.String(), "is now active")
+	return nil
 }
 
 // stop gracefully, return from rungroup.run

@@ -536,7 +536,10 @@ func (h *htrun) stop(wg *sync.WaitGroup, rmFromSmap bool) {
 	const sleep = time.Second >> 1
 
 	if rmFromSmap {
-		h.unregisterSelf(true)
+		smap := h.owner.smap.get()
+		if err := h.rmSelf(smap, true); err != nil && !cos.IsErrConnectionRefused(err) {
+			nlog.Warningln(err)
+		}
 	}
 	nlog.Infoln("Shutting down HTTP")
 
@@ -2023,11 +2026,10 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti
 	}
 }
 
-func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
-	var status int
-	smap := h.owner.smap.get()
+func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 	if smap == nil || smap.validate() != nil {
-		return
+		nlog.Warningln("cannot remove", h.String(), "(self): local copy of Smap is invalid")
+		return nil
 	}
 	cargs := allocCargs()
 	{
@@ -2036,17 +2038,17 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 		cargs.timeout = apc.DefaultTimeout
 	}
 	res := h.call(cargs, smap)
-	status, err = res.status, res.err
+	status, err := res.status, res.err
 	if err != nil {
 		f := nlog.Errorf
 		if ignoreErr {
 			f = nlog.Infof
 		}
-		f("%s: failed to unreg self, err: %v(%d)", h.si, err, status)
+		f("%s: failed to remove self from Smap: %v(%d)", h.si, err, status)
 	}
 	freeCargs(cargs)
 	freeCR(res)
-	return
+	return err
 }
 
 // via /health handler

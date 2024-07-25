@@ -33,8 +33,7 @@ func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err
 		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMountpaths}}
 		reqParams.Header = http.Header{
-			apc.HdrNodeID:  []string{node.ID()},
-			apc.HdrNodeURL: []string{node.URL(cmn.NetPublic)},
+			apc.HdrNodeID: []string{node.ID()},
 		}
 	}
 	_, err = reqParams.DoReqAny(&mpl)
@@ -51,7 +50,6 @@ func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ..
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathAttach, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
-			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 		if len(label) > 0 {
@@ -74,7 +72,6 @@ func EnableMountpath(bp BaseParams, node *meta.Snode, mountpath string) error {
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathEnable, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
-			apc.HdrNodeURL:     []string{node.URL(cmn.NetPublic)},
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
 	}

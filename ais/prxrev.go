@@ -24,11 +24,15 @@ import (
 type (
 	reverseProxy struct {
 		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
-		nodes   sync.Map               // map of reverse proxies keyed by node DaemonIDs
+		nodes   sync.Map               // map [SID => reverse proxy instance]
+		removed struct {
+			m  meta.NodeMap // map [SID => self-disabled node]
+			mu sync.Mutex
+		}
 		primary struct {
 			rp  *httputil.ReverseProxy
 			url string
-			sync.Mutex
+			mu  sync.Mutex
 		}
 	}
 	singleRProxy struct {
@@ -71,7 +75,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		}
 	}
 	primary := &p.rproxy.primary
-	primary.Lock()
+	primary.mu.Lock()
 	if primary.url != smap.Primary.PubNet.URL {
 		primary.url = smap.Primary.PubNet.URL
 		uparsed, err := url.Parse(smap.Primary.PubNet.URL)
@@ -81,7 +85,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		primary.rp.Transport = rpTransport(config)
 		primary.rp.ErrorHandler = p.rpErrHandler
 	}
-	primary.Unlock()
+	primary.mu.Unlock()
 	if len(body) > 0 {
 		debug.AssertFunc(func() bool {
 			l, _ := io.Copy(io.Discard, r.Body)
@@ -141,6 +145,9 @@ func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *m
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }
 
+// usage:
+// 1. primary => node in the cluster
+// 2. primary => remais
 func (p *proxy) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID string, parsedURL *url.URL) {
 	rproxy := p.rproxy.loadOrStore(nodeID, parsedURL, p.rpErrHandler)
 	rproxy.ServeHTTP(w, r)

@@ -64,9 +64,8 @@ const (
 	// Query objects handle header.
 	HdrHandle = HeaderPrefix + "query-handle"
 
-	// Reverse proxy headers.
-	HdrNodeID  = HeaderPrefix + "node-id"
-	HdrNodeURL = HeaderPrefix + "node-url"
+	// Reverse proxy header.
+	HdrNodeID = HeaderPrefix + "node-id"
 
 	// uptimes, respectively
 	HdrNodeUptime    = HeaderPrefix + "node-uptime"

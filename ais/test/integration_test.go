@@ -1034,11 +1034,12 @@ func TestMountpathDisableAll(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tools.BaseAPIParams()
 	)
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
+
+	baseParams := tools.BaseAPIParams(m.smap.Primary.PubNet.URL) // NOTE: only primary has self-removed
 
 	// Remove all mountpaths on the target
 	target, _ := m.smap.GetRandTarget()

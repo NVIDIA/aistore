@@ -929,9 +929,18 @@ func TestDownloadMountpath(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
 
+	time.Sleep(3 * time.Second)
 	waitForDownload(t, id2, time.Minute)
 	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
+
+	if len(objs) == 0 {
+		tlog.Logln("Listed zero objects - waiting a bit, retrying...")
+		time.Sleep(8 * time.Second)
+		objs, err = tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
+		tassert.CheckError(t, err)
+	}
+
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))
 }
 

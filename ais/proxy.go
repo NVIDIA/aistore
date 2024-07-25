@@ -2479,7 +2479,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// otherwise, warn and go ahead
 		// (e.g. scenario: shutdown when transitioning through states)
-		nlog.Warningf("%s: %s status is: %s", p, si.StringEx(), daeStatus)
+		nlog.Warningln(p.String()+":", si.StringEx(), "status is:", daeStatus)
 	}
 
 	// access control
@@ -2500,27 +2500,43 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if si == nil {
+		// TODO: if not primary, restore the original request (including URL.Path but not only)
+		// and forwardCP
+		v := &p.rproxy.removed
+		v.mu.Lock()
+		si = v.m[nodeID]
+		v.mu.Unlock()
+
+		if si == nil {
+			// when failing to find in Smap and (self)removed, both
+			var s string
+			if !smap.IsPrimary(p.si) {
+				s = "non-primary, " // TODO above
+			}
+			err = &errNodeNotFound{s + "cannot forward request to node", nodeID, p.si, smap}
+			p.writeErr(w, r, err, http.StatusNotFound)
+			return
+		}
+
+		// cleanup in place
+		go p._clremoved(nodeID)
+	}
 
 	// do
-	if si != nil {
-		p.reverseNodeRequest(w, r, si)
-		return
-	}
-	// special case when the target self-removed itself from cluster map
-	// after having lost all mountpaths.
-	nodeURL := r.Header.Get(apc.HdrNodeURL)
-	if nodeURL == "" {
-		err = &errNodeNotFound{"cannot rproxy to", nodeID, p.si, smap}
-		p.writeErr(w, r, err, http.StatusNotFound)
-		return
-	}
-	parsedURL, err := url.Parse(nodeURL)
-	if err != nil {
-		p.writeErrf(w, r, "%s: invalid URL %q for node %s", p.si, nodeURL, nodeID)
-		return
-	}
+	p.reverseNodeRequest(w, r, si)
+}
 
-	p.reverseRequest(w, r, nodeID, parsedURL)
+func (p *proxy) _clremoved(sid string) {
+	time.Sleep(cmn.Rom.MaxKeepalive())
+	smap := p.owner.smap.get()
+	if smap.GetNode(sid) == nil {
+		return
+	}
+	v := &p.rproxy.removed
+	v.mu.Lock()
+	delete(v.m, sid)
+	v.mu.Unlock()
 }
 
 //
