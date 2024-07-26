@@ -13,10 +13,10 @@ import (
 
 type global struct {
 	netServ struct {
-		pub     *netServer
-		control *netServer
-		data    *netServer
-		pub2    *netServer
+		pub      *netServer
+		pubExtra []*netServer
+		control  *netServer
+		data     *netServer
 	}
 	client struct {
 		control *http.Client // http client for intra-cluster comm
@@ -94,8 +94,8 @@ func initDataClient(config *cmn.Config) {
 func shuthttp() {
 	config := cmn.GCO.Get()
 	g.netServ.pub.shutdown(config)
-	if g.netServ.pub2 != nil {
-		g.netServ.pub2.shutdown(config)
+	for _, server := range g.netServ.pubExtra {
+		server.shutdown(config)
 	}
 	if config.HostNet.UseIntraControl {
 		g.netServ.control.shutdown(config)

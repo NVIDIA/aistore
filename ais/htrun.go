@@ -307,6 +307,10 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	}
 
 	// 1. pub net
+
+	// the "hostname" field can be a single IP address or DNS hostname;
+	// it can also be a comma-separated list of IP addresses (or DNS hostnames), in which case the function
+	// returns pub = list[0] and extra = list[1:]
 	pub, extra := multihome(config.HostNet.Hostname)
 
 	if k8s.IsK8s() && config.HostNet.Hostname != "" {
@@ -508,12 +512,14 @@ func (h *htrun) run(config *cmn.Config) error {
 	if h.pubAddrAny(config) {
 		ep = ":" + h.si.PubNet.Port
 	} else if len(h.si.PubExtra) > 0 {
-		pubAddr2 := h.si.PubExtra[0]
-		debug.Assert(pubAddr2.Port == h.si.PubNet.Port)
-		g.netServ.pub2 = &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize}
-		go func() {
-			_ = g.netServ.pub2.listen(pubAddr2.TCPEndpoint(), logger, tlsConf, config)
-		}()
+		for _, pubExtra := range h.si.PubExtra {
+			debug.Assert(pubExtra.Port == h.si.PubNet.Port, "expecting the same TCP port for all multi-home interfaces")
+			server := &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize}
+			go func() {
+				_ = server.listen(pubExtra.TCPEndpoint(), logger, tlsConf, config)
+			}()
+			g.netServ.pubExtra = append(g.netServ.pubExtra, server)
+		}
 	}
 
 	return g.netServ.pub.listen(ep, logger, tlsConf, config) // stay here
