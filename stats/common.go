@@ -46,9 +46,9 @@ const (
 
 // periodic
 const (
-	maxLogSizeCheckTime = 48 * time.Minute       // periodically check the logs for max accumulated size
+	maxLogSizeCheckTime = time.Hour              // periodically check the logs for max accumulated size
 	startupSleep        = 300 * time.Millisecond // periodically poll ClusterStarted()
-	numGorHighCheckTime = 2 * time.Minute        // periodically log a warning if the number of goroutines remains high
+	numGorHighCheckTime = 10 * time.Minute       // periodically log a warning if the number of goroutines remains high
 )
 
 // number-of-goroutines watermarks expressed as multipliers over the number of CPUs (GOMAXPROCS)
@@ -496,6 +496,8 @@ func (ctracker copyTracker) write(sgl *memsys.SGL, sorted []string, target, idle
 // log rotation and GC
 //
 
+const gcLogs = "GC logs:"
+
 func recycleLogs() time.Duration {
 	// keep total log size below the configured max
 	go removeLogs(cmn.GCO.Get())
@@ -506,18 +508,18 @@ func removeLogs(config *cmn.Config) {
 	maxtotal := int64(config.Log.MaxTotal)
 	dentries, err := os.ReadDir(config.LogDir)
 	if err != nil {
-		nlog.Errorf("GC logs: cannot read log dir %s, err: %v", config.LogDir, err)
-		_ = cos.CreateDir(config.LogDir) // FIXME: (local non-containerized + kill/restart under test)
+		nlog.Errorln(gcLogs, "cannot read log dir", config.LogDir, "err:", err)
+		_ = cos.CreateDir(config.LogDir) // (local non-containerized + kill/restart under test)
 		return
 	}
 	for _, logtype := range logtypes {
 		var tot int64
 		finfos := make([]rfs.FileInfo, 0, len(dentries))
 		for _, dent := range dentries {
-			if dent.IsDir() || !dent.Type().IsRegular() {
+			if !dent.Type().IsRegular() {
 				continue
 			}
-			if n := dent.Name(); !strings.Contains(n, ".log.") || !strings.Contains(n, logtype) {
+			if n := dent.Name(); !strings.Contains(n, logtype) {
 				continue
 			}
 			if finfo, err := dent.Info(); err == nil {
@@ -527,15 +529,16 @@ func removeLogs(config *cmn.Config) {
 		}
 		if tot > maxtotal {
 			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, finfos)
+		} else if cmn.Rom.FastV(4, cos.SmoduleStats) {
+			nlog.Infoln(gcLogs, "skipping log type:", logtype, "total:", tot, "max:", maxtotal)
 		}
 	}
 }
 
 func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
-	const prefix = "GC logs"
 	l := len(filteredInfos)
 	if l <= 1 {
-		nlog.Warningf("%s: cannot cleanup %s, dir %s, tot %d, max %d", prefix, logtype, logdir, tot, maxtotal)
+		nlog.Warningln(gcLogs, "cannot cleanup", logtype, "dir:", logdir, "total:", tot, "max:", maxtotal)
 		return
 	}
 	fiLess := func(i, j int) bool {
@@ -544,7 +547,7 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 
 	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if verbose {
-		nlog.Infoln(prefix + ": started")
+		nlog.Infoln(gcLogs, "started for log type:", logtype)
 	}
 	sort.Slice(filteredInfos, fiLess)
 	filteredInfos = filteredInfos[:l-1] // except the last = current
@@ -553,18 +556,16 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 		if err := cos.RemoveFile(logfqn); err == nil {
 			tot -= logfi.Size()
 			if verbose {
-				nlog.Infof("%s: removed %s", prefix, logfqn)
+				nlog.Infoln(gcLogs, "removed", logfqn)
 			}
 			if tot < maxtotal {
 				break
 			}
 		} else {
-			nlog.Errorf("%s: failed to remove %s", prefix, logfqn)
+			nlog.Errorln(gcLogs, "failed to remove", logfqn, "err:", err)
 		}
 	}
-	if verbose {
-		nlog.Infoln(prefix + ": done")
-	}
+	nlog.Infoln(gcLogs, "done, new total:", tot)
 }
 
 //
