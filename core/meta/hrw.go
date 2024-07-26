@@ -6,11 +6,11 @@ package meta
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
@@ -18,8 +18,6 @@ import (
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 // See also: fs/hrw.go
-
-var robin atomic.Uint64 // round
 
 func (smap *Smap) HrwName2T(uname []byte) (*Snode, error) {
 	digest := xxhash.Checksum64S(uname, cos.MLCG32)
@@ -32,15 +30,9 @@ func (smap *Smap) HrwMultiHome(uname []byte) (si *Snode, netName string, err err
 	if err != nil {
 		return nil, cmn.NetPublic, err
 	}
-	l := len(si.PubExtra)
-	if l == 0 {
-		return si, cmn.NetPublic, nil
-	}
-	i := robin.Add(1) % uint64(l+1)
-	if i == 0 {
-		return si, cmn.NetPublic, nil
-	}
-	return si, si.PubExtra[i-1].URL, nil
+
+	debug.Assert(si.nmr != nil, si.StringEx(), " in ", smap.StringEx()) // see related: smapOwner.put
+	return si, si.nmr.name(), nil
 }
 
 func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {

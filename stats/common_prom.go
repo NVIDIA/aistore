@@ -49,7 +49,7 @@ func (s *coreStats) init(size int) {
 	s.Tracker = make(map[string]*statsValue, size)
 	s.promDesc = make(promDesc, size)
 
-	s.sgl = memsys.PageMM().NewSGL(memsys.PageSize)
+	s.sgl = memsys.PageMM().NewSGL(memsys.DefaultBufSize)
 }
 
 // vs Collect()

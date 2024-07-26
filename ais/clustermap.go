@@ -286,6 +286,7 @@ func (m *smapX) addTarget(tsi *meta.Snode) {
 		cos.Assertf(false, "FATAL: duplicate SID: new %s vs %s", tsi.StringEx(), si.StringEx())
 	}
 	tsi.SetName()
+	tsi.InitNetNamer()
 	m.Tmap[tsi.ID()] = tsi
 	m.Version++
 }
@@ -522,14 +523,26 @@ func (r *smapOwner) Listeners() meta.SmapListeners { return r.sls }
 // private
 //
 
+// put new smap version
 func (r *smapOwner) put(smap *smapX) {
+	// residual (in-memory) initialization
 	smap.InitDigests()
 	smap.vstr = strconv.FormatInt(smap.Version, 10)
+
+	for _, psi := range smap.Pmap {
+		psi.SetName()
+	}
+	for _, tsi := range smap.Tmap {
+		tsi.SetName()
+		tsi.InitNetNamer()
+	}
+
+	// put and notify
 	r.smap.Store(smap)
 	r.sls.notify(smap.version())
 }
 
-func (r *smapOwner) get() (smap *smapX) { return r.smap.Load() }
+func (r *smapOwner) get() *smapX { return r.smap.Load() }
 
 func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) (err error) {
 	if err = newSmap.validate(); err != nil {
