@@ -18,6 +18,8 @@ var (
 		Port          string
 		TTL           string
 		UseHTTPS      string
+		ServerCrt     string
+		ServerKey     string
 		AdminPassword string
 		AdminUsername string
 		SecretKey     string
@@ -31,6 +33,8 @@ var (
 		Port:          "AIS_AUTHN_PORT",
 		TTL:           "AIS_AUTHN_TTL",
 		UseHTTPS:      "AIS_AUTHN_USE_HTTPS",
+		ServerCrt:     "AIS_SERVER_CRT",
+		ServerKey:     "AIS_SERVER_KEY",
 		SecretKey:     "AIS_AUTHN_SECRET_KEY",
 		AdminUsername: "AIS_AUTHN_SU_NAME",
 		AdminPassword: "AIS_AUTHN_SU_PASS",

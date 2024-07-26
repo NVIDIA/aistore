@@ -7,10 +7,12 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -43,31 +45,55 @@ func parseURL(w http.ResponseWriter, r *http.Request, itemsAfter int, items []st
 }
 
 // Run public server to manage users and generate tokens
-func (h *hserv) Run() (err error) {
-	portstring := fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
-	nlog.Infof("Listening on *:%s", portstring)
+func (h *hserv) Run() error {
+	var (
+		portStr    string
+		err        error
+		useHTTPS   bool
+		serverCert string
+		serverKey  string
+	)
+
+	// Retrieve and set the port
+	portStr = os.Getenv(env.AuthN.Port)
+	if portStr == "" {
+		portStr = fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
+	} else {
+		portStr = ":" + portStr
+	}
+	nlog.Infof("Listening on %s", portStr)
 
 	h.registerPublicHandlers()
 	h.s = &http.Server{
-		Addr:              portstring,
+		Addr:              portStr,
 		Handler:           h.mux,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
 	}
 	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
 		h.s.ReadHeaderTimeout = timeout
 	}
-	if Conf.Net.HTTP.UseHTTPS {
-		if err = h.s.ListenAndServeTLS(Conf.Net.HTTP.Certificate, Conf.Net.HTTP.Key); err == nil {
-			return nil
-		}
-		goto rerr
+
+	// Retrieve and set HTTPS configuration with environment variables taking precedence
+	useHTTPS, err = cos.IsParseEnvBoolOrDefault(env.AuthN.UseHTTPS, Conf.Net.HTTP.UseHTTPS)
+	if err != nil {
+		nlog.Errorf("Failed to parse %s: %v. Defaulting to false", env.AuthN.UseHTTPS, err)
 	}
-	if err = h.s.ListenAndServe(); err == nil {
-		return nil
+	serverCert = cos.GetEnvOrDefault(env.AuthN.ServerCrt, Conf.Net.HTTP.Certificate)
+	serverKey = cos.GetEnvOrDefault(env.AuthN.ServerKey, Conf.Net.HTTP.Key)
+
+	// Start the appropriate server based on the configuration
+	if useHTTPS {
+		nlog.Infof("Starting HTTPS server on port%s", portStr)
+		nlog.Infof("Certificate: %s", serverCert)
+		nlog.Infof("Key: %s", serverKey)
+		err = h.s.ListenAndServeTLS(serverCert, serverKey)
+	} else {
+		nlog.Infof("Starting HTTP server on port%s", portStr)
+		err = h.s.ListenAndServe()
 	}
-rerr:
-	if err != http.ErrServerClosed {
-		nlog.Errorf("Terminated with err: %v", err)
+
+	if err != nil && err != http.ErrServerClosed {
+		nlog.Errorf("Server terminated with error: %v", err)
 		return err
 	}
 	return nil

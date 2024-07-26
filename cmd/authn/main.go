@@ -106,10 +106,11 @@ func main() {
 }
 
 func updateLogOptions() error {
-	if err := cos.CreateDir(Conf.Log.Dir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", Conf.Log.Dir, err)
+	logDir := cos.GetEnvOrDefault(env.AuthN.LogDir, Conf.Log.Dir)
+	if err := cos.CreateDir(logDir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", logDir, err)
 	}
-	nlog.SetLogDirRole(Conf.Log.Dir, "auth")
+	nlog.SetLogDirRole(logDir, "auth")
 	return nil
 }
 
