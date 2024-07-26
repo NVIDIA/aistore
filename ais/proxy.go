@@ -261,11 +261,13 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 	if cmn.GCO.Get().Proxy.NonElectable {
 		query = url.Values{apc.QparamNonElectable: []string{"true"}}
 	}
-	res := p.join(query, nil /*htext*/, primaryURLs...)
+	res, err := p.join(query, nil /*htext*/, primaryURLs...)
+	if err != nil {
+		return status, err
+	}
 	defer freeCR(res)
 	if res.err != nil {
-		status, err = res.status, res.err
-		return
+		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.bytes) == 0 {

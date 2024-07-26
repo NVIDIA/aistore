@@ -1787,7 +1787,7 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 //   - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res *callResult) {
+func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res *callResult, err error) {
 	var (
 		config                   = cmn.GCO.Get()
 		candidates               = make([]string, 0, 4+len(contactURLs))
@@ -1817,7 +1817,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	for range 4 { // retry
 		for _, candidateURL := range candidates {
 			if nlog.Stopping() {
-				return
+				return res, errors.New(h.String() + " is stopping")
 			}
 			if resPrev != nil {
 				freeCR(resPrev)
@@ -1837,20 +1837,23 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	}
 
 	smap := h.owner.smap.get()
-	if smap.validate() != nil {
-		return
+	if err := smap.validate(); err != nil {
+		return res, fmt.Errorf("%s: invalid Smap, err: %v", h.si, err)
 	}
 
 	// Failed to join cluster using config, try getting primary URL using existing smap.
 	nsti, _ := h.bcastHealth(smap, false /*checkAll*/)
-	if nsti == nil || nsti.Smap.Version < smap.version() {
-		return
+	if nsti == nil {
+		return res, fmt.Errorf("%s: failed to discover a new smap", h)
+	}
+	if nsti.Smap.Version < smap.version() {
+		return res, fmt.Errorf("%s: current %s version is newer than %d from the primary proxy (%s)", h, smap, nsti.Smap.Version, nsti.Smap.Primary.ID)
 	}
 	primaryURL = nsti.Smap.Primary.PubURL
 
 	// Daemon is stopping skip register
 	if nlog.Stopping() {
-		return
+		return res, errors.New(h.String() + " is stopping")
 	}
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 	if res.err == nil {

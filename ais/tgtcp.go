@@ -48,11 +48,13 @@ type delb struct {
 }
 
 func (t *target) joinCluster(action string, primaryURLs ...string) (status int, err error) {
-	res := t.join(nil, t, primaryURLs...)
+	res, err := t.join(nil, t, primaryURLs...)
+	if err != nil {
+		return status, err
+	}
 	defer freeCR(res)
 	if res.err != nil {
-		status, err = res.status, res.err
-		return
+		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive
 	if len(res.bytes) == 0 {
