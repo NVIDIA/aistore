@@ -760,7 +760,7 @@ class Bucket(AISSource):
         Args:
             path (str): Local filepath, can be relative or absolute
             prefix_filter (str, optional): Only put files with names starting with this prefix
-            pattern (str, optional): Regex pattern to filter files
+            pattern (str, optional): Shell-style wildcard pattern to filter files
             basename (bool, optional): Whether to use the file names only as object names and omit the path information
             prepend (str, optional): Optional string to use as a prefix in the object name for all objects uploaded
                 No delimiter ("/", "-", etc.) is automatically applied between the prepend value and the object name

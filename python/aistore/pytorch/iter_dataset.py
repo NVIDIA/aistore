@@ -57,5 +57,4 @@ class AISIterDataset(AISBaseIterDataset):
                 disable=not self._show_progress,
                 force_tty=False,
             ):
-                # Update each object to use WorkerRequestSession for multithreading support
                 yield obj.name, obj.get(etl_name=self._etl_name).read_all()
