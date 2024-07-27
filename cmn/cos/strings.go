@@ -44,6 +44,14 @@ func Either(lhs, rhs string) string {
 	return rhs
 }
 
+// rightmost override if non-empty
+func Rather(lhs /*e.g., default value*/, rhs string) string {
+	if rhs != "" {
+		return rhs
+	}
+	return lhs
+}
+
 // (common use)
 func Plural(num int) (s string) {
 	if num != 1 {

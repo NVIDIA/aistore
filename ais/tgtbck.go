@@ -317,7 +317,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 	// never started
 	if xctn == nil {
 		err := cos.NewErrNotFound(t, apc.ActSummaryBck+" job "+msg.UUID)
-		t._erris(w, r, dpq.silent, err, http.StatusNotFound)
+		t._erris(w, r, err, http.StatusNotFound, dpq.silent)
 		return
 	}
 
@@ -509,7 +509,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 				t.writeErr(w, r, err, code, Silent)
 			} else {
 				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
-				t._erris(w, r, cos.IsParseBool(apireq.query.Get(apc.QparamSilent)), err, code)
+				t._erris(w, r, err, code, cos.IsParseBool(apireq.query.Get(apc.QparamSilent)))
 			}
 			return
 		}

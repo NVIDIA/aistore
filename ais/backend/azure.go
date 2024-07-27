@@ -76,11 +76,7 @@ var (
 var _ core.Backend = (*azbp)(nil)
 
 func azProto() string {
-	proto := os.Getenv(azProtoEnvVar)
-	if proto == "" {
-		proto = azDefaultProto
-	}
-	return proto
+	return cos.Rather(azDefaultProto, os.Getenv(azProtoEnvVar))
 }
 
 func azAccName() string { return os.Getenv(azAccNameEnvVar) }

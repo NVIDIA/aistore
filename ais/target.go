@@ -678,7 +678,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 	lom := core.AllocLOM(apireq.items[1])
 	lom, err = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
 	if err != nil {
-		t._erris(w, r, apireq.dpq.silent, err, 0)
+		t._erris(w, r, err, 0, apireq.dpq.silent)
 	}
 	core.FreeLOM(lom)
 }
@@ -772,10 +772,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			if dpq.isS3 {
 				s3.WriteErr(w, r, err, ecode)
 			} else {
-				if ecode == http.StatusNotFound {
-					dpq.silent = true
-				}
-				t._erris(w, r, dpq.silent, err, ecode)
+				t._erris(w, r, err, ecode, !goi.isIOErr /*silent*/)
 			}
 		}
 	}
@@ -795,9 +792,8 @@ func _validateWarmGet(lom *core.LOM, latestVer bool /*apc.QparamLatestVer*/) boo
 	}
 }
 
-// err in silence
-func (t *target) _erris(w http.ResponseWriter, r *http.Request, silent bool /*apc.QparamSilent*/, err error, code int) {
-	if silent {
+func (t *target) _erris(w http.ResponseWriter, r *http.Request, err error, code int, silent bool) {
+	if silent { // e.g,. apc.QparamSilent, StatusNotFound
 		t.writeErr(w, r, err, code, Silent)
 	} else {
 		t.writeErr(w, r, err, code)
@@ -1029,7 +1025,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	ecode, err := t.objHead(r, w.Header(), query, bck, lom)
 	core.FreeLOM(lom)
 	if err != nil {
-		t._erris(w, r, cos.IsParseBool(query.Get(apc.QparamSilent)), err, ecode)
+		t._erris(w, r, err, ecode, cos.IsParseBool(query.Get(apc.QparamSilent)))
 	}
 }
 

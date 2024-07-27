@@ -43,13 +43,13 @@ type (
 // authManager //
 /////////////////
 
-func newAuthManager(secret string) *authManager {
-	// First check for the secret key in the environment variable
-	// and if not found, falls back to the config's secret key.
-	if envSecret := os.Getenv(env.AuthN.SecretKey); envSecret != "" {
-		secret = envSecret
+func newAuthManager(config *cmn.Config) *authManager {
+	return &authManager{
+		tkList:        make(tkList),
+		revokedTokens: make(map[string]bool), // TODO: preallocate
+		version:       1,
+		secret:        cos.Rather(config.Auth.Secret, os.Getenv(env.AuthN.SecretKey)), // environment override
 	}
-	return &authManager{tkList: make(tkList), revokedTokens: make(map[string]bool), version: 1, secret: secret}
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.

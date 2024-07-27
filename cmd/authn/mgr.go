@@ -499,15 +499,10 @@ func initializeDB(driver kvdb.Driver) error {
 	if err := driver.Set(rolesCollection, authn.AdminRole, role); err != nil {
 		return err
 	}
-	userName := os.Getenv(env.AuthN.AdminUsername)
-	if userName == "" {
-		userName = adminUserID
-	}
-	// Get the admin password from the environment variable or use the default
-	password := os.Getenv(env.AuthN.AdminPassword)
-	if password == "" {
-		password = adminUserPass
-	}
+
+	// environment override
+	userName := cos.Rather(adminUserID, os.Getenv(env.AuthN.AdminUsername))
+	password := cos.Rather(adminUserPass, os.Getenv(env.AuthN.AdminPassword))
 
 	// Create the admin user
 	su := &authn.User{

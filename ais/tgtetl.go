@@ -268,7 +268,7 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	core.FreeLOM(lom)
 
 	if err != nil {
-		t._erris(w, r, dpq.silent, err, 0)
+		t._erris(w, r, err, 0, dpq.silent)
 	}
 	dpqFree(dpq)
 }

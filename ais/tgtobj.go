@@ -256,7 +256,7 @@ func (poi *putOI) loghdr() string {
 	var sb strings.Builder
 	sb.WriteString(poi.owt.String())
 	sb.WriteString(", ")
-	sb.WriteString(poi.lom.String())
+	sb.WriteString(poi.lom.Cname())
 	if poi.xctn != nil {
 		sb.WriteString(", ")
 		sb.WriteString(poi.xctn.String())
@@ -468,7 +468,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		cksums.finalized = cksums.compt == cksums.store
 		cksums.compt.Finalize()
 		if !cksums.compt.Equal(cksums.expct) {
-			err = cos.NewErrDataCksum(cksums.expct, &cksums.compt.Cksum, poi.lom.String())
+			err = cos.NewErrDataCksum(cksums.expct, &cksums.compt.Cksum, poi.lom.Cname())
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				cos.NamedVal64{Name: stats.ErrCksumSize, Value: written},
@@ -919,7 +919,7 @@ gfn:
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
-			nlog.Infoln(goi.t.String(), "EC-recovered", goi.lom.String())
+			nlog.Infoln(goi.t.String(), "EC-recovered", goi.lom.Cname())
 			return
 		}
 		err = cmn.NewErrFailedTo(goi.t, "load EC-recovered", goi.lom.Cname(), ecErr)
@@ -1162,11 +1162,9 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil {
-		if !cos.IsRetriableConnErr(err) {
-			nlog.Errorln("failed to GET", goi.lom.String()+":", err)
+		if !cos.IsRetriableConnErr(err) || cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.Warningln("failed to GET (Tx)", goi.lom.Cname(), err)
 			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
-		} else if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Warningln("failed to GET", goi.lom.String()+":", err)
 		}
 
 		// at this point, error is already written into the response -
