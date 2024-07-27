@@ -798,7 +798,7 @@ func oneClusterCompletions(c *cli.Context) {
 		return
 	}
 	for _, clu := range cluList {
-		fmt.Println(cos.Either(clu.Alias, clu.ID))
+		fmt.Println(cos.Left(clu.Alias, clu.ID))
 	}
 }
 

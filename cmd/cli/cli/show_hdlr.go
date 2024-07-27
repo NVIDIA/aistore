@@ -407,7 +407,7 @@ func showClusterHandler(c *cli.Context) error {
 		return V(err)
 	}
 
-	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, cos.Either(sid, what))
+	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, cos.Left(sid, what))
 }
 
 func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {

@@ -77,18 +77,18 @@ const (
 
 	// error counters
 	// see also: `IncErr`, `regCommon`, `ioErrNames`
-	ErrGetCount    = "err.get.n"
-	ErrPutCount    = "err.put.n"
-	ErrAppendCount = "err.append.n"
-	ErrDeleteCount = "err.del.n"
-	ErrRenameCount = "err.ren.n"
-	ErrListCount   = "err.lst.n"
+	ErrGetCount    = errPrefix + GetCount
+	ErrPutCount    = errPrefix + PutCount
+	ErrAppendCount = errPrefix + AppendCount
+	ErrDeleteCount = errPrefix + DeleteCount
+	ErrRenameCount = errPrefix + RenameCount
+	ErrListCount   = errPrefix + ListCount
 
 	// more errors
 	// (for even more errors, see target_stats)
-	ErrHTTPWriteCount = "err.http.write.n" //nolint:gosec // false positive G101
-	ErrDownloadCount  = "err.dl.n"
-	ErrPutMirrorCount = "err.put.mirror.n"
+	ErrHTTPWriteCount = errPrefix + "http.write.n"
+	ErrDownloadCount  = errPrefix + "dl.n"
+	ErrPutMirrorCount = errPrefix + "put.mirror.n"
 
 	// KindLatency
 	GetLatency         = "get.ns"
@@ -165,7 +165,9 @@ func (r *runner) InitPrometheus(snode *meta.Snode) {
 	r.core.initProm(snode)
 }
 
-func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string) { r.reg(snode, name, kind) }
+func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra) {
+	r.reg(snode, name, kind, extra)
+}
 
 // common (target, proxy) metrics
 func (r *runner) regCommon(snode *meta.Snode) {

@@ -46,8 +46,12 @@ type (
 		ResetStats(errorsOnly bool)
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
-		RegExtMetric(node *meta.Snode, name, kind string)
+		// for aistore modules, to add their respective metrics
+		RegExtMetric(node *meta.Snode, name, kind string, extra *Extra)
 	}
+)
+
+type (
 
 	// REST API
 	Node struct {
@@ -102,6 +106,14 @@ type (
 		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
 		MemCPUInfo     apc.MemCPUInfo `json:"sys_info"`
 		SmapVersion    int64          `json:"smap_version,string"`
+	}
+)
+
+type (
+	Extra struct {
+		StrName string
+		Help    string
+		Labels  cos.StrKVs
 	}
 )
 

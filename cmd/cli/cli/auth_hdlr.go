@@ -242,7 +242,7 @@ func readMasked(c *cli.Context, prompt string) string {
 }
 
 func cliAuthnURL(cfg *config.Config) string {
-	return cos.Rather(cfg.Auth.URL, os.Getenv(env.AuthN.URL))
+	return cos.Right(cfg.Auth.URL, os.Getenv(env.AuthN.URL))
 }
 
 func lookupClusterID(cluID string) (string, error) {

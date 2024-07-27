@@ -47,15 +47,15 @@ const (
 	VerChangeSize  = "ver.change.size"
 
 	// errors
-	ErrCksumCount = "err.cksum.n"
-	ErrCksumSize  = "err.cksum.size"
+	ErrCksumCount = errPrefix + "cksum.n"
+	ErrCksumSize  = errPrefix + "cksum.size"
 
-	ErrFSHCCount = "err.fshc.n"
+	ErrFSHCCount = errPrefix + "fshc.n"
 
 	// IO errors (must have ioErrPrefix)
-	IOErrGetCount    = "err.io.get.n"
-	IOErrPutCount    = "err.io.put.n"
-	IOErrDeleteCount = "err.io.del.n"
+	IOErrGetCount    = ioErrPrefix + "get.n"
+	IOErrPutCount    = ioErrPrefix + "put.n"
+	IOErrDeleteCount = ioErrPrefix + "del.n"
 
 	// KindLatency
 	PutLatency         = "put.ns"
@@ -409,8 +409,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	if now >= r.next || !idle {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
 		r.ctracker.write(s.sgl, r.sorted, true /*target*/, idle)
-		if s.sgl.Len() > 3 { // skip '{}'
+		if l := s.sgl.Len(); l > 3 { // skip '{}'
 			line := string(s.sgl.Bytes())
+			debug.Assert(l < s.sgl.Slab().Size(), l, " vs slab ", s.sgl.Slab().Size())
 			if line != r.prev {
 				r.lines = append(r.lines, line)
 				r.prev = line

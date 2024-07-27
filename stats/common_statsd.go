@@ -281,7 +281,9 @@ func (s *coreStats) reset(errorsOnly bool) {
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
 // compare with coreStats.initProm()
-func (r *runner) reg(snode *meta.Snode, name, kind string) {
+func (r *runner) reg(snode *meta.Snode, name, kind string, extra ...*Extra) {
+	_ = extra // TODO -- FIXME: in progress
+
 	v := &statsValue{kind: kind}
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {

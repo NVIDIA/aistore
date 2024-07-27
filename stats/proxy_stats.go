@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -77,8 +78,9 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 	if now >= r.next || !idle {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
 		r.ctracker.write(s.sgl, r.sorted, false /*target*/, idle)
-		if s.sgl.Len() > 3 { // skip '{}'
+		if l := s.sgl.Len(); l > 3 { // skip '{}'
 			line := string(s.sgl.Bytes())
+			debug.Assert(l < s.sgl.Slab().Size(), l, " vs slab ", s.sgl.Slab().Size())
 			if line != r.prev {
 				nlog.Infoln(line)
 				r.prev = line

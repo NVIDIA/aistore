@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -19,41 +20,91 @@ import (
 
 type base struct {
 	provider string
-	metrics  map[string]string // this backend's metric names (below)
+	metrics  cos.StrKVs // this backend's metric names (below)
 }
 
 // NOTE: `stats.LatencyToCounter()` - a public helper that relies on the naming convention below
-func (b *base) init(snode *meta.Snode, tstats stats.Tracker) {
+func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 	prefix := b.provider
 	if prefix == apc.AIS {
 		prefix = apc.RemAIS
 	}
+
+	labels := cos.StrKVs{"backend": prefix}
 	b.metrics = make(map[string]string, 12)
+
+	// GET
 	b.metrics[stats.GetCount] = prefix + "." + stats.GetCount
 	b.metrics[stats.GetLatencyTotal] = prefix + "." + stats.GetLatencyTotal
 	b.metrics[stats.GetE2ELatencyTotal] = prefix + "." + stats.GetE2ELatencyTotal
 	b.metrics[stats.GetSize] = prefix + "." + stats.GetSize
 
-	tstats.RegExtMetric(snode, b.metrics[stats.GetCount], stats.KindCounter)
-	tstats.RegExtMetric(snode, b.metrics[stats.GetLatencyTotal], stats.KindTotal)
-	tstats.RegExtMetric(snode, b.metrics[stats.GetE2ELatencyTotal], stats.KindTotal)
-	tstats.RegExtMetric(snode, b.metrics[stats.GetSize], stats.KindSize)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.GetCount],
+		stats.KindCounter,
+		&stats.Extra{Help: "Total number of cold-GET requests", StrName: "remote_get_n", Labels: labels},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.GetLatencyTotal],
+		stats.KindTotal,
+		&stats.Extra{Help: "Total nanoseconds cold-GET object into AIStore", StrName: "remote_get_ns_total", Labels: labels},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.GetE2ELatencyTotal],
+		stats.KindTotal,
+		&stats.Extra{
+			Help:    "Total nanoseconds spent by AIStore to service cold-GET request",
+			StrName: "remote_e2e_get_ns_total",
+			Labels:  labels,
+		},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.GetSize],
+		stats.KindSize,
+		&stats.Extra{Help: "Total bytes received through cold-GET", StrName: "remote_get_bytes_total", Labels: labels},
+	)
 
+	// PUT
 	b.metrics[stats.PutCount] = prefix + "." + stats.PutCount
 	b.metrics[stats.PutLatencyTotal] = prefix + "." + stats.PutLatencyTotal
 	b.metrics[stats.PutE2ELatencyTotal] = prefix + "." + stats.PutE2ELatencyTotal
 	b.metrics[stats.PutSize] = prefix + "." + stats.PutSize
 
-	tstats.RegExtMetric(snode, b.metrics[stats.PutCount], stats.KindCounter)
-	tstats.RegExtMetric(snode, b.metrics[stats.PutLatencyTotal], stats.KindTotal)
-	tstats.RegExtMetric(snode, b.metrics[stats.PutE2ELatencyTotal], stats.KindTotal)
-	tstats.RegExtMetric(snode, b.metrics[stats.PutSize], stats.KindSize)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.PutCount],
+		stats.KindCounter,
+		&stats.Extra{Help: "Total number of remote PUT requests", StrName: "remote_put_n", Labels: labels},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.PutLatencyTotal],
+		stats.KindTotal,
+		&stats.Extra{Help: "Total nanoseconds PUT object from AIStore to remote", StrName: "remote_put_ns_total", Labels: labels},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.PutE2ELatencyTotal],
+		stats.KindTotal,
+		&stats.Extra{StrName: "remote_e2e_put_ns_total", Labels: labels},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.PutSize],
+		stats.KindSize,
+		&stats.Extra{StrName: "remote_e2e_put_bytes_total", Labels: labels},
+	)
 
+	// version changed out-of-band
 	b.metrics[stats.VerChangeCount] = prefix + "." + stats.VerChangeCount
 	b.metrics[stats.VerChangeSize] = prefix + "." + stats.VerChangeSize
 
-	tstats.RegExtMetric(snode, b.metrics[stats.VerChangeCount], stats.KindCounter)
-	tstats.RegExtMetric(snode, b.metrics[stats.VerChangeSize], stats.KindSize)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.VerChangeCount],
+		stats.KindCounter,
+		&stats.Extra{StrName: "remote_ver_change_n", Labels: labels},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.VerChangeSize],
+		stats.KindSize,
+		&stats.Extra{StrName: "remote_ver_change_bytes_total", Labels: labels},
+	)
 }
 
 func (b *base) Provider() string              { return b.provider }
