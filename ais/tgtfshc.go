@@ -53,7 +53,7 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 	// counting I/O errors on a per mountpath
 	// TODO -- FIXME: remove `NameSuffix`
 	//
-	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: mi.Path, Value: 1})
+	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrFSHCCount, NameSuffix: mi.Path, Value: 1})
 	t.fshc.OnErr(mi, fqn)
 }
 

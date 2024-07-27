@@ -216,12 +216,10 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	return 0, nil
 rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
-		// non-IO error when:
-		// (skip | returned by remote backend | failure to transmit)
-		if err == cmn.ErrSkip || poi.remoteErr || err == io.ErrUnexpectedEOF || cos.IsRetriableConnErr(err) {
-			poi.t.statsT.IncNonIOErr()
+		poi.t.statsT.IncErr(stats.ErrPutCount)
+		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF && !cos.IsRetriableConnErr(err) {
+			poi.t.statsT.IncErr(stats.IOErrPutCount)
 		}
-		poi.t.statsT.IncErr(stats.PutCount)
 	}
 	return ecode, err
 }

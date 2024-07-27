@@ -57,14 +57,17 @@ const (
 	numGorExtreme = 1000
 )
 
+// [naming convention] error counter prefixes
+const (
+	errPrefix   = "err."    // all error metric names (see `IsErrMetric` below)
+	ioErrPrefix = "err.io." // excluding connection-reset-by-peer and similar (see ioErrNames)
+)
+
 // metrics
 const (
 	// KindCounter:
 	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
 	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
-	//
-	// See also: `IncErr`, `IncNonIOErr`, `regCommon`
-	// See also: `softErrNames`
 	GetCount    = "get.n"    // GET(object) count = (cold + warm)
 	PutCount    = "put.n"    // ditto PUT
 	AppendCount = "append.n" // ditto etc.
@@ -72,10 +75,20 @@ const (
 	RenameCount = "ren.n"    // ditto
 	ListCount   = "lst.n"    // list-objects
 
-	// statically defined err counts (NOTE: update regCommon when adding/updating)
-	ErrHTTPWriteCount = errPrefix + "http.write.n"
-	ErrDownloadCount  = errPrefix + "dl.n"
-	ErrPutMirrorCount = errPrefix + "put.mirror.n"
+	// error counters
+	// see also: `IncErr`, `regCommon`, `ioErrNames`
+	ErrGetCount    = "err.get.n"
+	ErrPutCount    = "err.put.n"
+	ErrAppendCount = "err.append.n"
+	ErrDeleteCount = "err.del.n"
+	ErrRenameCount = "err.ren.n"
+	ErrListCount   = "err.lst.n"
+
+	// more errors
+	// (for even more errors, see target_stats)
+	ErrHTTPWriteCount = "err.http.write.n" //nolint:gosec // false positive G101
+	ErrDownloadCount  = "err.dl.n"
+	ErrPutMirrorCount = "err.put.mirror.n"
 
 	// KindLatency
 	GetLatency         = "get.ns"
@@ -134,7 +147,6 @@ type (
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
 		next      int64       // mono.Nano
-		nonIOErr  int64
 		mem       sys.MemStat
 		startedUp atomic.Bool
 	}
@@ -145,15 +157,9 @@ var logtypes = [...]string{".INFO.", ".WARNING.", ".ERROR."}
 
 var ignoreIdle = [...]string{"kalive", Uptime, "disk."}
 
-var softErrNames = [...]string{errPrefix + GetCount, errPrefix + PutCount, errPrefix + DeleteCount}
-
 ////////////
 // runner //
 ////////////
-
-// soft IO error correction, whereby (the corrected)
-// number of soft IO errors = number of (GET, PUT, DELETE errors) - r.nonIOErr
-func (r *runner) IncNonIOErr() { ratomic.AddInt64(&r.nonIOErr, 1) }
 
 func (r *runner) InitPrometheus(snode *meta.Snode) {
 	r.core.initProm(snode)
@@ -172,14 +178,14 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, ListCount, KindCounter)
 
 	// basic error counters, respectively
-	r.reg(snode, errPrefix+GetCount, KindCounter)
-	r.reg(snode, errPrefix+PutCount, KindCounter)
-	r.reg(snode, errPrefix+AppendCount, KindCounter)
-	r.reg(snode, errPrefix+DeleteCount, KindCounter)
-	r.reg(snode, errPrefix+RenameCount, KindCounter)
-	r.reg(snode, errPrefix+ListCount, KindCounter)
+	r.reg(snode, ErrGetCount, KindCounter)
+	r.reg(snode, ErrPutCount, KindCounter)
+	r.reg(snode, ErrAppendCount, KindCounter)
+	r.reg(snode, ErrDeleteCount, KindCounter)
+	r.reg(snode, ErrRenameCount, KindCounter)
+	r.reg(snode, ErrListCount, KindCounter)
 
-	// more error counters
+	// even more error counters
 	r.reg(snode, ErrHTTPWriteCount, KindCounter)
 	r.reg(snode, ErrDownloadCount, KindCounter)
 	r.reg(snode, ErrPutMirrorCount, KindCounter)
@@ -209,12 +215,10 @@ func (r *runner) Inc(name string) {
 	r.core.update(cos.NamedVal64{Name: name, Value: 1})
 }
 
+// same as above (readability)
 func (r *runner) IncErr(metric string) {
-	if IsErrMetric(metric) {
-		r.core.update(cos.NamedVal64{Name: metric, Value: 1})
-	} else { // e.g. "err." + GetCount
-		r.core.update(cos.NamedVal64{Name: errPrefix + metric, Value: 1})
-	}
+	debug.Assert(strings.HasPrefix(metric, errPrefix), metric)
+	r.core.update(cos.NamedVal64{Name: metric, Value: 1})
 }
 
 func (r *runner) AddMany(nvs ...cos.NamedVal64) {
@@ -248,13 +252,6 @@ func (r *runner) Get(name string) (val int64) { return r.core.get(name) }
 func (r *runner) nodeStateFlags() cos.NodeStateFlags {
 	val := r.Get(NodeStateFlags)
 	return cos.NodeStateFlags(val)
-}
-
-func (r *runner) numSoftErrs() (n int64) {
-	for _, name := range softErrNames {
-		n += r.Get(name)
-	}
-	return n
 }
 
 func (r *runner) _run(logger statsLogger /* Prunner or Trunner */) error {

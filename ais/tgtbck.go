@@ -84,7 +84,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 				}
 			}
 			if err != nil {
-				t.statsT.IncErr(stats.ListCount)
+				t.statsT.IncErr(stats.ErrListCount)
 				t.writeErr(w, r, err)
 				return
 			}
@@ -103,7 +103,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			return
 		}
 		if ok := t.listObjects(w, r, bck, lsmsg); !ok {
-			t.statsT.IncErr(stats.ListCount)
+			t.statsT.IncErr(stats.ErrListCount)
 			return
 		}
 		delta := mono.SinceNano(begin)

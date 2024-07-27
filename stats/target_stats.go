@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	ratomic "sync/atomic"
 	"time"
 	"unsafe"
 
@@ -50,7 +49,13 @@ const (
 	// errors
 	ErrCksumCount = "err.cksum.n"
 	ErrCksumSize  = "err.cksum.size"
-	ErrIOCount    = "err.io.n"
+
+	ErrFSHCCount = "err.fshc.n"
+
+	// IO errors (must have ioErrPrefix)
+	IOErrGetCount    = "err.io.get.n"
+	IOErrPutCount    = "err.io.put.n"
+	IOErrDeleteCount = "err.io.del.n"
 
 	// KindLatency
 	PutLatency         = "put.ns"
@@ -106,11 +111,11 @@ type (
 		cs  struct {
 			last int64 // mono.Nano
 		}
-		softErrs int64 // numSoftErrs(); to monitor the change
-		lines    []string
-		fsIDs    []cos.FsID
-		xallRun  core.AllRunningInOut
-		standby  bool
+		ioErrs  int64 // sum values of (ioErrNames) counters
+		lines   []string
+		fsIDs   []cos.FsID
+		xallRun core.AllRunningInOut
+		standby bool
 	}
 )
 
@@ -129,6 +134,10 @@ var (
 	_ cos.Runner = (*Trunner)(nil)
 	_ Tracker    = (*Trunner)(nil)
 )
+
+// assorted IO errors (discounting connection-reset et al.)
+// NOTE: must have ioErrPrefix
+var ioErrNames = [...]string{IOErrGetCount, IOErrPutCount, IOErrDeleteCount}
 
 func NewTrunner(t core.Target) *Trunner { return &Trunner{t: t} }
 
@@ -253,8 +262,11 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	// errors
 	r.reg(snode, ErrCksumCount, KindCounter)
 	r.reg(snode, ErrCksumSize, KindSize)
+	r.reg(snode, ErrFSHCCount, KindCounter)
 
-	r.reg(snode, ErrIOCount, KindCounter)
+	r.reg(snode, IOErrGetCount, KindCounter)
+	r.reg(snode, IOErrPutCount, KindCounter)
+	r.reg(snode, IOErrDeleteCount, KindCounter)
 
 	// streams
 	r.reg(snode, cos.StreamsOutObjCount, KindCounter)
@@ -327,7 +339,14 @@ func (r *Trunner) GetStatsV322() (out *NodeV322) {
 	return out
 }
 
-func (r *Trunner) _softErrs(config *cmn.Config) {
+func (r *Trunner) numIOErrs() (n int64) {
+	for _, name := range ioErrNames {
+		n += r.Get(name)
+	}
+	return n
+}
+
+func (r *Trunner) _fshcMaybe(config *cmn.Config) {
 	c := config.FSHC
 	if !c.Enabled {
 		return
@@ -335,28 +354,26 @@ func (r *Trunner) _softErrs(config *cmn.Config) {
 	if r.core.statsTime < 5*time.Second {
 		return // cannot reliably recompute to c.SoftErrTime (which is 10s or greater)
 	}
-	debug.Assert(c.SoftErrs > 0 && c.SoftErrTime > 0)
 
-	n := r.numSoftErrs() - ratomic.LoadInt64(&r.nonIOErr) // num soft excluding non-IO
-	d := n - r.softErrs                                   // the delta
-	r.softErrs = n                                        // until next periodic call
-	debug.Assert(d >= 0 && n >= 0)
+	n := r.numIOErrs()
+	d := n - r.ioErrs // since previous `r.log`
+	r.ioErrs = n
 
 	j := d * int64(c.SoftErrTime) / int64(r.core.statsTime) // recompute
 	if j < int64(c.SoftErrs) {
 		return
 	}
-	err := fmt.Errorf("number of soft errors (%d) raised during the last (%v) exceeded configured limit (%d)",
-		d, c.SoftErrTime, c.SoftErrs)
+
+	err := fmt.Errorf("## IO errors (%d) exceeded configured limit: (%d during %v)", d, c.SoftErrTime, c.SoftErrs)
 	nlog.Errorln(err)
-	nlog.Warningln("waking up FSHC to check _all_ mountpaths")
+	nlog.Warningln("waking up FSHC to check all mountpaths...") // _all_
 
 	r.t.SoftFSHC()
 }
 
 // log _and_ update various low-level states
 func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
-	r._softErrs(config)
+	r._fshcMaybe(config)
 
 	r.lines = r.lines[:0]
 

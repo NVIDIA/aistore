@@ -761,11 +761,10 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// do
 	if ecode, err := goi.getObject(); err != nil {
-		if !goi.isIOErr {
-			t.statsT.IncNonIOErr()
+		t.statsT.IncErr(stats.ErrGetCount)
+		if goi.isIOErr {
+			t.statsT.IncErr(stats.IOErrGetCount)
 		}
-
-		t.statsT.IncErr(stats.GetCount)
 
 		// handle right here, return nil
 		if err != errSendingResp {
@@ -877,7 +876,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
-		t.statsT.IncErr(stats.AppendCount)
+		t.statsT.IncErr(stats.ErrAppendCount)
 	default:
 		poi := allocPOI()
 		{
@@ -971,7 +970,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			core.FreeLOM(lom)
 			lom = nil
 		} else {
-			t.statsT.IncErr(stats.RenameCount)
+			t.statsT.IncErr(stats.ErrRenameCount)
 		}
 	case apc.ActBlobDl:
 		var (
@@ -1351,10 +1350,11 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	if err == nil {
 		t.statsT.Inc(stats.DeleteCount)
 	} else {
-		if isback {
-			t.statsT.IncNonIOErr()
+		// TODO: count GET/PUT/DELETE remote errors on a per-backend...
+		t.statsT.IncErr(stats.ErrDeleteCount)
+		if !isback {
+			t.statsT.IncErr(stats.IOErrDeleteCount)
 		}
-		t.statsT.IncErr(stats.DeleteCount) // TODO: count GET/PUT/DELETE remote errors on a per-backend...
 	}
 	return
 }

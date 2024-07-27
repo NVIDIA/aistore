@@ -29,8 +29,6 @@ const (
 	KindThroughput = "bw" // e.g. GetThroughput
 )
 
-const errPrefix = "err." // all error metric names (see `IsErrMetric` below)
-
 type (
 	Tracker interface {
 		cos.StatsUpdater
@@ -41,7 +39,6 @@ type (
 		IsPrometheus() bool
 
 		IncErr(metric string)
-		IncNonIOErr()
 
 		GetStats() *Node
 		GetStatsV322() *NodeV322 // [backward compatibility]
@@ -109,7 +106,11 @@ type (
 )
 
 func IsErrMetric(name string) bool {
-	return strings.HasPrefix(name, errPrefix) // e.g. name = ErrHTTPWriteCount
+	return strings.HasPrefix(name, errPrefix) // e.g., "err.get.n"
+}
+
+func IsIOErrMetric(name string) bool {
+	return strings.HasPrefix(name, ioErrPrefix) // e.g., "err.io.get.n" (see ioErrNames)
 }
 
 // compare with base.init() at ais/backend/common
