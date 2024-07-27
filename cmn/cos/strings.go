@@ -36,20 +36,20 @@ func TrimLastB(s string, b byte) string {
 	return s
 }
 
-// return non-empty
-func Either(lhs, rhs string) string {
-	if lhs != "" {
-		return lhs
+// left if non-empty; otherwise right
+func Left(left, right string) string {
+	if left != "" {
+		return left
 	}
-	return rhs
+	return right
 }
 
-// rightmost override if non-empty
-func Rather(lhs /*e.g., default value*/, rhs string) string {
-	if rhs != "" {
-		return rhs
+// right if non-empty; otherwise left
+func Right(left, right string) string {
+	if right != "" {
+		return right
 	}
-	return lhs
+	return left
 }
 
 // (common use)

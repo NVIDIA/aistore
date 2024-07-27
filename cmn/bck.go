@@ -512,8 +512,8 @@ func (qbck QueryBcks) Equal(bck *Bck) bool { return Bck(qbck).Equal(bck) }
 // NOTE: a named bucket with no provider is assumed to be ais://
 func (qbck QueryBcks) Contains(other *Bck) bool {
 	if qbck.Name != "" {
-		other.Provider = cos.Rather(apc.AIS, other.Provider)
-		qbck.Provider = cos.Rather(other.Provider, qbck.Provider) //nolint:revive // if not set we match the expected
+		other.Provider = cos.Right(apc.AIS, other.Provider)
+		qbck.Provider = cos.Right(other.Provider, qbck.Provider) //nolint:revive // if not set we match the expected
 		return qbck.Equal(other)
 	}
 	ok := qbck.Provider == other.Provider || qbck.Provider == ""

@@ -183,11 +183,11 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 			}
 			// merge existing w/ new props
 			if !entry.IsPresent() && en.IsPresent() {
-				en.Version = cos.Either(en.Version, entry.Version)
+				en.Version = cos.Left(en.Version, entry.Version)
 				tmp[en.Name] = en
 			} else {
-				entry.Location = cos.Either(entry.Location, en.Location)
-				entry.Version = cos.Either(entry.Version, en.Version)
+				entry.Location = cos.Left(entry.Location, en.Location)
+				entry.Version = cos.Left(entry.Version, en.Version)
 			}
 		}
 	}

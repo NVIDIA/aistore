@@ -15,8 +15,8 @@
 # and so on. This rule holds for all AIS "applications" except `aisnode` itself.
 # See https://github.com/NVIDIA/aistore/tree/main/cmn/fname for the most updated locations.
 #
-# NOTE: build tag `statsd` is the Local Playground's default; to enable Prometheus,
-# remove `statsd` from the "... TAGS=statsd make ..." command below.
+# NOTE: Prometheus is the Local Playground's default; use TAGS to specify `statsd` and/or
+# any other non-default build tag.
 #
 ############################################
 
@@ -171,10 +171,11 @@ parse_backend_providers
 
 create_loopbacks
 
-## NOTE: build tag `statsd` in the make command;
+## NOTE: to enable StatsD instead of Prometheus, use build tag `statsd` in the make command, as follows:
+## TAGS=statsd make ...
 ## see docs/metrics.md and docs/prometheus.md for more information.
 ##
-if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS} TAGS=statsd make --no-print-directory -C ${AISTORE_PATH} node; then
+if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS} make --no-print-directory -C ${AISTORE_PATH} node; then
   exit_error "failed to compile 'aisnode' binary"
 fi
 

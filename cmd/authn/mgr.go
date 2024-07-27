@@ -207,7 +207,7 @@ func (m *mgr) roleList() ([]*authn.Role, error) {
 // are not returned to a caller as it is not crucial.
 func (m *mgr) createRolesForCluster(clu *authn.CluACL) {
 	for _, pr := range predefinedRoles {
-		suffix := cos.Either(clu.Alias, clu.ID)
+		suffix := cos.Left(clu.Alias, clu.ID)
 		uid := pr.prefix + "-" + suffix
 		rInfo := &authn.Role{}
 		if err := m.db.Get(rolesCollection, uid, rInfo); err == nil {
@@ -501,8 +501,8 @@ func initializeDB(driver kvdb.Driver) error {
 	}
 
 	// environment override
-	userName := cos.Rather(adminUserID, os.Getenv(env.AuthN.AdminUsername))
-	password := cos.Rather(adminUserPass, os.Getenv(env.AuthN.AdminPassword))
+	userName := cos.Right(adminUserID, os.Getenv(env.AuthN.AdminUsername))
+	password := cos.Right(adminUserPass, os.Getenv(env.AuthN.AdminPassword))
 
 	// Create the admin user
 	su := &authn.User{

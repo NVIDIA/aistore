@@ -119,7 +119,7 @@ func (s3bp *s3bp) initInventory(cloudBck *cmn.Bck, svc *s3.Client, ctx *core.Lso
 	if csv.oname == "" {
 		what := prefix
 		if ctx.ID == "" {
-			what = cos.Either(ctx.Name, aiss3.InvName)
+			what = cos.Left(ctx.Name, aiss3.InvName)
 		}
 		return nil, csv, manifest, http.StatusNotFound, cos.NewErrNotFound(cloudBck, invTag+":"+what)
 	}

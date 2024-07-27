@@ -48,7 +48,7 @@ func newAuthManager(config *cmn.Config) *authManager {
 		tkList:        make(tkList),
 		revokedTokens: make(map[string]bool), // TODO: preallocate
 		version:       1,
-		secret:        cos.Rather(config.Auth.Secret, os.Getenv(env.AuthN.SecretKey)), // environment override
+		secret:        cos.Right(config.Auth.Secret, os.Getenv(env.AuthN.SecretKey)), // environment override
 	}
 }
 
