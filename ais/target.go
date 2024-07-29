@@ -362,8 +362,6 @@ func (t *target) Run() error {
 
 	t.initBackends(tstats) // (+ reg backend metrics)
 
-	t.statsT.InitPrometheus(t.si) // must be last
-
 	// end target metrics -----------------------
 
 	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))

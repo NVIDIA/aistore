@@ -29,7 +29,6 @@ func (*StatsTracker) Add(string, int64)                                         
 func (*StatsTracker) SetFlag(string, cos.NodeStateFlags)                        {}
 func (*StatsTracker) SetClrFlag(string, cos.NodeStateFlags, cos.NodeStateFlags) {}
 func (*StatsTracker) AddMany(...cos.NamedVal64)                                 {}
-func (*StatsTracker) InitPrometheus(*meta.Snode)                                {}
 func (*StatsTracker) RegExtMetric(*meta.Snode, string, string, *stats.Extra)    {}
 func (*StatsTracker) GetMetricNames() cos.StrKVs                                { return nil }
 func (*StatsTracker) GetStats() *stats.Node                                     { return nil }

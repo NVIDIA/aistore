@@ -9,7 +9,6 @@ package stats
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	ratomic "sync/atomic"
@@ -62,9 +61,8 @@ func (s *coreStats) init(size int) {
 func (s *coreStats) statsdDisabled() bool { return s.statsdC == nil }
 
 // empty stabs
-func (*coreStats) initProm(*meta.Snode) {}
-func (*coreStats) promLock()            {}
-func (*coreStats) promUnlock()          {}
+func (*coreStats) promLock()   {}
+func (*coreStats) promUnlock() {}
 
 // init MetricClient client: StatsD (default) or Prometheus
 func (s *coreStats) initMetricClient(snode *meta.Snode, _ *runner) {
@@ -279,52 +277,8 @@ func (s *coreStats) reset(errorsOnly bool) {
 // runner //
 ////////////
 
-// NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
-// compare with coreStats.initProm()
-func (r *runner) reg(snode *meta.Snode, name, kind string, extra ...*Extra) {
-	_ = extra // TODO -- FIXME: in progress
-
-	v := &statsValue{kind: kind}
-	// in StatsD metrics ":" delineates the name and the value - replace with underscore
-	switch kind {
-	case KindCounter:
-		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".n")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "count")
-	case KindTotal:
-		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "total")
-	case KindSize:
-		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".size")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbytes")
-	case KindLatency:
-		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
-		v.label.comm = strings.TrimSuffix(name, ".ns")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "ms")
-	case KindThroughput, KindComputedThroughput:
-		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
-		v.label.comm = strings.TrimSuffix(name, ".bps")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "mbps")
-	default:
-		debug.Assert(kind == KindGauge || kind == KindSpecial)
-		v.label.comm = name
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		if name == Uptime {
-			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-			v.label.stpr = fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, "seconds")
-		} else {
-			v.label.stpr = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
-		}
-	}
-	r.core.Tracker[name] = v
-}
+// empty stub
+func (*runner) regProm(*meta.Snode, string, *Extra, *statsValue) {}
 
 func (*runner) IsPrometheus() bool { return false }
 

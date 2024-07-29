@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/core/meta"
 )
 
 const numProxyStats = 24 // approx. initial
@@ -36,11 +35,6 @@ var (
 )
 
 func (r *Prunner) Run() error { return r._run(r /*as statsLogger*/) }
-
-// have only common metrics - init only the Prometheus part if enabled
-func (r *Prunner) RegMetrics(node *meta.Snode) {
-	r.core.initProm(node)
-}
 
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(p core.Node) *atomic.Bool {

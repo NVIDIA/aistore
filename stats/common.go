@@ -7,6 +7,7 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	rfs "io/fs"
 	"os"
 	"path/filepath"
@@ -161,10 +162,6 @@ var ignoreIdle = [...]string{"kalive", Uptime, "disk."}
 // runner //
 ////////////
 
-func (r *runner) InitPrometheus(snode *meta.Snode) {
-	r.core.initProm(snode)
-}
-
 func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra) {
 	r.reg(snode, name, kind, extra)
 }
@@ -172,37 +169,88 @@ func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra
 // common (target, proxy) metrics
 func (r *runner) regCommon(snode *meta.Snode) {
 	// basic counters
-	r.reg(snode, GetCount, KindCounter)
-	r.reg(snode, PutCount, KindCounter)
-	r.reg(snode, AppendCount, KindCounter)
-	r.reg(snode, DeleteCount, KindCounter)
-	r.reg(snode, RenameCount, KindCounter)
-	r.reg(snode, ListCount, KindCounter)
+	r.reg(snode, GetCount, KindCounter, nil) // TODO -- FIXME: here and elsewhere
+	r.reg(snode, PutCount, KindCounter, nil)
+	r.reg(snode, AppendCount, KindCounter, nil)
+	r.reg(snode, DeleteCount, KindCounter, nil)
+	r.reg(snode, RenameCount, KindCounter, nil)
+	r.reg(snode, ListCount, KindCounter, nil)
 
 	// basic error counters, respectively
-	r.reg(snode, ErrGetCount, KindCounter)
-	r.reg(snode, ErrPutCount, KindCounter)
-	r.reg(snode, ErrAppendCount, KindCounter)
-	r.reg(snode, ErrDeleteCount, KindCounter)
-	r.reg(snode, ErrRenameCount, KindCounter)
-	r.reg(snode, ErrListCount, KindCounter)
+	r.reg(snode, ErrGetCount, KindCounter, nil)
+	r.reg(snode, ErrPutCount, KindCounter, nil)
+	r.reg(snode, ErrAppendCount, KindCounter, nil)
+	r.reg(snode, ErrDeleteCount, KindCounter, nil)
+	r.reg(snode, ErrRenameCount, KindCounter, nil)
+	r.reg(snode, ErrListCount, KindCounter, nil)
 
 	// even more error counters
-	r.reg(snode, ErrHTTPWriteCount, KindCounter)
-	r.reg(snode, ErrDownloadCount, KindCounter)
-	r.reg(snode, ErrPutMirrorCount, KindCounter)
+	r.reg(snode, ErrHTTPWriteCount, KindCounter, nil)
+	r.reg(snode, ErrDownloadCount, KindCounter, nil)
+	r.reg(snode, ErrPutMirrorCount, KindCounter, nil)
 
 	// latency
-	r.reg(snode, GetLatency, KindLatency)
-	r.reg(snode, GetLatencyTotal, KindTotal)
-	r.reg(snode, ListLatency, KindLatency)
-	r.reg(snode, KeepAliveLatency, KindLatency)
+	r.reg(snode, GetLatency, KindLatency, nil)
+	r.reg(snode, GetLatencyTotal, KindTotal, nil)
+	r.reg(snode, ListLatency, KindLatency, nil)
+	r.reg(snode, KeepAliveLatency, KindLatency, nil)
 
 	// special uptime
-	r.reg(snode, Uptime, KindSpecial)
+	r.reg(snode, Uptime, KindSpecial, nil)
 
 	// snode state flags
-	r.reg(snode, NodeStateFlags, KindGauge)
+	r.reg(snode, NodeStateFlags, KindGauge, nil)
+}
+
+// naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
+// compare with coreStats.initProm()
+func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
+	v := &statsValue{kind: kind}
+	f := func(units string) string {
+		return fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, units)
+	}
+	switch kind {
+	case KindCounter:
+		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
+		v.label.comm = strings.TrimSuffix(name, ".n")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stpr = f("count")
+	case KindTotal:
+		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
+		v.label.comm = strings.TrimSuffix(name, ".total")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stpr = f("total")
+	case KindSize:
+		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
+		v.label.comm = strings.TrimSuffix(name, ".size")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stpr = f("mbytes")
+	case KindLatency:
+		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
+		v.label.comm = strings.TrimSuffix(name, ".ns")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stpr = f("ms")
+	case KindThroughput, KindComputedThroughput:
+		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
+		v.label.comm = strings.TrimSuffix(name, ".bps")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stpr = f("mbps")
+	default:
+		debug.Assert(kind == KindGauge || kind == KindSpecial)
+		v.label.comm = name
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		if name == Uptime {
+			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
+			v.label.stpr = f("seconds")
+		} else {
+			v.label.stpr = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
+		}
+	}
+	r.core.Tracker[name] = v
+
+	// no-op for StatsD
+	r.regProm(snode, name, extra, v)
 }
 
 //

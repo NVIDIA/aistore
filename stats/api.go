@@ -35,7 +35,6 @@ type (
 
 		StartedUp() bool
 
-		InitPrometheus(node *meta.Snode)
 		IsPrometheus() bool
 
 		IncErr(metric string)

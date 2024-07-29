@@ -64,55 +64,6 @@ func (*coreStats) initMetricClient(_ *meta.Snode, parent *runner) {
 	prometheus.MustRegister(parent) // as prometheus.Collector
 }
 
-// populate *prometheus.Desc and statsValue.label.stpr
-func (s *coreStats) initProm(snode *meta.Snode) {
-	id := strings.ReplaceAll(snode.ID(), ".", "_")
-	for name, v := range s.Tracker {
-		var variableLabels []string
-		if isDiskMetric(name) {
-			// obtain prometheus specific disk-metric name from tracker name
-			// e.g. `disk.nvme0.read.bps` -> `disk.read.bps`.
-			_, name = extractPromDiskMetricName(name)
-			variableLabels = []string{diskMetricLabel}
-		}
-		label := strings.ReplaceAll(name, ".", "_")
-		// prometheus metrics names shouldn't include daemonID.
-		label = strings.ReplaceAll(label, "_"+id+"_", "_")
-		v.label.stpr = strings.ReplaceAll(label, ":", "_")
-
-		help := v.kind
-		if strings.HasSuffix(v.label.stpr, "_n") {
-			help = "total number of operations"
-		} else if strings.HasSuffix(v.label.stpr, "_size") {
-			help = "total size (bytes)"
-		} else if strings.HasSuffix(v.label.stpr, "avg_rsize") {
-			help = "average read size (bytes)"
-		} else if strings.HasSuffix(v.label.stpr, "avg_wsize") {
-			help = "average write size (bytes)"
-		} else if strings.HasSuffix(v.label.stpr, "_ns") {
-			v.label.stpr = strings.TrimSuffix(v.label.stpr, "_ns") + "_ms"
-			help = "latency (milliseconds)"
-		} else if strings.HasSuffix(v.label.stpr, "_ns_total") {
-			help = "cumulative latency (nanoseconds)"
-		} else if strings.Contains(v.label.stpr, "_ns_") {
-			v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "_ms_")
-			if name == Uptime {
-				v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "")
-				help = "uptime (seconds)"
-			} else {
-				help = "latency (milliseconds)"
-			}
-		} else if strings.HasSuffix(v.label.stpr, "_bps") {
-			v.label.stpr = strings.TrimSuffix(v.label.stpr, "_bps") + "_mbps"
-			help = "throughput (MB/s)"
-		}
-
-		fullqn := prometheus.BuildFQName("ais", snode.Type(), v.label.stpr)
-		// e.g. metric: ais_target_disk_avg_wsize{disk="nvme0n1",node_id="fqWt8081"}
-		s.promDesc[name] = prometheus.NewDesc(fullqn, help, variableLabels, prometheus.Labels{"node_id": id})
-	}
-}
-
 func (s *coreStats) updateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
 	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
@@ -261,43 +212,61 @@ var (
 	_ prometheus.Collector = (*runner)(nil)
 )
 
-// NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
-// compare with coreStats.initProm()
-func (r *runner) reg(_ *meta.Snode, name, kind string, extra ...*Extra) {
-	_ = extra // TODO -- FIXME: in progress
+// TODO -- FIXME: remove
+func _foobar(id, name string, v *statsValue) (metricName, help string) {
+	label := name
+	label = strings.ReplaceAll(label, ".", "_")
+	// prometheus metrics names shouldn't include daemonID.
+	label = strings.ReplaceAll(label, "_"+id+"_", "_")
+	v.label.stpr = strings.ReplaceAll(label, ":", "_")
 
-	v := &statsValue{kind: kind}
-	// in StatsD metrics ":" delineates the name and the value - replace with underscore
-	switch kind {
-	case KindCounter:
-		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".n")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-	case KindTotal:
-		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-	case KindSize:
-		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".size")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-	case KindLatency:
-		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
-		v.label.comm = strings.TrimSuffix(name, ".ns")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-	case KindThroughput, KindComputedThroughput:
-		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
-		v.label.comm = strings.TrimSuffix(name, ".bps")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-	default:
-		debug.Assert(kind == KindGauge || kind == KindSpecial)
-		v.label.comm = name
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+	help = v.kind
+	if strings.HasSuffix(v.label.stpr, "_n") {
+		help = "total number of operations"
+	} else if strings.HasSuffix(v.label.stpr, "_size") {
+		help = "total size (bytes)"
+	} else if strings.HasSuffix(v.label.stpr, "avg_rsize") {
+		help = "average read size (bytes)"
+	} else if strings.HasSuffix(v.label.stpr, "avg_wsize") {
+		help = "average write size (bytes)"
+	} else if strings.HasSuffix(v.label.stpr, "_ns") {
+		v.label.stpr = strings.TrimSuffix(v.label.stpr, "_ns") + "_ms"
+		help = "latency (milliseconds)"
+	} else if strings.HasSuffix(v.label.stpr, "_ns_total") {
+		help = "cumulative latency (nanoseconds)"
+	} else if strings.Contains(v.label.stpr, "_ns_") {
+		v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "_ms_")
 		if name == Uptime {
-			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
+			v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "")
+			help = "uptime (seconds)"
+		} else {
+			help = "latency (milliseconds)"
 		}
+	} else if strings.HasSuffix(v.label.stpr, "_bps") {
+		v.label.stpr = strings.TrimSuffix(v.label.stpr, "_bps") + "_mbps"
+		help = "throughput (MB/s)"
 	}
-	r.core.Tracker[name] = v
+	return v.label.stpr, help
+}
+
+func (r *runner) regProm(snode *meta.Snode, name string, extra *Extra, v *statsValue) {
+	var (
+		id               = strings.ReplaceAll(snode.ID(), ".", "_")
+		constVars        = prometheus.Labels{"node_id": id}
+		metricName, help string
+	)
+	if extra != nil {
+		for val, key := range extra.Labels {
+			constVars[val] = key
+		}
+		debug.Assert(extra.StrName != "")
+		metricName = extra.StrName
+		help = extra.Help
+	} else {
+		metricName, help = _foobar(id, name, v) // TODO -- FIXME: remove
+	}
+	fullqn := prometheus.BuildFQName("ais", snode.Type(), metricName)
+	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, nil, constVars)
 }
 
 func (*runner) IsPrometheus() bool { return true }
@@ -317,8 +286,6 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		var (
 			val int64
 			fv  float64
-
-			variableLabels []string
 		)
 		copyV, okc := r.ctracker[name]
 		if !okc {
@@ -348,29 +315,14 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		if v.kind == KindCounter || v.kind == KindSize || v.kind == KindTotal {
 			promMetricType = prometheus.CounterValue
 		}
-		if isDiskMetric(name) {
-			var diskName string
-			diskName, name = extractPromDiskMetricName(name)
-			variableLabels = []string{diskName}
-		}
 		// 3. publish
 		desc, ok := r.core.promDesc[name]
 		debug.Assert(ok, name)
-		m, err := prometheus.NewConstMetric(desc, promMetricType, fv, variableLabels...)
+		m, err := prometheus.NewConstMetric(desc, promMetricType, fv)
 		debug.AssertNoErr(err)
 		ch <- m
 	}
 	r.core.promRUnlock()
-}
-
-// extractPromDiskMetricName returns prometheus friendly metrics name
-// from disk tracker name of format `disk.<disk-name>.<metric-name>`
-// it returns, two strings:
-//  1. <disk-name> used as prometheus variable label
-//  2. `disk.<metric-name>` used for prometheus metric name
-func extractPromDiskMetricName(name string) (diskName, metricName string) {
-	diskName = strings.Split(name, ".")[1]
-	return diskName, strings.ReplaceAll(name, "."+diskName+".", ".")
 }
 
 func (r *runner) Stop(err error) {

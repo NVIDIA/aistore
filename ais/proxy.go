@@ -190,8 +190,6 @@ func (p *proxy) Run() error {
 
 	core.Pinit()
 
-	p.statsT.InitPrometheus(p.si)
-
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()
 

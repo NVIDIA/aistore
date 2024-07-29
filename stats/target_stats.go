@@ -237,75 +237,85 @@ func isDiskUtilMetric(name string) bool {
 
 // target-specific metrics, in addition to common and already added via regCommon()
 func (r *Trunner) RegMetrics(snode *meta.Snode) {
-	r.reg(snode, LruEvictCount, KindCounter)
-	r.reg(snode, LruEvictSize, KindSize)
+	r.reg(snode, LruEvictCount, KindCounter, nil)
+	r.reg(snode, LruEvictSize, KindSize, nil)
 
-	r.reg(snode, CleanupStoreCount, KindCounter)
-	r.reg(snode, CleanupStoreSize, KindSize)
+	r.reg(snode, CleanupStoreCount, KindCounter, nil)
+	r.reg(snode, CleanupStoreSize, KindSize, nil)
 
-	r.reg(snode, VerChangeCount, KindCounter)
-	r.reg(snode, VerChangeSize, KindSize)
+	r.reg(snode, VerChangeCount, KindCounter, nil)
+	r.reg(snode, VerChangeSize, KindSize, nil)
 
-	r.reg(snode, PutLatency, KindLatency)
-	r.reg(snode, PutLatencyTotal, KindTotal)
-	r.reg(snode, AppendLatency, KindLatency)
-	r.reg(snode, GetRedirLatency, KindLatency)
-	r.reg(snode, PutRedirLatency, KindLatency)
+	r.reg(snode, PutLatency, KindLatency, nil)
+	r.reg(snode, PutLatencyTotal, KindTotal, nil)
+	r.reg(snode, AppendLatency, KindLatency, nil)
+	r.reg(snode, GetRedirLatency, KindLatency, nil)
+	r.reg(snode, PutRedirLatency, KindLatency, nil)
 
 	// bps
-	r.reg(snode, GetThroughput, KindThroughput)
-	r.reg(snode, PutThroughput, KindThroughput)
+	r.reg(snode, GetThroughput, KindThroughput, nil)
+	r.reg(snode, PutThroughput, KindThroughput, nil)
 
-	r.reg(snode, GetSize, KindSize)
-	r.reg(snode, PutSize, KindSize)
+	r.reg(snode, GetSize, KindSize, nil)
+	r.reg(snode, PutSize, KindSize, nil)
 
 	// errors
-	r.reg(snode, ErrCksumCount, KindCounter)
-	r.reg(snode, ErrCksumSize, KindSize)
-	r.reg(snode, ErrFSHCCount, KindCounter)
+	r.reg(snode, ErrCksumCount, KindCounter, nil)
+	r.reg(snode, ErrCksumSize, KindSize, nil)
+	r.reg(snode, ErrFSHCCount, KindCounter, nil)
 
-	r.reg(snode, IOErrGetCount, KindCounter)
-	r.reg(snode, IOErrPutCount, KindCounter)
-	r.reg(snode, IOErrDeleteCount, KindCounter)
+	r.reg(snode, IOErrGetCount, KindCounter, nil)
+	r.reg(snode, IOErrPutCount, KindCounter, nil)
+	r.reg(snode, IOErrDeleteCount, KindCounter, nil)
 
 	// streams
-	r.reg(snode, cos.StreamsOutObjCount, KindCounter)
-	r.reg(snode, cos.StreamsOutObjSize, KindSize)
-	r.reg(snode, cos.StreamsInObjCount, KindCounter)
-	r.reg(snode, cos.StreamsInObjSize, KindSize)
+	r.reg(snode, cos.StreamsOutObjCount, KindCounter, nil)
+	r.reg(snode, cos.StreamsOutObjSize, KindSize, nil)
+	r.reg(snode, cos.StreamsInObjCount, KindCounter, nil)
+	r.reg(snode, cos.StreamsInObjSize, KindSize, nil)
 
 	// download
-	r.reg(snode, DownloadSize, KindSize)
-	r.reg(snode, DownloadLatency, KindLatency)
+	r.reg(snode, DownloadSize, KindSize, nil)
+	r.reg(snode, DownloadLatency, KindLatency, nil)
 
 	// dsort
-	r.reg(snode, DsortCreationReqCount, KindCounter)
-	r.reg(snode, DsortCreationRespCount, KindCounter)
-	r.reg(snode, DsortCreationRespLatency, KindLatency)
-	r.reg(snode, DsortExtractShardDskCnt, KindCounter)
-	r.reg(snode, DsortExtractShardMemCnt, KindCounter)
-	r.reg(snode, DsortExtractShardSize, KindSize)
+	r.reg(snode, DsortCreationReqCount, KindCounter, nil)
+	r.reg(snode, DsortCreationRespCount, KindCounter, nil)
+	r.reg(snode, DsortCreationRespLatency, KindLatency, nil)
+	r.reg(snode, DsortExtractShardDskCnt, KindCounter, nil)
+	r.reg(snode, DsortExtractShardMemCnt, KindCounter, nil)
+	r.reg(snode, DsortExtractShardSize, KindSize, nil)
 
 	// core
-	r.reg(snode, RemoteDeletedDelCount, KindCounter)
-	r.reg(snode, LcacheCollisionCount, KindCounter)
-	r.reg(snode, LcacheEvictedCount, KindCounter)
-	r.reg(snode, LcacheFlushColdCount, KindCounter)
+	r.reg(snode, RemoteDeletedDelCount, KindCounter, nil)
+	r.reg(snode, LcacheCollisionCount, KindCounter, nil)
+	r.reg(snode, LcacheEvictedCount, KindCounter, nil)
+	r.reg(snode, LcacheFlushColdCount, KindCounter, nil)
 }
 
 func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {
 	s := r.core.Tracker
-	rbps := r.nameRbps(disk)
-	if _, ok := s[rbps]; ok { // must be config.TestingEnv()
-		return
+	name := r.nameRbps(disk)
+	if _, ok := s[name]; ok {
+		return // all metrics - only once, at once
 	}
-	r.reg(snode, rbps, KindComputedThroughput)
-	r.reg(snode, r.nameRavg(disk), KindGauge)
 
-	r.reg(snode, r.nameWbps(disk), KindComputedThroughput)
-	r.reg(snode, r.nameWavg(disk), KindGauge)
-
-	r.reg(snode, r.nameUtil(disk), KindGauge)
+	// "disk.<DISK>.<METRIC> (e.g.: "disk.nvme0n1.read.bps")
+	r.reg(snode, name, KindComputedThroughput,
+		&Extra{Help: "read bandwidth (MB/s)", StrName: "disk_read_mbps", Labels: cos.StrKVs{"disk": disk}},
+	)
+	r.reg(snode, r.nameRavg(disk), KindGauge,
+		&Extra{Help: "average read size (bytes)", StrName: "disk_avg_rsize", Labels: cos.StrKVs{"disk": disk}},
+	)
+	r.reg(snode, r.nameWbps(disk), KindComputedThroughput,
+		&Extra{Help: "write bandwidth (MB/s)", StrName: "disk_write_mbps", Labels: cos.StrKVs{"disk": disk}},
+	)
+	r.reg(snode, r.nameWavg(disk), KindGauge,
+		&Extra{Help: "average write size (bytes)", StrName: "disk_avg_wsize", Labels: cos.StrKVs{"disk": disk}},
+	)
+	r.reg(snode, r.nameUtil(disk), KindGauge,
+		&Extra{Help: "disk utilization (%%)", StrName: "disk_util", Labels: cos.StrKVs{"disk": disk}},
+	)
 }
 
 func (r *Trunner) GetStats() (ds *Node) {
