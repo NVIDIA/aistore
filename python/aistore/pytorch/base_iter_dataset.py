@@ -9,6 +9,8 @@ from aistore.sdk.ais_source import AISSource
 from torch.utils.data import IterableDataset
 from abc import ABC, abstractmethod
 from aistore.pytorch.worker_request_client import WorkerRequestClient
+import torch.utils.data as torch_utils
+from itertools import islice
 
 
 class AISBaseIterDataset(ABC, IterableDataset):
@@ -88,6 +90,26 @@ class AISBaseIterDataset(ABC, IterableDataset):
 
         self._length = length
 
+    def _get_worker_iter_info(self) -> tuple[Iterator, str]:
+        """
+        Depending on how many Torch workers are present or if they are even present at all,
+        return an iterator for the current worker to access and a worker name.
+
+        Returns:
+            tuple[Iterator, str]: Iterator of objects and name of worker
+        """
+        worker_info = torch_utils.get_worker_info()
+
+        if worker_info is None or worker_info.num_workers == 1:
+            return self._iterator, ""
+
+        worker_iter = islice(
+            self._iterator, worker_info.id, None, worker_info.num_workers
+        )
+        worker_name = f" (Worker {worker_info.id})"
+
+        return worker_iter, worker_name
+
     @abstractmethod
     def __iter__(self) -> Iterator:
         """
@@ -100,10 +122,11 @@ class AISBaseIterDataset(ABC, IterableDataset):
 
     def _reset_iterator(self):
         """Reset the iterator to start from the beginning."""
+        self._length = 0
         self._iterator = self._create_samples_iter()
 
     def __len__(self):
         if self._length is None:
-            self._length = sum(1 for _ in self._iterator)
             self._reset_iterator()
+            self._length = sum(1 for _ in self._iterator)
         return self._length

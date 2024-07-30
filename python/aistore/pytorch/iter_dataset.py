@@ -7,8 +7,6 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from typing import List, Union, Dict
 from aistore.sdk.ais_source import AISSource
-from torch.utils.data import get_worker_info
-from itertools import islice
 from alive_progress import alive_it
 
 
@@ -38,23 +36,17 @@ class AISIterDataset(AISBaseIterDataset):
         super().__init__(ais_source_list, prefix_map)
         self._etl_name = etl_name
         self._show_progress = show_progress
-        self._reset_iterator()
 
     def __iter__(self):
-        worker_info = get_worker_info()
+        self._reset_iterator()
+        # Get iterator for current worker and name (if no workers, just entire iter)
+        worker_iter, worker_name = self._get_worker_iter_info()
 
-        if worker_info is None:
-            # If not using multiple workers, load directly
-            for obj in alive_it(
-                self._iterator, title="AISIterDataset", disable=not self._show_progress
-            ):
-                yield obj.name, obj.get(etl_name=self._etl_name).read_all()
-        else:
-            # Slice iterator based on worker id as starting index (0, 1, 2, ..) and steps of total workers
-            for obj in alive_it(
-                islice(self._iterator, worker_info.id, None, worker_info.num_workers),
-                title=f"AISIterDataset (Worker {worker_info.id})",
-                disable=not self._show_progress,
-                force_tty=False,
-            ):
-                yield obj.name, obj.get(etl_name=self._etl_name).read_all()
+        # For object, yield name and content
+        for obj in alive_it(
+            worker_iter,
+            title="AISIterDataset" + worker_name,
+            disable=not self._show_progress,
+            force_tty=worker_name == "",
+        ):
+            yield obj.name, obj.get(etl_name=self._etl_name).read_all()

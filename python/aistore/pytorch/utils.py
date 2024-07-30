@@ -67,6 +67,20 @@ def get_basename(name: str) -> str:
     return name.split("/")[-1].split(".")[0]
 
 
+def get_extension(name: str) -> str:
+    """
+    Get the file extension of the object by stripping any basename or prefix.
+
+    Args:
+        name (str): Complete object name
+
+    Returns:
+        str: File extension of the object
+    """
+
+    return name.split(".")[1]
+
+
 def parse_url(url: str) -> Tuple[str, str, str]:
     """
     Wrapper of sdk/utils.py parse_url. Parse AIS URLs for bucket and object names.

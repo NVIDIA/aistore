@@ -11,6 +11,8 @@ from aistore.pytorch.iter_dataset import AISIterDataset
 from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.shard_reader import AISShardReader
 from aistore.sdk import Bucket
+from tarfile import open, TarInfo
+from io import BytesIO
 
 
 class TestAISDataset(unittest.TestCase):
@@ -93,11 +95,34 @@ class TestAISDataset(unittest.TestCase):
         self.patcher = patch("aistore.pytorch.AISShardReader._create_samples_iter")
         mock_create_samples_iter = self.patcher.start()
 
-        mock_create_samples_iter.return_value = [
-            ("sample_1", {"cls": b"Content of class"}),
-            ("sample_2", {"png": b"Content of class"}),
-            ("sample_3", {"jpg": b"Content of class"}),
-        ]
+        tar_buffer = BytesIO()
+        # Open the tar file in write mode
+        with open(fileobj=tar_buffer, mode="w") as tar:
+            # Create some dummy content
+            content = b"Content of class"
+
+            # Create a TarInfo object to create samples
+            tarinfo = TarInfo(name="sample_1.cls")
+            tarinfo.size = len(content)
+            tar.addfile(tarinfo, BytesIO(content))
+            tarinfo = TarInfo(name="sample_1.png")
+            tarinfo.size = len(content)
+            tar.addfile(tarinfo, BytesIO(content))
+            tarinfo = TarInfo(name="sample_1.jpg")
+            tarinfo.size = len(content)
+            tar.addfile(tarinfo, BytesIO(content))
+
+        tar_buffer.seek(0)
+
+        mock_shard = Mock()
+        mock_shard.name = "test_shard.tar"
+
+        mock_get = Mock()
+        mock_shard.get.return_value = mock_get
+
+        mock_get.read_all.return_value = tar_buffer.getvalue()
+
+        mock_create_samples_iter.return_value = [mock_shard]
 
         # Create shard reader and get results and compare
         shard_reader = AISShardReader(bucket_list=self.mock_bck)
@@ -105,9 +130,14 @@ class TestAISDataset(unittest.TestCase):
         result = list(shard_reader)
 
         expected_result = [
-            ("sample_1", {"cls": b"Content of class"}),
-            ("sample_2", {"png": b"Content of class"}),
-            ("sample_3", {"jpg": b"Content of class"}),
+            (
+                "sample_1",
+                {
+                    "cls": b"Content of class",
+                    "png": b"Content of class",
+                    "jpg": b"Content of class",
+                },
+            ),
         ]
 
         self.assertEqual(result, expected_result)

@@ -7,14 +7,12 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
 from aistore.sdk.bucket import Bucket
-from typing import Dict, Iterator, List, Union, Iterable
-from aistore.sdk.list_object_flag import ListObjectFlag
-from aistore.pytorch.utils import get_basename
-from aistore.sdk.types import ArchiveSettings
+from typing import Dict, Iterator, List, Union
+from aistore.pytorch.utils import get_basename, get_extension
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from alive_progress import alive_it
-from torch.utils.data import get_worker_info
-from itertools import islice
+from io import BytesIO
+from tarfile import open, TarError
 
 
 class AISShardReader(AISBaseIterDataset):
@@ -43,66 +41,83 @@ class AISShardReader(AISBaseIterDataset):
         super().__init__(bucket_list, prefix_map)
         self._etl_name = etl_name
         self._show_progress = show_progress
+        self._observed_keys = set()
 
-    def _get_sample_iter_from_source(self, source: Bucket, prefix: str) -> Iterable:
+    class ZeroDict(dict):
         """
-        Creates an iterable for all samples and contents over each shard from a bucket.
+        When `collate_fn` is called while using ShardReader with a dataloader,
+        the content dictionaries for each sample are merged into a single dictionary
+        with file extensions as keys and lists of contents as values. This means,
+        however, that each sample must have a value for that file extension in the batch
+        at iteration time or else collation will fail. To avoid forcing the user to
+        pass in a custom collation function, we workaround the default implementation
+        of collation.
 
-        Args:
-            name (str): Name of shard object
-            source (Bucket): Bucket where the shard object is stored
-            prefix (str): Prefix of objects in bucket which are shards
+        As such, we define a dictionary that has a default value of `b""` (zero bytes)
+        for every key that we have seen so far. We cannot use None as collation
+        does not accept None. Initially, when we open a shard tar, we collect every file type
+        (pre-processing pass) from its members and cache those. Then, we read the shard files.
+        Lastly, before yielding the sample, we wrap its content dictionary with this custom dictionary
+        to insert any keys that it does not contain, hence ensuring consistent keys across
+        samples.
 
-        Returns:
-            Iterable[Tuple[str, dict(str, bytes)]]: Iterator over all the WDS basenames and content (file extension, data)
-            in shards from the given shard
+        NOTE: For our use case, `defaultdict` does not work due to needing
+        a `lambda` which cannot be pickled in multithreaded contexts.
         """
-        for entry in source.list_all_objects_iter(prefix=prefix):
 
-            # get iterator of all objects in the shard
-            objects_iter = source.list_objects_iter(
-                prefix=entry.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
-            )
+        def __init__(self, dict, keys):
+            super().__init__(dict)
+            for key in keys:
+                if key not in self:
+                    self[key] = b""
 
-            # pool all files with the same basename into dictionary (basename, [file names])
-            samples_dict = {}
-            for obj in objects_iter:
-                basename = get_basename(obj.name)
+    def _read_samples_from_shards(self, shard_content) -> Dict:
+        sample_dict = {}
 
-                # Original tar is included in basenames so only yield actual files
-                if basename != entry.name.split(".")[0]:
-                    if basename not in samples_dict:
-                        samples_dict[basename] = []
-                    samples_dict[basename].append(obj.name)
+        file = BytesIO(shard_content)
 
-            # if workers are present, then slice iterator
-            worker_info = get_worker_info()
-            if worker_info is None or worker_info.num_workers == 1:
-                worker_items = samples_dict.items()
-                worker_name = ""
-            else:
-                worker_items = islice(
-                    samples_dict.items(), worker_info.id, None, worker_info.num_workers
+        try:
+            # Open the shard as a tarfile as read samples into dict
+            with open(fileobj=file, mode="r:") as tar:
+
+                # Preprocess every key in the archive to ensure consistency in batch collation
+                self._observed_keys.update(
+                    [get_extension(name) for name in tar.getnames()]
                 )
-                worker_name = f" (Worker {worker_info.id})"
 
-            # for each basename, get the byte data for each file and yield in dictionary
-            shard = source.object(entry.name)
-            for basename, files in alive_it(
-                worker_items,
-                title=entry.name + worker_name,
-                disable=not self._show_progress,
-                force_tty=worker_info is None or worker_info.num_workers == 1,
-            ):
-                content_dict = {}
-                for file_name in files:
-                    file_prefix = file_name.split(".")[-1]
-                    content_dict[file_prefix] = shard.get(
-                        etl_name=self._etl_name,
-                        archive_settings=ArchiveSettings(archpath=file_name),
-                    ).read_all()
-                yield basename, content_dict
+                for member in tar.getmembers():
+                    if member.isfile():
+                        file_basename = get_basename(member.name)
+                        file_extension = get_extension(member.name)
+                        if file_basename not in sample_dict:
+                            sample_dict[file_basename] = {}
+                        sample_dict[file_basename][file_extension] = tar.extractfile(
+                            member
+                        ).read()
+        except TarError as e:
+            raise TarError(f"<{self.__class__.__name__}> Error opening tar file: {e}")
+
+        return sample_dict
 
     def __iter__(self) -> Iterator:
         self._reset_iterator()
-        yield from self._iterator
+
+        # Get iterator for current worker and name (if no workers, just entire iter)
+        worker_iter, worker_name = self._get_worker_iter_info()
+
+        # Read shard, get samples, and yield
+        for shard in worker_iter:
+            shard_content = shard.get(
+                etl_name=self._etl_name,
+            ).read_all()
+
+            sample_dict = self._read_samples_from_shards(shard_content)
+
+            for basename, content_dict in alive_it(
+                sample_dict.items(),
+                title=shard.name + worker_name,
+                disable=not self._show_progress,
+                force_tty=worker_name == "",
+            ):
+                self._length += 1
+                yield basename, self.ZeroDict(content_dict, self._observed_keys)
