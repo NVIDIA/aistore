@@ -157,6 +157,8 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 				s = " append"
 				lmfh, err = wi.beginAppend()
 			}
+		} else {
+			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
 		}
 		if err != nil {
 			return err
