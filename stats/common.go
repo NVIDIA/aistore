@@ -304,7 +304,7 @@ func (r *runner) nodeStateFlags() cos.NodeStateFlags {
 	return cos.NodeStateFlags(val)
 }
 
-func (r *runner) _run(logger statsLogger /* Prunner or Trunner */) error {
+func (r *runner) _run(logger statsLogger) error {
 	var (
 		i, j, k time.Duration
 		sleep   = startupSleep
@@ -364,6 +364,10 @@ waitStartup:
 	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
 	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
+
+	// one or the other, depending on the build tag
+	r.core.initStatsdOrProm(r.node.Snode(), r)
+
 	var (
 		checkNumGorHigh   int64
 		startTime         = mono.NanoTime() // uptime henceforth

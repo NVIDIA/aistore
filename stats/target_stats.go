@@ -165,8 +165,6 @@ func (r *Trunner) Init() *atomic.Bool {
 
 	r.runner.stopCh = make(chan struct{}, 4)
 
-	r.core.initMetricClient(r.t.Snode(), &r.runner)
-
 	r.sorted = make([]string, 0, numTargetStats)
 
 	r.xallRun.Running = make([]string, 16)

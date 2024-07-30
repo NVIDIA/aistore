@@ -64,8 +64,8 @@ func (s *coreStats) statsdDisabled() bool { return s.statsdC == nil }
 func (*coreStats) promLock()   {}
 func (*coreStats) promUnlock() {}
 
-// init MetricClient client: StatsD (default) or Prometheus
-func (s *coreStats) initMetricClient(snode *meta.Snode, _ *runner) {
+// init StatsD (not Prometheus)
+func (s *coreStats) initStatsdOrProm(snode *meta.Snode, _ *runner) {
 	var (
 		port  = 8125  // StatsD default port, see https://github.com/etsy/stats
 		probe = false // test-probe StatsD server at init time

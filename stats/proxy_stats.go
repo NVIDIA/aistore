@@ -52,8 +52,6 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 
 	r.runner.stopCh = make(chan struct{}, 4)
 
-	r.core.initMetricClient(p.Snode(), &r.runner)
-
 	r.sorted = make([]string, 0, numProxyStats)
 	return &r.runner.startedUp
 }

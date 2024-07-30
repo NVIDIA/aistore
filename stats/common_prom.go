@@ -58,8 +58,8 @@ func (s *coreStats) promRUnlock() { s.cmu.RUnlock() }
 func (s *coreStats) promLock()    { s.cmu.Lock() }
 func (s *coreStats) promUnlock()  { s.cmu.Unlock() }
 
-// init MetricClient client: StatsD (default) or Prometheus
-func (*coreStats) initMetricClient(_ *meta.Snode, parent *runner) {
+// init Prometheus (not StatsD)
+func (*coreStats) initStatsdOrProm(_ *meta.Snode, parent *runner) {
 	nlog.Infoln("Using Prometheus")
 	prometheus.MustRegister(parent) // as prometheus.Collector
 }
@@ -278,9 +278,8 @@ func (r *runner) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (r *runner) Collect(ch chan<- prometheus.Metric) {
-	if !r.StartedUp() {
-		return
-	}
+	debug.Assert(r.StartedUp()) // via initStatsdOrProm()
+
 	r.core.promRLock()
 	for name, v := range r.core.Tracker {
 		var (
