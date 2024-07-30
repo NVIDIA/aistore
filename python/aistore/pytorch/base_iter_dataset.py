@@ -42,7 +42,6 @@ class AISBaseIterDataset(ABC, IterableDataset):
         )
         self._prefix_map = prefix_map
         self._iterator = None
-        self._length = None
 
     def _get_sample_iter_from_source(self, source: AISSource, prefix: str) -> Iterable:
         """
@@ -68,14 +67,11 @@ class AISBaseIterDataset(ABC, IterableDataset):
         Returns:
             Iterable: Iterable over the samples of the dataset
         """
-        length = 0
-
         for source in self._ais_source_list:
             # Add pytorch worker support to the internal request client
             source.client = WorkerRequestClient(source.client)
             if source not in self._prefix_map or self._prefix_map[source] is None:
                 for sample in self._get_sample_iter_from_source(source, ""):
-                    length += 1
                     yield sample
             else:
                 prefixes = (
@@ -85,10 +81,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
                 )
                 for prefix in prefixes:
                     for sample in self._get_sample_iter_from_source(source, prefix):
-                        length += 1
                         yield sample
-
-        self._length = length
 
     def _get_worker_iter_info(self) -> tuple[Iterator, str]:
         """
@@ -122,11 +115,20 @@ class AISBaseIterDataset(ABC, IterableDataset):
 
     def _reset_iterator(self):
         """Reset the iterator to start from the beginning."""
-        self._length = 0
         self._iterator = self._create_samples_iter()
 
     def __len__(self):
-        if self._length is None:
-            self._reset_iterator()
-            self._length = sum(1 for _ in self._iterator)
-        return self._length
+        """
+        Returns the length of the dataset. Note that calling this
+        will iterate through the dataset, taking O(N) time.
+
+        NOTE: If you want the length of the dataset after iterating through
+        it, use `for i, data in enumerate(dataset)` instead.
+        """
+        self._reset_iterator()
+        sum = 0
+
+        for _ in self._iterator:
+            sum += 1
+
+        return sum

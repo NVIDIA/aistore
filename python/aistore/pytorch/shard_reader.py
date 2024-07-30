@@ -13,6 +13,7 @@ from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from alive_progress import alive_it
 from io import BytesIO
 from tarfile import open, TarError
+from aistore.sdk.list_object_flag import ListObjectFlag
 
 
 class AISShardReader(AISBaseIterDataset):
@@ -42,6 +43,28 @@ class AISShardReader(AISBaseIterDataset):
         self._etl_name = etl_name
         self._show_progress = show_progress
         self._observed_keys = set()
+
+    def __len__(self):
+        """
+        Returns the length of the dataset. Note that calling this
+        will iterate through the dataset, taking O(N) time.
+
+        NOTE: If you want the length of the dataset after iterating through
+        it, use `for i, data in enumerate(dataset)` instead.
+        """
+        self._reset_iterator()
+        length = 0
+
+        for shard in self._iterator:
+
+            for _ in shard.bucket.list_objects_iter(
+                prefix=shard.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
+            ):
+                length += 1
+
+            length -= 1  # Exclude the bucket (overcounted earlier)
+
+        return length
 
     class ZeroDict(dict):
         """
@@ -119,5 +142,4 @@ class AISShardReader(AISBaseIterDataset):
                 disable=not self._show_progress,
                 force_tty=worker_name == "",
             ):
-                self._length += 1
                 yield basename, self.ZeroDict(content_dict, self._observed_keys)
