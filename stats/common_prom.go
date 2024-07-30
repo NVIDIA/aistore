@@ -303,7 +303,11 @@ func (r *runner) Collect(ch chan<- prometheus.Metric) {
 		if !okc {
 			continue
 		}
-		val = copyV.Value
+		// NOTE: skipping metrics that have not (yet) been updated
+		// (and some of them may never be)
+		if val = copyV.Value; val == 0 {
+			continue
+		}
 		fv = float64(val)
 		// 1. convert units
 		switch v.kind {
