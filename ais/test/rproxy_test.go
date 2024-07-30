@@ -203,13 +203,12 @@ func TestRProxyInvalidURL(t *testing.T) {
 		statusCode int
 		doAndCheck bool
 	}{
-		// case 1
 		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound, doAndCheck: true},
-		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest, doAndCheck: true}, // Invalid domain
-		// case 2
+		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusNotFound, doAndCheck: true}, // sometimes, http.StatusBadRequest
 		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", doAndCheck: false},
 	}
 	for _, test := range tests {
+		tlog.Logln(t.Name() + test.url + " " + strings.Repeat("=", 16))
 		hbo, err := cmn.NewHTTPObjPath(test.url)
 		tassert.CheckError(t, err)
 		api.DestroyBucket(baseParams, hbo.Bck)

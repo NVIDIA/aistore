@@ -168,38 +168,128 @@ func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra
 
 // common (target, proxy) metrics
 func (r *runner) regCommon(snode *meta.Snode) {
+	// prometheus only
+	initDfltlabel(snode)
+
 	// basic counters
-	r.reg(snode, GetCount, KindCounter, nil) // TODO -- FIXME: here and elsewhere
-	r.reg(snode, PutCount, KindCounter, nil)
-	r.reg(snode, AppendCount, KindCounter, nil)
-	r.reg(snode, DeleteCount, KindCounter, nil)
-	r.reg(snode, RenameCount, KindCounter, nil)
-	r.reg(snode, ListCount, KindCounter, nil)
+	r.reg(snode, GetCount, KindCounter,
+		&Extra{
+			Help: "number of executed GET(object) requests",
+		},
+	)
+	r.reg(snode, PutCount, KindCounter,
+		&Extra{
+			Help: "number of executed PUT(object) requests",
+		},
+	)
+	r.reg(snode, AppendCount, KindCounter,
+		&Extra{
+			Help: "number of executed APPEND(object) requests",
+		},
+	)
+	r.reg(snode, DeleteCount, KindCounter,
+		&Extra{
+			Help: "number of executed DELETE(object) requests",
+		},
+	)
+	r.reg(snode, RenameCount, KindCounter,
+		&Extra{
+			Help: "number of executed Rename(object) requests",
+		},
+	)
+	r.reg(snode, ListCount, KindCounter,
+		&Extra{
+			Help: "number of executed list-objects requests",
+		},
+	)
 
 	// basic error counters, respectively
-	r.reg(snode, ErrGetCount, KindCounter, nil)
-	r.reg(snode, ErrPutCount, KindCounter, nil)
-	r.reg(snode, ErrAppendCount, KindCounter, nil)
-	r.reg(snode, ErrDeleteCount, KindCounter, nil)
-	r.reg(snode, ErrRenameCount, KindCounter, nil)
-	r.reg(snode, ErrListCount, KindCounter, nil)
+	r.reg(snode, ErrGetCount, KindCounter,
+		&Extra{
+			Help: "number of GET(object) errors",
+		},
+	)
+	r.reg(snode, ErrPutCount, KindCounter,
+		&Extra{
+			Help: "number of PUT(object) errors",
+		},
+	)
+	r.reg(snode, ErrAppendCount, KindCounter,
+		&Extra{
+			Help: "number of APPEND(object) errors",
+		},
+	)
+	r.reg(snode, ErrDeleteCount, KindCounter,
+		&Extra{
+			Help: "number of DELETE(object) errors",
+		},
+	)
+	r.reg(snode, ErrRenameCount, KindCounter,
+		&Extra{
+			Help: "number of Rename(object) errors",
+		},
+	)
+	r.reg(snode, ErrListCount, KindCounter,
+		&Extra{
+			Help: "number of list-objects errors",
+		},
+	)
 
 	// even more error counters
-	r.reg(snode, ErrHTTPWriteCount, KindCounter, nil)
-	r.reg(snode, ErrDownloadCount, KindCounter, nil)
-	r.reg(snode, ErrPutMirrorCount, KindCounter, nil)
+	r.reg(snode, ErrHTTPWriteCount, KindCounter,
+		&Extra{
+			Help: "number of HTTP write-response errors",
+		},
+	)
+	r.reg(snode, ErrDownloadCount, KindCounter,
+		&Extra{
+			Help: "number of download errors",
+		},
+	)
+	r.reg(snode, ErrPutMirrorCount, KindCounter,
+		&Extra{
+			Help: "number of n-way mirroring errors",
+		},
+	)
 
-	// latency
-	r.reg(snode, GetLatency, KindLatency, nil)
-	r.reg(snode, GetLatencyTotal, KindTotal, nil)
-	r.reg(snode, ListLatency, KindLatency, nil)
-	r.reg(snode, KeepAliveLatency, KindLatency, nil)
+	// basic latencies
+	r.reg(snode, GetLatency, KindLatency,
+		&Extra{
+			Help: "total cumulative time (nanoseconds) to execute GET requests " +
+				"(in the logs: average GET latency over the last stats-time interval)",
+		},
+	)
+	r.reg(snode, GetLatencyTotal, KindTotal,
+		&Extra{
+			Help: "total cumulative time (nanoseconds) to execute GET requests",
+		},
+	)
+	r.reg(snode, ListLatency, KindLatency,
+		&Extra{
+			Help: "total cumulative time (nanoseconds) to execute list-objects requests " +
+				"(in the logs: average list-objects latency over the last stats-time interval)",
+		},
+	)
+	r.reg(snode, KeepAliveLatency, KindLatency,
+		&Extra{
+			Help: "in-cluster keep-alive latency (heartbeat latency, nanoseconds)",
+		},
+	)
 
 	// special uptime
-	r.reg(snode, Uptime, KindSpecial, nil)
+	r.reg(snode, Uptime, KindSpecial,
+		&Extra{
+			Help: "this node's uptime since startup (nanoseconds)",
+		},
+	)
 
 	// snode state flags
-	r.reg(snode, NodeStateFlags, KindGauge, nil)
+	r.reg(snode, NodeStateFlags, KindGauge,
+		&Extra{
+			Help: "bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; " +
+				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state_info.go for details", // TODO: must have a readme
+		},
+	)
 }
 
 // naming convention: ".n" for the count and ".ns" for duration (nanoseconds)

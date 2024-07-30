@@ -41,6 +41,9 @@ var (
 	_ Tracker = (*Trunner)(nil)
 )
 
+// empty stab (Prometheus only)
+func initDfltlabel(*meta.Snode) {}
+
 ///////////////
 // coreStats //
 ///////////////

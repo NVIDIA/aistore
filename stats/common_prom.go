@@ -52,17 +52,23 @@ func (s *coreStats) init(size int) {
 	s.sgl = memsys.PageMM().NewSGL(memsys.DefaultBufSize)
 }
 
-// vs Collect()
-func (s *coreStats) promRLock()   { s.cmu.RLock() }
-func (s *coreStats) promRUnlock() { s.cmu.RUnlock() }
-func (s *coreStats) promLock()    { s.cmu.Lock() }
-func (s *coreStats) promUnlock()  { s.cmu.Unlock() }
+var dfltLabels = prometheus.Labels{"node_id": ""}
+
+func initDfltlabel(snode *meta.Snode) {
+	dfltLabels["node_id"] = strings.ReplaceAll(snode.ID(), ".", "_")
+}
 
 // init Prometheus (not StatsD)
 func (*coreStats) initStatsdOrProm(_ *meta.Snode, parent *runner) {
 	nlog.Infoln("Using Prometheus")
 	prometheus.MustRegister(parent) // as prometheus.Collector
 }
+
+// vs Collect()
+func (s *coreStats) promRLock()   { s.cmu.RLock() }
+func (s *coreStats) promRUnlock() { s.cmu.RUnlock() }
+func (s *coreStats) promLock()    { s.cmu.Lock() }
+func (s *coreStats) promUnlock()  { s.cmu.Unlock() }
 
 func (s *coreStats) updateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
@@ -251,22 +257,29 @@ func _foobar(id, name string, v *statsValue) (metricName, help string) {
 
 func (r *runner) regProm(snode *meta.Snode, name string, extra *Extra, v *statsValue) {
 	var (
-		id               = strings.ReplaceAll(snode.ID(), ".", "_")
-		constVars        = prometheus.Labels{"node_id": id}
-		metricName, help string
+		metricName  string
+		help        string
+		constLabels = dfltLabels
 	)
 	if extra != nil {
-		for val, key := range extra.Labels {
-			constVars[val] = key
+		if len(extra.Labels) > 0 {
+			constLabels = prometheus.Labels(extra.Labels)
+			constLabels["node_id"] = dfltLabels["node_id"]
 		}
-		debug.Assert(extra.StrName != "")
-		metricName = extra.StrName
+		if extra.StrName == "" {
+			metricName = strings.ReplaceAll(name, ".", "_")
+		} else {
+			metricName = extra.StrName
+		}
 		help = extra.Help
 	} else {
-		metricName, help = _foobar(id, name, v) // TODO -- FIXME: remove
+		// TODO -- FIXME: remove
+		id := strings.ReplaceAll(snode.ID(), ".", "_")
+		metricName, help = _foobar(id, name, v)
 	}
-	fullqn := prometheus.BuildFQName("ais", snode.Type(), metricName)
-	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, nil, constVars)
+
+	fullqn := prometheus.BuildFQName("ais" /*namespace*/, snode.Type() /*subsystem*/, metricName)
+	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, constLabels)
 }
 
 func (*runner) IsPrometheus() bool { return true }
