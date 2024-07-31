@@ -238,6 +238,7 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 		return bck, err
 	case cmn.IsErrBucketAlreadyExists(err):
 		// e.g., when (re)setting backend two times in a row
+		// TODO: return http.StatusNoContent
 		nlog.Infoln(bctx.p.String()+":", err, " - nothing to do")
 		return bck, nil
 	default:

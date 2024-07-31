@@ -113,7 +113,9 @@ func (c *lstcx) do() (string, error) {
 		return "", err
 	}
 	if len(lst.Entries) == 0 {
-		// TODO: return http status to indicate exactly that (#6393)
+		//
+		// TODO: return http.StatusNoContent to indicate exactly that (#6393)
+		//
 		nlog.Infoln(c.amsg.Action, c.bckFrom.Cname(""), " to ", c.bckTo.Cname("")+": lso counts zero - nothing to do")
 		return c.lsmsg.UUID, nil
 	}

@@ -510,39 +510,33 @@ func (mi *Mountpath) _cdf(tcdf *Tcdf) *CDF {
 	return cdf
 }
 
-func (mi *Mountpath) RefreshDisks() error {
-	// not "refreshing" when any of the following conditions is true
-	if len(mi.Disks) == 0 {
-		nlog.Warningln("skipping refresh-disks call:", mi.String(), "has no disks")
-		return nil
-	}
-	if !mi.IsAvail() {
-		nlog.Warningln("skipping refresh-disks call:", mi.String(), "is not available")
-		return nil
-	}
-
-	res := mfs.ios.RefreshDisks(mi.Path, mi.Fs, mi.Disks)
+func (mi *Mountpath) RescanDisks() (warn, err error) {
+	res := mfs.ios.RescanDisks(mi.Path, mi.Fs, mi.Disks) // TODO -- FIXME: comments inside
 	if res.Fatal != nil {
-		return res.Fatal
+		return nil, res.Fatal
 	}
 
+	debug.Assert(len(res.FsDisks) > 0)
 	if res.Attached == nil && res.Lost == nil {
-		return nil
+		return nil, nil
 	}
+	debug.Assert(len(res.Attached)+len(res.Lost) > 0)
 
 	if l := len(res.Attached); l > 0 {
-		nlog.Warningf("newly attached disk%ss: %v", cos.Plural(l), res.Attached)
+		warn = fmt.Errorf("Warning: %s got new disk%s: %v", mi, cos.Plural(l), res.Attached)
+		nlog.Errorln(warn)
 	}
 	if l := len(res.Lost); l > 0 {
-		err := fmt.Errorf("Warning: lost disk%ss: %v", cos.Plural(l), res.Lost)
-		nlog.Errorln(err)
-		mfs.hc.FSHC(err, mi, "")
+		if warn != nil {
+			warn = fmt.Errorf("Warning: %s lost disk%s: %v\n%v", mi, cos.Plural(l), res.Lost, warn)
+		} else {
+			warn = fmt.Errorf("Warning: %s lost disk%s: %v", mi, cos.Plural(l), res.Lost)
+		}
 	}
 
-	// TODO -- FIXME: NIY; in part, mountpath getting new disk(s) must trigger resilvering
+	// TODO: restart target and check its volume
 	mi._setDisks(res.FsDisks)
-
-	return nil
+	return warn, err
 }
 
 // return mountpath alert (suffix)

@@ -936,6 +936,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 		if err := p.destroyBucket(msg, bck); err != nil {
 			if cmn.IsErrBckNotFound(err) {
+				// TODO: return http.StatusNoContent
 				nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			} else {
 				p.writeErr(w, r, err)

@@ -274,6 +274,7 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 	bp, k := t.backend[provider]
 	debug.Assert(k, provider)
 	if bp != nil {
+		// TODO: return http.StatusNoContent
 		t.writeErrf(w, r, "backend %q is already enabled, nothing to do", provider)
 		return
 	}
@@ -308,12 +309,14 @@ func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, items []
 
 	_, ok := config.Backend.Providers[provider]
 	if !ok {
+		// TODO: return http.StatusNoContent
 		t.writeErrf(w, r, "backend %q is not configured, nothing to do", provider)
 		return
 	}
 	bp, k := t.backend[provider]
 	debug.Assert(k, provider)
 	if bp == nil {
+		// TODO: return http.StatusNoContent
 		t.writeErrf(w, r, "backend %q is already disabled, nothing to do", provider)
 		return
 	}
@@ -490,6 +493,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		if t.keepalive.paused() {
 			t.keepalive.ctrl(kaResumeMsg)
 		} else {
+			// TODO: return http.StatusNoContent
 			nlog.Warningf("%s already joined (\"enabled\")- nothing to do", t)
 		}
 		return
@@ -575,6 +579,10 @@ func (t *target) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
 		t.disableMpath(w, r, mpath)
 	case apc.ActMountpathDetach:
 		t.detachMpath(w, r, mpath)
+	case apc.ActMountpathRescan:
+		t.rescanMpath(w, r, mpath)
+	case apc.ActMountpathFSHC:
+		t.fshcMpath(w, r, mpath)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -648,6 +656,36 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 	if disabledMi == nil {
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (t *target) rescanMpath(w http.ResponseWriter, r *http.Request, mpath string) {
+	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
+	err := t.fsprg.rescanMpath(mpath, dontResilver)
+	if err == nil {
+		return
+	}
+	if cmn.IsErrMpathNotFound(err) {
+		t.writeErr(w, r, err, http.StatusNotFound)
+	} else {
+		// cmn.ErrInvalidMountpath
+		t.writeErr(w, r, err)
+	}
+}
+
+func (t *target) fshcMpath(w http.ResponseWriter, r *http.Request, mpath string) {
+	avail, disabled := fs.Get()
+	mi, ok := avail[mpath]
+	if !ok {
+		what := mpath
+		if mi, ok = disabled[mpath]; ok {
+			what = mi.String()
+		}
+		t.writeErrf(w, r, "%s: not starting FSHC: %s is not available", t, what)
+		return
+	}
+
+	nlog.Warningf("%s: manually starting FSHC to check %s", t, mi)
+	t.fshc.OnErr(mi, "")
 }
 
 func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {

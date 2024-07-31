@@ -23,8 +23,8 @@ func (m *IOS) GetMpathUtil(mpath string) int64  { return m.Utils.Get(mpath) }
 
 func (*IOS) AddMpath(string, string, ios.Label, *cmn.Config) (ios.FsDisks, error) { return nil, nil }
 
-func (*IOS) RefreshDisks(string, string, []string) ios.RefreshDisksResult {
-	return ios.RefreshDisksResult{}
+func (*IOS) RescanDisks(string, string, []string) ios.RescanDisksResult {
+	return ios.RescanDisksResult{}
 }
 
 func (*IOS) RemoveMpath(string, bool)      {}

@@ -74,7 +74,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 		goto disable
 	}
 
-	// 3. mi.RefreshDisks (TODO: needed?)
+	// 3. mi.RescanDisks (currently, only manually via CLI)
 
 	// double-check before reading/writing
 	if !mi.IsAvail() {

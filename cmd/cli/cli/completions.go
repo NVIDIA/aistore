@@ -853,7 +853,11 @@ func cliPropCompletions(c *cli.Context) {
 	debug.AssertNoErr(err)
 }
 
-func suggestTargetMpath(c *cli.Context, cmd string) {
+func suggestMpathEnable(c *cli.Context) { _suggestMpath(c, cmdMpathEnable) }
+func suggestMpathActive(c *cli.Context) { _suggestMpath(c, "select-active") } // local usage
+func suggestMpathDetach(c *cli.Context) { _suggestMpath(c, cmdMpathDetach) }
+
+func _suggestMpath(c *cli.Context, cmd string) {
 	switch c.NArg() {
 	case 0:
 		suggestTargets(c)
@@ -881,7 +885,7 @@ func suggestTargetMpath(c *cli.Context, cmd string) {
 			for _, mpath := range mpl.Disabled {
 				fmt.Println(mpath)
 			}
-		case cmdMpathDisable:
+		case "select-active":
 			for _, mpath := range mpl.Available {
 				fmt.Println(mpath)
 			}

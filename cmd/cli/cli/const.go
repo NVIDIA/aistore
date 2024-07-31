@@ -118,11 +118,15 @@ const (
 	cmdCluConfig = "configure"
 	cmdReset     = "reset"
 
-	// Mountpath (disk) actions
+	// Mountpath commands
 	cmdMpathAttach  = cmdAttach
 	cmdMpathEnable  = "enable"
 	cmdMpathDetach  = cmdDetach
 	cmdMpathDisable = "disable"
+
+	// More mountpath commands (advanced usage)
+	cmdMpathRescanDisks = "rescan-disks"
+	cmdMpathFshc        = "fshc"
 
 	// backend enable/disable (advanced use only)
 	cmdBackendEnable  = "enable-backend"

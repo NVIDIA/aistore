@@ -100,6 +100,35 @@ func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (*fs.Mountpat
 	return g.doDD(apc.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver)
 }
 
+//
+// rescan and fshc (advanced use)
+//
+
+func (g *fsprungroup) rescanMpath(mpath string, dontResilver bool) error {
+	avail, disabled := fs.Get()
+	mi, ok := avail[mpath]
+	if !ok {
+		what := mpath
+		if mi, ok = disabled[mpath]; ok {
+			what = mi.String()
+		}
+		return fmt.Errorf("%s: not starting rescan-disks: %s is not available", g.t, what)
+	}
+
+	if len(mi.Disks) == 0 {
+		return fmt.Errorf("%s: not starting rescan-disks: %s has no disks", g.t, mi)
+	}
+
+	warn, err := mi.RescanDisks()
+	if err != nil || warn == nil {
+		return err
+	}
+	if !dontResilver && cmn.GCO.Get().Resilver.Enabled {
+		go g.t.runResilver(res.Args{}, nil /*wg*/)
+	}
+	return warn
+}
+
 func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (*fs.Mountpath, error) {
 	rmi, numAvail, noResil, err := fs.BeginDD(action, flags, mpath)
 	if err != nil || rmi == nil {

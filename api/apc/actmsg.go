@@ -118,6 +118,9 @@ const (
 	ActMountpathDetach  = "detach-mp"
 	ActMountpathDisable = "disable-mp"
 
+	ActMountpathRescan = "rescan-mp"
+	ActMountpathFSHC   = "fshc-mp"
+
 	// Actions on xactions
 	ActXactStop  = Stop
 	ActXactStart = Start

@@ -44,11 +44,7 @@ var (
 		cmdMpathAttach: {
 			mountpathLabelFlag,
 		},
-		cmdMpathEnable: {},
-		cmdMpathDetach: {
-			noResilverFlag,
-		},
-		cmdMpathDisable: {
+		"default": {
 			noResilverFlag,
 		},
 	}
@@ -61,7 +57,7 @@ var (
 			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 			{
 				Name:         cmdMpathAttach,
-				Usage:        "attach mountpath (i.e., formatted disk or RAID) to a target node",
+				Usage:        "attach mountpath to a given target node",
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathAttach],
 				Action:       mpathAttachHandler,
@@ -71,25 +67,43 @@ var (
 				Name:         cmdMpathEnable,
 				Usage:        "(re)enable target's mountpath",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[cmdMpathEnable],
 				Action:       mpathEnableHandler,
-				BashComplete: func(c *cli.Context) { suggestTargetMpath(c, cmdMpathEnable) },
+				BashComplete: suggestMpathEnable,
 			},
 			{
 				Name:         cmdMpathDetach,
-				Usage:        "detach mountpath (i.e., formatted disk or RAID) from a target node",
+				Usage:        "detach mountpath from a target node (disable and remove it from the target's volume)",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[cmdMpathDetach],
+				Flags:        mpathCmdsFlags["default"],
 				Action:       mpathDetachHandler,
-				BashComplete: func(c *cli.Context) { suggestTargetMpath(c, cmdMpathDetach) },
+				BashComplete: suggestMpathDetach,
 			},
 			{
 				Name:         cmdMpathDisable,
-				Usage:        "disable mountpath (deactivate but keep in a target's volume)",
+				Usage:        "disable mountpath (deactivate but keep in a target's volume for possible future activation)",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[cmdMpathDisable],
+				Flags:        mpathCmdsFlags["default"],
 				Action:       mpathDisableHandler,
-				BashComplete: func(c *cli.Context) { suggestTargetMpath(c, cmdMpathDisable) },
+				BashComplete: suggestMpathActive,
+			},
+			//
+			// advanced usage
+			//
+			{
+				Name: cmdMpathRescanDisks,
+				Usage: "re-resolve (mountpath, filesystem) to its underlying disk(s) and revalidate the disks\n" +
+					indent1 + "\t(advanced use only)",
+				ArgsUsage:    nodeMountpathPairArgument,
+				Flags:        mpathCmdsFlags["default"],
+				Action:       mpathRescanHandler,
+				BashComplete: suggestMpathActive,
+			},
+			{
+				Name:         cmdMpathFshc,
+				Usage:        "run filesystem health checker (FSHC) to test selected mountpath for read and write errors",
+				ArgsUsage:    nodeMountpathPairArgument,
+				Action:       mpathFshcHandler,
+				BashComplete: suggestMpathActive,
 			},
 		},
 	}
@@ -571,10 +585,12 @@ func showMpathHandler(c *cli.Context) error {
 	return teb.Print(mpls, teb.MpathListTmpl, teb.Jopts(usejs))
 }
 
-func mpathAttachHandler(c *cli.Context) (err error)  { return mpathAction(c, apc.ActMountpathAttach) }
-func mpathEnableHandler(c *cli.Context) (err error)  { return mpathAction(c, apc.ActMountpathEnable) }
-func mpathDetachHandler(c *cli.Context) (err error)  { return mpathAction(c, apc.ActMountpathDetach) }
-func mpathDisableHandler(c *cli.Context) (err error) { return mpathAction(c, apc.ActMountpathDisable) }
+func mpathAttachHandler(c *cli.Context) error  { return mpathAction(c, apc.ActMountpathAttach) }
+func mpathEnableHandler(c *cli.Context) error  { return mpathAction(c, apc.ActMountpathEnable) }
+func mpathDetachHandler(c *cli.Context) error  { return mpathAction(c, apc.ActMountpathDetach) }
+func mpathDisableHandler(c *cli.Context) error { return mpathAction(c, apc.ActMountpathDisable) }
+func mpathRescanHandler(c *cli.Context) error  { return mpathAction(c, apc.ActMountpathRescan) }
+func mpathFshcHandler(c *cli.Context) error    { return mpathAction(c, apc.ActMountpathFSHC) }
 
 func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
@@ -628,13 +644,25 @@ func mpathAction(c *cli.Context, action string) error {
 		case apc.ActMountpathDisable:
 			acted = "disabled"
 			err = api.DisableMountpath(apiBP, si, mountpath, flagIsSet(c, noResilverFlag))
+		case apc.ActMountpathRescan:
+			acted = "re-scanned for attached and/or lost disks (found neither)"
+			err = api.RescanMountpath(apiBP, si, mountpath, flagIsSet(c, noResilverFlag))
+		case apc.ActMountpathFSHC:
+			err = api.FshcMountpath(apiBP, si, mountpath)
+			if err == nil {
+				done := fmt.Sprintf("%s: started filesystem health check on mountpath %q", si.StringEx(), mountpath)
+				actionDone(c, done)
+			}
 		default:
 			return incorrectUsageMsg(c, "invalid mountpath action %q", action)
 		}
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "Node %q %s mountpath %q\n", si.ID(), acted, mountpath)
+		if acted != "" {
+			done := fmt.Sprintf("%s: mountpath %q is now %s", si.StringEx(), mountpath, acted)
+			actionDone(c, done)
+		}
 	}
 	return nil
 }

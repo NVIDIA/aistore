@@ -191,6 +191,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if err := p.destroyBucket(&msg, bck); err != nil {
 		ecode := http.StatusInternalServerError
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
+			// TODO: return http.StatusNoContent
 			nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			return
 		}

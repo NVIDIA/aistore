@@ -1482,6 +1482,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 		debug.Assert(latestVer && err == nil)
 		// not latest
 	case err == nil:
+		// TODO: return http.StatusNoContent
 		return "", nil, nil // nothing to do
 	case !cmn.IsErrObjNought(err):
 		return "", nil, err

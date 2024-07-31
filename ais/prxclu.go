@@ -1923,6 +1923,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	if npid == p.SID() {
 		debug.Assert(p.SID() == smap.Primary.ID()) // must be forwardCP-ed
+		// TODO: return http.StatusNoContent
 		nlog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
 		return
 	}

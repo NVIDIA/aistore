@@ -32,14 +32,14 @@ type (
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
 		AddMpath(mpath, fs string, label Label, config *cmn.Config) (FsDisks, error)
-		RefreshDisks(mpath, fs string, disks []string) RefreshDisksResult
+		RescanDisks(mpath, fs string, disks []string) RescanDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
 		DiskStats(m AllDiskStats)
 	}
 
 	MpathUtil sync.Map
 
-	RefreshDisksResult struct {
+	RescanDisksResult struct {
 		FsDisks  FsDisks
 		Fatal    error
 		Lost     []error
@@ -261,7 +261,7 @@ func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.Str
 // - resolve (mpath, filesystem) => disks
 // - revalidate disk(s)
 // - note: part of the alerting mechanism, via filesystem health checker (FSHC)
-func (ios *ios) RefreshDisks(mpath, fs string, disks []string) (out RefreshDisksResult) {
+func (ios *ios) RescanDisks(mpath, fs string, disks []string) (out RescanDisksResult) {
 	debug.Assert(len(disks) > 0)
 	res, err := lsblk(fs, true /*err is not fatal*/)
 	if err != nil {

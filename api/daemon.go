@@ -42,42 +42,19 @@ func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err
 }
 
 func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ...ios.Label) error {
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths) // NOTE: reverse, via p.reverseHandler
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathAttach, Value: mountpath})
-		reqParams.Header = http.Header{
-			apc.HdrNodeID:      []string{node.ID()},
-			cos.HdrContentType: []string{cos.ContentJSON},
-		}
-		if len(label) > 0 {
-			if lb := string(label[0]); lb != "" {
-				reqParams.Query = url.Values{apc.QparamMpathLabel: []string{lb}}
-			}
+	var q url.Values
+	if len(label) > 0 {
+		if lb := string(label[0]); lb != "" {
+			q = url.Values{apc.QparamMpathLabel: []string{lb}}
 		}
 	}
-	err := reqParams.DoRequest()
-	FreeRp(reqParams)
-	return err
+	bp.Method = http.MethodPut
+	return _actMpath(bp, node, mountpath, apc.ActMountpathAttach, q)
 }
 
 func EnableMountpath(bp BaseParams, node *meta.Snode, mountpath string) error {
 	bp.Method = http.MethodPost
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths) // NOTE: reverse, via p.reverseHandler
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathEnable, Value: mountpath})
-		reqParams.Header = http.Header{
-			apc.HdrNodeID:      []string{node.ID()},
-			cos.HdrContentType: []string{cos.ContentJSON},
-		}
-	}
-	err := reqParams.DoRequest()
-	FreeRp(reqParams)
-	return err
+	return _actMpath(bp, node, mountpath, apc.ActMountpathEnable, nil)
 }
 
 func DetachMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontResilver bool) error {
@@ -86,20 +63,7 @@ func DetachMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontResi
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
 	}
 	bp.Method = http.MethodDelete
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths) // NOTE: reverse, via p.reverseHandler
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathDetach, Value: mountpath})
-		reqParams.Header = http.Header{
-			apc.HdrNodeID:      []string{node.ID()},
-			cos.HdrContentType: []string{cos.ContentJSON},
-		}
-		reqParams.Query = q
-	}
-	err := reqParams.DoRequest()
-	FreeRp(reqParams)
-	return err
+	return _actMpath(bp, node, mountpath, apc.ActMountpathDetach, q)
 }
 
 func DisableMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontResilver bool) error {
@@ -108,11 +72,29 @@ func DisableMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontRes
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
 	}
 	bp.Method = http.MethodPost
+	return _actMpath(bp, node, mountpath, apc.ActMountpathDisable, q)
+}
+
+func RescanMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontResilver bool) error {
+	var q url.Values
+	if dontResilver {
+		q = url.Values{apc.QparamDontResilver: []string{"true"}}
+	}
+	bp.Method = http.MethodPost
+	return _actMpath(bp, node, mountpath, apc.ActMountpathRescan, q)
+}
+
+func FshcMountpath(bp BaseParams, node *meta.Snode, mountpath string) error {
+	bp.Method = http.MethodPost
+	return _actMpath(bp, node, mountpath, apc.ActMountpathFSHC, nil)
+}
+
+func _actMpath(bp BaseParams, node *meta.Snode, mountpath, action string, q url.Values) error {
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths) // NOTE: reverse, via p.reverseHandler
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMountpathDisable, Value: mountpath})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: action, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
 			cos.HdrContentType: []string{cos.ContentJSON},

@@ -1,2 +1,2 @@
-Node "$RANDOM_TARGET" detached mountpath "$RANDOM_MOUNTPATH"
-Node "$RANDOM_TARGET" attached mountpath "$RANDOM_MOUNTPATH"
+^.*$RANDOM_TARGET.*now detached.*$
+^.*$RANDOM_TARGET.*now attached.*$
