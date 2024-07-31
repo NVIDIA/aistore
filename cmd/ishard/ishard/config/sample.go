@@ -24,48 +24,58 @@ var (
 	CollapseAllDirPattern = SampleKeyPattern{Regex: `/`, CaptureGroup: ""}
 )
 
-// MissExtReact contains the set of expected extensions for each sample, and corresponding reaction
-type MissExtReact struct {
-	Name   string
-	extSet cos.StrSet
+// MissingExtManager contains the set of expected extensions for each sample, and corresponding reaction
+type MissingExtManager struct {
+	Name             string
+	EffectiveObjSize int64
+	extSet           cos.StrSet
 
 	// Action to take on the given Records, returns the potentially updated Records and any error encountered
 	React func(*shard.Records) (*shard.Records, error)
 }
 
-func NewMissExtReact(name string, sampleExts []string) (*MissExtReact, error) {
+func NewMissingExtManager(name string, sampleExts []string) (*MissingExtManager, error) {
 	if len(sampleExts) == 0 {
 		return nil, fmt.Errorf("invalid extensions, should have at least one specified extension")
 	}
-	mer := &MissExtReact{
+	for _, ext := range sampleExts {
+		if ext == "" {
+			return nil, fmt.Errorf("invalid extensions, extension can't be empty string \"\"")
+		}
+	}
+	mgr := &MissingExtManager{
 		Name:   name,
 		extSet: cos.NewStrSet(sampleExts...),
 	}
 
 	switch name {
 	case "ignore":
-		mer.React = mer.ignore
+		mgr.React = mgr.ignore
 	case "warn":
-		mer.React = mer.warn
+		mgr.React = mgr.warn
 	case "abort":
-		mer.React = mer.abort
+		mgr.React = mgr.abort
 	case "exclude":
-		mer.React = mer.exclude
+		mgr.React = mgr.exclude
 	default:
 		debug.Assert(false)
 		return nil, fmt.Errorf("invalid action: %s. Accepted values are: abort, warn, ignore, exclude", name)
 	}
 
-	return mer, nil
+	return mgr, nil
 }
 
-func (mer *MissExtReact) ignore(recs *shard.Records) (*shard.Records, error) {
+func (mgr *MissingExtManager) ignore(recs *shard.Records) (*shard.Records, error) {
+	for _, record := range recs.All() {
+		mgr.EffectiveObjSize += record.TotalSize()
+	}
 	return nil, nil
 }
 
-func (mer *MissExtReact) warn(recs *shard.Records) (*shard.Records, error) {
+func (mgr *MissingExtManager) warn(recs *shard.Records) (*shard.Records, error) {
 	for _, record := range recs.All() {
-		extra, missing := difference(mer.extSet, record.Objects)
+		mgr.EffectiveObjSize += record.TotalSize()
+		extra, missing := difference(mgr.extSet, record.Objects)
 		for ext := range extra {
 			fmt.Printf("[Warning] sample %s contains extension %s, not specified in `sample_ext` config\n", record.Name, ext)
 		}
@@ -77,9 +87,10 @@ func (mer *MissExtReact) warn(recs *shard.Records) (*shard.Records, error) {
 	return nil, nil
 }
 
-func (mer *MissExtReact) abort(recs *shard.Records) (*shard.Records, error) {
+func (mgr *MissingExtManager) abort(recs *shard.Records) (*shard.Records, error) {
 	for _, record := range recs.All() {
-		extra, missing := difference(mer.extSet, record.Objects)
+		mgr.EffectiveObjSize += record.TotalSize()
+		extra, missing := difference(mgr.extSet, record.Objects)
 		for ext := range extra {
 			return nil, fmt.Errorf("sample %s contains extension %s, not specified in `sample_ext` config", record.Name, ext)
 		}
@@ -91,16 +102,17 @@ func (mer *MissExtReact) abort(recs *shard.Records) (*shard.Records, error) {
 	return nil, nil
 }
 
-func (mer *MissExtReact) exclude(recs *shard.Records) (*shard.Records, error) {
+func (mgr *MissingExtManager) exclude(recs *shard.Records) (*shard.Records, error) {
 	filteredRecs := shard.NewRecords(16)
 
 	for _, record := range recs.All() {
-		extra, missing := difference(mer.extSet, record.Objects)
+		extra, missing := difference(mgr.extSet, record.Objects)
 		for ext := range extra {
 			recs.DeleteDup(record.Name, ext)
 		}
 		if len(missing) == 0 {
 			filteredRecs.Insert(record)
+			mgr.EffectiveObjSize += record.TotalSize()
 		}
 	}
 

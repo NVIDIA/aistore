@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/ishard/ishard/factory"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 )
 
@@ -67,7 +68,7 @@ func (n *dirNode) insert(keyPath, fullPath string, size int64) {
 
 // apply performs a preorder traversal through the tree starting from the node `n`,
 // applying the given reaction `act` to the Records of each node. The traversal stops if an error occurs.
-func (n *dirNode) apply(act *config.MissExtReact, recursive bool) error {
+func (n *dirNode) apply(act *config.MissingExtManager, recursive bool) error {
 	if n == nil {
 		return nil
 	}
@@ -261,15 +262,19 @@ func (is *ISharder) Start() error {
 		return err
 	}
 
-	if is.cfg.Progress {
-		is.shardFactory.NewBar(objTotalSize)
-	}
-
 	// Check missing extensions
-	if is.cfg.MissingExtAction != nil {
-		if err := root.apply(is.cfg.MissingExtAction, true); err != nil {
+	if is.cfg.MExtMgr != nil {
+		if err := root.apply(is.cfg.MExtMgr, true); err != nil {
 			return err
 		}
+		debug.Assert(
+			objTotalSize == is.cfg.MExtMgr.EffectiveObjSize || is.cfg.MExtMgr.Name == "exclude",
+			"except for the 'exclude' action, the total object size calculated by the missing extension manager should equal the original size",
+		)
+	}
+
+	if is.cfg.Progress {
+		is.shardFactory.NewBar(is.cfg.MExtMgr.EffectiveObjSize)
 	}
 
 	if _, _, err := is.archive(root, ""); err != nil {

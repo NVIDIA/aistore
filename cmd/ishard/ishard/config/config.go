@@ -27,7 +27,7 @@ type (
 		Ext              string
 		ShardTemplate    string
 		SampleKeyPattern SampleKeyPattern
-		MissingExtAction *MissExtReact
+		MExtMgr          *MissingExtManager
 		Collapse         bool
 	}
 	DryRunFlag struct {
@@ -59,7 +59,7 @@ var DefaultConfig = Config{
 		ShardTemplate:    "shard-%d",
 		Collapse:         false,
 		SampleKeyPattern: BaseFileNamePattern,
-		MissingExtAction: nil,
+		MExtMgr:          nil,
 	},
 	SrcBck:     cmn.Bck{Name: "src_bck", Provider: apc.AIS},
 	DstBck:     cmn.Bck{Name: "dst_bck", Provider: apc.AIS},
@@ -216,7 +216,7 @@ func parseCliParams(cfg *Config) {
 		os.Exit(1)
 	}
 
-	cfg.MissingExtAction, err = NewMissExtReact(missingExtActStr, strings.Split(sampleExts, ","))
+	cfg.MExtMgr, err = NewMissingExtManager(missingExtActStr, strings.Split(sampleExts, ","))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		flag.Usage()

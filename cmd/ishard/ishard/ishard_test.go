@@ -375,7 +375,7 @@ func TestIshardMissingExtension(t *testing.T) {
 
 		var err error
 		expectedExts := []string{".jpeg", ".cls", ".json"}
-		cfg.MissingExtAction, err = config.NewMissExtReact("abort", expectedExts)
+		cfg.MExtMgr, err = config.NewMissingExtManager("abort", expectedExts)
 		tassert.CheckFatal(t, err)
 
 		_, err = generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", expectedExts, int64(fileSize), true /*randomize*/, true /*dropout*/)
@@ -406,7 +406,7 @@ func TestIshardMissingExtension(t *testing.T) {
 
 		expectedExts := []string{".jpeg", ".cls", ".json"}
 		var err error
-		cfg.MissingExtAction, err = config.NewMissExtReact("exclude", expectedExts)
+		cfg.MExtMgr, err = config.NewMissingExtManager("exclude", expectedExts)
 		tassert.CheckFatal(t, err)
 
 		_, err = generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", expectedExts, int64(fileSize), true /*randomize*/, true /*dropout*/)
