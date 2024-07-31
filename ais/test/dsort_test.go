@@ -91,6 +91,7 @@ type (
 		outputShardCnt        int
 		recordDuplicationsCnt int
 		recordExts            []string
+		recordNames           []string
 
 		inputShards []string
 
@@ -99,6 +100,7 @@ type (
 		outputExt       string
 		alg             *dsort.Algorithm
 		missingKeys     bool
+		EKMMissingKey   string
 		outputShardSize string
 		maxMemUsage     string
 		dryRun          bool
@@ -270,6 +272,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		Config: cmn.DsortConf{
 			MissingShards:     df.missingShards,
 			DuplicatedRecords: df.duplicatedRecords,
+			EKMMissingKey:     df.EKMMissingKey,
 		},
 	}
 }
@@ -312,12 +315,15 @@ func (df *dsortFramework) createInputShards() {
 			if df.alg.Kind == dsort.Content {
 				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys)
+			} else if df.recordNames != nil {
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
+					df.fileSz, duplication, true, df.recordExts, df.recordNames)
 			} else if df.inputExt == archive.ExtTar {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
-					df.fileSz, duplication, df.recordExts, nil)
+					df.fileSz, duplication, false, df.recordExts, nil)
 			} else {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
-					df.fileSz, duplication, nil, nil)
+					df.fileSz, duplication, false, nil, nil)
 			}
 			tassert.CheckFatal(df.m.t, err)
 
@@ -2038,6 +2044,167 @@ func TestDsortOrderFile(t *testing.T) {
 					}
 				}
 			}
+		},
+	)
+}
+
+func TestDsortRegexOrderFile(t *testing.T) {
+	runDsortTest(
+		t, dsortTestSpec{p: true, types: []string{dsort.GeneralType}},
+		func(dsorterType string, t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:             m,
+					dsorterType:   dsorterType,
+					shardCnt:      100,
+					filesPerShard: 5,
+					recordNames:   []string{"n01440764.JPEG", "n02097658.JPEG", "n03495258.JPEG", "n02965783.JPEG", "n01631663.JPEG"},
+				}
+
+				orderFileName = "orderFileName.json"
+				proxyURL      = tools.RandomProxyURL()
+				baseParams    = tools.BaseAPIParams(proxyURL)
+			)
+
+			m.initAndSaveState(true /*cleanup*/)
+			m.expectTargets(3)
+
+			// Set URL for order file (points to the object in cluster).
+			df.orderFileURL = fmt.Sprintf(
+				"%s/%s/%s/%s/%s?%s=%s",
+				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
+				apc.QparamProvider, apc.AIS,
+			)
+			df.init()
+
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+			df.createInputShards()
+
+			// test case 1: EKMMissingKey is abort
+			t.Run("abort", func(t *testing.T) {
+				df.EKMMissingKey = cmn.AbortReaction
+				df.outputBck = cmn.Bck{
+					Name:     trand.String(15),
+					Provider: apc.AIS,
+				}
+
+				// Create local output bucket
+				tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
+
+				// Generate content for the orderFile
+				tlog.Logln("generating and putting order file into cluster...")
+
+				jsonContent := map[string][]string{
+					"shard-%d.tar": {".*string_dont_match.*"},
+				}
+				jsonBytes, err := jsoniter.Marshal(jsonContent)
+				tassert.CheckFatal(t, err)
+				args := api.PutArgs{
+					BaseParams: baseParams,
+					Bck:        m.bck,
+					ObjName:    orderFileName,
+					Reader:     readers.NewBytes(jsonBytes),
+				}
+				_, err = api.PutObject(&args)
+				tassert.CheckFatal(t, err)
+
+				tlog.Logln(startingDS)
+				spec := df.gen()
+				managerUUID, err := api.StartDsort(baseParams, &spec)
+				tassert.CheckFatal(t, err)
+
+				_, err = tools.WaitForDsortToFinish(m.proxyURL, managerUUID)
+				tassert.CheckFatal(t, err)
+				tlog.Logf("%s: finished\n", df.job())
+
+				allMetrics, err := api.MetricsDsort(baseParams, managerUUID)
+				tassert.CheckFatal(t, err)
+				if len(allMetrics) != m.originalTargetCount {
+					t.Errorf("number of metrics %d is not same as number of targets %d",
+						len(allMetrics), m.originalTargetCount)
+				}
+
+				tlog.Logln("checking if all records are in specified shards...")
+				list, err := api.ListObjects(df.baseParams, df.outputBck, nil, api.ListArgs{})
+				tassert.CheckFatal(df.m.t, err)
+				tassert.Fatalf(t, len(list.Entries) == 0, "dsort should abort, the output bucket should be empty")
+			})
+
+			// test case 2: EKMMissingKey is warn
+			t.Run("warn", func(t *testing.T) {
+				df.EKMMissingKey = cmn.WarnReaction
+				df.outputBck = cmn.Bck{
+					Name:     trand.String(15),
+					Provider: apc.AIS,
+				}
+
+				// Create local output bucket
+				tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
+
+				// Generate content for the orderFile
+				tlog.Logln("generating and putting order file into cluster...")
+				ekm := shard.NewExternalKeyMap(8)
+				jsonContent := map[string][]string{
+					"tench-shard-%d.tar":        {".*n01440764.*"},
+					"great_dane-shard-%d.tar":   {".*n02097658.*"},
+					"eiffel_tower-shard-%d.tar": {".*n03495258.*"},
+					"car-shard-%d.tar":          {".*n02965783.*"},
+					"flamingo-shard-%d.tar":     {".*n01631663.*"},
+				}
+				for format, samples := range jsonContent {
+					for _, s := range samples {
+						err := ekm.Add(s, format)
+						tassert.CheckFatal(t, err)
+					}
+				}
+				jsonBytes, err := jsoniter.Marshal(jsonContent)
+				tassert.CheckFatal(t, err)
+				args := api.PutArgs{
+					BaseParams: baseParams,
+					Bck:        m.bck,
+					ObjName:    orderFileName,
+					Reader:     readers.NewBytes(jsonBytes),
+				}
+				_, err = api.PutObject(&args)
+				tassert.CheckFatal(t, err)
+
+				tlog.Logln(startingDS)
+				spec := df.gen()
+				managerUUID, err := api.StartDsort(baseParams, &spec)
+				tassert.CheckFatal(t, err)
+
+				_, err = tools.WaitForDsortToFinish(m.proxyURL, managerUUID)
+				tassert.CheckFatal(t, err)
+				tlog.Logf("%s: finished\n", df.job())
+
+				allMetrics, err := api.MetricsDsort(baseParams, managerUUID)
+				tassert.CheckFatal(t, err)
+				if len(allMetrics) != m.originalTargetCount {
+					t.Errorf("number of metrics %d is not same as number of targets %d",
+						len(allMetrics), m.originalTargetCount)
+				}
+
+				tlog.Logln("checking if all records are in specified shards...")
+				shardRecords := df.getRecordNames(df.outputBck)
+				for _, shard := range shardRecords {
+					for _, recordName := range shard.recordNames {
+						shardFmt, err := ekm.Lookup(recordName)
+						tassert.CheckFatal(t, err)
+						match := false
+						// Some shard with specified format contains the record
+						for i := range 30 {
+							match = match || fmt.Sprintf(shardFmt, i) == shard.name
+						}
+						if !match {
+							t.Errorf("record %q was not part of any shard with format %q but was in shard %q",
+								recordName, shardFmt, shard.name)
+						}
+					}
+				}
+			})
 		},
 	)
 }

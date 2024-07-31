@@ -604,15 +604,8 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*shard.Shard, err
 	return shards, nil
 }
 
-func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard, error) {
-	var (
-		shards         = make([]*shard.Shard, 0)
-		externalKeyMap = make(map[string]string)
-		shardsBuilder  = make(map[string][]*shard.Shard)
-	)
-	if maxSize <= 0 {
-		return nil, fmt.Errorf(fmtErrInvalidMaxSize, maxSize)
-	}
+func (m *Manager) parseOrderFile() (shard.ExternalKeyMap, error) {
+	ekm := shard.NewExternalKeyMap(64)
 	parsedURL, err := url.Parse(m.Pars.OrderFileURL)
 	if err != nil {
 		return nil, fmt.Errorf(fmtErrOrderURL, m.Pars.OrderFileURL, err)
@@ -645,14 +638,16 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 
 	switch filepath.Ext(parsedURL.Path) {
 	case ".json":
-		var ekm map[string][]string
-		if err := jsoniter.NewDecoder(resp.Body).Decode(&ekm); err != nil {
+		var content map[string][]string
+		if err := jsoniter.NewDecoder(resp.Body).Decode(&content); err != nil {
 			return nil, err
 		}
 
-		for shardNameFmt, recordKeys := range ekm {
+		for shardNameFmt, recordKeys := range content {
 			for _, recordKey := range recordKeys {
-				externalKeyMap[recordKey] = shardNameFmt
+				if err := ekm.Add(recordKey, shardNameFmt); err != nil {
+					return nil, err
+				}
 			}
 		}
 	default:
@@ -680,15 +675,33 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 			}
 
 			recordKey, shardNameFmt := parts[0], parts[1]
-			externalKeyMap[recordKey] = shardNameFmt
+			if err := ekm.Add(recordKey, shardNameFmt); err != nil {
+				return nil, err
+			}
 		}
+	}
+	return ekm, nil
+}
+
+func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard, error) {
+	var (
+		shards        = make([]*shard.Shard, 0)
+		shardsBuilder = make(map[string][]*shard.Shard)
+	)
+	if maxSize <= 0 {
+		return nil, fmt.Errorf(fmtErrInvalidMaxSize, maxSize)
+	}
+
+	ekm, err := m.parseOrderFile()
+	if err != nil {
+		return nil, err
 	}
 
 	for _, r := range m.recm.Records.All() {
 		key := fmt.Sprintf("%v", r.Key)
-		shardNameFmt, ok := externalKeyMap[key]
-		if !ok {
-			msg := fmt.Sprintf("record %q doesn't belong in external key map", key)
+		shardNameFmt, err := ekm.Lookup(key)
+		if err != nil {
+			msg := fmt.Sprintf("error on lookup record %q in external key map: %s", key, err)
 			if err := m.react(m.Pars.EKMMissingKey, msg); err != nil {
 				return nil, err
 			}

@@ -9,9 +9,11 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
+	"regexp"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -48,6 +50,12 @@ type (
 
 	ErrSortingKeyType struct {
 		ty string
+	}
+
+	// represents a map where keys are regex patterns and values are associated strings.
+	ExternalKeyMap map[string]struct {
+		regex *regexp.Regexp
+		value string
 	}
 )
 
@@ -138,4 +146,47 @@ func ValidateContentKeyTy(ty string) error {
 
 func (e *ErrSortingKeyType) Error() string {
 	return fmt.Sprintf("invalid content sorting key %q, expecting one of: 'int', 'float', 'string'", e.ty)
+}
+
+/////////////////
+// RegexKeyMap //
+/////////////////
+
+func NewExternalKeyMap(n int) ExternalKeyMap {
+	return make(ExternalKeyMap, n)
+}
+
+func (ekm ExternalKeyMap) Add(key, value string) error {
+	if _, exists := ekm[key]; exists {
+		return errors.New("duplicated regex keys")
+	}
+	re, err := regexp.Compile(key)
+	if err != nil {
+		return err
+	}
+	ekm[key] = struct {
+		regex *regexp.Regexp
+		value string
+	}{
+		regex: re,
+		value: value,
+	}
+	return nil
+}
+
+func (ekm ExternalKeyMap) Lookup(input string) (string, error) {
+	var matches []string
+	for _, p := range ekm {
+		if p.regex.MatchString(input) {
+			matches = append(matches, p.value)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", errors.New("no match found")
+	}
+	if len(matches) > 1 {
+		return "", errors.New("multiple matches found")
+	}
+	return matches[0], nil
 }

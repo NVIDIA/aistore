@@ -176,13 +176,13 @@ Assuming that `dsort_spec.json` contains:
     "extension": ".tar",
     "input_bck": {"name": "dsort-testing"},
     "input_format": {
-	template: "shard-{0..9}"
+      "template": "shard-{0..9}"
     },
     "output_format": "new-shard-{0000..1000}",
     "output_shard_size": "10KB",
     "description": "sort shards from 0 to 9",
     "algorithm": {
-        "kind": "alphanumeric"
+      "kind": "alphanumeric"
     },
 }
 ```
@@ -253,6 +253,23 @@ or if `order_file` (URL: `http://website.web/static/order_file.json`, notice `.j
     "car_0.txt",
     "car_1.txt",
     ...
+  ],
+  ...
+}
+```
+
+or, you can also use regex as the record identifier. The `order_file` can contain regex patterns as keys to match multiple records that fit the regex pattern to provided format.
+
+```json
+{
+  "shard-cats-%d": [
+    "cat_[0-9]+\\.txt"
+  ],
+  "shard-dogs-%d": [
+    "dog_[0-9]+\\.txt"
+  ],
+  "shard-car-%d": [
+    "car_[0-9]+\\.txt"
   ],
   ...
 }

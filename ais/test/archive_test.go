@@ -129,6 +129,7 @@ func TestGetFromArch(t *testing.T) {
 						numArchived,
 						fsize,
 						false,       // duplication
+						false,       // random dir prefix
 						nil,         // record extensions
 						randomNames, // pregenerated filenames
 					)

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 var pool1m, pool128k, pool32k sync.Pool
@@ -62,8 +63,9 @@ func addBufferToArch(aw archive.Writer, path string, l int, buf []byte) error {
 	return aw.Write(path, oah, reader)
 }
 
+// TODO: refactor to reduce number of arguments
 func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, fileCnt, fileSize int,
-	dup bool, recExts, randNames []string) error {
+	dup, randDir bool, recExts, randNames []string) error {
 	wfh, err := cos.CreateFile(shardName)
 	if err != nil {
 		return err
@@ -96,6 +98,12 @@ func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, f
 				}
 			} else {
 				fileName = randNames[i]
+			}
+			if randDir {
+				layers := rand.IntN(5)
+				for range layers {
+					fileName = trand.String(5) + "/" + fileName
+				}
 			}
 			if err := addBufferToArch(aw, fileName, fileSize, nil); err != nil {
 				return err
