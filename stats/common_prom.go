@@ -26,6 +26,14 @@ import (
 type (
 	promDesc map[string]*prometheus.Desc
 
+	// Stats are tracked via a map of stats names (key) and statsValue (values).
+	statsValue struct {
+		kind       string // enum { KindCounter, ..., KindSpecial }
+		Value      int64  `json:"v,string"`
+		numSamples int64  // (average latency over stats_time)
+		cumulative int64  // REST API
+	}
+
 	coreStats struct {
 		Tracker   map[string]*statsValue
 		promDesc  promDesc
@@ -101,7 +109,7 @@ func (s *coreStats) update(nv cos.NamedVal64) {
 	}
 }
 
-// log + StatsD (Prometheus is done separately via `Collect`)
+// usage: log resulting `copyValue` numbers:
 func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 	idle := true
 	intl := max(int64(s.statsTime.Seconds()), 1)
@@ -111,7 +119,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 		case KindLatency:
 			var lat int64
 			if num := ratomic.SwapInt64(&v.numSamples, 0); num > 0 {
-				lat = ratomic.SwapInt64(&v.Value, 0) / num
+				lat = ratomic.SwapInt64(&v.Value, 0) / num // NOTE: log average latency (nanoseconds) over the last "periodic.stats_time" interval
 				if !ignore(name) {
 					idle = false
 				}
@@ -120,7 +128,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 		case KindThroughput:
 			var throughput int64
 			if throughput = ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
-				throughput /= intl
+				throughput /= intl // NOTE: log average throughput (bps) over the last "periodic.stats_time" interval
 				if !ignore(name) {
 					idle = false
 				}
@@ -158,6 +166,8 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 }
 
 // REST API what=stats query
+// NOTE: reporting total cumulative values to compute throughput and latency by the client
+// based on their respective time interval and request counts
 // NOTE: not reporting zero counts
 func (s *coreStats) copyCumulative(ctracker copyTracker) {
 	for name, v := range s.Tracker {
@@ -218,65 +228,45 @@ var (
 	_ prometheus.Collector = (*runner)(nil)
 )
 
-// TODO -- FIXME: remove
-func _foobar(id, name string, v *statsValue) (metricName, help string) {
-	label := name
-	label = strings.ReplaceAll(label, ".", "_")
-	// prometheus metrics names shouldn't include daemonID.
-	label = strings.ReplaceAll(label, "_"+id+"_", "_")
-	v.label.stpr = strings.ReplaceAll(label, ":", "_")
+func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
+	v := &statsValue{kind: kind}
+	r.core.Tracker[name] = v
 
-	help = v.kind
-	if strings.HasSuffix(v.label.stpr, "_n") {
-		help = "total number of operations"
-	} else if strings.HasSuffix(v.label.stpr, "_size") {
-		help = "total size (bytes)"
-	} else if strings.HasSuffix(v.label.stpr, "avg_rsize") {
-		help = "average read size (bytes)"
-	} else if strings.HasSuffix(v.label.stpr, "avg_wsize") {
-		help = "average write size (bytes)"
-	} else if strings.HasSuffix(v.label.stpr, "_ns") {
-		v.label.stpr = strings.TrimSuffix(v.label.stpr, "_ns") + "_ms"
-		help = "latency (milliseconds)"
-	} else if strings.HasSuffix(v.label.stpr, "_ns_total") {
-		help = "cumulative latency (nanoseconds)"
-	} else if strings.Contains(v.label.stpr, "_ns_") {
-		v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "_ms_")
-		if name == Uptime {
-			v.label.stpr = strings.ReplaceAll(v.label.stpr, "_ns_", "")
-			help = "uptime (seconds)"
-		} else {
-			help = "latency (milliseconds)"
-		}
-	} else if strings.HasSuffix(v.label.stpr, "_bps") {
-		v.label.stpr = strings.TrimSuffix(v.label.stpr, "_bps") + "_mbps"
-		help = "throughput (MB/s)"
-	}
-	return v.label.stpr, help
-}
-
-func (r *runner) regProm(snode *meta.Snode, name string, extra *Extra, v *statsValue) {
 	var (
 		metricName  string
 		help        string
 		constLabels = dfltLabels
 	)
-	if extra != nil {
-		if len(extra.Labels) > 0 {
-			constLabels = prometheus.Labels(extra.Labels)
-			constLabels["node_id"] = dfltLabels["node_id"]
-		}
-		if extra.StrName == "" {
-			metricName = strings.ReplaceAll(name, ".", "_")
-		} else {
-			metricName = extra.StrName
-		}
-		help = extra.Help
-	} else {
-		// TODO -- FIXME: remove
-		id := strings.ReplaceAll(snode.ID(), ".", "_")
-		metricName, help = _foobar(id, name, v)
+	debug.Assert(extra != nil)
+	debug.Assert(extra.Help != "")
+	if len(extra.Labels) > 0 {
+		constLabels = prometheus.Labels(extra.Labels)
+		constLabels["node_id"] = dfltLabels["node_id"]
 	}
+	if extra.StrName == "" {
+		// when not explicitly specified: generate prometheus name
+		// from an internal name (compare with common_statsd reg() impl.)
+		switch kind {
+		case KindCounter:
+			debug.Assert(strings.HasSuffix(name, ".n"), name)
+			metricName = strings.TrimSuffix(name, ".n") + "_count"
+		case KindSize:
+			debug.Assert(strings.HasSuffix(name, ".size"), name)
+			metricName = strings.TrimSuffix(name, ".size") + "_bytes"
+		case KindLatency:
+			debug.Assert(strings.HasSuffix(name, ".ns"), name)
+			metricName = strings.TrimSuffix(name, ".ns") + "_ms"
+		case KindThroughput, KindComputedThroughput:
+			debug.Assert(strings.HasSuffix(name, ".bps"), name)
+			metricName = strings.TrimSuffix(name, ".bps") + "_mbps"
+		default:
+			metricName = name
+		}
+		metricName = strings.ReplaceAll(metricName, ".", "_")
+	} else {
+		metricName = extra.StrName
+	}
+	help = extra.Help
 
 	fullqn := prometheus.BuildFQName("ais" /*namespace*/, snode.Type() /*subsystem*/, metricName)
 	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, constLabels)

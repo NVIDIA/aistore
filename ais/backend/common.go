@@ -44,7 +44,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		stats.KindCounter,
 		&stats.Extra{
 			Help:    "GET: total number of executed remote requests (cold GETs)",
-			StrName: "remote_get_n",
+			StrName: "remote_get_count",
 			Labels:  labels,
 		},
 	)
@@ -52,7 +52,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		b.metrics[stats.GetLatencyTotal],
 		stats.KindTotal,
 		&stats.Extra{
-			Help:    "GET: total cumulative time (nanoseconds) to execute cold GETs and store new content in-cluster",
+			Help:    "GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster",
 			StrName: "remote_get_ns_total",
 			Labels:  labels,
 		},
@@ -61,7 +61,8 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		b.metrics[stats.GetE2ELatencyTotal],
 		stats.KindTotal,
 		&stats.Extra{
-			Help:    "GET: total end-to-end time (nanoseconds) servicing remote requests; includes: cold GET, store in-cluster, transmit response",
+			Help: "GET: total end-to-end time (nanoseconds) servicing remote requests; " +
+				"includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response",
 			StrName: "remote_e2e_get_ns_total",
 			Labels:  labels,
 		},
@@ -69,7 +70,10 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 	tr.RegExtMetric(snode,
 		b.metrics[stats.GetSize],
 		stats.KindSize,
-		&stats.Extra{Help: "GET: total cumulative size (bytes) of all cold GET operations", StrName: "remote_get_bytes_total", Labels: labels},
+		&stats.Extra{
+			Help:    "GET: total cumulative size (bytes) of all cold-GET transactions",
+			StrName: "remote_get_bytes_total",
+			Labels:  labels},
 	)
 
 	// PUT
@@ -81,13 +85,17 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 	tr.RegExtMetric(snode,
 		b.metrics[stats.PutCount],
 		stats.KindCounter,
-		&stats.Extra{Help: "PUT: total number of executed remote requests", StrName: "remote_put_n", Labels: labels},
+		&stats.Extra{
+			Help:    "PUT: total number of executed remote requests to a given backend",
+			StrName: "remote_put_count",
+			Labels:  labels,
+		},
 	)
 	tr.RegExtMetric(snode,
 		b.metrics[stats.PutLatencyTotal],
 		stats.KindTotal,
 		&stats.Extra{
-			Help:    "PUT: total cumulative time (nanoseconds) to execute remote requests and store new content in-cluster",
+			Help:    "PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster",
 			StrName: "remote_put_ns_total",
 			Labels:  labels,
 		},
@@ -97,13 +105,18 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		stats.KindTotal,
 		&stats.Extra{
 			StrName: "remote_e2e_put_ns_total",
-			Help:    "PUT: total end-to-end time (nanoseconds) servicing remote requests; includes: store in-cluster, execute remote PUT",
-			Labels:  labels},
+			Help: "PUT: total end-to-end time (nanoseconds) servicing remote requests; " +
+				"includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object",
+			Labels: labels},
 	)
 	tr.RegExtMetric(snode,
 		b.metrics[stats.PutSize],
 		stats.KindSize,
-		&stats.Extra{Help: "PUT: total cumulative size (bytes) of all PUTs to remote backend", StrName: "remote_e2e_put_bytes_total", Labels: labels},
+		&stats.Extra{
+			Help:    "PUT: total cumulative size (bytes) of all PUTs to a given remote backend",
+			StrName: "remote_e2e_put_bytes_total",
+			Labels:  labels,
+		},
 	)
 
 	// version changed out-of-band
@@ -115,7 +128,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		stats.KindCounter,
 		&stats.Extra{
 			Help:    "number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster)",
-			StrName: "remote_ver_change_n",
+			StrName: "remote_ver_change_count",
 			Labels:  labels,
 		},
 	)

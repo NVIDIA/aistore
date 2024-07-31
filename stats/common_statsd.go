@@ -9,6 +9,7 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	ratomic "sync/atomic"
@@ -26,6 +27,18 @@ import (
 
 type (
 	metric = statsd.Metric // type alias
+
+	// Stats are tracked via a map of stats names (key) and statsValue (values).
+	statsValue struct {
+		kind  string // enum { KindCounter, ..., KindSpecial }
+		label struct {
+			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
+			stpr string // StatsD _or_ Prometheus label (depending on build tag)
+		}
+		Value      int64 `json:"v,string"`
+		numSamples int64 // (average latency over stats_time)
+		cumulative int64 // REST API
+	}
 
 	coreStats struct {
 		Tracker   map[string]*statsValue
@@ -136,7 +149,7 @@ func (s *coreStats) update(nv cos.NamedVal64) {
 	}
 }
 
-// log + StatsD (Prometheus is done separately via `Collect`)
+// usage: log and StatsD Tx
 func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 	idle := true
 	intl := max(int64(s.statsTime.Seconds()), 1)
@@ -146,13 +159,14 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 		case KindLatency:
 			var lat int64
 			if num := ratomic.SwapInt64(&v.numSamples, 0); num > 0 {
-				lat = ratomic.SwapInt64(&v.Value, 0) / num
+				lat = ratomic.SwapInt64(&v.Value, 0) / num // NOTE: log average latency (nanoseconds) over the last "periodic.stats_time" interval
 				if !ignore(name) {
 					idle = false
 				}
 			}
 			out[name] = copyValue{lat}
-			// NOTE: ns => ms, and not reporting zeros
+
+			// NOTE: if not zero, report StatsD latency (milliseconds) over the last "periodic.stats_time" interval
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if !s.statsdDisabled() && millis > 0 {
 				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stpr, Value: float64(millis)}, s.sgl)
@@ -160,7 +174,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 		case KindThroughput:
 			var throughput int64
 			if throughput = ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
-				throughput /= intl
+				throughput /= intl // NOTE: log average throughput (bps) over the last "periodic.stats_time" interval
 				if !ignore(name) {
 					idle = false
 				}
@@ -280,8 +294,48 @@ func (s *coreStats) reset(errorsOnly bool) {
 // runner //
 ////////////
 
-// empty stub
-func (*runner) regProm(*meta.Snode, string, *Extra, *statsValue) {}
+// naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
+// compare with coreStats.initProm()
+func (r *runner) reg(snode *meta.Snode, name, kind string, _ *Extra) {
+	v := &statsValue{kind: kind}
+	f := func(units string) string {
+		return fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, units)
+	}
+	debug.Assert(!strings.Contains(name, ":"), name)
+	switch kind {
+	case KindCounter:
+		debug.Assert(strings.HasSuffix(name, ".n"), name)
+		v.label.comm = strings.TrimSuffix(name, ".n")
+		v.label.stpr = f("count")
+	case KindTotal:
+		debug.Assert(strings.HasSuffix(name, ".total"), name)
+		v.label.comm = strings.TrimSuffix(name, ".total")
+		v.label.stpr = f("total")
+	case KindSize:
+		debug.Assert(strings.HasSuffix(name, ".size"), name)
+		v.label.comm = strings.TrimSuffix(name, ".size")
+		v.label.stpr = f("bytes")
+	case KindLatency:
+		debug.Assert(strings.HasSuffix(name, ".ns"), name)
+		v.label.comm = strings.TrimSuffix(name, ".ns")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stpr = f("ms")
+	case KindThroughput, KindComputedThroughput:
+		debug.Assert(strings.HasSuffix(name, ".bps"), name)
+		v.label.comm = strings.TrimSuffix(name, ".bps")
+		v.label.stpr = f("mbps")
+	default:
+		debug.Assert(kind == KindGauge || kind == KindSpecial)
+		v.label.comm = name
+		if name == Uptime {
+			v.label.comm = "uptime"
+			v.label.stpr = f("seconds")
+		} else {
+			v.label.stpr = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
+		}
+	}
+	r.core.Tracker[name] = v
+}
 
 func (*runner) IsPrometheus() bool { return false }
 

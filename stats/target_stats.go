@@ -235,60 +235,210 @@ func isDiskUtilMetric(name string) bool {
 
 // target-specific metrics, in addition to common and already added via regCommon()
 func (r *Trunner) RegMetrics(snode *meta.Snode) {
-	r.reg(snode, LruEvictCount, KindCounter, nil)
-	r.reg(snode, LruEvictSize, KindSize, nil)
+	r.reg(snode, LruEvictCount, KindCounter,
+		&Extra{
+			Help: "number of LRU evictions",
+		},
+	)
+	r.reg(snode, LruEvictSize, KindSize,
+		&Extra{
+			Help: "total cumulative size (bytes) of LRU evictions",
+		},
+	)
 
-	r.reg(snode, CleanupStoreCount, KindCounter, nil)
-	r.reg(snode, CleanupStoreSize, KindSize, nil)
+	// removing $deleted objects is currently not counted
+	r.reg(snode, CleanupStoreCount, KindCounter,
+		&Extra{
+			Help: "space cleanup: number of removed misplaced objects and old work files",
+		},
+	)
+	r.reg(snode, CleanupStoreSize, KindSize,
+		&Extra{
+			Help: "space cleanup: total size (bytes) of all removed misplaced objects and old work files (not including removed deleted objects)",
+		},
+	)
 
-	r.reg(snode, VerChangeCount, KindCounter, nil)
-	r.reg(snode, VerChangeSize, KindSize, nil)
+	// out-of-band (x 3)
+	r.reg(snode, VerChangeCount, KindCounter,
+		&Extra{
+			Help: "number of out-of-band updates (by a 3rd party performing remote PUTs from outside this cluster)",
+		},
+	)
+	r.reg(snode, VerChangeSize, KindSize,
+		&Extra{
+			Help: "total cumulative size (bytes) of objects that were updated out-of-band across all backends combined",
+		},
+	)
+	r.reg(snode, RemoteDeletedDelCount, KindCounter,
+		&Extra{
+			Help: "number of out-of-band deletes (by a 3rd party remote DELETE(object) from outside this cluster)",
+		},
+	)
 
-	r.reg(snode, PutLatency, KindLatency, nil)
-	r.reg(snode, PutLatencyTotal, KindTotal, nil)
-	r.reg(snode, AppendLatency, KindLatency, nil)
-	r.reg(snode, GetRedirLatency, KindLatency, nil)
-	r.reg(snode, PutRedirLatency, KindLatency, nil)
+	r.reg(snode, PutLatency, KindLatency,
+		&Extra{
+			Help: "PUT: average time (milliseconds) over the last periodic.stats_time interval",
+		},
+	)
+	r.reg(snode, PutLatencyTotal, KindTotal,
+		&Extra{
+			Help: "PUT: total cumulative time (nanoseconds)",
+		},
+	)
+	r.reg(snode, AppendLatency, KindLatency,
+		&Extra{
+			Help: "APPEND(object): average time (milliseconds) over the last periodic.stats_time interval",
+		},
+	)
+	r.reg(snode, GetRedirLatency, KindLatency,
+		&Extra{
+			Help: "GET: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval",
+		},
+	)
+	r.reg(snode, PutRedirLatency, KindLatency,
+		&Extra{
+			Help: "PUT: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval",
+		},
+	)
 
 	// bps
-	r.reg(snode, GetThroughput, KindThroughput, nil)
-	r.reg(snode, PutThroughput, KindThroughput, nil)
+	r.reg(snode, GetThroughput, KindThroughput,
+		&Extra{
+			Help: "GET: average throughput (MB/s) over the last periodic.stats_time interval",
+		},
+	)
+	r.reg(snode, PutThroughput, KindThroughput,
+		&Extra{
+			Help: "PUT: average throughput (MB/s) over the last periodic.stats_time interval",
+		},
+	)
 
-	r.reg(snode, GetSize, KindSize, nil)
-	r.reg(snode, PutSize, KindSize, nil)
+	r.reg(snode, GetSize, KindSize,
+		&Extra{
+			Help: "GET: total cumulative size (bytes)",
+		},
+	)
+	r.reg(snode, PutSize, KindSize,
+		&Extra{
+			Help: "PUT: total cumulative size (bytes)",
+		},
+	)
 
 	// errors
-	r.reg(snode, ErrCksumCount, KindCounter, nil)
-	r.reg(snode, ErrCksumSize, KindSize, nil)
-	r.reg(snode, ErrFSHCCount, KindCounter, nil)
+	r.reg(snode, ErrCksumCount, KindCounter,
+		&Extra{
+			Help: "number of executed GET(object) requests",
+		},
+	)
+	r.reg(snode, ErrCksumSize, KindSize,
+		&Extra{
+			Help: "number of executed GET(object) requests",
+		},
+	)
+	r.reg(snode, ErrFSHCCount, KindCounter,
+		&Extra{
+			Help: "number of times filesystem health checker (FSHC) was triggered by an I/O error or errors",
+		},
+	)
 
-	r.reg(snode, IOErrGetCount, KindCounter, nil)
-	r.reg(snode, IOErrPutCount, KindCounter, nil)
-	r.reg(snode, IOErrDeleteCount, KindCounter, nil)
+	r.reg(snode, IOErrGetCount, KindCounter,
+		&Extra{
+			Help: "GET: number of I/O errors _not_ including remote backend and network errors",
+		},
+	)
+	r.reg(snode, IOErrPutCount, KindCounter,
+		&Extra{
+			Help: "PUT: number of I/O errors _not_ including remote backend and network errors",
+		},
+	)
+	r.reg(snode, IOErrDeleteCount, KindCounter,
+		&Extra{
+			Help: "DELETE(object): number of I/O errors _not_ including remote backend and network errors",
+		},
+	)
 
 	// streams
-	r.reg(snode, cos.StreamsOutObjCount, KindCounter, nil)
-	r.reg(snode, cos.StreamsOutObjSize, KindSize, nil)
-	r.reg(snode, cos.StreamsInObjCount, KindCounter, nil)
-	r.reg(snode, cos.StreamsInObjSize, KindSize, nil)
+	r.reg(snode, cos.StreamsOutObjCount, KindCounter,
+		&Extra{
+			Help: "intra-cluster streaming communications: number of sent objects",
+		},
+	)
+	r.reg(snode, cos.StreamsOutObjSize, KindSize,
+		&Extra{
+			Help: "intra-cluster streaming communications: total cumulative size (bytes) of all transmitted objects",
+		},
+	)
+	r.reg(snode, cos.StreamsInObjCount, KindCounter,
+		&Extra{
+			Help: "intra-cluster streaming communications: number of received objects",
+		},
+	)
+	r.reg(snode, cos.StreamsInObjSize, KindSize,
+		&Extra{
+			Help: "intra-cluster streaming communications: total cumulative size (bytes) of all received objects",
+		},
+	)
 
 	// download
-	r.reg(snode, DownloadSize, KindSize, nil)
-	r.reg(snode, DownloadLatency, KindLatency, nil)
+	r.reg(snode, DownloadSize, KindSize,
+		&Extra{
+			Help: "total downloaded size (bytes)",
+		},
+	)
+	r.reg(snode, DownloadLatency, KindLatency,
+		&Extra{
+			Help: "total time it took to execute dowload requests (milliseconds)",
+		},
+	)
 
 	// dsort
-	r.reg(snode, DsortCreationReqCount, KindCounter, nil)
-	r.reg(snode, DsortCreationRespCount, KindCounter, nil)
-	r.reg(snode, DsortCreationRespLatency, KindLatency, nil)
-	r.reg(snode, DsortExtractShardDskCnt, KindCounter, nil)
-	r.reg(snode, DsortExtractShardMemCnt, KindCounter, nil)
-	r.reg(snode, DsortExtractShardSize, KindSize, nil)
+	r.reg(snode, DsortCreationReqCount, KindCounter,
+		&Extra{
+			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
+	r.reg(snode, DsortCreationRespCount, KindCounter,
+		&Extra{
+			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
+	r.reg(snode, DsortCreationRespLatency, KindLatency,
+		&Extra{
+			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
+	r.reg(snode, DsortExtractShardDskCnt, KindCounter,
+		&Extra{
+			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
+	r.reg(snode, DsortExtractShardMemCnt, KindCounter,
+		&Extra{
+			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
+	r.reg(snode, DsortExtractShardSize, KindSize,
+		&Extra{
+			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
 
 	// core
-	r.reg(snode, RemoteDeletedDelCount, KindCounter, nil)
-	r.reg(snode, LcacheCollisionCount, KindCounter, nil)
-	r.reg(snode, LcacheEvictedCount, KindCounter, nil)
-	r.reg(snode, LcacheFlushColdCount, KindCounter, nil)
+	r.reg(snode, LcacheCollisionCount, KindCounter,
+		&Extra{
+			Help: "number of LOM cache collisions (core, internal)",
+		},
+	)
+	r.reg(snode, LcacheEvictedCount, KindCounter,
+		&Extra{
+			Help: "number of LOM cache evictions (core, internal)",
+		},
+	)
+	r.reg(snode, LcacheFlushColdCount, KindCounter,
+		&Extra{
+			Help: "number of times a LOM from cache was written to stable storage (core, internal)",
+		},
+	)
 }
 
 func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {

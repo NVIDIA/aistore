@@ -7,7 +7,6 @@ package stats
 
 import (
 	"encoding/json"
-	"fmt"
 	rfs "io/fs"
 	"os"
 	"path/filepath"
@@ -92,6 +91,7 @@ const (
 	ErrPutMirrorCount = errPrefix + "put.mirror.n"
 
 	// KindLatency
+	// latency stats have numSamples used to compute average latency
 	GetLatency         = "get.ns"
 	GetLatencyTotal    = "get.ns.total"
 	GetE2ELatencyTotal = "e2e.get.ns.total" // // e2e cold-GET latency
@@ -117,19 +117,6 @@ type (
 
 // primitives: values and maps
 type (
-	// Stats are tracked via a map of stats names (key) to statsValue (values).
-	// There are two main types of stats: counter and latency declared
-	// using the the kind field. Only latency stats have numSamples used to compute latency.
-	statsValue struct {
-		kind  string // enum { KindCounter, ..., KindSpecial }
-		label struct {
-			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
-			stpr string // StatsD _or_ Prometheus label (depending on build tag)
-		}
-		Value      int64 `json:"v,string"`
-		numSamples int64 // (log + StatsD) only
-		cumulative int64
-	}
 	copyValue struct {
 		Value int64 `json:"v,string"`
 	}
@@ -174,76 +161,76 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	// basic counters
 	r.reg(snode, GetCount, KindCounter,
 		&Extra{
-			Help: "number of executed GET(object) requests",
+			Help: "total number of executed GET(object) requests",
 		},
 	)
 	r.reg(snode, PutCount, KindCounter,
 		&Extra{
-			Help: "number of executed PUT(object) requests",
+			Help: "total number of executed PUT(object) requests",
 		},
 	)
 	r.reg(snode, AppendCount, KindCounter,
 		&Extra{
-			Help: "number of executed APPEND(object) requests",
+			Help: "total number of executed APPEND(object) requests",
 		},
 	)
 	r.reg(snode, DeleteCount, KindCounter,
 		&Extra{
-			Help: "number of executed DELETE(object) requests",
+			Help: "total number of executed DELETE(object) requests",
 		},
 	)
 	r.reg(snode, RenameCount, KindCounter,
 		&Extra{
-			Help: "number of executed Rename(object) requests",
+			Help: "total number of executed rename(object) requests",
 		},
 	)
 	r.reg(snode, ListCount, KindCounter,
 		&Extra{
-			Help: "number of executed list-objects requests",
+			Help: "total number of executed list-objects requests",
 		},
 	)
 
 	// basic error counters, respectively
 	r.reg(snode, ErrGetCount, KindCounter,
 		&Extra{
-			Help: "number of GET(object) errors",
+			Help: "total number of GET(object) errors",
 		},
 	)
 	r.reg(snode, ErrPutCount, KindCounter,
 		&Extra{
-			Help: "number of PUT(object) errors",
+			Help: "total number of PUT(object) errors",
 		},
 	)
 	r.reg(snode, ErrAppendCount, KindCounter,
 		&Extra{
-			Help: "number of APPEND(object) errors",
+			Help: "total number of APPEND(object) errors",
 		},
 	)
 	r.reg(snode, ErrDeleteCount, KindCounter,
 		&Extra{
-			Help: "number of DELETE(object) errors",
+			Help: "total number of DELETE(object) errors",
 		},
 	)
 	r.reg(snode, ErrRenameCount, KindCounter,
 		&Extra{
-			Help: "number of Rename(object) errors",
+			Help: "total number of rename(object) errors",
 		},
 	)
 	r.reg(snode, ErrListCount, KindCounter,
 		&Extra{
-			Help: "number of list-objects errors",
+			Help: "total number of list-objects errors",
 		},
 	)
 
 	// even more error counters
 	r.reg(snode, ErrHTTPWriteCount, KindCounter,
 		&Extra{
-			Help: "number of HTTP write-response errors",
+			Help: "total number of HTTP write-response errors",
 		},
 	)
 	r.reg(snode, ErrDownloadCount, KindCounter,
 		&Extra{
-			Help: "number of download errors",
+			Help: "downloader: number of download errors",
 		},
 	)
 	r.reg(snode, ErrPutMirrorCount, KindCounter,
@@ -255,31 +242,30 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	// basic latencies
 	r.reg(snode, GetLatency, KindLatency,
 		&Extra{
-			Help: "total cumulative time (nanoseconds) to execute GET requests " +
-				"(in the logs: average GET latency over the last stats-time interval)",
+			Help: "GET: average time (milliseconds) over the last periodic.stats_time interval",
 		},
 	)
 	r.reg(snode, GetLatencyTotal, KindTotal,
 		&Extra{
-			Help: "total cumulative time (nanoseconds) to execute GET requests",
+			Help: "GET: total cumulative time (nanoseconds)",
 		},
 	)
 	r.reg(snode, ListLatency, KindLatency,
 		&Extra{
-			Help: "total cumulative time (nanoseconds) to execute list-objects requests " +
-				"(in the logs: average list-objects latency over the last stats-time interval)",
+			Help: "list-objects: average time (milliseconds) over the last periodic.stats_time interval",
 		},
 	)
 	r.reg(snode, KeepAliveLatency, KindLatency,
 		&Extra{
-			Help: "in-cluster keep-alive latency (heartbeat latency, nanoseconds)",
+			Help: "in-cluster keep-alive (heartbeat): average time (milliseconds) over the last periodic.stats_time interval",
 		},
 	)
 
 	// special uptime
 	r.reg(snode, Uptime, KindSpecial,
 		&Extra{
-			Help: "this node's uptime since startup (nanoseconds)",
+			Help:    "this node's uptime since its startup (seconds)",
+			StrName: "uptime",
 		},
 	)
 
@@ -290,57 +276,6 @@ func (r *runner) regCommon(snode *meta.Snode) {
 				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state_info.go for details", // TODO: must have a readme
 		},
 	)
-}
-
-// naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
-// compare with coreStats.initProm()
-func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
-	v := &statsValue{kind: kind}
-	f := func(units string) string {
-		return fmt.Sprintf("%s.%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm, units)
-	}
-	switch kind {
-	case KindCounter:
-		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".n")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = f("count")
-	case KindTotal:
-		debug.Assert(strings.HasSuffix(name, ".total"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".total")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = f("total")
-	case KindSize:
-		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
-		v.label.comm = strings.TrimSuffix(name, ".size")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = f("mbytes")
-	case KindLatency:
-		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
-		v.label.comm = strings.TrimSuffix(name, ".ns")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = f("ms")
-	case KindThroughput, KindComputedThroughput:
-		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
-		v.label.comm = strings.TrimSuffix(name, ".bps")
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		v.label.stpr = f("mbps")
-	default:
-		debug.Assert(kind == KindGauge || kind == KindSpecial)
-		v.label.comm = name
-		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-		if name == Uptime {
-			v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
-			v.label.stpr = f("seconds")
-		} else {
-			v.label.stpr = fmt.Sprintf("%s.%s.%s", "ais"+snode.Type(), snode.ID(), v.label.comm)
-		}
-	}
-	r.core.Tracker[name] = v
-
-	// no-op for StatsD
-	r.regProm(snode, name, extra, v)
 }
 
 //
