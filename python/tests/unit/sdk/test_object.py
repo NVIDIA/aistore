@@ -4,7 +4,6 @@ from unittest.mock import Mock, patch, mock_open
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 
-
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
@@ -31,16 +30,25 @@ from aistore.sdk.const import (
     HEADER_OBJECT_BLOB_DOWNLOAD,
     HEADER_OBJECT_BLOB_CHUNK_SIZE,
     HEADER_OBJECT_BLOB_WORKERS,
+    AIS_BCK_NAME,
+    AIS_BCK_PROVIDER,
+    AIS_OBJ_NAME,
+    AIS_LOCATION,
+    AIS_MIRROR_PATHS,
+    AIS_MIRROR_COPIES,
+    AIS_PRESENT,
 )
 from aistore.sdk.object import Object
 from aistore.sdk.object_reader import ObjectReader
 from aistore.sdk.archive_mode import ArchiveMode
+from aistore.sdk.object_props import ObjectProps
 from aistore.sdk.types import (
     ActionMsg,
     BlobMsg,
     PromoteAPIArgs,
     ArchiveSettings,
     BlobDownloadSettings,
+    BucketEntry,
 )
 from tests.const import SMALL_FILE_SIZE, ETL_NAME
 
@@ -345,3 +353,56 @@ class TestObject(unittest.TestCase):
             params=self.expected_params,
             json=expected_json,
         )
+
+    def test_object_props(self):
+
+        headers = CaseInsensitiveDict(
+            {
+                "Ais-Atime": "1722021816727999173",
+                "Ais-Bucket-Name": "data-bck",
+                "Ais-Bucket-Provider": "ais",
+                "Ais-Checksum-Type": "xxhash",
+                "Ais-Checksum-Value": "ecc0a7bf787e089e",
+                "Ais-Location": "t[LSJt8081]:mp[/tmp/ais/mp1/1, [sda sdb]]",
+                "Ais-Mirror-Copies": "1",
+                "Ais-Mirror-Paths": "[/tmp/ais/mp1/1]",
+                "Ais-Name": "cifar-10-batches-py/batches.meta",
+                "Ais-Present": "true",
+                "Ais-Version": "1",
+                "Content-Length": "158",
+                "Date": "Wed, 31 Jul 2024 16:55:14 GMT",
+            }
+        )
+
+        self.mock_bucket.client.request.return_value = Mock(headers=headers)
+
+        self.assertEqual(self.object.props, None)
+
+        self.object.head()
+
+        props: ObjectProps = self.object.props
+
+        self.assertEqual(props.bucket_name, headers[AIS_BCK_NAME])
+        self.assertEqual(props.bucket_provider, headers[AIS_BCK_PROVIDER])
+        self.assertEqual(props.name, headers[AIS_OBJ_NAME])
+        self.assertEqual(props.location, headers[AIS_LOCATION])
+        self.assertEqual(
+            props.mirror_paths, headers[AIS_MIRROR_PATHS].strip("[]").split(",")
+        )
+        self.assertEqual(props.mirror_copies, int(headers[AIS_MIRROR_COPIES]))
+        self.assertEqual(props.present, headers[AIS_PRESENT] == "true")
+
+    def test_generate_object_props(self):
+        entry = BucketEntry(
+            n="NAME", cs="CHECKSUM", a="ATIME", v="VERSION", t="LOCATION", s=5, c=6
+        )
+
+        props: ObjectProps = entry.generate_object_props()
+
+        self.assertEqual(props.checksum_value, entry.cs)
+        self.assertEqual(props.name, entry.n)
+        self.assertEqual(props.location, entry.t)
+        self.assertEqual(props.mirror_copies, entry.c)
+        self.assertEqual(props.obj_version, entry.v)
+        self.assertEqual(props.size, entry.s)
+        self.assertEqual(props.access_time, entry.a)

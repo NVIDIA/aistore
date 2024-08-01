@@ -11,10 +11,22 @@ import msgspec
 import humanize
 from pydantic import BaseModel, Field, validator
 
+from requests.structures import CaseInsensitiveDict
+
 from aistore.sdk.namespace import Namespace
-from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.archive_mode import ArchiveMode
 from aistore.sdk.list_object_flag import ListObjectFlag
+from aistore.sdk.object_props import ObjectProps
+from aistore.sdk.const import (
+    HEADER_CONTENT_LENGTH,
+    AIS_CHECKSUM_VALUE,
+    AIS_ACCESS_TIME,
+    AIS_VERSION,
+    AIS_OBJ_NAME,
+    AIS_LOCATION,
+    AIS_MIRROR_COPIES,
+    PROVIDER_AIS,
+)
 
 
 # pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring
@@ -81,6 +93,28 @@ class BucketEntry(msgspec.Struct):
     c: int = 0
     f: int = 0
     object: Any = None
+
+    def generate_object_props(self) -> ObjectProps:
+        """
+        Convert bucket entry data into Object Props.
+
+        NOTE: Bucket entry data and object props are not a one-to-one mapping.
+
+        Returns:
+            ObjectProps with object data
+        """
+        headers = CaseInsensitiveDict(
+            {
+                AIS_OBJ_NAME: self.name,
+                AIS_CHECKSUM_VALUE: self.checksum,
+                AIS_ACCESS_TIME: self.atime,
+                AIS_VERSION: self.version,
+                AIS_LOCATION: self.location,
+                HEADER_CONTENT_LENGTH: self.size,
+                AIS_MIRROR_COPIES: self.copies,
+            }
+        )
+        return ObjectProps(headers)
 
     @property
     def name(self):

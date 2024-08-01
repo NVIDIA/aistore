@@ -11,6 +11,7 @@ from aistore.sdk import Bucket
 from aistore.sdk.object import Object
 from aistore.pytorch import AISMapDataset, DynamicBatchSampler
 from torch.utils.data import DataLoader
+from aistore.sdk.object_attributes import ObjectProps
 
 
 class TestAISSampler(unittest.TestCase):
@@ -19,7 +20,7 @@ class TestAISSampler(unittest.TestCase):
 
         self.data = b"\0" * 1000  # 1kb
         mock_obj.get.return_value.read_all.return_value = self.data
-        mock_obj.size = len(self.data)
+        mock_obj.props.size = len(self.data)
         mock_obj.name = "test_obj"
 
         self.mock_objects = [mock_obj for _ in range(10)]  # 10 objects total
@@ -105,7 +106,7 @@ class TestAISSampler(unittest.TestCase):
         mock_obj = Mock(Object)
         large_data = b"\0" * 6000  # 6kb
         mock_obj.get.return_value.read_all.return_value = large_data
-        mock_obj.size = len(large_data)
+        mock_obj.props.size = len(large_data)
         mock_obj.name = "test_obj"
 
         self.mock_objects.append(mock_obj)

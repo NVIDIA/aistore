@@ -63,24 +63,24 @@ class DynamicBatchSampler(Sampler):
         while index < len(self):
             sample = self._samples_list[index]
 
-            if sample.size > self._max_batch_size:
+            if sample.props.size > self._max_batch_size:
                 if self._allow_oversized_samples is True:
                     yield [index]
                 else:
                     self._logger.warn(
-                        f"Sample {sample.name} cannot be processed as it is larger than the max batch size: {sample.size} bytes > {self._max_batch_size} bytes"
+                        f"Sample {sample.name} cannot be processed as it is larger than the max batch size: {sample.props.size} bytes > {self._max_batch_size} bytes"
                     )
 
                 index += 1
                 continue
 
-            if total_mem + sample.size < self._max_batch_size:
+            if total_mem + sample.props.size < self._max_batch_size:
                 batch.append(index)
                 index += 1
-                total_mem += sample.size
+                total_mem += sample.props.size
             else:
 
-                if total_mem + sample.size == self._max_batch_size:
+                if total_mem + sample.props.size == self._max_batch_size:
                     batch.append(index)
                     index += 1
 

@@ -38,6 +38,7 @@ from aistore.sdk.types import (
     BlobDownloadSettings,
 )
 from aistore.sdk.utils import read_file_bytes, validate_file
+from aistore.sdk.object_props import ObjectProps
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -51,35 +52,36 @@ class Object:
         bucket (Bucket): Bucket to which this object belongs
         name (str): name of object
         size (int, optional): size of object in bytes
+        props (ObjectProps, optional): Properties of object
     """
 
-    def __init__(self, bucket: "Bucket", name: str, size: int = None):
+    def __init__(self, bucket: "Bucket", name: str, props: ObjectProps = None):
         self._bucket = bucket
         self._client = bucket.client
         self._bck_name = bucket.name
         self._qparams = bucket.qparam
         self._name = name
         self._object_path = f"{URL_PATH_OBJECTS}/{ self._bck_name}/{ self.name }"
-        self._size = size
+        self._props = props
 
     @property
     def bucket(self):
-        """Bucket containing this object"""
+        """Bucket containing this object."""
         return self._bucket
 
     @property
-    def name(self):
-        """Name of this object"""
+    def name(self) -> str:
+        """Name of this object."""
         return self._name
 
     @property
-    def size(self):
-        """Size of this object in bytes"""
-        return self._size
+    def props(self) -> ObjectProps:
+        """Properties of this object."""
+        return self._props
 
     def head(self) -> Header:
         """
-        Requests object properties.
+        Requests object properties and returns headers. Updates props.
 
         Returns:
             Response header with the object properties.
@@ -91,11 +93,13 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exceptions.HTTPError(404): The object does not exist
         """
-        return self._client.request(
+        headers = self._client.request(
             HTTP_METHOD_HEAD,
             path=self._object_path,
             params=self._qparams,
         ).headers
+        self._props = ObjectProps(headers)
+        return headers
 
     # pylint: disable=too-many-arguments
     def get(

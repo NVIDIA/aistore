@@ -103,8 +103,8 @@ class ObjectGroup(AISSource):
 
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
-            props (str, optional): Comma-separated list of object properties to return.
-                Default value includes all properties: "name,size"
+            props (str, optional): By default, will include all object properties.
+                Pass in None to skip and avoid the extra API call.
 
         Returns:
             Iterator of all the objects in the group
@@ -113,10 +113,8 @@ class ObjectGroup(AISSource):
 
             obj = self.bck.object(obj_name)
 
-            # TODO: Use the head object API to pass an object of requested props
-            if props is not None and "size" in props.split(","):
-                size = obj.head()["Content-Length"]
-                obj.size = size
+            if props is not None:
+                obj.head()  # updates the objects props as well
 
             yield obj
 

@@ -73,6 +73,7 @@ from aistore.sdk.types import (
 )
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.utils import validate_directory, get_file_size
+from aistore.sdk.object_props import ObjectProps
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -158,14 +159,14 @@ class Bucket(AISSource):
 
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
-            props (str, optional): Comma-separated list of object properties to return.
-                Default value includes all properties: "name,size"
+            props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
+                Properties: "name", "size", "atime", "version", "checksum", "target_url", "copies".
 
         Returns:
             Iterator of all object URLs matching the prefix
         """
         for entry in self.list_objects_iter(prefix=prefix, props=props):
-            yield self.object(entry.name, entry.size)
+            yield self.object(entry.name, entry.generate_object_props())
 
     def create(self, exist_ok=False):
         """
@@ -816,7 +817,7 @@ class Bucket(AISSource):
             return prepend + obj_name
         return obj_name
 
-    def object(self, obj_name: str, size: int = None) -> Object:
+    def object(self, obj_name: str, props: ObjectProps = None) -> Object:
         """
         Factory constructor for an object in this bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
@@ -828,7 +829,7 @@ class Bucket(AISSource):
         Returns:
             The object created.
         """
-        return Object(bucket=self, name=obj_name, size=size)
+        return Object(bucket=self, name=obj_name, props=props)
 
     def objects(
         self,

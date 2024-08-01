@@ -27,8 +27,8 @@ class AISSource(ABC):
 
         Args:
             prefix (str, optional): Only include objects with names matching this prefix
-            props (str, optional): Comma-separated list of object properties to return.
-                Default value includes all properties: "name,size"
+            props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
+                Properties: "name", "size", "atime", "version", "checksum", "target_url", "copies".
 
         Returns:
             Iterable over selected objects
