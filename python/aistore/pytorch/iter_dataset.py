@@ -12,7 +12,8 @@ from alive_progress import alive_it
 
 class AISIterDataset(AISBaseIterDataset):
     """
-    An iterable-style dataset that iterates over objects in AIS.
+    An iterable-style dataset that iterates over objects in AIS and yields
+    samples represented as a tuple of object_name (str) and object_content (bytes).
     If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
     Args:
@@ -22,8 +23,9 @@ class AISIterDataset(AISBaseIterDataset):
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
         show_progress (bool, optional): Enables console dataset reading progress indicator
 
-    Note:
-        Each object is represented as a tuple of object_name (str) and object_content (bytes)
+    Yields:
+        Tuple[str, bytes]: Each item is a tuple where the first element is the name of the object and the
+        second element is the byte representation of the object data.
     """
 
     def __init__(

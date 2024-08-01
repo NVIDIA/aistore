@@ -20,7 +20,7 @@ class AISMapDataset(AISBaseMapDataset):
         objects with the specified prefixes to be used from each source
         etl_name (str, optional): Optional ETL on the AIS cluster to apply to each object
 
-    Note:
+    NOTE:
         Each object is represented as a tuple of object_name (str) and object_content (bytes)
     """
 
@@ -34,11 +34,11 @@ class AISMapDataset(AISBaseMapDataset):
         self._etl_name = etl_name
 
     def __len__(self):
-        return len(self._samples)
+        return len(self._obj_list)
 
     def __getitem__(self, index: int):
         try:
-            obj = self._samples[index]
+            obj = self._obj_list[index]
             content = obj.get(etl_name=self._etl_name).read_all()
             return obj.name, content
         except IndexError:

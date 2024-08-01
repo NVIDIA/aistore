@@ -16,8 +16,7 @@ class AISBaseMapDataset(ABC, Dataset):
     """
     A base class for creating map-style AIS Datasets. Should not be instantiated directly. Subclasses
     should implement :meth:`__getitem__` which fetches a samples given a key from the dataset and can optionally
-    override other methods from torch Dataset such as :meth:`__len__` and :meth:`__getitems__`.  Additionally,
-    to modify the behavior of loading samples from a source, override :meth:`_get_sample_list_from_source`.
+    override other methods from torch Dataset such as :meth:`__len__` and :meth:`__getitems__`.
 
     Args:
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
@@ -40,26 +39,9 @@ class AISBaseMapDataset(ABC, Dataset):
             else ais_source_list
         )
         self._prefix_map = prefix_map
-        self._samples = self._create_samples_list()
+        self._obj_list = self._create_objects_list()
 
-    def _get_sample_list_from_source(self, source: AISSource, prefix: str) -> List:
-        """
-        Creates an list of samples from the AISSource and the objects stored within. Must be able to handle prefixes
-        as well. The default implementation returns an list of objects. This method can be overridden
-        to provides other functionality (such as reading the data and creating usable samples for different
-        file types).
-
-        Args:
-            source (AISSource): AISSource (:class:`aistore.sdk.ais_source.AISSource`) provides an interface for accessing a list of
-            AIS objects or their URLs
-            prefix (str): Prefix to dictate what objects should be included
-
-        Returns:
-            List: List over the content of the dataset
-        """
-        return [obj for obj in source.list_all_objects_iter(prefix=prefix)]
-
-    def _create_samples_list(self) -> List[Object]:
+    def _create_objects_list(self) -> List[Object]:
         """
         Create a list of all the objects in the given URLs and AIS sources.
 
@@ -72,7 +54,7 @@ class AISBaseMapDataset(ABC, Dataset):
             # Add pytorch worker support to the internal request client
             source.client = WorkerRequestClient(source.client)
             if source not in self._prefix_map or self._prefix_map[source] is None:
-                samples.extend(self._get_sample_list_from_source(source, ""))
+                samples.extend(list(source.list_all_objects_iter(prefix="")))
             else:
                 prefixes = (
                     [self._prefix_map[source]]
@@ -80,7 +62,7 @@ class AISBaseMapDataset(ABC, Dataset):
                     else self._prefix_map[source]
                 )
                 for prefix in prefixes:
-                    samples.extend(self._get_sample_list_from_source(source, prefix))
+                    samples.extend(list(source.list_all_objects_iter(prefix=prefix)))
 
         return samples
 

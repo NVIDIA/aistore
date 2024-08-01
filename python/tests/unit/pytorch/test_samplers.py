@@ -11,7 +11,6 @@ from aistore.sdk import Bucket
 from aistore.sdk.object import Object
 from aistore.pytorch import AISMapDataset, DynamicBatchSampler
 from torch.utils.data import DataLoader
-from aistore.sdk.object_attributes import ObjectProps
 
 
 class TestAISSampler(unittest.TestCase):
@@ -28,7 +27,7 @@ class TestAISSampler(unittest.TestCase):
         self.mock_bck = Mock(Bucket)
 
         self.patcher_get_objects = patch(
-            "aistore.pytorch.base_map_dataset.AISBaseMapDataset._create_samples_list",
+            "aistore.pytorch.base_map_dataset.AISBaseMapDataset._create_objects_list",
             return_value=self.mock_objects,
         )
 

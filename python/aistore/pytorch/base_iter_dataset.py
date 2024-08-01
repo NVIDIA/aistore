@@ -17,8 +17,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
     """
     A base class for creating AIS Iterable Datasets. Should not be instantiated directly. Subclasses
     should implement :meth:`__iter__` which returns the samples from the dataset and can optionally
-    override other methods from torch IterableDataset such as :meth:`__len__`. Additionally,
-    to modify the behavior of loading samples from a source, override :meth:`_get_sample_iter_from_source`.
+    override other methods from torch IterableDataset such as :meth:`__len__`.
 
     Args:
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
@@ -41,37 +40,20 @@ class AISBaseIterDataset(ABC, IterableDataset):
             else ais_source_list
         )
         self._prefix_map = prefix_map
-        self._iterator = None
+        self._obj_iterator = None
 
-    def _get_sample_iter_from_source(self, source: AISSource, prefix: str) -> Iterable:
+    def _create_objects_iter(self) -> Iterable:
         """
-        Creates an iterable of samples from the AISSource and the objects stored within. Must be able to handle prefixes
-        as well. The default implementation returns an iterable of Objects. This method can be overridden
-        to provides other functionality (such as reading the data and creating usable samples for different
-        file types).
-
-        Args:
-            source (AISSource): AISSource (:class:`aistore.sdk.ais_source.AISSource`) provides an interface for accessing a list of
-            AIS objects or their URLs
-            prefix (str): Prefix to dictate what objects should be included
+        Create an iterable of objects given the AIS sources and associated prefixes.
 
         Returns:
-            Iterable: Iterable over the content of the dataset
-        """
-        yield from source.list_all_objects_iter(prefix=prefix)
-
-    def _create_samples_iter(self) -> Iterable:
-        """
-        Create an iterable given the AIS sources and associated prefixes.
-
-        Returns:
-            Iterable: Iterable over the samples of the dataset
+            Iterable: Iterable over the objects from the sources provided
         """
         for source in self._ais_source_list:
             # Add pytorch worker support to the internal request client
             source.client = WorkerRequestClient(source.client)
             if source not in self._prefix_map or self._prefix_map[source] is None:
-                for sample in self._get_sample_iter_from_source(source, ""):
+                for sample in source.list_all_objects_iter(prefix=""):
                     yield sample
             else:
                 prefixes = (
@@ -80,7 +62,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
                     else self._prefix_map[source]
                 )
                 for prefix in prefixes:
-                    for sample in self._get_sample_iter_from_source(source, prefix):
+                    for sample in source.list_all_objects_iter(prefix=prefix):
                         yield sample
 
     def _get_worker_iter_info(self) -> tuple[Iterator, str]:
@@ -94,10 +76,10 @@ class AISBaseIterDataset(ABC, IterableDataset):
         worker_info = torch_utils.get_worker_info()
 
         if worker_info is None or worker_info.num_workers == 1:
-            return self._iterator, ""
+            return self._obj_iterator, ""
 
         worker_iter = islice(
-            self._iterator, worker_info.id, None, worker_info.num_workers
+            self._obj_iterator, worker_info.id, None, worker_info.num_workers
         )
         worker_name = f" (Worker {worker_info.id})"
 
@@ -114,8 +96,8 @@ class AISBaseIterDataset(ABC, IterableDataset):
         pass
 
     def _reset_iterator(self):
-        """Reset the iterator to start from the beginning."""
-        self._iterator = self._create_samples_iter()
+        """Reset the object iterator to start from the beginning."""
+        self._obj_iterator = self._create_objects_iter()
 
     def __len__(self):
         """
@@ -128,7 +110,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
         self._reset_iterator()
         sum = 0
 
-        for _ in self._iterator:
+        for _ in self._obj_iterator:
             sum += 1
 
         return sum

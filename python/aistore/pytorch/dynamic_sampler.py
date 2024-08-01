@@ -45,7 +45,7 @@ class DynamicBatchSampler(Sampler):
     ) -> None:
         self._data_source = data_source
         self._max_batch_size = max_batch_size
-        self._samples_list = data_source._create_samples_list()
+        self._samples_list = data_source._create_objects_list()
         self._drop_last = drop_last
         self._allow_oversized_samples = allow_oversized_samples
         self._logger = getLogger(f"{__name__}.put_files")

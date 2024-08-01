@@ -26,11 +26,11 @@ class TestAISDataset(unittest.TestCase):
         self.mock_bck = Mock(Bucket)
 
         self.patcher_get_objects_iterator = patch(
-            "aistore.pytorch.base_iter_dataset.AISBaseIterDataset._create_samples_iter",
+            "aistore.pytorch.base_iter_dataset.AISBaseIterDataset._create_objects_iter",
             return_value=iter(self.mock_objects),
         )
         self.patcher_get_objects = patch(
-            "aistore.pytorch.base_map_dataset.AISBaseMapDataset._create_samples_list",
+            "aistore.pytorch.base_map_dataset.AISBaseMapDataset._create_objects_list",
             return_value=self.mock_objects,
         )
         self.patcher_get_objects_iterator.start()
@@ -92,7 +92,7 @@ class TestAISDataset(unittest.TestCase):
 
     def test_shard_reader(self):
         # Mock get_wds_samples_iter
-        self.patcher = patch("aistore.pytorch.AISShardReader._create_samples_iter")
+        self.patcher = patch("aistore.pytorch.AISShardReader._create_objects_iter")
         mock_create_samples_iter = self.patcher.start()
 
         tar_buffer = BytesIO()

@@ -18,7 +18,8 @@ from aistore.sdk.list_object_flag import ListObjectFlag
 
 class AISShardReader(AISBaseIterDataset):
     """
-    An iterable-style dataset that iterates over objects stored as Webdataset shards.
+    An iterable-style dataset that iterates over objects stored as Webdataset shards
+    and yields samples represented as a tuple of basename (str) and contents (dictionary).
 
     Args:
         bucket_list (Union[Bucket, List[Bucket]]): Single or list of Bucket objects to load data
@@ -28,8 +29,8 @@ class AISShardReader(AISBaseIterDataset):
         show_progress (bool, optional): Enables console shard reading progress indicator
 
     Yields:
-        Tuple[str, List[bytes]]: Each item is a tuple where the first element is the basename of the shard
-        and the second element is a list of bytes representing the files in the shard.
+        Tuple[str, Dict(str, bytes)]: Each item is a tuple where the first element is the basename of the shard
+        and the second element is a dictionary mapping strings of file extensions to bytes.
     """
 
     def __init__(
@@ -55,7 +56,7 @@ class AISShardReader(AISBaseIterDataset):
         self._reset_iterator()
         length = 0
 
-        for shard in self._iterator:
+        for shard in self._obj_iterator:
 
             for _ in shard.bucket.list_objects_iter(
                 prefix=shard.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
