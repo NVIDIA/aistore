@@ -129,13 +129,13 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
 		if !cluOk {
-			return ErrNoPermissions
+			return fmt.Errorf("user `%s` has %v", tk.UserID, ErrNoPermissions)
 		}
 		if clusterID == "" {
 			return errors.New("requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
-			return fmt.Errorf("%v: [cluster %s, %s, granted(%s)]",
+			return fmt.Errorf("user `%s` has %v: [cluster %s, %s, granted(%s)]", tk.UserID,
 				ErrNoPermissions, clusterID, tk, cluACL.Describe(false /*include all*/))
 		}
 	}
@@ -152,11 +152,11 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 		if bckACL.Has(objPerms) {
 			return nil
 		}
-		return fmt.Errorf("%v: [%s, bucket %s, granted(%s)]",
+		return fmt.Errorf("user `%s` has %v: [%s, bucket %s, granted(%s)]", tk.UserID,
 			ErrNoPermissions, tk, bck.String(), bckACL.Describe(false /*include all*/))
 	}
 	if !cluOk || !cluACL.Has(objPerms) {
-		return fmt.Errorf("%v: [%s, granted(%s)]", ErrNoPermissions, tk, cluACL.Describe(false /*include all*/))
+		return fmt.Errorf("user `%s` has %v: [%s, granted(%s)]", tk.UserID, ErrNoPermissions, tk, cluACL.Describe(false /*include all*/))
 	}
 	return nil
 }
