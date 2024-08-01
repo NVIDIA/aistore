@@ -138,7 +138,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled":        true
 	},
 	"auth": {
-		"secret":      "$AIS_SECRET_KEY",
+		"secret":      "$AIS_AUTHN_SECRET_KEY",
 		"enabled":     ${AIS_AUTHN_ENABLED:-false}
 	},
 	"keepalivetracker": {
