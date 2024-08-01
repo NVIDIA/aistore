@@ -7,6 +7,11 @@ redirect_from:
  - /docs/prometheus.md/
 ---
 
+
+**August 2024 UPDATE**: added [complete reference](/docs/metrics-reference.md) that includes all supported metric names (both internal and visible externally), their respective types, and descriptions:
+
+* [Reference: all supported metrics](/docs/metrics-reference.md)
+
 ## Monitoring AIStore with Prometheus
 
 AIStore tracks a growing list of performance counters, utilization percentages, latency and throughput metrics, transmitted and received stats (total bytes and numbers of objects), error counters, and more.
@@ -64,40 +69,76 @@ $ curl http://hostname:8081/metrics | grep ais
 
 # A sample output follows below (note the metric names that must be self-explanatory):
 
-  # TYPE ais_target_DFIltrTgz_disk_sda_avg_rsize gauge
-  ais_target_DFIltrTgz_disk_sda_avg_rsize 23560
-  # HELP ais_target_DFIltrTgz_disk_sda_avg_wsize average write size (bytes)
-  # TYPE ais_target_DFIltrTgz_disk_sda_avg_wsize gauge
-  ais_target_DFIltrTgz_disk_sda_avg_wsize 63120
-  # HELP ais_target_DFIltrTgz_disk_sda_util gauge
-  # TYPE ais_target_DFIltrTgz_disk_sda_util gauge
-  ais_target_DFIltrTgz_disk_sda_util 42
-  # HELP ais_target_DFIltrTgz_get_mbps throughput (MB/s)
-  # TYPE ais_target_DFIltrTgz_get_mbps gauge
-  ais_target_DFIltrTgz_get_mbps 72.65
-  # HELP ais_target_DFIltrTgz_get_ms latency (milliseconds)
-  # TYPE ais_target_DFIltrTgz_get_ms gauge
-  ais_target_DFIltrTgz_get_ms 2
-  # HELP ais_target_DFIltrTgz_get_n total number of operations
-  # TYPE ais_target_DFIltrTgz_get_n counter
-  ais_target_DFIltrTgz_get_n 155431
-  # HELP ais_target_DFIltrTgz_get_redir_ms latency (milliseconds)
-  # TYPE ais_target_DFIltrTgz_get_redir_ms gauge
-  ais_target_DFIltrTgz_get_redir_ms 0
-  # HELP ais_target_DFIltrTgz_kalive_ms latency (milliseconds)
-  # TYPE ais_target_DFIltrTgz_kalive_ms gauge
-  ais_target_DFIltrTgz_kalive_ms 1
-  # HELP ais_target_DFIltrTgz_lst_ms latency (milliseconds)
-  # TYPE ais_target_DFIltrTgz_lst_ms gauge
-  ais_target_DFIltrTgz_lst_ms 2
-  # HELP ais_target_DFIltrTgz_lst_n total number of operations
-  # TYPE ais_target_DFIltrTgz_lst_n counter
-  ais_target_DFIltrTgz_lst_n 120
-  # HELP ais_target_DFIltrTgz_put_ms latency (milliseconds)
-  # TYPE ais_target_DFIltrTgz_put_ms gauge
-  ais_target_DFIltrTgz_put_ms 5
-  # HELP ais_target_DFIltrTgz_put_n total number of operations
-  ...
+```console
+   # HELP ais_target_disk_avg_rsize average read size (bytes)
+   # TYPE ais_target_disk_avg_rsize gauge
+   ais_target_disk_avg_rsize{disk="nvme0n1",node_id="ClCt8081"} 4096
+   # HELP ais_target_disk_avg_wsize average write size (bytes)
+   # TYPE ais_target_disk_avg_wsize gauge
+   ais_target_disk_avg_wsize{disk="nvme0n1",node_id="ClCt8081"} 260130
+   # HELP ais_target_disk_read_mbps read bandwidth (MB/s)
+   # TYPE ais_target_disk_read_mbps gauge
+   ais_target_disk_read_mbps{disk="nvme0n1",node_id="ClCt8081"} 14336
+   # HELP ais_target_disk_util disk utilization (%%)
+   # TYPE ais_target_disk_util gauge
+   ais_target_disk_util{disk="nvme0n1",node_id="ClCt8081"} 15
+   # HELP ais_target_disk_write_mbps write bandwidth (MB/s)
+   # TYPE ais_target_disk_write_mbps gauge
+   ais_target_disk_write_mbps{disk="nvme0n1",node_id="ClCt8081"} 4.54291456e+08
+   # HELP ais_target_kalive_ms in-cluster keep-alive (heartbeat): average time (milliseconds) over the last periodic.stats_time interval
+   # TYPE ais_target_kalive_ms gauge
+   ais_target_kalive_ms{node_id="ClCt8081"} 0
+   # HELP ais_target_put_bytes PUT: total cumulative size (bytes)
+   # TYPE ais_target_put_bytes counter
+   ais_target_put_bytes{node_id="ClCt8081"} 1.078984704e+10
+   # HELP ais_target_put_count total number of executed PUT(object) requests
+   # TYPE ais_target_put_count counter
+   ais_target_put_count{node_id="ClCt8081"} 1029
+   # HELP ais_target_put_mbps PUT: average throughput (MB/s) over the last periodic.stats_time interval
+   # TYPE ais_target_put_mbps gauge
+   ais_target_put_mbps{node_id="ClCt8081"} 412.09
+   # HELP ais_target_put_ms PUT: average time (milliseconds) over the last periodic.stats_time interval
+   # TYPE ais_target_put_ms gauge
+...
+...
+   # HELP ais_target_get_mbps GET: average throughput (MB/s) over the last periodic.stats_time interval
+   # TYPE ais_target_get_mbps gauge
+   ais_target_get_mbps{node_id="ClCt8081"} 7189.04
+   # HELP ais_target_get_ms GET: average time (milliseconds) over the last periodic.stats_time interval
+   # TYPE ais_target_get_ms gauge
+   ais_target_get_ms{node_id="ClCt8081"} 7
+   # HELP ais_target_get_ns_total GET: total cumulative time (nanoseconds)
+   # TYPE ais_target_get_ns_total counter
+   ais_target_get_ns_total{node_id="ClCt8081"} 5.0083047525e+10
+   # HELP ais_target_get_redir_ms GET: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval
+   # TYPE ais_target_get_redir_ms gauge
+   ais_target_get_redir_ms{node_id="ClCt8081"} 0
+   # HELP ais_target_lcache_collision_count number of LOM cache collisions (core, internal)
+   # TYPE ais_target_lcache_collision_count counter
+   ais_target_lcache_collision_count{node_id="ClCt8081"} 8511
+   # HELP ais_target_lst_count total number of executed list-objects requests
+   # TYPE ais_target_lst_count counter
+   ais_target_lst_count{node_id="ClCt8081"} 1
+   # HELP ais_target_lst_ms list-objects: average time (milliseconds) over the last periodic.stats_time interval
+   # TYPE ais_target_lst_ms gauge
+   ais_target_lst_ms{node_id="ClCt8081"} 4
+   # HELP ais_target_put_bytes PUT: total cumulative size (bytes)
+   # TYPE ais_target_put_bytes counter
+   ais_target_put_bytes{node_id="ClCt8081"} 1.721761792e+10
+   # HELP ais_target_put_count total number of executed PUT(object) requests
+   # TYPE ais_target_put_count counter
+   ais_target_put_count{node_id="ClCt8081"} 1642
+   # HELP ais_target_put_ns_total PUT: total cumulative time (nanoseconds)
+   # TYPE ais_target_put_ns_total counter
+   ais_target_put_ns_total{node_id="ClCt8081"} 9.44367232e+09
+   # HELP ais_target_state_flags bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state_info.go for details
+   # TYPE ais_target_state_flags gauge
+   ais_target_state_flags{node_id="ClCt8081"} 6
+   # HELP ais_target_uptime this node's uptime since its startup (seconds)
+   # TYPE ais_target_uptime gauge
+   ais_target_uptime{node_id="ClCt8081"} 210
+...
+...
 ```
 
 And for continuous monitoring of any given subset of metrics (still _without_ using actual Prometheus installation) one could also run something like:

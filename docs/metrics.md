@@ -7,6 +7,10 @@ redirect_from:
  - /docs/metrics.md/
 ---
 
+**August 2024 UPDATE**: added [complete reference](/docs/metrics-reference.md) that includes all supported metric names (both internal and visible externally), their respective types, and descriptions:
+
+* [Reference: all supported metrics](/docs/metrics-reference.md)
+
 ## Introduction
 
 AIStore tracks, logs, and reports a large and growing number of counters, latencies and throughputs including (but not limited to) metrics that reflect cluster recovery and global rebalancing, all [extended long-running operations](/xact/README.md), and, of course, the basic read, write, list transactions, and more.

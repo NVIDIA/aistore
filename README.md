@@ -188,6 +188,7 @@ With a little effort, they all could be extracted and used outside.
   - [Feature flags](/docs/feature_flags.md)
 - Observability
   - [Observability](/docs/metrics.md)
+    - [Reference: all supported metrics](/docs/metrics-reference.md)
   - [Prometheus](/docs/prometheus.md)
   - [CLI: `ais show performance`](/docs/cli/show.md)
 - For users and developers
