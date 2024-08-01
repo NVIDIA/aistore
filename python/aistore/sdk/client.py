@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
@@ -19,13 +19,19 @@ from aistore.sdk.object import Object
 from aistore.sdk.errors import InvalidURLException
 
 
-# pylint: disable=unused-variable, duplicate-code
+# pylint: disable=unused-variable, duplicate-code, too-many-arguments
 class Client:
     """
     AIStore client for managing buckets, objects, ETL jobs
 
     Args:
         endpoint (str): AIStore endpoint
+        skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
+        ca_cert (str, optional): Path to a CA certificate file for SSL verification.
+        timeout (Union[float, tuple[float, float], None], optional): Request timeout in seconds; a single float
+            for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
+            or None to disable timeout.
+        token (str, optional): Authorization token.
     """
 
     def __init__(
@@ -34,8 +40,11 @@ class Client:
         skip_verify: bool = False,
         ca_cert: str = None,
         timeout: float | tuple[float, float] | None = None,
+        token: str = None,
     ):
-        self._request_client = RequestClient(endpoint, skip_verify, ca_cert, timeout)
+        self._request_client = RequestClient(
+            endpoint, skip_verify, ca_cert, timeout, token
+        )
 
     def bucket(
         self, bck_name: str, provider: str = PROVIDER_AIS, namespace: Namespace = None

@@ -37,6 +37,8 @@ HEADER_OBJECT_BLOB_WORKERS = HEADER_PREFIX + "blob-workers"
 HEADER_OBJECT_APPEND_HANDLE = "ais-append-handle"
 # Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 HEADER_RANGE = "Range"
+# AuthN Headers
+HEADER_AUTHORIZATION = "Authorization"
 
 # URL Params
 # See api/apc/query.go
@@ -79,6 +81,8 @@ URL_PATH_ETL = "etl"
 URL_PATH_DSORT = "sort"
 URL_PATH_REVERSE = "reverse"
 DSORT_ABORT = "abort"
+# AuthN
+URL_PATH_AUTHN_USERS = "users"
 
 # Bucket providers
 # See api/apc/provider.go
@@ -152,3 +156,6 @@ DUIS = (
 
 # AWS Constants
 AWS_DEFAULT_REGION = "us-east-1"
+
+# Time constants
+NANOSECONDS_IN_SECOND = 1_000_000_000

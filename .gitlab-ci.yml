@@ -451,6 +451,18 @@ test:short:k8s:
   script:
     - make test-short
 
+test:short:python-authn:
+  <<: *test_short_optional_def
+  variables:
+    AIS_AUTHN_ENABLED: "true"
+    AIS_AUTHN_SU_NAME: "admin"
+    AIS_AUTHN_SU_PASS: "admin"
+    AIS_AUTHN_URL: "http://localhost:52001"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - cd python/
+    - make python_authn_tests
+
 test:short:python-etl:
   extends: .test_k8s_short_template
   <<: *default_only_def

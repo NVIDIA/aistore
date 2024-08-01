@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -23,20 +23,26 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
     @patch("aistore.sdk.client.RequestClient")
     def test_init_defaults(self, mock_request_client):
         Client(self.endpoint)
-        mock_request_client.assert_called_with(self.endpoint, False, None, None)
+        mock_request_client.assert_called_with(self.endpoint, False, None, None, None)
 
     @test_cases(
-        (True, None, None),
-        (False, "ca_cert_location", None),
-        (False, None, 30.0),
-        (False, None, (10, 30.0)),
+        (True, None, None, "dummy.token"),
+        (False, "ca_cert_location", None, None),
+        (False, None, 30.0, None),
+        (False, None, (10, 30.0), "dummy.token"),
     )
     @patch("aistore.sdk.client.RequestClient")
     def test_init(self, test_case, mock_request_client):
-        skip_verify, ca_cert, timeout = test_case
-        Client(self.endpoint, skip_verify=skip_verify, ca_cert=ca_cert, timeout=timeout)
+        skip_verify, ca_cert, timeout, token = test_case
+        Client(
+            self.endpoint,
+            skip_verify=skip_verify,
+            ca_cert=ca_cert,
+            timeout=timeout,
+            token=token,
+        )
         mock_request_client.assert_called_with(
-            self.endpoint, skip_verify, ca_cert, timeout
+            self.endpoint, skip_verify, ca_cert, timeout, token
         )
 
     def test_bucket(self):

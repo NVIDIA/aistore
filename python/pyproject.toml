@@ -11,6 +11,7 @@ include = ["aistore"]
 [tool.pytest.ini_options]
 markers = [
     "etl: marks tests as using etl and therefore requiring k8s cluster",
+    "authn: marks tests as using AuthN and therefore requiring AIStore cluster to be deployed with AuthN",
 ]
 
 [tool.hatch.version]

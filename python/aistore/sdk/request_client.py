@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 import os
 from urllib.parse import urljoin, urlencode
@@ -12,6 +12,7 @@ from aistore.sdk.const import (
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
     AIS_SERVER_CRT,
+    HEADER_AUTHORIZATION,
 )
 from aistore.sdk.utils import handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
@@ -19,13 +20,19 @@ from aistore.version import __version__ as sdk_version
 T = TypeVar("T")
 
 
-# pylint: disable=unused-variable, duplicate-code
+# pylint: disable=unused-variable, duplicate-code, too-many-arguments
 class RequestClient:
     """
     Internal client for buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
 
     Args:
         endpoint (str): AIStore endpoint
+        skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
+        ca_cert (str, optional): Path to a CA certificate file for SSL verification.
+        timeout (Union[float, tuple[float, float], None], optional): Request timeout in seconds; a single float
+            for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
+            or None to disable timeout.
+        token (str, optional): Authorization token.
     """
 
     def __init__(
@@ -34,6 +41,7 @@ class RequestClient:
         skip_verify: bool = False,
         ca_cert: str = None,
         timeout=None,
+        token: str = None,
     ):
         self._endpoint = endpoint
         self._base_url = urljoin(endpoint, "v1")
@@ -41,6 +49,7 @@ class RequestClient:
         self._skip_verify = skip_verify
         self._ca_cert = ca_cert
         self._session = self.create_new_session()
+        self._token = token
 
     def create_new_session(self) -> Session:
         """
@@ -93,6 +102,13 @@ class RequestClient:
         """
         return self._session
 
+    @property
+    def token(self):
+        """
+        Returns: Token for Authorization
+        """
+        return self._token
+
     def request_deserialize(
         self, method: str, path: str, res_model: Type[T], **kwargs
     ) -> T:
@@ -136,6 +152,9 @@ class RequestClient:
             headers = {}
         headers[HEADER_CONTENT_TYPE] = JSON_CONTENT_TYPE
         headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
+        if self.token:
+            headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
+
         resp = self.session.request(
             method,
             url,
