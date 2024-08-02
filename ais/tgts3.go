@@ -248,7 +248,9 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("getMptPart", bck.String(), objName, q)
 		}
-		t.getMptPart(w, r, bck, objName, q)
+		lom := core.AllocLOM(objName)
+		t.getMptPart(w, r, bck, lom, q)
+		core.FreeLOM(lom)
 		return
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)
