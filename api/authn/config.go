@@ -23,7 +23,7 @@ type (
 		Server  ServerConf  `json:"auth"`
 		Timeout TimeoutConf `json:"timeout"`
 		// private
-		mu sync.RWMutex
+		mu sync.RWMutex `json:"-"`
 	}
 	LogConf struct {
 		Dir   string `json:"dir"`
@@ -42,8 +42,8 @@ type (
 		Secret string       `json:"secret"`
 		Expire cos.Duration `json:"expiration_time"`
 		// private
-		psecret *string
-		pexpire *cos.Duration
+		psecret *string       `json:"-"`
+		pexpire *cos.Duration `json:"-"`
 	}
 	TimeoutConf struct {
 		Default cos.Duration `json:"default_timeout"`
