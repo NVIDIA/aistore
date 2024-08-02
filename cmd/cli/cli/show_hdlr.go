@@ -712,6 +712,10 @@ func showClusterConfig(c *cli.Context, section string) error {
 		return err
 	}
 
+	if section == "backend" {
+		// NOTE special case: custom marshaling (ref 080235)
+		usejs = true
+	}
 	if usejs && section != "" {
 		if printSectionJSON(c, cluConfig, section) {
 			return nil
@@ -778,6 +782,10 @@ func showNodeConfig(c *cli.Context) error {
 		}
 	}
 
+	if section == "backend" {
+		// NOTE special case: custom marshaling (ref 080235)
+		usejs = true
+	}
 	if usejs {
 		opts := teb.Jopts(true)
 		warn := "option " + qflprn(jsonFlag) + " won't show node <=> cluster configuration differences, if any."

@@ -232,6 +232,7 @@ func setNodeConfigCompletions(c *cli.Context) {
 			v = &config.LocalConfig
 		} else if argLast(c) == cfgScopeInherited {
 			fmt.Println(cmdReset)
+			fmt.Println("backend") // NOTE special case: custom marshaling (ref 080235)
 		}
 		err := cmn.IterFields(v, func(tag string, _ cmn.IterField) (err error, b bool) {
 			props.Set(tag)
@@ -336,6 +337,12 @@ func setCluConfigCompletions(c *cli.Context) {
 	if propValueCompletion(c, false /*bucket scope*/) {
 		return
 	}
+
+	// NOTE special case: custom marshaling (ref 080235)
+	if c.NArg() == 0 {
+		propList = append(propList, "backend")
+	}
+
 	for _, prop := range propList {
 		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
