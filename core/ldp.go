@@ -126,7 +126,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 		return CRMD{Eq: true}
 	}
 
-	oa, ecode, err := T.Backend(bck).HeadObj(context.Background(), lom, origReq)
+	oa, ecode, err := T.HeadCold(lom, origReq)
 	if err == nil {
 		if !lom.IsFeatureSet(feat.DisableColdGET) || lom.Equal(oa) {
 			debug.Assert(ecode == 0, ecode)

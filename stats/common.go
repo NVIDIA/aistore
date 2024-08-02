@@ -68,17 +68,19 @@ const (
 	// KindCounter:
 	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
 	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
-	GetCount    = "get.n"    // GET(object) count = (cold + warm)
-	PutCount    = "put.n"    // ditto PUT
-	AppendCount = "append.n" // ditto etc.
-	DeleteCount = "del.n"    // ditto
-	RenameCount = "ren.n"    // ditto
-	ListCount   = "lst.n"    // list-objects
+	GetCount    = "get.n" // GET(object) count = (cold + warm)
+	PutCount    = "put.n" // ditto PUT
+	HeadCount   = "head.n"
+	AppendCount = "append.n"
+	DeleteCount = "del.n"
+	RenameCount = "ren.n"
+	ListCount   = "lst.n" // list-objects
 
 	// error counters
 	// see also: `IncErr`, `regCommon`, `ioErrNames`
 	ErrGetCount    = errPrefix + GetCount
 	ErrPutCount    = errPrefix + PutCount
+	ErrHeadCount   = errPrefix + HeadCount
 	ErrAppendCount = errPrefix + AppendCount
 	ErrDeleteCount = errPrefix + DeleteCount
 	ErrRenameCount = errPrefix + RenameCount
@@ -169,6 +171,11 @@ func (r *runner) regCommon(snode *meta.Snode) {
 			Help: "total number of executed PUT(object) requests",
 		},
 	)
+	r.reg(snode, HeadCount, KindCounter,
+		&Extra{
+			Help: "total number of executed HEAD(object) requests", // NOTE: currently, we only count remote ("cold") HEAD
+		},
+	)
 	r.reg(snode, AppendCount, KindCounter,
 		&Extra{
 			Help: "total number of executed APPEND(object) requests",
@@ -199,6 +206,11 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, ErrPutCount, KindCounter,
 		&Extra{
 			Help: "total number of PUT(object) errors",
+		},
+	)
+	r.reg(snode, ErrHeadCount, KindCounter,
+		&Extra{
+			Help: "total number of HEAD(object) errors", // ditto (HeadCount above)
 		},
 	)
 	r.reg(snode, ErrAppendCount, KindCounter,

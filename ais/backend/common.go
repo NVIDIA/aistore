@@ -119,6 +119,29 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		},
 	)
 
+	// HEAD
+	b.metrics[stats.HeadCount] = prefix + "." + stats.HeadCount
+	b.metrics[stats.HeadLatencyTotal] = prefix + "." + stats.HeadLatencyTotal
+
+	tr.RegExtMetric(snode,
+		b.metrics[stats.HeadCount],
+		stats.KindCounter,
+		&stats.Extra{
+			Help:    "HEAD: total number of executed remote requests to a given backend",
+			StrName: "remote_head_count",
+			Labels:  labels,
+		},
+	)
+	tr.RegExtMetric(snode,
+		b.metrics[stats.HeadLatencyTotal],
+		stats.KindTotal,
+		&stats.Extra{
+			Help:    "HEAD: total cumulative time (nanoseconds) to execute remote requests",
+			StrName: "remote_head_ns_total",
+			Labels:  labels,
+		},
+	)
+
 	// version changed out-of-band
 	b.metrics[stats.VerChangeCount] = prefix + "." + stats.VerChangeCount
 	b.metrics[stats.VerChangeSize] = prefix + "." + stats.VerChangeSize

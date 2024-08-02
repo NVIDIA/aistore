@@ -211,6 +211,23 @@ func (t *target) GetColdBlob(params *core.BlobParams, oa *cmn.ObjAttrs) (xctn co
 	return xctn, err
 }
 
+func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+	var (
+		backend = t.Backend(lom.Bck())
+		now     = mono.NanoTime()
+	)
+	oa, ecode, err = backend.HeadObj(context.Background(), lom, origReq)
+	if err != nil {
+		t.statsT.IncErr(stats.ErrHeadCount)
+	} else {
+		t.statsT.AddMany(
+			cos.NamedVal64{Name: backend.MetricName(stats.HeadCount), Value: 1},
+			cos.NamedVal64{Name: backend.MetricName(stats.HeadLatencyTotal), Value: mono.SinceNano(now)},
+		)
+	}
+	return oa, ecode, err
+}
+
 func (t *target) Promote(params *core.PromoteParams) (ecode int, err error) {
 	lom := core.AllocLOM(params.ObjName)
 	if err = lom.InitBck(params.Bck.Bucket()); err == nil {

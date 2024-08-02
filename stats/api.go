@@ -132,6 +132,8 @@ func LatencyToCounter(latency string) string {
 		return GetCount
 	case PutLatency, PutRedirLatency:
 		return PutCount
+	case HeadLatency:
+		return HeadCount
 	case ListLatency:
 		return ListCount
 	case AppendLatency:

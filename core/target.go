@@ -122,6 +122,8 @@ type (
 
 		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error)
 
+		HeadCold(lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
+
 		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
 		Promote(params *PromoteParams) (ecode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool

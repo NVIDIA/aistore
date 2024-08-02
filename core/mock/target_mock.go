@@ -72,6 +72,10 @@ func (*TargetMock) GetCold(context.Context, *core.LOM, cmn.OWT) (int, error) {
 	return http.StatusOK, nil
 }
 
+func (*TargetMock) HeadCold(*core.LOM, *http.Request) (*cmn.ObjAttrs, int, error) {
+	return nil, 0, nil
+}
+
 func (*TargetMock) GetColdBlob(*core.BlobParams, *cmn.ObjAttrs) (core.Xact, error) {
 	return nil, nil
 }

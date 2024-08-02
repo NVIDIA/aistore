@@ -1104,7 +1104,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, query url.Values, bc
 	} else {
 		// cold HEAD
 		var oa *cmn.ObjAttrs
-		oa, ecode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom, r)
+		oa, ecode, err = t.HeadCold(lom, r)
 		if err != nil {
 			if ecode != http.StatusNotFound {
 				err = cmn.NewErrFailedTo(t, "HEAD", lom.Cname(), err)
