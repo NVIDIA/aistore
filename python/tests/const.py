@@ -20,7 +20,6 @@ ETL_NAME = "test-etl-name"
 # Object
 OBJ_READ_TYPE_ALL = "read_all"
 OBJ_READ_TYPE_CHUNK = "chunk"
-OBJ_NAME = "test-object"
 OBJ_CONTENT = "test-content"
 OBJECT_COUNT = 10
 STRESS_TEST_OBJECT_COUNT = 500

@@ -90,31 +90,29 @@ class RemoteEnabledTest(unittest.TestCase):
         elif REMOTE_SET:
             self.cloud_objects.extend(names)
 
-    def _create_object(self, obj_name=""):
+    def _create_object(self):
         """
-        Create an object with the given object name and track them for later cleanup
-
-        Args:
-            obj_name: Name of the object to create
+        Create an object and track it for later cleanup
 
         Returns:
             The object created
         """
+        obj_name = f"{self.obj_prefix}-{random_string(6)}"
         obj = self.bucket.object(obj_name=obj_name)
         self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
         return obj
 
-    def _create_object_with_content(self, obj_name="", obj_size=None):
+    def _create_object_with_content(self, obj_size=None):
         """
-        Create an object with the given object name and some content and track them for later cleanup
+        Create an object with the given content and track for later cleanup
 
         Args:
-            obj_name: Name of the object to create
+            obj_size: Size of the content in the created object
 
         Returns:
-            The content of the object created
+            Tuple of the object name and the content of the object created
         """
-
+        obj_name = f"{self.obj_prefix}-{random_string(6)}"
         content = create_and_put_object(
             client=self.client,
             bck_name=self.bck_name,
@@ -123,7 +121,7 @@ class RemoteEnabledTest(unittest.TestCase):
             obj_size=obj_size,
         )
         self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
-        return content
+        return obj_name, content
 
     def _create_objects(
         self, num_obj=OBJECT_COUNT, suffix="", obj_names=None, obj_size=None

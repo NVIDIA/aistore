@@ -15,7 +15,6 @@ from aistore.sdk.types import ArchiveSettings, BlobDownloadSettings
 
 from tests.const import (
     SMALL_FILE_SIZE,
-    OBJ_NAME,
     OBJ_READ_TYPE_ALL,
     OBJ_READ_TYPE_CHUNK,
     TEST_TIMEOUT,
@@ -45,7 +44,7 @@ class TestObjectOps(RemoteEnabledTest):
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
-        stream = self._create_object(obj_name).get(chunk_size=chunk_size)
+        stream = self.bucket.object(obj_name).get(chunk_size=chunk_size)
 
         self.assertEqual(stream.attributes.size, len(exp_content))
         self.assertNotEqual(stream.attributes.checksum_type, "")
@@ -65,16 +64,13 @@ class TestObjectOps(RemoteEnabledTest):
     def _put_objects(self, num_obj, obj_size=None):
         name_to_content = {}
         for i in range(num_obj):
-            obj_name = f"obj{ i }"
-            content = self._create_object_with_content(
-                obj_name=obj_name, obj_size=obj_size
-            )
+            obj_name, content = self._create_object_with_content(obj_size=obj_size)
             name_to_content[obj_name] = content
         return name_to_content
 
     def test_put_content(self):
         content = b"content for the object"
-        obj = self._create_object(OBJ_NAME)
+        obj = self._create_object()
         obj.put_content(content)
         res = obj.get()
         self.assertEqual(content, res.read_all())
@@ -85,7 +81,7 @@ class TestObjectOps(RemoteEnabledTest):
         filename = self.local_test_files.joinpath("test_file")
         with open(filename, "wb") as writer:
             writer.write(content)
-        obj = self._create_object(OBJ_NAME)
+        obj = self._create_object()
         obj.put_file(filename)
         res = obj.get()
         self.assertEqual(content, res.read_all())
@@ -111,7 +107,7 @@ class TestObjectOps(RemoteEnabledTest):
 
     def test_append_content(self):
         content = b"object head before append"
-        obj = self._create_object(OBJ_NAME)
+        obj = self._create_object()
         obj.put_content(content)
 
         obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
@@ -125,7 +121,7 @@ class TestObjectOps(RemoteEnabledTest):
 
     def test_get_object_appended_without_flush(self):
         original_content = b"object head before append"
-        obj = self._create_object(OBJ_NAME)
+        obj = self._create_object()
         obj.put_content(original_content)
 
         obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
@@ -286,8 +282,7 @@ class TestObjectOps(RemoteEnabledTest):
         "Remote bucket is not set",
     )
     def test_blob_download(self):
-        obj_name = "obj-blob-download"
-        _ = self._create_object_with_content(obj_name=obj_name)
+        obj_name, _ = self._create_object_with_content()
 
         evict_job_id = self.bucket.objects(obj_names=[obj_name]).evict()
         self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
@@ -314,10 +309,11 @@ class TestObjectOps(RemoteEnabledTest):
             "file3.cls": b"3",
         }
         create_archive(archive_path, content_dict)
-        obj = self._create_object(archive_name)
+        obj_name = f"{self.obj_prefix}-{archive_name}"
+        obj = self.bucket.object(obj_name)
         obj.put_file(archive_path)
         objs = self.bucket.list_objects_iter(
-            prefix=archive_name, props="name", flags=[ListObjectFlag.ARCH_DIR]
+            prefix=obj.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
         )
         obj_names = [obj.name for obj in objs]
         self.assertEqual(len(obj_names), 7)

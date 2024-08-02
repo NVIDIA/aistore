@@ -59,8 +59,7 @@ class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
         "Remote bucket is not set",
     )
     def test_job_wait_single_node(self):
-        obj_name = "test-obj"
-        _ = self._create_object_with_content(obj_name=obj_name)
+        obj_name, _ = self._create_object_with_content()
 
         evict_job_id = self.bucket.objects(obj_names=[obj_name]).evict()
         self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
