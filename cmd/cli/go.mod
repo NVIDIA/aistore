@@ -3,7 +3,7 @@ module github.com/NVIDIA/aistore/cmd/cli
 go 1.22.3
 
 require (
-	github.com/NVIDIA/aistore v1.3.24-0.20240801153904-abe0c157a63d
+	github.com/NVIDIA/aistore v1.3.24-0.20240802125643-e24c869c5db3
 	github.com/fatih/color v1.17.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.19.0
