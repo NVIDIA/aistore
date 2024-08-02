@@ -7,10 +7,12 @@ redirect_from:
  - /docs/python_sdk.md/
 ---
 
-AIStore Python SDK is a growing set of client-side objects and methods to access and utilize AIS clusters.
+AIStore Python SDK is a growing set of client-side objects and methods to access and utilize AIS clusters. This document contains API documentation
+for the AIStore Python SDK.
 
-> For PyTorch integration and usage examples, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI), or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://github.com/NVIDIA/aistore/tree/main/python/aistore).
-
+> For our PyTorch integration, please refer to the [Pytorch Docs](https://github.com/NVIDIA/aistore/tree/main/docs/pytorch.md).
+For more information, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI)
+or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://github.com/NVIDIA/aistore/tree/main/python/aistore).
 * [client](#client)
   * [Client](#client.Client)
     * [bucket](#client.Client.bucket)
@@ -18,6 +20,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [job](#client.Client.job)
     * [etl](#client.Client.etl)
     * [dsort](#client.Client.dsort)
+    * [fetch\_object\_by\_url](#client.Client.fetch_object_by_url)
 * [cluster](#cluster)
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
@@ -31,6 +34,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [get\_performance](#cluster.Cluster.get_performance)
 * [bucket](#bucket)
   * [Bucket](#bucket.Bucket)
+    * [client](#bucket.Bucket.client)
     * [client](#bucket.Bucket.client)
     * [qparam](#bucket.Bucket.qparam)
     * [provider](#bucket.Bucket.provider)
@@ -62,6 +66,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
   * [Object](#object.Object)
     * [bucket](#object.Object.bucket)
     * [name](#object.Object.name)
+    * [props](#object.Object.props)
     * [head](#object.Object.head)
     * [get](#object.Object.get)
     * [get\_semantic\_url](#object.Object.get_semantic_url)
@@ -74,6 +79,8 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [append\_content](#object.Object.append_content)
 * [multiobj.object\_group](#multiobj.object_group)
   * [ObjectGroup](#multiobj.object_group.ObjectGroup)
+    * [client](#multiobj.object_group.ObjectGroup.client)
+    * [client](#multiobj.object_group.ObjectGroup.client)
     * [list\_urls](#multiobj.object_group.ObjectGroup.list_urls)
     * [list\_all\_objects\_iter](#multiobj.object_group.ObjectGroup.list_all_objects_iter)
     * [delete](#multiobj.object_group.ObjectGroup.delete)
@@ -87,6 +94,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
   * [ObjectNames](#multiobj.object_names.ObjectNames)
 * [multiobj.object\_range](#multiobj.object_range)
   * [ObjectRange](#multiobj.object_range.ObjectRange)
+    * [from\_string](#multiobj.object_range.ObjectRange.from_string)
 * [multiobj.object\_template](#multiobj.object_template)
   * [ObjectTemplate](#multiobj.object_template.ObjectTemplate)
 * [job](#job)
@@ -116,6 +124,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [start](#etl.Etl.start)
     * [stop](#etl.Etl.stop)
     * [delete](#etl.Etl.delete)
+    * [validate\_etl\_name](#etl.Etl.validate_etl_name)
 
 <a id="client.Client"></a>
 
@@ -232,6 +241,25 @@ Does not make any HTTP request, only instantiates a dSort object.
 **Returns**:
 
   dSort object created
+
+<a id="client.Client.fetch_object_by_url"></a>
+
+### fetch\_object\_by\_url
+
+```python
+def fetch_object_by_url(url: str) -> Object
+```
+
+Retrieve an object based on its URL.
+
+**Arguments**:
+
+- `url` _str_ - Full URL of the object (e.g., "ais://bucket1/file.txt")
+  
+
+**Returns**:
+
+- `Object` - The object retrieved from the specified URL
 
 <a id="cluster.Cluster"></a>
 
@@ -446,6 +474,17 @@ def client() -> RequestClient
 
 The client bound to this bucket.
 
+<a id="bucket.Bucket.client"></a>
+
+### client
+
+```python
+@client.setter
+def client(client) -> RequestClient
+```
+
+Update the client bound to this bucket.
+
 <a id="bucket.Bucket.qparam"></a>
 
 ### qparam
@@ -516,15 +555,18 @@ of full URLs to every object in this bucket matching the specified prefix
 ### list\_all\_objects\_iter
 
 ```python
-def list_all_objects_iter(prefix: str = "") -> Iterable[Object]
+def list_all_objects_iter(prefix: str = "",
+                          props: str = "name,size") -> Iterable[Object]
 ```
 
 Implementation of the abstract method from AISSource that provides an iterator
-of all the objects in this bucket matching the specified prefix
+of all the objects in this bucket matching the specified prefix.
 
 **Arguments**:
 
 - `prefix` _str, optional_ - Limit objects selected by a given string prefix
+- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size".
+- `Properties` - "name", "size", "atime", "version", "checksum", "target_url", "copies".
   
 
 **Returns**:
@@ -705,7 +747,8 @@ Returns bucket summary (starts xaction job and polls for results).
 
 ```python
 def info(flt_presence: int = FLTPresence.FLT_EXISTS,
-         bsumm_remote: bool = True)
+         bsumm_remote: bool = True,
+         prefix: str = "")
 ```
 
 Returns bucket summary and information/properties.
@@ -724,6 +767,7 @@ Returns bucket summary and information/properties.
   the cluster as replica, ec-slices, misplaced
   FLT_EXISTS_OUTSIDE - not present; exists outside cluster
 - `bsumm_remote` _bool_ - If True, returned bucket info will include remote objects as well
+- `prefix` _str_ - Only include objects with the given prefix in the bucket
   
 
 **Raises**:
@@ -976,7 +1020,7 @@ Puts files found in a given filepath as objects to a bucket in AIS storage.
 
 - `path` _str_ - Local filepath, can be relative or absolute
 - `prefix_filter` _str, optional_ - Only put files with names starting with this prefix
-- `pattern` _str, optional_ - Regex pattern to filter files
+- `pattern` _str, optional_ - Shell-style wildcard pattern to filter files
 - `basename` _bool, optional_ - Whether to use the file names only as object names and omit the path information
 - `prepend` _str, optional_ - Optional string to use as a prefix in the object name for all objects uploaded
   No delimiter ("/", "-", etc.) is automatically applied between the prepend value and the object name
@@ -1003,7 +1047,7 @@ Puts files found in a given filepath as objects to a bucket in AIS storage.
 ### object
 
 ```python
-def object(obj_name: str) -> Object
+def object(obj_name: str, props: ObjectProps = None) -> Object
 ```
 
 Factory constructor for an object in this bucket.
@@ -1012,6 +1056,7 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 **Arguments**:
 
 - `obj_name` _str_ - Name of object
+- `size` _int, optional_ - Size of object in bytes
   
 
 **Returns**:
@@ -1131,6 +1176,8 @@ A class representing an object of a bucket bound to a client.
 
 - `bucket` _Bucket_ - Bucket to which this object belongs
 - `name` _str_ - name of object
+- `size` _int, optional_ - size of object in bytes
+- `props` _ObjectProps, optional_ - Properties of object
 
 <a id="object.Object.bucket"></a>
 
@@ -1141,7 +1188,7 @@ A class representing an object of a bucket bound to a client.
 def bucket()
 ```
 
-Bucket containing this object
+Bucket containing this object.
 
 <a id="object.Object.name"></a>
 
@@ -1149,10 +1196,21 @@ Bucket containing this object
 
 ```python
 @property
-def name()
+def name() -> str
 ```
 
-Name of this object
+Name of this object.
+
+<a id="object.Object.props"></a>
+
+### props
+
+```python
+@property
+def props() -> ObjectProps
+```
+
+Properties of this object.
 
 <a id="object.Object.head"></a>
 
@@ -1162,7 +1220,7 @@ Name of this object
 def head() -> Header
 ```
 
-Requests object properties.
+Requests object properties and returns headers. Updates props.
 
 **Returns**:
 
@@ -1328,7 +1386,7 @@ See more info here: https://aiatscale.org/blog/2022/03/17/promote
 
 **Returns**:
 
-  Job ID (as str) that can be used to check the job's status; empty ("") if the job failed or executed synchronously
+  Job ID (as str) that can be used to check the status of the operation, or empty if job is done synchronously
   
 
 **Raises**:
@@ -1400,20 +1458,24 @@ Returns job ID that for the blob download operation.
 ### append\_content
 
 ```python
-def append_content(content: bytes, handle: str = "", flush: bool = False) -> str:
+def append_content(content: bytes,
+                   handle: str = "",
+                   flush: bool = False) -> str
 ```
 
 Append bytes as an object to a bucket in AIS storage.
 
 **Arguments**:
 
-- `content` _bytes_: Bytes to append to the object
-- `handle` _str_: Handle string to use for subsequent appends or flush (empty for the first append)
-- `flush` _bool_: Whether to flush and finalize the append operation, making the object accessible
+- `content` _bytes_ - Bytes to append to the object.
+- `handle` _str_ - Handle string to use for subsequent appends or flush (empty for the first append).
+- `flush` _bool_ - Whether to flush and finalize the append operation, making the object accessible.
+  
 
 **Returns**:
 
-  The handle string for subsequent appends or flush (empty on flush)
+- `handle` _str_ - Handle string to pass for subsequent appends or flush.
+  
 
 **Raises**:
 
@@ -1441,6 +1503,28 @@ should be provided.
 - `obj_range` _ObjectRange, optional_ - Range defining which object names in the bucket should be included
 - `obj_template` _str, optional_ - String argument to pass as template value directly to api
 
+<a id="multiobj.object_group.ObjectGroup.client"></a>
+
+### client
+
+```python
+@property
+def client() -> RequestClient
+```
+
+The client bound to the bucket used by the ObjectGroup.
+
+<a id="multiobj.object_group.ObjectGroup.client"></a>
+
+### client
+
+```python
+@client.setter
+def client(client) -> RequestClient
+```
+
+Update the client bound to the bucket used by the ObjectGroup.
+
 <a id="multiobj.object_group.ObjectGroup.list_urls"></a>
 
 ### list\_urls
@@ -1467,15 +1551,18 @@ of full URLs to every object in this bucket matching the specified prefix
 ### list\_all\_objects\_iter
 
 ```python
-def list_all_objects_iter(prefix: str = "") -> Iterable[Object]
+def list_all_objects_iter(prefix: str = "",
+                          props: str = "name,size") -> Iterable[Object]
 ```
 
 Implementation of the abstract method from AISSource that provides an iterator
-of all the objects in this bucket matching the specified prefix
+of all the objects in this bucket matching the specified prefix.
 
 **Arguments**:
 
 - `prefix` _str, optional_ - Limit objects selected by a given string prefix
+- `props` _str, optional_ - By default, will include all object properties.
+  Pass in None to skip and avoid the extra API call.
   
 
 **Returns**:
@@ -1731,6 +1818,26 @@ Class representing a range of object names
 - `step` _int, optional_ - Size of iterator steps between each item
 - `suffix` _str, optional_ - Suffix at the end of all object names
 
+<a id="multiobj.object_range.ObjectRange.from_string"></a>
+
+### from\_string
+
+```python
+@classmethod
+def from_string(cls, range_string: str)
+```
+
+Construct an ObjectRange instance from a valid range string like 'input-{00..99..1}.txt'
+
+**Arguments**:
+
+- `range_string` _str_ - The range string to parse
+  
+
+**Returns**:
+
+- `ObjectRange` - An instance of the ObjectRange class
+
 <a id="multiobj.object_template.ObjectTemplate"></a>
 
 ## Class: ObjectTemplate
@@ -1969,7 +2076,7 @@ class ObjectReader()
 ```
 
 Represents the data returned by the API when getting an object, including access to the content stream and object
-attributes
+attributes.
 
 <a id="object_reader.ObjectReader.attributes"></a>
 
@@ -1980,11 +2087,11 @@ attributes
 def attributes() -> ObjectAttributes
 ```
 
-Object metadata attributes
+Object metadata attributes.
 
 **Returns**:
 
-  Object attributes parsed from the headers returned by AIS
+- `ObjectAttributes` - Parsed object attributes from the headers returned by AIS
 
 <a id="object_reader.ObjectReader.read_all"></a>
 
@@ -1995,21 +2102,26 @@ def read_all() -> bytes
 ```
 
 Read all byte data from the object content stream.
-This uses a bytes cast which makes it slightly slower and requires all object content to fit in memory at once
+
+This uses a bytes cast which makes it slightly slower and requires all object content to fit in memory at once.
 
 **Returns**:
 
-  Object content as bytes
+- `bytes` - Object content as bytes.
 
 <a id="object_reader.ObjectReader.raw"></a>
 
 ### raw
 
 ```python
-def raw() -> bytes
+def raw() -> requests.Response
 ```
 
-Returns: Raw byte stream of object content
+Returns the raw byte stream of object content.
+
+**Returns**:
+
+- `requests.Response` - Raw byte stream of the object content
 
 <a id="object_reader.ObjectReader.__iter__"></a>
 
@@ -2019,11 +2131,11 @@ Returns: Raw byte stream of object content
 def __iter__() -> Iterator[bytes]
 ```
 
-Creates a generator to read the stream content in chunks
+Creates a generator to read the stream content in chunks.
 
 **Returns**:
 
-  An iterator with access to the next chunk of bytes
+- `Iterator[bytes]` - An iterator to access the next chunk of bytes
 
 <a id="object_iterator.ObjectIterator"></a>
 
@@ -2173,4 +2285,26 @@ Delete ETL. Deletes pods created by Kubernetes for this ETL and specifications f
 in Kubernetes.
 
 Note: Running ETLs cannot be deleted.
+
+<a id="etl.Etl.validate_etl_name"></a>
+
+### validate\_etl\_name
+
+```python
+@staticmethod
+def validate_etl_name(name: str)
+```
+
+Validate the ETL name based on specific criteria.
+
+**Arguments**:
+
+- `name` _str_ - The name of the ETL to validate.
+  
+
+**Raises**:
+
+- `ValueError` - If the name is too short (less than 6 characters),
+  too long (more than 32 characters),
+  or contains invalid characters (anything other than lowercase letters, digits, or hyphens).
 
