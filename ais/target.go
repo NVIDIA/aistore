@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -158,11 +159,19 @@ func (t *target) _initBuiltin(tstats *stats.Trunner) error {
 			notlinked = append(notlinked, provider)
 		}
 	}
+	const c = "configured but missing in the build"
 	switch {
 	case len(notlinked) > 0:
-		return fmt.Errorf("%s backends: enabled %v, disabled %v, missing in the build %v", t, enabled, disabled, notlinked)
+		s := fmt.Sprintf("%s: %v backends are "+c, t, notlinked)
+		if len(notlinked) == 1 {
+			s = fmt.Sprintf("%s: %s backend is "+c, t, notlinked[0])
+		}
+		if len(enabled) == 0 && len(disabled) == 0 {
+			return errors.New(s)
+		}
+		return fmt.Errorf("%s (enabled %v, disabled %v)", s, enabled, disabled)
 	case len(disabled) > 0:
-		nlog.Warningf("%s backends: enabled %v, disabled %v", t, enabled, disabled)
+		nlog.Warningf("%s some backends are disabled via configuration: (enabled %v, disabled %v)", t, enabled, disabled)
 	default:
 		nlog.Infoln(t.String(), "backends:", enabled)
 	}

@@ -3,7 +3,7 @@ export LOCAL_AWS="/tmp/credentials"
 touch $LOCAL_AWS
 export AIS_BACKEND_PROVIDERS="" # See deploy.sh for more information about empty AIS_BACKEND_PROVIDERS.
 source ../utils.sh
-parse_backend_providers
+set_env_backends
 
 if [[ "${AIS_BACKEND_PROVIDERS}" == *aws* ]]; then
     echo "Enter the location of your AWS configuration and credentials files:"

@@ -157,6 +157,8 @@ fi
 START=0
 END=$((TARGET_CNT + PROXY_CNT - 1))
 
+### begin reading STDIN ---------------------------------------------------------------------
+
 echo "Number of local mountpaths (enter 0 for preconfigured filesystems):"
 read test_fspath_cnt
 is_number ${test_fspath_cnt}
@@ -167,9 +169,11 @@ TEST_LOOPBACK_COUNT=0
 # If not specified, AIS_BACKEND_PROVIDERS will remain empty (or `0`) and
 # aisnode build will include neither AWS ("aws") nor GCP ("gcp").
 
-parse_backend_providers
+set_env_backends
 
-create_loopbacks
+create_loopbacks_or_skip
+
+### end reading STDIN ------------------------------------------------------------------------
 
 ## NOTE: to enable StatsD instead of Prometheus, use build tag `statsd` in the make command, as follows:
 ## TAGS=statsd make ...

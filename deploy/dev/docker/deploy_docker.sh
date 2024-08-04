@@ -273,7 +273,7 @@ if [ $DRYRUN -ne 0 ]; then
     is_size $DRYOBJSIZE
 fi
 
-parse_backend_providers
+set_env_backends
 
 touch $LOCAL_AWS
 echo "Configured backend providers: '${AIS_BACKEND_PROVIDERS}'"

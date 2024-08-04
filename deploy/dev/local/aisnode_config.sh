@@ -1,18 +1,9 @@
 # NOTE: system environment variables are listed in the `env` package,
 # see https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 
-backend_desc=()
-for backend in ${AIS_BACKEND_PROVIDERS}; do
-  case $backend in
-    aws)   backend_desc+=('"aws":   {}') ;;
-    azure) backend_desc+=('"azure": {}') ;;
-    gcp)   backend_desc+=('"gcp":   {}') ;;
-  esac
-done
-
 cat > $AIS_CONF_FILE <<EOL
 {
-	"backend": {$(IFS=$','; echo "${backend_desc[*]}")},
+	"backend": $(make_backend_conf),
 	"mirror": {
 		"copies":       2,
 		"burst_buffer": 128,

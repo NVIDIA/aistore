@@ -30,35 +30,80 @@ run_cmd() {
 #  { set +x; } 2>/dev/null
 }
 
-# NOTE: `AIS_BACKEND_PROVIDERS` and all other system environment variables
-# are listed in the `env` package:
+# NOTE 1:
+# AIS_BACKEND_PROVIDERS and all other system environment variables are listed in the `env` package:
 # https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 
-parse_backend_providers() {
+# NOTE 2:
+# defined AIS_BACKEND_PROVIDERS (empty or non-empty) always takes precedence over STDIN
+
+set_env_backends() {
+  if [[ ! -z $TAGS ]]; then
+    ## env var TAGS may contain all build tags, including backends
+    arr=( aws gcp azure )
+    for b in "${arr[@]}"; do
+      re="\\b$b\\b"
+      if [[ $TAGS =~ $re && ! $AIS_BACKEND_PROVIDERS =~ $re ]]; then
+        AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} $b"
+      fi
+    done
+  fi
+
+  if [[  -v AIS_BACKEND_PROVIDERS ]]; then
+    ## env takes precedence over STDIN
+    local orig=$AIS_BACKEND_PROVIDERS
+    _set_env_backends
+    AIS_BACKEND_PROVIDERS=$orig
+  else
+    _set_env_backends
+  fi
+}
+
+_set_env_backends() {
   AIS_BACKEND_PROVIDERS=""
-  echo "Select backend providers:"
+  echo "Select backend providers (press Enter at any point to stop adding backends):"
   echo "Amazon S3: (y/n) ?"
   read -r cld_aws
+  if [[ "$cld_aws" == "" ]] ; then
+    return
+  fi
   is_boolean "${cld_aws}"
-  echo "Google Cloud Storage: (y/n) ?"
-  read -r cld_gcp
-  is_boolean "${cld_gcp}"
-  echo "Azure: (y/n) ?"
-  read -r cld_azure
-  is_boolean "${cld_azure}"
-
   if  [[ "${cld_aws}" == "y" ]] ; then
     AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} aws"
   fi
+  echo "Google Cloud Storage: (y/n) ?"
+  read -r cld_gcp
+  if [[ "$cld_gcp" == "" ]] ; then
+    return
+  fi
+  is_boolean "${cld_gcp}"
   if  [[ "${cld_gcp}" == "y" ]] ; then
     AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} gcp"
   fi
+  echo "Azure: (y/n) ?"
+  read -r cld_azure
+  if [[ "$cld_azure" == "" ]] ; then
+    return
+  fi
+  is_boolean "${cld_azure}"
   if  [[ "${cld_azure}" == "y" ]] ; then
     AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"
   fi
 }
 
-create_loopbacks() {
+make_backend_conf() {
+  backend_conf=()
+  for backend in ${AIS_BACKEND_PROVIDERS}; do
+    case $backend in
+      aws)   backend_conf+=('"aws":   {}') ;;
+      azure) backend_conf+=('"azure": {}') ;;
+      gcp)   backend_conf+=('"gcp":   {}') ;;
+    esac
+  done
+  echo {$(IFS=$','; echo "${backend_conf[*]}")}
+}
+
+create_loopbacks_or_skip() {
   echo "Loopback device size, e.g. 10G, 100M (press Enter to skip): "
   read -r loopback_size
   if [[ "$loopback_size" == "" || "$loopback_size" == "0" ]] ; then

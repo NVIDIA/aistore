@@ -111,7 +111,7 @@ endif
 	@echo "done."
 
 cli: ## Build CLI binary. NOTE: 1) a separate go.mod, 2) static linkage with cgo disabled
-	@echo "Building ais (CLI) => $(BUILD_DEST)/ais [build tags:$(BUILD_TAGS)]"
+	@echo "Building ais (CLI) [build tags:$(BUILD_TAGS)]"
 ifdef CROSS_COMPILE_CLI
 	cd $(BUILD_DIR)/cli && \
 	$(CROSS_COMPILE_CLI) go build -o ./ais -tags="$(BUILD_TAGS)" $(BUILD_FLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
