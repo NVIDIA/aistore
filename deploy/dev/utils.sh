@@ -53,7 +53,7 @@ set_env_backends() {
     done
   fi
 
-  if [[  -v AIS_BACKEND_PROVIDERS ]]; then
+  if [[  -n "${AIS_BACKEND_PROVIDERS+x}" ]]; then
     ## environment takes precedence over STDIN
     local orig=$AIS_BACKEND_PROVIDERS
 
