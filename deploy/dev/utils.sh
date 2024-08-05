@@ -53,7 +53,7 @@ set_env_backends() {
     done
   fi
 
-  if [[  -n "${AIS_BACKEND_PROVIDERS+x}" ]]; then
+  if [[ -n "${AIS_BACKEND_PROVIDERS+x}" ]]; then
     ## environment takes precedence over STDIN
     local orig=$AIS_BACKEND_PROVIDERS
 
@@ -122,23 +122,50 @@ make_backend_conf() {
   echo {$(IFS=$','; echo "${backend_conf[*]}")}
 }
 
+read_fspath_count() {
+  local test_fspath_cnt
+  read test_fspath_cnt
+  if [[ "$test_fspath_cnt" == "" ]] ; then
+    return
+  fi
+  is_number ${test_fspath_cnt}
+  echo ${test_fspath_cnt}
+}
+
 create_loopbacks_or_skip() {
-  echo "Loopback device size, e.g. 10G, 100M (press Enter to skip): "
-  read -r loopback_size
+  local loopback_size
+  if [[  -n "${TEST_LOOPBACK_SIZE+x}" ]]; then
+    ## environment takes precedence over STDIN
+    local discard
+    loopback_size=${TEST_LOOPBACK_SIZE}
+    read -r discard
+  else
+    echo "Loopback device size, e.g. 10G, 100M (press Enter to skip): "
+    read -r loopback_size
+  fi
+
+  ## check presence
   if [[ "$loopback_size" == "" || "$loopback_size" == "0" ]] ; then
     return
   fi
+
+  ## check installed packages
   if ! command -v numfmt &> /dev/null; then
-    exit_error "numfmt not found (check GNU coreutils)"
+    exit_error "numfmt not found (tip: install GNU coreutils package)"
   fi
   if ! command -v losetup &> /dev/null; then
-	  exit_error "losetup not found (install mount or klibc-utils)"
+    exit_error "losetup not found (tip: install mount and/or klibc-utils package)"
   fi
-  size=`numfmt --from=iec ${loopback_size}` || exit_error $?
+
+  ## IEC units to bytes
+  size=`numfmt --from=iec ${loopback_size^^}` || exit_error $?
+
   let mbcount=$size/1048576 # IEC mebibytes
   if [ $mbcount -lt 100 ] ; then
     exit_error "the minimum loopback size is 100M (got ${loopback_size})"
   fi
+
+  ## create TEST_FSPATH_COUNT /dev/loop devices
   for ((i=1; i<=TEST_FSPATH_COUNT; i++)); do
     dir=${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}mp${i}
     mkdir -p "${dir}"
@@ -155,6 +182,7 @@ create_loopbacks_or_skip() {
     sudo mount -o loop "${device}" "${dir}"
     sudo chown -R ${USER}: "${dir}"
   done
+
   TEST_LOOPBACK_COUNT=$TEST_FSPATH_COUNT
 }
 

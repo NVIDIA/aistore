@@ -102,14 +102,13 @@ mkdir -p $APP_CONF_DIR
 COLLECTD_CONF_FILE="${APP_CONF_DIR}/collectd.conf"
 STATSD_CONF_FILE="${APP_CONF_DIR}/statsd.conf"
 
-
-TEST_FSPATH_COUNT=1
-
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
   exit_error "TCP port $PORT is not open (check if AIStore is already running)"
 fi
+
 TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
 touch $TMPF;
+
 OS=$(uname -s)
 case $OS in
   Linux) # Linux
@@ -134,46 +133,50 @@ if [ $? -ne 0 ]; then
 fi
 rm $TMPF 2>/dev/null
 
-# Read target count
-echo "Enter number of storage targets:"
-read -r TARGET_CNT
-is_number ${TARGET_CNT}
+### begin reading STDIN =================== 5 steps below ========================================
 
-# Read proxy count
-echo "Enter number of proxies (gateways):"
-read -r PROXY_CNT
-is_number ${PROXY_CNT}
-if  [[ ${PROXY_CNT} -lt 1 && -z "${AIS_PRIMARY_HOST}" ]] ; then
-  exit_error "Number of proxies must be at least 1 if no external primary proxy is specified with AIS_PRIMARY_HOST. Received "${PROXY_CNT}""
-fi
-if [[ ${PROXY_CNT} -gt 1 ]] ; then
-  AIS_DISCOVERY_PORT=$((PORT + 1))
-  AIS_DISCOVERY_URL="http://$PRIMARY_HOST:$AIS_DISCOVERY_PORT"
-  if $AIS_USE_HTTPS; then
-    AIS_DISCOVERY_URL="https://$PRIMARY_HOST:$AIS_DISCOVERY_PORT"
+# 1. read target count
+  echo "Enter number of storage targets:"
+  read -r TARGET_CNT
+  is_number ${TARGET_CNT}
+
+# 2. read proxy count
+  echo "Enter number of proxies (gateways):"
+  read -r PROXY_CNT
+  is_number ${PROXY_CNT}
+  if  [[ ${PROXY_CNT} -lt 1 && -z "${AIS_PRIMARY_HOST}" ]] ; then
+    exit_error "Number of proxies must be at least 1 if no external primary proxy is specified with AIS_PRIMARY_HOST. Received "${PROXY_CNT}""
   fi
-fi
+  if [[ ${PROXY_CNT} -gt 1 ]] ; then
+    AIS_DISCOVERY_PORT=$((PORT + 1))
+    AIS_DISCOVERY_URL="http://$PRIMARY_HOST:$AIS_DISCOVERY_PORT"
+    if $AIS_USE_HTTPS; then
+      AIS_DISCOVERY_URL="https://$PRIMARY_HOST:$AIS_DISCOVERY_PORT"
+    fi
+  fi
 
-START=0
-END=$((TARGET_CNT + PROXY_CNT - 1))
+  START=0
+  END=$((TARGET_CNT + PROXY_CNT - 1))
 
-### begin reading STDIN ---------------------------------------------------------------------
+# 3. read mountpath count (and notice the default)
+  if [[ ! -n "${TEST_FSPATH_COUNT+x}" ]]; then
+    echo "Number of local mountpaths (enter 0 for preconfigured filesystems):"
+    TEST_FSPATH_COUNT=$(read_fspath_count)
+  fi
+  ## default = 4
+  if [[ -z $TEST_FSPATH_COUNT ]]; then
+    TEST_FSPATH_COUNT=4
+  fi
 
-echo "Number of local mountpaths (enter 0 for preconfigured filesystems):"
-read test_fspath_cnt
-is_number ${test_fspath_cnt}
-TEST_FSPATH_COUNT=${test_fspath_cnt}
+# 4. conditionally linked backends
+  set_env_backends
 
-TEST_LOOPBACK_COUNT=0
+# 5. finally, /dev/loop* devices, if any
+# see also: TEST_LOOPBACK_SIZE
+  TEST_LOOPBACK_COUNT=0
+  create_loopbacks_or_skip
 
-# If not specified, AIS_BACKEND_PROVIDERS will remain empty and
-# aisnode build won't include any conditionally-linked backends (AWS, GCP, et al.)
-
-set_env_backends
-
-create_loopbacks_or_skip
-
-### end reading STDIN ------------------------------------------------------------------------
+### end reading STDIN ============================ 5 steps above =================================
 
 ## NOTE: to enable StatsD instead of Prometheus, use build tag `statsd` in the make command, as follows:
 ## TAGS=statsd make ...

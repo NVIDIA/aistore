@@ -90,8 +90,6 @@ The rest of this document is structured as follows:
 - [Multiple deployment options](#multiple-deployment-options)
   - [Kubernetes deployments](#kubernetes-deployments)
   - [Minimal all-in-one-docker Deployment](#minimal-all-in-one-docker-deployment)
-  - [Local Playground Demo](#local-playground-demo)
-  - [Manual deployment](#manual-deployment)
   - [Testing your cluster](#testing-your-cluster)
 - [Kubernetes Playground](#kubernetes-playground)
 - [Setting Up HTTPS Locally](#setting-up-https-locally)
@@ -145,76 +143,40 @@ $ cd aistore
 
 Many useful commands are provided via top [Makefile](https://github.com/NVIDIA/aistore/blob/main/Makefile) (for details, see [Make](#make) section below).
 
-In particular, we can use `make` to deploy our very first 1-node cluster:
+In particular, we can use `make` to deploy our very first 3 nodes (and 3 gateways) cluster:
 
 ```console
-$ make kill clean cli deploy <<< $'1\n1\n1\nn\nn\nn\n0\n'
+$ make kill clean cli aisloader deploy <<< $'3\n3'
 ```
 
-OR (same):
+This `make` command executes several make targets (not to confuse with ais targets) - in particular, it:
+
+* shuts down (via `make kill`) AIStore that _may_ have been previously deployed in the local playground;
+* removes its metadata and data (`make clean`);
+* builds CLI (`ais`) and `aisloader` tools (that we are using all the time);
+
+and, finally:
+
+* deploys (3 storage nodes, 3 gateways) cluster.
+
+The cluster than can be observed as follows:
+
 ```console
-$ make kill clean # kill previous cluster and clean any binaries
-$ make cli # build ais cli
-$ make deploy
-Enter number of storage targets:
-1
-Enter number of proxies (gateways):
-1
-Number of local mountpaths (enter 0 for preconfigured filesystems):
-1
-Select backend providers:
-Amazon S3: (y/n) ?
-n
-Google Cloud Storage: (y/n) ?
-n
-Azure: (y/n) ?
-n
-Loopback device size, e.g. 10G, 100M (press Enter to skip):
+$ ais show cluster
 ```
 
-You should see a successful deployment in the output when the AIS proxy is listening on port 8080 (unless changed in config).
+### `clean_deploy.sh`
 
-```
-Building aisnode 2ce1aaeb1 [build tags: mono]
-done.
-Proxy is listening on port: 8080
-Primary endpoint: http://localhost:8080
-```
+Alternatively (to `make deploy`) or, rather, in addition, one can also use:
 
-Note that [`clean_deploy.sh`](/docs/development.md#clean-deploy) with no arguments also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses. 
+* [`clean_deploy.sh`](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
+* [`clean_deploy.sh readme`](/docs/development.md#clean-deploy)
 
-> WARNING: Note that the `--cleanup` option will wipe all AIS related files and binaries. You do not need to use the --cleanup option if you just want to run the local playground with a different number of nodes or proxies. The same warning applies to running `make clean` as well. If you'd like to just restart the cluster without loss of data, just kill the cluster using `make kill` and `make run` to restart cluster without recreating daemon configs.
+With no arguments, this script also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses.
 
 ```console
 $ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1 --deployment local --cleanup
 ```
-
-We can verify that the cluster is running using:
-
-```console
-$ ais show cluster
-
-# Example output below
-PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION                 BUILD TIME
-p[FAEp8080][P]   0.13%           29.31GiB        [0.4 0.2 0.2]   -       online  3.23.rc3.2ce1aaeb1      2024-05-15T16:19:05-0700
-
-TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       LOAD AVERAGE    REBALANCE       UPTIME  STATUS  VERSION                 BUILD TIME
-t[hgjt8081]      0.13%           29.31GiB        39%             21.999GiB       [0.4 0.2 0.2]   -               -       online  3.23.rc3.2ce1aaeb1      2024-05-15T16:19:05-0700
-
-Summary:
-   Proxies:             1
-   Targets:             1 (one disk)
-   Capacity:            used 14.61GiB (39%), available 22.00GiB
-   Cluster Map:         version 5, UUID PrVDVYkcT, primary p[FAEp8080]
-   Deployment:          dev
-   Status:              2 online
-   Rebalance:           n/a
-   Authentication:      disabled
-   Version:             3.23.rc3.2ce1aaeb1
-   Build:               2024-05-15T16:19:05-0700
-```
-
-If you get repreated errors indicating that the cluster is taking a long time to start up, then your configuration is incorrect.
 
 ## Step 3: Run `aisloader` tool
 
@@ -263,7 +225,15 @@ index c5e0e4fae..46085e19c 100755
 * Step 2: deploy a single target with two loopback devices (1GB size each):
 
 ```console
-$ make kill clean cli deploy <<< $'1\n1\n2\ny\ny\nn\n1G\n'
+$ make kill clean cli deploy <<< $'1\n1\n4\ny\ny\nn\n1G\n'
+```
+
+or, same:
+
+```console
+$ TAGS=aws TEST_LOOPBACK_SIZE=1G make kill clean cli deploy <<< $'1\n1\n'
+```
+
 
 $ mount | grep dev/loop
 /dev/loop23 on /tmp/ais/mp1 type ext4 (rw,relatime)
@@ -345,17 +315,49 @@ $ make help
 
 This shows all subcommands, environment variables, and numerous usage examples, including:
 
+### Example: deploy cluster locally
 ```console
-Examples:
-# Deploy cluster locally
 $ make deploy
-
-# Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)
-$ make kill clean
-
-# Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
-$ make kill deploy <<< $'7\n2\n4\ny\ny\nn\n0\n'
 ```
+
+### Example: shutdown cluster and cleanup all its data and metadata
+```console
+$ make kill clean
+```
+
+### Example: shutdown/cleanup, and then deploy non-interactively a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with GCP and AWS backends
+```console
+$ make kill clean deploy <<< $'7\n2\n4\ny\ny\nn\n0\n'
+```
+
+### Example: same as above
+```console
+$ AIS_BACKEND_PROVIDERS="aws gcp" make kill clean deploy <<< $'7\n2'
+```
+
+### Example: same as above
+```console
+$ TAGS="aws gcp" make kill clean deploy <<< $'7\n2'
+```
+
+> Use `TAGS` environment to specify any/all supported build tags that also include conditionally linked remote backends (see next).
+
+> Use `AIS_BACKEND_PROVIDERS` environment to select remote backends that include 3 (three) Cloud providers and `ht://` - namely: (`aws`, `gcp`, `azure`, `ht`)
+
+### Example: same as above but also build `aisnode` with debug info
+```console
+$ TAGS="aws gcp debug" make kill clean deploy <<< $'7\n2'
+```
+
+### Further:
+
+* `make kill`    - terminate local AIStore.
+* `make restart` - shut it down and immediately restart using the existing configuration.
+* `make help`    - show make options and usage examples.
+
+For even more development options and tools, please refer to:
+
+* [development docs](/docs/development.md)
 
 ## System environment variables
 
@@ -421,51 +423,6 @@ Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernet
 ### Minimal all-in-one-docker Deployment
 
 This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
-
-### Manual deployment
-
-You can also run `make deploy` in the root directory of the repository to deploy a cluster:
-```console
-$ make deploy
-Enter number of storage targets:
-10
-Enter number of proxies (gateways):
-3
-Number of local cache directories (enter 0 to use preconfigured filesystems):
-2
-Select backend providers:
-Amazon S3: (y/n) ?
-n
-Google Cloud Storage: (y/n) ?
-n
-Azure: (y/n) ?
-n
-HDFS: (y/n) ?
-n
-Create loopback devices (note that it may take some time): (y/n) ?
-n
-Building aisnode: version=df24df77 providers=
-```
-> Notice the "Cloud" prompt above and the fact that access to 3rd party Cloud storage is a deployment-time option.
-
-Run `make help` for supported (make) options and usage examples, including:
-
-```console
-# Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations
-$ make restart <<< $'7\n2\n4\ny\ny\nn\n0\n'
-
-...
-```
-
-Further:
-
-* `make kill`    - terminate local AIStore.
-* `make restart` - shut it down and immediately restart using the existing configuration.
-* `make help`    - show make options and usage examples.
-
-For even more development options and tools, please refer to:
-
-* [development docs](/docs/development.md)
 
 ### Testing your cluster
 

@@ -30,7 +30,7 @@ if [[ ${NUM_PROXY} -lt 1 ]]; then
   exit_error "${NUM_PROXY} is less than 1"
 fi
 
-export TEST_FSPATH_COUNT=${FS_CNT:-3}
+export TEST_FSPATH_COUNT=${FS_CNT:-4}
 PRIMARY_PORT=8080
 export AIS_BACKEND_PROVIDERS=$PROVIDERS
 INSTANCE=0

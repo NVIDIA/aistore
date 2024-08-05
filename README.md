@@ -60,7 +60,7 @@ Since prerequisites boil down to, essentially, having Linux with a disk the depl
 
 | Option | Objective |
 | --- | ---|
-| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
+| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers or first-time users, Linux or Mac OS; to get started, run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of targets, `M` - gateways |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
 | [Easy automated GCP/GKE deployment](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-deployments) | Developers, first-time users, AI researchers |
 | [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
