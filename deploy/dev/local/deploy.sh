@@ -166,8 +166,8 @@ TEST_FSPATH_COUNT=${test_fspath_cnt}
 
 TEST_LOOPBACK_COUNT=0
 
-# If not specified, AIS_BACKEND_PROVIDERS will remain empty (or `0`) and
-# aisnode build will include neither AWS ("aws") nor GCP ("gcp").
+# If not specified, AIS_BACKEND_PROVIDERS will remain empty and
+# aisnode build won't include any conditionally-linked backends (AWS, GCP, et al.)
 
 set_env_backends
 

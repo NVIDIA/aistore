@@ -706,17 +706,18 @@ func AsErrAborted(err error) (errAborted *ErrAborted) {
 // ErrInitBackend & ErrMissingBackend
 
 func (e *ErrInitBackend) Error() string {
-	return fmt.Sprintf(
-		"cannot initialize %q backend (present in the cluster configuration): missing %s-supporting libraries in the build",
-		e.Provider, e.Provider,
-	)
+	p := apc.DisplayProvider(e.Provider)
+	s := "cannot initialize " + p + " backend "
+	s += "(present in the cluster configuration): "
+	s += "missing " + p + "-supporting libraries in the build"
+	return s
 }
 
 func (e *ErrMissingBackend) Error() string {
 	if e.Msg != "" {
 		return e.Msg
 	}
-	return fmt.Sprintf("%q backend is missing in the cluster configuration", e.Provider)
+	return apc.DisplayProvider(e.Provider) + " backend is missing in the cluster configuration"
 }
 
 // ErrETL

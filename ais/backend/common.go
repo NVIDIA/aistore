@@ -199,9 +199,6 @@ func calcPageSize(pageSize, maxPageSize int64) int64 {
 	return min(pageSize, maxPageSize)
 }
 
-//nolint:deadcode,unused // used by dummy backends
-func newErrInitBackend(provider string) error { return &cmn.ErrInitBackend{Provider: provider} }
-
 func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {
 	params := core.AllocPutParams()
 	{

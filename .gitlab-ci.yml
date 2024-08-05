@@ -122,8 +122,8 @@ build:linux:
   script:
     - MODE="" make node # Build node without backends in production mode.
     - MODE="debug" make node # Build node without backends in debug mode.
-    - AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node # Build with all backends (production mode).
-    - AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node # Build with all backends (debug mode).
+    - AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node # Build with all Cloud backends (production mode).
+    - AIS_BACKEND_PROVIDERS="aws azure gcp ht" MODE="debug" make node # Build with all backends (debug mode).
     - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
     - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
     - make authn
@@ -144,7 +144,7 @@ build:k8s:
   before_script:
     - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $CI_REGISTRY
   script:
-    - buildah images 
+    - buildah images
     - buildah build -t $FQ_IMAGE_NAME -f deploy/dev/k8s/Dockerfile --build-arg MODE="debug" --build-arg providers="gcp"
     - buildah images
     - buildah push $FQ_IMAGE_NAME
@@ -166,6 +166,7 @@ lint:linux:
   <<: *default_only_def
   script:
     - make lint
+    - TAGS="statsd ht" make lint
     - make fmt-check
     - make spell-check
 
@@ -311,7 +312,7 @@ test:long:
     NUM_PROXY: 6
     BUCKET: "ais://ais-ci"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --ht
     - make test-long
 
 test:long:aws:
@@ -320,7 +321,7 @@ test:long:aws:
     NUM_PROXY: 6
     BUCKET: "aws://ais-cicd"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws --ht
     - make test-long
 
 test:long:gcp:
@@ -329,7 +330,7 @@ test:long:gcp:
     NUM_PROXY: 6
     BUCKET: "gs://ais-ci"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --ht
     - make test-long
 
 test:long:azure:
@@ -338,7 +339,7 @@ test:long:azure:
     NUM_PROXY: 6
     BUCKET: "az://ais-ci"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht
     - make test-long
 
 test:long:aisloader:

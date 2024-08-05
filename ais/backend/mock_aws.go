@@ -19,7 +19,7 @@ import (
 )
 
 func NewAWS(_ core.TargetPut, _ stats.Tracker) (core.Backend, error) {
-	return nil, newErrInitBackend(apc.AWS)
+	return nil, &cmn.ErrInitBackend{Provider: apc.AWS}
 }
 
 func StartMpt(*core.LOM, *http.Request, url.Values) (string, int, error) {

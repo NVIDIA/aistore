@@ -30,29 +30,47 @@ run_cmd() {
 #  { set +x; } 2>/dev/null
 }
 
-# NOTE 1:
-# AIS_BACKEND_PROVIDERS and all other system environment variables are listed in the `env` package:
-# https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
-
-# NOTE 2:
-# defined AIS_BACKEND_PROVIDERS (empty or non-empty) always takes precedence over STDIN
+# NOTE:
+# 1. AIS_BACKEND_PROVIDERS and all other system environment variables are listed in the `env` package:
+#    https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
+# 2. environment AIS_BACKEND_PROVIDERS (empty or non-empty)
+#    always takes precedence over STDIN
+# 3. when adding/deleting backends, update the 3 (three) functions that follow below:
 
 set_env_backends() {
+  known_backends=( aws gcp azure ht )
   if [[ ! -z $TAGS ]]; then
-    ## env var TAGS may contain all build tags, including backends
-    arr=( aws gcp azure )
-    for b in "${arr[@]}"; do
+    ## environment var TAGS may contain any/all build tags, including backends
+    for b in "${known_backends[@]}"; do
       re="\\b$b\\b"
-      if [[ $TAGS =~ $re && ! $AIS_BACKEND_PROVIDERS =~ $re ]]; then
-        AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} $b"
+      if [[ $TAGS =~ $re ]]; then
+        if [[ ! $AIS_BACKEND_PROVIDERS =~ $re ]]; then
+          AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} $b"
+	fi
+	## dedup
+        TAGS=${TAGS//$b/}
       fi
     done
   fi
 
   if [[  -v AIS_BACKEND_PROVIDERS ]]; then
-    ## env takes precedence over STDIN
+    ## environment takes precedence over STDIN
     local orig=$AIS_BACKEND_PROVIDERS
+
+    ## validate
+    for b in ${AIS_BACKEND_PROVIDERS}; do
+      case $b in
+        aws)   ;;
+        azure) ;;
+        gcp)   ;;
+        ht)    ;;
+	*) echo "fatal: unknown backend '$b' in 'AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}'"; exit 1;;
+      esac
+    done
+    ## consume (and discard) all reads
     _set_env_backends
+
+    ## restore from env
     AIS_BACKEND_PROVIDERS=$orig
   else
     _set_env_backends
@@ -98,6 +116,7 @@ make_backend_conf() {
       aws)   backend_conf+=('"aws":   {}') ;;
       azure) backend_conf+=('"azure": {}') ;;
       gcp)   backend_conf+=('"gcp":   {}') ;;
+      ht)    backend_conf+=('"ht":    {}') ;;
     esac
   done
   echo {$(IFS=$','; echo "${backend_conf[*]}")}

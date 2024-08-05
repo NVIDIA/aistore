@@ -24,7 +24,7 @@ const (
 )
 
 func IsHTTPS(url string) bool { return strings.HasPrefix(url, "https://") }
-func IsHTTP(url string) bool  { return strings.HasPrefix(url, "http://") }
+func IsHT(url string) bool    { return strings.HasPrefix(url, "http://") }
 
 func ParseURL(s string) (u *url.URL, valid bool) {
 	if s == "" {

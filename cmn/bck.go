@@ -372,7 +372,7 @@ func (b *Bck) IsAIS() bool {
 }
 
 func (b *Bck) IsRemoteAIS() bool { return b.Provider == apc.AIS && b.Ns.IsRemote() }
-func (b *Bck) IsHTTP() bool      { return b.Provider == apc.HTTP }
+func (b *Bck) IsHT() bool        { return b.Provider == apc.HT }
 
 func (b *Bck) IsRemote() bool {
 	return apc.IsRemoteProvider(b.Provider) || b.IsRemoteAIS() || b.Backend() != nil
@@ -381,6 +381,10 @@ func (b *Bck) IsRemote() bool {
 //
 // NOTE: for more Is* accessors (e.g. IsRemoteS3), see also: core/meta/bck.go
 //
+
+func (b *Bck) IsBuiltTagged() bool {
+	return b.IsCloud() || b.Provider == apc.HT
+}
 
 func (b *Bck) IsCloud() bool {
 	if apc.IsCloudProvider(b.Provider) {
@@ -472,7 +476,7 @@ func (qbck QueryBcks) String() string {
 }
 
 func (qbck *QueryBcks) IsAIS() bool       { b := (*Bck)(qbck); return b.IsAIS() }
-func (qbck *QueryBcks) IsHTTP() bool      { b := (*Bck)(qbck); return b.IsHTTP() }
+func (qbck *QueryBcks) IsHT() bool        { b := (*Bck)(qbck); return b.IsHT() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
 func (qbck *QueryBcks) IsCloud() bool     { return apc.IsCloudProvider(qbck.Provider) }
 
@@ -574,7 +578,7 @@ func (bcks Bcks) Equal(other Bcks) bool {
 func NewHTTPObj(u *url.URL) *HTTPBckObj {
 	hbo := &HTTPBckObj{
 		Bck: Bck{
-			Provider: apc.HTTP,
+			Provider: apc.HT,
 			Ns:       NsGlobal,
 		},
 	}

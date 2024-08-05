@@ -84,11 +84,34 @@ $ make help
 ### Clean deploy
 
 ```console
-./clean_deploy.sh [--target-cnt TARGET_CNT] [--proxy-cnt PROXY_CNT] [--mountpath-cnt MOUNTPATH_CNT] [--https] [--deployment local|remote|all] [--remote-alias REMOTE_ALIAS] [--PROVIDER ...] [--debug PKG=LOG_LEVEL[,PKG=LOG_LEVEL]] [--loopback SIZE] [--cleanup] [--dir]
-[--override_backends] [--standby] [--transient] [--debug]
+$ ./scripts/clean_deploy.sh -h
+NAME:
+  clean_deploy.sh - locally deploy AIS cluster(s)
+
+USAGE:
+  ./clean_deploy.sh [options...]
+
+OPTIONS:
+  --target-cnt        Number of target nodes in the cluster (default: 5)
+  --proxy-cnt         Number of proxies/gateways (default: 5)
+  --mountpath-cnt     Number of mountpaths (default: 5)
+  --cleanup           Cleanup data and metadata from the previous deployments
+  --deployment        Choose which AIS cluster(s) to deploy, one of: 'local', 'remote', 'all' (default: 'local')
+  --remote-alias      Alias to assign to the remote cluster (default: 'remais')
+  --aws               Build with AWS S3 backend
+  --gcp               Build with Google Cloud Storage backend
+  --azure             Build with Azure Blob Storage backend
+  --ht                Build with ht:// backend (experimental)
+  --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means emulated mountpaths (with no loopback devices).
+  --dir               The root directory of the aistore repository
+  --https             Use HTTPS (note: X509 certificates may be required)
+  --standby           When starting up, do not join cluster - wait instead for admin request (advanced usage, target-only)
+  --transient         Do not store config changes, keep all the updates in memory
+  -h, --help          Show this help text
 ```
 
-Deploys a new instance of an AIS cluster after killing any current instances.
+Deploys a new instance of an AIS cluster after shutting down currently running cluster(s), if any.
+
 To make it even more convenient, consider setting up an alias:
 
 ```bash

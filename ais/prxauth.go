@@ -266,7 +266,7 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 		tk, err = p.validateToken(hdr)
 		if err != nil {
 			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
-			if err == tok.ErrNoToken && bck != nil && bck.IsHTTP() {
+			if err == tok.ErrNoToken && bck != nil && bck.IsHT() {
 				err = nil
 			}
 			return err

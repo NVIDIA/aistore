@@ -1387,7 +1387,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			eq = true
 			nlog.Warningf("multi-object operation %q within the same bucket %q", msg.Action, bck)
 		}
-		if bckTo.IsHTTP() {
+		if bckTo.IsHT() {
 			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
 			return
 		}
@@ -1621,7 +1621,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	case lsmsg.Props == apc.GetPropsNameSize:
 		lsmsg.SetFlag(apc.LsNameSize)
 	}
-	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
+	if bck.IsHT() || lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
@@ -2113,7 +2113,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 		bmd     = p.owner.bmd.get()
 		present bool
 	)
-	if qbck.IsAIS() || qbck.IsHTTP() {
+	if qbck.IsAIS() || qbck.IsHT() {
 		bcks := bmd.Select(qbck)
 		p.writeJSON(w, r, bcks, "list-buckets")
 		return
@@ -3129,11 +3129,11 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		nlog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		// bck.IsHTTP()
+		// bck.IsHT()
 		hbo := cmn.NewHTTPObj(r.URL)
 		q := r.URL.Query()
 		q.Set(apc.QparamOrigURL, r.URL.String())
-		q.Set(apc.QparamProvider, apc.HTTP)
+		q.Set(apc.QparamProvider, apc.HT)
 		r.URL.Path = apc.URLPathObjects.Join(hbo.Bck.Name, hbo.ObjName)
 		r.URL.RawQuery = q.Encode()
 		if r.Method == http.MethodGet {
@@ -3143,7 +3143,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	p.writeErrf(w, r, "%q provider doesn't support %q", apc.HTTP, r.Method)
+	p.writeErrf(w, r, "%q provider doesn't support %q", apc.HT, r.Method)
 }
 
 //
@@ -3348,12 +3348,12 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 	if tsi, err = smap.GetRandTarget(); err != nil {
 		return
 	}
-	if bck.IsCloud() {
+	if bck.IsBuiltTagged() {
 		config := cmn.GCO.Get()
 		if config.Backend.Get(bck.Provider) == nil {
 			err = &cmn.ErrMissingBackend{Provider: bck.Provider}
 			statusCode = http.StatusNotFound
-			err = cmn.NewErrFailedTo(p, "lookup Cloud bucket", bck, err, statusCode)
+			err = cmn.NewErrFailedTo(p, "lookup bucket", bck, err, statusCode)
 			return
 		}
 	}

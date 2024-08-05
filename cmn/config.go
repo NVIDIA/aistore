@@ -165,11 +165,8 @@ type (
 	}
 
 	BackendConf struct {
-		// Provider implementation-dependent. We are using custom marshaling
-		// which populates this field.
-		Conf map[string]any `json:"-"`
-		// 3rd party Cloud(s) -- set during validation
-		Providers map[string]Ns `json:"-"`
+		Conf      map[string]any `json:"-"` // backend implementation-dependent (custom marshaling to populate this field)
+		Providers map[string]Ns  `json:"-"` // conditional (build tag) providers set during validation (BackendConf.Validate)
 	}
 	BackendConfAIS map[string][]string // cluster alias -> [urls...]
 
@@ -888,7 +885,7 @@ func (c *BackendConf) Validate() (err error) {
 func (c *BackendConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
-	case apc.AWS, apc.Azure, apc.GCP:
+	case apc.AWS, apc.Azure, apc.GCP, apc.HT:
 		ns = NsGlobal
 	default:
 		debug.Assert(false, "unknown backend provider "+provider)
@@ -908,18 +905,6 @@ func (c *BackendConf) Get(provider string) (conf any) {
 
 func (c *BackendConf) Set(provider string, newConf any) {
 	c.Conf[provider] = newConf
-}
-
-func (c *BackendConf) EqualClouds(o *BackendConf) bool {
-	if len(o.Conf) != len(c.Conf) {
-		return false
-	}
-	for k := range o.Conf {
-		if _, ok := c.Conf[k]; !ok {
-			return false
-		}
-	}
-	return true
 }
 
 func (c *BackendConf) EqualRemAIS(o *BackendConf, sname string) bool {

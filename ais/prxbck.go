@@ -163,7 +163,7 @@ func (bctx *bctx) accessSupported() error {
 		goto rerr
 	}
 	// HTTP buckets are not writeable
-	if bctx.bck.IsHTTP() && bctx._perm(apc.AcePUT) {
+	if bctx.bck.IsHT() && bctx._perm(apc.AcePUT) {
 		op = "write to HTTP bucket"
 		goto rerr
 	}
@@ -292,7 +292,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	}
 
 	// orig-url for the ht:// bucket
-	if bck.IsHTTP() {
+	if bck.IsHT() {
 		if bctx.origURLBck != "" {
 			remoteHdr.Set(apc.HdrOrigURLBck, bctx.origURLBck)
 		} else {
@@ -364,7 +364,7 @@ func (bctx *bctx) lookup(bck *meta.Bck) (hdr http.Header, code int, err error) {
 		q       = url.Values{}
 		retried bool
 	)
-	if bck.IsHTTP() {
+	if bck.IsHT() {
 		origURL := bctx.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}

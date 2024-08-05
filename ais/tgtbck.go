@@ -175,7 +175,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		code   int
 	)
 	if qbck.Provider != "" {
-		if qbck.IsAIS() || qbck.IsHTTP() { // built-in providers
+		if qbck.IsAIS() || qbck.IsHT() { // built-in providers
 			bcks = bmd.Select(qbck)
 		} else {
 			bcks, code, err = t.blist(qbck, config)
@@ -191,7 +191,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 		for provider := range apc.Providers {
 			var buckets cmn.Bcks
 			qbck.Provider = provider
-			if qbck.IsAIS() || qbck.IsHTTP() {
+			if qbck.IsAIS() || qbck.IsHT() {
 				buckets = bmd.Select(qbck)
 			} else {
 				buckets, code, err = t.blist(qbck, config)
@@ -491,7 +491,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 
 	debug.Assert(!apireq.bck.IsAIS())
 
-	if apireq.bck.IsHTTP() {
+	if apireq.bck.IsHT() {
 		originalURL := apireq.query.Get(apc.QparamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {

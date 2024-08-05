@@ -186,6 +186,7 @@ func TestRemoteBucketObject(t *testing.T) {
 }
 
 func TestHttpProviderObjectGet(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // NOTE: ht:// is now conditionally linked, requires 'ht' build tag
 	var (
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams(proxyURL)

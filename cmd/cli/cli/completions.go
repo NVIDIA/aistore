@@ -521,7 +521,7 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 	switch c.Args().Get(0) {
 	case apc.S3Scheme, apc.AWS:
 		return strings.HasPrefix(tag, "extra.aws")
-	case apc.HTTP:
+	case apc.HT:
 		return strings.HasPrefix(tag, "extra.http")
 	}
 	return false

@@ -35,7 +35,7 @@ jobs:
           export GOPATH="$(go env GOPATH)"
           make lint
           TAGS=statsd make lint
-          TAGS="statsd nethttp debug" make lint
+          TAGS="statsd nethttp ht debug" make lint
           TAGS="aws gcp azure" make lint
           make fmt-check
           make spell-check

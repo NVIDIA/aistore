@@ -84,6 +84,7 @@ func extractSpeed(out []byte) int64 {
 }
 
 func TestRProxyGCS(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // NOTE: ht:// is now conditionally linked, requires 'ht' build tag
 	var (
 		resURL     = genObjURL(false, true)
 		proxyURL   = tools.GetPrimaryURL()
@@ -98,7 +99,7 @@ func TestRProxyGCS(t *testing.T) {
 	}
 
 	initMountpaths(t, proxyURL)
-	bck := cmn.Bck{Provider: apc.HTTP}
+	bck := cmn.Bck{Provider: apc.HT}
 	queryBck := cmn.QueryBcks(bck)
 	bckList, err := api.ListBuckets(baseParams, queryBck, apc.FltExists)
 	tassert.CheckFatal(t, err)
@@ -193,6 +194,7 @@ retry:
 }
 
 func TestRProxyInvalidURL(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // NOTE: ht:// is now conditionally linked, requires 'ht' build tag
 	var (
 		proxyURL   = tools.GetPrimaryURL()
 		baseParams = tools.BaseAPIParams(proxyURL)

@@ -41,9 +41,6 @@ func (t *target) Backend(bck *meta.Bck) core.Backend {
 	if bck.IsRemoteAIS() {
 		return t.backend[apc.AIS]
 	}
-	if bck.IsHTTP() {
-		return t.backend[apc.HTTP]
-	}
 	provider := bck.Provider
 	if bck.Props != nil {
 		provider = bck.RemoteBck().Provider

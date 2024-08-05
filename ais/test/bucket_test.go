@@ -45,7 +45,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
-			Provider: apc.HTTP,
+			Provider: apc.HT,
 		}
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)

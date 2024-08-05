@@ -208,7 +208,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		if bck.IsCloud() {
 			return cmn.NewErrNotImpl("create", bck.Provider+"(cloud) bucket")
 		}
-		if bck.IsHTTP() {
+		if bck.IsHT() {
 			return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
 		}
 		// can do remote ais though

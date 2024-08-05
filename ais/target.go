@@ -106,8 +106,7 @@ func (*target) interruptedRestarted() (interrupted, restarted bool) {
 func (t *target) initBackends(tstats *stats.Trunner) {
 	config := cmn.GCO.Get()
 	aisbp := backend.NewAIS(t, tstats)
-	t.backend[apc.AIS] = aisbp                               // always present
-	t.backend[apc.HTTP] = backend.NewHTTP(t, config, tstats) // ditto
+	t.backend[apc.AIS] = aisbp // always present
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
 		if err := aisbp.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
@@ -117,15 +116,14 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 		}
 	}
 
-	if err := t._initBuiltin(tstats); err != nil {
+	if err := t._initBuiltTagged(tstats); err != nil {
 		cos.ExitLog(err)
 	}
 }
 
-// init built-in (via build tags) backends
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
-func (t *target) _initBuiltin(tstats *stats.Trunner) error {
+func (t *target) _initBuiltTagged(tstats *stats.Trunner) error {
 	var (
 		enabled, disabled, notlinked []string
 		config                       = cmn.GCO.Get()
@@ -142,7 +140,9 @@ func (t *target) _initBuiltin(tstats *stats.Trunner) error {
 			add, err = backend.NewGCP(t, tstats)
 		case apc.Azure:
 			add, err = backend.NewAzure(t, tstats)
-		case apc.AIS, apc.HTTP:
+		case apc.HT:
+			add, err = backend.NewHT(t, config, tstats)
+		case apc.AIS:
 			continue
 		default:
 			return fmt.Errorf(cmn.FmtErrUnknown, t, "backend provider", provider)
@@ -761,7 +761,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	}
 
 	// apc.QparamOrigURL
-	if bck.IsHTTP() {
+	if bck.IsHT() {
 		originalURL := dpq.origURL
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}

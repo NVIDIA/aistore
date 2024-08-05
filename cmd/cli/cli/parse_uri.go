@@ -128,7 +128,7 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	bck, pathSuffix, err = parseBckObjURI(c, uri, true /*optional objName*/)
 	if err != nil {
 		return
-	} else if bck.IsHTTP() {
+	} else if bck.IsHT() {
 		err = errors.New("http bucket is not supported as destination")
 		return
 	}

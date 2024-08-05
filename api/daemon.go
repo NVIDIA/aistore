@@ -119,13 +119,7 @@ func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err e
 	}
 	_, err = reqParams.DoReqAny(&config)
 	FreeRp(reqParams)
-	if err != nil {
-		return nil, err
-	}
-	// FIXME: transform backend structures on the client side
-	// as a side effect, config.Backend validation populates non-JSON structs that client can utilize;
-	_ = config.Backend.Validate()
-	return config, nil
+	return config, err
 }
 
 // names _and_ kinds, i.e. (name, kind) pairs

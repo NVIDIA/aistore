@@ -91,7 +91,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fl
 		if info.IsBckPresent {
 			footer.nbp++
 		}
-		if bck.IsHTTP() {
+		if bck.IsHT() {
 			if bmd == nil {
 				bmd, err = api.GetBMD(apiBP)
 				if err != nil {
@@ -186,7 +186,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 			footer.size += info.TotalSize.OnDisk
 			footer.pct += int(info.UsedPct)
 		}
-		if bck.IsHTTP() {
+		if bck.IsHT() {
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
 		data = append(data, teb.ListBucketsHelper{XactID: xid, Bck: bck, Props: props, Info: info})

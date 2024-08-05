@@ -77,7 +77,7 @@ func getHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if !bck.IsHTTP() {
+	if !bck.IsHT() {
 		if bck.Props, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
@@ -631,7 +631,7 @@ func (a *qparamArch) getQuery(c *cli.Context, bck *cmn.Bck) (q url.Values) {
 			q = make(url.Values, 4)
 		}
 	}
-	if bck.IsHTTP() {
+	if bck.IsHT() {
 		f()
 		uri := c.Args().Get(0)
 		q.Set(apc.QparamOrigURL, uri)

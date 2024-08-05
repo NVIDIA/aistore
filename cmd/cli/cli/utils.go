@@ -133,7 +133,7 @@ func reorderTailArgs(left string, middle []string, right ...string) string {
 	return strings.TrimSuffix(sb.String(), " ")
 }
 
-func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
+func isWebURL(url string) bool { return cos.IsHT(url) || cos.IsHTTPS(url) }
 
 func jsonMarshalIndent(v any) ([]byte, error) { return jsoniter.MarshalIndent(v, "", "    ") }
 
@@ -595,7 +595,7 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 			{"lru", props.LRU.String()},
 			{"versioning", props.Versioning.String()},
 		}
-		if props.Provider == apc.HTTP {
+		if props.Provider == apc.HT {
 			origURL := props.Extra.HTTP.OrigURLBck
 			if origURL != "" {
 				propList = append(propList, nvpair{Name: "original-url", Value: origURL})
@@ -718,7 +718,7 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 	if !cos.IsLastB(strURL, '/') {
 		strURL += "/"
 	}
-	bck.Provider = apc.HTTP
+	bck.Provider = apc.HT
 	bck.Name = cmn.OrigURLBck2Name(strURL)
 	return
 }

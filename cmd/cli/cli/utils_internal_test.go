@@ -305,8 +305,8 @@ func TestParseQueryBckURI(t *testing.T) {
 		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}},
 		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
 		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
-		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
 	}
 	for _, test := range positiveTests {
 		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
@@ -341,8 +341,8 @@ func TestParseBckURI(t *testing.T) {
 		{uri: "ais://bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket"}},
 		{uri: "ais://#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
 		{uri: "ais://@uuid#ns/bucket", bck: cmn.Bck{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
-		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "http://web.url/dataset", bck: cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "https://web.url/dataset", bck: cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
 	}
 	for _, test := range positiveTests {
 		bck, err := parseBckURI(&cli.Context{}, test.uri, true /*require provider*/)
@@ -411,12 +411,12 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 		{
 			uri:     "http://web.url/dataset/object_name",
-			bck:     cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
+			bck:     cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
 			objName: "object_name",
 		},
 		{
 			uri:     "https://web.url/dataset/object_name",
-			bck:     cmn.Bck{Provider: apc.HTTP, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
+			bck:     cmn.Bck{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"},
 			objName: "object_name",
 		},
 	}

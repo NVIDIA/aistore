@@ -279,7 +279,7 @@ func NewBpropsToSet(nvs cos.StrKVs) (props *BpropsToSet, err error) {
 func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
-	if provider == apc.HTTP && c.HTTP.OrigURLBck == "" {
+	if provider == apc.HT && c.HTTP.OrigURLBck == "" {
 		return errors.New("original bucket URL must be set for a bucket with HTTP provider")
 	}
 	return nil

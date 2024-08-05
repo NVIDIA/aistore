@@ -22,6 +22,8 @@ $ aisnode -config=/etc/ais/config.json -local_config=/etc/ais/local_config.json 
 The common executable, typically called `aisnode`, supports the following command-line arguments:
 
 ```console
+  -allow_shared_no_disks
+        NOTE: deprecated, will be removed in future releases
   -config string
         config filename: local file that stores the global cluster configuration
   -config_custom string
@@ -31,21 +33,21 @@ The common executable, typically called `aisnode`, supports the following comman
   -h    show usage and exit
   -local_config string
         config filename: local file that stores daemon's local configuration
+  -loopback
+        use loopback devices (local playground, target-only)
   -ntargets int
         number of storage targets expected to be joining at startup (optional, primary-only)
-  -override_backends
-        configure remote backends at deployment time (potentially, override previously stored configuration)
   -role string
         _role_ of this aisnode: 'proxy' OR 'target'
   -skip_startup
         whether primary, when starting up, should skip waiting for target joins (used only in tests)
   -standby
-        when starting up, do not try to join cluster - standby and wait for admin request (target-only)
+        when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)
+  -start_with_lost_mountpath
+        force starting up with a lost or missing mountpath (target-only)
   -transient
-        false: store customized (via config_custom) configuration
-        true: runtime only (non-persistent)
-  -v value
-        log level for V logs
+        false: store customized (via '-config_custom') configuration
+        true: keep '-config_custom' settings in memory only (non-persistent)
 ```
 
 For usage and the most recently updated set of command-line options, run `aisnode` with empty command-line:

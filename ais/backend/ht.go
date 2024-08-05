@@ -1,3 +1,5 @@
+//go:build ht
+
 // Package backend contains implementation of various backend providers.
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
@@ -32,14 +34,14 @@ type (
 // interface guard
 var _ core.Backend = (*htbp)(nil)
 
-func NewHTTP(t core.TargetPut, config *cmn.Config, tstats stats.Tracker) core.Backend {
+func NewHT(t core.TargetPut, config *cmn.Config, tstats stats.Tracker) (core.Backend, error) {
 	bp := &htbp{
 		t:    t,
-		base: base{provider: apc.HTTP},
+		base: base{provider: apc.HT},
 	}
 	bp.cliH, bp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
 	bp.init(t.Snode(), tstats)
-	return bp
+	return bp, nil
 }
 
 func (htbp *htbp) client(u string) *http.Client {
@@ -79,7 +81,7 @@ func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.S
 	}
 
 	bckProps = make(cos.StrKVs)
-	bckProps[apc.HdrBackendProvider] = apc.HTTP
+	bckProps[apc.HdrBackendProvider] = apc.HT
 	return
 }
 
@@ -128,7 +130,7 @@ func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
 	oa = &cmn.ObjAttrs{}
-	oa.SetCustomKey(cmn.SourceObjMD, apc.HTTP)
+	oa.SetCustomKey(cmn.SourceObjMD, apc.HT)
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
 	}
@@ -196,7 +198,7 @@ func (htbp *htbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		nlog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
-	lom.SetCustomKey(cmn.SourceObjMD, apc.HTTP)
+	lom.SetCustomKey(cmn.SourceObjMD, apc.HT)
 	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
 	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)

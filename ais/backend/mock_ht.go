@@ -1,8 +1,8 @@
-//go:build !azure
+//go:build !ht
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -13,6 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewAzure(_ core.TargetPut, _ stats.Tracker) (core.Backend, error) {
-	return nil, &cmn.ErrInitBackend{Provider: apc.Azure}
+func NewHT(core.TargetPut, *cmn.Config, stats.Tracker) (core.Backend, error) {
+	return nil, &cmn.ErrInitBackend{Provider: apc.HT}
 }
