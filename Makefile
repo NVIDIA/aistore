@@ -313,9 +313,8 @@ help:
 	@printf "  $(cyan)%s$(term-reset)\n    %s\n\n" \
 		"make deploy" "Deploy cluster locally" \
 		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
-		"make kill deploy <<< $$'7\n2\n4\ny\ny\nn\n0\n'"  "Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build 'aisnode' executable with the support for GCP and AWS backends" \
-		"make restart <<< $$'7\n2\n4\ny\ny\nn\nn\n0\n'"  "Restart a cluster of 7 targets (4 mountpaths each) and 2 proxies; utilize previously generated (pre-shutdown) local configurations" \
-		"make kill clean cli deploy <<< $$'7\n2\n4\ny\ny\nn\n1G\n'"  "Shutdown, cleanup, build CLI, and redeploy from scratch; create 4 loopback devices (size = 1G, one loopback per mountpath)" \
+		"make kill deploy <<< $$'7\n2\n4\ny\ny\n'"  "Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build 'aisnode' executable with GCP and AWS backends" \
+		"TAGS=\"aws gcp\" make kill deploy <<< $$'7\n2\n'"  "Same as above" \
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
 		"MODE=debug make deploy" "Deploy cluster with 'aisnode' (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
 		"BUCKET=tmp make test-short" "Run all short tests" \

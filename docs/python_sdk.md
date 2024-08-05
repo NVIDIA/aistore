@@ -1372,7 +1372,7 @@ def promote(path: str,
 Promotes a file or folder an AIS target can access to a bucket in AIS storage.
 These files can be either on the physical disk of an AIS target itself or on a network file system
 the cluster can access.
-See more info here: https://aiatscale.org/blog/2022/03/17/promote
+See more info here: https://aistore.nvidia.com/blog/2022/03/17/promote
 
 **Arguments**:
 

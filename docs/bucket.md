@@ -607,7 +607,7 @@ $ ais bucket props set ais://llm-latest backend_bck=gs://llm-augmented-2023-12-0
 
 Caching wise, when you walk `ais://llm-latest` (or any other aistore bucket with a remote backend), aistore will make sure to perform remote (cold) GETs to update itself when and if required, etc.
 
-> In re "cold GET" vs "warm GET" performance, see [AIStore as a Fast Tier Storage](https://aiatscale.org/blog/2023/11/27/aistore-fast-tier) blog.
+> In re "cold GET" vs "warm GET" performance, see [AIStore as a Fast Tier Storage](https://aistore.nvidia.com/blog/2023/11/27/aistore-fast-tier) blog.
 
 # Bucket Properties
 

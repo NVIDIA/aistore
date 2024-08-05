@@ -14,13 +14,13 @@ redirect_from:
 - [Getting started](/docs/getting_started.md)
 - [CLI: overview, getting started](/docs/cli.md)
 - [CLI: reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
-- [Blogs](https://aiatscale.org/blog)
+- [Blogs](https://aistore.nvidia.com/blog)
 - [Deployment](https://github.com/NVIDIA/aistore/tree/main/deploy)
 
 ## Guides and References
 
 - [Getting Started](/docs/getting_started.md)
-- [Technical Blog](https://aiatscale.org/blog)
+- [Technical Blog](https://aistore.nvidia.com/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/main/api)
   - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore), and also:

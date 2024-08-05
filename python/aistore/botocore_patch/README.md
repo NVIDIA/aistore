@@ -1,7 +1,7 @@
 
 # AIS Botocore Patch
 
-As an alternative to the [AIStore Python SDK](https://aiatscale.org/docs/python_sdk.md) for accessing AIStore, you might prefer using other popular object storage client libraries. For example, you can use Amazon's [Boto3](https://github.com/boto/boto3) library, or its underlying [botocore](https://github.com/boto/botocore) library.
+As an alternative to the [AIStore Python SDK](https://aistore.nvidia.com/docs/python_sdk.md) for accessing AIStore, you might prefer using other popular object storage client libraries. For example, you can use Amazon's [Boto3](https://github.com/boto/boto3) library, or its underlying [botocore](https://github.com/boto/botocore) library.
 
 This package `aistore.botocore_patch.botocore` exposes an interface to access AIStore as if it were Amazon S3, allowing developers to utilize AIStore object storage without changing their existing S3 client code.
 
@@ -41,6 +41,6 @@ Now AIS will accept S3 commands and behave as an S3 client.
 ## References
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
-* [Documentation](https://aiatscale.org/docs)
+* [Documentation](https://aistore.nvidia.com/docs)
 * [AIStore pip package](https://pypi.org/project/aistore/)
 * [Videos and demos](https://github.com/NVIDIA/aistore/blob/main/docs/videos.md)

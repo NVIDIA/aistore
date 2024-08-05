@@ -10,6 +10,6 @@ See the README files in each module for usage details:
 ## References
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
-* [Documentation](https://aiatscale.org/docs)
+* [Documentation](https://aistore.nvidia.com/docs)
 * [AIStore pip package](https://pypi.org/project/aistore/)
 * [Videos and demos](https://github.com/NVIDIA/aistore/blob/main/docs/videos.md)

@@ -31,7 +31,7 @@ All sharding formats are equally supported across the entire set of AIS APIs. Fo
 
 and including the corresponding pathnames into generated result sets. Clients can run concurrent multi-object (source bucket => destination bucket) transactions to en masse generate new archives from [selected](/docs/batch.md) subsets of files, and more.
 
-APPEND to existing archives is also provided but limited to [TAR only](https://aiatscale.org/blog/2021/08/10/tar-append).
+APPEND to existing archives is also provided but limited to [TAR only](https://aistore.nvidia.com/blog/2021/08/10/tar-append).
 
 > Maybe with exception of TAR, none of the listed sharding/archiving formats was ever designed to be append-able - that is, not if we are actually talking about *appending* and not some sort of extract-all-create-new type emulation (that will certainly break the performance in several well-documented ways).
 

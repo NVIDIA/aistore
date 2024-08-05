@@ -387,9 +387,9 @@ Below are specifications for a valid `ETL_NAME`:
 ## References
 
 * For technical blogs with in-depth background and working real-life examples, see:
-  - [ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
-  - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk)
-  - [ETL: Using WebDataset to train on a sharded dataset ](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
+  - [ETL: Introduction](https://aistore.nvidia.com/blog/2021/10/21/ais-etl-1)
+  - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aistore.nvidia.com/blog/2023/04/03/transform-images-with-python-sdk)
+  - [ETL: Using WebDataset to train on a sharded dataset ](https://aistore.nvidia.com/blog/2021/10/29/ais-etl-3)
 * For step-by-step tutorials, see:
   - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
 * For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)

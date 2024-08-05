@@ -15,7 +15,7 @@ In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore (AIS
 
 See also:
 
-* [blog](https://aiatscale.org/blog)
+* [blog](https://aistore.nvidia.com/blog)
 * [white paper](https://arxiv.org/abs/2001.01858)
 * [at-a-glance poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
 
@@ -169,7 +169,7 @@ Common way to use AIStore include the most fundamental and, often, the very firs
 
 To this end, AIS provides 6 (six) easy ways ranging from the conventional on-demand caching to *promoting* colocated files and directories, and more.
 
-> Related references and examples include this [technical blog](https://aiatscale.org/blog/2021/12/07/cp-files-to-ais) that shows how to copy a file-based dataset in two easy steps.
+> Related references and examples include this [technical blog](https://aistore.nvidia.com/blog/2021/12/07/cp-files-to-ais) that shows how to copy a file-based dataset in two easy steps.
 
 1. [Cold GET](#existing-datasets-cold-get)
 2. [Prefetch](#existing-datasets-batch-prefetch)

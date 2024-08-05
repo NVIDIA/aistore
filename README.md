@@ -5,7 +5,7 @@
 
 AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
 
-AIS [consistently shows balanced I/O distribution and linear scalability](https://aiatscale.org/blog/2024/02/16/multihome-bench) across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the initial design was also driven by the ideas to [offload](https://aiatscale.org/blog/2023/06/09/aisio-transforms-with-webdataset-pt-3) custom dataset transformations (often referred to as [ETL](https://aiatscale.org/blog/2021/10/21/ais-etl-1)). And finally, since AIS is a software system that aggregates Linux machines to provide storage for user data, there's the requirement number one: reliability and data protection.
+AIS [consistently shows balanced I/O distribution and linear scalability](https://aistore.nvidia.com/blog/2024/02/16/multihome-bench) across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the initial design was also driven by the ideas to [offload](https://aistore.nvidia.com/blog/2023/06/09/aisio-transforms-with-webdataset-pt-3) custom dataset transformations (often referred to as [ETL](https://aistore.nvidia.com/blog/2021/10/21/ais-etl-1)). And finally, since AIS is a software system that aggregates Linux machines to provide storage for user data, there's the requirement number one: reliability and data protection.
 
 ## Features
 
@@ -107,9 +107,9 @@ Specifically, [TorchData](https://github.com/pytorch/data) library provides:
 
 to list and, respectively, load data from AIStore.
 
-Further references and usage examples - in our technical blog at https://aiatscale.org/blog:
-* [PyTorch: Loading Data from AIStore](https://aiatscale.org/blog/2022/07/12/aisio-pytorch)
-* [Python SDK: Getting Started](https://aiatscale.org/blog/2022/07/20/python-sdk)
+Further references and usage examples - in our technical blog at https://aistore.nvidia.com/blog:
+* [PyTorch: Loading Data from AIStore](https://aistore.nvidia.com/blog/2022/07/12/aisio-pytorch)
+* [Python SDK: Getting Started](https://aistore.nvidia.com/blog/2022/07/20/python-sdk)
 
 Since AIS natively supports a number of [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3 and Google Cloud buckets, and more.
 
@@ -122,7 +122,7 @@ With a little effort, they all could be extracted and used outside.
 ## Guides and References
 
 - [Getting Started](/docs/getting_started.md)
-- [Technical Blog](https://aiatscale.org/blog)
+- [Technical Blog](https://aistore.nvidia.com/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/main/api)
   - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore), and also:
@@ -204,7 +204,7 @@ With a little effort, they all could be extracted and used outside.
     - [copy bucket](/docs/cli/bucket.md#copy-bucket)
     - [copy multiple objects](/docs/cli/bucket.md#copy-multiple-objects)
     - [download remote BLOBs](/docs/cli/blob-downloader.md)
-    - [promote NFS or SMB share](https://aiatscale.org/blog/2022/03/17/promote), and more
+    - [promote NFS or SMB share](https://aistore.nvidia.com/blog/2022/03/17/promote), and more
 - Assorted Topics
   - [Virtual directories](/docs/howto_virt_dirs.md)
   - [System files](/docs/sysfiles.md)
