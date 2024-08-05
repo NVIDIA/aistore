@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type (
@@ -30,15 +32,12 @@ type (
 		MExtMgr          *MissingExtManager
 		Collapse         bool
 	}
-	DryRunFlag struct {
-		IsSet bool
-		Mode  string
-	}
 	Config struct {
 		ClusterConfig
 		IshardConfig
 		DryRunFlag
 		SortFlag
+		EKMFlag
 		SrcBck    cmn.Bck
 		SrcPrefix string
 		DstBck    cmn.Bck
@@ -129,9 +128,64 @@ func (alg *SortFlag) String() string {
 	}
 }
 
+///////////////////////
+// Parse `-ekm` flag //
+///////////////////////
+
+type EKMFlag struct {
+	IsSet     bool
+	Path      string
+	JSONBytes []byte
+
+	// Used for validating input
+	ekm shard.ExternalKeyMap
+}
+
+func (e *EKMFlag) Set(param string) error {
+	var err error
+	param = strings.TrimSpace(param)
+	if strings.HasSuffix(param, ".json") {
+		e.Path = param
+		e.JSONBytes, err = os.ReadFile(param)
+		if err != nil {
+			return fmt.Errorf("error reading ekm file: %w", err)
+		}
+	} else if strings.HasPrefix(param, "{") && strings.HasSuffix(param, "}") {
+		e.JSONBytes = []byte(param)
+	} else {
+		return fmt.Errorf("invalid format, should be an inline JSON string or JSON file path")
+	}
+
+	var jsonContent map[string][]string
+	if err := jsoniter.Unmarshal(e.JSONBytes, &jsonContent); err != nil {
+		return fmt.Errorf("error unmarshal ekm file: %w", err)
+	}
+
+	e.IsSet = true
+
+	e.ekm = shard.NewExternalKeyMap(16)
+	for format, samples := range jsonContent {
+		for _, sample := range samples {
+			if err = e.ekm.Add(sample, format); err != nil {
+				return fmt.Errorf("error parsing ekm file: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (e *EKMFlag) String() string {
+	return e.Path
+}
+
 ///////////////////////////
 // Parse `-dry_run` flag //
 ///////////////////////////
+
+type DryRunFlag struct {
+	IsSet bool
+	Mode  string
+}
 
 func (d *DryRunFlag) String() string {
 	return d.Mode
@@ -171,6 +225,9 @@ func parseCliParams(cfg *Config) {
 	flag.BoolVar(&cfg.Collapse, "collapse", false, "If true, files in a subdirectory will be flattened and merged into its parent directory if their overall size doesn't reach the desired shard size. Default is `false`.")
 	flag.BoolVar(&cfg.Progress, "progress", false, "If true, display the progress of processing objects in the source bucket. Default is `false`.")
 	flag.Var(&cfg.DryRunFlag, "dry_run", "If set, only shows the layout of resulting output shards without actually executing archive jobs. Use -dry_run=\"show_keys\" to include sample keys.")
+	flag.Var(&cfg.EKMFlag, "ekm", "Specify an external key map (EKM) to pack samples into shards based on customized regex categories, either as a JSON string or a path to a JSON file.\n"+
+		"  -ekm=\"/path/to/ekm.json\"\n"+
+		"  -ekm=\"{\\\"fish-%d.tar\\\": [\\\"train/n01440764.*\\\", \\\"train/n01443537.*\\\"], \\\"dog-%d.tar\\\": [\\\"train/n02084071.*\\\", \\\"train/n02085782.*\\\"]}\"")
 	flag.Var(&cfg.SortFlag, "sort", "If set, sorting algorithm will be performed on files within shards\n"+
 		"  -sort=\"alpha:inc\": Sorts the items in alphanumeric order in ascending (increasing) order.\n"+
 		"  -sort=\"shuffle:124123\": Randomly shuffles the items using the specified seed 124123 for reproducibility. If the seed cannot be parsed as an integer, the flag is rejected.")
@@ -216,11 +273,13 @@ func parseCliParams(cfg *Config) {
 		os.Exit(1)
 	}
 
-	cfg.MExtMgr, err = NewMissingExtManager(missingExtActStr, strings.Split(sampleExts, ","))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		flag.Usage()
-		os.Exit(1)
+	if sampleExts != "" {
+		cfg.MExtMgr, err = NewMissingExtManager(missingExtActStr, strings.Split(sampleExts, ","))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			flag.Usage()
+			os.Exit(1)
+		}
 	}
 
 	var commonPatterns = map[string]SampleKeyPattern{

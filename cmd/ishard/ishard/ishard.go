@@ -287,7 +287,7 @@ func (is *ISharder) Start() error {
 
 	is.shardFactory.Wait()
 
-	if is.cfg.SortFlag.IsSet {
+	if is.cfg.SortFlag.IsSet || is.cfg.EKMFlag.IsSet {
 		dsortUUID, err := is.sort(is.shardFactory.OutShardNames)
 		if err != nil {
 			return err

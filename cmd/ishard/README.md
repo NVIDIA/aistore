@@ -39,6 +39,9 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
    - `-shard_template="prefix-{0000..4096..8}-suffix"`: Generate output shards `prefix-0000-suffix`, `prefix-0008-suffix`, `prefix-00016-suffix`, and so on.
    - `-shard_template="prefix-%06d-suffix"`: Generate output shards `prefix-000000-suffix`, `prefix-000001-suffix`, `prefix-000002-suffix`, and so on.
    - `-shard_template="prefix-@00001-gap-@100-suffix"`: Generate output shards `prefix-00001-gap-001-suffix`, `prefix-00001-gap-002-suffix`, and so on.
+- `ekm`: Specify an external key map (EKM) to pack samples into shards based on customized regex categories, either as a JSON string or a path to a JSON file.
+   - `ekm="/path/to/ekm.json"`: Specify EKM as a path to a JSON file.
+   - `ekm="{\"fish-%d.tar\": [\"train/n01440764.*\", \"train/n01443537.*\"], \"dog-%d.tar\": [\"train/n02084071.*\", \"train/n02085782.*\"]}"`: Specify EKM as an inline JSON string.
 - `-ext`: The extension used for generating output shards. Supports `.tar`, `.tgz`, `.tar.gz`, `.zip`, and `.tar.lz4` formats.
 - `-sample_exts`: A comma-separated list of required extensions for all samples in the dataset. See -missing_extension_action for handling missing extensions.
 - `-missing_extension_action`: Specifies the action to take when an expected extension is missing from a sample. Options are: `abort` | `warn` | `ignore` | `exclude`.
@@ -281,7 +284,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 5. **Generate output shards name using template:** You can use various templates to generate output shards using `-shard_template`. For example: 
 
    ```sh
-   $ ./ishard-cli -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -shard_template="pre-{0000..8192..8}-suf"
+   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -shard_template="pre-{0000..8192..8}-suf"
 
    NAME                                                                            SIZE            
    pre-0000-suf.tar                                                                1.07MiB         
@@ -296,6 +299,33 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
       pre-0016-suf.tar/ImageNet/Annotations/n00014536/n00014536_02.xml             100B            
       pre-0016-suf.tar/ImageNet/Annotations/n00015250/n00015250_01.xml             100B            
    ...
+   ```
+
+6. **Generate output shards name using template:** You can pack samples into shards based on customized categories using `-ekm`. For example, the following example EKM file will pack all samples matching to these specified templates into their corresponding category.
+
+   ```json
+   {
+   "fish-%d.tar": [
+      "train/n01440764.*",  // tench
+      "train/n01443537.*",  // goldfish
+      ...
+   ],
+   "dog-%d.tar": [
+      "train/n02084071.*",  // toy terrier
+      "train/n02085782.*",  // Japanese spaniel
+      "train/n02085936.*",  // Maltese dog
+      ...
+   ],
+   "bird-%d.tar": [
+      "train/n01514668.*",  // cock
+      "train/n01514859.*",  // hen
+      ...
+   ],
+   }
+   ```
+
+   ```sh
+   $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -ekm="/path/to/category.json"
    ```
 
 ### Incorrect Usages

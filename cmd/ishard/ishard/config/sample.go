@@ -1,4 +1,4 @@
-// Package ishard provides sample extension configs and associated actions
+// Package config provides types and functions to configure ishard executable.
 /*
  * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
  */

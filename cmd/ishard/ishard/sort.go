@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/tools/readers"
 )
 
 const DsortDefaultTimeout = 6 * time.Minute
@@ -32,6 +33,32 @@ func (is *ISharder) sort(shardNames []string) (string, error) {
 			Provider: is.cfg.DstBck.Provider,
 		},
 		Algorithm: is.cfg.Algorithm,
+	}
+
+	// upload EKM order file if specified
+	if is.cfg.EKMFlag.IsSet {
+		orderFileName := is.cfg.EKMFlag.Path
+		if orderFileName == "" {
+			orderFileName = "order_file.json"
+		}
+		args := api.PutArgs{
+			BaseParams: is.baseParams,
+			Bck:        is.cfg.DstBck,
+			ObjName:    orderFileName,
+			Reader:     readers.NewBytes(is.cfg.JSONBytes),
+		}
+		if _, err := api.PutObject(&args); err != nil {
+			return "", fmt.Errorf("error uploading order file: %w", err)
+		}
+
+		spec.OrderFileURL = fmt.Sprintf(
+			"%s/%s/%s/%s/%s?%s=%s",
+			is.cfg.URL, apc.Version, apc.Objects, is.cfg.DstBck.Name, orderFileName,
+			apc.QparamProvider, is.cfg.DstBck.Provider,
+		)
+
+		fmt.Println("Upload Success", spec.OrderFileURL)
+		spec.Config.EKMMissingKey = cmn.AbortReaction
 	}
 
 	fmt.Println("dsort started...")

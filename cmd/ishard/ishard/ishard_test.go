@@ -450,6 +450,84 @@ func TestIshardMissingExtension(t *testing.T) {
 	})
 }
 
+func TestIshardEKM(t *testing.T) {
+	var (
+		cfg = &config.Config{
+			SrcBck: cmn.Bck{
+				Name:     trand.String(15),
+				Provider: apc.AIS,
+			},
+			DstBck: cmn.Bck{
+				Name:     trand.String(15),
+				Provider: apc.AIS,
+			},
+			IshardConfig: config.IshardConfig{
+				MaxShardSize:     102400,
+				ShardTemplate:    "shard-%d",
+				Ext:              ".tar",
+				SampleKeyPattern: config.BaseFileNamePattern,
+			},
+			ClusterConfig: config.DefaultConfig.ClusterConfig,
+		}
+		baseParams = api.BaseParams{
+			URL:    cfg.URL,
+			Client: cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true}),
+		}
+		numRecords    = 50
+		numExtensions = 5
+		fileSize      = 32 * cos.KiB
+		dsortedBck    = cmn.Bck{
+			Name:     cfg.DstBck.Name + "-sorted",
+			Provider: apc.AIS,
+		}
+	)
+
+	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, cfg.URL, dsortedBck, nil, true /*cleanup*/)
+
+	var extensions []string
+	for range numExtensions {
+		extensions = append(extensions, "."+trand.String(3))
+	}
+	_, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, int64(fileSize), false, false)
+	tassert.CheckFatal(t, err)
+
+	tlog.Logf("building and configuring EKM as JSON string")
+	var builder strings.Builder
+	builder.WriteString("{")
+	for i, letter := range "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+		if i > 0 {
+			builder.WriteString(",")
+		}
+		fmt.Fprintf(&builder, "\n    \"%c-%%d.tar\": [\"^%c.*\"]", letter, letter)
+	}
+	builder.WriteString("\n}")
+	jsonData := []byte(builder.String())
+	cfg.EKMFlag = config.EKMFlag{
+		IsSet:     true,
+		JSONBytes: jsonData,
+	}
+
+	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	isharder, err := ishard.NewISharder(cfg)
+	tassert.CheckFatal(t, err)
+
+	err = isharder.Start()
+	tassert.CheckFatal(t, err)
+
+	shardContents, err := getShardContents(baseParams, dsortedBck)
+	tassert.CheckFatal(t, err)
+	for tarball, files := range shardContents {
+		for _, fileName := range files {
+			tassert.Fatalf(
+				t, tarball[0] == fileName[0],
+				"fail to categorize by the first character in file names, tarball name %s != file name %s", tarball, fileName,
+			)
+		}
+	}
+}
+
 func TestIshardParallel(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
