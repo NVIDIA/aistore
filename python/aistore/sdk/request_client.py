@@ -11,7 +11,7 @@ from aistore.sdk.const import (
     HEADER_USER_AGENT,
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
-    AIS_SERVER_CRT,
+    AIS_CLIENT_CA,
     HEADER_AUTHORIZATION,
 )
 from aistore.sdk.utils import handle_errors, decode_response
@@ -78,7 +78,7 @@ class RequestClient:
         if self._ca_cert:
             request_session.verify = self._ca_cert
             return
-        env_crt = os.getenv(AIS_SERVER_CRT)
+        env_crt = os.getenv(AIS_CLIENT_CA)
         request_session.verify = env_crt if env_crt else True
 
     @property

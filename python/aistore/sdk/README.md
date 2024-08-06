@@ -99,7 +99,7 @@ The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTP
      - Pass an argument to the path of the certificate when creating the client:
         - `client = Client(ca_cert=/path/to/cert)`
      - Use the environment variable
-       - Set `AIS_SERVER_CRT` to the path of your certificate before initializing the client
+       - Set `AIS_CLIENT_CA` to the path of your certificate before initializing the client
     - If your AIS cluster is using a certificate signed by a trusted CA, the client will default to using verification without needing to provide a CA cert.
 ---
 

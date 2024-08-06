@@ -8,7 +8,7 @@ from aistore.sdk.const import (
     HEADER_USER_AGENT,
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
-    AIS_SERVER_CRT,
+    AIS_CLIENT_CA,
 )
 from aistore.sdk.request_client import RequestClient
 from aistore.version import __version__ as sdk_version
@@ -35,7 +35,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             "aistore.sdk.request_client.os.getenv", return_value=None
         ) as mock_getenv:
             self.request_client = RequestClient(self.endpoint)
-            mock_getenv.assert_called_with(AIS_SERVER_CRT)
+            mock_getenv.assert_called_with(AIS_CLIENT_CA)
             self.assertEqual(True, self.request_client.session.verify)
 
     @test_cases(
@@ -54,7 +54,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 self.endpoint, skip_verify=skip_verify, ca_cert=arg_cert
             )
             if not skip_verify and not arg_cert:
-                mock_getenv.assert_called_with(AIS_SERVER_CRT)
+                mock_getenv.assert_called_with(AIS_CLIENT_CA)
             self.assertEqual(test_case[1], self.request_client.session.verify)
 
     def test_properties(self):
