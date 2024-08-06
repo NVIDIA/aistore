@@ -50,6 +50,7 @@ ENV STATSD_CONF_FILE ${AIS_CONF_DIR}/statsd.conf
 
 ENV MOUNTPATH /tmp/ais
 
+COPY utils.sh utils.sh
 COPY aisnode_config.sh aisnode_config.sh
 COPY entrypoint/entrypoint.sh entrypoint.sh
 COPY limits.conf /etc/security/limits.conf

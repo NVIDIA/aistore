@@ -265,15 +265,16 @@ index 9f7d048cf..d775fc69d 100644
 +++ b/deploy/prod/docker/single/Makefile
 @@ -14,10 +14,11 @@ all: build push
  build:
+        cp ${AISTORE_PATH}/deploy/dev/utils.sh .
         cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh .
         cp ${AISTORE_PATH}/deploy/conf/limits.conf .
 +       cp ~/.aws/credentials .
 
--       docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f aisnode_config.sh limits.conf
-+       docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f aisnode_config.sh limits.conf credentials
+-       docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f utils.sh aisnode_config.sh limits.conf
++       docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f utils.sh aisnode_config.sh limits.conf credentials
 
--       rm -f aisnode_config.sh limits.conf
-+       rm -f aisnode_config.sh limits.conf credentials
+-       rm -f utils.sh aisnode_config.sh limits.conf
++       rm -f utils.sh aisnode_config.sh limits.conf credentials
 
  push:
         docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)

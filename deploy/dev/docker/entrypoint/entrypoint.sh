@@ -9,6 +9,7 @@ mkdir -p ${AIS_LOG_DIR}
 export GOCACHE=/tmp/.gocache
 mkdir -p /tmp/.gocache
 touch ${AIS_LOG_DIR}/statsd.log
+source /utils.sh
 source /aisnode_config.sh
 
 exec node /statsd/stats.js ${STATSD_CONF_FILE} 2>&1 | tee -a ${AIS_LOG_DIR}/statsd.log &

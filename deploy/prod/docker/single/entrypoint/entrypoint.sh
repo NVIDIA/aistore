@@ -16,6 +16,7 @@ function start_node {
   mkdir -p ${AIS_CONF_DIR}
   mkdir -p ${AIS_LOG_DIR}
 
+  source utils.sh
   source aisnode_config.sh
 
   bin/aisnode \

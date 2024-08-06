@@ -39,6 +39,7 @@ RUN apk upgrade --no-cache && \
 
 WORKDIR /build
 COPY entrypoint entrypoint/
+COPY utils.sh ./
 COPY aisnode_config.sh ./
 COPY limits.conf /etc/security/limits.conf
 COPY --from=builder /go/bin/aisnode bin/

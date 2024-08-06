@@ -119,6 +119,7 @@ deploy_mode() {
 }
 
 deploy_quickstart() {
+    cp $DIR/../utils.sh utils.sh
     cp $DIR/../local/aisnode_config.sh aisnode_config.sh
     cp $DIR/../../conf/limits.conf limits.conf
 
@@ -142,6 +143,7 @@ deploy_quickstart() {
     container_id=$(docker ps | grep ais-quickstart | awk '{ print $1 }')
     docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
 
+    rm -rf utils.sh
     rm -rf aisnode_config.sh
     rm -rf limits.conf
 }
@@ -387,6 +389,7 @@ if [ "${NETWORK}" = "multi" ]; then
     composer_file="${DIR}/docker-compose.singlenet.yml -f ${DIR}/docker-compose.multinet.yml"
 fi
 
+cp $DIR/../utils.sh utils.sh
 cp $DIR/../local/aisnode_config.sh aisnode_config.sh
 cp $DIR/../../conf/limits.conf limits.conf
 
@@ -497,6 +500,7 @@ if [ "$GRAFANA" == true ]; then
 fi
 
 # Consider moving these to a folder instead of deleting - for future reference
+rm utils.sh
 rm aisnode_config.sh
 rm limits.conf
 docker ps
