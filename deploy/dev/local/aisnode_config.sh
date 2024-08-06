@@ -124,7 +124,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"fshc": {
 		"test_files":     4,
 		"error_limit":    2,
-		"soft_err_limit": 100,
+		"soft_err_limit": 10,
 		"soft_err_time":  "10s",
 		"enabled":        true
 	},

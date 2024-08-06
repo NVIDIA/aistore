@@ -74,13 +74,16 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 		curr := &localIPv4Info{}
 		if ipnet, ok := addr.(*net.IPNet); ok {
 			if ipnet.IP.IsLoopback() {
-				// K8s: always skip (ie, exclude) 127.0.0.1 loopback
+				// K8s: always exclude 127.0.0.1 loopback
 				if k8s.IsK8s() {
 					continue
 				}
 				// non K8s and fspaths:
 				if !config.TestingEnv() {
 					if excludeLoopbackIP() {
+						if ipnet.IP.To4() != nil {
+							nlog.Warningln("(non-K8s, fspaths) deployment: excluding loopback IP:", ipnet.IP)
+						}
 						continue
 					}
 				}

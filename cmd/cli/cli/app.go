@@ -85,6 +85,7 @@ type (
 	longRun struct {
 		count            int
 		lfooter          int
+		iters            int
 		refreshRate      time.Duration
 		offset           int64
 		mapBegin, mapEnd teb.StstMap
@@ -190,6 +191,7 @@ func Run(version, buildtime string, args []string) error {
 		}
 		return nil
 	}
+	a.longRun.iters = 1
 	if a.longRun.outFile != nil {
 		defer a.longRun.outFile.Close()
 	}
@@ -225,6 +227,7 @@ func (a *acli) runForever(args []string) error {
 		if err := a.runOnce(args); err != nil {
 			return err
 		}
+		a.longRun.iters++
 		a.longRun.mapBegin = a.longRun.mapEnd
 		a.longRun.mapEnd = nil
 	}
@@ -239,12 +242,12 @@ func printLongRunFooter(w io.Writer, repeat int) {
 func (a *acli) runN(args []string) error {
 	delim := fcyan(strings.Repeat("-", 16))
 	fmt.Fprintln(a.outWriter, delim)
-	for i := 2; i <= a.longRun.count; i++ {
+	for ; a.longRun.iters < a.longRun.count; a.longRun.iters++ {
 		time.Sleep(a.longRun.refreshRate)
 		if err := a.runOnce(args); err != nil {
 			return err
 		}
-		if i < a.longRun.count {
+		if a.longRun.iters < a.longRun.count-1 {
 			fmt.Fprintln(a.outWriter, delim)
 		}
 	}

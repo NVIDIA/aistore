@@ -314,7 +314,7 @@ help:
 		"make deploy" "Deploy cluster locally" \
 		"make kill clean" "Stop locally deployed cluster and cleanup all cluster-related data and bucket metadata (but not cluster map)" \
 		"make kill deploy <<< $$'7\n2\n4\ny\ny\n'"  "Shutdown and then (non-interactively) generate local configs and deploy a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build 'aisnode' executable with GCP and AWS backends" \
-		"TAGS=\"aws gcp\" make kill deploy <<< $$'7\n2\n'"  "Same as above" \
+		"TAGS=\"aws gcp\" make kill deploy <<< $$'7\n2\n'"  "Same as above (see docs/getting_started.md for many more examples)" \
 		"GORACE='log_path=/tmp/race' make deploy" "Deploy cluster with race detector, write reports to /tmp/race.<PID>" \
 		"MODE=debug make deploy" "Deploy cluster with 'aisnode' (AIS target and proxy) executable built with debug symbols and debug asserts enabled" \
 		"BUCKET=tmp make test-short" "Run all short tests" \

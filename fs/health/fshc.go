@@ -10,10 +10,13 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -31,6 +34,8 @@ const (
 	maxNumFiles = 100     // read:  upto so many existing files
 )
 
+// - compare with cmn/cos/oom
+// - compare with ais/tgtspace
 const (
 	minTimeBetweenRuns = 4 * time.Minute
 )
@@ -48,7 +53,50 @@ type (
 	}
 )
 
+type (
+	ror struct {
+		last    int64
+		running int64
+	}
+)
+
+// per mountpath: recent-or-running
+var all sync.Map // [mpath => ror]
+
 func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
+
+func (*FSHC) IsErr(err error) bool {
+	return cmn.IsErrGetCap(err) || cmn.IsErrMpathCheck(err) || cos.IsIOError(err)
+}
+
+// serialize per-mountpath runs
+func (f *FSHC) OnErr(mi *fs.Mountpath, fqn string) {
+	var (
+		now       = mono.NanoTime()
+		r         = &ror{last: now, running: now}
+		a, loaded = all.LoadOrStore(mi.Path, r)
+	)
+	if loaded {
+		r = a.(*ror)
+		prev := ratomic.LoadInt64(&r.last)
+		elapsed := time.Duration(now - prev)
+		if elapsed < minTimeBetweenRuns {
+			nlog.Infoln("not enough time passed since the previous run:", elapsed)
+			return
+		}
+		if !ratomic.CompareAndSwapInt64(&r.running, 0, now) {
+			nlog.Infoln(mi.String(), "still running:", elapsed, "- nothing to do")
+			return
+		}
+	}
+	go run(f, mi, r, fqn, now)
+}
+
+func run(f *FSHC, mi *fs.Mountpath, r *ror, fqn string, now int64) {
+	f.run(mi, fqn)
+	ratomic.StoreInt64(&r.last, now)
+	ratomic.StoreInt64(&r.running, 0)
+}
 
 func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 	var (

@@ -124,7 +124,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"fshc": {
 		"test_files":     4,
 		"error_limit":    2,
-		"soft_err_limit": 100,
+		"soft_err_limit": 10,
 		"soft_err_time":  "10s",
 		"enabled":        true
 	},
@@ -172,11 +172,7 @@ cat > $AIS_CONF_FILE <<EOL
 EOL
 
 ## E.g. usage
-## 1) with loopbacks:
-## deploy/dev/loopback.sh --mountpath /tmp/ais/mp8 --size 1G
-## deploy/dev/loopback.sh --mountpath /tmp/ais/mp9 --size 1G
-## 2) and without:
-## mkdir -p /tmp/ais/mp8 /tmp/ais/mp9
+## for i in {1..4}; do deploy/dev/loopback.sh --mountpath /tmp/ais/mp$i --size 1G; done
 
 cat > $AIS_LOCAL_CONF_FILE <<EOL
 {
@@ -190,7 +186,7 @@ cat > $AIS_LOCAL_CONF_FILE <<EOL
 		"port_intra_control": "${PORT_INTRA_CONTROL:-9080}",
 		"port_intra_data":    "${PORT_INTRA_DATA:-10080}"
 	},
-	"fspaths": {"/tmp/ais/mp1": "disk1", "/tmp/ais/mp2": "disk2", "/tmp/ais/mp3": "disk3"},
+	"fspaths": {"/tmp/ais/mp1": "disk1", "/tmp/ais/mp2": "disk2", "/tmp/ais/mp3": "disk3", "/tmp/ais/mp4": "disk4"},
 	"test_fspaths": {
 		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
 		"count":    0,

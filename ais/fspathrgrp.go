@@ -147,9 +147,11 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 	core.UncacheMountpath(rmi)
 
-	if noResil || dontResilver || !cmn.GCO.Get().Resilver.Enabled {
-		nlog.Infof("%s: %q %s: no resilvering (%t, %t, %t)", g.t, action, rmi,
-			noResil, !dontResilver, cmn.GCO.Get().Resilver.Enabled)
+	config := cmn.GCO.Get()
+	if noResil || dontResilver || !config.Resilver.Enabled {
+		nlog.Infoln(g.t.String(), "action", action, rmi.String(), "- not resilvering:")
+		nlog.Infoln("noResil (action done?):", noResil, "dontResilver:", dontResilver,
+			"config enabled:", config.Resilver.Enabled)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // ditto (compare with the one below)
 		return rmi, nil
 	}

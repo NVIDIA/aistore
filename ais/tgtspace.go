@@ -27,7 +27,8 @@ import (
 
 const (
 	// - note that an API call (e.g. CLI) will go through anyway
-	// - compare with cmn/cos/oom.go
+	// - compare with cmn/cos/oom
+	// - compare with fs/health/fshc
 	minAutoDetectInterval = 10 * time.Minute
 )
 
