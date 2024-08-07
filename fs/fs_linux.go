@@ -38,9 +38,10 @@ func (mi *Mountpath) resolveFS() error {
 	return nil
 }
 
-// NOTE: filepath.Rel() returns '.' not an empty string when there is an exact match.
-// TODO: consider excepting only exact match (rel == '.') as a match
-
+// NOTE:
+//   - filepath.Rel() returns '.' not an empty string when there is an exact match.
+//   - mountpath must be either a direct descendant of a mount point, or the mount point itself
+//     (when `rel` == ".")
 func _resolve(path string, fh *os.File) (fs, fsType string, _ error) {
 	var (
 		bestMatch string
