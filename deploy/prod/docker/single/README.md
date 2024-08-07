@@ -91,32 +91,43 @@ $ REGISTRY_URL=docker.io IMAGE_REPO=my-docker-rep IMAGE_TAG=custom make -e all
 The following command starts an AIS cluster in a Docker container with a single disk (requires at least one disk) that is mounted under a temporary directory on the host:
 
 ```
-docker run -d \
-  -p 51080:51080 \
-  -v $(mktemp -d):/ais/disk0 \
-  aistorage/cluster-minimal:latest
+docker run -d -p 51080:51080 -v $(mktemp -d):/ais/disk0 aistorage/cluster-minimal:latest
 ```
 
 > Note the command exposes the host `51080` port. It is possible to reach the cluster with `http://localhost:51080` if you are on the host machine.
 
 > The above command, and all subsequent commands, assume that all volumes will be mounted in `/ais/*` directory.
 
-You can check the status of the AIS cluster on the now running Docker instance (using local host endpoint) as follows:
+You can check the status of the AIS cluster on the now running Docker instance (using local host endpoint), as follows:
 
 ```
 $ AIS_ENDPOINT="http://localhost:51080" ais show cluster
+```
 
-PROXY                   MEM USED %  MEM AVAIL   UPTIME
-proxy-0934deff64b7[P]   0.40%       7.78GiB     3m30s
+> The `ais` command (above) is AIS command line management tool often simply referred to as [CLI](/docs/cli.md). To build it from sources, run `make cli`. To install one of the released binaries, see `scripts/install_from_binaries.sh --help`.
 
-TARGET              MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBALANCE   UPTIME
-target-0934deff64b7 0.41%       7.78GiB     84%         8.950TiB    0.07%       -           3m30s
+
+In the `ais show cluster` output - a sample below - notice software versions and various other minor details. But most of all note that this is one truly minimalistic cluster: a single gateway and a single storage node:
+
+```console
+$ AIS_ENDPOINT="http://localhost:51080" ais show cluster
+PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION                 BUILD TIME
+p[aXXGsjBy][P]   0.14%           27.69GiB        [0.5 0.2 0.2]   -       online  3.24.rc2.0d437de0b      2024-08-07T13:15:30+0000
+
+TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       LOAD AVERAGE    REBALANCE       UPTIME  STATUS  VERSION                 BUILD TIME
+t[zXRiIdJM]      0.14%           27.69GiB        16%             366.272GiB      [0.5 0.2 0.2]   -               -       online  3.24.rc2.0d437de0b      2024-08-07T13:15:30+0000
 
 Summary:
- Proxies:       1 (0 - unelectable)
- Targets:       1
- Primary Proxy: proxy-0934deff64b7
- Smap Version:  3
+   Proxies:             1
+   Targets:             1 (one disk)
+   Capacity:            used 71.86GiB (16%), available 366.27GiB
+   Cluster Map:         version 4, UUID XC0AxWp0K, primary p[aXXGsjBy]
+   Deployment:          linux
+   Status:              2 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.24.rc2.0d437de0b
+   Build:               2024-08-07T13:15:30+0000
 ```
 
 > **IMPORTANT**: `docker stop` may not be the right way to stop `cluster-minimal` instance - section [Shutting down](#shutting-down) below will explain why.
