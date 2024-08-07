@@ -8,12 +8,14 @@ from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_GET,
+    HTTP_METHOD_PATCH,
     QPARAM_ARCHPATH,
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
     QPARAM_ETL_NAME,
     QPARAM_OBJ_APPEND,
     QPARAM_OBJ_APPEND_HANDLE,
+    QPARAM_NEW_CUSTOM,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
     HEADER_CONTENT_LENGTH,
@@ -57,7 +59,7 @@ OBJ_NAME = "object_name"
 REQUEST_PATH = f"{URL_PATH_OBJECTS}/{BCK_NAME}/{OBJ_NAME}"
 
 
-# pylint: disable=unused-variable, too-many-locals
+# pylint: disable=unused-variable, too-many-locals, too-many-public-methods
 class TestObject(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock()
@@ -262,6 +264,33 @@ class TestObject(unittest.TestCase):
             data=b"",
         )
         self.assertEqual(next_handle, expected_handle)
+
+    def test_set_custom_props(self):
+        custom_metadata = {"key1": "value1", "key2": "value2"}
+        expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
+
+        self.object.set_custom_props(custom_metadata)
+
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PATCH,
+            path=REQUEST_PATH,
+            params=self.expected_params,
+            json=expected_json_val,
+        )
+
+    def test_set_custom_props_with_replace_existing(self):
+        custom_metadata = {"key1": "value1", "key2": "value2"}
+        self.expected_params[QPARAM_NEW_CUSTOM] = "true"
+        expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
+
+        self.object.set_custom_props(custom_metadata, replace_existing=True)
+
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PATCH,
+            path=REQUEST_PATH,
+            params=self.expected_params,
+            json=expected_json_val,
+        )
 
     def test_promote_default_args(self):
         filename = "promoted file"

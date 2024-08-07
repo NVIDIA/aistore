@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from io import BufferedWriter
-from typing import NewType
+from typing import Dict, NewType
 
 import requests
 
@@ -19,7 +19,9 @@ from aistore.sdk.const import (
     QPARAM_OBJ_APPEND_HANDLE,
     QPARAM_ETL_NAME,
     QPARAM_LATEST,
+    QPARAM_NEW_CUSTOM,
     ACT_PROMOTE,
+    HTTP_METHOD_PATCH,
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
     HEADER_RANGE,
@@ -392,3 +394,23 @@ class Object:
         ).headers
 
         return resp_headers.get(HEADER_OBJECT_APPEND_HANDLE, "")
+
+    def set_custom_props(
+        self, custom_metadata: Dict[str, str], replace_existing: bool = False
+    ):
+        """
+        Set custom properties for the object.
+
+        Args:
+            custom_metadata (Dict[str, str]): Custom metadata key-value pairs.
+            replace_existing (bool, optional): Whether to replace existing metadata. Defaults to False.
+        """
+        params = self._qparams.copy()
+        if replace_existing:
+            params[QPARAM_NEW_CUSTOM] = "true"
+
+        url = f"{URL_PATH_OBJECTS}/{self._bck_name}/{self.name}"
+
+        json_val = ActionMsg(action="", value=custom_metadata).dict()
+
+        self._client.request(HTTP_METHOD_PATCH, path=url, params=params, json=json_val)

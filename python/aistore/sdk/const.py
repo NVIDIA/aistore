@@ -60,6 +60,7 @@ QPARAM_OBJ_APPEND_HANDLE = "append_handle"
 DSORT_UUID = "uuid"
 QPARAM_UUID = "uuid"
 QPARAM_LATEST = "latest-ver"
+QPARAM_NEW_CUSTOM = "set-new-custom"
 
 # URL Param values
 # See api/apc/query.go
@@ -99,6 +100,7 @@ HTTP_METHOD_POST = "post"
 HTTP_METHOD_DELETE = "delete"
 HTTP_METHOD_PUT = "put"
 HTTP_METHOD_HEAD = "head"
+HTTP_METHOD_PATCH = "patch"
 
 # Actions
 # See api/apc/actmsg.go

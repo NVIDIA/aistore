@@ -16,6 +16,14 @@ def random_string(length: int = 10):
     return "".join(random.choices(string.ascii_lowercase, k=length))
 
 
+def string_to_dict(input_string: str) -> dict:
+    pairs = input_string.split(", ")
+    result_dict = {
+        key_value.split("=")[0]: key_value.split("=")[1] for key_value in pairs
+    }
+    return result_dict
+
+
 # pylint: disable=unused-variable
 def create_and_put_object(
     client: Client,

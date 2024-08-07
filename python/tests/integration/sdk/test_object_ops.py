@@ -8,7 +8,12 @@ import tarfile
 from datetime import datetime
 from pathlib import Path
 
-from aistore.sdk.const import AIS_VERSION, HEADER_CONTENT_LENGTH, UTF_ENCODING
+from aistore.sdk.const import (
+    AIS_CUSTOM_MD,
+    AIS_VERSION,
+    HEADER_CONTENT_LENGTH,
+    UTF_ENCODING,
+)
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.archive_mode import ArchiveMode
 from aistore.sdk.types import ArchiveSettings, BlobDownloadSettings
@@ -25,11 +30,12 @@ from tests.utils import (
     cleanup_local,
     test_cases,
     create_archive,
+    string_to_dict,
 )
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable, too-many-public-methods
 class TestObjectOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
@@ -152,6 +158,41 @@ class TestObjectOps(RemoteEnabledTest):
         for obj_name, content in objects.items():
             resp = self.bucket.object(obj_name).get(byte_range="bytes=5-100").read_all()
             self.assertEqual(content[5:101], resp)
+
+    def test_set_custom_props(self):
+        cont = b"test content"
+        obj = self._create_object()
+        obj.put_content(cont)
+
+        obj.set_custom_props(
+            custom_metadata={"testkey1": "testval1", "testkey2": "testval2"}
+        )
+        self.assertTrue(
+            {"testkey1": "testval1", "testkey2": "testval2"}.items()
+            <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
+        )
+
+        obj.set_custom_props(custom_metadata={"testkey3": "testval3"})
+        self.assertTrue(
+            {
+                "testkey1": "testval1",
+                "testkey2": "testval2",
+                "testkey3": "testval3",
+            }.items()
+            <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
+        )
+
+        obj.set_custom_props(
+            custom_metadata={"testkey4": "testval4"}, replace_existing=True
+        )
+        self.assertTrue(
+            {"testkey4": "testval4"}.items()
+            <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
+        )
+        current_metadata = string_to_dict(obj.head()[AIS_CUSTOM_MD])
+        self.assertNotIn("testkey1", current_metadata)
+        self.assertNotIn("testkey2", current_metadata)
+        self.assertNotIn("testkey3", current_metadata)
 
     @unittest.skipIf(
         not REMOTE_SET,

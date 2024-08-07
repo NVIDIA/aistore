@@ -77,6 +77,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [delete](#object.Object.delete)
     * [blob\_download](#object.Object.blob_download)
     * [append\_content](#object.Object.append_content)
+    * [set\_custom\_props](#object.Object.set_custom_props)
 * [multiobj.object\_group](#multiobj.object_group)
   * [ObjectGroup](#multiobj.object_group.ObjectGroup)
     * [client](#multiobj.object_group.ObjectGroup.client)
@@ -1476,6 +1477,30 @@ Append bytes as an object to a bucket in AIS storage.
 
 - `handle` _str_ - Handle string to pass for subsequent appends or flush.
   
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `requests.exceptions.HTTPError(404)` - The object does not exist
+
+<a id="object.Object.set_custom_props"></a>
+
+### set\_custom\_props
+
+```python
+def set_custom_props(self, custom_metadata: Dict[str, str], replace_existing: bool = False)
+```
+
+Set custom properties for the object.
+
+**Arguments**:
+
+- `custom_metadata` _Dict[str, str]_ - Custom metadata key-value pairs.
+- `replace_existing` _bool, optional_ - Whether to replace existing metadata. Defaults to False.
+
 
 **Raises**:
 
