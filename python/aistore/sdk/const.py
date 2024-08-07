@@ -83,6 +83,7 @@ URL_PATH_REVERSE = "reverse"
 DSORT_ABORT = "abort"
 # AuthN
 URL_PATH_AUTHN_USERS = "users"
+URL_PATH_AUTHN_CLUSTERS = "clusters"
 
 # Bucket providers
 # See api/apc/provider.go

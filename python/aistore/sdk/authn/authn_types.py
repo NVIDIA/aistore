@@ -3,7 +3,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, Union
+from typing import Optional, Union, Dict, List
 from pydantic import BaseModel, Field
 from aistore.sdk.const import NANOSECONDS_IN_SECOND
 
@@ -47,3 +47,51 @@ class TokenMsg(BaseModel):
     """
 
     token: str
+
+
+class ClusterInfo(BaseModel):
+    """
+    Represents information about a cluster.
+
+    Attributes:
+        id (str): The unique identifier of the cluster.
+        alias (Optional[str]): The alias name of the cluster. Defaults to None.
+        urls (List[str]): A list of URLs associated with the cluster.
+    """
+
+    id: str
+    alias: Optional[str] = None
+    urls: List[str] = []
+
+    def as_dict(self) -> Dict[str, Optional[str] | List[str]]:
+        """
+        Converts the ClusterInfo object to a dictionary.
+
+        Returns:
+            Dict[str, Optional[str] | List[str]]: A dictionary representation of the ClusterInfo object.
+        """
+        return {
+            "id": self.id,
+            "alias": self.alias,
+            "urls": self.urls,
+        }
+
+
+class ClusterList(BaseModel):
+    """
+    Represents a list of clusters.
+
+    Attributes:
+        clusters (Dict[str, ClusterInfo]): A dictionary of cluster IDs to ClusterInfo objects.
+    """
+
+    clusters: Dict[str, ClusterInfo] = {}
+
+    def as_dict(self) -> Dict[str, ClusterInfo]:
+        """
+        Converts the ClusterList object to a dictionary.
+
+        Returns:
+            Dict[str, ClusterInfo]: A dictionary representation of the ClusterList object.
+        """
+        return self.clusters

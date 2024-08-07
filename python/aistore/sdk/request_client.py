@@ -109,6 +109,21 @@ class RequestClient:
         """
         return self._token
 
+    @token.setter
+    def token(self, token: str):
+        """
+        Set the token for Authorization.
+
+        Args:
+            token (str): Token for Authorization. Must be a non-empty string.
+
+        Raises:
+            ValueError: If the provided token is empty.
+        """
+        if not token:
+            raise ValueError("Token must be a non-empty string.")
+        self._token = token
+
     def request_deserialize(
         self, method: str, path: str, res_model: Type[T], **kwargs
     ) -> T:

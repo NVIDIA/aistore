@@ -54,6 +54,7 @@ def _raise_error(text: str):
                 raise ErrBckAlreadyExists(err.status, err.message)
             if "etl" in err.message:
                 raise ErrETLAlreadyExists(err.status, err.message)
+    # TODO: Add error handling for AUTHN errors
     raise AISError(err.status, err.message)
 
 

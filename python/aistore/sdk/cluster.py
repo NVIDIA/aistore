@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
@@ -269,3 +269,9 @@ class Cluster:
     def _get_targets(self):
         tmap = self._get_smap().tmap
         return list(tmap.keys())
+
+    def get_uuid(self) -> str:
+        """
+        Returns: UUID of AIStore Cluster
+        """
+        return self._get_smap().uuid

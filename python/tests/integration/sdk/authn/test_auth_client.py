@@ -18,7 +18,7 @@ from tests.integration import (
 from tests.utils import random_string
 
 
-class TestAuthCLient(unittest.TestCase):  # pylint: disable=unused-variable
+class TestAuthCLient(unittest.TestCase):
     def setUp(self) -> None:
         # AIStore Client
         self.bck_name = random_string()

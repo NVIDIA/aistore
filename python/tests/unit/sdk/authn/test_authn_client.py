@@ -14,7 +14,7 @@ from tests.utils import test_cases
 # pylint: disable=unused-variable, duplicate-code
 class TestAuthNClient(unittest.TestCase):
     def setUp(self) -> None:
-        self.endpoint = "https://authn-endpoint"
+        self.endpoint = "http://authn-endpoint"
         self.client = AuthNClient(self.endpoint)
 
     @patch("aistore.sdk.authn.authn_client.RequestClient")

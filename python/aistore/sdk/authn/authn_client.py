@@ -2,6 +2,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
+import logging
 from typing import Optional, Union
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.const import (
@@ -9,6 +10,11 @@ from aistore.sdk.const import (
     URL_PATH_AUTHN_USERS,
 )
 from aistore.sdk.authn.authn_types import TokenMsg, LoginMsg
+from aistore.sdk.authn.cluster_manager import ClusterManager
+
+# logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # pylint: disable=too-many-arguments, too-few-public-methods
@@ -37,9 +43,21 @@ class AuthNClient:
         timeout: Optional[Union[float, tuple[float, float]]] = None,
         token: Optional[str] = None,
     ):
+        logger.info("Initializing AuthNClient")
         self._request_client = RequestClient(
             endpoint, skip_verify, ca_cert, timeout, token
         )
+        logger.info("AuthNClient initialized with endpoint: %s", endpoint)
+
+    @property
+    def client(self) -> RequestClient:
+        """
+        Get the request client.
+
+        Returns:
+            RequestClient: The client this AuthN client uses to make requests.
+        """
+        return self._request_client
 
     def login(
         self,
@@ -65,11 +83,29 @@ class AuthNClient:
         if password.strip() == "":
             raise ValueError("Password cannot be empty or spaces only")
 
+        logger.info("Attempting to log in with username: %s", username)
         login_msg = LoginMsg(password=password, expires_in=expires_in).as_dict()
 
-        return self._request_client.request_deserialize(
-            HTTP_METHOD_POST,
-            path=f"{URL_PATH_AUTHN_USERS}/{username}",
-            json=login_msg,
-            res_model=TokenMsg,
-        ).token
+        try:
+            token = self.client.request_deserialize(
+                HTTP_METHOD_POST,
+                path=f"{URL_PATH_AUTHN_USERS}/{username}",
+                json=login_msg,
+                res_model=TokenMsg,
+            ).token
+            logger.info("Login successful for username: %s", username)
+            # Update the client token
+            self.client.token = token
+            return token
+        except Exception as err:
+            logger.error("Login failed for username: %s, error: %s", username, err)
+            raise
+
+    def cluster_manager(self) -> ClusterManager:
+        """
+        Factory method to create a ClusterManager instance.
+
+        Returns:
+            ClusterManager: An instance to manage cluster operations.
+        """
+        return ClusterManager(client=self._request_client)
