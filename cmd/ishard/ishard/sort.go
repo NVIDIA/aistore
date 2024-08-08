@@ -57,7 +57,6 @@ func (is *ISharder) sort(shardNames []string) (string, error) {
 			apc.QparamProvider, is.cfg.DstBck.Provider,
 		)
 
-		fmt.Println("Upload Success", spec.OrderFileURL)
 		spec.Config.EKMMissingKey = cmn.AbortReaction
 	}
 

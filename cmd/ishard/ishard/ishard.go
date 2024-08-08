@@ -228,7 +228,6 @@ func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
 func (is *ISharder) Start() error {
 	var (
 		root         = newDirNode()
-		objCounter   int
 		objTotalSize int64
 		err          error
 	)
@@ -242,9 +241,16 @@ func (is *ISharder) Start() error {
 		}
 
 		for _, en := range objListPage.Entries {
+
+			if is.cfg.EKMFlag.IsSet {
+				// skip if the object doesn't match any key in EKM
+				if _, err := is.cfg.Ekm.Lookup(en.Name); err != nil {
+					continue
+				}
+			}
+
 			sampleKey := is.sampleKeyRegex.ReplaceAllString(en.Name, is.cfg.SampleKeyPattern.CaptureGroup)
 			root.insert(sampleKey, en.Name, en.Size)
-			objCounter++
 			objTotalSize += en.Size
 		}
 
@@ -269,12 +275,15 @@ func (is *ISharder) Start() error {
 		}
 		debug.Assert(
 			objTotalSize == is.cfg.MExtMgr.EffectiveObjSize || is.cfg.MExtMgr.Name == "exclude",
-			"except for the 'exclude' action, the total object size calculated by the missing extension manager should equal the original size",
+			"expecting total object size to be equal original size, have: ", objTotalSize, " vs ", is.cfg.MExtMgr.EffectiveObjSize,
 		)
+
+		objTotalSize = is.cfg.MExtMgr.EffectiveObjSize
 	}
 
 	if is.cfg.Progress {
-		is.shardFactory.NewBar(is.cfg.MExtMgr.EffectiveObjSize)
+		fmt.Println("\r")
+		is.shardFactory.NewBar(objTotalSize)
 	}
 
 	if _, _, err := is.archive(root, ""); err != nil {

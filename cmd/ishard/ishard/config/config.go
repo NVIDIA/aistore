@@ -136,9 +136,7 @@ type EKMFlag struct {
 	IsSet     bool
 	Path      string
 	JSONBytes []byte
-
-	// Used for validating input
-	ekm shard.ExternalKeyMap
+	Ekm       shard.ExternalKeyMap
 }
 
 func (e *EKMFlag) Set(param string) error {
@@ -150,10 +148,8 @@ func (e *EKMFlag) Set(param string) error {
 		if err != nil {
 			return fmt.Errorf("error reading ekm file: %w", err)
 		}
-	} else if strings.HasPrefix(param, "{") && strings.HasSuffix(param, "}") {
-		e.JSONBytes = []byte(param)
 	} else {
-		return fmt.Errorf("invalid format, should be an inline JSON string or JSON file path")
+		e.JSONBytes = []byte(param)
 	}
 
 	var jsonContent map[string][]string
@@ -163,10 +159,10 @@ func (e *EKMFlag) Set(param string) error {
 
 	e.IsSet = true
 
-	e.ekm = shard.NewExternalKeyMap(16)
+	e.Ekm = shard.NewExternalKeyMap(16)
 	for format, samples := range jsonContent {
 		for _, sample := range samples {
-			if err = e.ekm.Add(sample, format); err != nil {
+			if err = e.Ekm.Add(sample, format); err != nil {
 				return fmt.Errorf("error parsing ekm file: %w", err)
 			}
 		}

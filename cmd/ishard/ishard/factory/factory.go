@@ -181,4 +181,5 @@ func (sf *ShardFactory) poll() {
 func (sf *ShardFactory) Wait() {
 	close(sf.pollCh)
 	sf.pollWg.Wait()
+	p.Wait()
 }

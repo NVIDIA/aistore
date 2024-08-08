@@ -305,27 +305,54 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 
    ```json
    {
-   "fish-%d.tar": [
-      "train/n01440764.*",  // tench
-      "train/n01443537.*",  // goldfish
-      ...
-   ],
-   "dog-%d.tar": [
-      "train/n02084071.*",  // toy terrier
-      "train/n02085782.*",  // Japanese spaniel
-      "train/n02085936.*",  // Maltese dog
-      ...
-   ],
-   "bird-%d.tar": [
-      "train/n01514668.*",  // cock
-      "train/n01514859.*",  // hen
-      ...
-   ],
+      "fish-%d.tar": [
+         "train/n01440764.*",  // tench
+         "train/n01443537.*",  // goldfish
+         ...
+      ],
+      "dog-%d.tar": [
+         "train/n02084071.*",  // toy terrier
+         "train/n02085782.*",  // Japanese spaniel
+         "train/n02085936.*",  // Maltese dog
+         ...
+      ],
+      "bird-%d.tar": [
+         "train/n01514668.*",  // cock
+         "train/n01514859.*",  // hen
+         ...
+      ],
    }
    ```
 
    ```sh
    $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -ekm="/path/to/category.json"
+
+   $ ais archive ls ais://ImageNet-out | less
+
+   NAME                                                     SIZE            
+   bird-0.tar                                               1.08MiB         
+      bird-0.tar/train/n01514668/n01514668_10004.JPEG      124.09KiB       
+      bird-0.tar/train/n01514668/n01514668_10014.JPEG      202.01KiB       
+   ...
+   bird-176.tar                                             1.06MiB         
+      bird-176.tar/train/n01514668/n01514668_9964.JPEG     133.77KiB       
+      bird-176.tar/train/n01514668/n01514668_9973.JPEG     95.13KiB        
+      bird-176.tar/train/n01514859/n01514859_1.JPEG        117.13KiB       
+      bird-176.tar/train/n01514859/n01514859_10021.JPEG    257.52KiB       
+      bird-176.tar/train/n01514859/n01514859_10028.JPEG    107.14KiB       
+   ...
+   dog-0.tar                                                1.36MiB         
+      dog-0.tar/train/n02085782/n02085782_1006.JPEG        1.01KiB         
+      dog-0.tar/train/n02085782/n02085782_10073.JPEG       2.40KiB         
+      dog-0.tar/train/n02085782/n02085782_10135.JPEG       45.49KiB        
+      dog-0.tar/train/n02085782/n02085782_10216.JPEG       32.59KiB        
+   ...
+   fish-0.tar                                               1.01MiB         
+      fish-0.tar/train/n01440764/n01440764_10026.JPEG      13.38KiB        
+      fish-0.tar/train/n01440764/n01440764_10027.JPEG      9.45KiB         
+      fish-0.tar/train/n01440764/n01440764_10029.JPEG      65.46KiB        
+      fish-0.tar/train/n01440764/n01440764_10040.JPEG      143.06KiB       
+   ...
    ```
 
 ### Incorrect Usages
