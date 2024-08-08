@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -33,6 +34,8 @@ const (
 	accessNetAll           = accessNetPublic | accessNetIntraData | accessNetIntraControl
 )
 
+const fmtErrParseIP = "failed to parse local unicast IP address: %s"
+
 // Network access of handlers (Public, IntraControl, & IntraData)
 type (
 	netAccess int
@@ -50,6 +53,16 @@ type (
 )
 
 func (na netAccess) isSet(flag netAccess) bool { return na&flag == flag }
+
+func (addr *localIPv4Info) String() string {
+	return fmt.Sprintf("unicast IP: %s (MTU %d)", addr.ipv4, addr.mtu)
+}
+
+func (addr *localIPv4Info) warn() {
+	if addr.mtu <= 1500 {
+		nlog.Warningln("Warning: small MTU")
+	}
+}
 
 //
 // IPV4
@@ -171,30 +184,80 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 }
 
 // _localIP takes a list of local IPv4s and returns the best fit for a daemon to listen on it
-func _localIP(addrList []*localIPv4Info) (ip net.IP, err error) {
-	if len(addrList) == 0 {
-		return nil, errors.New("no addresses to choose from")
+func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
+	l := len(addrList)
+	if l == 0 {
+		return nil, errors.New("no unicast addresses to choose from")
 	}
-	if len(addrList) == 1 {
-		nlog.Infof("Found only one IPv4: %s, MTU %d", addrList[0].ipv4, addrList[0].mtu)
-		if addrList[0].mtu <= 1500 {
-			nlog.Warningf("IPv4 %s MTU size is small: %d\n", addrList[0].ipv4, addrList[0].mtu)
-		}
+	if l == 1 {
 		if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
-			return nil, fmt.Errorf("failed to parse IP address: %s", addrList[0].ipv4)
+			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
 		}
+		nlog.Infoln("Found a single", addrList[0].String())
+		addrList[0].warn()
 		return ip, nil
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		nlog.Infof("%d IPv4s:", len(addrList))
-		for _, addr := range addrList {
-			nlog.Infof("    %#v\n", *addr)
+
+	// always log when multi-choice
+	nlog.Infoln(l, "local unicast IPs:")
+	for _, addr := range addrList {
+		nlog.Infoln("    ", addr.String())
+	}
+
+	// NOTE:
+	// reusing local-redirect CIDR ("AIS_CLUSTER_CIDR") for the second and separate purpose -
+	// to select public IP (to listen on) from the `addrList` of local unicast IP interfaces
+
+	var (
+		selected     = -1
+		parsed       net.IP
+		network, err = localRedirectCIDR()
+	)
+	if err != nil {
+		return nil, err
+	}
+	if network == nil {
+		goto warn
+	}
+	for j := range l {
+		if ip = net.ParseIP(addrList[j].ipv4); ip == nil {
+			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
+		}
+		if network.Contains(ip) {
+			if selected >= 0 {
+				return nil, fmt.Errorf("CIDR network %s contains multiple local unicast IPs: %s and %s",
+					network, addrList[selected].ipv4, addrList[j].ipv4)
+			}
+			selected, parsed = j, ip
 		}
 	}
-	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
-		return nil, fmt.Errorf("failed to parse IP address: %s", addrList[0].ipv4)
+	if selected < 0 {
+		nlog.Warningln("CIDR network", network.String(), "does not contain any local unicast IPs")
+		goto warn
 	}
+	nlog.Infoln("CIDR network", network.String(), "contains a single local unicast IP:", addrList[selected].ipv4)
+	addrList[selected].warn()
+	return parsed, nil
+
+warn:
+	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
+		return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
+	}
+	nlog.Warningln("given multiple choice, selecting the first", addrList[0].String())
+	addrList[0].warn()
 	return ip, nil
+}
+
+func localRedirectCIDR() (*net.IPNet, error) {
+	cidr := os.Getenv(env.AIS.LocalRedirectCIDR)
+	if cidr == "" {
+		return nil, nil
+	}
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid '%s=%s': %v", env.AIS.LocalRedirectCIDR, cidr, err)
+	}
+	return network, nil
 }
 
 func multihome(configuredIPv4s string) (pub string, extra []string) {

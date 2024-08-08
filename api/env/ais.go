@@ -4,28 +4,36 @@
  */
 package env
 
-// See also:
+// NOTE not included:
 // - "AIS_READ_HEADER_TIMEOUT"
 // - "AIS_DAEMON_ID"
-// - "AIS_CLUSTER_CIDR", "AIS_HOST_IP", "AIS_HOST_PORT"
-// - "AIS_TARGET_URL"
+// - "AIS_HOST_IP", "AIS_HOST_PORT" - local playground (target only)
+// - "AIS_TARGET_URL"               - ETL
 //
 // See also:
 // - docs/environment-vars.md
 
 var (
 	AIS = struct {
+		// endpoint: client | primary startup
 		Endpoint  string
 		PrimaryEP string
-		UseHTTPS  string
+
+		// networking: local redirect
+		LocalRedirectCIDR string
+
+		// https
+		UseHTTPS string
 		// TLS: client side
 		Certificate   string
 		CertKey       string
 		ClientCA      string
 		SkipVerifyCrt string
+
 		// tests, CI
 		NumTarget string
 		NumProxy  string
+
 		// K8s
 		K8sPod       string
 		K8sNode      string
@@ -34,6 +42,9 @@ var (
 		// the way to designate primary when cluster's starting up
 		Endpoint:  "AIS_ENDPOINT",
 		PrimaryEP: "AIS_PRIMARY_EP",
+
+		// differentiate local (same CIDR) clients for faster HTTP redirect
+		LocalRedirectCIDR: "AIS_CLUSTER_CIDR",
 
 		// false: HTTP transport, with all the TLS config (below) ignored
 		// true:  HTTPS/TLS

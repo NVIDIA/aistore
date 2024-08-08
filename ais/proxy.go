@@ -81,15 +81,6 @@ var _ cos.Runner = (*proxy)(nil)
 
 func (*proxy) Name() string { return apc.Proxy } // as cos.Runner
 
-func (p *proxy) initClusterCIDR() {
-	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {
-		_, network, err := net.ParseCIDR(nodeCIDR)
-		p.si.LocalNet = network
-		cos.AssertNoErr(err)
-		nlog.Infof("local network: %+v", *network)
-	}
-}
-
 func (p *proxy) init(config *cmn.Config) {
 	p.initSnode(config)
 
@@ -103,7 +94,13 @@ func (p *proxy) init(config *cmn.Config) {
 
 	cos.InitShortID(p.si.Digest())
 
-	p.initClusterCIDR()
+	if network, err := localRedirectCIDR(); err != nil {
+		cos.ExitLog(err) // FATAL
+	} else {
+		p.si.LocalNet = network
+		nlog.Infoln("using local redirect CIDR:", network.String())
+	}
+
 	daemon.rg.add(p)
 
 	ps := &stats.Prunner{}
