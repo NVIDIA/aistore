@@ -5,6 +5,7 @@
 package ishard
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -20,12 +21,15 @@ const DsortDefaultTimeout = 6 * time.Minute
 
 // Invoke dsort to perform the configured sorting algorithm and output to a new bucket with the suffix `-sorted`
 func (is *ISharder) sort(shardNames []string) (string, error) {
+	if is.cfg.ShardSize.IsCount {
+		return "", errors.New("dsort currently doesn't support count-based output shard size")
+	}
 	spec := dsort.RequestSpec{
 		InputBck:        is.cfg.DstBck,
 		InputExtension:  is.cfg.Ext,
 		InputFormat:     apc.ListRange{ObjNames: shardNames},
 		OutputFormat:    is.cfg.IshardConfig.ShardTemplate,
-		OutputShardSize: strconv.FormatInt(is.cfg.MaxShardSize, 10),
+		OutputShardSize: strconv.FormatInt(is.cfg.ShardSize.Size, 10),
 		OutputExtension: is.cfg.Ext,
 		Description:     "Dsort after ishard",
 		OutputBck: cmn.Bck{

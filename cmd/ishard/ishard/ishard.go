@@ -105,6 +105,10 @@ type ISharder struct {
 	baseParams     api.BaseParams
 	sampleKeyRegex *regexp.Regexp
 
+	// used for tracking size while archiving
+	currentShardSize int64
+	currentFileCount int
+
 	shardFactory *factory.ShardFactory
 }
 
@@ -112,10 +116,9 @@ type ISharder struct {
 // the desired amount, it runs a goroutine to archive those collected records
 func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Records, _ int64, _ error) {
 	var (
-		totalSize int64
-		recs      = shard.NewRecords(16)
-		errCh     = make(chan error, 1)
-		wg        = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 0)
+		recs  = shard.NewRecords(16)
+		errCh = make(chan error, 1)
+		wg    = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 0)
 	)
 
 	for name, child := range n.children {
@@ -136,20 +139,17 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		if childRecords != nil && childRecords.Len() != 0 {
 			recs.Insert(childRecords.All()...)
 		}
-		totalSize += subtreeSize
 
-		if totalSize < is.cfg.MaxShardSize {
-			continue
+		// Create a new shard and reset once exceeding the configured size
+		if totalSize := is.incAndCheck(subtreeSize); totalSize != 0 {
+			wg.Add(1)
+			go func(recs *shard.Records, size int64) {
+				is.shardFactory.Create(recs, size, errCh)
+				wg.Done()
+			}(recs, totalSize)
+
+			recs = shard.NewRecords(16)
 		}
-
-		wg.Add(1)
-		go func(recs *shard.Records, size int64) {
-			is.shardFactory.Create(recs, size, errCh)
-			wg.Done()
-		}(recs, totalSize)
-
-		totalSize = 0
-		recs = shard.NewRecords(16)
 	}
 
 	n.records.Lock()
@@ -160,31 +160,28 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		default:
 		}
 
-		totalSize += record.TotalSize()
 		recs.Insert(record)
 
-		if totalSize < is.cfg.MaxShardSize {
-			continue
+		// Create a new shard and reset once exceeding the configured size
+		if totalSize := is.incAndCheck(record.TotalSize()); totalSize != 0 {
+			wg.Add(1)
+			go func(recs *shard.Records, size int64) {
+				is.shardFactory.Create(recs, size, errCh)
+				wg.Done()
+			}(recs, totalSize)
+
+			recs = shard.NewRecords(16)
 		}
-
-		wg.Add(1)
-		go func(recs *shard.Records, size int64) {
-			is.shardFactory.Create(recs, size, errCh)
-			wg.Done()
-		}(recs, totalSize)
-
-		totalSize = 0
-		recs = shard.NewRecords(16)
 	}
 	n.records.Unlock()
 
-	// if cfg.Collapse is not set, or no parent to collapse to (root level), archive all remaining objects regardless the current total size
+	// if cfg.Collapse is not set, or no parent to collapse to (at root level), archive all remaining objects regardless the current total size
 	if !is.cfg.Collapse || path == "" {
 		wg.Add(1)
 		go func(recs *shard.Records, size int64) {
 			is.shardFactory.Create(recs, size, errCh)
 			wg.Done()
-		}(recs, totalSize)
+		}(recs, is.currentShardSize)
 	}
 
 	done := make(chan struct{})
@@ -197,8 +194,29 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 	case err := <-errCh:
 		return nil, 0, err
 	case <-done:
-		return recs, totalSize, nil
+		return recs, is.currentShardSize, nil
 	}
+}
+
+// incAndCheck adds the provided size to the current shard and checks if it exceeds the configured limit
+// If the limit is exceeded, it resets the counters and returns the accumulated size. Otherwise, it returns 0.
+func (is *ISharder) incAndCheck(size int64) (accumulatedSize int64) {
+	is.currentShardSize += size
+	is.currentFileCount++
+
+	accumulatedSize = is.currentShardSize
+
+	if is.cfg.ShardSize.IsCount && is.currentFileCount < is.cfg.ShardSize.Count {
+		return 0
+	}
+
+	if accumulatedSize < is.cfg.ShardSize.Size {
+		return 0
+	}
+
+	is.currentFileCount = 0
+	is.currentShardSize = 0
+	return
 }
 
 // NewISharder instantiates an ISharder with the configuration if provided;

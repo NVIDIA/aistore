@@ -25,7 +25,7 @@ type (
 		URL string
 	}
 	IshardConfig struct {
-		MaxShardSize     int64
+		ShardSize        ShardSize
 		Ext              string
 		ShardTemplate    string
 		SampleKeyPattern SampleKeyPattern
@@ -53,7 +53,7 @@ const (
 var DefaultConfig = Config{
 	ClusterConfig: ClusterConfig{URL: "http://" + defaultClusterIPv4 + ":" + defaultProxyPort},
 	IshardConfig: IshardConfig{
-		MaxShardSize:     102400,
+		ShardSize:        ShardSize{Size: 102400},
 		Ext:              ".tar",
 		ShardTemplate:    "shard-%d",
 		Collapse:         false,
@@ -65,6 +65,42 @@ var DefaultConfig = Config{
 	Progress:   false,
 	DryRunFlag: DryRunFlag{IsSet: false},
 	SortFlag:   SortFlag{IsSet: false},
+}
+
+//////////////////////////////
+// Parse `-shard_size` flag //
+//////////////////////////////
+
+type ShardSize struct {
+	IsCount bool
+	Size    int64
+	Count   int
+}
+
+func (s *ShardSize) Set(value string) error {
+	var (
+		err error
+		cnt int64
+	)
+	if cnt, err = strconv.ParseInt(value, 10, 32); err == nil {
+		s.Count = int(cnt)
+		s.IsCount = true
+		return nil
+	}
+
+	if s.Size, err = cos.ParseSize(value, cos.UnitsIEC); err != nil {
+		return fmt.Errorf("error parsing shard_size (accepts IEC, SI, or count formats): %w", err)
+	}
+
+	s.IsCount = false
+	return nil
+}
+
+func (s *ShardSize) String() string {
+	if s.IsCount {
+		return fmt.Sprintf("%d files", s.Count)
+	}
+	return fmt.Sprintf("%d bytes", s.Size)
 }
 
 ////////////////////////
@@ -230,16 +266,15 @@ func parseCliParams(cfg *Config) {
 
 	var (
 		err                 error
-		maxShardSizeStr     string
 		sampleExts          string
 		sampleKeyPatternStr string
 		missingExtActStr    string
 	)
 
-	flag.StringVar(&maxShardSizeStr, "max_shard_size", "1MiB", "Maximum size of each output shard. Default is `\"1MiB\"`. Accepts the following units formats:\n"+
-		"  - IEC format, e.g.: 4KiB, 16MiB, 2GiB\n"+
-		"  - SI format, e.g.: 4KB, 16MB, 2GB\n"+
-		"  - raw format (in bytes), e.g.: 1024000")
+	flag.Var(&cfg.ShardSize, "shard_size", "Approximate size of each output shard. Supports both count-based and size-based formats. Default is `\"1MiB\"`.\n"+
+		"  -shard_size=\"10\": Sets the number of samples contained in each output shard to 10.\n"+
+		"  -shard_size=\"16MiB\": Sets the size of each output shard to \"16MiB\" using the IEC format.\n"+
+		"  -shard_size=\"4KB\": Sets the size of each output shard to \"4KB\" using the SI format.")
 	flag.StringVar(&sampleExts, "sample_exts", "", "Comma-separated list of extensions that should exists in the dataset. e.g. -sample=\".JPEG,.xml,.json\". See -missing_extension_action for handling missing extensions")
 	flag.StringVar(&sampleKeyPatternStr, "sample_key_pattern", "", "The pattern used to substitute source file names to sample keys. Default it `\"base_filename\"`. Options are \"base_file_name\" | \"full_name\" | \"collapse_all_dir\" | \"any other valid regex\" \n"+
 		"This ensures that files with the same sample key are always sharded into the same output shard.\n"+
@@ -255,12 +290,6 @@ func parseCliParams(cfg *Config) {
 		"  -missing_extension_action=\"exclude\": Exclude any incomplete records and remove unnecessary extensions.")
 
 	flag.Parse()
-
-	if cfg.MaxShardSize, err = cos.ParseSize(maxShardSizeStr, cos.UnitsIEC); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	var reactions = []string{"ignore", "warn", "abort", "exclude"}
 	if !cos.StringInSlice(missingExtActStr, reactions) {

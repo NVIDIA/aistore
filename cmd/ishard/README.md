@@ -29,10 +29,12 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
    - `-sample_key_pattern="full_name"`: Performs no substitution, using the entire file name without extension as the sample key.
    - `-sample_key_pattern="collapse_all_dir"`: Removes all '/' characters from the file name, using the resulting string as the sample key.
    - `-sample_key_pattern="custom_regex"`: Applies a custom regex pattern to substitute the file names to sample keys for your specific requirements.
-- `-max_shard_size`: Maximum size of each output shard. Default is `1MiB`. Accept following _units_ formats:
-   - IEC format, e.g.: 4KiB, 16MiB, 2GiB
-   - SI format, e.g.: 4KB, 16MB, 2GB
-   - raw format (in bytes), e.g.: 1024000
+- `-shard_size`: Specifies the approximate size of each output shard. The default value is 1MiB. This option supports both count-based and size-based formats:
+   - Count-Based Format:
+      - `-shard_size="10"`: Sets the number of samples contained in each output shard to 10.
+   - Size-Based Formats:
+      - `-shard_size="16MiB"`: Sets the size of each output shard to "16MiB" using the IEC format.
+      - `-shard_size="4KB"`: Sets the size of each output shard to "4KB" using the SI format.
 - `-src_bck`: The source bucket name or URI.
 - `-dst_bck`: The destination bucket name or URI.
 - `-shard_template`: The template used for generating output shards. Accepts Bash, Fmt, or At formats.
@@ -158,7 +160,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
    - `ImageNet/Data/train/n00000333/n00000333_02.JPEG`
    - `ImageNet/Data/train/n00000333/n00000333_02.loss` 
    
-   They have the same base name `n00000333_02`, and therefore will always present in the same output shard, regardless of `max_shard_size` value.
+   They have the same base name `n00000333_02`, and therefore will always present in the same output shard, regardless of `shard_size` value.
    ```sh
    ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out
 
@@ -203,9 +205,9 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
    ...
    ```
 
-   By default, `ishard` ensures that files with different virtual directory structure (after applying `sample_key_pattern`) won't present in the same output shard. In other words, `ishard` maintains clear boundaries between files that belong to different virtual directory, even if some output shard's size doesn't reached the `max_shard_size`. As shown in the example above, there are only two objects in the `shard-059.tar` output shard regardless of the `max_shard_size` value, since they are the only two files under their virtual directory structure.
+   By default, `ishard` ensures that files with different virtual directories (after applying `sample_key_pattern`) won't be present in the same output shard. In other words, `ishard` maintains clear boundaries between files that belong to different virtual directories, even if an output shard's size doesn't reach the requested `shard_size`. As shown in the example above, there are only two objects in the `shard-059.tar` output shard regardless of the `shard_size` value, since they are the only two files under their virtual directories.
 
-   To disable this default setting and compact each output shard's size closer to `max_shard_size`, regardless of virtual directories, you can specify `-collapse` flag. This will to flatten samples into its parent virtual directory if their overall size doesn't reach `max_shard_size`.
+   To disable this default setting and compact each output shard's size closer to `shard_size`, regardless of virtual directories, you can specify `-collapse` flag. This will to flatten samples into its parent virtual directory if their overall size doesn't reach `shard_size`.
 
    ```sh
    $ ./ishard -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="full_name" -collapse
@@ -359,14 +361,14 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 
 1. The number of generated output shards can't fit into specified `shard-template`.
    ```sh
-   $ ./ishard -max_shard_size=256000 -src_bck=ais://sample -dst_bck=ais://sample-out -collapse -sample_key_pattern="base_filename" -shard_template="pre-{0000..50..8}-suf"
+   $ ./ishard -shard_size=256KiB -src_bck=ais://sample -dst_bck=ais://sample-out -collapse -sample_key_pattern="base_filename" -shard_template="pre-{0000..50..8}-suf"
 
    Error: number of shards to be created exceeds expected number of shards (7)
    ```
 
 2. Provides invalid regex `sample_key_pattern`.
    ```sh
-   $ ./ishard -max_shard_size=256000 -src_bck=ais://sample -dst_bck=ais://sample-out -collapse -sample_key_pattern="(.*'" -shard_template="pre-{0000..8192..8}-suf"
+   $ ./ishard -shard_size=256KiB -src_bck=ais://sample -dst_bck=ais://sample-out -collapse -sample_key_pattern="(.*'" -shard_template="pre-{0000..8192..8}-suf"
 
    Invalid regex pattern: (.*'. Error: error parsing regexp: missing closing ): `(.*'`
    ```
@@ -376,7 +378,7 @@ ImageNet/Data/val/n00000333/ILSVRC2012_val_00007175.JPEG         30.00KiB
 The `-dry_run` flag in the CLI parameters allows `ishard` to only print a preview of the output shards composition without performing the actual archiving tasks. This is especially useful when working with large datasets, where the full execution of `ishard` can take hours to complete.
 
 ```sh
-$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run | less
+$ ./ishard-cli -shard_size=120KiB -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run | less
 
 pre-0000-suf.tar                                                        120.68KiB
     pre-0000-suf/ImageNet/Annotations/n00000333/n00000333_01.xml        100B
@@ -398,7 +400,7 @@ pre-0008-suf.tar                                                        120.59Ki
 You can also apply `-dry_run="show_keys"` to display the key of each group of samples after `sample_key_pattern` substitution. The string inside `[]` in the output represents the sample key of the sample to which the following files belong.
 
 ```sh
-$ ./ishard-cli -max_shard_size=102400 -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run="show_keys" | less
+$ ./ishard-cli -shard_size=120KiB -src_bck=ais://ImageNet -dst_bck=ais://ImageNet-out -sample_key_pattern="base_file_name" -shard_template="pre-{0000..8192..8}-suf" -dry_run="show_keys" | less
 
 pre-0000-suf.tar                                                        120.68KiB
   [n00000333_01]                                                        
@@ -439,31 +441,11 @@ go test -v -short -tags=debug
 Test for a Specific Case
 
 ```sh
-go test -v -short -tags=debug -run=TestIshardMaxShardSize
+go test -v -short -tags=debug -run=TestIshardShardSize
 ```
 
 ## TODO List
 
-### MUST HAVE/DESIRABLE
-- [X] Shard name patterns
-   - [X] Utilize existing name template tools
-- [X] goroutine
-- [X] configurable record key, extensions
-   - [X] upon missing extension in a record: (abort | warn | ignore)
-- [X] dry run
-- [ ] debug build
-- [X] allow user to specify source directories to include/exclude (achieved by prefix option)
-- [X] logging (timestamp, nlog)
-- [ ] Large list of objects, need to swap MEM temporary
-- [ ] Dry run with Dsort
-- [X] Long stress tests
-- [X] Dsort integration
-   - [ ] Dry run with Dsort
-
-### GOOD TO HAVE
-- [X] progress bar (later)
-- [X] polling for completion of archive xactions (necessary to show the progress)
-- [ ] substitute the original file name
-- [X] multi-worker archive xact
-- [ ] integration into aistore (later)
-- [ ] E2E testing from CLI
+- [ ] Naming Template Placeholder
+- [ ] ETL Integration
+- [ ] On-the-fly ishard

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/ishard/ishard/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tarch"
@@ -77,7 +78,7 @@ func TestIshardNoRecordsSplit(t *testing.T) {
 						Provider: apc.AIS,
 					},
 					IshardConfig: config.IshardConfig{
-						MaxShardSize:     102400,
+						ShardSize:        config.ShardSize{Size: 102400},
 						Collapse:         tc.collapse,
 						ShardTemplate:    "shard-%d",
 						Ext:              ".tar",
@@ -100,19 +101,29 @@ func TestIshardNoRecordsSplit(t *testing.T) {
 	}
 }
 
-func TestIshardMaxShardSize(t *testing.T) {
-	testCases := []struct {
-		numRecords   int
-		fileSize     int64
-		maxShardSize int64
-	}{
-		{numRecords: 100, fileSize: 96 * cos.KiB, maxShardSize: 256 * cos.KiB},
-		{numRecords: 200, fileSize: 24 * cos.KiB, maxShardSize: 16 * cos.KiB},
-		{numRecords: 2000, fileSize: 24 * cos.KiB, maxShardSize: 160000 * cos.KiB},
+func TestIshardShardSize(t *testing.T) {
+	type tc struct {
+		numRecords int
+		fileSize   int64
+		shardSize  int64
+		isCount    bool
+	}
+	testCases := []tc{
+		{numRecords: 100, fileSize: 96 * cos.KiB, shardSize: 256 * cos.KiB, isCount: false},
+		{numRecords: 200, fileSize: 24 * cos.KiB, shardSize: 20, isCount: true},
+		{numRecords: 2000, fileSize: 24 * cos.KiB, shardSize: 160000 * cos.KiB, isCount: false},
+	}
+
+	if !testing.Short() {
+		testCases = append(testCases,
+			tc{numRecords: 100, fileSize: 96 * cos.KiB, shardSize: 10, isCount: true},
+			tc{numRecords: 200, fileSize: 24 * cos.KiB, shardSize: 16 * cos.KiB, isCount: false},
+			tc{numRecords: 2000, fileSize: 24 * cos.KiB, shardSize: 200, isCount: true},
+		)
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("Records:%d/FileSize:%d/MaxShardSize:%d", tc.numRecords, tc.fileSize, tc.maxShardSize), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Records:%d/FileSize:%d/ShardSize:%d", tc.numRecords, tc.fileSize, tc.shardSize), func(t *testing.T) {
 			var (
 				cfg = &config.Config{
 					SrcBck: cmn.Bck{
@@ -124,7 +135,11 @@ func TestIshardMaxShardSize(t *testing.T) {
 						Provider: apc.AIS,
 					},
 					IshardConfig: config.IshardConfig{
-						MaxShardSize:     tc.maxShardSize,
+						ShardSize: config.ShardSize{
+							IsCount: tc.isCount,
+							Size:    tc.shardSize,
+							Count:   int(tc.shardSize),
+						},
 						Collapse:         true,
 						ShardTemplate:    "shard-%d",
 						Ext:              ".tar",
@@ -145,16 +160,51 @@ func TestIshardMaxShardSize(t *testing.T) {
 
 			runIshardTest(t, cfg, baseParams, tc.numRecords, numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
 
-			tarballs, err := api.ListObjects(baseParams, cfg.DstBck, &apc.LsoMsg{}, api.ListArgs{})
-			tassert.CheckFatal(t, err)
+			lsmsg := &apc.LsoMsg{}
+			lsmsg.SetFlag(apc.LsNameSize)
+			if tc.isCount {
+				lsmsg.SetFlag(apc.LsArchDir)
+				recs := shard.NewRecords(tc.numRecords)
 
-			// With collapse enabled, only one output shard is allowed to have size that doesn't reach to `maxShardSize`,
-			// which may contain only the remaining data.
-			var foundIncompleteShard bool
-			for _, en := range tarballs.Entries {
-				if en.Size < tc.maxShardSize {
-					tassert.Fatalf(t, !foundIncompleteShard, "The output shard size doesn't reach to maxShardSize. en.Name: %s, en.Size: %d, tc.maxShardSize: %d, len(tarballs.Entries): %d", en.Name, en.Size, tc.maxShardSize, len(tarballs.Entries))
-					foundIncompleteShard = true
+				objList, err := api.ListObjects(baseParams, cfg.DstBck, lsmsg, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+
+				for _, en := range objList.Entries {
+					// Only counts objects inside archive
+					if !en.IsInsideArch() {
+						continue
+					}
+					ext := filepath.Ext(en.Name)
+					fullname := strings.TrimSuffix(en.Name, ext)
+					recs.Insert(&shard.Record{
+						Key:  fullname,
+						Name: fullname,
+						Objects: []*shard.RecordObj{{
+							Size:      en.Size,
+							Extension: ext,
+						}},
+					})
+				}
+
+				var foundIncompleteShard bool
+				for _, record := range recs.All() {
+					if len(record.Objects) > int(tc.shardSize)*numExtensions {
+						tassert.Fatalf(t, foundIncompleteShard, "number of records in a shard exceeds the configured limit count, have len(record.Objects)=%d v.s. int(tc.shardSize)*numExtensions=%d", len(record.Objects), int(tc.shardSize)*numExtensions)
+						foundIncompleteShard = true
+					}
+				}
+			} else {
+				tarballs, err := api.ListObjects(baseParams, cfg.DstBck, lsmsg, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+
+				// With collapse enabled, only one output shard is allowed to have size that doesn't reach to `shardSize`,
+				// which may contain only the remaining data.
+				var foundIncompleteShard bool
+				for _, en := range tarballs.Entries {
+					if en.Size < tc.shardSize {
+						tassert.Fatalf(t, !foundIncompleteShard, "The output shard size doesn't reach to shardSize. en.Name: %s, en.Size: %d, tc.shardSize: %d, len(tarballs.Entries): %d", en.Name, en.Size, tc.shardSize, len(tarballs.Entries))
+						foundIncompleteShard = true
+					}
 				}
 			}
 		})
@@ -173,7 +223,7 @@ func TestIshardPrefix(t *testing.T) {
 				Provider: apc.AIS,
 			},
 			IshardConfig: config.IshardConfig{
-				MaxShardSize:     102400,
+				ShardSize:        config.ShardSize{Size: 102400},
 				Collapse:         false,
 				ShardTemplate:    "shard-%d",
 				Ext:              ".tar",
@@ -220,16 +270,16 @@ func TestIshardTemplate(t *testing.T) {
 	testCases := []struct {
 		numRecords    int
 		fileSize      int64
-		maxShardSize  int64
+		shardSize     int64
 		shardTemplate string
 	}{
-		{numRecords: 50, fileSize: 32 * cos.KiB, maxShardSize: 128 * cos.KiB, shardTemplate: "prefix{0000..9999}-suffix"},
-		{numRecords: 50, fileSize: 96 * cos.KiB, maxShardSize: 256 * cos.KiB, shardTemplate: "prefix-%06d-suffix"},
-		{numRecords: 50, fileSize: 24 * cos.KiB, maxShardSize: 16 * cos.KiB, shardTemplate: "prefix-@00001-gap-@100-suffix"},
+		{numRecords: 50, fileSize: 32 * cos.KiB, shardSize: 128 * cos.KiB, shardTemplate: "prefix{0000..9999}-suffix"},
+		{numRecords: 50, fileSize: 96 * cos.KiB, shardSize: 256 * cos.KiB, shardTemplate: "prefix-%06d-suffix"},
+		{numRecords: 50, fileSize: 24 * cos.KiB, shardSize: 16 * cos.KiB, shardTemplate: "prefix-@00001-gap-@100-suffix"},
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("Records:%d/FileSize:%d/MaxShardSize:%d/Template:%s", tc.numRecords, tc.fileSize, tc.maxShardSize, tc.shardTemplate), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Records:%d/FileSize:%d/ShardSize:%d/Template:%s", tc.numRecords, tc.fileSize, tc.shardSize, tc.shardTemplate), func(t *testing.T) {
 			var (
 				cfg = &config.Config{
 					SrcBck: cmn.Bck{
@@ -241,7 +291,7 @@ func TestIshardTemplate(t *testing.T) {
 						Provider: apc.AIS,
 					},
 					IshardConfig: config.IshardConfig{
-						MaxShardSize:     tc.maxShardSize,
+						ShardSize:        config.ShardSize{Size: tc.shardSize},
 						Collapse:         true,
 						ShardTemplate:    tc.shardTemplate,
 						Ext:              ".tar",
@@ -314,7 +364,7 @@ func TestIshardSampleKeyPattern(t *testing.T) {
 						Provider: apc.AIS,
 					},
 					IshardConfig: config.IshardConfig{
-						MaxShardSize:     102400,
+						ShardSize:        config.ShardSize{Size: 102400},
 						Collapse:         tc.collapse,
 						ShardTemplate:    "shard-%d",
 						Ext:              ".tar",
@@ -340,7 +390,7 @@ func TestIshardMissingExtension(t *testing.T) {
 	var (
 		cfg = &config.Config{
 			IshardConfig: config.IshardConfig{
-				MaxShardSize:     102400,
+				ShardSize:        config.ShardSize{Size: 102400},
 				Collapse:         true,
 				ShardTemplate:    "shard-%d",
 				Ext:              ".tar",
@@ -462,7 +512,7 @@ func TestIshardEKM(t *testing.T) {
 				Provider: apc.AIS,
 			},
 			IshardConfig: config.IshardConfig{
-				MaxShardSize:     102400,
+				ShardSize:        config.ShardSize{Size: 102400},
 				ShardTemplate:    "shard-%d",
 				Ext:              ".tar",
 				SampleKeyPattern: config.BaseFileNamePattern,
@@ -547,7 +597,7 @@ func TestIshardParallel(t *testing.T) {
 					Provider: apc.AIS,
 				},
 				IshardConfig: config.IshardConfig{
-					MaxShardSize:     64 * cos.MiB,
+					ShardSize:        config.ShardSize{Size: 64 * cos.MiB},
 					Collapse:         true,
 					ShardTemplate:    "shard-%09d",
 					Ext:              ".tar",
@@ -591,7 +641,7 @@ func TestIshardChain(t *testing.T) {
 					Provider: apc.AIS,
 				},
 				IshardConfig: config.IshardConfig{
-					MaxShardSize:     64 * cos.MiB,
+					ShardSize:        config.ShardSize{Size: 64 * cos.MiB},
 					Collapse:         true,
 					ShardTemplate:    "shard-%09d",
 					Ext:              ".tar",
@@ -626,7 +676,7 @@ func TestIshardLargeBucket(t *testing.T) {
 				Provider: apc.AIS,
 			},
 			IshardConfig: config.IshardConfig{
-				MaxShardSize:     128 * cos.MiB,
+				ShardSize:        config.ShardSize{Size: 128 * cos.MiB},
 				Collapse:         true,
 				ShardTemplate:    "shard-%09d",
 				Ext:              ".tar",
@@ -652,7 +702,7 @@ func TestIshardLargeFiles(t *testing.T) {
 	var (
 		cfg = &config.Config{
 			IshardConfig: config.IshardConfig{
-				MaxShardSize:     5 * cos.GiB,
+				ShardSize:        config.ShardSize{Size: 5 * cos.GiB},
 				Collapse:         true,
 				ShardTemplate:    "shard-%09d",
 				Ext:              ".tar",
