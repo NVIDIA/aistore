@@ -168,7 +168,11 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   if [[ ${deployment} == "all" ]]; then
     echo -e "\n*** Remote cluster ***"
   fi
-  echo -e "1\n1\n3\n" | DEPLOY_AS_NEXT_TIER="true" AIS_AUTHN_ENABLED=false make deploy
+
+  ## NOTE: must have the same build tags and, in particular, same backends -
+  ## otherwise, `make deploy` below will rebuild and replace aisnode binary
+
+  echo -e "1\n1\n3\n" | DEPLOY_AS_NEXT_TIER="true" AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" AIS_AUTHN_ENABLED=false make deploy
 
   # Do not try attach remote cluster if the main cluster did not start.
   if [[ ${deployment} == "all" ]]; then

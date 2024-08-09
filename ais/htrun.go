@@ -306,6 +306,15 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
 
+	if l := len(addrList); l > 1 {
+		if config.HostNet.Hostname == "" || cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			nlog.Infoln(l, "local unicast IPs:")
+			for _, addr := range addrList {
+				nlog.Infoln("\t", addr.String())
+			}
+		}
+	}
+
 	// 1. pub net
 
 	// the "hostname" field can be a single IP address or DNS hostname;
@@ -329,8 +338,13 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		for i, addr := range extra {
 			pubExtra[i].Init(proto, addr, port)
 		}
+		// already logged (pub, extra)
 	} else {
-		nlog.Infof("%s (user) access: %v (%q)", cmn.NetPublic, pubAddr, config.HostNet.Hostname)
+		var s string
+		if config.HostNet.Hostname != "" {
+			s = " (config: " + config.HostNet.Hostname + ")"
+		}
+		nlog.Infof("%s (user) access: %v%s", cmn.NetPublic, pubAddr, s)
 	}
 
 	// 2. intra-cluster

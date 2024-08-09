@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -94,7 +95,7 @@ func (p *proxy) init(config *cmn.Config) {
 
 	cos.InitShortID(p.si.Digest())
 
-	if network, err := localRedirectCIDR(); err != nil {
+	if network, err := _parseCIDR(env.AIS.LocalRedirectCIDR, ""); err != nil {
 		cos.ExitLog(err) // FATAL
 	} else {
 		p.si.LocalNet = network

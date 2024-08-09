@@ -19,8 +19,9 @@ var (
 		Endpoint  string
 		PrimaryEP string
 
-		// networking: local redirect
+		// networking: two CIDR masks
 		LocalRedirectCIDR string
+		PubIPv4CIDR       string
 
 		// https
 		UseHTTPS string
@@ -43,8 +44,12 @@ var (
 		Endpoint:  "AIS_ENDPOINT",
 		PrimaryEP: "AIS_PRIMARY_EP",
 
-		// differentiate local (same CIDR) clients for faster HTTP redirect
+		// two CIDRs, respectively:
+		// 1. differentiate local (same CIDR) clients for faster HTTP redirect
+		// 2. at node startup: when present with multiple choices, select one matching local unicast IP
+		//    to use it as node's public interface
 		LocalRedirectCIDR: "AIS_CLUSTER_CIDR",
+		PubIPv4CIDR:       "AIS_PUBLIC_IP_CIDR",
 
 		// false: HTTP transport, with all the TLS config (below) ignored
 		// true:  HTTPS/TLS

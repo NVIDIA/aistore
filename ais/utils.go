@@ -55,7 +55,7 @@ type (
 func (na netAccess) isSet(flag netAccess) bool { return na&flag == flag }
 
 func (addr *localIPv4Info) String() string {
-	return fmt.Sprintf("unicast IP: %s (MTU %d)", addr.ipv4, addr.mtu)
+	return fmt.Sprintf("IP: %s (MTU %d)", addr.ipv4, addr.mtu)
 }
 
 func (addr *localIPv4Info) warn() {
@@ -183,12 +183,13 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 	return "", err
 }
 
-// _localIP takes a list of local IPv4s and returns the best fit for a daemon to listen on it
+// given a list of local IPv4s return the best fit to listen on
 func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 	l := len(addrList)
 	if l == 0 {
 		return nil, errors.New("no unicast addresses to choose from")
 	}
+
 	if l == 1 {
 		if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
 			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
@@ -198,20 +199,13 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 		return ip, nil
 	}
 
-	// always log when multi-choice
-	nlog.Infoln(l, "local unicast IPs:")
-	for _, addr := range addrList {
-		nlog.Infoln("    ", addr.String())
-	}
-
 	// NOTE:
-	// reusing local-redirect CIDR ("AIS_CLUSTER_CIDR") for the second and separate purpose -
-	// to select public IP (to listen on) from the `addrList` of local unicast IP interfaces
-
+	// - try using environment to eliminate ambiguity
+	// - env.AIS.PubIPv4CIDR ("AIS_PUBLIC_IP_CIDR") takes precedence
 	var (
 		selected     = -1
 		parsed       net.IP
-		network, err = localRedirectCIDR()
+		network, err = _parseCIDR(env.AIS.LocalRedirectCIDR, env.AIS.PubIPv4CIDR)
 	)
 	if err != nil {
 		return nil, err
@@ -248,14 +242,19 @@ warn:
 	return ip, nil
 }
 
-func localRedirectCIDR() (*net.IPNet, error) {
-	cidr := os.Getenv(env.AIS.LocalRedirectCIDR)
+func _parseCIDR(name, name2 string) (*net.IPNet, error) {
+	cidr := os.Getenv(name)
+	if name2 != "" {
+		if mask := os.Getenv(name2); mask != "" {
+			cidr, name = mask, name2
+		}
+	}
 	if cidr == "" {
 		return nil, nil
 	}
 	_, network, err := net.ParseCIDR(cidr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid '%s=%s': %v", env.AIS.LocalRedirectCIDR, cidr, err)
+		return nil, fmt.Errorf("invalid '%s=%s': %v", name, cidr, err)
 	}
 	return network, nil
 }
