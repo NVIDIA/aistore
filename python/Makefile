@@ -91,7 +91,7 @@ python_pytorch_integration_tests: common_deps dev_deps
 	$(PYTEST) -v tests/integration/pytorch
 
 .PHONY: lint
-lint: common_deps
+lint: common_deps botocore_deps
 	pylint --rcfile=.pylintrc --recursive=y aistore
 
 .PHONY: lint-tests
