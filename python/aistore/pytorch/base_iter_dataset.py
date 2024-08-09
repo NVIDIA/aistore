@@ -4,7 +4,7 @@ Base class for AIS Iterable Style Datasets
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Union, Iterable, Dict, Iterator
+from typing import List, Union, Iterable, Dict, Iterator, Tuple
 from aistore.sdk.ais_source import AISSource
 from torch.utils.data import IterableDataset
 from abc import ABC, abstractmethod
@@ -65,7 +65,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
                     for sample in source.list_all_objects_iter(prefix=prefix):
                         yield sample
 
-    def _get_worker_iter_info(self) -> tuple[Iterator, str]:
+    def _get_worker_iter_info(self) -> Tuple[Iterator, str]:
         """
         Depending on how many Torch workers are present or if they are even present at all,
         return an iterator for the current worker to access and a worker name.
