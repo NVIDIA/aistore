@@ -712,10 +712,6 @@ func showClusterConfig(c *cli.Context, section string) error {
 		return err
 	}
 
-	if section == "backend" {
-		// NOTE special case: custom marshaling (ref 080235)
-		usejs = true
-	}
 	if usejs && section != "" {
 		if printSectionJSON(c, cluConfig, section) {
 			return nil
@@ -726,7 +722,18 @@ func showClusterConfig(c *cli.Context, section string) error {
 	if usejs {
 		return teb.Print(cluConfig, "", teb.Jopts(usejs))
 	}
-	flat := flattenJSON(cluConfig, section)
+
+	var flat nvpairList
+	if section != "backend" {
+		flat = flattenJSON(cluConfig, section)
+	} else {
+		backends, err := api.GetConfiguredBackends(apiBP)
+		if err != nil {
+			return V(err)
+		}
+		flat = flattenBackends(backends)
+	}
+
 	if flagIsSet(c, noHeaderFlag) {
 		err = teb.Print(flat, teb.PropValTmplNoHdr)
 	} else {
@@ -783,7 +790,7 @@ func showNodeConfig(c *cli.Context) error {
 	}
 
 	if section == "backend" {
-		// NOTE special case: custom marshaling (ref 080235)
+		// NOTE compare with showClusterConfig above (ref 080235)
 		usejs = true
 	}
 	if usejs {

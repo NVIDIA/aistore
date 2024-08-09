@@ -719,6 +719,22 @@ func flattenJSON(jstruct any, section string) (flat nvpairList) {
 	return flat
 }
 
+func flattenBackends(backends []string) (flat nvpairList) {
+	for _, b := range backends {
+		nv := nvpair{Name: b}
+		switch b {
+		case "aws":
+			nv.Value = "Amazon S3"
+		case "gcp":
+			nv.Value = "Google Cloud Storage"
+		case "azure":
+			nv.Value = "Azure Blob Storage"
+		}
+		flat = append(flat, nv)
+	}
+	return
+}
+
 // remove secrets, if any
 func _toStr(v any) (s string) {
 	m, ok := v.(map[string]any)
