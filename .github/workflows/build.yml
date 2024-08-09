@@ -1,51 +1,52 @@
-name: Build
+name: Build `aisnode`
 on:
   push:
     branches:
       - main
   pull_request:
   workflow_dispatch:
+
 jobs:
-  test:
+  build:
     strategy:
       matrix:
         go-version: ['1.22.x']
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-    - name: Install Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go-version }}
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
 
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup additional system libraries
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        sudo apt update
-        sudo apt install -y xattr attr
+      - name: Setup additional system libraries
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update
+          sudo apt install -y xattr attr
 
-    - name: Build AIStore on ${{ matrix.os }}
-      run: |
-        export GOPATH="$(go env GOPATH)"
-        # 1) no build tags, no debug
-        MODE="" make node
-        # 2) no build tags, debug
-        MODE="debug" make node
-        # 3) cloud backends, no debug
-        AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
-        # 4) cloud backends, debug
-        AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
-        # 5) cloud backends, debug, statsd
-        # (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
-        TAGS="aws azure gcp statsd debug" make node
-        # 6) statsd, debug, nethttp (note that fasthttp is used by default)
-        TAGS="nethttp statsd debug" make node
-        # 7) w/ mem profile (see cmd/aisnodeprofile)
-        MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node
-        # 8) authn, cli, aisloader
-        make authn
-        make cli
-        make aisloader
+      - name: Build AIStore on ${{ matrix.os }}
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          # 1) no build tags, no debug
+          MODE="" make node
+          # 2) no build tags, debug
+          MODE="debug" make node
+          # 3) cloud backends, no debug
+          AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+          # 4) cloud backends, debug
+          AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+          # 5) cloud backends, debug, statsd
+          # (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
+          TAGS="aws azure gcp statsd debug" make node
+          # 6) statsd, debug, nethttp (note that fasthttp is used by default)
+          TAGS="nethttp statsd debug" make node
+          # 7) w/ mem profile (see cmd/aisnodeprofile)
+          MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node
+          # 8) authn, cli, aisloader
+          make authn
+          make cli
+          make aisloader
