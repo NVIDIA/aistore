@@ -167,23 +167,6 @@ func briefPause(seconds time.Duration) {
 	time.Sleep(seconds * time.Second) //nolint:durationcheck // false positive
 }
 
-// Get config from a random target.
-func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return nil, err
-	}
-	tsi, err := smap.GetRandTarget()
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := api.GetDaemonConfig(apiBP, tsi)
-	if err != nil {
-		return nil, V(err)
-	}
-	return cfg, err
-}
-
 func isConfigProp(s string) bool {
 	props := configPropList()
 	for _, p := range props {

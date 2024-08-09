@@ -2586,6 +2586,7 @@ func (p *proxy) bmodPostMv(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
+// (compare w/ httpcluget)
 func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
@@ -2614,6 +2615,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)
+
 	case apc.WhatSmap:
 		const retries = 16
 		var (

@@ -88,10 +88,14 @@ func TestListBuckets(t *testing.T) {
 		tlog.Logf("%s:\t%2d bucket%s\n", apc.ToScheme(provider), len(bcks), cos.Plural(len(bcks)))
 		pnums[provider] = bcks
 	}
-	config := tools.GetClusterConfig(t)
+
+	backends, err := api.GetConfiguredBackends(baseParams)
+	tassert.CheckFatal(t, err)
+	tlog.Logf("configured backends: %v\n", backends)
+
 	// tests: vs configured backend vs count
 	for provider := range apc.Providers {
-		_, configured := config.Backend.Providers[provider]
+		configured := cos.StringInSlice(provider, backends)
 		qbck := cmn.QueryBcks{Provider: provider}
 		bcks, err := api.ListBuckets(baseParams, qbck, apc.FltExists)
 		if err != nil {
@@ -111,10 +115,8 @@ func TestListBuckets(t *testing.T) {
 	}
 
 	// tests: vs present vs exist-outside, etc.
-	for provider := range apc.Providers {
-		if _, configured := config.Backend.Providers[provider]; !configured {
-			continue
-		}
+
+	for _, provider := range backends {
 		qbck := cmn.QueryBcks{Provider: provider}
 		presbcks, err := api.ListBuckets(baseParams, qbck, apc.FltPresent)
 		tassert.CheckFatal(t, err)

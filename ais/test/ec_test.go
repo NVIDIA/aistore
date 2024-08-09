@@ -176,15 +176,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
 		bck, objPath, totalCnt, len(sliceList), sliceList)
 
-	if !bck.IsAIS() && !bck.IsRemoteAIS() {
-		var ok bool
-		config := tools.GetClusterConfig(t)
-		_, ok = config.Backend.Providers[bck.Provider]
-		tassert.Errorf(t, ok, "invalid provider %s, expected to be in: %v",
-			bck.Provider, config.Backend.Providers)
-	}
-
-	metaCnt := 0
+	var metaCnt int
 	for k, md := range sliceList {
 		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
@@ -1942,6 +1934,8 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 // - gets all objects
 // - nothing must fail
 // - enable the mountpath back
+
+// TODO -- FIXME: use runProviderTests (currently, only ais://)
 func TestECEmergencyMountpath(t *testing.T) {
 	const (
 		smallEvery = 4

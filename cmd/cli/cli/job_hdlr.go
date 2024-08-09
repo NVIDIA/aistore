@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
@@ -463,11 +464,11 @@ func startDownloadHandler(c *cli.Context) error {
 	} else if source.backend.bck.IsEmpty() {
 		dlType = dload.TypeSingle
 	} else {
-		cfg, err := getRandTargetConfig(c)
+		backends, err := api.GetConfiguredBackends(apiBP)
 		if err != nil {
 			return err
 		}
-		if _, ok := cfg.Backend.Providers[source.backend.bck.Provider]; ok { // backend is configured
+		if cos.StringInSlice(source.backend.bck.Provider, backends) {
 			dlType = dload.TypeBackend
 
 			p, err := api.HeadBucket(apiBP, basePayload.Bck, false /* don't add */)

@@ -169,6 +169,20 @@ func GetRemoteAIS(bp BaseParams) (remais meta.RemAisVec, err error) {
 	return
 }
 
+// (see also enable/disable backend below)
+func GetConfiguredBackends(bp BaseParams) (out []string, err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatBackends}}
+	}
+	_, err = reqParams.DoReqAny(&out)
+	FreeRp(reqParams)
+	return
+}
+
 // JoinCluster add a node to a cluster.
 func JoinCluster(bp BaseParams, nodeInfo *meta.Snode) (rebID, sid string, err error) {
 	bp.Method = http.MethodPost
@@ -322,12 +336,13 @@ func DetachRemoteAIS(bp BaseParams, alias string) error {
 
 //
 // Backend (enable | disable)
+// see also GetConfiguredBackends above
 //
 
 func EnableBackend(bp BaseParams, provider string) error {
 	np := apc.NormalizeProvider(provider)
 	if !apc.IsCloudProvider(np) {
-		return fmt.Errorf("can only enable cloud backend (have %q)", provider)
+		return fmt.Errorf("can only enable cloud backend (have %q)", provider) // TODO: this check can be removed, if need be
 	}
 	path := apc.URLPathCluBendEnable.Join(np)
 	return _backend(bp, path)

@@ -51,6 +51,7 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/cluster - query cluster states and stats
 //
 
+// (compare w/ httpdaeget)
 func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
@@ -80,6 +81,13 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.qcluSysinfo(w, r, what, query)
 	case apc.WhatMountpaths:
 		p.qcluMountpaths(w, r, what, query)
+	case apc.WhatBackends:
+		config := cmn.GCO.Get()
+		out := make([]string, 0, len(config.Backend.Providers))
+		for b := range config.Backend.Providers {
+			out = append(out, b)
+		}
+		p.writeJSON(w, r, out, what)
 	case apc.WhatRemoteAIS:
 		all, err := p.getRemAisVec(true /*refresh*/)
 		if err != nil {

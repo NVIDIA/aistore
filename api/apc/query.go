@@ -216,6 +216,9 @@ const (
 	WhatNodeConfig    = "config" // query specific node for (cluster config + overrides, local config)
 	WhatClusterConfig = "cluster_config"
 
+	// configured backends
+	WhatBackends = "backends"
+
 	// stats and status
 	WhatNodeStatsV322          = "stats"  // [ backward compatibility ]
 	WhatNodeStatsAndStatusV322 = "status" // [ ditto ]

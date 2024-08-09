@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 
@@ -44,7 +43,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		space      = regexp.MustCompile(`\s+`) // Used to replace all whitespace with single spaces.
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)
-		backends   = retrieveBackendProviders()
+		backends   = getConfiguredBackends()
 		etlName    = "etlname-" + strings.ToLower(trand.String(4))
 
 		inputFileName   = fileName + ".in"
@@ -271,17 +270,9 @@ func randomMountpath(target *meta.Snode) string {
 	return mpaths.Available[rand.IntN(len(mpaths.Available))]
 }
 
-func retrieveBackendProviders() []string {
-	target := randomTarget()
-	config, err := api.GetDaemonConfig(BaseAPIParams(proxyURLReadOnly), target)
+func getConfiguredBackends() []string {
+	backends, err := api.GetConfiguredBackends(BaseAPIParams(proxyURLReadOnly))
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	set := cos.NewStrSet()
-	for b := range config.Backend.Providers {
-		set.Set(b)
-	}
-	set.Set(apc.AIS)
-	backends := set.ToSlice()
-	sort.Strings(backends)
 	return backends
 }
 
