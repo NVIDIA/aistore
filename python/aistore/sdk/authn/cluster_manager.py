@@ -5,7 +5,7 @@
 import logging
 from typing import List, Optional
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk import Client as AISClient
+from aistore.sdk.client import Client as AISClient
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,

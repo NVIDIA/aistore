@@ -2,6 +2,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
+# pylint: disable=duplicate-code
+
 import unittest
 
 import pytest
@@ -18,6 +20,7 @@ from tests.integration import (
 from tests.utils import random_string
 
 
+# pylint: disable=duplicate-code
 class TestAuthCLient(unittest.TestCase):
     def setUp(self) -> None:
         # AIStore Client

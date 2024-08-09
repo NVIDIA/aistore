@@ -62,7 +62,6 @@ class ObjectReader:
             Iterator[bytes]: An iterator to access the next chunk of bytes
         """
         try:
-            for chunk in self._stream.iter_content(chunk_size=self._chunk_size):
-                yield chunk
+            yield from self._stream.iter_content(chunk_size=self._chunk_size)
         finally:
             self._stream.close()

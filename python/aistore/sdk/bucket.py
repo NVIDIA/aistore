@@ -429,6 +429,8 @@ class Bucket(AISSource):
         uuid = response.headers.get(HEADER_XACTION_ID, "").strip('"')
         params[QPARAM_UUID] = uuid
 
+        result = {}
+
         # Initial response status code should be 202
         if response.status_code != int(STATUS_ACCEPTED):
             raise UnexpectedHTTPStatusCode([STATUS_ACCEPTED], response.status_code)

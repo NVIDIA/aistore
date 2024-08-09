@@ -1,7 +1,7 @@
 pytest==7.1.1
 pydantic==1.10.14
 cloudpickle==2.2.0
-pylint==2.16.0
+pylint==3.2.6
 typing_extensions==4.2.0
 requests==2.32.3
 humanize>=4.6.0

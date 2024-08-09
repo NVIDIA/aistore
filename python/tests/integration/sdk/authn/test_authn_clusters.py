@@ -2,6 +2,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
+# pylint: disable=duplicate-code
+
 import unittest
 
 import pytest

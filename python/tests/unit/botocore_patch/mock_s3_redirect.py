@@ -51,6 +51,7 @@ def s3_response_wrapper(
 
     logging.debug("s3_response_wrapper: intercepted %s", wrapped.__name__)
     method = None
+    attempt = None
     try:
         method = operation.split("_").pop().upper()
         if method == "GET":

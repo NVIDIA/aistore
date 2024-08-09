@@ -49,10 +49,8 @@ def combine_results(result_dict, bench_type):
     for host_values in result_dict.values():
         host_res = host_values.get("results")
         min_lat, avg_lat, max_lat = get_latencies(host_res, bench_type)
-        if min_lat < total_lat_min:
-            total_lat_min = min_lat
-        if max_lat > total_lat_max:
-            total_lat_max = max_lat
+        total_lat_min = min(total_lat_min, min_lat)
+        total_lat_max = max(total_lat_max, max_lat)
         lats.append(int(avg_lat))
         tputs.append(int(get_final_throughput(host_res, bench_type)))
     avg_lat = sum(lats) / len(lats)
