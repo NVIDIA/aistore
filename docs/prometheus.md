@@ -14,7 +14,7 @@ redirect_from:
 
 ## Monitoring AIStore with Prometheus
 
-AIStore tracks a growing list of performance counters, utilization percentages, latency and throughput metrics, transmitted and received stats (total bytes and numbers of objects), error counters, and more.
+AIStore tracks a growing list of performance counters, utilization percentages, latency and throughput metrics, transmitted and received stats (total bytes and numbers of objects), error counters and more.
 
 Viewership is equally supported via:
 * AIS node logs

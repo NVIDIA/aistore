@@ -121,4 +121,4 @@ And that's the upshot.
 
 ## References
 
-* [Lifecycle management: maintenance mode, rebalance/rebuild, and more](/docs/lifecycle_node.md)
+* [Lifecycle management: maintenance mode, rebalance/rebuild and more](/docs/lifecycle_node.md)

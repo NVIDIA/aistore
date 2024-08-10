@@ -128,10 +128,10 @@ def view_data(dataloader):
 2. Documentation, blogs, videos:
     - https://aiatscale.org
     - https://github.com/NVIDIA/aistore/tree/main/docs
-    - Pytorch intro to Datasets and DataLoaders: https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
+    - PyTorch intro to Datasets and DataLoaders: https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
     - Discussion on Datasets, DataPipes, DataLoaders: https://sebastianraschka.com/blog/2022/datapipes.html
 3. Full code example
-    - [Pytorch Pipelines With WebDataset Example](/python/examples/aisio-pytorch/pytorch_webdataset.py)
+    - [PyTorch Pipelines With WebDataset Example](/python/examples/aisio-pytorch/pytorch_webdataset.py)
 4. Dataset
     - [The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/)
 

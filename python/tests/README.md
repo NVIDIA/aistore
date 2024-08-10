@@ -1,6 +1,6 @@
 # Python Tests
 
-This directory contains unit tests and integration tests for each of the python package interfaces we provide to access AIStore, including the Amazon S3 botocore, SDK, and Pytorch datasets APIs.
+This directory contains unit tests and integration tests for each of the python package interfaces we provide to access AIStore, including the Amazon S3 botocore, SDK, and PyTorch datasets APIs.
 It also contains tests for verifying s3 compatibility.
 
 ---

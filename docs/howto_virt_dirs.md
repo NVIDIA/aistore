@@ -13,7 +13,7 @@ Train, for instance, on all audio files under `en_es_synthetic/v1/train/`, or si
 The motivation may become clearer if I say that the entire real-life dataset
 contains many millions of objects and numerous _virtual directories_, including the aforementioned `en_es_synthetic/v1/train/`.
 
-Needless to say, aistore provides for all of that, and more. There is a certainty subtlety, however, that makes sense to illustrate on examples.
+Needless to say, aistore provides for all of that and more. There is a certainty subtlety, however, that makes sense to illustrate on examples.
 
 ## But first, the rules
 

@@ -22,7 +22,6 @@ Xactions start running based on a wide variety of runtime conditions that includ
 * user request (e.g., to reduce the number of local object copies in a given bucket)
 * adding or removing storage targets (the events that trigger cluster-wide rebalancing)
 * adding or removing local disks (the events that cause resilver to start moving stored content between *mountpaths* - see [Managing mountpaths](/docs/configuration.md#managing-mountpaths))
-* and more...
 
 Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](/deploy/dev/local/aisnode_config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
 
@@ -57,7 +56,6 @@ Supported extended actions are enumerated in the [user-facing API](/cmn/api.go) 
 * consensus voting (when conducting new leader [election](/docs/ha.md#election))
 * erasure-encoding objects in a EC-configured bucket (see [Erasure coding](/docs/storage_svcs.md#erasure-coding))
 * creating additional local replicas, and reducing number of object replicas in a given locally-mirrored bucket (see [Storage Services](/docs/storage_svcs.md))
-* and more...
 
 There are different actions that may be taken upon xaction.
 Actions include stats, start and stop.
@@ -151,6 +149,6 @@ the most recent xactions will be displayed, for each bucket, kind or (bucket, ki
 
 ## References
 
-For xaction-related CLI documentation and examples, supported multi-object (batch) operations, and more, please see:
+For xaction-related CLI documentation and examples and supported multi-object (batch) operations, please see:
 
 * [Batch operations](/docs/batch.md)

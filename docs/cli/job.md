@@ -37,7 +37,7 @@ Rest of this document covers starting, stopping, and otherwise managing job kind
 ### See also
 
 - [static descriptors (source code)](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L108)
-- [`xact` package README](/xact/README.md).
+- [`xact` package README](https://github.com/NVIDIA/aistore/blob/main/xact/README.md).
 - [`batch jobs`](/docs/batch.md)
 - [CLI: `dsort` (distributed shuffle)](/docs/cli/dsort.md)
 - [CLI: `download` from any remote source](/docs/cli/download.md)

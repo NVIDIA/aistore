@@ -39,7 +39,7 @@ Complete and most recently updated list of supported jobs can be found in this [
 
 Last (but not the least) is - time. Job execution may take many seconds, sometimes minutes or hours.
 
-Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and more.
+Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset and more.
 
 Global rebalance gets (automatically) triggered by any membership changes (nodes joining, leaving, powercycling, etc.) that can be further visualized via `ais show rebalance` CLI.
 

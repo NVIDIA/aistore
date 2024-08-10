@@ -51,7 +51,7 @@ NAME:
    ais show performance counters - show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
         - numbers of list-objects requests;
         - (GET, PUT, etc.) cumulative and average sizes;
-        - associated error counters, if any, and more.
+        - associated error counters, if any.
 
 USAGE:
    ais show performance counters [command options] [TARGET_ID]

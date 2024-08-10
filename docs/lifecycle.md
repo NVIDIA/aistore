@@ -143,7 +143,7 @@ Still, the `join` command can solve the case when the node is misconfigured. Sec
 
 * [`aisnode` command line](/docs/command_line.md)
 
-When rebalancing, the cluster remains fully operational and can be used to read and write data, list, create, and destroy buckets, run jobs, and more. In other words, none of the listed lifecycle operations requires downtime. The idea is that users never notice (and if the cluster has enough spare capacity - they won't).
+When rebalancing, the cluster remains fully operational and can be used to read and write data, list, create, and destroy buckets, run jobs and more. In other words, none of the listed lifecycle operations requires downtime. The idea is that users never notice (and if the cluster has enough spare capacity - they won't).
 
 ## References
 

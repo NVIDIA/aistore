@@ -13,12 +13,14 @@ redirect_from:
 | --- | --- | --- | --- | --- |
 | `get.n` | `get_count` | counter | total number of executed GET(object) requests | default |
 | `put.n` | `put_count` | counter | total number of executed PUT(object) requests | default |
+| `head.n` | `head_count` | counter | total number of executed HEAD(object) requests | default |
 | `append.n` | `append_count` | counter | total number of executed APPEND(object) requests | default |
 | `del.n` | `del_count` | counter | total number of executed DELETE(object) requests | default |
 | `ren.n` | `ren_count` | counter | total number of executed rename(object) requests | default |
 | `lst.n` | `lst_count` | counter | total number of executed list-objects requests | default |
 | `err.get.n` | `err_get_count` | counter | total number of GET(object) errors | default |
 | `err.put.n` | `err_put_count` | counter | total number of PUT(object) errors | default |
+| `err.head.n` | `err_head_count` | counter | total number of HEAD(object) errors | default |
 | `err.append.n` | `err_append_count` | counter | total number of APPEND(object) errors | default |
 | `err.del.n` | `err_del_count` | counter | total number of DELETE(object) errors | default |
 | `err.ren.n` | `err_ren_count` | counter | total number of rename(object) errors | default |
@@ -83,26 +85,18 @@ redirect_from:
 | `remais.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster | map[backend:remais node_id:`<AIS-NODE-ID>`] |
 | `remais.e2e.get.ns.total` | `remote_e2e_get_ns_total` | total | GET: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response | map[backend:remais node_id:`<AIS-NODE-ID>`] |
 | `remais.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all cold-GET transactions | map[backend:remais node_id:`<AIS-NODE-ID>`] |
+| `remais.head.n` | `remote_head_count` | counter | HEAD: total number of executed remote requests to a given backend | map[backend:remais node_id:`<AIS-NODE-ID>`] |
 | `remais.put.n` | `remote_put_count` | counter | PUT: total number of executed remote requests to a given backend | map[backend:remais node_id:`<AIS-NODE-ID>`] |
 | `remais.put.ns.total` | `remote_put_ns_total` | total | PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster | map[backend:remais node_id:`<AIS-NODE-ID>`] |
 | `remais.e2e.put.ns.total` | `remote_e2e_put_ns_total` | total | PUT: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object | map[backend:remais node_id:`<AIS-NODE-ID>`] |
-| `remais.put.size` | `remote_e2e_put_bytes_total` | size | PUT: total cumulative size (bytes) of all PUTs to a given remote backend | map[backend:remais node _id:ClCt8081] |
+| `remais.put.size` | `remote_e2e_put_bytes_total` | size | PUT: total cumulative size (bytes) of all PUTs to a given remote backend | map[backend:remais node_id:ClCt8081] |
 | `remais.ver.change.n` | `remote_ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster) | map[backend:remais node_id:`<AIS-NODE-ID>`] |
 | `remais.ver.change.size` | `remote_ver_change_bytes_total` | size | total cumulative size of objects that were updated out-of-band | map[backend:remais node_id:`<AIS-NODE-ID>`] |
-| `ht.get.n` | `remote_get_count` | counter | GET: total number of executed remote requests (cold GETs) | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.e2e.get.ns.total` | `remote_e2e_get_ns_total` | total | GET: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all cold-GET transactions | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.put.n` | `remote_put_count` | counter | PUT: total number of executed remote requests to a given backend | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.put.ns.total` | `remote_put_ns_total` | total | PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.e2e.put.ns.total` | `remote_e2e_put_ns_total` | total | PUT: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.put.size` | `remote_e2e_put_bytes_total` | size | PUT: total cumulative size (bytes) of all PUTs to a given remote backend | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.ver.change.n` | `remote_ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster) | map[backend:ht node_id:`<AIS-NODE-ID>`] |
-| `ht.ver.change.size` | `remote_ver_change_bytes_total` | size | total cumulative size of objects that were updated out-of-band | map[backend:ht node_id:`<AIS-NODE-ID>`] |
 | `gcp.get.n` | `remote_get_count` | counter | GET: total number of executed remote requests (cold GETs) | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.e2e.get.ns.total` | `remote_e2e_get_ns_total` | total | GET: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all cold-GET transactions | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
+| `gcp.head.n` | `remote_head_count` | counter | HEAD: total number of executed remote requests to a given backend | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.put.n` | `remote_put_count` | counter | PUT: total number of executed remote requests to a given backend | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.put.ns.total` | `remote_put_ns_total` | total | PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
 | `gcp.e2e.put.ns.total` | `remote_e2e_put_ns_total` | total | PUT: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object | map[backend:gcp node_id:`<AIS-NODE-ID>`] |
@@ -113,6 +107,7 @@ redirect_from:
 | `aws.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.e2e.get.ns.total` | `remote_e2e_get_ns_total` | total | GET: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving request , executing cold-GET, storing new object version in-cluster, and transmitting response | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all cold-GET transactions | map[backend:aws node_id:`<AIS-NODE-ID>`] |
+| `aws.head.n` | `remote_head_count` | counter | HEAD: total number of executed remote requests to a given backend | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.put.n` | `remote_put_count` | counter | PUT: total number of executed remote requests to a given backend | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.put.ns.total` | `remote_put_ns_total` | total | PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster | map[backend:aws node_id:`<AIS-NODE-ID>`] |
 | `aws.e2e.put.ns.total` | `remote_e2e_put_ns_total` | total | PUT: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object | map[backend:aws node_id:`<AIS-NODE-ID>`] |
@@ -123,6 +118,7 @@ redirect_from:
 | `azure.get.ns.total` | `remote_get_ns_total` | total | GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.e2e.get.ns.total` | `remote_e2e_get_ns_total` | total | GET: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.get.size` | `remote_get_bytes_total` | size | GET: total cumulative size (bytes) of all cold-GET transactions | map[backend:azure node_id:`<AIS-NODE-ID>`] |
+| `azure.head.n` | `remote_head_count` | counter | HEAD: total number of executed remote requests to a given backend | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.put.n` | `remote_put_count` | counter | PUT: total number of executed remote requests to a given backend | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.put.ns.total` | `remote_put_ns_total` | total | PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster | map[backend:azure node_id:`<AIS-NODE-ID>`] |
 | `azure.e2e.put.ns.total` | `remote_e2e_put_ns_total` | total | PUT: total end-to-end time (nanoseconds) servicing remote requests; includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object | map[backend:azure node_id:`<AIS-NODE-ID>`] |

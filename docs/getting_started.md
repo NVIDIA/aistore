@@ -41,7 +41,7 @@ Depending on your Linux distribution, you may or may not have `GCC`, `sysstat`, 
 
 Speaking of distributions, our current default recommendation is Ubuntu Server 20.04 LTS. But Ubuntu 18.04 and CentOS 8.x (or later) will also work. As well as numerous others.
 
-For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs, and more.
+For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs and more.
 
 Since AIS itself provides n-way mirroring and erasure coding, hardware RAID would _not_ be recommended. But can be used, and will work.
 
@@ -559,7 +559,7 @@ In particular, the `make` provides a growing number of developer-friendly comman
 
 * **deploy** the AIS cluster on your local development machine;
 * **run** all or selected tests;
-* **instrument** AIS binary with race detection, CPU and/or memory profiling, and more.
+* **instrument** AIS binary with race detection, CPU and/or memory profiling and more.
 
 Of course, local build is intended for development only. For production, there is a separate [dedicated repository](https://github.com/NVIDIA/ais-k8s) noted below.
 

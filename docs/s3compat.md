@@ -17,7 +17,7 @@ This document talks about the 2. and 3. - about AIS providing S3 compatible API 
 
 There's a separate, albeit closely related, [document](/docs/s3cmd.md) that explains how to configure `s3cmd` and then maybe tweak AIStore configuration to work with it:
 
-* [Getting Started with `s3cmd`](/docs/s3cmd.md) - also contains configuration, tips, usage examples, and more.
+* [Getting Started with `s3cmd`](/docs/s3cmd.md) - also contains configuration, tips, usage examples and more.
 
 For additional background, see:
 

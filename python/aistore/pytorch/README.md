@@ -6,9 +6,9 @@ AIS plugin is a PyTorch dataset library to access datasets stored on AIStore.
 
 PyTorch comes with powerful data loading capabilities, but loading data in PyTorch is fairly complex. One of the best ways to handle it is to start small and then add complexities as and when you need them.
 
-![Pytorch Structure](../../../docs/images/pytorch_structure.webp)
+![PyTorch Structure](../../../docs/images/pytorch_structure.webp)
 
-In our plugin, we extend the base Dataset, Sampler, and IterableDataset Torch clases to provide AIStore Object functionality natively to Pytorch. You can extend AISBaseMapDataset instead of Dataset and AISBaseIterDataset instead of IterableDataset in your custom datasets to automatically obtain object fetching functionality. But if you'd like fully complete datasets that fetch objects and load their data, then you can use AISMapDataset and AISIterData.
+In our plugin, we extend the base Dataset, Sampler, and IterableDataset Torch clases to provide AIStore Object functionality natively to PyTorch. You can extend AISBaseMapDataset instead of Dataset and AISBaseIterDataset instead of IterableDataset in your custom datasets to automatically obtain object fetching functionality. But if you'd like fully complete datasets that fetch objects and load their data, then you can use AISMapDataset and AISIterData.
 
 ### PyTorch DataLoader
 

@@ -56,6 +56,12 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
 
 ## Terminology
 
+* **Target** - storage node. In the docs and the code, instead of saying something like "storage node in an aistore cluster" we simply say "target."
+
+* **Proxy** - a **gateway** providing API access point. One of the proxies is elected, or designated, to be the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways. The terms "proxy" and "gateway" are often used interchangeably.
+
+> Each proxy/gateway implements RESTful APIs (both native and S3 compatible) and provides full access to user data stored in the cluster. Each proxy collaborates with other proxies in the cluster to perform majority-voted HA failover.
+
 * [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 * [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
@@ -66,7 +72,7 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
    - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
    - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
 
-* [Xaction](/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+* [Xaction](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
 ## Design Philosophy
 
@@ -167,7 +173,7 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 Common way to use AIStore include the most fundamental and, often, the very first step: populating AIS cluster with an existing dataset, or datasets. Those (datasets) can come from remote buckets (AWS, Google Cloud, Azure), HDFS directories, NFS shares, local files, or any vanilla HTTP(S) locations.
 
-To this end, AIS provides 6 (six) easy ways ranging from the conventional on-demand caching to *promoting* colocated files and directories, and more.
+To this end, AIS provides 6 (six) easy ways ranging from the conventional on-demand caching to *promoting* colocated files and directories.
 
 > Related references and examples include this [technical blog](https://aistore.nvidia.com/blog/2021/12/07/cp-files-to-ais) that shows how to copy a file-based dataset in two easy steps.
 

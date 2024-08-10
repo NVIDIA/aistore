@@ -49,12 +49,10 @@ redirect_from:
   - [Jobs](/docs/cli/job.md)
 - Security and Access Control
   - [Authentication Server (AuthN)](/docs/authn.md)
-- Tutorials
-  - [Tutorials](/docs/tutorials/README.md)
-  - [Videos](/docs/videos.md)
 - Power tools and extensions
   - [Reading, writing, and listing *archives*](/docs/archive.md)
-  - [Distributed Shuffle](/docs/dsort.md)
+  - [Distributed Shuffle (`dsort`)](/docs/dsort.md)
+  - [Initial Sharding utility (`ishard`)](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
   - [Downloader](/docs/downloader.md)
   - [Extract, Transform, Load](/docs/etl.md)
   - [Tools and utilities](/docs/tools.md)
@@ -86,18 +84,25 @@ redirect_from:
   - [Feature flags](/docs/feature_flags.md)
 - Observability
   - [Observability](/docs/metrics.md)
+    - [Reference: all supported metrics](/docs/metrics-reference.md)
   - [Prometheus](/docs/prometheus.md)
   - [CLI: `ais show performance`](/docs/cli/show.md)
 - For users and developers
   - [Getting started](/docs/getting_started.md)
   - [Docker](/docs/docker_main.md)
   - [Useful scripts](/docs/development.md)
-  - Profiling, race-detecting, and more
+  - Profiling, race-detecting and more
 - Batch jobs
   - [Batch operations](/docs/batch.md)
-  - [eXtended Actions (xactions)](/xact/README.md)
-  - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
+  - [eXtended Actions (xactions)](https://github.com/NVIDIA/aistore/blob/main/xact/README.md)
+  - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md), including:
+    - [prefetch remote datasets](/docs/cli/object.md#prefetch-objects)
+    - [copy bucket](/docs/cli/bucket.md#copy-bucket)
+    - [copy multiple objects](/docs/cli/bucket.md#copy-multiple-objects)
+    - [download remote BLOBs](/docs/cli/blob-downloader.md)
+    - [promote NFS or SMB share](https://aistore.nvidia.com/blog/2022/03/17/promote)
 - Assorted Topics
+  - [Virtual directories](/docs/howto_virt_dirs.md)
   - [System files](/docs/sysfiles.md)
   - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
   - [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
@@ -109,4 +114,4 @@ redirect_from:
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket)
-  - [Out of band updates](/docs/out_of_band.md)
+  - [Out-of-band updates](/docs/out_of_band.md)

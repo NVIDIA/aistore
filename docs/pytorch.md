@@ -7,13 +7,13 @@ redirect_from:
  - /docs/pytorch.md/
 ---
 
-The AIStore Pytorch integration is a growing set of datasets, samplers, and datapipes that allow you to use easily add AIStore support
-to a codebase using Pytorch. This document contains API documentation for the AIStore Pytorch integration.
+In AIStore, PyTorch integration is a growing set of datasets (both iterable and map-style), samplers, and dataloaders. This readme illustrates taxonomy of the associated abstractions and provides API reference documentation.
 
-> For usage examples, please refer to the [Pytorch README](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md).
-For more in-depth examples, see our [notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/).
+For usage examples, please see:
+* [AIS plugin for PyTorch](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
+* [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
 
-![Pytorch Structure](/docs/images/pytorch_structure.webp)
+![PyTorch Structure](/docs/images/pytorch_structure.webp)
 * [base\_map\_dataset](#base_map_dataset)
   * [AISBaseMapDataset](#base_map_dataset.AISBaseMapDataset)
 * [base\_iter\_dataset](#base_iter_dataset)
@@ -241,7 +241,7 @@ a `lambda` which cannot be pickled in multithreaded contexts.
 
 Worker Supported Request Client for PyTorch
 
-This client allows Pytorch workers to have separate request sessions per thread
+This client allows PyTorch workers to have separate request sessions per thread
 which is needed in order to use workers in a DataLoader as
 the default implementation of RequestClient and requests is not thread-safe.
 
@@ -255,7 +255,7 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 class WorkerRequestClient(RequestClient)
 ```
 
-Extension that supports Pytorch and multiple workers of internal client for
+Extension that supports PyTorch and multiple workers of internal client for
 buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
 
 **Arguments**:
@@ -271,7 +271,7 @@ buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
 def session()
 ```
 
-Returns: Active request session acquired for a specific Pytorch dataloader worker
+Returns: Active request session acquired for a specific PyTorch dataloader worker
 
 Multishard Stream Dataset for AIS.
 

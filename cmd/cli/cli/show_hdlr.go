@@ -138,7 +138,7 @@ var (
 	}
 	showCmdCluster = cli.Command{
 		Name:         cmdCluster,
-		Usage:        "show cluster nodes and utilization",
+		Usage:        "main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)",
 		ArgsUsage:    showClusterArgument,
 		Flags:        showCmdsFlags[cmdCluster],
 		Action:       showClusterHandler,
@@ -146,7 +146,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         cmdSmap,
-				Usage:        "show Smap (cluster map)",
+				Usage:        "show cluster map (Smap)",
 				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        showCmdsFlags[cmdSmap],
 				Action:       showSmapHandler,
@@ -154,7 +154,7 @@ var (
 			},
 			{
 				Name:         cmdBMD,
-				Usage:        "show BMD (bucket metadata)",
+				Usage:        "show bucket metadata (BMD)",
 				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        showCmdsFlags[cmdBMD],
 				Action:       showBMDHandler,

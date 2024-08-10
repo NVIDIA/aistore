@@ -7,15 +7,17 @@ redirect_from:
  - /docs/on_disk_layout.md/
 ---
 
-AIStore 3.0 introduces new on-disk layout that addresses several motivations including (but not limited to) the motivation to support multiple cloud backends. One of those Clouds can be (and starting with v3.0 **is**) AIStore itself with the immediate availability of AIS-to-AIS caching and a gamut of future capabilities: continuous data protection, DR, and more.
+AIStore 3.0 introduced new on-disk layout that addressed several motivations including (but not limited to) the motivation to support multiple remote backends.
 
-At a high level, with v3.0:
+One of those remote backends can be AIStore itself, with immediate availability of AIS-to-AIS caching and a gamut of related data recovery capabilities.
+
+At a high level:
 
 - in addition to checksum, all metadata (including object metadata) is versioned to provide for **backward compatibility** when (and *if*) there are any future changes;
 - cluster-wide control structures -  in particular, cluster map and bucket metadata - are now uniformly GUID-protected and LZ4-compressed;
 - bucket metadata is replicated, with multiple protected and versioned copies stored on data drives of **all** storage targets in a cluster.
 
-In addition, release 3.0 adds configurable namespaces whereby users can choose to group selected buckets for the purposes of physical isolation from all other buckets and datasets, and/or applying common (for this group) storage management policies: erasure coding, n-way mirroring, etc. But more about it later.
+In addition, AIS supports configurable namespaces whereby users can choose to group selected buckets for the purposes of physical isolation from all other buckets and datasets, and/or applying common (for this group) storage management policies: erasure coding, n-way mirroring, etc. But more about it later.
 
 Here's a simplified drawing depicting two [providers](providers.md), AIS and AWS, and two buckets, `ABC` and `XYZ`, respectively. In the picture, `mpath` is a single [mountpath](configuration.md) - a single disk **or** a volume formatted with a local filesystem of choice, **and** a local directory (`mpath/`):
 

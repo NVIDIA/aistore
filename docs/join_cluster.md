@@ -18,9 +18,13 @@ Also, see related:
 * [CLI: `ais cluster` command](/docs/cli/cluster.md)
 * [Scripted integration tests](https://github.com/NVIDIA/aistore/tree/main/ais/test/scripts)
 
-## Joining a Cluster: _discovery_ URL, and more
+## Joining a Cluster: _discovery_ URL
 
-First, some basic facts. AIStore clusters can be deployed with an arbitrary number of AIStore proxies. Each proxy/gateway implements RESTful API and provides full access to objects stored in the cluster. Each proxy collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](ha.md).
+First, some basic facts. AIStore clusters can be deployed with an arbitrary number of AIStore proxies (a.k.a. gateways).
+
+Each proxy/gateway implements RESTful APIs (both native and S3 compatible) and provides full access to user data stored in the cluster.
+
+Each proxy collaborates with other proxies in the cluster to perform majority-voted HA failovers (section [Highly Available Control Plane](ha.md).
 
 All _electable_ proxies are functionally equivalent. The one that is elected as _primary_ is, among other things, responsible to _join_ nodes to the running cluster.
 

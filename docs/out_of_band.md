@@ -66,7 +66,7 @@ OPTIONS:
 * [`ais cp` command](/docs/cli/bucket.md) and, in particular, its `--sync` option.
 - [Example copying buckets and multi-objects with simultaneous synchronization](/docs/cli/bucket.md#example-copying-buckets-and-multi-objects-with-simultaneous-synchronization)
 
-## Out-of-band writes, deletes, and more
+## Out-of-band writes, deletes and more
 
 1. with version validation enabled, aistore will detect both out-of-band writes and deletes;
 2. buckets with versioning disabled are also supported;

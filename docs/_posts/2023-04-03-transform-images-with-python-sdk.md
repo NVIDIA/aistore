@@ -190,7 +190,7 @@ etl_group(image_etl)
 
 ### AIS/PyTorch connector
 
-In the steps above, we demonstrated a few ways to transform objects, but to use the results we need to load them into a Pytorch Dataset and DataLoader. In PyTorch, a dataset can be defined by inheriting [`torch.utils.data.Dataset`](https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset). Datasets can be fed into a `DataLoader` to handle batching, shuffling, etc. (see ['torch.utils.data.DataLoader'](https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader)).
+In the steps above, we demonstrated a few ways to transform objects, but to use the results we need to load them into a PyTorch Dataset and DataLoader. In PyTorch, a dataset can be defined by inheriting [`torch.utils.data.Dataset`](https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset). Datasets can be fed into a `DataLoader` to handle batching, shuffling, etc. (see ['torch.utils.data.DataLoader'](https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader)).
 
 To implement inline ETL, transforming objects as we read them, you  will need to create a custom PyTorch Dataset as described [by PyTorch here](https://pytorch.org/tutorials/beginner/basics/data_tutorial.html). In the future, AIS will likely provide some of this functionality directly. For now, we will use the output of the offline ETL (bucket-to-bucket) described above and use the provided `AISDataset` to read the transformed results. More info on reading AIS data into PyTorch can be found [on the AIS blog here](https://aiatscale.org/blog/2022/07/12/aisio-pytorch).
 

@@ -143,7 +143,7 @@ $ curl -s -L -X GET 'http://aistore/gs/my-google-bucket' | jq
 
 > AIS provides S3 compatibility layer via its "/s3" endpoint. [S3 compatibility](/docs/s3compat.md) shall not be confused with "easy URL" mapping, whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with "v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request and response parameters and components.
 
-> For detals and more usage examples, please see [easy URL readme](/docs/easy_url.md).
+> For detals and additional usage examples, please see [easy URL readme](/docs/easy_url.md).
 
 ## API Reference
 
@@ -187,7 +187,7 @@ This and the next section reference a variety of URL paths (e.g., `/v1/cluster`)
 | Get Cluster Map from a specific node (any node in the cluster) | See [Querying information](#querying-information) section below | (to be added) | `api.GetNodeClusterMap` |
 | Get Cluster System information | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetClusterSysInfo` |
 | Get Cluster statistics | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetClusterStats` |
-| Get remote AIS-cluster information (access URL, primary gateway, cluster map version, and more) | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetRemoteAIS` |
+| Get remote AIS-cluster information (access URL, primary gateway, cluster map version and more) | GET /v1/cluster | See [Querying information](#querying-information) section below | `api.GetRemoteAIS` |
 | Attach remote AIS cluster | PUT /v1/cluster/attach | (to be added) | `api.AttachRemoteAIS` |
 | Detach remote AIS cluster | PUT /v1/cluster/detach | (to be added) | `api.DetachRemoteAIS` |
 
@@ -711,7 +711,7 @@ Following is a brief summary of the majority of supported monitoring operations 
 $ curl -X GET http://G/v1/cluster?what=stats
 ```
 
-Execution flow for this single command causes intra-cluster broadcast whereby requesting proxy (which could be any proxy in the cluster) consolidates all  results from all other nodes in a JSON-formatted output. The latter contains both http proxy and storage targets request counters, per-target used/available capacities, and more. For example:
+Execution flow for this single command causes intra-cluster broadcast whereby requesting proxy (which could be any proxy in the cluster) consolidates all  results from all other nodes in a JSON-formatted output. The latter contains both http proxy and storage targets request counters, per-target used/available capacitiesand more. For example:
 
 ![AIStore statistics](images/ais-get-stats.png)
 

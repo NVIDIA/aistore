@@ -1,4 +1,4 @@
-Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort, and more.
+Package `transport` provides streaming object-based transport over HTTP for massive intra-AIS data transfers. AIStore utilizes this package for cluster-wide (aka "global") rebalancing, distributed merge-sort and more.
 
 - [Build](#build)
 - [Description](#description)
@@ -184,7 +184,7 @@ For usage examples and details, please see tests in the package directory.
 
 ## Stream Bundle
 
-Stream bundle (`transport.StreamBundle`) in this package is motivated by the need to broadcast and multicast continuously over a set of long-lived TCP sessions. The scenarios in storage clustering include intra-cluster replication and erasure coding, rebalancing (upon *target-added* and *target-removed* events) and MapReduce-generated flows, and more.
+Stream bundle (`transport.StreamBundle`) in this package is motivated by the need to broadcast and multicast continuously over a set of long-lived TCP sessions. The scenarios in storage clustering include intra-cluster replication and erasure coding, rebalancing (upon *target-added* and *target-removed* events) and MapReduce-generated flows and more.
 
 In each specific case, a given clustered node needs to maintain control and/or data flows between itself and multiple other clustered nodes, where each of the flows would be transferring large numbers of control and data objects, or parts of thereof.
 

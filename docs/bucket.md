@@ -41,11 +41,11 @@ AIStore uses the popular and well-known bucket abstraction, originally (likely) 
 
 Similar to S3, AIS bucket is a _container for objects_.
 
-> An object, in turn, is a file **and** a metadata that describes that object and normally includes: checksum, version, references to copies (replicas), size, last access time, source bucket (if object's origin is a Cloud bucket), custom user-defined attributes, and more.
+> An object, in turn, is a file **and** a metadata that describes that object and normally includes: checksum, version, references to copies (replicas), size, last access time, source bucket (if object's origin is a Cloud bucket), custom user-defined attributes and more.
 
 AIS is a flat `<bucket-name>/<object-name>` storage hierarchy where named buckets store user datasets.
 
-In addition, each AIS bucket is a point of applying (per-bucket) management policies: checksumming, versioning, erasure coding, mirroring, LRU eviction, checksum and/or version validation, and more.
+In addition, each AIS bucket is a point of applying (per-bucket) management policies: checksumming, versioning, erasure coding, mirroring, LRU eviction, checksum and/or version validation.
 
 AIS buckets *contain* user data performing the same function as, for instance:
 
@@ -695,7 +695,7 @@ For background and usage examples, please see [CLI: AWS-specific bucket configur
 * [`ais ls`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/bucket.md#list-objects)
 * [Virtual directories](/docs/howto_virt_dirs.md)
 
-`ListObjects` API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
+`ListObjects` API returns a page of object names and, optionally, their properties (including sizes, access time, checksums), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
 
 > Go [ListObjects](https://github.com/NVIDIA/aistore/blob/main/api/bucket.go) API
 

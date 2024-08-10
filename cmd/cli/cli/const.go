@@ -228,7 +228,7 @@ const (
 	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
 
 	// Perf
-	showPerfArgument = "show performance counters, throughput, latency, and more (" + tabtab + " specific view)"
+	showPerfArgument = "show performance counters, throughput, latency, disks, used/available capacities (" + tabtab + " specific view)"
 
 	// ETL
 	etlNameArgument     = "ETL_NAME"

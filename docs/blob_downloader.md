@@ -16,7 +16,7 @@ AIStore supports multiple ways to populate itself with existing datasets, includ
 * **copy** multiple matching objects;
 * **archive** multiple objects
 * **prefetch** remote bucket or parts of thereof;
-* **download** raw http(s) addressible directories, including (but not limited to) Cloud storages;
+* **download** raw http(s) addressable directories, including (but not limited to) Cloud storages;
 * **promote** NFS or SMB shares accessible by one or multiple (or all) AIS target nodes;
 
 > The on-demand "way" is maybe the most popular, whereby users just start running their workloads against a [remote bucket](docs/providers.md) with AIS cluster positioned as an intermediate fast tier.

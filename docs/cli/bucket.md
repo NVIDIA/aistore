@@ -204,7 +204,7 @@ OPTIONS:
                         - all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster
    --cached             list only those objects from a remote bucket that are present ("cached")
    --name-only          faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)
-   --props value        comma-separated list of object properties including name, size, version, copies, and more; e.g.:
+   --props value        comma-separated list of object properties including name, size, version, copies and more; e.g.:
                         --props all
                         --props name,size,cached
                         --props "ec, copies, custom, location"
@@ -299,7 +299,7 @@ OPTIONS:
    --cached               list only in-cluster objects - only those objects from a remote bucket that are present ("cached")
    --name-only            faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)
 
-   --props value          comma-separated list of object properties including name, size, version, copies, and more; e.g.:
+   --props value          comma-separated list of object properties including name, size, version, copies and more; e.g.:
                           --props all
                           --props name,size,cached
                           --props "ec, copies, custom, location"
@@ -375,7 +375,7 @@ OPTIONS:
 | `--template` | `string` | template for matching object names, e.g.: 'shard-{900..999}.tar' | `""` |
 | `--prefix` | `string` | list objects matching a given prefix | `""` |
 | `--page-size` | `int` | maximum number of names per page (0 - the maximum is defined by the corresponding backend) | `0` |
-| `--props` | `string` | comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom metadata, location, and more; to include all properties, type '--props all' (default: "name,size") | `"name,size"` |
+| `--props` | `string` | comma-separated list of object properties including name, size, version, copies, EC data and parity info, custom metadata, location and more; to include all properties, type '--props all' (default: "name,size") | `"name,size"` |
 | `--limit` | `int` | limit object name count (0 - unlimited) | `0` |
 | `--show-unmatched` | `bool` | list objects that were not matched by regex and/or template | `false` |
 | `--all` | `bool` | depending on context: all objects (including misplaced ones and copies) _or_ all buckets (including remote buckets that are not present in the cluster) | `false` |
