@@ -83,9 +83,9 @@ redirect_from:
   - [CLI: `ais config`](/docs/cli/config.md)
   - [Feature flags](/docs/feature_flags.md)
 - Observability
-  - [Observability](/docs/metrics.md)
-    - [Reference: all supported metrics](/docs/metrics-reference.md)
   - [Prometheus](/docs/prometheus.md)
+    - [Reference: all supported metrics](/docs/metrics-reference.md)
+  - [Observability overview: StatsD and Prometheus, logs, and CLI](/docs/metrics.md)
   - [CLI: `ais show performance`](/docs/cli/show.md)
 - For users and developers
   - [Getting started](/docs/getting_started.md)

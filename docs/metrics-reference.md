@@ -7,7 +7,12 @@ redirect_from:
  - /docs/metrics-reference.md/
 ---
 
-## Common (targets and gateways) metrics
+## Table of Contents
+
+- [Common metrics: ais targets and gateways](#common-metrics-ais-targets-and-gateways)
+- [Target metrics](#target-metrics)
+
+## Common metrics: ais targets and gateways
 
 | Internal name | Public name | Internal Type | Description (Prometheus help) | Prometheus labels |
 | --- | --- | --- | --- | --- |
