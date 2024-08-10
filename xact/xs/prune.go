@@ -48,7 +48,7 @@ func (rp *prune) init(config *cmn.Config) {
 		// DoLoad:  noLoad
 	}
 	rmopts.Bck.Copy(rp.bckTo.Bucket())
-	rp.joggers = mpather.NewJoggerGroup(rmopts, config, "")
+	rp.joggers = mpather.NewJoggerGroup(rmopts, config, nil)
 	rp.filter = prob.NewDefaultFilter()
 	rp.same = rp.bckTo.Equal(rp.bckFrom, true, true)
 }

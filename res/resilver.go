@@ -114,10 +114,10 @@ func (res *Res) RunResilver(args Args) {
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
 	if args.SingleRmiJogger {
-		jg = mpather.NewJoggerGroup(opts, config, args.Rmi.Path)
+		jg = mpather.NewJoggerGroup(opts, config, args.Rmi)
 		nlog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
-		jg = mpather.NewJoggerGroup(opts, config, "")
+		jg = mpather.NewJoggerGroup(opts, config, nil)
 		if args.Rmi != nil {
 			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
 		} else {

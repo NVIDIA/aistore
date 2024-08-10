@@ -263,15 +263,13 @@ func AddMpath(t *testing.T, path string) {
 	tassert.Errorf(t, err == nil, "Failed adding mountpath %q, err: %v", path, err)
 }
 
-func AssertMountpathCount(t *testing.T, availableCount, disabledCount int) {
-	availableMountpaths, disabledMountpaths := fs.Get()
-	if len(availableMountpaths) != availableCount ||
-		len(disabledMountpaths) != disabledCount {
-		t.Errorf(
-			"wrong mountpaths: %d/%d, %d/%d",
-			len(availableMountpaths), availableCount,
-			len(disabledMountpaths), disabledCount,
-		)
+func AssertMountpathCount(t *testing.T, na, nd int) {
+	var (
+		avail, disabled = fs.Get()
+		la, ld          = len(avail), len(disabled)
+	)
+	if la != na || ld != nd {
+		t.Errorf("wrong mountpath count: avail (have %d, expect %d), disabled (have %d, expect %d)", la, na, ld, nd)
 	}
 }
 

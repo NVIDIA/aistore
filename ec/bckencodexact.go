@@ -100,7 +100,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		DoLoad:   mpather.LoadUnsafe,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
 	jg.Run()
 
 	select {

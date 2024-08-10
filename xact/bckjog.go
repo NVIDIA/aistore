@@ -18,7 +18,7 @@ type BckJog struct {
 
 func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts, config *cmn.Config) {
 	r.InitBase(id, kind, bck)
-	r.joggers = mpather.NewJoggerGroup(opts, config, "")
+	r.joggers = mpather.NewJoggerGroup(opts, config, nil)
 	r.Config = config
 }
 
@@ -33,6 +33,7 @@ func (r *BckJog) Wait() error {
 		}
 		return cmn.NewErrAborted(r.Name(), "x-bck-jog", errCause)
 	case <-r.joggers.ListenFinished():
-		return r.joggers.Stop()
+		err := r.joggers.Stop()
+		return err
 	}
 }

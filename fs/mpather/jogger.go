@@ -94,26 +94,29 @@ type (
 	}
 )
 
-func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, mpath string) *Jgroup {
+func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup {
 	var (
 		joggers map[string]*jogger
 		avail   = fs.GetAvail()
+		la      = len(avail)
 		wg, ctx = errgroup.WithContext(context.Background())
+		jg      = &Jgroup{wg: wg}
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
-	jg := &Jgroup{wg: wg}
 	opts.onFinish = jg.markFinished
 
 	switch {
-	case mpath != "":
-		joggers = make(map[string]*jogger, 1)
-		if mi, ok := avail[mpath]; ok {
-			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
+	case smi != nil: // selected mountpath
+		if _, ok := avail[smi.Path]; !ok {
+			nlog.Errorln(smi.String(), "is not available, nothing to do")
+		} else {
+			joggers = make(map[string]*jogger, 1)
+			joggers[smi.Path] = newJogger(ctx, opts, smi, config)
 		}
 	case opts.PerBucket:
 		debug.Assert(len(opts.Buckets) > 1)
-		joggers = make(map[string]*jogger, len(avail)*len(opts.Buckets))
+		joggers = make(map[string]*jogger, la*len(opts.Buckets))
 		for _, bck := range opts.Buckets {
 			nopts := *opts
 			nopts.Buckets = nil
@@ -125,16 +128,18 @@ func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, mpath string) *Jgroup 
 			}
 		}
 	default:
-		joggers = make(map[string]*jogger, len(avail))
+		joggers = make(map[string]*jogger, la)
 		for _, mi := range avail {
 			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
 		}
 	}
 
-	// this jogger group is a no-op (unlikely)
 	if len(joggers) == 0 {
-		_, disabled := fs.Get()
-		nlog.Errorf("%v: avail=%v, disabled=%v, selected=%q", cmn.ErrNoMountpaths, avail, disabled, mpath)
+		// this jogger group is a no-op (unlikely)
+		if smi == nil {
+			_, disabled := fs.Get()
+			nlog.Errorf("%v: avail=%v, disabled=%v", cmn.ErrNoMountpaths, avail, disabled)
+		}
 	}
 
 	jg.joggers = joggers
@@ -202,6 +207,12 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 }
 
 func (j *jogger) run() (err error) {
+	if err = j.mi.CheckFS(); err != nil {
+		nlog.Errorln(err)
+		core.T.FSHC(err, j.mi, "")
+		goto ex
+	}
+
 	if j.opts.Slab != nil {
 		if j.opts.Parallel <= 1 {
 			j.bufs = [][]byte{j.opts.Slab.Alloc()}
@@ -224,6 +235,7 @@ func (j *jogger) run() (err error) {
 		_, err = j.runBck(&j.opts.Bck)
 	}
 
+ex:
 	// cleanup
 	if j.opts.Slab != nil {
 		for _, buf := range j.bufs {
@@ -231,7 +243,7 @@ func (j *jogger) run() (err error) {
 		}
 	}
 	j.opts.onFinish()
-	return
+	return err
 }
 
 // run selected buckets, one at a time
