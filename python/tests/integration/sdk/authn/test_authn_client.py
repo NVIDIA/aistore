@@ -21,7 +21,7 @@ from tests.utils import random_string
 
 
 # pylint: disable=duplicate-code
-class TestAuthCLient(unittest.TestCase):
+class TestAuthNClient(unittest.TestCase):
     def setUp(self) -> None:
         # AIStore Client
         self.bck_name = random_string()

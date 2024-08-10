@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from aistore.sdk.authn import AuthNClient
-from aistore.sdk.authn.authn_types import TokenMsg, LoginMsg
+from aistore.sdk.authn.types import TokenMsg, LoginMsg
 
 from tests.utils import test_cases
 

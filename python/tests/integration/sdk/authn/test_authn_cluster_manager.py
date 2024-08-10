@@ -10,7 +10,7 @@ import pytest
 
 from aistore.sdk.authn.authn_client import AuthNClient
 from aistore.sdk.client import Client
-from aistore.sdk.authn.authn_types import ClusterInfo, ClusterList
+from aistore.sdk.authn.types import ClusterInfo, ClusterList
 from aistore.sdk.errors import AISError
 from tests.integration import (
     AIS_AUTHN_SU_NAME,
@@ -20,7 +20,7 @@ from tests.integration import (
 )
 
 
-class TestClusterManager(
+class TestAuthNClusterManager(
     unittest.TestCase
 ):  # pylint: disable=too-many-instance-attributes
     def setUp(self) -> None:

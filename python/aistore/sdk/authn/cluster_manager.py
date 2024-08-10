@@ -13,7 +13,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     URL_PATH_AUTHN_CLUSTERS,
 )
-from aistore.sdk.authn.authn_types import ClusterInfo, ClusterList
+from aistore.sdk.authn.types import ClusterInfo, ClusterList
 
 # logging
 logging.basicConfig(level=logging.INFO)

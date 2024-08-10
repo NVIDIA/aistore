@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.authn.authn_types import ClusterInfo, ClusterList
+from aistore.sdk.authn.types import ClusterInfo, ClusterList
 from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
@@ -17,7 +17,7 @@ from aistore.sdk.const import (
 )
 
 
-class TestClusterManager(unittest.TestCase):
+class TestAuthNClusterManager(unittest.TestCase):
     def setUp(self) -> None:
         self.endpoint = "http://authn-endpoint"
         self.mock_client = Mock(RequestClient)
