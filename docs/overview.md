@@ -25,6 +25,7 @@ The rest of this document is structured as follows:
 - [Terminology](#terminology)
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
+- [AIStore API](#aistore-api)
 - [Traffic Patterns](#traffic-patterns)
 - [Read-after-write consistency](#read-after-write-consistency)
 - [Open Format](#open-format)
@@ -56,21 +57,23 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
 
 ## Terminology
 
-* **Target** - storage node. In the docs and the code, instead of saying something like "storage node in an aistore cluster" we simply say "target."
+* **Target** - a storage node. To store user data, targets utilize **mountpaths** (see next). In the docs and the code, instead of saying something like "storage node in an aistore cluster" we simply say: "target."
 
-* **Proxy** - a **gateway** providing API access point. One of the proxies is elected, or designated, to be the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways. The terms "proxy" and "gateway" are often used interchangeably.
+* **Proxy** - a **gateway** providing [API](#aistore-api) access point. Proxies are diskless - they do not have direct access to user data, and do not "see" user data in-flight. One of the proxies is elected, or designated, as the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways (but only one _primary_ at any given time).
 
-> Each proxy/gateway implements RESTful APIs (both native and S3 compatible) and provides full access to user data stored in the cluster. Each proxy collaborates with other proxies in the cluster to perform majority-voted HA failover.
+> AIS proxy/gateway implements RESTful APIs, both [native](#aistore-api) and S3 compatible. Upon _primary_ failure, remaining proxies collaborate with each other to perform majority-voted HA failover. The terms "proxy" and "gateway" are used interchangeably.
 
-* [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
-
-* [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
+> In AIS cluster, there is no correlation between the numbers of proxies and targets, although for symmetry we usually deploy one proxy for each target (storage) node.
 
 * [Mountpath](configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath - meaning **no disk sharing**. Secondly, mountpath directories cannot be nested. Further:
    - a mountpath can be temporarily disabled and (re)enabled;
    - a mountpath can also be detached and (re)attached, thus effectively supporting growth and "shrinkage" of local capacity;
    - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
    - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
+
+* [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+
+* [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
 
 * [Xaction](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
@@ -108,6 +111,20 @@ If (compute + storage) rack is a *unit of deployment*, it may as well look as fo
 Finally, AIS target provides a number of storage services with [S3-like RESTful API](http_api.md) on top and a MapReduce layer that we call [dSort](#dsort).
 
 ![AIS target block diagram](images/ais-target-20-block.png)
+
+## AIStore API
+
+In addition to industry-standard [S3](/docs/s3compat.md), AIS provides its own (value-added) native API that can be (conveniently) called directly from Go and Python programs:
+
+- [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
+- [Python API](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
+- [HTTP REST](/docs/http_api.md)
+
+For Amazon S3 compatibility and related topics, see also:
+  - [`s3cmd` client](/docs/s3cmd.md)
+  - [S3 compatibility](/docs/s3compat.md)
+  - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
+  - [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)
 
 ## Traffic Patterns
 
