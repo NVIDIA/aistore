@@ -522,19 +522,19 @@ func (r *Trunner) _fshcMaybe(config *cmn.Config) {
 		return
 	}
 	if r.core.statsTime < 5*time.Second {
-		return // cannot reliably recompute to c.SoftErrTime (which is 10s or greater)
+		return // cannot reliably recompute to c.IOErrTime (which is 10s or greater)
 	}
 
 	n := r.numIOErrs()
 	d := n - r.ioErrs // since previous `r.log`
 	r.ioErrs = n
 
-	j := d * int64(c.SoftErrTime) / int64(r.core.statsTime) // recompute
-	if j < int64(c.SoftErrs) {
+	j := d * int64(c.IOErrTime) / int64(r.core.statsTime) // recompute
+	if j < int64(c.IOErrs) {
 		return
 	}
 
-	err := fmt.Errorf("## IO errors (%d) exceeded configured limit: (%d during %v)", d, c.SoftErrTime, c.SoftErrs)
+	err := fmt.Errorf("## IO errors (%d) exceeded configured limit: (%d during %v)", d, c.IOErrTime, c.IOErrs)
 	nlog.Errorln(err)
 	nlog.Warningln("waking up FSHC to check all mountpaths...") // _all_
 

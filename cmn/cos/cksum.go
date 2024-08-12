@@ -42,6 +42,7 @@ const (
 type (
 	noopHash struct{}
 
+	// in-cluster checksum validation (compare with cmn.ErrInvalidCksum)
 	ErrBadCksum struct {
 		prefix  string
 		a, b    any

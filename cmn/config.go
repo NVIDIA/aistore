@@ -380,15 +380,13 @@ type (
 		// or download from remote location (e.g., cloud bucket)
 		ValidateColdGet bool `json:"validate_cold_get"`
 
-		// validate object's version (if exists and provided) and its checksum -
-		// if either value fail to match, the object is removed from ais.
-		//
-		// NOTE: object versioning is backend-specific and is may _not_ be supported by a given
-		// (supported) backends - see docs for details.
+		// - validate in-cluster object's checksum(s);
+		// - upon any of the `cos.ErrBadCksum` errors try to recover from
+		//   local redundant copies, and/or EC slices, and/or remote backend if exists;
+		// - if all fails, remove the object and fail the GET.
 		ValidateWarmGet bool `json:"validate_warm_get"`
 
-		// determines whether to validate checksums of objects
-		// migrated or replicated within the cluster
+		// validate checksums of objects migrated or replicated within the cluster
 		ValidateObjMove bool `json:"validate_obj_move"`
 
 		// EnableReadRange: Return read range checksum otherwise return entire object checksum.
@@ -473,23 +471,28 @@ type (
 
 	FSHCConf struct {
 		TestFileCount int `json:"test_files"` // number of files to read/write
-		// critical and unexpected errors during FSHC run;
+		// critical and unexpected errors detected during FSHC run;
 		// exceeding the limit "triggers" FSHC that may, in turn, disable the corresponding mountpath
 		HardErrs int `json:"error_limit"`
-		// maximum number of non-critical errors during the last `SoftErrTime` interval;
-		// exceeding this limit is also FSHC-trggering event
-		SoftErrs int `json:"soft_err_limit"`
+
+		// - maximum number of I/O errors during the last `IOErrTime` interval;
+		// - the number does not include network error (e.g., connection reset by peer)
+		//   and errors returned by remote backends;
+		// - exceeding this limit is also an FSHC-trggering event; subsequently,
+		//   if FSHC confirms the problem it will disable the mountpath (see above)
+		IOErrs int `json:"io_err_limit"`
 		// time interval (in seconds) to accumulate soft errors;
-		// the total number by the end of the interval must not exceed `SoftErrs` (above)
-		SoftErrTime cos.Duration `json:"soft_err_time"`
-		// note: disabling FSHC is _not_ recommended
+		// the total number by the end of the interval must not exceed `IOErrs` (above)
+		IOErrTime cos.Duration `json:"io_err_time"`
+
+		// whether FSHC is enabled (note: disabling FSHC is _not_ recommended)
 		Enabled bool `json:"enabled"`
 	}
 	FSHCConfToSet struct {
 		TestFileCount *int          `json:"test_files,omitempty"`
 		HardErrs      *int          `json:"error_limit,omitempty"`
-		SoftErrs      *int          `json:"soft_err_limit,omitempty"`
-		SoftErrTime   *cos.Duration `json:"soft_err_time,omitempty"`
+		IOErrs        *int          `json:"io_err_limit,omitempty"`
+		IOErrTime     *cos.Duration `json:"io_err_time,omitempty"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
@@ -1250,8 +1253,8 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 /////////////
 
 const (
-	SoftErrTimeDflt = 10 * time.Second
-	SoftErrsLimit   = 100
+	IOErrTimeDflt = 10 * time.Second
+	IOErrsLimit   = 100
 )
 
 func (c *FSHCConf) Validate() error {
@@ -1263,19 +1266,19 @@ func (c *FSHCConf) Validate() error {
 	}
 
 	// [backward compatibility] when both "soft" knobs are missing
-	if c.SoftErrs == 0 && c.SoftErrTime == 0 {
-		c.SoftErrs = SoftErrsLimit
-		c.SoftErrTime = cos.Duration(SoftErrTimeDflt)
+	if c.IOErrs == 0 && c.IOErrTime == 0 {
+		c.IOErrs = IOErrsLimit
+		c.IOErrTime = cos.Duration(IOErrTimeDflt)
 	}
 
-	if c.SoftErrs < 10 {
-		return fmt.Errorf("invalid fshc.soft_err_limit %d (expecting >= %d)", c.SoftErrs, 10)
+	if c.IOErrs < 10 {
+		return fmt.Errorf("invalid fshc.io_err_limit %d (expecting >= %d)", c.IOErrs, 10)
 	}
-	if c.SoftErrTime < cos.Duration(10*time.Second) {
-		return fmt.Errorf("invalid fshc.soft_err_time %d (expecting >= %v)", c.SoftErrTime, 10*time.Second)
+	if c.IOErrTime < cos.Duration(10*time.Second) {
+		return fmt.Errorf("invalid fshc.io_err_time %d (expecting >= %v)", c.IOErrTime, 10*time.Second)
 	}
-	if c.SoftErrTime > cos.Duration(60*time.Second) {
-		return fmt.Errorf("invalid fshc.soft_err_time %d (expecting <= %v)", c.SoftErrTime, 60*time.Second)
+	if c.IOErrTime > cos.Duration(60*time.Second) {
+		return fmt.Errorf("invalid fshc.io_err_time %d (expecting <= %v)", c.IOErrTime, 60*time.Second)
 	}
 	return nil
 }

@@ -499,7 +499,8 @@ func IsErrGetCap(err error) bool {
 	return ok
 }
 
-// ErrInvalidCksum
+// ErrInvalidCksum - end-to-end client side protection
+// (compare with cos.ErrBadCksum)
 
 func (e *ErrInvalidCksum) Error() string {
 	return fmt.Sprintf("checksum: expected [%s], actual [%s]", e.expectedHash, e.actualHash)

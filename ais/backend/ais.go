@@ -529,7 +529,8 @@ func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *
 		return
 	}
 	unsetUUID(&remoteBck)
-	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent, true /*silent*/); err != nil {
+	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName,
+		api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}); err != nil {
 		ecode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
@@ -586,7 +587,8 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 			Query:  url.Values{apc.QparamSilent: []string{"true"}},
 		}
 	} else {
-		if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent, true /*silent*/); res.Err != nil {
+		hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
+		if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, hargs); res.Err != nil {
 			res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
 			return
 		}

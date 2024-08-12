@@ -224,7 +224,8 @@ func abortDownload(t *testing.T, id string) {
 }
 
 func verifyProps(t *testing.T, bck cmn.Bck, objName string, size int64, version string) *cmn.ObjectProps {
-	objProps, err := api.HeadObject(tools.BaseAPIParams(), bck, objName, apc.FltPresent, false /*silent*/)
+	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
+	objProps, err := api.HeadObject(tools.BaseAPIParams(), bck, objName, hargs)
 	tassert.CheckFatal(t, err)
 
 	tassert.Errorf(

@@ -127,6 +127,9 @@ const (
 	// deleted objects
 	QparamSync = "synchronize"
 
+	// validate (ie., recompute and check) in-cluster object's checksums
+	QparamValidateCksum = "validate-checksum"
+
 	// when true, skip nlog.Error and friends
 	// (to opt-out logging too many messages and/or benign warnings)
 	QparamSilent = "sln"
