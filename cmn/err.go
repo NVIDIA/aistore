@@ -94,8 +94,7 @@ type (
 		bck Bck
 	}
 	ErrRemoteMetadataMismatch struct {
-		localMD  map[string]string
-		remoteMD map[string]string
+		cause error
 	}
 
 	ErrCapExceeded struct {
@@ -405,11 +404,11 @@ func (*ErrInvalidBackendProvider) Is(err error) bool {
 
 // ErrRemoteMetadataMismatch
 
-func NewErrRemoteMetadataMismatch(localMD, remoteMD map[string]string) error {
-	return &ErrRemoteMetadataMismatch{localMD: localMD, remoteMD: remoteMD}
+func NewErrRemoteMetadataMismatch(cause error) error {
+	return &ErrRemoteMetadataMismatch{cause: cause}
 }
 func (e *ErrRemoteMetadataMismatch) Error() string {
-	return fmt.Sprintf("mismatch between local (%v) and remote (%v) metadata", e.localMD, e.remoteMD)
+	return fmt.Sprintf("metadata mismatch: %v", e.cause)
 }
 
 // ErrBusy

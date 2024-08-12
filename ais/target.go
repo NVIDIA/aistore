@@ -1036,13 +1036,13 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 }
 
 // NOTE: sets whdr.ContentLength = obj-size, with no response body
-func (t *target) objHead(r *http.Request, whdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
+func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
 	var (
 		fltPresence int
 		hasEC       bool
 		exists      = true
 	)
-	if tmp := query.Get(apc.QparamFltPresence); tmp != "" {
+	if tmp := q.Get(apc.QparamFltPresence); tmp != "" {
 		var erp error
 		fltPresence, erp = strconv.Atoi(tmp)
 		debug.AssertNoErr(erp)
@@ -1110,21 +1110,34 @@ func (t *target) objHead(r *http.Request, whdr http.Header, query url.Values, bc
 				op.EC.Generation = md.Generation
 			}
 		}
-	} else {
+	}
+
+	latest := cos.IsParseBool(q.Get(apc.QparamLatestVer))
+	if !exists || latest {
 		// cold HEAD
 		var oa *cmn.ObjAttrs
 		oa, ecode, err = t.HeadCold(lom, r)
 		if err != nil {
 			if ecode != http.StatusNotFound {
 				err = cmn.NewErrFailedTo(t, "HEAD", lom.Cname(), err)
+			} else if latest {
+				ecode = http.StatusGone
 			}
 			return
 		}
 		if apc.IsFltNoProps(fltPresence) {
 			return
 		}
-		op.ObjAttrs = *oa
-		op.ObjAttrs.Atime = 0
+
+		if exists && latest {
+			if e := op.ObjAttrs.CheckEq(oa); e != nil {
+				// (compare with lom.CheckRemoteMD)
+				return http.StatusNotFound, cmn.NewErrRemoteMetadataMismatch(e)
+			}
+		} else {
+			op.ObjAttrs = *oa
+			op.ObjAttrs.Atime = 0
+		}
 	}
 
 	// to header

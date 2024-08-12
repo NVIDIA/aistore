@@ -128,13 +128,14 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 
 	oa, ecode, err := T.HeadCold(lom, origReq)
 	if err == nil {
-		if !lom.IsFeatureSet(feat.DisableColdGET) || lom.Equal(oa) {
+		e := lom.CheckEq(oa)
+		if !lom.IsFeatureSet(feat.DisableColdGET) || e == nil {
 			debug.Assert(ecode == 0, ecode)
-			return CRMD{ObjAttrs: oa, Eq: lom.Equal(oa), ErrCode: ecode}
+			return CRMD{ObjAttrs: oa, Eq: e == nil, ErrCode: ecode}
 		}
 		// Cold Get disabled and metadata doesn't match, so we must treat
 		// it as if the object doesn't really exist.
-		err = cmn.NewErrRemoteMetadataMismatch(lom.GetCustomMD(), oa.GetCustomMD())
+		err = cmn.NewErrRemoteMetadataMismatch(e)
 		ecode = http.StatusNotFound
 	}
 

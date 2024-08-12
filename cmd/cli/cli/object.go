@@ -226,7 +226,8 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 
 func isObjPresent(c *cli.Context, bck cmn.Bck, objName string) error {
 	name := bck.Cname(objName)
-	_, err := api.HeadObject(apiBP, bck, objName, apc.FltPresentNoProps, true)
+	hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
+	_, err := api.HeadObject(apiBP, bck, objName, hargs)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "%s is not present (\"not cached\")\n", name)
@@ -255,22 +256,25 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 	var (
 		propsFlag     []string
 		selectedProps []string
-		fltPresence   = apc.FltPresentCluster
-		units, errU   = parseUnitsFlag(c, unitsFlag)
+		hargs         = api.HeadArgs{
+			FltPresence: apc.FltPresentCluster,
+			Silent:      flagIsSet(c, silentFlag),
+		}
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
 		return errU
 	}
 	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
-		fltPresence = apc.FltExists
+		hargs.FltPresence = apc.FltExists
 	}
-	objProps, err := api.HeadObject(apiBP, bck, objName, fltPresence, flagIsSet(c, silentFlag))
+	objProps, err := api.HeadObject(apiBP, bck, objName, hargs)
 	if err != nil {
 		if !cmn.IsStatusNotFound(err) {
 			return err
 		}
 		var hint string
-		if apc.IsFltPresent(fltPresence) && bck.IsRemote() {
+		if apc.IsFltPresent(hargs.FltPresence) && bck.IsRemote() {
 			if actionIsHandler(c.Command.Action, listAnyHandler) {
 				hint = fmt.Sprintf(" (tip: try %s option)", qflprn(allObjsOrBcksFlag))
 			} else {

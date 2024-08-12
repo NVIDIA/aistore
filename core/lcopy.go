@@ -232,8 +232,10 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
 		cplom := AllocLOM(lom.ObjName)
 		defer FreeLOM(cplom)
 		if errExists = cplom.InitFQN(copyFQN, lom.Bucket()); errExists == nil {
-			if errExists = cplom.Load(false /*cache it*/, true /*locked*/); errExists == nil && cplom.Equal(lom) {
-				goto add
+			if errExists = cplom.Load(false /*cache it*/, true /*locked*/); errExists == nil {
+				if cplom.CheckEq(lom) == nil {
+					goto add // skip copying
+				}
 			}
 		}
 	}

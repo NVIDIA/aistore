@@ -84,7 +84,7 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEnt, lom *core.LOM) {
 			var oa cmn.ObjAttrs
 			oa.CustomMD = md
 			oa.Size = e.Size
-			if !lom.Equal(&oa) {
+			if lom.CheckEq(&oa) != nil {
 				e.SetVerChanged()
 			}
 		}

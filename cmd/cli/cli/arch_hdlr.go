@@ -263,7 +263,8 @@ func archMultiObjHandler(c *cli.Context) error {
 		maxw = 8 * time.Second
 	}
 	for total < maxw {
-		if _, errV := api.HeadObject(apiBP, a.dst.bck, a.dst.oname, apc.FltPresentNoProps, true); errV == nil {
+		hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
+		if _, errV := api.HeadObject(apiBP, a.dst.bck, a.dst.oname, hargs); errV == nil {
 			goto ex
 		}
 		time.Sleep(sleep)

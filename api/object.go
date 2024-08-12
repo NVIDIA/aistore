@@ -325,6 +325,12 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn
 	if args.Silent {
 		q.Set(apc.QparamSilent, "true")
 	}
+	if args.LatestVer {
+		q.Set(apc.QparamLatestVer, "true")
+	}
+	if args.ValidateCksum {
+		q.Set(apc.QparamValidateCksum, "true")
+	}
 
 	reqParams := AllocRp()
 	defer FreeRp(reqParams)

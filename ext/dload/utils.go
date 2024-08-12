@@ -257,7 +257,7 @@ func CompareObjects(lom *core.LOM, dst *DstElement) (bool /*equal*/, error) {
 	oa := &cmn.ObjAttrs{}
 	oa.Size = attrsFromLink(dst.Link, resp, oa) // fill in from resp
 
-	return lom.Equal(oa), nil
+	return lom.CheckEq(oa) == nil, nil
 }
 
 // called via ais/prxnotifs generic mechanism

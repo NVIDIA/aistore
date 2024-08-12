@@ -261,7 +261,7 @@ func (oa *ObjAttrs) FromLsoEntry(e *LsoEnt) {
 //
 // Note that mismatch in any given checksum type immediately renders inequality and return
 // from the function.
-func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
+func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	var (
 		ver      string
 		md5      string
@@ -272,13 +272,13 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	)
 	// size check
 	if remSize := rem.Lsize(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
-		return false
+		return fmt.Errorf("size %d != %d remote", oa.Size, remSize)
 	}
 
 	// version check
 	if remVer, v := rem.Version(true), oa.Version(); remVer != "" && v != "" {
 		if v != remVer {
-			return false
+			return fmt.Errorf("version %s != %s remote", oa.Version(), remVer)
 		}
 		ver = v
 		// NOTE: ais own version is, currently, a nonunique sequence number - not counting
@@ -288,7 +288,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	} else if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(VersionObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
-				return false
+				return fmt.Errorf("version-md %s != %s remote", locMeta, remMeta)
 			}
 			count++
 			ver = locMeta
@@ -298,7 +298,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	// checksum check
 	if a, b := rem.Checksum(), oa.Cksum; !a.IsEmpty() && !b.IsEmpty() && a.Ty() == b.Ty() {
 		if !a.Equal(b) {
-			return false
+			return fmt.Errorf("%s checksum %s != %s remote", a.Ty(), b, a)
 		}
 		cksumVal = a.Val()
 		count++
@@ -308,7 +308,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(ETag); ok && locMeta != "" {
 			if remMeta != locMeta {
-				return false
+				return fmt.Errorf("ETag %s != %s remote", locMeta, remMeta)
 			}
 			etag = locMeta
 			if ver != locMeta && cksumVal != locMeta { // against double-counting
@@ -321,7 +321,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
-				return false
+				return fmt.Errorf("CRC32C %s != %s remote", locMeta, remMeta)
 			}
 			if cksumVal != locMeta {
 				count++
@@ -335,7 +335,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 		if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok && remMeta != "" {
 			if locMeta, ok := oa.GetCustomKey(MD5ObjMD); ok && locMeta != "" {
 				if remMeta != locMeta {
-					return
+					return fmt.Errorf("MD5 %s != %s remote", locMeta, remMeta)
 				}
 				md5 = locMeta
 				if etag != md5 && cksumVal != md5 {
@@ -347,19 +347,19 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 
 	switch {
 	case count >= 2: // e.g., equal because they have the same (version & md5, where version != md5)
-		return true
+		return nil
 	case count == 0:
-		return false
 	default:
 		// same version or ETag from the same (remote) backend
 		// (arguably, must be configurable)
 		if remMeta, ok := rem.GetCustomKey(SourceObjMD); ok && remMeta != "" {
 			if locMeta, ok := oa.GetCustomKey(SourceObjMD); ok && locMeta != "" {
 				if (ver != "" || etag != "") && remMeta == locMeta {
-					return true
+					return nil
 				}
 			}
 		}
 	}
-	return eq
+
+	return fmt.Errorf("local (%v) vs remote (%v)", oa.GetCustomMD(), rem.GetCustomMD())
 }

@@ -1624,7 +1624,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		}
 		attrs1 := oah.Attrs()
 		attrs2 := op.ObjAttrs
-		tassert.Errorf(t, attrs1.Equal(&attrs2), "PUT(obj) attrs %s != %s HEAD\n", attrs1.String(), attrs2.String())
+		tassert.Errorf(t, attrs1.CheckEq(&attrs2) == nil, "PUT(obj) attrs %s != %s HEAD\n", attrs1.String(), attrs2.String())
 	}
 }
 
