@@ -168,8 +168,11 @@ func IsErrOOS(err error) bool {
 }
 
 func isErrDNSLookup(err error) bool {
-	_, ok := err.(*net.DNSError)
-	return ok
+	if _, ok := err.(*net.DNSError); ok {
+		return ok
+	}
+	wrapped := &net.DNSError{}
+	return errors.As(err, &wrapped)
 }
 
 func IsUnreachable(err error, status int) bool {

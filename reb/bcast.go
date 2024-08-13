@@ -66,17 +66,18 @@ func bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 // pingTarget checks if target is running (type syncCallback)
 // TODO: reuse keepalive
 func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
+	const retries = 4
 	var (
 		ver    = rargs.smap.Version
 		sleep  = cmn.Rom.CplaneOperation()
 		logHdr = reb.logHdr(rargs.id, rargs.smap)
 		tname  = tsi.StringEx()
 	)
-	for i := range 4 {
+	for i := range retries {
 		_, code, err := core.T.Health(tsi, cmn.Rom.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {
-				nlog.Infof("%s: %s is online", logHdr, tname)
+				nlog.Infoln(logHdr+":", tname, "is now reachable")
 			}
 			return true
 		}
