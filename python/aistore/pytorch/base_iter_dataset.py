@@ -22,7 +22,7 @@ class AISBaseIterDataset(ABC, IterableDataset):
     Args:
         ais_source_list (Union[AISSource, List[AISSource]]): Single or list of AISSource objects to load data
         prefix_map (Dict(AISSource, List[str]), optional): Map of AISSource objects to list of prefixes that only allows
-        objects with the specified prefixes to be used from each source
+            objects with the specified prefixes to be used from each source
     """
 
     def __init__(
