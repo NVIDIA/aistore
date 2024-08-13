@@ -175,7 +175,7 @@ class TestBucketOps(RemoteEnabledTest):
 
         # cold GET must result in Error
         with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get(latest=True)
+            self.bucket.object(obj_name).get(latest=True).read_all()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -221,7 +221,7 @@ class TestBucketOps(RemoteEnabledTest):
         if expect_err:
             for obj_name in expected_res_dict:
                 with self.assertRaises(AISError):
-                    self.bucket.object(self.obj_prefix + obj_name).get()
+                    self.bucket.object(self.obj_prefix + obj_name).get().read_all()
         else:
             for obj_name, expected_data in expected_res_dict.items():
                 res = self.bucket.object(self.obj_prefix + obj_name).get()
@@ -279,9 +279,9 @@ class TestBucketOps(RemoteEnabledTest):
         )
         self.bucket.object(self.obj_prefix + included_filename).get()
         with self.assertRaises(AISError):
-            self.bucket.object(excluded_by_pattern).get()
+            self.bucket.object(excluded_by_pattern).get().read_all()
         with self.assertRaises(AISError):
-            self.bucket.object(excluded_by_prefix).get()
+            self.bucket.object(excluded_by_prefix).get().read_all()
 
     def test_put_files_dry_run(self):
         self._create_put_files_structure(TOP_LEVEL_FILES, LOWER_LEVEL_FILES)

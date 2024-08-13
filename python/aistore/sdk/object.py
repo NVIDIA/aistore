@@ -9,7 +9,6 @@ import requests
 from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
-    HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
     HTTP_METHOD_PUT,
     QPARAM_ARCHPATH,
@@ -115,7 +114,7 @@ class Object:
         byte_range: str = None,
     ) -> ObjectReader:
         """
-        Reads an object
+        Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
 
         Args:
             archive_settings (ArchiveSettings, optional): Settings for archive extraction
@@ -129,7 +128,8 @@ class Object:
                 both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
 
         Returns:
-            The stream of bytes to read an object or a file inside an archive.
+            An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
+            directly.
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -163,16 +163,11 @@ class Object:
             # https://www.rfc-editor.org/rfc/rfc7233#section-2.1
             headers = {HEADER_RANGE: byte_range}
 
-        resp = self._client.request(
-            HTTP_METHOD_GET,
+        obj_reader = ObjectReader(
+            client=self._client,
             path=self._object_path,
             params=params,
-            stream=True,
             headers=headers,
-        )
-        obj_reader = ObjectReader(
-            stream=resp,
-            response_headers=resp.headers,
             chunk_size=chunk_size,
         )
         if writer:

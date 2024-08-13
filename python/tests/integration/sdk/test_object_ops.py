@@ -50,20 +50,20 @@ class TestObjectOps(RemoteEnabledTest):
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
-        stream = self.bucket.object(obj_name).get(chunk_size=chunk_size)
+        reader = self.bucket.object(obj_name).get(chunk_size=chunk_size)
 
-        self.assertEqual(stream.attributes.size, len(exp_content))
-        self.assertNotEqual(stream.attributes.checksum_type, "")
-        self.assertNotEqual(stream.attributes.checksum_value, "")
-        self.assertNotEqual(stream.attributes.access_time, "")
+        self.assertEqual(reader.attributes.size, len(exp_content))
+        self.assertNotEqual(reader.attributes.checksum_type, "")
+        self.assertNotEqual(reader.attributes.checksum_value, "")
+        self.assertNotEqual(reader.attributes.access_time, "")
         if not REMOTE_SET:
-            self.assertNotEqual(stream.attributes.obj_version, "")
-            self.assertEqual(stream.attributes.custom_metadata, {})
+            self.assertNotEqual(reader.attributes.obj_version, "")
+            self.assertEqual(reader.attributes.custom_metadata, {})
         if read_type == OBJ_READ_TYPE_ALL:
-            obj = stream.read_all()
+            obj = reader.read_all()
         else:
             obj = b""
-            for chunk in stream:
+            for chunk in reader:
                 obj += chunk
         self.assertEqual(obj, exp_content)
 

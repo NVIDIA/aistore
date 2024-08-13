@@ -39,7 +39,7 @@ class RemoteEnabledTest(unittest.TestCase):
         self.bck_name = random_string()
         self.client = Client(CLUSTER_ENDPOINT)
         self.buckets = []
-        self.obj_prefix = f"{self._testMethodName}-{random_string(6)}-"
+        self.obj_prefix = f"{self._testMethodName}-{random_string(6)}"
 
         if REMOTE_SET:
             self.cloud_objects = []

@@ -7,7 +7,6 @@ from requests.structures import CaseInsensitiveDict
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
-    HTTP_METHOD_GET,
     HTTP_METHOD_PATCH,
     QPARAM_ARCHPATH,
     QPARAM_ARCHREGX,
@@ -18,13 +17,7 @@ from aistore.sdk.const import (
     QPARAM_NEW_CUSTOM,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
-    HEADER_CONTENT_LENGTH,
     HEADER_OBJECT_APPEND_HANDLE,
-    AIS_CHECKSUM_VALUE,
-    AIS_CHECKSUM_TYPE,
-    AIS_ACCESS_TIME,
-    AIS_VERSION,
-    AIS_CUSTOM_MD,
     HTTP_METHOD_POST,
     ACT_PROMOTE,
     ACT_BLOB_DOWNLOAD,
@@ -90,7 +83,7 @@ class TestObject(unittest.TestCase):
     def test_get(self):
         archpath_param = "archpath"
         chunk_size = "4mb"
-        num_workers = 10
+        num_workers = "10"
         self.expected_params[QPARAM_ARCHPATH] = archpath_param
         self.expected_params[QPARAM_ARCHREGX] = ""
         self.expected_params[QPARAM_ARCHMODE] = None
@@ -118,74 +111,35 @@ class TestObject(unittest.TestCase):
         self.get_exec_assert(archive_settings=archive_settings)
 
     def get_exec_assert(self, **kwargs):
-        content = b"123456789"
-        content_length = 9
-        ais_check_val = "xyz"
-        ais_check_type = "md5"
-        ais_atime = "time string"
-        ais_version = "3"
-        custom_metadata_dict = {"key1": "val1", "key2": "val2"}
-        custom_metadata = ", ".join(
-            ["=".join(kv) for kv in custom_metadata_dict.items()]
-        )
-        resp_headers = CaseInsensitiveDict(
-            {
-                HEADER_CONTENT_LENGTH: content_length,
-                AIS_CHECKSUM_VALUE: ais_check_val,
-                AIS_CHECKSUM_TYPE: ais_check_type,
-                AIS_ACCESS_TIME: ais_atime,
-                AIS_VERSION: ais_version,
-                AIS_CUSTOM_MD: custom_metadata,
-            }
-        )
-        mock_response = Mock(Response)
-        mock_response.headers = resp_headers
-        mock_response.iter_content.return_value = content
-        mock_response.raw = content
-        expected_obj = ObjectReader(
-            response_headers=resp_headers,
-            stream=mock_response,
-        )
-        self.mock_client.request.return_value = mock_response
+        with patch(
+            "aistore.sdk.object.ObjectReader", return_value=Mock(spec=ObjectReader)
+        ) as mock_obj_reader:
+            res = self.object.get(**kwargs)
 
-        res = self.object.get(**kwargs)
-        blob_download_settings = kwargs.get(
-            "blob_download_settings", BlobDownloadSettings()
-        )
-        chunk_size = blob_download_settings.chunk_size
-        num_workers = blob_download_settings.num_workers
-        headers = {}
-        if chunk_size or num_workers:
-            headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
-        if chunk_size:
-            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = chunk_size
-        if num_workers:
-            headers[HEADER_OBJECT_BLOB_WORKERS] = num_workers
+            blob_download_settings = kwargs.get(
+                "blob_download_settings", BlobDownloadSettings()
+            )
+            blob_chunk_size = blob_download_settings.chunk_size
+            blob_workers = blob_download_settings.num_workers
+            expected_headers = kwargs.get("expected_headers", {})
+            if blob_chunk_size or blob_workers:
+                expected_headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
+            if blob_chunk_size:
+                expected_headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
+            if blob_workers:
+                expected_headers[HEADER_OBJECT_BLOB_WORKERS] = blob_workers
+            expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
 
-        self.assertEqual(expected_obj.raw(), res.raw())
-        self.assertEqual(content_length, res.attributes.size)
-        self.assertEqual(ais_check_type, res.attributes.checksum_type)
-        self.assertEqual(ais_check_val, res.attributes.checksum_value)
-        self.assertEqual(ais_atime, res.attributes.access_time)
-        self.assertEqual(ais_version, res.attributes.obj_version)
-        self.assertEqual(custom_metadata_dict, res.attributes.custom_metadata)
-        self.mock_client.request.assert_called_with(
-            HTTP_METHOD_GET,
-            path=REQUEST_PATH,
-            params=self.expected_params,
-            stream=True,
-            headers=headers,
-        )
-
-        # Use the object reader iterator to call the stream with the chunk size
-        for _ in res:
-            continue
-        mock_response.iter_content.assert_called_with(
-            chunk_size=kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
-        )
-
-        if "writer" in kwargs:
-            self.mock_writer.writelines.assert_called_with(res)
+            self.assertIsInstance(res, ObjectReader)
+            mock_obj_reader.assert_called_with(
+                client=self.mock_client,
+                path=REQUEST_PATH,
+                params=self.expected_params,
+                headers=expected_headers,
+                chunk_size=expected_chunk_size,
+            )
+            if "writer" in kwargs:
+                self.mock_writer.writelines.assert_called_with(res)
 
     def test_get_url(self):
         expected_res = "full url"

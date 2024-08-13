@@ -180,7 +180,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
         with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get()
+            self.bucket.object(obj_name).get().read_all()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -247,7 +247,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         prefetch_job = self.bucket.objects(obj_names=[obj_name]).prefetch(latest=True)
         self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
         with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get()
+            self.bucket.object(obj_name).get().read_all()
 
     def _prefetch_and_check_with_latest(self, bucket, obj_name, expected, latest_flag):
         prefetch_job = bucket.objects(obj_names=[obj_name]).prefetch(latest=latest_flag)
