@@ -284,3 +284,13 @@ class TestObjectGroup(unittest.TestCase):
     def test_list_all_objects_iter(self):
         res = self.object_group.list_all_objects_iter(props=None)
         self.assertEqual(len(list(res)), len(self.obj_names))
+
+    def test_prefixes(self):
+        objs = list(self.object_group.list_all_objects_iter(prefix="obj"))
+        self.assertEqual(len(objs), len(self.obj_names))
+
+        objs = list(self.object_group.list_all_objects_iter(prefix="ojb"))
+        self.assertEqual(len(objs), 0)
+
+        objs = list(self.object_group.list_all_objects_iter(prefix="obj-1"))
+        self.assertEqual(len(objs), 1)

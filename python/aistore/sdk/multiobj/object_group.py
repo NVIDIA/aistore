@@ -111,10 +111,14 @@ class ObjectGroup(AISSource):
         """
         for obj_name in self._obj_collection:
 
+            # If object does not start the prefix, skip it
+            if not obj_name.startswith(prefix):
+                continue
+
             obj = self.bck.object(obj_name)
 
             if props is not None:
-                obj.head()  # updates the objects props as well
+                obj.head()  # Updates the objects props as well
 
             yield obj
 
