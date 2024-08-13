@@ -1363,7 +1363,6 @@ func (t *target) disable() {
 	smap := t.owner.smap.get()
 	if err := t.rmSelf(smap, false); err != nil {
 		t.regstate.mu.Unlock()
-		nlog.Errorln(t.String(), "failed to remove self from", smap.String()+":", err, "action:", apc.ActSelfRemove)
 		return
 	}
 	t.regstate.disabled.Store(true)

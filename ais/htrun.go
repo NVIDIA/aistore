@@ -2067,7 +2067,9 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 		if ignoreErr {
 			f = nlog.Infof
 		}
-		f("%s: failed to remove self from Smap: %v(%d)", h.si, err, status)
+		f("%s: failed to remove %s (self) from %s: %v(%d)", apc.ActSelfRemove, h.si, smap, err, status)
+	} else {
+		nlog.Infoln(apc.ActSelfRemove+":", h.String(), "(self) from", smap.StringEx())
 	}
 	freeCargs(cargs)
 	freeCR(res)

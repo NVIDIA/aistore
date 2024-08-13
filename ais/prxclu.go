@@ -2018,9 +2018,9 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	freeBcastRes(results)
 }
 
-/////////////////////////////////////////
-// DELET /v1/cluster - self-unregister //
-/////////////////////////////////////////
+//////////////////////////////////////////
+// DELETE /v1/cluster - self-unregister //
+//////////////////////////////////////////
 
 func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathCluDaemon.L, 1, false)
