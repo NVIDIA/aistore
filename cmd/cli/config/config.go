@@ -28,6 +28,8 @@ const (
 	defaultDockerIP  = "172.50.0.2"
 )
 
+const tipReset = "To reset config to system defaults, run 'ais config reset'. Or, edit the JSON file (above) directly."
+
 type (
 	ClusterConfig struct {
 		URL               string `json:"url"`
@@ -164,10 +166,24 @@ func (c *Config) validate() (err error) {
 	if c.DefaultProvider != "" && !apc.IsProvider(c.DefaultProvider) {
 		return fmt.Errorf("invalid default_provider value %q, expected one of [%s]", c.DefaultProvider, apc.Providers)
 	}
+
 	if c.Aliases == nil {
 		c.Aliases = DefaultAliasConfig
 	}
 	return nil
+}
+
+func (c *Config) ValidateTLS() (err error) {
+	err = cos.Stat(c.Cluster.Certificate)
+	if err == nil {
+		err = cos.Stat(c.Cluster.CertKey)
+	}
+	if err == nil {
+		return nil
+	}
+	path := filepath.Join(ConfigDir, fname.CliConfig)
+	return fmt.Errorf("CLI config at %s: invalid public/private key pair (%q,%q): %v",
+		path, c.Cluster.Certificate, c.Cluster.CertKey, err)
 }
 
 func Load(args []string, reset string) (*Config, error) {
@@ -178,16 +194,15 @@ func Load(args []string, reset string) (*Config, error) {
 	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, cfg); err != nil {
 		if !os.IsNotExist(err) {
 			if !cos.StringInSlice(reset, args) {
-				const tip = "To reset config to system defaults, run 'ais config reset'. Or, edit the JSON file (above) directly."
 				path := filepath.Join(ConfigDir, fname.CliConfig)
-				return nil, fmt.Errorf("failed to load CLI config %q: %v\n\n%s", path, err, tip)
+				return nil, fmt.Errorf("failed to load CLI config %q: %v\n\n%s", path, err, tipReset)
 			}
-			resetAndExit = true
+			resetAndExit = true // NOTE: just go ahead and reset
 		}
 
 		// revert to default config
 		if err = Save(&defaultConfig); err != nil {
-			return nil, err
+			return nil, err // (unlikely)
 		}
 		if resetAndExit {
 			fmt.Println("Done.")
@@ -198,7 +213,19 @@ func Load(args []string, reset string) (*Config, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, err
+		path := filepath.Join(ConfigDir, fname.CliConfig)
+		if cos.StringInSlice(reset, args) {
+			fmt.Fprintf(os.Stderr, "CLI config at %s: %v\n", path, err)
+			fmt.Fprintf(os.Stderr, "Resetting config to system defaults...\t")
+			time.Sleep(time.Second)
+			if err = Save(&defaultConfig); err != nil {
+				return nil, err // (unlikely)
+			}
+			fmt.Println("Done.")
+			os.Exit(0)
+		}
+
+		return nil, fmt.Errorf("CLI config at %s: %v\n\n%s", path, err, tipReset)
 	}
 	return cfg, nil
 }

@@ -777,8 +777,10 @@ func tokfile(c *cli.Context) (string, error) {
 	if tokenFile == "" {
 		tokenFile = filepath.Join(config.ConfigDir, fname.Token)
 	}
-	if tokenFile == "" {
-		return "", errors.New("missing token filename")
+	if err := cos.Stat(tokenFile); err != nil {
+		tip := fmt.Sprintf("(tip: to specify alternative location, use %s option or environment %q)",
+			qflprn(tokenFileFlag), env.AuthN.TokenFile)
+		return "", fmt.Errorf("missing authentication token at %s\n%s", filepath.Join(config.ConfigDir, fname.Token), tip)
 	}
-	return tokenFile, cos.Stat(tokenFile)
+	return tokenFile, nil
 }

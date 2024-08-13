@@ -108,7 +108,12 @@ func NewTLS(sargs TLSArgs) (tlsConf *tls.Config, _ error) {
 	if sargs.Certificate != "" {
 		cert, err := tls.LoadX509KeyPair(sargs.Certificate, sargs.Key)
 		if err != nil {
-			return nil, err
+			var hint string
+			if os.IsNotExist(err) {
+				hint = "\n(hint: check the two filenames for existence/accessibility)"
+			}
+			return nil, fmt.Errorf("client tls: failed to load public/private key pair: (%q, %q)%s",
+				sargs.Certificate, sargs.Key, hint)
 		}
 		tlsConf.Certificates = []tls.Certificate{cert}
 	}
@@ -137,7 +142,7 @@ func NewClientTLS(cargs TransportArgs, sargs TLSArgs) *http.Client {
 	// initialize TLS config
 	tlsConfig, err := NewTLS(sargs)
 	if err != nil {
-		cos.ExitLog(err)
+		cos.ExitLog(err) // FATAL
 	}
 	transport.TLSClientConfig = tlsConfig
 

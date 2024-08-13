@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -24,7 +24,7 @@ var loggedUserToken string
 func Init(args []string) (err error) {
 	cfg, err = config.Load(args, cmdReset)
 	if err != nil {
-		return
+		return err
 	}
 	// kubernetes
 	k8sDetected = detectK8s()
@@ -48,9 +48,7 @@ func Init(args []string) (err error) {
 		}
 	)
 
-	clientH = cmn.NewClient(cargs)
 	cmn.EnvToTLS(&sargs)
-	clientTLS = cmn.NewClientTLS(cargs, sargs)
 
 	apiBP = api.BaseParams{
 		URL:   clusterURL,
@@ -58,8 +56,13 @@ func Init(args []string) (err error) {
 		UA:    ua,
 	}
 	if cos.IsHTTPS(clusterURL) {
+		if err = cfg.ValidateTLS(); err != nil {
+			return err
+		}
+		clientTLS = cmn.NewClientTLS(cargs, sargs)
 		apiBP.Client = clientTLS
 	} else {
+		clientH = cmn.NewClient(cargs)
 		apiBP.Client = clientH
 	}
 
@@ -70,12 +73,18 @@ func Init(args []string) (err error) {
 			UA:    ua,
 		}
 		if cos.IsHTTPS(authnURL) {
+			if clientTLS == nil {
+				clientTLS = cmn.NewClientTLS(cargs, sargs)
+			}
 			authParams.Client = clientTLS
 		} else {
+			if clientH == nil {
+				clientH = cmn.NewClient(cargs)
+			}
 			authParams.Client = clientH
 		}
 	}
-	return
+	return nil
 }
 
 // resolving order:
