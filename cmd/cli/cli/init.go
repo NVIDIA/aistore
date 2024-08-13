@@ -74,6 +74,9 @@ func Init(args []string) (err error) {
 		}
 		if cos.IsHTTPS(authnURL) {
 			if clientTLS == nil {
+				if err = cfg.ValidateTLS(); err != nil {
+					return err
+				}
 				clientTLS = cmn.NewClientTLS(cargs, sargs)
 			}
 			authParams.Client = clientTLS
