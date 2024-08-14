@@ -4,7 +4,9 @@
 import os
 from urllib.parse import urljoin, urlencode
 from typing import Optional, TypeVar, Tuple, Type, Union, Any, Dict
-from requests import session, Session, Response
+from requests import Session, Response
+from requests.adapters import HTTPAdapter
+from urllib3 import Retry
 
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
@@ -18,6 +20,7 @@ from aistore.sdk.utils import handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
 
 T = TypeVar("T")
+DEFAULT_RETRY = Retry(total=6, connect=3, backoff_factor=1)
 
 
 # pylint: disable=unused-variable, duplicate-code, too-many-arguments
@@ -32,35 +35,42 @@ class RequestClient:
         timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
+        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
+            Default: Retry(total=6, connect=3, backoff_factor=1).
         token (str, optional): Authorization token.
     """
 
+    # pylint:disable=too-many-instance-attributes
     def __init__(
         self,
         endpoint: str,
         skip_verify: bool = False,
-        ca_cert: str = None,
+        ca_cert: Optional[str] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        retry: Retry = DEFAULT_RETRY,
         token: str = None,
     ):
         self._endpoint = endpoint
         self._base_url = urljoin(endpoint, "v1")
-        self._timeout = timeout
         self._skip_verify = skip_verify
         self._ca_cert = ca_cert
-        self._session = self.create_new_session()
         self._token = token
+        self._timeout = timeout
+        self._retry = retry
+        self._session = self._create_new_session()
 
-    def create_new_session(self) -> Session:
+    def _create_new_session(self) -> Session:
         """
         Creates a new requests session for HTTP requests.
 
         Returns:
             New HTTP request Session
         """
-        request_session = session()
+        request_session = Session()
         if "https" in self._endpoint:
             self._set_session_verification(request_session)
+        for protocol in ("http://", "https://"):
+            request_session.mount(protocol, HTTPAdapter(max_retries=self._retry))
         return request_session
 
     def _set_session_verification(self, request_session: Session):
@@ -181,7 +191,7 @@ class RequestClient:
             handle_errors(resp)
         return resp
 
-    def get_full_url(self, path: str, params: Dict[str, Any]):
+    def get_full_url(self, path: str, params: Dict[str, Any]) -> str:
         """
         Get the full URL to the path on the cluster with the parameters given
 

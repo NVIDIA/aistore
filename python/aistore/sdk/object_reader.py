@@ -1,5 +1,6 @@
 from typing import Iterator, List, Dict, Optional
 import requests
+
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE, HTTP_METHOD_GET, HTTP_METHOD_HEAD
 from aistore.sdk.object_attributes import ObjectAttributes
@@ -27,7 +28,7 @@ class ObjectReader:
         self._chunk_size = chunk_size
         self._attributes = None
 
-    def _head(self):
+    def _head(self) -> ObjectAttributes:
         """
         Make a head request to AIS to update and return only object attributes.
 
@@ -40,7 +41,7 @@ class ObjectReader:
         )
         return ObjectAttributes(resp.headers)
 
-    def _make_request(self, stream):
+    def _make_request(self, stream) -> requests.Response:
         """
         Make a request to AIS to get the object content.
 

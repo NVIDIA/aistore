@@ -4,6 +4,7 @@
 
 import logging
 from typing import Optional, Tuple, Union
+from urllib3 import Retry
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.const import (
     HTTP_METHOD_POST,
@@ -33,6 +34,7 @@ class AuthNClient:
         timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
+        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
         token (str, optional): Authorization token.
     """
 
@@ -42,11 +44,17 @@ class AuthNClient:
         skip_verify: bool = False,
         ca_cert: Optional[str] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        retry: Optional[Retry] = None,
         token: Optional[str] = None,
     ):
         logger.info("Initializing AuthNClient")
         self._request_client = RequestClient(
-            endpoint, skip_verify, ca_cert, timeout, token
+            endpoint=endpoint,
+            skip_verify=skip_verify,
+            ca_cert=ca_cert,
+            timeout=timeout,
+            retry=retry,
+            token=token,
         )
         logger.info("AuthNClient initialized with endpoint: %s", endpoint)
 

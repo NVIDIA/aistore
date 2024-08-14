@@ -27,6 +27,8 @@ class WorkerRequestClient(RequestClient):
             skip_verify=client._skip_verify,
             ca_cert=client._ca_cert,
             timeout=client._timeout,
+            retry=client._retry,
+            token=client._token,
         )
         self._worker_sessions = {}
 
@@ -41,5 +43,5 @@ class WorkerRequestClient(RequestClient):
             return self._session
         # if we only have one session but multiple workers, create more
         if worker_info.id not in self._worker_sessions:
-            self._worker_sessions[worker_info.id] = self.create_new_session()
+            self._worker_sessions[worker_info.id] = self._create_new_session()
         return self._worker_sessions[worker_info.id]

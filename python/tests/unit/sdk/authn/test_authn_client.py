@@ -5,6 +5,8 @@
 import unittest
 from unittest.mock import patch, Mock
 
+from urllib3 import Retry
+
 from aistore.sdk.authn import AuthNClient
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
 
@@ -20,30 +22,43 @@ class TestAuthNClient(unittest.TestCase):
     @patch("aistore.sdk.authn.authn_client.RequestClient")
     def test_init_defaults(self, mock_request_client):
         AuthNClient(self.endpoint)
-        mock_request_client.assert_called_with(self.endpoint, False, None, None, None)
+        mock_request_client.assert_called_with(
+            endpoint=self.endpoint,
+            skip_verify=False,
+            ca_cert=None,
+            timeout=None,
+            retry=None,
+            token=None,
+        )
 
     @test_cases(
-        (True, None, None, "dummy.token"),
-        (False, "ca_cert_location", None, None),
-        (False, None, 30.0, None),
-        (False, None, (10, 30.0), "dummy.token"),
+        (True, None, None, None, "dummy.token"),
+        (False, "ca_cert_location", None, None, None),
+        (False, None, 30.0, Retry(total=20), None),
+        (False, None, (10, 30.0), Retry(total=20), "dummy.token"),
     )
     @patch("aistore.sdk.authn.authn_client.RequestClient")
     def test_init(self, test_case, mock_request_client):
-        skip_verify, ca_cert, timeout, token = test_case
+        skip_verify, ca_cert, timeout, retry, token = test_case
         # print all vars
         print(
-            f"skip_verify: {skip_verify}, ca_cert: {ca_cert}, timeout: {timeout}, token: {token}"
+            f"skip_verify: {skip_verify}, ca_cert: {ca_cert}, timeout: {timeout}, retry: {retry}, token: {token}"
         )
         AuthNClient(
             self.endpoint,
             skip_verify=skip_verify,
             ca_cert=ca_cert,
             timeout=timeout,
+            retry=retry,
             token=token,
         )
         mock_request_client.assert_called_with(
-            self.endpoint, skip_verify, ca_cert, timeout, token
+            endpoint=self.endpoint,
+            skip_verify=skip_verify,
+            ca_cert=ca_cert,
+            timeout=timeout,
+            retry=retry,
+            token=token,
         )
 
     @patch("aistore.sdk.request_client.RequestClient.request_deserialize")

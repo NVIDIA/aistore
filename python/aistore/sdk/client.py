@@ -3,8 +3,9 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
-
 from typing import Optional, Tuple, Union
+
+from urllib3 import Retry
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
@@ -33,6 +34,7 @@ class Client:
         timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
+        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
         token (str, optional): Authorization token.
     """
 
@@ -42,10 +44,11 @@ class Client:
         skip_verify: bool = False,
         ca_cert: str = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        retry: Retry = None,
         token: str = None,
     ):
         self._request_client = RequestClient(
-            endpoint, skip_verify, ca_cert, timeout, token
+            endpoint, skip_verify, ca_cert, timeout, retry, token
         )
 
     def bucket(

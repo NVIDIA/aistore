@@ -4,6 +4,7 @@
 
 import unittest
 from unittest.mock import patch, MagicMock
+from urllib3.util import Retry
 
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
@@ -23,26 +24,29 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
     @patch("aistore.sdk.client.RequestClient")
     def test_init_defaults(self, mock_request_client):
         Client(self.endpoint)
-        mock_request_client.assert_called_with(self.endpoint, False, None, None, None)
+        mock_request_client.assert_called_with(
+            self.endpoint, False, None, None, None, None
+        )
 
     @test_cases(
-        (True, None, None, "dummy.token"),
-        (False, "ca_cert_location", None, None),
-        (False, None, 30.0, None),
-        (False, None, (10, 30.0), "dummy.token"),
+        (True, None, None, None, "dummy.token"),
+        (False, "ca_cert_location", None, None, None),
+        (False, None, 30.0, Retry(total=4), None),
+        (False, None, (10, 30.0), Retry(total=5, connect=2), "dummy.token"),
     )
     @patch("aistore.sdk.client.RequestClient")
     def test_init(self, test_case, mock_request_client):
-        skip_verify, ca_cert, timeout, token = test_case
+        skip_verify, ca_cert, timeout, retry, token = test_case
         Client(
             self.endpoint,
             skip_verify=skip_verify,
             ca_cert=ca_cert,
             timeout=timeout,
+            retry=retry,
             token=token,
         )
         mock_request_client.assert_called_with(
-            self.endpoint, skip_verify, ca_cert, timeout, token
+            self.endpoint, skip_verify, ca_cert, timeout, retry, token
         )
 
     def test_bucket(self):

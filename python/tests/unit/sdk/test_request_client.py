@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, Mock
 
+import urllib3
 from requests import Response
 
 from aistore.sdk.const import (
@@ -10,7 +11,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_TYPE,
     AIS_CLIENT_CA,
 )
-from aistore.sdk.request_client import RequestClient
+from aistore.sdk.request_client import RequestClient, DEFAULT_RETRY
 from aistore.version import __version__ as sdk_version
 from tests.utils import test_cases
 
@@ -19,7 +20,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.endpoint = "https://aistore-endpoint"
         self.mock_session = Mock()
-        with patch("aistore.sdk.request_client.session") as mock_session:
+        with patch("aistore.sdk.request_client.Session") as mock_session:
             mock_session.return_value = self.mock_session
             self.request_client = RequestClient(
                 self.endpoint, skip_verify=True, ca_cert=""
@@ -37,6 +38,31 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             self.request_client = RequestClient(self.endpoint)
             mock_getenv.assert_called_with(AIS_CLIENT_CA)
             self.assertEqual(True, self.request_client.session.verify)
+            self.assertEqual(
+                DEFAULT_RETRY,
+                self.request_client.session.get_adapter(self.endpoint).max_retries,
+            )
+            self.assertIsNone(self.request_client.token)
+
+    def test_custom_retry(self):
+        custom_retry = urllib3.util.Retry(total=40, connect=2)
+        self.request_client = RequestClient(self.endpoint, retry=custom_retry)
+        self.assertEqual(
+            custom_retry,
+            self.request_client.session.get_adapter(self.endpoint).max_retries,
+        )
+
+    @patch("aistore.sdk.request_client.Session")
+    def test_session_timeout(self, mock_session_init):
+        mock_session = Mock()
+        mock_session.request.return_value = Mock(status_code=200)
+        mock_session_init.return_value = mock_session
+        custom_timeout = (10, 30.0)
+        request_client = RequestClient("", timeout=custom_timeout)
+        request_client.request("method", "path")
+        mock_session.request.assert_called_with(
+            "method", "v1/path", headers=self.request_headers, timeout=custom_timeout
+        )
 
     @test_cases(
         (("env-cert", "arg-cert", False), "arg-cert"),
@@ -45,7 +71,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         ((True, None, False), True),
         ((None, None, True), False),
     )
-    def test_session(self, test_case):
+    def test_session_tls(self, test_case):
         env_cert, arg_cert, skip_verify = test_case[0]
         with patch(
             "aistore.sdk.request_client.os.getenv", return_value=env_cert
