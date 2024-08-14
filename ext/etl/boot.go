@@ -172,7 +172,7 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 	}
 
 	if err != nil {
-		err = cmn.NewErrETL(b.errCtx, "failed to create %s (err: %v)", entity, err)
+		err = cmn.NewErrETLf(b.errCtx, "failed to create %s (err: %v)", entity, err)
 	}
 	return err
 }
@@ -190,7 +190,7 @@ func (b *etlBootstrapper) waitPodReady() error {
 		client, err = k8s.GetClient()
 	)
 	if err != nil {
-		return cmn.NewErrETL(b.errCtx, "%v", err)
+		return cmn.NewErrETL(b.errCtx, err.Error())
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("waiting pod %q ready (%+v, %s) timeout=%v ival=%v",
@@ -208,9 +208,9 @@ func (b *etlBootstrapper) waitPodReady() error {
 	}
 	pod, _ := client.Pod(b.pod.Name)
 	if pod == nil {
-		return cmn.NewErrETL(b.errCtx, "%v", err)
+		return cmn.NewErrETL(b.errCtx, err.Error())
 	}
-	err = cmn.NewErrETL(b.errCtx,
+	err = cmn.NewErrETLf(b.errCtx,
 		`%v (pod phase: %q, pod conditions: %s; expected condition: %s)`,
 		err, pod.Status.Phase, podConditionsToString(pod.Status.Conditions),
 		podConditionToString(&corev1.PodCondition{Type: corev1.PodReady, Status: corev1.ConditionTrue}),

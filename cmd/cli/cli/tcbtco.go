@@ -228,7 +228,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	fmt.Fprintf(c.App.Writer, tcbtcoCptn("Copying", bckFrom, bckTo)+" ...")
+	fmt.Fprint(c.App.Writer, tcbtcoCptn("Copying", bckFrom, bckTo)+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
 	if err := waitXact(&xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)

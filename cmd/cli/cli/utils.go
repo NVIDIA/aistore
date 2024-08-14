@@ -637,7 +637,7 @@ func isUnsetTime(c *cli.Context, ts string) bool {
 }
 
 func readValue(c *cli.Context, prompt string) string {
-	fmt.Fprintf(c.App.Writer, prompt+": ")
+	fmt.Fprint(c.App.Writer, prompt+": ")
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {

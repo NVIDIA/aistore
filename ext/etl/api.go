@@ -178,19 +178,21 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 }
 
 func (m *InitMsgBase) validate(detail string) error {
+	const ferr = "%v [%s]"
+
 	if err := k8s.ValidateEtlName(m.IDX); err != nil {
-		return fmt.Errorf("%v [%s]", err, detail)
+		return fmt.Errorf(ferr, err, detail)
 	}
 
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 	if m.CommTypeX != "" && !cos.StringInSlice(m.CommTypeX, commTypes) {
 		err := fmt.Errorf("unknown comm-type %q", m.CommTypeX)
-		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
 
 	if !cos.StringInSlice(m.ArgTypeX, argTypes) {
 		err := fmt.Errorf("unsupported arg-type %q", m.ArgTypeX)
-		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
 
 	//
@@ -198,12 +200,12 @@ func (m *InitMsgBase) validate(detail string) error {
 	//
 	if m.ArgTypeX == ArgTypeURL && m.CommTypeX != Hpull {
 		err := fmt.Errorf("arg-type %q requires comm-type %q (%q is not supported yet)", m.ArgTypeX, Hpull, m.CommTypeX)
-		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
 	if m.ArgTypeX == ArgTypeFQN && !(m.CommTypeX == Hpull || m.CommTypeX == Hpush) {
 		err := fmt.Errorf("arg-type %q requires comm-type (%q or %q) - %q is not supported yet",
 			m.ArgTypeX, Hpull, Hpush, m.CommTypeX)
-		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
 
 	//
@@ -212,7 +214,7 @@ func (m *InitMsgBase) validate(detail string) error {
 	if m.ArgTypeX == ArgTypeFQN && cmn.Rom.Features().IsSet(feat.DontAllowPassingFQNtoETL) {
 		err := fmt.Errorf("arg-type %q is not permitted by the configured feature flags (%s)",
 			m.ArgTypeX, cmn.Rom.Features().String())
-		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
 
 	// NOTE: default comm-type
@@ -265,15 +267,15 @@ func (m *InitSpecMsg) Validate() (err error) {
 		return err
 	}
 	if len(pod.Spec.Containers) != 1 {
-		err = cmn.NewErrETL(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
+		err = cmn.NewErrETLf(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
 		return
 	}
 	container := pod.Spec.Containers[0]
 	if len(container.Ports) != 1 {
-		return cmn.NewErrETL(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
+		return cmn.NewErrETLf(errCtx, "unsupported number of container ports (%d), expected: 1", len(container.Ports))
 	}
 	if container.Ports[0].Name != k8s.Default {
-		return cmn.NewErrETL(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
+		return cmn.NewErrETLf(errCtx, "expected port name: %q, got: %q", k8s.Default, container.Ports[0].Name)
 	}
 
 	// Validate that user container supports health check.
@@ -292,7 +294,7 @@ func (m *InitSpecMsg) Validate() (err error) {
 	// Currently we need the `default` port (on which the application runs)
 	// to be same as the `readiness` probe port in the pod spec.
 	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
-		return cmn.NewErrETL(errCtx, "readinessProbe port must be the %q port", k8s.Default)
+		return cmn.NewErrETLf(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 	}
 	return nil
 }
@@ -300,12 +302,12 @@ func (m *InitSpecMsg) Validate() (err error) {
 func ParsePodSpec(errCtx *cmn.ETLErrCtx, spec []byte) (*corev1.Pod, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
 	if err != nil {
-		return nil, cmn.NewErrETL(errCtx, "failed to parse pod spec: %v\n%q", err, string(spec))
+		return nil, cmn.NewErrETLf(errCtx, "failed to parse pod spec: %v\n%q", err, string(spec))
 	}
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		kind := obj.GetObjectKind().GroupVersionKind().Kind
-		return nil, cmn.NewErrETL(errCtx, "expected pod spec, got: %s", kind)
+		return nil, cmn.NewErrETL(errCtx, "expected pod spec, got: "+kind)
 	}
 	return pod, nil
 }

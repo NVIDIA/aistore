@@ -233,7 +233,7 @@ func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 }
 
 func readMasked(c *cli.Context, prompt string) string {
-	fmt.Fprintf(c.App.Writer, prompt+": ")
+	fmt.Fprint(c.App.Writer, prompt+": ")
 	bytePass, err := term.ReadPassword(0)
 	if err != nil {
 		return ""

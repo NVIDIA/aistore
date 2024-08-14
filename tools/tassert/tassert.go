@@ -59,17 +59,31 @@ func DoAndCheckResp(tb testing.TB, client *http.Client, req *http.Request, statu
 	Errorf(tb, false, "expected %v status code, got %d", statusCode, resp.StatusCode)
 }
 
-func Fatalf(tb testing.TB, cond bool, msg string, args ...any) {
+func Fatal(tb testing.TB, cond bool, msg string) {
 	if !cond {
 		printStack()
-		tb.Fatalf(msg, args...)
+		tb.Fatal(msg)
 	}
 }
 
-func Errorf(tb testing.TB, cond bool, msg string, args ...any) {
+func Fatalf(tb testing.TB, cond bool, format string, args ...any) {
 	if !cond {
 		printStack()
-		tb.Errorf(msg, args...)
+		tb.Fatalf(format, args...)
+	}
+}
+
+func Error(tb testing.TB, cond bool, msg string) {
+	if !cond {
+		printStack()
+		tb.Error(msg, msg)
+	}
+}
+
+func Errorf(tb testing.TB, cond bool, format string, args ...any) {
+	if !cond {
+		printStack()
+		tb.Errorf(format, args...)
 	}
 }
 

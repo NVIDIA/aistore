@@ -1673,7 +1673,7 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 			msg      = &apc.ActMsg{Action: action}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {
-			p.writeErrf(w, r, err.Error())
+			p.writeErr(w, r, err)
 			return
 		}
 		if transient := cos.IsParseBool(query.Get(apc.ActTransient)); transient {

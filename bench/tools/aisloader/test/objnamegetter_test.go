@@ -112,14 +112,16 @@ func checkGetsAllObjNames(t *testing.T, getter namegetter.ObjectNameGetter, name
 		m[getter.ObjName()] = struct{}{}
 	}
 
-	tassert.Fatalf(t, len(m) == objNamesSize, "%s has not visited every element; got %d, expected %d", name, len(m), objNamesSize)
+	tassert.Fatalf(t, len(m) == objNamesSize,
+		"%s has not visited every element; got %d, expected %d", name, len(m), objNamesSize)
 
 	// Check that starting operation for the beginning still works as expected
 	m = make(map[string]struct{})
 	for range objNamesSize {
 		m[getter.ObjName()] = struct{}{}
 	}
-	tassert.Fatalf(t, len(m) == objNamesSize, "%s has not visited every element for second time; got %d, expected %d", name, len(m), objNamesSize)
+	tassert.Fatalf(t, len(m) == objNamesSize,
+		"%s has not visited every element for second time; got %d, expected %d", name, len(m), objNamesSize)
 }
 
 func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter, name string) {
@@ -137,5 +139,5 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter
 		s2[i] = getter.ObjName()
 	}
 
-	tassert.Fatalf(t, !reflect.DeepEqual(s1, s2), name+" is not random!")
+	tassert.Fatal(t, !reflect.DeepEqual(s1, s2), name+" is not random!")
 }

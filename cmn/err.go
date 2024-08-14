@@ -722,7 +722,12 @@ func (e *ErrMissingBackend) Error() string {
 
 // ErrETL
 
-func NewErrETL(ctx *ETLErrCtx, format string, a ...any) *ErrETL {
+func NewErrETL(ctx *ETLErrCtx, msg string) *ErrETL {
+	e := &ErrETL{Reason: msg}
+	return e.WithContext(ctx)
+}
+
+func NewErrETLf(ctx *ETLErrCtx, format string, a ...any) *ErrETL {
 	e := &ErrETL{
 		Reason: fmt.Sprintf(format, a...),
 	}

@@ -978,11 +978,11 @@ func TestListObjectsProps(t *testing.T) {
 				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEnt) {
 					tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 					if bck.IsAIS() || remoteVersioning {
-						tassert.Errorf(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
+						tassert.Error(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
 					}
-					tassert.Errorf(t, en.Copies > 0, "copies is not set")
+					tassert.Error(t, en.Copies > 0, "copies is not set")
 
-					tassert.Errorf(t, en.Atime == "", "atime is set")
+					tassert.Error(t, en.Atime == "", "atime is set")
 					tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
 				})
 
@@ -999,7 +999,7 @@ func TestListObjectsProps(t *testing.T) {
 			checkProps(useCache, apc.GetPropsAll, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 				if bck.IsAIS() || remoteVersioning {
-					tassert.Errorf(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
+					tassert.Error(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
 				}
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, en.Atime != "", "atime is not set")
