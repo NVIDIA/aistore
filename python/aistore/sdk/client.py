@@ -14,6 +14,7 @@ from aistore.sdk.const import (
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.dsort import Dsort
 from aistore.sdk.request_client import RequestClient
+from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
 from aistore.sdk.etl import Etl
@@ -47,8 +48,14 @@ class Client:
         retry: Retry = None,
         token: str = None,
     ):
+        session_manager = SessionManager(
+            retry=retry, ca_cert=ca_cert, skip_verify=skip_verify
+        )
         self._request_client = RequestClient(
-            endpoint, skip_verify, ca_cert, timeout, retry, token
+            endpoint=endpoint,
+            session_manager=session_manager,
+            timeout=timeout,
+            token=token,
         )
 
     def bucket(

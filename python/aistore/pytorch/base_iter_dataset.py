@@ -4,16 +4,15 @@ Base class for AIS Iterable Style Datasets
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import List, Union, Iterable, Dict, Iterator, Tuple
-from aistore.sdk.ais_source import AISSource
-from torch.utils.data import IterableDataset
-from abc import ABC, abstractmethod
-from aistore.pytorch.worker_request_client import WorkerRequestClient
-import torch.utils.data as torch_utils
 from itertools import islice
+from typing import List, Union, Iterable, Dict, Iterator, Tuple
+import torch.utils.data as torch_utils
+from abc import ABC, abstractmethod
+from aistore.sdk.ais_source import AISSource
+from aistore.pytorch.worker_session_manager import WorkerSessionManager
 
 
-class AISBaseIterDataset(ABC, IterableDataset):
+class AISBaseIterDataset(ABC, torch_utils.IterableDataset):
     """
     A base class for creating AIS Iterable Datasets. Should not be instantiated directly. Subclasses
     should implement :meth:`__iter__` which returns the samples from the dataset and can optionally
@@ -51,7 +50,10 @@ class AISBaseIterDataset(ABC, IterableDataset):
         """
         for source in self._ais_source_list:
             # Add pytorch worker support to the internal request client
-            source.client = WorkerRequestClient(source.client)
+            # TODO: Do not modify the provided source client
+            source.client.session_manager = WorkerSessionManager(
+                source.client.session_manager
+            )
             if source not in self._prefix_map or self._prefix_map[source] is None:
                 for sample in source.list_all_objects_iter(prefix=""):
                     yield sample

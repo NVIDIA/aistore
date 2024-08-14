@@ -1,26 +1,22 @@
 #
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
-import os
 from urllib.parse import urljoin, urlencode
-from typing import Optional, TypeVar, Tuple, Type, Union, Any, Dict
-from requests import Session, Response
-from requests.adapters import HTTPAdapter
-from urllib3 import Retry
+from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
+from requests import Response
 
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
-    AIS_CLIENT_CA,
     HEADER_AUTHORIZATION,
 )
+from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.utils import handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
 
 T = TypeVar("T")
-DEFAULT_RETRY = Retry(total=6, connect=3, backoff_factor=1)
 
 
 # pylint: disable=unused-variable, duplicate-code, too-many-arguments
@@ -30,66 +26,24 @@ class RequestClient:
 
     Args:
         endpoint (str): AIStore endpoint
-        skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
-        ca_cert (str, optional): Path to a CA certificate file for SSL verification.
+        session_manager (SessionManager): SessionManager for creating and accessing requests session
         timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
-        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
-            Default: Retry(total=6, connect=3, backoff_factor=1).
         token (str, optional): Authorization token.
     """
 
-    # pylint:disable=too-many-instance-attributes
     def __init__(
         self,
         endpoint: str,
-        skip_verify: bool = False,
-        ca_cert: Optional[str] = None,
+        session_manager: SessionManager,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
-        retry: Retry = DEFAULT_RETRY,
         token: str = None,
     ):
-        self._endpoint = endpoint
         self._base_url = urljoin(endpoint, "v1")
-        self._skip_verify = skip_verify
-        self._ca_cert = ca_cert
+        self._session_manager = session_manager
         self._token = token
         self._timeout = timeout
-        self._retry = retry
-        self._session = self._create_new_session()
-
-    def _create_new_session(self) -> Session:
-        """
-        Creates a new requests session for HTTP requests.
-
-        Returns:
-            New HTTP request Session
-        """
-        request_session = Session()
-        if "https" in self._endpoint:
-            self._set_session_verification(request_session)
-        for protocol in ("http://", "https://"):
-            request_session.mount(protocol, HTTPAdapter(max_retries=self._retry))
-        return request_session
-
-    def _set_session_verification(self, request_session: Session):
-        """
-        Set session verify value for validating the server's SSL certificate
-        The requests library allows this to be a boolean or a string path to the cert
-        If we do not skip verification, the order is:
-          1. Provided cert path
-          2. Cert path from env var.
-          3. True (verify with system's approved CA list)
-        """
-        if self._skip_verify:
-            request_session.verify = False
-            return
-        if self._ca_cert:
-            request_session.verify = self._ca_cert
-            return
-        env_crt = os.getenv(AIS_CLIENT_CA)
-        request_session.verify = env_crt if env_crt else True
 
     @property
     def base_url(self):
@@ -99,21 +53,34 @@ class RequestClient:
         return self._base_url
 
     @property
-    def endpoint(self):
+    def timeout(self):
         """
-        Returns: AIS cluster endpoint
+        Returns: Timeout for requests
         """
-        return self._endpoint
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, timeout: Union[float, Tuple[float, float]]):
+        """
+        Set timeout for all requests from this client
+        Args:
+            timeout: Request timeout
+        """
+        self._timeout = timeout
 
     @property
-    def session(self):
+    def session_manager(self) -> SessionManager:
         """
-        Returns: Active request session
+        Returns: SessionManager used to create sessions for this client
         """
-        return self._session
+        return self._session_manager
+
+    @session_manager.setter
+    def session_manager(self, session_manager):
+        self._session_manager = session_manager
 
     @property
-    def token(self):
+    def token(self) -> str:
         """
         Returns: Token for Authorization
         """
@@ -180,7 +147,7 @@ class RequestClient:
         if self.token:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
 
-        resp = self.session.request(
+        resp = self.session_manager.session.request(
             method,
             url,
             headers=headers,

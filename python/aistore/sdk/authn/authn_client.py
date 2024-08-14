@@ -13,6 +13,7 @@ from aistore.sdk.const import (
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
 from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.authn.role_manager import RoleManager
+from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.authn.user_manager import UserManager
 
 # logging
@@ -49,12 +50,13 @@ class AuthNClient:
         token: Optional[str] = None,
     ):
         logger.info("Initializing AuthNClient")
+        session_manager = SessionManager(
+            retry=retry, ca_cert=ca_cert, skip_verify=skip_verify
+        )
         self._request_client = RequestClient(
             endpoint=endpoint,
-            skip_verify=skip_verify,
-            ca_cert=ca_cert,
+            session_manager=session_manager,
             timeout=timeout,
-            retry=retry,
             token=token,
         )
         logger.info("AuthNClient initialized with endpoint: %s", endpoint)

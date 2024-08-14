@@ -1,17 +1,16 @@
 import unittest
 from unittest.mock import patch, Mock
 
-import urllib3
-from requests import Response
+from requests import Response, Session
 
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
-    AIS_CLIENT_CA,
 )
-from aistore.sdk.request_client import RequestClient, DEFAULT_RETRY
+from aistore.sdk.request_client import RequestClient
+from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
 from tests.utils import test_cases
 
@@ -19,95 +18,83 @@ from tests.utils import test_cases
 class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.endpoint = "https://aistore-endpoint"
-        self.mock_session = Mock()
-        with patch("aistore.sdk.request_client.Session") as mock_session:
-            mock_session.return_value = self.mock_session
-            self.request_client = RequestClient(
-                self.endpoint, skip_verify=True, ca_cert=""
-            )
-
+        self.mock_response = Mock(name="Mock response", spec=Response)
+        self.mock_session = Mock(name="Mock session", spec=Session)
+        self.mock_session.request.return_value = self.mock_response
+        self.mock_session_manager = Mock(spec=SessionManager, session=self.mock_session)
         self.request_headers = {
             HEADER_CONTENT_TYPE: JSON_CONTENT_TYPE,
             HEADER_USER_AGENT: f"{USER_AGENT_BASE}/{sdk_version}",
         }
+        self.default_request_client = RequestClient(
+            self.endpoint, self.mock_session_manager
+        )
 
-    def test_default_session(self):
-        with patch(
-            "aistore.sdk.request_client.os.getenv", return_value=None
-        ) as mock_getenv:
-            self.request_client = RequestClient(self.endpoint)
-            mock_getenv.assert_called_with(AIS_CLIENT_CA)
-            self.assertEqual(True, self.request_client.session.verify)
-            self.assertEqual(
-                DEFAULT_RETRY,
-                self.request_client.session.get_adapter(self.endpoint).max_retries,
-            )
-            self.assertIsNone(self.request_client.token)
-
-    def test_custom_retry(self):
-        custom_retry = urllib3.util.Retry(total=40, connect=2)
-        self.request_client = RequestClient(self.endpoint, retry=custom_retry)
+    def test_init_default(self):
+        self.assertEqual(self.endpoint + "/v1", self.default_request_client.base_url)
         self.assertEqual(
-            custom_retry,
-            self.request_client.session.get_adapter(self.endpoint).max_retries,
+            self.mock_session_manager, self.default_request_client.session_manager
         )
-
-    @patch("aistore.sdk.request_client.Session")
-    def test_session_timeout(self, mock_session_init):
-        mock_session = Mock()
-        mock_session.request.return_value = Mock(status_code=200)
-        mock_session_init.return_value = mock_session
-        custom_timeout = (10, 30.0)
-        request_client = RequestClient("", timeout=custom_timeout)
-        request_client.request("method", "path")
-        mock_session.request.assert_called_with(
-            "method", "v1/path", headers=self.request_headers, timeout=custom_timeout
-        )
+        self.assertIsNone(self.default_request_client.timeout)
 
     @test_cases(
-        (("env-cert", "arg-cert", False), "arg-cert"),
-        (("env-cert", "arg-cert", True), False),
-        (("env-cert", None, False), "env-cert"),
-        ((True, None, False), True),
-        ((None, None, True), False),
+        10,
+        30.0,
+        (10, 30.0),
     )
-    def test_session_tls(self, test_case):
-        env_cert, arg_cert, skip_verify = test_case[0]
-        with patch(
-            "aistore.sdk.request_client.os.getenv", return_value=env_cert
-        ) as mock_getenv:
-            self.request_client = RequestClient(
-                self.endpoint, skip_verify=skip_verify, ca_cert=arg_cert
-            )
-            if not skip_verify and not arg_cert:
-                mock_getenv.assert_called_with(AIS_CLIENT_CA)
-            self.assertEqual(test_case[1], self.request_client.session.verify)
+    def test_init_properties(self, timeout):
+        auth_token = "any string"
+        request_client = RequestClient(
+            self.endpoint, self.mock_session_manager, timeout=timeout, token=auth_token
+        )
+        self.assertEqual(self.endpoint + "/v1", request_client.base_url)
+        self.assertEqual(self.mock_session_manager, request_client.session_manager)
+        self.assertEqual(timeout, request_client.timeout)
+        self.assertEqual(auth_token, request_client.token)
 
-    def test_properties(self):
-        self.assertEqual(self.endpoint + "/v1", self.request_client.base_url)
-        self.assertEqual(self.endpoint, self.request_client.endpoint)
+    def test_update_token(self):
+        auth_token = "any string"
+        self.default_request_client.token = auth_token
+        self.assertEqual(auth_token, self.default_request_client.token)
 
-    @patch("aistore.sdk.request_client.RequestClient.request")
+    @test_cases(
+        10,
+        30.0,
+        (10, 30.0),
+    )
+    def test_update_timeout(self, timeout):
+        self.default_request_client.timeout = timeout
+        self.assertEqual(timeout, self.default_request_client.timeout)
+
     @patch("aistore.sdk.request_client.decode_response")
-    def test_request_deserialize(self, mock_decode, mock_request):
+    def test_request_deserialize(self, mock_decode):
         method = "method"
         path = "path"
         decoded_value = "test value"
         custom_kw = "arg"
         mock_decode.return_value = decoded_value
-        mock_response = Mock(Response)
-        mock_request.return_value = mock_response
+        self.mock_response.status_code = 200
 
-        res = self.request_client.request_deserialize(
+        res = self.default_request_client.request_deserialize(
             method, path, str, keyword=custom_kw
         )
 
+        expected_url = self.endpoint + "/v1/" + path
         self.assertEqual(decoded_value, res)
-        mock_request.assert_called_with(method, path, keyword=custom_kw)
-        mock_decode.assert_called_with(str, mock_response)
+        self.mock_session.request.assert_called_with(
+            method,
+            expected_url,
+            headers=self.request_headers,
+            timeout=None,
+            keyword=custom_kw,
+        )
+        mock_decode.assert_called_with(str, self.mock_response)
 
-    @test_cases(None, "http://custom_endpoint")
-    def test_request(self, endpoint_arg):
+    @test_cases((None, None), ("http://custom_endpoint", 30))
+    def test_request(self, test_case):
+        endpoint_arg, timeout = test_case
+        if timeout:
+            self.default_request_client.timeout = timeout
         method = "request_method"
         path = "request_path"
         extra_kw_arg = "arg"
@@ -116,13 +103,11 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         if endpoint_arg:
             req_url = f"{endpoint_arg}/v1/{path}"
         else:
-            req_url = f"{self.request_client.base_url}/{path}"
+            req_url = f"{self.default_request_client.base_url}/{path}"
 
-        mock_response = Mock()
-        mock_response.status_code = 200
-        self.mock_session.request.return_value = mock_response
+        self.mock_response.status_code = 200
         if endpoint_arg:
-            res = self.request_client.request(
+            res = self.default_request_client.request(
                 method,
                 path,
                 endpoint=endpoint_arg,
@@ -130,23 +115,22 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 keyword=extra_kw_arg,
             )
         else:
-            res = self.request_client.request(
+            res = self.default_request_client.request(
                 method, path, headers=extra_headers, keyword=extra_kw_arg
             )
         self.mock_session.request.assert_called_with(
             method,
             req_url,
             headers=self.request_headers,
-            timeout=None,
+            timeout=timeout,
             keyword=extra_kw_arg,
         )
-        self.assertEqual(mock_response, res)
+        self.assertEqual(self.mock_response, res)
 
         for response_code in [199, 300]:
             with patch("aistore.sdk.request_client.handle_errors") as mock_handle_err:
-                mock_response.status_code = response_code
-                self.mock_session.request.return_value = mock_response
-                res = self.request_client.request(
+                self.mock_response.status_code = response_code
+                res = self.default_request_client.request(
                     method,
                     path,
                     endpoint=endpoint_arg,
@@ -157,16 +141,16 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                     method,
                     req_url,
                     headers=self.request_headers,
-                    timeout=None,
+                    timeout=timeout,
                     keyword=extra_kw_arg,
                 )
-                self.assertEqual(mock_response, res)
+                self.assertEqual(self.mock_response, res)
                 mock_handle_err.assert_called_once()
 
     def test_get_full_url(self):
         path = "/testpath/to_obj"
         params = {"p1key": "p1val", "p2key": "p2val"}
-        res = self.request_client.get_full_url(path, params)
+        res = self.default_request_client.get_full_url(path, params)
         self.assertEqual(
             "https://aistore-endpoint/v1/testpath/to_obj?p1key=p1val&p2key=p2val", res
         )

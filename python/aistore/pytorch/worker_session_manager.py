@@ -8,27 +8,25 @@ the default implementation of RequestClient and requests is not thread-safe.
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from aistore.sdk.request_client import RequestClient
 from torch.utils.data import get_worker_info
 
+from aistore.sdk.session_manager import SessionManager
 
-class WorkerRequestClient(RequestClient):
+
+class WorkerSessionManager(SessionManager):
     """
     Extension that supports Pytorch and multiple workers of internal client for
     buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
 
     Args:
-        client (RequestClient): Existing RequestClient to replace
+        session_manager (SessionManager): Existing SessionManager to replace
     """
 
-    def __init__(self, client: RequestClient):
+    def __init__(self, session_manager: SessionManager):
         super().__init__(
-            endpoint=client._endpoint,
-            skip_verify=client._skip_verify,
-            ca_cert=client._ca_cert,
-            timeout=client._timeout,
-            retry=client._retry,
-            token=client._token,
+            retry=session_manager.retry,
+            ca_cert=session_manager.ca_cert,
+            skip_verify=session_manager.skip_verify,
         )
         self._worker_sessions = {}
 
@@ -43,5 +41,5 @@ class WorkerRequestClient(RequestClient):
             return self._session
         # if we only have one session but multiple workers, create more
         if worker_info.id not in self._worker_sessions:
-            self._worker_sessions[worker_info.id] = self._create_new_session()
+            self._worker_sessions[worker_info.id] = self._create_session()
         return self._worker_sessions[worker_info.id]

@@ -19,15 +19,14 @@ class TestAuthNClient(unittest.TestCase):
         self.endpoint = "http://authn-endpoint"
         self.client = AuthNClient(self.endpoint)
 
+    @patch("aistore.sdk.authn.authn_client.SessionManager")
     @patch("aistore.sdk.authn.authn_client.RequestClient")
-    def test_init_defaults(self, mock_request_client):
+    def test_init_defaults(self, mock_request_client, mock_sm):
         AuthNClient(self.endpoint)
         mock_request_client.assert_called_with(
             endpoint=self.endpoint,
-            skip_verify=False,
-            ca_cert=None,
+            session_manager=mock_sm.return_value,
             timeout=None,
-            retry=None,
             token=None,
         )
 
@@ -37,8 +36,9 @@ class TestAuthNClient(unittest.TestCase):
         (False, None, 30.0, Retry(total=20), None),
         (False, None, (10, 30.0), Retry(total=20), "dummy.token"),
     )
+    @patch("aistore.sdk.authn.authn_client.SessionManager")
     @patch("aistore.sdk.authn.authn_client.RequestClient")
-    def test_init(self, test_case, mock_request_client):
+    def test_init(self, test_case, mock_request_client, mock_sm):
         skip_verify, ca_cert, timeout, retry, token = test_case
         # print all vars
         print(
@@ -52,12 +52,15 @@ class TestAuthNClient(unittest.TestCase):
             retry=retry,
             token=token,
         )
-        mock_request_client.assert_called_with(
-            endpoint=self.endpoint,
+        mock_sm.assert_called_with(
+            retry=retry,
             skip_verify=skip_verify,
             ca_cert=ca_cert,
+        )
+        mock_request_client.assert_called_with(
+            endpoint=self.endpoint,
+            session_manager=mock_sm.return_value,
             timeout=timeout,
-            retry=retry,
             token=token,
         )
 

@@ -5,11 +5,11 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import List, Union, Dict
+from abc import ABC, abstractmethod
+from torch.utils.data import Dataset
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.object import Object
-from torch.utils.data import Dataset
-from abc import ABC, abstractmethod
-from aistore.pytorch.worker_request_client import WorkerRequestClient
+from aistore.pytorch.worker_session_manager import WorkerSessionManager
 
 
 class AISBaseMapDataset(ABC, Dataset):
@@ -52,7 +52,10 @@ class AISBaseMapDataset(ABC, Dataset):
 
         for source in self._ais_source_list:
             # Add pytorch worker support to the internal request client
-            source.client = WorkerRequestClient(source.client)
+            # TODO: Do not modify the provided source client
+            source.client.session_manager = WorkerSessionManager(
+                source.client.session_manager
+            )
             if source not in self._prefix_map or self._prefix_map[source] is None:
                 samples.extend(list(source.list_all_objects_iter(prefix="")))
             else:
