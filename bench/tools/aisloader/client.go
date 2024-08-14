@@ -340,6 +340,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int
 	if err != nil {
 		return 0, err
 	}
+	api.SetAuxHeaders(req, &runParams.bp)
 	resp, err := runParams.bp.Client.Do(req)
 	if err != nil {
 		return 0, err
