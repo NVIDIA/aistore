@@ -409,7 +409,7 @@ func summaryStorageHandler(c *cli.Context) error {
 		return err
 	}
 
-	altMap := teb.FuncMapUnits(ctx.units)
+	altMap := teb.FuncMapUnits(ctx.units, false /*incl. calendar date*/)
 	opts := teb.Opts{AltMap: altMap}
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	if hideHeader {

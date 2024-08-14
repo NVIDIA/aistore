@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -89,8 +88,8 @@ const (
 	dsortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t SRC BUCKET\t DST BUCKET\t SRC SHARDS\n"
 	dsortListBody = "{{$value.ID}}\t " +
 		"{{FormatDsortStatus $value}}\t " +
-		"{{FormatStart $value.StartedTime $value.FinishTime}}\t " +
-		"{{FormatEnd $value.StartedTime $value.FinishTime}}\t " +
+		"{{FormatStart $value.StartedTime}}\t " +
+		"{{FormatEnd $value.FinishTime}}\t " +
 		"{{FormatBckName $value.SrcBck}}\t " +
 		"{{FormatBckName $value.DstBck}}\t " +
 		"{{if (eq $value.Objs 0) }}-{{else}}{{$value.Objs}}{{end}}\n"
@@ -126,8 +125,8 @@ const (
 		"{{FormatBckName $xctn.Bck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	// same as above except for: src-bck, dst-bck columns
@@ -143,8 +142,8 @@ const (
 		"{{FormatBckName $xctn.DstBck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	// same as above for: no bucket column
@@ -158,8 +157,8 @@ const (
 		"{{$xctn.Kind}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	XactECGetTmpl      = xactECGetStatsHdr + XactECGetNoHdrTmpl
@@ -178,8 +177,8 @@ const (
 		"{{if (eq $ext.AvgQueueLen 0.0) }}-{{else}}{{ FormatFloat $ext.AvgQueueLen}}{{end}}\t " +
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 
-		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	XactECPutTmpl      = xactECPutStatsHdr + XactECPutNoHdrTmpl
@@ -199,8 +198,8 @@ const (
 		"{{if (eq $ext.AvgObjTime 0) }}-{{else}}{{FormatMilli $ext.AvgObjTime}}{{end}}\t " +
 		"{{if (eq $ext.AvgEncodeTime 0) }}-{{else}}{{FormatMilli $ext.AvgEncodeTime}}{{end}}\t " +
 
-		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
 	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t SIZE (apparent, objects, remote)\t USAGE(%)\n"
@@ -389,8 +388,8 @@ var (
 		"FormatMAM":           func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, cos.UnitsIEC, 2)) },
 		"FormatMilli":         func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },
 		"FormatDuration":      FormatDuration,
-		"FormatStart":         func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
-		"FormatEnd":           func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
+		"FormatStart":         FmtTime,
+		"FormatEnd":           FmtTime,
 		"FormatDsortStatus":   dsortJobInfoStatus,
 		"FormatLsObjStatus":   fmtLsObjStatus,
 		"FormatLsObjIsCached": fmtLsObjIsCached,

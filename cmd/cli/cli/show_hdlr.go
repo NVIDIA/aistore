@@ -51,6 +51,7 @@ var (
 			noHeaderFlag,
 			verboseJobFlag,
 			unitsFlag,
+			dateTimeFlag,
 			// download and dsort only
 			progressFlag,
 			dsortLogFlag,
@@ -499,12 +500,13 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		usejs       = flagIsSet(c, jsonFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
+		datedTime   = flagIsSet(c, dateTimeFlag)
 	)
 	if errU != nil {
 		actionWarn(c, errU.Error())
 		units = ""
 	}
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: usejs}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units, datedTime), UseJSON: usejs}
 	switch xargs.Kind {
 	case apc.ActECGet:
 		if hideHeader {

@@ -55,36 +55,38 @@ func Init() {
 	} else {
 		podName = os.Getenv(defaultPodNameEnv)
 	}
-	nlog.Infof("Checking K8s pod: %q, node: %q", podName, nodeName)
+	nlog.Infof("Checking pod: %q, node: %q", podName, nodeName)
 
 	// node name specified - proceed directly to check
 	if nodeName != "" {
 		goto checkNode
 	}
 	if podName == "" {
-		nlog.Infoln("K8s environment (above) not set =>", nonK8s)
+		nlog.Infoln("environment (above) not set =>", nonK8s)
 		return
 	}
 
 	// check POD
 	pod, err = client.Pod(podName)
 	if err != nil {
-		nlog.Errorf("Failed to get K8s pod %q: %v", podName, err)
+		nlog.Errorf("Failed to get pod %q: %v", podName, err)
 		return
 	}
 	nodeName = pod.Spec.NodeName
-	nlog.Infoln("K8s spec: NodeName", nodeName, "Hostname", pod.Spec.Hostname, "HostNetwork", pod.Spec.HostNetwork)
+	nlog.Infoln("pod.Spec: Node", nodeName, "Hostname", pod.Spec.Hostname, "HostNetwork", pod.Spec.HostNetwork)
 	_ppvols(pod.Spec.Volumes)
 
 checkNode: // always check Node
 	node, err := client.Node(nodeName)
 	if err != nil {
-		nlog.Errorf("Failed to get K8s node %q: %v", nodeName, err)
+		nlog.Errorf("Failed to get Node %q: %v", nodeName, err)
 		return
 	}
 
 	NodeName = node.Name
-	nlog.Infoln("K8s node: Name", NodeName, "Namespace", node.Namespace)
+	if node.Namespace != "" {
+		nlog.Infoln("Node", NodeName, "Namespace", node.Namespace)
+	}
 }
 
 func _ppvols(volumes []v1.Volume) {

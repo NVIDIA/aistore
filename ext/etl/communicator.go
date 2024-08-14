@@ -241,7 +241,7 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSiz
 		// to remove the following assert (and the corresponding limitation):
 		// - container must be ready to receive complete bucket name including namespace
 		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
-		debug.Assertf(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname("")+" - bucket with namespace")
+		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
 		u = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
 
 		fh, err := cos.NewFileHandle(lom.FQN)

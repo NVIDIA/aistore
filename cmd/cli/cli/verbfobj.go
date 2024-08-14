@@ -68,7 +68,7 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		totalSize, extSizes = groupByExt(fobjs)
 		units, errU         = parseUnitsFlag(c, unitsFlag)
 		tmpl                = teb.MultiPutTmpl + strconv.Itoa(l) + "\t " + cos.ToSizeIEC(totalSize, 2) + "\n"
-		opts                = teb.Opts{AltMap: teb.FuncMapUnits(units)}
+		opts                = teb.Opts{AltMap: teb.FuncMapUnits(units, false /*incl. calendar date*/)}
 	)
 	if errU != nil {
 		return errU

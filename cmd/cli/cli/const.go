@@ -503,6 +503,11 @@ var (
 			indent4 + "\traw - do not convert to (or from) human-readable format",
 	}
 
+	dateTimeFlag = cli.BoolFlag{
+		Name:  "date-time",
+		Usage: "override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well",
+	}
+
 	// list-objects
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",

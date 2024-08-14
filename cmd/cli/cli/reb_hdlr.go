@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -32,7 +32,7 @@ type targetRebSnap struct {
 }
 
 var (
-	showRebFlags = append(longRunFlags, allJobsFlag, noHeaderFlag, unitsFlag)
+	showRebFlags = append(longRunFlags, allJobsFlag, noHeaderFlag, unitsFlag, dateTimeFlag)
 
 	showCmdRebalance = cli.Command{
 		Name:      cmdRebalance,
@@ -53,6 +53,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		refreshRate    = _refreshRate(c)
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		xargs          = xact.ArgsMsg{Kind: apc.ActRebalance}
+		datedTime      = flagIsSet(c, dateTimeFlag)
 		units, errU    = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -139,14 +140,14 @@ func showRebalanceHandler(c *cli.Context) error {
 						fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
 						numMigratedObjs, sizeMigratedBytes = 0, 0
 					}
-					displayRebStats(tw, sts, units)
+					displayRebStats(tw, sts, units, datedTime)
 				} else {
 					if prevID != "" && sts.snap.ID != prevID {
 						break
 					}
 					latestAborted = latestAborted || sts.snap.AbortedX
 					latestFinished = latestFinished || !sts.snap.EndTime.IsZero()
-					displayRebStats(tw, sts, units)
+					displayRebStats(tw, sts, units, datedTime)
 				}
 				numMigratedObjs += sts.snap.Stats.Objs
 				sizeMigratedBytes += sts.snap.Stats.Bytes
@@ -186,8 +187,15 @@ func showRebalanceHandler(c *cli.Context) error {
 	return nil
 }
 
-func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap, units string) {
-	startTime, endTime := teb.FmtStartEnd(st.snap.StartTime, st.snap.EndTime)
+func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap, units string, datedTime bool) {
+	var startTime, endTime string
+	if datedTime {
+		startTime = teb.FmtDateTime(st.snap.StartTime)
+		endTime = teb.FmtDateTime(st.snap.EndTime)
+	} else {
+		startTime = teb.FmtTime(st.snap.StartTime)
+		endTime = teb.FmtTime(st.snap.EndTime)
+	}
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %s\n",
 		st.snap.ID, st.tid,

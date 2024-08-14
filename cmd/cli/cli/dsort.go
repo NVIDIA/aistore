@@ -522,7 +522,7 @@ func printCondensedStats(c *cli.Context, id, units string, errhint bool) error {
 		}
 		jobInfo.Aggregate(job)
 	}
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units, flagIsSet(c, dateTimeFlag))}
 	err = teb.Print([]*dsort.JobInfo{&jobInfo}, teb.DsortListTmpl, opts)
 	if err != nil {
 		return err
@@ -620,7 +620,7 @@ func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 	var (
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
-		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: usejs}
+		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units, flagIsSet(c, dateTimeFlag)), UseJSON: usejs}
 		verbose     = flagIsSet(c, verboseJobFlag)
 	)
 	debug.AssertNoErr(errU)

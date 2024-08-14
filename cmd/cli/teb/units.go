@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -45,15 +45,21 @@ func (ctx *unitsCtx) durHuman(dur time.Duration) string {
 	return FmtDuration(dur.Nanoseconds(), ctx.units)
 }
 
-func FuncMapUnits(units string) (m template.FuncMap) {
+func FuncMapUnits(units string, datedTime bool) (m template.FuncMap) {
 	ctx := &unitsCtx{units}
-	m = make(template.FuncMap, 6)
+	m = make(template.FuncMap, 8)
+
 	m["FormatBytesSig"] = ctx.sizeSig
 	m["FormatBytesSig2"] = ctx.sizeSig2
 	m["FormatBytesUns"] = ctx.sizeUns
 	m["FormatMAM"] = ctx.sizeMam
 	m["FormatMilli"] = ctx.durMilli
 	m["FormatDuration"] = ctx.durHuman
+
+	if datedTime {
+		m["FormatStart"] = FmtDateTime
+		m["FormatEnd"] = FmtDateTime
+	}
 	return m
 }
 

@@ -330,20 +330,18 @@ func isUnsetTime(t time.Time) bool {
 	return t.IsZero()
 }
 
-func FmtStartEnd(start, end time.Time) (startS, endS string) {
-	startS, endS = NotSetVal, NotSetVal
-	if start.IsZero() {
+func FmtTime(t time.Time) (s string) {
+	s = NotSetVal
+	if t.IsZero() {
 		return
 	}
-	y1, m1, d1 := start.Date()
-	f := cos.StampSec // hh:mm:ss
-	if !end.IsZero() {
-		y2, m2, d2 := end.Date()
-		if y1 != y2 || m1 != m2 || d1 != d2 {
-			f = time.Stamp // with date
-		}
-		endS = cos.FormatTime(end, f)
+	return cos.FormatTime(t, cos.StampSec)
+}
+
+func FmtDateTime(t time.Time) (s string) {
+	s = NotSetVal
+	if t.IsZero() {
+		return
 	}
-	startS = cos.FormatTime(start, f)
-	return
+	return cos.FormatTime(t, time.Stamp)
 }

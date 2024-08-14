@@ -154,7 +154,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 
 	// one at a time
 	prev := ctx.started
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(ctx.units)}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(ctx.units, false /*incl. calendar date*/)}
 	data := make([]teb.ListBucketsHelper, 0, len(bcks))
 	for i := range bcks {
 		bck := bcks[i]
@@ -567,7 +567,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 
 	// otherwise, print names
 	tmpl := teb.LsoTemplate(propsList, hideHeader, addCachedCol, addStatusCol)
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units, false /*incl. calendar date*/)}
 	if err := teb.Print(matched, tmpl, opts); err != nil {
 		return err
 	}

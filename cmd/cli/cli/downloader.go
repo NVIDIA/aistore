@@ -356,7 +356,8 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 	var (
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
-		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: flagIsSet(c, jsonFlag)}
+		datedTime   = flagIsSet(c, dateTimeFlag)
+		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units, datedTime), UseJSON: flagIsSet(c, jsonFlag)}
 		verbose     = flagIsSet(c, verboseJobFlag)
 	)
 	debug.AssertNoErr(errU)
