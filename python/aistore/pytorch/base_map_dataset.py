@@ -66,6 +66,15 @@ class AISBaseMapDataset(ABC, Dataset):
 
         return samples
 
+    def get_obj_list(self) -> List[Object]:
+        """
+        Getter for internal object data list.
+
+        Returns:
+            List[Object]: Object data of the dataset
+        """
+        return self._obj_list
+
     @abstractmethod
     def __getitem__(self, index):
         pass

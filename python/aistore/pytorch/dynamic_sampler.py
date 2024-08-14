@@ -9,16 +9,18 @@ while attempting to fit the maximum number of samples in each batch.
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from torch.utils.data import Sampler
+import torch
 from typing import Iterator, List
 from aistore.pytorch.base_map_dataset import AISBaseMapDataset
 from logging import getLogger
 
-# Saturation of a batch needed to not be dropped with drop_last=True
+
+# Default saturation of a batch needed to not be dropped with drop_last=True
 SATURATION_FACTOR = 0.8
+logger = getLogger(__name__)
 
 
-class DynamicBatchSampler(Sampler):
+class DynamicBatchSampler(torch.utils.data.Sampler):
     """
 
     Dynamically adds samples to mini-batch up to a maximum batch size.
@@ -31,9 +33,11 @@ class DynamicBatchSampler(Sampler):
         data_source (AISBaseMapDataset): Base AIS map-style dataset to sample from to create dynamic mini-batches.
         max_batch_size (float): Maximum size of mini-batch in bytes.
         drop_last (bool, optional): If `True`, then will drop last batch if the batch is not atleast 80% of `max_batch_size`.
-        Defaults to `False`.
+            Defaults to `False`.
         allow_oversized_samples (bool, optional): If `True`, then any sample that is larger than the `max_batch_size` will be processed
-        in its own min-batch by itself instead of being dropped. Defaults to `False`.
+            in its own min-batch by itself instead of being dropped. Defaults to `False`.
+        saturation_factor (float, optional): Saturation of a batch needed to not be dropped with `drop_last=True`. Default is `0.8`.
+        shuffle (bool, optional): Randomizes order of samples before calculating mini-batches. Default is `False`.
     """
 
     def __init__(
@@ -42,13 +46,19 @@ class DynamicBatchSampler(Sampler):
         max_batch_size: float,
         drop_last: bool = False,
         allow_oversized_samples: bool = False,
+        saturation_factor: float = SATURATION_FACTOR,
+        shuffle: bool = False,
     ) -> None:
+        super().__init__()
         self._data_source = data_source
         self._max_batch_size = max_batch_size
-        self._samples_list = data_source._create_objects_list()
+        self._samples_list = data_source.get_obj_list()
         self._drop_last = drop_last
         self._allow_oversized_samples = allow_oversized_samples
-        self._logger = getLogger(f"{__name__}.put_files")
+        if not (0 <= saturation_factor <= 1):
+            raise ValueError(f"`saturation_factor` must be between 0 and 1")
+        self._saturation_factor = saturation_factor
+        self._shuffle = shuffle
 
     def __iter__(self) -> Iterator[List[int]]:
         """
@@ -56,42 +66,55 @@ class DynamicBatchSampler(Sampler):
         """
         total_mem = 0
         batch = []
-        index = 0
 
-        # get sample size for each index, check if there is space in the batch, and yield batches whenever full
-        # calculate spaces in batch non-preemptively
-        while index < len(self):
+        if self._shuffle:
+            self._indices = list(
+                torch.randperm(len(self))
+            )  # randomized list of indices
+
+        # Get sample size for each index, check if there is space in the batch, and yield batches whenever full
+        # Calculate spaces in batch non-preemptively
+        index = self._get_next_index(-1)
+        while index < len(self._samples_list):
             sample = self._samples_list[index]
+
+            if sample.props.size == 0:
+                logger.warning(
+                    f"Sample {sample.name} cannot be processed as it has a size of 0 bytes"
+                )
+                index = self._get_next_index(index)
+                continue
 
             if sample.props.size > self._max_batch_size:
                 if self._allow_oversized_samples is True:
                     yield [index]
                 else:
-                    self._logger.warn(
+                    logger.warning(
                         f"Sample {sample.name} cannot be processed as it is larger than the max batch size: {sample.props.size} bytes > {self._max_batch_size} bytes"
                     )
 
-                index += 1
+                index = self._get_next_index(index)
                 continue
 
             if total_mem + sample.props.size < self._max_batch_size:
                 batch.append(index)
-                index += 1
+                index = self._get_next_index(index)
                 total_mem += sample.props.size
             else:
 
                 if total_mem + sample.props.size == self._max_batch_size:
                     batch.append(index)
-                    index += 1
+                    index = self._get_next_index(index)
 
                 yield batch
                 batch = []
                 total_mem = 0
 
-        # if batch exists and we are not dropping last or if we are dropping last but the batch is saturated
+        # If batch exists and we are not dropping last or if we are dropping last but the batch is saturated
         # then yield the last batch
         if (batch and not self._drop_last) or (
-            self._drop_last and total_mem / self._max_batch_size > SATURATION_FACTOR
+            self._drop_last
+            and total_mem / self._max_batch_size > self._saturation_factor
         ):
             yield batch
 
@@ -100,3 +123,17 @@ class DynamicBatchSampler(Sampler):
         Returns the total number of samples.
         """
         return len(self._samples_list)
+
+    def _get_next_index(self, index) -> int:
+        """
+        Get next index from indices if shuffling or otherwise return incremented count.
+
+        Returns:
+            index (int): Next index to sample from
+        """
+        if self._shuffle:
+            if len(self._indices) == 0:
+                return len(self._samples_list)
+            return int(self._indices.pop())
+        index += 1
+        return index
