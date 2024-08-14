@@ -275,8 +275,8 @@ func formatHdr(s severity, depth int, fb *fixed) {
 	}
 	fb.writeByte(char[s])
 	fb.writeByte(' ')
-	now := time.Now()
-	fb.writeString(now.Format("15:04:05.000000"))
+
+	fb.writeStamp()
 
 	fb.writeByte(' ')
 	if _, redact := redactFnames[fn]; redact {
