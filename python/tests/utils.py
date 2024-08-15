@@ -6,6 +6,8 @@ import tarfile
 import io
 from pathlib import Path
 
+from typing import Dict, List
+
 from aistore.sdk import Client
 from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.errors import ErrBckNotFound
@@ -16,7 +18,7 @@ def random_string(length: int = 10):
     return "".join(random.choices(string.ascii_lowercase, k=length))
 
 
-def string_to_dict(input_string: str) -> dict:
+def string_to_dict(input_string: str) -> Dict:
     pairs = input_string.split(", ")
     result_dict = {
         key_value.split("=")[0]: key_value.split("=")[1] for key_value in pairs
@@ -104,7 +106,7 @@ def create_random_tarballs(
         size = random.randint(min_size, max_size)
         return os.urandom(size)
 
-    def generate_files(num_files: int, num_extensions: int, dest_dir: str) -> list:
+    def generate_files(num_files: int, num_extensions: int, dest_dir: str) -> List:
         files_list = []
         filenames_list = []
 
@@ -124,7 +126,7 @@ def create_random_tarballs(
 
         return files_list, extension_list
 
-    def create_tarballs(min_shard_size: int, dest_dir: str, files_list: list) -> None:
+    def create_tarballs(min_shard_size: int, dest_dir: str, files_list: List) -> None:
         num_input_shards = 0
         current_size = 0
         dest_dir_path = Path(dest_dir).resolve()

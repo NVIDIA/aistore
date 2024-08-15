@@ -4,6 +4,8 @@
 
 from __future__ import annotations  # pylint: disable=unused-variable
 
+from typing import Optional, Tuple, Union
+
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
     PROVIDER_AIS,
@@ -28,7 +30,7 @@ class Client:
         endpoint (str): AIStore endpoint
         skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
         ca_cert (str, optional): Path to a CA certificate file for SSL verification.
-        timeout (Union[float, tuple[float, float], None], optional): Request timeout in seconds; a single float
+        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
         token (str, optional): Authorization token.
@@ -39,7 +41,7 @@ class Client:
         endpoint: str,
         skip_verify: bool = False,
         ca_cert: str = None,
-        timeout: float | tuple[float, float] | None = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
     ):
         self._request_client = RequestClient(

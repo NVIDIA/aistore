@@ -3,7 +3,7 @@
 #
 import os
 from urllib.parse import urljoin, urlencode
-from typing import TypeVar, Type, Any, Dict
+from typing import Optional, TypeVar, Tuple, Type, Union, Any, Dict
 from requests import session, Session, Response
 
 from aistore.sdk.const import (
@@ -29,7 +29,7 @@ class RequestClient:
         endpoint (str): AIStore endpoint
         skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
         ca_cert (str, optional): Path to a CA certificate file for SSL verification.
-        timeout (Union[float, tuple[float, float], None], optional): Request timeout in seconds; a single float
+        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
         token (str, optional): Authorization token.
@@ -40,7 +40,7 @@ class RequestClient:
         endpoint: str,
         skip_verify: bool = False,
         ca_cert: str = None,
-        timeout=None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
     ):
         self._endpoint = endpoint
@@ -146,7 +146,7 @@ class RequestClient:
         method: str,
         path: str,
         endpoint: str = None,
-        headers: dict = None,
+        headers: Dict = None,
         **kwargs,
     ) -> Response:
         """

@@ -512,7 +512,7 @@ class PrefetchMsg(BaseModel):
     API message structure for prefetching objects from remote buckets.
     """
 
-    object_selection: dict
+    object_selection: Dict
     continue_on_err: bool
     latest: bool
     blob_threshold: int = None
@@ -534,7 +534,7 @@ class TCMultiObj(BaseModel):
     to_bck: BucketModel
     tc_msg: TCBckMsg = None
     continue_on_err: bool
-    object_selection: dict
+    object_selection: Dict
 
     def as_dict(self):
         dict_rep = self.object_selection
@@ -557,7 +557,7 @@ class ArchiveMultiObj(BaseModel):
     include_source_name = False
     allow_append = False
     continue_on_err = False
-    object_selection: dict
+    object_selection: Dict
 
     def as_dict(self):
         dict_rep = self.object_selection
@@ -729,7 +729,7 @@ class NodeStatsV322(BaseModel):
     ais_version: str
     build_time: str
     k8s_pod_name: str
-    sys_info: dict
+    sys_info: Dict
     smap_version: str
 
 
@@ -747,7 +747,7 @@ class NodeStats(BaseModel):
     ais_version: str
     build_time: str
     k8s_pod_name: str
-    sys_info: dict
+    sys_info: Dict
     smap_version: str
     reserved1: Optional[str] = ""
     reserved2: Optional[str] = ""

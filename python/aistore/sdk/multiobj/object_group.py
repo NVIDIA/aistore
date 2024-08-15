@@ -48,7 +48,7 @@ class ObjectGroup(AISSource):
     def __init__(
         self,
         bck: "Bucket",
-        obj_names: list = None,
+        obj_names: List = None,
         obj_range: ObjectRange = None,
         obj_template: str = None,
     ):

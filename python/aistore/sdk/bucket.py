@@ -835,7 +835,7 @@ class Bucket(AISSource):
 
     def objects(
         self,
-        obj_names: list = None,
+        obj_names: List = None,
         obj_range: ObjectRange = None,
         obj_template: str = None,
     ) -> ObjectGroup:
@@ -861,8 +861,8 @@ class Bucket(AISSource):
         self,
         method: str,
         action: str,
-        value: dict = None,
-        params: dict = None,
+        value: Dict = None,
+        params: Dict = None,
     ) -> requests.Response:
         """
         Use the bucket's client to make a request to the bucket endpoint on the AIS server
