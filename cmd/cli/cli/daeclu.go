@@ -99,7 +99,8 @@ outer:
 			avail += int64(cdf.Avail)
 			num += len(cdf.Disks)
 
-			// TODO: a simplifying (local playground) assumption and shortcut
+			// TODO: a simplifying local-playground assumption and shortcut - won't work with loop devices, etc.
+			// (ref: 152408)
 			if ds.DeploymentType == apc.DeploymentDev {
 				break outer
 			}

@@ -132,7 +132,16 @@ func redErr(err error) error {
 	if i := strings.Index(msg, "Error:"); i >= 0 && len(msg) > i+10 {
 		// e.g. "CertificateVerificationError: ..."
 		if cos.IsAlphaNice(msg[:i]) {
-			return errors.New(fred(msg[:i+6]) + msg[i+6:])
+			typeCode := msg[:i+6]
+
+			// NOTE (usability vs hardcoded check)
+			// quoting Go source, "OpError is the error type usually returned by functions in the net package."
+			// the "Op" part in it is likely from "operation" - tells nothing...
+			if typeCode == "OpError:" {
+				typeCode = "NetworkError:"
+			}
+
+			return errors.New(fred(typeCode) + msg[i+6:])
 		}
 	}
 	return errors.New(fred("Error: ") + msg)

@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -117,6 +118,9 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		nb := len(opts.Buckets)
 		switch nb {
 		case 0:
+			if p.Bck.IsEmpty() {
+				return r, errors.New("no buckets in the cluster, nothing to do")
+			}
 			return r, fmt.Errorf("no buckets matching %q", p.Bck.Bucket())
 		case 1:
 			// change of mind: single result-set even though spec-ed as qbck
@@ -186,7 +190,6 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 			wg.Done()
 		}(lwg)
 	} else {
-		debug.Assert(len(r.buckets) > 1)
 		lwg = cos.NewLimitedWaitGroup(sys.NumCPU(), len(r.buckets))
 		for _, bck := range r.buckets {
 			res, ok := r.mapRes[bck.Props.BID]
@@ -306,7 +309,8 @@ func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
 	if dst.ObjCount.Present > 0 {
 		dst.ObjSize.Avg = int64(cos.DivRoundU64(dst.TotalSize.PresentObjs, dst.ObjCount.Present))
 	}
-	debug.Assert(r.totalDiskSize == src.TotalSize.Disks)
+	debug.Assert(r.totalDiskSize == src.TotalSize.Disks || (src.TotalSize.Disks == 0 && cmn.Rom.TestingEnv()),
+		r.totalDiskSize, " vs ", src.TotalSize.Disks)
 	dst.TotalSize.Disks = r.totalDiskSize
 	dst.UsedPct = cos.DivRoundU64(dst.TotalSize.OnDisk*100, r.totalDiskSize)
 }

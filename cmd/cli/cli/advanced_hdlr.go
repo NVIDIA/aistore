@@ -60,14 +60,14 @@ var (
 			},
 			{
 				Name:         cmdBackendEnable,
-				Usage:        "(re)enable cloud backend",
+				Usage:        "(re)enable cloud backend (see also: 'ais config cluster backend')",
 				ArgsUsage:    cloudProviderArg,
 				Action:       backendEnableHandler,
 				BashComplete: suggestCloudProvider,
 			},
 			{
 				Name:         cmdBackendDisable,
-				Usage:        "disable cloud backend",
+				Usage:        "disable cloud backend (see also: 'ais config cluster backend')",
 				ArgsUsage:    cloudProviderArg,
 				Action:       backendDisableHandler,
 				BashComplete: suggestCloudProvider,

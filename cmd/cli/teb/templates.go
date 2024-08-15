@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -447,9 +448,14 @@ func (sth SmapHelper) forMarshal() any {
 // stats.NodeStatus
 //
 
-func calcCap(daemon *stats.NodeStatus) (total uint64) {
-	for _, cdf := range daemon.Tcdf.Mountpaths {
+func calcCap(ds *stats.NodeStatus) (total uint64) {
+	for _, cdf := range ds.Tcdf.Mountpaths {
 		total += cdf.Capacity.Avail
+		// TODO: a simplifying local-playground assumption and shortcut - won't work with loop devices, etc.
+		// (ref: 152408)
+		if ds.DeploymentType == apc.DeploymentDev {
+			break
+		}
 	}
 	return total
 }
