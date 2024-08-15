@@ -1,0 +1,55 @@
+name: Python AuthN Tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: ['1.22.x']
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.11']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup additional system libraries
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update
+          sudo apt install -y xattr attr
+
+      - name: Run AIStore
+        env:
+          GOPATH: ${{ secrets.GOPATH }}
+          AIS_AUTHN_ENABLED: "true"
+          AIS_AUTHN_SU_NAME: "admin"
+          AIS_AUTHN_SU_PASS: "admin"
+          AIS_AUTHN_URL: "http://localhost:52001"
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 3
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run Python tests
+        env:
+          AIS_AUTHN_SU_NAME: "admin"
+          AIS_AUTHN_SU_PASS: "admin"
+          AIS_AUTHN_URL: "http://localhost:52001"
+        run: |
+          cd python
+          make python_authn_tests
