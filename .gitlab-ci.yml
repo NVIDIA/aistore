@@ -462,6 +462,13 @@ test:short:python-authn:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - cd python/
     - make python_authn_tests
+  rules:
+    - changes:
+      - python/aistore/sdk/authn/**/*
+      - python/aistore/tests/integration/sdk/authn/**/*
+    - if: $CI_MERGE_REQUEST_LABELS =~ /.*authn.*/
+      when: always
+    - when: manual
 
 test:short:python-etl:
   extends: .test_k8s_short_template
