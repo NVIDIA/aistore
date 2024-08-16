@@ -41,38 +41,36 @@ class TestAuthNRoleManager(unittest.TestCase):
         )
 
     def test_role_list(self):
-        mock_roles_list = RolesList(
-            __root__=[
-                RoleInfo(
-                    name="role1",
-                    desc="Description for role1",
-                    clusters=[
-                        ClusterPermission(id="cluster1", perm=str(AccessAttr.GET.value))
-                    ],
-                    buckets=[
-                        BucketPermission(
-                            bck=BucketModel(name="bucket1"),
-                            perm=str(AccessAttr.GET.value),
-                        )
-                    ],
-                    admin=False,
-                ),
-                RoleInfo(
-                    name="role2",
-                    desc="Description for role2",
-                    clusters=[
-                        ClusterPermission(id="cluster2", perm=str(AccessAttr.PUT.value))
-                    ],
-                    buckets=[
-                        BucketPermission(
-                            bck=BucketModel(name="bucket2"),
-                            perm=str(AccessAttr.PUT.value),
-                        )
-                    ],
-                    admin=True,
-                ),
-            ]
-        )
+        mock_roles_list = [
+            RoleInfo(
+                name="role1",
+                desc="Description for role1",
+                clusters=[
+                    ClusterPermission(id="cluster1", perm=str(AccessAttr.GET.value))
+                ],
+                buckets=[
+                    BucketPermission(
+                        bck=BucketModel(name="bucket1"),
+                        perm=str(AccessAttr.GET.value),
+                    )
+                ],
+                admin=False,
+            ),
+            RoleInfo(
+                name="role2",
+                desc="Description for role2",
+                clusters=[
+                    ClusterPermission(id="cluster2", perm=str(AccessAttr.PUT.value))
+                ],
+                buckets=[
+                    BucketPermission(
+                        bck=BucketModel(name="bucket2"),
+                        perm=str(AccessAttr.PUT.value),
+                    )
+                ],
+                admin=True,
+            ),
+        ]
         self.mock_client.request_deserialize.return_value = mock_roles_list
 
         roles_list = self.role_manager.list()

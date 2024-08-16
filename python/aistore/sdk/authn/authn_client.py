@@ -13,6 +13,7 @@ from aistore.sdk.const import (
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
 from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.authn.role_manager import RoleManager
+from aistore.sdk.authn.user_manager import UserManager
 
 # logging
 logging.basicConfig(level=logging.INFO)
@@ -127,3 +128,12 @@ class AuthNClient:
             RoleManager: An instance to manage role operations.
         """
         return RoleManager(client=self._request_client)
+
+    def user_manager(self) -> UserManager:
+        """
+        Factory method to create a UserManager instance.
+
+        Returns:
+            UserManager: An instance to manage user operations.
+        """
+        return UserManager(client=self._request_client)

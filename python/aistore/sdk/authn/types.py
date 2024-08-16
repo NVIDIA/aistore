@@ -170,3 +170,57 @@ class RolesList(BaseModel):
 
     def __str__(self) -> str:
         return "\n".join(str(role) for role in self.__root__)
+
+
+class UserInfo(BaseModel):
+    """
+    Represents user information in the AuthN service.
+
+    Attributes:
+        id (str): The username or ID of the user.
+        password (str, optional): The user's password. Serialized as 'pass' in the request.
+        roles (RolesList): The list of roles assigned to the user.
+    """
+
+    id: str
+    password: Optional[str] = None
+    roles: RolesList
+
+    def dict(self, **kwargs):
+        """
+        Override the dict method to serialize the 'password' field as 'pass'.
+
+        Returns:
+            Dict[str, Union[str, RolesList]]: The dict representation of the user information.
+        """
+        user_dict = super().dict(**kwargs)
+        if "password" in user_dict and user_dict["password"] is not None:
+            user_dict["pass"] = user_dict.pop("password")
+        return user_dict
+
+
+class UsersList(BaseModel):
+    """
+    Represents a list of users.
+
+    Attributes:
+        __root__ (Dict[str, UserInfo]): Dictionary of user names/IDs to UserInfo objects.
+    """
+
+    __root__: Dict[str, UserInfo]
+
+    def __iter__(self):
+        return iter(self.__root__.values())
+
+    def __getitem__(self, item):
+        return self.__root__[item]
+
+    def __len__(self):
+        return len(self.__root__)
+
+    @property
+    def users(self):
+        return self.__root__
+
+    def __str__(self) -> str:
+        return "\n".join(str(user) for user in self.__root__)
