@@ -473,7 +473,6 @@ test:short:python-authn:
       changes:
         - python/aistore/sdk/authn/**/*
         - python/aistore/tests/integration/sdk/authn/**/*
-      when: always
     - when: manual
       allow_failure: true
 
