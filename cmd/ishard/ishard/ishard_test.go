@@ -553,11 +553,7 @@ func TestIshardEKM(t *testing.T) {
 		fmt.Fprintf(&builder, "\n    \"%c-%%d.tar\": [\"^%c.*\"]", letter, letter)
 	}
 	builder.WriteString("\n}")
-	jsonData := []byte(builder.String())
-	cfg.EKMFlag = config.EKMFlag{
-		IsSet:     true,
-		JSONBytes: jsonData,
-	}
+	cfg.EKMFlag.Set(builder.String())
 
 	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 	isharder, err := ishard.NewISharder(cfg)
@@ -568,14 +564,18 @@ func TestIshardEKM(t *testing.T) {
 
 	shardContents, err := getShardContents(baseParams, dsortedBck)
 	tassert.CheckFatal(t, err)
+
+	var fileCount int
 	for tarball, files := range shardContents {
 		for _, fileName := range files {
+			fileCount++
 			tassert.Fatalf(
 				t, tarball[0] == fileName[0],
 				"fail to categorize by the first character in file names, tarball name %s != file name %s", tarball, fileName,
 			)
 		}
 	}
+	tassert.Fatalf(t, fileCount == numRecords*numExtensions, "created file count doesn't match, want %d have %d", numRecords*numExtensions, fileCount)
 }
 
 func TestIshardParallel(t *testing.T) {
