@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -117,7 +118,7 @@ func Term() {
 	for i := 0; i < 8 && !g.lchk.running.CAS(false, true); i++ {
 		time.Sleep(sleep)
 	}
-	g.lchk.evictAll(termDuration)
+	g.lchk.evictOlder(termDuration)
 }
 
 /////////
@@ -483,7 +484,7 @@ func (lom *LOM) LoadUnsafe() (err error) {
 // store new or refresh existing
 func (lom *LOM) Recache() {
 	debug.Assert(!lom.IsCopy())
-	lom.setbid(lom.Bprops().BID) // TODO -- FIXME: 52 bits
+	lom.setbid(lom.Bprops().BID)
 
 	md := lom.md
 
@@ -493,12 +494,19 @@ func (lom *LOM) Recache() {
 		return
 	}
 	lmd := val.(*lmeta)
-	if lmd.uname != lom.md.uname {
-		g.tstats.Inc(LcacheCollisionCount) // target stats
+	if *lmd.uname != *lom.md.uname {
+		lom._collide(lmd)
 	} else {
 		// updating the value that's already in the map (race extremely unlikely, benign anyway)
 		md.cpAtime(lmd)
 	}
+}
+
+func (lom *LOM) _collide(lmd *lmeta) {
+	if cmn.Rom.FastV(4, cos.SmoduleCore) || (lom.digest%17) == 5 {
+		nlog.InfoDepth(1, LcacheCollisionCount, lom.digest, "[", *lmd.uname, "]", *lom.md.uname, lom.Cname())
+	}
+	g.tstats.Inc(LcacheCollisionCount)
 }
 
 func (lom *LOM) Uncache() {
@@ -508,8 +516,8 @@ func (lom *LOM) Uncache() {
 		return
 	}
 	lmd := md.(*lmeta)
-	if lmd.uname != lom.md.uname {
-		g.tstats.Inc(LcacheCollisionCount) // target stats
+	if *lmd.uname != *lom.md.uname {
+		lom._collide(lmd)
 	} else {
 		lom.md.cpAtime(lmd)
 	}
@@ -534,8 +542,8 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	lcache = lom.lcache()
 	if md, ok := lcache.Load(lom.digest); ok {
 		lmd = md.(*lmeta)
-		if lmd.uname != lom.md.uname {
-			g.tstats.Inc(LcacheCollisionCount) // target stats
+		if *lmd.uname != *lom.md.uname {
+			lom._collide(lmd)
 		}
 	}
 	return

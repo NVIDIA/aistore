@@ -89,17 +89,19 @@ func UncacheMountpath(mi *fs.Mountpath) {
 // lchk //
 //////////
 
-func (lchk *lchk) housekeep() (d time.Duration) {
-	var tag string
-	d, tag = lchk.mp()
+func (lchk *lchk) housekeep() time.Duration {
+	d, tag := lchk.mp()
 	if !lchk.running.CAS(false, true) {
-		if tag != "" {
-			nlog.Infof("running now: memory pressure %q, next sched %v", tag, d)
-		}
-		return
+		nlog.Infoln("running now; memory pressure:", tag, "next HK:", d)
+		return d
 	}
-	go lchk.evictAll(d /*evict older than*/)
-	return
+
+	go func(d time.Duration) {
+		lchk.evictOlder(d)
+		lchk.running.Store(false)
+	}(d)
+
+	return d
 }
 
 const termDuration = time.Duration(-1)
@@ -124,7 +126,7 @@ func (*lchk) mp() (d time.Duration, tag string) {
 	return
 }
 
-func (lchk *lchk) evictAll(d time.Duration) {
+func (lchk *lchk) evictOlder(d time.Duration) {
 	lchk.now = time.Now()
 	lchk.d = d
 
@@ -133,6 +135,7 @@ func (lchk *lchk) evictAll(d time.Duration) {
 	// single-threaded: one cache at a time
 	caches := lomCaches()
 	if lchk.terminating() {
+		nlog.Infoln("terminating -->")
 		for _, cache := range caches {
 			lchk.cache = cache
 			cache.Range(lchk.fterm)
@@ -146,14 +149,12 @@ func (lchk *lchk) evictAll(d time.Duration) {
 	}
 
 	if _, tag := lchk.mp(); tag != "" {
-		nlog.Infof("memory pressure %q, total %d, evicted %d", tag, lchk.totalCnt, lchk.evictedCnt)
+		nlog.Infoln("post-evict memory pressure:", tag, "total:", lchk.totalCnt, "evicted:", lchk.evictedCnt)
 	}
 
 	// stats
 	g.tstats.Add(LcacheEvictedCount, lchk.evictedCnt)
 	g.tstats.Add(LcacheFlushColdCount, lchk.flushColdCnt)
-
-	lchk.running.Store(false)
 }
 
 func (lchk *lchk) fterm(_, value any) bool {

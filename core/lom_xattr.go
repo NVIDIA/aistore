@@ -390,7 +390,7 @@ func (md *lmeta) unpack(buf []byte) error {
 				mpathInfo, _, err := fs.FQN2Mpath(copyFQN)
 				if err != nil {
 					// Mountpath with the copy is missing.
-					if cmn.Rom.FastV(4, cos.SmoduleCluster) {
+					if cmn.Rom.FastV(4, cos.SmoduleCore) {
 						nlog.Warningln(err)
 					}
 					// For utilities and tests: fill the map with mpath names always

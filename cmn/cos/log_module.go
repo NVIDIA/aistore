@@ -19,7 +19,7 @@ const (
 	SmoduleTransport = 1 << iota
 	SmoduleAIS
 	SmoduleMemsys
-	SmoduleCluster
+	SmoduleCore
 	SmoduleFS
 	SmoduleReb
 	SmoduleEC
