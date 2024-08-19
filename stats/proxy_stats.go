@@ -60,7 +60,7 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 // statsLogger interface impl
 //
 
-func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
+func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	s := r.core
 	s.updateUptime(uptime)
 	s.promLock()
@@ -79,7 +79,7 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 			}
 		}
 		if idle {
-			r.next = now + maxStatsLogInterval
+			r._next(config, now)
 		}
 	}
 

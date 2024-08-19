@@ -636,8 +636,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	// 7. separately, memory w/ set/clr flags cumulative
 	r._mem(r.t.PageMM(), set, clr)
 
+	// idle
 	if now > r.next {
-		r.next = now + maxStatsLogInterval
+		r._next(config, now)
 	}
 }
 

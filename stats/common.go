@@ -341,6 +341,14 @@ func (r *runner) nodeStateFlags() cos.NodeStateFlags {
 	return cos.NodeStateFlags(val)
 }
 
+func (r *runner) _next(config *cmn.Config, now int64) {
+	if config.Log.StatsTime >= config.Periodic.StatsTime {
+		r.next = now + int64(config.Log.StatsTime)
+	} else {
+		r.next = now + maxStatsLogInterval // default
+	}
+}
+
 func (r *runner) _run(logger statsLogger) error {
 	var (
 		i, j, k time.Duration
