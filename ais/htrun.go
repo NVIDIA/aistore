@@ -1365,14 +1365,14 @@ func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string,
 
 func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Scheme != "" {
-		h.writeErrf(w, r, "request '%s %s://%s': invalid URL path", r.Method, r.URL.Scheme, r.URL.Path)
+		h.writeErrf(w, r, "request '%s %s://%s' from %s: invalid URL path", r.Method, r.URL.Scheme, r.URL.Path, r.RemoteAddr)
 		return
 	}
 	// ignore GET /favicon.ico by Browsers
 	if r.URL.Path == "/favicon.ico" || r.URL.Path == "favicon.ico" {
 		return
 	}
-	h.writeErrf(w, r, "invalid request URI: '%s %s'", r.Method, r.RequestURI)
+	h.writeErrf(w, r, "invalid request URI: '%s %s' from %s", r.Method, r.RequestURI, r.RemoteAddr)
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {

@@ -70,7 +70,7 @@ func NewMMSA(name string, silent bool) (mem *MMSA, err error) {
 	}
 	err = mem.Init(0)
 	if !silent {
-		cos.Infof("%s", mem.Str(&mem.mem))
+		cos.Infoln(mem.Str(&mem.mem))
 	}
 	return
 }

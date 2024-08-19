@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -47,8 +48,8 @@ var _ cos.Runner = (*StreamCollector)(nil)
 func (*StreamCollector) Name() string { return "stream-collector" }
 
 func (sc *StreamCollector) Run() error {
-	cos.Infof("Intra-cluster networking: %s client", whichClient())
-	cos.Infof("Starting %s", sc.Name())
+	cos.Infoln("Intra-cluster networking:", whichClient(), "client")
+	cos.Infoln("Starting", sc.Name())
 	gc.ticker = time.NewTicker(dfltTickIdle)
 	gc.none.Store(true)
 	gc.run()
@@ -62,10 +63,29 @@ func (sc *StreamCollector) Stop(err error) {
 }
 
 func (gc *collector) run() {
+	var prev int64
 	for {
 		select {
 		case <-gc.ticker.C:
 			gc.do()
+
+			// periodic log
+			if !gc.none.Load() {
+				now := mono.NanoTime()
+				if time.Duration(now-prev) >= dfltCollectLog {
+					var s *streamBase
+					for _, s = range gc.streams {
+						break
+					}
+					nlog.Infoln("total:", len(gc.streams), "one:", s.String())
+					prev = now
+
+					if l, c := len(gc.ctrlCh), cap(gc.ctrlCh); l > (c - c>>2) {
+						nlog.Errorln("control channel full", l, c) // compare w/ cos.ErrWorkChanFull
+					}
+				}
+			}
+
 		case ctrl, ok := <-gc.ctrlCh:
 			if !ok {
 				return
@@ -78,6 +98,7 @@ func (gc *collector) run() {
 				heap.Push(gc, s)
 				if gc.none.CAS(true, false) {
 					gc.ticker.Reset(dfltTick)
+					prev = mono.NanoTime()
 				}
 			} else if ok {
 				heap.Remove(gc, s.time.index)
@@ -156,6 +177,7 @@ func (gc *collector) do() {
 					gc.ticker.Reset(dfltTickIdle)
 					debug.Assert(!gc.none.Load())
 					gc.none.Store(true)
+					nlog.Infoln("none")
 				}
 				s.streamer.closeAndFree()
 				s.streamer.abortPending(err, true /*completions*/)

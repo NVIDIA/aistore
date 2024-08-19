@@ -100,7 +100,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 	hdr.Opaque = reb.encodeStageNtfn(&req)
 	// second, notify all
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		nlog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
+		nlog.Warningln("Failed to push new-stage notif:", req.rebID, stages[newStage], "err:", err)
 	}
 }
 

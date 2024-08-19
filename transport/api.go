@@ -159,7 +159,7 @@ func (s *Stream) Send(obj *Obj) (err error) {
 	}
 
 	s.workCh <- obj
-	if l, c := len(s.workCh), cap(s.workCh); l > c/2 {
+	if l, c := len(s.workCh), cap(s.workCh); l > (c - c>>2) {
 		runtime.Gosched() // poor man's throttle
 		if l == c {
 			s.chanFull.Inc()

@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -168,8 +168,8 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 
 	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
-		if verbose {
-			nlog.Infof("%s: inactive => active", s)
+		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+			nlog.Infoln(s.String(), "inactive => active")
 		}
 	}
 	return
@@ -212,21 +212,21 @@ func (s *streamBase) isNextReq() (reason string) {
 	for {
 		select {
 		case <-s.lastCh.Listen():
-			if verbose {
-				nlog.Infof("%s: end-of-stream", s)
+			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+				nlog.Infoln(s.String(), "end-of-stream")
 			}
 			reason = endOfStream
 			return
 		case <-s.stopCh.Listen():
-			if verbose {
-				nlog.Infof("%s: stopped", s)
+			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+				nlog.Infoln(s.String(), "stopped")
 			}
 			reason = reasonStopped
 			return
 		case <-s.postCh:
 			s.sessST.Store(active)
-			if verbose {
-				nlog.Infof("%s: active <- posted", s)
+			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+				nlog.Infoln(s.String(), "active <- posted")
 			}
 			return
 		}
@@ -235,9 +235,8 @@ func (s *streamBase) isNextReq() (reason string) {
 
 func (s *streamBase) deactivate() (n int, err error) {
 	err = io.EOF
-	if verbose {
-		num := s.stats.Num.Load()
-		nlog.Infof("%s: connection teardown (%d/%d)", s, s.numCur, num)
+	if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		nlog.Infoln(s.String(), "connection teardown: [", s.numCur, s.stats.Num.Load(), "]")
 	}
 	return
 }
@@ -260,7 +259,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 					break
 				}
 				retried = true
-				nlog.Errorf("%s: %v - retrying...", s, errR)
+				nlog.Errorln(s.String(), "err: ", errR, "- retrying...")
 				time.Sleep(connErrWait)
 			}
 		}
@@ -288,8 +287,9 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
 
+	verbose := cmn.Rom.FastV(5, cos.SmoduleTransport)
 	if cnt := s.chanFull.Load(); (cnt >= 10 && cnt <= 20) || (cnt > 0 && verbose) {
-		nlog.Errorln(cos.ErrWorkChanFull, s.lid, "cnt", cnt)
+		nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
 	}
 }
 

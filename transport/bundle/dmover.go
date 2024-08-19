@@ -152,7 +152,9 @@ func (dm *DataMover) Open() {
 		}
 		dm.ack.streams = New(dm.ack.client, ackArgs)
 	}
+
 	dm.stage.opened.Store(true)
+	nlog.Infoln(dm.String(), "is open")
 }
 
 func (dm *DataMover) String() string {
@@ -179,18 +181,29 @@ func (dm *DataMover) Quiesce(d time.Duration) core.QuiRes {
 
 func (dm *DataMover) Close(err error) {
 	if dm == nil {
+		nlog.Errorln("Warning: DM is <nil>")
 		return
 	}
 	if !dm.stage.opened.CAS(true, false) {
+		nlog.Errorln("Warning:", dm.String(), "not open")
 		return
 	}
 	if err == nil && dm.xctn != nil && dm.xctn.IsAborted() {
 		err = dm.xctn.AbortErr()
 	}
 	// nil: close gracefully via `fin`, otherwise abort
-	dm.data.streams.Close(err == nil)
-	if dm.useACKs() {
-		dm.ack.streams.Close(err == nil)
+	if err == nil {
+		dm.data.streams.Close(true)
+		if dm.useACKs() {
+			dm.ack.streams.Close(true)
+		}
+		nlog.Infoln(dm.String(), "closed")
+	} else {
+		dm.data.streams.Close(false)
+		if dm.useACKs() {
+			dm.ack.streams.Close(false)
+		}
+		nlog.Infoln(dm.String(), "aborted:", err)
 	}
 }
 

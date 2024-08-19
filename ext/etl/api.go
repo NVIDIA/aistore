@@ -219,7 +219,7 @@ func (m *InitMsgBase) validate(detail string) error {
 
 	// NOTE: default comm-type
 	if m.CommType() == "" {
-		cos.Infof("Warning: empty comm-type, defaulting to %q", Hpush)
+		cos.Infoln("Warning: empty comm-type, defaulting to", Hpush)
 		m.CommTypeX = Hpush
 	}
 	// NOTE: default timeout

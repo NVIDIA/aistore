@@ -321,7 +321,7 @@ func Run(version, buildTime string) int {
 		return 0
 	}
 	if e, ok := err.(*cos.ErrSignal); ok {
-		nlog.Infof("Terminated OK via %v", e)
+		nlog.Infoln("Terminated OK via", e)
 		return e.ExitCode()
 	}
 	if errors.Is(err, cmn.ErrStartupTimeout) {
@@ -331,7 +331,7 @@ func Run(version, buildTime string) int {
 		// to restart the daemon if the primary gets killed or panics prior (to reaching that state)
 		nlog.Errorln("Timed-out while starting up")
 	}
-	nlog.Errorf("Terminated with err: %v", err)
+	nlog.Errorln("Terminated with err:", err)
 	return 1
 }
 

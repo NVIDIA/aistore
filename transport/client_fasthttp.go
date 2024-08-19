@@ -75,10 +75,10 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	// do
 	err = s.client.Do(req, resp)
 	if err != nil {
-		if verbose {
-			nlog.Errorf("%s: Error [%v]", s, err)
+		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+			nlog.Errorln(s.String(), "err:", err)
 		}
-		return
+		return err
 	}
 	// handle response & cleanup
 	resp.BodyWriteTo(io.Discard)
@@ -87,5 +87,5 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	if s.streamer.compressed() {
 		s.streamer.resetCompression()
 	}
-	return
+	return nil
 }

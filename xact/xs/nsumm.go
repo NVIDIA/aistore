@@ -150,11 +150,15 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 
 func (r *XactNsumm) Run(started *sync.WaitGroup) {
 	started.Done()
-	nlog.Infoln(r.Name(), r.p.Bck.Cname(""))
-
 	var (
+		bname    string
 		rwg, lwg cos.WG
 	)
+	if !r.p.Bck.IsEmpty() {
+		bname = r.p.Bck.Cname("")
+	}
+	nlog.Infoln(r.Name(), bname)
+
 	// (I) remote
 	if r.listRemote {
 		// _this_ target to list-and-summ remote pages, in parallel

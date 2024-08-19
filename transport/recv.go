@@ -103,8 +103,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		//  at the lowest level (and with no handler and its rxObj cb).
 		//
 		if _, ok := err.(*errAlreadyClosedTrname); ok {
-			if verbose {
-				nlog.Errorln(err)
+			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+				nlog.Errorln(trname, "err:", err)
 			}
 		} else {
 			cmn.WriteErr(w, r, err, 0)
@@ -169,8 +169,8 @@ func (h *hdlExtra) stats(r *http.Request, trname string) (rxStats, uint64, strin
 
 	xxh, _ := UID2SessID(uid)
 	loghdr := fmt.Sprintf("%s[%d:%d]", h.trname, xxh, sessID)
-	if verbose {
-		nlog.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
+	if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		nlog.Infoln(loghdr, "start-of-stream from", r.RemoteAddr)
 	}
 	return statsif.(rxStats), uid, loghdr
 }

@@ -503,7 +503,7 @@ func (lom *LOM) Recache() {
 }
 
 func (lom *LOM) _collide(lmd *lmeta) {
-	if cmn.Rom.FastV(4, cos.SmoduleCore) || (lom.digest%17) == 5 {
+	if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 {
 		nlog.InfoDepth(1, LcacheCollisionCount, lom.digest, "[", *lmd.uname, "]", *lom.md.uname, lom.Cname())
 	}
 	g.tstats.Inc(LcacheCollisionCount)

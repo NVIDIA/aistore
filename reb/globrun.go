@@ -445,7 +445,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 		reb.endStreams(err)
 		xctn.Abort(err)
 		reb.mu.Unlock()
-		nlog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
+		nlog.Errorln("FATAL:", fatalErr, "WRITE:", writeErr)
 		return false
 	}
 
@@ -454,7 +454,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	reb.stages.cleanup()
 
 	reb.mu.Unlock()
-	nlog.Infof("%s: running %s", reb.logHdr(rargs.id, rargs.smap), reb.xctn())
+	nlog.Infoln(reb.logHdr(rargs.id, rargs.smap), "- running", reb.xctn())
 	return true
 }
 
@@ -482,10 +482,10 @@ func (reb *Reb) abortStreams() {
 }
 
 func (reb *Reb) endStreams(err error) {
-	if reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
-		reb.dm.Close(err)
-		reb.pushes.Close(true)
-	}
+	swapped := reb.stages.stage.CAS(rebStageFin, rebStageFinStreams)
+	debug.Assert(swapped)
+	reb.dm.Close(err)
+	reb.pushes.Close(err == nil)
 }
 
 // when at least one bucket has EC enabled
@@ -578,7 +578,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 						for _, lom := range lomack.q {
 							tsi, err := smap.HrwHash2T(lom.Digest())
 							if err == nil {
-								nlog.Infof("waiting for %s ACK from %s", lom, tsi.StringEx())
+								nlog.Infoln("waiting for", lom.String(), "ACK from", tsi.StringEx())
 								logged = true
 								break
 							}
@@ -587,7 +587,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 				}
 				lomack.mu.Unlock()
 				if err := xreb.AbortErr(); err != nil {
-					nlog.Infof("%s: abort wait-ack (%v)", logHdr, err)
+					nlog.Infoln(logHdr, "abort wait-ack:", err)
 					return
 				}
 			}
@@ -597,7 +597,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 			}
 			nlog.Warningf("%s: waiting for %d ACKs", logHdr, cnt)
 			if err := xreb.AbortedAfter(sleep); err != nil {
-				nlog.Infof("%s: abort wait-ack (%v)", logHdr, err)
+				nlog.Infoln(logHdr, "abort wait-ack:", err)
 				return
 			}
 
@@ -707,10 +707,8 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 }
 
 func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
-	var stats core.Stats
-	if cmn.Rom.FastV(4, cos.SmoduleReb) {
-		nlog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
-	}
+	nlog.Infoln(logHdr, "fini")
+
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Transport.QuiesceTime.D(), reb.nodesQuiescent); q != core.QuiAborted {
 		if errM := fs.RemoveMarker(fname.RebalanceMarker); errM == nil {
@@ -720,7 +718,11 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()
-	xreb := reb.xctn()
+
+	var (
+		stats core.Stats
+		xreb  = reb.xctn()
+	)
 	xreb.ToStats(&stats)
 	if stats.Objs > 0 || stats.OutObjs > 0 || stats.InObjs > 0 {
 		s, e := jsoniter.MarshalIndent(&stats, "", " ")
@@ -735,7 +737,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	if !xreb.Finished() {
 		xreb.Finish()
 	}
-	nlog.Infof("%s: done (%s)", logHdr, xreb)
+	nlog.Infoln(logHdr, "done", xreb.String())
 }
 
 //////////////////////////////

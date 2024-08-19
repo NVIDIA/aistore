@@ -140,7 +140,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 		return err
 	}
 	if ack.rebID != reb.RebID() {
-		nlog.Warningf("received %s: %s", hdr.Cname(), reb.warnID(ack.rebID, ack.daemonID))
+		nlog.Warningln("received", hdr.Cname(), reb.warnID(ack.rebID, ack.daemonID))
 		return nil
 	}
 	tsid := ack.daemonID // the sender
@@ -209,7 +209,7 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 		return err
 	}
 	if ack.rebID != reb.rebID.Load() {
-		nlog.Warningf("ACK from %s: %s", ack.daemonID, reb.warnID(ack.rebID, ack.daemonID))
+		nlog.Warningln("ACK from", ack.daemonID, reb.warnID(ack.rebID, ack.daemonID))
 		return nil
 	}
 
