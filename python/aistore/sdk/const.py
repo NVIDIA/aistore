@@ -86,6 +86,7 @@ DSORT_ABORT = "abort"
 URL_PATH_AUTHN_USERS = "users"
 URL_PATH_AUTHN_CLUSTERS = "clusters"
 URL_PATH_AUTHN_ROLES = "roles"
+URL_PATH_AUTHN_TOKENS = "tokens"
 
 # Bucket providers
 # See api/apc/provider.go
