@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 from urllib.parse import urljoin, urlencode
-from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
+from typing import Callable, TypeVar, Type, Any, Dict, Optional, Tuple, Union
 from requests import Response
 
 from aistore.sdk.const import (
@@ -13,7 +13,7 @@ from aistore.sdk.const import (
     HEADER_AUTHORIZATION,
 )
 from aistore.sdk.session_manager import SessionManager
-from aistore.sdk.utils import handle_errors, decode_response
+from aistore.sdk.utils import raise_ais_error, handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
 
 T = TypeVar("T")
@@ -22,15 +22,17 @@ T = TypeVar("T")
 # pylint: disable=unused-variable, duplicate-code, too-many-arguments
 class RequestClient:
     """
-    Internal client for buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
+    Internal client for making requests to an AIS cluster or a specific proxy (e.g. AuthN).
 
     Args:
-        endpoint (str): AIStore endpoint
-        session_manager (SessionManager): SessionManager for creating and accessing requests session
-        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
+        endpoint (str): Endpoint to either the AIS cluster or a specific proxy (e.g. AuthN).
+        session_manager (SessionManager): SessionManager for creating and accessing requests session.
+        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float.
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
         token (str, optional): Authorization token.
+        error_handler (Callable[[str], None], optional): Error handler for managing response errors. Defaults to
+            raise_ais_error.
     """
 
     def __init__(
@@ -39,39 +41,38 @@ class RequestClient:
         session_manager: SessionManager,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
+        error_handler: Callable[[str], None] = raise_ais_error,
     ):
         self._base_url = urljoin(endpoint, "v1")
         self._session_manager = session_manager
         self._token = token
         self._timeout = timeout
+        self._error_handler = error_handler
 
     @property
     def base_url(self):
-        """
-        Returns: AIS cluster base url
-        """
+        """Return the base URL."""
         return self._base_url
 
     @property
     def timeout(self):
-        """
-        Returns: Timeout for requests
-        """
+        """Return the timeout for requests."""
         return self._timeout
 
     @timeout.setter
     def timeout(self, timeout: Union[float, Tuple[float, float]]):
         """
-        Set timeout for all requests from this client
+        Set the timeout for all requests from this client.
+
         Args:
-            timeout: Request timeout
+            timeout: Timeout for requests.
         """
         self._timeout = timeout
 
     @property
     def session_manager(self) -> SessionManager:
         """
-        Returns: SessionManager used to create sessions for this client
+        Return the SessionManager used to create sessions for this client.
         """
         return self._session_manager
 
@@ -82,7 +83,7 @@ class RequestClient:
     @property
     def token(self) -> str:
         """
-        Returns: Token for Authorization
+        Return the token for authorization.
         """
         return self._token
 
@@ -92,7 +93,7 @@ class RequestClient:
         Set the token for Authorization.
 
         Args:
-            token (str): Token for Authorization.
+            token (str): Token for authorization.
         """
         self._token = token
 
@@ -100,15 +101,16 @@ class RequestClient:
         self, method: str, path: str, res_model: Type[T], **kwargs
     ) -> T:
         """
-        Make a request to the AIS cluster and deserialize the response to a defined type
+        Make a request and deserialize the response to a defined type.
+
         Args:
-            method (str): HTTP method, e.g. POST, GET, PUT, DELETE
-            path (str): URL path to call
-            res_model (Type[T]): Resulting type to which the response should be deserialized
-            **kwargs (optional): Optional keyword arguments to pass with the call to request
+            method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
+            path (str): URL path to call.
+            res_model (Type[T]): Resulting type to which the response should be deserialized.
+            **kwargs (optional): Optional keyword arguments to pass with the call to request.
 
         Returns:
-            Parsed result of the call to the API, as res_model
+            Parsed result of the call to the API, as res_model.
         """
         resp = self.request(method, path, **kwargs)
         return decode_response(res_model, resp)
@@ -122,16 +124,17 @@ class RequestClient:
         **kwargs,
     ) -> Response:
         """
-        Make a request to the AIS cluster
+        Make a request.
+
         Args:
-            method (str): HTTP method, e.g. POST, GET, PUT, DELETE
-            path (str): URL path to call
-            endpoint (str): Alternative endpoint for the AIS cluster, e.g. for connecting to a specific proxy
-            headers (dict): Extra headers to be passed with the request. Content-Type and User-Agent will be overridden
-            **kwargs (optional): Optional keyword arguments to pass with the call to request
+            method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
+            path (str): URL path to call.
+            endpoint (str): Alternative endpoint for the AIS cluster (e.g. for connecting to a specific proxy).
+            headers (dict): Extra headers to be passed with the request. Content-Type and User-Agent will be overridden.
+            **kwargs (optional): Optional keyword arguments to pass with the call to request.
 
         Returns:
-            Raw response from the API
+            Raw response from the API.
         """
         base = urljoin(endpoint, "v1") if endpoint else self._base_url
         url = f"{base}/{path.lstrip('/')}"
@@ -150,19 +153,19 @@ class RequestClient:
             **kwargs,
         )
         if resp.status_code < 200 or resp.status_code >= 300:
-            handle_errors(resp)
+            handle_errors(resp, self._error_handler)
         return resp
 
     def get_full_url(self, path: str, params: Dict[str, Any]) -> str:
         """
-        Get the full URL to the path on the cluster with the parameters given
+        Get the full URL to the path on the cluster with the given parameters.
 
         Args:
-            path: Path on the cluster
-            params: Query parameters to include
+            path: Path on the cluster.
+            params: Query parameters to include.
 
         Returns:
-            URL including cluster base url and parameters
+            URL including cluster base URL and parameters.
 
         """
         return f"{self._base_url}/{path.lstrip('/')}?{urlencode(params)}"

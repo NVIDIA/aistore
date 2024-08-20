@@ -10,6 +10,7 @@ from typing import List
 import pytest
 
 from aistore.sdk.authn.authn_client import AuthNClient
+from aistore.sdk.authn.errors import ErrUserInvalidCredentials, ErrUserNotFound
 from aistore.sdk.client import Client
 from aistore.sdk.authn.types import AccessAttr
 from aistore.sdk.errors import AISError
@@ -53,13 +54,7 @@ class TestAuthNUserManager(
         self._create_ais_client()
         self.cluster_manager.delete(cluster_id=self.uuid)
         self.role_manager.delete(name=self.role.name)
-
-        # TODO: Implement AuthN error handling and add `existing_ok`, `missing_ok` flags to appropriate methods
-        try:
-            self.user_manager.delete(username=self.user.id)
-        except AISError:
-            pass
-
+        self.user_manager.delete(username=self.user.id, missing_ok=True)
         if self.bucket:
             self.ais_client.bucket(self.bucket.name).delete()
 
@@ -87,7 +82,7 @@ class TestAuthNUserManager(
     @pytest.mark.authn
     def test_create_user(self):
         # Test invalid login with incorrect password
-        with self.assertRaises(AISError):
+        with self.assertRaises(ErrUserInvalidCredentials):
             self.authn_client.login(self.user.id, "1234")
 
         # Test valid login with correct password
@@ -109,7 +104,7 @@ class TestAuthNUserManager(
     def test_delete_user(self):
         # Delete the user and check if it exists
         self.user_manager.delete(username=self.user.id)
-        with self.assertRaises(AISError):
+        with self.assertRaises(ErrUserNotFound):
             self.user_manager.get(username=self.user.id)
 
     @pytest.mark.authn
@@ -162,7 +157,7 @@ class TestAuthNUserManager(
         )
 
         # Test invalid login with old password
-        with self.assertRaises(AISError):
+        with self.assertRaises(ErrUserInvalidCredentials):
             self.authn_client.login(self.user.id, "12345")
         self.authn_client.login(self.user.id, "123456")
 
@@ -190,7 +185,7 @@ class TestAuthNUserManager(
         )
 
         # Test invalid login with old password
-        with self.assertRaises(AISError):
+        with self.assertRaises(ErrUserInvalidCredentials):
             self.authn_client.login(self.user.id, "12345")
         self.authn_client.login(self.user.id, "1234567")
 

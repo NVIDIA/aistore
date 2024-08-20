@@ -10,12 +10,13 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     URL_PATH_AUTHN_USERS,
 )
+from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
 from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.authn.role_manager import RoleManager
 from aistore.sdk.authn.token_manager import TokenManager
-from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.authn.user_manager import UserManager
+from aistore.sdk.authn.utils import raise_authn_error
 
 # logging
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +60,7 @@ class AuthNClient:
             session_manager=session_manager,
             timeout=timeout,
             token=token,
+            error_handler=raise_authn_error,
         )
         logger.info("AuthNClient initialized with endpoint: %s", endpoint)
 

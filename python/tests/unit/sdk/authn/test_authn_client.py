@@ -9,6 +9,7 @@ from urllib3 import Retry
 
 from aistore.sdk.authn import AuthNClient
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
+from aistore.sdk.authn.utils import raise_authn_error
 
 from tests.utils import test_cases
 
@@ -28,6 +29,7 @@ class TestAuthNClient(unittest.TestCase):
             session_manager=mock_sm.return_value,
             timeout=None,
             token=None,
+            error_handler=raise_authn_error,
         )
 
     @test_cases(
@@ -62,6 +64,7 @@ class TestAuthNClient(unittest.TestCase):
             session_manager=mock_sm.return_value,
             timeout=timeout,
             token=token,
+            error_handler=raise_authn_error,
         )
 
     @patch("aistore.sdk.request_client.RequestClient.request_deserialize")

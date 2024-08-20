@@ -8,9 +8,10 @@ import logging
 
 from typing import List, Optional
 
-from aistore.sdk.authn.role_manager import RoleManager
 from aistore.sdk.authn.types import UserInfo, RolesList, UsersList
+from aistore.sdk.authn.errors import ErrUserNotFound
 from aistore.sdk.request_client import RequestClient
+from aistore.sdk.authn.role_manager import RoleManager
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
@@ -29,7 +30,7 @@ class UserManager:
     UserManager provides methods to manage users in the AuthN service.
 
     Args:
-        client (RequestClient): The request client to interact with AuthN service.
+        client (RequestClient): The RequestClient used to make HTTP requests.
     """
 
     def __init__(self, client: RequestClient):
@@ -63,21 +64,26 @@ class UserManager:
 
         return response
 
-    def delete(self, username: str) -> None:
+    def delete(self, username: str, missing_ok: bool = False) -> None:
         """
         Delete an existing user from the AuthN Server.
 
         Args:
             username (str): The username of the user to delete.
+            missing_ok (bool):  Ignore error if user does not exist. Defaults to False.
 
         Raises:
             AISError: If the user deletion request fails.
         """
         logger.info("Deleting user with ID: %s", username)
-        self._client.request(
-            HTTP_METHOD_DELETE,
-            path=f"{URL_PATH_AUTHN_USERS}/{username}",
-        )
+        try:
+            self._client.request(
+                HTTP_METHOD_DELETE,
+                path=f"{URL_PATH_AUTHN_USERS}/{username}",
+            )
+        except ErrUserNotFound as err:
+            if not missing_ok:
+                raise err
 
     def create(
         self,

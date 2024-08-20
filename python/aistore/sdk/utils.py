@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
-from typing import Iterator, Tuple, Type, TypeVar
+from typing import Callable, Iterator, Tuple, Type, TypeVar
 from urllib.parse import urlparse
 
 import braceexpand
@@ -28,7 +28,7 @@ T = TypeVar("T")
 
 class HttpError(BaseModel):
     """
-    Represents the errors returned by the API
+    Represents an error returned by the API.
     """
 
     status: int
@@ -40,31 +40,46 @@ class HttpError(BaseModel):
     node: str = ""
 
 
-def _raise_error(text: str):
+def raise_ais_error(text: str) -> None:
+    """
+    Raise an AIS error based on the response text.
+
+    Args:
+        text (str): The raw text of the API response containing error details.
+
+    Raises:
+        AISError: If the error doesn't match any specific conditions.
+        ErrBckNotFound: If the error message indicates a missing bucket.
+        ErrRemoteBckNotFound: If the error message indicates a missing remote bucket.
+        ErrBckAlreadyExists: If the error message indicates a bucket already exists.
+        ErrETLAlreadyExists: If the error message indicates an ETL already exists
+    """
     err = pydantic.tools.parse_raw_as(HttpError, text)
     if 400 <= err.status < 500:
-        err = pydantic.tools.parse_raw_as(HttpError, text)
         if "does not exist" in err.message:
             if "cloud bucket" in err.message or "remote bucket" in err.message:
                 raise ErrRemoteBckNotFound(err.status, err.message)
             if "bucket" in err.message:
                 raise ErrBckNotFound(err.status, err.message)
-        if "already exists" in err.message:
+        elif "already exists" in err.message:
             if "bucket" in err.message:
                 raise ErrBckAlreadyExists(err.status, err.message)
             if "etl" in err.message:
                 raise ErrETLAlreadyExists(err.status, err.message)
-    # TODO: Add error handling for AUTHN errors
+
     raise AISError(err.status, err.message)
 
 
 # pylint: disable=unused-variable
-def handle_errors(resp: requests.Response):
+def handle_errors(
+    resp: requests.Response, raise_error_fn: Callable[[str], None] = raise_ais_error
+) -> None:
     """
     Error handling for requests made to the AIS Client
 
     Args:
         resp: requests.Response = Response received from the request
+        raise_error_fn: Function that processes error text and raises appropriate exceptions.
     """
     error_text = resp.text
     if isinstance(resp.text, bytes):
@@ -73,7 +88,7 @@ def handle_errors(resp: requests.Response):
         except UnicodeDecodeError:
             error_text = error_text.decode("iso-8859-1")
     if error_text != "":
-        _raise_error(error_text)
+        raise_error_fn(error_text)
     resp.raise_for_status()
 
 
@@ -104,12 +119,12 @@ def read_file_bytes(filepath: str):
         return reader.read()
 
 
-def _check_path_exists(path: str):
+def _check_path_exists(path: str) -> None:
     if not Path(path).exists():
         raise ValueError(f"Path: {path} does not exist")
 
 
-def validate_file(path: str):
+def validate_file(path: str) -> None:
     """
     Validate that a file exists and is a file
     Args:
@@ -125,7 +140,7 @@ def validate_file(path: str):
         raise ValueError(f"Path: {path} is a directory, not a file")
 
 
-def validate_directory(path: str):
+def validate_directory(path: str) -> None:
     """
     Validate that a directory exists and is a directory
     Args:

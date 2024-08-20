@@ -30,18 +30,12 @@ class ErrRemoteBckNotFound(AISError):
     Raised when a remote bucket its required and missing for the requested operation
     """
 
-    def __init__(self, status_code, message):
-        super().__init__(status_code=status_code, message=message)
-
 
 # pylint: disable=unused-variable
 class ErrBckNotFound(AISError):
     """
     Raised when a bucket is expected and not found
     """
-
-    def __init__(self, status_code, message):
-        super().__init__(status_code=status_code, message=message)
 
 
 # pylint: disable=unused-variable
@@ -50,18 +44,12 @@ class ErrBckAlreadyExists(AISError):
     Raised when a bucket is created but already exists in AIS
     """
 
-    def __init__(self, status_code, message):
-        super().__init__(status_code=status_code, message=message)
-
 
 # pylint: disable=unused-variable
 class ErrETLAlreadyExists(AISError):
     """
     Raised when an ETL is created but already exists in AIS
     """
-
-    def __init__(self, status_code, message):
-        super().__init__(status_code=status_code, message=message)
 
 
 # pylint: disable=unused-variable

@@ -24,7 +24,7 @@ from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.types import BucketModel
 from aistore.sdk.namespace import Namespace
-from aistore.sdk.errors import AISError
+from aistore.sdk.authn.errors import ErrRoleNotFound
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class RoleManager:
     retrieving, creating, updating, and deleting role information.
 
     Args:
-        client (RequestClient): The client used to make HTTP requests.
+        client (RequestClient): The RequestClient used to make HTTP requests.
     """
 
     def __init__(self, client: RequestClient):
@@ -187,7 +187,7 @@ class RoleManager:
 
         try:
             role_info = self.get(role_name=name)
-        except AISError as error:
+        except ErrRoleNotFound as error:
             raise ValueError(f"Role {name} does not exist") from error
 
         if desc:
@@ -229,26 +229,26 @@ class RoleManager:
             json=role_info.dict(),
         )
 
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, missing_ok: bool = False) -> None:
         """
         Deletes a role.
 
         Args:
             name (str): The name of the role to delete.
+            missing_ok (bool): Ignore error if role does not exist. Defaults to False
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore.
             requests.RequestException: If the HTTP request fails.
             ValueError: If the role does not exist.
         """
-        try:
-            self.get(role_name=name)
-        except AISError as error:
-            raise ValueError(f"Role {name} does not exist") from error
-
         logger.info("Deleting role with name: %s", name)
 
-        self.client.request(
-            HTTP_METHOD_DELETE,
-            path=f"{URL_PATH_AUTHN_ROLES}/{name}",
-        )
+        try:
+            self.client.request(
+                HTTP_METHOD_DELETE,
+                path=f"{URL_PATH_AUTHN_ROLES}/{name}",
+            )
+        except ErrRoleNotFound as err:
+            if not missing_ok:
+                raise err

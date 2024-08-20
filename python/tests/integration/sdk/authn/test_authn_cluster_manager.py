@@ -11,7 +11,7 @@ import pytest
 from aistore.sdk.authn.authn_client import AuthNClient
 from aistore.sdk.client import Client
 from aistore.sdk.authn.types import ClusterInfo, ClusterList
-from aistore.sdk.errors import AISError
+from aistore.sdk.authn.errors import ErrClusterAlreadyRegistered
 from tests.integration import (
     AIS_AUTHN_SU_NAME,
     AIS_AUTHN_SU_PASS,
@@ -66,7 +66,7 @@ class TestAuthNClusterManager(
 
     @pytest.mark.authn
     def test_register_cluster_duplicate(self):
-        with self.assertRaises(AISError):
+        with self.assertRaises(ErrClusterAlreadyRegistered):
             self.cluster_manager.register(self.cluster_alias, self.urls)
 
     @pytest.mark.authn

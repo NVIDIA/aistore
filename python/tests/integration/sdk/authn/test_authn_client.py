@@ -11,6 +11,7 @@ import pytest
 from aistore.sdk import AuthNClient, Client
 from aistore.sdk.errors import AISError
 from aistore.sdk.const import PROVIDER_AIS
+from aistore.sdk.authn.errors import ErrUserInvalidCredentials
 from tests.integration import (
     AIS_AUTHN_SU_NAME,
     AIS_AUTHN_SU_PASS,
@@ -32,7 +33,7 @@ class TestAuthNClient(unittest.TestCase):
 
     @pytest.mark.authn
     def test_login_failure(self):
-        with self.assertRaises(AISError) as context:
+        with self.assertRaises(ErrUserInvalidCredentials) as context:
             self.authn_client.login(AIS_AUTHN_SU_NAME, "WRONG_PASSWORD")
 
         self.assertEqual(context.exception.status_code, 401)

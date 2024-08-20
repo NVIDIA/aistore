@@ -9,7 +9,7 @@ import pytest
 from aistore.sdk.authn.authn_client import AuthNClient
 from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.client import Client
-from aistore.sdk.errors import AISError
+from aistore.sdk.authn.errors import ErrRoleNotFound
 from tests.integration import (
     AIS_AUTHN_SU_NAME,
     AIS_AUTHN_SU_PASS,
@@ -38,10 +38,7 @@ class TestAuthNRoleManager(
 
     def tearDown(self) -> None:
         self.cluster_manager.delete(cluster_id=self.uuid)
-        try:
-            self.role_manager.delete(name=self.role.name)
-        except ValueError:
-            pass
+        self.role_manager.delete(name=self.role.name, missing_ok=True)
 
     def _create_role(self):
         return self.role_manager.create(
@@ -63,13 +60,13 @@ class TestAuthNRoleManager(
 
     @pytest.mark.authn
     def test_role_invalid_delete(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ErrRoleNotFound):
             self.role_manager.delete(name="invalid-name")
 
     @pytest.mark.authn
     def test_role_delete(self):
         self.role_manager.delete(name=self.role.name)
-        with self.assertRaises(AISError):
+        with self.assertRaises(ErrRoleNotFound):
             self.role_manager.get(role_name=self.role.name)
 
     @pytest.mark.authn
