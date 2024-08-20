@@ -173,16 +173,18 @@ func (c *Config) validate() (err error) {
 	return nil
 }
 
-func (c *Config) ValidateTLS() (err error) {
-	err = cos.Stat(c.Cluster.Certificate)
+func (c *Config) WarnTLS(server string) {
+	err := cos.Stat(c.Cluster.Certificate)
 	if err == nil {
 		err = cos.Stat(c.Cluster.CertKey)
 	}
 	if err == nil {
-		return nil
+		return
 	}
 	path := filepath.Join(ConfigDir, fname.CliConfig)
-	return fmt.Errorf("CLI config at %s: invalid public/private key pair (%q,%q): %v",
+
+	fmt.Fprintln(os.Stderr, "Warning: CLI may have a problem communicating with "+server+" - CLI config at")
+	fmt.Fprintf(os.Stderr, "%s contains invalid public/private key pair (%q,%q), err: %v\n\n",
 		path, c.Cluster.Certificate, c.Cluster.CertKey, err)
 }
 

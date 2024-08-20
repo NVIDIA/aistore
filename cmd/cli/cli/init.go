@@ -56,9 +56,7 @@ func Init(args []string) (err error) {
 		UA:    ua,
 	}
 	if cos.IsHTTPS(clusterURL) {
-		if err = cfg.ValidateTLS(); err != nil {
-			return err
-		}
+		cfg.WarnTLS("aistore at " + clusterURL)
 		clientTLS = cmn.NewClientTLS(cargs, sargs)
 		apiBP.Client = clientTLS
 	} else {
@@ -74,9 +72,7 @@ func Init(args []string) (err error) {
 		}
 		if cos.IsHTTPS(authnURL) {
 			if clientTLS == nil {
-				if err = cfg.ValidateTLS(); err != nil {
-					return err
-				}
+				cfg.WarnTLS("AuthN at " + authnURL)
 				clientTLS = cmn.NewClientTLS(cargs, sargs)
 			}
 			authParams.Client = clientTLS
