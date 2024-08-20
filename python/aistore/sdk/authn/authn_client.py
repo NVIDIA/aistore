@@ -114,6 +114,24 @@ class AuthNClient:
             logger.error("Login failed for username: %s, error: %s", username, err)
             raise
 
+    def logout(self) -> None:
+        """
+        Logs out and revokes current token from the AuthN Server.
+
+        Raises:
+            AISError: If the logout request fails.
+        """
+        if not self.client.token:
+            raise ValueError("Must be logged in first (no token)")
+
+        try:
+            logger.info("Logging out")
+            self.token_manager().revoke(token=self.client.token)
+            self.client.token = None
+        except Exception as err:
+            logger.error("Logout failed, error: %s", err)
+            raise
+
     def cluster_manager(self) -> ClusterManager:
         """
         Factory method to create a ClusterManager instance.

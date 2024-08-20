@@ -92,13 +92,8 @@ class RequestClient:
         Set the token for Authorization.
 
         Args:
-            token (str): Token for Authorization. Must be a non-empty string.
-
-        Raises:
-            ValueError: If the provided token is empty.
+            token (str): Token for Authorization.
         """
-        if not token:
-            raise ValueError("Token must be a non-empty string.")
         self._token = token
 
     def request_deserialize(

@@ -44,6 +44,14 @@ class TestAuthNClient(unittest.TestCase):
         self.assertIsNotNone(token)
 
     @pytest.mark.authn
+    def test_logout(self):
+        token = self.authn_client.login(AIS_AUTHN_SU_NAME, AIS_AUTHN_SU_PASS)
+        self.assertIsNotNone(token)
+
+        self.authn_client.logout()
+        self.assertIsNone(self.authn_client.client.token)
+
+    @pytest.mark.authn
     def test_create_bucket_without_token(self):
         ais_client = Client(CLUSTER_ENDPOINT)
         bucket = ais_client.bucket(self.bck_name, provider=self.provider)
