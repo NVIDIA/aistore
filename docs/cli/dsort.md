@@ -219,7 +219,7 @@ JGHEoo89gg
 
 One of the key features of the dSort is that user can specify the exact mapping from the record key to the output shard.
 To use this feature `output_format` should be empty and `order_file`, as well as `order_file_sep`, must be set.
-The output shards will be created with provided format which must contain mandatory `%d` which is required to enumerate the shards.
+The output shards will be created with provided [template format](/docs/batch.md#operations-on-multiple-selected-objects).
 
 Assuming that `order_file` (URL: `http://website.web/static/order_file.txt`) has content:
 
@@ -318,6 +318,63 @@ shard-cats-1.tar:
 shard-dogs-0.tar:
 - dog_1.txt
 - dog_2.txt
+...
+```
+
+EKM also supports [template syntax](/docs/batch.md#operations-on-multiple-selected-objects) to express output shard names.
+For example, if `order_file` has content:
+
+```json
+{
+  "shard-{0..100..3}-cats": [
+    "cat_0.txt",
+    "cat_1.txt",
+    "cat_3.txt",
+    "cat_4.txt",
+    "cat_5.txt",
+    "cat_6.txt",
+    ...
+  ],
+  "shard-@00001-gap-@100-dogs": [ 
+    "dog_0.txt",
+    "dog_1.txt",
+    ...
+  ],
+  "shard-%06d-cars": [
+    "car_0.txt",
+    "car_1.txt",
+    ...
+  ],
+  ...
+}
+```
+
+After running `dsort`, the output would be look like this:
+
+```
+shard-0-cats.tar:
+- cat_0.txt
+- cat_1.txt
+shard-3-cats.tar:
+- cat_2.txt
+- cat_3.txt
+shard-6-cats.tar:
+- cat_4.txt
+- cat_5.txt
+...
+shard-00001-gap-001-dogs.tar:
+- dog_0.txt
+- dog_1.txt
+shard-00001-gap-002-dogs.tar:
+- dog_2.txt
+- dog_3.txt
+...
+shard-1-cars.tar:
+- car_0.txt
+- car_1.txt
+shard-2-cars.tar:
+- car_2.txt
+- car_3.txt
 ...
 ```
 

@@ -164,6 +164,7 @@ func (ekm ExternalKeyMap) Add(key, value string) error {
 	if err != nil {
 		return err
 	}
+
 	ekm[key] = struct {
 		regex *regexp.Regexp
 		value string
@@ -189,4 +190,17 @@ func (ekm ExternalKeyMap) Lookup(input string) (string, error) {
 		return "", errors.New("multiple matches found")
 	}
 	return matches[0], nil
+}
+
+func (ekm ExternalKeyMap) All() (result []string) {
+	set := make(map[string]struct{}, 8)
+	for _, v := range ekm {
+		set[v.value] = struct{}{}
+	}
+
+	result = make([]string, 0, 8)
+	for key := range set {
+		result = append(result, key)
+	}
+	return
 }

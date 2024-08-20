@@ -491,6 +491,46 @@ outer:
 	}
 }
 
+func (df *dsortFramework) checkOutputShardsWithEKM(ekm *shard.ExternalKeyMap) {
+	tlog.Logln("verifying all records are placed in the correct shards...")
+	shardRecords := df.getRecordNames(df.outputBck)
+	shardNamePools := make(map[string]map[string]struct{}, 8) // map from template to shard name pool
+
+	// for each record name within the generated shards, find its template and add its container shard name to the corresponding shard name pool
+	for _, shard := range shardRecords {
+		for _, recordName := range shard.recordNames {
+			shardFmtTmpl, err := ekm.Lookup(recordName)
+			tassert.CheckFatal(df.m.t, err)
+			if _, ok := shardNamePools[shardFmtTmpl]; !ok {
+				shardNamePools[shardFmtTmpl] = make(map[string]struct{}, 4)
+			}
+			shardNamePools[shardFmtTmpl][shard.name] = struct{}{}
+		}
+	}
+
+	// validate all shard name pools match the consecutively generated shard names from their corresponding templates
+	for tmpl, pool := range shardNamePools {
+		pt, _ := cos.NewParsedTemplate(tmpl)
+		pt.InitIter()
+		for {
+			if len(pool) == 0 {
+				break
+			}
+			shardName, hasNext := pt.Next()
+			if !hasNext {
+				df.m.t.Fatalf("Shard name template (%v) does not match the corresponding shard name pool, remaining names: %v", tmpl, pool)
+			}
+
+			_, exists := pool[shardName]
+			if !exists {
+				df.m.t.Fatalf("Shard name (%s) generated from template (%v) should exist in the corresponding shard name pool", shardName, tmpl)
+			}
+			delete(pool, shardName)
+		}
+	}
+	tlog.Logln("finished, all records are placed in the correct shards as specified in EKM")
+}
+
 func canonicalName(recordName string) string {
 	return strings.TrimSuffix(recordName, cos.Ext(recordName))
 }
@@ -1958,7 +1998,7 @@ func TestDsortOrderFile(t *testing.T) {
 				}
 
 				orderFileName = "orderFileName"
-				ekm           = make(map[string]string, 10)
+				ekm           = shard.NewExternalKeyMap(8)
 				shardFmts     = []string{
 					"shard-%d-suf",
 					"input-%d-pref",
@@ -1996,7 +2036,7 @@ func TestDsortOrderFile(t *testing.T) {
 			for _, shard := range shardRecords {
 				for idx, recordName := range shard.recordNames {
 					buffer.WriteString(fmt.Sprintf("%s\t%s\n", recordName, shardFmts[idx%len(shardFmts)]))
-					ekm[recordName] = shardFmts[idx%len(shardFmts)]
+					ekm.Add(recordName, shardFmts[idx%len(shardFmts)])
 				}
 			}
 			args := api.PutArgs{
@@ -2022,29 +2062,14 @@ func TestDsortOrderFile(t *testing.T) {
 			if len(allMetrics) != m.originalTargetCount {
 				t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 			}
-
-			tlog.Logln("checking if all records are in specified shards...")
-			shardRecords = df.getRecordNames(df.outputBck)
-			for _, shard := range shardRecords {
-				for _, recordName := range shard.recordNames {
-					match := false
-					// Some shard with specified format contains the record
-					for i := range 30 {
-						match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
-					}
-					if !match {
-						t.Errorf("record %q was not part of any shard with format %q but was in shard %q",
-							recordName, ekm[recordName], shard.name)
-					}
-				}
-			}
+			df.checkOutputShardsWithEKM(&ekm)
 		},
 	)
 }
 
 func TestDsortRegexOrderFile(t *testing.T) {
 	runDsortTest(
-		t, dsortTestSpec{p: true, types: []string{dsort.GeneralType}},
+		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
 			var (
 				m = &ioContext{
@@ -2180,24 +2205,7 @@ func TestDsortRegexOrderFile(t *testing.T) {
 					t.Errorf("number of metrics %d is not same as number of targets %d",
 						len(allMetrics), m.originalTargetCount)
 				}
-
-				tlog.Logln("checking if all records are in specified shards...")
-				shardRecords := df.getRecordNames(df.outputBck)
-				for _, shard := range shardRecords {
-					for _, recordName := range shard.recordNames {
-						shardFmt, err := ekm.Lookup(recordName)
-						tassert.CheckFatal(t, err)
-						match := false
-						// Some shard with specified format contains the record
-						for i := range 30 {
-							match = match || fmt.Sprintf(shardFmt, i) == shard.name
-						}
-						if !match {
-							t.Errorf("record %q was not part of any shard with format %q but was in shard %q",
-								recordName, shardFmt, shard.name)
-						}
-					}
-				}
+				df.checkOutputShardsWithEKM(&ekm)
 			})
 		},
 	)
@@ -2224,11 +2232,11 @@ func TestDsortOrderJSONFile(t *testing.T) {
 				}
 
 				orderFileName = "order_file_name.json"
-				ekm           = make(map[string]string, 10)
+				ekm           = shard.NewExternalKeyMap(8)
 				shardFmts     = []string{
-					"shard-%d-suf",
-					"input-%d-pref",
-					"smth-%d",
+					"prefix-{0..100}-suffix.tar",
+					"prefix-@00001-gap-@100-suffix.tar",
+					"prefix-%06d-suffix.tar",
 				}
 				proxyURL   = tools.RandomProxyURL()
 				baseParams = tools.BaseAPIParams(proxyURL)
@@ -2263,7 +2271,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 				for idx, recordName := range shard.recordNames {
 					shardFmt := shardFmts[idx%len(shardFmts)]
 					content[shardFmt] = append(content[shardFmt], recordName)
-					ekm[recordName] = shardFmts[idx%len(shardFmts)]
+					ekm.Add(recordName, shardFmts[idx%len(shardFmts)])
 				}
 			}
 			jsonBytes, err := jsoniter.Marshal(content)
@@ -2293,21 +2301,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 					len(allMetrics), m.originalTargetCount)
 			}
 
-			tlog.Logln("checking if all records are in specified shards...")
-			shardRecords = df.getRecordNames(df.outputBck)
-			for _, shard := range shardRecords {
-				for _, recordName := range shard.recordNames {
-					match := false
-					// Some shard with specified format contains the record
-					for i := range 30 {
-						match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
-					}
-					if !match {
-						t.Errorf("record %q was not part of any shard with format %q but was in shard %q",
-							recordName, ekm[recordName], shard.name)
-					}
-				}
-			}
+			df.checkOutputShardsWithEKM(&ekm)
 		},
 	)
 }

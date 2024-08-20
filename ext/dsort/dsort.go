@@ -685,8 +685,9 @@ func (m *Manager) parseOrderFile() (shard.ExternalKeyMap, error) {
 
 func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard, error) {
 	var (
-		shards        = make([]*shard.Shard, 0)
-		shardsBuilder = make(map[string][]*shard.Shard)
+		shards         = make([]*shard.Shard, 0)
+		shardTemplates = make(map[string]*cos.ParsedTemplate, 8)
+		shardsBuilder  = make(map[string][]*shard.Shard, 8)
 	)
 	if maxSize <= 0 {
 		return nil, fmt.Errorf(fmtErrInvalidMaxSize, maxSize)
@@ -695,6 +696,18 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 	ekm, err := m.parseOrderFile()
 	if err != nil {
 		return nil, err
+	}
+
+	for _, shardNameFmt := range ekm.All() {
+		tmpl, err := cos.NewParsedTemplate(shardNameFmt)
+		if err != nil {
+			return nil, err
+		}
+		if len(tmpl.Ranges) == 0 {
+			return nil, fmt.Errorf("invalid output template %q: no ranges (prefix-only output is not supported)", shardNameFmt)
+		}
+		shardTemplates[shardNameFmt] = &tmpl
+		shardTemplates[shardNameFmt].InitIter()
 	}
 
 	for _, r := range m.recm.Records.All() {
@@ -707,12 +720,21 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 			}
 		}
 
-		shards := shardsBuilder[shardNameFmt]
 		recordSize := r.TotalSize() + m.shardRW.MetadataSize()*int64(len(r.Objects))
-		shardCount := len(shards)
-		if shardCount == 0 || shards[shardCount-1].Size > maxSize {
+
+		// retrieve all shards created using the current template format
+		shards := shardsBuilder[shardNameFmt]
+		// if no shards exist for this template, or the last shard exceeds the max size, create a new shard
+		if len(shards) == 0 || shards[len(shards)-1].Size > maxSize {
+			shardName, hasNext := shardTemplates[shardNameFmt].Next()
+			if !hasNext {
+				return nil, fmt.Errorf(
+					"number of shards to be created using %s template exceeds expected number of shards (%d)",
+					shardTemplates[shardNameFmt].Prefix, shardTemplates[shardNameFmt].Count(),
+				)
+			}
 			shard := &shard.Shard{
-				Name:    fmt.Sprintf(shardNameFmt, shardCount),
+				Name:    shardName,
 				Size:    recordSize,
 				Records: shard.NewRecords(1),
 			}
@@ -720,7 +742,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 			shardsBuilder[shardNameFmt] = append(shardsBuilder[shardNameFmt], shard)
 		} else {
 			// Append records
-			lastShard := shards[shardCount-1]
+			lastShard := shards[len(shards)-1]
 			lastShard.Size += recordSize
 			lastShard.Records.Insert(r)
 		}
