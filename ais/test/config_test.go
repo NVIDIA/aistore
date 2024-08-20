@@ -358,3 +358,26 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 			errWMConfigNotExpected, config.Disk.DiskUtilLowWM, daemonConfig.Disk.DiskUtilLowWM)
 	}
 }
+
+func TestConfigRebalance(t *testing.T) {
+	var (
+		oRebalance = tools.GetClusterConfig(t).Rebalance.Enabled
+	)
+	defer tools.SetClusterConfig(t, cos.StrKVs{
+		"rebalance.enabled": strconv.FormatBool(oRebalance),
+	})
+
+	tools.EnableRebalance(t)
+
+	nRebalance := tools.GetClusterConfig(t).Rebalance.Enabled
+
+	if !nRebalance {
+		t.Errorf("Rebalance was not enabled: current value %v, should be: %v", nRebalance, true)
+	}
+	tools.DisableRebalance(t)
+
+	nRebalance = tools.GetClusterConfig(t).Rebalance.Enabled
+	if nRebalance {
+		t.Errorf("Rebalance was not disabled: current value %v, should be: %v", nRebalance, false)
+	}
+}

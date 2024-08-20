@@ -262,6 +262,23 @@ func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToSet, tr
 	return err
 }
 
+func setRebalance(bp BaseParams, enabled bool) error {
+	configToSet := &cmn.ConfigToSet{
+		Rebalance: &cmn.RebalanceConfToSet{
+			Enabled: apc.Ptr(enabled),
+		},
+	}
+	return SetClusterConfigUsingMsg(bp, configToSet, false /*transient*/)
+}
+
+func EnableRebalance(bp BaseParams) error {
+	return setRebalance(bp, true)
+}
+
+func DisableRebalance(bp BaseParams) error {
+	return setRebalance(bp, false)
+}
+
 // all nodes: reset configuration to cluster defaults
 func ResetClusterConfig(bp BaseParams) error {
 	return _putCluster(bp, apc.ActMsg{Action: apc.ActResetConfig})

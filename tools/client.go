@@ -659,6 +659,20 @@ func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToSet) {
 	tassert.CheckFatal(t, err)
 }
 
+func EnableRebalance(t *testing.T) {
+	proxyURL := GetPrimaryURL()
+	bp := BaseAPIParams(proxyURL)
+	err := api.EnableRebalance(bp)
+	tassert.CheckError(t, err)
+}
+
+func DisableRebalance(t *testing.T) {
+	proxyURL := GetPrimaryURL()
+	bp := BaseAPIParams(proxyURL)
+	err := api.DisableRebalance(bp)
+	tassert.CheckError(t, err)
+}
+
 func SetRemAisConfig(t *testing.T, nvs cos.StrKVs) {
 	remoteBP := BaseAPIParams(RemoteCluster.URL)
 	err := api.SetClusterConfig(remoteBP, nvs, false /*transient*/)
