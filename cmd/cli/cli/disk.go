@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -60,7 +61,7 @@ func (ctx *dstatsCtx) get() error {
 	return nil
 }
 
-func getDiskStats(smap *meta.Smap, tid string) (_ []*teb.DiskStatsHelper, withCap bool, err error) {
+func getDiskStats(c *cli.Context, smap *meta.Smap, tid string) (_ []*teb.DiskStatsHelper, withCap bool, err error) {
 	var (
 		targets = smap.Tmap
 		l       = smap.CountActiveTs()
@@ -97,9 +98,13 @@ func getDiskStats(smap *meta.Smap, tid string) (_ []*teb.DiskStatsHelper, withCa
 		for name, stat := range res.stats {
 			ds := &teb.DiskStatsHelper{TargetID: res.tid, DiskName: name, Stat: stat}
 			if res.tcdf != nil {
-				for _, mi := range res.tcdf.Mountpaths {
+				for mpath, mi := range res.tcdf.Mountpaths {
 					// TODO: multi-disk mountpath
-					if mi.Disks[0] == ds.DiskName {
+					if len(mi.Disks) == 0 {
+						if mi.Label.IsNil() {
+							actionWarn(c, "mountpath "+mpath+" has no disks")
+						}
+					} else if mi.Disks[0] == ds.DiskName {
 						ds.Tcdf = res.tcdf
 						withCap = true
 					}

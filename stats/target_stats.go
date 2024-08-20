@@ -534,7 +534,7 @@ func (r *Trunner) _fshcMaybe(config *cmn.Config) {
 		return
 	}
 
-	err := fmt.Errorf("## IO errors (%d) exceeded configured limit: (%d during %v)", d, c.IOErrTime, c.IOErrs)
+	err := fmt.Errorf("## IO errors (%d) exceeded configured limit, which is: (no more than %d in %v)", d, c.IOErrs, c.IOErrTime)
 	nlog.Errorln(err)
 	nlog.Warningln("waking up FSHC to check all mountpaths...") // _all_
 

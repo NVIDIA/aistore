@@ -305,7 +305,7 @@ func showDiskStats(c *cli.Context, tid string) error {
 		}
 	}
 
-	dsh, withCap, err := getDiskStats(smap, tid)
+	dsh, withCap, err := getDiskStats(c, smap, tid)
 	if err != nil {
 		return err
 	}
