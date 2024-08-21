@@ -14,6 +14,8 @@ import (
 
 const TarBlockSize = 512 // Size of each block in a tar stream
 
+const FmtErrShortFile = "%s file is too short, should have at least %d size"
+
 // assorted errors
 type (
 	ErrUnknownMime struct{ detail string }

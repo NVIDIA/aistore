@@ -126,7 +126,7 @@ func MimeFile(file cos.LomReader, smm *memsys.MMSA, mime, archname string) (m st
 		n         int
 		buf, slab = smm.AllocSize(sizeDetectMime)
 	)
-	m, n, err = _detect(file, archname, buf)
+	m, n, err = _detect(file, archname, m, buf)
 	if n > 0 {
 		fh, ok := file.(*os.File)
 		cos.Assertf(ok, "expecting os.File, got %T", file)
@@ -160,19 +160,27 @@ func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
 		return "", err
 	}
 	buf, slab := smm.AllocSize(sizeDetectMime)
-	m, _, err = _detect(fh, archname, buf)
+	m, _, err = _detect(fh, archname, m, buf)
 	slab.Free(buf)
 	cos.Close(fh)
 	return
 }
 
-func _detect(file cos.LomReader, archname string, buf []byte) (m string, n int, err error) {
+func _detect(file cos.LomReader, archname, mine string, buf []byte) (m string, n int, err error) {
 	n, err = file.Read(buf)
 	if err != nil {
 		return
 	}
-	if n < sizeDetectMime {
-		err = NewErrUnknownFileExt(archname, "file is too short")
+	if mine == ExtTar && n < sizeDetectMime {
+		err = NewErrUnknownFileExt(archname, fmt.Sprintf(FmtErrShortFile, ExtTar, sizeDetectMime))
+		return
+	}
+	if mine == ExtTarGz && n < magicGzip.offset+len(magicGzip.sig) {
+		err = NewErrUnknownFileExt(archname, fmt.Sprintf(FmtErrShortFile, ExtTarGz, magicGzip.offset+len(magicGzip.sig)))
+		return
+	}
+	if mine == ExtTarLz4 && n < magicLz4.offset+len(magicLz4.sig) {
+		err = NewErrUnknownFileExt(archname, fmt.Sprintf(FmtErrShortFile, ExtTarGz, magicLz4.offset+len(magicLz4.sig)))
 		return
 	}
 	for _, magic := range allMagics {
