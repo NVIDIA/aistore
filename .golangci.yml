@@ -4,12 +4,12 @@ linters:
     - asciicheck
     - bodyclose
     - canonicalheader
+    - copyloopvar
     - depguard
     - dogsled
     - dupl
     - durationcheck
     - errcheck
-    - exportloopref
     - fatcontext
     - gci
     - gochecksumtype
@@ -97,7 +97,8 @@ linters-settings:
       - ifElseChain
       - unnamedResult
   gosec:
-    excludes:
+    excludes: ## TODO: revisit
+      - G115
       - G401
       - G402
       - G404

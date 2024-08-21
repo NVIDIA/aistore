@@ -129,7 +129,6 @@ func runDsortTest(t *testing.T, dts dsortTestSpec, f any) {
 	}
 
 	for _, dsorterType := range dts.types {
-		dsorterType := dsorterType // pin
 		t.Run(dsorterType, func(t *testing.T) {
 			if dts.p {
 				t.Parallel()
@@ -149,7 +148,6 @@ func runDsortTest(t *testing.T, dts dsortTestSpec, f any) {
 			} else if len(dts.phases) > 0 {
 				g := f.(func(dsorterType, phase string, t *testing.T))
 				for _, phase := range dts.phases {
-					phase := phase // pin
 					t.Run(phase, func(t *testing.T) {
 						if dts.p {
 							t.Parallel()
@@ -159,7 +157,6 @@ func runDsortTest(t *testing.T, dts dsortTestSpec, f any) {
 				}
 			} else if len(dts.reactions) > 0 {
 				for _, reaction := range dts.reactions {
-					reaction := reaction // pin
 					t.Run(reaction, func(t *testing.T) {
 						if dts.p {
 							t.Parallel()
@@ -167,7 +164,6 @@ func runDsortTest(t *testing.T, dts dsortTestSpec, f any) {
 
 						if len(dts.scopes) > 0 {
 							for _, scope := range dts.scopes {
-								scope := scope // pin
 								t.Run(scope, func(t *testing.T) {
 									if dts.p {
 										t.Parallel()
@@ -186,7 +182,6 @@ func runDsortTest(t *testing.T, dts dsortTestSpec, f any) {
 			} else if len(dts.algs) > 0 {
 				g := f.(func(dsorterType, alg string, t *testing.T))
 				for _, alg := range dts.algs {
-					alg := alg // pin
 					t.Run(alg, func(t *testing.T) {
 						if dts.p {
 							t.Parallel()
@@ -1286,7 +1281,6 @@ func TestDsortContent(t *testing.T) {
 			}
 
 			for _, entry := range cases {
-				entry := entry // pin
 				test := fmt.Sprintf("%s-%v", entry.contentKeyType, entry.missingKeys)
 				t.Run(test, func(t *testing.T) {
 					t.Parallel()
