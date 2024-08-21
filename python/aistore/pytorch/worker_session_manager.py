@@ -33,11 +33,13 @@ class WorkerSessionManager(SessionManager):
     @property
     def session(self):
         """
-        Returns: Active request session acquired for a specific Pytorch dataloader worker
+        Returns an active request session acquired for a specific Pytorch dataloader worker.
         """
         # sessions are not thread safe, so we must return different sessions for each worker
         worker_info = get_worker_info()
         if worker_info is None:
+            if self._session is None:
+                self._session = self._create_session()
             return self._session
         # if we only have one session but multiple workers, create more
         if worker_info.id not in self._worker_sessions:

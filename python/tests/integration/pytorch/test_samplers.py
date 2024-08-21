@@ -76,3 +76,12 @@ class TestAISSampler(TestCase):
 
         # Test that all objects are included in our batch
         self.assertEqual(num_objects, NUM_OBJECTS)
+
+    def test_sampler_no_workers(self):
+        sampler = DynamicBatchSampler(
+            data_source=self.dataset,
+            max_batch_size=MAX_BATCH_SIZE,
+        )
+
+        for _ in sampler:
+            continue
