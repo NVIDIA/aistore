@@ -65,8 +65,9 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	tableP := teb.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
 	tableT := teb.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 
-	// total num disks and capacity
+	// totals: num disks and capacity; software version and build tiume
 	body.NumDisks, body.Capacity = _totals(body.Status.Tmap, units, cfg)
+	body.Version, body.BuildTime = _clusoft(body.Status.Tmap, body.Status.Pmap)
 
 	out := tableP.Template(false) + "\n"
 	out += tableT.Template(false) + "\n"
@@ -132,4 +133,29 @@ outer:
 	cs = fmt.Sprintf("used %s (%s), available %s", teb.FmtSize(used, units, 2), pct, teb.FmtSize(avail, units, 2))
 
 	return num, cs
+}
+
+func _clusoft(nodemaps ...teb.StstMap) (version, build string) {
+	var multiver, multibuild bool
+	for _, m := range nodemaps {
+		for _, ds := range m {
+			if !multiver {
+				if version == "" {
+					version = ds.Version
+				} else if version != ds.Version {
+					multiver = true
+					version = ""
+				}
+			}
+			if !multibuild {
+				if build == "" {
+					build = ds.BuildTime
+				} else if build != ds.BuildTime {
+					multibuild = true
+					build = ""
+				}
+			}
+		}
+	}
+	return version, build
 }

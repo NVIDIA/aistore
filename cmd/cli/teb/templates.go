@@ -52,6 +52,7 @@ const (
 		indent1 + "Targets:\t{{FormatTargetsSumm .Smap .NumDisks}}\n" +
 		indent1 + "Capacity:\t{{.Capacity}}\n" +
 		indent1 + "Cluster Map:\t{{FormatSmap .Smap}}\n" +
+		indent1 + "Software:\t{{FormatCluSoft .Version .BuildTime}}\n" +
 		indent1 + "Deployment:\t{{ ( Deployments .Status) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Status) }}\n" +
 		indent1 + "Rebalance:\t{{ ( Rebalance .Status) }}\n" +
@@ -366,6 +367,8 @@ type (
 		CluConfig *cmn.ClusterConfig
 		Status    StatsAndStatusHelper
 		Capacity  string
+		Version   string // when all equal
+		BuildTime string // ditto
 		NumDisks  int
 	}
 	ListBucketsHelper struct {
@@ -397,6 +400,7 @@ var (
 		"FormatObjCustom":     fmtObjCustom,
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatSmap":          fmtSmap,
+		"FormatCluSoft":       fmtCluSoft,
 		"FormatProxiesSumm":   fmtProxiesSumm,
 		"FormatTargetsSumm":   fmtTargetsSumm,
 		"FormatCapPctMAM":     fmtCapPctMAM,
@@ -529,4 +533,13 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 		res = []string{UnknownStatusVal}
 	}
 	return res
+}
+
+func (m StstMap) allStateFlagsOK() bool {
+	for _, ds := range m {
+		if !ds.Cluster.Flags.IsOK() {
+			return false
+		}
+	}
+	return true
 }

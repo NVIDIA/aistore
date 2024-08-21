@@ -24,10 +24,12 @@ const (
 	colLoadAvg   = "LOAD AVERAGE"
 	colRebalance = "REBALANCE"
 	colUptime    = "UPTIME"
+	colPodName   = "K8s POD"
 	colStatus    = "STATUS"
 	colVersion   = "VERSION"
 	colBuildTime = "BUILD TIME"
-	colPodName   = "K8s POD"
+
+	colStateFlags = "ALERT"
 )
 
 // TODO: extend api.GetClusterSysInfo() and api.GetStatsAndStatus to return memsys.Pressure
@@ -70,6 +72,7 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()
+		builds   = h.buildTimes()
 		cols     = []*header{
 			{name: colProxy},
 			{name: colMemUsed},
@@ -78,8 +81,9 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
 			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
-			{name: colVersion, hide: len(versions) == 1 && len(ps) > 1},
-			{name: colBuildTime, hide: len(versions) == 1 && len(ps) > 1}, // intended
+			{name: colVersion, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colBuildTime, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colStateFlags, hide: ps.allStateFlagsOK()},
 		}
 		table = newTable(cols...)
 	)
@@ -130,6 +134,7 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 			ds.Status,
 			ds.Version,
 			ds.BuildTime,
+			ds.Cluster.Flags.String(),
 		}
 		table.addRow(row)
 	}
@@ -170,6 +175,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()
+		builds   = h.buildTimes()
 		cols     = []*header{
 			{name: colTarget},
 			{name: colMemUsed},
@@ -181,8 +187,9 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
 			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
-			{name: colVersion, hide: len(versions) == 1 && len(ts) > 1},
-			{name: colBuildTime, hide: len(versions) == 1 && len(ts) > 1}, // intended
+			{name: colVersion, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colBuildTime, hide: len(versions) == 1 && len(builds) == 1},
+			{name: colStateFlags, hide: ts.allStateFlagsOK()},
 		}
 		table = newTable(cols...)
 	)
@@ -244,6 +251,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 			ds.Status,
 			ds.Version,
 			ds.BuildTime,
+			ds.Cluster.Flags.String(),
 		}
 		table.addRow(row)
 	}

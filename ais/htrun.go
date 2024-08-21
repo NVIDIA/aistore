@@ -1134,6 +1134,9 @@ func (h *htrun) statsAndStatus() (ds *stats.NodeStatus) {
 		Node: stats.Node{
 			Snode: h.si,
 		},
+		Cluster: cos.NodeStateInfo{
+			Flags: cos.NodeStateFlags(h.statsT.Get(stats.NodeStateFlags)),
+		},
 		SmapVersion:    smap.Version,
 		MemCPUInfo:     apc.GetMemCPU(),
 		DeploymentType: deploymentType(),

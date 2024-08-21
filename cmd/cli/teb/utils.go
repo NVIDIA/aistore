@@ -177,6 +177,16 @@ func fmtSmap(smap *meta.Smap) string {
 	return fmt.Sprintf("version %d, UUID %s, primary %s", smap.Version, smap.UUID, smap.Primary.StringEx())
 }
 
+func fmtCluSoft(version, build string) string {
+	if version == "" {
+		return unknownVal
+	}
+	if build == "" {
+		return version + " (build: " + unknownVal + ")"
+	}
+	return version + " (build: " + build + ")"
+}
+
 func fmtStringList(lst []string) string {
 	if len(lst) == 0 {
 		return unknownVal
