@@ -707,8 +707,8 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 
 	// and more
 	flags := r.nodeStateFlags()
-	if hasAlerts {
-		r.lines = append(r.lines, "Warning: node-state-flags", flags.String(), "(check mountpath alerts!)")
+	if hasAlerts || flags.IsRed() {
+		r.lines = append(r.lines, "Warning: state alerts:", flags.String())
 	} else if flags.IsSet(cos.DiskFault) && updated {
 		clr |= cos.DiskFault
 	}

@@ -66,6 +66,14 @@ func fmtDaemonID(id string, smap *meta.Smap, daeStatus string) (snamePlus string
 	return
 }
 
+func fmtAlerts(flags cos.NodeStateFlags) (s string) {
+	s = flags.String()
+	if flags.IsRed() {
+		return fred(s)
+	}
+	return s
+}
+
 func fmtStatusSID(id string, smap *meta.Smap, daeStatus string) (snamePlus, status string) {
 	si := smap.GetNode(id)
 	snamePlus, status = si.StringEx(), daeStatus

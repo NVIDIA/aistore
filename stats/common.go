@@ -52,8 +52,8 @@ const (
 
 const (
 	ngrHighTime    = 10 * time.Minute // log a warning if the number of goroutines remains high
-	ngrExtremeTime = time.Minute      // (when extreme)
-	lshiftGorHigh  = 5                // max num expressed as left shift on the num CPUs: (number-of-CPUs * 2^^lshift...)
+	ngrExtremeTime = 5 * time.Minute  // when more then twice the maximum (below)
+	lshiftGorHigh  = 6                // max expressed as left shift of the num CPUs
 )
 
 // [naming convention] error counter prefixes
@@ -284,7 +284,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, NodeStateFlags, KindGauge,
 		&Extra{
 			Help: "bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; " +
-				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state_info.go for details", // TODO: must have a readme
+				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details", // TODO: must have a readme
 		},
 	)
 }
@@ -514,6 +514,7 @@ func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
 	if ngr < lim {
 		if lastNgr != 0 {
 			r.ClrFlag(NodeStateFlags, cos.NumGoroutines)
+			nlog.Infoln("Number of goroutines is now back to normal:", ngr)
 		}
 		return 0
 	}

@@ -38,7 +38,7 @@ redirect_from:
 | `lst.ns` | `lst_ms` | latency | list-objects: average time (milliseconds) over the last periodic.stats_time interval | default |
 | `kalive.ns` | `kalive_ms` | latency | in-cluster keep-alive (heartbeat): average time (milliseconds) over the last periodic.stats_time interval | default |
 | `up.ns.time` | `uptime` | special | this node's uptime since its startup (seconds) | default |
-| `state.flags` | `state_flags` | gauge | bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state_info.go |
+| `state.flags` | `state_flags` | gauge | bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go |
 
 ## Target metrics
 

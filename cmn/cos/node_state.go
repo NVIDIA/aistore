@@ -6,7 +6,6 @@ package cos
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -23,7 +22,7 @@ const (
 	Resilvering                                      // warning
 	ResilverInterrupted                              // warning
 	Restarted                                        // warning
-	OOS                                              // red alert
+	OOS                                              // red alert (see IsRed below)
 	OOM                                              // red alert
 	MaintenanceMode                                  // warning
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
@@ -34,6 +33,11 @@ const (
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
+
+func (f NodeStateFlags) IsRed() bool {
+	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(LowCapacity) || f.IsSet(LowMemory) || f.IsSet(DiskFault) ||
+		f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines)
+}
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
 
@@ -46,69 +50,76 @@ func (f NodeStateFlags) Clear(flags NodeStateFlags) NodeStateFlags {
 }
 
 func (f NodeStateFlags) String() string {
-	var sb strings.Builder
-	if f == 0 {
-		return ""
-	}
 	if f.IsOK() {
 		return "ok"
 	}
+
+	var sb []string
 	if f&VoteInProgress == VoteInProgress {
-		sb.WriteString("vote-in-progress,")
+		sb = append(sb, "vote-in-progress")
 	}
 	if f&ClusterStarted == 0 {
-		sb.WriteString("cluster-not-started-yet,") // NOTE: not set when !(primary: cluster-started | all other nodes: joined-cluster)
+		// NOTE not set when:
+		// - primary:         cluster-started
+		// - all other nodes: joined-cluster
+		// See also: IsOK() above
+		sb = append(sb, "cluster-not-started-yet")
 	}
 	if f&NodeStarted == 0 {
-		sb.WriteString("node-not-started-yet,")
+		sb = append(sb, "node-not-started-yet")
 	}
 	if f&Rebalancing == Rebalancing {
-		sb.WriteString("rebalancing,")
+		sb = append(sb, "rebalancing")
 	}
 	if f&RebalanceInterrupted == RebalanceInterrupted {
-		sb.WriteString("rebalance-interrupted,")
+		sb = append(sb, "rebalance-interrupted")
 	}
 	if f&Resilvering == Resilvering {
-		sb.WriteString("resilvering,")
+		sb = append(sb, "resilvering")
 	}
 	if f&ResilverInterrupted == ResilverInterrupted {
-		sb.WriteString("resilver-interrupted,")
+		sb = append(sb, "resilver-interrupted")
 	}
 	if f&Restarted == Restarted {
-		sb.WriteString("restarted,")
+		sb = append(sb, "restarted")
 	}
 	if f&OOS == OOS {
-		sb.WriteString("OOS,")
+		sb = append(sb, "OOS")
 	}
 	if f&OOM == OOM {
-		sb.WriteString("OOM,")
+		sb = append(sb, "OOM")
 	}
 	if f&MaintenanceMode == MaintenanceMode {
-		sb.WriteString("in-maintenance-mode,")
+		sb = append(sb, "in-maintenance-mode")
 	}
 	if f&LowCapacity == LowCapacity {
-		sb.WriteString("low-usable-capacity,")
+		sb = append(sb, "low-usable-capacity")
 	}
 	if f&LowMemory == LowMemory {
-		sb.WriteString("low-memory,")
+		sb = append(sb, "low-memory")
 	}
 	if f&DiskFault == DiskFault {
-		sb.WriteString("disk-fault,")
+		sb = append(sb, "disk-fault")
 	}
 	if f&NoMountpaths == NoMountpaths {
-		sb.WriteString("no-mountpaths,")
+		sb = append(sb, "no-mountpaths")
 	}
 	if f&NumGoroutines == NumGoroutines {
-		sb.WriteString("high-number-of-goroutines,")
+		sb = append(sb, "high-number-of-goroutines")
 	}
-	s := sb.String()
-	if s == "" {
+
+	l := len(sb)
+	switch l {
+	case 0:
 		err := fmt.Errorf("unknown flag %b", int64(f))
 		nlog.Errorln(err)
 		debug.Assert(false, err)
-		return ""
+		return "-" // (teb.unknownVal)
+	case 1:
+		return sb[0]
+	default:
+		return fmt.Sprint(sb)
 	}
-	return s[:len(s)-1]
 }
 
 //

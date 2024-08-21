@@ -105,6 +105,7 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 				nstatus,
 				ds.Version,
 				ds.BuildTime,
+				unknownVal,
 			}
 			table.addRow(row)
 			continue
@@ -134,7 +135,7 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 			ds.Status,
 			ds.Version,
 			ds.BuildTime,
-			ds.Cluster.Flags.String(),
+			fmtAlerts(ds.Cluster.Flags),
 		}
 		table.addRow(row)
 	}
@@ -213,6 +214,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 				nstatus,
 				ds.Version,
 				ds.BuildTime,
+				unknownVal,
 			}
 			table.addRow(row)
 			continue
@@ -251,7 +253,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 			ds.Status,
 			ds.Version,
 			ds.BuildTime,
-			ds.Cluster.Flags.String(),
+			fmtAlerts(ds.Cluster.Flags),
 		}
 		table.addRow(row)
 	}

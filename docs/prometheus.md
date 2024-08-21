@@ -131,7 +131,7 @@ $ curl http://hostname:8081/metrics | grep ais
    # HELP ais_target_put_ns_total PUT: total cumulative time (nanoseconds)
    # TYPE ais_target_put_ns_total counter
    ais_target_put_ns_total{node_id="ClCt8081"} 9.44367232e+09
-   # HELP ais_target_state_flags bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state_info.go for details
+   # HELP ais_target_state_flags bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details
    # TYPE ais_target_state_flags gauge
    ais_target_state_flags{node_id="ClCt8081"} 6
    # HELP ais_target_uptime this node's uptime since its startup (seconds)
