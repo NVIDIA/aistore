@@ -19,6 +19,7 @@ type (
 		Inc(name string)
 		Add(name string, val int64)
 		SetFlag(name string, set NodeStateFlags)
+		ClrFlag(name string, clr NodeStateFlags)
 		SetClrFlag(name string, set, clr NodeStateFlags)
 		Get(name string) int64
 		AddMany(namedVal64 ...NamedVal64)

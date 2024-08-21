@@ -103,7 +103,7 @@ func (h *htrun) ByteMM() *memsys.MMSA { return h.smm }
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
-		h.statsT.SetClrFlag(stats.NodeStateFlags, 0, cos.MaintenanceMode)
+		h.statsT.ClrFlag(stats.NodeStateFlags, cos.MaintenanceMode)
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }

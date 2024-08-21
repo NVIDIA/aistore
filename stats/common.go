@@ -48,13 +48,12 @@ const (
 const (
 	maxLogSizeCheckTime = time.Hour              // periodically check the logs for max accumulated size
 	startupSleep        = 300 * time.Millisecond // periodically poll ClusterStarted()
-	numGorHighCheckTime = 10 * time.Minute       // periodically log a warning if the number of goroutines remains high
 )
 
-// number-of-goroutines watermarks expressed as multipliers over the number of CPUs (GOMAXPROCS)
 const (
-	numGorHigh    = 100
-	numGorExtreme = 1000
+	ngrHighTime    = 10 * time.Minute // log a warning if the number of goroutines remains high
+	ngrExtremeTime = time.Minute      // (when extreme)
+	lshiftGorHigh  = 5                // max num expressed as left shift on the num CPUs: (number-of-CPUs * 2^^lshift...)
 )
 
 // [naming convention] error counter prefixes
@@ -316,20 +315,27 @@ func (r *runner) AddMany(nvs ...cos.NamedVal64) {
 
 func (r *runner) SetFlag(name string, set cos.NodeStateFlags) {
 	v := r.core.Tracker[name]
-	oval := cos.BitFlags(ratomic.LoadInt64(&v.Value))
-	nval := oval | cos.BitFlags(set)
-	ratomic.StoreInt64(&v.Value, int64(nval))
+	oval := ratomic.LoadInt64(&v.Value)
+	nval := oval | int64(set)
+	ratomic.StoreInt64(&v.Value, nval)
+}
+
+func (r *runner) ClrFlag(name string, clr cos.NodeStateFlags) {
+	v := r.core.Tracker[name]
+	oval := ratomic.LoadInt64(&v.Value)
+	nval := oval &^ int64(clr)
+	ratomic.StoreInt64(&v.Value, nval)
 }
 
 func (r *runner) SetClrFlag(name string, set, clr cos.NodeStateFlags) {
 	v := r.core.Tracker[name]
-	oval := cos.BitFlags(ratomic.LoadInt64(&v.Value))
-	nval := oval | cos.BitFlags(set)
+	oval := ratomic.LoadInt64(&v.Value)
+	nval := oval | int64(set)
 	if cos.NodeStateFlags(nval).IsOK() && cos.NodeStateFlags(oval).IsOK() {
 		return
 	}
-	nval &^= cos.BitFlags(clr)
-	ratomic.StoreInt64(&v.Value, int64(nval))
+	nval &^= int64(clr)
+	ratomic.StoreInt64(&v.Value, nval)
 }
 
 func (r *runner) Name() string { return r.name }
@@ -414,7 +420,7 @@ waitStartup:
 	r.core.initStatsdOrProm(r.node.Snode(), r)
 
 	var (
-		checkNumGorHigh   int64
+		lastNgr           int64
 		startTime         = mono.NanoTime() // uptime henceforth
 		lastDateTimestamp = startTime
 	)
@@ -424,7 +430,7 @@ waitStartup:
 			now := mono.NanoTime()
 			config = cmn.GCO.Get()
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
-			checkNumGorHigh = _checkGor(now, checkNumGorHigh, goMaxProcs)
+			lastNgr = r.checkNgr(now, lastNgr, goMaxProcs)
 
 			if statsTime != config.Periodic.StatsTime.D() {
 				statsTime = config.Periodic.StatsTime.D()
@@ -500,6 +506,27 @@ func (r *runner) GetMetricNames() cos.StrKVs {
 		out[name] = v.kind
 	}
 	return out
+}
+
+func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
+	lim := goMaxProcs << lshiftGorHigh
+	ngr := runtime.NumGoroutine()
+	if ngr < lim {
+		if lastNgr != 0 {
+			r.ClrFlag(NodeStateFlags, cos.NumGoroutines)
+		}
+		return 0
+	}
+	if lastNgr == 0 {
+		r.SetFlag(NodeStateFlags, cos.NumGoroutines)
+		lastNgr = now
+	} else if d := time.Duration(now - lastNgr); (d >= ngrHighTime) || (ngr > lim<<1 && d >= ngrExtremeTime) {
+		lastNgr = now
+	}
+	if lastNgr == now {
+		nlog.Warningln("High number of goroutines:", ngr)
+	}
+	return lastNgr
 }
 
 ////////////////
@@ -686,27 +713,4 @@ func roundMBs(val int64) (mbs float64) {
 	num := int(mbs + 0.5)
 	mbs = float64(num) / 100
 	return
-}
-
-func _checkGor(now, checkNumGorHigh int64, goMaxProcs int) int64 {
-	var (
-		ngr     = runtime.NumGoroutine()
-		extreme bool
-	)
-	if ngr < goMaxProcs*numGorHigh {
-		return 0
-	}
-	if ngr >= goMaxProcs*numGorExtreme {
-		extreme = true
-		nlog.Errorf("Extremely high number of goroutines: %d", ngr)
-	}
-	if checkNumGorHigh == 0 {
-		checkNumGorHigh = now
-	} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
-		if !extreme {
-			nlog.Warningf("High number of goroutines: %d", ngr)
-		}
-		checkNumGorHigh = 0
-	}
-	return checkNumGorHigh
 }

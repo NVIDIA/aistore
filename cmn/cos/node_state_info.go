@@ -29,7 +29,8 @@ const (
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
 	DiskFault                                        // red
-	NoMountpaths                                     // red
+	NoMountpaths                                     // red (TODO: reserved, not used)
+	NumGoroutines                                    // red
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
@@ -94,8 +95,11 @@ func (f NodeStateFlags) String() string {
 	if f&DiskFault == DiskFault {
 		sb.WriteString("disk-fault,")
 	}
-	if f&DiskFault == NoMountpaths {
+	if f&NoMountpaths == NoMountpaths {
 		sb.WriteString("no-mountpaths,")
+	}
+	if f&NumGoroutines == NumGoroutines {
+		sb.WriteString("high-number-of-goroutines,")
 	}
 	s := sb.String()
 	if s == "" {

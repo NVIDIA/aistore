@@ -240,7 +240,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	}
 
 	reb.fini(rargs, logHdr, err)
-	tstats.SetClrFlag(stats.NodeStateFlags, 0, cos.Rebalancing)
+	tstats.ClrFlag(stats.NodeStateFlags, cos.Rebalancing)
 
 	offGFN()
 }
