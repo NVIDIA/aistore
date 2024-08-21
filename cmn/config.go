@@ -495,6 +495,8 @@ type (
 		IOErrTime     *cos.Duration `json:"io_err_time,omitempty"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
+	// [backward compatibility] TODO: remove (ref v324)
+	FSHCConfRC3 FSHCConf
 
 	AuthConf struct {
 		Secret  string `json:"secret"`
@@ -685,6 +687,9 @@ var (
 	_ json.Unmarshaler = (*BackendConf)(nil)
 	_ json.Marshaler   = (*FSPConf)(nil)
 	_ json.Unmarshaler = (*FSPConf)(nil)
+
+	// [backward compatibility] TODO: remove (ref v324)
+	_ json.Unmarshaler = (*FSHCConf)(nil)
 )
 
 /////////////////////////////////////////////
@@ -1248,14 +1253,34 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 	}
 }
 
-/////////////
+//////////////
 // FSHCConf //
-/////////////
+//////////////
 
 const (
 	IOErrTimeDflt = 10 * time.Second
-	IOErrsLimit   = 100
+	IOErrsLimit   = 10
 )
+
+// [backward compatibility] TODO: remove (ref v324)
+func (c *FSHCConf) UnmarshalJSON(data []byte) (err error) {
+	rc3 := &FSHCConfRC3{}
+	if err = jsoniter.Unmarshal(data, rc3); err == nil {
+		*c = *(*FSHCConf)(rc3)
+		return nil
+	}
+
+	c.TestFileCount = 4
+	c.HardErrs = 2
+	c.IOErrs = IOErrsLimit
+	c.IOErrTime = cos.Duration(IOErrTimeDflt)
+	c.Enabled = true
+
+	// cannot nlog yet; may not show up when redirected
+	fmt.Fprintln(os.Stderr, "Warning: setting fshc to all defaults")
+
+	return nil
+}
 
 func (c *FSHCConf) Validate() error {
 	if c.TestFileCount < 4 {
@@ -1268,6 +1293,14 @@ func (c *FSHCConf) Validate() error {
 	// [backward compatibility] when both "soft" knobs are missing
 	if c.IOErrs == 0 && c.IOErrTime == 0 {
 		c.IOErrs = IOErrsLimit
+		c.IOErrTime = cos.Duration(IOErrTimeDflt)
+	}
+
+	// [backward compatibility] TODO: remove (ref v324)
+	if c.IOErrs == 0 {
+		c.IOErrs = IOErrsLimit
+	}
+	if c.IOErrTime == 0 {
 		c.IOErrTime = cos.Duration(IOErrTimeDflt)
 	}
 
@@ -1399,15 +1432,18 @@ func (c *FSPConf) UnmarshalJSON(data []byte) error {
 	// [backward compatibility] try loading from the prev. meta-version
 	var v322 FSPConfV322
 	v322.Paths = make(cos.StrSet, 10)
-	if err = jsoniter.Unmarshal(data, &v322.Paths); err == nil {
-		for fspath := range v322.Paths {
-			m[fspath] = ""
-		}
-		c.Paths = m
-		// cannot nlog yet - in the process of loading config (w/ log dirs not yet assigned)
-		fmt.Fprintln(os.Stderr, "Warning: load fspaths from V3 (older) config:", c.Paths)
+	if err = jsoniter.Unmarshal(data, &v322.Paths); err != nil {
+		return err
 	}
-	return err
+
+	for fspath := range v322.Paths {
+		m[fspath] = ""
+	}
+	c.Paths = m
+
+	// cannot nlog yet; may not show up when redirected
+	fmt.Fprintln(os.Stderr, "Warning: load fspaths from V3 (older) config:", c.Paths)
+	return nil
 }
 
 func (c *FSPConf) MarshalJSON() ([]byte, error) {
