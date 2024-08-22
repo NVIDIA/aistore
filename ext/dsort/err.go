@@ -16,7 +16,7 @@ const (
 	fmtErrInvalidAlg     = "invalid sorting algorithm (expecting one of: %+v)" // <--- supportedAlgorithms
 	fmtErrInvalidMaxSize = "invalid max shard size (%d) for usage with external key map"
 	fmtErrNegOutputSize  = "output shard size must be >= 0 (got %d)"
-	fmtErrOrderURL       = "failed to parse order file ('order_file') URL %q: %v"
+	fmtErrOrderURL       = "failed to parse ekm file ('ekm_file') URL %q: %v"
 	fmtErrSeed           = "invalid seed %q (expecting integer value)"
 )
 

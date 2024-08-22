@@ -18,7 +18,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.dsort import Dsort, DsortFramework, DsortShardsGroup, DsortAlgorithm
 from aistore.sdk.dsort.types import DsortMetrics, JobInfo
-from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_ORDER_FILE_NAME
+from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_FILE_NAME
 from aistore.sdk.multiobj import ObjectNames, ObjectRange
 
 from aistore.sdk.types import BucketModel
@@ -193,15 +193,15 @@ class TestDsort(unittest.TestCase):
             algorithm=DsortAlgorithm(),
             description="Test description",
         )
-        ekm_url = f"{URL_PATH_OBJECTS}/input_bucket/{ EKM_ORDER_FILE_NAME }"
+        ekm_url = f"{URL_PATH_OBJECTS}/input_bucket/{ EKM_FILE_NAME }"
         mock_get_url.return_value = ekm_url
 
         res = self.dsort.start(dsort_framework)
         self.assertEqual(new_id, res)
         self.assertEqual(new_id, self.dsort.dsort_id)
         spec = dsort_framework.to_spec()
-        spec["order_file"] = ekm_url
-        spec["order_file_sep"] = ""
+        spec["ekm_file"] = ekm_url
+        spec["ekm_file_sep"] = ""
 
         # Ensure object.put_content and dsort.start are called
         self.mock_client.request.assert_has_calls(

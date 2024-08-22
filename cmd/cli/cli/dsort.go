@@ -39,8 +39,8 @@ const (
 			"input_format": {"template": "shard-{0..9}"},
 			"output_shard_size": "200KB",
 			"description": "pack records into categorized shards",
-			"order_file": "http://website.web/static/order_file.txt",
-			"order_file_sep": " "
+			"ekm_file": "http://website.web/static/ekm_file.txt",
+			"ekm_file_sep": " "
 		}'`
 	dsortExampleY = `$ ais start dsort -f - <<EOM
 			input_extension: .tar
@@ -246,7 +246,7 @@ func _flattenSpec(spec *dsort.RequestSpec) (flat, config nvpairList) {
 				if v == "" {
 					v = dsort.Alphanumeric
 				}
-			case "order_file_sep":
+			case "ekm_file_sep":
 				if v == "" {
 					v = `\t`
 				}

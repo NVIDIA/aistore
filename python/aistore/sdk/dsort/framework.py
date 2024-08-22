@@ -125,8 +125,8 @@ class DsortFramework:
         self.algorithm = algorithm
         self.description = description
 
-        self.order_file = None
-        self.order_sep = None
+        self.ekm_file = None
+        self.ekm_sep = None
 
     @classmethod
     def from_file(cls, spec):
@@ -194,8 +194,8 @@ class DsortFramework:
                 output_shard_size=spec_data.get("output_shard_size", ""),
             )
 
-            framework.order_file = spec_data.get("order_file", "")
-            framework.order_sep = spec_data.get("order_sep", "")
+            framework.ekm_file = spec_data.get("ekm_file", "")
+            framework.ekm_sep = spec_data.get("ekm_sep", "")
 
             return framework
 
@@ -212,8 +212,8 @@ class DsortFramework:
         if self.output_shard_size:
             spec["output_shard_size"] = self.output_shard_size
 
-        if self.order_file:
-            spec["order_file"] = self.order_file
-            spec["order_sep"] = self.order_sep
+        if self.ekm_file:
+            spec["ekm_file"] = self.ekm_file
+            spec["ekm_sep"] = self.ekm_sep
 
         return spec

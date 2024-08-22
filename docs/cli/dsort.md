@@ -41,8 +41,8 @@ NAME:
                   "input_format": {"template": "shard-{0..9}"},
                   "output_shard_size": "200KB",
                   "description": "pack records into categorized shards",
-                  "order_file": "http://website.web/static/order_file.txt",
-                  "order_file_sep": " "
+                  "ekm_file": "http://website.web/static/ekm_file.txt",
+                  "ekm_file_sep": " "
                 }'
    E.g. inline YAML spec:
                 $ ais start dsort -f - <<EOM
@@ -96,8 +96,8 @@ input_bck                        ais://src
 input_format.objnames            -
 input_format.template            shard-{0..9}
 max_mem_usage                    -
-order_file                       -
-order_file_sep                   \t
+ekm_file                       -
+ekm_file_sep                   \t
 output_bck                       ais://dst
 output_format                    new-shard-{0000..1000}
 output_shard_size                10KB
@@ -144,8 +144,8 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | `algorithm.seed` | `string` | seed provided to random generator, used when `kind=shuffle` | no | `""` - `time.Now()` is used |
 | `algorithm.extension` | `string` | content of the file with provided extension will be used as sorting key, used when `kind=content` | yes (only when `kind=content`) |
 | `algorithm.content_key_type` | `string` | content key type; may have one of the following values: "int", "float", or "string"; used exclusively with `kind=content` sorting | yes (only when `kind=content`) |
-| `order_file` | `string` | URL to the file containing external key map (it should contain lines in format: `record_key[sep]shard-%d-fmt`) | yes (only when `output_format` not provided) | `""` |
-| `order_file_sep` | `string` | separator used for splitting `record_key` and `shard-%d-fmt` in the lines in external key map | no | `\t` (TAB) |
+| `ekm_file` | `string` | URL to the file containing external key map (it should contain lines in format: `record_key[sep]shard-%d-fmt`) | yes (only when `output_format` not provided) | `""` |
+| `ekm_file_sep` | `string` | separator used for splitting `record_key` and `shard-%d-fmt` in the lines in external key map | no | `\t` (TAB) |
 | `max_mem_usage` | `string` | limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB | no | same as in `/deploy/dev/local/aisnode_config.sh` |
 | `extract_concurrency_max_limit` | `int` | limits maximum number of concurrent shards extracted per disk | no | (calculated based on different factors) ~50 |
 | `create_concurrency_max_limit` | `int` | limits maximum number of concurrent shards created per disk| no | (calculated based on different factors) ~50 |
@@ -218,10 +218,10 @@ JGHEoo89gg
 #### Pack records into shards with different categories - EKM (External Key Map)
 
 One of the key features of the dSort is that user can specify the exact mapping from the record key to the output shard.
-To use this feature `output_format` should be empty and `order_file`, as well as `order_file_sep`, must be set.
+To use this feature `output_format` should be empty and `ekm_file`, as well as `ekm_file_sep`, must be set.
 The output shards will be created with provided [template format](/docs/batch.md#operations-on-multiple-selected-objects).
 
-Assuming that `order_file` (URL: `http://website.web/static/order_file.txt`) has content:
+Assuming that `ekm_file` (URL: `http://website.web/static/ekm_file.txt`) has content:
 
 ```
 cat_0.txt shard-cats-%d
@@ -235,7 +235,7 @@ car_1.txt shard-car-%d
 ...
 ```
 
-or if `order_file` (URL: `http://website.web/static/order_file.json`, notice `.json` extension) and has content:
+or if `ekm_file` (URL: `http://website.web/static/ekm_file.json`, notice `.json` extension) and has content:
 
 ```json
 {
@@ -258,7 +258,7 @@ or if `order_file` (URL: `http://website.web/static/order_file.json`, notice `.j
 }
 ```
 
-or, you can also use regex as the record identifier. The `order_file` can contain regex patterns as keys to match multiple records that fit the regex pattern to provided format.
+or, you can also use regex as the record identifier. The `ekm_file` can contain regex patterns as keys to match multiple records that fit the regex pattern to provided format.
 
 ```json
 {
@@ -299,8 +299,8 @@ $ ais start dsort '{
     "input_format": {"template": "shard-{0..9}"},
     "output_shard_size": "200KB",
     "description": "pack records into categorized shards",
-    "order_file": "http://website.web/static/order_file.txt",
-    "order_file_sep": " "
+    "ekm_file": "http://website.web/static/ekm_file.txt",
+    "ekm_file_sep": " "
 }'
 JGHEoo89gg
 ```
@@ -322,7 +322,7 @@ shard-dogs-0.tar:
 ```
 
 EKM also supports [template syntax](/docs/batch.md#operations-on-multiple-selected-objects) to express output shard names.
-For example, if `order_file` has content:
+For example, if `ekm_file` has content:
 
 ```json
 {

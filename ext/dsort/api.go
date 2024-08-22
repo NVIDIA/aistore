@@ -64,9 +64,9 @@ type RequestSpec struct {
 	// Default: alphanumeric, increasing
 	Algorithm Algorithm `json:"algorithm" yaml:"algorithm"`
 	// Default: ""
-	OrderFileURL string `json:"order_file" yaml:"order_file"`
+	EKMFileURL string `json:"ekm_file" yaml:"ekm_file"`
 	// Default: "\t"
-	OrderFileSep string `json:"order_file_sep" yaml:"order_file_sep"`
+	EKMFileSep string `json:"ekm_file_sep" yaml:"ekm_file_sep"`
 	// Default: "80%"
 	MaxMemUsage string `json:"max_mem_usage" yaml:"max_mem_usage"`
 	// Default: calcMaxLimit()

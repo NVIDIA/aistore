@@ -82,7 +82,7 @@ type (
 
 		inputTempl            apc.ListRange
 		outputTempl           string
-		orderFileURL          string
+		EKMFileURL            string
 		shardCnt              int
 		shardCntToSkip        int
 		filesPerShard         int
@@ -257,7 +257,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		OutputFormat:        df.outputTempl,
 		OutputShardSize:     df.outputShardSize,
 		Algorithm:           *df.alg,
-		OrderFileURL:        df.orderFileURL,
+		EKMFileURL:          df.EKMFileURL,
 		ExtractConcMaxLimit: 10,
 		CreateConcMaxLimit:  10,
 		MaxMemUsage:         df.maxMemUsage,
@@ -1977,7 +1977,7 @@ func TestDsortDuplications(t *testing.T) {
 	}
 }
 
-func TestDsortOrderFile(t *testing.T) {
+func TestDsortEKMFile(t *testing.T) {
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -1997,9 +1997,9 @@ func TestDsortOrderFile(t *testing.T) {
 					filesPerShard: 10,
 				}
 
-				orderFileName = "orderFileName"
-				ekm           = shard.NewExternalKeyMap(8)
-				shardFmts     = []string{
+				EKMFileName = "ekm_file_name"
+				ekm         = shard.NewExternalKeyMap(8)
+				shardFmts   = []string{
 					"shard-%d-suf",
 					"input-%d-pref",
 					"smth-%d",
@@ -2011,10 +2011,10 @@ func TestDsortOrderFile(t *testing.T) {
 			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			// Set URL for order file (points to the object in cluster).
-			df.orderFileURL = fmt.Sprintf(
+			// Set URL for the ekm file (points to the object in cluster).
+			df.EKMFileURL = fmt.Sprintf(
 				"%s/%s/%s/%s/%s?%s=%s",
-				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
+				proxyURL, apc.Version, apc.Objects, m.bck.Name, EKMFileName,
 				apc.QparamProvider, apc.AIS,
 			)
 
@@ -2027,8 +2027,8 @@ func TestDsortOrderFile(t *testing.T) {
 
 			df.createInputShards()
 
-			// Generate content for the orderFile
-			tlog.Logln("generating and putting order file into cluster...")
+			// Generate content for the ekm file
+			tlog.Logln("generating and putting ekm file into cluster...")
 			var (
 				buffer       bytes.Buffer
 				shardRecords = df.getRecordNames(m.bck)
@@ -2042,7 +2042,7 @@ func TestDsortOrderFile(t *testing.T) {
 			args := api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        m.bck,
-				ObjName:    orderFileName,
+				ObjName:    EKMFileName,
 				Reader:     readers.NewBytes(buffer.Bytes()),
 			}
 			_, err = api.PutObject(&args)
@@ -2067,7 +2067,7 @@ func TestDsortOrderFile(t *testing.T) {
 	)
 }
 
-func TestDsortRegexOrderFile(t *testing.T) {
+func TestDsortRegexEKMFile(t *testing.T) {
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -2083,18 +2083,18 @@ func TestDsortRegexOrderFile(t *testing.T) {
 					recordNames:   []string{"n01440764.JPEG", "n02097658.JPEG", "n03495258.JPEG", "n02965783.JPEG", "n01631663.JPEG"},
 				}
 
-				orderFileName = "orderFileName.json"
-				proxyURL      = tools.RandomProxyURL()
-				baseParams    = tools.BaseAPIParams(proxyURL)
+				EKMFileName = "ekm_file_name.json"
+				proxyURL    = tools.RandomProxyURL()
+				baseParams  = tools.BaseAPIParams(proxyURL)
 			)
 
 			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			// Set URL for order file (points to the object in cluster).
-			df.orderFileURL = fmt.Sprintf(
+			// Set URL for ekm file (points to the object in cluster).
+			df.EKMFileURL = fmt.Sprintf(
 				"%s/%s/%s/%s/%s?%s=%s",
-				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
+				proxyURL, apc.Version, apc.Objects, m.bck.Name, EKMFileName,
 				apc.QparamProvider, apc.AIS,
 			)
 			df.init()
@@ -2113,8 +2113,8 @@ func TestDsortRegexOrderFile(t *testing.T) {
 				// Create local output bucket
 				tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
 
-				// Generate content for the orderFile
-				tlog.Logln("generating and putting order file into cluster...")
+				// Generate content for the ekm file
+				tlog.Logln("generating and putting ekm file into cluster...")
 
 				jsonContent := map[string][]string{
 					"shard-%d.tar": {".*string_dont_match.*"},
@@ -2124,7 +2124,7 @@ func TestDsortRegexOrderFile(t *testing.T) {
 				args := api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        m.bck,
-					ObjName:    orderFileName,
+					ObjName:    EKMFileName,
 					Reader:     readers.NewBytes(jsonBytes),
 				}
 				_, err = api.PutObject(&args)
@@ -2163,8 +2163,8 @@ func TestDsortRegexOrderFile(t *testing.T) {
 				// Create local output bucket
 				tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
 
-				// Generate content for the orderFile
-				tlog.Logln("generating and putting order file into cluster...")
+				// Generate content for the ekm file
+				tlog.Logln("generating and putting ekm file into cluster...")
 				ekm := shard.NewExternalKeyMap(8)
 				jsonContent := map[string][]string{
 					"tench-shard-%d.tar":        {".*n01440764.*"},
@@ -2184,7 +2184,7 @@ func TestDsortRegexOrderFile(t *testing.T) {
 				args := api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        m.bck,
-					ObjName:    orderFileName,
+					ObjName:    EKMFileName,
 					Reader:     readers.NewBytes(jsonBytes),
 				}
 				_, err = api.PutObject(&args)
@@ -2231,9 +2231,9 @@ func TestDsortOrderJSONFile(t *testing.T) {
 					filesPerShard: 10,
 				}
 
-				orderFileName = "order_file_name.json"
-				ekm           = shard.NewExternalKeyMap(8)
-				shardFmts     = []string{
+				EKMFileName = "ekm_file_name.json"
+				ekm         = shard.NewExternalKeyMap(8)
+				shardFmts   = []string{
 					"prefix-{0..100}-suffix.tar",
 					"prefix-@00001-gap-@100-suffix.tar",
 					"prefix-%06d-suffix.tar",
@@ -2245,10 +2245,10 @@ func TestDsortOrderJSONFile(t *testing.T) {
 			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			// Set URL for order file (points to the object in cluster).
-			df.orderFileURL = fmt.Sprintf(
+			// Set URL for the ekm file (points to the object in cluster).
+			df.EKMFileURL = fmt.Sprintf(
 				"%s/%s/%s/%s/%s?%s=%s",
-				proxyURL, apc.Version, apc.Objects, m.bck.Name, orderFileName,
+				proxyURL, apc.Version, apc.Objects, m.bck.Name, EKMFileName,
 				apc.QparamProvider, apc.AIS,
 			)
 
@@ -2261,8 +2261,8 @@ func TestDsortOrderJSONFile(t *testing.T) {
 
 			df.createInputShards()
 
-			// Generate content for the orderFile
-			tlog.Logln("generating and putting order file into cluster...")
+			// Generate content for the ekm file
+			tlog.Logln("generating and putting ekm file into cluster...")
 			var (
 				content      = make(map[string][]string, 10)
 				shardRecords = df.getRecordNames(m.bck)
@@ -2279,7 +2279,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 			args := api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        m.bck,
-				ObjName:    orderFileName,
+				ObjName:    EKMFileName,
 				Reader:     readers.NewBytes(jsonBytes),
 			}
 			_, err = api.PutObject(&args)

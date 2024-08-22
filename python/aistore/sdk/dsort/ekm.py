@@ -2,7 +2,7 @@ from typing import Dict, List
 
 from aistore.sdk.multiobj import ObjectNames
 
-EKM_ORDER_FILE_NAME = "ekm-order-file.json"
+EKM_FILE_NAME = "ekm-file.json"
 
 
 class ExternalKeyMap(Dict[str, ObjectNames]):

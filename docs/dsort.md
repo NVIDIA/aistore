@@ -60,6 +60,10 @@ Eg. if we have a tarball which contains files named: `file1.txt`, `file1.png`,
 `file2.png`, then we would have 2 *records*: one for `file1` and one for
 `file2`.
 
+**Algorithm** - the sorting algorithm applied during the sorting phase of dSort. After dSort execution, all records within a shard, or across shards with adjacent indices, are guaranteed to be sorted according to the specified algorithm's order.
+
+**External Key Map (EKM)** - a dSort feature that allows users to precisely control how records are packed into output shards. EKM provides a flexible mechanism to map each individual record to a specific shard based on rules defined in an external file.
+
 **Extraction phase** - dSort has multiple phases in which it does the whole
 operation. The first of them is **extraction**. In this phase, dSort is reading
 input shards and looks inside them to get to the objects and metadata. Objects

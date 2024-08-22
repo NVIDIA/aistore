@@ -45,8 +45,8 @@ type parsedReqSpec struct {
 	Pit                 *parsedInputTemplate  `json:"pit"`
 	Pot                 *parsedOutputTemplate `json:"pot"`
 	Algorithm           *Algorithm            `json:"algorithm"`
-	OrderFileURL        string                `json:"order_file"`
-	OrderFileSep        string                `json:"order_file_sep"`
+	EKMFileURL          string                `json:"ekm_file"`
+	EKMFileSep          string                `json:"ekm_file_sep"`
 	MaxMemUsage         cos.ParsedQuantity    `json:"max_mem_usage"`
 	TargetOrderSalt     []byte                `json:"target_order_salt"`
 	ExtractConcMaxLimit int                   `json:"extract_concurrency_max_limit"`
@@ -148,11 +148,11 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 		return nil, specErr("algorithm", err)
 	}
 
-	var isOrder bool
-	if isOrder, err = validateOrderFileURL(rs.OrderFileURL); err != nil {
-		return nil, fmt.Errorf(fmtErrOrderURL, rs.OrderFileURL, err)
+	var isEKM bool
+	if isEKM, err = validateEKMFileURL(rs.EKMFileURL); err != nil {
+		return nil, fmt.Errorf(fmtErrOrderURL, rs.EKMFileURL, err)
 	}
-	if isOrder {
+	if isEKM {
 		if pars.Pot, err = parseOutputFormat(rs.OutputFormat); err != nil {
 			return nil, err
 		}
@@ -172,14 +172,14 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 			}
 		}
 	} else {
-		// For the order file the output shard size must be set.
+		// If the ekm file is provided, the output shard size must be set.
 		if pars.OutputShardSize == 0 {
 			return nil, errMissingOutputSize
 		}
-		pars.OrderFileURL = rs.OrderFileURL
-		pars.OrderFileSep = rs.OrderFileSep
-		if pars.OrderFileSep == "" {
-			pars.OrderFileSep = "\t"
+		pars.EKMFileURL = rs.EKMFileURL
+		pars.EKMFileSep = rs.EKMFileSep
+		if pars.EKMFileSep == "" {
+			pars.EKMFileSep = "\t"
 		}
 	}
 	if rs.OutputExtension == "" {
@@ -266,11 +266,11 @@ func parseAlgorithm(alg Algorithm) (*Algorithm, error) {
 	return &alg, nil
 }
 
-func validateOrderFileURL(orderURL string) (empty bool, err error) {
-	if orderURL == "" {
+func validateEKMFileURL(ekmURL string) (empty bool, err error) {
+	if ekmURL == "" {
 		return true, nil
 	}
-	_, err = url.ParseRequestURI(orderURL)
+	_, err = url.ParseRequestURI(ekmURL)
 	return
 }
 
