@@ -6,7 +6,6 @@
 package nlog
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -30,21 +29,17 @@ func ErrorDepth(depth int, args ...any)   { log(sevErr, depth, "", args...) }
 func Errorln(args ...any)                 { log(sevErr, 0, "", args...) }
 func Errorf(format string, args ...any)   { log(sevErr, 0, format, args...) }
 
-func Setup(logToStderr bool, maxSize int64) {
+func SetPre(dir, role string) {
+	logDir, aisrole = dir, role
+}
+
+func SetPost(logToStderr bool, maxSize int64) {
 	LogToStderr = logToStderr
 	MaxSize = maxSize
 	if MaxSize > 1024*1024*1024 {
 		Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", MaxSize)
 		MaxSize = 4 * 1024 * 1024
 	}
-}
-
-func SetLogDirRole(dir, role string) {
-	if logDir != "" && logDir != dir && unitTests.Load() {
-		msg := fmt.Sprintf("log dir %q != %q (using nlog _prior_ to loading config?)", logDir, dir)
-		assert(false, msg)
-	}
-	logDir, aisrole = dir, role
 }
 
 func SetTitle(s string) { title = s }

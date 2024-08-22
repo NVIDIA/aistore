@@ -39,7 +39,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 		fspaths = config.FSP.Paths.Keys()
 	)
 	// new and empty
-	fs.New(t, len(config.FSP.Paths))
+	blockDevs := fs.New(t, len(config.FSP.Paths))
 
 	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)
@@ -51,7 +51,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 	// b) when the config doesn't contain a single valid mountpath
 	// (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 	if vmd == nil {
-		if err := configInitMPI(tid, config); err != nil {
+		if err := configInitMPI(tid, config, blockDevs); err != nil {
 			cos.ExitLogf("%s: %v (config-init-mpi, %v, %+v)", t, err, fspaths, ctx)
 		}
 		nlog.Warningln(t.String()+":", "creating new VMD from", fspaths, "config")
@@ -68,7 +68,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 	// otherwise, use loaded VMD to find the most recently updated (the current) one and, simultaneously,
 	// initialize MPI
 	var persist bool
-	if v, haveOld, err := initMPI(tid, config, vmd, 1 /*pass #1*/, ctx.IgnoreMissing); err != nil {
+	if v, haveOld, err := initMPI(tid, config, blockDevs, vmd, 1 /*pass #1*/, ctx.IgnoreMissing); err != nil {
 		cos.ExitLogf("%s: %v (vmd-init-mpi-p1, %+v, %s)", t, err, ctx, vmd)
 	} else {
 		if v != nil && v.Version > vmd.Version {
@@ -78,7 +78,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 		if haveOld {
 			persist = true
 		}
-		if v, _, err := initMPI(tid, config, vmd, 2 /*pass #2*/, ctx.IgnoreMissing); err != nil {
+		if v, _, err := initMPI(tid, config, blockDevs, vmd, 2 /*pass #2*/, ctx.IgnoreMissing); err != nil {
 			cos.ExitLogf("%s: %v (vmd-init-mpi-p2, have-old=%t, %+v, %s)", t, err, haveOld, ctx, vmd)
 		} else {
 			debug.Assert(v == nil || v.Version == vmd.Version)
@@ -123,7 +123,7 @@ func newVMD(expectedSize int) *VMD {
 }
 
 // local config => fs.MPI
-func configInitMPI(tid string, config *cmn.Config) (err error) {
+func configInitMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices) (err error) {
 	var (
 		fspaths  = config.FSP.Paths
 		avail    = make(fs.MPI, len(fspaths))
@@ -134,7 +134,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 		if mi, err = fs.NewMountpath(path, ios.Label(label)); err != nil {
 			goto rerr
 		}
-		if err = mi.AddEnabled(tid, avail, config); err != nil {
+		if err = mi.AddEnabled(tid, avail, config, blockDevs); err != nil {
 			goto rerr
 		}
 	}
@@ -151,7 +151,8 @@ rerr:
 }
 
 // VMD => fs.MPI in two passes
-func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMi bool) (maxVer *VMD, haveOld bool, err error) {
+func initMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices, vmd *VMD, pass int, ignoreMissingMi bool) (maxVer *VMD,
+	haveOld bool, err error) {
 	var (
 		avail    = make(fs.MPI, len(vmd.Mountpaths))
 		disabled = make(fs.MPI)
@@ -225,7 +226,7 @@ func initMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissingMi
 				nlog.Warningf("%s: %v", mi, errLoad)
 			}
 		} else {
-			if err = mi.AddEnabled(tid, avail, config); err != nil {
+			if err = mi.AddEnabled(tid, avail, config, blockDevs); err != nil {
 				return
 			}
 		}

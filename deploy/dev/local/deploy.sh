@@ -112,13 +112,9 @@ touch $TMPF;
 OS=$(uname -s)
 case $OS in
   Linux) # Linux
-    is_command_available "iostat" "-V"
-    is_command_available "lsblk" "--version"
-    is_command_available "df" "--version"
     setfattr -n user.comment -v comment $TMPF
     ;;
   Darwin) # macOS
-    is_command_available "df" "--version"
     xattr -w user.comment comment $TMPF
     echo "WARNING: Darwin architecture is not yet fully supported. You may stumble upon bugs and issues when testing on Mac."
     ;;

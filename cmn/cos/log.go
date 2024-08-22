@@ -20,6 +20,14 @@ func Infoln(a ...any) {
 	}
 }
 
+func Errorln(a ...any) {
+	if flag.Parsed() {
+		nlog.ErrorDepth(1, a...)
+	} else {
+		fmt.Fprintln(os.Stderr, a...)
+	}
+}
+
 func Errorf(format string, a ...any) {
 	if flag.Parsed() {
 		nlog.ErrorDepth(1, fmt.Sprintf(format, a...))

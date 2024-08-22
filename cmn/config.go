@@ -1276,8 +1276,7 @@ func (c *FSHCConf) UnmarshalJSON(data []byte) (err error) {
 	c.IOErrTime = cos.Duration(IOErrTimeDflt)
 	c.Enabled = true
 
-	// cannot nlog yet; may not show up when redirected
-	fmt.Fprintln(os.Stderr, "Warning: setting fshc to all defaults")
+	cos.Errorln("Warning: setting fshc to all defaults")
 
 	return nil
 }
@@ -1441,8 +1440,7 @@ func (c *FSPConf) UnmarshalJSON(data []byte) error {
 	}
 	c.Paths = m
 
-	// cannot nlog yet; may not show up when redirected
-	fmt.Fprintln(os.Stderr, "Warning: load fspaths from V3 (older) config:", c.Paths)
+	cos.Errorln("Warning: load fspaths from V3 (older) config:", c.Paths)
 	return nil
 }
 
@@ -1809,7 +1807,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	if _, err := jsp.LoadMeta(localConfPath, &config.LocalConfig); err != nil {
 		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err) // FATAL
 	}
-	nlog.SetLogDirRole(config.LogDir, daeRole)
+
+	nlog.SetPre(config.LogDir, daeRole)
 
 	// Global (aka Cluster) config
 	// Normally, when the node is being deployed the very first time the last updated version
@@ -1822,7 +1821,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
 		if !os.IsNotExist(err) {
 			if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-				fmt.Fprintf(os.Stderr, "ERROR: "+FmtErrBackwardCompat+"\n", err)
+				cos.Errorf("ERROR: "+FmtErrBackwardCompat+"\n", err)
 			}
 			return fmt.Errorf("failed to load global config %q: %v", globalConfPath, err)
 		}
@@ -1834,7 +1833,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 			return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
 		}
 		if !config.TestingEnv() {
-			fmt.Fprintln(os.Stderr, itxt, globalConfPath)
+			cos.Errorln("Warning:", itxt, "from", globalConfPath)
 		}
 		debug.Assert(config.Version == 0, config.Version)
 		globalFpath = globalConfPath
@@ -1842,8 +1841,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
 
-	// Set up logging.
-	nlog.Setup(config.Log.ToStderr, int64(config.Log.MaxSize))
+	nlog.SetPost(config.Log.ToStderr, int64(config.Log.MaxSize))
 
 	// initialize atomic part of the config including most often used timeouts and features
 	Rom.Set(&config.ClusterConfig)

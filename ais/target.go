@@ -237,7 +237,6 @@ func (t *target) init(config *cmn.Config) {
 	if err := ts.InitCDF(config); err != nil {
 		cos.ExitLog(err)
 	}
-	fs.Clblk()
 }
 
 func (t *target) initHostIP(config *cmn.Config) {

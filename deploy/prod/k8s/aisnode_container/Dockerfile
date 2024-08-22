@@ -31,17 +31,6 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 FROM --platform=${TARGETPLATFORM:-linux/amd64} ${BASE_IMAGE} as base
 
-FROM base AS base-amd64
-ENV LIB_PATH "x86_64-linux-gnu"
-
-FROM base AS base-arm64
-ENV LIB_PATH "aarch64-linux-gnu"
-
-FROM base-${TARGETARCH:-amd64}
-
-COPY --from=installer /usr/lib/${LIB_PATH} /usr/lib/${LIB_PATH}
-COPY --from=installer /lib/${LIB_PATH} /lib/${LIB_PATH}
-COPY --from=installer /bin/lsblk /bin/lsblk
 COPY --from=installer /etc/ssl/certs /etc/ssl/certs
 
 COPY --from=builder /go/bin/aisnode /usr/bin/aisnode

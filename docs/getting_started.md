@@ -629,15 +629,3 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 > Memory limits may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding which also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
-
-## Assorted command lines
-
-AIStore targets may execute (and parse the output of) the following command:
-
-```console
-$ lsblk -Jt
-```
-
-**Tip**:
-
-> In fact, prior to deploying AIS cluster on a given Linux distribution the very first time, it'd make sense to maybe run the 3 commands and check output for "invalid option" or lack of thereof.

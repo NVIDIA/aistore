@@ -10,15 +10,17 @@ ENV DEBCONF_NOWARNINGS="yes"
 
 ENV AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"}
 
-RUN apt-get update -yq
-RUN apt-get --no-install-recommends -y install curl git coreutils
+# NOTE: Uncomment this line if you plan to use shell prompt inside the container.
+# RUN apt-get update -yq && apt-get --no-install-recommends -y install curl git coreutils util-linux
 
 RUN mkdir -p /go/src/github.com/NVIDIA/aistore
 WORKDIR /go/src/github.com/NVIDIA/aistore
 
-# Clone GitHub and build aisnode
-RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && go mod tidy &&\
- GOOS="linux" GOARCH="amd64" CGO_ENABLED=0 BUILD_FLAGS="-a -installsuffix cgo" MODE=${mode} make node
+# Clone GitHub and build aisnode.
+RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && go mod tidy && \
+    GOOS="linux" GOARCH="amd64" \
+    CGO_ENABLED=0 BUILD_FLAGS="-a -installsuffix cgo" \
+    MODE=${mode} make node
 
 FROM alpine:latest
 
@@ -28,13 +30,10 @@ FROM alpine:latest
 ENV AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"}
 
 # TODO: lsof (installed by default from busybox) doesn't handle `-sTCP:LISTEN` and `tcp@host:port`
-RUN apk upgrade --no-cache && \
-  apk add --no-cache --virtual .build-deps \
+RUN apk upgrade --no-cache && apk add --no-cache --virtual .build-deps \
     bash \
     sysstat \
     attr \
-    # for 'lsblk' command
-    util-linux \
   ;
 
 WORKDIR /build

@@ -41,8 +41,6 @@ var (
 
 	onceInitFiles sync.Once
 
-	unitTests atomic.Bool
-
 	stopping atomic.Bool // true when exiting
 )
 
@@ -56,7 +54,6 @@ func init() {
 
 func initFiles() {
 	if logDir == "" {
-		unitTests.Store(true)
 		logDir = filepath.Join(os.TempDir(), "aislogs")
 	}
 	if err := fcreateAll(sevErr); err != nil {

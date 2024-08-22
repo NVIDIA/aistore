@@ -58,7 +58,7 @@ type (
 		lomCaches  cos.MultiSyncMap // LOM caches
 		info       string
 		Path       string    // clean path
-		Label      ios.Label // (disk sharing; help resolve lsblk; storage class; user-defined grouping)
+		Label      ios.Label // (disk sharing; storage class; user-defined grouping)
 		cos.FS               // underlying filesystem
 		Disks      []string  // owned disks (ios.FsDisks map => slice)
 		flags      uint64    // bit flags (set/get atomic)
@@ -374,11 +374,11 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 // mountpath add/enable helpers - always call under mfs lock
 //
 
-func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config) (err error) {
+func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevices) (err error) {
 	if err = mi._validate(avail, config); err != nil {
 		return
 	}
-	if err = mi._addEnabled(tid, avail, config); err == nil {
+	if err = mi._addEnabled(tid, avail, config, blockDevs); err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
 	cos.ClearfAtomic(&mi.flags, FlagWaitingDD|FlagDisabledByFSHC)
@@ -421,8 +421,8 @@ func (mi *Mountpath) _validate(avail MPI, config *cmn.Config) error {
 	return nil
 }
 
-func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) error {
-	fsdisks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config)
+func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevices) error {
+	fsdisks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config, blockDevs)
 	if err != nil {
 		return err
 	}
@@ -459,7 +459,7 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 		return
 	}
 	availableCopy := _cloneOne(avail)
-	if err = mi.AddEnabled(tid, availableCopy, config); err == nil {
+	if err = mi.AddEnabled(tid, availableCopy, config, nil /*blockDevs*/); err == nil {
 		putAvailMPI(availableCopy)
 	}
 	return
@@ -562,9 +562,10 @@ func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
 // MFS global
 //
 
-func New(fshc HC, num int) {
+func New(fshc HC, num int) (blockDevs ios.BlockDevices) {
 	mfs = &MFS{hc: fshc, fsIDs: make(map[cos.FsID]string, 10)}
-	mfs.ios = ios.New(num)
+	mfs.ios, blockDevs = ios.New(num)
+	return blockDevs
 }
 
 // used only in tests
@@ -572,7 +573,7 @@ func TestNew(iostater ios.IOS) {
 	const num = 10
 	mfs = &MFS{fsIDs: make(map[cos.FsID]string, num)}
 	if iostater == nil {
-		mfs.ios = ios.New(num)
+		mfs.ios, _ = ios.New(num)
 	} else {
 		mfs.ios = iostater
 	}
@@ -580,7 +581,6 @@ func TestNew(iostater ios.IOS) {
 }
 
 // `ios` delegations
-func Clblk()                                   { mfs.ios.Clblk() }
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
 
@@ -645,6 +645,7 @@ func Add(mpath, tid string) (mi *Mountpath, err error) {
 	return
 }
 
+// (via attach-mpath)
 func AddMpath(tid, mpath string, label ios.Label, cb func()) (mi *Mountpath, err error) {
 	mi, err = NewMountpath(mpath, label)
 	if err != nil {
@@ -740,7 +741,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	availableCopy, disabledCopy := cloneMPI()
 	mi, ok = disabledCopy[cleanMpath]
 	debug.Assert(ok)
-	if err = mi.AddEnabled(tid, availableCopy, config); err != nil {
+	if err = mi.AddEnabled(tid, availableCopy, config, nil /*blockDevs*/); err != nil {
 		return
 	}
 	enabledMpath = mi

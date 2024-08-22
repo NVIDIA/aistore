@@ -1024,7 +1024,7 @@ var (
 			indent2 + "3. parallelism multiplier - a number of goroutines to concurrently read, write, and/or traverse the mountpath in question\n" +
 			indent2 + "   (e.g.: 'local-NVMe = 8', 'remote-NFS = 1', etc.);\n" +
 			indent2 + "4. mapping of the mountpath to underlying block device(s)\n" +
-			indent2 + "   (potentially useful in virtualized/containerized environments where 'lsblk' wouldn't show a thing);\n" +
+			indent2 + "   (potentially useful in virtualized/containerized environments where '/sys/block/' wouldn't show a thing);\n" +
 			indent2 + "5. user-defined grouping of the target mountpaths",
 	}
 	noResilverFlag = cli.BoolFlag{

@@ -11,11 +11,16 @@ import (
 
 // TODO: NIY
 
-type LsBlk struct{}
+type (
+	blockDev     struct{}
+	BlockDevices []*blockDev
+)
 
-func lsblk(string, bool) (*LsBlk, error) { return nil, nil }
+func _lsblk(string, *blockDev) (BlockDevices, error) {
+	return nil, nil
+}
 
-func fs2disks(*LsBlk, string, string, Label, int, bool) (FsDisks, error) {
+func fs2disks(string, string, Label, BlockDevices, int, bool) (FsDisks, error) {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil || len(driveStats) == 0 {
 		return nil, err

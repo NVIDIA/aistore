@@ -28,10 +28,9 @@ type (
 	FsDisks map[string]int64 // disk name => sector size
 
 	IOS interface {
-		Clblk()
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath, fs string, label Label, config *cmn.Config) (FsDisks, error)
+		AddMpath(mpath, fs string, label Label, config *cmn.Config, blockDevs BlockDevices) (FsDisks, error)
 		RescanDisks(mpath, fs string, disks []string) RescanDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
 		DiskStats(m AllDiskStats)
@@ -74,7 +73,6 @@ type (
 		disk2mpath  cos.StrKVs
 		disk2sysfn  cos.StrKVs
 		blockStats  allBlockStats
-		lsblk       ratomic.Pointer[LsBlk] // used only during target startup
 		cache       ratomic.Pointer[cache]
 		cacheHst    [16]*cache
 		cacheIdx    int
@@ -106,7 +104,7 @@ func (x *MpathUtil) Set(mpath string, util int64) {
 // ios //
 /////////
 
-func New(num int) IOS {
+func New(num int) (IOS, BlockDevices) {
 	ios := &ios{
 		mpath2disks: make(map[string]FsDisks, num),
 		disk2mpath:  make(cos.StrKVs, num),
@@ -120,16 +118,12 @@ func New(num int) IOS {
 	ios.cacheIdx = 0
 	ios.busy.Store(false) // redundant on purpose
 
-	// once (cleared via Clblk)
-	res, err := lsblk("new-ios", true)
+	blockDevs, err := _lsblk("", nil /*parent*/)
 	if err != nil {
-		nlog.Errorln("new IOS:", err)
-	} else {
-		debug.Assert(res != nil)
-		ios.lsblk.Store(res)
+		cos.Errorln(err)
 	}
 
-	return ios
+	return ios, blockDevs
 }
 
 func newCache(num int) *cache {
@@ -150,9 +144,6 @@ func newCache(num int) *cache {
 	}
 }
 
-// zero-out lsblk cache (reusing it during target startup, clearing right after)
-func (ios *ios) Clblk() { ios.lsblk.Store(nil) }
-
 func (ios *ios) _get() *cache      { return ios.cache.Load() }
 func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 
@@ -160,40 +151,31 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fs string, label Label, config *cmn.Config) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fs string, label Label, config *cmn.Config, blockDevs BlockDevices) (fsdisks FsDisks, err error) {
 	var (
 		warn       string
 		testingEnv = config.TestingEnv()
 		fspaths    = config.LocalConfig.FSP.Paths
 	)
-	if pres := ios.lsblk.Load(); pres != nil {
-		res := *pres
-		fsdisks, err = fs2disks(&res, mpath, fs, label, len(fspaths), testingEnv /*no-disks is ok*/)
-	} else {
-		res, errInfo := lsblk(fs, testingEnv /*err is not fatal*/)
-		if errInfo != nil {
-			nlog.Errorln("add-mpath:", errInfo)
-		} else {
-			fsdisks, err = fs2disks(res, mpath, fs, label, len(fspaths), testingEnv /*no-disks is ok*/)
-			if err == nil {
-				ios.lsblk.Store(res)
-			}
-		}
+	fsdisks, err = fs2disks(mpath, fs, label, blockDevs, len(fspaths), testingEnv)
+	if err != nil || len(fsdisks) == 0 {
+		return fsdisks, err
 	}
-	if len(fsdisks) == 0 || err != nil {
-		return
+	// NOTE: no need to lock when starting up (see via volume.Init and fs.New)
+	if blockDevs == nil {
+		ios.mu.Lock()
 	}
-	ios.mu.Lock()
 	warn, err = ios._add(mpath, label, fsdisks, fspaths, testingEnv)
-	ios.mu.Unlock()
-
+	if blockDevs == nil {
+		ios.mu.Unlock()
+	}
 	if err != nil {
 		nlog.Errorln(err)
 	}
 	if warn != "" {
 		nlog.Infoln(warn)
 	}
-	return
+	return fsdisks, err
 }
 
 func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
@@ -263,13 +245,9 @@ func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.Str
 // - note: part of the alerting mechanism, via filesystem health checker (FSHC)
 func (ios *ios) RescanDisks(mpath, fs string, disks []string) (out RescanDisksResult) {
 	debug.Assert(len(disks) > 0)
-	res, err := lsblk(fs, true /*err is not fatal*/)
-	if err != nil {
-		out.Fatal = cmn.NewErrMpathNoDisks(mpath, fs, err)
-		return out
-	}
 
-	out.FsDisks, err = fs2disks(res, mpath, fs, Label(""), len(disks), false /*no-disks is ok*/)
+	var err error
+	out.FsDisks, err = fs2disks(mpath, fs, Label(""), nil, len(disks), false /*no-disks is ok*/)
 	if err != nil {
 		out.Fatal = err
 		return out
