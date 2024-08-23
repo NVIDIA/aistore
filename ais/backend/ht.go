@@ -39,7 +39,7 @@ func NewHT(t core.TargetPut, config *cmn.Config, tstats stats.Tracker) (core.Bac
 		t:    t,
 		base: base{provider: apc.HT},
 	}
-	bp.cliH, bp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D(), nil)
+	bp.cliH, bp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
 	bp.init(t.Snode(), tstats)
 	return bp, nil
 }

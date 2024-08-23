@@ -198,7 +198,7 @@ func (m *AISbp) GetInfoInternal() (res meta.RemAisVec) {
 func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 	var (
 		cfg              = cmn.GCO.Get()
-		cliPlain, cliTLS = remaisClients(&cfg.ClusterConfig)
+		cliPlain, cliTLS = remaisClients(&cfg.Client)
 	)
 	m.mu.RLock()
 	res.A = make([]*meta.RemAis, 0, len(m.remote))
@@ -245,12 +245,8 @@ func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 	return
 }
 
-func remaisClients(cfg *cmn.ClusterConfig) (client, clientTLS *http.Client) {
-	sargs := cfg.Net.HTTP.ToTLS()
-	if cfg.Net.HTTP.UseHTTPS {
-		return cmn.NewDefaultClients(cfg.Client.Timeout.D(), &sargs)
-	}
-	return cmn.NewDefaultClients(cfg.Client.Timeout.D(), nil)
+func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) {
+	return cmn.NewDefaultClients(clientConf.Timeout.D())
 }
 
 // A list of remote AIS URLs can contains both HTTP and HTTPS links at the
@@ -261,7 +257,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	var (
 		url           string
 		remSmap, smap *meta.Smap
-		cliH, cliTLS  = remaisClients(cfg)
+		cliH, cliTLS  = remaisClients(&cfg.Client)
 	)
 	for _, u := range confURLs {
 		client := cliH

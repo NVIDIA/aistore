@@ -127,15 +127,9 @@ func NewTLS(sargs TLSArgs) (tlsConf *tls.Config, _ error) {
 	return tlsConf, nil
 }
 
-// NewDefaultClients creates and returns a pair of HTTP clients: one without TLS and one with TLS.
-// If the provided TLSArgs (sargs) is nil, the clientTLS will be a standard HTTP client without TLS.
-func NewDefaultClients(timeout time.Duration, sargs *TLSArgs) (clientH, clientTLS *http.Client) {
+func NewDefaultClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
 	clientH = NewClient(TransportArgs{Timeout: timeout})
-	if sargs != nil {
-		clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, *sargs)
-	} else {
-		clientTLS = NewClient(TransportArgs{Timeout: timeout})
-	}
+	clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, TLSArgs{SkipVerify: true})
 	return
 }
 
