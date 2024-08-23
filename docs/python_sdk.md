@@ -150,6 +150,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [props](#object.Object.props)
     * [head](#object.Object.head)
     * [get](#object.Object.get)
+    * [as\_file](#object.Object.as_file)
     * [get\_semantic\_url](#object.Object.get_semantic_url)
     * [get\_url](#object.Object.get_url)
     * [put\_content](#object.Object.put_content)
@@ -163,9 +164,12 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
   * [ObjectIterator](#object_iterator.ObjectIterator)
 * [object\_reader](#object_reader)
   * [ObjectReader](#object_reader.ObjectReader)
+    * [head](#object_reader.ObjectReader.head)
     * [attributes](#object_reader.ObjectReader.attributes)
+    * [chunk\_size](#object_reader.ObjectReader.chunk_size)
     * [read\_all](#object_reader.ObjectReader.read_all)
     * [raw](#object_reader.ObjectReader.raw)
+    * [iter\_from\_position](#object_reader.ObjectReader.iter_from_position)
     * [\_\_iter\_\_](#object_reader.ObjectReader.__iter__)
 
 <a id="authn.authn_client.AuthNClient"></a>
@@ -2732,6 +2736,57 @@ Creates and returns an ObjectReader with access to object contents and optionall
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 
+<a id="object.Object.as_file"></a>
+
+### as\_file
+
+```python
+def as_file(max_resume: int = 5,
+            archive_settings: ArchiveSettings = None,
+            blob_download_settings: BlobDownloadSettings = None,
+            chunk_size: int = DEFAULT_CHUNK_SIZE,
+            etl_name: str = None,
+            writer: BufferedWriter = None,
+            latest: bool = False,
+            byte_range: str = None) -> ObjectFile
+```
+
+Creates an `ObjectFile` for reading object data in chunks with support for
+resuming and retrying from the last known position in the case the object stream
+is prematurely closed due to an unexpected error.
+
+**Arguments**:
+
+- `max_resume` _int, optional_ - If streaming object contents is interrupted, this
+  defines the maximum number of attempts to resume the connection before
+  raising an exception.
+- `archive_settings` _ArchiveSettings, optional_ - Settings for archive extraction.
+- `blob_download_settings` _BlobDownloadSettings, optional_ - Settings for using blob
+  download (e.g., chunk size, workers).
+- `chunk_size` _int, optional_ - The size of chunks to use while reading from the stream.
+- `etl_name` _str, optional_ - Name of the ETL (Extract, Transform, Load) transformation
+  to apply during the get operation.
+- `writer` _BufferedWriter, optional_ - A writer for writing content output. User is
+  responsible for closing the writer.
+- `latest` _bool, optional_ - Whether to get the latest version of the object from
+  a remote bucket (if applicable).
+- `byte_range` _str, optional_ - Specify a byte range to fetch a segment of the object
+  (e.g., "bytes=0-499" for the first 500 bytes).
+  
+
+**Returns**:
+
+- `ObjectFile` - A file-like object that can be used to read the object content.
+  
+
+**Raises**:
+
+- `requests.RequestException` - An ambiguous exception occurred while handling the request.
+- `requests.ConnectionError` - A connection error occurred.
+- `requests.ConnectionTimeout` - The connection to AIStore timed out.
+- `requests.ReadTimeout` - Waiting for a response from AIStore timed out.
+- `requests.exceptions.HTTPError(404)` - The object does not exist.
+
 <a id="object.Object.get_semantic_url"></a>
 
 ### get\_semantic\_url
@@ -2982,6 +3037,20 @@ class ObjectReader()
 Represents the data returned by the API when getting an object, including access to the content stream and object
 attributes.
 
+<a id="object_reader.ObjectReader.head"></a>
+
+### head
+
+```python
+def head() -> ObjectAttributes
+```
+
+Make a head request to AIS to update and return only object attributes.
+
+**Returns**:
+
+  ObjectAttributes for this object
+
 <a id="object_reader.ObjectReader.attributes"></a>
 
 ### attributes
@@ -2996,6 +3065,21 @@ Object metadata attributes.
 **Returns**:
 
 - `ObjectAttributes` - Parsed object attributes from the headers returned by AIS
+
+<a id="object_reader.ObjectReader.chunk_size"></a>
+
+### chunk\_size
+
+```python
+@property
+def chunk_size() -> int
+```
+
+Chunk size.
+
+**Returns**:
+
+- `int` - Current chunk size for reading the object.
 
 <a id="object_reader.ObjectReader.read_all"></a>
 
@@ -3027,6 +3111,26 @@ Returns the raw byte stream of object content.
 
 - `requests.Response` - Raw byte stream of the object content
 
+<a id="object_reader.ObjectReader.iter_from_position"></a>
+
+### iter\_from\_position
+
+```python
+def iter_from_position(start_position: int = 0) -> Iterator[bytes]
+```
+
+Make a request to get a stream from the provided object starting at a specific byte position
+and yield chunks of the stream content.
+
+**Arguments**:
+
+- `start_position` _int, optional_ - The byte position to start reading from. Defaults to 0.
+  
+
+**Returns**:
+
+- `Iterator[bytes]` - An iterator over each chunk of bytes in the object starting from the specific position.
+
 <a id="object_reader.ObjectReader.__iter__"></a>
 
 ### \_\_iter\_\_
@@ -3039,5 +3143,5 @@ Make a request to get a stream from the provided object and yield chunks of the 
 
 **Returns**:
 
-- `Iterator[bytes]` - An iterator over each chunk of bytes in the object
+- `Iterator[bytes]` - An iterator over each chunk of bytes in the object.
 

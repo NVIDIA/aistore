@@ -75,6 +75,32 @@ class TestObjectReader(unittest.TestCase):
         self.assertEqual(expected_chunks, chunks)
         self.assert_make_request(mock_attr, stream=True)
 
+    @patch("aistore.sdk.object_reader.ObjectAttributes", autospec=True)
+    def test_iter_from_position(self, mock_attr):
+        expected_chunks = [b"chunk1", b"chunk2"]
+        mock_response = Mock(spec=requests.Response, headers=self.response_headers)
+        mock_response.iter_content.return_value = expected_chunks
+        self.client.request.return_value = mock_response
+
+        start_position = 2048
+        chunks = list(
+            self.object_reader.iter_from_position(start_position=start_position)
+        )
+
+        self.assertEqual(chunks, expected_chunks)
+        self.assert_make_request_with_range(
+            mock_attr, stream=True, start_position=start_position
+        )
+
+        self.client.request.reset_mock()
+        start_position = 0
+        chunks = list(
+            self.object_reader.iter_from_position(start_position=start_position)
+        )
+
+        self.assertEqual(chunks, expected_chunks)
+        self.assert_make_request(mock_attr, stream=True)
+
     def assert_make_request(self, mock_attr, stream):
         self.client.request.assert_called_once_with(
             HTTP_METHOD_GET,
@@ -82,6 +108,17 @@ class TestObjectReader(unittest.TestCase):
             params=self.params,
             stream=stream,
             headers=self.headers,
+        )
+        self.assertIsInstance(self.object_reader.attributes, ObjectAttributes)
+        mock_attr.assert_called_with(self.response_headers)
+
+    def assert_make_request_with_range(self, mock_attr, stream, start_position):
+        self.client.request.assert_called_once_with(
+            HTTP_METHOD_GET,
+            path=self.path,
+            params=self.params,
+            stream=stream,
+            headers={**self.headers, "Range": f"bytes={start_position}-"},
         )
         self.assertIsInstance(self.object_reader.attributes, ObjectAttributes)
         mock_attr.assert_called_with(self.response_headers)
