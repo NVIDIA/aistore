@@ -39,6 +39,12 @@ func (f NodeStateFlags) IsRed() bool {
 		f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines)
 }
 
+func (f NodeStateFlags) IsWarn() bool {
+	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
+		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
+		f.IsSet(Restarted) || f.IsSet(MaintenanceMode) || f.IsSet(LowCapacity)
+}
+
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
 
 func (f NodeStateFlags) Set(flags NodeStateFlags) NodeStateFlags {
