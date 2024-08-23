@@ -19,11 +19,11 @@ and [so on](/docs/cli.md).
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
-  - [docker](#docker)
+  - [Docker](#docker)
   - [CLI](#cli)
 - [How to Build](#how-to-build)
 - [How to Deploy](#how-to-deploy)
-  - [Multiple Disk Setup](#multiple-disk-setup)
+  - [Multiple Disks](#multiple-disks)
   - [Backend Provider Setup](#backend-provider-setup)
   - [Cloud Deployment](#cloud-deployment)
 - [Rebuilding](#rebuilding)
@@ -33,7 +33,7 @@ and [so on](/docs/cli.md).
 
 The prerequisites boil down to having **a)** docker and **b)** [AIS CLI](/docs/cli.md)
 
-### <ins>docker
+### <ins>Docker
 
 If not already installed, install [Docker](https://docs.docker.com/engine/install/) on the machine that will be used to run your containerized AIS cluster. Verify that Docker has been correctly installed with the following script:
 
@@ -90,8 +90,8 @@ $ REGISTRY_URL=docker.io IMAGE_REPO=my-docker-rep IMAGE_TAG=custom make -e all
 
 The following command starts an AIS cluster in a Docker container with a single disk (requires at least one disk) that is mounted under a temporary directory on the host:
 
-```
-docker run -d -p 51080:51080 -v $(mktemp -d):/ais/disk0 aistorage/cluster-minimal:latest
+```console
+$ docker run -d -p 51080:51080 -v $(mktemp -d):/ais/disk0 aistorage/cluster-minimal:latest
 ```
 
 > Note the command exposes the host `51080` port. It is possible to reach the cluster with `http://localhost:51080` if you are on the host machine.
@@ -111,42 +111,74 @@ In the `ais show cluster` output - a sample below - notice software versions and
 
 ```console
 $ AIS_ENDPOINT="http://localhost:51080" ais show cluster
-PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS  VERSION                 BUILD TIME
-p[aXXGsjBy][P]   0.14%           27.69GiB        [0.5 0.2 0.2]   -       online  3.24.rc2.0d437de0b      2024-08-07T13:15:30+0000
+$ ais show cluster
+PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME  STATUS
+p[nnDIlKOE][P]   0.23%           18.21GiB        [1.5 2.8 1.9]   -       online
 
-TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       LOAD AVERAGE    REBALANCE       UPTIME  STATUS  VERSION                 BUILD TIME
-t[zXRiIdJM]      0.14%           27.69GiB        16%             366.272GiB      [0.5 0.2 0.2]   -               -       online  3.24.rc2.0d437de0b      2024-08-07T13:15:30+0000
+TARGET           MEM USED(%)     MEM AVAIL   CAP USED(%)   CAP AVAIL    LOAD AVERAGE    REBALANCE   UPTIME  STATUS  ALERT
+t[BKCheLNU]      0.22%           18.21GiB    27%           68.445GiB    [1.5 2.8 1.9]   -           -       online  cluster-not-started-yet
 
 Summary:
    Proxies:             1
    Targets:             1 (one disk)
-   Capacity:            used 71.86GiB (16%), available 366.27GiB
-   Cluster Map:         version 4, UUID XC0AxWp0K, primary p[aXXGsjBy]
+   Capacity:            used 25.49GiB (27%), available 68.44GiB
+   Cluster Map:         version 2, UUID iHjYXi5IL, primary p[nnDIlKOE]
+   Software:            3.24.rc3.1f74b8f4b (build: 2024-08-23T14:09:13+0000)
    Deployment:          linux
    Status:              2 online
    Rebalance:           n/a
    Authentication:      disabled
-   Version:             3.24.rc2.0d437de0b
-   Build:               2024-08-07T13:15:30+0000
+   Version:             3.24.rc3.1f74b8f4b
+   Build:               2024-08-23T14:09:13+0000
 ```
 
-> **IMPORTANT**: `docker stop` may not be the right way to stop `cluster-minimal` instance - section [Shutting down](#shutting-down) below will explain why.
+> **IMPORTANT**: `docker stop` may not be the right way to stop `cluster-minimal` instance. Run `ais cluster shutdown --yes` to shut down the cluster gracefully. For details, see section [Shutting down](#shutting-down) below.
 
-### <ins>Multiple Disk Setup
+### <ins>Multiple Disks
 
-You can also mount multiple disks to your containerized AIS cluster. The following command launches a local Docker instance of an AIS cluster, but with three disks mounted:
+In this section, we show how to run all-in-one-docker AIS cluster with virtual disks that we also create right away.
 
+But first:
+
+> **NOTE**: mounted disk paths must resolve to _distinct_ and _disjoint_ file systems. AIStore checks and enforces non-sharing of local filesystems: each target [mountpath](/docs/overview.md#terminology) must have its own, undivided.
+
+And of course, when there are no spare drives for data storage, one uses loopback, as follows:
+
+```console
+$ for i in {1..4}; do deploy/dev/loopback.sh --mountpath /tmp/ais/mp$i --size 1G; done
 ```
-docker run -d \
-  -p 51080:51080 \
-  -v /disk0:/ais/disk0 \
-  -v /disk1:/ais/disk1 \
-  -v /some/disk2:/ais/disk2 \
+
+At this point, we have 4(file-based)  disks, and we can use them:
+
+```console
+$ docker run -d -p 51080:51080 \
+  -v /tmp/ais/mp1:/ais/disk1 -v /tmp/ais/mp2:/ais/disk2 \
+  -v /tmp/ais/mp3:/ais/disk3 -v /tmp/ais/mp4:/ais/disk4 \
   aistorage/cluster-minimal:latest
+
+$ $ ais storage mountpath
+yynRQpXV
+        Used: min= 6%, avg= 6%, max= 6%
+                                        /ais/disk1 /dev/loop10(ext4)
 ```
 
-> **IMPORTANT**: The mounted disk paths must resolve to _distinct_ and _disjoint_ file systems. Otherwise, the setup may be corrupted.
+Notice (above): upon startup, the cluster shows a single disk. That's because initial (hardcoded) configuration that we provided specifies only one.
 
+This is easily fiable, though: AIStore supports adding [mountpath](/docs/overview.md#terminology) at runtime. More exactly, all 4 verbs are supported: attach, detach, enable, disable.
+
+```console
+$ ais storage mountpath attach t[yynRQpXV] /ais/disk2
+$ ais storage mountpath attach t[yynRQpXV] /ais/disk3
+$ ais storage mountpath attach t[yynRQpXV] /ais/disk4
+
+$ ais storage mountpath
+yynRQpXV
+        Used: min= 6%, avg= 6%, max= 6%
+                                        /ais/disk1 /dev/loop10(ext4)
+                                        /ais/disk2 /dev/loop18(ext4)
+                                        /ais/disk3 /dev/loop19(ext4)
+                                        /ais/disk4 /dev/loop20(ext4)
+```
 
 ### <ins>Backend Provider Setup
 
@@ -158,8 +190,8 @@ Secondly, and separately, you could also deploy `cluster-minimal` with a subset 
 
 In other words, there's the flexibility to *activate* only some of the built-in providers at deployment time, e.g.:
 
-```
-docker run -d -p 51080:51080 -v $(mktemp -d):/ais/disk0 -e AIS_BACKEND_PROVIDERS="gcp" aistorage/cluster-minimal:latest
+``` console
+$ docker run -d -p 51080:51080 -v $(mktemp -d):/ais/disk0 -e AIS_BACKEND_PROVIDERS="gcp" aistorage/cluster-minimal:latest
 ```
 
 > **IMPORTANT**: For both AWS or GCP usage, to ensure the cluster works properly with backend providers, it is _essential_ to pass the environment variable `AIS_BACKEND_PROVIDERS`, a space-separated list of support backend provides to be used, in your `docker run` command.

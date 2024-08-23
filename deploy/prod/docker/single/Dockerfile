@@ -17,6 +17,9 @@ RUN mkdir -p /go/src/github.com/NVIDIA/aistore
 WORKDIR /go/src/github.com/NVIDIA/aistore
 
 # Clone GitHub and build aisnode.
+# To deploy from remote branch, run:
+#    git clone -b <BRANCH-NAME> --single-branch https://github.com/NVIDIA/aistore.git
+#
 RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && go mod tidy && \
     GOOS="linux" GOARCH="amd64" \
     CGO_ENABLED=0 BUILD_FLAGS="-a -installsuffix cgo" \
