@@ -251,6 +251,9 @@ func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 		r.cleanup()
 	}
 
+	if r.IsAborted() {
+		return
+	}
 	wi.j.workCh <- &archtask{wi, lrit}
 	if r.Err() != nil {
 		wi.cleanup()

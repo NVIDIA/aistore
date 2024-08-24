@@ -118,7 +118,7 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		curwt += sleep
 	}
 	logHdr, tname := reb.logHdr(rargs.id, rargs.smap), tsi.StringEx()
-	nlog.Errorf("%s: timed out waiting for %s to reach %s state", logHdr, tname, stages[rebStageTraverse])
+	nlog.Errorln(logHdr, "timed out waiting for", tname, "to reach", stages[rebStageTraverse], "stage")
 	return
 }
 

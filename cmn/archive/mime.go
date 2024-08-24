@@ -166,30 +166,31 @@ func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
 	return
 }
 
-func _detect(file cos.LomReader, archname, mine string, buf []byte) (m string, n int, err error) {
-	n, err = file.Read(buf)
+func _detect(file cos.LomReader, archname, mime string, buf []byte) (string, int, error) {
+	n, err := file.Read(buf)
 	if err != nil {
-		return
+		return "", 0, err
 	}
-	if mine == ExtTar && n < sizeDetectMime {
-		err = NewErrUnknownFileExt(archname, fmt.Sprintf(FmtErrShortFile, ExtTar, sizeDetectMime))
-		return
-	}
-	if mine == ExtTarGz && n < magicGzip.offset+len(magicGzip.sig) {
-		err = NewErrUnknownFileExt(archname, fmt.Sprintf(FmtErrShortFile, ExtTarGz, magicGzip.offset+len(magicGzip.sig)))
-		return
-	}
-	if mine == ExtTarLz4 && n < magicLz4.offset+len(magicLz4.sig) {
-		err = NewErrUnknownFileExt(archname, fmt.Sprintf(FmtErrShortFile, ExtTarGz, magicLz4.offset+len(magicLz4.sig)))
-		return
+	switch mime {
+	case ExtTar:
+		if n < sizeDetectMime {
+			return "", n, NewErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTar, sizeDetectMime))
+		}
+	case ExtTarGz:
+		if l := magicGzip.offset + len(magicGzip.sig) + 4; n < l {
+			return "", n, NewErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
+		}
+	case ExtTarLz4:
+		if l := magicLz4.offset + len(magicLz4.sig) + 4; n < l {
+			return "", n, NewErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
+		}
 	}
 	for _, magic := range allMagics {
 		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig) {
 			return magic.mime, n, nil
 		}
 	}
-	err = fmt.Errorf("failed to detect supported file signatures in %q", archname)
-	return
+	return "", n, fmt.Errorf("failed to detect supported file signatures in %q", archname)
 }
 
 func EqExt(ext1, ext2 string) bool {

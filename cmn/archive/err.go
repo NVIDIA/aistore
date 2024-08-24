@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -14,7 +14,7 @@ import (
 
 const TarBlockSize = 512 // Size of each block in a tar stream
 
-const FmtErrShortFile = "%s file is too short, should have at least %d size"
+const fmtErrTooShort = "%s file is too short, should have at least %d size"
 
 // assorted errors
 type (
