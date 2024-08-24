@@ -13,13 +13,13 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
 // transport defaults
 const (
-	dfltBurstNum     = 256 // burst size (see: config.Transport.Burst)
 	dfltTick         = time.Second
 	dfltTickIdle     = dfltTick << 8   // (when there are no streams to _collect_)
 	dfltIdleTeardown = 4 * time.Second // (see config.Transport.IdleTeardown)
@@ -31,16 +31,15 @@ const (
 )
 
 type global struct {
-	tstats cos.StatsUpdater // subset of stats.Tracker interface, the minimum required
+	tstats cos.StatsUpdater // strict subset of stats.Tracker interface (the minimum required)
 	mm     *memsys.MMSA
 }
 
 var (
-	g          global
-	dfltMaxHdr int64 // memsys.PageSize or cluster-configurable (`config.Transport.MaxHeaderSize`)
+	g global
 )
 
-func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
+func Init(tstats cos.StatsUpdater) *StreamCollector {
 	g.mm = memsys.PageMM()
 	g.tstats = tstats
 
@@ -49,10 +48,6 @@ func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 		hmaps[i] = make(hmap, 4)
 	}
 
-	dfltMaxHdr = dfltSizeHeader
-	if config.Transport.MaxHeaderSize > 0 {
-		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)
-	}
 	// real stream collector
 	gc = &collector{
 		ctrlCh:  make(chan ctrl, dfltCollectChan),
@@ -67,13 +62,15 @@ func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 }
 
 func burst(extra *Extra) (burst int) {
-	if extra.WorkChBurst > 0 {
-		return extra.WorkChBurst
+	if extra.ChanBurst > 0 {
+		debug.Assert(extra.ChanBurst <= cmn.MaxTransportBurst, extra.ChanBurst)
+		return min(extra.ChanBurst, cmn.MaxTransportBurst)
 	}
-	config := extra.Config
-	if burst = config.Transport.Burst; burst == 0 {
-		burst = dfltBurstNum
+	if burst = extra.Config.Transport.Burst; burst == 0 {
+		burst = cmn.DfltTransportBurst
 	}
+
+	// (feat)
 	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
 		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
 			nlog.Errorln(err)

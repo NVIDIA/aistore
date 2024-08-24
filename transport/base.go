@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,19 +141,49 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 			s.time.idleTeardown = dfltIdleTeardown
 		}
 	}
-	debug.Assertf(s.time.idleTeardown >= dfltTick, "%v vs. %v", s.time.idleTeardown, dfltTick)
+	debug.Assert(s.time.idleTeardown >= dfltTick, s.time.idleTeardown, " vs ", dfltTick)
 	s.time.ticks = int(s.time.idleTeardown / dfltTick)
 
-	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
+	s._lid(sid, dstID, extra)
 
-	if extra.MaxHdrSize == 0 {
-		s.maxhdr, _ = g.mm.AllocSize(dfltMaxHdr)
-	} else {
-		s.maxhdr, _ = g.mm.AllocSize(int64(extra.MaxHdrSize))
-		cos.AssertMsg(extra.MaxHdrSize <= 0xffff, "the field is uint16") // same comment in header.go
-	}
+	s.maxhdr, _ = g.mm.AllocSize(_sizeHdr(extra.Config, int64(extra.MaxHdrSize)))
+
 	s.sessST.Store(inactive) // initiate HTTP session upon the first arrival
 	return
+}
+
+func (s *streamBase) _lid(sid, dstID string, extra *Extra) {
+	var sb strings.Builder
+
+	sb.WriteString("s-")
+	sb.WriteString(s.trname)
+	sb.WriteString(sid)
+	sb.WriteByte('[')
+	sb.WriteString(strconv.FormatInt(s.sessID, 10))
+
+	if extra.Compressed() {
+		sb.WriteByte('[')
+		sb.WriteString(cos.ToSizeIEC(int64(extra.Config.Transport.LZ4BlockMaxSize), 0))
+		sb.WriteByte(']')
+	}
+
+	sb.WriteString("]=>")
+	sb.WriteString(dstID)
+
+	s.lid = sb.String() // "s-%s%s[%d]=>%s"
+}
+
+// (used on the receive side as well)
+func _sizeHdr(config *cmn.Config, size int64) int64 {
+	if size != 0 {
+		debug.Assert(size <= cmn.MaxTransportHeader, size)
+		size = min(size, cmn.MaxTransportHeader)
+	} else if config.Transport.MaxHeaderSize != 0 {
+		size = int64(config.Transport.MaxHeaderSize)
+	} else {
+		size = cmn.DfltTransportHeader
+	}
+	return size
 }
 
 func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {

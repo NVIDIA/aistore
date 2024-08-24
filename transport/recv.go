@@ -118,9 +118,13 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		reader = lz4Reader
 	}
 
-	stats, uid, loghdr := h.stats(r, trname)
-	it := &iterator{handler: h, body: reader, stats: stats}
-	it.hbuf, _ = mm.AllocSize(dfltMaxHdr)
+	var (
+		config             = cmn.GCO.Get()
+		stats, uid, loghdr = h.stats(r, trname)
+		it                 = &iterator{handler: h, body: reader, stats: stats}
+	)
+	debug.Assert(config.Transport.IdleTeardown > 0, "invalid config ", config.Transport)
+	it.hbuf, _ = mm.AllocSize(_sizeHdr(config, 0))
 
 	// receive loop
 	err = it.rxloop(uid, loghdr, mm)
@@ -236,14 +240,14 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 			break
 		}
 		if hlen > cap(it.hbuf) {
-			if hlen > maxSizeHeader {
-				err = fmt.Errorf("sbr1 %s: hlen %d exceeds maximum %d", loghdr, hlen, maxSizeHeader)
+			if hlen > cmn.MaxTransportHeader {
+				err = fmt.Errorf("sbr1 %s: transport header %d exceeds maximum %d", loghdr, hlen, cmn.MaxTransportHeader)
 				break
 			}
 			// grow
 			nlog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, cap(it.hbuf))
 			mm.Free(it.hbuf)
-			it.hbuf, _ = mm.AllocSize(min(int64(hlen)<<1, maxSizeHeader))
+			it.hbuf, _ = mm.AllocSize(min(int64(hlen)<<1, cmn.MaxTransportHeader))
 		}
 
 		it.stats.addOff(int64(hlen + sizeProtoHdr))

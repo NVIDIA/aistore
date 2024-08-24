@@ -91,7 +91,7 @@ func TestMain(t *testing.M) {
 	config.Transport.QuiesceTime = cos.Duration(10 * time.Second)
 	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
-	sc := transport.Init(&dummyStatsTracker{}, config)
+	sc := transport.Init(&dummyStatsTracker{})
 	go sc.Run()
 
 	objmux = mux.NewServeMux()

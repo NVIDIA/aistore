@@ -229,7 +229,7 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	sc := transport.Init(ts, config) // init transport sub-system; new stream collector
+	sc := transport.Init(ts) // init transport sub-system; new stream collector
 	daemon.rg.add(sc)
 
 	t.fshc = health.NewFSHC(t)

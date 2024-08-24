@@ -575,8 +575,8 @@ type (
 		LZ4FrameChecksum bool        `json:"lz4_frame_checksum"`
 	}
 	TransportConfToSet struct {
-		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
-		Burst            *int          `json:"burst_buffer,omitempty" list:"readonly"`
+		MaxHeaderSize    *int          `json:"max_header,omitempty"`
+		Burst            *int          `json:"burst_buffer,omitempty"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
 		QuiesceTime      *cos.Duration `json:"quiescent,omitempty"`
 		LZ4BlockMaxSize  *cos.SizeIEC  `json:"lz4_block,omitempty"`
@@ -1597,27 +1597,36 @@ func (c *MemsysConf) Validate() (err error) {
 // TransportConf //
 ///////////////////
 
+const (
+	DfltTransportHeader = 4 * cos.KiB   // memsys.PageSize
+	MaxTransportHeader  = 128 * cos.KiB // memsys.MaxPageSlabSize
+
+	DfltTransportBurst = 256
+	MaxTransportBurst  = 4096
+)
+
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
 func (c *TransportConf) Validate() (err error) {
 	if c.LZ4BlockMaxSize != 64*cos.KiB && c.LZ4BlockMaxSize != 256*cos.KiB &&
 		c.LZ4BlockMaxSize != cos.MiB && c.LZ4BlockMaxSize != 4*cos.MiB {
-		return fmt.Errorf("invalid transport.block_size %s (expected one of: [64K, 256K, 1MB, 4MB])",
+		return fmt.Errorf("invalid transport.block_size %s, expecting one of: [64K, 256K, 1MB, 4MB]",
 			c.LZ4BlockMaxSize)
 	}
-	if c.Burst < 0 {
-		return fmt.Errorf("invalid transport.burst_buffer: %v (expected >0)", c.Burst)
+	if c.Burst != 0 {
+		if c.Burst < 32 || c.Burst > MaxTransportBurst {
+			return fmt.Errorf("invalid transport.burst_buffer: %d, expecting [32, 4KiB] range or 0 (default)", c.Burst)
+		}
 	}
-	if c.MaxHeaderSize < 0 {
-		return fmt.Errorf("invalid transport.max_header: %v (expected >0)", c.MaxHeaderSize)
+	if c.MaxHeaderSize != 0 {
+		if c.MaxHeaderSize < 512 || c.MaxHeaderSize > MaxTransportHeader {
+			return fmt.Errorf("invalid transport.max_header: %v, expecting (0, 128KiB] range or 0 (default)", c.MaxHeaderSize)
+		}
 	}
 	if c.IdleTeardown.D() < time.Second {
-		return fmt.Errorf("invalid transport.idle_teardown: %v (expected >= 1s)", c.IdleTeardown)
+		return fmt.Errorf("invalid transport.idle_teardown: %v (expecting >= 1s)", c.IdleTeardown)
 	}
 	if c.QuiesceTime.D() < 8*time.Second {
-		return fmt.Errorf("invalid transport.quiescent: %v (expected >= 8s)", c.QuiesceTime)
-	}
-	if c.MaxHeaderSize > 0 && c.MaxHeaderSize < 512 {
-		return fmt.Errorf("invalid transport.max_header: %v (expected >= 512)", c.MaxHeaderSize)
+		return fmt.Errorf("invalid transport.quiescent: %v (expecting >= 8s)", c.QuiesceTime)
 	}
 	return nil
 }

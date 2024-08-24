@@ -35,12 +35,12 @@ const (
 func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
 const (
-	SizeUnknown = -1
+	SizeUnknown = -1 // obj size unknown (not set)
 
-	dfltSizePDU    = memsys.DefaultBufSize
-	maxSizePDU     = memsys.MaxPageSlabSize
-	dfltSizeHeader = memsys.PageSize
-	maxSizeHeader  = memsys.MaxPageSlabSize
+	dfltSizePDU = memsys.DefaultBufSize
+	maxSizePDU  = memsys.MaxPageSlabSize
+
+	// see also: cmn/config for (max, default) transport header sizes
 )
 
 const sizeofh = int(unsafe.Sizeof(Obj{}))
@@ -54,8 +54,8 @@ type (
 		SenderID     string        // e.g., xaction ID (optional)
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
 		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below maxSizePDU; unknown size _requires_ PDUs
-		MaxHdrSize   int32         // overrides `dfltMaxHdr`
-		WorkChBurst  int           // overrides `dfltBurstNum`
+		MaxHdrSize   int32         // overrides config.Transport.MaxHeaderSize
+		ChanBurst    int           // overrides config.Transport.Burst
 	}
 
 	// receive-side session stats indexed by session ID (see recv.go for "uid")

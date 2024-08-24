@@ -94,7 +94,6 @@ func (s *Stream) initCompression(extra *Extra) {
 	} else {
 		s.lz4s.sgl = g.mm.NewSGL(cos.KiB*64, cos.KiB*64)
 	}
-	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cos.ToSizeIEC(int64(s.lz4s.blockMaxSize), 0))
 }
 
 func (s *Stream) compressed() bool { return s.lz4s != nil }
@@ -341,7 +340,7 @@ func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
 		h    = &hdl{trname: s.trname}
-		it   = iterator{handler: h, body: body, hbuf: make([]byte, dfltMaxHdr)}
+		it   = iterator{handler: h, body: body, hbuf: make([]byte, cmn.DfltTransportHeader)}
 	)
 	for {
 		hlen, flags, err := it.nextProtoHdr(s.String())
