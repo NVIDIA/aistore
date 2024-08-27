@@ -452,7 +452,11 @@ test:short:k8s:
     - make test-short
 
 test:short:python-authn:
-  <<: *test_short_optional_def
+  stage: test-short
+  tags:
+    - ais
+  timeout: 20m
+  <<: *gather_logs_def
   variables:
     AIS_AUTHN_ENABLED: "true"
     AIS_AUTHN_SU_NAME: "admin"
@@ -462,19 +466,18 @@ test:short:python-authn:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - cd python/
     - make python_authn_tests
-  # overrides rules of test_short_optional_def
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
+      changes:
+        - python/aistore/sdk/authn/**/*
+        - python/aistore/tests/integration/sdk/authn/**/*
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - python/aistore/sdk/authn/**/*
         - python/aistore/tests/integration/sdk/authn/**/*
-    - when: manual
-      allow_failure: true
 
 test:short:python-etl:
   extends: .test_k8s_short_template
