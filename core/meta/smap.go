@@ -461,6 +461,22 @@ func (m *Smap) HasActiveTs(except string) bool {
 	return false
 }
 
+func (m *Smap) HasPeersToRebalance(except string) bool {
+	for tid, t := range m.Tmap {
+		if tid == except {
+			continue
+		}
+		if !t.InMaintOrDecomm() {
+			return true
+		}
+		// is a "peer" if still transitioning to post-rebalance state
+		if !t.Flags.IsSet(SnodeMaintPostReb) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Smap) CountActivePs() (count int) {
 	for _, p := range m.Pmap {
 		if !p.InMaintOrDecomm() {

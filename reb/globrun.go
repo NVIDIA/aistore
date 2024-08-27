@@ -196,7 +196,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	reb.regRecv()
 
-	haveStreams := smap.HasActiveTs(core.T.SID())
+	haveStreams := smap.HasPeersToRebalance(core.T.SID())
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}
@@ -552,16 +552,16 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 
 func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 	var (
-		cnt    int
-		logHdr = reb.logHdr(rargs.id, rargs.smap)
-		sleep  = rargs.config.Timeout.CplaneOperation.D()
-		maxwt  = rargs.config.Rebalance.DestRetryTime.D()
-		xreb   = reb.xctn()
-		smap   = rargs.smap
+		cnt   int
+		sleep = rargs.config.Timeout.CplaneOperation.D()
+		maxwt = rargs.config.Rebalance.DestRetryTime.D()
+		xreb  = reb.xctn()
+		smap  = rargs.smap
 	)
 	maxwt += time.Duration(int64(time.Minute) * int64(rargs.smap.CountTargets()/10))
 	maxwt = min(maxwt, rargs.config.Rebalance.DestRetryTime.D()*2)
 	reb.changeStage(rebStageWaitAck)
+	logHdr := reb.logHdr(rargs.id, rargs.smap)
 
 	for {
 		curwt := time.Duration(0)
