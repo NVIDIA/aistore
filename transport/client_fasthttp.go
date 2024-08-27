@@ -52,7 +52,7 @@ func NewIntraDataClient() Client {
 		WriteBufferSize: wbuf,
 	}
 	if config.Net.HTTP.UseHTTPS {
-		tlsConfig, err := cmn.NewTLS(config.Net.HTTP.ToTLS())
+		tlsConfig, err := cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra-cluster*/) // streams
 		if err != nil {
 			cos.ExitLog(err)
 		}

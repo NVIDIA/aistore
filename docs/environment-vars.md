@@ -99,10 +99,10 @@ See also:
 | name | comment |
 | ---- | ------- |
 | `AIS_USE_HTTPS` | tells aistore to run HTTPS transport (both public and intra-cluster networks); overrides the corresponding config; e.g. usage: 'export AIS_USE_HTTPS=true' |
-| `AIS_CRT` | X509 certificate pathname (this and the rest variables in the table are ignored when aistore is AIS_USE_HTTPS==false |
-| `AIS_CRT_KEY` | pathname that contains X509 certificate private key |
+| `AIS_CRT` | X.509 certificate pathname (this and the rest variables in the table are ignored when aistore is AIS_USE_HTTPS==false |
+| `AIS_CRT_KEY` | pathname that contains X.509 certificate private key |
 | `AIS_CLIENT_CA` | certificate authority that authorized (signed) the certificate |
-| `AIS_SKIP_VERIFY_CRT` | when true will skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+| `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
 
 ## Local Playground
 

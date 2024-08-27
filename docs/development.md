@@ -104,7 +104,7 @@ OPTIONS:
   --ht                Build with ht:// backend (experimental)
   --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means emulated mountpaths (with no loopback devices).
   --dir               The root directory of the aistore repository
-  --https             Use HTTPS (note: X509 certificates may be required)
+  --https             Use HTTPS (note: X.509 certificates may be required)
   --standby           When starting up, do not join cluster - wait instead for admin request (advanced usage, target-only)
   --transient         Do not store config changes, keep all the updates in memory
   -h, --help          Show this help text

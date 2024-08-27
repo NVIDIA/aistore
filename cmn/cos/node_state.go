@@ -35,14 +35,14 @@ const (
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsRed() bool {
-	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(LowCapacity) || f.IsSet(LowMemory) || f.IsSet(DiskFault) ||
-		f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines)
+	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines)
 }
 
 func (f NodeStateFlags) IsWarn() bool {
 	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
 		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
-		f.IsSet(Restarted) || f.IsSet(MaintenanceMode) || f.IsSet(LowCapacity)
+		f.IsSet(Restarted) || f.IsSet(MaintenanceMode) ||
+		f.IsSet(LowCapacity) || f.IsSet(LowMemory)
 }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }

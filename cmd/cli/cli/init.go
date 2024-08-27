@@ -56,8 +56,8 @@ func Init(args []string) (err error) {
 		UA:    ua,
 	}
 	if cos.IsHTTPS(clusterURL) {
-		cfg.WarnTLS("aistore at " + clusterURL)
-		clientTLS = cmn.NewClientTLS(cargs, sargs)
+		// TODO -- FIXME: cfg.WarnTLS("aistore at " + clusterURL)
+		clientTLS = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
 		apiBP.Client = clientTLS
 	} else {
 		clientH = cmn.NewClient(cargs)
@@ -72,8 +72,8 @@ func Init(args []string) (err error) {
 		}
 		if cos.IsHTTPS(authnURL) {
 			if clientTLS == nil {
-				cfg.WarnTLS("AuthN at " + authnURL)
-				clientTLS = cmn.NewClientTLS(cargs, sargs)
+				// TODO -- FIXME: cfg.WarnTLS("AuthN at " + authnURL)
+				clientTLS = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
 			}
 			authParams.Client = clientTLS
 		} else {

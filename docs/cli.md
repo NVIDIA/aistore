@@ -240,10 +240,10 @@ In addition, environment can be used to **override** client-side TLS (aka, HTTPS
 
 | var name | description | the corresponding [CLI Config](#cli-config) |
 | -- | -- | -- |
-| `AIS_CRT`             | X509 certificate | "cluster.client_crt" |
-| `AIS_CRT_KEY`         | X509 certificate's private key | "cluster.client_crt_key"|
+| `AIS_CRT`             | X.509 certificate | "cluster.client_crt" |
+| `AIS_CRT_KEY`         | X.509 certificate's private key | "cluster.client_crt_key"|
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate | "cluster.client_ca_tls" |
-| `AIS_SKIP_VERIFY_CRT` | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "cluster.skip_verify_crt" |
+| `AIS_SKIP_VERIFY_CRT` | true: skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "cluster.skip_verify_crt" |
 
 * See also: [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
 

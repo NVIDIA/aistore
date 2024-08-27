@@ -181,7 +181,9 @@ func (dm *DataMover) Quiesce(d time.Duration) core.QuiRes {
 
 func (dm *DataMover) Close(err error) {
 	if dm == nil {
-		nlog.Errorln("Warning: DM is <nil>")
+		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+			nlog.Warningln("Warning: DM is <nil>") // e.g., single-node cluster
+		}
 		return
 	}
 	if !dm.stage.opened.CAS(true, false) {

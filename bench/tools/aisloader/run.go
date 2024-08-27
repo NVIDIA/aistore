@@ -920,7 +920,7 @@ func _init(p *params) (err error) {
 	if useHTTPS {
 		// environment to override client config
 		cmn.EnvToTLS(&sargs)
-		p.bp.Client = cmn.NewClientTLS(cargs, sargs)
+		p.bp.Client = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
 	} else {
 		p.bp.Client = cmn.NewClient(cargs)
 	}

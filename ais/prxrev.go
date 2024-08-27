@@ -113,7 +113,7 @@ func rpTransport(config *cmn.Config) *http.Transport {
 		transport = cmn.NewTransport(cmn.TransportArgs{Timeout: config.Client.Timeout.D()})
 	)
 	if config.Net.HTTP.UseHTTPS {
-		transport.TLSClientConfig, err = cmn.NewTLS(config.Net.HTTP.ToTLS())
+		transport.TLSClientConfig, err = cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra-cluster*/)
 		if err != nil {
 			cos.ExitLog(err)
 		}

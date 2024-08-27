@@ -588,21 +588,19 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 	}
 	if clientAuth > tls.RequestClientCert {
 		if caCert, err = os.ReadFile(conf.ClientCA); err != nil {
-			return
+			return nil, fmt.Errorf("new-tls: failed to read PEM %q, err: %w", conf.ClientCA, err)
 		}
 		pool = x509.NewCertPool()
 		if ok := pool.AppendCertsFromPEM(caCert); !ok {
-			return nil, fmt.Errorf("tls: failed to append CA certs from PEM: %q", conf.ClientCA)
+			return nil, fmt.Errorf("new-tls: failed to append CA certs from PEM %q", conf.ClientCA)
 		}
 		tlsConf.ClientCAs = pool
 	}
 	if conf.Certificate != "" && conf.CertKey != "" {
-		if !aistls.IsLoaderSet() {
-			return nil, errors.New("tls: certificate manager not set")
-		}
-		tlsConf.GetCertificate = aistls.GetCert()
+		tlsConf.GetCertificate, err = aistls.GetCert()
+		debug.AssertNoErr(err)
 	}
-	return
+	return tlsConf, err
 }
 
 func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {

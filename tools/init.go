@@ -101,7 +101,7 @@ func init() {
 	if cos.IsHTTPS(os.Getenv(env.AIS.Endpoint)) {
 		// fill-in from env
 		cmn.EnvToTLS(&tlsArgs)
-		gctx.Client = cmn.NewClientTLS(transportArgs, tlsArgs)
+		gctx.Client = cmn.NewClientTLS(transportArgs, tlsArgs, false /*intra-cluster*/)
 	} else {
 		gctx.Client = cmn.NewClient(transportArgs)
 	}
@@ -117,7 +117,7 @@ func NewClientWithProxy(proxyURL string) *http.Client {
 
 	if parsedURL.Scheme == "https" {
 		cos.AssertMsg(cos.IsHTTPS(proxyURL), proxyURL)
-		tlsConfig, err := cmn.NewTLS(tlsArgs)
+		tlsConfig, err := cmn.NewTLS(tlsArgs, false /*intra-cluster*/)
 		cos.AssertNoErr(err)
 		transport.TLSClientConfig = tlsConfig
 	}

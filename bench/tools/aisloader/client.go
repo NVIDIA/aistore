@@ -35,7 +35,7 @@ var (
 	cargs = cmn.TransportArgs{
 		UseHTTPProxyEnv: true,
 	}
-	// NOTE: client X509 certificate and other `cmn.TLSArgs` variables can be provided via (os.Getenv) environment.
+	// NOTE: client X.509 certificate and other `cmn.TLSArgs` variables can be provided via (os.Getenv) environment.
 	// See also:
 	// - docs/aisloader.md, section "Environment variables"
 	// - AIS_ENDPOINT and aisEndpoint
@@ -261,7 +261,7 @@ func newTraceCtx(proxyURL string) *traceCtx {
 		err       error
 	)
 	if cos.IsHTTPS(proxyURL) {
-		transport.TLSClientConfig, err = cmn.NewTLS(sargs)
+		transport.TLSClientConfig, err = cmn.NewTLS(sargs, false /*intra-cluster*/)
 		cos.AssertNoErr(err)
 	}
 	tctx.tr = &traceableTransport{

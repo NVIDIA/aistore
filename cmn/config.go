@@ -445,15 +445,15 @@ type (
 
 	HTTPConf struct {
 		Proto           string `json:"-"`                 // http or https (set depending on `UseHTTPS`)
-		Certificate     string `json:"server_crt"`        // HTTPS: X509 certificate
-		CertKey         string `json:"server_key"`        // HTTPS: X509 key
+		Certificate     string `json:"server_crt"`        // HTTPS: X.509 certificate
+		CertKey         string `json:"server_key"`        // HTTPS: X.509 key
 		ServerNameTLS   string `json:"domain_tls"`        // #6410
 		ClientCA        string `json:"client_ca_tls"`     // #6410
 		ClientAuthTLS   int    `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
 		WriteBufferSize int    `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 4KB
 		ReadBufferSize  int    `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
 		UseHTTPS        bool   `json:"use_https"`         // use HTTPS
-		SkipVerifyCrt   bool   `json:"skip_verify"`       // skip X509 cert verification (used with self-signed certs)
+		SkipVerifyCrt   bool   `json:"skip_verify"`       // skip X.509 cert verification (used with self-signed certs)
 		Chunked         bool   `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
 	}
 	HTTPConfToSet struct {

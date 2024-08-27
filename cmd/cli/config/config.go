@@ -36,8 +36,8 @@ type (
 		DefaultAISHost    string `json:"default_ais_host"`
 		DefaultDockerHost string `json:"default_docker_host"`
 		// TLS
-		Certificate   string `json:"client_crt"`     // X509 certificate
-		CertKey       string `json:"client_crt_key"` // X509 key
+		Certificate   string `json:"client_crt"`     // X.509 certificate
+		CertKey       string `json:"client_crt_key"` // X.509 key
 		ClientCA      string `json:"client_ca_tls"`  // #6410
 		SkipVerifyCrt bool   `json:"skip_verify_crt"`
 	}

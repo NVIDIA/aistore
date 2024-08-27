@@ -5,6 +5,7 @@
 .*.swp
 *.key
 *.crt
+*.csr
 
 ## PYTHON ##
 

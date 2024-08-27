@@ -48,7 +48,7 @@ func NewIntraDataClient() (client *http.Client) {
 		ReadBufferSize:  rbuf,
 	}
 	if config.Net.HTTP.UseHTTPS {
-		client = cmn.NewClientTLS(cargs, config.Net.HTTP.ToTLS())
+		client = cmn.NewClientTLS(cargs, config.Net.HTTP.ToTLS(), true /*intra-cluster*/) // streams
 	} else {
 		client = cmn.NewClient(cargs)
 	}

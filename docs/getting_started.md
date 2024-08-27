@@ -387,7 +387,7 @@ For developers, CLI `ais config cluster log.modules ec xs` (for instance) would 
 
 > To list all log modules, type `ais config cluster` or `ais config node` and press `<TAB-TAB>`.
 
-Finally, there's also HTTPS configuration (including **X509** certificates and options), and the corresponding [environment](#tls-testing-with-self-signed-certificates).
+Finally, there's also HTTPS configuration (including **X.509** certificates and options), and the corresponding [environment](#tls-testing-with-self-signed-certificates).
 
 For details, please see section [TLS: testing with self-signed certificates](#tls-testing-with-self-signed-certificates) below.
 
@@ -473,26 +473,44 @@ This is still a so-called _local playground_ type deployment _from scratch_, whe
 
 ### Generate Certificates
 
-Creating a self-signed certificate along with its private key and a Certificate Authority (CA) certificate using [OpenSSL](https://www.openssl.org/) involves several steps. First we create a self-signed Certificate Authority (CA) certificate (`ca.crt`). Then we create a Certificate Signing Request (CSR) and finally based on CSR and CA we create the server certs (`server.key` and `server.crt`).
+Creating a self-signed certificate along with its private key and a Certificate Authority (CA) certificate using [OpenSSL](https://www.openssl.org/) involves steps:
+
+* First, we create a self-signed Certificate Authority (CA) certificate (`ca.crt`).
+* Second, create a Certificate Signing Request (CSR).
+* Finally, based on CSR and CA we create the server certs (`server.key` and `server.crt`) - as follows:
 
 ```console
-$ openssl req -x509 -newkey rsa:2048 -keyout ca.key -out ca.crt -days 1024 -nodes -subj "/CN=localhost" -extensions v3_ca -config <(printf "[req]\ndistinguished_name=req\nx509_extensions=v3_ca\n[ v3_ca ]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\nbasicConstraints=CA:TRUE\n")
-$ openssl req -new -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj "/C=US/ST=California/L=Santa Clara/O=NVIDIA/OU=AIStore/CN=localhost" -config <(printf "[req]\ndistinguished_name=req\nreq_extensions = v3_req\n[ v3_req ]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\n")
-$ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256 -extfile <(printf "[ext]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment\nextendedKeyUsage=serverAuth,clientAuth\n") -extensions ext
+openssl req -x509 -newkey rsa:2048 -keyout ca.key -out ca.crt -days 1024 -nodes -subj "/CN=localhost" -extensions v3_ca -config <(printf "[req]\ndistinguished_name=req\nx509_extensions=v3_ca\n[ v3_ca ]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\nbasicConstraints=CA:TRUE\n")
+
+openssl req -new -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj "/C=US/ST=California/L=Santa Clara/O=NVIDIA/OU=AIStore/CN=localhost" -config <(printf "[req]\ndistinguished_name=req\nreq_extensions = v3_req\n[ v3_req ]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\n")
+
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256 -extfile <(printf "[ext]\nsubjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment\nextendedKeyUsage=serverAuth,clientAuth\n") -extensions ext
 ```
 
-**Important:** Ensure you specify the appropriate DNS relevant to your deployment context. For deployments intended to run locally, the domain name `localhost` and `127.0.0.1` should be provided for the certificates to be valid.
+> **Important:** make sure to specify correct DNS. For local deployments, `localhost` and `127.0.0.1` domain must be provided - otherwise certificate validation will fail.
 
-### Deploy Cluster (4 targets, 1 gateway, 6 mountpaths, AWS)
+### Deploy Cluster: 4 targets, 1 gateway, 6 mountpaths, AWS backend
 
 ```console
-$ # shutdown prev running AIS cluster
+## shutdown previous running AIS cluster
+##
 $ make kill
-$ # delete smaps of prev AIS clusters
-$ find ~/.ais* -type f -name ".ais.smap" | xargs rm
-$ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-cert>/server.crt AIS_SERVER_KEY=<path-to-key>/server.key make deploy <<< $'4\n1\n6\ny\nn\nn\n0\n'
+
+## cleanup
+##
+$ make clean
+
+## run cluster: 4 targets, 1 gateway, 6 mountpaths, AWS backend, HTTPS
+##
+$ TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-cert>/server.crt AIS_SERVER_KEY=<path-to-key>/server.key make deploy <<< $'4\n1\n6'
 ```
 > Notice environment variables above: **AIS_USE_HTTPS**, **AIS_SKIP_VERIFY_CRT**, **AIS_SERVER_CRT** and **AIS_SERVER_KEY**.
+
+> Also note that `<path-to-cert>` (above) must not necessarily be absolute. Assuming, you have `server.*` in your **local directory**, the following will work as well:
+
+```console
+$ TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=server.crt AIS_SERVER_KEY=server.key make deploy <<< $'4\n1\n6'
+```
 
 ### Accessing the Cluster
 
@@ -518,12 +536,12 @@ In the previous example, the cluster is simply ignoring SSL certificate verifica
 | var name | description | the corresponding cluster configuration |
 | -- | -- | -- |
 | `AIS_USE_HTTPS`          | when false, we use plain HTTP with all the TLS config (below) simply **ignored** | "net.http.use_https" |
-| `AIS_SERVER_CRT`         | aistore cluster X509 certificate | "net.http.server_crt" |
+| `AIS_SERVER_CRT`         | aistore cluster X.509 certificate | "net.http.server_crt" |
 | `AIS_SERVER_KEY`         | certificate's private key | "net.http.server_key"|
 | `AIS_DOMAIN_TLS`         | NOTE: not supported, must be empty (domain, hostname, or SAN registered with the certificate) | "net.http.domain_tls"|
 | `AIS_CLIENT_CA_TLS`      | Certificate authority that authorized (signed) the certificate | "net.http.client_ca_tls" |
 | `AIS_CLIENT_AUTH_TLS`    | Client authentication during TLS handshake: a range from 0 (no authentication) to 4 (request and validate client's certificate) | "net.http.client_auth_tls" |
-| `AIS_SKIP_VERIFY_CRT`    | when true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |
+| `AIS_SKIP_VERIFY_CRT`    | when true: skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |
 
 > More info on [`AIS_CLIENT_AUTH_TLS`](https://pkg.go.dev/crypto/tls#ClientAuthType).
 

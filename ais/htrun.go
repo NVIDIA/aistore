@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	aistls "github.com/NVIDIA/aistore/cmn/tls"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
@@ -258,6 +259,13 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 }
 
 func (h *htrun) init(config *cmn.Config) {
+	// before newTLS() below and before clients
+	if config.Net.HTTP.UseHTTPS {
+		if err := aistls.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey); err != nil {
+			cos.ExitLog(err)
+		}
+	}
+
 	initCtrlClient(config)
 	initDataClient(config)
 
@@ -511,6 +519,7 @@ func (h *htrun) run(config *cmn.Config) error {
 		}
 		tlsConf = c
 	}
+
 	if config.HostNet.UseIntraControl {
 		go func() {
 			_ = g.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
