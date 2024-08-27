@@ -53,7 +53,7 @@ const (
 const (
 	ngrHighTime    = 10 * time.Minute // log a warning if the number of goroutines remains high
 	ngrExtremeTime = 5 * time.Minute  // when more then twice the maximum (below)
-	lshiftGorHigh  = 6                // max expressed as left shift of the num CPUs
+	lshiftGorHigh  = 8                // max expressed as left shift of the num CPUs
 )
 
 // [naming convention] error counter prefixes
