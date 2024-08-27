@@ -45,6 +45,10 @@ type (
 	BlockDevices []*blockDev
 )
 
+var (
+	errEmptyPhysBlock = errors.New("empty physical block size")
+)
+
 func (bd *blockDev) MarshalJSON() ([]byte, error) {
 	l := len(bd.children)
 	if l == 0 {
@@ -65,6 +69,14 @@ func (bd *blockDev) MarshalJSON() ([]byte, error) {
 	}
 	s := fmt.Sprintf("%s %v", bd.name, a)
 	return cos.UnsafeB(s), nil
+}
+
+func _dump(blockDevs BlockDevices) {
+	dump, _ := jsoniter.MarshalIndent(blockDevs, "", " ") // (custom MarshalJSON above)
+	s := strings.Repeat("=", 32)
+	nlog.Infoln("Begin dump block devices", s)
+	nlog.Infoln(string(dump))
+	nlog.Infoln("End dump block devices  ", s)
 }
 
 // fs2disks retrieves the underlying disk or disks; it may return multiple disks
@@ -91,6 +103,10 @@ func fs2disks(mpath, fs string, label Label, blockDevs BlockDevices, num int, te
 		return disks, nil // unit tests
 	}
 
+	if cmn.Rom.FastV(4, cos.SmoduleIOS) {
+		_dump(blockDevs)
+	}
+
 	switch {
 	case len(disks) > 0:
 		s := disks._str()
@@ -102,11 +118,7 @@ func fs2disks(mpath, fs string, label Label, blockDevs BlockDevices, num int, te
 		e := errors.New("empty label implies _resolvable_ underlying disk (" + trimmedFS + ")")
 		err = cmn.NewErrMpathNoDisks(mpath, fs, e)
 		nlog.Errorln(err)
-		dump, _ := jsoniter.MarshalIndent(blockDevs, "", " ") // (custom MarshalJSON above)
-		s := strings.Repeat("=", 32)
-		nlog.Infoln("Begin dump block devices", s)
-		nlog.Infoln(string(dump))
-		nlog.Infoln("End dump block devices  ", s)
+		_dump(blockDevs)
 	default:
 		nlog.Infoln("No disks for", fs, "[", trimmedFS, label, "]")
 	}
@@ -192,11 +204,17 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevices, error) {
 		// Try to read block size of this device/partition.
 		blksize, err := _readAny[int64](filepath.Join(devDirPath, "queue", "physical_block_size"))
 		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) || parent == nil {
+			switch {
+			case err == errEmptyPhysBlock:
+				// Empty physical_block_size file -- likely not a block device, proceed to next entry
+				continue
+			case errors.Is(err, fs.ErrNotExist) && parent != nil:
+				// Inherit value from parent if physical_block_size file does not exist
+				blksize = parent.blksize
+			default:
+				// Real error when reading
 				return nil, err
 			}
-			// If `physical_block_size` file doesn't exist then we should inherit value from parent.
-			blksize = parent.blksize
 		}
 
 		bd := &blockDev{
@@ -232,6 +250,9 @@ func _readAny[T any](path string) (value T, err error) {
 	case string:
 		return any(strings.TrimSpace(string(data))).(T), nil
 	case int64:
+		if len(data) == 0 {
+			return value, errEmptyPhysBlock
+		}
 		v, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
 		if err != nil {
 			return value, fmt.Errorf("_readAny: failed to parse %q, err: %w", path, err)
