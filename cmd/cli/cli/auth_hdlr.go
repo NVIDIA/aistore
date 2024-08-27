@@ -370,12 +370,12 @@ func loginUserHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	tokenFile, err := tokfile(c)
-	if err == nil {
-		msg := fmt.Sprintf("token %q exists - overwriting.\n", tokenFile)
-		actionWarn(c, msg)
-	} else if !os.IsNotExist(err) {
+	tokenFile, newlyCreated, err := tokfile(c)
+	if err != nil && !os.IsNotExist(err) {
 		return err
+	}
+	if !newlyCreated {
+		actionWarn(c, fmt.Sprintf("token %q exists - overwriting.\n", tokenFile))
 	}
 	if err := jsp.Save(tokenFile, token, jsp.Plain(), nil); err != nil {
 		return fmt.Errorf("failed to write token %q: %v", tokenFile, err)
@@ -385,7 +385,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 }
 
 func logoutUserHandler(c *cli.Context) (err error) {
-	tokenFile, err := tokfile(c)
+	tokenFile, _, err := tokfile(c)
 	if err != nil {
 		if tokenFile == "" {
 			return err
@@ -696,7 +696,7 @@ func parseClusterSpecs(c *cli.Context) (cluSpec authn.CluACL, err error) {
 }
 
 func revokeTokenHandler(c *cli.Context) (err error) {
-	tokenFile, err := tokfile(c)
+	tokenFile, _, err := tokfile(c)
 	if err != nil {
 		return err
 	}
@@ -769,7 +769,7 @@ func setAuthConfigHandler(c *cli.Context) (err error) {
 }
 
 // compare with: api/authn/loadtoken.go
-func tokfile(c *cli.Context) (string, error) {
+func tokfile(c *cli.Context) (string, bool, error) {
 	tokenFile := parseStrFlag(c, tokenFileFlag)
 	if tokenFile == "" {
 		tokenFile = os.Getenv(env.AuthN.TokenFile)
@@ -777,10 +777,15 @@ func tokfile(c *cli.Context) (string, error) {
 	if tokenFile == "" {
 		tokenFile = filepath.Join(config.ConfigDir, fname.Token)
 	}
-	if err := cos.Stat(tokenFile); err != nil {
-		tip := fmt.Sprintf("(tip: to specify alternative location, use %s option or environment %q)",
-			qflprn(tokenFileFlag), env.AuthN.TokenFile)
-		return "", fmt.Errorf("missing authentication token at %s\n%s", filepath.Join(config.ConfigDir, fname.Token), tip)
+	// Check if the token file exists.
+	if err := cos.Stat(tokenFile); err == nil {
+		return tokenFile, false, nil
 	}
-	return tokenFile, nil
+	// Attempt to create the token file if it does not exist.
+	file, err := os.Create(tokenFile)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to create token file %s: %w", tokenFile, err)
+	}
+	defer file.Close()
+	return tokenFile, true, nil
 }
