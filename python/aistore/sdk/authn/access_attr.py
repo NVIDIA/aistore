@@ -20,8 +20,8 @@ class AccessAttr(IntFlag):
     OBJ_UPDATE = 1 << 7
     BCK_HEAD = 1 << 8
     OBJ_LIST = 1 << 9
-    PATCH = 1 << 10
-    BCK_SET_ACL = 1 << 11
+    PATCH = 1 << 10  # TODO: Not implemented in SDK
+    BCK_SET_ACL = 1 << 11  # TODO: Implemented in SDK
     LIST_BUCKETS = 1 << 12
     SHOW_CLUSTER = 1 << 13
     CREATE_BUCKET = 1 << 14
