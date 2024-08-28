@@ -9,7 +9,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"strconv"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,25 +18,21 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/OneOfOne/xxhash"
 )
 
 const name = "certificate-loader"
 
-const (
-	hktime = time.Hour // TODO -- FIXME: revise and remove
-)
-
 type (
-	_cert struct {
-		// TODO -- FIXME: add mtime, ctime, size
+	xcert struct {
 		tls.Certificate
+		parent    *certLoader
+		modTime   time.Time
 		notBefore time.Time
 		notAfter  time.Time
-		digest    uint64
+		size      int64
 	}
 	certLoader struct {
-		curr     atomic.Pointer[_cert]
+		xcert    atomic.Pointer[xcert]
 		certFile string
 		keyFile  string
 	}
@@ -57,18 +53,40 @@ func Init(certFile, keyFile string) (err error) {
 
 	debug.Assert(loader == nil)
 	loader = &certLoader{certFile: certFile, keyFile: keyFile}
-	if err = loader.load(true); err != nil {
+	if err = loader.load(true /* starting up*/); err != nil {
 		nlog.Errorln("FATAL:", err)
 		loader = nil
 		return err
 	}
-	hk.Reg(name, loader.hk, hktime) // TODO -- FIXME: revise - use notAfter
+	hk.Reg(name, loader.hk, loader.hktime())
 	return nil
 }
 
-func (c *certLoader) _get() *tls.Certificate { return &c.curr.Load().Certificate }
+func (cl *certLoader) hktime() (d time.Duration) {
+	const warn = "X.509 will soon expire - remains:"
+	rem := time.Until(cl.xcert.Load().notAfter)
+	switch {
+	case rem > 24*time.Hour:
+		d = 6 * time.Hour
+	case rem > 6*time.Hour:
+		d = time.Hour
+	case rem > time.Hour:
+		d = 10 * time.Minute
+	case rem > 10*time.Minute:
+		nlog.Warningln(cl.certFile, warn, rem)
+		d = time.Minute
+	case rem > 0:
+		nlog.Errorln(cl.certFile, warn, rem)
+		d = min(10*time.Second, rem)
+	default: // expired
+		d = time.Hour
+	}
+	return d
+}
 
-func (c *certLoader) _hello(*tls.ClientHelloInfo) (*tls.Certificate, error) { return c._get(), nil }
+func (cl *certLoader) _get() *tls.Certificate { return &cl.xcert.Load().Certificate }
+
+func (cl *certLoader) _hello(*tls.ClientHelloInfo) (*tls.Certificate, error) { return cl._get(), nil }
 
 func GetCert() (GetCertCB, error) {
 	if loader == nil {
@@ -77,8 +95,8 @@ func GetCert() (GetCertCB, error) {
 	return loader._hello, nil
 }
 
-func (c *certLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-	return c._get(), nil
+func (cl *certLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+	return cl._get(), nil
 }
 
 func GetClientCert() (GetClientCertCB, error) {
@@ -88,71 +106,84 @@ func GetClientCert() (GetClientCertCB, error) {
 	return loader._info, nil
 }
 
-func (c *certLoader) hk() time.Duration {
-	if err := c.load(false); err != nil {
+func (cl *certLoader) hk() time.Duration {
+	if err := cl.load(false /* starting up*/); err != nil {
 		nlog.Errorln(err)
 	}
-	return hktime
+	return cl.hktime()
 }
 
-// TODO -- FIXME: use mtime, ctime, etc.
-func (c *certLoader) load(first bool) (err error) {
+func (cl *certLoader) load(startingUp bool) (err error) {
 	var (
-		parsed _cert
+		finfo os.FileInfo
+		xcert = xcert{parent: cl}
 	)
-	parsed.Certificate, err = tls.LoadX509KeyPair(c.certFile, c.keyFile)
+	// 1. fstat
+	finfo, err = os.Stat(cl.certFile)
 	if err != nil {
-		return fmt.Errorf("%s: failed to load X.509, err: %w", name, err)
-	}
-	if err = parsed.init(); err != nil {
-		return err
+		return fmt.Errorf("%s: failed to fstat X.509 %q, err: %w", name, cl.certFile, err)
 	}
 
-	if !first {
-		curr := c.curr.Load()
-		if curr.digest == parsed.digest {
-			debug.Assert(curr.notAfter == parsed.notAfter, curr.notAfter, " vs ", parsed.notAfter)
-			return nil // nothing to do
+	// 2. updated?
+	if !startingUp {
+		xcert := cl.xcert.Load()
+		debug.Assert(xcert != nil, "expecting to load at startup")
+		if finfo.ModTime() == xcert.modTime && finfo.Size() == xcert.size {
+			return nil
 		}
 	}
 
-	c.curr.Store(&parsed)
+	// 3. read and parse
+	xcert.Certificate, err = tls.LoadX509KeyPair(cl.certFile, cl.keyFile)
+	if err != nil {
+		return fmt.Errorf("%s: failed to load X.509, err: %w", name, err)
+	}
+	if err = xcert.ini(finfo); err != nil {
+		return err
+	}
 
-	// log
-	var sb strings.Builder
-	sb.WriteString(c.certFile)
-	parsed._str(&sb)
-	nlog.Infoln(sb.String())
+	// 4. keep and log
+	cl.xcert.Store(&xcert)
+	nlog.Infoln(xcert.String())
 
 	return nil
 }
 
 ///////////
-// _cert //
+// xcert //
 ///////////
 
-func (parsed *_cert) _str(sb *strings.Builder) {
+func (x *xcert) String() string {
+	var sb strings.Builder
+	sb.WriteString(x.parent.certFile)
+
 	sb.WriteByte('[')
-	sb.WriteString(cos.FormatTime(parsed.notBefore, ""))
+	sb.WriteString(cos.FormatTime(x.notBefore, ""))
 	sb.WriteByte(',')
-	sb.WriteString(cos.FormatTime(parsed.notAfter, ""))
-	sb.WriteByte(',')
-	sb.WriteString(strconv.Itoa(int(parsed.digest >> 48)))
-	sb.WriteString("...")
+	sb.WriteString(cos.FormatTime(x.notAfter, ""))
 	sb.WriteByte(']')
+
+	return sb.String()
 }
 
-func (parsed *_cert) init() (err error) {
-	if parsed.Certificate.Leaf == nil {
-		parsed.Certificate.Leaf, err = x509.ParseCertificate(parsed.Certificate.Certificate[0])
+// NOTE: second time parsing certificate (first time in tls.LoadX509KeyPair above)
+// to find out valid time bounds
+func (x *xcert) ini(finfo os.FileInfo) (err error) {
+	if x.Certificate.Leaf == nil {
+		x.Certificate.Leaf, err = x509.ParseCertificate(x.Certificate.Certificate[0])
 		if err != nil {
-			return fmt.Errorf("%s: failed to parse X.509, err: %w", name, err)
+			return fmt.Errorf("%s: failed to parse X.509 %q, err: %w", name, x.parent.certFile, err)
 		}
 	}
 	{
-		parsed.digest = xxhash.Checksum64S(parsed.Certificate.Leaf.Raw, cos.MLCG32)
-		parsed.notBefore = parsed.Certificate.Leaf.NotBefore
-		parsed.notAfter = parsed.Certificate.Leaf.NotAfter
+		x.modTime = finfo.ModTime()
+		x.size = finfo.Size()
+		x.notBefore = x.Certificate.Leaf.NotBefore
+		x.notAfter = x.Certificate.Leaf.NotAfter
+	}
+	now := time.Now()
+	if now.Before(x.notBefore) || now.After(x.notAfter) {
+		nlog.Errorln(x.parent.certFile, "X.509 is invalid - outside its certified time range [", x.notBefore, x.notAfter, "]")
 	}
 	return nil
 }

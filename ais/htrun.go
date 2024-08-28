@@ -259,7 +259,7 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 }
 
 func (h *htrun) init(config *cmn.Config) {
-	// before newTLS() below and before clients
+	// before newTLS() below & before intra-cluster clients
 	if config.Net.HTTP.UseHTTPS {
 		if err := aistls.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey); err != nil {
 			cos.ExitLog(err)
