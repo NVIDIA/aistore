@@ -467,7 +467,7 @@ The command randomly shuffles existing short tests and then, depending on your p
 
 ## Running AIStore in Google Colab
 
-To quickly set up AIStore in a [Google Colab](https://colab.google/) notebook, follow these steps:
+To quickly set up AIStore in a [Google Colab](https://colab.google/) notebook, follow the steps below or open the ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb): 
 
 **Note:**
 - This sample installs Go v1.22.3 - the Go version and toolchain that is supported at the time of this writing.
