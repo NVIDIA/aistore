@@ -13,6 +13,8 @@ import (
 
 type NodeStateFlags BitFlags
 
+const NodeAlerts = "state.flags"
+
 const (
 	VoteInProgress       = NodeStateFlags(1 << iota) // warning
 	ClusterStarted                                   // info: (primary: cluster-started | all other nodes: joined-cluster)

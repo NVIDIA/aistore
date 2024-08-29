@@ -20,6 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
+// TODO: can be _expired_ with invalid (non-parseable) replacement - differentiate
+
 const name = "certificate-loader"
 
 type (
@@ -35,6 +37,7 @@ type (
 		xcert    atomic.Pointer[xcert]
 		certFile string
 		keyFile  string
+		tstats   cos.StatsUpdater
 	}
 
 	GetCertCB       func(_ *tls.ClientHelloInfo) (*tls.Certificate, error)
@@ -46,13 +49,13 @@ var (
 )
 
 // (htrun only)
-func Init(certFile, keyFile string) (err error) {
+func Init(certFile, keyFile string, tstats cos.StatsUpdater) (err error) {
 	if certFile == "" && keyFile == "" {
 		return nil
 	}
 
 	debug.Assert(loader == nil)
-	loader = &certLoader{certFile: certFile, keyFile: keyFile}
+	loader = &certLoader{certFile: certFile, keyFile: keyFile, tstats: tstats}
 	if err = loader.load(false /*compare*/); err != nil {
 		nlog.Errorln("FATAL:", err)
 		loader = nil
@@ -83,6 +86,7 @@ func (cl *certLoader) hktime() (d time.Duration) {
 		nlog.Errorln(cl.certFile, warn, rem)
 		d = min(10*time.Second, rem)
 	default: // expired
+		cl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateExpired)
 		d = time.Hour
 	}
 	return d
@@ -147,6 +151,7 @@ func (cl *certLoader) load(compare bool) (err error) {
 	}
 
 	// 4. keep and log
+	cl.tstats.ClrFlag(cos.NodeAlerts, cos.CertificateExpired)
 	cl.xcert.Store(&xcert)
 	nlog.Infoln(xcert.String())
 
@@ -186,8 +191,10 @@ func (x *xcert) ini(finfo os.FileInfo) (err error) {
 		x.notAfter = x.Certificate.Leaf.NotAfter
 	}
 	now := time.Now()
-	if now.Before(x.notBefore) || now.After(x.notAfter) {
-		nlog.Errorln(x.parent.certFile, "X.509 is invalid - outside its certified time range [", x.notBefore, x.notAfter, "]")
+	if now.After(x.notAfter) {
+		err = fmt.Errorf("%s: X.509 %s expired (valid until %v)", name, x.parent.certFile, x.notAfter)
+	} else if now.Before(x.notBefore) {
+		nlog.Warningln(x.parent.certFile, "X.509 is not valid _yet_: [", x.notBefore, x.notAfter, "]")
 	}
-	return nil
+	return err
 }

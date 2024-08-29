@@ -104,7 +104,7 @@ func (h *htrun) ByteMM() *memsys.MMSA { return h.smm }
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
-		h.statsT.ClrFlag(stats.NodeStateFlags, cos.MaintenanceMode)
+		h.statsT.ClrFlag(stats.NodeAlerts, cos.MaintenanceMode)
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }
@@ -194,14 +194,14 @@ func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() > 0 } //
 
 func (h *htrun) markClusterStarted() {
 	h.startup.cluster.Store(mono.NanoTime())
-	h.statsT.SetFlag(stats.NodeStateFlags, cos.ClusterStarted)
+	h.statsT.SetFlag(stats.NodeAlerts, cos.ClusterStarted)
 }
 
 func (h *htrun) NodeStarted() bool { return h.startup.node.Load() > 0 }
 
 func (h *htrun) markNodeStarted() {
 	h.startup.node.Store(mono.NanoTime())
-	h.statsT.SetFlag(stats.NodeStateFlags, cos.NodeStarted)
+	h.statsT.SetFlag(stats.NodeAlerts, cos.NodeStarted)
 }
 
 func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
@@ -261,7 +261,7 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 func (h *htrun) init(config *cmn.Config) {
 	// before newTLS() below & before intra-cluster clients
 	if config.Net.HTTP.UseHTTPS {
-		if err := aistls.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey); err != nil {
+		if err := aistls.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey, h.statsT); err != nil {
 			cos.ExitLog(err)
 		}
 	}
@@ -1144,7 +1144,7 @@ func (h *htrun) statsAndStatus() (ds *stats.NodeStatus) {
 			Snode: h.si,
 		},
 		Cluster: cos.NodeStateInfo{
-			Flags: cos.NodeStateFlags(h.statsT.Get(stats.NodeStateFlags)),
+			Flags: cos.NodeStateFlags(h.statsT.Get(stats.NodeAlerts)),
 		},
 		SmapVersion:    smap.Version,
 		MemCPUInfo:     apc.GetMemCPU(),

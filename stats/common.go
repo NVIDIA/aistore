@@ -103,7 +103,7 @@ const (
 	Uptime = "up.ns.time"
 
 	// KindGauge, cos.NodeStateFlags enum
-	NodeStateFlags = "state.flags"
+	NodeAlerts = cos.NodeAlerts // "state.flags"
 )
 
 // interfaces
@@ -281,7 +281,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	)
 
 	// snode state flags
-	r.reg(snode, NodeStateFlags, KindGauge,
+	r.reg(snode, NodeAlerts, KindGauge,
 		&Extra{
 			Help: "bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; " +
 				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details", // TODO: must have a readme
@@ -343,7 +343,7 @@ func (r *runner) Name() string { return r.name }
 func (r *runner) Get(name string) (val int64) { return r.core.get(name) }
 
 func (r *runner) nodeStateFlags() cos.NodeStateFlags {
-	val := r.Get(NodeStateFlags)
+	val := r.Get(NodeAlerts)
 	return cos.NodeStateFlags(val)
 }
 
@@ -478,7 +478,7 @@ func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 	default:
 		clr |= cos.OOM | cos.LowMemory
 	}
-	r.SetClrFlag(NodeStateFlags, set, clr)
+	r.SetClrFlag(NodeAlerts, set, clr)
 }
 
 func (r *runner) GetStats() *Node {
@@ -513,13 +513,13 @@ func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
 	ngr := runtime.NumGoroutine()
 	if ngr < lim {
 		if lastNgr != 0 {
-			r.ClrFlag(NodeStateFlags, cos.NumGoroutines)
+			r.ClrFlag(NodeAlerts, cos.NumGoroutines)
 			nlog.Infoln("Number of goroutines is now back to normal:", ngr)
 		}
 		return 0
 	}
 	if lastNgr == 0 {
-		r.SetFlag(NodeStateFlags, cos.NumGoroutines)
+		r.SetFlag(NodeAlerts, cos.NumGoroutines)
 		lastNgr = now
 	} else if d := time.Duration(now - lastNgr); (d >= ngrHighTime) || (ngr > lim<<1 && d >= ngrExtremeTime) {
 		lastNgr = now

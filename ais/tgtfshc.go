@@ -61,6 +61,6 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 func (t *target) DisableMpath(mi *fs.Mountpath) (err error) {
 	_, err = t.fsprg.disableMpath(mi.Path, true /*dont-resilver*/)
 
-	t.statsT.SetFlag(stats.NodeStateFlags, cos.DiskFault)
+	t.statsT.SetFlag(stats.NodeAlerts, cos.DiskFault)
 	return err
 }

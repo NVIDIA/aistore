@@ -137,14 +137,37 @@ As far as automatic adjustment of the interval, this depends on the remaining ti
 | more than 1h | 10m |
 | more than 10m | 1m |
 | 10m or less | 10s |
+| `expired` | 1h |
 
-Upon initial loading, or every time when reloading, AIS node logs a record that also shows the validity bounds, e.g.:
+Upon initial loading, or every time when reloading, an AIS node logs a record that also shows the validity bounds, e.g.:
 
 ```log
 I 11:05:45.753438 certloader:151 server.crt[26 Aug 24 18:18 UTC, 26 Aug 25 18:18 UTC]
 ```
 
-If and when the certificate expires, AIS node raises the namesake alert that (as usual) will show up via Grafana dashboard, CLI `show cluster` command, or both.
+In addition, if certificate expires, AIS node raises the namesake alert that - as usual - will show up in Grafana dashboard, CLI `show cluster` command, or both.
+
+```console
+$ ais show cluster
+PROXY            MEM USED(%)    MEM AVAIL   LOAD AVERAGE    UPTIME  STATUS  ALERT
+p[atipJhgn][P]   0.17%          27.51GiB    [0.3 0.1 0.0]   -       online  **TLS-certificate-expired**
+
+TARGET           MEM USED(%)    MEM AVAIL   CAP USED(%)     CAP AVAIL       LOAD AVERAGE    STATUS  ALERT
+t[NlLtPtrm]      0.16%          27.51GiB    16%             367.538GiB      [0.3 0.1 0.0]   online  **TLS-certificate-expired**
+
+Summary:
+   Proxies:             1
+   Targets:             1 (one disk)
+   Capacity:            used 70.59GiB (16%), available 367.54GiB
+   Cluster Map:         version 4, UUID A5yAiCsW7p, primary p[atipJhgn]
+   Software:            3.24.rc3.97255b97e (build: 2024-08-29T19:27:33-0400)
+   Deployment:          dev
+   Status:              2 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.24.rc3.97255b97e
+   Build:               2024-08-29T19:27:33-0400
+```
 
 Finally, to reload TLS cert at any given time, simply run:
 
@@ -164,7 +187,7 @@ $ ais advanced load-X.509 t[NlLtPtrm]
 Done.
 ```
 
-Note: if [AuthN](docs/authn.md) is deployed, the API (and CLI above) will require administrative permissions.
+Note: if [AuthN](/docs/authn.md) is deployed, the API (and CLI above) will require administrative permissions.
 
 ## Switching cluster between HTTP and HTTPS
 
