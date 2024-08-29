@@ -4,7 +4,9 @@ AIS Python SDK provides a (growing) set of client-side APIs to access and utiliz
 
 The project is, essentially, a Python port of the [AIS Go APIs](https://aistore.nvidia.com/docs/http-api), with additional objectives that prioritize *utmost convenience for Python developers*.
 
-Note that only Python 3.x (version 3.6 or later) is currently supported.
+The SDK also includes the `authn` sub-package for managing authentication, users, roles, clusters, and tokens. For more details, refer to the [AuthN sub-package README](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/authn/README.md).
+
+> Only Python 3.x (version 3.6 or later) is currently supported.
 
 ---
 
