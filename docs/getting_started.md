@@ -91,6 +91,7 @@ The rest of this document is structured as follows:
   - [Kubernetes deployments](#kubernetes-deployments)
   - [Minimal all-in-one-docker Deployment](#minimal-all-in-one-docker-deployment)
   - [Testing your cluster](#testing-your-cluster)
+- [Running AIStore in Google Colab](#running-aistore-in-google-colab)
 - [Kubernetes Playground](#kubernetes-playground)
 - [Setting Up HTTPS Locally](#setting-up-https-locally)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
@@ -463,6 +464,88 @@ $ BUCKET=gs://myGCPbucket make test-short
 The command randomly shuffles existing short tests and then, depending on your platform, usually takes anywhere between 15 and 30 minutes. To terminate, press Ctrl-C at any time.
 
 > Ctrl-C or any other (kind of) abnormal termination of a running test may have a side effect of leaving some test data in the test bucket.
+
+## Running AIStore in Google Colab
+
+To quickly set up AIStore in a [Google Colab](https://colab.google/) notebook, follow these steps:
+
+**Note:**
+- This sample installs Go v1.22.3 - the Go version and toolchain that is supported at the time of this writing.
+- Run the code blocks below in separate cells of your notebook.
+
+### Step 1: Install Go
+```bash
+# Download and install Go
+!wget https://go.dev/dl/go1.22.3.linux-amd64.tar.gz
+!sudo tar -C /usr/local -xzf go1.22.3.linux-amd64.tar.gz
+!mkdir -p /content/go
+
+# Set environment variables
+import os
+os.environ['GOPATH'] = '/content/go'
+os.environ['PATH'] += ':/usr/local/go/bin:/content/go/bin'
+
+# Verify the Go installation
+!go version
+```
+
+### Step 2: Install and Run AIStore
+
+After installing Go, you can proceed to install and run AIStore:
+
+```bash
+# Update package lists and install dependencies
+!sudo apt update
+!sudo apt install -y xattr attr
+
+# Clone the AIStore repository
+!git clone https://github.com/NVIDIA/aistore.git
+
+# Deploy AIStore in the background
+!nohup bash -c "PORT=51080 make -C aistore deploy <<< $'1\n1'" > output.log 2>&1 &
+```
+
+**Note:** The AIStore deployment runs as a background process. Even after the command completes, AIStore may take some time to fully initialize. 
+
+### Step 3: Monitor AIStore Logs
+
+You can monitor AIStore's startup process by checking the logs:
+
+```bash
+!cat output.log
+```
+
+### Step 4: Test AIStore
+
+Once your cluster is up and running, you can test it using one of the following methods:
+
+#### Option 1: Using `curl`
+
+```bash
+# Verify AIStore with curl
+!curl http://localhost:51080/s3
+```
+
+#### Option 2: Using the AIStore Python Client
+
+```python
+# Install the AIStore Python client
+!pip install aistore
+
+from aistore import Client
+
+# Initialize the AIStore client and check cluster info
+ais_client = Client("http://localhost:51080")
+ais_client.cluster().get_info()
+```
+
+#### Option 3: Using the AIStore CLI
+
+```bash
+# Install and use the AIStore CLI
+!make -C aistore cli
+!AIS_ENDPOINT=http://localhost:51080 ais show cluster
+```
 
 ## Kubernetes Playground
 
