@@ -160,13 +160,13 @@ func (t *target) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) == 0 {
-		t.daeputActMsg(w, r)
+		t.daeputMsg(w, r)
 	} else {
 		t.daeputItems(w, r, apiItems)
 	}
 }
 
-func (t *target) daeputActMsg(w http.ResponseWriter, r *http.Request) {
+func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -254,6 +254,8 @@ func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []
 		t.regstate.mu.Lock()
 		t.disableBackend(w, r, apiItems)
 		t.regstate.mu.Unlock()
+	case apc.LoadX509:
+		t.daeLoadX509(w, r)
 	}
 }
 

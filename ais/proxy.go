@@ -208,7 +208,7 @@ func (p *proxy) Run() error {
 		// pubnet handlers: cluster must be started
 		{r: apc.Buckets, h: p.bucketHandler, net: accessNetPublic},
 		{r: apc.Objects, h: p.objectHandler, net: accessNetPublic},
-		{r: apc.Download, h: p.downloadHandler, net: accessNetPublic},
+		{r: apc.Download, h: p.dloadHandler, net: accessNetPublic},
 		{r: apc.ETL, h: p.etlHandler, net: accessNetPublic},
 		{r: apc.Sort, h: p.dsortHandler, net: accessNetPublic},
 
@@ -2717,6 +2717,8 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	case apc.LoadX509:
+		p.daeLoadX509(w, r)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}

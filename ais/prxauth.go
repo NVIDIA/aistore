@@ -171,7 +171,7 @@ func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.validateSecret(w, r)
 	case http.MethodDelete:
-		p.httpTokenDelete(w, r)
+		p.delToken(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete)
 	}
@@ -194,7 +194,7 @@ func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathTokens.L, 0, false); err != nil {
 		return
 	}

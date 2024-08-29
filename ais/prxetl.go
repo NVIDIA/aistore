@@ -34,24 +34,24 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 			return
 		}
-		p.handleETLPut(w, r)
+		p.httpetlput(w, r)
 	case r.Method == http.MethodPost:
-		p.handleETLPost(w, r)
+		p.httpetlpost(w, r)
 	case r.Method == http.MethodGet:
-		p.handleETLGet(w, r)
+		p.httpetlget(w, r)
 	case r.Method == http.MethodDelete:
 		// ditto
 		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 			return
 		}
-		p.handleETLDelete(w, r)
+		p.httpetldel(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
 	}
 }
 
 // GET /v1/etl
-func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 0, true)
 	if err != nil {
 		return
@@ -91,7 +91,7 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 //     otherwise:
 //   - add the new ETL instance (represented by the user-specified `etl.InitMsg`) to cluster MD
 //   - return ETL UUID to the user.
-func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
 		return
 	}
@@ -135,7 +135,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
 // start/stop ETL pods
-func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 2, true)
 	if err != nil {
 		return
@@ -164,7 +164,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /v1/etl/<etl-name>
-func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 1, true)
 	if err != nil {
 		return

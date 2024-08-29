@@ -959,7 +959,7 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// m.b. admin
+	// admin access - all actions
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
@@ -973,13 +973,13 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apiItems) == 0 {
-		p.cluputActMsg(w, r)
+		p.cluputMsg(w, r)
 	} else {
 		p.cluputItems(w, r, apiItems)
 	}
 }
 
-func (p *proxy) cluputActMsg(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 	msg, err := p.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -1682,62 +1682,30 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 			p.setCluCfgPersistent(w, r, toUpdate, msg)
 		}
 	case apc.ActAttachRemAis, apc.ActDetachRemAis:
-		p.attachDetachRemAis(w, r, action, r.URL.Query())
-	case apc.ActEnableBackend, apc.ActDisableBackend:
-		//
-		// (two-phase commit)
-		//
+		p.actRemAis(w, r, action, r.URL.Query())
+	case apc.ActEnableBackend:
+		p.actBackend(w, r, "enable", apc.URLPathDaeBendEnable, items)
+	case apc.ActDisableBackend:
+		p.actBackend(w, r, "disable", apc.URLPathDaeBendDisable, items)
+	case apc.LoadX509:
 		if len(items) < 2 {
-			p.writeErrf(w, r, "invalid URL '%s': expected 2 items, got %d", r.URL.Path, len(items))
-			return
-		}
-		var (
-			provider = items[1]
-			np       = apc.NormalizeProvider(provider)
-			tag      = "enable"
-		)
-		if action == apc.ActDisableBackend {
-			tag = "disable"
-		}
-		if !apc.IsCloudProvider(np) {
-			p.writeErrf(w, r, "can only %s cloud backend (have %q)", tag, provider)
-			return
-		}
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Infoln(action, provider, "...")
-		}
-		for _, phase := range []string{apc.ActBegin, apc.ActCommit} {
-			nlog.Infoln(phase+":", tag, provider)
-
-			// bcast
-			args := allocBcArgs()
-			path := apc.URLPathDaeBendDisable.Join(np)
-			if action == apc.ActEnableBackend {
-				path = apc.URLPathDaeBendEnable.Join(np)
-			}
-			path = cos.JoinWords(path, phase)
-			args.req = cmn.HreqArgs{Method: http.MethodPut, Path: path}
-			args.to = core.Targets
-			results := p.bcastGroup(args)
-			freeBcArgs(args)
-
-			for _, res := range results {
-				if res.err == nil {
-					continue
-				}
-				err := res.errorf("node %s failed to %s %q backend (phase %s)", res.si, tag, provider, phase)
-				p.writeErr(w, r, err)
-				freeBcastRes(results)
+			p.cluLoadX509(w, r)
+		} else if sid := items[1]; sid == p.SID() {
+			p.daeLoadX509(w, r)
+		} else {
+			smap := p.owner.smap.get()
+			node := smap.GetNode(sid)
+			if node == nil {
+				err := &errNodeNotFound{"X.509 load failure:", sid, p.si, smap}
+				p.writeErr(w, r, err, http.StatusNotFound)
 				return
 			}
-			freeBcastRes(results)
+			p.callLoadX509(w, r, node, smap)
 		}
-
-		nlog.Infoln("done:", tag, provider)
 	}
 }
 
-func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
+func (p *proxy) actRemAis(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
 	what := query.Get(apc.QparamWhat)
 	if what != apc.WhatRemoteAIS {
 		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
@@ -1774,6 +1742,48 @@ func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, actio
 	} else if newConfig != nil {
 		go p._remais(&newConfig.ClusterConfig, false)
 	}
+}
+
+func (p *proxy) actBackend(w http.ResponseWriter, r *http.Request, tag string, upath apc.URLPath, items []string) {
+	if len(items) < 2 {
+		p.writeErrf(w, r, "invalid URL '%s': missing cloud backend", r.URL.Path)
+		return
+	}
+	var (
+		provider = items[1]
+		np       = apc.NormalizeProvider(provider)
+	)
+	if !apc.IsCloudProvider(np) {
+		p.writeErrf(w, r, "can only %s cloud backend (have %q)", tag, provider)
+		return
+	}
+	// (two-phase commit)
+	for _, phase := range []string{apc.ActBegin, apc.ActCommit} {
+		var (
+			path string
+			args = allocBcArgs()
+		)
+		// bcast
+		path = cos.JoinWords(upath.S, np, phase)
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: path}
+		args.to = core.Targets
+		results := p.bcastGroup(args)
+		freeBcArgs(args)
+
+		nlog.Infoln(phase+":", tag, provider)
+		for _, res := range results {
+			if res.err == nil {
+				continue
+			}
+			err := res.errorf("node %s failed to %s %q backend (phase %s)", res.si, tag, provider, phase)
+			p.writeErr(w, r, err)
+			freeBcastRes(results)
+			return
+		}
+		freeBcastRes(results)
+	}
+
+	nlog.Infoln("done:", tag, provider)
 }
 
 // the flow: attach/detach remais => modify cluster config => _remaisConf as the pre phase

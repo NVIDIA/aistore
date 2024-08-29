@@ -24,7 +24,6 @@ const (
 	ObjStream = "objstream"
 	MsgStream = "msgstream"
 	Reverse   = "reverse"
-	Rebalance = "rebalance"
 	Xactions  = "xactions"
 	S3        = "s3"
 	Txn       = "txn"      // 2PC
@@ -69,6 +68,8 @@ const (
 	Discard     = "discard"
 	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
+	LoadX509 = "load-x509"
+
 	// ETL
 	ETL        = "etl"
 	ETLInfo    = "info"
@@ -98,26 +99,27 @@ func urlpath(words ...string) URLPath {
 var (
 	URLPathS3 = urlpath(S3) // URLPath{[]string{S3}, S3}
 
-	URLPathBuckets   = urlpath(Version, Buckets)
-	URLPathObjects   = urlpath(Version, Objects)
-	URLPathEC        = urlpath(Version, EC)
-	URLPathNotifs    = urlpath(Version, Notifs)
-	URLPathTxn       = urlpath(Version, Txn)
-	URLPathXactions  = urlpath(Version, Xactions)
-	URLPathIC        = urlpath(Version, IC)
-	URLPathHealth    = urlpath(Version, Health)
-	URLPathMetasync  = urlpath(Version, Metasync)
-	URLPathRebalance = urlpath(Version, Rebalance)
+	URLPathBuckets  = urlpath(Version, Buckets)
+	URLPathObjects  = urlpath(Version, Objects)
+	URLPathEC       = urlpath(Version, EC)
+	URLPathNotifs   = urlpath(Version, Notifs)
+	URLPathTxn      = urlpath(Version, Txn)
+	URLPathXactions = urlpath(Version, Xactions)
+	URLPathIC       = urlpath(Version, IC)
+	URLPathHealth   = urlpath(Version, Health)
+	URLPathMetasync = urlpath(Version, Metasync)
 
 	URLPathClu        = urlpath(Version, Cluster)
 	URLPathCluProxy   = urlpath(Version, Cluster, Proxy)
 	URLPathCluUserReg = urlpath(Version, Cluster, AdminJoin)
 	URLPathCluAutoReg = urlpath(Version, Cluster, SelfJoin)
 	URLPathCluKalive  = urlpath(Version, Cluster, Keepalive)
-	URLPathCluDaemon  = urlpath(Version, Cluster, Daemon)
+	URLPathCluDaemon  = urlpath(Version, Cluster, Daemon) // (internal)
 	URLPathCluSetConf = urlpath(Version, Cluster, ActSetConfig)
 	URLPathCluAttach  = urlpath(Version, Cluster, ActAttachRemAis)
 	URLPathCluDetach  = urlpath(Version, Cluster, ActDetachRemAis)
+
+	URLPathCluX509 = urlpath(Version, Cluster, LoadX509)
 
 	URLPathCluBendDisable = urlpath(Version, Cluster, ActDisableBackend)
 	URLPathCluBendEnable  = urlpath(Version, Cluster, ActEnableBackend)
@@ -129,6 +131,8 @@ var (
 
 	URLPathDaeBendDisable = urlpath(Version, Daemon, ActDisableBackend)
 	URLPathDaeBendEnable  = urlpath(Version, Daemon, ActEnableBackend)
+
+	URLPathDaeX509 = urlpath(Version, Daemon, LoadX509)
 
 	URLPathReverse    = urlpath(Version, Reverse)
 	URLPathReverseDae = urlpath(Version, Reverse, Daemon)

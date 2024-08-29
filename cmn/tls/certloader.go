@@ -53,13 +53,17 @@ func Init(certFile, keyFile string) (err error) {
 
 	debug.Assert(loader == nil)
 	loader = &certLoader{certFile: certFile, keyFile: keyFile}
-	if err = loader.load(true /* starting up*/); err != nil {
+	if err = loader.load(false /*compare*/); err != nil {
 		nlog.Errorln("FATAL:", err)
 		loader = nil
 		return err
 	}
 	hk.Reg(name, loader.hk, loader.hktime())
 	return nil
+}
+
+func Load() error {
+	return loader.load(false /*compare*/)
 }
 
 func (cl *certLoader) hktime() (d time.Duration) {
@@ -107,13 +111,13 @@ func GetClientCert() (GetClientCertCB, error) {
 }
 
 func (cl *certLoader) hk() time.Duration {
-	if err := cl.load(false /* starting up*/); err != nil {
+	if err := cl.load(true /*compare*/); err != nil {
 		nlog.Errorln(err)
 	}
 	return cl.hktime()
 }
 
-func (cl *certLoader) load(startingUp bool) (err error) {
+func (cl *certLoader) load(compare bool) (err error) {
 	var (
 		finfo os.FileInfo
 		xcert = xcert{parent: cl}
@@ -125,9 +129,9 @@ func (cl *certLoader) load(startingUp bool) (err error) {
 	}
 
 	// 2. updated?
-	if !startingUp {
+	if compare {
 		xcert := cl.xcert.Load()
-		debug.Assert(xcert != nil, "expecting to load at startup")
+		debug.Assert(xcert != nil, "expecting X.509 loaded at startup")
 		if finfo.ModTime() == xcert.modTime && finfo.Size() == xcert.size {
 			return nil
 		}

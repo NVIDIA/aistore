@@ -22,7 +22,7 @@ import (
 )
 
 // [METHOD] /v1/download
-func (p *proxy) downloadHandler(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) dloadHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return

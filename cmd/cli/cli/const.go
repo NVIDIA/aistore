@@ -132,6 +132,8 @@ const (
 	cmdBackendEnable  = "enable-backend"
 	cmdBackendDisable = "disable-backend"
 
+	cmdLoadX509 = "load-X.509"
+
 	// Node subcommands
 	cmdJoin                = "join"
 	cmdStartMaint          = "start-maintenance"
