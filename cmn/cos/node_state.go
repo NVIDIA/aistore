@@ -30,12 +30,14 @@ const (
 	DiskFault                                        // red
 	NoMountpaths                                     // red (TODO: reserved, not used)
 	NumGoroutines                                    // red
+	CertificateExpired                               // red (X.509 cert expired)
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsRed() bool {
-	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines)
+	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines) ||
+		f.IsSet(CertificateExpired)
 }
 
 func (f NodeStateFlags) IsWarn() bool {
@@ -112,6 +114,9 @@ func (f NodeStateFlags) String() string {
 	}
 	if f&NumGoroutines == NumGoroutines {
 		sb = append(sb, "high-number-of-goroutines")
+	}
+	if f&CertificateExpired == CertificateExpired {
+		sb = append(sb, "TLS-certificate-expired")
 	}
 
 	l := len(sb)

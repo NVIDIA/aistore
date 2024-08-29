@@ -245,7 +245,9 @@ In addition, environment can be used to **override** client-side TLS (aka, HTTPS
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate | "cluster.client_ca_tls" |
 | `AIS_SKIP_VERIFY_CRT` | true: skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "cluster.skip_verify_crt" |
 
-* See also: [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
+See also:
+
+* [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
 
 ## First steps
 

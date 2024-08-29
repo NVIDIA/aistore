@@ -536,10 +536,14 @@ If extended attributes are disabled globally when deploying a cluster, node IDs 
 
 To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
 
-See also:
+The following HTTPS topics are also covered elsewhere:
 
-* [HTTPS from scratch](/docs/getting_started.md)
-* [Switching an already deployed cluster between HTTP and HTTPS](/docs/switch_https.md)
+- [Generating self-signed certificates](https.md#generating-self-signed-certificates)
+- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
+- [Accessing the cluster](https.md#accessing-the-cluster)
+- [Testing with self-signed certificates](https.md#testing-with-self-signed-certificates)
+- [Updating and reloading X.509 certificates](https.md#updating-and-reloading-x509-certificates)
+- [Switching cluster between HTTP and HTTPS](https.md#switching-cluster-between-http-and-https)
 
 ## Filesystem Health Checker
 

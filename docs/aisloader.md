@@ -255,7 +255,9 @@ In addition, environment can be used to specify client-side TLS (aka, HTTPS) con
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate |
 | `AIS_SKIP_VERIFY_CRT` | when true, skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
 
-* See also: [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
+See also:
+
+* [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
 
 ## Examples
 

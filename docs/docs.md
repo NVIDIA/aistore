@@ -104,8 +104,7 @@ redirect_from:
 - Assorted Topics
   - [Virtual directories](/docs/howto_virt_dirs.md)
   - [System files](/docs/sysfiles.md)
-  - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
-  - [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
+  - [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
   - [Feature flags](/docs/feature_flags.md)
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
