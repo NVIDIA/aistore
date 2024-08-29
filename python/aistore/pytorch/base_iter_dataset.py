@@ -9,7 +9,6 @@ from typing import List, Union, Iterable, Dict, Iterator, Tuple
 import torch.utils.data as torch_utils
 from abc import ABC, abstractmethod
 from aistore.sdk.ais_source import AISSource
-from aistore.pytorch.worker_session_manager import WorkerSessionManager
 
 
 class AISBaseIterDataset(ABC, torch_utils.IterableDataset):
@@ -49,11 +48,6 @@ class AISBaseIterDataset(ABC, torch_utils.IterableDataset):
             Iterable: Iterable over the objects from the sources provided
         """
         for source in self._ais_source_list:
-            # Add pytorch worker support to the internal request client
-            # TODO: Do not modify the provided source client
-            source.client.session_manager = WorkerSessionManager(
-                source.client.session_manager
-            )
             if source not in self._prefix_map or self._prefix_map[source] is None:
                 for sample in source.list_all_objects_iter(prefix=""):
                     yield sample

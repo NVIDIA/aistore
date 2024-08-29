@@ -4,6 +4,7 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
 import os
 from typing import Optional
+from multiprocessing import current_process
 
 from requests import Session
 from requests.adapters import HTTPAdapter
@@ -34,29 +35,32 @@ class SessionManager:
         self._retry = retry
         self._ca_cert = ca_cert
         self._skip_verify = skip_verify
-        self._session = None
+        self._session_pool = {current_process().pid: self._create_session()}
 
     @property
     def retry(self) -> Retry:
-        """Returns retry config for this session"""
+        """Returns retry config for this session."""
         return self._retry
 
     @property
     def ca_cert(self) -> Optional[str]:
-        """Returns CA certificate for this session, if any"""
+        """Returns CA certificate for this session, if any."""
         return self._ca_cert
 
     @property
     def skip_verify(self) -> bool:
-        """Returns whether this session's requests skip server certificate verification"""
+        """Returns whether this session's requests skip server certificate verification."""
         return self._skip_verify
 
     @property
     def session(self) -> Session:
-        """Returns an existing `requests` session, creating a new one if needed"""
-        if self._session is None:
-            self._session = self._create_session()
-        return self._session
+        """Acquires an existing `requests` session, creating a new one if needed."""
+        pid = current_process().pid
+
+        if pid not in self._session_pool:
+            self._session_pool[pid] = self._create_session()
+
+        return self._session_pool[pid]
 
     def _set_session_verification(self, request_session: Session):
         """

@@ -36,6 +36,18 @@ class TestSessionManager(unittest.TestCase):  # pylint: disable=unused-variable
         first_session = session_manager.session
         self.assertEqual(first_session, session_manager.session)
 
+    def test_session_processes(self):
+        session_manager = SessionManager()
+        first_session = session_manager.session
+
+        mock_process = Mock()
+        mock_process.pid = "MOCKPID"
+
+        with patch(
+            "aistore.sdk.session_manager.current_process", return_value=mock_process
+        ):
+            self.assertNotEqual(first_session, session_manager.session)
+
     def test_create_custom_retry(self):
         custom_retry = urllib3.util.Retry(total=40, connect=2)
         session_manager = SessionManager(retry=custom_retry)
