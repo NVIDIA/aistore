@@ -128,7 +128,7 @@ In AIStore, related functionality consists of two pieces:
 
 The scope of this latter operation may be either a selected node or entire cluster.
 
-As far as automatic adjustment of the polling interval, the resulting value depends on the remaining time (until expired) and works [approximately](https://github.com/NVIDIA/aistore/blob/main/cmn/certloader/cl.go) as follows:
+As far as automatic adjustment of the polling interval, the resulting value depends on the remaining time (until expired) and works [approximately](https://github.com/NVIDIA/aistore/blob/main/cmn/certloader/certloader.go) as follows:
 
 | time to expire | period to check for renewal |
 | -- | -- |
@@ -153,20 +153,15 @@ p[atipJhgn][P]   0.17%          27.51GiB    [0.3 0.1 0.0]   -       online  **tl
 
 TARGET           MEM USED(%)    MEM AVAIL   CAP USED(%)     CAP AVAIL       LOAD AVERAGE    STATUS  ALERT
 t[NlLtPtrm]      0.16%          27.51GiB    16%             367.538GiB      [0.3 0.1 0.0]   online  **tls-cert-expired**
-
-Summary:
-   Proxies:             1
-   Targets:             1 (one disk)
-   Capacity:            used 70.59GiB (16%), available 367.54GiB
-   Cluster Map:         version 4, UUID A5yAiCsW7p, primary p[atipJhgn]
-   Software:            3.24.rc3.97255b97e (build: 2024-08-29T19:27:33-0400)
-   Deployment:          dev
-   Status:              2 online
-   Rebalance:           n/a
-   Authentication:      disabled
-   Version:             3.24.rc3.97255b97e
-   Build:               2024-08-29T19:27:33-0400
 ```
+
+Overall, supported alerts include:
+
+| alert | comment |
+| -- | -- |
+| `tls-cert-will-soon-expire` | warning: less than 3 days remains until X.509 cert expires |
+| `tls-cert-expired` | red alert (as the name implies) |
+| `tls-cert-invalid` | ditto |
 
 Finally, to reload TLS cert at any given time, simply run:
 

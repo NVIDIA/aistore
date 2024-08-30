@@ -32,8 +32,9 @@ const (
 	DiskFault                                        // red
 	NoMountpaths                                     // red: (reserved, not used)
 	NumGoroutines                                    // red
-	CertificateExpired                               // red: (X.509 cert expired)
-	CertificateInvalid                               // red: (X.509 cert invalid)
+	CertWillSoonExpire                               // warning X.509
+	CertificateExpired                               // red --/--
+	CertificateInvalid                               // red --/--
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
@@ -47,7 +48,8 @@ func (f NodeStateFlags) IsWarn() bool {
 	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
 		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
 		f.IsSet(Restarted) || f.IsSet(MaintenanceMode) ||
-		f.IsSet(LowCapacity) || f.IsSet(LowMemory)
+		f.IsSet(LowCapacity) || f.IsSet(LowMemory) ||
+		f.IsSet(CertWillSoonExpire)
 }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
@@ -117,6 +119,9 @@ func (f NodeStateFlags) String() string {
 	}
 	if f&NumGoroutines == NumGoroutines {
 		sb = append(sb, "high-number-of-goroutines")
+	}
+	if f&CertWillSoonExpire == CertWillSoonExpire {
+		sb = append(sb, "tls-cert-will-soon-expire")
 	}
 	if f&CertificateExpired == CertificateExpired {
 		sb = append(sb, "tls-cert-expired")

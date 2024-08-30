@@ -21,7 +21,10 @@ import (
 
 const name = "tls-cert-loader"
 
-const dfltTimeInvalid = time.Hour
+const (
+	dfltTimeInvalid = time.Hour
+	warnSoonExpire  = 3 * 24 * time.Hour
+)
 
 const fmtErrExpired = "%s: %s expired (valid until %v)"
 
@@ -105,6 +108,9 @@ func (cl *certLoader) hktime() (d time.Duration) {
 	switch {
 	case rem > 24*time.Hour:
 		d = 6 * time.Hour
+		if rem < warnSoonExpire {
+			cl.tstats.SetFlag(cos.NodeAlerts, cos.CertWillSoonExpire)
+		}
 	case rem > 6*time.Hour:
 		d = time.Hour
 	case rem > time.Hour:
@@ -116,7 +122,7 @@ func (cl *certLoader) hktime() (d time.Duration) {
 		nlog.Errorln(cl.certFile, warn, rem)
 		d = time.Minute
 	default: // expired
-		cl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateExpired)
+		cl.tstats.SetClrFlag(cos.NodeAlerts, cos.CertificateExpired, cos.CertWillSoonExpire)
 		d = dfltTimeInvalid
 	}
 	return d
@@ -185,13 +191,17 @@ func (cl *certLoader) do(compare bool) (err error) {
 	if err != nil {
 		return fmt.Errorf("%s: failed to load (%s, %s), err: %w", name, cl.certFile, cl.keyFile, err)
 	}
-	if err = xcert.ini(finfo); err != nil {
+	rem, err := xcert.ini(finfo)
+	if err != nil {
 		return err
 	}
 
 	// 4. ok
-	cl.tstats.ClrFlag(cos.NodeAlerts, cos.CertificateExpired|cos.CertificateInvalid)
+	cl.tstats.ClrFlag(cos.NodeAlerts, cos.CertificateExpired|cos.CertificateInvalid|cos.CertWillSoonExpire)
 	cl.xcert.Store(&xcert)
+	if rem < warnSoonExpire {
+		cl.tstats.SetFlag(cos.NodeAlerts, cos.CertWillSoonExpire)
+	}
 
 	nlog.Infoln(xcert.String())
 	return nil
@@ -216,11 +226,11 @@ func (x *xcert) String() string {
 
 // NOTE: second time parsing certificate (first time in tls.LoadX509KeyPair above)
 // to find out valid time bounds
-func (x *xcert) ini(finfo os.FileInfo) (err error) {
+func (x *xcert) ini(finfo os.FileInfo) (rem time.Duration, err error) {
 	if x.Certificate.Leaf == nil {
 		x.Certificate.Leaf, err = x509.ParseCertificate(x.Certificate.Certificate[0])
 		if err != nil {
-			return fmt.Errorf("%s: failed to parse %q, err: %w", name, x.parent.certFile, err)
+			return 0, fmt.Errorf("%s: failed to parse %q, err: %w", name, x.parent.certFile, err)
 		}
 	}
 	{
@@ -234,9 +244,11 @@ func (x *xcert) ini(finfo os.FileInfo) (err error) {
 		msg := fmt.Sprintf(fmtErrExpired, name, x.parent.certFile, x.notAfter)
 		err = &errExpired{msg}
 	} else if now.Before(x.notBefore) {
-		nlog.Warningln(x.parent.certFile, "is not valid _yet_: [", x.notBefore, x.notAfter, "]")
+		err = fmt.Errorf("%s: %s not valid yet: (%v, %v)", name, x.parent.certFile, x.notBefore, x.notAfter)
+	} else {
+		rem = x.notAfter.Sub(now)
 	}
-	return err
+	return rem, err
 }
 
 //
