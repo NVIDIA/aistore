@@ -80,9 +80,6 @@ const (
 	AllowReadWriteAccess = "rw"
 
 	AccessNone = AccessAttrs(0)
-
-	// permission to perform cluster-level ops
-	AccessCluster = AceListBuckets | AceCreateBucket | AceDestroyBucket | AceMoveBucket | AceAdmin
 )
 
 // verbs

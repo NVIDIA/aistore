@@ -116,6 +116,9 @@ func (tk *Token) String() string {
 //  4. User's default cluster permissions (ACL for a cluster with empty clusterID)
 //
 // If there are no defined ACL found at any step, any access is denied.
+
+const accessCluster = apc.AceListBuckets | apc.AceCreateBucket | apc.AceDestroyBucket | apc.AceMoveBucket | apc.AceAdmin
+
 func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
 	if tk.IsAdmin {
 		return nil
@@ -123,8 +126,8 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 	if perms == 0 {
 		return errors.New("empty permissions requested")
 	}
-	cluPerms := perms & apc.AccessCluster
-	objPerms := perms &^ apc.AccessCluster
+	cluPerms := perms & accessCluster
+	objPerms := perms &^ accessCluster
 	cluACL, cluOk := tk.aclForCluster(clusterID)
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
