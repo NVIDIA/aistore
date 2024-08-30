@@ -29,19 +29,21 @@ class AccessAttr(IntFlag):
     MOVE_BUCKET = 1 << 16
     ADMIN = 1 << 17
 
+    # Derived Roles
     ACCESS_RO = GET | OBJ_HEAD | LIST_BUCKETS | BCK_HEAD | OBJ_LIST
     ACCESS_RW = ACCESS_RO | PUT | APPEND | OBJ_DELETE | OBJ_MOVE
-    ACCESS_CLUSTER = LIST_BUCKETS | CREATE_BUCKET | DESTROY_BUCKET | MOVE_BUCKET | ADMIN
-    ACCESS_ALL = (
+    ACCESS_SU = (
         ACCESS_RW
-        | ACCESS_CLUSTER
         | PROMOTE
         | OBJ_UPDATE
         | PATCH
         | BCK_SET_ACL
         | SHOW_CLUSTER
+        | CREATE_BUCKET
+        | DESTROY_BUCKET
+        | MOVE_BUCKET
+        | ADMIN
     )
-    ACCESS_NONE = 0
 
     @staticmethod
     def describe(perms: int) -> str:
