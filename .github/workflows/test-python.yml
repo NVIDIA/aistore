@@ -29,10 +29,19 @@ jobs:
           sudo apt update
           sudo apt install -y xattr attr
 
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
       - name: Run AIStore
         run: |
           export GOPATH="$(go env GOPATH)"
-          scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1
+          AIS_SPACE_LOWWM=90 AIS_SPACE_HIGHWM=96 AIS_SPACE_OOS=99 scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4

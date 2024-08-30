@@ -23,6 +23,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
       - name: Setup additional system libraries
         if: startsWith(matrix.os, 'ubuntu')
         run: |
@@ -38,7 +47,7 @@ jobs:
           AIS_AUTHN_URL: "http://localhost:52001"
         run: |
           export GOPATH="$(go env GOPATH)"
-          scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 3
+          AIS_SPACE_LOWWM=90 AIS_SPACE_HIGHWM=96 AIS_SPACE_OOS=99 scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 3
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4

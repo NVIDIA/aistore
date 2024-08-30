@@ -51,9 +51,9 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"space": {
 		"cleanupwm":         65,
-		"lowwm":             75,
-		"highwm":            90,
-		"out_of_space":      95
+		"lowwm":             ${AIS_SPACE_LOWWM:-75},
+		"highwm":            ${AIS_SPACE_HIGHWM:-90},
+		"out_of_space":      ${AIS_SPACE_OOS:-95}
 	},
 	"lru": {
 		"dont_evict_time":   "120m",
