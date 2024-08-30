@@ -128,15 +128,14 @@ In AIStore, related functionality consists of two pieces:
 
 The scope of this latter operation may be either a selected node or entire cluster.
 
-As far as automatic adjustment of the interval, this depends on the remaining time to expire and works approximately as follows:
+As far as automatic adjustment of the polling interval, the resulting value depends on the remaining time (until expired) and works [approximately](https://github.com/NVIDIA/aistore/blob/main/cmn/certloader/cl.go) as follows:
 
 | time to expire | period to check for renewal |
 | -- | -- |
 | more than 24h | 6 hours |
 | more than 6h | 1 hour |
 | more than 1h | 10m |
-| more than 10m | 1m |
-| 10m or less | 10s |
+| more than 1s | 1m |
 | `expired` | 1h |
 
 Upon initial loading, or every time when reloading, an AIS node logs a record that also shows the validity bounds, e.g.:
@@ -145,15 +144,15 @@ Upon initial loading, or every time when reloading, an AIS node logs a record th
 I 11:05:45.753438 certloader:151 server.crt[26 Aug 24 18:18 UTC, 26 Aug 25 18:18 UTC]
 ```
 
-In addition, if certificate expires, AIS node raises the namesake alert that - as usual - will show up in Grafana dashboard, CLI `show cluster` command, or both.
+In addition, if certificate fails to load or expires, AIS node raises the namesake alert that - as usual - will show up in Grafana dashboard or via CLI `show cluster`, or both.
 
 ```console
 $ ais show cluster
 PROXY            MEM USED(%)    MEM AVAIL   LOAD AVERAGE    UPTIME  STATUS  ALERT
-p[atipJhgn][P]   0.17%          27.51GiB    [0.3 0.1 0.0]   -       online  **TLS-certificate-expired**
+p[atipJhgn][P]   0.17%          27.51GiB    [0.3 0.1 0.0]   -       online  **tls-cert-expired**
 
 TARGET           MEM USED(%)    MEM AVAIL   CAP USED(%)     CAP AVAIL       LOAD AVERAGE    STATUS  ALERT
-t[NlLtPtrm]      0.16%          27.51GiB    16%             367.538GiB      [0.3 0.1 0.0]   online  **TLS-certificate-expired**
+t[NlLtPtrm]      0.16%          27.51GiB    16%             367.538GiB      [0.3 0.1 0.0]   online  **tls-cert-expired**
 
 Summary:
    Proxies:             1

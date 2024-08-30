@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn/certloader"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	aistls "github.com/NVIDIA/aistore/cmn/tls"
 )
 
 type (
@@ -113,7 +113,7 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 
 	// intra-cluster client
 	if intra {
-		tlsConf.GetClientCertificate, err = aistls.GetClientCert()
+		tlsConf.GetClientCertificate, err = certloader.GetClientCert()
 		return tlsConf, err
 	}
 

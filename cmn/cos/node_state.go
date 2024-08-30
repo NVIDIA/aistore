@@ -30,9 +30,10 @@ const (
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
 	DiskFault                                        // red
-	NoMountpaths                                     // red (TODO: reserved, not used)
+	NoMountpaths                                     // red: (reserved, not used)
 	NumGoroutines                                    // red
-	CertificateExpired                               // red (X.509 cert expired)
+	CertificateExpired                               // red: (X.509 cert expired)
+	CertificateInvalid                               // red: (X.509 cert invalid)
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
@@ -118,7 +119,10 @@ func (f NodeStateFlags) String() string {
 		sb = append(sb, "high-number-of-goroutines")
 	}
 	if f&CertificateExpired == CertificateExpired {
-		sb = append(sb, "TLS-certificate-expired")
+		sb = append(sb, "tls-cert-expired")
+	}
+	if f&CertificateInvalid == CertificateInvalid {
+		sb = append(sb, "tls-cert-invalid")
 	}
 
 	l := len(sb)

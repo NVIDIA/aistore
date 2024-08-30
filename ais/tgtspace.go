@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/space"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -65,9 +64,9 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 	}
 
 	if cs.IsOOS() {
-		t.statsT.SetFlag(stats.NodeAlerts, cos.OOS)
+		t.statsT.SetFlag(cos.NodeAlerts, cos.OOS)
 	} else {
-		t.statsT.SetFlag(stats.NodeAlerts, cos.LowCapacity)
+		t.statsT.SetFlag(cos.NodeAlerts, cos.LowCapacity)
 	}
 	nlog.Warningln(t.String(), "running store cleanup:", cs.String())
 	// run serially, cleanup first and LRU second, iff out-of-space persists

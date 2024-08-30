@@ -25,10 +25,10 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/certloader"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	aistls "github.com/NVIDIA/aistore/cmn/tls"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
@@ -597,8 +597,7 @@ func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
 		tlsConf.ClientCAs = pool
 	}
 	if conf.Certificate != "" && conf.CertKey != "" {
-		tlsConf.GetCertificate, err = aistls.GetCert()
-		debug.AssertNoErr(err)
+		tlsConf.GetCertificate, err = certloader.GetCert()
 	}
 	return tlsConf, err
 }

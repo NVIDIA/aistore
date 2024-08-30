@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -224,7 +223,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	onGFN()
 
-	tstats.SetFlag(stats.NodeAlerts, cos.Rebalancing)
+	tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	errCnt := 0
 	err := reb.run(rargs)
@@ -240,7 +239,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	}
 
 	reb.fini(rargs, logHdr, err)
-	tstats.ClrFlag(stats.NodeAlerts, cos.Rebalancing)
+	tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	offGFN()
 }

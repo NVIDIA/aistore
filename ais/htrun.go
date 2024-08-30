@@ -27,13 +27,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/certloader"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	aistls "github.com/NVIDIA/aistore/cmn/tls"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
@@ -104,7 +104,7 @@ func (h *htrun) ByteMM() *memsys.MMSA { return h.smm }
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
-		h.statsT.ClrFlag(stats.NodeAlerts, cos.MaintenanceMode)
+		h.statsT.ClrFlag(cos.NodeAlerts, cos.MaintenanceMode)
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }
@@ -194,14 +194,14 @@ func (h *htrun) ClusterStarted() bool { return h.startup.cluster.Load() > 0 } //
 
 func (h *htrun) markClusterStarted() {
 	h.startup.cluster.Store(mono.NanoTime())
-	h.statsT.SetFlag(stats.NodeAlerts, cos.ClusterStarted)
+	h.statsT.SetFlag(cos.NodeAlerts, cos.ClusterStarted)
 }
 
 func (h *htrun) NodeStarted() bool { return h.startup.node.Load() > 0 }
 
 func (h *htrun) markNodeStarted() {
 	h.startup.node.Store(mono.NanoTime())
-	h.statsT.SetFlag(stats.NodeAlerts, cos.NodeStarted)
+	h.statsT.SetFlag(cos.NodeAlerts, cos.NodeStarted)
 }
 
 func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
@@ -261,7 +261,7 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 func (h *htrun) init(config *cmn.Config) {
 	// before newTLS() below & before intra-cluster clients
 	if config.Net.HTTP.UseHTTPS {
-		if err := aistls.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey, h.statsT); err != nil {
+		if err := certloader.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey, h.statsT); err != nil {
 			cos.ExitLog(err)
 		}
 	}
@@ -1144,7 +1144,7 @@ func (h *htrun) statsAndStatus() (ds *stats.NodeStatus) {
 			Snode: h.si,
 		},
 		Cluster: cos.NodeStateInfo{
-			Flags: cos.NodeStateFlags(h.statsT.Get(stats.NodeAlerts)),
+			Flags: cos.NodeStateFlags(h.statsT.Get(cos.NodeAlerts)),
 		},
 		SmapVersion:    smap.Version,
 		MemCPUInfo:     apc.GetMemCPU(),

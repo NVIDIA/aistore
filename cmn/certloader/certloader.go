@@ -1,13 +1,12 @@
-// Package tls provides support for TLS.
+// Package certloader loads and reloads X.509 certs.
 /*
  * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
  */
-package tls
+package certloader
 
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -20,9 +19,11 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-// TODO: can be _expired_ with invalid (non-parseable) replacement - differentiate
+const name = "tls-cert-loader"
 
-const name = "certificate-loader"
+const dfltTimeInvalid = time.Hour
+
+const fmtErrExpired = "%s: %s expired (valid until %v)"
 
 type (
 	xcert struct {
@@ -34,18 +35,25 @@ type (
 		size      int64
 	}
 	certLoader struct {
-		xcert    atomic.Pointer[xcert]
+		tstats   cos.StatsUpdater
 		certFile string
 		keyFile  string
-		tstats   cos.StatsUpdater
+		xcert    atomic.Pointer[xcert]
 	}
 
-	GetCertCB       func(_ *tls.ClientHelloInfo) (*tls.Certificate, error)
+	// tls.Config.GetCertificate
+	GetCertCB func(_ *tls.ClientHelloInfo) (*tls.Certificate, error)
+
+	// tls.Config.GetClientCertificate
 	GetClientCertCB func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error)
+
+	errExpired struct {
+		msg string
+	}
 )
 
 var (
-	loader *certLoader
+	gcl *certLoader
 )
 
 // (htrun only)
@@ -54,22 +62,44 @@ func Init(certFile, keyFile string, tstats cos.StatsUpdater) (err error) {
 		return nil
 	}
 
-	debug.Assert(loader == nil)
-	loader = &certLoader{certFile: certFile, keyFile: keyFile, tstats: tstats}
-	if err = loader.load(false /*compare*/); err != nil {
+	debug.Assert(gcl == nil)
+	gcl = &certLoader{certFile: certFile, keyFile: keyFile, tstats: tstats}
+	if err = Load(); err != nil {
 		nlog.Errorln("FATAL:", err)
-		loader = nil
 		return err
 	}
-	hk.Reg(name, loader.hk, loader.hktime())
+
+	hk.Reg(name, gcl.hk, gcl.hktime())
 	return nil
 }
 
-func Load() error {
-	return loader.load(false /*compare*/)
+// via (Init, API call)
+func Load() (err error) {
+	if err = gcl.do(false /*compare*/); err == nil {
+		return nil
+	}
+	if isExpired(err) {
+		gcl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateExpired)
+	} else {
+		gcl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateInvalid)
+	}
+	return err
+}
+
+func (cl *certLoader) hk() time.Duration {
+	if err := cl.do(true /*compare*/); err != nil {
+		nlog.Errorln(err)
+	}
+	return cl.hktime()
 }
 
 func (cl *certLoader) hktime() (d time.Duration) {
+	flags := cos.NodeStateFlags(cl.tstats.Get(cos.NodeAlerts))
+	if flags.IsSet(cos.CertificateExpired) || flags.IsSet(cos.CertificateInvalid) {
+		return dfltTimeInvalid
+	}
+
+	// (still) valid
 	const warn = "X.509 will soon expire - remains:"
 	rem := time.Until(cl.xcert.Load().notAfter)
 	switch {
@@ -84,12 +114,26 @@ func (cl *certLoader) hktime() (d time.Duration) {
 		d = time.Minute
 	case rem > 0:
 		nlog.Errorln(cl.certFile, warn, rem)
-		d = min(10*time.Second, rem)
+		d = time.Minute
 	default: // expired
 		cl.tstats.SetFlag(cos.NodeAlerts, cos.CertificateExpired)
-		d = time.Hour
+		d = dfltTimeInvalid
 	}
 	return d
+}
+
+func (cl *certLoader) errorf() error {
+	flags := cos.NodeStateFlags(cl.tstats.Get(cos.NodeAlerts))
+	switch {
+	case flags.IsSet(cos.CertificateInvalid):
+		return fmt.Errorf("%s: (%s, %s) is invalid", name, cl.certFile, cl.keyFile)
+	case flags.IsSet(cos.CertificateExpired):
+		xcert := cl.xcert.Load()
+		msg := fmt.Sprintf(fmtErrExpired, name, cl.certFile, xcert.notAfter)
+		return &errExpired{msg}
+	default:
+		return nil
+	}
 }
 
 func (cl *certLoader) _get() *tls.Certificate { return &cl.xcert.Load().Certificate }
@@ -97,10 +141,11 @@ func (cl *certLoader) _get() *tls.Certificate { return &cl.xcert.Load().Certific
 func (cl *certLoader) _hello(*tls.ClientHelloInfo) (*tls.Certificate, error) { return cl._get(), nil }
 
 func GetCert() (GetCertCB, error) {
-	if loader == nil {
-		return nil, errors.New(name + " is <nil>")
+	debug.Assert(gcl != nil, name, " not initialized")
+	if err := gcl.errorf(); err != nil {
+		return nil, err
 	}
-	return loader._hello, nil
+	return gcl._hello, nil
 }
 
 func (cl *certLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -108,20 +153,14 @@ func (cl *certLoader) _info(*tls.CertificateRequestInfo) (*tls.Certificate, erro
 }
 
 func GetClientCert() (GetClientCertCB, error) {
-	if loader == nil {
-		return nil, errors.New(name + " is <nil>")
+	debug.Assert(gcl != nil, name, " not initialized")
+	if err := gcl.errorf(); err != nil {
+		return nil, err
 	}
-	return loader._info, nil
+	return gcl._info, nil
 }
 
-func (cl *certLoader) hk() time.Duration {
-	if err := cl.load(true /*compare*/); err != nil {
-		nlog.Errorln(err)
-	}
-	return cl.hktime()
-}
-
-func (cl *certLoader) load(compare bool) (err error) {
+func (cl *certLoader) do(compare bool) (err error) {
 	var (
 		finfo os.FileInfo
 		xcert = xcert{parent: cl}
@@ -129,13 +168,13 @@ func (cl *certLoader) load(compare bool) (err error) {
 	// 1. fstat
 	finfo, err = os.Stat(cl.certFile)
 	if err != nil {
-		return fmt.Errorf("%s: failed to fstat X.509 %q, err: %w", name, cl.certFile, err)
+		return fmt.Errorf("%s: failed to fstat %q, err: %w", name, cl.certFile, err)
 	}
 
 	// 2. updated?
 	if compare {
 		xcert := cl.xcert.Load()
-		debug.Assert(xcert != nil, "expecting X.509 loaded at startup")
+		debug.Assert(xcert != nil, "expecting X.509 loaded at startup: ", cl.certFile, ", ", cl.keyFile)
 		if finfo.ModTime() == xcert.modTime && finfo.Size() == xcert.size {
 			return nil
 		}
@@ -144,17 +183,17 @@ func (cl *certLoader) load(compare bool) (err error) {
 	// 3. read and parse
 	xcert.Certificate, err = tls.LoadX509KeyPair(cl.certFile, cl.keyFile)
 	if err != nil {
-		return fmt.Errorf("%s: failed to load X.509, err: %w", name, err)
+		return fmt.Errorf("%s: failed to load (%s, %s), err: %w", name, cl.certFile, cl.keyFile, err)
 	}
 	if err = xcert.ini(finfo); err != nil {
 		return err
 	}
 
-	// 4. keep and log
-	cl.tstats.ClrFlag(cos.NodeAlerts, cos.CertificateExpired)
+	// 4. ok
+	cl.tstats.ClrFlag(cos.NodeAlerts, cos.CertificateExpired|cos.CertificateInvalid)
 	cl.xcert.Store(&xcert)
-	nlog.Infoln(xcert.String())
 
+	nlog.Infoln(xcert.String())
 	return nil
 }
 
@@ -181,7 +220,7 @@ func (x *xcert) ini(finfo os.FileInfo) (err error) {
 	if x.Certificate.Leaf == nil {
 		x.Certificate.Leaf, err = x509.ParseCertificate(x.Certificate.Certificate[0])
 		if err != nil {
-			return fmt.Errorf("%s: failed to parse X.509 %q, err: %w", name, x.parent.certFile, err)
+			return fmt.Errorf("%s: failed to parse %q, err: %w", name, x.parent.certFile, err)
 		}
 	}
 	{
@@ -192,9 +231,21 @@ func (x *xcert) ini(finfo os.FileInfo) (err error) {
 	}
 	now := time.Now()
 	if now.After(x.notAfter) {
-		err = fmt.Errorf("%s: X.509 %s expired (valid until %v)", name, x.parent.certFile, x.notAfter)
+		msg := fmt.Sprintf(fmtErrExpired, name, x.parent.certFile, x.notAfter)
+		err = &errExpired{msg}
 	} else if now.Before(x.notBefore) {
-		nlog.Warningln(x.parent.certFile, "X.509 is not valid _yet_: [", x.notBefore, x.notAfter, "]")
+		nlog.Warningln(x.parent.certFile, "is not valid _yet_: [", x.notBefore, x.notAfter, "]")
 	}
 	return err
+}
+
+//
+// other
+//
+
+func (e *errExpired) Error() string { return e.msg }
+
+func isExpired(err error) bool {
+	_, ok := err.(*errExpired)
+	return ok
 }
