@@ -467,17 +467,19 @@ test:short:python-authn:
     - cd python/
     - make python_authn_tests
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
       changes:
         - python/aistore/sdk/authn/**/*
         - python/aistore/tests/integration/sdk/authn/**/*
+      when: always
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - python/aistore/sdk/authn/**/*
         - python/aistore/tests/integration/sdk/authn/**/*
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
 
 test:short:python-etl:
   extends: .test_k8s_short_template
