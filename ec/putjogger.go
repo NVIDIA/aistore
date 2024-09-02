@@ -79,26 +79,24 @@ func (ctx *encodeCtx) freeReplica() {
 // putJogger //
 ///////////////
 
-func (*putJogger) newCtx(lom *core.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
-	ctx = allocCtx()
-	ctx.lom = lom
-	ctx.dataSlices = lom.Bprops().EC.DataSlices
-	ctx.paritySlices = lom.Bprops().EC.ParitySlices
-	ctx.meta = meta
+func (c *putJogger) run(wg *sync.WaitGroup) {
+	nlog.Infoln("start [", c.parent.bck.Cname(""), c.mpath, "]")
 
-	totalCnt := ctx.paritySlices + ctx.dataSlices
-	ctx.sliceSize = SliceSize(ctx.lom.Lsize(), ctx.dataSlices)
-	ctx.slices = make([]*slice, totalCnt)
-	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Lsize()
-	debug.Assert(ctx.padSize >= 0)
-
-	ctx.fh, err = cos.NewFileHandle(lom.FQN)
-	return ctx, err
-}
-
-func (*putJogger) freeCtx(ctx *encodeCtx) {
-	*ctx = emptyCtx
-	encCtxPool.Put(ctx)
+	defer wg.Done()
+	c.buffer, c.slab = g.pmm.Alloc()
+	for {
+		select {
+		case req := <-c.putCh:
+			c.processRequest(req)
+			freeReq(req)
+		case req := <-c.xactCh:
+			c.processRequest(req)
+			freeReq(req)
+		case <-c.stopCh.Listen():
+			c.freeResources()
+			return
+		}
+	}
 }
 
 func (c *putJogger) freeResources() {
@@ -139,27 +137,8 @@ func (c *putJogger) processRequest(req *request) {
 	}
 }
 
-func (c *putJogger) run(wg *sync.WaitGroup) {
-	nlog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
-	defer wg.Done()
-	c.buffer, c.slab = g.pmm.Alloc()
-	for {
-		select {
-		case req := <-c.putCh:
-			c.processRequest(req)
-			freeReq(req)
-		case req := <-c.xactCh:
-			c.processRequest(req)
-			freeReq(req)
-		case <-c.stopCh.Listen():
-			c.freeResources()
-			return
-		}
-	}
-}
-
 func (c *putJogger) stop() {
-	nlog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
+	nlog.Infoln("stop [", c.parent.bck.Cname(""), c.mpath, "]")
 	c.stopCh.Close()
 }
 
@@ -286,6 +265,28 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
 	}
 	return nil
+}
+
+func (*putJogger) newCtx(lom *core.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
+	ctx = allocCtx()
+	ctx.lom = lom
+	ctx.dataSlices = lom.Bprops().EC.DataSlices
+	ctx.paritySlices = lom.Bprops().EC.ParitySlices
+	ctx.meta = meta
+
+	totalCnt := ctx.paritySlices + ctx.dataSlices
+	ctx.sliceSize = SliceSize(ctx.lom.Lsize(), ctx.dataSlices)
+	ctx.slices = make([]*slice, totalCnt)
+	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Lsize()
+	debug.Assert(ctx.padSize >= 0)
+
+	ctx.fh, err = cos.NewFileHandle(lom.FQN)
+	return ctx, err
+}
+
+func (*putJogger) freeCtx(ctx *encodeCtx) {
+	*ctx = emptyCtx
+	encCtxPool.Put(ctx)
 }
 
 func (c *putJogger) ctSendCallback(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {

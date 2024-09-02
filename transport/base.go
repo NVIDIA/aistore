@@ -161,11 +161,7 @@ func (s *streamBase) _lid(sid, dstID string, extra *Extra) {
 	sb.WriteByte('[')
 	sb.WriteString(strconv.FormatInt(s.sessID, 10))
 
-	if extra.Compressed() {
-		sb.WriteByte('[')
-		sb.WriteString(cos.ToSizeIEC(int64(extra.Config.Transport.LZ4BlockMaxSize), 0))
-		sb.WriteByte(']')
-	}
+	extra.Lid(&sb)
 
 	sb.WriteString("]=>")
 	sb.WriteString(dstID)
@@ -332,6 +328,14 @@ func (extra *Extra) UsePDU() bool { return extra.SizePDU > 0 }
 
 func (extra *Extra) Compressed() bool {
 	return extra.Compression != "" && extra.Compression != apc.CompressNever
+}
+
+func (extra *Extra) Lid(sb *strings.Builder) {
+	if extra.Compressed() {
+		sb.WriteByte('[')
+		sb.WriteString(cos.ToSizeIEC(int64(extra.Config.Transport.LZ4BlockMaxSize), 0))
+		sb.WriteByte(']')
+	}
 }
 
 //

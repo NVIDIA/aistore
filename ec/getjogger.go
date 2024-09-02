@@ -88,7 +88,7 @@ func (*getJogger) freeCtx(ctx *restoreCtx) {
 }
 
 func (c *getJogger) run() {
-	nlog.Infof("started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
+	nlog.Infoln("start [", c.parent.bck.Cname(""), c.mpath, "]")
 
 	for {
 		select {
@@ -106,7 +106,7 @@ func (c *getJogger) run() {
 }
 
 func (c *getJogger) stop() {
-	nlog.Infof("stopping EC for mountpath: %s, bucket: %s", c.mpath, c.parent.bck)
+	nlog.Infoln("stop [", c.parent.bck.Cname(""), c.mpath, "]")
 	c.stopCh.Close()
 }
 
@@ -792,7 +792,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	if err := c.uploadRestoredSlices(ctx, restored); err != nil {
 		nlog.Errorf("failed to upload restored slices of %s: %v", ctx.lom, err)
 	} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
-		nlog.Infof("slices %s restored successfully", ctx.lom)
+		nlog.Infof("restored %s slices", ctx.lom)
 	}
 
 	c.freeDownloaded(ctx)

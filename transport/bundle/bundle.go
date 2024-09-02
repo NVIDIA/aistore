@@ -7,6 +7,8 @@ package bundle
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	ratomic "sync/atomic"
 
@@ -79,7 +81,7 @@ func (sb *Streams) Trname() string { return sb.trname }
 
 func New(cl transport.Client, args Args) (sb *Streams) {
 	if args.Net == "" {
-		args.Net = cmn.NetIntraData
+		args.Net = cmn.NetIntraData // intra-cluster default
 	}
 	sb = &Streams{
 		smap:         &meta.Smap{}, // empty on purpose (see Resync)
@@ -91,7 +93,6 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 		multiplier:   args.Multiplier,
 		manualResync: args.ManualResync,
 	}
-	debug.Assert(args.Extra != nil && args.Extra.Config != nil)
 	sb.extra = *args.Extra
 	if sb.multiplier == 0 {
 		sb.multiplier = 1
@@ -99,17 +100,14 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 	if sb.extra.Config == nil {
 		sb.extra.Config = cmn.GCO.Get()
 	}
-	if !sb.extra.Compressed() {
-		sb.lid = fmt.Sprintf("sb[%s-%s-%s]", core.T.SID(), sb.network, sb.trname)
-	} else {
-		sb.lid = fmt.Sprintf("sb[%s-%s-%s[%s]]", core.T.SID(), sb.network, sb.trname,
-			cos.ToSizeIEC(int64(sb.extra.Config.Transport.LZ4BlockMaxSize), 0))
-	}
 
 	// update streams when Smap changes
 	sb.smaplock.Lock()
 	sb.Resync()
 	sb.smaplock.Unlock()
+
+	sb._lid()
+	nlog.Infoln("open", sb.lid)
 
 	// register this stream-bundle as Smap listener
 	if !sb.manualResync {
@@ -119,12 +117,35 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 	return
 }
 
+func (sb *Streams) _lid() {
+	var s strings.Builder
+
+	s.WriteString("sb-[")
+	s.WriteString(core.T.SID())
+	if sb.network != cmn.NetIntraData {
+		s.WriteByte('-')
+		s.WriteString(sb.network)
+	}
+	s.WriteString("-v")
+	s.WriteString(strconv.FormatInt(sb.smap.Version, 10))
+	s.WriteByte('-')
+	s.WriteString(sb.trname)
+
+	sb.extra.Lid(&s)
+
+	s.WriteByte(']')
+
+	sb.lid = s.String() // approx. "sb[%s-%s-%s...]"
+}
+
 // Close closes all contained streams and unregisters the bundle from Smap listeners;
 // graceful=true blocks until all pending objects get completed (for "completion", see transport/README.md)
 func (sb *Streams) Close(gracefully bool) {
 	if gracefully {
+		nlog.Infoln("close", sb.lid)
 		sb.apply(closeFin)
 	} else {
+		nlog.Infoln("stop", sb.lid)
 		sb.apply(closeStop)
 	}
 	if !sb.manualResync {

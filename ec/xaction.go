@@ -213,7 +213,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, o *transport.Obj, reader
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
 		if !ok {
-			nlog.Errorf("t[%s] not found", id)
+			nlog.Errorln(meta.Tname(id), "not found in", smap.StringEx())
 			continue
 		}
 		nodes = append(nodes, si)
