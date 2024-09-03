@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
@@ -179,11 +180,31 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 	case trailingShow:
 		sb.WriteString(prefix)
 		sb.WriteString(c.App.Name) // NOTE: the entire command-line (vs cliName)
-		sb.WriteString(" " + commandShow)
-		sb.WriteString(" " + c.Args()[0])
+		sb.WriteByte(' ')
+		sb.WriteString(commandShow)
+		sb.WriteByte(' ')
+		sb.WriteString(c.Args()[0])
 		sbWriteFlags(c, sb)
 		sb.WriteString("'?")
 		sbWriteSearch(sb, cmd, true)
+	case strings.Contains(cmd, apc.BckProviderSeparator):
+		_, objName, err := cmn.ParseBckObjectURI(cmd, cmn.ParseURIOpts{})
+		if err != nil {
+			return ""
+		}
+		sb.WriteString(prefix)
+		sb.WriteString(c.App.Name) // ditto
+		sbWriteTail(c, sb)
+		sb.WriteByte(' ')
+		if objName == "" {
+			sb.WriteString(commandBucket)
+		} else {
+			sb.WriteString(commandObject)
+		}
+		sb.WriteByte(' ')
+		sb.WriteString(cmd)
+		sbWriteFlags(c, sb)
+		sb.WriteString("'?")
 	case len(similar) == 1:
 		sb.WriteString(prefix)
 		msg := fmt.Sprintf("%v", similar)
@@ -195,7 +216,8 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 	case distance < max(incorrectCmdDistance, len(cmd)/2):
 		sb.WriteString(prefix)
 		sb.WriteString(c.App.Name) // ditto
-		sb.WriteString(" " + closestCommand)
+		sb.WriteByte(' ')
+		sb.WriteString(closestCommand)
 		sbWriteTail(c, sb)
 		sbWriteFlags(c, sb)
 		sb.WriteString("'?")
@@ -210,7 +232,8 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 func sbWriteTail(c *cli.Context, sb *strings.Builder) {
 	if c.NArg() > 1 {
 		for _, a := range c.Args()[1:] { // skip the wrong one
-			sb.WriteString(" " + a)
+			sb.WriteByte(' ')
+			sb.WriteString(a)
 		}
 	}
 }
