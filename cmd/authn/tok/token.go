@@ -117,7 +117,7 @@ func (tk *Token) String() string {
 //
 // If there are no defined ACL found at any step, any access is denied.
 
-const accessCluster = apc.AceListBuckets | apc.AceCreateBucket | apc.AceDestroyBucket | apc.AceMoveBucket | apc.AceAdmin
+const accessCluster = apc.AceListBuckets | apc.AceCreateBucket | apc.AceDestroyBucket | apc.AceMoveBucket | apc.AceShowCluster | apc.AceAdmin
 
 func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
 	if tk.IsAdmin {
