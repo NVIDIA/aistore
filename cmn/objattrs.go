@@ -8,7 +8,6 @@ package cmn
 import (
 	"fmt"
 	"net/http"
-	"net/textproto"
 	"strconv"
 	"strings"
 
@@ -78,15 +77,13 @@ var (
 	props2hdr cos.StrKVs
 )
 
-// (compare with api.HeadObject)
 func InitObjProps2Hdr() {
 	props2hdr = make(cos.StrKVs, 18)
 
 	op := &ObjectProps{}
 	err := IterFields(op, func(tag string, _ IterField) (error, bool) {
-		h1 := apc.PropToHeader(tag)
-		h2 := textproto.CanonicalMIMEHeaderKey(h1)
-		props2hdr[tag] = h2
+		name := apc.PropToHeader(tag)
+		props2hdr[tag] = name // internal (json) obj prop => canonical http header
 		return nil, false
 	}, IterOpts{OnlyRead: false})
 

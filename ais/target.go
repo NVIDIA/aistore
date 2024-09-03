@@ -1157,11 +1157,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		if v == "" {
 			return nil, false
 		}
-		name := apc.PropToHeader(tag)
-		debug.Func(func() {
-			vv := whdr.Get(name)
-			debug.Assertf(vv == "", "not expecting duplications: %s=(%q, %q)", name, v, vv)
-		})
+		name := cmn.PropToHeader(tag)
 		whdr.Set(name, v)
 		return nil, false
 	})

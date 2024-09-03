@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/textproto"
 	"net/url"
 	"strconv"
 	"time"
@@ -353,9 +352,8 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn
 
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
-		h1 := apc.PropToHeader(tag)
-		h2 := textproto.CanonicalMIMEHeaderKey(h1)
-		v, ok := hdr[h2]
+		name := apc.PropToHeader(tag) // internal (json) obj prop => canonical http header
+		v, ok := hdr[name]
 		if !ok {
 			return nil, false // skip missing
 		}

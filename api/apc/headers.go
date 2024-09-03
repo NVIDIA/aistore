@@ -6,7 +6,9 @@ package apc
 
 import (
 	"strings"
+	"unicode"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -101,13 +103,39 @@ const (
 	HdrPromoteNamesNum  = aisPrefix + "Promote-Names-Num"
 )
 
-// (compare with cmn.PropToHeader)
+const lais = len(aisPrefix)
+
+// internal (json) obj prop => canonical http header
+// usage:
+// - target InitObjProps2Hdr
+// - api/object
 func PropToHeader(prop string) string {
 	debug.Assert(!strings.HasPrefix(prop, aisPrefix), "already converted: ", prop)
 	if prop[0] == '.' || prop[0] == '_' {
 		prop = prop[1:]
 	}
-	prop = strings.ReplaceAll(prop, ".", "-")
-	prop = strings.ReplaceAll(prop, "_", "-")
-	return aisPrefix + prop
+
+	var (
+		l   = len(prop)
+		out = make([]byte, l+lais)
+		o   = out[lais:]
+		up  = true
+	)
+	copy(out, aisPrefix)
+	for i := range l {
+		c := prop[i]
+		if c == '.' || c == '_' {
+			c = '-'
+		}
+		switch {
+		case up && 'a' <= c && c <= 'z':
+			o[i] = byte(unicode.ToUpper(rune(c)))
+		case !up && 'A' <= c && c <= 'Z':
+			o[i] = byte(unicode.ToLower(rune(c)))
+		default:
+			o[i] = c
+		}
+		up = c == '-'
+	}
+	return cos.UnsafeS(out)
 }
