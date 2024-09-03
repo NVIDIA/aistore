@@ -347,20 +347,22 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn
 		return nil, err
 	}
 
-	// first, cnm.ObjAttrs (NOTE: compare with `headObject()` in target.go)
+	// first, cnm.ObjAttrs (compare with `t.objHead`)
 	op := &cmn.ObjectProps{}
 	op.Cksum = op.ObjAttrs.FromHeader(hdr)
+
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
-		headerName := apc.PropToHeader(tag)
-		// get values, skip the missing ones
-		v, ok := hdr[textproto.CanonicalMIMEHeaderKey(headerName)]
+		h1 := apc.PropToHeader(tag)
+		h2 := textproto.CanonicalMIMEHeaderKey(h1)
+		v, ok := hdr[h2]
 		if !ok {
-			return nil, false
+			return nil, false // skip missing
 		}
 		// single-value
 		return field.SetValue(v[0], true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
+
 	if err != nil {
 		return nil, err
 	}

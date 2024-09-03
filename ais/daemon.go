@@ -258,6 +258,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 	nlog.SetTitle(title)
 	cmn.InitErrs(t.si.Name(), fs.CleanPathErr)
 
+	cmn.InitObjProps2Hdr()
+
 	return t
 }
 
