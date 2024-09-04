@@ -188,6 +188,8 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()
 
+	ECM.incActive(r)
+
 	// as of now all requests are equal. Some may get throttling later
 	for {
 		select {

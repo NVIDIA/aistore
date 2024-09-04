@@ -159,6 +159,8 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 		go jog.run(&wg)
 	}
 
+	ECM.incActive(r)
+
 	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	r.mainLoop(ticker)
 	ticker.Stop()

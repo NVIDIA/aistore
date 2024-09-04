@@ -94,6 +94,8 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		return
 	}
 
+	ECM.incActive(r)
+
 	opts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,

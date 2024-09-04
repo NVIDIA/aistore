@@ -385,7 +385,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	case apc.Keepalive:
 		// fast path(?)
 		if len(apiItems) > 1 {
-			p.fastKalive(w, r, smap, config, apiItems[1])
+			p.fastKaliveRsp(w, r, smap, config, apiItems[1] /*sid*/)
 			return
 		}
 
@@ -567,7 +567,8 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.mcastJoined(nsi, msg, nsi.Flags, &regReq)
 }
 
-func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, config *cmn.Config, sid string) {
+// respond to fastKalive from nodes
+func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smapX, config *cmn.Config, sid string) {
 	fast := p.readyToFastKalive.Load()
 	if !fast {
 		var (
@@ -586,7 +587,13 @@ func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		)
 		if callerID == sid && callerSver != "" && callerSver == smap.vstr {
 			if si := smap.GetNode(sid); si != nil {
-				p.keepalive.heardFrom(sid)
+				now := p.keepalive.heardFrom(sid)
+
+				if si.IsTarget() {
+					p._recvActiveEC(r.Header, now)
+				} else {
+					p._respActiveEC(w.Header(), now)
+				}
 				return
 			}
 		}
@@ -965,7 +972,7 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if nlog.Stopping() {
-		p.writeErr(w, r, fmt.Errorf("%s is stopping", p), http.StatusServiceUnavailable)
+		p.writeErr(w, r, p.errStopping(), http.StatusServiceUnavailable)
 		return
 	}
 	if !p.NodeStarted() {
@@ -2202,7 +2209,7 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 // rebalance's `can`: factors not including cluster map
 func (p *proxy) canRebalance() (err error) {
 	if nlog.Stopping() {
-		return fmt.Errorf("%s is stopping", p)
+		return p.errStopping()
 	}
 	smap := p.owner.smap.get()
 	if err = smap.validate(); err != nil {
@@ -2257,4 +2264,32 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 		}
 	}
 	return false
+}
+
+//
+// (EC is active) and (is EC active?) via fastKalive
+//
+
+// default config.Timeout.EcStreams
+const (
+	ecTimeout = 10 * time.Minute
+)
+
+func isActiveEC(hdr http.Header) (ok bool) {
+	_, ok = hdr[apc.HdrActiveEC]
+	return ok
+}
+
+// (target send => primary)
+func (p *proxy) _recvActiveEC(rhdr http.Header, now int64) {
+	if isActiveEC(rhdr) {
+		p.lastEC.Store(now)
+	}
+}
+
+// (primary resp => non-primary)
+func (p *proxy) _respActiveEC(whdr http.Header, now int64) {
+	if time.Duration(now-p.lastEC.Load()) < ecTimeout {
+		whdr.Set(apc.HdrActiveEC, "true")
+	}
 }

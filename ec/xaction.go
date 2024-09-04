@@ -56,14 +56,6 @@ type (
 	}
 )
 
-func (r *xactECBase) init(config *cmn.Config, bck *cmn.Bck, mgr *Manager) {
-	r.stats = stats{bck: *bck}
-	r.config = config
-	r.bck = *bck
-	r.dOwner = &dataOwner{slices: make(map[string]*slice, 10)}
-	r.mgr = mgr
-}
-
 /////////////////
 // xactReqBase //
 /////////////////
@@ -107,6 +99,14 @@ func (r *xactReqBase) ecRequestsEnabled() bool {
 ////////////////
 // xactECBase //
 ////////////////
+
+func (r *xactECBase) init(config *cmn.Config, bck *cmn.Bck, mgr *Manager) {
+	r.stats = stats{bck: *bck}
+	r.config = config
+	r.bck = *bck
+	r.dOwner = &dataOwner{slices: make(map[string]*slice, 10)}
+	r.mgr = mgr
+}
 
 func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos.ReadOpenCloser, err error) {
 	attrs.SetVersion(md.ObjVersion)

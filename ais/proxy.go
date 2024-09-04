@@ -72,6 +72,8 @@ type (
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
+		lastEC atomic.Int64 // last active EC via apc.HdrActiveEC (mono time)
+
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}

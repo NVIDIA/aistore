@@ -101,6 +101,10 @@ func (h *htrun) Sowner() meta.Sowner { return h.owner.smap }
 func (h *htrun) PageMM() *memsys.MMSA { return h.gmm }
 func (h *htrun) ByteMM() *memsys.MMSA { return h.smm }
 
+func (h *htrun) errStopping() error {
+	return errors.New(h.si.Name() + " is stopping")
+}
+
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
@@ -620,6 +624,8 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	freeCargs(cargs)
 }
 
+const _callHdrLen = 5
+
 func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	var (
 		req    *http.Request
@@ -636,10 +642,6 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	debug.Assert(args.si != nil || args.req.Base != "") // either si or base
 	if args.req.Base == "" && args.si != nil {
 		args.req.Base = args.si.ControlNet.URL // by default, use intra-cluster control network
-	}
-
-	if args.req.Header == nil {
-		args.req.Header = make(http.Header)
 	}
 
 	switch args.timeout {
@@ -682,14 +684,18 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		return res
 	}
 
-	req.Header.Set(apc.HdrCallerID, h.SID())
-	req.Header.Set(apc.HdrCallerName, h.si.Name())
+	// req header
+	if args.req.Header == nil {
+		args.req.Header = make(http.Header, _callHdrLen)
+	}
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
 			req.Header.Set(apc.HdrCallerIsPrimary, "true")
 		}
 		req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
 	}
+	req.Header.Set(apc.HdrCallerID, h.SID())
+	req.Header.Set(apc.HdrCallerName, h.si.Name())
 	req.Header.Set(cos.HdrUserAgent, ua)
 
 	resp, res.err = client.Do(req)
@@ -855,14 +861,6 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 			if si.ID() == h.si.ID() {
 				continue
 			}
-
-			// TODO: remove
-			debug.Func(func() {
-				if si.URL(bargs.network) == h.si.URL(bargs.network) {
-					nlog.Errorf(fmtErrNetInfoChanged, h, si.StringEx(), si.URL(bargs.network))
-				}
-			})
-
 			if !bargs.ignoreMaintenance && si.InMaintOrDecomm() {
 				continue
 			}
@@ -1843,7 +1841,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	for range 4 { // retry
 		for _, candidateURL := range candidates {
 			if nlog.Stopping() {
-				return res, errors.New(h.String() + " is stopping")
+				return res, h.errStopping()
 			}
 			if resPrev != nil {
 				freeCR(resPrev)
@@ -1873,13 +1871,14 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 		return res, fmt.Errorf("%s: failed to discover a new smap", h)
 	}
 	if nsti.Smap.Version < smap.version() {
-		return res, fmt.Errorf("%s: current %s version is newer than %d from the primary proxy (%s)", h, smap, nsti.Smap.Version, nsti.Smap.Primary.ID)
+		return res, fmt.Errorf("%s: current %s version is newer than %d from the primary proxy (%s)",
+			h, smap, nsti.Smap.Version, nsti.Smap.Primary.ID)
 	}
 	primaryURL = nsti.Smap.Primary.PubURL
 
 	// Daemon is stopping skip register
 	if nlog.Stopping() {
-		return res, errors.New(h.String() + " is stopping")
+		return res, h.errStopping()
 	}
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 	if res.err == nil {
@@ -1940,43 +1939,53 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 	return res
 }
 
-func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration, fast bool) (pid string, status int, err error) {
+// (fast path: nodes => primary)
+func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (pid string, hdr http.Header, err error) {
 	if nlog.Stopping() {
-		err = errors.New(h.String() + " is stopping")
-		return
+		return "", hdr, h.errStopping()
+	}
+	debug.Assert(h.ClusterStarted())
+
+	primaryURL, psi := h.getPrimaryURLAndSI(smap, nil)
+	pid = psi.ID()
+
+	cargs := allocCargs()
+	{
+		cargs.si = psi
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: primaryURL, Path: apc.URLPathCluKalive.Join(h.SID())}
+		cargs.timeout = timeout
+	}
+	if ecActive {
+		hdr := make(http.Header, _callHdrLen)
+		hdr.Set(apc.HdrActiveEC, "true")
+		cargs.req.Header = hdr
+	}
+
+	res := h.call(cargs, smap)
+	freeCargs(cargs)
+	err, hdr = res.err, res.header
+
+	freeCR(res)
+	return pid, hdr, err
+}
+
+// (slow path: nodes => primary)
+func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (pid string, status int, err error) {
+	if nlog.Stopping() {
+		return "", 0, h.errStopping()
 	}
 	primaryURL, psi := h.getPrimaryURLAndSI(smap, nil)
 	pid = psi.ID()
 
-	if fast {
-		// fast path
-		debug.Assert(h.ClusterStarted())
-		path := apc.URLPathCluKalive.Join(h.SID())
-		cargs := allocCargs()
-		{
-			cargs.si = psi
-			cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: primaryURL, Path: path}
-			cargs.timeout = timeout
-		}
-		res := h.call(cargs, smap)
-		freeCargs(cargs)
-		err = res.err
-		freeCR(res)
-		return
-	}
-
-	// slow path
 	res := h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
 		}
 		status, err = res.status, res.err
-		freeCR(res)
-		return
 	}
 	freeCR(res)
-	return
+	return pid, status, err
 }
 
 func (h *htrun) getPrimaryURLAndSI(smap *smapX, config *cmn.Config) (string, *meta.Snode) {

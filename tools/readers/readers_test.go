@@ -246,7 +246,7 @@ func TestSGReader(t *testing.T) {
 	defer mmsa.Terminate(false)
 	{
 		// Basic read
-		size := rand.Int64N(cos.MiB)
+		size := max(rand.Int64N(cos.MiB), cos.KiB+rand.Int64N(cos.KiB))
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 

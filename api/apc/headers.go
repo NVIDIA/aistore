@@ -101,6 +101,9 @@ const (
 	// Promote(dir)
 	HdrPromoteNamesHash = aisPrefix + "Promote-Names-Hash"
 	HdrPromoteNamesNum  = aisPrefix + "Promote-Names-Num"
+
+	// EC
+	HdrActiveEC = aisPrefix + "Ec"
 )
 
 const lais = len(aisPrefix)

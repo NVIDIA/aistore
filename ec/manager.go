@@ -19,8 +19,10 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -33,6 +35,9 @@ type Manager struct {
 	// streams
 	reqBundle  ratomic.Pointer[bundle.Streams]
 	respBundle ratomic.Pointer[bundle.Streams]
+
+	// ref count
+	_refc atomic.Int32
 
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 }
@@ -56,6 +61,22 @@ func initManager() (err error) {
 
 func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }
 func (mgr *Manager) resp() *bundle.Streams { return mgr.respBundle.Load() }
+
+func (mgr *Manager) IsActive() bool { return mgr._refc.Load() != 0 }
+
+func (mgr *Manager) incActive(xctn core.Xact) {
+	mgr._refc.Inc()
+	notif := &xact.NotifXact{
+		Base: nl.Base{When: core.UponTerm, F: mgr.notifyTerm},
+		Xact: xctn,
+	}
+	xctn.AddNotif(notif)
+}
+
+func (mgr *Manager) notifyTerm(core.Notif, error, bool) {
+	rc := mgr._refc.Dec()
+	debug.Assert(rc >= 0, "rc: ", rc)
+}
 
 func (mgr *Manager) initECBundles() error {
 	if !mgr.bundleEnabled.CAS(false, true) {

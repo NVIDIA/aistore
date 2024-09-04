@@ -207,7 +207,7 @@ func Init() {
 	xreg.RegBckXact(&encFactory{})
 
 	if err := initManager(); err != nil {
-		cos.ExitLog("Failed to init manager:", err)
+		cos.ExitLog("Failed to initialize EC manager:", err)
 	}
 }
 

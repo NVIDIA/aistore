@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -37,8 +38,8 @@ const (
 
 type (
 	keepaliver interface {
-		sendKalive(*smapX, time.Duration, bool) (string, int, error)
-		heardFrom(sid string)
+		sendKalive(*smapX, time.Duration, int64 /*now*/, bool) (string, int, error)
+		heardFrom(sid string) int64
 		do(config *cmn.Config) (stopped bool)
 		timeToPing(sid string) bool
 		ctrl(msg string)
@@ -73,8 +74,8 @@ type (
 	}
 
 	hbTracker interface {
-		HeardFrom(id string, now int64) // callback for 'id' to respond
-		TimedOut(id string) bool        // true if 'id` didn't keepalive or called (via "heard") within the interval (above)
+		HeardFrom(id string, now int64) int64 // callback for 'id' to respond
+		TimedOut(id string) bool              // true if 'id` didn't keepalive or called (via "heard") within the interval (above)
 
 		reg(id string)
 		set(interval time.Duration) bool
@@ -137,12 +138,18 @@ func (tkr *talive) cluUptime(now int64) (elapsed time.Duration) {
 	return
 }
 
-func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, fast bool) (string, int, error) {
+func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast bool) (pid string, status int, err error) {
 	if fast {
+		// additionally
 		interrupted, restarted := tkr.t.interruptedRestarted()
 		fast = !interrupted && !restarted
 	}
-	return tkr.t.sendKalive(smap, tkr.t, timeout, fast)
+	if fast {
+		debug.Assert(ec.ECM != nil)
+		pid, _, err = tkr.t.fastKalive(smap, timeout, ec.ECM.IsActive())
+		return pid, 0, err
+	}
+	return tkr.t.slowKalive(smap, tkr.t, timeout)
 }
 
 func (tkr *talive) do(config *cmn.Config) (stopped bool) {
@@ -200,9 +207,22 @@ func (pkr *palive) cluUptime(now int64) (elapsed time.Duration) {
 	return
 }
 
-func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, fast bool) (string, int, error) {
+func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fast bool) (string, int, error) {
 	debug.Assert(!smap.isPrimary(pkr.p.si))
-	return pkr.p.htrun.sendKalive(smap, nil /*htext*/, timeout, fast)
+
+	if fast {
+		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false /*ec active*/)
+		if err == nil {
+			// check resp header from primary
+			// (see: _respActiveEC; compare with: _recvActiveEC)
+			if isActiveEC(hdr) {
+				pkr.p.lastEC.Store(now)
+			}
+		}
+		return pid, 0, err
+	}
+
+	return pkr.p.slowKalive(smap, nil /*htext*/, timeout)
 }
 
 func (pkr *palive) do(config *cmn.Config) (stopped bool) {
@@ -432,8 +452,8 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, timeout time.Durat
 
 func (k *keepalive) Name() string { return k.name }
 
-func (k *keepalive) heardFrom(sid string) {
-	k.hb.HeardFrom(sid, 0 /*now*/)
+func (k *keepalive) heardFrom(sid string) int64 {
+	return k.hb.HeardFrom(sid, 0 /*now*/)
 }
 
 // wait for stats-runner to set startedUp=true
@@ -538,7 +558,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 		return
 	}
 	fast = k.k.cluUptime(started) > max(k.interval<<2, config.Timeout.Startup.D()>>1)
-	cpid, status, err := k.k.sendKalive(smap, timeout, fast)
+	cpid, status, err := k.k.sendKalive(smap, timeout, started, fast)
 	if err == nil {
 		now := mono.NanoTime()
 		k.statsT.Add(stats.KeepAliveLatency, now-started)
@@ -564,7 +584,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			// and therefore not skipping keepalive req (compare with palive.retry)
 			i++
 			started := mono.NanoTime()
-			pid, status, err = k.k.sendKalive(nil, timeout, false)
+			pid, status, err = k.k.sendKalive(nil, timeout, started, false)
 			if pid == si.ID() {
 				return // elected as primary
 			}
@@ -622,7 +642,7 @@ func (k *keepalive) paused() bool { return k.tickerPaused.Load() }
 
 func newHB(interval time.Duration) *heartBeat { return &heartBeat{interval: interval} }
 
-func (hb *heartBeat) HeardFrom(id string, now int64) {
+func (hb *heartBeat) HeardFrom(id string, now int64) int64 {
 	var (
 		val   *int64
 		v, ok = hb.last.Load(id)
@@ -637,6 +657,7 @@ func (hb *heartBeat) HeardFrom(id string, now int64) {
 		hb.last.Store(id, val)
 	}
 	ratomic.StoreInt64(val, now)
+	return now
 }
 
 func (hb *heartBeat) TimedOut(id string) bool {

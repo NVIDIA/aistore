@@ -1265,13 +1265,9 @@ func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX) (ok bool) 
 		cargs.si = tsi
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodHead,
-			Header: http.Header{
-				apc.HdrCallerID:   []string{t.SID()},
-				apc.HdrCallerName: []string{t.callerName()},
-			},
-			Base:  tsi.URL(cmn.NetIntraControl),
-			Path:  apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
-			Query: q,
+			Base:   tsi.URL(cmn.NetIntraControl),
+			Path:   apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+			Query:  q,
 		}
 		cargs.timeout = cmn.Rom.CplaneOperation()
 	}
@@ -1292,12 +1288,8 @@ func (t *target) headObjBcast(lom *core.LOM, smap *smapX) *meta.Snode {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,
-		Header: http.Header{
-			apc.HdrCallerID:   []string{t.SID()},
-			apc.HdrCallerName: []string{t.callerName()},
-		},
-		Path:  apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
-		Query: q,
+		Path:   apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
+		Query:  q,
 	}
 	args.ignoreMaintenance = true
 	args.smap = smap

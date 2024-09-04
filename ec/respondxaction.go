@@ -80,6 +80,8 @@ func newRespondXact(bck *cmn.Bck, mgr *Manager) *XactRespond {
 func (r *XactRespond) Run(*sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 
+	ECM.incActive(r)
+
 	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()
 
