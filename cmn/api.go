@@ -249,7 +249,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 }
 
 func (bp *Bprops) Apply(propsToSet *BpropsToSet) {
-	err := copyProps(propsToSet, bp, apc.Daemon)
+	err := CopyProps(propsToSet, bp, apc.Daemon)
 	debug.AssertNoErr(err)
 }
 

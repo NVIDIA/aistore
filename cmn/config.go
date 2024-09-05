@@ -756,7 +756,7 @@ func (c *Config) TestingEnv() bool {
 ///////////////////
 
 func (c *ClusterConfig) Apply(updateConf *ConfigToSet, asType string) error {
-	return copyProps(updateConf, c, asType)
+	return CopyProps(updateConf, c, asType)
 }
 
 func (c *ClusterConfig) String() string {

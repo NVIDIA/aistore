@@ -224,8 +224,8 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 	return
 }
 
-// update dst with the values from src
-func copyProps(src, dst any, asType string) error {
+// CopyProps update dst with the values from src
+func CopyProps(src, dst any, asType string) error {
 	var (
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
@@ -271,7 +271,7 @@ func copyProps(src, dst any, asType string) error {
 			}
 		} else {
 			// Recurse into struct
-			if err := copyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface(), asType); err != nil {
+			if err := CopyProps(srcValField.Elem().Interface(), dstValField.Addr().Interface(), asType); err != nil {
 				return err
 			}
 		}
