@@ -470,13 +470,13 @@ test:short:python-authn:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
       changes:
         - python/aistore/sdk/authn/**/*
-        - python/aistore/tests/integration/sdk/authn/**/*
-      when: always
+        - python/tests/integration/sdk/authn/**/*
+      when: on_success
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - python/aistore/sdk/authn/**/*
-        - python/aistore/tests/integration/sdk/authn/**/*
-      when: always
+        - python/tests/integration/sdk/authn/**/*
+      when: on_success
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
