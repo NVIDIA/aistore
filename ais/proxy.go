@@ -1244,7 +1244,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	}
 
-	bckArgs := bctx{p: p, w: w, r: r, bck: bck, perms: apc.AceObjLIST | apc.AceGET, msg: msg, query: query}
+	bckArgs := bctx{p: p, w: w, r: r, bck: bck, perms: apc.AccessNone /* access checked below */, msg: msg, query: query}
 	bckArgs.createAIS = false
 	if bck, err = bckArgs.initAndTry(); err != nil {
 		return
@@ -1779,7 +1779,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	bck := apireq.bck
-	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AcePUT, bck: bck}
+	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AccessNone /* access checked below */, bck: bck}
 	bckArgs.createAIS = false
 	bckArgs.dontHeadRemote = true
 	if _, err := bckArgs.initAndTry(); err != nil {
@@ -2088,7 +2088,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		bckArgs.p = p
 		bckArgs.w = w
 		bckArgs.r = r
-		bckArgs.perms = apc.AceObjHEAD
+		bckArgs.perms = apc.AceObjUpdate
 		bckArgs.createAIS = false
 	}
 	bck, objName, err := p._parseReqTry(w, r, bckArgs)

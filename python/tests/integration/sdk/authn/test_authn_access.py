@@ -277,6 +277,58 @@ class TestAuthNAccess(
         # Verify Access
         self._assert_does_not_raise(lambda: self.ais_client.cluster().get_info())
 
+    @pytest.mark.authn
+    def test_access_obj_promote(self):
+        """Test object promote permission."""
+        self.role = self._create_role(
+            access_attrs=[AccessAttr.PROMOTE], bucket_name=self.bucket.name
+        )
+        self.user = self._create_user(roles=[self.role.name])
+
+        user_token = self.authn_client.login(username=self.user.id, password="12345")
+        self._create_ais_client(user_token)
+
+        local_file_path = Path("test_promote_file.txt").absolute()
+        local_file_content = "Test content for promotion"
+        with open(local_file_path, "w", encoding=UTF_ENCODING) as file:
+            file.write(local_file_content)
+
+        # Verify Access
+        obj_name = "promoted_test_file"
+        self.ais_client.bucket(self.bucket.name).object(obj_name).promote(
+            str(local_file_path)
+        )
+
+        local_file_path.unlink()
+
+    @pytest.mark.authn
+    def test_access_move_bucket(self):
+        """Test move bucket permission."""
+        self.role = self._create_role(access_attrs=[AccessAttr.MOVE_BUCKET])
+        self.user = self._create_user(roles=[self.role.name])
+
+        user_token = self.authn_client.login(username=self.user.id, password="12345")
+        self._create_ais_client(user_token)
+
+        # Verify Access
+        self.ais_client.bucket(self.bucket.name).rename(self.bucket.name + "-Renamed")
+
+    @pytest.mark.authn
+    def test_access_obj_update(self):
+        """Test object update permission."""
+        self.role = self._create_role(
+            access_attrs=[AccessAttr.OBJ_UPDATE], bucket_name=self.bucket.name
+        )
+        self.user = self._create_user(roles=[self.role.name])
+
+        user_token = self.authn_client.login(username=self.user.id, password="12345")
+        self._create_ais_client(user_token)
+
+        # Verify Access
+        self.ais_client.bucket(self.bucket.name).object(
+            self.object.name
+        ).set_custom_props(custom_metadata={"Test-Key": "Test-Value"})
+
     # Test Derived Roles (RO, RW, SU)
 
     @pytest.mark.authn
@@ -395,61 +447,3 @@ class TestAuthNAccess(
     @pytest.mark.skip(reason="Bucket set ACL not implemented in SDK")
     def test_access_bck_set_acl(self):
         """Test bucket set ACL permission."""
-
-    # TODO: Fix on Go-side
-    @pytest.mark.authn
-    @pytest.mark.skip(reason="Not working on Go-side")
-    def test_access_obj_promote(self):
-        """Test object promote permission."""
-        self.role = self._create_role(
-            access_attrs=[AccessAttr.PROMOTE], bucket_name=self.bucket.name
-        )
-        self.user = self._create_user(roles=[self.role.name])
-
-        user_token = self.authn_client.login(username=self.user.id, password="12345")
-        self._create_ais_client(user_token)
-
-        local_file_path = Path("test_promote_file.txt").absolute()
-        local_file_content = "Test content for promotion"
-        with open(local_file_path, "w", encoding=UTF_ENCODING) as file:
-            file.write(local_file_content)
-
-        # Verify Access
-        obj_name = "promoted_test_file"
-        self.ais_client.bucket(self.bucket.name).object(obj_name).promote(
-            str(local_file_path)
-        )
-
-        local_file_path.unlink()
-
-    # TODO: Fix on Go-side
-    @pytest.mark.authn
-    @pytest.mark.skip(reason="Not working on Go-side")
-    def test_access_obj_update(self):
-        """Test object update permission."""
-        self.role = self._create_role(
-            access_attrs=[AccessAttr.OBJ_UPDATE], bucket_name=self.bucket.name
-        )
-        self.user = self._create_user(roles=[self.role.name])
-
-        user_token = self.authn_client.login(username=self.user.id, password="12345")
-        self._create_ais_client(user_token)
-
-        # Verify Access
-        self.ais_client.bucket(self.bucket.name).object(
-            self.object.name
-        ).set_custom_props(custom_metadata={"Test-Key": "Test-Value"})
-
-    # TODO: Fix on Go-side
-    @pytest.mark.authn
-    @pytest.mark.skip(reason="Not working on Go-side")
-    def test_access_move_bucket(self):
-        """Test move bucket permission."""
-        self.role = self._create_role(access_attrs=[AccessAttr.MOVE_BUCKET])
-        self.user = self._create_user(roles=[self.role.name])
-
-        user_token = self.authn_client.login(username=self.user.id, password="12345")
-        self._create_ais_client(user_token)
-
-        # Verify Access
-        self.ais_client.bucket(self.bucket.name).rename(self.bucket.name + "-Renamed")
