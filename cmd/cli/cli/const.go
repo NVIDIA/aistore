@@ -583,12 +583,14 @@ var (
 		Usage: "bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
 
+	keepMDFlag = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
+
 	copiesFlag = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 
-	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
-	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
-	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
-	compactPropFlag  = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
+	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Value: 2, Usage: "number of data slices", Required: true}
+	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Value: 2, Usage: "number of parity slices", Required: true}
+
+	compactPropFlag = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 
 	nameOnlyFlag = cli.BoolFlag{
 		Name:  "name-only",

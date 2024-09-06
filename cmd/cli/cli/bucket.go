@@ -427,38 +427,3 @@ func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) e
 	}
 	return teb.Print(propList, teb.PropValTmpl)
 }
-
-// Configure bucket as n-way mirror
-func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
-	var xid string
-	if xid, err = api.MakeNCopies(apiBP, bck, copies); err != nil {
-		return
-	}
-	if flagIsSet(c, nonverboseFlag) {
-		fmt.Fprintln(c.App.Writer, xid)
-		return nil
-	}
-	var baseMsg string
-	if copies > 1 {
-		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror. ", bck.Cname(""), copies)
-	} else {
-		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.Cname(""))
-	}
-	actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
-	return nil
-}
-
-// erasure code the entire bucket
-func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
-	var xid string
-	if xid, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
-		return
-	}
-	if flagIsSet(c, nonverboseFlag) {
-		fmt.Fprintln(c.App.Writer, xid)
-	} else {
-		msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.Cname(""))
-		actionDone(c, msg+toMonitorMsg(c, xid, ""))
-	}
-	return nil
-}

@@ -198,7 +198,8 @@ type (
 		err error
 	}
 	ErrLmetaNotFound struct {
-		err error
+		name string
+		err  error
 	}
 
 	ErrLimitedCoexistence struct {
@@ -820,9 +821,12 @@ func IsErrLmetaCorrupted(err error) bool {
 	return ok
 }
 
-func NewErrLmetaNotFound(err error) *ErrLmetaNotFound { return &ErrLmetaNotFound{err} }
-func (e *ErrLmetaNotFound) Error() string             { return e.err.Error() }
-func (e *ErrLmetaNotFound) Unwrap() (err error)       { return e.err }
+func NewErrLmetaNotFound(name string, err error) *ErrLmetaNotFound {
+	return &ErrLmetaNotFound{name, err}
+}
+
+func (e *ErrLmetaNotFound) Error() string       { return e.name + ", err: " + e.err.Error() }
+func (e *ErrLmetaNotFound) Unwrap() (err error) { return e.err }
 
 func IsErrLmetaNotFound(err error) bool {
 	_, ok := err.(*ErrLmetaNotFound)

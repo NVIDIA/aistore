@@ -1109,22 +1109,22 @@ func (c *MirrorConf) String() string {
 const (
 	ObjSizeToAlwaysReplicate = -1 // (see `ObjSizeLimit` comment above)
 
-	minSliceCount = 1  // minimum number of data or parity slices
-	maxSliceCount = 32 // maximum --/--
+	MinSliceCount = 1  // minimum number of data or parity slices
+	MaxSliceCount = 32 // maximum --/--
 )
 
 func (c *ECConf) Validate() error {
 	if c.ObjSizeLimit < -1 {
-		return fmt.Errorf("invalid ec.obj_size_limit: %d (expecting greater or equal -1)", c.ObjSizeLimit)
+		return fmt.Errorf("invalid ec.obj_size_limit: %d (expecting an integer greater or equal -1)", c.ObjSizeLimit)
 	}
-	if c.DataSlices < minSliceCount || c.DataSlices > maxSliceCount {
+	if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
 		err := fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])",
-			c.DataSlices, minSliceCount, maxSliceCount)
+			c.DataSlices, MinSliceCount, MaxSliceCount)
 		return err
 	}
-	if c.ParitySlices < minSliceCount || c.ParitySlices > maxSliceCount {
+	if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
 		return fmt.Errorf("invalid ec.parity_slices: %d (expected value in range [%d, %d])",
-			c.ParitySlices, minSliceCount, maxSliceCount)
+			c.ParitySlices, MinSliceCount, MaxSliceCount)
 	}
 	if c.SbundleMult < 0 || c.SbundleMult > 16 {
 		return fmt.Errorf("invalid ec.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)

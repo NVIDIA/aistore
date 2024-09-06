@@ -1862,8 +1862,12 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	var prefix string
 
 	// preparse
-	if items, err := p.parseURL(w, r, apireq.prefix, apireq.after, true); err == nil {
-		debug.Assert(apireq.bckIdx == 0, "expecting bucket name at idx = 0")
+	{
+		items, err := p.parseURL(w, r, apireq.prefix, apireq.after, true)
+		if err != nil {
+			return
+		}
+		debug.Assert(apireq.bckIdx == 0, "expecting bucket name at index 0 (zero)")
 		if len(items) > 1 {
 			prefix = items[1]
 			for _, s := range items[2:] {

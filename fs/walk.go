@@ -142,9 +142,8 @@ func Walk(opts *WalkOpts) error {
 		if err1 == nil || os.IsNotExist(err1) {
 			continue
 		}
-		// NOTE: mountpath is getting detached or disabled
 		if cmn.IsErrMpathNotFound(err1) {
-			nlog.Errorln(err1)
+			nlog.Errorln(err1) // mountpath is getting detached or disabled
 			continue
 		}
 		if cmn.IsErrAborted(err1) {
@@ -155,8 +154,8 @@ func Walk(opts *WalkOpts) error {
 			}
 			continue
 		}
-		if err1 != context.Canceled && !cos.IsNotExist(err1, 0) {
-			nlog.Errorln(err1)
+		if err1 != context.Canceled && !cmn.IsErrObjNought(err1) {
+			nlog.Errorln(err)
 		}
 		err = err1
 	}

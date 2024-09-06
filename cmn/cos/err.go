@@ -69,6 +69,7 @@ func IsErrNotFound(err error) bool {
 // gen-purpose not-finding-anything: objects, directories, xactions, nodes, ...
 //
 
+// NOTE: compare with cmn.IsErrObjNought() that also includes lmeta-not-found et al.
 func IsNotExist(err error, ecode int) bool {
 	if ecode == http.StatusNotFound || IsErrNotFound(err) {
 		return true

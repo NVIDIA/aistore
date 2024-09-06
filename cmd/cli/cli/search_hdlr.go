@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides commands that remove various entities from the cluster.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -33,8 +33,8 @@ var (
 		commandCopy:     {"copy", "replicate", "backup"},
 		commandGet:      {"fetch", "read", "download"},
 		commandPrefetch: {"load", "preload", "warmup", "cache", "get"},
-		commandMirror:   {"protect", "replicate", "copy"},
-		commandECEncode: {"protect", "encode", "replicate", "erasure-code"},
+		commandMirror:   {"protect", "replicate", "copy", "n-way", "backup", "redundancy"},
+		commandECEncode: {"protect", "encode", "replicate", "erasure-code", "backup", "redundancy"},
 		commandStart:    {"do", "run", "execute"},
 		commandStop:     {"abort", "terminate"},
 		commandPut:      {"update", "write", "promote", "modify", "upload"},
