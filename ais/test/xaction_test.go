@@ -66,10 +66,22 @@ func TestXactionAllStatus(t *testing.T) {
 				if ns.AbortedX {
 					tlog.Logf("%q is aborted but hasn't finished yet\n", ns.String())
 					aborted = append(aborted, ns)
-				} else {
-					// doesn't appear to be aborted and is, therefore, expected to be running
-					tassert.Errorf(t, ns.EndTimeX == 0, "%q: non-sero fin time=%v",
+				} else if ns.EndTimeX != 0 {
+					tlog.Logf("Warning: must've %q already finished (non-zero fin time=%v)\n",
 						ns.String(), time.Unix(0, ns.EndTimeX))
+
+					// un-race
+					xargs.OnlyRunning = true
+					vec2, err2 := api.GetAllXactionStatus(baseParams, &xargs)
+					tassert.CheckFatal(t, err2)
+					for _, ns2 := range vec2 {
+						if ns2.UUID == ns.UUID {
+							tassert.Errorf(t, ns.EndTimeX == 0, "%q (1) already finished (non-zero fin time=%v)",
+								ns.String(), time.Unix(0, ns.EndTimeX))
+							tassert.Errorf(t, ns2.EndTimeX == 0, "%q (2) already finished (non-zero fin time=%v)",
+								ns2.String(), time.Unix(0, ns2.EndTimeX))
+						}
+					}
 				}
 			}
 			if len(aborted) == 0 {
