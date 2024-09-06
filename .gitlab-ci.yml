@@ -13,6 +13,8 @@ include:
 
 variables:
   MODE: debug # run aistore and tests with debug asserts enabled
+  RUNNER_TAG: "ais"
+  RUNNER_TAG_K8s: "ais-k8s"
   SCRIPTS_DIR: "./scripts"
   NUM_TARGET:
     value: "5"
@@ -53,7 +55,7 @@ variables:
 .test_short_template: &test_short_def
   stage: test-short
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 30m
   <<: *default_only_def
   except:
@@ -65,7 +67,7 @@ variables:
 .test_short_skip_scheduled_template: &test_short_skip_scheduled_def
   stage: test-short
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
@@ -77,7 +79,7 @@ variables:
 .test_short_optional_template: &test_short_optional_def
   stage: test-short
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 30m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
@@ -89,7 +91,7 @@ variables:
 .test_long_template: &test_long_def
   stage: test-long
   tags:
-    - ais
+    - $RUNNER_TAG
   # NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
@@ -102,7 +104,7 @@ variables:
 .test_long_skip_scheduled_template: &test_long_skip_scheduled_def
   stage: test-long
   tags:
-    - ais
+    - $RUNNER_TAG
   # NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
@@ -116,7 +118,7 @@ variables:
 build:linux:
   stage: build
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 10m
   <<: *default_only_def
   script:
@@ -161,7 +163,7 @@ build:k8s:
 lint:linux:
   stage: build
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 10m
   <<: *default_only_def
   script:
@@ -222,7 +224,7 @@ test:short:minimal:
 test:short:s3-compat:
   <<: *test_short_def
   tags:
-    - ais
+    - $RUNNER_TAG
   variables:
     # Run only s3 compat tests we know should pass
     S3_COMPAT_RUN_ALL:
@@ -345,7 +347,7 @@ test:long:azure:
 test:long:aisloader:
   stage: test-long
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 15m
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
@@ -361,7 +363,7 @@ test:long:aisloader:
 test:long:pyaisloader:
   stage: test-long
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 15m
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
@@ -377,7 +379,7 @@ test:long:pyaisloader:
 test:long:ishard:
   stage: test-long
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 1h
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
@@ -396,7 +398,7 @@ test:long:ishard:
 
 .test_k8s:
   tags:
-    - ais-k8s
+    - $RUNNER_TAG_K8s
   variables:
     BUCKET: "gs://ais-ci-kube"
     TESTS_DIR: "ais/test"
@@ -454,7 +456,7 @@ test:short:k8s:
 test:short:python-authn:
   stage: test-short
   tags:
-    - ais
+    - $RUNNER_TAG
   timeout: 20m
   <<: *gather_logs_def
   variables:
