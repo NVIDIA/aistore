@@ -107,26 +107,30 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
 fi
 
 TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
-touch $TMPF;
+touch $TMPF
 
 OS=$(uname -s)
 case $OS in
   Linux) # Linux
-    setfattr -n user.comment -v comment $TMPF
+    if ! [ -x "$(command -v setfattr)" ]; then
+      echo "Warning: setfattr not installed" >&2
+    elif ! setfattr -n user.comment -v comment $TMPF; then
+      echo "Warning: bad kernel configuration: extended attributes are not enabled."
+    fi
     ;;
   Darwin) # macOS
-    xattr -w user.comment comment $TMPF
-    echo "WARNING: Darwin architecture is not yet fully supported. You may stumble upon bugs and issues when testing on Mac."
+    if ! xattr -w user.comment comment $TMPF; then
+      echo "Warning: bad macOS configuration: extended attributes are not enabled."
+    fi
+    echo "Warning: Darwin architecture is not yet fully supported. You may stumble upon bugs and issues when testing on Mac."
     ;;
   *)
     rm $TMPF 2>/dev/null
-    exit_error "'${OS}' is not supported"
+    echo "Error: '${OS}' is not supported."
+    exit 1
     ;;
 esac
-if [ $? -ne 0 ]; then
-  rm $TMPF 2>/dev/null
-  exit_error "bad kernel configuration: extended attributes are not enabled"
-fi
+
 rm $TMPF 2>/dev/null
 
 ### begin reading STDIN =================== 5 steps below ========================================
