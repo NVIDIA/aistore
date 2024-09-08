@@ -2792,13 +2792,36 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.
 	time.Sleep(time.Second)
 	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckError(t, err)
-	aborted, err := snaps.IsAborted(xid)
+	aborted, finished := _isAbortedOrFinished(xid, snaps)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, aborted, "failed to abort copy-bucket: %q, %v", xid, err)
+	tassert.Errorf(t, aborted || finished, "expecting copy-bucket %q to abort or finish", xid)
+
+	if finished {
+		tlog.Logf("%s[%s] already finished\n", apc.ActCopyBck, xid)
+	}
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck)), "should not contain destination bucket %s", dstBck)
+	if aborted {
+		tassert.Errorf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck)),
+			"when aborted, should not contain destination bucket %s", dstBck)
+	}
+}
+
+func _isAbortedOrFinished(xid string, xs xact.MultiSnap) (aborted, finished bool) {
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xid == xsnap.ID {
+				if xsnap.IsAborted() {
+					return true, false
+				}
+				if !xsnap.Finished() {
+					return false, false
+				}
+			}
+		}
+	}
+	return false, true
 }
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {

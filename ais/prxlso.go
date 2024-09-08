@@ -287,7 +287,7 @@ func (b *lsobjBuffers) housekeep(now int64) (num int) {
 	b.buffers.Range(func(key, value any) bool {
 		buffer := value.(*lsobjBuffer)
 		num++
-		// mono.Since(buffer.lastAccess.Load()) > lsobjBufferTTL
+		// mono.Since(lastAccess)
 		if now-buffer.lastAccess.Load() > int64(lsobjBufferTTL) {
 			b.buffers.Delete(key)
 		}
@@ -518,7 +518,7 @@ func (c *lsobjCaches) housekeep(now int64) (num int) {
 		cache.mtx.Lock()
 		for _, interval := range cache.intervals {
 			num++
-			// mono.Since(interval.lastAccess) > cacheIntervalTTL
+			// mono.Since(lastAccess)
 			if now-interval.lastAccess > int64(cacheIntervalTTL) {
 				toRemove = append(toRemove, interval)
 			}

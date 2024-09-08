@@ -452,20 +452,6 @@ func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error
 	return "", nil, nil
 }
 
-func (xs MultiSnap) IsAborted(xid string) (bool, error) {
-	if err := xs.checkEmptyID(xid); err != nil {
-		return false, err
-	}
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if (xid == xsnap.ID || xid == "") && xsnap.IsAborted() {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
 // (all targets, all xactions)
 func (xs MultiSnap) IsIdle(xid string) (aborted, running, notstarted bool) {
 	if xid != "" {
