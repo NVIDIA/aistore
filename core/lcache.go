@@ -89,7 +89,7 @@ func UncacheMountpath(mi *fs.Mountpath) {
 // lchk //
 //////////
 
-func (lchk *lchk) housekeep() time.Duration {
+func (lchk *lchk) housekeep(int64) time.Duration {
 	d, tag := lchk.mp()
 	if !lchk.running.CAS(false, true) {
 		nlog.Infoln("running now; memory pressure:", tag, "next HK:", d)

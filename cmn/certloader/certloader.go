@@ -89,7 +89,7 @@ func Load() (err error) {
 	return err
 }
 
-func (cl *certLoader) hk() time.Duration {
+func (cl *certLoader) hk(int64) time.Duration {
 	if err := cl.do(true /*compare*/); err != nil {
 		nlog.Errorln(err)
 	}
@@ -106,7 +106,7 @@ func (cl *certLoader) hktime() (d time.Duration) {
 	const warn = "X.509 will soon expire - remains:"
 	rem := time.Until(cl.xcert.Load().notAfter)
 	switch {
-	case rem > 24*time.Hour:
+	case rem > hk.DayInterval:
 		d = 6 * time.Hour
 		if rem < warnSoonExpire {
 			cl.tstats.SetFlag(cos.NodeAlerts, cos.CertWillSoonExpire)

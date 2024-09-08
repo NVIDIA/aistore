@@ -136,9 +136,9 @@ func (qm *lsobjMem) init() {
 	hk.Reg("lsobj-buffer-cache"+hk.NameSuffix, qm.housekeep, qmTimeHk)
 }
 
-func (qm *lsobjMem) housekeep() time.Duration {
-	num := qm.b.housekeep()
-	num += qm.c.housekeep()
+func (qm *lsobjMem) housekeep(now int64) time.Duration {
+	num := qm.b.housekeep(now)
+	num += qm.c.housekeep(now)
 	if num == 0 {
 		qm.d = min(qm.d+qmTimeHk, qmTimeHkMax)
 	} else {
@@ -283,11 +283,12 @@ func (b *lsobjBuffers) set(id, targetID string, entries cmn.LsoEntries, size int
 	v.(*lsobjBuffer).set(targetID, entries, size)
 }
 
-func (b *lsobjBuffers) housekeep() (num int) {
+func (b *lsobjBuffers) housekeep(now int64) (num int) {
 	b.buffers.Range(func(key, value any) bool {
 		buffer := value.(*lsobjBuffer)
 		num++
-		if mono.Since(buffer.lastAccess.Load()) > lsobjBufferTTL {
+		// mono.Since(buffer.lastAccess.Load()) > lsobjBufferTTL
+		if now-buffer.lastAccess.Load() > int64(lsobjBufferTTL) {
 			b.buffers.Delete(key)
 		}
 		return true
@@ -510,14 +511,15 @@ func (c *lsobjCaches) invalidate(bck *cmn.Bck) {
 }
 
 // TODO: factor-in memory pressure.
-func (c *lsobjCaches) housekeep() (num int) {
+func (c *lsobjCaches) housekeep(now int64) (num int) {
 	var toRemove []*cacheInterval
 	c.caches.Range(func(key, value any) bool {
 		cache := value.(*lsobjCache)
 		cache.mtx.Lock()
 		for _, interval := range cache.intervals {
 			num++
-			if mono.Since(interval.lastAccess) > cacheIntervalTTL {
+			// mono.Since(interval.lastAccess) > cacheIntervalTTL
+			if now-interval.lastAccess > int64(cacheIntervalTTL) {
 				toRemove = append(toRemove, interval)
 			}
 		}

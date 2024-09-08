@@ -185,8 +185,8 @@ func (h *hdlExtra) unreg() { hk.Unreg(h.hkName + hk.NameSuffix) }
 func (*hdl) addOld(uint64)            {}
 func (h *hdlExtra) addOld(uid uint64) { h.oldSessions.Store(uid, mono.NanoTime()) }
 
-func (h *hdlExtra) cleanup() time.Duration {
-	h.now = mono.NanoTime()
+func (h *hdlExtra) cleanup(now int64) time.Duration {
+	h.now = now
 	h.oldSessions.Range(h.cl)
 	return sessionIsOld
 }

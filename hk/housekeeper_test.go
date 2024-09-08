@@ -19,7 +19,7 @@ import (
 var _ = Describe("Housekeeper", func() {
 	It("should register the callback and fire it", func() {
 		fired := false
-		hk.Reg("foo", func() time.Duration {
+		hk.Reg("foo", func(int64) time.Duration {
 			fired = true
 			return time.Second
 		}, 0)
@@ -37,7 +37,7 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register the callback and fire it after initial interval", func() {
 		fired := false
-		hk.Reg("foo", func() time.Duration {
+		hk.Reg("foo", func(int64) time.Duration {
 			fired = true
 			return time.Second
 		}, time.Second)
@@ -52,12 +52,12 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should register multiple callbacks and fire it in correct order", func() {
 		fired := make([]bool, 2)
-		hk.Reg("foo", func() time.Duration {
+		hk.Reg("foo", func(int64) time.Duration {
 			fired[0] = true
 			return 2 * time.Second
 		}, 0)
 		defer hk.Unreg("foo")
-		hk.Reg("bar", func() time.Duration {
+		hk.Reg("bar", func(int64) time.Duration {
 			fired[1] = true
 			return time.Second + 500*time.Millisecond
 		}, 0)
@@ -96,11 +96,11 @@ var _ = Describe("Housekeeper", func() {
 
 	It("should unregister callback", func() {
 		fired := make([]bool, 2)
-		hk.Reg("bar", func() time.Duration {
+		hk.Reg("bar", func(int64) time.Duration {
 			fired[0] = true
 			return 400 * time.Millisecond
 		}, 400*time.Millisecond)
-		hk.Reg("foo", func() time.Duration {
+		hk.Reg("foo", func(int64) time.Duration {
 			fired[1] = true
 			return 200 * time.Millisecond
 		}, 200*time.Millisecond)
@@ -121,11 +121,11 @@ var _ = Describe("Housekeeper", func() {
 	It("should unregister callback that returns UnregInterval", func() {
 		for range 3 {
 			fired := make([]bool, 2)
-			hk.Reg("bar", func() time.Duration {
+			hk.Reg("bar", func(int64) time.Duration {
 				fired[0] = true
 				return 400 * time.Millisecond
 			}, 400*time.Millisecond)
-			hk.Reg("foo", func() time.Duration {
+			hk.Reg("foo", func(int64) time.Duration {
 				fired[1] = true
 				return hk.UnregInterval
 			}, 100*time.Millisecond)
@@ -147,7 +147,7 @@ var _ = Describe("Housekeeper", func() {
 		var fired bool
 		f := func(name string) {
 			Expect(fired).To(BeFalse())
-			hk.Reg(name, func() time.Duration {
+			hk.Reg(name, func(int64) time.Duration {
 				fired = true
 				return 100 * time.Millisecond
 			}, 100*time.Millisecond)
@@ -195,7 +195,7 @@ var _ = Describe("Housekeeper", func() {
 
 		for i := range actionCnt {
 			index := i
-			hk.Reg(strconv.Itoa(index), func() time.Duration {
+			hk.Reg(strconv.Itoa(index), func(int64) time.Duration {
 				if fired[index] == -1 {
 					fired[index] = counter.Inc() - 1
 				}

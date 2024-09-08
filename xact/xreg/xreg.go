@@ -392,7 +392,7 @@ func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.S
 
 func (r *registry) incFinished() { r.finDelta.Inc() }
 
-func (r *registry) hkPruneActive() time.Duration {
+func (r *registry) hkPruneActive(int64) time.Duration {
 	if r.finDelta.Swap(0) == 0 {
 		return hk.PruneActiveIval
 	}
@@ -413,7 +413,7 @@ func (r *registry) hkPruneActive() time.Duration {
 	return hk.PruneActiveIval
 }
 
-func (r *registry) hkDelOld() time.Duration {
+func (r *registry) hkDelOld(int64) time.Duration {
 	var (
 		toRemove  []string
 		numNonLso int

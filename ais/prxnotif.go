@@ -349,7 +349,7 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 // housekeeping
 //
 
-func (n *notifs) housekeep() time.Duration {
+func (n *notifs) housekeep(int64) time.Duration {
 	now := time.Now().UnixNano()
 	n.fin.mtx.Lock()
 	for _, nl := range n.fin.m {

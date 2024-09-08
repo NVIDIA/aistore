@@ -179,7 +179,7 @@ func (mg *ManagerGroup) AbortAll(err error) {
 	}
 }
 
-func (mg *ManagerGroup) housekeep() time.Duration {
+func (mg *ManagerGroup) housekeep(int64) time.Duration {
 	const (
 		retryInterval   = time.Hour // retry interval in case error occurred
 		regularInterval = hk.DayInterval

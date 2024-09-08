@@ -190,13 +190,13 @@ func (r *streamingX) fin(unreg bool) {
 	}
 }
 
-func (r *streamingX) wurr() time.Duration {
+func (r *streamingX) wurr(int64) time.Duration {
 	if cnt := r.wiCnt.Load(); cnt > 0 {
 		r.maxWt += waitUnregRecv
 		if r.maxWt < waitUnregMax {
 			return waitUnregRecv
 		}
-		nlog.Errorf("%s: unreg timeout %v, cnt %d", r, r.maxWt, cnt)
+		nlog.Errorln(r.String(), "unreg timeout", r.maxWt, "count", cnt)
 	}
 	r.p.dm.UnregRecv()
 	return hk.UnregInterval

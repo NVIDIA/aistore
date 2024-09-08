@@ -333,7 +333,7 @@ func (txns *transactions) _wait(txn txn, timeoutNetw, timeoutHost time.Duration)
 }
 
 // GC orphaned transactions
-func (txns *transactions) housekeep() (d time.Duration) {
+func (txns *transactions) housekeep(int64) (d time.Duration) {
 	var (
 		errs    []error
 		orphans []txn

@@ -366,7 +366,7 @@ func (r *runner) _run(logger statsLogger) error {
 		deadline = config.Timeout.JoinAtStartup.D()
 	)
 	if logger.standingBy() {
-		deadline = 24 * time.Hour
+		deadline = hk.DayInterval
 	} else if deadline == 0 {
 		deadline = 2 * config.Timeout.Startup.D()
 	}
@@ -409,8 +409,8 @@ waitStartup:
 
 	config = cmn.GCO.Get()
 	goMaxProcs := runtime.GOMAXPROCS(0)
-	nlog.Infof("Starting %s", r.Name())
-	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, recycleLogs, maxLogSizeCheckTime)
+	nlog.Infoln("Starting", r.Name())
+	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, hkLogs, maxLogSizeCheckTime)
 
 	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
 	r.ticker = time.NewTicker(statsTime)
@@ -622,13 +622,13 @@ func (ctracker copyTracker) write(sgl *memsys.SGL, sorted []string, target, idle
 
 const gcLogs = "GC logs:"
 
-func recycleLogs() time.Duration {
-	// keep total log size below the configured max
-	go removeLogs(cmn.GCO.Get())
+// keep total log size below the configured max
+func hkLogs(int64) time.Duration {
+	go _hkLogs(cmn.GCO.Get())
 	return maxLogSizeCheckTime
 }
 
-func removeLogs(config *cmn.Config) {
+func _hkLogs(config *cmn.Config) {
 	maxtotal := int64(config.Log.MaxTotal)
 	dentries, err := os.ReadDir(config.LogDir)
 	if err != nil {

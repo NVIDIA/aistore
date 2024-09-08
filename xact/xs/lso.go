@@ -284,9 +284,9 @@ func (r *LsoXact) resetIdle() {
 	r.DemandBase.Reset(max(r.config.Timeout.MaxKeepalive.D(), 2*time.Second))
 }
 
-func (r *LsoXact) fcleanup() (d time.Duration) {
+func (r *LsoXact) fcleanup(int64) (d time.Duration) {
 	if cnt := r.wiCnt.Load(); cnt > 0 {
-		d = time.Second
+		d = max(cmn.Rom.MaxKeepalive(), 2*time.Second)
 	} else {
 		d = hk.UnregInterval
 		if r.remtCh != nil {
@@ -295,7 +295,7 @@ func (r *LsoXact) fcleanup() (d time.Duration) {
 		close(r.msgCh)
 		r.p.dm.UnregRecv()
 	}
-	return
+	return d
 }
 
 // skip on-demand idleness check

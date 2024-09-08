@@ -27,7 +27,7 @@ const (
 )
 
 type (
-	hkcb    func() time.Duration
+	hkcb    func(now int64) time.Duration
 	request struct {
 		f               hkcb
 		name            string
@@ -161,7 +161,7 @@ func (hk *housekeeper) _run() error {
 			var (
 				item     = hk.actions.Peek()
 				started  = mono.NanoTime()
-				interval = item.f()
+				interval = item.f(started)
 			)
 			if interval == UnregInterval {
 				heap.Remove(hk.actions, 0)
@@ -184,10 +184,11 @@ func (hk *housekeeper) _run() error {
 					break
 				}
 				initialInterval := req.initialInterval
+				now := mono.NanoTime()
 				if req.initialInterval == 0 {
-					initialInterval = req.f()
+					initialInterval = req.f(now)
 				}
-				nt := mono.NanoTime() + initialInterval.Nanoseconds() // next time
+				nt := now + initialInterval.Nanoseconds() // next time
 				heap.Push(hk.actions, timedAction{name: req.name, f: req.f, updateTime: nt})
 			} else {
 				idx := hk.byName(req.name)

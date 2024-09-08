@@ -72,9 +72,9 @@ func (r *MMSA) GetStats() (stats *Stats) {
 // private
 //
 
-func (r *MMSA) hkcb() time.Duration {
+func (r *MMSA) hkcb(now int64) time.Duration {
 	// 1. refresh and clone stats
-	r.refreshStats()
+	r.refreshStats(now)
 
 	// 2. update swapping state and compute mem-pressure ranking
 	err := r.mem.Get()
@@ -141,8 +141,7 @@ func (r *MMSA) hkIval(pressure int) time.Duration {
 }
 
 // refresh and clone internal hits/idle stats
-func (r *MMSA) refreshStats() {
-	now := mono.NanoTime()
+func (r *MMSA) refreshStats(now int64) {
 	for i := range r.numSlabs {
 		hits, prev := r.slabStats.hits[i].Load(), r.slabStats.prev[i]
 		hinc := hits - prev

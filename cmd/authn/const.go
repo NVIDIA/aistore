@@ -21,5 +21,5 @@ const (
 	adminUserID   = "admin"
 	adminUserPass = "admin"
 
-	foreverTokenTime = 24 * 365 * 20 * time.Hour // kind of never-expired token
+	foreverTokenTime = 24 * 365 * 20 * time.Hour // kind of never-expired token // TODO -- FIXME: make it -1s
 )

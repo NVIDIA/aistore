@@ -127,12 +127,15 @@ func (is *infoStore) delJob(id string) {
 	is.downloaderDB.delete(id)
 }
 
-func (is *infoStore) housekeep() time.Duration {
+func (is *infoStore) housekeep(int64) time.Duration {
 	const interval = hk.DayInterval
-
+	var now time.Time
 	is.Lock()
 	for id, dljob := range is.dljobs {
-		if time.Since(dljob.finishedTime.Load()) > interval {
+		if now.IsZero() {
+			now = time.Now()
+		}
+		if now.Sub(dljob.finishedTime.Load()) > interval {
 			is.delJob(id)
 		}
 	}

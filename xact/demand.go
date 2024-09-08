@@ -74,10 +74,10 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duratio
 // (e.g. usage: listed last page)
 func (r *DemandBase) Reset(idleTime time.Duration) { r.idle.d.Store(int64(idleTime)) }
 
-func (r *DemandBase) hkcb() time.Duration {
+func (r *DemandBase) hkcb(now int64) time.Duration {
 	last := r.idle.last.Load()
 	idle := r.idle.d.Load()
-	if last != 0 && mono.SinceNano(last) >= idle {
+	if last != 0 && now-last >= idle { // mono.SinceNano(last)
 		// signal parent xaction to finish and exit (via `IdleTimer` chan)
 		r.idle.ticks.Close()
 	}
