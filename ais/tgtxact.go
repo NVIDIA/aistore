@@ -7,7 +7,6 @@ package ais
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -132,9 +131,8 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		if l := len(xid); l > 0 {
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(l))
-			w.Write([]byte(xid))
+		if xid != "" {
+			writeXid(w, xid)
 		}
 	case apc.ActXactStop:
 		debug.Assert(xact.IsValidKind(xargs.Kind) || xact.IsValidUUID(xargs.ID), xargs.String())

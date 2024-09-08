@@ -7,7 +7,6 @@ package ais
 import (
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -32,8 +31,7 @@ func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 			p.writeErr(w, r, err)
 		} else {
 			w.WriteHeader(http.StatusAccepted)
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(msg.UUID)))
-			w.Write([]byte(msg.UUID))
+			writeXid(w, msg.UUID)
 		}
 		return
 	}

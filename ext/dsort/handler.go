@@ -102,7 +102,8 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 		return
 	}
 
-	w.Write([]byte(managerUUID))
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(managerUUID)))
+	w.Write(cos.UnsafeB(managerUUID))
 }
 
 func _handleResp(w http.ResponseWriter, r *http.Request, smap *meta.Smap, managerUUID string, responses []response) error {

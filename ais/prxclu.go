@@ -1264,9 +1264,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		smap := p.owner.smap.get()
 		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
 		p.ic.registerEqual(regIC{smap: smap, nl: nl})
-
-		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
-		w.Write([]byte(xargs.ID))
+		writeXid(w, xargs.ID)
 	}
 }
 
@@ -1362,9 +1360,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 		p.writeErr(w, r, err)
 		return
 	}
-	debug.Assert(rmdCtx.rebID != "")
-	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rmdCtx.rebID)))
-	w.Write([]byte(rmdCtx.rebID))
+	writeXid(w, rmdCtx.rebID)
 }
 
 func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
@@ -1509,8 +1505,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			return
 		}
 		if rebID != "" {
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rebID)))
-			w.Write(cos.UnsafeB(rebID))
+			writeXid(w, rebID)
 		}
 	}
 }
@@ -1651,8 +1646,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		return
 	}
 	if rebID != "" {
-		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rebID)))
-		w.Write(cos.UnsafeB(rebID))
+		writeXid(w, rebID)
 	}
 }
 

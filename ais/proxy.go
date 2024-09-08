@@ -954,8 +954,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
-		w.Write([]byte(xid))
+		writeXid(w, xid)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1182,8 +1181,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 		xid, err := p.createArchMultiObj(bckFrom, bckTo, msg)
 		if err == nil {
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
-			w.Write([]byte(xid))
+			writeXid(w, xid)
 		} else {
 			p.writeErr(w, r, err)
 		}
@@ -1449,8 +1447,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 	}
 
 	debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
-	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
-	w.Write([]byte(xid))
+	writeXid(w, xid)
 }
 
 // init existing or create remote
@@ -1840,7 +1837,9 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
+		if xid != "" {
+			writeXid(w, xid)
+		}
 	case apc.ActBlobDl:
 		if err := p.checkAccess(w, r, bck, apc.AccessRW); err != nil {
 			return
@@ -2051,7 +2050,9 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 		p.writeErr(w, r, err)
 		return
 	}
-	w.Write([]byte(xid))
+	if xid != "" {
+		writeXid(w, xid)
+	}
 }
 
 // HEAD /v1/objects/bucket-name/object-name

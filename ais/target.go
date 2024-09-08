@@ -998,8 +998,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 		if xid, _, err = t.blobdl(args, nil /*oa*/); xid != "" {
 			debug.AssertNoErr(err)
-			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
-			w.Write([]byte(xid))
+			writeXid(w, xid)
+
 			// lom is eventually freed by x-blob
 		}
 	default:

@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	rdebug "runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -830,6 +831,13 @@ func apiReqFree(a *apiRequest) {
 //
 // misc helpers
 //
+
+// http response: xaction ID most of the time but may be any string
+func writeXid(w http.ResponseWriter, xid string) {
+	debug.Assert(xid != "")
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
+	w.Write(cos.UnsafeB(xid))
+}
 
 func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*meta.Bck, error) {
 	bck := _bckFromQ(bckName, query, dpq)
