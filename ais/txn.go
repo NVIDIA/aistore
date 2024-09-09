@@ -25,7 +25,6 @@ import (
 
 // GC
 const (
-	gcTxnsInterval   = time.Hour
 	gcTxnsNumKeep    = 16
 	gcTxnsTimeotMult = 10
 
@@ -157,7 +156,7 @@ func (txns *transactions) init(t *target) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous.m = make(map[string]rndzvs, 8)
-	hk.Reg("txn"+hk.NameSuffix, txns.housekeep, gcTxnsInterval)
+	hk.Reg("txn"+hk.NameSuffix, txns.housekeep, hk.DelOldIval)
 }
 
 func (txns *transactions) begin(txn txn, nlps ...core.NLP) (err error) {
@@ -339,15 +338,15 @@ func (txns *transactions) housekeep(int64) (d time.Duration) {
 		orphans []txn
 		config  = cmn.GCO.Get()
 	)
-	d = gcTxnsInterval
+	d = hk.DelOldIval
 	txns.mtx.Lock()
 	l := len(txns.m)
 	if l == 0 {
 		txns.mtx.Unlock()
 		return
 	}
-	if l > max(gcTxnsNumKeep*4, 16) {
-		d = gcTxnsInterval / 10
+	if l > max(gcTxnsNumKeep<<2, 32) {
+		d >>= 2
 	}
 	now := time.Now()
 	for _, txn := range txns.m {

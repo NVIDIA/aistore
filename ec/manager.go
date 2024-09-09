@@ -62,7 +62,7 @@ func initManager() error {
 	}
 
 	if ECM.bmd.IsECUsed() { // TODO -- FIXME: remove
-		ECM.OpenStreams()
+		ECM.OpenStreams(false)
 	}
 	return nil
 }
@@ -92,7 +92,10 @@ func cbReq(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	}
 }
 
-func (mgr *Manager) OpenStreams() {
+func (mgr *Manager) OpenStreams(withRefc bool) {
+	if withRefc {
+		mgr._refc.Inc()
+	}
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return
 	}
@@ -119,7 +122,10 @@ func (mgr *Manager) OpenStreams() {
 	mgr.respBundle.Store(bundle.New(client, respSbArgs))
 }
 
-func (mgr *Manager) CloseStreams() {
+func (mgr *Manager) CloseStreams(withRefc bool) {
+	if withRefc {
+		mgr._refc.Dec()
+	}
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
@@ -320,9 +326,9 @@ func (mgr *Manager) BMDChanged() error {
 
 	// TODO -- FIXME: remove
 	if newBMD.IsECUsed() && !oldBMD.IsECUsed() {
-		mgr.OpenStreams()
+		mgr.OpenStreams(false)
 	} else if !newBMD.IsECUsed() && oldBMD.IsECUsed() {
-		mgr.CloseStreams()
+		mgr.CloseStreams(false)
 		return nil
 	}
 

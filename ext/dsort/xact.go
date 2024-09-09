@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -40,6 +41,11 @@ func (p *factory) Start() error {
 	debug.Assert(ok)
 	p.xctn = &xaction{args: args}
 	p.xctn.InitBase(p.UUID(), apc.ActDsort, args.BckTo /*compare w/ tcb and tco*/)
+
+	g.once.Do(func() {
+		hk.Reg(apc.ActDsort+hk.NameSuffix, g.mg.housekeep, hk.DayInterval)
+	})
+
 	return nil
 }
 
@@ -60,7 +66,7 @@ func (*xaction) Run(*sync.WaitGroup) { debug.Assert(false) }
 // - Manager.abort(errs ...error) legacy, and
 // - xaction.Abort, to implement the corresponding interface and uniformly support `api.AbortXaction`
 func (r *xaction) Abort(err error) (ok bool) {
-	m, exists := Managers.Get(r.ID(), false /*incl. archived*/)
+	m, exists := g.mg.Get(r.ID(), false /*incl. archived*/)
 	if !exists {
 		return
 	}
@@ -75,7 +81,7 @@ func (r *xaction) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 
-	m, exists := Managers.Get(r.ID(), true /*incl. archived*/)
+	m, exists := g.mg.Get(r.ID(), true /*incl. archived*/)
 	if !exists {
 		return
 	}

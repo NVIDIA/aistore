@@ -467,7 +467,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 			)
 			group.Go(func() error {
 				var (
-					buf, slab = g.mm.AllocSize(serializationBufSize)
+					buf, slab = g.mem.AllocSize(serializationBufSize)
 					msgpw     = msgp.NewWriterBuf(w, buf)
 				)
 				defer slab.Free(buf)
@@ -861,7 +861,7 @@ func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shar
 	)
 	group.Go(func() error {
 		var (
-			buf, slab = g.mm.AllocSize(serializationBufSize)
+			buf, slab = g.mem.AllocSize(serializationBufSize)
 			msgpw     = msgp.NewWriterBuf(w, buf)
 			md        = &CreationPhaseMetadata{Shards: s, SendOrder: order}
 		)

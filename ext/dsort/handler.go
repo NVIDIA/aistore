@@ -405,9 +405,9 @@ func TargetHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.Start:
 		tstartHandler(w, r)
 	case apc.Records:
-		Managers.recordsHandler(w, r)
+		g.mg.recordsHandler(w, r)
 	case apc.Shards:
-		Managers.shardsHandler(w, r)
+		g.mg.shardsHandler(w, r)
 	case apc.Abort:
 		tabortHandler(w, r)
 	case apc.Remove:
@@ -455,7 +455,7 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, err := Managers.Add(managerUUID) // NOTE: returns manager locked iff err == nil
+	m, err := g.mg.Add(managerUUID) // NOTE: returns manager locked iff err == nil
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -491,7 +491,7 @@ func tstartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, exists := Managers.Get(managerUUID, false /*incl. archived*/)
+	m, exists := g.mg.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -536,7 +536,7 @@ func (m *Manager) errHandler(err error) {
 // shardsHandler is the handler for the HTTP endpoint /v1/sort/shards.
 // A valid POST to this endpoint results in a new shard being created locally based on the contents
 // of the incoming request body. The shard is then sent to the correct target in the cluster as per HRW.
-func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Request) {
+func (mg *managerGroup) shardsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -545,7 +545,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	managerUUID := apiItems[0]
-	m, exists := managers.Get(managerUUID, false /*incl. archived*/)
+	m, exists := mg.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -562,7 +562,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	var (
-		buf, slab   = g.mm.AllocSize(serializationBufSize)
+		buf, slab   = g.mem.AllocSize(serializationBufSize)
 		tmpMetadata = &CreationPhaseMetadata{}
 	)
 	defer slab.Free(buf)
@@ -585,7 +585,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 // recordsHandler is the handler /v1/sort/records.
 // A valid POST to this endpoint updates this target's dsortManager.Records with the
 // []Records from the request body, along with some related state variables.
-func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Request) {
+func (mg *managerGroup) recordsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -594,7 +594,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	managerUUID := apiItems[0]
-	m, exists := managers.Get(managerUUID, false /*incl. archived*/)
+	m, exists := mg.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -633,7 +633,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	var (
-		buf, slab = g.mm.AllocSize(serializationBufSize)
+		buf, slab = g.mem.AllocSize(serializationBufSize)
 		records   = shard.NewRecords(int(d))
 	)
 	defer slab.Free(buf)
@@ -669,7 +669,7 @@ func tabortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, exists := Managers.Get(managerUUID, true /*incl. archived*/)
+	m, exists := g.mg.Get(managerUUID, true /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("%s: [dsort] %s does not exist", core.T, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -695,7 +695,7 @@ func tremoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	if err := Managers.Remove(managerUUID); err != nil {
+	if err := g.mg.Remove(managerUUID); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -719,7 +719,7 @@ func tlistHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Write(cos.MustMarshal(Managers.List(regex, onlyActive)))
+	w.Write(cos.MustMarshal(g.mg.List(regex, onlyActive)))
 }
 
 // /v1/sort/metrics.
@@ -734,7 +734,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, exists := Managers.Get(managerUUID, true /*incl. archived*/)
+	m, exists := g.mg.Get(managerUUID, true /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("%s: [dsort] %s does not exist", core.T, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -763,7 +763,7 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID, tid := apiItems[0], apiItems[1]
-	m, exists := Managers.Get(managerUUID, false /*incl. archived*/)
+	m, exists := g.mg.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)

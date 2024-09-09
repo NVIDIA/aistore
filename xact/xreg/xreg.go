@@ -457,8 +457,12 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	}
 	r.entries.mtx.RUnlock()
 
-	if len(toRemove) == 0 {
-		return hk.DelOldIval
+	d, ll := hk.DelOldIval, len(toRemove)
+	if l-ll > keepOldThreshold<<1 {
+		d >>= 1
+	}
+	if ll == 0 {
+		return d
 	}
 
 	// cleanup
@@ -467,7 +471,8 @@ func (r *registry) hkDelOld(int64) time.Duration {
 		r.entries.del(id)
 	}
 	r.entries.mtx.Unlock()
-	return hk.DelOldIval
+
+	return d
 }
 
 func (r *registry) renewByID(entry Renewable, bck *meta.Bck) (rns RenewRes) {

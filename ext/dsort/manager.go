@@ -54,7 +54,11 @@ const (
 type (
 	global struct {
 		tstats stats.Tracker
-		mm     *memsys.MMSA
+		mem    *memsys.MMSA
+
+		// internal
+		mg   *managerGroup
+		once sync.Once // reg housekeep upon the first usage
 	}
 	buildingShardInfo struct {
 		shardName string
@@ -80,7 +84,7 @@ type (
 		Metrics     *Metrics       `json:"metrics"`
 		Pars        *parsedReqSpec `json:"pars"`
 
-		mg                 *ManagerGroup // parent
+		mg                 *managerGroup // parent
 		mu                 sync.Mutex
 		smap               *meta.Smap
 		recm               *shard.RecordManager
@@ -134,14 +138,14 @@ func Pinit(si core.Node, config *cmn.Config) {
 }
 
 func Tinit(tstats stats.Tracker, db kvdb.Driver, config *cmn.Config) {
-	Managers = NewManagerGroup(db, false)
+	g.mg = newManagerGroup(db)
 
 	xreg.RegBckXact(&factory{})
 
-	debug.Assert(g.mm == nil) // only once
+	debug.Assert(g.mem == nil) // only once
 	{
 		g.tstats = tstats
-		g.mm = core.T.PageMM()
+		g.mem = core.T.PageMM()
 	}
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})

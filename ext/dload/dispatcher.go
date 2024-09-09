@@ -54,6 +54,8 @@ type (
 		// Certification check is disabled for now and does not depend on cluster settings.
 		clientH   *http.Client
 		clientTLS *http.Client
+
+		once sync.Once // newInfoStore upon the first execution
 	}
 )
 
@@ -68,7 +70,6 @@ func Init(tstats stats.Tracker, db kvdb.Driver, clientConf *cmn.ClientConf) {
 	{
 		g.tstats = tstats
 		g.db = db
-		g.store = newInfoStore(db)
 	}
 	xreg.RegNonBckXact(&factory{})
 }

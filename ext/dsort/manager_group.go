@@ -25,23 +25,17 @@ const (
 	managersKey     = "managers"
 )
 
-var Managers *ManagerGroup
-
-// ManagerGroup abstracts multiple dsort managers into single struct.
-type ManagerGroup struct {
+// managerGroup abstracts multiple dsort managers into single struct.
+type managerGroup struct {
 	mtx      sync.Mutex // Synchronizes reading managers field and db access
 	managers map[string]*Manager
 	db       kvdb.Driver
 }
 
-// NewManagerGroup returns new, initialized manager group.
-func NewManagerGroup(db kvdb.Driver, skipHk bool) *ManagerGroup {
-	mg := &ManagerGroup{
+func newManagerGroup(db kvdb.Driver) *managerGroup {
+	mg := &managerGroup{
 		managers: make(map[string]*Manager, 1),
 		db:       db,
-	}
-	if !skipHk {
-		hk.Reg(apc.ActDsort+hk.NameSuffix, mg.housekeep, hk.DayInterval)
 	}
 	return mg
 }
@@ -49,7 +43,7 @@ func NewManagerGroup(db kvdb.Driver, skipHk bool) *ManagerGroup {
 // Add new, non-initialized manager with given managerUUID to manager group.
 // Returned manager is locked, it's caller responsibility to unlock it.
 // Returns error when manager with specified managerUUID already exists.
-func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
+func (mg *managerGroup) Add(managerUUID string) (*Manager, error) {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 	if _, exists := mg.managers[managerUUID]; exists {
@@ -64,7 +58,7 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	return manager, nil
 }
 
-func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInfo {
+func (mg *managerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInfo {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
@@ -113,7 +107,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 // exist and user requested persisted lookup, it looks for it in persistent
 // storage and returns it if found. Returns false if does not exist, true
 // otherwise.
-func (mg *ManagerGroup) Get(managerUUID string, inclArchived bool) (*Manager, bool) {
+func (mg *managerGroup) Get(managerUUID string, inclArchived bool) (*Manager, bool) {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
@@ -132,7 +126,7 @@ func (mg *ManagerGroup) Get(managerUUID string, inclArchived bool) (*Manager, bo
 }
 
 // Remove the managerUUID from history. Used for reducing clutter. Fails if process hasn't been cleaned up.
-func (mg *ManagerGroup) Remove(managerUUID string) error {
+func (mg *managerGroup) Remove(managerUUID string) error {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
@@ -153,7 +147,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 //
 // When error occurs during moving manager to persistent storage, manager is not
 // removed from memory.
-func (mg *ManagerGroup) persist(managerUUID string) {
+func (mg *managerGroup) persist(managerUUID string) {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 	manager, exists := mg.managers[managerUUID]
@@ -170,16 +164,7 @@ func (mg *ManagerGroup) persist(managerUUID string) {
 	delete(mg.managers, managerUUID)
 }
 
-func (mg *ManagerGroup) AbortAll(err error) {
-	mg.mtx.Lock()
-	defer mg.mtx.Unlock()
-
-	for _, manager := range mg.managers {
-		manager.abort(err)
-	}
-}
-
-func (mg *ManagerGroup) housekeep(int64) time.Duration {
+func (mg *managerGroup) housekeep(int64) time.Duration {
 	const (
 		retryInterval   = time.Hour // retry interval in case error occurred
 		regularInterval = hk.DayInterval

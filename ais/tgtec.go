@@ -74,9 +74,9 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	action := apiItems[0]
 	switch action {
 	case apc.ActEcOpen:
-		ec.ECM.OpenStreams()
+		ec.ECM.OpenStreams(false /*with refc*/)
 	case apc.ActEcClose:
-		ec.ECM.CloseStreams()
+		ec.ECM.CloseStreams(false /*with refc*/)
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}

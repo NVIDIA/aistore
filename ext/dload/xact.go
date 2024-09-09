@@ -169,6 +169,11 @@ func (*factory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 func (p *factory) Start() error {
 	xdl := newXact(p)
 	p.xctn = xdl
+
+	g.once.Do(func() {
+		g.store = newInfoStore(g.db)
+	})
+
 	go xdl.Run(nil)
 	return nil
 }

@@ -282,7 +282,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 	)
 
 	if storeType != shard.SGLStoreType { // SGL does not need buffer as it is buffer itself
-		buf, slab = g.mm.AllocSize(obj.Size)
+		buf, slab = g.mem.AllocSize(obj.Size)
 	}
 
 	defer func() {
@@ -556,7 +556,7 @@ func (ds *dsorterGeneral) recvResp(hdr *transport.ObjHdr, object io.Reader, err 
 		return nil
 	}
 
-	buf, slab := g.mm.AllocSize(hdr.ObjAttrs.Size)
+	buf, slab := g.mem.AllocSize(hdr.ObjAttrs.Size)
 	writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 	writer.wg.Done()
 	slab.Free(buf)

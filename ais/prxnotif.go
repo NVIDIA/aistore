@@ -353,9 +353,9 @@ func (n *notifs) housekeep(int64) time.Duration {
 	now := time.Now().UnixNano()
 	n.fin.mtx.Lock()
 	for _, nl := range n.fin.m {
-		timeout := hk.DelOldIval
+		timeout := hk.OldAgeNotif
 		if nl.Kind() == apc.ActList {
-			timeout = hk.OldAgeLsoNotif
+			timeout = hk.OldAgeNotifLso
 		}
 		if time.Duration(now-nl.EndTime()) > timeout {
 			n.fin.del(nl, true /*locked*/)
