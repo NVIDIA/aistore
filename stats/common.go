@@ -141,9 +141,6 @@ type (
 	}
 )
 
-// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-var logtypes = [...]string{".INFO.", ".WARNING.", ".ERROR."}
-
 var ignoreIdle = [...]string{"kalive", Uptime, "disk."}
 
 ////////////
@@ -437,17 +434,16 @@ waitStartup:
 				r.ticker.Reset(statsTime)
 				logger.statsTime(statsTime)
 			}
-			// stats runner is now solely responsible to flush the logs
-			// both periodically and on (OOB) demand
+			//
+			// NOTE: stats runner is solely responsible to flush logs
+			//
 			flushTime := dfltPeriodicFlushTime
 			if config.Log.FlushTime != 0 {
 				flushTime = config.Log.FlushTime.D()
 			}
-			if nlog.Since() > flushTime || nlog.OOB() {
+			if nlog.Since(now) > flushTime || nlog.OOB() {
 				nlog.Flush(nlog.ActNone)
 			}
-
-			now = mono.NanoTime()
 			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
 				nlog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
 				lastDateTimestamp = now
@@ -624,72 +620,97 @@ const gcLogs = "GC logs:"
 
 // keep total log size below the configured max
 func hkLogs(int64) time.Duration {
-	go _hkLogs(cmn.GCO.Get())
+	var (
+		config   = cmn.GCO.Get()
+		maxtotal = int64(config.Log.MaxTotal)
+		logdir   = config.LogDir
+	)
+	dentries, err := os.ReadDir(logdir)
+	if err != nil {
+		nlog.Errorln(gcLogs, "cannot read log dir", logdir, "err:", err)
+		_ = cos.CreateDir(logdir) // (local non-containerized + kill/restart under test)
+		return maxLogSizeCheckTime
+	}
+
+	var (
+		tot     int64
+		finfos  = make([]rfs.FileInfo, 0, len(dentries)>>1)
+		verbose = cmn.Rom.FastV(4, cos.SmoduleStats)
+	)
+	for _, logtype := range []string{".INFO.", ".ERROR."} {
+		finfos, tot = _sizeLogs(dentries, logtype, finfos)
+		l := len(finfos)
+		if tot > maxtotal && l > 1 {
+			go _rmLogs(tot, maxtotal, logdir, logtype, finfos)
+			if logtype != ".ERROR." {
+				finfos = make([]rfs.FileInfo, 0, len(dentries)>>1)
+			}
+		} else {
+			if tot > maxtotal {
+				nlog.Warningln(gcLogs, "cannot cleanup single large", logtype, "size:", tot, "configured max:", maxtotal)
+				debug.Assert(l == 1)
+				for _, finfo := range finfos {
+					nlog.Warningln("\t>>>", gcLogs, filepath.Join(logdir, finfo.Name()))
+				}
+			}
+			clear(finfos)
+			if verbose {
+				nlog.Infoln(gcLogs, "skipping:", logtype, "total:", tot, "max:", maxtotal)
+			}
+		}
+	}
+
 	return maxLogSizeCheckTime
 }
 
-func _hkLogs(config *cmn.Config) {
-	maxtotal := int64(config.Log.MaxTotal)
-	dentries, err := os.ReadDir(config.LogDir)
-	if err != nil {
-		nlog.Errorln(gcLogs, "cannot read log dir", config.LogDir, "err:", err)
-		_ = cos.CreateDir(config.LogDir) // (local non-containerized + kill/restart under test)
-		return
-	}
-	for _, logtype := range logtypes {
-		var tot int64
-		finfos := make([]rfs.FileInfo, 0, len(dentries))
-		for _, dent := range dentries {
-			if !dent.Type().IsRegular() {
-				continue
-			}
-			if n := dent.Name(); !strings.Contains(n, logtype) {
-				continue
-			}
-			if finfo, err := dent.Info(); err == nil {
-				tot += finfo.Size()
-				finfos = append(finfos, finfo)
-			}
+// e.g. name: ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+// see also: nlog.InfoLogName, nlog.ErrLogName
+func _sizeLogs(dentries []os.DirEntry, logtype string, finfos []rfs.FileInfo) (_ []rfs.FileInfo, tot int64) {
+	for _, dent := range dentries {
+		if !dent.Type().IsRegular() {
+			continue
 		}
-		if tot > maxtotal {
-			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, finfos)
-		} else if cmn.Rom.FastV(4, cos.SmoduleStats) {
-			nlog.Infoln(gcLogs, "skipping log type:", logtype, "total:", tot, "max:", maxtotal)
+		if n := dent.Name(); !strings.Contains(n, logtype) {
+			continue
+		}
+		if finfo, err := dent.Info(); err == nil {
+			tot += finfo.Size()
+			finfos = append(finfos, finfo)
 		}
 	}
+	return finfos, tot
 }
 
-func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
-	l := len(filteredInfos)
-	if l <= 1 {
-		nlog.Warningln(gcLogs, "cannot cleanup", logtype, "dir:", logdir, "total:", tot, "max:", maxtotal)
-		return
+func _rmLogs(tot, maxtotal int64, logdir, logtype string, finfos []rfs.FileInfo) {
+	less := func(i, j int) bool {
+		return finfos[i].ModTime().Before(finfos[j].ModTime())
 	}
-	fiLess := func(i, j int) bool {
-		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
-	}
-
+	l := len(finfos)
 	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if verbose {
-		nlog.Infoln(gcLogs, "started for log type:", logtype)
+		nlog.Infoln(gcLogs, logtype, "total:", tot, "max:", maxtotal, "num:", l)
 	}
-	sort.Slice(filteredInfos, fiLess)
-	filteredInfos = filteredInfos[:l-1] // except the last = current
-	for _, logfi := range filteredInfos {
-		logfqn := filepath.Join(logdir, logfi.Name())
-		if err := cos.RemoveFile(logfqn); err == nil {
-			tot -= logfi.Size()
+	sort.Slice(finfos, less)
+	finfos = finfos[:l-1] // except the last, i.e. current
+
+	for _, finfo := range finfos {
+		fqn := filepath.Join(logdir, finfo.Name())
+		if err := cos.RemoveFile(fqn); err == nil {
+			tot -= finfo.Size()
 			if verbose {
-				nlog.Infoln(gcLogs, "removed", logfqn)
+				nlog.Infoln(gcLogs, "removed", fqn)
 			}
 			if tot < maxtotal {
 				break
 			}
 		} else {
-			nlog.Errorln(gcLogs, "failed to remove", logfqn, "err:", err)
+			nlog.Errorln(gcLogs, "failed to remove", fqn, "err:", err)
 		}
 	}
 	nlog.Infoln(gcLogs, "done, new total:", tot)
+
+	clear(finfos)
+	finfos = finfos[:0]
 }
 
 //

@@ -44,6 +44,7 @@ func SetPost(logToStderr bool, maxSize int64) {
 
 func SetTitle(s string) { title = s }
 
+// see also: `logtypes` in stats/common
 func InfoLogName() string { return sname() + ".INFO" }
 func ErrLogName() string  { return sname() + ".ERROR" }
 
@@ -80,8 +81,7 @@ func Flush(action int) {
 	}
 }
 
-func Since() time.Duration {
-	now := mono.NanoTime()
+func Since(now int64) time.Duration {
 	a, b := nlogs[sevInfo].since(now), nlogs[sevErr].since(now)
 	if a > b {
 		return a
