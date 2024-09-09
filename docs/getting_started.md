@@ -494,9 +494,6 @@ os.environ['PATH'] += ':/usr/local/go/bin:/content/go/bin'
 After installing Go, you can proceed to install and run AIStore:
 
 ```bash
-# Update package lists and install dependencies
-!sudo apt update
-!sudo apt install -y xattr attr
 
 # Clone the AIStore repository
 !git clone https://github.com/NVIDIA/aistore.git

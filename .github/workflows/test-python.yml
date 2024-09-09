@@ -12,7 +12,7 @@ jobs:
       matrix:
         go-version: ['1.22.x']
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.11']
+        python-version: ['3.8','3.9','3.10','3.11']
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Go
@@ -22,12 +22,6 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup additional system libraries
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt update
-          sudo apt install -y xattr attr
 
       - name: Remove unnecessary directories to free up space
         run: |

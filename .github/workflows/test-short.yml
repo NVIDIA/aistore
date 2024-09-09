@@ -24,12 +24,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup additional system libraries
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt update
-          sudo apt install -y xattr attr
-
       - name: Run and test AIStore
         run: |
           export GOPATH="$(go env GOPATH)"
