@@ -72,8 +72,10 @@ type (
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
-		lastEC atomic.Int64 // last active EC via apc.HdrActiveEC (mono time)
-
+		ec struct {
+			last atomic.Int64 // last active EC via apc.HdrActiveEC (mono time)
+			rust int64        // same as above
+		}
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}
@@ -224,6 +226,7 @@ func (p *proxy) Run() error {
 		{r: apc.Vote, h: p.voteHandler, net: accessNetIntraControl},
 
 		{r: apc.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
+		{r: apc.EC, h: p.ecHandler, net: accessNetIntraControl},
 
 		// S3 compatibility
 		{r: "/" + apc.S3, h: p.s3Handler, net: accessNetPublic},
@@ -734,6 +737,8 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		return
 	}
 
+	started := time.Now()
+
 	// 3. redirect
 	smap := p.owner.smap.get()
 	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
@@ -742,9 +747,10 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infoln("GET " + bck.Cname(objName) + " => " + tsi.String())
+		nlog.Infoln("GET", bck.Cname(objName), "=>", tsi.StringEx())
 	}
-	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraData, netPub)
+
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
 	// 4. stats
@@ -816,14 +822,15 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 
 	// verbose
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		verb, s := "PUT", ""
+		verb := "PUT"
 		if appendTyProvided {
 			verb = "APPEND"
 		}
+		var s string
 		if bck.Props.Mirror.Enabled {
 			s = " (put-mirror)"
 		}
-		nlog.Infof("%s %s => %s%s", verb, bck.Cname(objName), tsi.StringEx(), s)
+		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx(), s)
 	}
 
 	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
@@ -858,7 +865,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infoln("DELETE " + bck.Cname(objName) + " => " + tsi.StringEx())
+		nlog.Infoln("DELETE", bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1457,7 +1464,11 @@ func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Valu
 	bckToArgs.createAIS = true
 
 	ecode, err := bckToArgs.init()
-	if err != nil && ecode != http.StatusNotFound {
+	if err == nil {
+		return bckTo, 0, p.onEC(bckTo) // compare with `initAndTry`
+	}
+
+	if ecode != http.StatusNotFound {
 		p.writeErr(w, r, err, ecode)
 		return nil, 0, err
 	}
@@ -1697,7 +1708,7 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 			if lsmsg.SID != "" {
 				s += " via " + tsi.StringEx()
 			}
-			nlog.Infof("%s[%s] %s%s", amsg.Action, lsmsg.UUID, bck.Cname(""), s)
+			nlog.Infoln(amsg.Action, "[", lsmsg.UUID, "]", bck.Cname(""), s)
 		}
 
 		config := cmn.GCO.Get()
@@ -2079,7 +2090,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -2107,7 +2118,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -2409,7 +2420,7 @@ func (p *proxy) redirectObjAction(w http.ResponseWriter, r *http.Request, bck *m
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
+		nlog.Infoln(msg.Action, bck.Cname(objName), "=>", si.StringEx())
 	}
 
 	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
@@ -3135,7 +3146,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
+		nlog.Infoln("[HTTP CLOUD] RevProxy handler:", baseURL, "-->", r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		// bck.IsHT()

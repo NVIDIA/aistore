@@ -154,7 +154,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
 				if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-					nlog.Warningf("%s: %s(%s) is busy", t, lom, owt)
+					nlog.Warningln(t.String(), lom.String(), owt.String(), "is busy")
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 			}

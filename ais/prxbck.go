@@ -118,8 +118,7 @@ func (bctx *bctx) init() (ecode int, err error) {
 	}
 
 	if err = bctx.accessSupported(); err != nil {
-		ecode = http.StatusMethodNotAllowed
-		return
+		return http.StatusMethodNotAllowed, err
 	}
 	if bctx.skipBackend {
 		err = bck.InitNoBackend(bctx.p.owner.bmd)
@@ -127,11 +126,10 @@ func (bctx *bctx) init() (ecode int, err error) {
 		err = bck.Init(bctx.p.owner.bmd)
 	}
 	if err != nil {
-		ecode = http.StatusBadRequest
 		if cmn.IsErrBucketNought(err) {
-			ecode = http.StatusNotFound
+			return http.StatusNotFound, err
 		}
-		return
+		return http.StatusBadRequest, err
 	}
 
 	bctx.isPresent = true
@@ -195,6 +193,7 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 	// 1. init bucket
 	bck = bctx.bck
 	if ecode, err = bctx.init(); err == nil {
+		err = bctx.p.onEC(bck)
 		return
 	}
 	if ecode != http.StatusNotFound {
@@ -239,7 +238,7 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 	case cmn.IsErrBucketAlreadyExists(err):
 		// e.g., when (re)setting backend two times in a row
 		// TODO: return http.StatusNoContent
-		nlog.Infoln(bctx.p.String()+":", err, " - nothing to do")
+		nlog.Infoln(bctx.p.String(), err, " - nothing to do")
 		return bck, nil
 	default:
 		if bctx.perms == apc.AceBckHEAD {
@@ -257,13 +256,10 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 
 func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	if err = bctx.bck.Validate(); err != nil {
-		ecode = http.StatusBadRequest
-		return
+		return bck, http.StatusBadRequest, err
 	}
-
 	if bctx.p.forwardCP(bctx.w, bctx.r, bctx.msg, "add-bucket", bctx.reqBody) {
-		err = errForwarded
-		return
+		return bck, 0, errForwarded
 	}
 
 	// am primary from this point on
@@ -277,8 +273,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	}
 	if bck.IsAIS() {
 		if err = bctx.p.access(bctx.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
-			ecode = aceErrToCode(err)
-			return
+			return bck, aceErrToCode(err), err
 		}
 		nlog.Warningf("%s: %q doesn't exist, proceeding to create", bctx.p, bctx.bck)
 		goto creadd
@@ -287,8 +282,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 
 	// lookup remote
 	if remoteHdr, ecode, err = bctx.lookup(bck); err != nil {
-		bck = nil
-		return
+		return nil, ecode, err
 	}
 
 	// orig-url for the ht:// bucket
@@ -301,8 +295,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 				origURL = bctx.getOrigURL()
 			)
 			if origURL == "" {
-				err = cmn.NewErrFailedTo(bctx.p, "initialize", bctx.bck, errors.New("missing HTTP URL"))
-				return
+				return bck, 0, cmn.NewErrFailedTo(bctx.p, "initialize", bctx.bck, errors.New("missing HTTP URL"))
 			}
 			if hbo, err = cmn.NewHTTPObjPath(origURL); err != nil {
 				return
@@ -336,15 +329,18 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	// add/create
 creadd:
 	if err = bctx.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
-		ecode = crerrStatus(err)
-		return
+		return bck, crerrStatus(err), err
 	}
+
 	// finally, initialize the newly added/created
 	if err = bck.Init(bctx.p.owner.bmd); err != nil {
 		debug.AssertNoErr(err)
-		ecode = http.StatusInternalServerError
-		err = cmn.NewErrFailedTo(bctx.p, "post create-bucket init", bck, err, ecode)
+		return bck, http.StatusInternalServerError,
+			cmn.NewErrFailedTo(bctx.p, "post create-bucket init", bck, err, ecode)
 	}
+
+	err = bctx.p.onEC(bck)
+
 	bck = bctx.bck
 	return
 }

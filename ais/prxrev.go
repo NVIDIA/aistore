@@ -98,9 +98,9 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		pname := smap.Primary.StringEx()
 		if msg != nil {
-			nlog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
+			nlog.Infoln(p.String(), "forwarding [", msg.Action, s, "] to the primary", pname)
 		} else {
-			nlog.Infof("%s: forwarding %q to the primary %s", p, s, pname)
+			nlog.Infoln(p.String(), "forwarding [", s, "] to the primary", pname)
 		}
 	}
 	primary.rp.ServeHTTP(w, r)

@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -47,16 +47,24 @@ var (
 	errSkipped = errors.New("skipped") // CT is skipped due to EC unsupported for the content type
 )
 
-func initManager() (err error) {
+func initManager() error {
 	ECM = &Manager{
 		netReq:  cmn.NetIntraControl,
 		netResp: cmn.NetIntraData,
 		bmd:     core.T.Bowner().Get(),
 	}
-	if ECM.bmd.IsECUsed() {
-		err = ECM.initECBundles()
+	// EC trnames (ReqStreamName, RespStreamName) are constants, receive handlers static
+	if err := transport.Handle(ReqStreamName, ECM.recvRequest); err != nil {
+		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
-	return err
+	if err := transport.Handle(RespStreamName, ECM.recvResponse); err != nil {
+		return fmt.Errorf("failed to register respResponse: %v", err)
+	}
+
+	if ECM.bmd.IsECUsed() { // TODO -- FIXME: remove
+		ECM.OpenStreams()
+	}
+	return nil
 }
 
 func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }
@@ -78,20 +86,15 @@ func (mgr *Manager) notifyTerm(core.Notif, error, bool) {
 	debug.Assert(rc >= 0, "rc: ", rc)
 }
 
-func (mgr *Manager) initECBundles() error {
+func cbReq(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+	if err != nil {
+		nlog.Errorf("failed to request %s: %v", hdr.Cname(), err)
+	}
+}
+
+func (mgr *Manager) OpenStreams() {
 	if !mgr.bundleEnabled.CAS(false, true) {
-		return nil
-	}
-	if err := transport.Handle(ReqStreamName, ECM.recvRequest); err != nil {
-		return fmt.Errorf("failed to register recvRequest: %v", err)
-	}
-	if err := transport.Handle(RespStreamName, ECM.recvResponse); err != nil {
-		return fmt.Errorf("failed to register respResponse: %v", err)
-	}
-	cbReq := func(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
-		if err != nil {
-			nlog.Errorf("failed to request %s: %v", hdr.Cname(), err)
-		}
+		return
 	}
 	var (
 		client      = transport.NewIntraDataClient()
@@ -114,18 +117,14 @@ func (mgr *Manager) initECBundles() error {
 
 	mgr.reqBundle.Store(bundle.New(client, reqSbArgs))
 	mgr.respBundle.Store(bundle.New(client, respSbArgs))
-
-	return nil
 }
 
-func (mgr *Manager) closeECBundles() {
+func (mgr *Manager) CloseStreams() {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
 	mgr.req().Close(false)
 	mgr.resp().Close(false)
-	transport.Unhandle(ReqStreamName)
-	transport.Unhandle(RespStreamName)
 }
 
 func (mgr *Manager) NewGetXact(bck *cmn.Bck) *XactGet         { return newGetXact(bck, mgr) }
@@ -319,13 +318,11 @@ func (mgr *Manager) BMDChanged() error {
 	}
 	mgr.bmd = newBMD
 
-	// globally
+	// TODO -- FIXME: remove
 	if newBMD.IsECUsed() && !oldBMD.IsECUsed() {
-		if err := mgr.initECBundles(); err != nil {
-			return err
-		}
+		mgr.OpenStreams()
 	} else if !newBMD.IsECUsed() && oldBMD.IsECUsed() {
-		mgr.closeECBundles()
+		mgr.CloseStreams()
 		return nil
 	}
 

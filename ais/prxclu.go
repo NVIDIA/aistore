@@ -383,7 +383,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	switch apiOp {
 	case apc.Keepalive:
-		// fast path(?)
+		// fast path
 		if len(apiItems) > 1 {
 			p.fastKaliveRsp(w, r, smap, config, apiItems[1] /*sid*/)
 			return
@@ -2258,32 +2258,4 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 		}
 	}
 	return false
-}
-
-//
-// (EC is active) and (is EC active?) via fastKalive
-//
-
-// default config.Timeout.EcStreams
-const (
-	ecTimeout = 10 * time.Minute
-)
-
-func isActiveEC(hdr http.Header) (ok bool) {
-	_, ok = hdr[apc.HdrActiveEC]
-	return ok
-}
-
-// (target send => primary)
-func (p *proxy) _recvActiveEC(rhdr http.Header, now int64) {
-	if isActiveEC(rhdr) {
-		p.lastEC.Store(now)
-	}
-}
-
-// (primary resp => non-primary)
-func (p *proxy) _respActiveEC(whdr http.Header, now int64) {
-	if time.Duration(now-p.lastEC.Load()) < ecTimeout {
-		whdr.Set(apc.HdrActiveEC, "true")
-	}
 }

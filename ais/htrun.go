@@ -624,7 +624,7 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	freeCargs(cargs)
 }
 
-const _callHdrLen = 5
+const lenhdr = 5
 
 func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	var (
@@ -686,7 +686,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 
 	// req header
 	if args.req.Header == nil {
-		args.req.Header = make(http.Header, _callHdrLen)
+		args.req.Header = make(http.Header, lenhdr)
 	}
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
@@ -1956,7 +1956,8 @@ func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (p
 		cargs.timeout = timeout
 	}
 	if ecActive {
-		hdr := make(http.Header, _callHdrLen)
+		// (target => primary)
+		hdr := make(http.Header, lenhdr)
 		hdr.Set(apc.HdrActiveEC, "true")
 		cargs.req.Header = hdr
 	}

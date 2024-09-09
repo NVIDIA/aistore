@@ -175,7 +175,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	if !poi.skipVC && !poi.coldGET && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
 			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-				nlog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
+				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 			}
 			cos.DrainReader(poi.r)
 			return 0, nil
@@ -984,7 +984,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	freePOI(poi)
 	if erp == nil {
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-			nlog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
+			nlog.Infoln(goi.t.String(), "gfn", goi.lom.String(), "<=", tsi.StringEx())
 		}
 		return true
 	}
@@ -1342,7 +1342,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 		cos.NamedVal64{Name: stats.AppendLatency, Value: lat},
 	)
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		nlog.Infof("APPEND %s: %s", a.lom, lat)
+		nlog.Infoln("APPEND", a.lom.String(), time.Duration(lat))
 	}
 	return
 }

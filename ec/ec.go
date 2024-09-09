@@ -115,7 +115,6 @@ const (
 	ActClearRequests  = "clear-requests"
 	ActEnableRequests = "enable-requests"
 
-	URLCT   = "ct"   // for using in URL path - requests for slices/replicas
 	URLMeta = "meta" /// .. - metadata requests
 
 	// EC switches to disk from SGL when memory pressure is high and the amount of
@@ -383,7 +382,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 	path := apc.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = bck.AddToQuery(query)
-	url := si.URL(cmn.NetIntraData) + path
+	url := si.URL(cmn.NetIntraControl) + path
 	rq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err

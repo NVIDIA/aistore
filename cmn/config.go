@@ -255,12 +255,14 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"` // read-mostly via global cmn.Rom.CplaneOperation
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto, cmn.Rom.MaxKeepalive - see below
-		MaxHostBusy     cos.Duration `json:"max_host_busy"`
-		Startup         cos.Duration `json:"startup_time"`
-		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout
-		SendFile        cos.Duration `json:"send_file_time"`
+		CplaneOperation cos.Duration `json:"cplane_operation"`  // read-mostly via global cmn.Rom.CplaneOperation
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`     // ditto, cmn.Rom.MaxKeepalive - see below
+		MaxHostBusy     cos.Duration `json:"max_host_busy"`     // 2-phase transactions and more
+		Startup         cos.Duration `json:"startup_time"`      // primary wait for joins at (primary's) startup; indirectly, cluster startup
+		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout; (2 * Startup) when zero
+		SendFile        cos.Duration `json:"send_file_time"`    // large file or blob and/or slow network
+		// intra-cluster EC streams; default=EcStreamsDflt; never timeout when negative
+		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
 	}
 	TimeoutConfToSet struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
@@ -269,6 +271,7 @@ type (
 		Startup         *cos.Duration `json:"startup_time,omitempty"`
 		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty"`
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
+		EcStreams       *cos.Duration `json:"ec_streams_time,omitempty"`
 	}
 
 	ClientConf struct {
@@ -480,10 +483,10 @@ type (
 		//   and errors returned by remote backends;
 		// - exceeding this limit is also an FSHC-trggering event; subsequently,
 		//   if FSHC confirms the problem it will disable the mountpath (see above)
-		IOErrs int `json:"io_err_limit"`
+		IOErrs int `json:"io_err_limit,omitempty"`
 		// time interval (in seconds) to accumulate soft errors;
 		// the total number by the end of the interval must not exceed `IOErrs` (above)
-		IOErrTime cos.Duration `json:"io_err_time"`
+		IOErrTime cos.Duration `json:"io_err_time,omitempty"`
 
 		// whether FSHC is enabled (note: disabling FSHC is _not_ recommended)
 		Enabled bool `json:"enabled"`
@@ -507,18 +510,7 @@ type (
 		Enabled *bool   `json:"enabled,omitempty"`
 	}
 
-	// keepalive tracker
-	KeepaliveTrackerConf struct {
-		Name     string       `json:"name"`     // "heartbeat" (other enumerated values TBD)
-		Interval cos.Duration `json:"interval"` // keepalive interval
-		Factor   uint8        `json:"factor"`   // only average
-	}
-	KeepaliveTrackerConfToSet struct {
-		Interval *cos.Duration `json:"interval,omitempty"`
-		Name     *string       `json:"name,omitempty" list:"readonly"`
-		Factor   *uint8        `json:"factor,omitempty"`
-	}
-
+	// keepalive
 	KeepaliveConf struct {
 		Proxy       KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
 		Target      KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
@@ -528,6 +520,16 @@ type (
 		Proxy       *KeepaliveTrackerConfToSet `json:"proxy,omitempty"`
 		Target      *KeepaliveTrackerConfToSet `json:"target,omitempty"`
 		RetryFactor *uint8                     `json:"retry_factor,omitempty"`
+	}
+	KeepaliveTrackerConf struct {
+		Name     string       `json:"name"`     // "heartbeat"
+		Interval cos.Duration `json:"interval"` // keepalive interval
+		Factor   uint8        `json:"factor"`   // only average
+	}
+	KeepaliveTrackerConfToSet struct {
+		Interval *cos.Duration `json:"interval,omitempty"`
+		Name     *string       `json:"name,omitempty" list:"readonly"`
+		Factor   *uint8        `json:"factor,omitempty"`
 	}
 
 	DownloaderConf struct {
@@ -1650,6 +1652,12 @@ func (c *TCBConf) Validate() error {
 // TimeoutConf //
 /////////////////
 
+const (
+	EcStreamsEver = -time.Second
+	EcStreamsDflt = 10 * time.Minute
+	EcStreamsMini = 5 * time.Minute
+)
+
 func (c *TimeoutConf) Validate() error {
 	if c.CplaneOperation.D() < 10*time.Millisecond {
 		return fmt.Errorf("invalid timeout.cplane_operation=%s", c.CplaneOperation)
@@ -1670,6 +1678,11 @@ func (c *TimeoutConf) Validate() error {
 	}
 	if c.SendFile.D() < time.Minute {
 		return fmt.Errorf("invalid timeout.send_file_time=%s (cannot be less than 1m)", c.SendFile)
+	}
+	// must be greater than (2 * keepalive.interval*keepalive.factor)
+	if c.EcStreams > 0 && c.EcStreams.D() < EcStreamsMini {
+		return fmt.Errorf("invalid timeout.ec_streams_time=%s (never timeout: %v; minimum: %s; default: %s)",
+			c.EcStreams, EcStreamsEver, EcStreamsMini, EcStreamsDflt)
 	}
 	return nil
 }

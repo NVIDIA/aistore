@@ -193,7 +193,7 @@ func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) 
 		nl.SetStats(tsi.ID(), stats)
 
 		if abortedSnap != msg.AbortedX && cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Infof("Warning: %s: %t vs %t [%s]", msg, abortedSnap, msg.AbortedX, nl.String())
+			nlog.Infoln("Warning:", msg.String(), "aborted", abortedSnap, "vs", msg.AbortedX, nl.String())
 		}
 		aborted = aborted || abortedSnap
 	}
@@ -430,7 +430,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
 		} else if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
+			nlog.Errorln(n.p.String(), nl.String(), "node", res.si.StringEx(), res.unwrap())
 		}
 	}
 	freeBcastRes(results)
@@ -463,14 +463,17 @@ func (n *notifs) ListenSmapChanged() {
 		return
 	}
 	var (
-		remnl = make(map[string]nl.Listener)
-		remid = make(cos.StrKVs)
+		remnl map[string]nl.Listener
+		remid cos.StrKVs
 	)
 	n.nls.mtx.RLock()
 	for uuid, nl := range n.nls.m {
 		nl.RLock()
 		for sid := range nl.ActiveNotifiers() {
 			if node := smap.GetActiveNode(sid); node == nil {
+				if remnl == nil {
+					remnl, remid = _remini()
+				}
 				remnl[uuid] = nl
 				remid[uuid] = sid
 				break
@@ -521,6 +524,10 @@ repeat:
 	// cleanup
 	clear(remnl)
 	clear(remid)
+}
+
+func _remini() (map[string]nl.Listener, cos.StrKVs) {
+	return make(map[string]nl.Listener, 1), make(cos.StrKVs, 1)
 }
 
 func (n *notifs) MarshalJSON() ([]byte, error) {

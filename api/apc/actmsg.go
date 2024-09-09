@@ -143,6 +143,11 @@ const (
 	NodeDecommission = "decommission"
 )
 
+const (
+	ActEcOpen  = "open-ec-streams"
+	ActEcClose = "close-ec-streams"
+)
+
 // ActMsg is a JSON-formatted control structures used in a majority of API calls
 type (
 	ActMsg struct {

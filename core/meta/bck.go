@@ -187,10 +187,11 @@ func (b *Bck) init(bmd *BMD) error {
 func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, ecode int) {
 	bmd := bowner.Get()
 	all := bmd.getAllByName(bckName)
-	if all == nil {
+	switch {
+	case all == nil:
 		err = cmn.NewErrBckNotFound(&cmn.Bck{Name: bckName})
 		ecode = http.StatusNotFound
-	} else if len(all) == 1 {
+	case len(all) == 1:
 		bck = &all[0]
 		if bck.Props == nil {
 			err = cmn.NewErrBckNotFound(bck.Bucket())
@@ -199,12 +200,11 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, ecode i
 			debug.Assert(apc.IsRemoteProvider(backend.Provider))
 			err = backend.init(bmd)
 		}
-	} else {
-		err = fmt.Errorf("cannot unambiguously resolve bucket name %q to a single bucket (%v)",
-			bckName, all)
+	default:
+		err = fmt.Errorf("cannot unambiguously resolve bucket name %q to a single bucket (%v)", bckName, all)
 		ecode = http.StatusUnprocessableEntity
 	}
-	return
+	return bck, err, ecode
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }

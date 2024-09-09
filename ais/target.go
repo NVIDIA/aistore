@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -485,7 +484,7 @@ func (t *target) initRecvHandlers() {
 		{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
 		{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
 		{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
-		{r: apc.EC, h: t.ecHandler, net: accessNetIntraData},
+		{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},
 		{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
 		{r: apc.Txn, h: t.txnHandler, net: accessNetIntraControl},
 		{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
@@ -636,17 +635,6 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPost, http.MethodPut)
-	}
-}
-
-// verb /v1/slices
-// Non-public inerface
-func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		t.httpecget(w, r)
-	default:
-		cmn.WriteErr405(w, r, http.MethodGet)
 	}
 }
 
@@ -1214,85 +1202,6 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 	}
 	lom.Persist()
-}
-
-//
-// httpec* handlers
-//
-
-// Returns a slice. Does not use GFN.
-func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(3, apc.URLPathEC.L, false)
-	apireq.bckIdx = 1
-	if err := t.parseReq(w, r, apireq); err != nil {
-		apiReqFree(apireq)
-		return
-	}
-	switch apireq.items[0] {
-	case ec.URLMeta:
-		t.sendECMetafile(w, r, apireq.bck, apireq.items[2])
-	case ec.URLCT:
-		lom := core.AllocLOM(apireq.items[2])
-		t.sendECCT(w, r, apireq.bck, lom)
-		core.FreeLOM(lom)
-	default:
-		t.writeErrURL(w, r)
-	}
-	apiReqFree(apireq)
-}
-
-// Returns a CT's metadata.
-func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
-	if err := bck.Init(t.owner.bmd); err != nil {
-		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
-			t.writeErr(w, r, err, Silent)
-			return
-		}
-	}
-	md, err := ec.ObjectMetadata(bck, objName)
-	if err != nil {
-		if os.IsNotExist(err) {
-			t.writeErr(w, r, err, http.StatusNotFound, Silent)
-		} else {
-			t.writeErr(w, r, err, http.StatusInternalServerError, Silent)
-		}
-		return
-	}
-	b := md.NewPack()
-	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
-	w.Write(b)
-}
-
-func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM) {
-	if err := lom.InitBck(bck.Bucket()); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = lom.InitBck(bck.Bucket())
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-	sliceFQN := lom.Mountpath().MakePathFQN(bck.Bucket(), fs.ECSliceType, lom.ObjName)
-	finfo, err := os.Stat(sliceFQN)
-	if err != nil {
-		t.writeErr(w, r, err, http.StatusNotFound, Silent)
-		return
-	}
-	file, err := os.Open(sliceFQN)
-	if err != nil {
-		t.FSHC(err, lom.Mountpath(), sliceFQN)
-		t.writeErr(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set(cos.HdrContentLength, strconv.FormatInt(finfo.Size(), 10))
-	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
-	cos.Close(file)
-	if err != nil {
-		nlog.Errorf("Failed to send slice %s: %v", lom.Cname(), err)
-	}
 }
 
 // called under lock

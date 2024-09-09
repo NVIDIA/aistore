@@ -486,7 +486,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		pid := apireq.query.Get(apc.QparamProxyID)
-		nlog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
+		nlog.Infoln(r.Method, apireq.bck, "<=", pid)
 	}
 
 	debug.Assert(!apireq.bck.IsAIS())

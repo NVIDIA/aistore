@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -175,9 +176,8 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 
 // DELETE /s3/<bucket-name> (TODO: AWS allows to delete bucket only if it is empty)
 func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, bucket)
+	if bck == nil {
 		return
 	}
 	if err := bck.Allow(apc.AceDestroyBucket); err != nil {
@@ -200,22 +200,21 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 }
 
 func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []string) {
-	bucket := parts[0]
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, parts[0] /*bucket*/)
+	if bck == nil {
 		return
 	}
 	if err := bck.Allow(apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
-	smap := p.owner.smap.get()
 	objName := s3.ObjName(parts)
 	if err := cmn.ValidateObjName(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
+
+	smap := p.owner.smap.get()
 	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
@@ -229,9 +228,8 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 // DELETE /s3/i<bucket-name>?delete
 // Delete a list of objects
 func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, bucket)
+	if bck == nil {
 		return
 	}
 	if err := bck.Allow(apc.AceObjDELETE); err != nil {
@@ -292,9 +290,8 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 
 // HEAD /s3/<bucket-name>
 func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, bucket)
+	if bck == nil {
 		return
 	}
 	if err := bck.Allow(apc.AceBckHEAD); err != nil {
@@ -317,9 +314,8 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 // GET /s3/<bucket-name>
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string, q url.Values) {
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, bucket)
+	if bck == nil {
 		return
 	}
 	amsg := &apc.ActMsg{Action: apc.ActList}
@@ -431,9 +427,8 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	// src
-	bckSrc, err, ecode := meta.InitByNameOnly(parts[0], p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bckSrc := p.initByNameOnly(w, r, parts[0])
+	if bckSrc == nil {
 		return
 	}
 	if err := bckSrc.Allow(apc.AceGET); err != nil {
@@ -441,27 +436,24 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	// dst
-	bckDst, err, ecode := meta.InitByNameOnly(items[0], p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bckDst := p.initByNameOnly(w, r, items[0])
+	if bckDst == nil {
 		return
 	}
-	var (
-		si   *meta.Snode
-		smap = p.owner.smap.get()
-	)
-	if err = bckDst.Allow(apc.AcePUT); err != nil {
+	if err := bckDst.Allow(apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
+
 	objName := strings.Trim(parts[1], "/")
-	si, err = smap.HrwName2T(bckSrc.MakeUname(objName))
+	smap := p.owner.smap.get()
+	si, err := smap.HrwName2T(bckSrc.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
+		nlog.Infoln("COPY:", r.Method, bckSrc.Cname(objName), "=>", bckDst.Cname(""), items, si.StringEx())
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
@@ -471,18 +463,11 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 // PUT /s3/<bucket-name>/<object-name> - with empty `cos.S3HdrObjSrc`
 // (compare with p.copyObjS3)
 func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bucket := items[0]
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
+	if bck == nil {
 		return
 	}
-	var (
-		netPub string
-		si     *meta.Snode
-		smap   = p.owner.smap.get()
-	)
-	if err = bck.Allow(apc.AcePUT); err != nil {
+	if err := bck.Allow(apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -495,34 +480,29 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
+
+	smap := p.owner.smap.get()
+	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	started := time.Now()
+
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
 // GET /s3/<bucket-name>/<object-name>
 func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, listMultipart bool) {
-	bucket := items[0]
-
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
+	if bck == nil {
 		return
 	}
-	var (
-		si     *meta.Snode
-		netPub string
-		smap   = p.owner.smap.get()
-	)
-	if err = bck.Allow(apc.AceGET); err != nil {
+	if err := bck.Allow(apc.AceGET); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -539,15 +519,18 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
+
+	smap := p.owner.smap.get()
+	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	started := time.Now()
+
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
@@ -605,18 +588,17 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
 	}
-	bucket, objName := items[0], s3.ObjName(items)
-	if err := cmn.ValidateObjName(objName); err != nil {
-		s3.WriteErr(w, r, err, 0)
-		return
-	}
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
+	if bck == nil {
 		return
 	}
 	if err := bck.Allow(apc.AceObjHEAD); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
+		return
+	}
+	objName := s3.ObjName(items)
+	if err := cmn.ValidateObjName(objName); err != nil {
+		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -626,7 +608,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 
 	p.reverseNodeRequest(w, r, si)
@@ -634,22 +616,16 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 // DELETE /s3/<bucket-name>/<object-name>
 func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bucket := items[0]
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
-		return
-	}
-	var (
-		si   *meta.Snode
-		smap = p.owner.smap.get()
-	)
-	if err = bck.Allow(apc.AceObjDELETE); err != nil {
-		s3.WriteErr(w, r, err, http.StatusForbidden)
-		return
-	}
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
+		return
+	}
+	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
+	if bck == nil {
+		return
+	}
+	if err := bck.Allow(apc.AceObjDELETE); err != nil {
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -657,13 +633,15 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	si, err = smap.HrwName2T(bck.MakeUname(objName))
+
+	smap := p.owner.smap.get()
+	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
@@ -672,9 +650,8 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 
 // GET /s3/<bucket-name>?versioning
 func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, bucket)
+	if bck == nil {
 		return
 	}
 	resp := s3.NewVersioningConfiguration(bck.Props.Versioning.Enabled)
@@ -700,9 +677,8 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
 	}
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
+	bck := p.initByNameOnly(w, r, bucket)
+	if bck == nil {
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
@@ -724,4 +700,56 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 	if _, err := p.setBprops(msg, bck, nprops); err != nil {
 		s3.WriteErr(w, r, err, 0)
 	}
+}
+
+//
+// misc. utils
+//
+
+func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket string) *meta.Bck {
+	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	if err != nil {
+		s3.WriteErr(w, r, err, ecode)
+		return nil
+	}
+	if err = p.onEC(bck); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return nil
+	}
+	return bck
+}
+
+// either reverse-proxy call _or_ HTTP-redirect to a designated node
+// see also: docs/s3compat.md
+func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redirectURL, bucket string) {
+	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
+		p.reverseNodeRequest(w, r, si)
+		return
+	}
+
+	h := w.Header()
+	h.Set(cos.HdrLocation, redirectURL)
+	h.Set(cos.HdrContentType, "text/xml; charset=utf-8")
+	h.Set(cos.HdrServer, s3.AISServer)
+	w.WriteHeader(http.StatusTemporaryRedirect)
+	ep := extractEndpoint(redirectURL)
+	body := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+		"<Error><Code>TemporaryRedirect</Code><Message>Redirect</Message>" +
+		"<Endpoint>" + ep + "</Endpoint>" +
+		"<Bucket>" + bucket + "</Bucket></Error>"
+	fmt.Fprint(w, body)
+}
+
+// extractEndpoint extracts an S3 endpoint from the full URL path.
+// Endpoint is a host name with port and root URL path (if exists).
+// E.g. for AIS `http://localhost:8080/s3/bck1/obj1` the endpoint
+// would be `localhost:8080/s3`
+func extractEndpoint(path string) string {
+	ep := path
+	if idx := strings.Index(ep, "/"+apc.S3); idx > 0 {
+		ep = ep[:idx+3]
+	}
+	ep = strings.TrimPrefix(ep, "http://")
+	ep = strings.TrimPrefix(ep, "https://")
+	return ep
 }

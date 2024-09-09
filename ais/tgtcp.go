@@ -1170,7 +1170,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 	}
 	ntid := msg.UUID
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		nlog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
+		nlog.Infoln(t.String(), msg.String(), newSmap.String(), "join", meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
 	case apc.ActStartGFN:
@@ -1188,7 +1188,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Warningf("[health] %s: standing by...", t)
+			nlog.Warningln("[health]", t.String(), "standing by...")
 		}
 	} else if !t.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)

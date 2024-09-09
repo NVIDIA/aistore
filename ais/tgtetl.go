@@ -81,7 +81,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infoln(t.String() + ": " + initMsg.String())
+		nlog.Infoln(t.String(), initMsg.String())
 	}
 }
 
