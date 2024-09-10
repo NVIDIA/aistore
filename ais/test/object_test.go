@@ -1392,7 +1392,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]",
 			expectedLength, len(outputBytes))
 	}
-	for i := range len(expectedBytes) {
+	for i := range expectedBytes {
 		if expectedBytes[i] != outputBytes[i] {
 			t.Errorf("Byte mismatch. Expected: %v, Actual: %v", string(expectedBytes), string(outputBytes))
 		}

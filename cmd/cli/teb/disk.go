@@ -119,7 +119,7 @@ func _flt(cols []*header, regex *regexp.Regexp) []*header {
 }
 
 func _idx(cols []*header, name string) int {
-	for i := range len(cols) {
+	for i := range cols {
 		if cols[i].name == name {
 			return i
 		}

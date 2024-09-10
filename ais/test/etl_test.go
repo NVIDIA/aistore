@@ -100,7 +100,7 @@ func tfRecordsEqual(examples1, examples2 []*core.TFExample) (bool, error) {
 		return examples2[i].GetFeature("__key__").String() < examples2[j].GetFeature("__key__").String()
 	})
 
-	for i := range len(examples1) {
+	for i := range examples1 {
 		if !reflect.DeepEqual(examples1[i].ProtoReflect(), examples2[i].ProtoReflect()) {
 			return false, nil
 		}

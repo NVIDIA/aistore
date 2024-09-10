@@ -65,7 +65,7 @@ var _ = Describe("Housekeeper", func() {
 
 		time.Sleep(20 * time.Millisecond)
 		// "foo" and "bar" should fire at the start (no initial interval)
-		for idx := range len(fired) {
+		for idx := range fired {
 			Expect(fired[idx]).To(BeTrue())
 			fired[idx] = false
 		}

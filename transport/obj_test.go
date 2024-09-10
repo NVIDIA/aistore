@@ -347,7 +347,7 @@ func TestSendCallback(t *testing.T) {
 		posted    = make([]*randReader, objectCnt)
 	)
 	random := newRand(mono.NanoTime())
-	for idx := range len(posted) {
+	for idx := range posted {
 		hdr, rr := makeRandReader(random, false)
 		mu.Lock()
 		posted[idx] = rr
