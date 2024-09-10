@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
@@ -67,19 +69,29 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 }
 
 func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.parseURL(w, r, apc.URLPathEC.L, 1, false)
+	const (
+		hkname   = "close-ec-streams" + hk.NameSuffix
+		postpone = time.Minute
+	)
+	items, err := t.parseURL(w, r, apc.URLPathEC.L, 1, false)
 	if err != nil {
 		return
 	}
-	action := apiItems[0]
+	action := items[0]
 	switch action {
 	case apc.ActEcOpen:
+		hk.UnregIf(hkname, closeEc) // just in case
 		ec.ECM.OpenStreams(false /*with refc*/)
 	case apc.ActEcClose:
-		ec.ECM.CloseStreams(false /*with refc*/)
+		hk.Reg(hkname, closeEc, postpone)
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}
+}
+
+func closeEc(int64) time.Duration {
+	ec.ECM.CloseStreams(false /*with refc*/)
+	return hk.UnregInterval
 }
 
 func errActEc(act string) error {

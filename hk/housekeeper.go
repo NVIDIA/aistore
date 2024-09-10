@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+const workChanCap = 48
+
 const NameSuffix = ".gc" // reg name suffix
 
 const (
@@ -27,12 +29,11 @@ const (
 )
 
 type (
-	hkcb    func(now int64) time.Duration
-	request struct {
-		f               hkcb
-		name            string
-		initialInterval time.Duration
-		registering     bool
+	hkcb func(now int64) time.Duration
+	op   struct {
+		f        hkcb
+		name     string
+		interval time.Duration
 	}
 	timedAction struct {
 		f          hkcb
@@ -41,20 +42,20 @@ type (
 	}
 	timedActions []timedAction
 
-	housekeeper struct {
+	hk struct {
 		stopCh  cos.StopCh
 		sigCh   chan os.Signal
 		actions *timedActions
 		timer   *time.Timer
-		workCh  chan request
+		workCh  chan op
 		running atomic.Bool
 	}
 )
 
-var DefaultHK *housekeeper
+var HK *hk
 
 // interface guard
-var _ cos.Runner = (*housekeeper)(nil)
+var _ cos.Runner = (*hk)(nil)
 
 func TestInit() {
 	_init(false)
@@ -65,18 +66,166 @@ func Init() {
 }
 
 func _init(mustRun bool) {
-	DefaultHK = &housekeeper{
-		workCh:  make(chan request, 512),
+	HK = &hk{
+		workCh:  make(chan op, workChanCap),
 		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},
 	}
-	DefaultHK.stopCh.Init()
+	HK.stopCh.Init()
 	if mustRun {
-		DefaultHK.running.Store(false)
+		HK.running.Store(false)
 	} else {
-		DefaultHK.running.Store(true) // tests only
+		HK.running.Store(true) // tests only
 	}
-	heap.Init(DefaultHK.actions)
+	heap.Init(HK.actions)
+}
+
+func WaitStarted() {
+	for !HK.running.Load() {
+		time.Sleep(time.Second)
+	}
+}
+
+func Reg(name string, f hkcb, interval time.Duration) {
+	debug.Assert(nlog.Stopping() || HK.running.Load())
+	debug.Assert(interval != UnregInterval)
+
+	HK.workCh <- op{name: name, f: f, interval: interval}
+
+	if l, c := len(HK.workCh), workChanCap; l >= (c - c>>3) {
+		nlog.Errorln(cos.ErrWorkChanFull, "len", l, "cap", c)
+	}
+}
+
+func Unreg(name string) {
+	debug.Assert(nlog.Stopping() || HK.running.Load())
+	HK.workCh <- op{name: name, interval: UnregInterval}
+}
+
+// non-presence is fine
+func UnregIf(name string, f hkcb) {
+	HK.workCh <- op{name: name, f: f, interval: UnregInterval}
+}
+
+////////
+// hk //
+////////
+
+func (*hk) Name() string { return "hk" }
+
+func (hk *hk) terminate() {
+	hk.timer.Stop()
+	hk.running.Store(false)
+}
+
+func (*hk) Stop(error) { HK.stopCh.Close() }
+
+func (hk *hk) Run() (err error) {
+	signal.Notify(hk.sigCh,
+		syscall.SIGHUP,  // kill -SIGHUP
+		syscall.SIGINT,  // kill -SIGINT (Ctrl-C)
+		syscall.SIGTERM, // kill -SIGTERM
+		syscall.SIGQUIT, // kill -SIGQUIT
+	)
+	hk.timer = time.NewTimer(time.Hour)
+	hk.running.Store(true)
+	err = hk._run()
+	hk.terminate()
+	return
+}
+
+func (hk *hk) _run() error {
+	for {
+		select {
+		case <-hk.stopCh.Listen():
+			return nil
+
+		case <-hk.timer.C:
+			if hk.actions.Len() == 0 {
+				break
+			}
+			// call and update the heap
+			var (
+				item    = hk.actions.Peek()
+				started = mono.NanoTime()
+				ival    = item.f(started)
+			)
+			if ival == UnregInterval {
+				heap.Remove(hk.actions, 0)
+			} else {
+				now := mono.NanoTime()
+				item.updateTime = now + ival.Nanoseconds()
+				heap.Fix(hk.actions, 0)
+
+				// either extremely loaded or
+				// lock/sleep type contention inside the callback
+				if d := time.Duration(now - started); d > time.Second {
+					nlog.Warningln("call[", item.name, "] duration exceeds 1s:", d.String())
+				}
+			}
+			hk.updateTimer()
+
+		case op := <-hk.workCh:
+			idx := hk.byName(op.name)
+			if op.interval != UnregInterval {
+				if idx >= 0 {
+					nlog.Errorln("duplicated name [", op.name, "] - not registering")
+					break
+				}
+				ival := op.interval
+				now := mono.NanoTime()
+				if op.interval == 0 {
+					// calling right away
+					ival = op.f(now)
+					if ival == UnregInterval {
+						nlog.Errorln("illegal usage [", op.name, "] - not registering")
+						debug.Assert(false)
+						break
+					}
+				}
+				// next time
+				nt := now + ival.Nanoseconds()
+				heap.Push(hk.actions, timedAction{name: op.name, f: op.f, updateTime: nt})
+			} else {
+				if idx >= 0 {
+					heap.Remove(hk.actions, idx)
+				} else if op.f != nil {
+					// via UnregIf
+					nlog.Infoln(op.name, "not found (never registered?)")
+				} else {
+					nlog.Warningln(op.name, "not found (already removed?)")
+					debug.Assert(false, op.name)
+				}
+			}
+			hk.updateTimer()
+
+		case s, ok := <-hk.sigCh:
+			if ok {
+				signal.Stop(hk.sigCh)
+				err := cos.NewSignalError(s.(syscall.Signal))
+				hk.Stop(err)
+				return err
+			}
+		}
+	}
+}
+
+func (hk *hk) updateTimer() {
+	if hk.actions.Len() == 0 {
+		hk.timer.Stop()
+		return
+	}
+	d := hk.actions.Peek().updateTime - mono.NanoTime()
+	hk.timer.Reset(time.Duration(d))
+}
+
+func (hk *hk) byName(name string) int {
+	for i, tc := range *hk.actions {
+		if tc.name == name {
+			return i
+		}
+	}
+	return -1
 }
 
 //////////////////
@@ -96,137 +245,3 @@ func (tc *timedActions) Pop() any {
 	*tc = old[0 : n-1]
 	return item
 }
-
-/////////////////
-// housekeeper //
-/////////////////
-
-func WaitStarted() {
-	for !DefaultHK.running.Load() {
-		time.Sleep(time.Second)
-	}
-}
-
-func IsReg(name string) bool { return DefaultHK.byName(name) != -1 } // see "duplicated" below
-
-func Reg(name string, f hkcb, interval time.Duration) {
-	debug.Assert(nlog.Stopping() || DefaultHK.running.Load())
-	DefaultHK.workCh <- request{
-		registering:     true,
-		name:            name,
-		f:               f,
-		initialInterval: interval,
-	}
-}
-
-func Unreg(name string) {
-	debug.Assert(nlog.Stopping() || DefaultHK.running.Load())
-	DefaultHK.workCh <- request{
-		registering: false,
-		name:        name,
-	}
-}
-
-func (*housekeeper) Name() string { return "housekeeper" }
-
-func (hk *housekeeper) terminate() {
-	hk.timer.Stop()
-	hk.running.Store(false)
-}
-
-func (hk *housekeeper) Run() (err error) {
-	signal.Notify(hk.sigCh,
-		syscall.SIGHUP,  // kill -SIGHUP
-		syscall.SIGINT,  // kill -SIGINT (Ctrl-C)
-		syscall.SIGTERM, // kill -SIGTERM
-		syscall.SIGQUIT, // kill -SIGQUIT
-	)
-	hk.timer = time.NewTimer(time.Hour)
-	hk.running.Store(true)
-	err = hk._run()
-	hk.terminate()
-	return
-}
-
-func (hk *housekeeper) _run() error {
-	for {
-		select {
-		case <-hk.stopCh.Listen():
-			return nil
-		case <-hk.timer.C:
-			if hk.actions.Len() == 0 {
-				break
-			}
-			// run the callback and update heap
-			var (
-				item     = hk.actions.Peek()
-				started  = mono.NanoTime()
-				interval = item.f(started)
-			)
-			if interval == UnregInterval {
-				heap.Remove(hk.actions, 0)
-			} else {
-				now := mono.NanoTime()
-				item.updateTime = now + interval.Nanoseconds()
-				heap.Fix(hk.actions, 0)
-				// system under extreme pressure or
-				// an illegal lock/sleep type contention inside the callback
-				if d := time.Duration(now - started); d > time.Second {
-					nlog.Warningln("hk call(", item.name, ") duration exceeds 1s:", d.String())
-				}
-			}
-			hk.updateTimer()
-		case req := <-hk.workCh:
-			if req.registering {
-				// duplicate name
-				if hk.byName(req.name) != -1 {
-					nlog.Errorf("hk: duplicated name %q - not registering", req.name)
-					break
-				}
-				initialInterval := req.initialInterval
-				now := mono.NanoTime()
-				if req.initialInterval == 0 {
-					initialInterval = req.f(now)
-				}
-				nt := now + initialInterval.Nanoseconds() // next time
-				heap.Push(hk.actions, timedAction{name: req.name, f: req.f, updateTime: nt})
-			} else {
-				idx := hk.byName(req.name)
-				if idx >= 0 {
-					heap.Remove(hk.actions, idx)
-				} else {
-					debug.Assert(false, req.name)
-					nlog.Warningln(req.name, "already removed")
-				}
-			}
-			hk.updateTimer()
-		case s, ok := <-hk.sigCh:
-			if ok {
-				signal.Stop(hk.sigCh)
-				err := cos.NewSignalError(s.(syscall.Signal))
-				hk.Stop(err)
-				return err
-			}
-		}
-	}
-}
-
-func (hk *housekeeper) updateTimer() {
-	if hk.actions.Len() == 0 {
-		hk.timer.Stop()
-		return
-	}
-	d := hk.actions.Peek().updateTime - mono.NanoTime()
-	hk.timer.Reset(time.Duration(d))
-}
-
-func (hk *housekeeper) byName(name string) int {
-	for i, tc := range *hk.actions {
-		if tc.name == name {
-			return i
-		}
-	}
-	return -1
-}
-
-func (*housekeeper) Stop(_ error) { DefaultHK.stopCh.Close() }

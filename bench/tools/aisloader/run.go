@@ -351,7 +351,7 @@ func Start(version, buildtime string) (err error) {
 	// empty config to use memsys constants;
 	// alternatively: "memsys": { "min_free": "2gb", ... }
 	hk.Init()
-	go hk.DefaultHK.Run()
+	go hk.HK.Run()
 	hk.WaitStarted()
 
 	config := &cmn.Config{}

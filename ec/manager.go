@@ -122,9 +122,10 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 	mgr.respBundle.Store(bundle.New(client, respSbArgs))
 }
 
-func (mgr *Manager) CloseStreams(withRefc bool) {
-	if withRefc {
+func (mgr *Manager) CloseStreams(justRefc bool) {
+	if justRefc {
 		mgr._refc.Dec()
+		return
 	}
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return

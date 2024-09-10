@@ -1,7 +1,7 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package hk
 

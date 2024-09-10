@@ -193,7 +193,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
 	hk.Init()
-	daemon.rg.add(hk.DefaultHK)
+	daemon.rg.add(hk.HK)
 
 	// K8s
 	k8s.Init()
@@ -361,11 +361,11 @@ func (g *rungroup) runAll(mainRunner cos.Runner) error {
 	g.errCh = make(chan runRet, len(g.rs))
 
 	// run all, housekeeper first
-	go g.run(hk.DefaultHK)
+	go g.run(hk.HK)
 	runtime.Gosched()
 	hk.WaitStarted()
 	for _, r := range g.rs {
-		if r.Name() == hk.DefaultHK.Name() {
+		if r.Name() == hk.HK.Name() {
 			continue
 		}
 		go g.run(r)
