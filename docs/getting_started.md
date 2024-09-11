@@ -467,82 +467,11 @@ The command randomly shuffles existing short tests and then, depending on your p
 
 ## Running AIStore in Google Colab
 
-To quickly set up AIStore in a [Google Colab](https://colab.google/) notebook, follow the steps below or open the ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb): 
+To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https://colab.research.google.com/) notebook, use our ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb): 
 
-**Note:**
-- This sample installs Go v1.22.3 - the Go version and toolchain that is supported at the time of this writing.
-- Run the code blocks below in separate cells of your notebook.
-
-### Step 1: Install Go
-```bash
-# Download and install Go
-!wget https://go.dev/dl/go1.22.3.linux-amd64.tar.gz
-!sudo tar -C /usr/local -xzf go1.22.3.linux-amd64.tar.gz
-!mkdir -p /content/go
-
-# Set environment variables
-import os
-os.environ['GOPATH'] = '/content/go'
-os.environ['PATH'] += ':/usr/local/go/bin:/content/go/bin'
-
-# Verify the Go installation
-!go version
-```
-
-### Step 2: Install and Run AIStore
-
-After installing Go, you can proceed to install and run AIStore:
-
-```bash
-
-# Clone the AIStore repository
-!git clone https://github.com/NVIDIA/aistore.git
-
-# Deploy AIStore in the background
-!nohup bash -c "PORT=51080 make -C aistore deploy <<< $'1\n1'" > output.log 2>&1 &
-```
-
-**Note:** The AIStore deployment runs as a background process. Even after the command completes, AIStore may take some time to fully initialize. 
-
-### Step 3: Monitor AIStore Logs
-
-You can monitor AIStore's startup process by checking the logs:
-
-```bash
-!cat output.log
-```
-
-### Step 4: Test AIStore
-
-Once your cluster is up and running, you can test it using one of the following methods:
-
-#### Option 1: Using `curl`
-
-```bash
-# Verify AIStore with curl
-!curl http://localhost:51080/s3
-```
-
-#### Option 2: Using the AIStore Python Client
-
-```python
-# Install the AIStore Python client
-!pip install aistore
-
-from aistore import Client
-
-# Initialize the AIStore client and check cluster info
-ais_client = Client("http://localhost:51080")
-ais_client.cluster().get_info()
-```
-
-#### Option 3: Using the AIStore CLI
-
-```bash
-# Install and use the AIStore CLI
-!make -C aistore cli
-!AIS_ENDPOINT=http://localhost:51080 ais show cluster
-```
+**Important Notes:**
+- This sample installs Go v1.22.3, the supported Go version and toolchain at the time of writing.
+- AIStore runs in the background. However, if you stop any cell, it sends a "SIGINT" (termination signal) to all background processes, terminating AIStore. To restart AIStore, simply rerun the relevant cell.
 
 ## Kubernetes Playground
 
