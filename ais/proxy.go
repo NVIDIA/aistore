@@ -1444,6 +1444,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 	case apc.ActECEncode:
+		if cmn.Rom.EcStreams() > 0 {
+			if err = p._onEC(mono.NanoTime()); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+		}
 		if xid, err = p.ecEncode(bck, msg); err != nil {
 			p.writeErr(w, r, err)
 			return

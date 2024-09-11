@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -375,6 +376,12 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 		return "", cmn.NewErrBckNotFound(bck.Bucket())
 	}
 	bck.Props = bprops
+
+	if nprops.EC.Enabled && cmn.Rom.EcStreams() > 0 {
+		if err := p._onEC(mono.NanoTime()); err != nil {
+			return "", err
+		}
+	}
 
 	// 2. begin
 	switch msg.Action {

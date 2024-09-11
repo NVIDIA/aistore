@@ -36,7 +36,7 @@ func (p *proxy) httpecpost(w http.ResponseWriter, r *http.Request) {
 	case apc.ActEcOpen:
 		p._setActiveEC(mono.NanoTime())
 	case apc.ActEcClose:
-		// TODO -- FIXME: niy
+		p._setActiveEC(0)
 	default:
 		p.writeErr(w, r, errActEc(action))
 	}
@@ -51,11 +51,23 @@ func isActiveEC(hdr http.Header) (ok bool) {
 	return ok
 }
 
-// (target send => primary)
+// (target kalive => primary)
 func (p *proxy) _recvActiveEC(hdr http.Header, now int64) {
 	if isActiveEC(hdr) {
 		p._setActiveEC(now)
+		return
 	}
+	// check if time has come to close (easy checks first)
+	if p.ec.rust == 0 || time.Duration(now-p.ec.rust) < cmn.Rom.EcStreams() {
+		return
+	}
+	last := p.ec.last.Load()
+	if last == 0 || time.Duration(now-last) < cmn.Rom.EcStreams() {
+		return
+	}
+
+	// NOTE: go ahead and close EC streams (with one last check inside)
+	p.offEC(last)
 }
 
 func (p *proxy) _setActiveEC(now int64) {
@@ -63,15 +75,22 @@ func (p *proxy) _setActiveEC(now int64) {
 	p.ec.rust = now
 }
 
-// (primary resp => non-primary)
+// (primary kalive response => non-primary)
 func (p *proxy) _respActiveEC(hdr http.Header, now int64) {
 	tout := cmn.Rom.EcStreams()
-	if time.Duration(now-p.ec.last.Load()) < tout {
+	last := p.ec.last.Load()
+	if last != 0 && time.Duration(now-last) < tout {
 		hdr.Set(apc.HdrActiveEC, "true")
 	}
 }
 
-const ecStreamsNack = max(cmn.EcStreamsMini>>1, 3*time.Minute)
+//
+// primary action: on | off
+//
+
+const (
+	ecStreamsNack = max(cmn.EcStreamsMini>>1, 3*time.Minute)
+)
 
 func (p *proxy) onEC(bck *meta.Bck) error {
 	if !bck.Props.EC.Enabled || cmn.Rom.EcStreams() < 0 /* cmn.EcStreamsEver */ {
@@ -79,7 +98,7 @@ func (p *proxy) onEC(bck *meta.Bck) error {
 	}
 	now := mono.NanoTime()
 	debug.Assert(cmn.Rom.EcStreams() >= cmn.EcStreamsMini, cmn.Rom.EcStreams(), " vs ", cmn.EcStreamsMini)
-	if time.Duration(now-p.ec.rust) < ecStreamsNack {
+	if p.ec.rust != 0 && time.Duration(now-p.ec.rust) < ecStreamsNack {
 		return nil
 	}
 	return p._onEC(now)
@@ -87,15 +106,22 @@ func (p *proxy) onEC(bck *meta.Bck) error {
 
 func (p *proxy) _onEC(now int64) error {
 	last := p.ec.last.Load()
-	if time.Duration(now-last) < ecStreamsNack {
+	if last != 0 && time.Duration(now-last) < ecStreamsNack {
 		return nil
 	}
+	err := p._toggleEC(apc.ActEcOpen)
+	if err == nil {
+		p._setActiveEC(mono.NanoTime())
+	}
+	return err
+}
 
+func (p *proxy) _toggleEC(action string) error {
 	// 1. targets
 	args := allocBcArgs()
 	{
 		args.smap = p.owner.smap.get()
-		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathEC.Join(apc.ActEcOpen)}
+		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathEC.Join(action)}
 		args.network = cmn.NetIntraControl
 		args.timeout = cmn.Rom.CplaneOperation()
 		args.nodes = []meta.NodeMap{args.smap.Tmap}
@@ -106,7 +132,7 @@ func (p *proxy) _onEC(now int64) error {
 	for _, res := range results {
 		if res.err != nil {
 			freeBcArgs(args)
-			return fmt.Errorf("%s: %s failed to open EC streams: %v", p, res.si.StringEx(), res.err)
+			return fmt.Errorf("%s: %s failed to %s: %v", p, res.si.StringEx(), action, res.err)
 		}
 	}
 
@@ -119,12 +145,28 @@ func (p *proxy) _onEC(now int64) error {
 	results = p.bcastNodes(args)
 	for _, res := range results {
 		if res.err != nil {
-			nlog.Warningf("%s: %s failed to get notified: %v", p, res.si.StringEx(), res.err)
+			// NOTE: warn, ignore
+			nlog.Warningln("action:", action, "proxy:", res.si.StringEx(), "failed to get notified:", res.err)
 		}
 	}
 
+	nlog.Infoln(p.String(), "toggle:", action)
 ex:
 	freeBcArgs(args)
 	freeBcastRes(results)
 	return nil
+}
+
+func (p *proxy) offEC(last int64) {
+	if !p.ec.last.CAS(last, 0) {
+		return
+	}
+	p.ec.rust = 0
+
+	if err := p._toggleEC(apc.ActEcClose); err == nil {
+		return
+	}
+
+	// undo
+	p._onEC(mono.NanoTime())
 }

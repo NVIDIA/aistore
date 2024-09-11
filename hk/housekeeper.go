@@ -189,13 +189,11 @@ func (hk *hk) _run() error {
 			} else {
 				if idx >= 0 {
 					heap.Remove(hk.actions, idx)
-				} else if op.f != nil {
-					// via UnregIf
-					nlog.Infoln(op.name, "not found (never registered?)")
-				} else {
+				} else if op.f == nil {
 					nlog.Warningln(op.name, "not found (already removed?)")
 					debug.Assert(false, op.name)
 				}
+				// op.f != nil via UnregIf()
 			}
 			hk.updateTimer()
 

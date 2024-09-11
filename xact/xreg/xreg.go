@@ -431,7 +431,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 			continue
 		}
 		if xctn.Finished() {
-			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeLso {
+			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeLsoX {
 				toRemove = append(toRemove, xctn.ID())
 			}
 		}

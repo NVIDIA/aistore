@@ -351,6 +351,7 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 
 func (n *notifs) housekeep(int64) time.Duration {
 	now := time.Now().UnixNano()
+
 	n.fin.mtx.Lock()
 	for _, nl := range n.fin.m {
 		timeout := hk.OldAgeNotif

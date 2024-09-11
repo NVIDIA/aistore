@@ -42,8 +42,10 @@ type (
 )
 
 // forward control plane request to the current primary proxy
-// return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, s string, origBody ...[]byte) (forf bool) {
+// returns:
+// - true when forwarded or failed
+// - false otherwise (ie., when self is primary and can go ahead to execute)
+func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, s string, origBody ...[]byte) bool {
 	var (
 		body []byte
 		smap = p.owner.smap.get()
@@ -55,15 +57,15 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		} else {
 			p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s %q", errmsg, s)
 		}
-		return true
+		return true // fail
 	}
 	if p.settingNewPrimary.Load() {
 		p.writeErrStatusf(w, r, http.StatusServiceUnavailable,
 			"%s is in transition, cannot process the request", p.si)
-		return true
+		return true // fail
 	}
 	if smap.isPrimary(p.si) {
-		return
+		return false // ok, can execute
 	}
 	// We must **not** send any request body when doing HEAD request.
 	// Otherwise, the request can be rejected and terminated.
@@ -104,7 +106,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		}
 	}
 	primary.rp.ServeHTTP(w, r)
-	return true
+	return true // forwarded
 }
 
 func rpTransport(config *cmn.Config) *http.Transport {

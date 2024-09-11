@@ -216,7 +216,7 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 			// check resp header from primary
 			// (see: _respActiveEC; compare with: _recvActiveEC)
 			if isActiveEC(hdr) {
-				pkr.p.ec.last.Store(now)
+				pkr.p._setActiveEC(now)
 			}
 		}
 		return pid, 0, err

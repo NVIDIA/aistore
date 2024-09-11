@@ -10,14 +10,14 @@ import "time"
 // common cleanup-related durations
 
 const (
-	DelOldIval      = 24 * time.Minute // hk-cleanup old xactions; old transactions
-	PruneActiveIval = 2 * time.Minute  // hk-prune active xactions; cleanup notifs
+	DelOldIval      = 24 * time.Minute // hk timer: cleanup old xactions; old transactions
+	PruneActiveIval = 2 * time.Minute  // hk timer: prune active xactions; cleanup notifs
 
 	//
 	// when things are considered _old_
 	//
-	OldAgeLso      = time.Minute      // list-objects
+	OldAgeLsoX     = time.Minute      // x-lso
+	OldAgeX        = time.Hour        // all other xactions
 	OldAgeNotif    = 3 * time.Minute  // old notifications
-	OldAgeNotifLso = 10 * time.Second // ditto lso
-	OldAgeX        = time.Hour        // xactions
+	OldAgeNotifLso = 10 * time.Second // note: seconds
 )

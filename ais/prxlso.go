@@ -401,24 +401,22 @@ func (c *lsobjCache) findInterval(token string) *cacheInterval {
 // PRECONDITION: `c.mtx` must be locked.
 func (c *lsobjCache) merge(start, end, cur *cacheInterval) {
 	debug.AssertRWMutexLocked(&c.mtx)
-
-	if start == nil && end == nil {
+	switch {
+	case start == nil && end == nil:
 		c.intervals = append(c.intervals, cur)
-	} else if start != nil && end == nil {
+	case start != nil && end == nil:
 		start.append(cur)
-	} else if start == nil && end != nil {
+	case start == nil && end != nil:
 		end.prepend(cur)
-	} else if start != nil && end != nil {
+	default:
+		debug.Assert(start != nil && end != nil)
 		if start == end {
 			// `cur` is part of some interval.
 			return
 		}
-
 		start.append(cur)
 		start.append(end)
 		c.removeInterval(end)
-	} else {
-		debug.Assert(false)
 	}
 }
 

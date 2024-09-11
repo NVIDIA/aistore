@@ -53,16 +53,12 @@ func initManager() error {
 		netResp: cmn.NetIntraData,
 		bmd:     core.T.Bowner().Get(),
 	}
-	// EC trnames (ReqStreamName, RespStreamName) are constants, receive handlers static
+	// EC `trnames` (ReqStreamName, RespStreamName) are constants, receive handlers static
 	if err := transport.Handle(ReqStreamName, ECM.recvRequest); err != nil {
 		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
 	if err := transport.Handle(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
-	}
-
-	if ECM.bmd.IsECUsed() { // TODO -- FIXME: remove
-		ECM.OpenStreams(false)
 	}
 	return nil
 }
@@ -74,6 +70,7 @@ func (mgr *Manager) IsActive() bool { return mgr._refc.Load() != 0 }
 
 func (mgr *Manager) incActive(xctn core.Xact) {
 	mgr._refc.Inc()
+	mgr.OpenStreams(false)
 	notif := &xact.NotifXact{
 		Base: nl.Base{When: core.UponTerm, F: mgr.notifyTerm},
 		Xact: xctn,
@@ -99,6 +96,7 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return
 	}
+	nlog.InfoDepth(1, core.T.String(), "ECM.OpenStreams")
 	var (
 		client      = transport.NewIntraDataClient()
 		config      = cmn.GCO.Get()
@@ -130,6 +128,7 @@ func (mgr *Manager) CloseStreams(justRefc bool) {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
+	nlog.InfoDepth(1, core.T.String(), "ECM.CloseStreams")
 	mgr.req().Close(false)
 	mgr.resp().Close(false)
 }
@@ -324,14 +323,6 @@ func (mgr *Manager) BMDChanged() error {
 		return nil
 	}
 	mgr.bmd = newBMD
-
-	// TODO -- FIXME: remove
-	if newBMD.IsECUsed() && !oldBMD.IsECUsed() {
-		mgr.OpenStreams(false)
-	} else if !newBMD.IsECUsed() && oldBMD.IsECUsed() {
-		mgr.CloseStreams(false)
-		return nil
-	}
 
 	// by bucket
 	newBMD.Range(nil, nil, func(nbck *meta.Bck) bool {

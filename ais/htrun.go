@@ -1449,7 +1449,13 @@ func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*cos.NodeStateInfo, int
 	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTs() > 0) {
 		h._bch(&c, smap, apc.Target)
 	}
-	nlog.Infoln(h.String()+":", c.maxNsti.String())
+
+	// log
+	b, err := jsoniter.MarshalIndent(c.maxNsti.Smap, "", "    ")
+	debug.AssertNoErr(err)
+	nlog.Infoln(string(b))
+	nlog.Infoln("flags:", c.maxNsti.Flags.String())
+
 	return c.maxNsti, c.cnt
 }
 

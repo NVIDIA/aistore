@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/hk"
@@ -70,7 +71,7 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 
 func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	const (
-		hkname   = "close-ec-streams" + hk.NameSuffix
+		hkname   = apc.ActEcClose + hk.NameSuffix
 		postpone = time.Minute
 	)
 	items, err := t.parseURL(w, r, apc.URLPathEC.L, 1, false)
@@ -80,9 +81,13 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	action := items[0]
 	switch action {
 	case apc.ActEcOpen:
-		hk.UnregIf(hkname, closeEc) // just in case
+		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time
 		ec.ECM.OpenStreams(false /*with refc*/)
 	case apc.ActEcClose:
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		nlog.Infoln(t.String(), "hk-postpone", action)
 		hk.Reg(hkname, closeEc, postpone)
 	default:
 		t.writeErr(w, r, errActEc(action))
