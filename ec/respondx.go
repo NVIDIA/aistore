@@ -162,7 +162,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 }
 
 // DispatchReq is responsible for handling request from other targets
-func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck) {
+func (r *XactRespond) dispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck) {
 	switch hdr.Opcode {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
@@ -181,9 +181,10 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	}
 }
 
-func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object io.Reader) {
+func (r *XactRespond) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, object io.Reader) {
 	r.IncPending()
-	defer r.DecPending() // no async operation, so DecPending is deferred
+	defer r.DecPending()
+
 	switch hdr.Opcode {
 	case reqPut:
 		// a remote target sent a replica/slice while it was
@@ -196,7 +197,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			nlog.Errorf("%s: no metadata for %s", core.T, hdr.Cname())
+			nlog.Errorln(core.T.String(), "no metadata for", hdr.Cname())
 			return
 		}
 

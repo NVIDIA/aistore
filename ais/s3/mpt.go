@@ -7,12 +7,12 @@ package s3
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -134,12 +134,12 @@ func CleanupUpload(id, fqn string, aborted bool) (exists bool) {
 
 	if !aborted {
 		if err := storeMptXattr(fqn, mpt); err != nil {
-			nlog.Warningf("fqn %s, id %s: %v", fqn, id, err)
+			nlog.Warningln("failed to xattr [", fqn, id, err, "]")
 		}
 	}
 	for _, part := range mpt.parts {
-		if err := os.Remove(part.FQN); err != nil && !os.IsNotExist(err) {
-			nlog.Errorln(err)
+		if err := cos.RemoveFile(part.FQN); err != nil {
+			nlog.Errorln("failed to remove part [", fqn, id, err, "]")
 		}
 	}
 	return true

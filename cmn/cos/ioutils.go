@@ -153,52 +153,36 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 	return
 }
 
-func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, cksumType string, size int64) (cksum *CksumHash,
-	err error) {
-	if cksum, err = SaveReader(tmpfqn, reader, buf, cksumType, size); err != nil {
-		return
-	}
-	if err = Rename(tmpfqn, fqn); err != nil {
-		os.Remove(tmpfqn)
-	}
-	return
-}
-
-// Saves the reader directly to `fqn`, checksums if requested
-func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string, size int64) (cksum *CksumHash, err error) {
-	var (
-		written   int64
-		file, erc = CreateFile(fqn)
-		writer    = WriterOnly{file} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
-	)
+// Saves the `reader` directly to `fqn`, checksums if requested
+func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string, size int64) (*CksumHash, error) {
+	wfh, erc := CreateFile(fqn)
 	if erc != nil {
 		return nil, erc
 	}
-	defer func() {
-		if err != nil {
-			os.Remove(fqn)
-		}
-	}()
+	cksum, err := _save(fqn, WriterOnly{wfh} /*hide ReadFrom*/, reader, buf, cksumType, size)
+	erc = wfh.Close()
 
-	if size >= 0 {
-		reader = io.LimitReader(reader, size)
+	if err == nil && erc != nil {
+		err = fmt.Errorf("failed to close %s: %w", fqn, erc)
 	}
-	written, cksum, err = CopyAndChecksum(writer, reader, buf, cksumType)
-	erc = file.Close()
-
 	if err != nil {
-		err = fmt.Errorf("failed to save to %q: %w", fqn, err)
-		return
+		os.Remove(fqn) // cleanup
+	}
+	return cksum, err
+}
+
+func _save(fqn string, w io.Writer, r io.Reader, buf []byte, cksumType string, size int64) (*CksumHash, error) {
+	if size >= 0 {
+		r = io.LimitReader(r, size)
+	}
+	written, cksum, err := CopyAndChecksum(w, r, buf, cksumType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy-and-checksum to %s: %w", fqn, err)
 	}
 	if size >= 0 && written != size {
-		err = fmt.Errorf("wrong size when saving to %q: expected %d, got %d", fqn, size, written)
-		return
+		err = fmt.Errorf("wrong size %s: expected %d, got %d", fqn, size, written) // (unlikely)
 	}
-	if erc != nil {
-		err = fmt.Errorf("failed to close %q: %w", fqn, erc)
-		return
-	}
-	return
+	return cksum, err
 }
 
 // a slightly modified excerpt from https://github.com/golang/go/blob/master/src/io/io.go#L407

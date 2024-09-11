@@ -232,7 +232,7 @@ func (s *slice) free() {
 		}
 	}
 	if s.workFQN != "" {
-		if err := os.Remove(s.workFQN); err != nil && !os.IsNotExist(err) {
+		if err := cos.RemoveFile(s.workFQN); err != nil {
 			nlog.Errorln(err)
 		}
 	}
@@ -465,7 +465,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 	if err := ct.Write(args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
-	if err := ctMeta.Write(bytes.NewReader(args.MD), -1); err != nil {
+	if err := ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/); err != nil {
 		return err
 	}
 	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
@@ -507,13 +507,13 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 			return
 		}
 		if rmErr := lom.RemoveMain(); rmErr != nil {
-			nlog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
+			nlog.Errorln("nested error: save replica -> remove replica:", rmErr)
 		}
 		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
-			nlog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
+			nlog.Errorln("nested error: save replica -> remove metafile:", rmErr)
 		}
 	}()
-	if err = ctMeta.Write(bytes.NewReader(args.MD), -1); err != nil {
+	if err = ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/); err != nil {
 		return
 	}
 	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {

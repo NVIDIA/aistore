@@ -107,9 +107,11 @@ func newGetXact(bck *cmn.Bck, mgr *Manager) *XactGet {
 	return xctn
 }
 
-func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck, reader io.Reader) {
-	objName, objAttrs := hdr.ObjName, hdr.ObjAttrs
-	uname := unique(hdr.SID, bck, objName)
+func (r *XactGet) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck, reader io.Reader) {
+	var (
+		objName, objAttrs = hdr.ObjName, hdr.ObjAttrs
+		uname             = unique(hdr.SID, bck, objName)
+	)
 	switch hdr.Opcode {
 	// It is response to slice/replica request by an object
 	// restoration process. In this case, there should exists

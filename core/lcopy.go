@@ -330,7 +330,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mi, lom.mi
 		if err = lom.syncMetaWithCopies(); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
-				if errRemove := os.Remove(dst.FQN); errRemove != nil && !os.IsNotExist(errRemove) {
+				if errRemove := cos.RemoveFile(dst.FQN); errRemove != nil {
 					nlog.Errorln("nested err:", errRemove)
 				}
 			}
@@ -342,7 +342,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		}
 		err = lom.Persist()
 	} else if err = dst.Persist(); err != nil {
-		if errRemove := os.Remove(dst.FQN); errRemove != nil && !os.IsNotExist(errRemove) {
+		if errRemove := cos.RemoveFile(dst.FQN); errRemove != nil {
 			nlog.Errorln("nested err:", errRemove)
 		}
 	}

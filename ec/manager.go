@@ -85,7 +85,7 @@ func (mgr *Manager) notifyTerm(core.Notif, error, bool) {
 
 func cbReq(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	if err != nil {
-		nlog.Errorf("failed to request %s: %v", hdr.Cname(), err)
+		nlog.Errorln("failed to request", hdr.Cname(), "err: [", err, "]")
 	}
 }
 
@@ -96,7 +96,7 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return
 	}
-	nlog.InfoDepth(1, core.T.String(), "ECM.OpenStreams")
+	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActEcOpen)
 	var (
 		client      = transport.NewIntraDataClient()
 		config      = cmn.GCO.Get()
@@ -128,7 +128,7 @@ func (mgr *Manager) CloseStreams(justRefc bool) {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
-	nlog.InfoDepth(1, core.T.String(), "ECM.CloseStreams")
+	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActEcClose)
 	mgr.req().Close(false)
 	mgr.resp().Close(false)
 }
@@ -201,7 +201,8 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 			return err
 		}
 	}
-	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, hdr, bck)
+	xctn := mgr.RestoreBckRespXact(bck)
+	xctn.dispatchReq(iReq, hdr, bck)
 	return nil
 }
 
@@ -226,19 +227,21 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 		return err
 	}
 	bck := meta.CloneBck(&hdr.Bck)
-	if err = bck.Init(core.T.Bowner()); err != nil {
-		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
+	if err := bck.Init(core.T.Bowner()); err != nil {
+		if !cmn.IsErrRemoteBckNotFound(err) { // is ais://
 			nlog.Errorln(err)
 			return err
 		}
 	}
 	switch hdr.Opcode {
 	case reqPut:
-		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, hdr, objReader)
+		xctn := mgr.RestoreBckRespXact(bck)
+		xctn.dispatchResp(iReq, hdr, objReader)
 	case respPut:
 		// Process the request even if the number of targets is insufficient
 		// (might've started when we had enough)
-		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, hdr, bck, objReader)
+		xctn := mgr.RestoreBckGetXact(bck)
+		xctn.dispatchResp(iReq, hdr, bck, objReader)
 	default:
 		debug.Assertf(false, "unknown EC response action %d", hdr.Opcode)
 	}

@@ -331,7 +331,7 @@ loop: //nolint:gocritic // keeping label for readability
 
 	b := cos.MustMarshal(ctx.meta)
 	ctMeta := core.NewCTFromLOM(ctx.lom, fs.ECMetaType)
-	if err := ctMeta.Write(bytes.NewReader(b), -1); err != nil {
+	if err := ctMeta.Write(bytes.NewReader(b), -1, "" /*work fqn*/); err != nil {
 		return err
 	}
 	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {

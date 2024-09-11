@@ -121,7 +121,7 @@ func (d *Snode) ID() string   { return d.DaeID }
 func (d *Snode) Type() string { return d.DaeType } // enum { apc.Proxy, apc.Target }
 
 func (d *Snode) Name() string   { return d.name }
-func (d *Snode) String() string { return d.Name() }
+func (d *Snode) String() string { return d.name }
 
 func (d *Snode) SetName() {
 	name := d.StringEx()

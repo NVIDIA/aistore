@@ -255,7 +255,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 		return err
 	}
 	metaBuf := bytes.NewReader(meta.NewPack())
-	if err := ctMeta.Write(metaBuf, -1); err != nil {
+	if err := ctMeta.Write(metaBuf, -1, "" /*work fqn*/); err != nil {
 		return err
 	}
 	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
@@ -497,7 +497,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *meta.Snode, idx
 			data.release()
 		}
 		if err != nil {
-			nlog.Errorln("failed to send", hdr.Cname()+": ", err)
+			nlog.Errorln("failed to send", hdr.Cname(), "[", err, "]")
 		}
 	}
 

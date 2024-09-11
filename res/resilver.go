@@ -190,16 +190,17 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
 		jg.xres.AddErr(errV, 0)
-		if err = os.Remove(destMetaFQN); err != nil {
+		if err = cos.RemoveFile(destMetaFQN); err != nil {
 			errV := fmt.Errorf("failed to cleanup metafile %q: %v", destMetaFQN, err)
 			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)
 		}
 	}
-	errMeta := os.Remove(srcMetaFQN)
-	errSlice := os.Remove(ct.FQN())
-	if errMeta != nil || errSlice != nil {
-		nlog.Warningf("Failed to cleanup %q: %v, %v", ct.FQN(), errSlice, errMeta)
+	if errMeta := cos.RemoveFile(srcMetaFQN); errMeta != nil {
+		nlog.Warningln("failed to cleanup meta", srcMetaFQN, "[", errMeta, "]")
+	}
+	if errSlice := cos.RemoveFile(ct.FQN()); errSlice != nil {
+		nlog.Warningln("failed to cleanup slice", ct.FQN(), "[", errSlice, "]")
 	}
 }
 

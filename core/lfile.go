@@ -20,6 +20,18 @@ const (
 	_apndFlags = os.O_APPEND | os.O_WRONLY
 )
 
+type errBdir struct {
+	cname string
+	err   error
+}
+
+func (e *errBdir) Error() string {
+	if os.IsNotExist(e.err) {
+		return e.cname + ": missing bdir (bucket exists?)"
+	}
+	return fmt.Sprintf("%s: missing bdir [%v]", e.cname, e.err)
+}
+
 //
 // open
 //
@@ -74,7 +86,7 @@ func (lom *LOM) _checkBdir() (err error) {
 	if err = cos.Stat(bdir); err == nil {
 		return nil
 	}
-	err = fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
+	err = &errBdir{lom.Cname(), err}
 	bmd := T.Bowner().Get()
 	if _, present := bmd.Get(&lom.bck); present {
 		err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
@@ -134,7 +146,7 @@ func (lom *LOM) RenameToMain(wfqn string) error {
 func (lom *LOM) RenameFinalize(wfqn string) error {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
-		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)
+		return &errBdir{lom.Cname(), err}
 	}
 	if err := lom.RenameToMain(wfqn); err != nil {
 		T.FSHC(err, lom.Mountpath(), wfqn)

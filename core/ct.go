@@ -1,16 +1,18 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
 import (
+	"fmt"
 	"io"
 	"os"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -44,6 +46,7 @@ func (ct *CT) Mountpath() *fs.Mountpath { return ct.mi }
 func (ct *CT) Lsize() int64             { return ct.size }
 func (ct *CT) MtimeUnix() int64         { return ct.mtime }
 func (ct *CT) Digest() uint64           { return ct.digest }
+func (ct *CT) Cname() string            { return ct.bck.Cname(ct.objName) }
 
 func (ct *CT) LoadSliceFromFS() error {
 	debug.Assert(ct.ContentType() == fs.ECSliceType, "unexpected content type: ", ct.ContentType())
@@ -158,30 +161,38 @@ func (ct *CT) Clone(ctType string) *CT {
 	}
 }
 
-func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
-	var prefix string
-	cos.Assert(toType != "")
-
-	if len(pref) > 0 {
-		prefix = pref[0]
-	}
-	return fs.CSM.Gen(ct, toType, prefix)
+func (ct *CT) Make(toType string) string {
+	debug.Assert(toType != "")
+	return fs.CSM.Gen(ct, toType, "")
 }
 
 // Save CT to local drives. If workFQN is set, it saves in two steps: first,
-// save to workFQN; second, rename workFQN to ct.FQN. If unset, it writes
-// directly to ct.FQN
-func (ct *CT) Write(reader io.Reader, size int64, workFQN ...string) (err error) {
+// save to workFQN; second, rename workFQN to ct.fqn. If unset, it writes
+// directly to ct.fqn
+func (ct *CT) Write(reader io.Reader, size int64, workFQN string) (err error) {
 	bdir := ct.mi.MakePathBck(ct.Bucket())
-	if err := cos.Stat(bdir); err != nil {
-		return err
+	if err = cos.Stat(bdir); err != nil {
+		return &errBdir{ct.Cname(), err}
 	}
 	buf, slab := g.pmm.Alloc()
-	if len(workFQN) == 0 {
+	if workFQN == "" {
 		_, err = cos.SaveReader(ct.fqn, reader, buf, cos.ChecksumNone, size)
 	} else {
-		_, err = cos.SaveReaderSafe(workFQN[0], ct.fqn, reader, buf, cos.ChecksumNone, size)
+		_, err = ct.saveAndRename(workFQN, reader, buf, cos.ChecksumNone, size)
 	}
 	slab.Free(buf)
 	return err
+}
+
+func (ct *CT) saveAndRename(tmpfqn string, reader io.Reader, buf []byte, cksumType string, size int64) (cksum *cos.CksumHash, err error) {
+	if cksum, err = cos.SaveReader(tmpfqn, reader, buf, cksumType, size); err != nil {
+		return
+	}
+	if err = cos.Rename(tmpfqn, ct.fqn); err != nil {
+		err = fmt.Errorf("failed to rename temp to %s: %w", ct.Cname(), err)
+		if rmErr := cos.RemoveFile(tmpfqn); rmErr != nil {
+			nlog.Errorln("nested error:", err, "[ failed to remove temp fqn:", rmErr, "]")
+		}
+	}
+	return
 }

@@ -262,7 +262,7 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	md.Daemons = req.md.Daemons
 	mdBytes := md.NewPack()
 
-	return ctMeta.Write(bytes.NewReader(mdBytes), -1)
+	return ctMeta.Write(bytes.NewReader(mdBytes), -1, "" /*work fqn*/)
 }
 
 func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader) error {
@@ -294,12 +294,12 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	// Save received CT to local drives
 	err = reb.saveCTToDisk(req, hdr, reader)
 	if err != nil {
-		if errRm := os.Remove(ct.FQN()); errRm != nil {
-			nlog.Errorf("Failed to remove %s: %v", ct.FQN(), errRm)
+		if errRm := cos.RemoveFile(ct.FQN()); errRm != nil {
+			nlog.Errorln(err, "nested err: failed to remove", ct.FQN(), "[", errRm, "]")
 		}
 		if moveTo != nil {
 			if errMv := os.Rename(workFQN, ct.FQN()); errMv != nil {
-				nlog.Errorf("Error restoring slice: %v", errMv)
+				nlog.Errorln(err, "nested err: failed to rename slice", ct.FQN(), "[", errMv, "]")
 			}
 		}
 		return err
@@ -308,7 +308,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	if moveTo != nil {
 		req.md.SliceID = md.SliceID
 		if err = reb.sendFromDisk(ct, req.md, moveTo, workFQN); err != nil {
-			nlog.Errorf("Failed to move slice to %s: %v", moveTo, err)
+			nlog.Errorln("failed to move slice to", moveTo, "[", err, "]")
 		}
 	}
 	// Broadcast updated MD
