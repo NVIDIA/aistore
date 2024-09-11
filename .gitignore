@@ -74,6 +74,7 @@ venv.bak/
 .netlify/
 _site/
 .sass-cache/
+!/docs/assets/**/*.svg
 
 # VSCode
 .vscode
