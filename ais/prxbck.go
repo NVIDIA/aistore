@@ -193,7 +193,6 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 	// 1. init bucket
 	bck = bctx.bck
 	if ecode, err = bctx.init(); err == nil {
-		err = bctx.p.onEC(bck)
 		return
 	}
 	if ecode != http.StatusNotFound {

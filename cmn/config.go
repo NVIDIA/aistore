@@ -1681,7 +1681,7 @@ func (c *TimeoutConf) Validate() error {
 	}
 	// must be greater than (2 * keepalive.interval*keepalive.factor)
 	if c.EcStreams > 0 && c.EcStreams.D() < EcStreamsMini {
-		return fmt.Errorf("invalid timeout.ec_streams_time=%s (never timeout: %v; minimum: %s; default: %s)",
+		return fmt.Errorf("invalid timeout.ec_streams_time=%s (no timeout: %v; minimum: %s; default: %s)",
 			c.EcStreams, EcStreamsEver, EcStreamsMini, EcStreamsDflt)
 	}
 	return nil

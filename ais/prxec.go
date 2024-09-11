@@ -132,7 +132,8 @@ func (p *proxy) _toggleEC(action string) error {
 	for _, res := range results {
 		if res.err != nil {
 			freeBcArgs(args)
-			return fmt.Errorf("%s: %s failed to %s: %v", p, res.si.StringEx(), action, res.err)
+			err := fmt.Errorf("%s: %s failed to %s: %v", p, res.si.StringEx(), action, res.err)
+			return err
 		}
 	}
 
@@ -163,9 +164,12 @@ func (p *proxy) offEC(last int64) {
 	}
 	p.ec.rust = 0
 
-	if err := p._toggleEC(apc.ActEcClose); err == nil {
+	err := p._toggleEC(apc.ActEcClose)
+	if err == nil {
 		return
 	}
+
+	nlog.Warningln(err) // benign (see errCloseStreams)
 
 	// undo
 	p._onEC(mono.NanoTime())

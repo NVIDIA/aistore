@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/hk"
 )
+
+var errCloseStreams = errors.New("EC is currently active, cannot close streams")
 
 func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -87,6 +90,10 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
+		if ec.ECM.IsActive() {
+			t.writeErr(w, r, errCloseStreams)
+			return
+		}
 		nlog.Infoln(t.String(), "hk-postpone", action)
 		hk.Reg(hkname, closeEc, postpone)
 	default:
@@ -95,7 +102,11 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func closeEc(int64) time.Duration {
-	ec.ECM.CloseStreams(false /*with refc*/)
+	if ec.ECM.IsActive() {
+		nlog.Warningln("hk-cb:", errCloseStreams)
+	} else {
+		ec.ECM.CloseStreams(false /*with refc*/)
+	}
 	return hk.UnregInterval
 }
 

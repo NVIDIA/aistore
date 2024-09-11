@@ -712,10 +712,7 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 		s3.WriteErr(w, r, err, ecode)
 		return nil
 	}
-	if err = p.onEC(bck); err != nil {
-		s3.WriteErr(w, r, err, 0)
-		return nil
-	}
+	debug.Assert(bck != nil)
 	return bck
 }
 
