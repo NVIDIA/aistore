@@ -4,9 +4,14 @@
 
 # pylint: disable=too-many-arguments, duplicate-code
 
-import logging
 from typing import List
 from aistore.sdk.request_client import RequestClient
+from aistore.sdk.authn.access_attr import AccessAttr
+from aistore.sdk.authn.cluster_manager import ClusterManager
+from aistore.sdk.types import BucketModel
+from aistore.sdk.namespace import Namespace
+from aistore.sdk.authn.errors import ErrRoleNotFound
+from aistore.sdk.utils import get_logger
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
@@ -20,14 +25,8 @@ from aistore.sdk.authn.types import (
     BucketPermission,
     ClusterPermission,
 )
-from aistore.sdk.authn.access_attr import AccessAttr
-from aistore.sdk.authn.cluster_manager import ClusterManager
-from aistore.sdk.types import BucketModel
-from aistore.sdk.namespace import Namespace
-from aistore.sdk.authn.errors import ErrRoleNotFound
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RoleManager:

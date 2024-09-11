@@ -2,17 +2,15 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-import logging
 from aistore.sdk.request_client import RequestClient
+from aistore.sdk.authn.types import TokenMsg
+from aistore.sdk.utils import get_logger
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     URL_PATH_AUTHN_TOKENS,
 )
-from aistore.sdk.authn.types import TokenMsg
 
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TokenManager:  # pylint: disable=duplicate-code

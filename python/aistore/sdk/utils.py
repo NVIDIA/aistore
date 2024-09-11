@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
+
+import logging
 from pathlib import Path
 from typing import Callable, Iterator, Tuple, Type, TypeVar
 from urllib.parse import urlparse
@@ -14,7 +16,12 @@ import requests
 from pydantic import BaseModel, parse_raw_as
 from requests import Response
 
-from aistore.sdk.const import UTF_ENCODING, HEADER_CONTENT_TYPE, MSGPACK_CONTENT_TYPE
+from aistore.sdk.const import (
+    UTF_ENCODING,
+    HEADER_CONTENT_TYPE,
+    MSGPACK_CONTENT_TYPE,
+    DEFAULT_LOG_FORMAT,
+)
 from aistore.sdk.errors import (
     AISError,
     ErrBckNotFound,
@@ -214,3 +221,24 @@ def parse_url(url: str) -> Tuple[str, str, str]:
     parsed_url = urlparse(url)
     path = parsed_url.path.lstrip("/")
     return parsed_url.scheme, parsed_url.netloc, path
+
+
+def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
+    """
+    Create or retrieve a logger with the specified configuration.
+
+    Args:
+        name (str): The name of the logger.
+        format (str, optional): Logging format.
+
+    Returns:
+        logging.Logger: Configured logger instance.
+    """
+    logger = logging.getLogger(name)
+    if not logger.hasHandlers():
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(log_format)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.propagate = False
+    return logger

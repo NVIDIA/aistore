@@ -4,16 +4,13 @@
 
 # pylint: disable=too-many-branches
 
-import logging
 from io import BufferedIOBase
 from typing import Iterator
-
 import requests
-
 from aistore.sdk.object_reader import ObjectReader
+from aistore.sdk.utils import get_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SimpleBuffer:

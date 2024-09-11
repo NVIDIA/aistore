@@ -2,10 +2,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-import logging
 from typing import List, Optional
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.client import Client as AISClient
+from aistore.sdk.authn.types import ClusterInfo, ClusterList
+from aistore.sdk.utils import get_logger
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
@@ -13,11 +14,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     URL_PATH_AUTHN_CLUSTERS,
 )
-from aistore.sdk.authn.types import ClusterInfo, ClusterList
 
-# logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ClusterManager:

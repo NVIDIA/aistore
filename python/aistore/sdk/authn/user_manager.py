@@ -4,14 +4,13 @@
 
 # pylint: disable=too-many-arguments, duplicate-code
 
-import logging
 
 from typing import List, Optional
-
 from aistore.sdk.authn.types import UserInfo, RolesList, UsersList
 from aistore.sdk.authn.errors import ErrUserNotFound
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.authn.role_manager import RoleManager
+from aistore.sdk.utils import get_logger
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
@@ -20,9 +19,7 @@ from aistore.sdk.const import (
     URL_PATH_AUTHN_USERS,
 )
 
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserManager:

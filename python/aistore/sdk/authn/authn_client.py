@@ -2,25 +2,23 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-import logging
 from typing import Optional, Tuple, Union
 from urllib3 import Retry
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.const import (
-    HTTP_METHOD_POST,
-    URL_PATH_AUTHN_USERS,
-)
 from aistore.sdk.session_manager import SessionManager
+from aistore.sdk.utils import get_logger
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
 from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.authn.role_manager import RoleManager
 from aistore.sdk.authn.token_manager import TokenManager
 from aistore.sdk.authn.user_manager import UserManager
 from aistore.sdk.authn.utils import raise_authn_error
+from aistore.sdk.const import (
+    HTTP_METHOD_POST,
+    URL_PATH_AUTHN_USERS,
+)
 
-# logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # pylint: disable=too-many-arguments, too-few-public-methods

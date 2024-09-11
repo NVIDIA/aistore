@@ -164,3 +164,5 @@ AWS_DEFAULT_REGION = "us-east-1"
 
 # Time constants
 NANOSECONDS_IN_SECOND = 1_000_000_000
+
+DEFAULT_LOG_FORMAT = "%(asctime)s %(levelname)s: %(message)s"
