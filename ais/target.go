@@ -1271,16 +1271,24 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 			code, err = t.Backend(lom.Bck()).DeleteObj(lom)
 		}
 	}
-	if err == nil {
+
+	// stats
+	switch {
+	case err == nil:
 		t.statsT.Inc(stats.DeleteCount)
-	} else {
-		// TODO: count GET/PUT/DELETE remote errors on a per-backend...
+	case cos.IsNotExist(err, code) || cmn.IsErrObjNought(err):
+		if !evict {
+			t.statsT.IncErr(stats.ErrDeleteCount) // TODO: count GET/PUT/DELETE remote errors on a per-backend...
+		}
+	default:
+		// not to confuse with `stats.RemoteDeletedDelCount` that counts against
+		// QparamLatestVer, 'versioning.validate_warm_get' and friends
 		t.statsT.IncErr(stats.ErrDeleteCount)
 		if !isback {
 			t.statsT.IncErr(stats.IOErrDeleteCount)
 		}
 	}
-	return
+	return code, err
 }
 
 func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
