@@ -284,13 +284,14 @@ none:
 const versionedPageSize = 20
 
 func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, _ error) {
+	const tag = "list_objects"
 	var (
 		h          = cmn.BackendHelpers.Amazon
 		cloudBck   = bck.RemoteBck()
 		sessConf   = sessConf{bck: cloudBck}
 		versioning bool
 	)
-	svc, err := sessConf.s3client("[list_objects]")
+	svc, err := sessConf.s3client(tag)
 	if err != nil {
 		return 0, err
 	}
@@ -315,7 +316,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			nlog.Infoln("list_objects", cloudBck.Name, err)
+			nlog.Infoln(tag, cloudBck.Name, err)
 		}
 		ecode, err = awsErrorToAISError(err, cloudBck, "")
 		return ecode, err
@@ -364,7 +365,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 
 	if len(lst.Entries) == 0 || !versioning {
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries))
+			nlog.Infoln(tag, cloudBck.Name, len(lst.Entries))
 		}
 		return 0, nil
 	}
@@ -395,7 +396,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		}
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-		nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries), num)
+		nlog.Infoln(tag, cloudBck.Name, len(lst.Entries), num)
 	}
 	return 0, nil
 }
@@ -438,6 +439,7 @@ func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
 //
 
 func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+	const tag = "[head_object]"
 	var (
 		svc        *s3.Client
 		headOutput *s3.HeadObjectOutput
@@ -459,7 +461,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		}
 	}
 
-	svc, err = sessConf.s3client("[head_object]")
+	svc, err = sessConf.s3client(tag)
 	if err != nil {
 		return
 	}
@@ -514,7 +516,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 
 exit:
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Infoln("[head_object]", cloudBck.Cname(lom.ObjName))
+		nlog.Infoln(tag, cloudBck.Cname(lom.ObjName))
 	}
 	return
 }
@@ -635,6 +637,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 //
 
 func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
+	const tag = "[put_object]"
 	var (
 		svc                   *s3.Client
 		uploader              *s3manager.Uploader
@@ -660,7 +663,7 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 		}
 	}
 
-	svc, err = sessConf.s3client("[put_object]")
+	svc, err = sessConf.s3client(tag)
 	if err != nil {
 		return
 	}
@@ -695,7 +698,7 @@ exit:
 		}
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Infoln("[put_object]", lom.String())
+		nlog.Infoln(tag, lom.String())
 	}
 	cos.Close(r)
 	return
@@ -705,13 +708,15 @@ exit:
 // DELETE OBJECT
 //
 
+// [NOTE] returns (0, nil) when the object does not exist
 func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
+	const tag = "[delete_object]"
 	var (
 		svc      *s3.Client
 		cloudBck = lom.Bck().RemoteBck()
 		sessConf = sessConf{bck: cloudBck}
 	)
-	svc, err = sessConf.s3client("[delete_object]")
+	svc, err = sessConf.s3client(tag)
 	if err != nil {
 		return
 	}
@@ -724,7 +729,7 @@ func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Infoln("[delete_object]", lom.String())
+		nlog.Infoln(tag, lom.String())
 	}
 	return
 }
