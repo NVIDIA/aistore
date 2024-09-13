@@ -44,7 +44,7 @@ var (
 			// blob-downloader
 			blobDownloadFlag,
 			chunkSizeFlag,
-			numWorkersFlag,
+			numBlobWorkersFlag,
 			// archive
 			archpathGetFlag,
 			archmimeFlag,

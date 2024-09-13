@@ -113,7 +113,7 @@ type (
 	}
 	txnTCObjs struct {
 		xtco *xs.XactTCObjs
-		msg  *cmn.TCObjsMsg
+		msg  *cmn.TCOMsg
 		txnBckBase
 	}
 	txnECEncode struct {
@@ -581,7 +581,7 @@ func (txn *txnTCB) String() string {
 // txnTCObjs //
 ///////////////
 
-func newTxnTCObjs(c *txnSrv, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
+func newTxnTCObjs(c *txnSrv, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *cmn.TCOMsg) (txn *txnTCObjs) {
 	txn = &txnTCObjs{xtco: xtco, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)

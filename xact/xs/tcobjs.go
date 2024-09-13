@@ -40,14 +40,14 @@ type (
 			mtx sync.RWMutex
 		}
 		args     *xreg.TCObjsArgs
-		workCh   chan *cmn.TCObjsMsg
+		workCh   chan *cmn.TCOMsg
 		chanFull atomic.Int64
 		streamingX
 		owt cmn.OWT
 	}
 	tcowi struct {
 		r   *XactTCObjs
-		msg *cmn.TCObjsMsg
+		msg *cmn.TCOMsg
 		// finishing
 		refc atomic.Int32
 	}
@@ -81,7 +81,7 @@ func (p *tcoFactory) Start() error {
 	p.Args.UUID = PrefixTcoID + uuid
 
 	// new x-tco
-	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
+	workCh := make(chan *cmn.TCOMsg, maxNumInParallel)
 	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	r.owt = cmn.OwtCopy
@@ -134,7 +134,7 @@ func (r *XactTCObjs) Snap() (snap *core.Snap) {
 	return
 }
 
-func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
+func (r *XactTCObjs) Begin(msg *cmn.TCOMsg) {
 	wi := &tcowi{r: r, msg: msg}
 	r.pending.mtx.Lock()
 	r.pending.m[msg.TxnUUID] = wi
@@ -175,7 +175,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 
 			// run
 			var wg *sync.WaitGroup
-			if err = lrit.init(r, &msg.ListRange, r.Bck()); err == nil {
+			if err = lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt); err == nil {
 				if msg.Sync && lrit.lrp != lrpList {
 					wg = &sync.WaitGroup{}
 					wg.Add(1)
@@ -213,7 +213,7 @@ fin:
 }
 
 // more work
-func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
+func (r *XactTCObjs) Do(msg *cmn.TCOMsg) {
 	r.IncPending()
 	r.workCh <- msg
 
@@ -372,7 +372,7 @@ func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap, pt *cos.ParsedTemp
 	var syncit lriterator
 	debug.Assert(lrit.lrp == lrpRange)
 
-	err := syncit.init(lrit.parent, lrit.msg, rp.bckTo)
+	err := syncit.init(lrit.parent, lrit.msg, rp.bckTo, lrpWorkersDflt)
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)

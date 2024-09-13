@@ -55,8 +55,8 @@ func blobDownloadHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	if flagIsSet(c, numWorkersFlag) {
-		msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
+	if flagIsSet(c, numBlobWorkersFlag) {
+		msg.NumWorkers = parseIntFlag(c, numBlobWorkersFlag)
 	}
 	msg.LatestVer = flagIsSet(c, latestVerFlag)
 

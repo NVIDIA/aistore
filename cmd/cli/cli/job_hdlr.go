@@ -26,16 +26,16 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	prefetchUsage = "prefetch one remote bucket, multiple remote buckets, or\n" +
-		indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
-		indent1 + "\t- 'prefetch gs://abc'\t- prefetch entire bucket (all gs://abc objects that are _not_ present in the cluster);\n" +
-		indent1 + "\t- 'prefetch gs:'\t- prefetch all visible/accessible GCP buckets;\n" +
-		indent1 + "\t- 'prefetch gs://abc --template images/'\t- prefetch all objects from the virtual subdirectory \"images\";\n" +
-		indent1 + "\t- 'prefetch gs://abc/images/'\t- same as above;\n" +
-		indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
-		indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
-)
+const prefetchUsage = "prefetch one remote bucket, multiple remote buckets, or\n" +
+	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
+	indent1 + "\t- 'prefetch gs://abc'\t- prefetch entire bucket (all gs://abc objects that are _not_ in-cluster);\n" +
+	indent1 + "\t- 'prefetch gs://abc --num-workers 32'\t- same as above with 32 concurrent (prefetching) workers;\n" +
+	indent1 + "\t- 'prefetch gs:'\t- prefetch all visible/accessible GCP buckets;\n" +
+	indent1 + "\t- 'prefetch gs: --num-workers=48'\t- same as above employing 48 workers;\n" +
+	indent1 + "\t- 'prefetch gs://abc --template images/'\t- prefetch all objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- 'prefetch gs://abc/images/'\t- same as above;\n" +
+	indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
+	indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
 // top-level job command
 var (
@@ -85,13 +85,14 @@ var (
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			latestVerFlag,
 			blobThresholdFlag,
+			numListRangeWorkersFlag,
 		),
 		cmdBlobDownload: {
 			refreshFlag,
 			progressFlag,
 			listFlag,
 			chunkSizeFlag,
-			numWorkersFlag,
+			numBlobWorkersFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
 			latestVerFlag,

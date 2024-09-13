@@ -57,7 +57,7 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete, err error) {
 	ed = &evictDelete{config: cmn.GCO.Get()}
-	if err = ed.lriterator.init(ed, msg, bck); err != nil {
+	if err = ed.lriterator.init(ed, msg, bck, lrpWorkersDflt); err != nil {
 		return nil, err
 	}
 	ed.InitBase(xargs.UUID, kind, bck)

@@ -16,11 +16,13 @@ import (
 const _bldl = "blob-downloader"
 
 type BlobMsg struct {
-	ChunkSize  int64 `json:"chunk-size"`
-	FullSize   int64 `json:"full-size"`
-	NumWorkers int   `json:"num-workers"`
-	LatestVer  bool  `json:"latest-ver"`
+	ChunkSize  int64 `json:"chunk-size"`  // as in: chunk size
+	FullSize   int64 `json:"full-size"`   // user-specified (full) size of the object to download
+	NumWorkers int   `json:"num-workers"` // number of concurrent downloading workers (readers); `dfltNumWorkers` when zero
+	LatestVer  bool  `json:"latest-ver"`  // when true and in-cluster: check with remote whether (deleted | version-changed)
 }
+
+// in re LatestVer, see also: `QparamLatestVer`, 'versioning.validate_warm_get'
 
 // using textproto.CanonicalMIMEHeaderKey() to check presence -
 // if a given key is present and is an empty string, it's an error

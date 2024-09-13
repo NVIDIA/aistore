@@ -137,6 +137,8 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 			cos.ToSizeIEC(maxChunkSize, 0))
 		pre.chunkSize = maxChunkSize
 	}
+
+	// [NOTE] factor in num CPUs and num chunks to tuneup num workers (heuristic)
 	if pre.numWorkers == 0 {
 		pre.numWorkers = dfltNumWorkers
 	}
@@ -149,6 +151,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	if a := cmn.MaxParallelism(); a < pre.numWorkers {
 		pre.numWorkers = a
 	}
+
 	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: pre})
 }
 

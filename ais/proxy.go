@@ -1373,7 +1373,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			tcomsg = &cmn.TCObjsMsg{}
+			tcomsg = &cmn.TCOMsg{}
 			bckTo  *meta.Bck
 			ecode  int
 			eq     bool

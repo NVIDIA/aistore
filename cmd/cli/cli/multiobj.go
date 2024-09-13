@@ -62,7 +62,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 	}
 
 	// 2. TCO message
-	msg := cmn.TCObjsMsg{ToBck: bckTo}
+	msg := cmn.TCOMsg{ToBck: bckTo}
 	{
 		msg.ListRange = lrMsg
 		msg.DryRun = flagIsSet(c, copyDryRunFlag)
@@ -444,11 +444,14 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 			msg.ObjNames = fileList
 			msg.Template = lr.tmplObjs
 			msg.LatestVer = flagIsSet(c, latestVerFlag)
-		}
-		if flagIsSet(c, blobThresholdFlag) {
-			msg.BlobThreshold, err = parseSizeFlag(c, blobThresholdFlag)
-			if err != nil {
-				return
+			if flagIsSet(c, blobThresholdFlag) {
+				msg.BlobThreshold, err = parseSizeFlag(c, blobThresholdFlag)
+				if err != nil {
+					return
+				}
+			}
+			if flagIsSet(c, numListRangeWorkersFlag) {
+				msg.NumWorkers = parseIntFlag(c, numListRangeWorkersFlag)
 			}
 		}
 		xid, err = api.Prefetch(apiBP, lr.bck, msg)
@@ -462,7 +465,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 		kind = apc.ActEvictObjects
 		action = "evict"
 	default:
-		debug.Assert(false, verb)
+		debug.Assert(false, "invalid subcommand: ", verb)
 	}
 	return xid, kind, action, err
 }

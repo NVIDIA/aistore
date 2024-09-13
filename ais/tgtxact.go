@@ -268,7 +268,7 @@ func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 		err    error
 		xctn   core.Xact
 		amsg   *apc.ActMsg
-		tcomsg cmn.TCObjsMsg
+		tcomsg cmn.TCOMsg
 	)
 	if amsg, err = t.readActionMsg(w, r); err != nil {
 		return

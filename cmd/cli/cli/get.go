@@ -466,10 +466,10 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 			}
 			hdr.Set(apc.HdrBlobChunk, parseStrFlag(c, chunkSizeFlag))
 		}
-		if flagIsSet(c, numWorkersFlag) {
-			nw := parseIntFlag(c, numWorkersFlag)
+		if flagIsSet(c, numBlobWorkersFlag) {
+			nw := parseIntFlag(c, numBlobWorkersFlag)
 			if nw <= 0 || nw > 128 {
-				return fmt.Errorf("invalid %s=%d: expecting (1..128) range", flprn(numWorkersFlag), nw)
+				return fmt.Errorf("invalid %s=%d: expecting (1..128) range", flprn(numBlobWorkersFlag), nw)
 			}
 			hdr.Set(apc.HdrBlobWorkers, strconv.Itoa(nw))
 		}
@@ -477,9 +477,9 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 		if !quiet {
 			now = mono.NanoTime()
 		}
-	} else if flagIsSet(c, chunkSizeFlag) || flagIsSet(c, numWorkersFlag) {
+	} else if flagIsSet(c, chunkSizeFlag) || flagIsSet(c, numBlobWorkersFlag) {
 		return fmt.Errorf("command line options (%s, %s) can be used only together with %s",
-			qflprn(chunkSizeFlag), qflprn(numWorkersFlag), qflprn(blobDownloadFlag))
+			qflprn(chunkSizeFlag), qflprn(numBlobWorkersFlag), qflprn(blobDownloadFlag))
 	}
 
 	var getArgs api.GetArgs

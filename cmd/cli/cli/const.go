@@ -835,13 +835,22 @@ var (
 		Usage: "utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects",
 	}
 
-	numWorkersFlag = cli.IntFlag{
+	// num-workers
+	numBlobWorkersFlag = cli.IntFlag{
 		Name:  "num-workers",
 		Usage: "number of concurrent blob-downloading workers (readers); system default when omitted or zero",
 	}
+	numListRangeWorkersFlag = cli.IntFlag{
+		Name: "num-workers",
+		Usage: "number of concurrent workers (readers); number of target mountpaths if omitted or zero;\n" +
+			indent4 + "\t(-1) is a special value indicating no workers (ie., single-threaded execution);\n" +
+			indent4 + "\tany positive value will be adjusted not to exceed the number of CPUs",
+	}
 
+	// validate
 	cksumFlag = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 
+	// ais put
 	putObjCksumText     = indent4 + "\tand provide it as part of the PUT request for subsequent validation on the server side"
 	putObjCksumFlags    = initPutObjCksumFlags()
 	putObjDfltCksumFlag = cli.BoolFlag{

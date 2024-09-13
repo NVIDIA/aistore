@@ -35,6 +35,14 @@ const (
 	lrpPrefix
 )
 
+// when number of workers is not defined in a respective control message
+// (see e.g. PrefetchMsg.NumWorkers)
+// we have two special values
+const (
+	lrpWorkersNone = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
+	lrpWorkersDflt = 0  // num workers = number of mountpaths
+)
+
 // common for all list-range
 type (
 	// one multi-object operation work item
@@ -94,9 +102,11 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, blocking ...bool) error {
-	avail := fs.GetAvail()
-	l := len(avail)
+func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers int) error {
+	var (
+		avail = fs.GetAvail()
+		l     = len(avail)
+	)
 	if l == 0 {
 		return cmn.ErrNoMountpaths
 	}
@@ -104,28 +114,49 @@ func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, blocki
 	r.msg = msg
 	r.bck = bck
 
-	// list is the simplest and always single-threaded
 	if msg.IsList() {
 		r.lrp = lrpList
-		return nil
+	} else {
+		if err := r._inipr(msg); err != nil {
+			return err
+		}
 	}
-	if err := r._inipr(msg); err != nil {
-		return err
-	}
-	if l == 1 {
-		return nil
-	}
-	if len(blocking) > 0 && blocking[0] {
+
+	// run single-threaded
+	if numWorkers == lrpWorkersNone {
 		return nil
 	}
 
-	// num-workers == num-mountpaths but note:
-	// these are not _joggers_
-	r.workers = make([]*lrworker, 0, l)
-	for range avail {
+	// tuneup number of concurrent workers (heuristic)
+	if numWorkers == lrpWorkersDflt {
+		numWorkers = l
+	}
+	if a := cmn.MaxParallelism(); a > numWorkers+8 {
+		var bump bool
+		a <<= 1
+		switch r.lrp {
+		case lrpList:
+			bump = len(msg.ObjNames) > a
+		case lrpRange:
+			bump = int(r.pt.Count()) > a
+		case lrpPrefix:
+			bump = true // err on that other side
+		}
+		if bump {
+			numWorkers += 2
+		}
+	} else {
+		numWorkers = min(numWorkers, a)
+	}
+
+	// but note: these are _not_ joggers
+	r.workers = make([]*lrworker, 0, numWorkers)
+	for range numWorkers {
 		r.workers = append(r.workers, &lrworker{r})
 	}
-	r.workCh = make(chan lrpair, l)
+
+	// work channel capacity: up to 4 pending work items per
+	r.workCh = make(chan lrpair, min(numWorkers<<2, 512))
 	return nil
 }
 
@@ -157,6 +188,8 @@ pref:
 	r.lrp = lrpPrefix
 	return nil
 }
+
+func (r *lriterator) numWorkers() int { return len(r.workers) }
 
 func (r *lriterator) run(wi lrwi, smap *meta.Smap) (err error) {
 	for _, worker := range r.workers {
@@ -251,7 +284,7 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 			lst = &npg.page
 		}
 		if err != nil {
-			nlog.Errorln(core.T.String()+":", err, ecode)
+			nlog.Errorln(core.T.String(), "[", err, "ecode", ecode, "]")
 			freeLsoEntries(lst.Entries)
 			return err
 		}

@@ -146,7 +146,7 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 		objList        = pt.ToSlice()
 		objCnt         = len(objList)
 		requestTimeout = 30 * time.Second
-		tcomsg         = cmn.TCObjsMsg{ToBck: bckTo}
+		tcomsg         = cmn.TCOMsg{ToBck: bckTo}
 	)
 	tcomsg.Transform.Name = etlName
 	tcomsg.Transform.Timeout = cos.Duration(requestTimeout)

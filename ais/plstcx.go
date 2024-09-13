@@ -42,7 +42,7 @@ type (
 		cnt     int
 		lsmsg   apc.LsoMsg
 		altmsg  apc.ActMsg
-		tcomsg  cmn.TCObjsMsg
+		tcomsg  cmn.TCOMsg
 		stopped atomic.Bool
 	}
 )

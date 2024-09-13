@@ -78,7 +78,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
 		tlog.Logf("[%s] %s => %s\n", template, bckFrom.Cname(""), bckTo.Cname(""))
 
-		msg := cmn.TCObjsMsg{ToBck: bckTo}
+		msg := cmn.TCOMsg{ToBck: bckTo}
 		msg.Template = template
 		xid, err = api.CopyMultiObj(baseParams, bckFrom, &msg)
 		tassert.CheckFatal(t, err)
@@ -190,7 +190,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						var (
 							err error
 							xid string
-							msg = cmn.TCObjsMsg{ToBck: bckTo}
+							msg = cmn.TCOMsg{ToBck: bckTo}
 						)
 						msg.ObjNames = list
 						if m.bck.IsRemote() && test.evictRemoteSrc {
@@ -224,7 +224,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 							err      error
 							xid      string
 							template = fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-							msg      = cmn.TCObjsMsg{ToBck: bckTo}
+							msg      = cmn.TCOMsg{ToBck: bckTo}
 						)
 						msg.Template = template
 						if m.bck.IsRemote() && test.evictRemoteSrc {

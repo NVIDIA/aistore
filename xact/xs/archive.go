@@ -244,7 +244,10 @@ func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 		r.cleanup()
 	}
 	var lrit = &lriterator{}
-	err := lrit.init(r, &msg.ListRange, r.Bck(), true)
+
+	// lrpWorkersNone since we need a single writer to serialize adding files
+	// into an eventual `archlom`
+	err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersNone)
 	if err != nil {
 		r.Abort(err)
 		r.DecPending()

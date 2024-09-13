@@ -366,9 +366,9 @@ type (
 	}
 
 	//  Multi-object copy & transform (see also: TCBMsg)
-	TCObjsMsg struct {
+	TCOMsg struct {
 		ToBck Bck `json:"tobck"`
-		apc.TCObjsMsg
+		apc.TCOMsg
 	}
 )
 
