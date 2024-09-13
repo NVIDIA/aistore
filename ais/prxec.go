@@ -58,11 +58,12 @@ func (p *proxy) _recvActiveEC(hdr http.Header, now int64) {
 		return
 	}
 	// check if time has come to close (easy checks first)
-	if p.ec.rust == 0 || time.Duration(now-p.ec.rust) < cmn.Rom.EcStreams() {
+	tout := cmn.Rom.EcStreams()
+	if p.ec.rust == 0 || tout < 0 || time.Duration(now-p.ec.rust) < tout {
 		return
 	}
 	last := p.ec.last.Load()
-	if last == 0 || time.Duration(now-last) < cmn.Rom.EcStreams() {
+	if last == 0 || time.Duration(now-last) < tout {
 		return
 	}
 
@@ -80,6 +81,7 @@ func (p *proxy) _respActiveEC(hdr http.Header, now int64) {
 	tout := cmn.Rom.EcStreams()
 	last := p.ec.last.Load()
 	if last != 0 && time.Duration(now-last) < tout {
+		debug.Assert(tout > 0)
 		hdr.Set(apc.HdrActiveEC, "true")
 	}
 }

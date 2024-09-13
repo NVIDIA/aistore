@@ -172,6 +172,7 @@ class ObjectGroup(AISSource):
     def prefetch(
         self,
         blob_threshold: int = None,
+        num_workers: int = None,
         latest: bool = False,
         continue_on_error: bool = False,
     ):
@@ -182,6 +183,7 @@ class ObjectGroup(AISSource):
         Args:
             latest (bool, optional): GET the latest object version from the associated remote bucket
             continue_on_error (bool, optional): Whether to continue if there is an error prefetching a single object
+            num_workers (int, optional): Number of concurrent workers; number of target mountpaths if omitted or zero
             blob_threshold (int, optional): Utilize built-in blob-downloader for remote objects
                 greater than the specified (threshold) size in bytes
 
@@ -204,6 +206,7 @@ class ObjectGroup(AISSource):
             continue_on_err=continue_on_error,
             latest=latest,
             blob_threshold=blob_threshold,
+            num_workers=num_workers,
         ).as_dict()
 
         return self.bck.make_request(

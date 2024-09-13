@@ -151,7 +151,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		case msg := <-r.workCh:
 			var (
 				smap = core.T.Sowner().Get()
-				lrit = &lriterator{}
+				lrit = &lrit{}
 			)
 			debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
 			r.pending.mtx.Lock()
@@ -307,7 +307,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 // tcowi //
 ///////////
 
-func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
+func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	var (
 		objNameTo = wi.msg.ToName(lom.ObjName)
 		buf, slab = core.T.PageMM().Alloc()
@@ -355,13 +355,13 @@ type syncwi struct {
 // interface guard
 var _ lrwi = (*syncwi)(nil)
 
-func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap, pt *cos.ParsedTemplate) {
+func (r *XactTCObjs) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) {
 	rp := prune{parent: r, smap: smap}
 	rp.bckFrom, rp.bckTo = r.FromTo()
 
 	// tcb use case
-	if lrit.lrp == lrpPrefix {
-		rp.prefix = lrit.prefix
+	if pruneit.lrp == lrpPrefix {
+		rp.prefix = pruneit.prefix
 		rp.init(r.config)
 		rp.run()
 		rp.wait()
@@ -369,10 +369,10 @@ func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap, pt *cos.ParsedTemp
 	}
 
 	// same range iterator but different bucket
-	var syncit lriterator
-	debug.Assert(lrit.lrp == lrpRange)
+	var syncit lrit
+	debug.Assert(pruneit.lrp == lrpRange)
 
-	err := syncit.init(lrit.parent, lrit.msg, rp.bckTo, lrpWorkersDflt)
+	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, lrpWorkersDflt)
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
@@ -380,6 +380,6 @@ func (r *XactTCObjs) prune(lrit *lriterator, smap *meta.Smap, pt *cos.ParsedTemp
 	syncit.wait()
 }
 
-func (syncwi *syncwi) do(lom *core.LOM, _ *lriterator) {
+func (syncwi *syncwi) do(lom *core.LOM, _ *lrit) {
 	syncwi.rp.do(lom, nil)
 }

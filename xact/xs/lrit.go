@@ -47,10 +47,10 @@ const (
 type (
 	// one multi-object operation work item
 	lrwi interface {
-		do(*core.LOM, *lriterator)
+		do(*core.LOM, *lrit)
 	}
 	// a strict subset of core.Xact, includes only the methods
-	// lriterator needs for itself
+	// lrit needs for itself
 	lrxact interface {
 		IsAborted() bool
 		Finished() bool
@@ -62,11 +62,11 @@ type (
 		wi  lrwi
 	}
 	lrworker struct {
-		lrit *lriterator
+		lrit *lrit
 	}
 
 	// common multi-object operation context and list|range|prefix logic
-	lriterator struct {
+	lrit struct {
 		parent lrxact
 		msg    *apc.ListRange
 		bck    *meta.Bck
@@ -99,10 +99,10 @@ var (
 )
 
 ////////////////
-// lriterator //
+// lrit //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers int) error {
+func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers int) error {
 	var (
 		avail = fs.GetAvail()
 		l     = len(avail)
@@ -165,7 +165,7 @@ func (r *lriterator) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWor
 // - "copy entire source bucket", or even
 // - "archive entire bucket as a single shard" (caution!)
 
-func (r *lriterator) _inipr(msg *apc.ListRange) error {
+func (r *lrit) _inipr(msg *apc.ListRange) error {
 	pt, err := cos.NewParsedTemplate(msg.Template)
 	if err != nil {
 		if err == cos.ErrEmptyTemplate {
@@ -189,9 +189,9 @@ pref:
 	return nil
 }
 
-func (r *lriterator) numWorkers() int { return len(r.workers) }
+func (r *lrit) numWorkers() int { return len(r.workers) }
 
-func (r *lriterator) run(wi lrwi, smap *meta.Smap) (err error) {
+func (r *lrit) run(wi lrwi, smap *meta.Smap) (err error) {
 	for _, worker := range r.workers {
 		r.wg.Add(1)
 		go worker.run()
@@ -207,7 +207,7 @@ func (r *lriterator) run(wi lrwi, smap *meta.Smap) (err error) {
 	return err
 }
 
-func (r *lriterator) wait() {
+func (r *lrit) wait() {
 	if r.workers == nil {
 		return
 	}
@@ -215,9 +215,9 @@ func (r *lriterator) wait() {
 	r.wg.Wait()
 }
 
-func (r *lriterator) done() bool { return r.parent.IsAborted() || r.parent.Finished() }
+func (r *lrit) done() bool { return r.parent.IsAborted() || r.parent.Finished() }
 
-func (r *lriterator) _list(wi lrwi, smap *meta.Smap) error {
+func (r *lrit) _list(wi lrwi, smap *meta.Smap) error {
 	r.lrp = lrpList
 	for _, objName := range r.msg.ObjNames {
 		if r.done() {
@@ -236,7 +236,7 @@ func (r *lriterator) _list(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
-func (r *lriterator) _range(wi lrwi, smap *meta.Smap) error {
+func (r *lrit) _range(wi lrwi, smap *meta.Smap) error {
 	r.pt.InitIter()
 	for objName, hasNext := r.pt.Next(); hasNext; objName, hasNext = r.pt.Next() {
 		if r.done() {
@@ -256,7 +256,7 @@ func (r *lriterator) _range(wi lrwi, smap *meta.Smap) error {
 }
 
 // (compare with ais/plstcx)
-func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
+func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
 		err     error
 		ecode   int
@@ -321,7 +321,7 @@ func (r *lriterator) _prefix(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
-func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
+func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
 	if err := lom.InitBck(r.bck.Bucket()); err != nil {
 		return false, err
 	}

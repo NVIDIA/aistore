@@ -58,7 +58,7 @@ type (
 	}
 	archtask struct {
 		wi   *archwi
-		lrit *lriterator
+		lrit *lrit
 	}
 	jogger struct {
 		mpath  *fs.Mountpath
@@ -243,7 +243,7 @@ func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 		r.DecPending()
 		r.cleanup()
 	}
-	var lrit = &lriterator{}
+	var lrit = &lrit{}
 
 	// lrpWorkersNone since we need a single writer to serialize adding files
 	// into an eventual `archlom`
@@ -543,7 +543,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 }
 
 // multi-object iterator i/f: "handle work item"
-func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
+func (wi *archwi) do(lom *core.LOM, lrit *lrit) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {
