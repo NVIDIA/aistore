@@ -261,7 +261,6 @@ func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, ecod
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
-	_clean(err)
 
 	e := &ErrFailedTo{action: action, what: what, err: err}
 	e.actor = thisNodeName
@@ -673,7 +672,6 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 	if e, ok := err.(*ErrAborted); ok {
 		return e
 	}
-	_clean(err)
 	return &ErrAborted{what: what, ctx: ctx, err: err}
 }
 

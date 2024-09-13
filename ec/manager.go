@@ -236,7 +236,9 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 	switch hdr.Opcode {
 	case reqPut:
 		xctn := mgr.RestoreBckRespXact(bck)
+		xctn.IncPending()
 		xctn.dispatchResp(iReq, hdr, objReader)
+		xctn.DecPending()
 	case respPut:
 		// Process the request even if the number of targets is insufficient
 		// (might've started when we had enough)

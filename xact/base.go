@@ -177,7 +177,7 @@ func (xctn *Base) AddErr(err error, logExtra ...int) {
 		return
 	}
 	debug.Assert(err != nil)
-	fs.CleanPathErr(err)
+
 	xctn.err.Add(err)
 	// just add
 	if len(logExtra) == 0 {

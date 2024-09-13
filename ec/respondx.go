@@ -182,9 +182,6 @@ func (r *XactRespond) dispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 }
 
 func (r *XactRespond) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, object io.Reader) {
-	r.IncPending()
-	defer r.DecPending()
-
 	switch hdr.Opcode {
 	case reqPut:
 		// a remote target sent a replica/slice while it was
