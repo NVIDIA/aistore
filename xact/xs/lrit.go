@@ -148,6 +148,7 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 	} else {
 		numWorkers = min(numWorkers, a)
 	}
+	nlog.Infoln("init:", numWorkers, "workers")
 
 	// but note: these are _not_ joggers
 	r.workers = make([]*lrworker, 0, numWorkers)
@@ -188,8 +189,6 @@ pref:
 	r.lrp = lrpPrefix
 	return nil
 }
-
-func (r *lrit) numWorkers() int { return len(r.workers) }
 
 func (r *lrit) run(wi lrwi, smap *meta.Smap) (err error) {
 	for _, worker := range r.workers {

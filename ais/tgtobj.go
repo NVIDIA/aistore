@@ -915,12 +915,12 @@ gfn:
 	ecErr := ec.ECM.RestoreObject(goi.lom)
 	if ecErr == nil {
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
-		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
 			nlog.Infoln(goi.t.String(), "EC-recovered", goi.lom.Cname())
 			return
 		}
 		err = cmn.NewErrFailedTo(goi.t, "load EC-recovered", goi.lom.Cname(), ecErr)
+		nlog.Errorln(ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
 		err = cmn.NewErrFailedTo(goi.t, "EC-recover", goi.lom.Cname(), ecErr)
 		if cmn.IsErrCapExceeded(ecErr) {
@@ -930,7 +930,9 @@ gfn:
 	}
 
 	if err != nil {
-		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom.Cname(), err)
+		if _, ok := err.(*cmn.ErrFailedTo); !ok {
+			err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom.Cname(), err)
+		}
 	} else {
 		err = cos.NewErrNotFound(goi.t, goi.lom.Cname())
 	}

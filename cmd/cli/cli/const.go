@@ -842,9 +842,9 @@ var (
 	}
 	numListRangeWorkersFlag = cli.IntFlag{
 		Name: "num-workers",
-		Usage: "number of concurrent workers (readers); number of target mountpaths if omitted or zero;\n" +
-			indent4 + "\t(-1) is a special value indicating no workers (ie., single-threaded execution);\n" +
-			indent4 + "\tany positive value will be adjusted not to exceed the number of CPUs",
+		Usage: "number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;\n" +
+			indent4 + "\t(-1) is a special value indicating no workers at all (ie., single-threaded execution);\n" +
+			indent4 + "\tany positive value will be adjusted _not_ to exceed the number of target CPUs",
 	}
 
 	// validate

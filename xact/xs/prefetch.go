@@ -103,11 +103,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 }
 
 func (r *prefetch) Run(wg *sync.WaitGroup) {
-	if nw := r.lrit.numWorkers(); nw > 1 {
-		nlog.Infoln(r.Name(), "[", nw, "workers ]")
-	} else {
-		nlog.Infoln(r.Name())
-	}
+	nlog.Infoln(r.Name())
 
 	wg.Done()
 

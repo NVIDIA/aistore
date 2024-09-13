@@ -161,20 +161,24 @@ func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
 }
 
 func CleanPathErr(err error) {
-	var (
-		pathErr *fs.PathError
-		what    string
-		parsed  ParsedFQN
-	)
+	var pathErr *fs.PathError
 	if !errors.As(err, &pathErr) {
 		return
 	}
+	if pathErr.Path == "" {
+		return
+	}
+
+	var parsed ParsedFQN
 	if errV := parsed.Init(pathErr.Path); errV != nil {
 		return
 	}
+
+	// replace
 	pathErr.Path = parsed.Bck.Cname(parsed.ObjName)
 	pathErr.Op = "[fs-path]"
 	if strings.Contains(pathErr.Err.Error(), "no such file") {
+		var what string
 		switch parsed.ContentType {
 		case ObjectType:
 			what = "'object'"

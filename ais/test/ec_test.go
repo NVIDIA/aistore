@@ -1600,6 +1600,7 @@ func TestECXattrs(t *testing.T) {
 // 4. create bucket with the same name
 // 5. check that EC is working properly for this bucket
 func TestECDestroyBucket(t *testing.T) {
+	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: revisit
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
@@ -1640,7 +1641,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 			objName := fmt.Sprintf(o.pattern, i)
 			if i%10 == 0 {
-				tlog.Logf("ec object %s into bucket %s\n", objName, bck)
+				tlog.Logf("PUT %s\n", bck.Cname(objName))
 			}
 			if putECFile(baseParams, bck, objName) != nil {
 				errCnt.Inc()

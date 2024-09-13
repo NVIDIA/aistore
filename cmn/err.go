@@ -654,7 +654,7 @@ func IsErrXactNotFound(err error) bool {
 // ErrObjDefunct
 
 func (e *ErrObjDefunct) Error() string {
-	return fmt.Sprintf("%s is defunct (%d != %d)", e.name, e.d1, e.d2)
+	return fmt.Sprintf("%s is defunct (%x != %x)", e.name, e.d1, e.d2)
 }
 
 func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
