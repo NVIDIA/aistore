@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -115,18 +114,16 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 		}
 	}
 
-	if err := t._initBuiltTagged(tstats); err != nil {
+	if err := t._initBuiltTagged(tstats, config); err != nil {
 		cos.ExitLog(err)
 	}
 }
 
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
-func (t *target) _initBuiltTagged(tstats *stats.Trunner) error {
-	var (
-		enabled, disabled, notlinked []string
-		config                       = cmn.GCO.Get()
-	)
+func (t *target) _initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) error {
+	var enabled, disabled, notlinked []string
+
 	for provider := range apc.Providers {
 		var (
 			add core.Backend
@@ -156,24 +153,35 @@ func (t *target) _initBuiltTagged(tstats *stats.Trunner) error {
 			disabled = append(disabled, provider)
 		case err != nil && configured:
 			notlinked = append(notlinked, provider)
+		case err != nil && !configured:
+			_, ok := err.(*cmn.ErrInitBackend) // error type to indicate a _mock_ backend
+			if !ok {
+				return fmt.Errorf("%s: failed to initialize [%s] backend, err: %v", t, provider, err)
+			}
 		}
 	}
-	const c = "configured but missing in the build"
+
+	var (
+		ln = len(notlinked)
+		ld = len(disabled)
+		le = len(enabled)
+	)
 	switch {
-	case len(notlinked) > 0:
-		s := fmt.Sprintf("%s: %v backends are "+c, t, notlinked)
-		if len(notlinked) == 1 {
-			s = fmt.Sprintf("%s: %s backend is "+c, t, notlinked[0])
+	case ln > 0:
+		err := fmt.Errorf("%s backend%s: %v configured but missing in the build", t, cos.Plural(ln), notlinked)
+		if le > 0 || ld > 0 {
+			err = fmt.Errorf("%v (enabled: %v, disabled: %v)", err, enabled, disabled)
 		}
-		if len(enabled) == 0 && len(disabled) == 0 {
-			return errors.New(s)
-		}
-		return fmt.Errorf("%s (enabled %v, disabled %v)", s, enabled, disabled)
-	case len(disabled) > 0:
-		nlog.Warningf("%s some backends are disabled via configuration: (enabled %v, disabled %v)", t, enabled, disabled)
+		return err
+	case ld > 0:
+		nlog.Warningf("%s backend%s: %v present in the build but disabled via (or not present in) the configuration",
+			t, cos.Plural(ld), disabled)
+	case le == 0:
+		nlog.Infoln(t.String(), "backends: none")
 	default:
 		nlog.Infoln(t.String(), "backends:", enabled)
 	}
+
 	return nil
 }
 
