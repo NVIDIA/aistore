@@ -148,7 +148,7 @@ $ ais bucket evict ...
 
 See also:
 
-* [CLI: Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges)
+* [CLI: Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 * [api.CreateBucket() and api.SetBucketProps()](/api/bucket.go)
 * [RESTful API](http_api.md)
 * [CLI: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
@@ -468,7 +468,7 @@ $ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
 
 ### See also
 
-* [Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges)
+* [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 
 ## Evict Remote Bucket
 
@@ -537,7 +537,7 @@ This behavior can be applied to other remote buckets by using the `--keep-md` fl
 
 ### See also
 
-* [Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges)
+* [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 
 # Backend Bucket
 

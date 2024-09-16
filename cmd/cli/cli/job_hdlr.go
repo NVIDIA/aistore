@@ -37,6 +37,22 @@ const prefetchUsage = "prefetch one remote bucket, multiple remote buckets, or\n
 	indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
+const blobDownloadUsage = "run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
+	indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
+	indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- run 4 concurrent readers to download 2 (listed) blobs\n" +
+	indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor."
+
+const resilverUsage = "resilver user data on a given target (or all targets in the cluster); entails:\n" +
+	indent1 + "\t- fix data redundancy with respect to bucket configuration;\n" +
+	indent1 + "\t- remove migrated objects and old/obsolete workfiles."
+
+const stopUsage = "terminate a single batch job or multiple jobs, e.g.:\n" +
+	indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given job identified by its unique ID;\n" +
+	indent1 + "\t- 'stop copy-listrange'\t- terminate all multi-object copies;\n" +
+	indent1 + "\t- 'stop copy-objects'\t- same as above (using display name);\n" +
+	indent1 + "\t- 'stop --all'\t- terminate all running jobs\n" +
+	indent1 + tabHelpOpt + "."
+
 // top-level job command
 var (
 	jobCmd = cli.Command{
@@ -106,9 +122,8 @@ var (
 	}
 
 	jobStartResilver = cli.Command{
-		Name: commandResilver,
-		Usage: "resilver user data on a given target (or all targets in the cluster): fix data redundancy\n" +
-			indent4 + "\twith respect to bucket configuration, remove migrated objects and old/obsolete workfiles",
+		Name:         commandResilver,
+		Usage:        resilverUsage,
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        startCommonFlags,
 		Action:       startResilverHandler,
@@ -124,11 +139,8 @@ var (
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
 	blobDownloadCmd = cli.Command{
-		Name: cmdBlobDownload,
-		Usage: "run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
-			indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
-			indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- use 4 concurrent readers to download each of the 2 blobs\n" +
-			indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor.",
+		Name:         cmdBlobDownload,
+		Usage:        blobDownloadUsage,
 		ArgsUsage:    objectArgument,
 		Flags:        startSpecialFlags[cmdBlobDownload],
 		Action:       blobDownloadHandler,
@@ -186,13 +198,8 @@ var (
 		yesFlag,
 	}
 	jobStopSub = cli.Command{
-		Name: commandStop,
-		Usage: "terminate a single batch job or multiple jobs, e.g.:\n" +
-			indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given job identified by its unique ID;\n" +
-			indent1 + "\t- 'stop copy-listrange'\t- terminate all multi-object copies;\n" +
-			indent1 + "\t- 'stop copy-objects'\t- same as above (using display name);\n" +
-			indent1 + "\t- 'stop --all'\t- terminate all running jobs\n" +
-			indent1 + strToSentence(tabHelpOpt),
+		Name:         commandStop,
+		Usage:        stopUsage,
 		ArgsUsage:    jobAnyArg,
 		Flags:        stopCmdsFlags,
 		Action:       stopJobHandler,

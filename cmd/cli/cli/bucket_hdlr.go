@@ -68,6 +68,25 @@ var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts 
 	indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_\n" +
 	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to cluster's BMD"
 
+const setBpropsUsage = "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
+	indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
+	indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
+	indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
+	indent1 + "\t* ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5\n" +
+	indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
+	indent1 + "\tReferences:\n" +
+	indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
+	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'"
+
+const evictUsage = "evict one remote bucket, multiple remote buckets, or\n" +
+	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
+	indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
+	indent1 + "\t- 'evict gs:'\t- evict all GCP buckets from the cluster;\n" +
+	indent1 + "\t- 'evict gs://abc --template images/'\t- evict all objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- 'evict gs://abc/images/'\t- same as above;\n" +
+	indent1 + "\t- 'evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- evict the matching range (prefix + brace expansion);\n" +
+	indent1 + "\t- 'evict \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
+
 var (
 	// flags
 	bucketCmdsFlags = map[string][]cli.Flag{
@@ -188,15 +207,8 @@ var (
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	bucketObjCmdEvict = cli.Command{
-		Name: commandEvict,
-		Usage: "evict one remote bucket, multiple remote buckets, or\n" +
-			indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
-			indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
-			indent1 + "\t- 'evict gs:'\t- evict all GCP buckets from the cluster;\n" +
-			indent1 + "\t- 'evict gs://abc --template images/'\t- evict all objects from the virtual subdirectory \"images\";\n" +
-			indent1 + "\t- 'evict gs://abc/images/'\t- same as above;\n" +
-			indent1 + "\t- 'evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- evict the matching range (prefix + brace expansion);\n" +
-			indent1 + "\t- 'evict \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)",
+		Name:         commandEvict,
+		Usage:        evictUsage,
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
 		Flags:        bucketCmdsFlags[commandEvict],
 		Action:       evictHandler,
@@ -219,16 +231,8 @@ var (
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 	}
 	bucketCmdSetProps = cli.Command{
-		Name: cmdSetBprops,
-		Usage: "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
-			indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
-			indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
-			indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
-			indent1 + "\t* ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5\n" +
-			indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
-			indent1 + "\tReferences:\n" +
-			indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
-			indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'",
+		Name:      cmdSetBprops,
+		Usage:     setBpropsUsage,
 		ArgsUsage: bucketPropsArgument,
 		Flags:     bucketCmdsFlags[cmdSetBprops],
 		Action:    setPropsHandler,

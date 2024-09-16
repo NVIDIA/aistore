@@ -24,6 +24,16 @@ import (
 
 const clusterCompletion = "cluster"
 
+// (compare with getCluLogUsage)
+const getLogUsage = "download the current log or entire log history from a selected node or all nodes, e.g.:\n" +
+	indent4 + "\t - 'ais log get NODE_ID /tmp' - download the specified node's current log; save the result to the specified directory;\n" +
+	indent4 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10' - download the current log as /tmp/out\n" +
+	indent4 + "\t    keep updating (ie., appending) the latter every 10s;\n" +
+	indent4 + "\t - 'ais log get cluster /tmp' - download TAR.GZ archived logs from _all_ nodes in the cluster\n" +
+	indent4 + "\t    (note that 'cluster' implies '--all'), and save the result to the specified destination;\n" +
+	indent4 + "\t - 'ais log get NODE_ID --all' - download the node's TAR.GZ log archive\n" +
+	indent4 + "\t - 'ais log get NODE_ID --all --severity e' - TAR.GZ archive of (only) logged errors and warnings"
+
 var (
 	nodeLogFlags = map[string][]cli.Flag{
 		commandShow: append(
@@ -50,15 +60,8 @@ var (
 		BashComplete: suggestAllNodes,
 	}
 	getCmdLog = cli.Command{
-		Name: commandGet,
-		Usage: "download the current log or entire log history from a selected node or all nodes, e.g.:\n" +
-			indent4 + "\t - 'ais log get NODE_ID /tmp' - download the specified node's current log; save the result to the specified directory;\n" +
-			indent4 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10' - download the current log as /tmp/out\n" +
-			indent4 + "\t    keep updating (ie., appending) the latter every 10s;\n" +
-			indent4 + "\t - 'ais log get cluster /tmp' - download TAR.GZ archived logs from _all_ nodes in the cluster\n" +
-			indent4 + "\t    (note that 'cluster' implies '--all'), and save the result to the specified destination;\n" +
-			indent4 + "\t - 'ais log get NODE_ID --all' - download the node's TAR.GZ log archive\n" +
-			indent4 + "\t - 'ais log get NODE_ID --all --severity e' - TAR.GZ archive of (only) logged errors and warnings",
+		Name:      commandGet,
+		Usage:     getLogUsage,
 		ArgsUsage: getLogArgument,
 		Flags:     nodeLogFlags[commandGet],
 		Action:    getLogHandler,

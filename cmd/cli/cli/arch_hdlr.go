@@ -30,21 +30,48 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var (
-	archPutUsage = "archive a file, a directory, or multiple files and/or directories as\n" +
-		indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
-		indent1 + "\tBoth APPEND (to an existing shard) and PUT (a new version of the shard) are supported.\n" +
-		indent1 + "\tExamples:\n" +
-		indent1 + "\t- 'local-file s3://q/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,\n" +
-		indent1 + "\t   optionally, rename it (inside archive) as specified;\n" +
-		indent1 + "\t- 'local-file s3://q/shard-00123.tar.lz4 --append-or-put --archpath name-in-archive' - append file to a given shard if exists,\n" +
-		indent1 + "\t   otherwise, create a new shard (and name it shard-00123.tar.lz4, as specified);\n" +
-		indent1 + "\t- 'src-dir gs://w/shard-999.zip --append' - archive entire 'src-dir' directory; iff the destination .zip doesn't exist create a new one;\n" +
-		indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
-		indent1 + "\tTips:\n" +
-		indent1 + "\t- use '--dry-run' if in doubt;\n" +
-		indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details)."
-)
+const archBucketUsage = "archive selected or matching objects from " + bucketObjectSrcArgument + " as\n" +
+	indent1 + archExts + "-formatted object (a.k.a. shard),\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t- 'archive bucket ais://src ais://dst/a.tar.lz4 --template \"shard-{001..997}\"'\n" +
+	indent1 + "\t- 'archive bucket \"ais://src/shard-{001..997}\" ais://dst/a.tar.lz4'\t- same as above (notice double quotes)\n" +
+	indent1 + "\t- 'archive bucket \"ais://src/shard-{998..999}\" ais://dst/a.tar.lz4 --append-or-put'\t- append (ie., archive) 2 more objects"
+
+const archPutUsage = "archive a file, a directory, or multiple files and/or directories as\n" +
+	indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
+	indent1 + "\tBoth APPEND (to an existing shard) and PUT (a new version of the shard) are supported.\n" +
+	indent1 + "\tExamples:\n" +
+	indent1 + "\t- 'local-file s3://q/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,\n" +
+	indent1 + "\t   optionally, rename it (inside archive) as specified;\n" +
+	indent1 + "\t- 'local-file s3://q/shard-00123.tar.lz4 --append-or-put --archpath name-in-archive' - append file to a given shard if exists,\n" +
+	indent1 + "\t   otherwise, create a new shard (and name it shard-00123.tar.lz4, as specified);\n" +
+	indent1 + "\t- 'src-dir gs://w/shard-999.zip --append' - archive entire 'src-dir' directory; iff the destination .zip doesn't exist create a new one;\n" +
+	indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
+	indent1 + "\tTips:\n" +
+	indent1 + "\t- use '--dry-run' if in doubt;\n" +
+	indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details)."
+
+// (compare with  objGetUsage)
+const archGetUsage = "get a shard and extract its content; get an archived file;\n" +
+	indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
+	indent4 + "\tassorted options further include:\n" +
+	indent4 + "\t- '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);\n" +
+	indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
+	indent4 + "\t- '-v' to produce verbose output when getting multiple objects.\n" +
+	indent1 + "'ais archive get' examples:\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar.lz4 /tmp/out - get and extract entire shard to /tmp/out/trunk/*\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar.lz4 --archpath file45.jpeg /tmp/out - extract one named file\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar.lz4/file45.jpeg /tmp/out - same as above (and note that '--archpath' is implied)\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar.lz4/file45 /tmp/out/file456.new - same as above, with destination explicitly (re)named\n" +
+	indent1 + "'ais archive get' multi-selection examples:\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar 111.tar --archregx=jpeg --archmode=suffix - return 111.tar with all *.jpeg files from a given shard\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar 222.tar --archregx=file45 --archmode=wdskey - return 222.tar with all file45.* files --/--\n" +
+	indent4 + "\t- ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--"
+
+const genShardsUsage = "generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
+	indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
+	indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
+	indent4 + "\t(notice quotation marks in both cases)"
 
 var (
 	// flags
@@ -86,13 +113,8 @@ var (
 
 	// archive bucket
 	archBucketCmd = cli.Command{
-		Name: commandBucket,
-		Usage: "archive selected or matching objects from " + bucketObjectSrcArgument + " as\n" +
-			indent1 + archExts + "-formatted object (a.k.a. shard),\n" +
-			indent1 + "e.g.:\n" +
-			indent1 + "\t- 'archive bucket ais://src ais://dst/a.tar.lz4 --template \"shard-{001..997}\"'\n" +
-			indent1 + "\t- 'archive bucket \"ais://src/shard-{001..997}\" ais://dst/a.tar.lz4'\t- same as above (notice double quotes)\n" +
-			indent1 + "\t- 'archive bucket \"ais://src/shard-{998..999}\" ais://dst/a.tar.lz4 --append-or-put'\t- append (ie., archive) 2 more objects",
+		Name:         commandBucket,
+		Usage:        archBucketUsage,
 		ArgsUsage:    bucketObjectSrcArgument + " " + dstShardArgument,
 		Flags:        archCmdsFlags[commandBucket],
 		Action:       archMultiObjHandler,
@@ -111,23 +133,8 @@ var (
 
 	// archive get
 	archGetCmd = cli.Command{
-		Name: objectCmdGet.Name,
-		// NOTE: compare with  objectCmdGet.Usage
-		Usage: "get a shard and extract its content; get an archived file;\n" +
-			indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
-			indent4 + "\tassorted options further include:\n" +
-			indent4 + "\t- '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);\n" +
-			indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
-			indent4 + "\t- '-v' to produce verbose output when getting multiple objects.\n" +
-			indent1 + "'ais archive get' examples:\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar.lz4 /tmp/out - get and extract entire shard to /tmp/out/trunk/*\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar.lz4 --archpath file45.jpeg /tmp/out - extract one named file\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar.lz4/file45.jpeg /tmp/out - same as above (and note that '--archpath' is implied)\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar.lz4/file45 /tmp/out/file456.new - same as above, with destination explicitly (re)named\n" +
-			indent1 + "'ais archive get' multi-selection examples:\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar 111.tar --archregx=jpeg --archmode=suffix - return 111.tar with all *.jpeg files from a given shard\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar 222.tar --archregx=file45 --archmode=wdskey - return 222.tar with all file45.* files --/--\n" +
-			indent4 + "\t- ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--",
+		Name:         objectCmdGet.Name,
+		Usage:        archGetUsage,
 		ArgsUsage:    getShardArgument,
 		Flags:        rmFlags(objectCmdGet.Flags, headObjPresentFlag, lengthFlag, offsetFlag),
 		Action:       getArchHandler,
@@ -146,11 +153,8 @@ var (
 
 	// gen shards
 	genShardsCmd = cli.Command{
-		Name: cmdGenShards,
-		Usage: "generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
-			indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
-			indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
-			indent4 + "\t(notice quotation marks in both cases)",
+		Name:      cmdGenShards,
+		Usage:     genShardsUsage,
 		ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 		Flags:     archCmdsFlags[cmdGenShards],
 		Action:    genShardsHandler,

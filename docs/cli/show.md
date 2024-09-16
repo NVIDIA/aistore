@@ -306,9 +306,9 @@ qVJt8087         g15     rebalance       694             1.02MiB         13:40:5
 - [CLI: `dsort` (distributed shuffle)](/docs/cli/dsort.md)
 - [CLI: `download` from any remote source](/docs/cli/download.md)
 - [built-in `rebalance`](/docs/rebalance.md)
-- [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
+- [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 - [reading, writing, and listing archives](/docs/cli/object.md)
-- [copying buckets](/docs/cli/bucket.md#copy-bucket)
+- [copying buckets](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
 
 ## `ais show cluster`
 

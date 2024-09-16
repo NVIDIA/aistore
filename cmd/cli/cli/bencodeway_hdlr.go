@@ -13,6 +13,15 @@ import (
 	"github.com/urfave/cli"
 )
 
+const mirrorUsage = "configure (or unconfigure) bucket as n-way mirror, and run the corresponding batch job, e.g.:\n" +
+	indent1 + "\t- 'ais start mirror ais://m --copies 3'\t- configure ais://m as a 3-way mirror;\n" +
+	indent1 + "\t- 'ais start mirror ais://m --copies 1'\t- configure ais://m for no redundancy (no extra copies).\n" +
+	indent1 + "(see also: 'ais start ec-encode')"
+
+const bencodeUsage = "erasure code entire bucket, e.g.:\n" +
+	indent1 + "\t- 'ais start ec-encode ais://m -d 8 -p 2'\t- erasure-code ais://m for (D=8, P=2).\n" +
+	indent1 + "(see also: 'ais start mirror')"
+
 var (
 	storageSvcCmdsFlags = map[string][]cli.Flag{
 		commandMirror: {
@@ -28,21 +37,16 @@ var (
 
 	storageSvcCmds = []cli.Command{
 		{
-			Name: commandMirror,
-			Usage: "configure (or unconfigure) bucket as n-way mirror, and run the corresponding batch job, e.g.:\n" +
-				indent1 + "\t- 'ais start mirror ais://m --copies 3'\t- configure ais://m as a 3-way mirror;\n" +
-				indent1 + "\t- 'ais start mirror ais://m --copies 1'\t- configure ais://m for no redundancy (no extra copies).\n" +
-				indent1 + "(see also: 'ais start ec-encode')",
+			Name:         commandMirror,
+			Usage:        mirrorUsage,
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandMirror],
 			Action:       setCopiesHandler,
 			BashComplete: bucketCompletions(bcmplop{}),
 		},
 		{
-			Name: commandECEncode,
-			Usage: "erasure code entire bucket, e.g.:\n" +
-				indent1 + "\t- 'ais start ec-encode ais://m -d 8 -p 2'\t- erasure-code ais://m for (D=8, P=2).\n" +
-				indent1 + "(see also: 'ais start mirror')",
+			Name:         commandECEncode,
+			Usage:        bencodeUsage,
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandECEncode],
 			Action:       ecEncodeHandler,

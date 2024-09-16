@@ -43,6 +43,14 @@ Rest of this document covers starting, stopping, and otherwise managing job kind
 - [CLI: `download` from any remote source](/docs/cli/download.md)
 - [built-in `rebalance`](/docs/rebalance.md)
 
+* And more:
+  - [`ais etl`](/docs/cli/etl.md)
+  - [`ais prefetch`](/docs/cli/object.md)
+  - [`ais cp`](#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+  - [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
+  - [reading, writing, and listing archives](/docs/cli/object.md)
+  - [copying buckets](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+
 # `ais job` command
 
 Has the following static completions aka subcommands:

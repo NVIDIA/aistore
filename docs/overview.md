@@ -201,8 +201,8 @@ To this end, AIS provides 6 (six) easy ways ranging from the conventional on-dem
 5. [Promote local or shared files](#promote-local-or-shared-files)
 6. [Backend Bucket](bucket.md#backend-bucket)
 7. [Download very large objects (BLOBs)](/docs/cli/blob-downloader.md)
-8. [Copy remote bucket](/docs/cli/bucket.md#copy-bucket)
-9. [Copy multiple remote objects](/docs/cli/bucket.md#copy-multiple-objects)
+8. [Copy remote bucket](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+9. [Copy multiple remote objects](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
 
 In particular:
 

@@ -5,7 +5,6 @@
 package cli
 
 import (
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -217,10 +216,20 @@ const (
 	tabHelpDet = "press <TAB-TAB> to select, '--help' for details"
 )
 
+// indentation
+const (
+	indent1 = "   "
+	indent2 = "      "       // repeat(indent1, 2)
+	indent4 = "            " // repeat(indent1, 4)
+)
+
+const (
+	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4" // namely, archive.FileExtensions
+	archExts    = "(" + archFormats + ")"
+)
+
 // `ArgsUsage`: argument placeholders in help messages
 const (
-	indent1 = "   " // indent4 et al.
-
 	// Job IDs (download, dsort)
 	jobIDArgument                 = "JOB_ID"
 	optionalJobIDArgument         = "[JOB_ID]"
@@ -353,12 +362,6 @@ const (
 //
 
 var (
-	indent2 = strings.Repeat(indent1, 2)
-	indent4 = strings.Repeat(indent1, 4)
-
-	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4" // namely, archive.FileExtensions
-	archExts    = "(" + archFormats + ")"
-
 	//
 	// scope 'all'
 	//

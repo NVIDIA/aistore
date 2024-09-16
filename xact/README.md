@@ -41,9 +41,10 @@ The mirroring (xaction) takes into account congestion on its communication chann
   - [`ais show rebalance`](/docs/rebalance.md)
 * And also:
   - [`ais etl`](/docs/cli/etl.md)
-  - [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges)
+  - [`ais prefetch`](/docs/cli/object.md)
+  - [`ais cp`](#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+  - [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
   - [reading, writing, and listing archives](/docs/cli/object.md)
-  - [copying buckets](/docs/cli/bucket.md#copy-bucket)
 
 ---------------------------------------------------------------
 

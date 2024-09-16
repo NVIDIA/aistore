@@ -13,7 +13,7 @@ AIStore supports [numerous ways](https://github.com/NVIDIA/aistore/blob/main/doc
 Ultimately, the only precondition is that there is a *directory* you can access that contains files to migrate or copy. It turns out that **everything else** can be done in two easy steps:
 
 1. Run local HTTP server.
-2. [Prefetch](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/main/docs/downloader.md) the files.
+2. [Prefetch](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets) or [download](https://github.com/NVIDIA/aistore/blob/main/docs/downloader.md) the files.
 
 Implementation-wise, both Step 1 and Step 2 have multiple variations and we'll consider at least some of them below. But first, let's take a look at an example:
 
@@ -98,5 +98,5 @@ Other than a different, albeit still arbitrary, listening port and a user-select
 ## References
 
 * [Using AIS Downloader](https://github.com/NVIDIA/aistore/blob/main/docs/cli/download.md)
-* [Multi-object operations](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#operations-on-lists-and-ranges)
+* [Multi-object operations](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 * [Promote files and directories](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#promote-files-and-directories)

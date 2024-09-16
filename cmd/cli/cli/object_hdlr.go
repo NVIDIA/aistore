@@ -21,6 +21,54 @@ import (
 
 // in this file: operations on objects
 
+// (compare with  archGetUsage)
+const objGetUsage = "get an object, a shard, an archived file, or a range of bytes from all of the above;\n" +
+	indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
+	indent4 + "\tassorted options further include:\n" +
+	indent4 + "\t- '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);\n" +
+	indent4 + "\t- '--extract' or '--archpath' to extract archived content;\n" +
+	indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
+	indent4 + "\t- '-v' to produce verbose output when getting multiple objects."
+
+const objPutUsage = "PUT or append one file, one directory, or multiple files and/or directories.\n" +
+	indent1 + "Use optional shell filename PATTERN (wildcard) to match/select multiple sources.\n" +
+	indent1 + "Destination naming is consistent with 'ais object promote' command, whereby the optional OBJECT_NAME_or_PREFIX\n" +
+	indent1 + "becomes either a name, a prefix, or a virtual destination directory (if it ends with a forward '/').\n" +
+	indent1 + "Assorted examples and usage options follow (and see docs/cli/object.md for more):\n" +
+	indent1 + "\t- upload matching files: 'ais put \"docs/*.md\" ais://abc/markdown/'\n" +
+	indent1 + "\t- (notice quotation marks and a forward slash after 'markdown/' destination);\n" +
+	indent1 + "\t- '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;\n" +
+	indent1 + "\t- '--progress': progress bar, to show running counts and sizes of uploaded files;\n" +
+	indent1 + "\t- Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;\n" +
+	indent1 + "\t- '--append' to append (concatenate) files, e.g.: 'ais put docs ais://nnn/all-docs --append';\n" +
+	indent1 + "\t- '--dry-run': see the results without making any changes.\n" +
+	indent1 + "\tNotes:\n" +
+	indent1 + "\t- to write or add files to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'"
+
+const objPromoteUsage = "PROMOTE target-accessible files and directories.\n" +
+	indent1 + "The operation is intended for copying NFS and SMB shares mounted on any/all targets\n" +
+	indent1 + "but can be also used to copy local files (again, on any/all targets in the cluster).\n" +
+	indent1 + "Copied files and directories become regular stored objects that can be further listed and operated upon.\n" +
+	indent1 + "Destination naming is consistent with 'ais put' command, e.g.:\n" +
+	indent1 + "\t- 'promote /tmp/subdir/f1 ais://nnn'\t - ais://nnn/f1\n" +
+	indent1 + "\t- 'promote /tmp/subdir/f2 ais://nnn/aaa'\t - ais://nnn/aaa\n" +
+	indent1 + "\t- 'promote /tmp/subdir/f3 ais://nnn/aaa/'\t - ais://nnn/aaa/f3\n" +
+	indent1 + "\t- 'promote /tmp/subdir ais://nnn'\t - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3\n" +
+	indent1 + "\t- 'promote /tmp/subdir ais://nnn/aaa/'\t - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3\n" +
+	indent1 + "Other supported options follow below."
+
+const objRmUsage = "remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +
+	indent1 + "\t- 'rm ais://nnn --all'\t- remove all objects from the bucket ais://nnn;\n" +
+	indent1 + "\t- 'rm s3://abc' --all\t- remove all objects including those that are not _present_ in the cluster;\n" +
+	indent1 + "\t- 'rm gs://abc --template images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- 'rm gs://abc/images/'\t- same as above;\n" +
+	indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
+	indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
+
+const concatUsage = "append a file, a directory, or multiple files and/or directories\n" +
+	indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
+	indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory."
+
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
 		commandRemove: append(
@@ -110,14 +158,8 @@ var (
 
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
-		Name: commandGet,
-		Usage: "get an object, a shard, an archived file, or a range of bytes from all of the above;\n" +
-			indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
-			indent4 + "\tassorted options further include:\n" +
-			indent4 + "\t- '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);\n" +
-			indent4 + "\t- '--extract' or '--archpath' to extract archived content;\n" +
-			indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
-			indent4 + "\t- '-v' to produce verbose output when getting multiple objects.",
+		Name:         commandGet,
+		Usage:        objGetUsage,
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
@@ -125,49 +167,24 @@ var (
 	}
 
 	objectCmdPut = cli.Command{
-		Name: commandPut,
-		Usage: "PUT or append one file, one directory, or multiple files and/or directories.\n" +
-			indent1 + "Use optional shell filename PATTERN (wildcard) to match/select multiple sources.\n" +
-			indent1 + "Destination naming is consistent with 'ais object promote' command, whereby the optional OBJECT_NAME_or_PREFIX\n" +
-			indent1 + "becomes either a name, a prefix, or a virtual destination directory (if it ends with a forward '/').\n" +
-			indent1 + "Assorted examples and usage options follow (and see docs/cli/object.md for more):\n" +
-			indent1 + "\t- upload matching files: 'ais put \"docs/*.md\" ais://abc/markdown/'\n" +
-			indent1 + "\t- (notice quotation marks and a forward slash after 'markdown/' destination);\n" +
-			indent1 + "\t- '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;\n" +
-			indent1 + "\t- '--progress': progress bar, to show running counts and sizes of uploaded files;\n" +
-			indent1 + "\t- Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;\n" +
-			indent1 + "\t- '--append' to append (concatenate) files, e.g.: 'ais put docs ais://nnn/all-docs --append';\n" +
-			indent1 + "\t- '--dry-run': see the results without making any changes.\n" +
-			indent1 + "\tNotes:\n" +
-			indent1 + "\t- to write or add files to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'",
+		Name:         commandPut,
+		Usage:        objPutUsage,
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
 		BashComplete: putPromApndCompletions,
 	}
 	objectCmdPromote = cli.Command{
-		Name: commandPromote,
-		Usage: "PROMOTE target-accessible files and directories.\n" +
-			indent1 + "The operation is intended for copying NFS and SMB shares mounted on any/all targets\n" +
-			indent1 + "but can be also used to copy local files (again, on any/all targets in the cluster).\n" +
-			indent1 + "Copied files and directories become regular stored objects that can be further listed and operated upon.\n" +
-			indent1 + "Destination naming is consistent with 'ais put' command, e.g.:\n" +
-			indent1 + "\t- 'promote /tmp/subdir/f1 ais://nnn'\t - ais://nnn/f1\n" +
-			indent1 + "\t- 'promote /tmp/subdir/f2 ais://nnn/aaa'\t - ais://nnn/aaa\n" +
-			indent1 + "\t- 'promote /tmp/subdir/f3 ais://nnn/aaa/'\t - ais://nnn/aaa/f3\n" +
-			indent1 + "\t- 'promote /tmp/subdir ais://nnn'\t - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3\n" +
-			indent1 + "\t- 'promote /tmp/subdir ais://nnn/aaa/'\t - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3\n" +
-			indent1 + "Other supported options follow below.",
+		Name:         commandPromote,
+		Usage:        objPromoteUsage,
 		ArgsUsage:    promoteObjectArgument,
 		Flags:        objectCmdsFlags[commandPromote],
 		Action:       promoteHandler,
 		BashComplete: putPromApndCompletions,
 	}
 	objectCmdConcat = cli.Command{
-		Name: commandConcat,
-		Usage: "append a file, a directory, or multiple files and/or directories\n" +
-			indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
-			indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory.",
+		Name:      commandConcat,
+		Usage:     concatUsage,
 		ArgsUsage: concatObjectArgument,
 		Flags:     objectCmdsFlags[commandConcat],
 		Action:    concatHandler,
@@ -191,14 +208,8 @@ var (
 	}
 
 	objectCmdRemove = cli.Command{
-		Name: commandRemove,
-		Usage: "remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +
-			indent1 + "\t- 'rm ais://nnn --all'\t- remove all objects from the bucket ais://nnn;\n" +
-			indent1 + "\t- 'rm s3://abc' --all\t- remove all objects including those that are not _present_ in the cluster;\n" +
-			indent1 + "\t- 'rm gs://abc --template images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
-			indent1 + "\t- 'rm gs://abc/images/'\t- same as above;\n" +
-			indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
-			indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)",
+		Name:         commandRemove,
+		Usage:        objRmUsage,
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
 		Flags:        objectCmdsFlags[commandRemove],
 		Action:       rmHandler,

@@ -38,7 +38,7 @@ prefetch-objects[f70MKzP63]: prefetch entire bucket s3://abc. To monitor the pro
 
 Notice the `--latest` switch above. As far as this particular `prefetch` is concerned `--latest` will have the same effect as setting `versioning.validate_warm_get=true`. But only "as far" - the scope of validating in-cluster versions will be limited to this specific batch job.
 
-The same applies to copying buckets, [copying ranges and lists of objects](/docs/cli/bucket.md#copy-multiple-objects), and certainly getting (as in `GET`) individual objects.
+The same applies to [copying buckets and copying ranges and lists of objects](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets), and certainly getting (as in `GET`) individual objects.
 
 Here's the an excerpt from `GET` help (and note `--latest` below):
 

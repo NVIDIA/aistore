@@ -12,9 +12,8 @@ AIS comes with built-in blob downloading facility that employs multiple concurre
 In terms of its from/to operation, blob downloading can be compared to [prefetching](/docs/cli/object.md#prefetch-objects).
 
 More precisely, the list of "comparables" includes:
-* [prefetch](/docs/cli/object.md#prefetch-objects)
-* [copy remote bucket](/docs/cli/bucket.md#copy-bucket)
-* [copy multiple remote objects](/docs/cli/bucket.md#copy-multiple-objects)
+* [prefetch remote content](/docs/cli/object.md#prefetch-objects)
+* [copy (list, range, and/or prefix) selected objects or entire (in-cluster or remote) buckets](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
 
 In all these cases, destination of the remote content is aistore cluster (and not the client requesting the operation).
 

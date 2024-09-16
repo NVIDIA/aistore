@@ -299,7 +299,7 @@ This is a yet another archive-**creating** operation that:
 * supported archival formats include `.tar`, `.tar.gz` (or, same, `.tgz`), and `.zip`; more extensions may be added in the future.
 * archiving is carried out asynchronously, in parallel by all AIS targets.
 
-As such, `ais archive bucket` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
+As such, `ais archive bucket` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets).
 
 **NOTE:**
 
