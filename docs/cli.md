@@ -245,9 +245,15 @@ In addition, environment can be used to **override** client-side TLS (aka, HTTPS
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate | "cluster.client_ca_tls" |
 | `AIS_SKIP_VERIFY_CRT` | true: skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "cluster.skip_verify_crt" |
 
-See also:
+### Further references
 
-* [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
+- [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)
+- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
+- [Accessing HTTPS-based cluster](/docs/https.md#accessing-https-based-cluster)
+- [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
+- [Observability: TLS related alerts]((/docs/https.md#observability-tls-related-alerts)
+- [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
+- [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)
 
 ## First steps
 

@@ -163,7 +163,8 @@ func NewClientTLS(cargs TransportArgs, sargs TLSArgs, intra bool) *http.Client {
 	return &http.Client{Transport: transport, Timeout: cargs.Timeout}
 }
 
-// see related: HTTPConf.ToTLS()
+// EnvToTLS usage is limited to aisloader and tools
+// NOTE that embedded intra-cluster clients utilize a similar method: `HTTPConf.ToTLS`
 func EnvToTLS(sargs *TLSArgs) {
 	if s := os.Getenv(env.AIS.Certificate); s != "" {
 		sargs.Certificate = s

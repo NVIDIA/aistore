@@ -534,7 +534,7 @@ If extended attributes are disabled globally when deploying a cluster, node IDs 
 
 ## Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your TLS certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
 
 The following HTTPS topics are also covered elsewhere:
 

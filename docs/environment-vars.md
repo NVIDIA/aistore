@@ -96,13 +96,39 @@ See also:
 
 ## HTTPS
 
+At first it may sound slightly confusing, but HTTP-wise aistore is both a client and a server.
+
+All nodes in a cluster talk to each other using HTTP (or HTTPS) - the fact that inevitably implies a certain client-side configuration (and configurability).
+
+In particular, aistore server-side HTTPS environment includes:
+
 | name | comment |
 | ---- | ------- |
-| `AIS_USE_HTTPS` | tells aistore to run HTTPS transport (both public and intra-cluster networks); overrides the corresponding config; e.g. usage: 'export AIS_USE_HTTPS=true' |
-| `AIS_CRT` | X.509 certificate pathname (this and the rest variables in the table are ignored when aistore is AIS_USE_HTTPS==false |
-| `AIS_CRT_KEY` | pathname that contains X.509 certificate private key |
-| `AIS_CLIENT_CA` | certificate authority that authorized (signed) the certificate |
+| `AIS_USE_HTTPS`       | tells aistore to run HTTPS transport (both public and intra-cluster networks)                                |
+| `AIS_SERVER_CRT`      | TLS certificate (pathname). Required when `AIS_USE_HTTPS` is `true`                                          |
+| `AIS_SERVER_KEY`      | private key (pathname) for the certificate above.                                                            |
 | `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+
+> E.g., for local playground, typical usage starts from running `export AIS_USE_HTTPS=true` followed by one of the usual `make deploy` combinations.
+
+In addition, all embedded (intra-cluster) clients in a cluster utilize the following environment:
+
+| name | comment |
+| ---- | ------- |
+| `AIS_CRT`             | TLS certificate pathname (this and the rest variables in the table are ignored when aistore is AIS_USE_HTTPS==false |
+| `AIS_CRT_KEY`         | pathname that contains X.509 certificate private key |
+| `AIS_CLIENT_CA`       | certificate authority that authorized (signed) the certificate |
+| `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+
+### Further references
+
+- [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)
+- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
+- [Accessing HTTPS-based cluster](/docs/https.md#accessing-https-based-cluster)
+- [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
+- [Observability: TLS related alerts]((/docs/https.md#observability-tls-related-alerts)
+- [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
+- [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)
 
 ## Local Playground
 
@@ -262,17 +288,17 @@ AIStore Authentication Server (**AuthN**) provides OAuth 2.0 compliant [JSON Web
 
 AuthN supports multiple AIS clusters; in fact, there's no limit on the number of clusters a given AuthN instance can provide authentication and access control service for.
 
-| Variable             | Default Value       | Description                                                                                     |
-|----------------------|---------------------|-------------------------------------------------------------------------------------------------|
-| `AIS_AUTHN_SECRET_KEY` | `aBitLongSecretKey` | Secret key used to sign tokens                                                                  |
-| `AIS_AUTHN_ENABLED`    | `false`             | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)                  |
-| `AIS_AUTHN_PORT`       | `52001`             | Port on which AuthN listens to requests                                                         |
-| `AIS_AUTHN_TTL`        | `24h`               | Token expiration time. Can be set to `0` for no expiration                                      |
-| `AIS_AUTHN_USE_HTTPS`  | `false`             | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
-| `AIS_SERVER_CRT`       | `""`                 | OpenSSL certificate. Required when `AIS_AUTHN_USE_HTTPS` is `true`                              |
-| `AIS_SERVER_KEY`       | `""`                 | OpenSSL key. Required when `AIS_AUTHN_USE_HTTPS` is `true`                                      |
-| `AIS_AUTHN_SU_NAME`    | `admin`             | Superuser (admin) name for AuthN                                                                        |
-| `AIS_AUTHN_SU_PASS`    | `admin`             | Superuser (admin) password for AuthN                                                                    |
+| Variable               | Default Value       | Description                                                                               |
+|------------------------|---------------------|-------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_SECRET_KEY` | `aBitLongSecretKey` | Secret key used to sign tokens                                                            |
+| `AIS_AUTHN_ENABLED`    | `false`             | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)            |
+| `AIS_AUTHN_PORT`       | `52001`             | Port on which AuthN listens to requests                                                   |
+| `AIS_AUTHN_TTL`        | `24h`               | Token expiration time. Can be set to `0` for no expiration                                |
+| `AIS_AUTHN_USE_HTTPS`  | `false`             | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY`  |
+| `AIS_SERVER_CRT`       | `""`                | TLS certificate (pathname). Required when `AIS_AUTHN_USE_HTTPS` is `true`                 |
+| `AIS_SERVER_KEY`       | `""`                | pathname that contains X.509 certificate private key                                      |
+| `AIS_AUTHN_SU_NAME`    | `admin`             | Superuser (admin) name for AuthN                                                          |
+| `AIS_AUTHN_SU_PASS`    | `admin`             | Superuser (admin) password for AuthN                                                      |
 
 Separately, there's also client-side AuthN environment that includes:
 

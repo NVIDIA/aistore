@@ -23,13 +23,17 @@ var (
 		LocalRedirectCIDR string
 		PubIPv4CIDR       string
 
-		// https
+		//
+		// HTTPS
+		// for details and background, see: https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md#https
+		//
 		UseHTTPS string
 		// TLS: client side
 		Certificate   string
 		CertKey       string
 		ClientCA      string
 		SkipVerifyCrt string
+		// TLS: server (aistore, AuthN) side (NOTE comment below)
 
 		// tests, CI
 		NumTarget string
@@ -53,12 +57,18 @@ var (
 
 		// false: HTTP transport, with all the TLS config (below) ignored
 		// true:  HTTPS/TLS
+		// for details and background, see: https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md#https
 		UseHTTPS: "AIS_USE_HTTPS", // cluster config: "net.http.use_https"
 
 		// TLS: client side
 		Certificate: "AIS_CRT",
 		CertKey:     "AIS_CRT_KEY",
 		ClientCA:    "AIS_CLIENT_CA",
+
+		// TLS: server (aistore, AuthN) side
+		// "AIS_SERVER_CRT" - TLS certificate (pathname)
+		// "AIS_SERVER_KEY" - private key (ditto)
+
 		// TLS: common
 		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT", // cluster config: "net.http.skip_verify"
 

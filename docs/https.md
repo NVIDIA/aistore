@@ -11,8 +11,9 @@ In this document:
 
 - [Generating self-signed certificates](#generating-self-signed-certificates)
 - [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
-- [Accessing the cluster](#accessing-the-cluster)
+- [Accessing HTTPS-based cluster](#accessing-https-based-cluster)
 - [Testing with self-signed certificates](#testing-with-self-signed-certificates)
+- [Observability: TLS related alerts](#observability-tls-related-alerts)
 - [Updating and reloading X.509 certificates](#updating-and-reloading-x509-certificates)
 - [Switching cluster between HTTP and HTTPS](#switching-cluster-between-http-and-https)
 
@@ -58,7 +59,7 @@ $ TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=<path-to-c
 $ TAGS=aws AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true AIS_SERVER_CRT=server.crt AIS_SERVER_KEY=server.key make deploy <<< $'4\n1\n6'
 ```
 
-## Accessing the cluster
+## Accessing HTTPS-based cluster
 
 To use CLI, try first any command with HTTPS-based cluster endpoint, for instance:
 
@@ -111,6 +112,45 @@ On the other hand, `ais/test/tls-env/client.conf` contains environment variables
 
 > See also: [Client-side TLS environment](/docs/cli.md#environment-variables)
 
+## Observability: TLS related alerts
+
+HTTPS deployment implies (and requires) that each AIS node has a valid TLS (a.k.a. [X.509](https://www.ssl.com/faqs/what-is-an-x-509-certificate/)) certificate.
+
+The latter has a number of interesting properties ultimately intended to authenticate clients to the server (AIS node, in this case), and vice versa.
+
+In addition, TLS certfificates tend to expire from time to time. In fact, each TLS certificate has expiration date with the standard-defined maximum being 13 months (397 days).
+
+> Some sources claim 398 days but the (much) larger point remains: TLS certificates do expire. Which means, they must be periodically updated and timely reloaded.
+
+Starting v3.24, AIStore:
+
+* tracks certificate expiration times;
+* automatically - upon update - reloads updated certificates;
+* raises associated alerts.
+
+### Associated alerts
+
+```console
+$ ais show cluster
+
+PROXY            MEM AVAIL  LOAD AVERAGE    UPTIME      STATUS  ALERT
+p[KKFpNjqo][P]   127.77GiB  [5.2 7.2 3.1]   108h30m40s  online  **tls-cert-will-soon-expire**
+...
+
+TARGET           MEM AVAIL  CAP USED(%)     CAP AVAIL   LOAD AVERAGE    UPTIME      STATUS  ALERT
+t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1s  online   **tls-cert-will-soon-expire**
+...
+...
+```
+
+Overall, there are currentky 3 (three) alerts:
+
+| alert | comment |
+| -- | -- |
+| `tls-cert-will-soon-expire` | a warning that X.509 cert will expire in less than 3 days |
+| `tls-cert-expired` | red alert (as the name implies) |
+| `tls-cert-invalid` | ditto |
+
 ## Updating and reloading X.509 certificates
 
 Quoting WWW:
@@ -148,6 +188,7 @@ In addition, if certificate fails to load or expires, AIS node raises the namesa
 
 ```console
 $ ais show cluster
+
 PROXY            MEM USED(%)    MEM AVAIL   LOAD AVERAGE    UPTIME  STATUS  ALERT
 p[atipJhgn][P]   0.17%          27.51GiB    [0.3 0.1 0.0]   -       online  **tls-cert-expired**
 
@@ -182,6 +223,11 @@ Done.
 ```
 
 Note: if [AuthN](/docs/authn.md) is deployed, the API (and CLI above) will require administrative permissions.
+
+### Further references
+
+* [HTTPS-related environment variables](environment-vars.md#https)
+- [Reloading TLS certificate](/docs/cli/advanced.md#load-tls-certificate)
 
 ## Switching cluster between HTTP and HTTPS
 
@@ -249,4 +295,4 @@ $ make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\n'
 
 # step 5: and use
 $ ais show cluster
-```
+
