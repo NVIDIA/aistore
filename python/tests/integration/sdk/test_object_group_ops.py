@@ -56,17 +56,30 @@ class TestObjectGroupOps(RemoteEnabledTest):
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).evict()
 
+    def _prefetch_objects_test_helper(self, num_workers=None):
+        obj_group = self.bucket.objects(obj_names=self.obj_names[1:])
+        self._evict_all_objects()
+        prefetch_kwargs = {}
+        if num_workers is not None:
+            prefetch_kwargs["num_workers"] = num_workers
+        # Fetch back a specific object group and verify cache status
+        job_id = obj_group.prefetch(**prefetch_kwargs)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        self._verify_cached_objects(OBJECT_COUNT, range(1, OBJECT_COUNT))
+
     @unittest.skipIf(
         not REMOTE_SET,
         "Remote bucket is not set",
     )
     def test_prefetch_list(self):
-        obj_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self._evict_all_objects()
-        # Fetch back a specific object group and verify cache status
-        job_id = obj_group.prefetch()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
-        self._verify_cached_objects(OBJECT_COUNT, range(1, OBJECT_COUNT))
+        self._prefetch_objects_test_helper()
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_prefetch_list_with_num_workers(self):
+        self._prefetch_objects_test_helper(num_workers=3)
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -119,7 +132,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).prefetch()
 
-    def test_copy_objects(self):
+    def _copy_objects_test_helper(self, num_workers=None):
         to_bck_name = "destination-bucket"
         to_bck = self._create_bucket(to_bck_name)
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
@@ -128,14 +141,24 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
 
         new_prefix = PREFIX_NAME
+        copy_kwargs = {"prepend": new_prefix}
+        if num_workers is not None:
+            copy_kwargs["num_workers"] = num_workers
+
         copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
-            to_bck, prepend=new_prefix
+            to_bck, **copy_kwargs
         )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
         self.assertEqual(
             4, len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix))
         )
+
+    def test_copy_objects(self):
+        self._copy_objects_test_helper()
+
+    def test_copy_objects_with_num_workers(self):
+        self._copy_objects_test_helper(num_workers=3)
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -302,9 +325,8 @@ class TestObjectGroupOps(RemoteEnabledTest):
                 member_names.append(member.name)
             self.assertEqual(set(archived_names), set(member_names))
 
-    @pytest.mark.etl
-    def test_transform_objects(self):
-        # Define an etl with code that hashes the contents of each object
+    def _transform_objects_test_helper(self, num_workers=None):
+        # Define an ETL that hashes the contents of each object
         etl_name = "etl-" + random_string(5)
 
         def transform(input_bytes):
@@ -323,8 +345,16 @@ class TestObjectGroupOps(RemoteEnabledTest):
             OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))
         )
 
+        transform_kwargs = {
+            "to_bck": to_bck,
+            "etl_name": md5_etl.name,
+            "prepend": new_prefix,
+        }
+        if num_workers is not None:
+            transform_kwargs["num_workers"] = num_workers
+
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
-            to_bck, etl_name=md5_etl.name, prepend=new_prefix
+            **transform_kwargs
         )
         self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
@@ -337,6 +367,14 @@ class TestObjectGroupOps(RemoteEnabledTest):
             to_bck.object(new_prefix + name).get().read_all() for name in self.obj_names
         ]
         self.assertEqual(to_obj_values, from_obj_hashes)
+
+    @pytest.mark.etl
+    def test_transform_objects(self):
+        self._transform_objects_test_helper()
+
+    @pytest.mark.etl
+    def test_transform_objects_with_num_workers(self):
+        self._transform_objects_test_helper(num_workers=3)
 
     def _evict_all_objects(self, num_obj=OBJECT_COUNT):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()

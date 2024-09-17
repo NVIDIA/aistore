@@ -183,9 +183,11 @@ class ObjectGroup(AISSource):
         Args:
             latest (bool, optional): GET the latest object version from the associated remote bucket
             continue_on_error (bool, optional): Whether to continue if there is an error prefetching a single object
-            num_workers (int, optional): Number of concurrent workers; number of target mountpaths if omitted or zero
             blob_threshold (int, optional): Utilize built-in blob-downloader for remote objects
                 greater than the specified (threshold) size in bytes
+            num_workers (int, optional): Number of concurrent workers (readers). Defaults to the number of target
+                mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
+                execution). Any positive value will be adjusted not to exceed the number of target CPUs.
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -225,6 +227,7 @@ class ObjectGroup(AISSource):
         force: bool = False,
         latest: bool = False,
         sync: bool = False,
+        num_workers: int = None,
     ):
         """
         Copies a list or range of objects in a bucket
@@ -238,6 +241,9 @@ class ObjectGroup(AISSource):
                 (see "limited coexistence" and xact/xreg/xreg.go)
             latest (bool, optional): GET the latest object version from the associated remote bucket
             sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
+            num_workers (int, optional): Number of concurrent workers (readers). Defaults to the number of target
+                mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
+                execution). Any positive value will be adjusted not to exceed the number of target CPUs.
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -268,6 +274,7 @@ class ObjectGroup(AISSource):
             tc_msg=TCBckMsg(copy_msg=copy_msg),
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
+            num_workers=num_workers,
         ).as_dict()
 
         return self.bck.make_request(
@@ -288,6 +295,7 @@ class ObjectGroup(AISSource):
         force: bool = False,
         latest: bool = False,
         sync: bool = False,
+        num_workers: int = None,
     ):
         """
         Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
@@ -303,6 +311,9 @@ class ObjectGroup(AISSource):
                 (see "limited coexistence" and xact/xreg/xreg.go)
             latest (bool, optional): GET the latest object version from the associated remote bucket
             sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
+            num_workers (int, optional): Number of concurrent workers (readers). Defaults to the number of target
+                mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
+                execution). Any positive value will be adjusted not to exceed the number of target CPUs.
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -333,6 +344,7 @@ class ObjectGroup(AISSource):
             tc_msg=TCBckMsg(transform_msg=transform_msg, copy_msg=copy_msg),
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
+            num_workers=num_workers,
         ).as_dict()
         return self.bck.make_request(
             HTTP_METHOD_POST, ACT_TRANSFORM_OBJECTS, value=value

@@ -99,11 +99,13 @@ class TestObjectGroup(unittest.TestCase):
         prefetch_expected_val = self.expected_value.copy()
         prefetch_expected_val["coer"] = False
         prefetch_expected_val["latest-ver"] = False
+        prefetch_expected_val["num-workers"] = 3
         self.object_group_test_helper(
             self.object_group.prefetch,
             HTTP_METHOD_POST,
             ACT_PREFETCH_OBJECTS,
             prefetch_expected_val,
+            num_workers=3,
         )
 
     def test_prefetch_with_blob_threshold(self):
@@ -112,6 +114,7 @@ class TestObjectGroup(unittest.TestCase):
         prefetch_expected_val["latest-ver"] = False
         blob_threshold_value = LARGE_FILE_SIZE
         prefetch_expected_val["blob-threshold"] = blob_threshold_value
+        prefetch_expected_val["num-workers"] = 3
 
         self.object_group_test_helper(
             self.object_group.prefetch,
@@ -119,6 +122,7 @@ class TestObjectGroup(unittest.TestCase):
             ACT_PREFETCH_OBJECTS,
             prefetch_expected_val,
             blob_threshold=blob_threshold_value,
+            num_workers=3,
         )
 
     def test_copy(self):
@@ -146,6 +150,7 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["coer"] = True
         self.expected_value["latest-ver"] = False
         self.expected_value["synchronize"] = False
+        self.expected_value["num-workers"] = 3
 
         self.object_group_test_helper(
             self.object_group.copy,
@@ -157,6 +162,7 @@ class TestObjectGroup(unittest.TestCase):
             force=True,
             dry_run=True,
             continue_on_error=True,
+            num_workers=3,
         )
 
     @patch("aistore.sdk.multiobj.object_group.logging")
@@ -197,6 +203,7 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["request_timeout"] = timeout
         self.expected_value["dry_run"] = True
         self.expected_value["force"] = True
+        self.expected_value["num-workers"] = 3
         self.object_group_test_helper(
             self.object_group.transform,
             HTTP_METHOD_POST,
@@ -209,6 +216,7 @@ class TestObjectGroup(unittest.TestCase):
             dry_run=True,
             force=True,
             continue_on_error=True,
+            num_workers=3,
         )
 
     @patch("aistore.sdk.multiobj.object_group.logging")

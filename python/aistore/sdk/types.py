@@ -29,7 +29,7 @@ from aistore.sdk.const import (
 )
 
 
-# pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring
+# pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring,too-many-lines
 
 
 class ActionMsg(BaseModel):
@@ -516,6 +516,7 @@ class PrefetchMsg(BaseModel):
     continue_on_err: bool
     latest: bool
     blob_threshold: int = None
+    num_workers: int = None
 
     def as_dict(self):
         dict_rep = self.object_selection
@@ -523,6 +524,8 @@ class PrefetchMsg(BaseModel):
         dict_rep["latest-ver"] = self.latest
         if self.blob_threshold:
             dict_rep["blob-threshold"] = self.blob_threshold
+        if self.num_workers:
+            dict_rep["num-workers"] = self.num_workers
         return dict_rep
 
 
@@ -535,6 +538,7 @@ class TCMultiObj(BaseModel):
     tc_msg: TCBckMsg = None
     continue_on_err: bool
     object_selection: Dict
+    num_workers: int = None
 
     def as_dict(self):
         dict_rep = self.object_selection
@@ -543,6 +547,8 @@ class TCMultiObj(BaseModel):
                 dict_rep[key] = val
         dict_rep["tobck"] = self.to_bck.as_dict()
         dict_rep["coer"] = self.continue_on_err
+        if self.num_workers:
+            dict_rep["num-workers"] = self.num_workers
         return dict_rep
 
 
