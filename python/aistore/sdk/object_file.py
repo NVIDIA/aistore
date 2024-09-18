@@ -200,7 +200,7 @@ class ObjectFile(BufferedIOBase):
 
                 # Reset the chunk iterator for resuming the stream
                 self._chunk_iterator = self._object_reader.iter_from_position(
-                    len(self._buffer)
+                    self._current_pos + len(self._buffer)
                 )
 
         # Read data from the buffer

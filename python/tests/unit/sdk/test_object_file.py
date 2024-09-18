@@ -15,7 +15,10 @@ from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 
 
 class BadObjectStream(io.BytesIO):
-    """Simulates a stream that fails with ChunkedEncodingError after a few reads."""
+    """
+    Simulates a stream that fails with ChunkedEncodingError intermittently every `fail_on_read`
+    chunks read.
+    """
 
     def __init__(self, *args, fail_on_read=2, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,6 +26,7 @@ class BadObjectStream(io.BytesIO):
         self.fail_on_read = fail_on_read
 
     def read(self, size=-1):
+        """Overrides `BytesIO.read` to simulate failure after a specific number of reads."""
         self.read_count += 1
         if self.read_count == self.fail_on_read:
             raise ChunkedEncodingError("Simulated ChunkedEncodingError")
@@ -30,7 +34,16 @@ class BadObjectStream(io.BytesIO):
 
 
 class BadObjectReader(ObjectReader):
-    """Simulate an ObjectReader that returns BadObjectStream and simulates intermittent failures."""
+    """
+    Simulates an ObjectReader that streams data using BadObjectStream that fails with ChunksEncoding
+    error every `fail_on_read` chunks read.
+
+    This class extends `ObjectReader` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
+    parent class `ObjectReader`.
+
+    The streaming starts from a specific position (`start_position`), allowing the object to resume
+    reading from that point if necessary.
+    """
 
     def __init__(self, data=None, fail_on_read=2):
         super().__init__(client=mock.Mock(), path="", params=[])
@@ -38,7 +51,7 @@ class BadObjectReader(ObjectReader):
         self.fail_on_read = fail_on_read
 
     def iter_from_position(self, start_position=0):
-        """Simulate streaming the object from a certain position."""
+        """Simulate streaming the object from the specified position `start_position`."""
 
         def iterator():
             stream = BadObjectStream(
@@ -92,36 +105,54 @@ class TestObjectFile(unittest.TestCase):
 
     # Retry & Resume Related Tests
 
-    def test_read_all_catch_error(self):
-        """Test ObjectFile catches ChunkedEncodingError and retries."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 2)
+    def test_read_all_fails_after_max_retries(self):
+        """Test that ObjectFile gives up after exceeding max retry attempts for read-all."""
+        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
         mock_reader = BadObjectReader(data=data, fail_on_read=2)
-        object_file = ObjectFile(mock_reader, max_resume=0)
-        with self.assertRaises(ChunkedEncodingError):
-            object_file.read()
-
-    def test_read_fixed_catch_error(self):
-        """Test ObjectFile catches ChunkedEncodingError and retries."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 2)
-        mock_reader = BadObjectReader(data=data, fail_on_read=2)
-        object_file = ObjectFile(mock_reader, max_resume=0)
-        with self.assertRaises(ChunkedEncodingError):
-            object_file.read(DEFAULT_CHUNK_SIZE * 2)
-
-    def test_success_after_retries(self):
-        """Test ObjectFile retries and succeeds after intermittent ChunkedEncodingError."""
-        # Error raised on every 5th read (fail 4 times before succeeding)
-        data = os.urandom(20 * DEFAULT_CHUNK_SIZE)
-        mock_reader = BadObjectReader(data=data, fail_on_read=5)
-        object_file = ObjectFile(mock_reader, max_resume=5)
-        result = object_file.read()
-        self.assertEqual(result, data)
-
-    def test_fail_max_retries(self):
-        """Test ObjectFile raises ChunkedEncodingError after exceeding max retries."""
-        # Error raised on every 5th read (fail 2 times before raising)
-        data = os.urandom(20 * DEFAULT_CHUNK_SIZE)
-        mock_reader = BadObjectReader(data=data, fail_on_read=5)
         object_file = ObjectFile(mock_reader, max_resume=2)
+
+        # Test that the read fails after 2 retry attempts
         with self.assertRaises(ChunkedEncodingError):
             object_file.read()
+
+    def test_read_fixed_fails_after_max_retries(self):
+        """Test that ObjectFile gives up after exceeding max retry attempts for fixed-size reads."""
+        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
+        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        object_file = ObjectFile(mock_reader, max_resume=2)
+
+        # Test that the read fails after 2 retry attempts for a fixed-size read
+        with self.assertRaises(ChunkedEncodingError):
+            object_file.read(DEFAULT_CHUNK_SIZE * 4)
+
+    def test_read_all_success_after_retries(self):
+        """Test that ObjectFile retries and succeeds after intermittent ChunkedEncodingError for read-all."""
+        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
+        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        object_file = ObjectFile(mock_reader, max_resume=4)
+
+        result = object_file.read()
+        # Ensure all data was correctly read after retries
+        self.assertEqual(result, data)
+        self.assertEqual(object_file.tell(), DEFAULT_CHUNK_SIZE * 4)
+
+    def test_read_fixed_success_after_retries(self):
+        """Test that ObjectFile retries and succeeds for fixed-size reads after intermittent ChunkedEncodingError."""
+        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
+        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        object_file = ObjectFile(mock_reader, max_resume=4)
+
+        # Read the first half of the data and check the position
+        first_part = object_file.read(DEFAULT_CHUNK_SIZE * 2)
+        self.assertEqual(first_part, data[: DEFAULT_CHUNK_SIZE * 2])
+        self.assertEqual(object_file.tell(), DEFAULT_CHUNK_SIZE * 2)
+
+        # Resume reading the second half and check position
+        second_part = object_file.read(DEFAULT_CHUNK_SIZE * 2)
+        self.assertEqual(
+            second_part, data[DEFAULT_CHUNK_SIZE * 2 : DEFAULT_CHUNK_SIZE * 4]
+        )
+        self.assertEqual(object_file.tell(), DEFAULT_CHUNK_SIZE * 4)
+
+        # Ensure all data was read correctly in two parts
+        self.assertEqual(first_part + second_part, data)
