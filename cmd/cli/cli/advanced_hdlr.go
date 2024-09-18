@@ -72,13 +72,6 @@ var (
 				Action:       backendDisableHandler,
 				BashComplete: suggestCloudProvider,
 			},
-			{
-				Name:         cmdLoadX509,
-				Usage:        "(re)load TLS certificate",
-				ArgsUsage:    optionalNodeIDArgument,
-				Action:       loadX509Handler,
-				BashComplete: suggestAllNodes,
-			},
 		},
 	}
 )
@@ -206,18 +199,4 @@ func backendDisableHandler(c *cli.Context) error {
 	}
 	actionDone(c, "cluster: disabled "+cloudProvider+" backend")
 	return nil
-}
-
-func loadX509Handler(c *cli.Context) (err error) {
-	s := "Done."
-	if c.NArg() == 0 {
-		err = api.LoadX509Cert(apiBP, c.Args()...)
-		s = "Done: all nodes."
-	} else {
-		err = api.LoadX509Cert(apiBP, meta.N2ID(c.Args().Get(0)))
-	}
-	if err == nil {
-		actionDone(c, s)
-	}
-	return err
 }

@@ -115,14 +115,15 @@ The recommended and, actually, fastest way to get started with CLI is to type `a
 ```console
 $ ais <TAB-TAB>
 
-bucket        etl         help           log              create        dsort        stop         blob-download
-object        job         advanced       performance      download      evict        cp           rmo
-cluster       auth        storage        remote-cluster   prefetch      get          rmb          wait
-config        show        archive        alias            put           ls           start        search
+bucket           job              storage          remote-cluster   prefetch         evict            create
+object           auth             archive          alias            put              rmo              dsort
+cluster          show             log              ls               start            wait             search
+config           help             tls              stop             get              blob-download
+etl              advanced         performance      download         rmb              cp
 ```
 
-These are the top-level commands as of early 2024. Each command has its own extended help (`--help`) and sub-commands
-(which, in turn, have their respective helps and subcommands).
+These are the current set of top-level commands. Each command has its own extended help (the `--help` option) and, usually, multiple sub-commands
+(which, in turn, have their respective inline helps and subcommands).
 
 The list of top-level commands must give maybe the first idea of the supported functionality and functional grouping.
 
@@ -145,6 +146,8 @@ Following is a brief summary (that's non-exhaustive and slightly outdated):
 | [`ais show`](/docs/cli/show.md) | Monitor anything and everything: performance (all aspects), buckets, jobs, remote clusters and more. |
 | [`ais log`](/docs/cli/log.md) | Download ais nodes' logs or view the logs in real time. |
 | [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis (num objects and sizes), attach/detach mountpaths (disks). |
+| [`ais performance`](/docs/cli/performance.md) | Show performance counters, throughput, latency, disks, used/available capacities. |
+| [`ais tls`](/docs/cli/x509.md) | Load or reload (an updated) TLS certificate; display information about currently deployed certificates. |
 {: .nobreak}
 
 Other CLI documentation:

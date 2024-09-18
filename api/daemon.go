@@ -30,7 +30,7 @@ func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMountpaths}}
 		reqParams.Header = http.Header{
 			apc.HdrNodeID: []string{node.ID()},
@@ -93,7 +93,7 @@ func _actMpath(bp BaseParams, node *meta.Snode, mountpath, action string, q url.
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths) // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.Join(apc.Mountpaths)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: action, Value: mountpath})
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{node.ID()},
@@ -113,7 +113,7 @@ func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err e
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeConfig}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
@@ -128,7 +128,7 @@ func GetMetricNames(bp BaseParams, node *meta.Snode) (kvs cos.StrKVs, err error)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMetricNames}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
@@ -155,7 +155,7 @@ func GetDaemonLog(bp BaseParams, node *meta.Snode, args GetLogInput) (int64, err
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Query = q
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
@@ -180,7 +180,7 @@ func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.Join(apc.ActSetConfig) // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.Join(apc.ActSetConfig)
 		reqParams.Query = query
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{nodeID}}
 	}
@@ -203,7 +203,7 @@ func _putDaemon(bp BaseParams, nodeID string, msg apc.ActMsg) error {
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S // NOTE: reverse, via p.reverseHandler
+		reqParams.Path = apc.URLPathReverseDae.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:      []string{nodeID},

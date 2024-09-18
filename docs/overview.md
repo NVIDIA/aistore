@@ -230,24 +230,6 @@ But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS U
 
 For these and similar use cases we have [AIS Downloader](/docs/downloader.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
-### Existing Datasets: HTTP(S) Datasets
-
-AIS can also be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation requires:
-
-1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
-2. Disable proxy for AIS cluster IP addresses/hostnames (for `curl` use option `--noproxy`)
-
-Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
-
-WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
-If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
-
-```console
-$ export http_proxy=<AIS proxy IPv4 or hostname>
-```
-
-In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective. AIStore will on the fly create a bucket to store and cache HTTP(S) reachable files all the while supporting the entire gamut of functionality including ETL. Examples for HTTP(S) datasets can be found in [this readme](bucket.md#public-https-dataset)
-
 ### Promote local or shared files
 
 AIS can also `promote` files and directories to objects. The operation entails synchronous or asynchronus massively-parallel downloading of any accessible file source, including:
@@ -396,11 +378,11 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](/docs/cli.md). Once [installed](/docs/cli.md#getting-started), to start using it, simply execute:
 
  ```console
-$ export AIS_ENDPOINT=http://G
+$ export AIS_ENDPOINT=http://ais-gateway:port
 $ ais --help
  ```
 
-where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
+where `ais-gateway:port` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
 
 One salient feature of AIS CLI is its Bash style [auto-completions](/docs/cli.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
 

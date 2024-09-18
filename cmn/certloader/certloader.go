@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 )
+
+//
+// related sources: api/x509.go, ais/x509.go, and cmd/cli/cli/x509.go
+//
 
 const name = "tls-cert-loader"
 
@@ -88,6 +93,41 @@ func Load() (err error) {
 	}
 	return err
 }
+
+func Props() (out cos.StrKVs) {
+	flags := cos.NodeStateFlags(gcl.tstats.Get(cos.NodeAlerts))
+	if flags.IsSet(cos.CertificateInvalid) || flags.IsSet(cos.CertificateExpired) {
+		out = make(cos.StrKVs, 1)
+		flags &= (cos.CertificateInvalid | cos.CertificateExpired)
+		out["error"] = flags.String()
+		return out
+	}
+	xcert := gcl.xcert.Load()
+
+	out = make(cos.StrKVs, 6)
+	leaf := xcert.Certificate.Leaf
+	{
+		out["version"] = strconv.Itoa(leaf.Version)
+		out["issued-by (CN)"] = leaf.Issuer.CommonName
+		out["signature-algorithm"] = leaf.SignatureAlgorithm.String()
+		out["public-key-algorithm"] = leaf.PublicKeyAlgorithm.String()
+		if leaf.SerialNumber != nil {
+			out["serial-number"] = leaf.SerialNumber.String()
+		}
+		out["valid"] = "from " + fmtTime(leaf.NotBefore)
+		out["valid"] += " to " + fmtTime(leaf.NotAfter)
+
+		if flags.IsSet(cos.CertWillSoonExpire) {
+			out["warning"] = cos.CertWillSoonExpire.String()
+		}
+	}
+
+	return out
+}
+
+//
+// private methods
+//
 
 func (cl *certLoader) hk(int64) time.Duration {
 	if err := cl.do(true /*compare*/); err != nil {
@@ -216,9 +256,9 @@ func (x *xcert) String() string {
 	sb.WriteString(x.parent.certFile)
 
 	sb.WriteByte('[')
-	sb.WriteString(cos.FormatTime(x.notBefore, ""))
+	sb.WriteString(x.notBefore.String())
 	sb.WriteByte(',')
-	sb.WriteString(cos.FormatTime(x.notAfter, ""))
+	sb.WriteString(x.notAfter.String())
 	sb.WriteByte(']')
 
 	return sb.String()
@@ -260,4 +300,14 @@ func (e *errExpired) Error() string { return e.msg }
 func isExpired(err error) bool {
 	_, ok := err.(*errExpired)
 	return ok
+}
+
+// YATF
+func fmtTime(tm time.Time) string {
+	s := tm.String()
+	i := strings.Index(s, " +")
+	if i > 0 {
+		return s[0:i]
+	}
+	return s
 }

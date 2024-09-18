@@ -113,6 +113,7 @@ var (
 			showCmdRemoteAIS,
 			showCmdJob,
 			showCmdLog,
+			showTLS,
 		},
 	}
 

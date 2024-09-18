@@ -52,6 +52,7 @@ var (
 		cmdAuthAdd:      {"register", "create"},
 		cmdStgCleanup:   {"remove", "delete", "evict"},
 		cmdDownload:     {"load", "populate", "copy", "cp"},
+		commandTLS:      {"x509", "X509", "X.509", "certificate", "https"},
 	}
 
 	// app state

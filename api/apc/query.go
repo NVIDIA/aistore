@@ -4,8 +4,7 @@
  */
 package apc
 
-// URL Query "?name1=val1&name2=..."
-// User query params.
+// see related "GET(what)" set of APIs: api/cluster and api/daemon
 const (
 	QparamWhat = "what" // "smap" | "bmd" | "config" | "stats" | "xaction" ... (enum below)
 
@@ -212,22 +211,24 @@ const (
 
 // QparamWhat enum.
 const (
-	// cluster meta
+	// cluster metadata
 	WhatSmap = "smap"
 	WhatBMD  = "bmd"
+
 	// config
-	WhatNodeConfig    = "config" // query specific node for (cluster config + overrides, local config)
-	WhatClusterConfig = "cluster_config"
+	WhatNodeConfig    = "config"         // query specific node for (cluster config + overrides, local config)
+	WhatClusterConfig = "cluster_config" // as the name implies; identical (compressed, checksummed, versioned) copy on each node
 
 	// configured backends
 	WhatBackends = "backends"
 
 	// stats and status
-	WhatNodeStatsV322          = "stats"  // [ backward compatibility ]
-	WhatNodeStatsAndStatusV322 = "status" // [ ditto ]
-	WhatNodeStats              = "node_stats"
-	WhatNodeStatsAndStatus     = "node_status"
-	WhatDiskRWUtilCap          = "disk" // read/write stats, disk utilization, capacity
+	WhatNodeStatsV322          = "stats"       // [ backward compatibility ]
+	WhatNodeStatsAndStatusV322 = "status"      // [ ditto ]
+	WhatNodeStats              = "node_stats"  // redundant
+	WhatNodeStatsAndStatus     = "node_status" // current
+
+	WhatDiskRWUtilCap = "disk" // read/write stats, disk utilization, capacity
 
 	WhatMetricNames = "metrics"
 
@@ -237,17 +238,23 @@ const (
 	WhatSmapVote   = "smapvote"
 	WhatSysInfo    = "sysinfo"
 	WhatTargetIPs  = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
+
 	// log
 	WhatLog = "log"
+
 	// xactions
 	WhatOneXactStatus   = "status"      // IC status by uuid (returns a single matching xaction or none)
 	WhatAllXactStatus   = "status_all"  // ditto - all matching xactions
 	WhatXactStats       = "getxstats"   // stats: xaction by uuid
 	WhatQueryXactStats  = "qryxstats"   // stats: all matching xactions
 	WhatAllRunningXacts = "running_all" // e.g. e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] ...
+
 	// internal
 	WhatSnode    = "snode"
 	WhatICBundle = "ic_bundle"
+
+	// tls
+	WhatCertificate = "tls_certificate"
 )
 
 // QparamLogSev enum.

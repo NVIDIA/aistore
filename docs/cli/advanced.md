@@ -16,7 +16,6 @@ Commands for special use cases (e.g. scripting) and *advanced* usage scenarios, 
 - [Remove node from Smap](#remove-node-from-smap)
 - [Rotate logs: individual nodes or entire cluster](#rotate-logs-individual-nodes-or-entire-cluster)
 - [Disable/Enable cloud backend at runtime](#disableenable-cloud-backend-at-runtime)
-- [Load TLS certificate](#load-tls-certificate)
 
 ## `ais advanced`
 
@@ -37,7 +36,6 @@ COMMANDS:
    rotate-logs       rotate aistore logs
    enable-backend    (re)enable cloud backend (see also: 'ais config cluster backend')
    disable-backend   disable cloud backend (see also: 'ais config cluster backend')
-   load-X.509        (re)load TLS certificate
 ```
 
 ## Manual Resilvering
@@ -221,59 +219,3 @@ NAME     SIZE            CACHED
 $ ais get s3://test-bucket/333 /dev/null
 GET (and discard) 333 from s3://test-bucket (15.97KiB)
 ```
-
-## Load TLS certificate
-
-HTTPS deployment implies (and requires) that each AIS node has a valid TLS (a.k.a. [X.509](https://www.ssl.com/faqs/what-is-an-x-509-certificate/)) certificate.
-
-The latter has a number of interesting properties ultimately intended to authenticate clients (users) to servers (AIS nodes). And vice versa.
-
-In addition, TLS certfificates tend to expire from time to time. In fact, each TLS certificate has expiration date with the standard-defined maximum being 13 months (397 days).
-
-> Some sources claim 398 days but the (much) larger point remains: TLS certificates do expire. Which means, they must be periodically updated and timely reloaded.
-
-Starting v3.24, AIStore:
-
-* tracks certificate expiration times;
-* automatically - upon update - reloads updated certificates;
-* raises associated alerts.
-
-### Associated alerts
-
-```console
-$ ais show cluster
-
-PROXY            MEM AVAIL  LOAD AVERAGE    UPTIME      STATUS  ALERT
-p[KKFpNjqo][P]   127.77GiB  [5.2 7.2 3.1]   108h30m40s  online  tls-cert-will-soon-expire
-...
-
-TARGET           MEM AVAIL  CAP USED(%)     CAP AVAIL   LOAD AVERAGE    UPTIME      STATUS  ALERT
-t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1s  online  tls-cert-will-soon-expire
-...
-...
-```
-
-Overall, there are currentky 3 (three) related alerts:
-
-| alert | comment |
-| -- | -- |
-| `tls-cert-will-soon-expire` | a warning that X.509 cert will expire in less than 3 days |
-| `tls-cert-expired` | red alert (as the name implies) |
-| `tls-cert-invalid` | ditto |
-
-### Loading and reloading certificate on demand
-
-```console
-$ ais advanced load-X.509
-Done: all nodes.
-```
-
-### Further references
-
-- [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)
-- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
-- [Accessing HTTPS-based cluster](/docs/https.md#accessing-https-based-cluster)
-- [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
-- [Observability: TLS related alerts](/docs/https.md#observability-tls-related-alerts)
-- [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
-- [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)

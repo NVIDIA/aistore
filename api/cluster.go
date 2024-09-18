@@ -351,22 +351,6 @@ func DetachRemoteAIS(bp BaseParams, alias string) error {
 	return err
 }
 
-func LoadX509Cert(bp BaseParams, nodeID ...string) error {
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		if len(nodeID) > 0 {
-			reqParams.Path = apc.URLPathCluX509.Join(nodeID[0]) // the node
-		} else {
-			reqParams.Path = apc.URLPathCluX509.S // all nodes
-		}
-	}
-	err := reqParams.DoRequest()
-	FreeRp(reqParams)
-	return err
-}
-
 //
 // Backend (enable | disable)
 // see also GetConfiguredBackends above

@@ -17,19 +17,20 @@ import (
 
 // top-level commands (categories - nouns)
 const (
-	commandAuth     = "auth"
 	commandAdvanced = "advanced"
+	commandAlias    = "alias"
+	commandArch     = "archive"
+	commandAuth     = "auth"
 	commandBucket   = "bucket"
-	commandObject   = "object"
 	commandCluster  = "cluster"
 	commandConfig   = "config"
+	commandETL      = apc.ETL
 	commandJob      = "job"
 	commandLog      = "log"
+	commandObject   = "object"
 	commandPerf     = "performance"
 	commandStorage  = "storage"
-	commandETL      = apc.ETL   // TODO: add `ais show etl`
-	commandAlias    = "alias"   // TODO: ditto alias
-	commandArch     = "archive" // TODO: ditto archive
+	commandTLS      = "tls"
 
 	commandSearch = "search"
 )
@@ -131,7 +132,7 @@ const (
 	cmdBackendEnable  = "enable-backend"
 	cmdBackendDisable = "disable-backend"
 
-	cmdLoadX509 = "load-X.509"
+	cmdLoadTLS = "load-certificate"
 
 	// Node subcommands
 	cmdJoin                = "join"

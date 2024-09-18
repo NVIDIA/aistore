@@ -26,14 +26,15 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 * **Batch jobs**. APIs and CLI to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
 
 For easy usage, management, and monitoring, there's also:
-* **Integrated and powerful [CLI](/docs/cli.md)**. As of early 2024, top-level CLI commands include:
+* **Integrated easy-to-use [CLI](/docs/cli.md)**, with top-level commands including:
 ```console
-$ ais
+$ ais <TAB-TAB>
 
-bucket        etl         help           log              create        dsort        stop         blob-download
-object        job         advanced       performance      download      evict        cp           rmo
-cluster       auth        storage        remote-cluster   prefetch      get          rmb          wait
-config        show        archive        alias            put           ls           start        search
+bucket           job              storage          remote-cluster   prefetch         evict            create
+object           auth             archive          alias            put              rmo              dsort
+cluster          show             log              ls               start            wait             search
+config           help             tls              stop             get              blob-download
+etl              advanced         performance      download         rmb              cp
 ```
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.

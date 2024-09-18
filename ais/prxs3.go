@@ -720,6 +720,8 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 // see also: docs/s3compat.md
 func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redirectURL, bucket string) {
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
+		// [intra-cluster communications]
+		// instead of regular HTTP redirect (below) reverse-proxy S3 API call to a designated target
 		p.reverseNodeRequest(w, r, si)
 		return
 	}

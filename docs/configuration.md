@@ -328,7 +328,6 @@ In the `DEFAULT` column above hyphen (`-`) indicates that the corresponding valu
 - [Enabling HTTPS](#enabling-https)
 - [Filesystem Health Checker](#filesystem-health-checker)
 - [Networking](#networking)
-- [Reverse proxy](#reverse-proxy)
 - [Curl examples](#curl-examples)
 - [CLI examples](#cli-examples)
 
@@ -608,10 +607,6 @@ Separately, there's a **multi-homing** capability motivated by the fact that tod
 ```
 
 No other changes. Just add the second NIC - second IPv4 addr `10.50.56.206` above, and that's all.
-
-## Reverse proxy
-
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/deploy/dev/local/aisnode_config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](rproxy.md).
 
 ## Curl examples
 

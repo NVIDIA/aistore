@@ -1075,6 +1075,8 @@ func _checkAction(msg *apc.ActMsg, expectedActions ...string) (err error) {
 // common cplane cont-d
 //
 
+// see related "GET(what)" set of APIs: api/cluster and api/daemon
+// the enum itself in api/apc/query
 func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Values, htext htext) {
 	var (
 		body any
@@ -1128,8 +1130,10 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		daeStats := h.statsT.GetStatsV322()
 		ds.Tracker = daeStats.Tracker
 		body = ds
+	case apc.WhatCertificate: // (see also: daeLoadX509, cluLoadX509)
+		body = certloader.Props()
 	default:
-		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
+		h.writeErrf(w, r, "invalid '%s' request: unrecognized 'what=%s' query", r.URL.Path, what)
 		return
 	}
 	h.writeJSON(w, r, body, "httpdaeget-"+what)

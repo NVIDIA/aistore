@@ -2470,7 +2470,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// rewrite URL path (removing `apc.Reverse`)
+	// update URL path: remove `apc.Reverse`
 	r.URL.Path = cos.JoinWords(apc.Version, apiItems[0])
 
 	nodeID := r.Header.Get(apc.HdrNodeID)

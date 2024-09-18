@@ -15,6 +15,10 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
+//
+// API endpoint: load TLS cert
+//
+
 func (h *htrun) daeLoadX509(w http.ResponseWriter, r *http.Request) {
 	if err := certloader.Load(); err != nil {
 		h.writeErr(w, r, err)

@@ -143,7 +143,7 @@ t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1
 ...
 ```
 
-Overall, there are currentky 3 (three) alerts:
+Overall, there are currently 3 (three) alerts:
 
 | alert | comment |
 | -- | -- |
@@ -201,33 +201,21 @@ Overall, supported alerts include:
 | alert | comment |
 | -- | -- |
 | `tls-cert-will-soon-expire` | warning: less than 3 days remains until X.509 cert expires |
-| `tls-cert-expired` | red alert (as the name implies) |
-| `tls-cert-invalid` | ditto |
+| `tls-cert-expired` | X.509 expired (red alert, as the name implies) |
+| `tls-cert-invalid` | e.g., invalid PEM format; further details at [OpenSSL: X.509 errors](https://x509errors.org/)  |
 
-Finally, to reload TLS cert at any given time, simply run:
+Finally, to view (existing) and/or reload (new) TLS certificates, see the following CLI reference:
 
-```console
-## all nodes in a cluster
-$ ais advanced load-X.509
-Done: all nodes.
-```
+* [Managing TLS Certificates](/docs/cli/x509.md)
 
-```console
-## selected gateway
-$ ais advanced load-X.509 p[atipJhgn]
-Done.
+When aistore is deployed with aithentication (enabled), the API (and CLI) to reload certificates will require administrative permissions.
 
-## selected target
-$ ais advanced load-X.509 t[NlLtPtrm]
-Done.
-```
-
-Note: if [AuthN](/docs/authn.md) is deployed, the API (and CLI above) will require administrative permissions.
+> See `ais config cluster` command and related `auth.enabled` knob.
 
 ### Further references
 
 * [HTTPS-related environment variables](environment-vars.md#https)
-- [Reloading TLS certificate](/docs/cli/advanced.md#load-tls-certificate)
+- [Managing TLS certificates](/docs/cli/x509.md)
 
 ## Switching cluster between HTTP and HTTPS
 
