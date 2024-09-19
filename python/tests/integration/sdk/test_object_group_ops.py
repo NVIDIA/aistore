@@ -91,10 +91,10 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.obj_names.extend(obj_names)
         obj_group = self.bucket.objects(obj_names=obj_names)
         self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
-        start_time = datetime.now().time()
+        start_time = datetime.now()
         job_id = obj_group.prefetch(blob_threshold=2 * MIB)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now().time()
+        end_time = datetime.now()
         jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
             start_time=start_time, end_time=end_time
         )
@@ -113,10 +113,10 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.obj_names.extend(obj_names)
         obj_group = self.bucket.objects(obj_names=obj_names)
         self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
-        start_time = datetime.now().time()
+        start_time = datetime.now()
         job_id = obj_group.prefetch(blob_threshold=2 * SMALL_FILE_SIZE)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now().time()
+        end_time = datetime.now()
 
         with self.assertRaises(JobInfoNotFound):
             self.client.job(job_kind="blob-download").get_within_timeframe(

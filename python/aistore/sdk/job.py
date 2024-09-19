@@ -236,41 +236,43 @@ class Job:
         )
         return resp.text
 
+    def _parse_iso_datetime(self, dt_str):
+        # Remove 'Z' timezone designator if present
+        if dt_str.endswith("Z"):
+            dt_str = dt_str[:-1]
+        # Handle fractional seconds (nanoseconds) by truncating to microseconds
+        if "." in dt_str:
+            date_part, frac_part = dt_str.split(".")
+            # Truncate or pad the fractional part to 6 digits (microseconds)
+            frac_part = (frac_part + "000000")[:6]
+            dt_str = f"{date_part}.{frac_part}"
+            return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S.%f")
+        return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+
     def get_within_timeframe(
-        self, start_time: datetime.time, end_time: datetime.time
+        self, start_time: datetime.datetime, end_time: datetime.datetime
     ) -> List[JobSnapshot]:
         """
-        Checks for jobs that started and finished within a specified timeframe
+        Checks for jobs that started and finished within a specified timeframe.
 
         Args:
-            start_time (datetime.time): The start of the timeframe for monitoring jobs
-            end_time (datetime.time): The end of the timeframe for monitoring jobs
+            start_time (datetime.datetime): The start of the timeframe for monitoring jobs.
+            end_time (datetime.datetime): The end of the timeframe for monitoring jobs.
 
         Returns:
-            list: A list of jobs that have finished within the specified timeframe
+            List[JobSnapshot]: A list of jobs that have finished within the specified timeframe.
 
         Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
-            errors.Timeout: Timeout while waiting for the job to finish
-            errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
+            JobInfoNotFound: Raised when information on a job's status could not be found.
         """
-
         snapshots = self._query_job_snapshots()
         jobs_found = []
         for snapshot in snapshots:
             if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
-                snapshot_start_time = datetime.fromisoformat(
-                    snapshot.start_time[:26]
-                ).time()
-                snapshot_end_time = datetime.fromisoformat(
-                    snapshot.end_time[:26]
-                ).time()
+                snapshot_start_time = self._parse_iso_datetime(snapshot.start_time)
+                snapshot_end_time = self._parse_iso_datetime(snapshot.end_time)
                 if snapshot_start_time >= start_time and snapshot_end_time <= end_time:
                     jobs_found.append(snapshot)
-                    print(snapshot)
         if len(jobs_found) == 0:
             raise JobInfoNotFound("No relevant job info found")
         return jobs_found

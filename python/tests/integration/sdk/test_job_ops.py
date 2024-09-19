@@ -72,10 +72,10 @@ class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
         self._validate_objects_cached(objects, True)
 
     def test_get_within_timeframe(self):
-        start_time = datetime.now().time()
+        start_time = datetime.now()
         job_id = self.client.job(job_kind="lru").start()
         self.client.job(job_id=job_id).wait()
-        end_time = datetime.now().time()
+        end_time = datetime.now()
         self.assertNotEqual(job_id, "")
         jobs_list = self.client.job(job_id=job_id).get_within_timeframe(
             start_time=start_time, end_time=end_time

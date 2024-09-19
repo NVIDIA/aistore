@@ -312,7 +312,7 @@ class TestJob(unittest.TestCase):
 
         self.mock_client.request_deserialize.return_value = {"key": mock_snapshots}
 
-        found_jobs = self.job.get_within_timeframe(start_time.time(), end_time.time())
+        found_jobs = self.job.get_within_timeframe(start_time, end_time)
 
         self.assertEqual(len(found_jobs), len(mock_snapshots))
         for found_job, expected_snapshot in zip(found_jobs, mock_snapshots):
@@ -326,4 +326,4 @@ class TestJob(unittest.TestCase):
         self.mock_client.request_deserialize.return_value = {}
 
         with self.assertRaises(JobInfoNotFound):
-            self.job.get_within_timeframe(start_time.time(), end_time.time())
+            self.job.get_within_timeframe(start_time, end_time)
