@@ -45,7 +45,9 @@ var (
 		cmdShutdown: {
 			yesFlag,
 		},
-		cmdPrimary: {},
+		cmdPrimary: {
+			forceFlag,
+		},
 		cmdJoin: {
 			roleFlag,
 		},
@@ -484,7 +486,7 @@ func setPrimaryHandler(c *cli.Context) error {
 		return fmt.Errorf("%s is non-electable", sname)
 	}
 
-	err = api.SetPrimaryProxy(apiBP, node.ID(), false /*force*/)
+	err = api.SetPrimaryProxy(apiBP, node.ID(), flagIsSet(c, forceFlag))
 	if err == nil {
 		actionDone(c, sname+" is now a new primary")
 	}
