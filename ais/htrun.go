@@ -1993,6 +1993,23 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (pid
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
 		}
+		//
+		// intermittent DNS? retry just once if confirmed && pub != control
+		//
+		if cos.IsErrDNSLookup(res.err) && primaryURL == smap.Primary.URL(cmn.NetIntraControl) {
+			debug.Assert(psi == smap.Primary)
+			if smap.Primary.PubNet.Hostname != smap.Primary.ControlNet.Hostname {
+				nlog.Warningln(h.si.String(), "=>", psi.StringEx(), "slow keepalive:", err)
+				primaryURL = smap.Primary.URL(cmn.NetPublic)
+				nlog.Warningln("retrying via pub addr:", primaryURL)
+
+				freeCR(res)
+				res = h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
+			}
+		} else if s := res.err.Error(); strings.Contains(s, "lookup") || strings.Contains(s, "no such host") {
+			// DEBUG -- remove when tested -- DEBUG
+			nlog.Infof(">>> slow keepalive: %v (%T)", res.err, res.err)
+		}
 		status, err = res.status, res.err
 	}
 	freeCR(res)

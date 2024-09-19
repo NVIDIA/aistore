@@ -567,7 +567,11 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 	}
 
 	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
-	nlog.Warningf("%s => %s keepalive failed: %v(%d)", si, meta.Pname(pid), err, status)
+	if status != 0 {
+		nlog.Warningln(si.String(), "=>", meta.Pname(pid), "keepalive failed: [", err, status, "]")
+	} else {
+		nlog.Warningln(si.String(), "=>", meta.Pname(pid), "keepalive failed:", err)
+	}
 
 	//
 	// retry
@@ -584,7 +588,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			// and therefore not skipping keepalive req (compare with palive.retry)
 			i++
 			started := mono.NanoTime()
-			pid, status, err = k.k.sendKalive(nil, timeout, started, false)
+			pid, status, err = k.k.sendKalive(nil, timeout, started, false /*fast*/)
 			if pid == si.ID() {
 				return // elected as primary
 			}

@@ -168,7 +168,7 @@ func IsErrOOS(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)
 }
 
-func isErrDNSLookup(err error) bool {
+func IsErrDNSLookup(err error) bool {
 	if _, ok := err.(*net.DNSError); ok {
 		return ok
 	}
@@ -178,7 +178,7 @@ func isErrDNSLookup(err error) bool {
 
 func IsUnreachable(err error, status int) bool {
 	return IsErrConnectionRefused(err) ||
-		isErrDNSLookup(err) ||
+		IsErrDNSLookup(err) ||
 		errors.Is(err, context.DeadlineExceeded) ||
 		status == http.StatusRequestTimeout ||
 		status == http.StatusServiceUnavailable ||
