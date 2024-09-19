@@ -5,7 +5,7 @@
 package meta
 
 type (
-	// RMD (Rebalance MetaData)
+	// Rebalance MetaData
 	RMD struct {
 		Ext       any      `json:"ext,omitempty"` // within meta-version extensions
 		CluID     string   `json:"cluster_id"`    // effectively, Smap.UUID
