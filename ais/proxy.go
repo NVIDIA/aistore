@@ -2677,13 +2677,12 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
-	// urlpath-based actions
+	// urlpath items
 	if len(apiItems) > 0 {
-		action := apiItems[0]
-		p.daePathAction(w, r, action)
+		p.daeputItems(w, r, apiItems)
 		return
 	}
-	// message-based actions
+	// action-message
 	query := r.URL.Query()
 	msg, err := p.readActionMsg(w, r)
 	if err != nil {
@@ -2748,8 +2747,8 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action string) {
-	switch action {
+func (p *proxy) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []string) {
+	switch apiItems[0] {
 	case apc.Proxy:
 		p.daeSetPrimary(w, r)
 	case apc.SyncSmap:
@@ -2768,8 +2767,10 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 		nlog.Infof("%s: %s %s done", p, apc.SyncSmap, newsmap)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		p.setDaemonConfigQuery(w, r)
+	case apc.LoadX509:
+		p.daeLoadX509(w, r)
 	default:
-		p.writeErrAct(w, r, action)
+		p.writeErrAct(w, r, apiItems[0])
 	}
 }
 

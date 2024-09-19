@@ -104,7 +104,7 @@ func removeNodeFromSmap(c *cli.Context) error {
 	if node.IsProxy() {
 		smap, err := getClusterMap(c)
 		if err != nil {
-			return err // cannot happen
+			return err // (unlikely)
 		}
 		if smap.IsPrimary(node) {
 			return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)

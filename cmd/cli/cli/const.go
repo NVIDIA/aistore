@@ -132,7 +132,8 @@ const (
 	cmdBackendEnable  = "enable-backend"
 	cmdBackendDisable = "disable-backend"
 
-	cmdLoadTLS = "load-certificate"
+	cmdLoadTLS     = "load-certificate"
+	cmdValidateTLS = "validate-certificates"
 
 	// Node subcommands
 	cmdJoin                = "join"

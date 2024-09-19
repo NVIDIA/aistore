@@ -6,8 +6,11 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/urfave/cli"
 )
@@ -28,6 +31,12 @@ var (
 		Action:       loadCertHandler,
 		BashComplete: suggestAllNodes,
 	}
+	validateTLS = cli.Command{
+		Name:      cmdValidateTLS,
+		Usage:     "check that all TLS certficates are identical",
+		ArgsUsage: optionalNodeIDArgument,
+		Action:    validateCertHandler,
+	}
 
 	// top-level
 	tlsCmd = cli.Command{
@@ -36,17 +45,18 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(showTLS, "", true, commandShow),
 			loadTLS,
+			validateTLS,
 		},
 	}
 )
 
 func showCertHandler(c *cli.Context) error {
 	var (
-		sid             []string
-		node, sname, er = arg0Node(c)
+		sid            []string
+		node, sname, e = arg0Node(c)
 	)
-	if er != nil {
-		return er
+	if e != nil {
+		return e
 	}
 	if node != nil {
 		sid = append(sid, node.ID())
@@ -75,15 +85,82 @@ func showCertHandler(c *cli.Context) error {
 }
 
 func loadCertHandler(c *cli.Context) (err error) {
-	s := "Done."
+	s := "Done: "
 	if c.NArg() == 0 {
 		err = api.LoadX509Cert(apiBP, c.Args()...)
-		s = "Done: all nodes."
+		s += "all nodes."
 	} else {
-		err = api.LoadX509Cert(apiBP, meta.N2ID(c.Args().Get(0)))
+		node, sname, e := arg0Node(c)
+		if e != nil {
+			return e
+		}
+		s += sname
+		err = api.LoadX509Cert(apiBP, node.ID())
 	}
 	if err == nil {
 		actionDone(c, s)
 	}
 	return err
+}
+
+// TODO: check expiration times as well
+func validateCertHandler(c *cli.Context) error {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
+	}
+
+	var (
+		sid     = make([]string, 1)
+		info, i cos.StrKVs
+		cnt     int
+	)
+	sid[0] = smap.Primary.ID()
+	info, err = api.GetX509Info(apiBP, sid...)
+	if err != nil {
+		return V(err)
+	}
+	for pid, snode := range smap.Pmap {
+		if pid == smap.Primary.ID() {
+			continue
+		}
+		sid[0] = pid
+		i, err = api.GetX509Info(apiBP, sid...)
+		if err != nil {
+			actionWarn(c, fmt.Sprintf("%s returned error: %v", snode, V(err)))
+			continue
+		}
+		cnt += compareCerts(c, info, i, smap.Primary, snode)
+	}
+	for tid, snode := range smap.Tmap {
+		sid[0] = tid
+		i, err = api.GetX509Info(apiBP, sid...)
+		if err != nil {
+			actionWarn(c, fmt.Sprintf("%s returned error: %v", snode, V(err)))
+			continue
+		}
+		cnt += compareCerts(c, info, i, smap.Primary, snode)
+	}
+
+	if cnt == 0 {
+		actionDone(c, "Done: all TLS certificates are identical")
+	} else if cnt > 1 {
+		warn := fmt.Sprintf("\n==== %d differences overall ====", cnt)
+		actionWarn(c, warn)
+	}
+	return nil
+}
+
+func compareCerts(c *cli.Context, info, i cos.StrKVs, pnode, snode *meta.Snode) int {
+	for k, v1 := range info {
+		v2, ok := i[k]
+		if ok && v1 == v2 {
+			continue
+		}
+		warn := fmt.Sprintf("primary %s and node %s have different TLS certificates: (%s, %q) != (%s, %q)",
+			pnode, snode, k, v1, k, v2)
+		actionWarn(c, warn)
+		return 1
+	}
+	return 0
 }
