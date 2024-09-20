@@ -423,9 +423,8 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, timeout time.Durat
 				started = mono.NanoTime()
 				smap    = pkr.p.owner.smap.get()
 			)
-			// retry upon (intermittent) network failure
-			// (compare with slowKalive)
-			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap, 1 /*retry via pub-addr*/)
+			// retry via pub-addr if different (compare with slowKalive)
+			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap, 1 /*retry*/)
 			if err == nil {
 				now := mono.NanoTime()
 				pkr.statsT.Add(stats.KeepAliveLatency, now-started)

@@ -1429,9 +1429,11 @@ func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap
 	freeCR(res)
 
 	if err != nil && len(retry) > 0 {
-		// [NOTE]
-		// about to remove the node from the cluster map - not checking IsErrDNSLookup and similar
-		// (ie., not trying to narrow down - compare w/ slow-keepalive)
+		// [NOTE] retrying when:
+		// - about to remove the node from the cluster map, or
+		// - about to elect new primary
+		// not checking `IsErrDNSLookup` and similar - ie., not trying to narrow down
+		// (compare w/ slow-keepalive)
 		if si.PubNet.Hostname != si.ControlNet.Hostname {
 			cargs.req.Base = si.URL(cmn.NetPublic)
 			nlog.Warningln("retrying via pub addr:", cargs.req.Base)
