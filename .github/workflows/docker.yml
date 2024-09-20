@@ -3,41 +3,41 @@ name: Container Images
 on:
   workflow_dispatch:
     inputs:
-      build_admin_image:
-        description: 'Build admin image (aistorage/admin)'
+      build_util_image:
+        description: 'Build ais-util image (aistorage/ais-util)'
         required: true
         type: boolean
-        default: true
+        default: false
 
       build_aisnode_image:
         description: 'Build aisnode image (aistorage/aisnode)'
         required: true
         type: boolean
-        default: true
+        default: false
 
       build_cluster_minimal_image:
         description: 'Build cluster-minimal image (aistorage/cluster-minimal)'
         required: true
         type: boolean
-        default: true
+        default: false
 
       build_ci_image:
         description: 'Build GitLab CI image (aistorage/ci)'
         required: true
         type: boolean
-        default: true
+        default: false
 
       build_aisnode_minikube_image:
         description: 'Build aisnode-minikube image (aistorage/aisnode-minikube)'
         required: true
         type: boolean
-        default: true
+        default: false
 
       build_authn_image:
         description: 'Build AuthN (aistorage/authn)'
         required: true
         type: boolean
-        default: true
+        default: false
 
       image_tag:
         description: 'Tag of all the selected images'
@@ -45,7 +45,7 @@ on:
         default: 'latest'
 
 env:
-  ADMIN_IMAGE: 'aistorage/admin'
+  UTIL_IMAGE: 'aistorage/ais-util'
   AISNODE_IMAGE: 'aistorage/aisnode'
   CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
   CI_IMAGE: 'aistorage/ci'
@@ -65,11 +65,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push `aisadmin` image
-        if: ${{ inputs.build_admin_image }}
+      - name: Build and push `ais-util` image
+        if: ${{ inputs.build_util_image }}
         run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisadmin_container
-          IMAGE_REPO="${{ env.ADMIN_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisutil_container
+          IMAGE_REPO="${{ env.UTIL_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
           popd
 
       - name: Build and push `aisnode` image
