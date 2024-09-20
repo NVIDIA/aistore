@@ -21,6 +21,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// TODO: target only - won't show put/get etc. counters and error counters (e.g. keep-alive) from proxies' perspective
+
 type (
 	perfcb func(c *cli.Context,
 		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
@@ -352,6 +354,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 	}
 
+	// TODO: target only - won't show proxies' put/get etc. counters and error counters (e.g. keep-alive)
 	smap, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
 	if err != nil {
 		return err

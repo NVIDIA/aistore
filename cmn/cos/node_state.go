@@ -6,9 +6,9 @@ package cos
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type NodeStateFlags BitFlags
@@ -35,6 +35,7 @@ const (
 	CertWillSoonExpire                               // warning X.509
 	CertificateExpired                               // red --/--
 	CertificateInvalid                               // red --/--
+	KeepAliveErrors                                  // warning (errors during the last ~1m)
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
@@ -129,12 +130,16 @@ func (f NodeStateFlags) String() string {
 	if f&CertificateInvalid == CertificateInvalid {
 		sb = append(sb, "tls-cert-invalid")
 	}
+	if f&KeepAliveErrors == KeepAliveErrors {
+		sb = append(sb, "keep-alive-errors")
+	}
 
 	l := len(sb)
 	switch l {
 	case 0:
-		err := fmt.Errorf("unknown flag %b", int64(f))
-		nlog.Errorln(err)
+		v := int64(f)
+		err := fmt.Errorf("node state alerts: unknown flag %x (%b)", v, v)
+		fmt.Fprintln(os.Stderr, err)
 		debug.Assert(false, err)
 		return "-" // (teb.unknownVal)
 	case 1:

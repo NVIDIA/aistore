@@ -38,6 +38,7 @@ import (
 
 // defaults and tunables
 const (
+	dfltKaliveClearAlert  = 5 * time.Minute        // clear `cos.KeepAliveErrors` alert when `ErrKaliveCount` doesn't inc that much time
 	dfltPeriodicFlushTime = time.Minute            // when `config.Log.FlushTime` is 0 (zero)
 	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
 	maxStatsLogInterval   = int64(3 * time.Minute) // when idle; secondly, an upper limit on `config.Log.StatsTime`
@@ -84,6 +85,8 @@ const (
 	ErrDeleteCount = errPrefix + DeleteCount
 	ErrRenameCount = errPrefix + RenameCount
 	ErrListCount   = errPrefix + ListCount
+
+	ErrKaliveCount = errPrefix + "kalive.n"
 
 	// more errors
 	// (for even more errors, see target_stats)
@@ -227,6 +230,11 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, ErrListCount, KindCounter,
 		&Extra{
 			Help: "total number of list-objects errors",
+		},
+	)
+	r.reg(snode, ErrKaliveCount, KindCounter,
+		&Extra{
+			Help: "total number of keep-alive failures",
 		},
 	)
 
@@ -418,8 +426,10 @@ waitStartup:
 
 	var (
 		lastNgr           int64
+		lastKaliveErrInc  int64
+		kaliveErrs        int64
 		startTime         = mono.NanoTime() // uptime henceforth
-		lastDateTimestamp = startTime
+		lastDateTimestamp = startTime       // RFC822
 	)
 	for {
 		select {
@@ -427,6 +437,8 @@ waitStartup:
 			now := mono.NanoTime()
 			config = cmn.GCO.Get()
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
+
+			// 1. "High number of"
 			lastNgr = r.checkNgr(now, lastNgr, goMaxProcs)
 
 			if statsTime != config.Periodic.StatsTime.D() {
@@ -434,9 +446,8 @@ waitStartup:
 				r.ticker.Reset(statsTime)
 				logger.statsTime(statsTime)
 			}
-			//
-			// NOTE: stats runner is solely responsible to flush logs
-			//
+
+			// 2. flush logs (NOTE: stats runner is solely responsible)
 			flushTime := dfltPeriodicFlushTime
 			if config.Log.FlushTime != 0 {
 				flushTime = config.Log.FlushTime.D()
@@ -444,9 +455,23 @@ waitStartup:
 			if nlog.Since(now) > flushTime || nlog.OOB() {
 				nlog.Flush(nlog.ActNone)
 			}
+
+			// 3. dated time => info log
 			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
 				nlog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
 				lastDateTimestamp = now
+			}
+
+			// 4. kalive alert
+			n := r.Get(ErrKaliveCount)
+			if n != kaliveErrs {
+				// raise
+				lastKaliveErrInc = now
+				r.SetFlag(NodeAlerts, cos.KeepAliveErrors)
+				kaliveErrs = n
+			} else if time.Duration(now-lastKaliveErrInc) >= dfltKaliveClearAlert {
+				// clear
+				r.ClrFlag(NodeAlerts, cos.KeepAliveErrors)
 			}
 		case <-r.stopCh:
 			r.ticker.Stop()

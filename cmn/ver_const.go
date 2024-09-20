@@ -27,9 +27,9 @@ const GitHubHome = "https://github.com/NVIDIA/aistore"
 
 const (
 	VersionAIStore = "3.24.rc4"
-	VersionCLI     = "1.12"
-	VersionLoader  = "1.11"
-	VersionAuthN   = "1.0"
+	VersionCLI     = "1.13"
+	VersionLoader  = "1.12"
+	VersionAuthN   = "1.1"
 )
 
 const (

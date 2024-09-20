@@ -284,8 +284,10 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 				continue
 			}
 			// otherwise, go keepalive with retries
+
+			pkr.statsT.IncErr(stats.ErrKaliveCount)
 			wg.Add(1)
-			go pkr.ping(si, wg, smap, config)
+			go pkr.goping(si, wg, smap, config)
 		}
 	}
 	wg.Wait()
@@ -308,7 +310,7 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 	return
 }
 
-func (pkr *palive) ping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Config) {
+func (pkr *palive) goping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Config) {
 	if len(pkr.stoppedCh) > 0 {
 		wg.Done()
 		return
@@ -338,6 +340,7 @@ func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (
 
 	tout := config.Timeout.MaxKeepalive.String()
 	nlog.Warningln("failed to slow-ping", si.StringEx(), "- retrying [", err, status, tout, smap.StringEx(), "]")
+	pkr.statsT.IncErr(stats.ErrKaliveCount)
 
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
 	ok, stopped = pkr.retry(si, ticker, config.Timeout.MaxKeepalive.D())
@@ -432,6 +435,7 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, timeout time.Durat
 				return true, false
 			}
 
+			pkr.statsT.IncErr(stats.ErrKaliveCount)
 			i++
 
 			if i >= kaNumRetries {
@@ -559,12 +563,11 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 		pid     = smap.Primary.ID()
 		timeout = config.Timeout.CplaneOperation.D()
 		started = mono.NanoTime()
-		fast    bool
 	)
 	if nlog.Stopping() {
 		return
 	}
-	fast = k.k.cluUptime(started) > max(k.interval<<2, config.Timeout.Startup.D()>>1)
+	fast := k.k.cluUptime(started) > max(k.interval<<2, config.Timeout.Startup.D()>>1)
 	cpid, status, err := k.k.sendKalive(smap, timeout, started, fast)
 	if err == nil {
 		now := mono.NanoTime()
@@ -572,6 +575,8 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 		k.hb.HeardFrom(pid, now) // effectively, yes
 		return
 	}
+
+	k.statsT.IncErr(stats.ErrKaliveCount)
 
 	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
 	if status != 0 {

@@ -25,6 +25,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+//
+// [TODO] retry to pub-addr, if different (currently, cmn.NetIntraControl only; see palive.retry)
+//
+
 // Metasync provides two methods to the rest of the `ais` code:
 // * sync - to synchronize cluster-level metadata (the main method)
 // * becomeNonPrimary - to be called when the current primary becomes non-primary
