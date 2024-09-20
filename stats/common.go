@@ -467,9 +467,11 @@ waitStartup:
 			if n != kaliveErrs {
 				// raise
 				lastKaliveErrInc = now
-				r.SetFlag(NodeAlerts, cos.KeepAliveErrors)
+				if n > kaliveErrs { // vs. 'reset errors-only'
+					r.SetFlag(NodeAlerts, cos.KeepAliveErrors)
+				}
 				kaliveErrs = n
-			} else if time.Duration(now-lastKaliveErrInc) >= dfltKaliveClearAlert {
+			} else if n > 0 && time.Duration(now-lastKaliveErrInc) > dfltKaliveClearAlert {
 				// clear
 				r.ClrFlag(NodeAlerts, cos.KeepAliveErrors)
 			}

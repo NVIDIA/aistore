@@ -97,7 +97,7 @@ The rest of this document is structured as follows:
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
   - [A note on conditional linkage](#a-note-on-conditional-linkage)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
-- [Assorted command lines](#assorted-command-lines)
+- [Assorted Curl](#assorted-curl)
 
 ## Local Playground
 
@@ -574,3 +574,50 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 > Memory limits may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding which also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
+
+## Assorted Curl
+
+Some will say that using AIS [CLI](/docs/cli.md) with aistore is an order of magnitude more convenient than [curl](https://curl.se/). Or two orders.
+
+Must be a matter of taste, though, and so here are a few `curl` examples.
+
+> As always, `http://localhost:8080` address simply indicates [Local Playground](#local-playground) and must be understood as an _arbitrary_ aistore endpoint.
+
+### Example: PUT via aistore [S3 interface](/docs/s3compat.md); specify PUT content inline (in the curl command):
+
+```console
+$ ais create ais://nnn ## create bucket, if doesn't exist
+
+$ curl -L -X PUT -d "0123456789" http://localhost:8080/s3/nnn/qqq
+
+$ ais ls ais://nnn
+NAME     SIZE
+qqq      10B
+```
+
+### Example: same as above using [Easy URL](/docs/http_api.md#easy-url)
+
+```console
+## notice PROVIDER/BUCKET/OBJECT notation
+##
+$ curl -L -X PUT -d "0123456789" http://localhost:8080/ais/nnn/eee
+
+$ ais ls ais://nnn
+NAME     SIZE
+eee      10B
+qqq      10B
+```
+
+### Finally, same as above using native aistore API
+
+```console
+## notice '/v1/objects' API endpoint
+##
+$ curl -L -X PUT -d "0123456789" http://localhost:8080/v1/objects/nnn/uuu
+
+$ ais ls ais://nnn
+NAME     SIZE
+eee      10B
+qqq      10B
+uuu      10B
+```

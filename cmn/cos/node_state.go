@@ -35,7 +35,7 @@ const (
 	CertWillSoonExpire                               // warning X.509
 	CertificateExpired                               // red --/--
 	CertificateInvalid                               // red --/--
-	KeepAliveErrors                                  // warning (errors during the last ~1m)
+	KeepAliveErrors                                  // warning (new keep-alive errors during the last 5m)
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
