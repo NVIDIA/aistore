@@ -1413,7 +1413,7 @@ func (h *htrun) isValidObjname(w http.ResponseWriter, r *http.Request, name stri
 }
 
 // health client
-func (h *htrun) reqHealth(si *meta.Snode, timeout time.Duration, query url.Values, smap *smapX) (b []byte, status int, err error) {
+func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap *smapX, retry ...int) ([]byte, int, error) {
 	var (
 		path  = apc.URLPathHealth.S
 		url   = si.URL(cmn.NetIntraControl)
@@ -1421,14 +1421,31 @@ func (h *htrun) reqHealth(si *meta.Snode, timeout time.Duration, query url.Value
 	)
 	{
 		cargs.si = si
-		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query}
-		cargs.timeout = timeout
+		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q}
+		cargs.timeout = tout
 	}
 	res := h.call(cargs, smap)
-	b, status, err = res.bytes, res.status, res.err
-	freeCargs(cargs)
+	b, status, err := res.bytes, res.status, res.err
 	freeCR(res)
-	return
+
+	if err != nil && len(retry) > 0 {
+		// [NOTE]
+		// about to remove the node from the cluster map - not checking IsErrDNSLookup and similar
+		// (ie., not trying to narrow down - compare w/ slow-keepalive)
+		if si.PubNet.Hostname != si.ControlNet.Hostname {
+			cargs.req.Base = si.URL(cmn.NetPublic)
+			nlog.Warningln("retrying via pub addr:", cargs.req.Base)
+			res = h.call(cargs, smap)
+			b, status, err = res.bytes, res.status, res.err
+			freeCR(res)
+			if err != nil {
+				nlog.Warningln(h.si.String(), "=>", si.StringEx(), "failed slow-ping retry:", err)
+			}
+		}
+	}
+
+	freeCargs(cargs)
+	return b, status, err
 }
 
 // - utilizes reqHealth (above) to discover a _better_ Smap, if exists
@@ -1835,7 +1852,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	if daemon.EP != "" {
 		candidates = _addCan(daemon.EP, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
-	primaryURL, psi := h.getPrimaryURLAndSI(nil, config)
+	_, primaryURL, psi := h._primus(nil, config)
 	candidates = _addCan(primaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	if psi != nil {
 		candidates = _addCan(psi.URL(cmn.NetPublic), selfPublicURL.Host, selfIntraURL.Host, candidates)
@@ -1950,14 +1967,13 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 }
 
 // (fast path: nodes => primary)
-func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (pid string, hdr http.Header, err error) {
+func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (string /*pid*/, http.Header, error) {
 	if nlog.Stopping() {
-		return "", hdr, h.errStopping()
+		return "", http.Header{}, h.errStopping()
 	}
 	debug.Assert(h.ClusterStarted())
 
-	primaryURL, psi := h.getPrimaryURLAndSI(smap, nil)
-	pid = psi.ID()
+	pid, primaryURL, psi := h._primus(smap, nil)
 
 	cargs := allocCargs()
 	{
@@ -1974,49 +1990,57 @@ func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (p
 
 	res := h.call(cargs, smap)
 	freeCargs(cargs)
-	err, hdr = res.err, res.header
+	err, hdr := res.err, res.header
 
 	freeCR(res)
 	return pid, hdr, err
 }
 
 // (slow path: nodes => primary)
-func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (pid string, status int, err error) {
+func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (string /*pid*/, int, error) {
 	if nlog.Stopping() {
 		return "", 0, h.errStopping()
 	}
-	primaryURL, psi := h.getPrimaryURLAndSI(smap, nil)
-	pid = psi.ID()
+	pid, primaryURL, psi := h._primus(smap, nil)
 
 	res := h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
-	if res.err != nil {
-		if strings.Contains(res.err.Error(), ciePrefix) {
-			cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
-		}
-		//
-		// intermittent DNS? retry just once if confirmed && pub != control
-		//
-		if cos.IsErrDNSLookup(res.err) && primaryURL == smap.Primary.URL(cmn.NetIntraControl) {
-			debug.Assert(psi == smap.Primary)
-			if smap.Primary.PubNet.Hostname != smap.Primary.ControlNet.Hostname {
-				nlog.Warningln(h.si.String(), "=>", psi.StringEx(), "slow keepalive:", err)
-				primaryURL = smap.Primary.URL(cmn.NetPublic)
-				nlog.Warningln("retrying via pub addr:", primaryURL)
-
-				freeCR(res)
-				res = h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
-			}
-		} else if s := res.err.Error(); strings.Contains(s, "lookup") || strings.Contains(s, "no such host") {
-			// DEBUG -- remove when tested -- DEBUG
-			nlog.Infof(">>> slow keepalive: %v (%T)", res.err, res.err)
-		}
-		status, err = res.status, res.err
+	if res.err == nil {
+		freeCR(res)
+		return pid, 0, nil
 	}
+
+	s := res.err.Error()
+	if strings.Contains(s, ciePrefix) {
+		cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
+	}
+
+	if psi == nil || pid == "" || psi.PubNet.Hostname == psi.ControlNet.Hostname {
+		status, err := res.status, res.err
+		freeCR(res)
+		return pid, status, err
+	}
+
+	// intermittent DNS failure? retry just once if (pub != control)
+	// (compare with palive.retry)
+
+	debug.Assert(psi == smap.Primary)
+	debug.Assert(primaryURL == smap.Primary.URL(cmn.NetIntraControl))
+
+	if a, b := cos.IsErrDNSLookup(res.err), strings.Contains(s, "lookup") && strings.Contains(s, "no such"); a || b {
+		nlog.Warningln(h.String(), "=>", psi.StringEx(), "slow-keepalive:", res.err, "[", a, b, "]")
+		primaryURL = smap.Primary.URL(cmn.NetPublic)
+		nlog.Warningln("retrying via pub addr:", primaryURL)
+
+		freeCR(res)
+		res = h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
+	}
+
+	status, err := res.status, res.err
 	freeCR(res)
 	return pid, status, err
 }
 
-func (h *htrun) getPrimaryURLAndSI(smap *smapX, config *cmn.Config) (string, *meta.Snode) {
+func (h *htrun) _primus(smap *smapX, config *cmn.Config) (string /*pid*/, string /*url*/, *meta.Snode) {
 	if smap == nil {
 		smap = h.owner.smap.get()
 	}
@@ -2024,9 +2048,9 @@ func (h *htrun) getPrimaryURLAndSI(smap *smapX, config *cmn.Config) (string, *me
 		if config == nil {
 			config = cmn.GCO.Get()
 		}
-		return config.Proxy.PrimaryURL, nil
+		return "", config.Proxy.PrimaryURL, nil
 	}
-	return smap.Primary.URL(cmn.NetIntraControl), smap.Primary
+	return smap.Primary.ID(), smap.Primary.URL(cmn.NetIntraControl), smap.Primary
 }
 
 func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti *cos.NodeStateInfo) {

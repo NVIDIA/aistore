@@ -28,6 +28,7 @@ const (
 	kaResumeMsg  = "resume"
 	kaSuspendMsg = "suspend"
 
+	// NOTE: number of keepalive failures prior to removing nodes from Smap = (1 + 1 + kaNumRetries)
 	kaNumRetries = 3
 )
 
@@ -335,8 +336,9 @@ func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (
 		return true, false
 	}
 
-	nlog.Warningf("node %s failed health ping [%v(%d)] - retry with max=%s", si.StringEx(), err, status,
-		config.Timeout.MaxKeepalive.String())
+	tout := config.Timeout.MaxKeepalive.String()
+	nlog.Warningln("failed to slow-ping", si.StringEx(), "- retrying [", err, status, tout, smap.StringEx(), "]")
+
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
 	ok, stopped = pkr.retry(si, ticker, config.Timeout.MaxKeepalive.D())
 	ticker.Stop()
@@ -421,7 +423,9 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, timeout time.Durat
 				started = mono.NanoTime()
 				smap    = pkr.p.owner.smap.get()
 			)
-			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
+			// retry upon (intermittent) network failure
+			// (compare with slowKalive)
+			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap, 1 /*retry via pub-addr*/)
 			if err == nil {
 				now := mono.NanoTime()
 				pkr.statsT.Add(stats.KeepAliveLatency, now-started)
@@ -430,10 +434,14 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, timeout time.Durat
 			}
 
 			i++
-			if i == kaNumRetries {
-				nlog.Warningf("Failed after %d attempts - removing %s from %s", i, si.StringEx(), smap)
+
+			if i >= kaNumRetries {
+				debug.Assert(i == kaNumRetries)
+				nlog.Errorln("slow-ping failure after", i, "attempts - removing", si.StringEx(),
+					"from", smap.StringEx())
 				return false, false
 			}
+
 			if cos.IsUnreachable(err, status) {
 				continue
 			}
