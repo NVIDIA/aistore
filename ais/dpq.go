@@ -60,7 +60,7 @@ var _except = map[string]bool{
 	s3.QparamSignature:   false,
 	s3.QparamXID:         false,
 
-	s3.HeaderCredentials: false, // plus, all headers that have s3.HeaderPrefix
+	// plus, all headers that have s3.HeaderPrefix "X-Amz-"
 }
 
 var (
@@ -152,7 +152,7 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		case apc.QparamLatestVer:
 			dpq.latestVer = cos.IsParseBool(value)
 
-		default: // the key must be known or _except-ed
+		default: // the key must be known or `_except`-ed
 			if strings.HasPrefix(key, s3.HeaderPrefix) {
 				continue
 			}
