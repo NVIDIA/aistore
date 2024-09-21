@@ -32,12 +32,8 @@ const (
 	QparamSignature   = "Signature"
 	QparamXID         = "x-id"
 
-	HeaderAlgorithm     = "X-Amz-Algorithm"
-	HeaderCredentials   = "X-Amz-Credential" //nolint:gosec // This is just a header name definition...
-	HeaderDate          = "X-Amz-Date"
-	HeaderExpires       = "X-Amz-Expires"
-	HeaderSignedHeaders = "X-Amz-SignedHeaders"
-	HeaderSignature     = "X-Amz-Signature"
+	HeaderPrefix      = "X-Amz-"
+	HeaderCredentials = "X-Amz-Credential" //nolint:gosec // This is just a header name definition...
 
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"

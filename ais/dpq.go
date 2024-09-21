@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // RESTful API: datapath query parameters
@@ -52,19 +52,15 @@ var _except = map[string]bool{
 	apc.QparamDontHeadRemote: false,
 
 	// flows that utilize the following query parameters perform conventional r.URL.Query()
-	s3.QparamMptUploadID:   false,
-	s3.QparamMptUploads:    false,
-	s3.QparamMptPartNo:     false,
-	s3.QparamAccessKeyID:   false,
-	s3.QparamExpires:       false,
-	s3.QparamSignature:     false,
-	s3.HeaderAlgorithm:     false,
-	s3.HeaderCredentials:   false,
-	s3.HeaderDate:          false,
-	s3.HeaderExpires:       false,
-	s3.HeaderSignedHeaders: false,
-	s3.HeaderSignature:     false,
-	s3.QparamXID:           false,
+	s3.QparamMptUploadID: false,
+	s3.QparamMptUploads:  false,
+	s3.QparamMptPartNo:   false,
+	s3.QparamAccessKeyID: false,
+	s3.QparamExpires:     false,
+	s3.QparamSignature:   false,
+	s3.QparamXID:         false,
+
+	s3.HeaderCredentials: false, // plus, all headers that have s3.HeaderPrefix
 }
 
 var (
@@ -156,11 +152,13 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		case apc.QparamLatestVer:
 			dpq.latestVer = cos.IsParseBool(value)
 
-		default:
-			// the key must be known or _except-ed
+		default: // the key must be known or _except-ed
+			if strings.HasPrefix(key, s3.HeaderPrefix) {
+				continue
+			}
 			if _, ok := _except[key]; !ok {
-				err = fmt.Errorf("invalid query parameter: %q", key)
-				debug.AssertNoErr(err)
+				err = fmt.Errorf("invalid query parameter: %q (raw query: %q)", key, rawQuery)
+				nlog.Errorln(err)
 				return err
 			}
 		}

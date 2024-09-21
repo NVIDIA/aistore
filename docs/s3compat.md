@@ -146,6 +146,15 @@ $ curl -L -X PUT -d 'testing 1 2 3' "https://localhost:8080/s3/bucket/test.txt?X
 
 At this point, AIStore will send the presigned (PUT) URL to S3 and, if successful, store the object in cluster.
 
+**NOTE:** when using HTTPS (as in: `AIS_USE_HTTPS`) and having AIS deployed with a self-signed TLS certificate you may get the following `curl` failure:
+
+```sh
+curl: (60) SSL certificate problem: unable to get local issuer certificate
+More details here: https://curl.se/docs/sslcerts.html
+```
+
+In this case, simply ask it to skip checking, e.g.: `echo insecure >> ~/.curlrc`
+
 ### 4. Finally, check the status
 
 Finally (and optionally), let's check the status of the new object - `s3://bucket/test.txt`, in this case:
