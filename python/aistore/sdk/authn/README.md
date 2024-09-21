@@ -34,6 +34,8 @@ admin_auth_token = authn_client.login("admin", "admin")
 aistore_client = Client("http://localhost:8080", admin_auth_token)
 ```
 
+> Note: `http://localhost:8080` address (above and elsewhere) is used for purely demonstration purposes and must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
+
 #### Registering a Cluster
 
 Register a cluster with the AuthN server for security management. This allows AuthN to ensure that security policies, such as revoked tokens, are properly managed across all clusters. During registration, the AuthN server contacts the AIStore server to verify that `authn.enabled` is set and that the secret signing key hashes match:

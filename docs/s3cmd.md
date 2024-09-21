@@ -172,7 +172,7 @@ host_bucket="--host-bucket=$s3endpoint/%(bucket)"
 ```
 
 > Separately, note that by default aistore handles S3 API at its `AIS_ENDPOINT/s3` endpoint (e.g., `localhost:8080/s3`).
-> However, any aistore cluster is configurable to accept S3 API at its root as well. That is, without the "/s3" suffix shown above. 
+> However, any aistore cluster is **configurable** to accept S3 API calls at its root as well. That is, without the "/s3" suffix shown above.
 
 Back to running `s3cmd` though - the second, and arguably the easiest, way is exemplified by the `diff` below:
 
@@ -346,7 +346,7 @@ $ diff -uN ~/.s3cfg.orig ~/.s3cfg
  invalidate_default_index_root_on_cf = True
 ```
 
-Goes without saying that `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway.
+> **NOTE:** `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway. The latter may - but not necessarily have to - be specified with the environment variable `AIS ENDPOINT`.
 
 The following further assumes that `abc` is an AIStore bucket, while `my-s3-bucket` is S3 bucket that _this_ AIStore cluster can access.
 

@@ -31,6 +31,11 @@ For additional background, see:
   - [GET(object)](#getobject)
   - [HEAD(object)](#headobject)
 - [Presigned S3 requests](#presigned-s3-requests)
+  - [1. Enable presigned S3 requests](#1-enable-presigned-s3-requests)
+  - [2. Create presigned S3 request](#2-create-presigned-s3-request)
+  - [3. Execute presigned S3 request](#3-execute-presigned-s3-request)
+  - [4. Finally, check the status](#4-finally-check-the-status)
+  - [Using Go client to execute presigned S3 requests](#using-go-client-to-execute-presigned-s3-requests)
 - [Quick example using Internet Browser](#quick-example-using-internet-browser)
 - [`s3cmd` command line](#s3cmd-command-line)
 - [ETag and MD5](#etag-and-md5)
@@ -107,33 +112,55 @@ $ aws s3api --endpoint-url http://localhost:8080/s3 head-object --bucket abc --k
 
 AIStore also supports (passing through) [presigned S3 requests](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide).
 
-To use this _feature_, you need to enable it - as follows:
+To use this _feature_, you need to enable it first - as follows:
 
-```commandline
+### 1. Enable presigned S3 requests
+
+```console
 $ ais config cluster features S3-Presigned-Request
 ```
 
-Once we have our cluster configured we can prepare and issue presigned S3 request:
-1. First create a signed S3 request.
-   ```commandline
-   $ aws s3 presign s3://bucket/test.txt
-   https://bucket.s3.us-west-2.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
-   ```
+Rest of this section uses [curl](https://curl.se/); more (and easier to use) examples can be found at:
 
-2. Issue request against AIStore:
-   ```commandline
-   $ curl -L -X -d 'testing 1 2 3' PUT https://localhost:8080/s3/bucket/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
-   ```
-   At this point, AIStore will send the presigned (PUT) URL to S3 and, if successful, store the object in cluster.
+* [Assorted Curl](/docs/getting_started.md#assorted-curl)
 
-3. Check status of the object:
-   ```commandline
-   ais bucket ls s3://bucket
-   NAME          SIZE   CACHED  STATUS
-   test.txt      13B    yes     ok
-   ```
+### 2. Create presigned S3 request
 
-It is also possible to achieve the same using a Go client. You will need to define a custom `RoundTripper` that changes URL from S3 to AIStore, e.g.:
+Once we have our cluster configured to execute presigned requests we can then start creating them and sending to AIStore.
+
+```console
+$ aws s3 presign s3://bucket/test.txt
+
+https://bucket.s3.us-west-2.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
+```
+
+### 3. Execute presigned S3 request
+
+Let's assumes that there's S3 bucket called `s3://bucket`, and we have read/write access to it.
+
+Further, `https://localhost:8080` address (below) simply indicates [Local Playground](/docs/getting_started.md#local-playground) and must be understood as a demonstration-only placeholder for an _arbitrary_ aistore endpoint (`AIS_ENDPOINT`).
+
+```console
+$ curl -L -X PUT -d 'testing 1 2 3' "https://localhost:8080/s3/bucket/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456"
+```
+
+At this point, AIStore will send the presigned (PUT) URL to S3 and, if successful, store the object in cluster.
+
+### 4. Finally, check the status
+
+Finally (and optionally), let's check the status of the new object - `s3://bucket/test.txt`, in this case:
+
+```console
+ais bucket ls s3://bucket
+NAME          SIZE   CACHED  STATUS
+test.txt      13B    yes     ok
+```
+
+### Using Go client to execute presigned S3 requests
+
+In the previous section, we used `curl` client. Of course, it is also possible to achieve the same using many other HTTP clients - for instance, Go.
+
+In Go, you will need to define a custom `RoundTripper` that changes URL from S3 to AIStore, e.g.:
 
 ```go
 type customTransport struct {

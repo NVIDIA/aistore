@@ -581,7 +581,7 @@ Some will say that using AIS [CLI](/docs/cli.md) with aistore is an order of mag
 
 Must be a matter of taste, though, and so here are a few `curl` examples.
 
-> As always, `http://localhost:8080` address simply indicates [Local Playground](#local-playground) and must be understood as an _arbitrary_ aistore endpoint.
+> As always, `http://localhost:8080` address (below) simply indicates [Local Playground](#local-playground) and must be understood as a placeholder for an _arbitrary_ aistore endpoint (`AIS_ENDPOINT`).
 
 ### Example: PUT via aistore [S3 interface](/docs/s3compat.md); specify PUT content inline (in the curl command):
 

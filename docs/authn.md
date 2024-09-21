@@ -48,15 +48,18 @@ AuthN generates tokens that are *self-sufficient*, meaning a proxy does not need
 
 ## Getting Started
 
-To deploy an AIS cluster with AuthN enabled, follow these steps:
-> **Note:** If you already have an AIS cluster deployed and want to add AuthN to it, follow these [instructions](#how-to-enable-authn-server-after-deployment).
+In this section, we use AIStore [Local Playground](/docs/getting_started.md#local-playground). This is done for purely (easy-to-use-and-repropduce) demonsration purposes.
 
-1. Ensure there is no previous cluster running:
+To deploy an AIS cluster with AuthN enabled, follow these steps:
+
+1. Optionally, shutdown and cleanup [Local Playground](/docs/getting_started.md#local-playground):
     ```sh
     make kill clean
     ```
-    
-> **Note:** When deploying AIStore with AuthN, an admin user is created by default with admin privileges. The default password for the admin user is `admin`. You can override it by setting the environment variable `AIS_AUTHN_ADMIN_PASSWORD` before deployment, as the password cannot be updated after deployment. For a list of other important environment variables, refer to the [Environment and Configuration](#environment-and-configuration) section.
+
+> **Note:** If you already have AIS cluster deployed and just want to add AuthN to it - that is, enable authentication and access control - follow these [instructions](#how-to-enable-authn-server-after-deployment).
+
+> **Note:** When deploying AIStore with AuthN, an `admin` user is created by default with `admin` privileges. The default password for the `admin` user isalso `admin`. You can override it by setting the environment variable `AIS_AUTHN_ADMIN_PASSWORD` before deployment, as the password cannot be updated after deployment. For the list of environment variables, refer to the [Environment and Configuration](#environment-and-configuration) section below.
 
 2. Deploy the cluster with AuthN enabled:
     ```sh
@@ -71,7 +74,6 @@ After deploying the cluster, you won't be able to access it without authenticati
 
 ```sh
 ais cluster show
-E 12:48:06.491664 token required: GET /v1/daemon (p[gUFp8080]: htrun.go:1307 <- prxauth.go:234 <- proxy.go:2580 <- proxy.go:2535])
 Error: token required
 ```
 
@@ -98,6 +100,8 @@ Error: token required
     CLUSTER ID  ALIAS       URLs
     eTdL4YGHN   mycluster   http://localhost:8080
     ```
+
+> Note: `http://localhost:8080` address (above) is used for purely demonstration purposes and must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 ### Default Roles and Permissions
 
@@ -315,6 +319,8 @@ By default, the AIStore deployment does not launch the AuthN server. To start th
     After registering, you can proceed using your cluster with admin privileges. You can add users, set up roles, etc.
 
 > **Note:** This example assumes that AuthN is running on the same host as the AIS cluster. If AuthN is running on a different host, you will need to specify the `AIS_AUTHN_URL` variable. For example, use `AIS_AUTHN_URL=http://10.10.1.190:52001 ais auth COMMAND`.
+
+Goes without saying that `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway. The latter may - but not necessarily have to - be specified with the environment variable `AIS ENDPOINT`.
 
 ## REST API
 

@@ -35,9 +35,9 @@ $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore/python/
 
 # upgrade pip to latest version
-$ python -m pip install --upgrade pip       
+$ python -m pip install --upgrade pip
 
-# install dependencies 
+# install dependencies
 $ pip install -r aistore/common_requirements
 
 $ pip install -e .
@@ -53,6 +53,8 @@ from aistore.sdk import Client
 
 client = Client("http://localhost:8080")
 ```
+
+> Note: `http://localhost:8080` address (above and elsewhere) must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. 
 See the [examples](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk) and the [reference docs](https://aistore.nvidia.com/docs/python-sdk) for more details

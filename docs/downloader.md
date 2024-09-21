@@ -132,6 +132,10 @@ $ curl -Li -H 'Content-Type: application/json' -d '{
 }' -X POST 'http://localhost:8080/v1/download'
 ```
 
+**NOTE:**
+
+> `localhost:8080` (above and elsewhere in this document) can be replaced with any legitimate (http or https) address of any AIS gateway.
+
 ## Multi Download
 
 A *multi* object download requires either a map or a list in JSON body:

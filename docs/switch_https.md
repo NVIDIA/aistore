@@ -43,9 +43,7 @@ ais://abc      yes             999 0           5.86MiB 5.20MiB 0B               
 ...
 ```
 
-Goes without saying that `localhost` etc. are used here (and elsewhere) for purely illustrative purposes.
-
-Instead of `localhost`, `127.0.0.1`, port `8080`, and the `make` command above one must use their respective correct endpoints and proper deployment operations.
+> **NOTE:** `localhost:8080` (above) can be replaced with any legitimate (http or https) address of any AIS gateway. The latter may - but not necessarily have to - be specified with the environment variable `AIS ENDPOINT`.
 
 ## From HTTPS back to HTTP
 

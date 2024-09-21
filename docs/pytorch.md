@@ -320,7 +320,6 @@ Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://buc
   -   length is -1 by default, all calls to len() are invalid as
   not all items are iterated at the start.
   -   This internally uses AIStore Python SDK.
-  
 
 **Arguments**:
 
@@ -328,7 +327,6 @@ Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://buc
   prefixes to objects on AIS
 - `length(int)` - length of the datapipe
 - `url(str)` - AIStore endpoint
-  
 
 **Example**:
 
@@ -344,6 +342,10 @@ Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://buc
   ...     pass
 
 <a id="aisio.AISFileLoaderIterDataPipe"></a>
+
+**Notes**:
+
+  - `http://localhost:8080` address (above and elsewhere) is used for purely demonstration purposes and must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 ## Class: AISFileLoaderIterDataPipe
 
@@ -362,7 +364,6 @@ Iterates all files in BytesIO format and returns a tuple (url, BytesIO).
   -   This internally uses AIStore Python SDK.
   -   An `etl_name` can be provided to run an existing ETL on the AIS cluster.
   See https://github.com/NVIDIA/aistore/blob/main/docs/etl.md for more info on AIStore ETL.
-  
 
 **Arguments**:
 
@@ -370,7 +371,6 @@ Iterates all files in BytesIO format and returns a tuple (url, BytesIO).
 - `length(int)` - length of the datapipe
 - `url(str)` - AIStore endpoint
 - `etl_name` _str, optional_ - Optional etl on the AIS cluster to apply to each object
-  
 
 **Example**:
 
