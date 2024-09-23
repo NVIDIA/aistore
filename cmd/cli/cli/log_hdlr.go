@@ -30,7 +30,7 @@ const getLogUsage = "download the current log or entire log history from: a) sel
 	indent1 + "\t - 'ais log get NODE_ID /tmp'\t- download the specified node's current log and save it in the specified directory;\n" +
 	indent1 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10'\t- download the node's current log _as_ /tmp/out\n" +
 	indent1 + "\t    \t  and keep updating (ie., appending) the latter every 10s;\n" +
-	indent1 + "\t - 'ais log get cluster /tmp'\t-\tdownload TAR.GZ archived logs of _all_ nodes in the cluster\n" +
+	indent1 + "\t - 'ais log get cluster /tmp'\t- download TAR.GZ archived logs of _all_ nodes in the cluster\n" +
 	indent1 + "\t    \t  and save the result in the specified local directory (note that 'get cluster' implies '--all');\n" +
 	indent1 + "\t - 'ais log get NODE_ID --all'\t- given 'NODE-ID' download the node's entire log TAR.GZ archive\n" +
 	indent1 + "\t - 'ais log get NODE_ID --all --severity e'\t- archive logged errors and warnings"

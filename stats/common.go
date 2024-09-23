@@ -661,28 +661,29 @@ func hkLogs(int64) time.Duration {
 
 	var (
 		tot     int64
-		finfos  = make([]rfs.FileInfo, 0, len(dentries)>>1)
+		n       = len(dentries)
+		nn      = n - n>>2
+		finfos  = make([]rfs.FileInfo, 0, nn)
 		verbose = cmn.Rom.FastV(4, cos.SmoduleStats)
 	)
-	for _, logtype := range []string{".INFO.", ".ERROR."} {
+	for i, logtype := range []string{".INFO.", ".ERROR."} {
 		finfos, tot = _sizeLogs(dentries, logtype, finfos)
 		l := len(finfos)
-		if tot > maxtotal && l > 1 {
-			go _rmLogs(tot, maxtotal, logdir, logtype, finfos)
-			if logtype != ".ERROR." {
-				finfos = make([]rfs.FileInfo, 0, len(dentries)>>1)
-			}
-		} else {
-			if tot > maxtotal {
-				nlog.Warningln(gcLogs, "cannot cleanup single large", logtype, "size:", tot, "configured max:", maxtotal)
-				debug.Assert(l == 1)
-				for _, finfo := range finfos {
-					nlog.Warningln("\t>>>", gcLogs, filepath.Join(logdir, finfo.Name()))
-				}
-			}
-			clear(finfos)
+		switch {
+		case tot < maxtotal:
 			if verbose {
 				nlog.Infoln(gcLogs, "skipping:", logtype, "total:", tot, "max:", maxtotal)
+			}
+		case l > 1:
+			go _rmLogs(tot, maxtotal, logdir, logtype, finfos)
+			if i == 0 {
+				finfos = make([]rfs.FileInfo, 0, nn)
+			}
+		default:
+			nlog.Warningln(gcLogs, "cannot cleanup a single large", logtype, "size:", tot, "configured max:", maxtotal)
+			debug.Assert(l == 1)
+			for _, finfo := range finfos {
+				nlog.Warningln("\t>>>", gcLogs, filepath.Join(logdir, finfo.Name()))
 			}
 		}
 	}
@@ -693,6 +694,8 @@ func hkLogs(int64) time.Duration {
 // e.g. name: ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
 // see also: nlog.InfoLogName, nlog.ErrLogName
 func _sizeLogs(dentries []os.DirEntry, logtype string, finfos []rfs.FileInfo) (_ []rfs.FileInfo, tot int64) {
+	clear(finfos)
+	finfos = finfos[:0]
 	for _, dent := range dentries {
 		if !dent.Type().IsRegular() {
 			continue
