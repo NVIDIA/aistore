@@ -97,7 +97,7 @@ func (p *proxy) a2u(aliasOrUUID string) string {
 }
 
 // initialize bucket and check access permissions
-func (bctx *bctx) init() (ecode int, err error) {
+func (bctx *bctx) init() (_ int, err error) {
 	debug.Assert(bctx.bck != nil)
 
 	bck := bctx.bck
@@ -142,8 +142,7 @@ func (bctx *bctx) init() (ecode int, err error) {
 		}
 		bctx.perms = dtor.Access
 	}
-	ecode, err = bctx.accessAllowed(bck)
-	return
+	return bctx.accessAllowed(bck)
 }
 
 // returns true when operation requires the 'perm' type access
@@ -196,6 +195,14 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 		return
 	}
 	if ecode != http.StatusNotFound {
+		// user GET and PUT requests: making a _silent_ exception for assorted error codes
+		// (counting them via stats.IncErr though)
+		if bctx.perms == apc.AceGET || bctx.perms == apc.AcePUT {
+			if ecode == http.StatusUnauthorized || ecode == http.StatusForbidden {
+				bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
+				return
+			}
+		}
 		bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 		return
 	}

@@ -734,6 +734,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	objName := apireq.items[1]
 	apiReqFree(apireq)
 	if err != nil {
+		p.statsT.IncErr(stats.ErrGetCount)
 		return
 	}
 
@@ -743,6 +744,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	smap := p.owner.smap.get()
 	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
+		p.statsT.IncErr(stats.ErrGetCount)
 		p.writeErr(w, r, err)
 		return
 	}
@@ -761,6 +763,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		nodeID string
+		errcnt = stats.ErrPutCount
 		perms  apc.AccessAttrs
 	)
 	// 1. request
@@ -772,6 +775,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		perms = apc.AcePUT
 	} else {
 		perms = apc.AceAPPEND
+		errcnt = stats.ErrAppendCount
 		if apireq.dpq.apnd.hdl != "" {
 			items, err := preParse(apireq.dpq.apnd.hdl) // apc.QparamAppendHandle
 			if err != nil {
@@ -795,6 +799,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	bck, err := bckArgs.initAndTry()
 	freeBctx(bckArgs)
 	if err != nil {
+		p.statsT.IncErr(errcnt)
 		return
 	}
 
@@ -809,11 +814,13 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	if nodeID == "" {
 		tsi, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 		if err != nil {
+			p.statsT.IncErr(errcnt)
 			p.writeErr(w, r, err)
 			return
 		}
 	} else {
 		if tsi = smap.GetTarget(nodeID); tsi == nil {
+			p.statsT.IncErr(errcnt)
 			err = &errNodeNotFound{"PUT failure:", nodeID, p.si, smap}
 			p.writeErr(w, r, err)
 			return
@@ -861,6 +868,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
+		p.statsT.IncErr(stats.ErrDeleteCount)
 		p.writeErr(w, r, err)
 		return
 	}
