@@ -1413,7 +1413,7 @@ func (h *htrun) isValidObjname(w http.ResponseWriter, r *http.Request, name stri
 }
 
 // health client
-func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap *smapX, retry ...int) ([]byte, int, error) {
+func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap *smapX, retry bool) ([]byte, int, error) {
 	var (
 		path  = apc.URLPathHealth.S
 		url   = si.URL(cmn.NetIntraControl)
@@ -1428,10 +1428,10 @@ func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap
 	b, status, err := res.bytes, res.status, res.err
 	freeCR(res)
 
-	if err != nil && len(retry) > 0 {
+	if err != nil && retry {
 		// [NOTE] retrying when:
-		// - about to remove the node from the cluster map, or
-		// - about to elect new primary
+		// - about to remove node 'si' from the cluster map, or
+		// - about to elect a new primary;
 		// not checking `IsErrDNSLookup` and similar - ie., not trying to narrow down
 		// (compare w/ slow-keepalive)
 		if si.PubNet.Hostname != si.ControlNet.Hostname {
@@ -2077,7 +2077,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti
 			nlog.Warningln(h.String(), "started as a non-primary and got _elected_ during startup")
 			return
 		}
-		if _, _, err := h.reqHealth(smap.Primary, healthTimeout, query /*ask primary*/, smap); err == nil {
+		if _, _, err := h.reqHealth(smap.Primary, healthTimeout, query /*ask primary*/, smap, false /*retry pub-addr*/); err == nil {
 			// log
 			s := fmt.Sprintf("%s via primary health: cluster startup Ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {

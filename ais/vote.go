@@ -228,8 +228,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 		curName    = curPrimary.StringEx()
 		pname      = p.String()
 		pnameC     = pname + ":"
-		config     = cmn.GCO.Get()
-		timeout    = config.Timeout.CplaneOperation.D() / 2
+		tout       = cmn.Rom.CplaneOperation()
 	)
 	// 1. ping the current primary (not using `apc.QparamAskPrimary` as the latter might be transitioning)
 	for i := range retryCurPrimary {
@@ -243,19 +242,16 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 			return
 		}
 
-		// retry via pub-addr if different (compare with palive.retry)
-		_, _, err = p.reqHealth(curPrimary, timeout, nil /*ask primary*/, smap, 1 /*retry*/)
+		_, _, err = p.reqHealth(curPrimary, tout, nil /*ask primary*/, smap, true /*retry via pub-addr, if different*/)
 		if err == nil {
 			break
 		}
-		timeout = config.Timeout.CplaneOperation.D()
 	}
 	if err == nil {
 		// move back to idle
 		query := url.Values{apc.QparamAskPrimary: []string{"true"}}
 
-		// retry via pub-addr if different (compare with palive.retry)
-		_, _, err = p.reqHealth(curPrimary, timeout, query /*ask primary*/, smap, 1 /*retry*/)
+		_, _, err = p.reqHealth(curPrimary, tout, query /*ask primary*/, smap, true /* ditto */)
 
 		if err == nil {
 			nlog.Infoln(pnameC, "the current primary", curName, "is up, moving back to idle")

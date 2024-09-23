@@ -34,7 +34,7 @@ func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 }
 
 func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
-	return t.reqHealth(si, timeout, query, t.owner.smap.get())
+	return t.reqHealth(si, timeout, query, t.owner.smap.get(), false /*retry*/)
 }
 
 func (t *target) Backend(bck *meta.Bck) core.Backend {

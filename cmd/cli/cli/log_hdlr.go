@@ -25,14 +25,15 @@ import (
 const clusterCompletion = "cluster"
 
 // (compare with getCluLogUsage)
-const getLogUsage = "download the current log or entire log history from a selected node or all nodes, e.g.:\n" +
-	indent4 + "\t - 'ais log get NODE_ID /tmp' - download the specified node's current log; save the result to the specified directory;\n" +
-	indent4 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10' - download the current log as /tmp/out\n" +
-	indent4 + "\t    keep updating (ie., appending) the latter every 10s;\n" +
-	indent4 + "\t - 'ais log get cluster /tmp' - download TAR.GZ archived logs from _all_ nodes in the cluster\n" +
-	indent4 + "\t    (note that 'cluster' implies '--all'), and save the result to the specified destination;\n" +
-	indent4 + "\t - 'ais log get NODE_ID --all' - download the node's TAR.GZ log archive\n" +
-	indent4 + "\t - 'ais log get NODE_ID --all --severity e' - TAR.GZ archive of (only) logged errors and warnings"
+const getLogUsage = "download the current log or entire log history from: a) selected node, or b) entire cluster,\n" +
+	indent1 + "\t e.g.:\n" +
+	indent1 + "\t - 'ais log get NODE_ID /tmp'\t- download the specified node's current log and save it in the specified directory;\n" +
+	indent1 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10'\t- download the node's current log _as_ /tmp/out\n" +
+	indent1 + "\t    \t  and keep updating (ie., appending) the latter every 10s;\n" +
+	indent1 + "\t - 'ais log get cluster /tmp'\t-\tdownload TAR.GZ archived logs of _all_ nodes in the cluster\n" +
+	indent1 + "\t    \t  and save the result in the specified local directory (note that 'get cluster' implies '--all');\n" +
+	indent1 + "\t - 'ais log get NODE_ID --all'\t- given 'NODE-ID' download the node's entire log TAR.GZ archive\n" +
+	indent1 + "\t - 'ais log get NODE_ID --all --severity e'\t- archive logged errors and warnings"
 
 var (
 	nodeLogFlags = map[string][]cli.Flag{

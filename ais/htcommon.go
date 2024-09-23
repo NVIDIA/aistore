@@ -726,7 +726,7 @@ func (smap *smapX) fill(nsti *cos.NodeStateInfo) {
 
 func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
 	var nsti *cos.NodeStateInfo
-	body, _, err := c.h.reqHealth(si, c.timeout, c.query, smap)
+	body, _, err := c.h.reqHealth(si, c.timeout, c.query, smap, false /*retry pub-addr*/)
 	if err != nil {
 		goto ret
 	}
