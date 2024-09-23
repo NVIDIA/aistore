@@ -49,7 +49,8 @@ class SimpleBuffer:
         if size < 0 or size > len(self):
             size = len(self)
 
-        data = self._buffer[self._pos : self._pos + size]
+        data = memoryview(self._buffer)[self._pos : self._pos + size]
+        # Use len(data) instead of `size` -- Buffer may not contain that much data
         self._pos += len(data)
         return bytes(data)
 
