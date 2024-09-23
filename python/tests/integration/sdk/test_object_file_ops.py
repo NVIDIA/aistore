@@ -11,7 +11,7 @@ import unittest
 from io import BytesIO
 
 from aistore.sdk.client import Client
-from aistore.sdk.object_file import ObjectFile
+from aistore.sdk.obj.object_file import ObjectFile
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import create_random_tarballs

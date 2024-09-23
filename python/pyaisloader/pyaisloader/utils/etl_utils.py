@@ -1,6 +1,5 @@
-import aistore.sdk.etl_templates as etl_templates
-from aistore.sdk.etl_const import ETL_COMM_HPUSH
-from aistore.sdk.etl import Etl
+import aistore.sdk.etl.etl_templates as etl_templates
+from aistore.sdk.etl.etl_const import ETL_COMM_HPUSH
 
 from pyaisloader.utils.random_utils import generate_random_str
 

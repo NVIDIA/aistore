@@ -8,6 +8,7 @@ import tarfile
 from datetime import datetime
 from pathlib import Path
 
+from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.const import (
     AIS_CUSTOM_MD,
     AIS_VERSION,
@@ -15,8 +16,7 @@ from aistore.sdk.const import (
     UTF_ENCODING,
 )
 from aistore.sdk.list_object_flag import ListObjectFlag
-from aistore.sdk.archive_mode import ArchiveMode
-from aistore.sdk.types import ArchiveSettings, BlobDownloadSettings
+from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
 
 from tests.const import (
     SMALL_FILE_SIZE,
@@ -207,12 +207,10 @@ class TestObjectOps(RemoteEnabledTest):
 
         for obj_name, content in objects.items():
             start_time = datetime.now()
-            blob_download_settings = BlobDownloadSettings(
-                chunk_size=testcase, num_workers="4"
-            )
+            blob_config = BlobDownloadConfig(chunk_size=testcase, num_workers="4")
             resp = (
                 self.bucket.object(obj_name)
-                .get(blob_download_settings=blob_download_settings)
+                .get(blob_download_config=blob_config)
                 .read_all()
             )
             self.assertEqual(content, resp)
@@ -358,15 +356,13 @@ class TestObjectOps(RemoteEnabledTest):
         )
         obj_names = [obj.name for obj in objs]
         self.assertEqual(len(obj_names), 7)
-        archive_settings = ArchiveSettings(archpath="file1.txt")
-        extracted_content_archpath = obj.get(
-            archive_settings=archive_settings
-        ).read_all()
+        archive_config = ArchiveConfig(archpath="file1.txt")
+        extracted_content_archpath = obj.get(archive_config=archive_config).read_all()
         self.assertEqual(extracted_content_archpath, content_dict["file1.txt"])
 
         # PREFIX Mode
-        archive_settings = ArchiveSettings(regex="file2", mode=ArchiveMode.PREFIX)
-        extracted_content_regx = obj.get(archive_settings=archive_settings).read_all()
+        archive_config = ArchiveConfig(regex="file2", mode=ArchiveMode.PREFIX)
+        extracted_content_regx = obj.get(archive_config=archive_config).read_all()
         file_like_object = io.BytesIO(extracted_content_regx)
         with tarfile.open(fileobj=file_like_object, mode="r:") as tar:
             self.assertEqual(tar.getnames(), ["file2.txt", "file2.cls"])
@@ -376,8 +372,8 @@ class TestObjectOps(RemoteEnabledTest):
             self.assertEqual(file_content, content_dict["file2.cls"])
 
         # WDSKEY Mode
-        archive_settings = ArchiveSettings(regex="file3", mode=ArchiveMode.WDSKEY)
-        extracted_content_regx = obj.get(archive_settings=archive_settings).read_all()
+        archive_config = ArchiveConfig(regex="file3", mode=ArchiveMode.WDSKEY)
+        extracted_content_regx = obj.get(archive_config=archive_config).read_all()
         file_like_object = io.BytesIO(extracted_content_regx)
         with tarfile.open(fileobj=file_like_object, mode="r:") as tar:
             self.assertEqual(tar.getnames(), ["file3.txt", "file3.cls"])

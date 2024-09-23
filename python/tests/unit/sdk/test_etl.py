@@ -14,14 +14,14 @@ from aistore.sdk.const import (
     URL_PATH_ETL,
     UTF_ENCODING,
 )
-from aistore.sdk.etl_const import (
+from aistore.sdk.etl.etl_const import (
     CODE_TEMPLATE,
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
     ETL_COMM_IO,
 )
 
-from aistore.sdk.etl import Etl, _get_default_runtime
+from aistore.sdk.etl.etl import Etl, _get_default_runtime
 from aistore.sdk.types import ETLDetails
 from tests.const import ETL_NAME
 
@@ -83,7 +83,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             (3, 11): "python3.11v2",
         }
         for version, runtime in version_to_runtime.items():
-            with patch.object(aistore.sdk.etl.sys, "version_info") as version_info:
+            with patch.object(aistore.sdk.etl.etl.sys, "version_info") as version_info:
                 version_info.major = version[0]
                 version_info.minor = version[1]
                 self.assertEqual(runtime, _get_default_runtime())

@@ -3,9 +3,9 @@ from unittest.mock import Mock, call, patch, MagicMock
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.bucket import Bucket, Header
-from aistore.sdk.object import Object
-from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
-from aistore.sdk.object_iterator import ObjectIterator
+from aistore.sdk.obj.object import Object
+from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
+from aistore.sdk.obj.object_iterator import ObjectIterator
 from aistore.sdk import ListObjectFlag
 
 from aistore.sdk.const import (
@@ -530,8 +530,8 @@ class TestBucket(unittest.TestCase):
         new_obj = self.ais_bck.object(obj_name="name")
         self.assertEqual(self.ais_bck, new_obj.bucket)
 
-    @patch("aistore.sdk.object.read_file_bytes")
-    @patch("aistore.sdk.object.validate_file")
+    @patch("aistore.sdk.obj.object.read_file_bytes")
+    @patch("aistore.sdk.obj.object.validate_file")
     @patch("aistore.sdk.bucket.validate_directory")
     @patch("pathlib.Path.glob")
     def test_put_files(

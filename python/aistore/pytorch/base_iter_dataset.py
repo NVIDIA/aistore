@@ -8,7 +8,7 @@ from itertools import islice
 from typing import List, Union, Iterable, Dict, Iterator, Tuple
 import torch.utils.data as torch_utils
 from abc import ABC, abstractmethod
-from aistore.sdk.ais_source import AISSource
+from aistore.sdk import AISSource
 
 
 class AISBaseIterDataset(ABC, torch_utils.IterableDataset):

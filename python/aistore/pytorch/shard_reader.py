@@ -6,14 +6,13 @@ PyTorch Dataset and DataLoader for AIS.
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
-from aistore.sdk.bucket import Bucket
+from aistore.sdk import Bucket, ListObjectFlag
 from typing import Dict, Iterator, List, Union
 from aistore.pytorch.utils import get_basename, get_extension
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from alive_progress import alive_it
 from io import BytesIO
 from tarfile import open, TarError
-from aistore.sdk.list_object_flag import ListObjectFlag
 
 
 class AISShardReader(AISBaseIterDataset):

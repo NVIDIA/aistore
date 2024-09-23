@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from aistore.sdk.object_iterator import ObjectIterator
+from aistore.sdk.obj.object_iterator import ObjectIterator
 from aistore.sdk.types import BucketEntry
 
 

@@ -7,7 +7,7 @@ import requests
 
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE, HTTP_METHOD_GET, HTTP_METHOD_HEAD
-from aistore.sdk.object_attributes import ObjectAttributes
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 
 
 class ObjectReader:

@@ -6,7 +6,7 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
 from aistore.pytorch.base_iter_dataset import AISBaseIterDataset
 from typing import List, Union, Dict
-from aistore.sdk.ais_source import AISSource
+from aistore.sdk import AISSource
 from alive_progress import alive_it
 
 

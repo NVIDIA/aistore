@@ -142,7 +142,7 @@ class TestDsort(unittest.TestCase):
             HTTP_METHOD_POST, path=URL_PATH_DSORT, json=dsort_framework.to_spec()
         )
 
-    @patch("aistore.sdk.object.Object.get_url")
+    @patch("aistore.sdk.obj.object.Object.get_url")
     def test_start_from_framework_with_ekm(self, mock_get_url):
         new_id = "789"
         mock_request_return_val = Mock(text=new_id)

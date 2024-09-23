@@ -6,7 +6,7 @@ Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 
 from typing import List, Union, Dict
 
-from aistore.sdk.ais_source import AISSource
+from aistore.sdk import AISSource
 from aistore.pytorch.base_map_dataset import AISBaseMapDataset
 
 

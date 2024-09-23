@@ -11,9 +11,9 @@ import time
 import pytest
 
 from aistore.sdk import Client, Bucket
-from aistore.sdk.etl_const import ETL_COMM_HPUSH, ETL_COMM_IO
+from aistore.sdk.etl.etl_const import ETL_COMM_HPUSH, ETL_COMM_IO
 from aistore.sdk.errors import AISError
-from aistore.sdk.etl_templates import MD5, ECHO
+from aistore.sdk.etl.etl_templates import MD5, ECHO
 from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import create_and_put_object, random_string
 

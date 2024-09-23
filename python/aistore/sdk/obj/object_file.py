@@ -7,7 +7,7 @@ from typing import Iterator
 
 import requests
 
-from aistore.sdk.object_reader import ObjectReader
+from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)

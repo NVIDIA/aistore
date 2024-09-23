@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+#
+
 from __future__ import annotations
 from enum import Enum
 

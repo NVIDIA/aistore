@@ -16,8 +16,8 @@ from aistore.sdk.const import (
     ACT_TRANSFORM_OBJECTS,
     ACT_ARCHIVE_OBJECTS,
 )
-from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
-from aistore.sdk.object import Object
+from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
+from aistore.sdk.obj.object import Object
 from aistore.sdk.multiobj.object_names import ObjectNames
 from aistore.sdk.multiobj.object_range import ObjectRange
 from aistore.sdk.multiobj.object_template import ObjectTemplate

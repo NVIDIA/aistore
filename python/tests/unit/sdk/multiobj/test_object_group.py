@@ -14,7 +14,7 @@ from aistore.sdk.const import (
     PROVIDER_AMAZON,
     HTTP_METHOD_PUT,
 )
-from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
+from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj
 from tests.const import LARGE_FILE_SIZE, ETL_NAME, PREFIX_NAME

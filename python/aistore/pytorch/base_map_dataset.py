@@ -7,8 +7,7 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 from typing import List, Union, Dict
 from abc import ABC, abstractmethod
 from torch.utils.data import Dataset
-from aistore.sdk.ais_source import AISSource
-from aistore.sdk.object import Object
+from aistore.sdk import AISSource, Object
 
 
 class AISBaseMapDataset(ABC, Dataset):

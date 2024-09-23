@@ -2,10 +2,10 @@ import unittest
 from unittest.mock import MagicMock, patch, Mock
 import requests
 
-from aistore.sdk.object_reader import ObjectReader
+from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.const import HTTP_METHOD_GET, HTTP_METHOD_HEAD
-from aistore.sdk.object_attributes import ObjectAttributes
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 
 
 class TestObjectReader(unittest.TestCase):
@@ -20,7 +20,7 @@ class TestObjectReader(unittest.TestCase):
             self.client, self.path, self.params, self.headers, self.chunk_size
         )
 
-    @patch("aistore.sdk.object_reader.ObjectAttributes", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_attributes_head(self, mock_attr):
         mock_response = Mock(spec=requests.Response, headers=self.response_headers)
         self.client.request.return_value = mock_response
@@ -33,7 +33,7 @@ class TestObjectReader(unittest.TestCase):
         )
         mock_attr.assert_called_with(self.response_headers)
 
-    @patch("aistore.sdk.object_reader.ObjectAttributes", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_read_all(self, mock_attr):
         chunk1 = b"chunk1"
         chunk2 = b"chunk2"
@@ -49,7 +49,7 @@ class TestObjectReader(unittest.TestCase):
         self.assertEqual(chunk1 + chunk2, content)
         self.assert_make_request(mock_attr, stream=False)
 
-    @patch("aistore.sdk.object_reader.ObjectAttributes", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_raw(self, mock_attr):
         mock_response = Mock(
             spec=requests.Response, raw=b"bytestream", headers=self.response_headers
@@ -61,7 +61,7 @@ class TestObjectReader(unittest.TestCase):
         self.assertEqual(mock_response.raw, raw_stream)
         self.assert_make_request(mock_attr, stream=True)
 
-    @patch("aistore.sdk.object_reader.ObjectAttributes", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_iter(self, mock_attr):
         expected_chunks = [b"chunk1", b"chunk2"]
         mock_response = Mock(spec=requests.Response, headers=self.response_headers)
@@ -75,7 +75,7 @@ class TestObjectReader(unittest.TestCase):
         self.assertEqual(expected_chunks, chunks)
         self.assert_make_request(mock_attr, stream=True)
 
-    @patch("aistore.sdk.object_reader.ObjectAttributes", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectAttributes", autospec=True)
     def test_iter_from_position(self, mock_attr):
         expected_chunks = [b"chunk1", b"chunk2"]
         mock_response = Mock(spec=requests.Response, headers=self.response_headers)

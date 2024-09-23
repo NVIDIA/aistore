@@ -1,7 +1,7 @@
 import unittest
 
 from requests.structures import CaseInsensitiveDict
-from aistore.sdk.object_attributes import ObjectAttributes
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 
 
 class TestObjectAttributes(unittest.TestCase):

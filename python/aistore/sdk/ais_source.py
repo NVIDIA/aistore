@@ -3,7 +3,7 @@
 #
 from abc import ABC, abstractmethod
 from typing import Iterable
-from aistore.sdk.object import Object
+from aistore.sdk.obj.object import Object
 from aistore.sdk.request_client import RequestClient
 
 

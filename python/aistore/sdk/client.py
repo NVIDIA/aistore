@@ -19,9 +19,9 @@ from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
-from aistore.sdk.etl import Etl
+from aistore.sdk.etl.etl import Etl
 from aistore.sdk.utils import parse_url
-from aistore.sdk.object import Object
+from aistore.sdk.obj.object import Object
 from aistore.sdk.errors import InvalidURLException
 
 

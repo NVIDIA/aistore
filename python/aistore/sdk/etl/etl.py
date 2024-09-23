@@ -17,7 +17,7 @@ from aistore.sdk.const import (
     URL_PATH_ETL,
     UTF_ENCODING,
 )
-from aistore.sdk.etl_const import (
+from aistore.sdk.etl.etl_const import (
     ETL_SUPPORTED_PYTHON_VERSIONS,
     DEFAULT_ETL_RUNTIME,
     DEFAULT_ETL_COMM,

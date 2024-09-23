@@ -4,8 +4,11 @@
 from io import BufferedWriter
 from typing import Dict, NewType
 
-import requests
+from requests import Response
+from requests.structures import CaseInsensitiveDict
 
+from aistore.sdk.archive_config import ArchiveConfig
+from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
@@ -30,19 +33,17 @@ from aistore.sdk.const import (
     HEADER_OBJECT_BLOB_WORKERS,
     HEADER_OBJECT_BLOB_CHUNK_SIZE,
 )
-from aistore.sdk.object_file import ObjectFile
-from aistore.sdk.object_reader import ObjectReader
+from aistore.sdk.obj.object_file import ObjectFile
+from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.types import (
     ActionMsg,
     PromoteAPIArgs,
     BlobMsg,
-    ArchiveSettings,
-    BlobDownloadSettings,
 )
 from aistore.sdk.utils import read_file_bytes, validate_file
-from aistore.sdk.object_props import ObjectProps
+from aistore.sdk.obj.object_props import ObjectProps
 
-Header = NewType("Header", requests.structures.CaseInsensitiveDict)
+Header = NewType("Header", CaseInsensitiveDict)
 
 
 # pylint: disable=consider-using-with,unused-variable
@@ -106,8 +107,8 @@ class Object:
     # pylint: disable=too-many-arguments
     def get(
         self,
-        archive_settings: ArchiveSettings = None,
-        blob_download_settings: BlobDownloadSettings = None,
+        archive_config: ArchiveConfig = None,
+        blob_download_config: BlobDownloadConfig = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
         writer: BufferedWriter = None,
@@ -118,8 +119,8 @@ class Object:
         Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
 
         Args:
-            archive_settings (ArchiveSettings, optional): Settings for archive extraction
-            blob_download_settings (BlobDownloadSettings, optional): Settings for using blob download
+            archive_config (ArchiveConfig, optional): Settings for archive extraction
+            blob_download_config (BlobDownloadConfig, optional): Settings for using blob download
             chunk_size (int, optional): chunk_size to use while reading from stream
             etl_name (str, optional): Transforms an object based on ETL with etl_name
             writer (BufferedWriter, optional): User-provided writer for writing content output
@@ -140,23 +141,23 @@ class Object:
         """
         params = self._qparams.copy()
         headers = {}
-        if archive_settings:
-            if archive_settings.mode:
-                archive_settings.mode = archive_settings.mode.value
-            params[QPARAM_ARCHPATH] = archive_settings.archpath
-            params[QPARAM_ARCHREGX] = archive_settings.regex
-            params[QPARAM_ARCHMODE] = archive_settings.mode
+        if archive_config:
+            if archive_config.mode:
+                archive_config.mode = archive_config.mode.value
+            params[QPARAM_ARCHPATH] = archive_config.archpath
+            params[QPARAM_ARCHREGX] = archive_config.regex
+            params[QPARAM_ARCHMODE] = archive_config.mode
 
-        if blob_download_settings:
+        if blob_download_config:
             headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
-            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_download_settings.chunk_size
-            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_download_settings.num_workers
+            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_download_config.chunk_size
+            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_download_config.num_workers
         if etl_name:
             params[QPARAM_ETL_NAME] = etl_name
         if latest:
             params[QPARAM_LATEST] = "true"
 
-        if byte_range and blob_download_settings:
+        if byte_range and blob_download_config:
             raise ValueError("Cannot use Byte Range with Blob Download")
 
         if byte_range:
@@ -178,8 +179,8 @@ class Object:
     def as_file(
         self,
         max_resume: int = 5,
-        archive_settings: ArchiveSettings = None,
-        blob_download_settings: BlobDownloadSettings = None,
+        archive_settings: ArchiveConfig = None,
+        blob_download_settings: BlobDownloadConfig = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
         writer: BufferedWriter = None,
@@ -195,8 +196,8 @@ class Object:
             max_resume (int, optional): If streaming object contents is interrupted, this
                 defines the maximum number of attempts to resume the connection before
                 raising an exception.
-            archive_settings (ArchiveSettings, optional): Settings for archive extraction.
-            blob_download_settings (BlobDownloadSettings, optional): Settings for using blob
+            archive_settings (ArchiveConfig, optional): Settings for archive extraction.
+            blob_download_settings (BlobDownloadConfig, optional): Settings for using blob
                 download (e.g., chunk size, workers).
             chunk_size (int, optional): The size of chunks to use while reading from the stream.
             etl_name (str, optional): Name of the ETL (Extract, Transform, Load) transformation
@@ -219,8 +220,8 @@ class Object:
             requests.exceptions.HTTPError(404): The object does not exist.
         """
         object_reader = self.get(
-            archive_settings=archive_settings,
-            blob_download_settings=blob_download_settings,
+            archive_config=archive_settings,
+            blob_download_config=blob_download_settings,
             chunk_size=chunk_size,
             etl_name=etl_name,
             writer=writer,
@@ -229,7 +230,7 @@ class Object:
         )
         return ObjectFile(object_reader, max_resume=max_resume)
 
-    def get_semantic_url(self):
+    def get_semantic_url(self) -> str:
         """
         Get the semantic URL to the object
 
@@ -239,7 +240,7 @@ class Object:
 
         return f"{self.bucket.provider}://{self._bck_name}/{self._name}"
 
-    def get_url(self, archpath: str = "", etl_name: str = None):
+    def get_url(self, archpath: str = "", etl_name: str = None) -> str:
         """
         Get the full url to the object including base url and any query parameters
 
@@ -259,7 +260,7 @@ class Object:
             params[QPARAM_ETL_NAME] = etl_name
         return self._client.get_full_url(self._object_path, params)
 
-    def put_content(self, content: bytes) -> Header:
+    def put_content(self, content: bytes) -> Response:
         """
         Puts bytes as an object to a bucket in AIS storage.
 
@@ -272,9 +273,9 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        self._put_data(self.name, content)
+        return self._put_data(self.name, content)
 
-    def put_file(self, path: str = None):
+    def put_file(self, path: str = None) -> Response:
         """
         Puts a local file as an object to a bucket in AIS storage.
 
@@ -289,11 +290,11 @@ class Object:
             ValueError: The path provided is not a valid file
         """
         validate_file(path)
-        self._put_data(self.name, read_file_bytes(path))
+        return self._put_data(self.name, read_file_bytes(path))
 
-    def _put_data(self, obj_name: str, data: bytes):
+    def _put_data(self, obj_name: str, data: bytes) -> Response:
         url = f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ obj_name }"
-        self._client.request(
+        return self._client.request(
             HTTP_METHOD_PUT,
             path=url,
             params=self._qparams,
@@ -350,7 +351,7 @@ class Object:
             HTTP_METHOD_POST, path=url, params=self._qparams, json=json_val
         ).text
 
-    def delete(self):
+    def delete(self) -> Response:
         """
         Delete an object from a bucket.
 
@@ -364,7 +365,7 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exceptions.HTTPError(404): The object does not exist
         """
-        self._client.request(
+        return self._client.request(
             HTTP_METHOD_DELETE,
             path=self._object_path,
             params=self._qparams,
@@ -447,7 +448,7 @@ class Object:
 
     def set_custom_props(
         self, custom_metadata: Dict[str, str], replace_existing: bool = False
-    ):
+    ) -> Response:
         """
         Set custom properties for the object.
 
@@ -463,4 +464,6 @@ class Object:
 
         json_val = ActionMsg(action="", value=custom_metadata).dict()
 
-        self._client.request(HTTP_METHOD_PATCH, path=url, params=params, json=json_val)
+        return self._client.request(
+            HTTP_METHOD_PATCH, path=url, params=params, json=json_val
+        )

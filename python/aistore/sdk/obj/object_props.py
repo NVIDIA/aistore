@@ -12,7 +12,7 @@ from aistore.sdk.const import (
     AIS_MIRROR_COPIES,
     AIS_PRESENT,
 )
-from aistore.sdk.object_attributes import ObjectAttributes
+from aistore.sdk.obj.object_attributes import ObjectAttributes
 
 
 class ObjectProps(ObjectAttributes):

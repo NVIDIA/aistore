@@ -13,8 +13,8 @@ from typing import Dict, List, NewType, Iterable
 import requests
 
 from aistore.sdk.ais_source import AISSource
-from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
-from aistore.sdk.object_iterator import ObjectIterator
+from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
+from aistore.sdk.obj.object_iterator import ObjectIterator
 from aistore.sdk.const import (
     ACT_COPY_BCK,
     ACT_CREATE_BCK,
@@ -58,7 +58,7 @@ from aistore.sdk.errors import (
 )
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.object import Object
+from aistore.sdk.obj.object import Object
 from aistore.sdk.types import (
     ActionMsg,
     BucketEntry,
@@ -73,7 +73,7 @@ from aistore.sdk.types import (
 )
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.utils import validate_directory, get_file_size
-from aistore.sdk.object_props import ObjectProps
+from aistore.sdk.obj.object_props import ObjectProps
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 

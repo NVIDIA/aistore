@@ -10,7 +10,7 @@ import hashlib
 import sys
 
 from aistore.sdk import Bucket
-from aistore.sdk.etl_const import ETL_COMM_IO
+from aistore.sdk.etl.etl_const import ETL_COMM_IO
 
 client = Client("http://192.168.49.2:8080")
 

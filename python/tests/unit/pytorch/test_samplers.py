@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch, Mock
 import unittest.mock
 from aistore.sdk import Bucket
-from aistore.sdk.object import Object
+from aistore.sdk.obj.object import Object
 from aistore.pytorch import AISMapDataset, DynamicBatchSampler
 from torch.utils.data import DataLoader
 

@@ -8,7 +8,7 @@ from urllib3.util import Retry
 
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
-from aistore.sdk.etl import Etl
+from aistore.sdk.etl.etl import Etl
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job

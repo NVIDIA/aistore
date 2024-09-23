@@ -9,8 +9,8 @@ import os
 import unittest
 from unittest import mock
 from requests.exceptions import ChunkedEncodingError
-from aistore.sdk.object_file import ObjectFile
-from aistore.sdk.object_reader import ObjectReader
+from aistore.sdk.obj.object_file import ObjectFile
+from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 
 
