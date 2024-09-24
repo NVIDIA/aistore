@@ -2022,16 +2022,10 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (str
 		return pid, status, err
 	}
 
-	// intermittent DNS failure? retry just once if (pub != control)
-	// (compare with palive.retry)
-
-	debug.Assert(psi == smap.Primary)
-	debug.Assert(primaryURL == smap.Primary.URL(cmn.NetIntraControl))
-
-	if a, b := cos.IsErrDNSLookup(res.err), strings.Contains(s, "lookup") && strings.Contains(s, "no such"); a || b {
-		nlog.Warningln(h.String(), "=>", psi.StringEx(), "slow-keepalive:", res.err, "[", a, b, "]")
-		primaryURL = smap.Primary.URL(cmn.NetPublic)
-		nlog.Warningln("retrying via pub addr:", primaryURL)
+	// intermittent DNS failure? (compare with h.reqHealth)
+	if psi.PubNet.Hostname != psi.ControlNet.Hostname {
+		primaryURL = psi.URL(cmn.NetPublic)
+		nlog.Warningln("retrying via pub addr", primaryURL, "[", s, pid, "]")
 
 		freeCR(res)
 		res = h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)

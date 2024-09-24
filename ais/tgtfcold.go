@@ -142,20 +142,20 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 	lom := goi.lom
 	if revert != "" {
 		if err := cos.RemoveFile(revert); err != nil {
-			nlog.InfoDepth(1, ftcg+"(rm-revert)", lom, err)
+			nlog.InfoDepth(1, ftcg, "(rm-revert)", lom, err)
 		}
 	}
 
 	// make copies and slices (async)
 	if err := ec.ECM.EncodeObject(lom, nil); err != nil && err != ec.ErrorECDisabled {
-		nlog.InfoDepth(1, ftcg+"(ec)", lom, err)
+		nlog.InfoDepth(1, ftcg, "(ec)", lom, err)
 	}
 	goi.t.putMirror(lom)
 
 	// load
 	if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		goi.lom.Unlock(true)
-		nlog.InfoDepth(1, ftcg+"(load)", lom, err) // (unlikely)
+		nlog.InfoDepth(1, ftcg, "(load)", lom, err) // (unlikely)
 		return errSendingResp
 	}
 	debug.Assert(lom.Lsize() == fullSize)
@@ -173,21 +173,36 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 	if slab != nil {
 		slab.Free(buf)
 	}
-	if err != nil {
-		goi.lom.RemoveObj()
-		if revert != "" {
-			if errV := goi.lom.RenameToMain(revert); errV != nil {
-				nlog.Infoln(ftcg+tag+"(revert)", errV)
-			}
-		}
-		nlog.InfoDepth(1, ftcg+tag, err)
+	if err == nil {
+		goi.lom.Unlock(true)
+		return
 	}
-	goi.lom.Unlock(true)
+
+	lom := goi.lom
+	cname := lom.Cname()
+	if errV := lom.RemoveMain(); errV != nil {
+		nlog.Warningln("failed to remove work-main", cname, errV)
+	}
+	if revert != "" {
+		if errV := lom.RenameToMain(revert); errV != nil {
+			nlog.Warningln("failed to revert", cname, errV)
+		} else {
+			nlog.Infoln("reverted", cname)
+		}
+	}
+	lom.Unlock(true)
+
+	s := err.Error()
+	if cos.IsErrBrokenPipe(err) {
+		s = "[broken pipe]" // EPIPE
+	}
+	nlog.InfoDepth(1, ftcg, tag, cname, "err:", s)
 }
 
 // NOTE:
 // Streaming cold GET feature (`feat.StreamingColdGET`) puts response header on the wire _prior_
 // to finalizing in-cluster object. Use it at your own risk.
+// (under wlock)
 func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	var (
 		t, lom = goi.t, goi.lom

@@ -615,7 +615,7 @@ func (lom *LOM) isLockedExcl() (exclusive bool) {
 	return exclusive
 }
 
-func (lom *LOM) isLockedRW() (locked bool) {
+func (lom *LOM) isLockedRW() bool {
 	nlc := lom.getLocker()
 	rc, exclusive := nlc.IsLocked(lom.Uname())
 	return exclusive || rc > 0

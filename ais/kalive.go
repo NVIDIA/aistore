@@ -123,7 +123,7 @@ func (tkr *talive) Run() error {
 
 	tkr.init(tkr.t.owner.smap.get(), tkr.t.SID())
 
-	nlog.Infof("Starting %s", tkr.Name())
+	nlog.Infoln("Starting", tkr.Name())
 	tkr._run()
 	return nil
 }
@@ -192,7 +192,7 @@ func (pkr *palive) Run() error {
 
 	pkr.init(pkr.p.owner.smap.get(), pkr.p.SID())
 
-	nlog.Infof("Starting %s", pkr.Name())
+	nlog.Infoln("Starting", pkr.Name())
 	pkr._run()
 	return nil
 }
@@ -448,7 +448,7 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration
 			if cos.IsUnreachable(err, status) {
 				continue
 			}
-			nlog.Warningf("Unexpected error %v(%d) from %s", err, status, si.StringEx())
+			nlog.Warningf("unexpected error %v(%d) from %s", err, status, si.StringEx())
 		case sig := <-pkr.controlCh:
 			if sig.msg == kaStopMsg {
 				return false, true

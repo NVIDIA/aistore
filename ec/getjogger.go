@@ -767,7 +767,7 @@ func (c *getJogger) freeDownloaded(ctx *restoreCtx) {
 // Main function that starts restoring an object that was encoded
 func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	if cmn.Rom.FastV(4, cos.SmoduleEC) {
-		nlog.Infof("Starting EC restore %s", ctx.lom)
+		nlog.Infoln("Starting EC restore", ctx.lom.Cname())
 	}
 
 	// Download all slices from the targets that have sent metadata

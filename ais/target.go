@@ -444,7 +444,7 @@ func (t *target) goresilver(interrupted bool) {
 	if interrupted {
 		nlog.Infoln("Resuming resilver...")
 	} else if daemon.resilver.required {
-		nlog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
+		nlog.Infoln("Starting resilver, reason:", daemon.resilver.reason)
 	}
 	t.runResilver(res.Args{}, nil /*wg*/)
 }

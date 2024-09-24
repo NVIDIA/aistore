@@ -643,6 +643,7 @@ do:
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
 
+		// upgrade rlock => wlock
 		if loaded, err = goi._coldLock(); err != nil {
 			return 0, err
 		}
@@ -708,8 +709,8 @@ fin:
 // done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
 func (goi *getOI) _coldLock() (loaded bool, err error) {
 	var (
-		t, lom = goi.t, goi.lom
-		now    int64
+		lom = goi.lom
+		now int64
 	)
 outer:
 	for lom.UpgradeLock() {
@@ -723,7 +724,7 @@ outer:
 			now = mono.NanoTime()
 			fallthrough
 		case mono.Since(now) < max(cmn.Rom.CplaneOperation(), 2*time.Second):
-			nlog.Errorln(t.String()+": failed to load", lom.String(), err, "- retrying...")
+			nlog.Errorln("failed to load", lom.String(), "err:", err, "- retrying...")
 		default:
 			err = cmn.NewErrBusy("object", lom.Cname())
 			break outer
