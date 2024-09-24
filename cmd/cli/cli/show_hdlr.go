@@ -580,7 +580,8 @@ func showObjectHandler(c *cli.Context) error {
 	if _, err := headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
-	return showObjProps(c, bck, object)
+	_, err = showObjProps(c, bck, object)
+	return err
 }
 
 func showBckPropsHandler(c *cli.Context) error {
