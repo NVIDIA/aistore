@@ -144,6 +144,7 @@ STATUS_PARTIAL_CONTENT = 206
 
 # Environment Variables
 AIS_CLIENT_CA = "AIS_CLIENT_CA"
+AIS_AUTHN_TOKEN = "AIS_AUTHN_TOKEN"
 
 # Content Constants
 LOREM = (

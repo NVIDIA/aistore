@@ -4,12 +4,14 @@
 
 from __future__ import annotations  # pylint: disable=unused-variable
 from typing import Optional, Tuple, Union
+import os
 
 from urllib3 import Retry
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
     PROVIDER_AIS,
+    AIS_AUTHN_TOKEN,
 )
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.dsort import Dsort
@@ -31,26 +33,32 @@ class Client:
     Args:
         endpoint (str): AIStore endpoint
         skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
-        ca_cert (str, optional): Path to a CA certificate file for SSL verification.
+        ca_cert (str, optional): Path to a CA certificate file for SSL verification. If not provided, the
+            'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
         timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
         retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
-        token (str, optional): Authorization token.
+        token (str, optional): Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
+            will be used. Defaults to None.
     """
 
     def __init__(
         self,
         endpoint: str,
         skip_verify: bool = False,
-        ca_cert: str = None,
+        ca_cert: Optional[str] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
-        retry: Retry = None,
-        token: str = None,
+        retry: Optional[Retry] = None,
+        token: Optional[str] = None,
     ):
         session_manager = SessionManager(
             retry=retry, ca_cert=ca_cert, skip_verify=skip_verify
         )
+
+        # Check for token from arguments or environment variable
+        if not token:
+            token = os.environ.get(AIS_AUTHN_TOKEN, None)
         self._request_client = RequestClient(
             endpoint=endpoint,
             session_manager=session_manager,

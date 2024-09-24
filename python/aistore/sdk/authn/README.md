@@ -34,7 +34,9 @@ admin_auth_token = authn_client.login("admin", "admin")
 aistore_client = Client("http://localhost:8080", admin_auth_token)
 ```
 
-> Note: `http://localhost:8080` address (above and elsewhere) is used for purely demonstration purposes and must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
+> Note: 
+> - You can either pass the token explicitly, as shown above, or set it as an environment variable (`AIS_AUTHN_TOKEN`). If no token is provided directly, the client will automatically use the token from the environment variable. Ensure the environment variable contains only the token itself (not the full JSON object that the CLI generates).
+> - `http://localhost:8080` address (above and elsewhere) is used for purely demonstration purposes and must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 #### Registering a Cluster
 
