@@ -31,6 +31,7 @@ Usage examples:
   (see docs/cli for details)
 `
 
+// ais cp
 const copyBucketUsage = "copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'), e.g.:\n" +
 	indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy entire Cloud bucket that may not be _present_ in the cluster;\n" +
@@ -44,6 +45,7 @@ const copyBucketUsage = "copy entire bucket or selected objects (to select, use 
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'\t- copy up to 1000 objects that share the specified prefix;\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens'"
 
+// ais ls
 var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
@@ -52,22 +54,24 @@ var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts 
 	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list a very large bucket (20 items in each page), report progress every 3s;\n" +
 	indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
 	indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in the cluster;\n" +
-	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets, both in-cluster and remote;\n" +
+	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets, both in-cluster and remote.\n" +
 	indent1 + "with template, regex, and/or prefix:\n" +
 	indent1 + "\t* ais ls gs: --regex \"^abc\" --all \t- list all accessible GCP buckets with names starting with \"abc\";\n" +
 	indent1 + "\t* ais ls ais://abc --regex \".md\" --props size,checksum \t- list *.md objects with their respective sizes and checksums;\n" +
 	indent1 + "\t* ais ls gs://abc --template images/\t- list all objects from the virtual subdirectory called \"images\";\n" +
 	indent1 + "\t* ais ls gs://abc --prefix images/\t- same as above (for more examples, see '--template' below);\n" +
+	indent1 + "\t* ais ls gs://abc/images/\t- same as above.\n" +
 	indent1 + "with in-cluster vs remote content comparison (diff):\n" +
 	indent1 + "\t* ais ls s3://abc --check-versions         \t- for each remote object in s3://abc: check whether it has identical in-cluster copy\n" +
-	indent1 + "\t                                           \t  and show missing objects\n" +
+	indent1 + "\t                                           \t  and show missing objects;\n" +
 	indent1 + "\t* ais ls s3://abc --check-versions --cached\t- for each in-cluster object in s3://abc: check whether it has identical remote copy\n" +
-	indent1 + "\t                                           \t  and show deleted objects\n" +
+	indent1 + "\t                                           \t  and show deleted objects.\n" +
 	indent1 + "with summary (stats):\n" +
 	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket in the cluster: print object numbers and total size(s);\n" +
-	indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_\n" +
-	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to cluster's BMD"
+	indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;\n" +
+	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to cluster's BMD."
 
+// ais bucket ... props
 const setBpropsUsage = "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
@@ -78,6 +82,7 @@ const setBpropsUsage = "update bucket properties; the command accepts both JSON-
 	indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
 	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'"
 
+// ais evict
 const evictUsage = "evict one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
 	indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
@@ -625,7 +630,9 @@ func listAnyHandler(c *cli.Context) error {
 			}
 		} else if notfound {
 			prefix := objName
-			err = listObjects(c, bck, prefix, false)
+			if errV := listObjects(c, bck, prefix, false /*list arch*/, false /*print empty*/); errV == nil {
+				return nil
+			}
 		}
 		return err
 	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list or summarize bucket(s)
@@ -669,6 +676,6 @@ func listAnyHandler(c *cli.Context) error {
 	default: // list objects
 		prefix := parseStrFlag(c, listObjPrefixFlag)
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
-		return listObjects(c, bck, prefix, listArch)
+		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
 	}
 }

@@ -245,7 +245,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 	return footer.nb
 }
 
-func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
+func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpty bool) error {
 	// prefix and filter
 	lstFilter, prefixFromTemplate, err := newLstFilter(c)
 	if err != nil {
@@ -463,6 +463,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return lsoErr(msg, err)
+	}
+	if len(objList.Entries) == 0 && !printEmpty {
+		return fmt.Errorf("%s/%s not found", bck.Cname(""), msg.Prefix)
 	}
 	return printLso(c, objList.Entries, lstFilter, propsStr, _listed, now,
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))

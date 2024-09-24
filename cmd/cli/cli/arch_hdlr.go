@@ -453,7 +453,7 @@ func listArchHandler(c *cli.Context) error {
 	if prefix == "" {
 		prefix = objName
 	}
-	return listObjects(c, bck, prefix, true /*list arch*/)
+	return listObjects(c, bck, prefix, true /*list arch*/, true /*print empty*/)
 }
 
 //
