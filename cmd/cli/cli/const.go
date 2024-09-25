@@ -866,7 +866,7 @@ var (
 	putRetriesFlag = cli.IntFlag{
 		Name:  "retries",
 		Value: 1,
-		Usage: "retry PUT operation so many times (with increasing timeout if timed out)",
+		Usage: "when failing to PUT retry the operation up to so many times (with increasing timeout if timed out)",
 	}
 
 	appendConcatFlag = cli.BoolFlag{
