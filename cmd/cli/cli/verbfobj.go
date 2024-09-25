@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +43,7 @@ type (
 	}
 	uctx struct {
 		wg            cos.WG
+		errCh         chan string
 		errCount      atomic.Int32 // uploads failed so far
 		processedCnt  atomic.Int32 // files processed so far
 		processedSize atomic.Int64 // size of already processed files
@@ -165,18 +167,30 @@ func (p *uparams) do(c *cli.Context) error {
 		u.barSize = totalBars[1]
 	}
 
+	u.errCh = make(chan string, len(p.fobjs))
 	for _, fobj := range p.fobjs {
 		u.wg.Add(1) // cos.NewLimitedWaitGroup
 		go u.run(c, p, fobj)
 	}
 	u.wg.Wait()
 
+	close(u.errCh)
+
 	if u.showProgress {
 		u.progress.Wait()
 		fmt.Fprint(c.App.Writer, u.errSb.String())
 	}
 	if numFailed := u.errCount.Load(); numFailed > 0 {
-		return fmt.Errorf("failed to %s %d file%s", p.wop.verb(), numFailed, cos.Plural(int(numFailed)))
+		fn := fmt.Sprintf(".ais-%s-failures.%d.log", strings.ToLower(p.wop.verb()), os.Getpid())
+		fn = filepath.Join(os.TempDir(), fn)
+		fh, err := cos.CreateFile(fn)
+		if err == nil {
+			for failedPath := range u.errCh {
+				fmt.Fprintln(fh, failedPath)
+			}
+			fh.Close()
+		}
+		return fmt.Errorf("failed to %s %d file%s (%q)", p.wop.verb(), numFailed, cos.Plural(int(numFailed)), fn)
 	}
 	if !flagIsSet(c, dryRunFlag) {
 		if !flagIsSet(c, yesFlag) {
@@ -354,6 +368,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 			fmt.Fprint(c.App.ErrWriter, str)
 		}
 		u.errCount.Inc()
+		u.errCh <- fobj.path
 	} else if u.verbose && !u.showProgress && !p.dryRun {
 		fmt.Fprintf(c.App.Writer, "%s -> %s\n", fobj.path, fobj.dstName) // needed?
 	}
