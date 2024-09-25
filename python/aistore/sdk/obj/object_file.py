@@ -7,7 +7,7 @@ from typing import Iterator
 
 import requests
 
-from aistore.sdk.obj.object_reader import ObjectReader
+from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -100,17 +100,19 @@ class ObjectFile(BufferedIOBase):
     of data from the buffer.
 
     Args:
-        object_reader (ObjectReader): The object reader used to fetch object data in chunks.
+        content_iterator (ContentIterator): An iterator that can fetch object data from AIS in chunks.
         max_resume (int): Maximum number of retry attempts in case of a streaming failure.
     """
 
-    def __init__(self, object_reader: ObjectReader, max_resume: int):
-        self._object_reader = object_reader
+    def __init__(self, content_iterator: ContentIterator, max_resume: int):
+        self._content_iterator = content_iterator
         self._max_resume = max_resume
         self._current_pos = 0
         self._closed = False
         self._buffer = SimpleBuffer()
-        self._chunk_iterator = self._object_reader.iter_from_position(self._current_pos)
+        self._chunk_iterator = self._content_iterator.iter_from_position(
+            self._current_pos
+        )
         self._resume_total = 0
 
     def close(self) -> None:
@@ -198,7 +200,7 @@ class ObjectFile(BufferedIOBase):
                 )
 
                 # Reset the chunk iterator for resuming the stream
-                self._chunk_iterator = self._object_reader.iter_from_position(
+                self._chunk_iterator = self._content_iterator.iter_from_position(
                     self._current_pos + len(self._buffer)
                 )
 

@@ -1,17 +1,18 @@
 #
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
-
-# pylint: disable=protected-access
-
 import io
 import os
 import unittest
 from unittest import mock
 from requests.exceptions import ChunkedEncodingError
+
+from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.obj.object_file import ObjectFile
-from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
+
+
+# pylint: disable=too-few-public-methods
 
 
 class BadObjectStream(io.BytesIO):
@@ -33,20 +34,20 @@ class BadObjectStream(io.BytesIO):
         return super().read(size)
 
 
-class BadObjectReader(ObjectReader):
+class BadContentIterator(ContentIterator):
     """
-    Simulates an ObjectReader that streams data using BadObjectStream that fails with ChunksEncoding
+    Simulates an ContentIterator that streams data using BadObjectStream that fails with ChunksEncoding
     error every `fail_on_read` chunks read.
 
-    This class extends `ObjectReader` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
-    parent class `ObjectReader`.
+    This class extends `ContentIterator` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
+    parent class `ContentIterator`.
 
     The streaming starts from a specific position (`start_position`), allowing the object to resume
     reading from that point if necessary.
     """
 
     def __init__(self, data=None, fail_on_read=2):
-        super().__init__(client=mock.Mock(), path="", params=[])
+        super().__init__(client=mock.Mock(), chunk_size=DEFAULT_CHUNK_SIZE)
         self.data = data
         self.fail_on_read = fail_on_read
 
@@ -58,7 +59,7 @@ class BadObjectReader(ObjectReader):
                 self.data[start_position:], fail_on_read=self.fail_on_read
             )
             while True:
-                chunk = stream.read(self.chunk_size)
+                chunk = stream.read(self._chunk_size)
                 if not chunk:
                     break
                 yield chunk
@@ -73,7 +74,7 @@ class TestObjectFile(unittest.TestCase):
     def test_buffer_usage(self):
         """Test ObjectFile uses buffer correctly, only fetching new chunks when needed."""
         data = os.urandom(DEFAULT_CHUNK_SIZE * 2)
-        mock_reader = BadObjectReader(data=data, fail_on_read=0)
+        mock_reader = BadContentIterator(data=data, fail_on_read=0)
         object_file = ObjectFile(mock_reader, max_resume=0)
 
         # Mock `next` to track how many times we fetch new data
@@ -108,7 +109,7 @@ class TestObjectFile(unittest.TestCase):
     def test_read_all_fails_after_max_retries(self):
         """Test that ObjectFile gives up after exceeding max retry attempts for read-all."""
         data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        mock_reader = BadContentIterator(data=data, fail_on_read=2)
         object_file = ObjectFile(mock_reader, max_resume=2)
 
         # Test that the read fails after 2 retry attempts
@@ -118,7 +119,7 @@ class TestObjectFile(unittest.TestCase):
     def test_read_fixed_fails_after_max_retries(self):
         """Test that ObjectFile gives up after exceeding max retry attempts for fixed-size reads."""
         data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        mock_reader = BadContentIterator(data=data, fail_on_read=2)
         object_file = ObjectFile(mock_reader, max_resume=2)
 
         # Test that the read fails after 2 retry attempts for a fixed-size read
@@ -128,7 +129,7 @@ class TestObjectFile(unittest.TestCase):
     def test_read_all_success_after_retries(self):
         """Test that ObjectFile retries and succeeds after intermittent ChunkedEncodingError for read-all."""
         data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        mock_reader = BadContentIterator(data=data, fail_on_read=2)
         object_file = ObjectFile(mock_reader, max_resume=4)
 
         result = object_file.read()
@@ -139,7 +140,7 @@ class TestObjectFile(unittest.TestCase):
     def test_read_fixed_success_after_retries(self):
         """Test that ObjectFile retries and succeeds for fixed-size reads after intermittent ChunkedEncodingError."""
         data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadObjectReader(data=data, fail_on_read=2)
+        mock_reader = BadContentIterator(data=data, fail_on_read=2)
         object_file = ObjectFile(mock_reader, max_resume=4)
 
         # Read the first half of the data and check the position

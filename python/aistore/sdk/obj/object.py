@@ -33,7 +33,7 @@ from aistore.sdk.const import (
     HEADER_OBJECT_BLOB_WORKERS,
     HEADER_OBJECT_BLOB_CHUNK_SIZE,
 )
-from aistore.sdk.obj.object_file import ObjectFile
+from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.types import (
     ActionMsg,
@@ -165,70 +165,20 @@ class Object:
             # https://www.rfc-editor.org/rfc/rfc7233#section-2.1
             headers = {HEADER_RANGE: byte_range}
 
-        obj_reader = ObjectReader(
-            client=self._client,
+        obj_client = ObjectClient(
+            request_client=self._client,
             path=self._object_path,
             params=params,
             headers=headers,
+        )
+
+        obj_reader = ObjectReader(
+            object_client=obj_client,
             chunk_size=chunk_size,
         )
         if writer:
             writer.writelines(obj_reader)
         return obj_reader
-
-    def as_file(
-        self,
-        max_resume: int = 5,
-        archive_settings: ArchiveConfig = None,
-        blob_download_settings: BlobDownloadConfig = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_name: str = None,
-        writer: BufferedWriter = None,
-        latest: bool = False,
-        byte_range: str = None,
-    ) -> ObjectFile:  # pylint: disable=too-many-arguments
-        """
-        Creates an `ObjectFile` for reading object data in chunks with support for
-        resuming and retrying from the last known position in the case the object stream
-        is prematurely closed due to an unexpected error.
-
-        Args:
-            max_resume (int, optional): If streaming object contents is interrupted, this
-                defines the maximum number of attempts to resume the connection before
-                raising an exception.
-            archive_settings (ArchiveConfig, optional): Settings for archive extraction.
-            blob_download_settings (BlobDownloadConfig, optional): Settings for using blob
-                download (e.g., chunk size, workers).
-            chunk_size (int, optional): The size of chunks to use while reading from the stream.
-            etl_name (str, optional): Name of the ETL (Extract, Transform, Load) transformation
-                to apply during the get operation.
-            writer (BufferedWriter, optional): A writer for writing content output. User is
-                responsible for closing the writer.
-            latest (bool, optional): Whether to get the latest version of the object from
-                a remote bucket (if applicable).
-            byte_range (str, optional): Specify a byte range to fetch a segment of the object
-                (e.g., "bytes=0-499" for the first 500 bytes).
-
-        Returns:
-            ObjectFile: A file-like object that can be used to read the object content.
-
-        Raises:
-            requests.RequestException: An ambiguous exception occurred while handling the request.
-            requests.ConnectionError: A connection error occurred.
-            requests.ConnectionTimeout: The connection to AIStore timed out.
-            requests.ReadTimeout: Waiting for a response from AIStore timed out.
-            requests.exceptions.HTTPError(404): The object does not exist.
-        """
-        object_reader = self.get(
-            archive_config=archive_settings,
-            blob_download_config=blob_download_settings,
-            chunk_size=chunk_size,
-            etl_name=etl_name,
-            writer=writer,
-            latest=latest,
-            byte_range=byte_range,
-        )
-        return ObjectFile(object_reader, max_resume=max_resume)
 
     def get_semantic_url(self) -> str:
         """

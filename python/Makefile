@@ -108,7 +108,7 @@ generate-sdk-docs:
 	@ pydoc-markdown -I ./aistore/sdk \
 	-m authn.authn_client -m authn.cluster_manager -m authn.role_manager -m authn.token_manager -m authn.user_manager -m authn.access_attr \
 	-m bucket -m client -m cluster -m etl -m job -m multiobj.object_group -m multiobj.object_names -m multiobj.object_range -m multiobj.object_template \
-	-m object -m object_iterator -m object_reader \
+	-m obj.object -m obj.object_reader -m obj.object_file -m obj.object_props -m obj.object_attributes \
 	'{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(SDK_DOCFILE)	
 	@ sed -i -e 's/####/###/g' $(SDK_DOCFILE)
 

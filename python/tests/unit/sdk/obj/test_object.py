@@ -35,6 +35,7 @@ from aistore.sdk.const import (
     AIS_PRESENT,
 )
 from aistore.sdk.obj.object import Object
+from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
 from aistore.sdk.obj.object_props import ObjectProps
@@ -51,7 +52,7 @@ OBJ_NAME = "object_name"
 REQUEST_PATH = f"{URL_PATH_OBJECTS}/{BCK_NAME}/{OBJ_NAME}"
 
 
-# pylint: disable=unused-variable, too-many-locals, too-many-public-methods
+# pylint: disable=unused-variable, too-many-locals, too-many-public-methods, no-value-for-parameter
 class TestObject(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock()
@@ -109,28 +110,35 @@ class TestObject(unittest.TestCase):
         archive_config = ArchiveConfig(regex=regex, mode=mode)
         self.get_exec_assert(archive_config=archive_config)
 
-    def get_exec_assert(self, **kwargs):
-        with patch(
-            "aistore.sdk.obj.object.ObjectReader", return_value=Mock(spec=ObjectReader)
-        ) as mock_obj_reader:
-            res = self.object.get(**kwargs)
+    @patch("aistore.sdk.obj.object.ObjectReader")
+    @patch("aistore.sdk.obj.object.ObjectClient")
+    def get_exec_assert(self, mock_obj_client, mock_obj_reader, **kwargs):
+        mock_obj_client_instance = Mock(spec=ObjectClient)
+        mock_obj_client.return_value = mock_obj_client_instance
+        mock_obj_reader.return_value = Mock(spec=ObjectReader)
 
-            blob_config = kwargs.get("blob_download_config", BlobDownloadConfig())
-            initial_headers = kwargs.get("expected_headers", {})
-            expected_headers = self.get_expected_headers(initial_headers, blob_config)
+        res = self.object.get(**kwargs)
 
-            expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
+        blob_config = kwargs.get("blob_download_config", BlobDownloadConfig())
+        initial_headers = kwargs.get("expected_headers", {})
+        expected_headers = self.get_expected_headers(initial_headers, blob_config)
 
-            self.assertIsInstance(res, ObjectReader)
-            mock_obj_reader.assert_called_with(
-                client=self.mock_client,
-                path=REQUEST_PATH,
-                params=self.expected_params,
-                headers=expected_headers,
-                chunk_size=expected_chunk_size,
-            )
-            if "writer" in kwargs:
-                self.mock_writer.writelines.assert_called_with(res)
+        expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
+
+        self.assertIsInstance(res, ObjectReader)
+
+        mock_obj_client.assert_called_with(
+            request_client=self.mock_client,
+            path=REQUEST_PATH,
+            params=self.expected_params,
+            headers=expected_headers,
+        )
+        mock_obj_reader.assert_called_with(
+            object_client=mock_obj_client_instance,
+            chunk_size=expected_chunk_size,
+        )
+        if "writer" in kwargs:
+            self.mock_writer.writelines.assert_called_with(res)
 
     @staticmethod
     def get_expected_headers(initial_headers, blob_config):

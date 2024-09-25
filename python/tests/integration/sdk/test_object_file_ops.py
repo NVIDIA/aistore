@@ -56,7 +56,7 @@ class TestObjectFileOps(unittest.TestCase):
             os.remove(cls.TAR_FILE_PATH)
 
     def setUp(self):
-        self.file_obj = self.bucket.object(self.OBJECT_NAME).as_file()
+        self.file_obj = self.bucket.object(self.OBJECT_NAME).get().as_file()
 
     def tearDown(self):
         # Close the file object if it's still open

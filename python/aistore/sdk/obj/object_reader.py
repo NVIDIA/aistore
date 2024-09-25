@@ -2,34 +2,33 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import Iterator, List, Dict, Optional
+from typing import Iterator, Optional
 import requests
 
-from aistore.sdk.request_client import RequestClient
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE, HTTP_METHOD_GET, HTTP_METHOD_HEAD
+from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.object_client import ObjectClient
+from aistore.sdk.obj.object_file import ObjectFile
+from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 
 
 class ObjectReader:
     """
-    Represents the data returned by the API when getting an object, including access to the content stream and object
-    attributes.
+    Provide a way to read an object's contents and attributes, optionally iterating over a stream of content.
+
+    Args:
+        object_client (ObjectClient): Client for making requests to a specific object in AIS
+        chunk_size (int, optional): Size of each data chunk to be fetched from the stream.
+            Defaults to DEFAULT_CHUNK_SIZE.
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
-        client: RequestClient,
-        path: str,
-        params: List[str],
-        headers: Optional[Dict[str, str]] = None,
+        object_client: ObjectClient,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
     ):
-        self._request_client = client
-        self._request_path = path
-        self._request_params = params
-        self._request_headers = headers
-        self._chunk_size = chunk_size
+        self._object_client = object_client
+        self._content_iterator = ContentIterator(self._object_client, chunk_size)
         self._attributes = None
 
     def head(self) -> ObjectAttributes:
@@ -37,39 +36,26 @@ class ObjectReader:
         Make a head request to AIS to update and return only object attributes.
 
         Returns:
-            ObjectAttributes for this object
-
+            `ObjectAttributes` containing metadata for this object.
         """
-        resp = self._request_client.request(
-            HTTP_METHOD_HEAD, path=self._request_path, params=self._request_params
-        )
-        return ObjectAttributes(resp.headers)
+        self._attributes = self._object_client.head()
+        return self._attributes
 
     def _make_request(
-        self, stream: bool = True, start_position: Optional[int] = None
+        self, stream: bool = True, start_position: int = 0
     ) -> requests.Response:
         """
-        Make a request to AIS to get the object content, optionally starting at a specific byte position.
+        Use the object client to get a response from AIS and update the reader's object attributes.
 
         Args:
-            stream: Whether to stream the response.
-            start_position: The byte position to start reading from, if specified.
+            stream (bool, optional): If True, use the `requests` library `stream` option to stream the response content.
+             Defaults to True.
+            start_position (int, optional): The byte position to start reading from. Defaults to 0.
 
         Returns:
             The response object from the request.
         """
-        headers = self._request_headers.copy() if self._request_headers else {}
-        if start_position is not None and start_position != 0:
-            headers["Range"] = f"bytes={start_position}-"
-
-        resp = self._request_client.request(
-            HTTP_METHOD_GET,
-            path=self._request_path,
-            params=self._request_params,
-            stream=stream,
-            headers=headers,
-        )
-        resp.raise_for_status()
+        resp = self._object_client.get(stream=stream, start_position=start_position)
         self._attributes = ObjectAttributes(resp.headers)
         return resp
 
@@ -79,21 +65,11 @@ class ObjectReader:
         Object metadata attributes.
 
         Returns:
-            ObjectAttributes: Parsed object attributes from the headers returned by AIS
+            ObjectAttributes: Parsed object attributes from the headers returned by AIS.
         """
         if not self._attributes:
             self._attributes = self.head()
         return self._attributes
-
-    @property
-    def chunk_size(self) -> int:
-        """
-        Chunk size.
-
-        Returns:
-            int: Current chunk size for reading the object.
-        """
-        return self._chunk_size
 
     def read_all(self) -> bytes:
         """
@@ -108,12 +84,36 @@ class ObjectReader:
 
     def raw(self) -> requests.Response:
         """
-        Returns the raw byte stream of object content.
+        Return the raw byte stream of object content.
 
         Returns:
-            requests.Response: Raw byte stream of the object content
+            requests.Response: Raw byte stream of the object content.
         """
         return self._make_request(stream=True).raw
+
+    def as_file(
+        self,
+        max_resume: Optional[int] = 5,
+    ) -> ObjectFile:
+        """
+        Create an `ObjectFile` for reading object data in chunks. `ObjectFile` supports
+        resuming and retrying from the last known position in the case the object stream
+        is prematurely closed due to an unexpected error.
+
+        Args:
+            max_resume (int, optional): Maximum number of resume attempts in case of streaming failure. Defaults to 5.
+
+        Returns:
+            ObjectFile: A file-like object that can be used to read the object content.
+
+        Raises:
+            requests.RequestException: An ambiguous exception occurred while handling the request.
+            requests.ConnectionError: A connection error occurred.
+            requests.ConnectionTimeout: The connection to AIStore timed out.
+            requests.ReadTimeout: Waiting for a response from AIStore timed out.
+            requests.exceptions.HTTPError(404): The object does not exist.
+        """
+        return ObjectFile(self._content_iterator, max_resume=max_resume)
 
     def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
         """
@@ -126,11 +126,7 @@ class ObjectReader:
         Returns:
             Iterator[bytes]: An iterator over each chunk of bytes in the object starting from the specific position.
         """
-        stream = self._make_request(stream=True, start_position=start_position)
-        try:
-            yield from stream.iter_content(chunk_size=self.chunk_size)
-        finally:
-            stream.close()
+        return self._content_iterator.iter_from_position(start_position)
 
     def __iter__(self) -> Iterator[bytes]:
         """
