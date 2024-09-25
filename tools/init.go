@@ -185,7 +185,7 @@ func InitLocalCluster() {
 // InitCluster initializes the environment necessary for testing against an AIS cluster.
 // NOTE: the function is also used for testing by NVIDIA/ais-k8s Operator
 func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
-	LoggedUserToken = authn.LoadToken("")
+	LoggedUserToken, _ = authn.LoadToken("") // ignore error as not all tests require token
 	proxyURLReadOnly = proxyURL
 	testClusterType = clusterType
 	if err = initProxyURL(); err != nil {

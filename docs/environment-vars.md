@@ -302,10 +302,11 @@ AuthN supports multiple AIS clusters; in fact, there's no limit on the number of
 
 Separately, there's also client-side AuthN environment that includes:
 
-| name | comment |
-| ---- | ------- |
-| `AIS_AUTHN_URL` | used by [CLI](docs/cli/auth.md) to configure and query authenication server (AuthN) |
-| `AIS_AUTHN_TOKEN_FILE` | token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`  |
+| Name                  | Description                                                                                                                          |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_URL`       | Used by [CLI](docs/cli/auth.md) to configure and query the authentication server (AuthN).                                            |
+| `AIS_AUTHN_TOKEN_FILE`| Token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`.                                      |
+| `AIS_AUTHN_TOKEN`     | The JWT token itself (excluding the file and JSON); can be used to specify the token directly, bypassing the need for a token file.  |
 
 When AuthN is disabled (i.e., not used), `ais config` CLI will show something like:
 

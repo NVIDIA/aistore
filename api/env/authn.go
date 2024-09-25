@@ -12,6 +12,7 @@ var (
 		Enabled       string
 		URL           string
 		TokenFile     string
+		Token         string
 		ConfDir       string
 		LogDir        string
 		LogLevel      string
@@ -27,6 +28,7 @@ var (
 		Enabled:       "AIS_AUTHN_ENABLED",
 		URL:           "AIS_AUTHN_URL",
 		TokenFile:     "AIS_AUTHN_TOKEN_FILE", // fully qualified
+		Token:         "AIS_AUTHN_TOKEN",      // Only the JWT token itself (excluding the file and JSON)
 		ConfDir:       "AIS_AUTHN_CONF_DIR",   // contains AuthN config and tokens DB
 		LogDir:        "AIS_AUTHN_LOG_DIR",
 		LogLevel:      "AIS_AUTHN_LOG_LEVEL",

@@ -202,6 +202,14 @@ AIS_AUTHN_ENABLED=true make deploy
 > **Note:** Don't forget to change the _default secret key_ used to sign tokens and the _admin password_ before starting the deployment process. If you don't, you will have to restart the cluster.
 * More info on env vars: [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/main/api/env/authn.go)
 
+Separately, there's also client-side AuthN environment that includes:
+
+| Name                  | Description                                                                                                                         |
+|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_URL`       | Used by [CLI](docs/cli/auth.md) to configure and query the authentication server (AuthN).                                           |
+| `AIS_AUTHN_TOKEN_FILE`| Token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`.                                     |
+| `AIS_AUTHN_TOKEN`     | The JWT token itself (excluding the file and JSON); can be used to specify the token directly, bypassing the need for a token file. |
+
 ## Notation
 
 In this README:
