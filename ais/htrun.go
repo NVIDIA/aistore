@@ -2149,11 +2149,13 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
 	callerID := r.Header.Get(apc.HdrCallerID)
 	caller := r.Header.Get(apc.HdrCallerName)
+
 	// external call
 	if callerID == "" && caller == "" {
+		// TODO: check receiving on PubNet
 		readiness := cos.IsParseBool(r.URL.Query().Get(apc.QparamHealthReadiness))
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-			nlog.Infof("%s: external health-ping from %s (readiness=%t)", h.si, r.RemoteAddr, readiness)
+			nlog.Infoln(h.String(), "external health-ping from:", r.RemoteAddr, "readiness:", readiness)
 		}
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 		// see also:
@@ -2161,11 +2163,16 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 		if !readiness && !h.ClusterStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
-		// NOTE: for "readiness" check always return true; otherwise, true if cluster started
+		// NOTE: for "readiness" always return true (otherwise, true if cluster-started)
 		return true
 	}
+
 	// intra-cluster health ping
-	if !h.ensureIntraControl(w, r, false /* from primary */) {
+	// - pub addr permitted (see reqHealth)
+	// - compare w/ h.ensureIntraControl
+	err := h.isIntraCall(r.Header, false /* from primary */)
+	if err != nil {
+		h.writeErr(w, r, err)
 		responded = true
 	}
 	return
