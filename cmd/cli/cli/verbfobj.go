@@ -167,6 +167,10 @@ func (p *uparams) do(c *cli.Context) error {
 		u.barSize = totalBars[1]
 	}
 
+	if flagIsSet(c, putRetriesFlag) {
+		_ = parseRetriesFlag(c, putRetriesFlag, true)
+	}
+
 	u.errCh = make(chan string, len(p.fobjs))
 	for _, fobj := range p.fobjs {
 		u.wg.Add(1) // cos.NewLimitedWaitGroup
@@ -322,15 +326,15 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		err         error
 		skipVC      = flagIsSet(c, skipVerCksumFlag)
 		countReader = cos.NewCallbackReadOpenCloser(fh, updateBar /*progress callback*/)
-		retries     = 1
+		iters       = 1
 		isTout      bool
 	)
 	if flagIsSet(c, putRetriesFlag) {
-		retries = max(parseIntFlag(c, putRetriesFlag), 1)
+		iters += parseRetriesFlag(c, putRetriesFlag, false /*warn*/)
 	}
 	switch p.wop.verb() {
 	case "PUT":
-		for i := range retries {
+		for i := range iters {
 			err = p._putOne(c, fobj, countReader, skipVC, isTout)
 			if err == nil {
 				if i > 0 {
@@ -339,7 +343,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 				break
 			}
 			e := stripErr(err)
-			if i < retries-1 {
+			if i < iters-1 {
 				s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, fobj.path, e)
 				fmt.Fprintln(c.App.ErrWriter, s)
 				time.Sleep(time.Second)
@@ -353,6 +357,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 			}
 		}
 	case "APPEND":
+		// TODO: retry as well
 		err = p._a2aOne(c, fobj, countReader, skipVC)
 	default:
 		debug.Assert(false, p.wop.verb()) // "ARCHIVE"
@@ -406,7 +411,6 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		progress *mpb.Progress
 		bars     []*mpb.Bar
 		cksum    *cos.Cksum
-		retries  = 1
 	)
 	if flagIsSet(c, dryRunFlag) {
 		// resulting message printed upon return
@@ -437,12 +441,11 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		Cksum:      cksum,
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
-
+	iters := 1
 	if flagIsSet(c, putRetriesFlag) {
-		retries = max(parseIntFlag(c, putRetriesFlag), 1)
+		iters += parseRetriesFlag(c, putRetriesFlag, true /*warn*/)
 	}
-
-	for i := range retries {
+	for i := range iters {
 		_, err = api.PutObject(&putArgs)
 		if err == nil {
 			if i > 0 {
@@ -451,7 +454,7 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 			break
 		}
 		e := stripErr(err)
-		if i < retries-1 {
+		if i < iters-1 {
 			s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, path, e)
 			fmt.Fprintln(c.App.ErrWriter, s)
 			time.Sleep(time.Second)

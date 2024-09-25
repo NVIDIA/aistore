@@ -166,6 +166,28 @@ func parseSizeFlag(c *cli.Context, flag cli.StringFlag, unitsParsed ...string) (
 	return cos.ParseSize(val, units)
 }
 
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
+func parseRetriesFlag(c *cli.Context, flag cli.IntFlag, warn bool) (retries int) {
+	const (
+		maxr = 5
+		efmt = "invalid option '%s=%d' (expecting 1..5 range)"
+	)
+	retries = parseIntFlag(c, flag)
+	if retries < 0 {
+		if warn {
+			actionWarn(c, fmt.Sprintf(efmt, flprn(flag), retries))
+		}
+		return 0
+	}
+	if retries > maxr {
+		if warn {
+			actionWarn(c, fmt.Sprintf(efmt, flprn(flag), retries))
+		}
+		return maxr
+	}
+	return retries
+}
+
 func rmFlags(flags []cli.Flag, fs ...cli.Flag) (out []cli.Flag) {
 	out = make([]cli.Flag, 0, len(flags))
 loop:
