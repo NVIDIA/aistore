@@ -863,6 +863,11 @@ var (
 		Usage: "[end-to-end protection] compute client-side checksum configured for the destination bucket\n" +
 			putObjCksumText,
 	}
+	putRetriesFlag = cli.IntFlag{
+		Name:  "retries",
+		Value: 1,
+		Usage: "retry PUT operation so many times (with increasing timeout if timed out)",
+	}
 
 	appendConcatFlag = cli.BoolFlag{
 		Name:  "append",

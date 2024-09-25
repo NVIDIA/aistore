@@ -349,6 +349,7 @@ func V(err error) error {
 	return err
 }
 
+// with hints and tips (compare with `stripErr` below)
 func formatErr(err error) error {
 	if err == nil {
 		return nil
@@ -380,6 +381,33 @@ func formatErr(err error) error {
 		}
 		return redErr(err)
 	}
+}
+
+// remove "verb URL" from the error (compare with `formatErr`)
+// TODO: add more apc.URLPath* paths
+func stripErr(err error) error {
+	var (
+		s = err.Error()
+		l int
+	)
+	i := strings.Index(s, apc.URLPathObjects.S)
+	if i < 0 {
+		i = strings.Index(s, apc.URLPathBuckets.S)
+	}
+	if i < 0 {
+		return err
+	}
+
+	k := strings.Index(s[i+l:], " ")
+	if k < 0 || len(s) < i+l+k+5 {
+		return err
+	}
+	return errors.New(s[i+l+k+1:])
+}
+
+func isTimeout(err error) bool {
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "timeout") || strings.Contains(s, "deadline")
 }
 
 func isStartingUp(err error) bool {

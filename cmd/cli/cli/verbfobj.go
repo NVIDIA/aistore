@@ -188,7 +188,7 @@ func (p *uparams) do(c *cli.Context) error {
 	return nil
 }
 
-func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC bool) (err error) {
+func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC, isTout bool) (err error) {
 	if p.dryRun {
 		fmt.Fprintf(c.App.Writer, "%s %s -> %s\n", p.wop.verb(), fobj.path, p.bck.Cname(fobj.dstName))
 		return
@@ -201,6 +201,9 @@ func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 		Cksum:      p.cksum,
 		Size:       uint64(fobj.size),
 		SkipVC:     skipVC,
+	}
+	if isTout {
+		putArgs.BaseParams.Client.Timeout = longClientTimeout
 	}
 	_, err = api.PutObject(&putArgs)
 	return
@@ -305,10 +308,36 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		err         error
 		skipVC      = flagIsSet(c, skipVerCksumFlag)
 		countReader = cos.NewCallbackReadOpenCloser(fh, updateBar /*progress callback*/)
+		retries     = 1
+		isTout      bool
 	)
+	if flagIsSet(c, putRetriesFlag) {
+		retries = max(parseIntFlag(c, putRetriesFlag), 1)
+	}
 	switch p.wop.verb() {
 	case "PUT":
-		err = p._putOne(c, fobj, countReader, skipVC)
+		for i := range retries {
+			err = p._putOne(c, fobj, countReader, skipVC, isTout)
+			if err == nil {
+				if i > 0 {
+					fmt.Fprintf(c.App.Writer, "[#%d] %s - done.\n", i+1, fobj.path)
+				}
+				break
+			}
+			e := stripErr(err)
+			if i < retries-1 {
+				s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, fobj.path, e)
+				fmt.Fprintln(c.App.ErrWriter, s)
+				time.Sleep(time.Second)
+				ffh, errO := fh.Open()
+				if errO != nil {
+					fmt.Fprintf(c.App.ErrWriter, "failed to reopen %s: %v\n", fobj.path, errO)
+					break
+				}
+				countReader = cos.NewCallbackReadOpenCloser(ffh, updateBar /*progress callback*/)
+				isTout = isTimeout(e)
+			}
+		}
 	case "APPEND":
 		err = p._a2aOne(c, fobj, countReader, skipVC)
 	default:
@@ -317,11 +346,12 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		return
 	}
 	if err != nil {
-		str := fmt.Sprintf("Failed to %s %s: %v\n", p.wop.verb(), p.bck.Cname(fobj.dstName), err)
+		e := stripErr(err)
+		str := fmt.Sprintf("Failed to %s %s => %s: %v\n", p.wop.verb(), fobj.path, p.bck.Cname(fobj.dstName), e)
 		if u.showProgress {
 			u.errSb.WriteString(str)
 		} else {
-			fmt.Fprint(c.App.Writer, str)
+			fmt.Fprint(c.App.ErrWriter, str)
 		}
 		u.errCount.Inc()
 	} else if u.verbose && !u.showProgress && !p.dryRun {
@@ -361,6 +391,7 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		progress *mpb.Progress
 		bars     []*mpb.Bar
 		cksum    *cos.Cksum
+		retries  = 1
 	)
 	if flagIsSet(c, dryRunFlag) {
 		// resulting message printed upon return
@@ -391,10 +422,34 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		Cksum:      cksum,
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
-	_, err = api.PutObject(&putArgs)
+
+	if flagIsSet(c, putRetriesFlag) {
+		retries = max(parseIntFlag(c, putRetriesFlag), 1)
+	}
+
+	for i := range retries {
+		_, err = api.PutObject(&putArgs)
+		if err == nil {
+			if i > 0 {
+				fmt.Fprintf(c.App.Writer, "[#%d] %s - done.\n", i+1, path)
+			}
+			break
+		}
+		e := stripErr(err)
+		if i < retries-1 {
+			s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, path, e)
+			fmt.Fprintln(c.App.ErrWriter, s)
+			time.Sleep(time.Second)
+			putArgs.Reader, err = fh.Open()
+			if isTimeout(e) {
+				putArgs.BaseParams.Client.Timeout = longClientTimeout
+			}
+		}
+	}
 	if progress != nil {
 		progress.Wait()
 	}
+
 	return err
 }
 

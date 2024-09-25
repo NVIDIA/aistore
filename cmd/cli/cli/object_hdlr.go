@@ -125,6 +125,7 @@ var (
 			yesFlag,
 			continueOnErrorFlag,
 			unitsFlag,
+			putRetriesFlag,
 			// cksum
 			skipVerCksumFlag,
 			putObjDfltCksumFlag,
@@ -319,7 +320,8 @@ func putHandler(c *cli.Context) error {
 			a.dst.oname += a.src.arg
 		}
 		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
-			return err
+			e := stripErr(err)
+			return fmt.Errorf("failed to %s %s => %s: %v", a.verb(), a.src.abspath, a.dst.bck.Cname(a.dst.oname), e)
 		}
 		actionDone(c, fmt.Sprintf("%s %q => %s\n", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
