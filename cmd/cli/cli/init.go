@@ -30,7 +30,14 @@ func Init(args []string) (err error) {
 	k8sDetected = detectK8s()
 
 	// auth
-	loggedUserToken = authn.LoadToken("")
+	token := os.Getenv(env.AuthN.Token)
+	tokenFile := os.Getenv(env.AuthN.TokenFile)
+
+	if token != "" && tokenFile != "" {
+		fmt.Fprintf(os.Stderr, "Warning: both `%s` and `%s` are set, using `%s`\n", env.AuthN.Token, env.AuthN.TokenFile, env.AuthN.Token)
+	}
+
+	loggedUserToken, _ = authn.LoadToken("") // No error handling as token might not be needed
 
 	// http clients: the main one and the auth, if enabled
 	clusterURL = _clusterURL(cfg)
