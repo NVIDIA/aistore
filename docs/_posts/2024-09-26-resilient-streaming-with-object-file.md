@@ -51,14 +51,14 @@ The basic `object.get()` function in the AIS SDK returns an `ObjectReader`, whic
 <ul>
   <li><strong><a href="#how-objectfile-works">How <code>ObjectFile</code> Works:</a></strong> Delving into <code>ObjectFile</code>’s mechanics, such as buffer management and retry logic.</li>
 
-  <li><strong><a href="#integrating-objectfile">Integrating <code>ObjectFile</code> in File-like Contexts:</a></strong> How <code>ObjectFile</code> fits into common libraries like <code>tarfile</code> and <code>csv</code>.</li>
+  <li><strong><a href="#integrating-objectfile-in-file-like-contexts">Integrating <code>ObjectFile</code> in File-like Contexts:</a></strong> How <code>ObjectFile</code> fits into common libraries like <code>tarfile</code> and <code>csv</code>.</li>
 
   <li><strong><a href="#future-work">Future Work:</a></strong> Ongoing efforts for improvements, including custom buffer sizes and parallel pre-fetching, along with benchmarking.</li>
 </ul>
 
 </div>
 
-## How `ObjectFile` Works
+## How <code style="font-size: 92%;">ObjectFile</code> Works
 
 `ObjectFile` extends `io.BufferedIOBase`, offering a familiar file-like interface for reading streamed objects in chunks and handling interruptions gracefully. It relies on `ObjectReader` to fetch object data in chunks and maintains an internal buffer to optimize reads.
 
@@ -72,7 +72,7 @@ Once the buffer has sufficient data, `ObjectFile` reads directly from it to comp
   <img src="/assets/object-file/flow.svg" alt="ObjectFile Flowchart" width="500px" />
 </div>
 
-## Integrating `ObjectFile` in File-like Contexts
+## Integrating <code style="font-size: 92%;">ObjectFile</code> in File-like Contexts
 
 Because `ObjectFile` extends `io.BufferedIOBase`, you can use it in any context where a non-seekable file-like object is expected. For instance, `ObjectFile` works seamlessly with libraries like `tarfile` (in [streaming modes](https://docs.python.org/3/library/tarfile.html#tarfile.open) such as `r|*`, `r|`, `r|gz`, where the pipe `|` indicates sequential streaming of tar blocks) and `csv`, which rely on standard file objects for sequential reads:
 
@@ -97,17 +97,17 @@ In both cases, the `file_obj` ensures that streaming continues smoothly, even in
 
 While `ObjectFile` brings substantial improvements in terms of resilience and performance in streaming environments, there are several avenues for further optimization and enhancements:
 
-### Custom Buffer Size
+#### Custom Buffer Size
 
 In the initial implementation, `ObjectFile` uses an internal buffer of the same size requested by the reader (on each call to `read()`). For reading larger chunk sizes over the network, we rely on the `object.get()` `chunk_size` parameter, which can exceed the requested buffer size. With a larger chunk size, the buffer will often still hold enough data for multiple reads. 
 
 Adding support for custom buffer sizes would allow further performance optimization by separating the buffer size from the amount specified in each `read` call. More work still needs to be done to determine optimal sizes for read, buffer, and chunk iteration (see [Benchmarking](#benchmarking) section below for ongoing efforts to fine-tune these sizes).
 
-### Read-Ahead Buffer with Parallelization
+#### Read-Ahead Buffer with Parallelization
 
 Implementing a read-ahead buffer that pre-fetches data in parallel would minimize latency between reads. This approach would better utilize network bandwidth and avoid blocking during larger data fetches.
 
-### Benchmarking
+#### Benchmarking
 
 Further benchmarks are currently underway to:
 
