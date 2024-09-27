@@ -8,7 +8,10 @@ redirect_from:
 ---
 
 
-**August 2024 UPDATE**: added [complete reference](/docs/metrics-reference.md) that includes all supported metric names (both internal and visible externally), their respective types, and descriptions:
+**August 2024 UPDATES**:
+* added [complete reference](/docs/metrics-reference.md) that includes all supported metric names (both internal and visible externally), their respective types, and descriptions:
+* building `aisnode` with StatsD requires the corresponding build tag; build-wise, Prometheus is, effectively, the default.
+* for details, see related: [package `stats`](/docs/environment-vars.md#package-stats)
 
 * [Reference: all supported metrics](/docs/metrics-reference.md)
 

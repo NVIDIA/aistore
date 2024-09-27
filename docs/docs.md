@@ -7,7 +7,7 @@ redirect_from:
  - /docs/docs.md/
 ---
 
-### Introduction
+## Introduction
 
 - [Brief overview](/README.md)
 - [In-depth overview](/docs/overview.md)
