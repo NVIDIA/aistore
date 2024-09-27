@@ -2,8 +2,8 @@
 
 Unlike hierarchical POSIX, object storage is flat, treating forward slash ('/') in object names as simply another symbol.
 
-But that's not the entire truth. The other part of it is that user may want to operate (list, train, copy, transform, etc.)
-on a subset of objects in a dataset that, for the lack of better word, looks _exactly_ like a directory.
+But that's not the entire truth. The other part of it is that user may want to operate on (ie., list, load, shuffle, copy, transform, etc.)
+subset of objects in a dataset that, for the lack of better word, looks _exactly_ like a directory.
 
 In fact, user often wants to do exactly that.
 Train, for instance, on all audio files under `en_es_synthetic/v1/train/`, or similar.
@@ -27,7 +27,7 @@ Needless to say, aistore provides for all of that and more. There is a certainty
 
 ## Examples
 
-### Show everything that has a certain prefix
+### 1. Show everything that has a certain prefix
 
 ```console
 $ ais ls s3://speech --prefix .inventory
@@ -41,7 +41,13 @@ NAME                                                                      SIZE  
 .inventory/speech/hive/dt=2024-05-31-01-00/symlink.txt                    85B             no
 ```
 
-### Same as above, without directories
+### 2. Same as above using familiar `*nix` notation
+
+```console
+$ ais ls s3://speech/.inventory
+```
+
+### 3. Same as above, without directories
 
 ```console
 $ ais ls s3://speech --prefix .inventory --no-dirs
@@ -54,7 +60,7 @@ NAME                                                                      SIZE  
 .inventory/speech/hive/dt=2024-05-31-01-00/symlink.txt                    85B             no
 ```
 
-### Show dataset structure at a certain nested depth
+### 4. Show dataset structure at a certain nested depth
 
 ```console
 $ ais ls s3://speech --prefix .inventory/speech/ --nr

@@ -183,13 +183,15 @@ NAME:
      * ais ls s3                                           - list all s3 buckets that are present in the cluster;
      * ais ls s3 --all                                     - list all s3 buckets, both present and remote;
    with template, regex, and/or prefix:
-     * ais ls gs: --regex "^abc" --all                        - list all accessible GCP buckets with names starting with "abc";
-     * ais ls ais://abc --regex ".md" --props size,checksum   - list *.md objects with their respective sizes and checksums;
-     * ais ls gs://abc --template images/                     - list all objects from the virtual subdirectory called "images";
-     * ais ls gs://abc --prefix images/                       - same as above (for more examples, see '--template' below);
+     * ais ls gs: --regex "^abc" --all                       - list all accessible GCP buckets with names starting with "abc";
+     * ais ls ais://abc --regex ".md" --props size,checksum  - list *.md objects with their respective sizes and checksums;
+     * ais ls gs://abc --template images/                    - list all objects from the virtual subdirectory called "images";
+     * ais ls gs://abc --prefix images/                      - same as above (for more examples, see '--template' below);
+     * ais ls gs://abc/images/                               - same as above.
    and summary (stats):
-     * ais ls s3 --summary         - for each s3 bucket in the cluster: print object numbers and total size(s);
-     * ais ls s3 --summary --all   - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_
+     * ais ls s3 --summary                  - for each s3 bucket in the cluster: print object numbers and total size(s);
+     * ais ls s3 --summary --all            - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;
+     * ais ls s3 --summary --all --dont-add - same as above but without adding _non-present_ remote buckets to cluster's BMD.
 ```
 
 ## Assorted options
@@ -274,19 +276,20 @@ NAME:
      * ais ls s3                                           - list all s3 buckets that are present in the cluster;
      * ais ls s3 --all                                     - list all s3 buckets, both in-cluster and remote;
    with template, regex, and/or prefix:
-     * ais ls gs: --regex "^abc" --all                        - list all accessible GCP buckets with names starting with "abc";
-     * ais ls ais://abc --regex ".md" --props size,checksum   - list *.md objects with their respective sizes and checksums;
-     * ais ls gs://abc --template images/                     - list all objects from the virtual subdirectory called "images";
-     * ais ls gs://abc --prefix images/                       - same as above (for more examples, see '--template' below);
+     * ais ls gs: --regex "^abc" --all                       - list all accessible GCP buckets with names starting with "abc";
+     * ais ls ais://abc --regex ".md" --props size,checksum  - list *.md objects with their respective sizes and checksums;
+     * ais ls gs://abc --template images/                    - list all objects from the virtual subdirectory called "images";
+     * ais ls gs://abc --prefix images/                      - same as above (for more examples, see '--template' below);
+     * ais ls gs://abc/images/                               - same as above.
    with in-cluster vs remote content comparison (diff):
      * ais ls s3://abc --check-versions           - for each remote object in s3://abc: check whether it has identical in-cluster copy
-                                                    and show missing objects
+                                                    and show missing objects;
      * ais ls s3://abc --check-versions --cached  - for each in-cluster object in s3://abc: check whether it has identical remote copy
-                                                    and show deleted objects
+                                                    and show deleted objects.
    with summary (stats):
      * ais ls s3 --summary                   - for each s3 bucket in the cluster: print object numbers and total size(s);
-     * ais ls s3 --summary --all             - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_
-     * ais ls s3 --summary --all --dont-add  - same as above but without adding _non-present_ remote buckets to cluster's BMD
+     * ais ls s3 --summary --all             - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;
+     * ais ls s3 --summary --all --dont-add  - same as above but without adding _non-present_ remote buckets to cluster's BMD.
 
 USAGE:
    ais ls [command options] PROVIDER:[//BUCKET_NAME]
