@@ -15,6 +15,7 @@ Introduced in [AIStore Python SDK version 1.8](https://pypi.org/project/aistore/
 `ObjectFile` is straightforward to use in the AIStore Python SDK. You can create a file-like object and read from it just as you would with any other file object:
 
 ```python
+import urllib3
 from aistore.sdk.client import Client
 
 # Customize the retry behavior for the initial connection
