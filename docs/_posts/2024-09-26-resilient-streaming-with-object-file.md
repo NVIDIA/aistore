@@ -8,7 +8,7 @@ categories: aistore python streaming big-data chunkedencodingerror
 
 Massively parallel loading of terabytes of data in a distributed system presents reliability challenges. This holds true even for data centers where network stability is supposed to be stellar. Consider multi-node training of a model with (hundreds of) billions of parameters — a process that takes many hours, sometimes days. A single spurious interruption of any kind may disrupt workflows, forcing one of the compute workers to fail, ultimately leading to wasted time and resources.
 
-Introduced in [AIStore Python SDK version 1.8](https://pypi.org/project/aistore/), `ObjectFile` provides a way to read remote object contents as if they were a local file on disk, including support for efficient handling of interrupted streams. 
+Introduced in [AIStore Python SDK version 1.8](https://pypi.org/project/aistore/), `ObjectFile` supports local file-like semantics and efficiently handles interrupted streams.
 
 ## Usage
 
