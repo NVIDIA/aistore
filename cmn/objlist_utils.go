@@ -219,14 +219,16 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 // already listed and must be skipped). Note that string `>=` is lexicographic.
 func TokenGreaterEQ(token, objName string) bool { return token >= objName }
 
-// Directory has to either:
+// directory has to either:
 // - include (or match) prefix, or
 // - be contained in prefix - motivation: don't SkipDir a/b when looking for a/b/c
-// An alternative name for this function could be smth. like SameBranch()
+// an alternative name for this function could be smth. like SameBranch()
+// see also: cos.TrimPrefix
 func DirHasOrIsPrefix(dirPath, prefix string) bool {
 	return prefix == "" || (strings.HasPrefix(prefix, dirPath) || strings.HasPrefix(dirPath, prefix))
 }
 
+// see also: cos.TrimPrefix
 func ObjHasPrefix(objName, prefix string) bool {
 	return prefix == "" || strings.HasPrefix(objName, prefix)
 }

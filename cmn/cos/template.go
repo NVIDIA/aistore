@@ -102,7 +102,7 @@ func NewParsedTemplate(template string) (parsed ParsedTemplate, err error) {
 	}
 
 	// "pure" prefix w/ no ranges
-	return ParsedTemplate{Prefix: template}, nil
+	return ParsedTemplate{Prefix: TrimPrefix(template)}, nil
 }
 
 func (pt *ParsedTemplate) Clone() *ParsedTemplate {

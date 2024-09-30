@@ -632,6 +632,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
+		summMsg.Prefix = cos.TrimPrefix(summMsg.Prefix)
 		if qbck.IsBucket() {
 			bck := (*meta.Bck)(qbck)
 			bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
@@ -685,6 +686,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	lsmsg.Prefix = cos.TrimPrefix(lsmsg.Prefix)
 	if err := cmn.ValidatePrefix("bad list-objects request", lsmsg.Prefix); err != nil {
 		p.statsT.IncErr(stats.ErrListCount)
 		p.writeErr(w, r, err)
@@ -1348,6 +1350,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
+		tcbmsg.Prefix = cos.TrimPrefix(tcbmsg.Prefix)
 		if bckFrom.Equal(bckTo, true, true) {
 			if !bckFrom.IsRemote() {
 				p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bckFrom)
@@ -1408,6 +1411,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, errPrependSync, tcomsg.Prepend)
 			return
 		}
+		tcomsg.Prefix = cos.TrimPrefix(tcomsg.Prefix)
 		bckTo = meta.CloneBck(&tcomsg.ToBck)
 
 		if bck.Equal(bckTo, true, true) {
@@ -1932,6 +1936,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 			for _, s := range items[2:] {
 				prefix += "/" + s
 			}
+			prefix = cos.TrimPrefix(prefix)
 			apireq.after = 2
 		}
 	}

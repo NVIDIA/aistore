@@ -36,6 +36,17 @@ func TrimLastB(s string, b byte) string {
 	return s
 }
 
+// [NOTE] common *nix expectation in re: `ls aaa/bbb*` and similar
+// - `?` not supported
+// - `\*` not supported
+// see also: cmn.ObjHasPrefix and friends
+func TrimPrefix(s string) string {
+	if l := len(s); l > 0 && s[l-1] == WildcardMatchAll[0] {
+		return s[:l-1]
+	}
+	return s
+}
+
 // left if non-empty; otherwise right
 func Left(left, right string) string {
 	if left != "" {
