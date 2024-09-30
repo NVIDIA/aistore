@@ -5,13 +5,12 @@
 import logging
 from typing import List, Dict, Any, Generator, Tuple
 from pathlib import Path
-from webdataset import ShardWriter
 
 from aistore.sdk.dataset.config_attribute import ConfigAttribute
 from aistore.sdk.const import DEFAULT_DATASET_MAX_COUNT
 
 
-# pylint: disable=too-few-public-methods
+# pylint: disable=too-few-public-methods,import-outside-toplevel
 class DatasetConfig:
     """
     Represents the configuration for managing datasets, particularly focusing on how data attributes are structured
@@ -39,6 +38,16 @@ class DatasetConfig:
             skip_missing (bool, optional): Skip samples that are missing one or more attributes, defaults to True
             **kwargs: Additional arguments to pass to the webdataset writer
         """
+        # Avoid module-level import
+        try:
+            from webdataset import (
+                ShardWriter,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "The 'webdataset' module is required to use 'write_shards'."
+                "Please install it with 'pip install webdataset'."
+            ) from e
         logger = logging.getLogger(f"{__name__}.write_shards")
         max_shard_items = kwargs.get("maxcount", DEFAULT_DATASET_MAX_COUNT)
         num_digits = len(str(max_shard_items))
@@ -54,14 +63,12 @@ class DatasetConfig:
                         "Missing attributes: %s - Skipping sample.",
                         missing_attributes_str,
                     )
-                else:
-                    logger.warning(
-                        "Missing attributes: %s - Including sample without missing attributes.",
-                        missing_attributes_str,
-                    )
-                    shard_writer.write(sample)
-            else:
-                shard_writer.write(sample)
+                    continue
+                logger.warning(
+                    "Missing attributes: %s - Including sample despite missing attributes.",
+                    missing_attributes_str,
+                )
+            shard_writer.write(sample)
 
         shard_writer.close()
 

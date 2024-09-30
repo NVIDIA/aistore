@@ -45,7 +45,6 @@ dependencies = [
     "humanize>=4.6.0",
     "braceexpand>=0.1.7",
     "msgspec>=0.15.1",
-    "webdataset==0.2.86"
 ]
 
 keywords = [
@@ -60,7 +59,7 @@ keywords = [
 ]
 
 [project.optional-dependencies]
-pytorch = ["torch", "torchdata"]
+pytorch = ["torch", "torchdata", "webdataset==0.2.86"]
 botocore = ["wrapt"]
 
 [project.urls]

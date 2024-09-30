@@ -20,7 +20,7 @@ class TestDatasetConfig(unittest.TestCase):
             secondary_attributes=[self.secondary_label_attribute],
         )
 
-    @patch("aistore.sdk.dataset.dataset_config.ShardWriter")
+    @patch("webdataset.ShardWriter")
     def test_write_shards(self, mock_shard_writer_class):
         sample_data = [
             ({"__key__": "sample_01", "image.jpg": "data1", "cls": "label1"}, []),
