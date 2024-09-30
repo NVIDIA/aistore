@@ -283,14 +283,6 @@ func (b *Bck) ValidateName() error {
 	return cos.CheckAlphaPlus(b.Name, "bucket name")
 }
 
-// ditto
-func ValidatePrefix(s string) error {
-	if !strings.Contains(s, "../") {
-		return nil
-	}
-	return fmt.Errorf("invalid prefix %q", s)
-}
-
 // canonical name, with or without object
 func (b *Bck) Cname(objname string) (s string) {
 	sch := apc.ToScheme(b.Provider)

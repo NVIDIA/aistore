@@ -1395,23 +1395,6 @@ func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action strin
 	cmn.FreeHterr(err)
 }
 
-func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action string,
-	format string, a ...any) {
-	detail := fmt.Sprintf(format, a...)
-	err := cmn.InitErrHTTP(r, fmt.Errorf("invalid action %q: %s", action, detail), 0)
-	h.writeErr(w, r, err)
-	cmn.FreeHterr(err)
-}
-
-// also, validatePrefix
-func (h *htrun) isValidObjname(w http.ResponseWriter, r *http.Request, name string) bool {
-	if err := cmn.ValidateObjName(name); err != nil {
-		h.writeErr(w, r, err)
-		return false
-	}
-	return true
-}
-
 // health client
 func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap *smapX, retry bool) ([]byte, int, error) {
 	var (

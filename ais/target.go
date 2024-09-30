@@ -809,9 +809,6 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		started = time.Now().UnixNano()
 		t2tput  = isT2TPut(r.Header)
 	)
-	if !t.isValidObjname(w, r, lom.ObjName) {
-		return
-	}
 	if apireq.dpq.ptime == "" && !t2tput {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
@@ -914,9 +911,6 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		return
 	}
 	objName := apireq.items[1]
-	if !t.isValidObjname(w, r, objName) {
-		return
-	}
 	if isRedirect(apireq.query) == "" {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
@@ -975,6 +969,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			t.statsT.IncErr(stats.ErrRenameCount)
 		}
 	case apc.ActBlobDl:
+		// TODO: add stats.GetBlobCount and *ErrCount
 		var (
 			xid     string
 			objName = msg.Name
@@ -1175,6 +1170,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 			return
 		}
 	}
+
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -1184,11 +1180,9 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "set-custom", msg.Value, err)
 		return
 	}
+
 	lom := core.AllocLOM(apireq.items[1] /*objName*/)
 	defer core.FreeLOM(lom)
-	if !t.isValidObjname(w, r, lom.ObjName) {
-		return
-	}
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return

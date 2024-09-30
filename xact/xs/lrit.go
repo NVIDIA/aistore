@@ -175,7 +175,7 @@ func (r *lrit) _inipr(msg *apc.ListRange) error {
 		}
 		return err
 	}
-	if err := cmn.ValidatePrefix(pt.Prefix); err != nil {
+	if err := cmn.ValidatePrefix("bad list-range request", pt.Prefix); err != nil {
 		nlog.Errorln(err)
 		return err
 	}

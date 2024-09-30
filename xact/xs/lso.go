@@ -97,15 +97,15 @@ func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *lsoFactory) Start() (err error) {
+func (p *lsoFactory) Start() error {
+	if err := cmn.ValidatePrefix("bad list-objects request", p.msg.Prefix); err != nil {
+		return err
+	}
 	r := &LsoXact{
 		streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()},
 		msg:        p.msg,
 		msgCh:      make(chan *apc.LsoMsg), // unbuffered
 		respCh:     make(chan *LsoRsp),     // ditto: one caller-requested page at a time
-	}
-	if err = cmn.ValidatePrefix(p.msg.Prefix); err != nil {
-		return err
 	}
 
 	r.lastPage = allocLsoEntries()
@@ -129,7 +129,7 @@ func (p *lsoFactory) Start() (err error) {
 			nt := core.T.Sowner().Get().CountActiveTs()
 			if nt > 1 {
 				// NOTE streams
-				if err = p.beginStreams(r); err != nil {
+				if err := p.beginStreams(r); err != nil {
 					return err
 				}
 			}

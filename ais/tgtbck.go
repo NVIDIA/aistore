@@ -389,9 +389,10 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
-		// note extra safety check
+		// extra safety check
 		for _, name := range lrMsg.ObjNames {
-			if !t.isValidObjname(w, r, name) {
+			if err := cmn.ValidateOname(name); err != nil {
+				t.writeErr(w, r, err)
 				return
 			}
 		}

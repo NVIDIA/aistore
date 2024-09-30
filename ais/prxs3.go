@@ -29,8 +29,9 @@ import (
 // TODO: `checkAccess` permissions (see ais/proxy.go)
 
 var (
-	errS3Req = errors.New("invalid s3 request")
-	errS3Obj = errors.New("missing or empty object name")
+	errS3Req    = errors.New("invalid s3 request")
+	errS3Obj    = errors.New("missing or empty object name")
+	errS3BckObj = errors.New("missing or empty bucket and/or object name")
 )
 
 // [METHOD] /s3
@@ -200,6 +201,10 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 }
 
 func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []string) {
+	if len(parts) < 2 {
+		s3.WriteErr(w, r, errS3BckObj, 0)
+		return
+	}
 	bck := p.initByNameOnly(w, r, parts[0] /*bucket*/)
 	if bck == nil {
 		return
@@ -209,7 +214,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 		return
 	}
 	objName := s3.ObjName(parts)
-	if err := cmn.ValidateObjName(objName); err != nil {
+	if err := cmn.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -476,7 +481,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidateObjName(objName); err != nil {
+	if err := cmn.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -515,7 +520,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidateObjName(objName); err != nil {
+	if err := cmn.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -585,7 +590,7 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 // HEAD /s3/<bucket-name>/<object-name>
 func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
+		s3.WriteErr(w, r, errS3BckObj, 0)
 		return
 	}
 	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
@@ -597,7 +602,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidateObjName(objName); err != nil {
+	if err := cmn.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -617,7 +622,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 // DELETE /s3/<bucket-name>/<object-name>
 func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
-		s3.WriteErr(w, r, errS3Obj, 0)
+		s3.WriteErr(w, r, errS3BckObj, 0)
 		return
 	}
 	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
@@ -629,7 +634,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidateObjName(objName); err != nil {
+	if err := cmn.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
