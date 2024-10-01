@@ -935,9 +935,13 @@ var (
 		Name:  "include-src-bck",
 		Usage: "prefix the names of archived files with the source bucket name",
 	}
-	inclSrcDirNameFlag = cli.BoolFlag{
+	archSrcDirNameFlag = cli.BoolFlag{
 		Name:  "include-src-dir",
-		Usage: "prefix the names of archived files with the (root) source directory (omitted by default)",
+		Usage: "prefix the names of archived files with the (root) source directory",
+	}
+	putSrcDirNameFlag = cli.BoolFlag{
+		Name:  "include-src-dir",
+		Usage: "prefix destination object names with the source directory",
 	}
 	// 'ais archive put': conditional APPEND
 	archAppendOrPutFlag = cli.BoolFlag{

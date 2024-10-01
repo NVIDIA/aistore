@@ -121,6 +121,7 @@ var (
 			concurrencyFlag,
 			dryRunFlag,
 			recursFlag,
+			putSrcDirNameFlag,
 			verboseFlag,
 			yesFlag,
 			continueOnErrorFlag,
@@ -328,7 +329,7 @@ func putHandler(c *cli.Context) error {
 	}
 
 	// 2. multi-file list & range
-	incl := flagIsSet(c, inclSrcDirNameFlag)
+	incl := flagIsSet(c, putSrcDirNameFlag)
 	switch {
 	case len(a.src.fdnames) > 0:
 		if len(a.src.fdnames) > 1 {
@@ -373,7 +374,7 @@ func putHandler(c *cli.Context) error {
 	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s%s'", srcpath, s)); !ok {
 		return nil
 	}
-	fobjs, err := lsFobj(c, srcpath, "", a.dst.oname, &ndir, a.src.recurs, incl)
+	fobjs, err := lsFobj(srcpath, "", a.dst.oname, &ndir, a.src.recurs, incl, false)
 	if err != nil {
 		return err
 	}

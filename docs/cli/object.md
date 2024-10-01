@@ -44,7 +44,8 @@ ls           promote      concat       evict        mv           cat
   - [Put a range of files](#put-a-range-of-files)
   - [Put a list of files](#put-a-list-of-files)
   - [Dry-Run option](#dry-run-option)
-  - [Put multiple directories](#put-multiple-directories)
+  - [Put multiple directories using Bash range notation](#put-multiple-directories-using-bash-range-notation)
+  - [Put multiple directories using filename-matching pattern (wildcard)](#put-multiple-directories-using-filename-matching-pattern-wildcard)
   - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
 - [APPEND object](#append-object)
 - [Delete object](#delete-object)
@@ -513,6 +514,7 @@ OPTIONS:
    --conc value        limits number of concurrent put requests and number of concurrent shards created (default: 10)
    --dry-run           preview the results without really running the action
    --recursive, -r     recursive operation
+   --include-src-dir   prefix destination object names with the source directory
    --verbose, -v       verbose output
    --yes, -y           assume 'yes' to all questions
    --cont-on-err       keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
@@ -853,16 +855,20 @@ $ ais put "~/dir/test{0..2}{0..2}.txt" ais://mybucket -y
 9 objects put into "ais://mybucket" bucket
 ```
 
-### Example 2. PUT a range of files into virtial directory
+### Example 2. PUT a range of files into a virtual directory
 
 Same as above but in addition destination object names will have additional prefix `subdir/` (notice the trailing `/`)
 
 In other words, this PUT in affect creates a **virtual directory** inside destination `ais://mybucket`
 
 ```bash
-# prep test files
+# first, prepare test files
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
+```
 
+Next, PUT:
+
+```console
 $ ais put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/subdir/ -y
 ```
 
@@ -963,15 +969,69 @@ PUT /tmp/w/111 -> ais://nnn/fff111
 
 > Note: to PUT files into a virtual destination directory, use trailing '/', e.g.: `ais put ais://nnn/fff/ ...`
 
-## Put multiple directories
+## Put multiple directories using Bash range notation
 
-Put multiple directories into the cluster with range syntax.
+First, let's generate some files and directories (strictly for illustration purposes):
 
 ```bash
-$ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
-$ ais put "dir{0..10}" ais://mybucket -y
-33 objects put into "ais://mybucket" bucket
-# PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
+$ for d1 in {0..10}; do mkdir /tmp/testdir_$d1 && for d2 in {0..2}; do echo "0" > /tmp/testdir_$d1/test${d2}.txt; done; done
+```
+
+Next, PUT them all in one shot (notice quotation marks!):
+
+```bash
+$ ais put "/tmp/testdir_{0..10}" ais://nnn
+Files to upload:
+EXTENSION        COUNT   SIZE
+.txt             33      66B
+TOTAL            33      66B
+
+PUT 33 files (11 directories, non-recursive) => ais://nnn? [Y/N]:
+```
+
+Let's now take a look at the result - and observe a PROBLEM:
+
+```console
+$ ais ls ais://nnn --summary
+NAME             PRESENT         OBJECTS         SIZE (apparent, objects, remote)        USAGE(%)
+ais://nnn        yes             3 0             112.01KiB 6B 0B                         0%
+```
+
+So Yes, the problem is that by default destination object names are _sourced_ from the source file basenames.
+
+In this examples, we happen to have only **3** basenames: `test0.txt`, `test1.txt`, and `test2.txt`.
+
+The **workaround** is to include respective parent directories in the destination naming:
+
+> As always, see `ais put --help` for usage examples and more options.
+
+```console
+$ ais put "/tmp/testdir_{0..10}" ais://nnn --include-src-dir
+Files to upload:
+EXTENSION        COUNT   SIZE
+.txt             33      66B
+TOTAL            33      66B
+
+PUT 33 files (11 directories, non-recursive) => ais://nnn? [Y/N]: y
+Done
+
+$ ais ls ais://nnn --summary
+NAME             PRESENT         OBJECTS         SIZE (apparent, objects, remote)        USAGE(%)
+ais://nnn        yes             33 0            320.06KiB 66B 0B                        0%
+```
+
+## Put multiple directories using filename-matching pattern (wildcard)
+
+Same as above, but **note**: alternative syntax, which is maybe more conventional:
+
+```bash
+$ ais put "/tmp/testdir_*" ais://nnn --include-src-dir
+Files to upload:
+EXTENSION        COUNT   SIZE
+.txt             33      66B
+TOTAL            33      66B
+
+PUT 33 files (11 directories, non-recursive) => ais://nnn? [Y/N]:
 ```
 
 ## Put multiple directories with the `--skip-vc` option
@@ -979,8 +1039,11 @@ $ ais put "dir{0..10}" ais://mybucket -y
 > The `--skip-vc` option allows AIS to skip loading existing object's metadata to perform metadata-associated processing (such as comparing source and destination checksums, for instance). In certain scenarios (e.g., massive uploading of new files that cannot be present in the bucket) this can help reduce PUT latency.
 
 ```bash
-$ for d1 in {0..10}; do mkdir dir$d1 && for d2 in {0..2}; do echo "0" > dir$d1/test${d2}.txt; done; done
-$ ais put "dir{0..10}" ais://mybucket -y --skip-vc
+## prepare testing content
+$ for d1 in {0..10}; do mkdir /tmp/testdir_$d1 && for d2 in {0..2}; do echo "0" > /tmp/testdir_$d1/test${d2}.txt; done; done
+
+## PUT
+$ ais put ""/tmp/testdir_{0..10}"" ais://mybucket -y --skip-vc
 
 Files to upload:
 EXTENSION        COUNT   SIZE

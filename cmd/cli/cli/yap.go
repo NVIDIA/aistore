@@ -187,13 +187,8 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		return err
 	}
 
-	const efmt = "too many arguments: '%s'"
-	var hint = fmt.Sprintf("(hint: wildcards must be in single or double quotes, see %s for details)", qflprn(cli.HelpFlag))
-	l := c.NArg()
-	if l > 4 {
-		return fmt.Errorf(efmt+" ...\n%s\n", strings.Join(c.Args()[2:4], " "), hint)
-	}
-	return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
+	hint := fmt.Sprintf("(hint: wildcards must be in single or double quotes, see %s for details)", qflprn(cli.HelpFlag))
+	return fmt.Errorf("too many arguments: '%s'\n"+hint, strings.Join(c.Args(), " "))
 }
 
 func (*archbck) verb() string { return "ARCHIVE" }

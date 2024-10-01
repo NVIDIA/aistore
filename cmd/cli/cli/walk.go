@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/urfave/cli"
 )
 
 // walk locally accessible files and directories; handle file/dir matching wildcards and patterns
@@ -102,64 +101,83 @@ func listRecurs(path, trimPref, appendPref, pattern string) (fobjs, error) {
 // - source path that may contain wildcard(s)
 // - (trimPref, appendPref) combo to influence destination naming
 // - recursive, etc.
-// Returns:
+// OUT:
 // - a slice of matching triplets: {source fname or dirname, destination name, size in bytes}
-func lsFobj(c *cli.Context, path, trimPref, appendPref string, ndir *int, recurs, incl bool) (fobjs, error) {
-	var (
-		pattern    = cos.WildcardMatchAll // default pattern: entire directory
-		finfo, err = os.Stat(path)
-	)
-	debug.Assert(trimPref == "" || strings.HasPrefix(path, trimPref))
-
-	// single file (uses cases: reg file, --template, --list)
-	if err == nil && !finfo.IsDir() {
-		if trimPref == "" {
-			// [convention] trim _everything_ leaving only the base, unless (below)
-			trimPref = filepath.Dir(path)
-			if incl {
-				// --include-source-(root)-dir: retain the last snippet
-				trimPref = filepath.Dir(trimPref)
-			}
+func lsFobj(srcpath, trimPref, appendPref string, ndir *int, recurs, incl, globbed bool) (fobjs fobjs, _ error) {
+	// 1. fstat ok
+	finfo, err := os.Stat(srcpath)
+	if err == nil {
+		if finfo.IsDir() {
+			return _lsDir(srcpath, trimPref, appendPref, cos.WildcardMatchAll, ndir, recurs, incl)
 		}
-		fo := fobj{
-			dstName: appendPref + trimPrefix(path, trimPref),
-			path:    path,
-			size:    finfo.Size(),
-		}
-		return []fobj{fo}, nil
+		return _lsFil(finfo, srcpath, trimPref, appendPref, incl)
 	}
 
-	if err != nil {
-		// expecting the base to be a filename-matching pattern (wildcard)
-		pattern = filepath.Base(path)
-		if isPattern(pattern) {
-			warn := fmt.Sprintf("%q is not a directory and does not appear to be a shell filename matching pattern (%q)",
-				path, pattern)
-			actionWarn(c, warn)
+	if globbed {
+		return nil, &errDoesNotExist{what: "srcpath", name: srcpath}
+	}
+	// 2. glob
+	const fmte = "%q is not a directory and does not appear to be a filename-matching pattern"
+	all, e := filepath.Glob(srcpath)
+	if e != nil {
+		return nil, fmt.Errorf(fmte+": %v", srcpath, e)
+	}
+
+	// no matches? extract basename and use it as a pattern to list the parent directory
+	if len(all) == 0 {
+		pattern := filepath.Base(srcpath)
+		if !isPattern(pattern) {
+			return nil, fmt.Errorf(fmte, srcpath)
 		}
-		path = filepath.Dir(path)
-		finfo, err = os.Stat(path)
+		parent := filepath.Dir(srcpath)
+		if _, err := os.Stat(parent); err != nil {
+			return nil, &errDoesNotExist{what: "path", name: parent}
+		}
+		return _lsDir(parent, trimPref, appendPref, pattern, ndir, recurs, incl)
+	}
+
+	// 3. append all
+	for _, src := range all {
+		fob, err := lsFobj(src, trimPref, appendPref, ndir, recurs, incl, true)
 		if err != nil {
-			return nil, &errDoesNotExist{what: "path", name: path}
+			return nil, fmt.Errorf("nested failure to ls %q: [%v]", src, err)
 		}
-		if !finfo.IsDir() {
-			return nil, fmt.Errorf("%q is not a directory", path)
-		}
+		fobjs = append(fobjs, fob...)
 	}
+	return fobjs, nil
+}
 
+func _lsDir(srcpath, trimPref, appendPref, pattern string, ndir *int, recurs, incl bool) (fobjs, error) {
 	*ndir++
 	// [convention] ditto
 	if trimPref == "" {
-		trimPref = path
+		trimPref = srcpath
 		if incl {
-			trimPref = strings.TrimSuffix(path, filepath.Base(path))
+			trimPref = strings.TrimSuffix(srcpath, filepath.Base(srcpath))
 		}
 	}
 	f := listDir
 	if recurs {
 		f = listRecurs
 	}
-	return f(path, trimPref, appendPref, pattern)
+	return f(srcpath, trimPref, appendPref, pattern)
+}
+
+func _lsFil(finfo os.FileInfo, srcpath, trimPref, appendPref string, incl bool) (fobjs, error) {
+	if trimPref == "" {
+		// [convention] trim _everything_ leaving only the base, unless (below)
+		trimPref = filepath.Dir(srcpath)
+		if incl {
+			// --include-source-(root)-dir: retain the last snippet
+			trimPref = filepath.Dir(trimPref)
+		}
+	}
+	fo := fobj{
+		dstName: appendPref + trimPrefix(srcpath, trimPref),
+		path:    srcpath,
+		size:    finfo.Size(),
+	}
+	return []fobj{fo}, nil
 }
 
 func groupByExt(files []fobj) (int64, map[string]counter) {

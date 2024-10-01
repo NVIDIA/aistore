@@ -98,7 +98,7 @@ var (
 			verboseFlag,
 			yesFlag,
 			unitsFlag,
-			inclSrcDirNameFlag,
+			archSrcDirNameFlag,
 			skipVerCksumFlag,
 			continueOnErrorFlag, // TODO: revisit
 		),
@@ -346,7 +346,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	incl := flagIsSet(c, inclSrcDirNameFlag)
+	incl := flagIsSet(c, archSrcDirNameFlag)
 	switch {
 	case len(a.src.fdnames) > 0:
 		// a) csv of files and/or directories (names) from the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
@@ -369,7 +369,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 			debug.Assert(srcpath == "", srcpath)
 			srcpath = a.pt.Prefix
 		}
-		fobjs, err := lsFobj(c, srcpath, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl)
+		fobjs, err := lsFobj(srcpath, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl, false)
 		if err != nil {
 			return err
 		}
