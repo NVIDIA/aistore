@@ -683,11 +683,6 @@ var (
 		Name:  "cleanup",
 		Usage: "remove old bucket and create it again (warning: removes the entire content of the old bucket)",
 	}
-	concurrencyFlag = cli.IntFlag{
-		Name:  "conc",
-		Value: 10,
-		Usage: "limits number of concurrent put requests and number of concurrent shards created",
-	}
 
 	// waiting
 	waitPodReadyTimeoutFlag = DurationFlag{
@@ -845,11 +840,26 @@ var (
 		Name:  "num-workers",
 		Usage: "number of concurrent blob-downloading workers (readers); system default when omitted or zero",
 	}
+
+	noWorkers = indent4 + "\tuse (-1) to indicate single-threaded serial execution (ie., no workers);\n"
+
 	numListRangeWorkersFlag = cli.IntFlag{
-		Name: "num-workers",
+		Name: numBlobWorkersFlag.Name,
 		Usage: "number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;\n" +
-			indent4 + "\t(-1) is a special value indicating no workers at all (ie., single-threaded execution);\n" +
+			noWorkers +
 			indent4 + "\tany positive value will be adjusted _not_ to exceed the number of target CPUs",
+	}
+	numGenShardWorkersFlag = cli.IntFlag{
+		Name:  numBlobWorkersFlag.Name,
+		Value: 10,
+		Usage: "limits the number of shards created concurrently",
+	}
+	numPutWorkersFlag = cli.IntFlag{
+		Name:  numBlobWorkersFlag.Name,
+		Value: 10,
+		Usage: "number of concurrent client-side workers (to execute PUT or append requests);\n" +
+			noWorkers +
+			indent4 + "\tany positive value will be adjusted _not_ to exceed twice the number of client CPUs",
 	}
 
 	// validate

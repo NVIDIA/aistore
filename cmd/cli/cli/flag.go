@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -172,6 +174,9 @@ func parseRetriesFlag(c *cli.Context, flag cli.IntFlag, warn bool) (retries int)
 		maxr = 5
 		efmt = "invalid option '%s=%d' (expecting 1..5 range)"
 	)
+	if !flagIsSet(c, flag) {
+		return 0
+	}
 	retries = parseIntFlag(c, flag)
 	if retries < 0 {
 		if warn {
@@ -186,6 +191,16 @@ func parseRetriesFlag(c *cli.Context, flag cli.IntFlag, warn bool) (retries int)
 		return maxr
 	}
 	return retries
+}
+
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
+func parseNumWorkersFlag(c *cli.Context, flag cli.IntFlag) (n int) {
+	n = parseIntFlag(c, flag)
+	if n > 0 {
+		return min(2*cmn.MaxParallelism(), n)
+	}
+	debug.Assert(n < 0, "flag '", flag.Name, "' must have positive default value")
+	return 1
 }
 
 func rmFlags(flags []cli.Flag, fs ...cli.Flag) (out []cli.Flag) {

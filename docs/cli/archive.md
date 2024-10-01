@@ -115,18 +115,60 @@ NAME:
      (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object - aka "shard".
      Both APPEND (to an existing shard) and PUT (a new version of the shard) are supported.
      Examples:
-     - 'local-filename bucket/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,
+     - 'local-file s3://q/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,
         optionally, rename it (inside archive) as specified;
-     - 'local-filename bucket/shard-00123.tar.lz4 --append-or-put --archpath name-in-archive' - append file to a given shard if exists,
+     - 'local-file s3://q/shard-00123.tar.lz4 --append-or-put --archpath name-in-archive' - append file to a given shard if exists,
         otherwise, create a new shard (and name it shard-00123.tar.lz4, as specified);
-     - 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;
+     - 'src-dir gs://w/shard-999.zip --append' - archive entire 'src-dir' directory; iff the destination .zip doesn't exist create a new one;
      - '"sys, docs" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.
      Tips:
-     - use '--dry-run' option if in doubt;
-     - to archive objects from a ais:// or remote bucket, run 'ais archive bucket', see --help for details.
+     - use '--dry-run' if in doubt;
+     - to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details).
 
 USAGE:
    ais archive put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME
+
+OPTIONS:
+   --list value         comma-separated list of object or file names, e.g.:
+                        --list 'o1,o2,o3'
+                        --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                        or, when listing files and/or directories:
+                        --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                        (with optional steps and gaps), e.g.:
+                        --template "" # (an empty or '*' template matches eveything)
+                        --template 'dir/subdir/'
+                        --template 'shard-{1000..9999}.tar'
+                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                        and similarly, when specifying files and directories:
+                        --template '/home/dir/subdir/'
+                        --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress           show progress bar(s) and progress of execution in real time
+   --refresh value      time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --append-or-put      append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
+                        note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
+   --append             add newly archived content to the destination object ("archive", "shard") that must exist
+   --archpath value     filename in an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4
+   --num-workers value  number of concurrent client-side workers (to execute PUT or append requests);
+                        use (-1) to indicate single-threaded serial execution (ie., no workers);
+                        any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
+
+   --dry-run            preview the results without really running the action
+   --recursive, -r      recursive operation
+   --verbose, -v        verbose output
+   --yes, -y            assume 'yes' to all questions
+   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                        si  - SI (metric) format, e.g.: KB, MB, GB
+                        raw - do not convert to (or from) human-readable format
+   --include-src-dir    prefix the names of archived files with the (root) source directory
+   --skip-vc            skip loading object metadata (and the associated checksum & version related processing)
+   --cont-on-err        keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --help, -h           show help
 ```
 
 The operation accepts either an explicitly defined *list* or template-defined *range* of file names (to archive).
@@ -679,7 +721,7 @@ The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must 
 | `--fcount` | `int` | Number of files inside single shard | `5` |
 | `--fext` | `string` |  Comma-separated list of file extensions (default ".test"), e.g.: --fext '.mp3,.json,.cls' | `.test` |
 | `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
-| `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
+| `--num-workers` | `int` | Limits the number of shards created concurrently | `10` |
 
 ### Examples
 

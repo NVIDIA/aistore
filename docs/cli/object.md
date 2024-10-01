@@ -511,7 +511,10 @@ OPTIONS:
    --refresh value     interval for continuous monitoring;
                        valid time units: ns, us (or µs), ms, s (default), m, h
    --chunk-size value  chunk size in IEC or SI units, or "raw" bytes (e.g.: 1MiB or 1048576; see '--units')
-   --conc value        limits number of concurrent put requests and number of concurrent shards created (default: 10)
+   --num-workers value number of concurrent client-side workers (to execute PUT or append requests);
+                       use (-1) to indicate single-threaded serial execution (ie., no workers);
+                       any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
+
    --dry-run           preview the results without really running the action
    --recursive, -r     recursive operation
    --include-src-dir   prefix destination object names with the source directory

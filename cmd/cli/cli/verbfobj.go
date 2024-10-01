@@ -31,15 +31,15 @@ import (
 
 type (
 	uparams struct {
-		wop       wop
-		bck       cmn.Bck
-		fobjs     []fobj
-		workerCnt int
-		refresh   time.Duration
-		cksum     *cos.Cksum
-		cptn      string
-		totalSize int64
-		dryRun    bool
+		wop        wop
+		bck        cmn.Bck
+		fobjs      []fobj
+		numWorkers int
+		refresh    time.Duration
+		cksum      *cos.Cksum
+		cptn       string
+		totalSize  int64
+		dryRun     bool
 	}
 	uctx struct {
 		wg            cos.WG
@@ -102,18 +102,18 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		}
 	}
 	refresh := calcPutRefresh(c)
-	numWorkers := parseIntFlag(c, concurrencyFlag)
-	debug.Assert(numWorkers > 0)
+	numWorkers := parseNumWorkersFlag(c, numPutWorkersFlag)
+
 	uparams := &uparams{
-		wop:       wop,
-		bck:       bck,
-		fobjs:     fobjs,
-		workerCnt: numWorkers,
-		refresh:   refresh,
-		cksum:     cksum,
-		cptn:      cptn,
-		totalSize: totalSize,
-		dryRun:    flagIsSet(c, dryRunFlag),
+		wop:        wop,
+		bck:        bck,
+		fobjs:      fobjs,
+		numWorkers: numWorkers,
+		refresh:    refresh,
+		cksum:      cksum,
+		cptn:       cptn,
+		totalSize:  totalSize,
+		dryRun:     flagIsSet(c, dryRunFlag),
 	}
 	return uparams.do(c)
 }
@@ -144,7 +144,7 @@ func (p *uparams) do(c *cli.Context) error {
 	u := &uctx{
 		verbose:      flagIsSet(c, verboseFlag),
 		showProgress: flagIsSet(c, progressFlag),
-		wg:           cos.NewLimitedWaitGroup(p.workerCnt, 0),
+		wg:           cos.NewLimitedWaitGroup(p.numWorkers, 0),
 		lastReport:   time.Now(),
 		reportEvery:  p.refresh,
 	}
@@ -167,9 +167,7 @@ func (p *uparams) do(c *cli.Context) error {
 		u.barSize = totalBars[1]
 	}
 
-	if flagIsSet(c, putRetriesFlag) {
-		_ = parseRetriesFlag(c, putRetriesFlag, true)
-	}
+	_ = parseRetriesFlag(c, putRetriesFlag, true) // to warn once, if need be
 
 	u.errCh = make(chan string, len(p.fobjs))
 	for _, fobj := range p.fobjs {
@@ -329,9 +327,8 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		iters       = 1
 		isTout      bool
 	)
-	if flagIsSet(c, putRetriesFlag) {
-		iters += parseRetriesFlag(c, putRetriesFlag, false /*warn*/)
-	}
+	iters += parseRetriesFlag(c, putRetriesFlag, false /*warn*/)
+
 	switch p.wop.verb() {
 	case "PUT":
 		for i := range iters {
@@ -442,9 +439,8 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
 	iters := 1
-	if flagIsSet(c, putRetriesFlag) {
-		iters += parseRetriesFlag(c, putRetriesFlag, true /*warn*/)
-	}
+	iters += parseRetriesFlag(c, putRetriesFlag, true /*warn*/)
+
 	for i := range iters {
 		_, err = api.PutObject(&putArgs)
 		if err == nil {

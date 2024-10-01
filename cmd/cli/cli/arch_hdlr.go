@@ -92,7 +92,7 @@ var (
 			archAppendOrPutFlag,
 			archAppendOnlyFlag,
 			archpathFlag,
-			concurrencyFlag,
+			numPutWorkersFlag,
 			dryRunFlag,
 			recursFlag,
 			verboseFlag,
@@ -104,7 +104,7 @@ var (
 		),
 		cmdGenShards: {
 			cleanupFlag,
-			concurrencyFlag,
+			numGenShardWorkersFlag,
 			fsizeFlag,
 			fcountFlag,
 			fextsFlag,
@@ -519,7 +519,7 @@ func genShardsHandler(c *cli.Context) error {
 	var (
 		shardNum      int
 		progress      = mpb.New(mpb.WithWidth(barWidth))
-		concLimit     = parseIntFlag(c, concurrencyFlag)
+		concLimit     = parseIntFlag(c, numGenShardWorkersFlag)
 		concSemaphore = make(chan struct{}, concLimit)
 		group, ctx    = errgroup.WithContext(context.Background())
 		text          = "Shards created: "

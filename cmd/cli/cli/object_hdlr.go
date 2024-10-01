@@ -118,7 +118,7 @@ var (
 		commandPut: append(
 			listRangeProgressWaitFlags,
 			chunkSizeFlag,
-			concurrencyFlag,
+			numPutWorkersFlag,
 			dryRunFlag,
 			recursFlag,
 			putSrcDirNameFlag,
