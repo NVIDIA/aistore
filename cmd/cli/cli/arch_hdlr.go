@@ -95,12 +95,12 @@ var (
 			numPutWorkersFlag,
 			dryRunFlag,
 			recursFlag,
+			continueOnErrorFlag,
 			verboseFlag,
 			yesFlag,
 			unitsFlag,
 			archSrcDirNameFlag,
 			skipVerCksumFlag,
-			continueOnErrorFlag, // TODO: revisit
 		),
 		cmdGenShards: {
 			cleanupFlag,
@@ -369,7 +369,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 			debug.Assert(srcpath == "", srcpath)
 			srcpath = a.pt.Prefix
 		}
-		fobjs, err := lsFobj(srcpath, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl, false)
+		fobjs, err := lsFobj(c, srcpath, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl, false /*globbed*/)
 		if err != nil {
 			return err
 		}

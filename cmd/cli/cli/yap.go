@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -133,7 +133,7 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 			return err
 		}
 
-		const efmt = "source (%q) and flag (%s) cannot are mutually exclusive"
+		const efmt = "source (%q) and flag (%s) are mutually exclusive"
 		if flagIsSet(c, listFlag) {
 			return fmt.Errorf(efmt, a.src.arg, qflprn(listFlag))
 		}

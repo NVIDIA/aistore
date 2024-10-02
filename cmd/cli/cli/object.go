@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -106,7 +106,7 @@ func verbList(c *cli.Context, wop wop, fnames []string, bck cmn.Bck, appendPref 
 		recurs   = flagIsSet(c, recursFlag)
 	)
 	for _, n := range fnames {
-		fobjs, err := lsFobj(n, "", appendPref, &ndir, recurs, incl, false)
+		fobjs, err := lsFobj(c, n, "", appendPref, &ndir, recurs, incl, false /*globbed*/)
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, tri
 	)
 	pt.InitIter()
 	for n, hasNext := pt.Next(); hasNext; n, hasNext = pt.Next() {
-		fobjs, err := lsFobj(n, trimPref, appendPref, &ndir, recurs, incl, false)
+		fobjs, err := lsFobj(c, n, trimPref, appendPref, &ndir, recurs, incl, false /*globbed*/)
 		if err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		recurs     = flagIsSet(c, recursFlag)
 	)
 	for i, fileName := range fileNames {
-		fobjs, err := lsFobj(fileName, "", "", &ndir, recurs, false /*incl src dir*/, false)
+		fobjs, err := lsFobj(c, fileName, "", "", &ndir, recurs, false /*incl src dir*/, false /*globbed*/)
 		if err != nil {
 			return err
 		}

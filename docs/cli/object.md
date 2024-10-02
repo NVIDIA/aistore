@@ -1103,13 +1103,29 @@ $ ais put --help
                         any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
 ```
 
-**Usage Example**:
+### Example 1
 
-```bash
-ais object put -r -y --num-workers 64 --retries 3 target_dir/ ais://nnn/target_dir/
+Recursively copy the contents of (NFS-mounted) `target_dir/` to the `ais://nnn/target_dir/` bucket, using 64 client workers (OS threads) and retrying failed requests up to 3 times.
+
+```console
+$ ais object put -r -y --num-workers 64 --retries 3 target_dir/ ais://nnn/target_dir/
 ```
 
-This command recursively copies the contents of (NFS-mounted) `target_dir/` to the `ais://nnn/target_dir/` bucket, using 64 client workers (OS threads) and retrying failed requests up to 3 times.
+### Example 2
+
+Same as above (and notice `ais put` shortcut and `--include-src-dir` option):
+
+```console
+$ ais put target_dir ais://nnn -r -y --num-workers 64 --retries 3 --include-src-dir
+```
+
+### Example 3
+
+Same as above, but with additional capability to skip errors that may arise when traversing source tree:
+
+```console
+$ ais put target_dir ais://nnn --recursive --yes --num-workers 64 --retries 3 --include-src-dir --cont-on-err
+```
 
 
 3. **Patience**

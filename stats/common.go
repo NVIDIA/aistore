@@ -7,7 +7,7 @@ package stats
 
 import (
 	"encoding/json"
-	rfs "io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -663,7 +663,7 @@ func hkLogs(int64) time.Duration {
 		tot     int64
 		n       = len(dentries)
 		nn      = n - n>>2
-		finfos  = make([]rfs.FileInfo, 0, nn)
+		finfos  = make([]iofs.FileInfo, 0, nn)
 		verbose = cmn.Rom.FastV(4, cos.SmoduleStats)
 	)
 	for i, logtype := range []string{".INFO.", ".ERROR."} {
@@ -677,7 +677,7 @@ func hkLogs(int64) time.Duration {
 		case l > 1:
 			go _rmLogs(tot, maxtotal, logdir, logtype, finfos)
 			if i == 0 {
-				finfos = make([]rfs.FileInfo, 0, nn)
+				finfos = make([]iofs.FileInfo, 0, nn)
 			}
 		default:
 			nlog.Warningln(gcLogs, "cannot cleanup a single large", logtype, "size:", tot, "configured max:", maxtotal)
@@ -693,7 +693,7 @@ func hkLogs(int64) time.Duration {
 
 // e.g. name: ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
 // see also: nlog.InfoLogName, nlog.ErrLogName
-func _sizeLogs(dentries []os.DirEntry, logtype string, finfos []rfs.FileInfo) (_ []rfs.FileInfo, tot int64) {
+func _sizeLogs(dentries []os.DirEntry, logtype string, finfos []iofs.FileInfo) (_ []iofs.FileInfo, tot int64) {
 	clear(finfos)
 	finfos = finfos[:0]
 	for _, dent := range dentries {
@@ -711,7 +711,7 @@ func _sizeLogs(dentries []os.DirEntry, logtype string, finfos []rfs.FileInfo) (_
 	return finfos, tot
 }
 
-func _rmLogs(tot, maxtotal int64, logdir, logtype string, finfos []rfs.FileInfo) {
+func _rmLogs(tot, maxtotal int64, logdir, logtype string, finfos []iofs.FileInfo) {
 	less := func(i, j int) bool {
 		return finfos[i].ModTime().Before(finfos[j].ModTime())
 	}

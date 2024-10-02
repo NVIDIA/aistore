@@ -374,7 +374,8 @@ func putHandler(c *cli.Context) error {
 	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s%s'", srcpath, s)); !ok {
 		return nil
 	}
-	fobjs, err := lsFobj(srcpath, "", a.dst.oname, &ndir, a.src.recurs, incl, false)
+
+	fobjs, err := lsFobj(c, srcpath, "", a.dst.oname, &ndir, a.src.recurs, incl, false /*globbed*/)
 	if err != nil {
 		return err
 	}

@@ -99,7 +99,7 @@ func Rename(src, dst string) (err error) {
 			if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
 				// [design tradeoff] keeping objects under (e.g.) their respective sha256
 				// would eliminate this one, in part
-				return fmt.Errorf("destination %q is a (virtual) directory", dst)
+				return fmt.Errorf("move destination '../%s' already exists (and is a virtual directory)", filepath.Base(dst))
 			}
 		}
 		return err
