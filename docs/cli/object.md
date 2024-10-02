@@ -1121,9 +1121,24 @@ $ ais put target_dir ais://nnn -r -y --num-workers 64 --retries 3 --include-src-
 
 ### Example 3
 
-Same as above, but with additional capability to skip errors that may arise when traversing source tree:
+Same as above, but with additional capability to "continue on error" - skip errors that may arise when traversing the source tree:
 
 ```console
+$ ais put target_dir ais://nnn --recursive --yes --num-workers 64 --retries 3 --include-src-dir --cont-on-err
+```
+
+### Example 4
+
+Same as above, but in addition ask CLI to report all errors that may be skipped or ignored due to the `--cont-on-err` flag:
+
+```console
+$ ais config cli verbose
+PROPERTY         VALUE
+verbose          false
+
+$ ais config cli set verbose true
+"verbose" set to: "true" (was: "false")
+
 $ ais put target_dir ais://nnn --recursive --yes --num-workers 64 --retries 3 --include-src-dir --cont-on-err
 ```
 
