@@ -86,10 +86,10 @@ spell)
   echo "Running spell check..." >&2
   case $2 in
   --fix)
-    ${GOPATH}/bin/misspell -i "colour,importas" -w -locale=US ${AISTORE_PATH}
+    ${GOPATH}/bin/misspell -i "colour,importas,lustre" -w -locale=US ${AISTORE_PATH}
     ;;
   *)
-    ${GOPATH}/bin/misspell -i "colour,importas" -error -locale=US ${AISTORE_PATH}
+    ${GOPATH}/bin/misspell -i "colour,importas,lustre" -error -locale=US "" ${AISTORE_PATH}
     ;;
   esac
   ;;

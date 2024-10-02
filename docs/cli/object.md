@@ -31,6 +31,7 @@ ls           promote      concat       evict        mv           cat
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [Out of band updates](/docs/out_of_band.md)
+
 - [PUT object](#put-object)
   - [Object names](#object-names)
   - [Put single file](#put-single-file)
@@ -47,10 +48,12 @@ ls           promote      concat       evict        mv           cat
   - [Put multiple directories using Bash range notation](#put-multiple-directories-using-bash-range-notation)
   - [Put multiple directories using filename-matching pattern (wildcard)](#put-multiple-directories-using-filename-matching-pattern-wildcard)
   - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
+
+- [Tips for copying files from Lustre (NFS)](#tips-for-copying-files-from-lustre-nfs)
+- [Promote files and directories](#promote-files-and-directories)
 - [APPEND object](#append-object)
 - [Delete object](#delete-object)
 - [Evict object](#evict-object)
-- [Promote files and directories](#promote-files-and-directories)
 - [Move object](#move-object)
 - [Concat objects](#concat-objects)
 - [Set custom properties](#set-custom-properties)
@@ -1053,6 +1056,84 @@ EXTENSION        COUNT   SIZE
 .txt             33      66B
 TOTAL            33      66B
 ```
+
+# Tips for Copying Files from Lustre (NFS)
+
+Yes, `ais put` can be used to copy remote files - usage tips follow below. Buf first, disclaimer.
+
+## Disclaimer
+
+> Copying large amounts of data from remote (NFS, SMB) locations is not exactly an exercise for a single client machine. There are alternative designed-in [ways](https://aistore.nvidia.com/blog/2022/03/17/promote), whereby all AIStore nodes _partition_ remote source between themselves and do the copying - in parallel.
+
+Performance-wise, the difference from copying via client (or by client) - is two-fold:
+
+1. many orders of magnitude greater horsepower that AIStore can contribute to the effort, and
+2. avoidance of the (client <= NFS) and (client => AIStore) roundtrips.
+
+Needless to say, _promoting_ files to objects, as it were, requires that all AIS nodes have connectivity and permissions to access the remote source.
+
+Further references:
+
+* [`ais promote` command](#promote-files-and-directories)
+* [blog: promoting local and shared files](https://aistore.nvidia.com/blog/2022/03/17/promote)
+
+## Tips
+
+1. **Use `--retries` option**
+
+Including `--retries` in your command will help resolve an occasional timeout and other intermittent failures. For example, `--retries 5` will retry a failed requests up to 5 (five) times.
+
+```console
+$ ais put --help
+...
+
+   --retries value      when failing to PUT retry the operation up to so many times (with increasing timeout if timed out) (default: 1)
+```
+
+2. **Use `--num-workers` option**
+
+In other words, take advantage of the client side multi-threading. If you have sufficient resources, increase this number to allow more workers to transfer data in parallel.
+
+```console
+$ ais put --help
+...
+
+   --num-workers value  number of concurrent client-side workers (to execute PUT or append requests);
+                        use (-1) to indicate single-threaded serial execution (ie., no workers);
+                        any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
+```
+
+**Usage Example**:
+
+```bash
+ais object put -r -y --num-workers 64 --retries 3 target_dir/ ais://nnn/target_dir/
+```
+
+This command recursively copies the contents of (NFS-mounted) `target_dir/` to the `ais://nnn/target_dir/` bucket, using 64 client workers (OS threads) and retrying failed requests up to 3 times.
+
+
+3. **Patience**
+
+Be patient: copying from remote locations is subject to network and remote servers' delays, both.
+
+Also and separately, note that at the time of this writing AIS CLI does not support _pagination_ of the remote directories that _may_ contain millions of entries. Listing of the entire remote source is (currently) done in one shot, and prior to copying.
+
+If `ais put` process seems to have paused, there's a good chance it is still listing remote files or copying in the background.
+
+Refrain from pressing `Ctrl-C` to interrupt it.
+
+4. **When your destination bucket is S3 or similar**
+
+Waiting time may be even greater if you are copying data to an AIStore `s3://`, `gs://`, or `az://` bucket. AIS uses write-through, so the same data is written to the remote backend and locally as one atomic transaction.
+
+5. Finally, try to transition to **WebDataset formatting**
+
+Copying, or generally, working in any shape and form with many (millions of) small files comes with significant and unavoidable overhead, both networking and storage-wise.
+
+Use our `ishard` tool to convert and serialize your data using the preferred formatting (a.k.a. WebDataset convention):
+
+* [`ishard` readme](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
+* [`ishard` blog](https://aistore.nvidia.com/blog/2024/08/16/ishard)
 
 # Promote files and directories
 
