@@ -1,0 +1,38 @@
+name: Links Checker
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+  schedule:
+    - cron: "00 12 * * 1"
+
+jobs:
+  linkChecker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .lycheeignore file
+        run: |
+          echo "https://a/b/c/imagenet/train-000000.tar" >> .lycheeignore
+          echo "https://a/b/c/imagenet/train-123456.tar" >> .lycheeignore
+          echo "https://a/b/c/imagenet/train-999999.tar" >> .lycheeignore
+          echo "http://ip:port" >> .lycheeignore
+          echo "https://s3.amazonaws.com/BUCKET/KEY" >> .lycheeignore
+          echo "file:///home/runner/work/aistore/aistore/docs/_includes/%7B%7B%20" >> .lycheeignore
+          echo "http://localhost:8080/" >> .lycheeignore
+          echo "http://10.0.0.207:51080/gs" >> .lycheeignore
+          echo "http://10.0.0.207:51080/s3" >> .lycheeignore
+          echo "http://localhost:3000/" >> .lycheeignore
+          echo "http://172.50.0.2:51080/" >> .lycheeignore
+          echo "http://127.0.0.1:11080/" >> .lycheeignore
+          echo "http://localhost:52001/" >> .lycheeignore
+          echo "https://github.com/NVIDIA/aistore/security/*" >> .lycheeignore
+          echo "http://g/v1/etl/ETL_NAME" >> .lycheeignore
+          echo "https://gist.github.com/*" >> .lycheeignore
+
+      - name: Link Checker
+        id: lychee
+        uses: lycheeverse/lychee-action@v1
+        with:
+            fail: true

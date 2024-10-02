@@ -48,7 +48,7 @@ The question, then, is how to get the maximum out of the underlying hardware? Ho
 
 Specifically, `sysctl` selected system variables, such as `net.core.wmem_max`, `net.core.rmem_max`, `vm.swappiness`, and more - here's the approximate list:
 
-* [https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/host-config/vars/host_config_sysctl.yml](sysctl)
+* [sysctl](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/host-config/vars/host_config_sysctl.yml)
 
 The document is part of a separate [repository](https://github.com/NVIDIA/ais-k8s) that serves the (specific) purposes of deploying AIS on **bare-metal Kubernetes**. The repo includes a number of [playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md) to assist in a full deployment of AIStore.
 

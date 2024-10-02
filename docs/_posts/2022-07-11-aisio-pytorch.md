@@ -21,7 +21,7 @@ unified namespace across multiple connected backends and/or other AIS
 clusters, and [more](https://github.com/NVIDIA/aistore#features).
 
 In the following example, we use the [Caltech-256 Object Category
-Dataset](https://authors.library.caltech.edu/7694/) containing 256
+Dataset](https://data.caltech.edu/records/nyy15-4j048) containing 256
 object categories and a total of 30607 images stored on an AIS bucket
 and the [Microsoft COCO Dataset](https://cocodataset.org/#home) which
 has 330K images with over 200K labels of more than 1.5 million object
@@ -195,7 +195,7 @@ for url, file in dp_files.load_from_tar():
 -   [AIStore Documentation](https://aiatscale.org/docs)
 -   [AIStore Python
     SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
--   [Caltech 256 Dataset](https://authors.library.caltech.edu/7694/)
+-   [Caltech 256 Dataset](https://data.caltech.edu/records/nyy15-4j048)
 -   [Getting started with
     AIStore](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md)
 -   [Microsoft COCO Dataset](https://cocodataset.org/#home)

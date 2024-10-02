@@ -28,7 +28,7 @@ This tutorial consists of couple steps:
 ## Prepare dataset
 
 Before we start writing code, let's put an example tarball file with ImageNet images to the AIStore.
-The tarball we will be using is [imagenet-train-000999.tar](https://storage.googleapis.com/nvdata-imagenet/imagenet-train-000999.tar) which is already in WebDataset friendly format.
+The tarball we will be using is [imagenet-train-000999.tar](https://image-net.org/download.php) which is already in WebDataset friendly format.
 
 ```console
 $ tar -tvf imagenet-train-000999.tar | head -n 5

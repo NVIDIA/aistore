@@ -43,7 +43,7 @@ For developers and data scientists, there's also:
   - [Python SDK reference guide](/docs/python_sdk.md)
 * [PyTorch integration](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) and usage examples
 * [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch) for interoperability with AWS SDK for Python (aka [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) client
-  - and other [Botocore](https://github.com/boto/botocorehttps://github.com/boto/botocore) derivatives.
+  - and other [Botocore](https://github.com/boto/botocore) derivatives.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
@@ -53,7 +53,7 @@ Finally, [getting started](/docs/getting_started.md) with AIS takes only a few m
 
 ## Deployment options
 
-AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](deploy/README.md).
+AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](/deploy/README.md).
 
 Since prerequisites boil down to, essentially, having Linux with a disk the deployment options range from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. But practical use cases require, of course, further consideration and may include:
 
@@ -82,13 +82,13 @@ AIStore supports multiple ways to populate itself with existing datasets, includ
 * **download** raw http(s) addressable directories, including (but not limited to) Cloud storages;
 * **promote** NFS or SMB shares accessible by one or multiple (or all) AIS [target](/docs/overview.md#terminology) nodes;
 
-> The on-demand "way" is maybe the most popular, whereby users just start running their workloads against a [remote bucket](docs/providers.md) with AIS cluster positioned as an intermediate fast tier.
+> The on-demand "way" is maybe the most popular, whereby users just start running their workloads against a [remote bucket](/docs/providers.md) with AIS cluster positioned as an intermediate fast tier.
 
 But there's more. In [v3.22](https://github.com/NVIDIA/aistore/releases/tag/v1.3.22), we introduce [blob downloader](/docs/blob_downloader.md), a special facility to download very large remote objects (BLOBs). And in [v3.23](https://github.com/NVIDIA/aistore/releases/tag/v1.3.23), there's a new capability, dubbed [bucket inventory](/docs/s3inventory.md), to list very large S3 buckets _fast_.
 
 ## Installing from release binaries
 
-Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](Makefile) from source or installed directly from GitHub:
+Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](/Makefile) from source or installed directly from GitHub:
 
 ```console
 $ ./scripts/install_from_binaries.sh --help

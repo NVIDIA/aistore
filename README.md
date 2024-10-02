@@ -45,7 +45,7 @@ For developers and data scientists, there's also:
   - [Python SDK reference guide](/docs/python_sdk.md)
 * [PyTorch integration](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) and usage examples
 * [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch) for interoperability with AWS SDK for Python (aka [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) client
-  - and other [Botocore](https://github.com/boto/botocorehttps://github.com/boto/botocore) derivatives.
+  - and other [Botocore](https://github.com/boto/botocore) derivatives.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 

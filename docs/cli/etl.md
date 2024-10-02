@@ -63,7 +63,7 @@ Initializes ETL from provided `CODE_FILE` that contains a transformation functio
 
 The `--name` parameter is used to assign a user defined unique name to the ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
-Based on the communication type used, there are mutiple ways you can initialize the `transform(input_bytes, context)`, `before(context)` and `after(context)` functions. Check [ETL Init Code Docs](docs/etl.md#init-code-request) for more info.
+Based on the communication type used, there are mutiple ways you can initialize the `transform(input_bytes, context)`, `before(context)` and `after(context)` functions. Check [ETL Init Code Docs](/docs/etl.md#init-code-request) for more info.
 
 All available runtimes are listed [here](/docs/etl.md#runtimes).
 

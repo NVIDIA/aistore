@@ -145,9 +145,9 @@ See also:
 
 | name | comment |
 | ---- | ------- |
-| `MY_POD` and `HOSTNAME` | Kubernetes POD name. `MY_POD` is used in [production](operator/pkg/resources/cmn/env.go); `HOSTNAME`, on the other hand, is usually considered a Kubernetes default |
+| `MY_POD` and `HOSTNAME` | Kubernetes POD name. `MY_POD` is used in [production](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go); `HOSTNAME`, on the other hand, is usually considered a Kubernetes default |
 | `MY_NODE` | Kubernetes node name |
-| `K8S_NS` and `POD_NAMESPACE` | Kubernetes namespace. `K8S_NS` is used in [production](operator/pkg/resources/cmn/env.go), while `POD_NAMESPACE` - development |
+| `K8S_NS` and `POD_NAMESPACE` | Kubernetes namespace. `K8S_NS` is used in [production](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go), while `POD_NAMESPACE` - development |
 
 Kubernetes POD name is also reported via `ais show cluster` CLI - when it is a Kubernetes deployment, e.g.:
 
@@ -231,7 +231,7 @@ See also:
 
 AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/).
 
-In addition and separately, AIStore supports [StatsD](https://github.com/etsy/statsd), and via StatsD - Graphite (collection) and Grafana (graphics).
+In addition and separately, AIStore supports [StatsD](https://github.com/statsd/statsd), and via StatsD - Graphite (collection) and Grafana (graphics).
 
 The corresponding binary choice between StatsD and Prometheus is a **build-time** switch controlled by a single build tag: **statsd**.
 
@@ -304,7 +304,7 @@ Separately, there's also client-side AuthN environment that includes:
 
 | Name                  | Description                                                                                                                          |
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `AIS_AUTHN_URL`       | Used by [CLI](docs/cli/auth.md) to configure and query the authentication server (AuthN).                                            |
+| `AIS_AUTHN_URL`       | Used by [CLI](./cli/auth.md) to configure and query the authentication server (AuthN).                                            |
 | `AIS_AUTHN_TOKEN_FILE`| Token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`.                                      |
 | `AIS_AUTHN_TOKEN`     | The JWT token itself (excluding the file and JSON); can be used to specify the token directly, bypassing the need for a token file.  |
 

@@ -6,7 +6,7 @@ Specifically, these tests verify the Boto3, monkey patched by `aistore.botocore_
 
 ## Test Sets
 
-The [`botocore_common.py`](python/tests/botocore_common.py) file contains a common test group to verify a basic set of S3 operations.
+The [`botocore_common.py`](/python/tests/botocore_common.py) file contains a common test group to verify a basic set of S3 operations.
 
 There are two degrees of freedom to test here:
 
@@ -22,7 +22,7 @@ To fully cover all possibilities, we have four test sets, each inheriting and te
 
 ## Unit Testing Mocks
 
-For the purpose of unit testing within the scope of an interface provided by `aistore.botocore_patch.botocore`, here we do not actually set up AIStore as an object storage to test against. Instead, we use [moto](https://github.com/spulec/moto) to mock an S3-like interface, simulating AIStore. Additionally, we implement another monkey patch [`mock_s3_redirect.py`](python/tests/unit/botocore_patch/mock_s3_redirect.py) under moto to send redirects when needed, mimicking the behavior of AIStore.
+For the purpose of unit testing within the scope of an interface provided by `aistore.botocore_patch.botocore`, here we do not actually set up AIStore as an object storage to test against. Instead, we use [moto](https://github.com/spulec/moto) to mock an S3-like interface, simulating AIStore. Additionally, we implement another monkey patch [`mock_s3_redirect.py`](/python/tests/unit/botocore_patch/mock_s3_redirect.py) under moto to send redirects when needed, mimicking the behavior of AIStore.
 
 ## Unit Testing Execution
 

@@ -58,7 +58,7 @@ Run `curl --help` for help.
 
 2. **HTTP verb** aka method, one of: `PUT`, `GET`, `HEAD`, `POST`, `DELETE`, or `PATCH`.
 
-In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
+In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](https://www.restapitutorial.com/introduction/httpmethods).
 
 3. **Hostname** (or IPv4 address) and TCP port of one of the AIStore daemons.
 
@@ -727,7 +727,7 @@ For API Reference of ETL please refer to [ETL Readme](/docs/etl.md#api-reference
 
 ## Footnotes
 
-<a name="ft1">1</a>) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html). [↩](#a1)
+<a name="ft1">1</a>) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://everything.curl.dev/http/redirects.html). [↩](#a1)
 
 <a name="ft2">2</a>) See the [List Objects section](/docs/bucket.md#list-objects) for details. [↩](#a2)
 

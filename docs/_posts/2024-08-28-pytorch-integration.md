@@ -311,7 +311,7 @@ Furthermore, we want data loading to be quick and easy for data scientists to us
 6. [AIStore GitHub](https://github.com/NVIDIA/aistore)
 7. [PyTorch GitHub](https://github.com/pytorch/data)
 8. [AIStore Blog](https://aistore.nvidia.com/blog)
-9. [WebDataset Website](https://webdataset.github.io/webdataset/sharding/) 
+9. [WebDataset Website](https://webdataset.github.io/webdataset/webdataset/) 
 10. [WebDataset Hugging Face](https://huggingface.co/docs/hub/datasets-webdataset )
 11. [Training CIFAR-10 with AIStore Notebook](https://github.com/NVIDIA/aistore/blob/main/python/examples/aisio-pytorch/cifar10_training_example.ipynb)
 12. [Training ResNet50 with AIStore Notebook](https://github.com/NVIDIA/aistore/blob/main/python/examples/aisio-pytorch/resnet50_wds_train.ipynb)

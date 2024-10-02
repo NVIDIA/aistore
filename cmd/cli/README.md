@@ -4,7 +4,7 @@ CLI provides easy-to-use intuitive interface to AIStore.
 
 It is a separate package, module (as in: `go.mod`), and development.
 
-For implementation, we have used [urfave/cli](https://github.com/urfave/cli/blob/master/docs/v1/manual.md) open-source.
+For implementation, we have used [urfave/cli](https://github.com/urfave/cli/blob/main/docs/v1/getting-started.md) open-source.
 
 To build CLI from source, run the following two steps:
 
