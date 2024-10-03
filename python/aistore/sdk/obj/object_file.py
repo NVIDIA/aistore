@@ -8,6 +8,10 @@ from typing import Iterator
 import requests
 
 from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.object_file_errors import (
+    ObjectFileMaxResumeError,
+    ObjectFileStreamError,
+)
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -110,10 +114,10 @@ class ObjectFile(BufferedIOBase):
         self._current_pos = 0
         self._closed = False
         self._buffer = SimpleBuffer()
-        self._chunk_iterator = self._content_iterator.iter_from_position(
-            self._current_pos
-        )
         self._resume_total = 0
+        self._chunk_iterator = None
+
+        self._reset_iterator()
 
     def close(self) -> None:
         """
@@ -166,6 +170,20 @@ class ObjectFile(BufferedIOBase):
         """
         return False
 
+    def _reset_iterator(self):
+        """
+        Initialize a new iterator for establishing an object stream and reading chunks of data.
+
+        Raises: ObjectFileStreamError if a connection cannot be made.
+        """
+        try:
+            self._chunk_iterator = self._content_iterator.iter_from_position(
+                self._current_pos + len(self._buffer)
+            )
+        except Exception as err:
+            logger.error("Error establishing object stream: (%s)", err)
+            raise ObjectFileStreamError(err) from err
+
     def read(self, size=-1):
         """
         Read bytes from the object, handling retries in case of stream errors.
@@ -175,6 +193,10 @@ class ObjectFile(BufferedIOBase):
 
         Returns:
             bytes: The data read from the object.
+
+        Raises:
+            ObjectFileStreamError if a connection cannot be made.
+            ObjectFileMaxResumeError if the stream is interrupted more than the allowed maximum.
         """
         if self._closed:
             raise ValueError("I/O operation on closed file.")
@@ -191,18 +213,14 @@ class ObjectFile(BufferedIOBase):
                 self._resume_total += 1
                 if self._resume_total > self._max_resume:
                     logger.error("Max retries reached. Cannot resume read.")
-                    raise err
+                    raise ObjectFileMaxResumeError(err, self._resume_total) from err
                 logger.warning(
                     "Chunked encoding error (%s), retrying %d/%d",
                     err,
                     self._resume_total,
                     self._max_resume,
                 )
-
-                # Reset the chunk iterator for resuming the stream
-                self._chunk_iterator = self._content_iterator.iter_from_position(
-                    self._current_pos + len(self._buffer)
-                )
+                self._reset_iterator()
 
         # Read data from the buffer
         data = self._buffer.read(size)

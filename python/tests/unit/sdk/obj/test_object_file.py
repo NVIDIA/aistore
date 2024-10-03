@@ -5,11 +5,17 @@ import io
 import os
 import unittest
 from unittest import mock
+from unittest.mock import Mock
+
 from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.obj.object_file import ObjectFile
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
+from aistore.sdk.obj.object_file_errors import (
+    ObjectFileMaxResumeError,
+    ObjectFileStreamError,
+)
 
 
 # pylint: disable=too-few-public-methods
@@ -106,6 +112,36 @@ class TestObjectFile(unittest.TestCase):
 
     # Retry & Resume Related Tests
 
+    def test_init_raises_stream_error(self):
+        """Test that ObjectFile raises ObjectFileStreamError if no stream can be established."""
+        stream_creation_err = Exception("Can't connect to AIS")
+        mock_content_iterator = Mock()
+        mock_content_iterator.iter_from_position.side_effect = stream_creation_err
+
+        with self.assertRaises(ObjectFileStreamError):
+            ObjectFile(mock_content_iterator, max_resume=2)
+
+    def test_read_raises_stream_error(self):
+        """Test that ObjectFile raises ObjectFileStreamError if no stream can be established on subsequent reads."""
+        stream_creation_err = Exception("Can't connect to AIS")
+        mock_content_iterator = Mock(spec=ContentIterator)
+        bad_iterator = BadContentIterator(
+            data=b"some data", fail_on_read=2
+        ).iter_from_position(0)
+
+        # First attempt creates a bad iterator, which fails and triggers a re-initialization of the content iterator
+        # Second content_iterator can't connect at all
+        mock_content_iterator.iter_from_position.side_effect = [
+            bad_iterator,
+            stream_creation_err,
+        ]
+
+        # The initialization before the ChunkedEncodingError happens without error
+        object_file = ObjectFile(mock_content_iterator, max_resume=2)
+        # ChunkedEncodingError is raised on a subsequent call, and new iterator fails to reconnect
+        with self.assertRaises(ObjectFileStreamError):
+            object_file.read()
+
     def test_read_all_fails_after_max_retries(self):
         """Test that ObjectFile gives up after exceeding max retry attempts for read-all."""
         data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
@@ -113,7 +149,7 @@ class TestObjectFile(unittest.TestCase):
         object_file = ObjectFile(mock_reader, max_resume=2)
 
         # Test that the read fails after 2 retry attempts
-        with self.assertRaises(ChunkedEncodingError):
+        with self.assertRaises(ObjectFileMaxResumeError):
             object_file.read()
 
     def test_read_fixed_fails_after_max_retries(self):
@@ -123,7 +159,7 @@ class TestObjectFile(unittest.TestCase):
         object_file = ObjectFile(mock_reader, max_resume=2)
 
         # Test that the read fails after 2 retry attempts for a fixed-size read
-        with self.assertRaises(ChunkedEncodingError):
+        with self.assertRaises(ObjectFileMaxResumeError):
             object_file.read(DEFAULT_CHUNK_SIZE * 4)
 
     def test_read_all_success_after_retries(self):
