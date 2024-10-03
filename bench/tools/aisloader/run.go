@@ -585,8 +585,11 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 		"when true, generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.BoolVar(&p.randomProxy, "randomproxy", false,
 		"when true, select random gateway (\"proxy\") to execute I/O request")
-	f.StringVar(&p.subDir, "subdir", "", "when writing: virtual destination directory for all aisloader-generated objects;\n"+
-		"when listing: list objects with names that have the specified prefix (that may or may not be a virtual directory")
+	f.StringVar(&p.subDir, "subdir", "", "For GET requests, '-subdir' is a prefix that may or may not be an actual _virtual directory_;\n"+
+		"For PUTs, '-subdir' is a virtual destination directory for all aisloader-generated objects;\n"+
+		"See also:\n"+
+		"\t- closely related CLI '--prefix' option: "+cmn.GitHubHome+"/blob/main/docs/cli/object.md\n"+
+		"\t- virtual directories:                   "+cmn.GitHubHome+"/blob/main/docs/howto_virt_dirs.md")
 	f.Uint64Var(&p.putShards, "putshards", 0, "spread generated objects over this many subdirectories (max 100k)")
 	f.BoolVar(&p.uniqueGETs, "uniquegets", true,
 		"when true, GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")

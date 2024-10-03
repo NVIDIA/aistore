@@ -98,7 +98,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -statsdport | `int` | StatsD UDP port | `8125` |
 | -statsdprobe | `bool` | Test-probe StatsD server prior to benchmarks | `true` |
 | -statsinterval | `int` | Interval in seconds to print performance counters; 0 - disabled | `10` |
-| -subdir | `string` | Virtual destination directory for all aisloader-generated objects | `""` |
+| -subdir | `string` | For GET requests, `-subdir` is a prefix that may or may not be an actual [virtual directory](/docs/howto_virt_dirs.md). For PUT, `-subdir` is a virtual destination directory for all aisloader-generated objects. See closely related [CLI](/docs/cli/object.md) `--prefix` option. | `""` |
 | -test-probe | `bool`| Test StatsD server prior to running benchmarks | `false` |
 | -timeout | `string` | Client HTTP timeout; `0` = infinity) | `10m` |
 | -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
