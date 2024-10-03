@@ -123,7 +123,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			intervalStats.get.Add(wo.size, delta)
 			intervalStats.statsd.Get.Add(wo.size, delta)
 		} else {
-			fmt.Println("GET failed: ", wo.err)
+			fmt.Println("GET failed:", wo.err)
 			intervalStats.statsd.Get.AddErr()
 			intervalStats.get.AddErr()
 		}
@@ -135,7 +135,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			intervalStats.put.Add(wo.size, delta)
 			intervalStats.statsd.Put.Add(wo.size, delta)
 		} else {
-			fmt.Println("PUT failed: ", wo.err)
+			fmt.Println("PUT failed:", wo.err)
 			intervalStats.put.AddErr()
 			intervalStats.statsd.Put.AddErr()
 		}
@@ -171,7 +171,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			intervalStats.getConfig.Add(1, delta)
 			intervalStats.statsd.Config.Add(delta, wo.latencies.Proxy, wo.latencies.ProxyConn)
 		} else {
-			fmt.Println("GET config failed: ", wo.err)
+			fmt.Println("get-config failed:", wo.err)
 			intervalStats.getConfig.AddErr()
 		}
 	default:
