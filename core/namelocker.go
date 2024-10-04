@@ -29,11 +29,8 @@ type (
 		mu sync.Mutex
 	}
 	lockInfo struct {
-		wcond     *sync.Cond // to synchronize "waiting room" upgrade logic
-		rc        int32      // read-lock refcount
-		waiting   int32      // waiting room count
-		exclusive bool       // write-lock
-		upgraded  bool       // indication for the waiters that upgrade's done
+		rc        int32 // read-lock refcount
+		exclusive bool  // write-lock
 	}
 )
 
@@ -71,31 +68,6 @@ func newNameLocker() (nl nameLocker) {
 		nl[idx].init()
 	}
 	return
-}
-
-//////////////
-// lockInfo //
-//////////////
-
-func (li *lockInfo) notify() {
-	if li.wcond == nil || li.waiting == 0 {
-		return
-	}
-	debug.Assert(li.rc >= li.waiting)
-	if li.upgraded {
-		// has been upgraded - wake up all waiters
-		li.wcond.Broadcast()
-	} else {
-		// wake up only the owner
-		li.wcond.Signal()
-	}
-}
-
-func (li *lockInfo) decWaiting() {
-	li.waiting--
-	if li.waiting == 0 {
-		li.wcond = nil
-	}
 }
 
 /////////
@@ -142,10 +114,6 @@ func (nlc *nlc) try(uname string, exclusive bool) bool {
 	if li.exclusive {
 		return false
 	}
-	// can't rlock if there's someone trying to upgrade
-	if li.waiting > 0 {
-		return false
-	}
 	li.rc++
 	return true
 }
@@ -167,55 +135,28 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 	}
 }
 
-// upgrade rlock -> wlock
-// e.g. usage: simultaneous cold GET
-// returns true if exclusively locked by _another_ thread
-func (nlc *nlc) UpgradeLock(uname string) bool {
+// lone reader: upgrade rlock -> wlock
+// otherwise:   fail
+func (nlc *nlc) UpgradeLock(uname string) (wlocked bool) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
-	debug.Assert(found && !li.exclusive && li.rc > 0)
+	debug.Assertf(found && !li.exclusive && li.rc > 0, "found %t li.exclusive %t li.rc %d", found, li.exclusive, li.rc)
+
 	if li.rc == 1 {
 		li.rc = 0
 		li.exclusive = true
-		nlc.mu.Unlock()
-		return false
+		wlocked = true
 	}
-
-	//
-	// TODO -- FIXME: consider removing this part, simplifying `wcond` out, returning EBUSY instead..
-	//
-
-	if li.wcond == nil {
-		li.wcond = sync.NewCond(&nlc.mu)
-	}
-	li.waiting++
-	// Wait here until all readers get in line
-	for li.rc != li.waiting {
-		li.wcond.Wait()
-
-		// Has been upgraded by smbd. else
-		if li.upgraded {
-			li.decWaiting()
-			nlc.mu.Unlock()
-			return true
-		}
-	}
-	// Upgrading
-	li.upgraded = true
-	li.rc--
-	li.decWaiting()
-	li.exclusive = true
 	nlc.mu.Unlock()
-	return false
+	return wlocked
 }
 
 func (nlc *nlc) DowngradeLock(uname string) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
-	debug.Assert(found && li.exclusive)
+	debug.Assertf(found && li.exclusive, "found %t li.exclusive %t", found, li.exclusive)
 	li.rc++
 	li.exclusive = false
-	li.notify()
 	nlc.mu.Unlock()
 }
 
@@ -223,22 +164,18 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
 	debug.Assert(found)
+
 	if exclusive {
 		debug.Assert(li.exclusive)
-		if li.waiting > 0 {
-			li.exclusive = false
-			li.notify()
-		} else {
-			delete(nlc.m, uname)
-		}
+		delete(nlc.m, uname)
 		nlc.mu.Unlock()
 		return
 	}
+
 	li.rc--
 	if li.rc == 0 {
 		delete(nlc.m, uname)
 	}
-	li.notify()
 	nlc.mu.Unlock()
 }
 

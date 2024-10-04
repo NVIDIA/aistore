@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,6 +89,12 @@ type (
 		cold       bool       // true if executed backend.Get
 		latestVer  bool       // QparamLatestVer || 'versioning.*_warm_get'
 		isIOErr    bool       // to count GET error as a "IO error"; see `Trunner._softErrs()`
+	}
+	_uplock struct {
+		config  *cmn.Config
+		timeout time.Duration
+		elapsed time.Duration
+		sleep   time.Duration
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -546,6 +553,7 @@ func (goi *getOI) getObject() (ecode int, err error) {
 // is under rlock
 func (goi *getOI) get() (ecode int, err error) {
 	var (
+		uplock      *_uplock
 		cs          fs.CapStatus
 		doubleCheck bool
 		retried     bool
@@ -624,13 +632,12 @@ do:
 		}
 	}
 
-	// cold-GET: upgrade rlock => wlock, call t.Backend.GetObjReader
+	// cold-GET: upgrade rlock => wlock and call t.Backend.GetObjReader
 	if cold {
 		var (
 			res     core.GetReaderResult
 			ckconf  = goi.lom.CksumConf()
 			backend = goi.t.Backend(goi.lom.Bck())
-			loaded  bool
 		)
 		if cs.IsNil() {
 			cs = fs.Cap()
@@ -638,16 +645,23 @@ do:
 		if cs.IsOOS() {
 			return http.StatusInsufficientStorage, cs.Err()
 		}
+
+		// try upgrading rlock => wlock; poll for a while
+		if !goi.lom.UpgradeLock() {
+			if uplock == nil {
+				c := cmn.GCO.Get()
+				uplock = &_uplock{config: c, sleep: time.Second}
+				uplock.timeout = max(c.Timeout.MaxHostBusy.D()-c.Timeout.CplaneOperation.D(), 4*time.Second)
+
+				nlog.Warningln(uplockWarn, goi.lom.String())
+			}
+			if err := uplock.do(goi.lom); err != nil {
+				return http.StatusConflict, err
+			}
+			goto do
+		}
+
 		goi.lom.SetAtimeUnix(goi.atime)
-
-		// upgrade rlock => wlock
-		if loaded, err = goi._coldLock(); err != nil {
-			return 0, err
-		}
-		if loaded {
-			goto fin
-		}
-
 		// zero-out prev. version custom metadata, if any
 		goi.lom.SetCustomMD(nil)
 
@@ -700,34 +714,6 @@ fin:
 		}
 	}
 	return ecode, err
-}
-
-// upgrade rlock => wlock
-// done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
-func (goi *getOI) _coldLock() (loaded bool, err error) {
-	var (
-		lom = goi.lom
-		now int64
-	)
-outer:
-	for lom.UpgradeLock() {
-		if erl := lom.Load(true /*cache it*/, true /*locked*/); erl == nil {
-			// nothing to do
-			// (lock was upgraded by another goroutine that had also performed PUT on our behalf)
-			return true, nil
-		}
-		switch {
-		case now == 0:
-			now = mono.NanoTime()
-			fallthrough
-		case mono.Since(now) < max(cmn.Rom.CplaneOperation(), 2*time.Second):
-			nlog.Errorln("failed to load", lom.String(), "err:", err, "- retrying...")
-		default:
-			err = cmn.NewErrBusy("object", lom.Cname())
-			break outer
-		}
-	}
-	return
 }
 
 func (goi *getOI) _coldPut(res *core.GetReaderResult) (int, error) {
@@ -1178,7 +1164,8 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 		goi.t.reb.FilterAdd(*bname)
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
 		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			nlog.Errorf("%s: GET post-transmission failure: %v", goi.t, err)
+			fs.CleanPathErr(err)
+			nlog.Errorln(goi.t.String(), "GET post-transmission failure:", err)
 			return errSendingResp
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
@@ -1880,6 +1867,31 @@ func (t *target) putMirror(lom *core.LOM) {
 	xctn := rns.Entry.Get()
 	xputlrep := xctn.(*mirror.XactPut)
 	xputlrep.Repl(lom)
+}
+
+//
+// uplock
+//
+
+const uplockWarn = "conflict getting remote"
+
+func (u *_uplock) do(lom *core.LOM) error {
+	if u.elapsed > u.timeout {
+		err := cmn.NewErrBusy("node", core.T.String(), uplockWarn+" '"+lom.Cname()+"'")
+		nlog.ErrorDepth(1, err)
+		return err
+	}
+
+	lom.Unlock(false)
+	runtime.Gosched()
+	time.Sleep(u.sleep)
+	lom.Lock(false) // all over again: try load and check all respective conditions
+
+	u.elapsed += u.sleep
+	if u.elapsed == 3*u.sleep && u.sleep < u.config.Timeout.CplaneOperation.D() {
+		u.sleep <<= 1
+	}
+	return nil
 }
 
 // TODO:
