@@ -88,7 +88,7 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 		table = newTable(cols...)
 	)
 
-	ids := ps.sortedSIDs()
+	ids := ps.sortPODs(smap, true)
 
 	for _, sid := range ids {
 		ds := ps[sid]
@@ -194,7 +194,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 		}
 		table = newTable(cols...)
 	)
-	ids := ts.sortedSIDs()
+	ids := ts.sortPODs(smap, false)
 
 	for _, sid := range ids {
 		ds := ts[sid]

@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -63,7 +63,7 @@ func NewMpathCapTab(st StstMap, c *PerfTabCtx, showMpaths bool) *Table {
 	}
 	table := newTable(cols...)
 
-	tids := st.sortedSIDs()
+	tids := st.sortSIDs()
 	for _, tid := range tids {
 		ds := st[tid]
 		if c.Sid != "" && c.Sid != tid {

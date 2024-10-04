@@ -114,7 +114,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 	}
 
 	// 9. sort targets by IDs
-	tids := st.sortedSIDs()
+	tids := st.sortSIDs()
 
 	// 10. construct an empty table
 	table := newTable(printedColumns...)
