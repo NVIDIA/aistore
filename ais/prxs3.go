@@ -26,8 +26,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// TODO: `checkAccess` permissions (see ais/proxy.go)
-
 var (
 	errS3Req    = errors.New("invalid s3 request")
 	errS3Obj    = errors.New("missing or empty object name")
@@ -54,15 +52,20 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(apiItems) == 1 {
+			// perms: apc.AceBckHEAD
 			p.headBckS3(w, r, apiItems[0])
 			return
 		}
+		// perms: apc.AceObjHEAD
 		p.headObjS3(w, r, apiItems)
 	case http.MethodGet:
 		if len(apiItems) == 0 {
 			// list all buckets; NOTE: compare with `p.easyURLHandler` and see
 			// "list buckets for a given provider" comment there
-			p.bckNamesFromBMD(w)
+			// perms: apc.AceListBuckets
+			if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
+				p.bckNamesFromBMD(w)
+			}
 			return
 		}
 		var (
@@ -83,10 +86,12 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				p.getBckVersioningS3(w, r, apiItems[0])
 				return
 			}
+			// perms: apc.AceObjLIST
 			p.listObjectsS3(w, r, apiItems[0], q)
 			return
 		}
 		// object data otherwise
+		// perms: apc.AceGET
 		p.getObjS3(w, r, apiItems, q, listMultipart)
 	case http.MethodPut:
 		if len(apiItems) == 0 {
@@ -100,9 +105,11 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				p.putBckVersioningS3(w, r, apiItems[0])
 				return
 			}
+			// perms: apc.AceCreateBucket
 			p.putBckS3(w, r, apiItems[0])
 			return
 		}
+		// perms: apc.AcePUT
 		p.putObjS3(w, r, apiItems)
 	case http.MethodPost:
 		q := r.URL.Query()
@@ -118,6 +125,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			s3.WriteErr(w, r, errS3Req, 0)
 			return
 		}
+		// perms: apc.AceObjDELETE
 		p.delMultipleObjs(w, r, apiItems[0])
 	case http.MethodDelete:
 		if len(apiItems) == 0 {
@@ -131,9 +139,11 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				p.delMultipleObjs(w, r, apiItems[0])
 				return
 			}
+			// perms: apc.AceDestroyBucket
 			p.delBckS3(w, r, apiItems[0])
 			return
 		}
+		// perms: apc.AceObjDELETE
 		p.delObjS3(w, r, apiItems)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
@@ -161,6 +171,9 @@ func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 
 // PUT /s3/<bucket-name> (i.e., create bucket)
 func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
+	if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
+		return
+	}
 	msg := apc.ActMsg{Action: apc.ActCreateBck}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {
 		return
@@ -321,6 +334,10 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string, q url.Values) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
+		return
+	}
+	if err := bck.Allow(apc.AceObjLIST); err != nil {
+		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
 	amsg := &apc.ActMsg{Action: apc.ActList}
