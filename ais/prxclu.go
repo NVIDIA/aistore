@@ -1030,9 +1030,13 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 		args.to = core.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
+
 		// self
 		p.termKalive(msg.Action)
-		p.shutdown(msg.Action)
+		go func() {
+			time.Sleep(cmn.Rom.CplaneOperation())
+			p.shutdown(msg.Action)
+		}()
 	case apc.ActDecommissionCluster:
 		var (
 			opts apc.ActValRmNode
@@ -1046,9 +1050,13 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 		args.to = core.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
+
 		// self
 		p.termKalive(msg.Action)
-		p.decommission(msg.Action, &opts)
+		go func() {
+			time.Sleep(cmn.Rom.CplaneOperation())
+			p.decommission(msg.Action, &opts)
+		}()
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode, apc.ActRmNodeUnsafe:
 		p.rmNode(w, r, msg)
 	case apc.ActStopMaintenance:
