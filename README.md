@@ -9,7 +9,7 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 
 ## Features
 
-* **Deploys anywhere**. AIS clusters are immediately deployable on any commodity hardware, on any Linux machine(s).
+* **Deploys anywhere**. AIStore deploys _immediately_ and _anywhere_, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook, on the one hand, to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers, on the other. There are [no limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - the system will run on any Linux machine, virtual or physical.
 * **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
 * **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
 * **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, and Microsoft Azure.
