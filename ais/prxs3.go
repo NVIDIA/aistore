@@ -194,7 +194,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceDestroyBucket); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceDestroyBucket); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -222,7 +222,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AcePUT); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -250,7 +250,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceObjDELETE); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceObjDELETE); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -312,7 +312,7 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceBckHEAD); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceBckHEAD); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -336,7 +336,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceObjLIST); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceObjLIST); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -453,7 +453,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if bckSrc == nil {
 		return
 	}
-	if err := bckSrc.Allow(apc.AceGET); err != nil {
+	if err := p.checkAccess(w, r, bckSrc, apc.AceGET); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -489,7 +489,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AcePUT); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -524,7 +524,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceGET); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceGET); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -614,7 +614,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceObjHEAD); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceObjHEAD); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -646,7 +646,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	if bck == nil {
 		return
 	}
-	if err := bck.Allow(apc.AceObjDELETE); err != nil {
+	if err := p.checkAccess(w, r, bck, apc.AceObjDELETE); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
