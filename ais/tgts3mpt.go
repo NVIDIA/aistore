@@ -210,13 +210,14 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	delta := mono.SinceNano(startTime)
 	t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.PutSize, Value: size},
+		cos.NamedVal64{Name: stats.PutLatency, Value: delta},
 		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
 	)
 	if remotePutLatency > 0 {
 		backendBck := t.Backend(bck)
 		t.statsT.AddMany(
 			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatency), Value: remotePutLatency},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency},
 			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta},
 		)
 	}
