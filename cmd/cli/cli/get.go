@@ -302,9 +302,11 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 		var shardName string
 
 		// NOTE: s3.ListObjectsV2 _may_ return a directory - filtering out
-		if err := cmn.ValidateObjName(entry.Name); err != nil {
-			warn := fmt.Sprintf("%v in the list-objects results (ignored)", err)
-			actionNote(c, warn)
+		if cos.IsLastB(entry.Name, '/') {
+			actionNote(c, "virtual directory '"+entry.Name+"' in 'list-objects' results (skipping)")
+			continue
+		}
+		if err := cmn.ValidOname(entry.Name); err != nil {
 			continue
 		}
 
