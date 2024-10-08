@@ -21,8 +21,8 @@ CLI_VERSION := $(shell ais version 2>/dev/null)
 MAKEFLAGS += --no-print-directory
 
 # Uncomment to cross-compile aisnode and cli, respectively:
-# CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.22
-# CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.22
+# CROSS_COMPILE = docker run --rm -v $(AISTORE_PATH):/go/src/n -w /go/src/n golang:1.23
+# CROSS_COMPILE_CLI = docker run -e $(CGO_DISABLE) --rm -v $(AISTORE_PATH)/cmd/cli:/go/src/n -w /go/src/n golang:1.23
 
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)

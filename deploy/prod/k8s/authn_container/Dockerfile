@@ -2,7 +2,7 @@
 # Dockerfile to build an authn Docker image
 #
 
-ARG BUILDER_IMAGE=golang:1.22
+ARG BUILDER_IMAGE=golang:1.23
 ARG BASE_IMAGE=gcr.io/distroless/base-debian12
 
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILDER_IMAGE} AS builder

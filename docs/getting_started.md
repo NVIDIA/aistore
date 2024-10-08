@@ -470,7 +470,7 @@ The command randomly shuffles existing short tests and then, depending on your p
 To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https://colab.research.google.com/) notebook, use our ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb): 
 
 **Important Notes:**
-- This sample installs Go v1.22.3, the supported Go version and toolchain at the time of writing.
+- This sample installs Go v1.23.1, the supported Go version and toolchain at the time of writing.
 - AIStore runs in the background. However, if you stop any cell, it sends a "SIGINT" (termination signal) to all background processes, terminating AIStore. To restart AIStore, simply rerun the relevant cell.
 
 ## Kubernetes Playground

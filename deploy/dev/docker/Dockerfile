@@ -26,7 +26,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   pip install awscli s3cmd
 
 # Setting ENV variables
-ENV GOLANG_VERSION="1.22.3"
+ENV GOLANG_VERSION="1.23.2"
 
 # Reassign arguments to environment variables so run.sh can use them
 ENV GOPATH /go

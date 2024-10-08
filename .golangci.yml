@@ -172,7 +172,7 @@ issues:
   max-issues-per-linter: 0
 
 run:
-  go: '1.22.3'
+  go: '1.23.2'
   tests: true # Enable linting test files.
   concurrency: 4
   timeout: 6m

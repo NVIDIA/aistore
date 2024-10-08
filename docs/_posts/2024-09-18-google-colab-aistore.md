@@ -17,7 +17,7 @@ The process is simple. Just click the button below to load the notebook and foll
 <a href="https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 **Important Notes:**
-- This example installs [Go v1.22.3](https://go.dev/doc/install), which is the supported Go version and toolchain at the time of writing.
+- This example installs [Go v1.23.1](https://go.dev/doc/install), which is the supported Go version and toolchain at the time of writing.
 - AIStore runs in the background during the experiments. However, if you interrupt any cell, it sends a `SIGINT` (termination signal) to all background processes, including AIStore. If this happens, simply rerun the appropriate cell to restart AIStore and continue your work.
 
 ## Stats for Nerds

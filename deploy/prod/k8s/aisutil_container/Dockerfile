@@ -1,6 +1,6 @@
 # Dockerfile to build an AIS Util Docker image
 
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.22 AS builder
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.23 AS builder
 
 WORKDIR /go/src/aistore
 

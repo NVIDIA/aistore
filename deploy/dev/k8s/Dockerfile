@@ -1,4 +1,4 @@
-FROM docker.io/golang:1.22 AS builder
+FROM docker.io/golang:1.23 AS builder
 
 ARG mode
 ARG providers
