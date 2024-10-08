@@ -1,18 +1,6 @@
-image: aistorage/ci:latest
-
-stages:
-  - build
-  - test-short
-  - test-long
-  - security
-
-include:
-  - project: pstooling/gitlab-templates
-    ref: main
-    file: /templates/static-analysis/Checkmarx-main-csv.gitlab-ci.yml
-
 variables:
   MODE: debug # run aistore and tests with debug asserts enabled
+  CI_IMAGE: aistorage/ci:latest
   RUNNER_TAG: "ais"
   RUNNER_TAG_K8s: "ais-k8s"
   SCRIPTS_DIR: "./scripts"
@@ -31,6 +19,19 @@ variables:
   GOOGLE_APPLICATION_CREDENTIALS:
     value: "$GCP_JSON_FILE"
     description: "Gitlab file variable containing credentials for GCP"
+
+image: $CI_IMAGE
+
+stages:
+  - build
+  - test-short
+  - test-long
+  - security
+
+include:
+  - project: pstooling/gitlab-templates
+    ref: main
+    file: /templates/static-analysis/Checkmarx-main-csv.gitlab-ci.yml
 
 
 # Templates
