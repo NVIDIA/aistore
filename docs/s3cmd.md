@@ -400,6 +400,37 @@ In the examples above, the `mmm` and `nnn` buckets are, actually, AIS buckets wi
 
 Nevertheless, when using `s3cmd` we have to reference them as `s3://mmm` and `s3://nnn`, respectively.
 
+## S3CMD with AIStore Authentication (AuthN)
+
+When [Auth](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md) is enabled on AIStore, it expects a JWT token for each request. Unfortunately, using the `--add-header` option in `s3cmd` doesn't work because the header gets overwritten with the signature and signing algorithm when the actual request is made.
+
+To overcome this, you can modify the `S3.py` file in `s3cmd` to include the JWT token directly in the `Authorization` header before the request is sent.
+
+### Example:
+
+In the `S3.py` file (found in the [S3CMD GitHub repository](https://github.com/s3tools/s3cmd/blob/master/S3/S3.py)), add the following line before the request is sent:
+
+```python
+self.headers["Authorization"] = "Bearer <token>"
+```
+
+### Git Diff for reference:
+```diff
+$ git diff
+diff --git a/S3/S3.py b/S3/S3.py
+index d4cac8f..9fa1496 100644
+--- a/S3/S3.py
++++ b/S3/S3.py
+@@ -210,6 +210,7 @@ class S3Request(object):
+         resource['uri'] = s3_quote(resource['uri'], quote_backslashes=False, unicode_output=True)
+         # Get the final uri by adding the uri parameters
+         resource['uri'] += format_param_str(self.params)
++        self.headers["Authorization"] = "Bearer <token>"
+         return (self.method_string, resource, self.headers)
+```
+
+Adding this line ensures that the `Authorization` header contains the correct token for requests to the AIStore server.
+
 For table summary documenting AIS/S3 compatibility and further discussion, please see:
 
 * [AIStore S3 compatibility](/docs/s3compat.md)

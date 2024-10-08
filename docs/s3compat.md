@@ -237,17 +237,19 @@ Specifically - since in this document we are talking about s3-compatible API - h
 
 > In re `/s3 endpoint` mentioned above, the corresponding request URL in the browser's address bar would look something like `ais-gateway-host:port/s3`.
 
-## `s3cmd` command line
+## `s3cmd` Command Line
 
-The following table enumerates some of the `s3cmd` options that may appear to be useful:
+For a detailed `s3cmd` setup guide, please refer to this [documentation](/docs/s3cmd.md).
 
-| Options | Usage | Example |
+Below is a table outlining some key `s3cmd` options that can be particularly useful when working with AIStore:
+
+| Option | Description | Example |
 | --- | --- | --- |
-| `--host` | Define an AIS cluster endpoint | `--host=10.10.0.1:51080/s3` |
-| `--host-bucket` | Define URL path to access a bucket of an AIS cluster | `--host-bucket="10.10.0.1:51080/s3/%(bucket)"` |
+| `--host` | Set the AIS cluster endpoint | `--host=10.10.0.1:51080/s3` |
+| `--host-bucket` | Define the URL path for accessing a bucket in the AIS cluster | `--host-bucket="10.10.0.1:51080/s3/"` |
 | `--no-ssl` | Use HTTP instead of HTTPS | |
-| `--no-check-certificate` | Disable checking server's certificate in case of self-signed ones | |
-| `--region` | Define a bucket region | `--region=us-west-1` |
+| `--no-check-certificate` | Disable certificate verification (useful for self-signed certificates) | |
+| `--region` | Specify the region for a bucket | `--region=us-west-1` |
 
 ## ETag and MD5
 
@@ -574,26 +576,9 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [botocore](https://github.com/boto/botocore), used by [Boto3](https://github.com/boto/boto3), just happens to be one of those (libraries).
 
-AIStore provides a shim that you can use to alter `botocore` and `boto3`'s behavior to work as expected with AIStore.
+AIStore provides a patch to modify `botocore` and `boto3` behavior, making them compatible with AIStore’s redirect-based load balancing.
 
-To use `boto3` or `botocore` as client libraries for AIStore:
-
- - Install the [aistore python package](/docs/s3cmd.md) with the `botocore` extra.
-
-```shell
-$ pip install aistore[botocore]
-```
-
- - Import `aistore.botocore_patch.botocore` in your source code alongside `botocore` and / or `boto3`.
-
-```python
-import boto3
-from aistore.botocore_patch import botocore
-```
-
-For more context, see perhaps the following `aws-cli` ticket and discussion at:
-
-* [Support S3 HTTP redirects to non-Amazon URI's](https://github.com/aws/aws-cli/issues/6559)
+To use `boto3` or `botocore` with AIStore, refer [here](/python/aistore/botocore_patch/README.md) for detailed instructions.
 
 ## Amazon CLI tools
 

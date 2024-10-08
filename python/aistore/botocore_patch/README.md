@@ -20,23 +20,30 @@ import boto3
 from aistore.botocore_patch import botocore
 ```
 
-## Cluster Configuration
+## Boto3 with AIStore Authentication
 
-To use AIS as an S3 client, you must first configure the cluster. 
+When [Authentication (AuthN)](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md) is enabled on the AIStore server, AIStore expects a JWT authorization token with each request to grant the required permissions. Normally, `boto3` signs requests by adding complex signature and signing information to the `Authorization` header. However, AIStore doesn’t need this extra information—just the token.
 
-Set the cluster to run as an S3 client:
+To handle this in `boto3`, you can modify the `Authorization` header to include your JWT token before the request is made to AIStore.
 
-```shell
-ais config cluster features S3-API-via-Root
+### Example:
+
+```python
+# Create the S3 client
+s3 = boto3.client(
+    "s3",
+    endpoint_url="http://localhost:8080/s3",
+)
+
+# Custom request hook to inject the Authorization header
+def add_auth_header(request, **kwargs):
+    request.headers['Authorization'] = "Bearer <token>"
+
+# Attach the request hook to modify headers
+s3.meta.events.register('before-send.s3.*', add_auth_header)
 ```
 
-S3 uses MD5 hashes, so set the cluster to use it:
-
-```shell
-ais config cluster checksum.type=md5
-```
-
-Now AIS will accept S3 commands and behave as an S3 client. 
+This setup replaces the `Authorization` header with the correct token before the request is sent to the AIStore server.
 
 ## References
 
