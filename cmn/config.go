@@ -447,29 +447,39 @@ type (
 	}
 
 	HTTPConf struct {
-		Proto           string `json:"-"`                 // http or https (set depending on `UseHTTPS`)
-		Certificate     string `json:"server_crt"`        // HTTPS: X.509 certificate
-		CertKey         string `json:"server_key"`        // HTTPS: X.509 key
-		ServerNameTLS   string `json:"domain_tls"`        // #6410
-		ClientCA        string `json:"client_ca_tls"`     // #6410
-		ClientAuthTLS   int    `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
-		WriteBufferSize int    `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 4KB
-		ReadBufferSize  int    `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
-		UseHTTPS        bool   `json:"use_https"`         // use HTTPS
-		SkipVerifyCrt   bool   `json:"skip_verify"`       // skip X.509 cert verification (used with self-signed certs)
-		Chunked         bool   `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
+		Proto         string `json:"-"`             // http or https (set depending on `UseHTTPS`)
+		Certificate   string `json:"server_crt"`    // HTTPS: X.509 certificate
+		CertKey       string `json:"server_key"`    // HTTPS: X.509 key
+		ServerNameTLS string `json:"domain_tls"`    // #6410
+		ClientCA      string `json:"client_ca_tls"` // #6410
+		// added v3.26
+		IdleConnTimeout     cos.Duration `json:"idle_conn_time"`
+		MaxIdleConnsPerHost int          `json:"idle_conns_per_host"`
+		MaxIdleConns        int          `json:"idle_conns"`
+		// cont-d
+		ClientAuthTLS   int  `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
+		WriteBufferSize int  `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 4KB
+		ReadBufferSize  int  `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
+		UseHTTPS        bool `json:"use_https"`         // use HTTPS
+		SkipVerifyCrt   bool `json:"skip_verify"`       // skip X.509 cert verification (used with self-signed certs)
+		Chunked         bool `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
 	}
 	HTTPConfToSet struct {
-		Certificate     *string `json:"server_crt,omitempty"`
-		CertKey         *string `json:"server_key,omitempty"`
-		ServerNameTLS   *string `json:"domain_tls,omitempty"`
-		ClientCA        *string `json:"client_ca_tls,omitempty"`
-		WriteBufferSize *int    `json:"write_buffer_size,omitempty" list:"readonly"`
-		ReadBufferSize  *int    `json:"read_buffer_size,omitempty" list:"readonly"`
-		ClientAuthTLS   *int    `json:"client_auth_tls,omitempty"`
-		UseHTTPS        *bool   `json:"use_https,omitempty"`
-		SkipVerifyCrt   *bool   `json:"skip_verify,omitempty"`
-		Chunked         *bool   `json:"chunked_transfer,omitempty"`
+		Certificate   *string `json:"server_crt,omitempty"`
+		CertKey       *string `json:"server_key,omitempty"`
+		ServerNameTLS *string `json:"domain_tls,omitempty"`
+		ClientCA      *string `json:"client_ca_tls,omitempty"`
+		// added v3.26
+		IdleConnTimeout     *cos.Duration `json:"idle_conn_time,omitempty"`
+		MaxIdleConnsPerHost *int          `json:"idle_conns_per_host,omitempty"`
+		MaxIdleConns        *int          `json:"idle_conns,omitempty"`
+		// cont-d
+		WriteBufferSize *int  `json:"write_buffer_size,omitempty" list:"readonly"`
+		ReadBufferSize  *int  `json:"read_buffer_size,omitempty" list:"readonly"`
+		ClientAuthTLS   *int  `json:"client_auth_tls,omitempty"`
+		UseHTTPS        *bool `json:"use_https,omitempty"`
+		SkipVerifyCrt   *bool `json:"skip_verify,omitempty"`
+		Chunked         *bool `json:"chunked_transfer,omitempty"`
 	}
 
 	FSHCConf struct {
