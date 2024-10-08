@@ -1,4 +1,6 @@
-FROM golang:1.22
+ARG GO_VERSION=1.23
+
+FROM golang:${GO_VERSION}
 
 RUN apt update -yq
 RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof coreutils python3 python3-pip python3-setuptools s3cmd docker.io uuid-runtime bc gettext-base

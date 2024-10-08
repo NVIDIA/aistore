@@ -21,12 +21,6 @@ on:
         type: boolean
         default: false
 
-      build_ci_image:
-        description: 'Build GitLab CI image (aistorage/ci)'
-        required: true
-        type: boolean
-        default: false
-
       build_aisnode_minikube_image:
         description: 'Build aisnode-minikube image (aistorage/aisnode-minikube)'
         required: true
@@ -84,13 +78,6 @@ jobs:
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/docker/single
           IMAGE_REPO="${{ env.CLUSTER_MINIMAL_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
-          popd
-
-      - name: Build and push `ci` image
-        if: ${{ inputs.build_gitlab_ci_image }}
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/ci
-          CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
           popd
 
       - name: Build and push `aisnode-minikube` image
