@@ -114,7 +114,7 @@ def probing_frequency(dur: int) -> float:
     return max(freq, 0.1)
 
 
-def read_file_bytes(filepath: str):
+def read_file_bytes(filepath: str) -> bytes:
     """
     Given a filepath, read the content as bytes
     Args:
@@ -126,37 +126,40 @@ def read_file_bytes(filepath: str):
         return reader.read()
 
 
-def _check_path_exists(path: str) -> None:
-    if not Path(path).exists():
+def _check_path_exists(path: Path) -> None:
+    if not path.exists():
         raise ValueError(f"Path: {path} does not exist")
 
 
-def validate_file(path: str) -> None:
+def validate_file(path: str or Path) -> None:
     """
     Validate that a file exists and is a file
     Args:
-        path: Path to validate
+        path (str or Path): Path to validate
     Raises:
         ValueError: If path does not exist or is not a file
     """
+    if isinstance(path, str):
+        path = Path(path)
     _check_path_exists(path)
-    path_obj = Path(path)
-    if not path_obj.exists():
+    if not path.exists():
         raise ValueError(f"Path: {path} does not exist")
-    if not path_obj.is_file():
+    if not path.is_file():
         raise ValueError(f"Path: {path} is a directory, not a file")
 
 
-def validate_directory(path: str) -> None:
+def validate_directory(path: str or Path) -> None:
     """
     Validate that a directory exists and is a directory
     Args:
-        path: Path to validate
+        path (str or Path): Path to validate
     Raises:
         ValueError: If path does not exist or is not a directory
     """
+    if isinstance(path, str):
+        path = Path(path)
     _check_path_exists(path)
-    if not Path(path).is_dir():
+    if not path.is_dir():
         raise ValueError(f"Path: {path} is a file, not a directory")
 
 
@@ -229,7 +232,7 @@ def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
 
     Args:
         name (str): The name of the logger.
-        format (str, optional): Logging format.
+        log_format (str, optional): Logging format.
 
     Returns:
         logging.Logger: Configured logger instance.

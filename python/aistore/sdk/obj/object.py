@@ -3,6 +3,7 @@
 #
 from dataclasses import dataclass
 from io import BufferedWriter
+from pathlib import Path
 from typing import Dict
 
 from requests import Response
@@ -42,7 +43,7 @@ from aistore.sdk.types import (
     PromoteAPIArgs,
     BlobMsg,
 )
-from aistore.sdk.utils import read_file_bytes, validate_file
+from aistore.sdk.utils import validate_file
 from aistore.sdk.obj.object_props import ObjectProps
 
 
@@ -247,14 +248,14 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        return self._put_data(content)
+        return self._put_data(data=content)
 
-    def put_file(self, path: str = None) -> Response:
+    def put_file(self, path: str or Path) -> Response:
         """
         Puts a local file as an object to a bucket in AIS storage.
 
         Args:
-            path (str): Path to local file
+            path (str or Path): Path to local file
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -264,9 +265,10 @@ class Object:
             ValueError: The path provided is not a valid file
         """
         validate_file(path)
-        return self._put_data(read_file_bytes(path))
+        with open(path, "rb") as f:
+            return self._put_data(f)
 
-    def _put_data(self, data: bytes) -> Response:
+    def _put_data(self, data) -> Response:
         return self._client.request(
             HTTP_METHOD_PUT,
             path=self._object_path,

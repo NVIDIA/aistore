@@ -176,16 +176,15 @@ class TestObject(unittest.TestCase):
         mock_exists.return_value = True
         mock_is_file.return_value = True
         path = "any/filepath"
-        data = b"bytes in the file"
-
-        with patch("builtins.open", mock_open(read_data=data)):
+        mock_file = mock_open(read_data=b"file content")
+        with patch("builtins.open", mock_file):
             self.object.put_file(path)
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
             params=self.expected_params,
-            data=data,
+            data=mock_file.return_value,
         )
 
     def test_put_content(self):

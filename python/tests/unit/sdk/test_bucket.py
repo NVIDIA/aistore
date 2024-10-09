@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock, call, patch, MagicMock
+from unittest.mock import Mock, call, patch, MagicMock, mock_open
 
 from requests.structures import CaseInsensitiveDict
 
@@ -540,48 +540,50 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(self.ais_bck.qparam, new_obj.query_params)
         self.assertEqual(props, new_obj.props)
 
-    @patch("aistore.sdk.obj.object.read_file_bytes")
     @patch("aistore.sdk.obj.object.validate_file")
     @patch("aistore.sdk.bucket.validate_directory")
     @patch("pathlib.Path.glob")
-    def test_put_files(
-        self, mock_glob, mock_validate_dir, mock_validate_file, mock_read
-    ):
+    def test_put_files(self, mock_glob, mock_validate_dir, mock_validate_file):
         path = "directory"
-        file_1 = ("file_1_name", b"bytes in the first file")
-        file_2 = ("file_2_name", b"bytes in the second file")
+        file_names = ["file_1_name", "file_2_name"]
+        file_sizes = [123, 4567]
 
-        path_1 = Mock()
-        path_1.is_file.return_value = True
-        path_1.relative_to.return_value = file_1[0]
-        path_1.stat.return_value = Mock(st_size=123)
+        file_readers = [
+            mock_open(read_data=b"bytes in the first file").return_value,
+            mock_open(read_data=b"bytes in the second file").return_value,
+        ]
+        mock_file = mock_open()
+        mock_file.side_effect = file_readers
 
-        path_2 = Mock()
-        path_2.is_file.return_value = True
-        path_2.relative_to.return_value = file_2[0]
-        path_2.stat.return_value = Mock(st_size=4567)
+        # Set up mock files
+        mock_files = [
+            Mock(
+                is_file=Mock(return_value=True),
+                relative_to=Mock(return_value=name),
+                stat=Mock(return_value=Mock(st_size=size)),
+            )
+            for name, size in zip(file_names, file_sizes)
+        ]
+        mock_glob.return_value = mock_files
 
-        mock_glob.return_value = [path_1, path_2]
-        expected_obj_names = [file_1[0], file_2[0]]
-        mock_read.side_effect = [file_1[1], file_2[1]]
-
-        res = self.ais_bck.put_files(path)
+        with patch("builtins.open", mock_file):
+            res = self.ais_bck.put_files(path)
 
         # Ensure that put_files is called for files for the directory at path
         mock_validate_dir.assert_called_with(path)
         # Ensure that files have been created with the proper path
-        mock_validate_file.assert_has_calls([call(str(path_1)), call(str(path_2))])
+        mock_validate_file.assert_has_calls([call(str(f)) for f in mock_files])
         # Ensure that the files put in the bucket have the sane names
-        self.assertEqual(expected_obj_names, res)
+        self.assertEqual(file_names, res)
         expected_calls = []
 
-        for file_name, file_data in [file_1, file_2]:
+        for file_name, file_reader in zip(file_names, file_readers):
             expected_calls.append(
                 call(
                     HTTP_METHOD_PUT,
                     path=f"objects/{BCK_NAME}/{file_name}",
                     params=self.ais_bck_params,
-                    data=file_data,
+                    data=file_reader,
                 )
             )
 
