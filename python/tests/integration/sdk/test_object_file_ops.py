@@ -167,3 +167,32 @@ class TestObjectFileOps(unittest.TestCase):
 
         with tarfile.open(fileobj=BytesIO(file_data)) as tar:
             tar.extractall(path=self.EXTRACT_PATH)
+
+    def test_context_manager(self):
+        """Test the context manager (__enter__ and __exit__) functionality."""
+        # First read using context manager
+        with self.file_obj as f:
+            # Ensure the file is readable
+            self.assertTrue(f.readable())
+            # Read first part of the data
+            read_size = DEFAULT_CHUNK_SIZE
+            data1 = f.read(read_size)
+            self.assertEqual(data1, self.tar_data[:read_size])
+            self.assertEqual(f.tell(), read_size)
+
+        # After exiting the context, the file should be closed
+        self.assertFalse(self.file_obj.readable())
+        self.assertFalse(self.file_obj.seekable())
+        with self.assertRaises(ValueError):
+            self.file_obj.tell()
+        with self.assertRaises(ValueError):
+            self.file_obj.read()
+
+        # Re-open and read from the beginning using context manager
+        with self.file_obj as f:
+            # Ensure the file is readable
+            self.assertTrue(f.readable())
+            # Read the entire data
+            data2 = f.read()
+            self.assertEqual(data2, self.tar_data)
+            self.assertEqual(f.tell(), len(self.tar_data))

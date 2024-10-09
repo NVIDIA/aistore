@@ -119,6 +119,19 @@ class ObjectFile(BufferedIOBase):
 
         self._reset_iterator()
 
+    def __enter__(self):
+        logger.debug("Entering context, resetting file state.")
+        self._closed = False
+        self._current_pos = 0
+        self._resume_total = 0
+        self._buffer.empty()
+        self._reset_iterator()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        logger.debug("Exiting context, closing file.")
+        self.close()
+
     def close(self) -> None:
         """
         Close the file and release resources.
@@ -128,6 +141,7 @@ class ObjectFile(BufferedIOBase):
         """
         if self._closed:
             raise ValueError("I/O operation on closed file.")
+
         logger.debug("Closing file.")
         self._buffer.empty()
         self._chunk_iterator = None
