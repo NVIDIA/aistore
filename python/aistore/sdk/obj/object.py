@@ -107,7 +107,7 @@ class Object:
         """Properties of this object."""
         return self._props
 
-    def head(self) -> CaseInsensitiveDict[str]:
+    def head(self) -> CaseInsensitiveDict:
         """
         Requests object properties and returns headers. Updates props.
 
