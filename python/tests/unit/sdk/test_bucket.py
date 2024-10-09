@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, call, patch, MagicMock
 
+from requests.structures import CaseInsensitiveDict
+
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.bucket import Bucket, Header
 from aistore.sdk.obj.object import Object
@@ -48,6 +50,7 @@ from aistore.sdk.errors import (
     ErrBckNotFound,
     UnexpectedHTTPStatusCode,
 )
+from aistore.sdk.obj.object_props import ObjectProps
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
@@ -527,8 +530,15 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(expected_response, result_id)
 
     def test_object(self):
-        new_obj = self.ais_bck.object(obj_name="name")
-        self.assertEqual(self.ais_bck, new_obj.bucket)
+        obj_name = "testobject"
+        props = ObjectProps(CaseInsensitiveDict({"testkey": "testval"}))
+
+        new_obj = self.ais_bck.object(obj_name=obj_name, props=props)
+
+        self.assertEqual(self.ais_bck.name, new_obj.bucket_name)
+        self.assertEqual(self.ais_bck.provider, new_obj.bucket_provider)
+        self.assertEqual(self.ais_bck.qparam, new_obj.query_params)
+        self.assertEqual(props, new_obj.props)
 
     @patch("aistore.sdk.obj.object.read_file_bytes")
     @patch("aistore.sdk.obj.object.validate_file")

@@ -1,8 +1,9 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
+from dataclasses import dataclass
 from io import BufferedWriter
-from typing import Dict, NewType
+from typing import Dict
 
 from requests import Response
 from requests.structures import CaseInsensitiveDict
@@ -35,6 +36,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
+from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
     PromoteAPIArgs,
@@ -43,34 +45,57 @@ from aistore.sdk.types import (
 from aistore.sdk.utils import read_file_bytes, validate_file
 from aistore.sdk.obj.object_props import ObjectProps
 
-Header = NewType("Header", CaseInsensitiveDict)
+
+@dataclass
+class BucketDetails:
+    """
+    Metadata about a bucket, used by objects within that bucket.
+    """
+
+    name: str
+    provider: str
+    qparams: Dict[str, str]
 
 
-# pylint: disable=consider-using-with,unused-variable
 class Object:
     """
-    A class representing an object of a bucket bound to a client.
+    Provides methods for interacting with an object in AIS.
 
     Args:
-        bucket (Bucket): Bucket to which this object belongs
-        name (str): name of object
-        size (int, optional): size of object in bytes
-        props (ObjectProps, optional): Properties of object
+        client (RequestClient): Client used for all http requests.
+        bck_details (BucketDetails): Metadata about the bucket to which this object belongs.
+        name (str): Name of the object.
+        props (ObjectProps, optional): Properties of the object, as updated by head(), optionally pre-initialized.
     """
 
-    def __init__(self, bucket: "Bucket", name: str, props: ObjectProps = None):
-        self._bucket = bucket
-        self._client = bucket.client
-        self._bck_name = bucket.name
-        self._qparams = bucket.qparam
+    def __init__(
+        self,
+        client: RequestClient,
+        bck_details: BucketDetails,
+        name: str,
+        props: ObjectProps = None,
+    ):
+        self._client = client
+        self._bck_details = bck_details
+        self._bck_path = f"{URL_PATH_OBJECTS}/{ bck_details.name}"
+        self._object_path = f"{self._bck_path}/{name}"
         self._name = name
-        self._object_path = f"{URL_PATH_OBJECTS}/{ self._bck_name}/{ self.name }"
         self._props = props
 
     @property
-    def bucket(self):
-        """Bucket containing this object."""
-        return self._bucket
+    def bucket_name(self) -> str:
+        """Name of the bucket where this object resides."""
+        return self._bck_details.name
+
+    @property
+    def bucket_provider(self):
+        """Provider of the bucket where this object resides (e.g. ais, s3, gcp)."""
+        return self._bck_details.provider
+
+    @property
+    def query_params(self) -> Dict[str, str]:
+        """Query params used as a base for constructing all requests for this object."""
+        return self._bck_details.qparams
 
     @property
     def name(self) -> str:
@@ -82,7 +107,7 @@ class Object:
         """Properties of this object."""
         return self._props
 
-    def head(self) -> Header:
+    def head(self) -> CaseInsensitiveDict[str]:
         """
         Requests object properties and returns headers. Updates props.
 
@@ -99,7 +124,7 @@ class Object:
         headers = self._client.request(
             HTTP_METHOD_HEAD,
             path=self._object_path,
-            params=self._qparams,
+            params=self.query_params,
         ).headers
         self._props = ObjectProps(headers)
         return headers
@@ -139,14 +164,13 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        params = self._qparams.copy()
+        params = self.query_params.copy()
         headers = {}
         if archive_config:
             if archive_config.mode:
-                archive_config.mode = archive_config.mode.value
+                params[QPARAM_ARCHMODE] = archive_config.mode.value
             params[QPARAM_ARCHPATH] = archive_config.archpath
             params[QPARAM_ARCHREGX] = archive_config.regex
-            params[QPARAM_ARCHMODE] = archive_config.mode
 
         if blob_download_config:
             headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
@@ -188,7 +212,7 @@ class Object:
             Semantic URL to get object
         """
 
-        return f"{self.bucket.provider}://{self._bck_name}/{self._name}"
+        return f"{self.bucket_provider}://{self.bucket_name}/{self._name}"
 
     def get_url(self, archpath: str = "", etl_name: str = None) -> str:
         """
@@ -203,7 +227,7 @@ class Object:
             Full URL to get object
 
         """
-        params = self._qparams.copy()
+        params = self.query_params.copy()
         if archpath:
             params[QPARAM_ARCHPATH] = archpath
         if etl_name:
@@ -223,7 +247,7 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        return self._put_data(self.name, content)
+        return self._put_data(content)
 
     def put_file(self, path: str = None) -> Response:
         """
@@ -240,14 +264,13 @@ class Object:
             ValueError: The path provided is not a valid file
         """
         validate_file(path)
-        return self._put_data(self.name, read_file_bytes(path))
+        return self._put_data(read_file_bytes(path))
 
-    def _put_data(self, obj_name: str, data: bytes) -> Response:
-        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ obj_name }"
+    def _put_data(self, data: bytes) -> Response:
         return self._client.request(
             HTTP_METHOD_PUT,
-            path=url,
-            params=self._qparams,
+            path=self._object_path,
+            params=self.query_params,
             data=data,
         )
 
@@ -285,7 +308,6 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             AISError: Path does not exist on the AIS cluster storage
         """
-        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }"
         value = PromoteAPIArgs(
             source_path=path,
             object_name=self.name,
@@ -298,7 +320,10 @@ class Object:
         json_val = ActionMsg(action=ACT_PROMOTE, name=path, value=value).dict()
 
         return self._client.request(
-            HTTP_METHOD_POST, path=url, params=self._qparams, json=json_val
+            HTTP_METHOD_POST,
+            path=self._bck_path,
+            params=self.query_params,
+            json=json_val,
         ).text
 
     def delete(self) -> Response:
@@ -318,7 +343,7 @@ class Object:
         return self._client.request(
             HTTP_METHOD_DELETE,
             path=self._object_path,
-            params=self._qparams,
+            params=self.query_params,
         )
 
     def blob_download(
@@ -346,7 +371,7 @@ class Object:
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
         """
-        params = self._qparams.copy()
+        params = self.query_params.copy()
         value = BlobMsg(
             chunk_size=chunk_size,
             num_workers=num_workers,
@@ -355,9 +380,8 @@ class Object:
         json_val = ActionMsg(
             action=ACT_BLOB_DOWNLOAD, value=value, name=self.name
         ).dict()
-        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }"
         return self._client.request(
-            HTTP_METHOD_POST, path=url, params=params, json=json_val
+            HTTP_METHOD_POST, path=self._bck_path, params=params, json=json_val
         ).text
 
     def append_content(
@@ -381,15 +405,13 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exceptions.HTTPError(404): The object does not exist
         """
-
-        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }"
-        params = self._qparams.copy()
+        params = self.query_params.copy()
         params[QPARAM_OBJ_APPEND] = "append" if not flush else "flush"
         params[QPARAM_OBJ_APPEND_HANDLE] = handle
 
         resp_headers = self._client.request(
             HTTP_METHOD_PUT,
-            path=url,
+            path=self._object_path,
             params=params,
             data=content,
         ).headers
@@ -406,14 +428,12 @@ class Object:
             custom_metadata (Dict[str, str]): Custom metadata key-value pairs.
             replace_existing (bool, optional): Whether to replace existing metadata. Defaults to False.
         """
-        params = self._qparams.copy()
+        params = self.query_params.copy()
         if replace_existing:
             params[QPARAM_NEW_CUSTOM] = "true"
-
-        url = f"{URL_PATH_OBJECTS}/{self._bck_name}/{self.name}"
 
         json_val = ActionMsg(action="", value=custom_metadata).dict()
 
         return self._client.request(
-            HTTP_METHOD_PATCH, path=url, params=params, json=json_val
+            HTTP_METHOD_PATCH, path=self._object_path, params=params, json=json_val
         )

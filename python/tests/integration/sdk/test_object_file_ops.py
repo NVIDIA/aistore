@@ -2,14 +2,15 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-# pylint: disable=protected-access
-
 import os
+import shutil
 import tarfile
 import unittest
 
 from io import BytesIO
+from pathlib import Path
 
+from aistore.sdk import Bucket
 from aistore.sdk.client import Client
 from aistore.sdk.obj.object_file import ObjectFile
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
@@ -18,11 +19,13 @@ from tests.utils import create_random_tarballs
 
 
 class TestObjectFileOps(unittest.TestCase):
-    TAR_FILE_DIR = "./generated-tarballs"
-    TAR_FILE_PATH = "./generated-tarballs/input-shard-0.tar"
-    EXTRACT_PATH = "./extracted-tar-files"
+    TAR_FILE_DIR = Path("generated-tarballs")
+    TAR_FILE_PATH = TAR_FILE_DIR.joinpath("input-shard-0.tar")
+    EXTRACT_PATH = Path("extracted-tar-files")
     OBJECT_NAME = "test-tarball.tar"
     BUCKET_NAME = "test-tar-bucket"
+    client: Client = None
+    bucket: Bucket = None
 
     @classmethod
     def setUpClass(cls):
@@ -37,7 +40,7 @@ class TestObjectFileOps(unittest.TestCase):
                 num_files=100,
                 num_extensions=5,
                 min_shard_size=5000000,
-                dest_dir=cls.TAR_FILE_DIR,
+                dest_dir=cls.TAR_FILE_DIR.name,
             )
 
         # Read the generated tarball and upload it to the bucket
@@ -50,10 +53,9 @@ class TestObjectFileOps(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         # Delete the test bucket
-        cls.bucket.delete()
-        # Remove the generated tar file
-        if os.path.exists(cls.TAR_FILE_PATH):
-            os.remove(cls.TAR_FILE_PATH)
+        cls.bucket.delete(missing_ok=True)
+        # Remove any generated files
+        shutil.rmtree(cls.TAR_FILE_DIR)
 
     def setUp(self):
         self.file_obj = self.bucket.object(self.OBJECT_NAME).get().as_file()
@@ -80,9 +82,6 @@ class TestObjectFileOps(unittest.TestCase):
     def test_close(self):
         """Test file close."""
         self.file_obj.close()
-        self.assertTrue(self.file_obj._closed)
-        self.assertEqual(self.file_obj._buffer._buffer, b"")
-        self.assertEqual(self.file_obj._chunk_iterator, None)
         self.assertFalse(self.file_obj.readable())
         self.assertFalse(self.file_obj.seekable())
         with self.assertRaises(ValueError):

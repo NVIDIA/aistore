@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 import requests
 
@@ -25,7 +25,7 @@ class ObjectClient:
         self,
         request_client: RequestClient,
         path: str,
-        params: List[str],
+        params: Dict[str, str],
         headers: Optional[Dict[str, str]] = None,
     ):
         self._request_client = request_client

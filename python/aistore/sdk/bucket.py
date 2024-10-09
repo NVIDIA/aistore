@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-from __future__ import annotations  # pylint: disable=unused-variable
+from __future__ import annotations
 
 import json
 import logging
@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 from typing import Dict, List, NewType, Iterable
 import requests
+from requests import structures
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
@@ -58,7 +59,7 @@ from aistore.sdk.errors import (
 )
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.obj.object import Object
+from aistore.sdk.obj.object import Object, BucketDetails
 from aistore.sdk.types import (
     ActionMsg,
     BucketEntry,
@@ -75,10 +76,10 @@ from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.utils import validate_directory, get_file_size
 from aistore.sdk.obj.object_props import ObjectProps
 
-Header = NewType("Header", requests.structures.CaseInsensitiveDict)
+Header = NewType("Header", structures.CaseInsensitiveDict)
 
 
-# pylint: disable=unused-variable,too-many-public-methods,too-many-lines
+# pylint: disable=too-many-public-methods,too-many-lines
 class Bucket(AISSource):
     """
     A class representing a bucket that contains user data.
@@ -107,12 +108,12 @@ class Bucket(AISSource):
 
     @property
     def client(self) -> RequestClient:
-        """The client bound to this bucket."""
+        """The client used by this bucket."""
         return self._client
 
     @client.setter
-    def client(self, client) -> RequestClient:
-        """Update the client bound to this bucket."""
+    def client(self, client):
+        """Update the client used by this bucket."""
         self._client = client
 
     @property
@@ -826,12 +827,15 @@ class Bucket(AISSource):
 
         Args:
             obj_name (str): Name of object
-            size (int, optional): Size of object in bytes
+            props (ObjectProps, optional): Properties of the object, as updated by head(), optionally pre-initialized.
 
         Returns:
             The object created.
         """
-        return Object(bucket=self, name=obj_name, props=props)
+        details = BucketDetails(self.name, self.provider, self.qparam)
+        return Object(
+            client=self.client, bck_details=details, name=obj_name, props=props
+        )
 
     def objects(
         self,
@@ -938,7 +942,7 @@ class Bucket(AISSource):
             **kwargs (optional): Optional keyword arguments to pass to the ShardWriter
         """
 
-        # Add the upload shard logic to the original post processing function
+        # Add the upload shard logic to the original post-processing function
         original_post = kwargs.get("post", lambda path: None)
 
         def combined_post_processing(shard_path):

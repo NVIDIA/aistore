@@ -34,7 +34,7 @@ from aistore.sdk.const import (
     AIS_MIRROR_COPIES,
     AIS_PRESENT,
 )
-from aistore.sdk.obj.object import Object
+from aistore.sdk.obj.object import Object, BucketDetails
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
@@ -56,17 +56,20 @@ REQUEST_PATH = f"{URL_PATH_OBJECTS}/{BCK_NAME}/{OBJ_NAME}"
 class TestObject(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock()
-        self.mock_bucket = Mock()
-        self.mock_bucket.client = self.mock_client
-        self.mock_bucket.name = BCK_NAME
+        self.bck_qparams = {"propkey": "propval"}
+        self.bucket_details = BucketDetails(
+            BCK_NAME, AIS_BCK_PROVIDER, self.bck_qparams
+        )
         self.mock_writer = Mock()
-        self.mock_bucket.qparam = {}
-        self.expected_params = {}
-        self.object = Object(self.mock_bucket, OBJ_NAME)
+        self.expected_params = self.bck_qparams
+        self.object = Object(self.mock_client, self.bucket_details, OBJ_NAME)
 
     def test_properties(self):
-        self.assertEqual(self.mock_bucket, self.object.bucket)
+        self.assertEqual(BCK_NAME, self.object.bucket_name)
+        self.assertEqual(AIS_BCK_PROVIDER, self.object.bucket_provider)
+        self.assertEqual(self.bck_qparams, self.object.query_params)
         self.assertEqual(OBJ_NAME, self.object.name)
+        self.assertIsNone(self.object.props)
 
     def test_head(self):
         self.object.head()
@@ -157,10 +160,14 @@ class TestObject(unittest.TestCase):
         expected_res = "full url"
         archpath = "arch"
         self.mock_client.get_full_url.return_value = expected_res
+        self.expected_params[QPARAM_ARCHPATH] = archpath
+        self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
+
         res = self.object.get_url(archpath=archpath, etl_name=ETL_NAME)
+
         self.assertEqual(expected_res, res)
         self.mock_client.get_full_url.assert_called_with(
-            REQUEST_PATH, {QPARAM_ARCHPATH: archpath, QPARAM_ETL_NAME: ETL_NAME}
+            REQUEST_PATH, self.expected_params
         )
 
     @patch("pathlib.Path.is_file")
@@ -369,7 +376,7 @@ class TestObject(unittest.TestCase):
             }
         )
 
-        self.mock_bucket.client.request.return_value = Mock(headers=headers)
+        self.mock_client.request.return_value = Mock(headers=headers)
 
         self.assertEqual(self.object.props, None)
 
