@@ -44,12 +44,10 @@ type (
 // NOTE: TLS below, and separately
 func NewTransport(cargs TransportArgs) *http.Transport {
 	var (
-		dialTimeout      = cargs.DialTimeout
 		defaultTransport = http.DefaultTransport.(*http.Transport)
+		dialTimeout      = cos.NonZero(cargs.DialTimeout, 30*time.Second)
 	)
-	if dialTimeout == 0 {
-		dialTimeout = 30 * time.Second
-	}
+
 	dialer := &net.Dialer{
 		Timeout:   dialTimeout,
 		KeepAlive: 30 * time.Second,
@@ -62,30 +60,15 @@ func NewTransport(cargs TransportArgs) *http.Transport {
 		DialContext:           dialer.DialContext,
 		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		IdleConnTimeout:       cargs.IdleConnTimeout,
-		MaxIdleConnsPerHost:   cargs.IdleConnsPerHost,
-		MaxIdleConns:          cargs.MaxIdleConns,
-		WriteBufferSize:       cargs.WriteBufferSize,
-		ReadBufferSize:        cargs.ReadBufferSize,
 		DisableCompression:    true, // NOTE: hardcoded - never used
 	}
+	transport.IdleConnTimeout = cos.NonZero(cargs.IdleConnTimeout, DefaultIdleConnTimeout)
+	transport.MaxIdleConnsPerHost = cos.NonZero(cargs.IdleConnsPerHost, DefaultMaxIdleConnsPerHost)
+	transport.MaxIdleConns = cos.NonZero(cargs.MaxIdleConns, DefaultMaxIdleConns)
 
-	// apply global defaults
-	if transport.MaxIdleConnsPerHost == 0 {
-		transport.MaxIdleConnsPerHost = DefaultMaxIdleConnsPerHost
-	}
-	if transport.MaxIdleConns == 0 {
-		transport.MaxIdleConns = DefaultMaxIdleConns
-	}
-	if transport.IdleConnTimeout == 0 {
-		transport.IdleConnTimeout = DefaultIdleConnTimeout
-	}
-	if transport.WriteBufferSize == 0 {
-		transport.WriteBufferSize = DefaultWriteBufferSize
-	}
-	if transport.ReadBufferSize == 0 {
-		transport.ReadBufferSize = DefaultReadBufferSize
-	}
+	transport.WriteBufferSize = cos.NonZero(cargs.WriteBufferSize, DefaultWriteBufferSize)
+	transport.ReadBufferSize = cos.NonZero(cargs.ReadBufferSize, DefaultReadBufferSize)
+
 	// not used anymore
 	if cargs.UseHTTPProxyEnv {
 		transport.Proxy = defaultTransport.Proxy

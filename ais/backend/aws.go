@@ -744,6 +744,9 @@ func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 // From S3 SDK:
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
+
+// TODO: use config.Net.HTTP.IdleConnTimeout and friends (https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/custom-http)
+
 func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	var (
 		endpoint = s3Endpoint

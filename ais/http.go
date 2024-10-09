@@ -59,9 +59,12 @@ func initCtrlClient(config *cmn.Config) {
 		defaultControlReadBufferSize  = 16 * cos.KiB
 	)
 	cargs := cmn.TransportArgs{
-		Timeout:         config.Client.Timeout.D(),
-		WriteBufferSize: defaultControlWriteBufferSize,
-		ReadBufferSize:  defaultControlReadBufferSize,
+		Timeout:          config.Client.Timeout.D(),
+		WriteBufferSize:  defaultControlWriteBufferSize,
+		ReadBufferSize:   defaultControlReadBufferSize,
+		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
+		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
+		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.control = cmn.NewIntraClientTLS(cargs, config)
@@ -80,9 +83,12 @@ func initDataClient(config *cmn.Config) {
 		rbuf = cmn.DefaultReadBufferSize
 	}
 	cargs := cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong.D(),
-		WriteBufferSize: wbuf,
-		ReadBufferSize:  rbuf,
+		Timeout:          config.Client.TimeoutLong.D(),
+		WriteBufferSize:  wbuf,
+		ReadBufferSize:   rbuf,
+		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
+		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
+		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.data = cmn.NewIntraClientTLS(cargs, config)

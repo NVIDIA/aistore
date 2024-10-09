@@ -570,7 +570,7 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 * CORS
 * Website endpoints
 * CloudFront CDN
-
+* S3 ACLs (table above)
 
 ## Boto3 Compatibility
 

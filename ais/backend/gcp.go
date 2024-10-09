@@ -96,6 +96,8 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker) (_ core.Backend, err error) 
 	return bp, err
 }
 
+// TODO: use config.Net.HTTP.IdleConnTimeout and friends
+
 func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {
 	opts := []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
 	if gsbp.projectID == "" {

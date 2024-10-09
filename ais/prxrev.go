@@ -112,7 +112,12 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 func rpTransport(config *cmn.Config) *http.Transport {
 	var (
 		err       error
-		transport = cmn.NewTransport(cmn.TransportArgs{Timeout: config.Client.Timeout.D()})
+		transport = cmn.NewTransport(cmn.TransportArgs{
+			Timeout:          config.Client.Timeout.D(),
+			IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
+			IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
+			MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
+		})
 	)
 	if config.Net.HTTP.UseHTTPS {
 		transport.TLSClientConfig, err = cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra-cluster*/)

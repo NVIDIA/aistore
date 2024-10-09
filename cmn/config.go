@@ -1252,6 +1252,15 @@ func (c *HTTPConf) Validate() error {
 	if c.ServerNameTLS != "" {
 		return fmt.Errorf("invalid domain_tls %q: expecting empty (domain names/SANs should be set in X.509 cert)", c.ServerNameTLS)
 	}
+	if d := c.IdleConnTimeout.D(); d < 0 || d > 90*time.Second {
+		return fmt.Errorf("invalid idle_conn_time %v (expecting range [0 - %v])", d, 90*time.Second)
+	}
+	if c.MaxIdleConns != 0 && c.MaxIdleConnsPerHost > c.MaxIdleConns {
+		return fmt.Errorf("invalid (idle_conns, idle_conns_per_host): (%d and %d), respectively", c.MaxIdleConns, c.MaxIdleConnsPerHost)
+	}
+	if n := c.MaxIdleConns; n < 0 || n > 1000 {
+		return fmt.Errorf("invalid idle_conns %d (expecting range [0 - %d])", n, 1000)
+	}
 	return nil
 }
 
