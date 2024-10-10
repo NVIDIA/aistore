@@ -140,7 +140,7 @@ func NewListObjectResult(bucket string) *ListObjectResult {
 		Name:     bucket,
 		Ns:       s3Namespace,
 		MaxKeys:  apc.MaxPageSizeAWS,
-		Contents: make([]*ObjInfo, apc.MaxPageSizeAWS),
+		Contents: make([]*ObjInfo, 0, apc.MaxPageSizeAWS),
 	}
 }
 
