@@ -11,8 +11,8 @@ MIB = 2**20
 GIB = 2**30
 
 # Object Sizes
-LARGE_FILE_SIZE = 100 * MIB
-SMALL_FILE_SIZE = 10 * MIB
+LARGE_FILE_SIZE = 20 * MIB
+SMALL_FILE_SIZE = 100 * KIB
 
 # ETL
 ETL_NAME = "test-etl-name"

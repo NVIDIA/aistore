@@ -92,6 +92,7 @@ URL_PATH_AUTHN_TOKENS = "tokens"
 # See api/apc/provider.go
 PROVIDER_AIS = "ais"
 PROVIDER_AMAZON = "aws"
+PROVIDER_S3 = "s3"
 PROVIDER_AZURE = "azure"
 PROVIDER_GOOGLE = "gcp"
 PROVIDER_HTTP = "ht"

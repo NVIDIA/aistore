@@ -21,7 +21,6 @@ from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import (
     create_and_put_object,
     random_string,
-    destroy_bucket,
     cleanup_local,
     create_archive,
 )
@@ -46,7 +45,7 @@ class TestPytorchPlugin(unittest.TestCase):
         """
         Cleanup after each test, destroy the bucket if it exists
         """
-        destroy_bucket(self.client, self.bck_name)
+        self.bck.delete(missing_ok=True)
         cleanup_local(str(self.local_test_files))
 
     def test_filelister_with_prefix_variations(self):

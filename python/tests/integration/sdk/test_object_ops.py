@@ -226,8 +226,7 @@ class TestObjectOps(RemoteEnabledTest):
     )
     # pylint: disable=too-many-locals
     def test_promote(self):
-        self.bck_name = random_string()
-        self.bucket = self._create_bucket(self.bck_name)
+        self.bucket = self._create_bucket()
         self.local_test_files.mkdir()
         top_folder = self.local_test_files.joinpath("promote_folder")
         top_item = "test_file_top"
@@ -254,7 +253,7 @@ class TestObjectOps(RemoteEnabledTest):
         obj_name = "promoted_obj/"
         promote_job = self.bucket.object(obj_name).promote(str(local_files_path))
 
-        # If the promote is executed as an asynchronous job, wait until it completes
+        # If promote is executed as an asynchronous job, wait until it completes
         if promote_job:
             self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
@@ -278,7 +277,7 @@ class TestObjectOps(RemoteEnabledTest):
             overwrite_dest=True,
         )
 
-        # If the promote is executed as an asynchronous job, wait until it completes
+        # If promote is executed as an asynchronous job, wait until it completes
         if promote_job:
             self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
@@ -301,18 +300,16 @@ class TestObjectOps(RemoteEnabledTest):
         self.assertEqual(0, len(list(inner_folder.glob("*"))))
 
     def test_delete(self):
-        self.bck_name = random_string()
-        self.bucket = self._create_bucket(self.bck_name)
+        self.bucket = self._create_bucket()
         bucket_size = 10
         delete_cnt = 7
 
-        obj_names = [f"obj-{ obj_id }" for obj_id in range(bucket_size)]
-        self._create_objects(num_obj=bucket_size, obj_names=obj_names)
+        obj_names = self._create_objects(num_obj=bucket_size)
         objects = self.bucket.list_objects()
         self.assertEqual(len(objects.entries), bucket_size)
 
         for obj_id in range(delete_cnt):
-            self.bucket.object(f"obj-{ obj_id + 1 }").delete()
+            self.bucket.object(obj_names[obj_id]).delete()
         objects = self.bucket.list_objects()
         self.assertEqual(len(objects.entries), bucket_size - delete_cnt)
 

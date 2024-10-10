@@ -5,7 +5,7 @@ import hashlib
 import unittest
 import tarfile
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -13,7 +13,6 @@ from aistore.sdk.const import PROVIDER_AIS, LOREM, DUIS
 from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
 from tests.const import (
     SMALL_FILE_SIZE,
-    MIB,
     OBJECT_COUNT,
     TEST_TIMEOUT,
     PREFIX_NAME,
@@ -29,7 +28,11 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
         self.suffix = SUFFIX_NAME
-        self.obj_names = self._create_objects(suffix=self.suffix)
+        # Use a slightly larger file size to allow for blob threshold (must be > 128KiB)
+        self.file_size = SMALL_FILE_SIZE * 5
+        self.obj_names = self._create_objects(
+            suffix=self.suffix, obj_size=self.file_size
+        )
         if REMOTE_SET:
             self.s3_client = self._get_boto3_client()
 
@@ -57,15 +60,23 @@ class TestObjectGroupOps(RemoteEnabledTest):
             local_bucket.objects(obj_names=[]).evict()
 
     def _prefetch_objects_test_helper(self, num_workers=None):
-        obj_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self._evict_all_objects()
+        objects_excluded = 1
+        all_objects = self.bucket.objects(obj_names=self.obj_names)
+        # Evict and verify
+        self._evict_objects(all_objects)
+
+        # Fetch back a specific object group
+        prefetched_objects = self.bucket.objects(
+            obj_names=self.obj_names[objects_excluded:]
+        )
         prefetch_kwargs = {}
         if num_workers is not None:
             prefetch_kwargs["num_workers"] = num_workers
-        # Fetch back a specific object group and verify cache status
-        job_id = obj_group.prefetch(**prefetch_kwargs)
+        job_id = prefetched_objects.prefetch(**prefetch_kwargs)
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
-        self._verify_cached_objects(OBJECT_COUNT, range(1, OBJECT_COUNT))
+
+        # Verify all objects exist but only those in the prefetch group are now cached
+        self._verify_cached_objects(OBJECT_COUNT, range(objects_excluded, OBJECT_COUNT))
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -86,21 +97,25 @@ class TestObjectGroupOps(RemoteEnabledTest):
         "Remote bucket is not set",
     )
     def test_prefetch_blob_download(self):
-        obj_name = self.obj_prefix + str(OBJECT_COUNT) + self.suffix
-        obj_names = self._create_objects(obj_names=[obj_name], obj_size=SMALL_FILE_SIZE)
-        self.obj_names.extend(obj_names)
-        obj_group = self.bucket.objects(obj_names=obj_names)
-        self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
-        start_time = datetime.now()
-        job_id = obj_group.prefetch(blob_threshold=2 * MIB)
+        obj_group = self.bucket.objects(obj_names=self.obj_names)
+        self._evict_objects(obj_group)
+        #
+        start_time = datetime.utcnow() - timedelta(seconds=1)
+        # Use a threshold that's just low enough for our object size to require blob
+        job_id = obj_group.prefetch(blob_threshold=self.file_size)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now()
+        end_time = datetime.utcnow() + timedelta(seconds=1)
+
         jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
             start_time=start_time, end_time=end_time
         )
-        self.assertTrue(len(jobs_list) > 0)
-        self._verify_cached_objects(
-            OBJECT_COUNT + 1, range(OBJECT_COUNT, OBJECT_COUNT + 1)
+        filtered_jobs = [
+            job for job in jobs_list if job.bucket.name == self.bucket.name
+        ]
+
+        self.assertTrue(len(filtered_jobs) > 0)
+        self._check_all_objects_cached(
+            len(obj_group.list_names()), expected_cached=True
         )
 
     @unittest.skipIf(
@@ -108,23 +123,19 @@ class TestObjectGroupOps(RemoteEnabledTest):
         "Remote bucket is not set",
     )
     def test_prefetch_without_blob_download(self):
-        obj_name = self.obj_prefix + str(OBJECT_COUNT) + self.suffix
-        obj_names = self._create_objects(obj_names=[obj_name], obj_size=SMALL_FILE_SIZE)
-        self.obj_names.extend(obj_names)
-        obj_group = self.bucket.objects(obj_names=obj_names)
-        self._evict_all_objects(num_obj=OBJECT_COUNT + 1)
-        start_time = datetime.now()
-        job_id = obj_group.prefetch(blob_threshold=2 * SMALL_FILE_SIZE)
+        obj_group = self.bucket.objects(obj_names=self.obj_names)
+        self._evict_objects(obj_group)
+        start_time = datetime.utcnow() - timedelta(seconds=1)
+        job_id = obj_group.prefetch(blob_threshold=self.file_size + 1)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now()
+        end_time = datetime.utcnow() + timedelta(seconds=1)
 
         with self.assertRaises(JobInfoNotFound):
             self.client.job(job_kind="blob-download").get_within_timeframe(
                 start_time=start_time, end_time=end_time
             )
-
-        self._verify_cached_objects(
-            OBJECT_COUNT + 1, range(OBJECT_COUNT, OBJECT_COUNT + 1)
+        self._check_all_objects_cached(
+            len(obj_group.list_names()), expected_cached=True
         )
 
     def test_prefetch_objects_local(self):
@@ -133,8 +144,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
             local_bucket.objects(obj_names=[]).prefetch()
 
     def _copy_objects_test_helper(self, num_workers=None):
-        to_bck_name = "destination-bucket"
-        to_bck = self._create_bucket(to_bck_name)
+        to_bck = self._create_bucket()
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
         self.assertEqual(
             OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))
@@ -167,8 +177,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def test_copy_objects_latest_flag(self):
         obj_name = random_string()
         self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
-        to_bck_name = "dst-bck-cp-latest"
-        to_bck = self._create_bucket(to_bck_name)
+        to_bck = self._create_bucket()
 
         # out-of-band PUT: first version
         self.s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=LOREM)
@@ -210,8 +219,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         "Remote bucket is not set",
     )
     def test_copy_objects_sync_flag(self):
-        to_bck_name = "dst-bck-cp-sync"
-        to_bck = self._create_bucket(to_bck_name)
+        to_bck = self._create_bucket()
 
         # run copy with '--sync' on different dst, and make sure the object "disappears"
         # multi-obj --sync currently only supports templates
@@ -232,9 +240,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         copy_job = self.bucket.objects(obj_template=template).copy(to_bck, sync=True)
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
-        # check to see if all the objects in dst disapear after cp multi-obj sync
+        # check to see if all the objects in dst disappear after cp multi-obj sync
         self.assertEqual(len(to_bck.list_all_objects(prefix=self.obj_prefix)), 0)
-        # objects also disapear from src bck
+        # objects also disappear from src bck
         self.assertEqual(len(self.bucket.list_all_objects(prefix=self.obj_prefix)), 0)
 
     @unittest.skipIf(
@@ -297,7 +305,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
     def test_archive_objects_with_copy(self):
         arch_name = self.obj_prefix + "-archive-with-copy.tar"
-        dest_bck = self._create_bucket(random_string())
+        dest_bck = self._create_bucket()
         self._archive_exec_assert(arch_name, self.bucket, dest_bck, to_bck=dest_bck)
 
     def _archive_exec_assert(self, arch_name, src_bck, res_bck, **kwargs):
@@ -337,8 +345,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         md5_etl = self.client.etl(etl_name)
         md5_etl.init_code(transform=transform)
 
-        to_bck_name = "destination-bucket"
-        to_bck = self._create_bucket(to_bck_name)
+        to_bck = self._create_bucket()
         new_prefix = PREFIX_NAME
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
         self.assertEqual(
@@ -376,7 +383,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def test_transform_objects_with_num_workers(self):
         self._transform_objects_test_helper(num_workers=3)
 
-    def _evict_all_objects(self, num_obj=OBJECT_COUNT):
-        job_id = self.bucket.objects(obj_names=self.obj_names).evict()
+    def _evict_objects(self, obj_group):
+        job_id = obj_group.evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(num_obj, expected_cached=False)
+        self._check_all_objects_cached(
+            len(obj_group.list_names()), expected_cached=False
+        )

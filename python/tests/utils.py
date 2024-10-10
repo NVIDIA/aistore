@@ -9,8 +9,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from aistore.sdk import Client
-from aistore.sdk.const import UTF_ENCODING
-from aistore.sdk.errors import ErrBckNotFound
+from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING
 
 
 # pylint: disable=unused-variable
@@ -31,7 +30,7 @@ def create_and_put_object(
     client: Client,
     bck_name: str,
     obj_name: str,
-    provider: str = "ais",
+    provider: str = PROVIDER_AIS,
     obj_size: int = 0,
 ):
     obj_size = obj_size if obj_size else random.randrange(10, 20)
@@ -39,13 +38,6 @@ def create_and_put_object(
     content = obj_body.encode(UTF_ENCODING)
     client.bucket(bck_name, provider=provider).object(obj_name).put_content(content)
     return content
-
-
-def destroy_bucket(client: Client, bck_name: str):
-    try:
-        client.bucket(bck_name).delete()
-    except ErrBckNotFound:
-        pass
 
 
 def cleanup_local(path: str):
@@ -99,9 +91,6 @@ def create_archive(archive_name, content_dict):
 def create_random_tarballs(
     num_files: int, num_extensions: int, min_shard_size: int, dest_dir: str
 ):
-    def generate_random_string(length: int) -> str:
-        return "".join(random.choices(string.ascii_letters + string.digits, k=length))
-
     def generate_random_content(min_size: int = 1024, max_size: int = 10240) -> bytes:
         size = random.randint(min_size, max_size)
         return os.urandom(size)
@@ -113,9 +102,9 @@ def create_random_tarballs(
         dest_dir_path = Path(dest_dir)
         dest_dir_path.mkdir(parents=True, exist_ok=True)
 
-        extension_list = [generate_random_string(3) for _ in range(num_extensions)]
+        extension_list = [random_string(3) for _ in range(num_extensions)]
         for _ in range(num_files):
-            filename = generate_random_string(10)
+            filename = random_string(10)
             filenames_list.append(filename)
 
             for ext in extension_list:

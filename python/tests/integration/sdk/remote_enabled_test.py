@@ -15,13 +15,11 @@ from tests.integration import (
 )
 from tests.utils import (
     random_string,
-    destroy_bucket,
-    create_and_put_objects,
     create_and_put_object,
 )
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
-from tests.const import TEST_TIMEOUT_LONG, OBJECT_COUNT, SUFFIX_NAME
+from tests.const import TEST_TIMEOUT_LONG, OBJECT_COUNT, SUFFIX_NAME, SMALL_FILE_SIZE
 
 
 class RemoteEnabledTest(unittest.TestCase):
@@ -36,7 +34,6 @@ class RemoteEnabledTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.bck_name = random_string()
         self.client = Client(CLUSTER_ENDPOINT)
         self.buckets = []
         self.obj_prefix = f"{self._testMethodName}-{random_string(6)}"
@@ -46,10 +43,9 @@ class RemoteEnabledTest(unittest.TestCase):
             provider, bck_name = REMOTE_BUCKET.split("://")
             self.bucket = self.client.bucket(bck_name, provider=provider)
             self.provider = provider
-            self.bck_name = bck_name
         else:
             self.provider = PROVIDER_AIS
-            self.bucket = self._create_bucket(self.bck_name)
+            self.bucket = self._create_bucket()
 
     def tearDown(self) -> None:
         """
@@ -62,18 +58,16 @@ class RemoteEnabledTest(unittest.TestCase):
             if len(obj_names) > 0:
                 job_id = self.bucket.objects(obj_names=obj_names).delete()
                 self.client.job(job_id).wait(timeout=TEST_TIMEOUT_LONG)
-        for bck in self.buckets:
-            destroy_bucket(self.client, bck)
+        for bck_name in self.buckets:
+            self.client.bucket(bck_name).delete(missing_ok=True)
 
-    def _create_bucket(self, bck_name, provider=PROVIDER_AIS):
+    def _create_bucket(self):
         """
         Create a bucket and store its name for later cleanup
-        Args:
-            bck_name: Name of new bucket
-            provider: Provider for new bucket
         """
-        bck = self.client.bucket(bck_name, provider=provider)
-        bck.create()
+        bck_name = f"test-bck-{random_string(8)}"
+        bck = self.client.bucket(bck_name)
+        bck.create(exist_ok=True)
         self._register_for_post_test_cleanup(names=[bck_name], is_bucket=True)
         return bck
 
@@ -115,7 +109,7 @@ class RemoteEnabledTest(unittest.TestCase):
         obj_name = f"{self.obj_prefix}-{random_string(6)}"
         content = create_and_put_object(
             client=self.client,
-            bck_name=self.bck_name,
+            bck_name=self.bucket.name,
             obj_name=obj_name,
             provider=self.provider,
             obj_size=obj_size,
@@ -124,7 +118,7 @@ class RemoteEnabledTest(unittest.TestCase):
         return obj_name, content
 
     def _create_objects(
-        self, num_obj=OBJECT_COUNT, suffix="", obj_names=None, obj_size=None
+        self, num_obj=OBJECT_COUNT, suffix="", obj_size=SMALL_FILE_SIZE
     ):
         """
         Create a list of objects using a unique test prefix and track them for later cleanup
@@ -132,15 +126,15 @@ class RemoteEnabledTest(unittest.TestCase):
             num_obj: Number of objects to create
             suffix: Optional suffix for each object name
         """
-        obj_names = create_and_put_objects(
-            self.client,
-            self.bucket,
-            self.obj_prefix,
-            suffix,
-            num_obj,
-            obj_names,
-            obj_size,
-        )
+        obj_names = [self.obj_prefix + str(i) + suffix for i in range(num_obj)]
+        for obj_name in obj_names:
+            create_and_put_object(
+                self.client,
+                bck_name=self.bucket.name,
+                provider=self.bucket.provider,
+                obj_name=obj_name,
+                obj_size=obj_size,
+            )
         self._register_for_post_test_cleanup(names=obj_names, is_bucket=False)
         return obj_names
 
