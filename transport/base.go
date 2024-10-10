@@ -136,10 +136,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	if extra.IdleTeardown > 0 {
 		s.time.idleTeardown = extra.IdleTeardown
 	} else {
-		s.time.idleTeardown = extra.Config.Transport.IdleTeardown.D()
-		if s.time.idleTeardown == 0 {
-			s.time.idleTeardown = dfltIdleTeardown
-		}
+		s.time.idleTeardown = cos.NonZero(extra.Config.Transport.IdleTeardown.D(), dfltIdleTeardown)
 	}
 	debug.Assert(s.time.idleTeardown >= dfltTick, s.time.idleTeardown, " vs ", dfltTick)
 	s.time.ticks = int(s.time.idleTeardown / dfltTick)
@@ -174,10 +171,8 @@ func _sizeHdr(config *cmn.Config, size int64) int64 {
 	if size != 0 {
 		debug.Assert(size <= cmn.MaxTransportHeader, size)
 		size = min(size, cmn.MaxTransportHeader)
-	} else if config.Transport.MaxHeaderSize != 0 {
-		size = int64(config.Transport.MaxHeaderSize)
 	} else {
-		size = cmn.DfltTransportHeader
+		size = cos.NonZero(int64(config.Transport.MaxHeaderSize), int64(cmn.DfltTransportHeader))
 	}
 	return size
 }

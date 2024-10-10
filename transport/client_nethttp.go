@@ -3,7 +3,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -29,23 +29,13 @@ func whichClient() string { return "net/http" }
 // intra-cluster networking: net/http client
 func NewIntraDataClient() (client *http.Client) {
 	config := cmn.GCO.Get()
+	httcfg := &config.Net.HTTP
 
-	// compare with ais/hcommon.go
-	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
-	if wbuf == 0 {
-		wbuf = cmn.DefaultWriteBufferSize
-	}
-	if rbuf == 0 {
-		rbuf = cmn.DefaultReadBufferSize
-	}
-	tcpbuf := config.Net.L4.SndRcvBufSize
-	if tcpbuf == 0 {
-		tcpbuf = cmn.DefaultSendRecvBufferSize
-	}
+	// (compare with ais/hcommon.go)
 	cargs := cmn.TransportArgs{
-		SndRcvBufSize:   tcpbuf,
-		WriteBufferSize: wbuf,
-		ReadBufferSize:  rbuf,
+		SndRcvBufSize:   cos.NonZero(config.Net.L4.SndRcvBufSize, int(cmn.DefaultSendRecvBufferSize)),
+		WriteBufferSize: cos.NonZero(httcfg.WriteBufferSize, int(cmn.DefaultWriteBufferSize)),
+		ReadBufferSize:  cos.NonZero(httcfg.ReadBufferSize, int(cmn.DefaultReadBufferSize)),
 	}
 	if config.Net.HTTP.UseHTTPS {
 		client = cmn.NewClientTLS(cargs, config.Net.HTTP.ToTLS(), true /*intra-cluster*/) // streams

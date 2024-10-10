@@ -3,7 +3,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -37,19 +37,13 @@ func dialTimeout(addr string) (net.Conn, error) {
 // intra-cluster networking: fasthttp client
 func NewIntraDataClient() Client {
 	config := cmn.GCO.Get()
+	httcfg := &config.Net.HTTP
 
-	// compare with ais/httpcommon.go
-	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
-	if wbuf == 0 {
-		wbuf = cmn.DefaultWriteBufferSize // fasthttp uses 4KB
-	}
-	if rbuf == 0 {
-		rbuf = cmn.DefaultReadBufferSize // ditto
-	}
+	// (compare with ais/httpcommon.go)
 	cl := &fasthttp.Client{
 		Dial:            dialTimeout,
-		ReadBufferSize:  rbuf,
-		WriteBufferSize: wbuf,
+		ReadBufferSize:  cos.NonZero(httcfg.ReadBufferSize, int(cmn.DefaultReadBufferSize)),   // 4K
+		WriteBufferSize: cos.NonZero(httcfg.WriteBufferSize, int(cmn.DefaultWriteBufferSize)), // ditto
 	}
 	if config.Net.HTTP.UseHTTPS {
 		tlsConfig, err := cmn.NewTLS(config.Net.HTTP.ToTLS(), true /*intra-cluster*/) // streams

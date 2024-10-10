@@ -448,10 +448,7 @@ waitStartup:
 			}
 
 			// 2. flush logs (NOTE: stats runner is solely responsible)
-			flushTime := dfltPeriodicFlushTime
-			if config.Log.FlushTime != 0 {
-				flushTime = config.Log.FlushTime.D()
-			}
+			flushTime := cos.NonZero(config.Log.FlushTime.D(), dfltPeriodicFlushTime)
 			if nlog.Since(now) > flushTime || nlog.OOB() {
 				nlog.Flush(nlog.ActNone)
 			}

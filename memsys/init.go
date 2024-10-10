@@ -32,16 +32,13 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	debug.Assert(gmm == nil && smm == nil)
 
 	// page mmsa config (see also "AIS_MINMEM_FREE" and related environment)
-	defBufSize := int64(DefaultBufSize)
-	if config.Memsys.DefaultBufSize != 0 {
-		defBufSize = int64(config.Memsys.DefaultBufSize)
-	}
+	defBufSize := cos.NonZero(int64(config.Memsys.DefaultBufSize), int64(DefaultBufSize))
 	gmm = &MMSA{Name: gmmName + ".gmm", defBufSize: defBufSize, slabIncStep: PageSlabIncStep}
 	gmm.MinFree = uint64(config.Memsys.MinFree)
 	gmm.MinPctTotal = config.Memsys.MinPctTotal
 	gmm.MinPctFree = config.Memsys.MinPctFree
 
-	// hk config
+	// hk tunables
 	if config.Memsys.SizeToGC != 0 {
 		sizeToGC = int64(config.Memsys.SizeToGC)
 	}

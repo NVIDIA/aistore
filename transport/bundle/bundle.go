@@ -90,13 +90,10 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 		network:      args.Net,
 		trname:       args.Trname,
 		rxNodeType:   args.Ntype,
-		multiplier:   args.Multiplier,
 		manualResync: args.ManualResync,
 	}
 	sb.extra = *args.Extra
-	if sb.multiplier == 0 {
-		sb.multiplier = 1
-	}
+	sb.multiplier = cos.NonZero(args.Multiplier, int(1))
 	if sb.extra.Config == nil {
 		sb.extra.Config = cmn.GCO.Get()
 	}
