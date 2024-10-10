@@ -286,7 +286,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	)
 	// .1 sort and check parts
 	sort.Slice(partList.Parts, func(i, j int) bool {
-		return partList.Parts[i].PartNumber < partList.Parts[j].PartNumber
+		return *partList.Parts[i].PartNumber < *partList.Parts[j].PartNumber
 	})
 	nparts, err := s3.CheckParts(uploadID, partList.Parts)
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 const defaultLastModified = 0 // When an object was not accessed yet
@@ -63,16 +64,9 @@ type (
 		UploadID string `xml:"UploadId"`
 	}
 
-	// Multipart uploaded part
-	PartInfo struct {
-		ETag       string `xml:"ETag"`
-		PartNumber int32  `xml:"PartNumber"`
-		Size       int64  `xml:"Size,omitempty"`
-	}
-
 	// Multipart upload completion request
 	CompleteMptUpload struct {
-		Parts []*PartInfo `xml:"Part"`
+		Parts []types.CompletedPart `xml:"Part"`
 	}
 
 	// Multipart upload completion response
@@ -84,10 +78,10 @@ type (
 
 	// Multipart uploaded parts response
 	ListPartsResult struct {
-		Bucket   string      `xml:"Bucket"`
-		Key      string      `xml:"Key"`
-		UploadID string      `xml:"UploadId"`
-		Parts    []*PartInfo `xml:"Part"`
+		Bucket   string                `xml:"Bucket"`
+		Key      string                `xml:"Key"`
+		UploadID string                `xml:"UploadId"`
+		Parts    []types.CompletedPart `xml:"Part"`
 	}
 
 	// Active upload info

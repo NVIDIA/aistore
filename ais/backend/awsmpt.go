@@ -148,14 +148,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 		nlog.Warningln(errN)
 	}
 
-	// TODO -- FIXME: reduce copying
-	s3parts.Parts = make([]types.CompletedPart, 0, len(parts.Parts))
-	for _, part := range parts.Parts {
-		s3parts.Parts = append(s3parts.Parts, types.CompletedPart{
-			ETag:       aws.String(part.ETag),
-			PartNumber: aws.Int32(part.PartNumber),
-		})
-	}
+	s3parts.Parts = parts.Parts
 	input.MultipartUpload = &s3parts
 
 	out, err := svc.CompleteMultipartUpload(context.Background(), &input)
