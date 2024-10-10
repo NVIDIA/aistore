@@ -28,9 +28,9 @@ const (
 // - ReadBufferSize:        4KB
 // Following are the constants we use by default:
 const (
-	DefaultMaxIdleConns        = 100
-	DefaultMaxIdleConnsPerHost = 32
-	DefaultIdleConnTimeout     = 6 * time.Second // NOTE: Go default is 90s
+	DefaultMaxIdleConns        = 0               // unlimited (in re: `http.errTooManyIdle`)
+	DefaultMaxIdleConnsPerHost = 32              // (http.errTooManyIdleHost)
+	DefaultIdleConnTimeout     = 6 * time.Second // Go default is 90s
 	DefaultWriteBufferSize     = 64 * cos.KiB
 	DefaultReadBufferSize      = 64 * cos.KiB
 	DefaultSendRecvBufferSize  = 128 * cos.KiB

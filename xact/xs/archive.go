@@ -160,8 +160,10 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 	}
 
 	// bind a new/existing jogger to this archwi based on archlom's mountpath
-	var exists bool
-	mpath := archlom.Mountpath()
+	var (
+		mpath  = archlom.Mountpath()
+		exists bool
+	)
 	r.joggers.Lock()
 	if wi.j, exists = r.joggers.m[mpath.Path]; !exists {
 		r.joggers.m[mpath.Path] = &jogger{
@@ -237,26 +239,30 @@ func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 	r.pending.RLock()
 	wi, ok := r.pending.m[msg.TxnUUID]
 	r.pending.RUnlock()
-	if !ok {
+	if !ok || wi == nil {
+		// NOTE: unexpected and unlikely - aborting
 		debug.Assert(r.ErrCnt() > 0) // see cleanup
 		r.Abort(r.Err())
 		r.DecPending()
 		r.cleanup()
+		return
 	}
-	var lrit = &lrit{}
 
 	// lrpWorkersNone since we need a single writer to serialize adding files
 	// into an eventual `archlom`
+	lrit := &lrit{}
 	err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersNone)
 	if err != nil {
 		r.Abort(err)
 		r.DecPending()
 		r.cleanup()
+		return
 	}
 
 	if r.IsAborted() {
 		return
 	}
+
 	wi.j.workCh <- &archtask{wi, lrit}
 	if r.Err() != nil {
 		wi.cleanup()
@@ -335,7 +341,10 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 			return nil
 		}
 		cnt, err := r.JoinErr()
-		debug.Assert(cnt > 0) // see cleanup
+		if cnt == 0 { // see cleanup
+			err = fmt.Errorf("%s: recv: failed to begin(?)", r.Name())
+			nlog.Errorln(err)
+		}
 		return err
 	}
 	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == cos.UnsafeS(hdr.Opaque))
@@ -579,7 +588,13 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit) {
 		wi.r.doSend(lom, wi, fh)
 		return
 	}
-	debug.Assert(wi.wfh != nil) // see Begin
+	// see Begin
+	if wi.wfh == nil {
+		// NOTE: unexpected and unlikely - aborting
+		err = fmt.Errorf("%s: destination %q does not exist (not open)", wi.r.Name(), wi.fqn)
+		wi.r.Abort(err)
+		return
+	}
 	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, fh /*reader*/)
 	cos.Close(fh)
 	if err == nil {

@@ -110,16 +110,19 @@ cat > $AIS_CONF_FILE <<EOL
 			"sndrcv_buf_size":    ${SNDRCV_BUF_SIZE:-131072}
 		},
 		"http": {
-			"use_https":         ${AIS_USE_HTTPS:-false},
-			"server_crt":        "${AIS_SERVER_CRT:-server.crt}",
-			"server_key":        "${AIS_SERVER_KEY:-server.key}",
-			"domain_tls":        "",
-			"client_ca_tls":     "${AIS_CLIENT_CA_TLS}",
-			"client_auth_tls":   ${AIS_CLIENT_AUTH_TLS:-0},
-			"write_buffer_size": ${HTTP_WRITE_BUFFER_SIZE:-0},
-			"read_buffer_size":  ${HTTP_READ_BUFFER_SIZE:-0},
-			"chunked_transfer":  ${AIS_HTTP_CHUNKED_TRANSFER:-true},
-			"skip_verify":       ${AIS_SKIP_VERIFY_CRT:-false}
+			"use_https":          ${AIS_USE_HTTPS:-false},
+			"server_crt":         "${AIS_SERVER_CRT:-server.crt}",
+			"server_key":         "${AIS_SERVER_KEY:-server.key}",
+			"domain_tls":         "",
+			"client_ca_tls":      "${AIS_CLIENT_CA_TLS}",
+			"client_auth_tls":    ${AIS_CLIENT_AUTH_TLS:-0},
+			"idle_conn_time":     "6s",
+			"idle_conns_per_host":32,
+			"idle_conns":         0,
+			"write_buffer_size":  ${HTTP_WRITE_BUFFER_SIZE:-0},
+			"read_buffer_size":   ${HTTP_READ_BUFFER_SIZE:-0},
+			"chunked_transfer":   ${AIS_HTTP_CHUNKED_TRANSFER:-true},
+			"skip_verify":        ${AIS_SKIP_VERIFY_CRT:-false}
 		}
 	},
 	"fshc": {

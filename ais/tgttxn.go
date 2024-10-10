@@ -834,8 +834,10 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		archMsg.FromBckName = bckFrom.Name
 		archlom := core.AllocLOM(archMsg.ArchName)
 		if err := xarch.Begin(archMsg, archlom); err != nil {
-			core.FreeLOM(archlom) // otherwise is freed by x-archive
-			return xid, err
+			// NOTE: unexpected and unlikely - aborting
+			core.FreeLOM(archlom)
+			xarch.Abort(err)
+			return "", err
 		}
 		txn := newTxnArchMultiObj(c, bckFrom, xarch, archMsg)
 		if err := t.transactions.begin(txn); err != nil {
