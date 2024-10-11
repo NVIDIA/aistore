@@ -21,8 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-const defaultLastModified = 0 // When an object was not accessed yet
-
 // NOTE: do not rename structs that have `xml` tags. The names of those structs
 // become a top level tag of resulting XML, and those tags S3-compatible
 // clients require.
@@ -154,23 +152,23 @@ func (r *ListObjectResult) Add(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) {
 	if entry.Flags&apc.EntryIsDir == 0 {
 		r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
 	} else {
-		r.CommonPrefixes = append(r.CommonPrefixes, &CommonPrefix{Prefix: entry.Name + "/"})
+		prefix := entry.Name
+		if !cos.IsLastB(entry.Name, '/') {
+			prefix += "/"
+		}
+		r.CommonPrefixes = append(r.CommonPrefixes, &CommonPrefix{Prefix: prefix})
 	}
 }
 
-func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) *ObjInfo {
-	objInfo := &ObjInfo{
-		Key:          entry.Name,
-		LastModified: entry.Atime,
-		ETag:         entry.Checksum,
-		Size:         entry.Size,
+func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
+	oi = &ObjInfo{Key: entry.Name, Size: entry.Size, LastModified: entry.Atime}
+	if oi.LastModified == "" {
+		oi.LastModified = cmn.S2LastModified(entry.Custom)
 	}
-	// Some S3 clients do not tolerate empty or missing LastModified, so fill it
-	// with a zero time if the object was not accessed yet
-	if objInfo.LastModified == "" {
-		objInfo.LastModified = cos.FormatNanoTime(defaultLastModified, lsmsg.TimeFormat)
+	if oi.LastModified == "" && lsmsg.TimeFormat != "" {
+		oi.LastModified = cos.FormatNanoTime(0, lsmsg.TimeFormat) // 1970-01-01 epoch
 	}
-	return objInfo
+	return oi
 }
 
 func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {

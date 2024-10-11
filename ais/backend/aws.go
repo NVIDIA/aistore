@@ -323,18 +323,14 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	}
 
 	var (
-		custom     cos.StrKVs
 		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
-	if wantCustom {
-		custom = make(cos.StrKVs, 2) // reuse
-	}
 	lst.Entries = lst.Entries[:0]
 	for _, obj := range resp.Contents {
 		en := cmn.LsoEnt{Name: *obj.Key, Size: *obj.Size}
 		// rarely
 		if en.Size == 0 && cos.IsLastB(en.Name, '/') {
-			if msg.IsFlagSet(apc.LsNoDirs) {
+			if msg.IsFlagSet(apc.LsNoDirs) { // do not return virtual subdirectories
 				continue
 			}
 			en.Flags = apc.EntryIsDir
@@ -343,10 +339,8 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 				en.Checksum = v
 			}
 			if wantCustom {
-				custom[cmn.ETag] = en.Checksum
 				mtime := *(obj.LastModified)
-				custom[cmn.LastModified] = fmtTime(mtime)
-				en.Custom = cmn.CustomMD2S(custom)
+				en.Custom = custom2S(cmn.ETag, en.Checksum, cmn.LastModified, fmtTime(mtime))
 			}
 		}
 		lst.Entries = append(lst.Entries, &en)

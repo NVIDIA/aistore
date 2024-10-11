@@ -187,12 +187,8 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	lst.ContinuationToken = nextPageToken
 
 	var (
-		custom     cos.StrKVs
 		wantCustom = msg.WantProp(apc.GetPropsCustom)
 	)
-	if wantCustom {
-		custom = make(cos.StrKVs, 3) // reuse
-	}
 	lst.Entries = lst.Entries[:0]
 	for _, attrs := range objs {
 		en := cmn.LsoEnt{Name: attrs.Name, Size: attrs.Size}
@@ -202,7 +198,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			debug.Assert(attrs.Name == "", attrs.Prefix, " vs ", attrs.Name)
 			debug.Assert(query != nil && query.Delimiter != "")
 
-			if msg.IsFlagSet(apc.LsNoDirs) {
+			if msg.IsFlagSet(apc.LsNoDirs) { // do not return virtual subdirectories
 				continue
 			}
 			en.Name = attrs.Prefix
@@ -214,12 +210,10 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			if v, ok := h.EncodeVersion(attrs.Generation); ok {
 				en.Version = v
 			}
-			// custom
 			if wantCustom {
-				custom[cmn.ETag], _ = h.EncodeCksum(attrs.Etag)
-				custom[cmn.LastModified] = fmtTime(attrs.Updated)
-				custom[cos.HdrContentType] = attrs.ContentType
-				en.Custom = cmn.CustomMD2S(custom)
+				etag, _ := h.EncodeCksum(attrs.Etag)
+				en.Custom = custom2S(cmn.ETag, etag, cmn.LastModified, fmtTime(attrs.Updated),
+					cos.HdrContentType, attrs.ContentType)
 			}
 		}
 		lst.Entries = append(lst.Entries, &en)

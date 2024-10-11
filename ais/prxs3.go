@@ -352,10 +352,12 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	}
 
 	// e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
-	lsmsg := &apc.LsoMsg{TimeFormat: cos.ISO8601}
+	lsmsg := &apc.LsoMsg{TimeFormat: time.RFC3339}
 
-	// NOTE: hard-coded props as per FromLsoResult (see below)
-	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime)
+	//
+	// NOTE (s3 api limitation): hard-coded props w/ apc.GetPropsCustom always included
+	//
+	lsmsg.AddProps(apc.GetPropsSize, apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsCustom)
 	amsg.Value = lsmsg
 
 	// as per API_ListObjectsV2.html, optional:

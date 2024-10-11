@@ -273,11 +273,11 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 	}
 
 	var (
-		custom     cos.StrKVs
 		wantCustom = msg.WantProp(apc.GetPropsCustom)
+		custom     []string
 	)
 	if wantCustom {
-		custom = make(cos.StrKVs, 4) // reuse
+		custom = make([]string, 0, 8)
 	}
 	lst.Entries = lst.Entries[:0]
 	for _, blob := range resp.Segment.BlobItems {
@@ -295,18 +295,18 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 		etag := azEncodeEtag(*blob.Properties.ETag)
 		en.Version = etag // (TODO a the top)
 		if wantCustom {
-			clear(custom)
-			custom[cmn.ETag] = etag
+			custom = custom[:0]
+			custom = append(custom, cmn.ETag, etag)
 			if !blob.Properties.LastModified.IsZero() {
-				custom[cmn.LastModified] = fmtTime(*blob.Properties.LastModified)
+				custom = append(custom, cmn.LastModified, fmtTime(*blob.Properties.LastModified))
 			}
 			if blob.Properties.ContentType != nil {
-				custom[cos.HdrContentType] = *blob.Properties.ContentType
+				custom = append(custom, cos.HdrContentType, *blob.Properties.ContentType)
 			}
 			if blob.VersionID != nil {
-				custom[cmn.VersionObjMD] = *blob.VersionID
+				custom = append(custom, cmn.VersionObjMD, *blob.VersionID)
 			}
-			en.Custom = cmn.CustomMD2S(custom)
+			en.Custom = custom2S(custom...)
 		}
 		lst.Entries = append(lst.Entries, &en)
 	}
