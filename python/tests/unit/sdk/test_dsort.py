@@ -19,6 +19,7 @@ from aistore.sdk.const import (
 from aistore.sdk.dsort import Dsort, DsortFramework, DsortShardsGroup, DsortAlgorithm
 from aistore.sdk.dsort.types import DsortMetrics, JobInfo
 from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_FILE_NAME
+from aistore.sdk.provider import Provider
 from aistore.sdk.multiobj import ObjectNames, ObjectRange
 
 from aistore.sdk.types import BucketModel
@@ -116,13 +117,13 @@ class TestDsort(unittest.TestCase):
         self.mock_client.request.return_value = mock_request_return_val
 
         input_shards = DsortShardsGroup(
-            bck=BucketModel(name="input_bucket"),
+            bck=BucketModel(name="input_bucket", provider=Provider.AIS.value),
             role="input",
             format=ObjectRange("input-", 0, 99),
             extension="txt",
         )
         output_shards = DsortShardsGroup(
-            bck=BucketModel(name="output_bucket"),
+            bck=BucketModel(name="output_bucket", provider=Provider.AIS.value),
             role="output",
             format=ObjectRange("output-", 0, 99),
             extension="txt",
@@ -149,7 +150,7 @@ class TestDsort(unittest.TestCase):
         self.mock_client.request.return_value = mock_request_return_val
 
         input_shards = DsortShardsGroup(
-            bck=BucketModel(name="input_bucket"),
+            bck=BucketModel(name="input_bucket", provider=Provider.AIS.value),
             role="input",
             format=ObjectRange("input-", 0, 99),
             extension="txt",
@@ -181,7 +182,7 @@ class TestDsort(unittest.TestCase):
         )
 
         output_shards = DsortShardsGroup(
-            bck=BucketModel(name="output_bucket"),
+            bck=BucketModel(name="output_bucket", provider=Provider.AIS.value),
             role="output",
             format=ekm,
             extension="txt",
@@ -209,7 +210,7 @@ class TestDsort(unittest.TestCase):
                 call(
                     HTTP_METHOD_PUT,
                     path=ekm_url,
-                    params={"provider": "ais"},
+                    params={"provider": Provider.AIS.value},
                     data=json.dumps(ekm.as_dict()).encode("utf-8"),
                 ),
                 call(HTTP_METHOD_POST, path=URL_PATH_DSORT, json=spec),
@@ -380,13 +381,13 @@ class TestDsort(unittest.TestCase):
 
     def test_to_spec(self):
         input_shards = DsortShardsGroup(
-            bck=BucketModel(name="input_bucket"),
+            bck=BucketModel(name="input_bucket", provider=Provider.AIS.value),
             role="input",
             format=ObjectRange("input-", 0, 99),
             extension="txt",
         )
         output_shards = DsortShardsGroup(
-            bck=BucketModel(name="output_bucket"),
+            bck=BucketModel(name="output_bucket", provider=Provider.AIS.value),
             role="output",
             format=ObjectRange("output-", 0, 99),
             extension="txt",

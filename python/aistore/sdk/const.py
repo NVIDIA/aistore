@@ -88,15 +88,6 @@ URL_PATH_AUTHN_CLUSTERS = "clusters"
 URL_PATH_AUTHN_ROLES = "roles"
 URL_PATH_AUTHN_TOKENS = "tokens"
 
-# Bucket providers
-# See api/apc/provider.go
-PROVIDER_AIS = "ais"
-PROVIDER_AMAZON = "aws"
-PROVIDER_S3 = "s3"
-PROVIDER_AZURE = "azure"
-PROVIDER_GOOGLE = "gcp"
-PROVIDER_HTTP = "ht"
-
 # HTTP Methods
 HTTP_METHOD_GET = "get"
 HTTP_METHOD_POST = "post"

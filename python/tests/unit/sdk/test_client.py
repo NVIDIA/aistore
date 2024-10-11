@@ -8,6 +8,7 @@ from urllib3.util import Retry
 
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
+from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl import Etl
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
@@ -60,9 +61,9 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             token=token,
         )
 
-    def test_bucket(self):
+    @test_cases(*Provider)
+    def test_bucket(self, provider):
         bck_name = "bucket_123"
-        provider = "bucketProvider"
         namespace = Namespace(uuid="id", name="namespace")
         bucket = self.client.bucket(bck_name, provider, namespace)
         self.assertIn(self.endpoint, bucket.client.base_url)

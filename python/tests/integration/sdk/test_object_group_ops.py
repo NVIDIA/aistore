@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from aistore.sdk.const import PROVIDER_AIS, LOREM, DUIS
+from aistore.sdk.const import LOREM, DUIS
+from aistore.sdk.provider import Provider
 from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
 from tests.const import (
     SMALL_FILE_SIZE,
@@ -55,7 +56,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self._verify_cached_objects(OBJECT_COUNT, [0])
 
     def test_evict_objects_local(self):
-        local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
+        local_bucket = self.client.bucket(random_string(), provider=Provider.AIS)
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).evict()
 
@@ -139,7 +140,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
 
     def test_prefetch_objects_local(self):
-        local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
+        local_bucket = self.client.bucket(random_string(), provider=Provider.AIS)
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).prefetch()
 
@@ -310,7 +311,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
     def _archive_exec_assert(self, arch_name, src_bck, res_bck, **kwargs):
         # Add to object list to clean up on test finish
-        if res_bck.provider != PROVIDER_AIS:
+        if res_bck.provider != Provider.AIS:
             self._register_for_post_test_cleanup(names=[arch_name], is_bucket=False)
         archived_names = self.obj_names[1:5]
         expected_contents = {}

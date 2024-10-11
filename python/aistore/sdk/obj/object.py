@@ -35,6 +35,7 @@ from aistore.sdk.const import (
     HEADER_OBJECT_BLOB_WORKERS,
     HEADER_OBJECT_BLOB_CHUNK_SIZE,
 )
+from aistore.sdk.provider import Provider
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.request_client import RequestClient
@@ -54,7 +55,7 @@ class BucketDetails:
     """
 
     name: str
-    provider: str
+    provider: Provider
     qparams: Dict[str, str]
 
 
@@ -89,7 +90,7 @@ class Object:
         return self._bck_details.name
 
     @property
-    def bucket_provider(self):
+    def bucket_provider(self) -> Provider:
         """Provider of the bucket where this object resides (e.g. ais, s3, gcp)."""
         return self._bck_details.provider
 
@@ -213,7 +214,7 @@ class Object:
             Semantic URL to get object
         """
 
-        return f"{self.bucket_provider}://{self.bucket_name}/{self._name}"
+        return f"{self.bucket_provider.value}://{self.bucket_name}/{self._name}"
 
     def get_url(self, archpath: str = "", etl_name: str = None) -> str:
         """

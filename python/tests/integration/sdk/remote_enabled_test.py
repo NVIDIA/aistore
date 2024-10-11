@@ -6,8 +6,8 @@ from typing import List
 import unittest
 import boto3
 
-from aistore.sdk.const import PROVIDER_AIS
 from aistore import Client
+from aistore.sdk.provider import Provider
 from tests.integration import (
     REMOTE_SET,
     REMOTE_BUCKET,
@@ -44,7 +44,7 @@ class RemoteEnabledTest(unittest.TestCase):
             self.bucket = self.client.bucket(bck_name, provider=provider)
             self.provider = provider
         else:
-            self.provider = PROVIDER_AIS
+            self.provider = Provider.AIS
             self.bucket = self._create_bucket()
 
     def tearDown(self) -> None:

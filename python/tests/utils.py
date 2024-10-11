@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Dict, List
 
 from aistore.sdk import Client
-from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING
+from aistore.sdk.const import UTF_ENCODING
+from aistore.sdk.provider import Provider
 
 
 # pylint: disable=unused-variable
@@ -30,7 +31,7 @@ def create_and_put_object(
     client: Client,
     bck_name: str,
     obj_name: str,
-    provider: str = PROVIDER_AIS,
+    provider: Provider = Provider.AIS,
     obj_size: int = 0,
 ):
     obj_size = obj_size if obj_size else random.randrange(10, 20)

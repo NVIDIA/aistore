@@ -382,7 +382,7 @@ class TestObjectOps(RemoteEnabledTest):
     def test_fetch_object_by_url(self):
         objects = self._put_objects(5)
         for obj_name, content in objects.items():
-            url = f"{self.bucket.provider}://{self.bucket.name}/{obj_name}"
+            url = f"{self.bucket.provider.value}://{self.bucket.name}/{obj_name}"
             fetched_obj = self.client.fetch_object_by_url(url)
             fetched_content = fetched_obj.get().read_all()
             self.assertEqual(content, fetched_content)

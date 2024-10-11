@@ -220,7 +220,7 @@ class Job:
         if buckets and len(buckets) > 0:
             bucket_models = [
                 BucketModel(
-                    name=bck.name, provider=bck.provider, namespace=bck.namespace
+                    name=bck.name, provider=bck.provider.value, namespace=bck.namespace
                 )
                 for bck in buckets
             ]

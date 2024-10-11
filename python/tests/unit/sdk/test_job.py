@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 from unittest.mock import Mock, patch, call
 
+from aistore.sdk import Bucket
 from aistore.sdk.const import (
     QPARAM_WHAT,
     QPARAM_FORCE,
@@ -15,7 +16,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.errors import Timeout, JobInfoNotFound
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.types import JobStatus, JobArgs, BucketModel, ActionMsg, JobSnapshot
+from aistore.sdk.types import JobStatus, JobArgs, ActionMsg, JobSnapshot
 from aistore.sdk.utils import probing_frequency
 from aistore.sdk.job import Job
 
@@ -190,9 +191,12 @@ class TestJob(unittest.TestCase):
 
     def test_job_start_single_bucket(self):
         daemon_id = "daemon id"
-        bucket = BucketModel(client=Mock(RequestClient), name="single bucket")
+        bucket = Bucket(
+            client=Mock(RequestClient),
+            name="single bucket",
+        )
         expected_json = JobArgs(
-            kind=self.job_kind, daemon_id=daemon_id, bucket=bucket
+            kind=self.job_kind, daemon_id=daemon_id, bucket=bucket.as_model()
         ).as_dict()
         self.job_start_exec_assert(
             self.job,
@@ -206,11 +210,19 @@ class TestJob(unittest.TestCase):
     def test_job_start_bucket_list(self):
         daemon_id = "daemon id"
         buckets = [
-            BucketModel(client=Mock(RequestClient), name="first bucket"),
-            BucketModel(client=Mock(RequestClient), name="second bucket"),
+            Bucket(
+                client=Mock(RequestClient),
+                name="first bucket",
+            ),
+            Bucket(
+                client=Mock(RequestClient),
+                name="second bucket",
+            ),
         ]
         expected_json = JobArgs(
-            kind=self.job_kind, daemon_id=daemon_id, buckets=buckets
+            kind=self.job_kind,
+            daemon_id=daemon_id,
+            buckets=[bucket.as_model() for bucket in buckets],
         ).as_dict()
         self.job_start_exec_assert(
             self.job,

@@ -2,8 +2,6 @@ import itertools
 import random
 import time
 
-from aistore.sdk.const import PROVIDER_AIS
-
 from pyaisloader.utils.bucket_utils import (
     add_one_object,
     bucket_exists,
@@ -24,6 +22,8 @@ from pyaisloader.utils.concurrency_utils import multiworker_deploy
 from pyaisloader.utils.parse_utils import format_size, format_time
 from pyaisloader.utils.random_utils import generate_bytes, generate_random_str
 from pyaisloader.utils.stat_utils import combine_results, print_results
+
+from aistore.sdk.provider import Provider
 
 
 class BenchmarkStats:
@@ -77,7 +77,7 @@ class Benchmark:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def setup(self):
-        if self.bucket.provider != PROVIDER_AIS:  # Cloud Bucket
+        if self.bucket.provider != Provider.AIS:  # Cloud Bucket
             print_caution("You are currently operating on a cloud storage bucket.")
             confirm_continue()
             if not bucket_exists(
@@ -85,27 +85,27 @@ class Benchmark:
             ):  # Cloud buckets that don't exist are not permitted
                 terminate(
                     "Cloud bucket "
-                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                     + " does not exist and AIStore Python SDK does not yet support cloud bucket creation (re-run with existing cloud bucket)."
                 )
         else:
             if bucket_exists(self.bucket):
                 print_caution(
                     "The bucket "
-                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                     + " already exists."
                 )
                 confirm_continue()
             else:
                 print_in_progress(
                     "Creating bucket "
-                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                 )
                 self.bucket.create()
                 self.bck_created = True
                 print_success(
                     "Created bucket "
-                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                 )
 
     def prepopulate(self, type_list=False):
@@ -144,13 +144,15 @@ class Benchmark:
 
         if self.bck_created:
             msg = (
-                "bucket " + bold(f"{self.bucket.provider}://{self.bucket.name}") + " ? "
+                "bucket "
+                + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
+                + " ? "
             )
         else:
             msg = (
                 bold(f"{len(self.objs_created)}")
                 + " objects created by the benchmark (and pre-population) in "
-                + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                 + " ? "
             )
 
@@ -317,7 +319,7 @@ class PutGetMixedBenchmark(Benchmark):
         else:
             print(
                 "\nBucket "
-                + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                 + f" currently has a total size of "
                 + bold(f"{format_size(curr_bck_size)}")
                 + f", which already meets the specified total size of "
@@ -429,7 +431,7 @@ class ListBenchmark(Benchmark):
             else:
                 print(
                     "\nBucket "
-                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + bold(f"{self.bucket.provider.value}://{self.bucket.name}")
                     + f" currently has "
                     + bold(f"{curr_bck_count}")
                     + f" objects, which already meets the specified total count of "
@@ -458,7 +460,7 @@ class ListBenchmark(Benchmark):
             )
         else:
             terminate(
-                f"The bucket {self.bucket.provider}://{self.bucket.name} is empty. Please populate the bucket before running the benchmark or use the option --num-objects (or -n)."
+                f"The bucket {self.bucket.provider.value}://{self.bucket.name} is empty. Please populate the bucket before running the benchmark or use the option --num-objects (or -n)."
             )
 
     def run(self):

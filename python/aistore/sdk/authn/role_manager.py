@@ -5,6 +5,8 @@
 # pylint: disable=too-many-arguments, duplicate-code
 
 from typing import List
+
+from aistore.sdk.provider import Provider
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.authn.cluster_manager import ClusterManager
@@ -122,7 +124,7 @@ class RoleManager:
                 BucketPermission(
                     bck=BucketModel(
                         name=bucket_name,
-                        provider="ais",
+                        provider=Provider.AIS.value,
                         namespace=Namespace(uuid=cluster_uuid),
                     ),
                     perm=perm_value,
@@ -206,7 +208,7 @@ class RoleManager:
                     BucketPermission(
                         bck=BucketModel(
                             name=bucket_name,
-                            provider="ais",
+                            provider=Provider.AIS.value,
                             namespace=Namespace(uuid=cluster_uuid),
                         ),
                         perm=perm_value,

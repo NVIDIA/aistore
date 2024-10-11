@@ -9,12 +9,13 @@ import boto3
 import requests
 
 from aistore.sdk import ListObjectFlag
-from aistore.sdk.const import UTF_ENCODING, LOREM, DUIS, PROVIDER_AIS
+from aistore.sdk.const import UTF_ENCODING, LOREM, DUIS
 from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.dataset.data_attribute import DataAttribute
 from aistore.sdk.dataset.label_attribute import LabelAttribute
 from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 from aistore.sdk.enums import FLTPresence
+from aistore.sdk.provider import Provider
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
@@ -433,7 +434,7 @@ class TestBucketOps(RemoteEnabledTest):
             bck_info["TotalSize"]["size_all_present_objs"], present_obj_size
         )
         self.assertEqual(bck_info["TotalSize"]["size_all_remote_objs"], "0")
-        self.assertEqual(bck_info["provider"], PROVIDER_AIS)
+        self.assertEqual(bck_info["provider"], Provider.AIS.value)
         self.assertEqual(bck_info["name"], bck.name)
 
     def test_write_dataset(self):

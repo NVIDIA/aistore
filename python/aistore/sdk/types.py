@@ -2,7 +2,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-from __future__ import annotations  # pylint: disable=unused-variable
+from __future__ import annotations
 import base64
 from typing import Any, Mapping, List, Optional, Dict
 
@@ -23,13 +23,10 @@ from aistore.sdk.const import (
     AIS_OBJ_NAME,
     AIS_LOCATION,
     AIS_MIRROR_COPIES,
-    PROVIDER_AIS,
 )
 
 
 # pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring,too-many-lines
-
-
 class ActionMsg(BaseModel):
     """
     Represents the action message passed by the client via json
@@ -192,7 +189,7 @@ class BucketModel(BaseModel):
     """
 
     name: str
-    provider: str = PROVIDER_AIS
+    provider: str
     namespace: Namespace = None
 
     def as_dict(self):

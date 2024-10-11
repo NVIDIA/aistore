@@ -21,7 +21,7 @@ The `DsortFramework` class in the Python SDK enables you to define and manage dS
 2. **Creating a DsortFramework Directly:**
 
    ```python
-    from aistore.sdk import Client, BucketModel
+    from aistore.sdk import Client
     from aistore.sdk.multiobj import ObjectNames, ObjectRange
     from aistore.sdk.dsort import DsortFramework, DsortShardsGroup, ExternalKeyMap
 
@@ -29,10 +29,10 @@ The `DsortFramework` class in the Python SDK enables you to define and manage dS
     client = Client("http://your-aistore-url:8080")
 
     # Define the input bucket
-    input_bucket = BucketModel(name="input-bucket", provider="ais")
+    input_bucket = client.bucket(bck_name="input-bucket")
 
     # Define the output bucket
-    output_bucket = BucketModel(name="output-bucket", provider="ais")
+    output_bucket = client.bucket(bck_name="output-bucket")
 
     # Define the input format as ObjectRange
     input_format = ObjectRange(
@@ -50,7 +50,7 @@ The `DsortFramework` class in the Python SDK enables you to define and manage dS
 
     # Define the input shards group
     input_shards_group = DsortShardsGroup(
-        bck=input_bucket,
+        bck=input_bucket.as_model(),
         role="input",
         format=input_format,
         extension=".tar",
@@ -58,7 +58,7 @@ The `DsortFramework` class in the Python SDK enables you to define and manage dS
 
     # Define the output shards group
     output_shards_group = DsortShardsGroup(
-        bck=output_bucket,
+        bck=output_bucket.as_model(),
         role="output",
         format=output_format,
         extension=".tar",

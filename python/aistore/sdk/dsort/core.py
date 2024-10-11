@@ -18,6 +18,7 @@ from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_FILE_NAME
 from aistore.sdk.dsort.types import JobInfo
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.errors import Timeout
+from aistore.sdk.request_client import RequestClient
 from aistore.sdk.utils import validate_file, probing_frequency
 
 
@@ -26,7 +27,7 @@ class Dsort:
     Class for managing jobs for the dSort extension: https://github.com/NVIDIA/aistore/blob/main/docs/cli/dsort.md
     """
 
-    def __init__(self, client: "Client", dsort_id: str = ""):
+    def __init__(self, client: RequestClient, dsort_id: str = ""):
         self._client = client
         self._dsort_id = dsort_id
 

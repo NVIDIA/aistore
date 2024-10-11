@@ -9,8 +9,8 @@ import unittest
 import pytest
 
 from aistore.sdk import AuthNClient, Client
+from aistore.sdk.provider import Provider
 from aistore.sdk.errors import AISError
-from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.authn.errors import ErrUserInvalidCredentials
 from tests.integration import (
     AIS_AUTHN_SU_NAME,
@@ -26,7 +26,7 @@ class TestAuthNClient(unittest.TestCase):
     def setUp(self) -> None:
         # AIStore Client
         self.bck_name = random_string()
-        self.provider = PROVIDER_AIS
+        self.provider = Provider.AIS
 
         # AuthN Client
         self.authn_client = AuthNClient(AUTHN_ENDPOINT)

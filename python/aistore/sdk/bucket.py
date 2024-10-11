@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Dict, List, NewType, Iterable
+from typing import Dict, List, NewType, Iterable, Union
 import requests
 from requests import structures
 
@@ -34,7 +34,6 @@ from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     HTTP_METHOD_POST,
     MSGPACK_CONTENT_TYPE,
-    PROVIDER_AIS,
     QPARAM_BCK_TO,
     QPARAM_BSUMM_REMOTE,
     QPARAM_FLT_PRESENCE,
@@ -49,6 +48,7 @@ from aistore.sdk.const import (
     DEFAULT_JOB_POLL_TIME,
 )
 from aistore.sdk.enums import FLTPresence
+from aistore.sdk.provider import Provider
 from aistore.sdk.dataset.dataset_config import DatasetConfig
 
 from aistore.sdk.errors import (
@@ -87,7 +87,7 @@ class Bucket(AISSource):
     Args:
         client (RequestClient): Client for interfacing with AIS cluster
         name (str): name of bucket
-        provider (str, optional): Provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
+        provider (str or Provider, optional): Provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
         namespace (Namespace, optional): Namespace of bucket, defaults to None
     """
 
@@ -95,14 +95,14 @@ class Bucket(AISSource):
         self,
         name: str,
         client: RequestClient = None,
-        provider: str = PROVIDER_AIS,
+        provider: Union[Provider, str] = Provider.AIS,
         namespace: Namespace = None,
     ):
         self._client = client
         self._name = name
-        self._provider = provider
+        self._provider = Provider.parse(provider)
         self._namespace = namespace
-        self._qparam = {QPARAM_PROVIDER: provider}
+        self._qparam = {QPARAM_PROVIDER: self.provider.value}
         if self.namespace:
             self._qparam[QPARAM_NAMESPACE] = namespace.get_path()
 
@@ -122,7 +122,7 @@ class Bucket(AISSource):
         return self._qparam
 
     @property
-    def provider(self) -> str:
+    def provider(self) -> Provider:
         """The provider for this bucket."""
         return self._provider
 
@@ -898,14 +898,14 @@ class Bucket(AISSource):
         """
         Verify the bucket provider is AIS
         """
-        if self.provider is not PROVIDER_AIS:
+        if self.provider is not Provider.AIS:
             raise InvalidBckProvider(self.provider)
 
     def verify_cloud_bucket(self):
         """
         Verify the bucket provider is a cloud provider
         """
-        if self.provider is PROVIDER_AIS:
+        if self.provider is Provider.AIS:
             raise InvalidBckProvider(self.provider)
 
     def get_path(self) -> str:
@@ -913,7 +913,7 @@ class Bucket(AISSource):
         Get the path representation of this bucket
         """
         namespace_path = self.namespace.get_path() if self.namespace else "@#"
-        return f"{ self.provider }/{ namespace_path }/{ self.name }/"
+        return f"{ self.provider.value }/{ namespace_path }/{ self.name }/"
 
     def as_model(self) -> BucketModel:
         """
@@ -923,7 +923,7 @@ class Bucket(AISSource):
             BucketModel representation
         """
         return BucketModel(
-            name=self.name, namespace=self.namespace, provider=self.provider
+            name=self.name, namespace=self.namespace, provider=self.provider.value
         )
 
     def write_dataset(

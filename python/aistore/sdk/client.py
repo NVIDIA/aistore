@@ -9,10 +9,8 @@ import os
 from urllib3 import Retry
 
 from aistore.sdk.bucket import Bucket
-from aistore.sdk.const import (
-    PROVIDER_AIS,
-    AIS_AUTHN_TOKEN,
-)
+from aistore.sdk.provider import Provider
+from aistore.sdk.const import AIS_AUTHN_TOKEN
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.dsort import Dsort
 from aistore.sdk.request_client import RequestClient
@@ -67,7 +65,10 @@ class Client:
         )
 
     def bucket(
-        self, bck_name: str, provider: str = PROVIDER_AIS, namespace: Namespace = None
+        self,
+        bck_name: str,
+        provider: Union[Provider, str] = Provider.AIS,
+        namespace: Namespace = None,
     ):
         """
         Factory constructor for bucket object.
@@ -75,7 +76,8 @@ class Client:
 
         Args:
             bck_name (str): Name of bucket
-            provider (str): Provider of bucket, one of "ais", "aws", "gcp", ... (optional, defaults to ais)
+            provider (str or Provider): Provider of bucket, one of "ais", "aws", "gcp", ...
+                (optional, defaults to ais)
             namespace (Namespace): Namespace of bucket (optional, defaults to None)
 
         Returns:

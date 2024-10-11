@@ -11,9 +11,9 @@ from aistore.sdk.const import (
     ACT_COPY_OBJECTS,
     ACT_TRANSFORM_OBJECTS,
     ACT_ARCHIVE_OBJECTS,
-    PROVIDER_AMAZON,
     HTTP_METHOD_PUT,
 )
+from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj
@@ -35,10 +35,7 @@ class TestObjectGroup(unittest.TestCase):
         )
         self.mock_bck.as_model.return_value = self.mock_bck_model
         namespace = Namespace(name="ns-name", uuid="ns-id")
-        provider = "any provider"
-        self.dest_bucket = Bucket(
-            name="to-bucket", namespace=namespace, provider=provider
-        )
+        self.dest_bucket = Bucket(name="to-bucket", namespace=namespace)
 
         self.obj_names = ["obj-1", "obj-2"]
         self.object_group = ObjectGroup(self.mock_bck, obj_names=self.obj_names)
@@ -252,7 +249,7 @@ class TestObjectGroup(unittest.TestCase):
         archive_name = "test-arch"
         namespace = Namespace(name="ns-name", uuid="ns-id")
         to_bck = Bucket(
-            name="dest-bck-name", namespace=namespace, provider=PROVIDER_AMAZON
+            name="dest-bck-name", namespace=namespace, provider=Provider.AMAZON
         )
         mime = "text"
         include_source = True

@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
+from aistore.sdk.provider import Provider
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.authn.types import (
     BucketModel,
@@ -38,7 +39,7 @@ class TestAuthNUserManager(unittest.TestCase):
             ],
             buckets=[
                 BucketPermission(
-                    bck=BucketModel(name="test-bucket"),
+                    bck=BucketModel(name="test-bucket", provider=Provider.AIS.value),
                     perm=str(AccessAttr.GET.value),
                 )
             ],

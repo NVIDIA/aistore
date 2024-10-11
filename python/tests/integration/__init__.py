@@ -1,14 +1,14 @@
 import os
 
-from aistore.sdk.const import PROVIDER_AIS, PROVIDER_AMAZON, PROVIDER_S3
+from aistore.sdk.provider import Provider, ALIAS_S3
 
 CLUSTER_ENDPOINT = os.environ.get("AIS_ENDPOINT", "http://localhost:8080")
 REMOTE_BUCKET = os.environ.get("BUCKET", "")
-REMOTE_SET = REMOTE_BUCKET and not REMOTE_BUCKET.startswith(PROVIDER_AIS + ":")
+REMOTE_SET = REMOTE_BUCKET and not REMOTE_BUCKET.startswith(Provider.AIS.value + ":")
 AWS_BUCKET = (
     REMOTE_SET
-    and REMOTE_BUCKET.startswith(PROVIDER_AMAZON + ":")
-    or REMOTE_BUCKET.startswith(PROVIDER_S3 + ":")
+    and REMOTE_BUCKET.startswith(Provider.AMAZON.value + ":")
+    or REMOTE_BUCKET.startswith(ALIAS_S3 + ":")
 )
 
 # AuthN

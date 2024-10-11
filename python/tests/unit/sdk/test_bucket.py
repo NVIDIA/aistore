@@ -19,8 +19,6 @@ from aistore.sdk.const import (
     ACT_LIST,
     ACT_MOVE_BCK,
     ACT_SUMMARY_BCK,
-    PROVIDER_AMAZON,
-    PROVIDER_AIS,
     QPARAM_BCK_TO,
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
@@ -63,7 +61,9 @@ from aistore.sdk.types import (
     CopyBckMsg,
 )
 from aistore.sdk.enums import FLTPresence
+from aistore.sdk.provider import Provider
 from tests.const import ETL_NAME, PREFIX_NAME
+from tests.utils import test_cases
 
 BCK_NAME = "bucket_name"
 
@@ -73,7 +73,7 @@ class TestBucket(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock(RequestClient)
         self.amz_bck = Bucket(
-            name=BCK_NAME, client=self.mock_client, provider=PROVIDER_AMAZON
+            name=BCK_NAME, client=self.mock_client, provider=Provider.AMAZON
         )
         self.amz_bck_params = self.amz_bck.qparam.copy()
         self.ais_bck = Bucket(name=BCK_NAME, client=self.mock_client)
@@ -82,8 +82,8 @@ class TestBucket(unittest.TestCase):
 
     def test_default_props(self):
         bucket = Bucket(name=BCK_NAME, client=self.mock_client)
-        self.assertEqual({QPARAM_PROVIDER: PROVIDER_AIS}, bucket.qparam)
-        self.assertEqual(PROVIDER_AIS, bucket.provider)
+        self.assertEqual({QPARAM_PROVIDER: Provider.AIS.value}, bucket.qparam)
+        self.assertEqual(Provider.AIS, bucket.provider)
         self.assertIsNone(bucket.namespace)
 
     def test_properties(self):
@@ -93,20 +93,30 @@ class TestBucket(unittest.TestCase):
         bck = Bucket(
             client=client,
             name=BCK_NAME,
-            provider=PROVIDER_AMAZON,
+            provider=Provider.AMAZON,
             namespace=expected_ns,
         )
         self.assertEqual(client, bck.client)
-        self.assertEqual(PROVIDER_AMAZON, bck.provider)
+        self.assertEqual(Provider.AMAZON, bck.provider)
         self.assertEqual(
             {
-                QPARAM_PROVIDER: PROVIDER_AMAZON,
+                QPARAM_PROVIDER: Provider.AMAZON.value,
                 QPARAM_NAMESPACE: expected_ns.get_path(),
             },
             bck.qparam,
         )
         self.assertEqual(BCK_NAME, bck.name)
         self.assertEqual(expected_ns, bck.namespace)
+
+    @test_cases(("gs", Provider.GOOGLE), ("s3", Provider.AMAZON))
+    def test_init_mapped_provider(self, test_case):
+        alias, provider = test_case
+        bck = Bucket(
+            client=self.mock_client,
+            name="test-bck",
+            provider=alias,
+        )
+        self.assertEqual(provider, bck.provider)
 
     def test_ais_source(self):
         self.assertIsInstance(self.ais_bck, AISSource)
@@ -143,7 +153,7 @@ class TestBucket(unittest.TestCase):
     def test_rename_success(self):
         new_bck_name = "new_bucket"
         expected_response = "rename_op_123"
-        self.ais_bck_params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{new_bck_name}/"
+        self.ais_bck_params[QPARAM_BCK_TO] = f"{Provider.AIS.value}/@#/{new_bck_name}/"
         mock_response = Mock()
         mock_response.text = expected_response
         self.mock_client.request.return_value = mock_response
@@ -216,12 +226,13 @@ class TestBucket(unittest.TestCase):
         )
         self.assertEqual(headers, mock_header.headers)
 
-    def test_copy_default_params(self):
+    @test_cases(*Provider)
+    def test_copy_default_params(self, provider):
         dest_bck = Bucket(
             client=self.mock_client,
             name="test-bck",
             namespace=Namespace(uuid="namespace-id", name="ns-name"),
-            provider="any-provider",
+            provider=provider,
         )
         action_value = {
             "prefix": "",
@@ -592,12 +603,14 @@ class TestBucket(unittest.TestCase):
 
     def test_get_path(self):
         namespace = Namespace(uuid="ns-id", name="ns-name")
-        bucket = Bucket(name=BCK_NAME, namespace=namespace, provider=PROVIDER_AMAZON)
+        bucket = Bucket(name=BCK_NAME, namespace=namespace, provider=Provider.AMAZON)
         expected_path = (
-            f"{PROVIDER_AMAZON}/@{namespace.uuid}#{namespace.name}/{bucket.name}/"
+            f"{Provider.AMAZON.value}/@{namespace.uuid}#{namespace.name}/{bucket.name}/"
         )
         self.assertEqual(expected_path, bucket.get_path())
-        self.assertEqual(f"{PROVIDER_AIS}/@#/{bucket.name}/", self.ais_bck.get_path())
+        self.assertEqual(
+            f"{Provider.AIS.value}/@#/{bucket.name}/", self.ais_bck.get_path()
+        )
 
     @patch("aistore.sdk.bucket.Bucket.object")
     @patch("aistore.sdk.bucket.Bucket.list_objects_iter")

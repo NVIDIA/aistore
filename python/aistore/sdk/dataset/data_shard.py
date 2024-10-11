@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 from aistore.sdk.client import Client
+from aistore.sdk.provider import Provider
 
 
 @dataclass
@@ -21,7 +22,7 @@ class DataShard:
 
     client_url: str
     bucket_name: str
-    provider: str = "ais"
+    provider: str = Provider.AIS
     prefix: str = ""
     etl_name: str = None
 

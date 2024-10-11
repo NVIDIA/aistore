@@ -21,7 +21,7 @@ class InvalidBckProvider(Exception):
     """
 
     def __init__(self, provider):
-        super().__init__(f"Invalid bucket provider {provider}")
+        super().__init__(f"Invalid bucket provider: '{provider}'")
 
 
 # pylint: disable=unused-variable
