@@ -7,7 +7,7 @@ import requests
 
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.obj.object_client import ObjectClient
-from aistore.sdk.obj.object_file import ObjectFile
+from aistore.sdk.obj.obj_file.object_file import ObjectFile
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 

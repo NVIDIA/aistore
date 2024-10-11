@@ -12,7 +12,6 @@ from pathlib import Path
 
 from aistore.sdk import Bucket
 from aistore.sdk.client import Client
-from aistore.sdk.obj.object_file import ObjectFile
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import create_random_tarballs
@@ -71,25 +70,6 @@ class TestObjectFileOps(unittest.TestCase):
         # Remove extracted files
         if os.path.exists(self.EXTRACT_PATH):
             os.system(f"rm -rf {self.EXTRACT_PATH}")
-
-    def test_initialization(self):
-        """Test initialization."""
-        self.assertIsInstance(self.file_obj, ObjectFile)
-        self.assertEqual(self.file_obj.tell(), 0)
-        self.assertTrue(self.file_obj.readable())
-        self.assertFalse(self.file_obj.seekable())
-
-    def test_close(self):
-        """Test file close."""
-        self.file_obj.close()
-        self.assertFalse(self.file_obj.readable())
-        self.assertFalse(self.file_obj.seekable())
-        with self.assertRaises(ValueError):
-            self.file_obj.tell()
-        with self.assertRaises(ValueError):
-            self.file_obj.close()
-        with self.assertRaises(ValueError):
-            self.file_obj.read()
 
     def test_read_less_than_chunk_size(self):
         """Test reading less than a chunk size."""

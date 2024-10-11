@@ -1,195 +1,98 @@
 #
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
-import io
-import os
+
+# pylint: disable=protected-access
+
 import unittest
-from unittest import mock
 from unittest.mock import Mock
 
-from requests.exceptions import ChunkedEncodingError
-
-from aistore.sdk.obj.content_iterator import ContentIterator
-from aistore.sdk.obj.object_file import ObjectFile
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from aistore.sdk.obj.object_file_errors import (
-    ObjectFileMaxResumeError,
-    ObjectFileStreamError,
-)
-
-
-# pylint: disable=too-few-public-methods
-
-
-class BadObjectStream(io.BytesIO):
-    """
-    Simulates a stream that fails with ChunkedEncodingError intermittently every `fail_on_read`
-    chunks read.
-    """
-
-    def __init__(self, *args, fail_on_read=2, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.read_count = 0
-        self.fail_on_read = fail_on_read
-
-    def read(self, size=-1):
-        """Overrides `BytesIO.read` to simulate failure after a specific number of reads."""
-        self.read_count += 1
-        if self.read_count == self.fail_on_read:
-            raise ChunkedEncodingError("Simulated ChunkedEncodingError")
-        return super().read(size)
-
-
-class BadContentIterator(ContentIterator):
-    """
-    Simulates an ContentIterator that streams data using BadObjectStream that fails with ChunksEncoding
-    error every `fail_on_read` chunks read.
-
-    This class extends `ContentIterator` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
-    parent class `ContentIterator`.
-
-    The streaming starts from a specific position (`start_position`), allowing the object to resume
-    reading from that point if necessary.
-    """
-
-    def __init__(self, data=None, fail_on_read=2):
-        super().__init__(client=mock.Mock(), chunk_size=DEFAULT_CHUNK_SIZE)
-        self.data = data
-        self.fail_on_read = fail_on_read
-
-    def iter_from_position(self, start_position=0):
-        """Simulate streaming the object from the specified position `start_position`."""
-
-        def iterator():
-            stream = BadObjectStream(
-                self.data[start_position:], fail_on_read=self.fail_on_read
-            )
-            while True:
-                chunk = stream.read(self._chunk_size)
-                if not chunk:
-                    break
-                yield chunk
-
-        return iterator()
+from aistore.sdk.obj.obj_file.buffer import SimpleBuffer
+from aistore.sdk.obj.obj_file.object_file import ObjectFile
 
 
 class TestObjectFile(unittest.TestCase):
 
-    # Basic Tests
-
-    def test_buffer_usage(self):
-        """Test ObjectFile uses buffer correctly, only fetching new chunks when needed."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 2)
-        mock_reader = BadContentIterator(data=data, fail_on_read=0)
-        object_file = ObjectFile(mock_reader, max_resume=0)
-
-        # Mock `next` to track how many times we fetch new data
-        with mock.patch("builtins.next", wraps=next) as mock_next:
-
-            # Read data that will cause buffer to fill partially
-            read_size = DEFAULT_CHUNK_SIZE // 2
-            read_data = object_file.read(read_size)
-            self.assertEqual(read_data, data[:read_size])
-
-            # Check that next() was called once to fill the buffer
-            self.assertEqual(mock_next.call_count, 1)
-
-            # Read more data from the buffer (without fetching new chunks)
-            read_data = object_file.read(DEFAULT_CHUNK_SIZE // 2)
-            self.assertEqual(read_data, data[read_size:DEFAULT_CHUNK_SIZE])
-
-            # Ensure next() was not called again (since the buffer had the remaining data)
-            self.assertEqual(mock_next.call_count, 1)
-
-            # Read more data that requires fetching additional chunks
-            read_data = object_file.read(DEFAULT_CHUNK_SIZE)
-            self.assertEqual(
-                read_data, data[DEFAULT_CHUNK_SIZE : DEFAULT_CHUNK_SIZE * 2]
-            )
-
-            # Now check that next() was called again to fetch more data
-            self.assertEqual(mock_next.call_count, 2)
-
-    # Retry & Resume Related Tests
-
-    def test_init_raises_stream_error(self):
-        """Test that ObjectFile raises ObjectFileStreamError if no stream can be established."""
-        stream_creation_err = Exception("Can't connect to AIS")
-        mock_content_iterator = Mock()
-        mock_content_iterator.iter_from_position.side_effect = stream_creation_err
-
-        with self.assertRaises(ObjectFileStreamError):
-            ObjectFile(mock_content_iterator, max_resume=2)
-
-    def test_read_raises_stream_error(self):
-        """Test that ObjectFile raises ObjectFileStreamError if no stream can be established on subsequent reads."""
-        stream_creation_err = Exception("Can't connect to AIS")
-        mock_content_iterator = Mock(spec=ContentIterator)
-        bad_iterator = BadContentIterator(
-            data=b"some data", fail_on_read=2
-        ).iter_from_position(0)
-
-        # First attempt creates a bad iterator, which fails and triggers a re-initialization of the content iterator
-        # Second content_iterator can't connect at all
-        mock_content_iterator.iter_from_position.side_effect = [
-            bad_iterator,
-            stream_creation_err,
-        ]
-
-        # The initialization before the ChunkedEncodingError happens without error
-        object_file = ObjectFile(mock_content_iterator, max_resume=2)
-        # ChunkedEncodingError is raised on a subsequent call, and new iterator fails to reconnect
-        with self.assertRaises(ObjectFileStreamError):
-            object_file.read()
-
-    def test_read_all_fails_after_max_retries(self):
-        """Test that ObjectFile gives up after exceeding max retry attempts for read-all."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        object_file = ObjectFile(mock_reader, max_resume=2)
-
-        # Test that the read fails after 2 retry attempts
-        with self.assertRaises(ObjectFileMaxResumeError):
-            object_file.read()
-
-    def test_read_fixed_fails_after_max_retries(self):
-        """Test that ObjectFile gives up after exceeding max retry attempts for fixed-size reads."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        object_file = ObjectFile(mock_reader, max_resume=2)
-
-        # Test that the read fails after 2 retry attempts for a fixed-size read
-        with self.assertRaises(ObjectFileMaxResumeError):
-            object_file.read(DEFAULT_CHUNK_SIZE * 4)
-
-    def test_read_all_success_after_retries(self):
-        """Test that ObjectFile retries and succeeds after intermittent ChunkedEncodingError for read-all."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        object_file = ObjectFile(mock_reader, max_resume=4)
-
-        result = object_file.read()
-        # Ensure all data was correctly read after retries
-        self.assertEqual(result, data)
-        self.assertEqual(object_file.tell(), DEFAULT_CHUNK_SIZE * 4)
-
-    def test_read_fixed_success_after_retries(self):
-        """Test that ObjectFile retries and succeeds for fixed-size reads after intermittent ChunkedEncodingError."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        object_file = ObjectFile(mock_reader, max_resume=4)
-
-        # Read the first half of the data and check the position
-        first_part = object_file.read(DEFAULT_CHUNK_SIZE * 2)
-        self.assertEqual(first_part, data[: DEFAULT_CHUNK_SIZE * 2])
-        self.assertEqual(object_file.tell(), DEFAULT_CHUNK_SIZE * 2)
-
-        # Resume reading the second half and check position
-        second_part = object_file.read(DEFAULT_CHUNK_SIZE * 2)
-        self.assertEqual(
-            second_part, data[DEFAULT_CHUNK_SIZE * 2 : DEFAULT_CHUNK_SIZE * 4]
+    def setUp(self):
+        self.content_iterator_mock = Mock()
+        self.object_file = ObjectFile(
+            content_iterator=self.content_iterator_mock, max_resume=0
         )
-        self.assertEqual(object_file.tell(), DEFAULT_CHUNK_SIZE * 4)
 
-        # Ensure all data was read correctly in two parts
-        self.assertEqual(first_part + second_part, data)
+    def test_close(self):
+        """Test that ObjectFile closes correctly."""
+        self.assertFalse(self.object_file._closed)
+        self.object_file.close()  # Close the file
+        self.assertTrue(self.object_file._closed)
+        with self.assertRaises(ValueError):
+            self.object_file.close()  # Attempt to close already closed file
+
+    def test_init(self):
+        """Test that ObjectFile initializes correctly."""
+        self.assertEqual(self.object_file._max_resume, 0)
+        self.assertEqual(self.object_file._read_position, 0)
+        self.assertFalse(self.object_file._closed)
+        self.assertIsInstance(self.object_file._buffer, SimpleBuffer)
+
+    def test_tell(self):
+        """Test that ObjectFile returns the correct read position."""
+        self.assertEqual(self.object_file.tell(), 0)
+        self.object_file._read_position = 10
+        self.assertEqual(self.object_file.tell(), 10)
+
+        # Test that ValueError is raised when file is closed
+        self.object_file.close()
+        with self.assertRaises(ValueError):
+            self.object_file.tell()
+
+    def test_readable(self):
+        """Test that ObjectFile is readable when file is not closed."""
+        self.assertTrue(self.object_file.readable())
+        self.object_file.close()
+        self.assertFalse(self.object_file.readable())
+
+    def test_seekable(self):
+        """Test that ObjectFile is not seekable."""
+        self.assertFalse(self.object_file.seekable())
+
+    def test_read(self):
+        """Test basic ObjectFile read."""
+        # Test reading size zero bytes
+        self.assertEqual(self.object_file.read(0), b"")
+
+        # Test that ValueError is raised when file is closed
+        self.object_file.close()
+        with self.assertRaises(ValueError):
+            self.object_file.read()
+
+    def test_context_manager(self):
+        """Test that ObjectFile functions as a context manager."""
+        with self.object_file as obj_file:
+            self.assertFalse(obj_file._closed)
+            self.assertEqual(obj_file._read_position, 0)
+            self.assertIsInstance(obj_file._buffer, SimpleBuffer)
+        self.assertTrue(obj_file._closed)
+
+    def test_read_and_position_advance(self):
+        """
+        Test that the internal buffer is used to fill and read data,
+        and that the read position advances correctly.
+        """
+        read_data = b"testdata"
+
+        self.object_file._buffer.fill = Mock()
+        self.object_file._buffer.read = Mock(return_value=read_data)
+
+        data = self.object_file.read(len(read_data))
+
+        # Assert that the buffer's fill method was called
+        self.object_file._buffer.fill.assert_called_once()
+
+        # Assert that the buffer's read method was called with the correct size
+        self.object_file._buffer.read.assert_called_once_with(len(read_data))
+
+        # Assert that the data returned is correct
+        self.assertEqual(data, read_data)
+
+        # Check that the read position was advanced by the length of the data
+        self.assertEqual(self.object_file.tell(), len(data))

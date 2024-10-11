@@ -3,7 +3,7 @@ from unittest.mock import patch, Mock
 import requests
 
 from aistore.sdk.obj.content_iterator import ContentIterator
-from aistore.sdk.obj.object_file import ObjectFile
+from aistore.sdk.obj.obj_file.object_file import ObjectFile
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 
