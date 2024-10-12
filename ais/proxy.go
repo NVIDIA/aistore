@@ -1930,23 +1930,19 @@ func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 }
 
 // HEAD /v1/buckets/bucket-name[/prefix]
-// with additional preparsing step to support api.GetBucketInfo prefix (as in: ais ls --summary)
+// with additional preparsing step to support api.GetBucketInfo prefix
+// (e.g. 'ais ls ais://nnn --summary --prefix=aaa/bbb')
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var prefix string
 
 	// preparse
 	{
-		items, err := p.parseURL(w, r, apireq.prefix, apireq.after, true)
+		items, err := p.parseURL(w, r, apireq.prefix, apireq.after, false)
 		if err != nil {
 			return
 		}
-		debug.Assert(apireq.bckIdx == 0, "expecting bucket name at index 0 (zero)")
-		if len(items) > 1 {
-			prefix = items[1]
-			for _, s := range items[2:] {
-				prefix += "/" + s
-			}
-			prefix = cos.TrimPrefix(prefix)
+		if i := strings.IndexByte(items[0], '/'); i > 0 {
+			prefix = cos.TrimPrefix(items[0][i+1:])
 			apireq.after = 2
 		}
 	}

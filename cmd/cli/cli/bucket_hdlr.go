@@ -66,10 +66,12 @@ var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts 
 	indent1 + "\t                                           \t  and show missing objects;\n" +
 	indent1 + "\t* ais ls s3://abc --check-versions --cached\t- for each in-cluster object in s3://abc: check whether it has identical remote copy\n" +
 	indent1 + "\t                                           \t  and show deleted objects.\n" +
-	indent1 + "with summary (stats):\n" +
-	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket in the cluster: print object numbers and total size(s);\n" +
+	indent1 + "with summary (bucket sizes and numbers of objects):\n" +
+	indent1 + "\t* ais ls ais://nnn --summary --prefix=aaa/bbb' \t- summarize objects that match a given prefix;\n" +
+	indent1 + "\t* ais ls ais://nnn/aaa/bbb --summary' \t- same as above;\n" +
+	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket: print number of objects and total size (bytes);\n" +
 	indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;\n" +
-	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to cluster's BMD."
+	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to the cluster's BMD."
 
 // ais bucket ... props
 const setBpropsUsage = "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
@@ -594,6 +596,7 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.Bprops) {
 type lsbCtx struct {
 	regexStr        string
 	regex           *regexp.Regexp
+	prefix          string
 	fltPresence     int
 	countRemoteObjs bool
 	all             bool
@@ -615,8 +618,13 @@ func listAnyHandler(c *cli.Context) error {
 	}
 
 	switch {
-	case objName != "": // list archive OR show specific obj (HEAD(obj))
+	case objName != "":
+		// (1) list archive, or
+		// (2) show (as in: HEAD) specied object, or
+		// (3) show part of a bucket that matches prefix = objName, or
+		// (4) summarize part of a bucket that --/--
 		if flagIsSet(c, listArchFlag) {
+			// (1)
 			return listArchHandler(c)
 		}
 		if _, err := headBucket(bck, true /* don't add */); err != nil {
@@ -624,58 +632,84 @@ func listAnyHandler(c *cli.Context) error {
 		}
 		notfound, err := showObjProps(c, bck, objName)
 		if err == nil {
+			// (2)
 			if _, errV := archive.Mime("", objName); errV == nil {
 				fmt.Fprintf(c.App.Writer, "\n('ais ls %s %s' to list archived contents, %s for details)\n",
 					bck.Cname(objName), flprn(listArchFlag), qflprn(cli.HelpFlag))
 			}
 		} else if notfound {
-			prefix := objName
-			if errV := listObjects(c, bck, prefix, false /*list arch*/, false /*print empty*/); errV == nil {
-				return nil
-			}
-		}
-		return err
-	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list or summarize bucket(s)
-		var lsb lsbCtx
-		if lsb.regexStr = parseStrFlag(c, regexLsAnyFlag); lsb.regexStr != "" {
-			regex, err := regexp.Compile(lsb.regexStr)
-			if err != nil {
-				return err
-			}
-			lsb.regex = regex
-		}
-		lsb.all = flagIsSet(c, allObjsOrBcksFlag)
-		lsb.fltPresence = apc.FltPresent
-		if lsb.all {
-			lsb.fltPresence = apc.FltExists
-		}
-		if flagIsSet(c, bckSummaryFlag) {
-			if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
-				lsb.countRemoteObjs = true
-				const (
-					warn = "counting and sizing remote objects may take considerable time\n"
-					tip1 = "(tip: run 'ais storage summary' or use '--regex' to refine the selection)\n"
-					tip2 = "(tip: use '--refresh DURATION' to show progress, '--help' for details)\n"
-				)
-				switch {
-				case !flagIsSet(c, refreshFlag):
-					actionWarn(c, warn+tip2)
-				case lsb.regex == nil:
-					actionWarn(c, warn+tip1)
-				default:
-					actionWarn(c, warn)
+			if !flagIsSet(c, bckSummaryFlag) {
+				// (3)
+				prefix := objName
+				if errV := listObjects(c, bck, prefix, false /*list arch*/, false /*print empty*/); errV == nil {
+					return nil
 				}
-			}
-			if bck.Name != "" {
+			} else if !flagIsSet(c, listObjPrefixFlag) { // summarize buckets w/ prefix embedded; TODO: warn --all
+				// (4)
+				lsb, err := _newLsbCtx(c)
+				if err != nil {
+					return err
+				}
+				lsb.prefix = objName
 				_ = listBckTable(c, cmn.QueryBcks(bck), cmn.Bcks{bck}, lsb)
 				return nil
 			}
 		}
+		return err
 
+	case flagIsSet(c, bckSummaryFlag): // summarize buckets
+		lsb, err := _newLsbCtx(c)
+		if err != nil {
+			return err
+		}
+		if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
+			lsb.countRemoteObjs = true
+			const (
+				warn = "counting and sizing remote objects may take considerable time\n"
+				tip1 = "(tip: run 'ais storage summary' or use '--regex' to refine the selection)\n"
+				tip2 = "(tip: use '--refresh DURATION' to show progress, '--help' for details)\n"
+			)
+			switch {
+			case !flagIsSet(c, refreshFlag):
+				actionWarn(c, warn+tip2)
+			case lsb.regex == nil:
+				actionWarn(c, warn+tip1)
+			default:
+				actionWarn(c, warn)
+			}
+		}
+		if bck.Name != "" {
+			_ = listBckTable(c, cmn.QueryBcks(bck), cmn.Bcks{bck}, lsb)
+			return nil
+		}
 		return listOrSummBuckets(c, cmn.QueryBcks(bck), lsb)
+
+	case bck.Name == "": // list buckets
+		lsb, err := _newLsbCtx(c)
+		if err != nil {
+			return err
+		}
+		return listOrSummBuckets(c, cmn.QueryBcks(bck), lsb)
+
 	default: // list objects
 		prefix := parseStrFlag(c, listObjPrefixFlag)
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
 		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
 	}
+}
+
+func _newLsbCtx(c *cli.Context) (lsb lsbCtx, _ error) {
+	if lsb.regexStr = parseStrFlag(c, regexLsAnyFlag); lsb.regexStr != "" {
+		regex, err := regexp.Compile(lsb.regexStr)
+		if err != nil {
+			return lsb, err
+		}
+		lsb.regex = regex
+	}
+	lsb.all = flagIsSet(c, allObjsOrBcksFlag)
+	lsb.fltPresence = apc.FltPresent
+	if lsb.all {
+		lsb.fltPresence = apc.FltExists
+	}
+	return lsb, nil
 }

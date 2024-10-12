@@ -41,7 +41,7 @@ type (
 	}
 )
 
-// `ais ls`, `ais ls s3:` and similar
+// `ais ls`, `ais ls s3:`, `ais ls s3://aaa --prefix bbb --summary` and similar
 func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, lsb lsbCtx) (cnt int) {
 	if flagIsSet(c, bckSummaryFlag) {
 		args := api.BinfoArgs{
@@ -50,7 +50,8 @@ func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, lsb lsbCtx)
 			Summarize:     true,
 			DontAddRemote: flagIsSet(c, dontAddRemoteFlag),
 		}
-		cnt = listBckTableWithSummary(c, qbck, bcks, args)
+		prefix := cos.Left(parseStrFlag(c, listObjPrefixFlag), lsb.prefix /*as in: bucket/[prefix]*/)
+		cnt = listBckTableWithSummary(c, qbck, bcks, args, prefix)
 	} else {
 		cnt = listBckTableNoSummary(c, qbck, bcks, lsb.fltPresence)
 	}
@@ -130,7 +131,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fl
 }
 
 // compare with `showBucketSummary`
-func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, args api.BinfoArgs) int {
+func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, args api.BinfoArgs, prefix string) int {
 	var (
 		footer     lsbFooter
 		hideHeader = flagIsSet(c, noHeaderFlag)
@@ -139,7 +140,6 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 
 		objCached  = flagIsSet(c, listObjCachedFlag)
 		bckPresent = flagIsSet(c, allObjsOrBcksFlag)
-		prefix     = parseStrFlag(c, listObjPrefixFlag)
 	)
 	debug.Assert(args.Summarize)
 	ctx, err := newBsummCtxMsg(c, qbck, prefix, objCached, bckPresent)
