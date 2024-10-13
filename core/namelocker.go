@@ -140,8 +140,8 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 func (nlc *nlc) UpgradeLock(uname string) (wlocked bool) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
-	debug.Assertf(found && !li.exclusive && li.rc > 0, "found %t li.exclusive %t li.rc %d", found, li.exclusive, li.rc)
-
+	debug.Assert(found && !li.exclusive && li.rc > 0,
+		"found ", found, " li.exclusive ", li.exclusive, " li.rc ", li.rc)
 	if li.rc == 1 {
 		li.rc = 0
 		li.exclusive = true
@@ -154,7 +154,7 @@ func (nlc *nlc) UpgradeLock(uname string) (wlocked bool) {
 func (nlc *nlc) DowngradeLock(uname string) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
-	debug.Assertf(found && li.exclusive, "found %t li.exclusive %t", found, li.exclusive)
+	debug.Assert(found && li.exclusive, "found ", found, " li.exclusive ", li.exclusive, " li.rc ", li.rc)
 	li.rc++
 	li.exclusive = false
 	nlc.mu.Unlock()

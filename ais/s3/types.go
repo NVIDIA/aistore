@@ -162,8 +162,8 @@ func (r *ListObjectResult) Add(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) {
 
 func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
 	oi = &ObjInfo{Key: entry.Name, Size: entry.Size, LastModified: entry.Atime}
-	if oi.LastModified == "" {
-		oi.LastModified = cmn.S2LastModified(entry.Custom)
+	if oi.LastModified == "" && entry.Custom != "" {
+		oi.LastModified = cmn.S2CustomVal(entry.Custom, cmn.LastModified)
 	}
 	if oi.LastModified == "" && lsmsg.TimeFormat != "" {
 		oi.LastModified = cos.FormatNanoTime(0, lsmsg.TimeFormat) // 1970-01-01 epoch

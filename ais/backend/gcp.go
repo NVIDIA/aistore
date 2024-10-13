@@ -212,7 +212,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			}
 			if wantCustom {
 				etag, _ := h.EncodeCksum(attrs.Etag)
-				en.Custom = custom2S(cmn.ETag, etag, cmn.LastModified, fmtTime(attrs.Updated),
+				en.Custom = cmn.CustomProps2S(cmn.ETag, etag, cmn.LastModified, fmtTime(attrs.Updated),
 					cos.HdrContentType, attrs.ContentType)
 			}
 		}

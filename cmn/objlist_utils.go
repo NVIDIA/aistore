@@ -255,3 +255,113 @@ func HandleNoRecurs(prefix, relPath string) (*LsoEnt, error) {
 	}
 	return &LsoEnt{Name: relPath, Flags: apc.EntryIsDir}, nil
 }
+
+//
+// LsoEnt.Custom ------------------------------------------------------------
+// e.g. "[ETag:67c24314d6587da16bfa50dd4d2f6a0a LastModified:2023-09-20T21:04:51Z]
+//
+
+const (
+	cusbeg = '[' // begin (key-value, ...) string
+	cusend = ']' // end   --/--
+	cusepa = ':' // key:val
+	cusdlm = ' ' // k1:v1 k2:v2
+)
+
+const (
+	numStdCustomProps = 6 // {SourceObjMD, CRC32CObjMD, MD5ObjMD, ETag, LastModified, VersionObjMD}
+)
+
+// (compare w/ CustomProps2S below)
+func CustomMD2S(md cos.StrKVs) string {
+	var (
+		sb strings.Builder
+		l  = len(md)
+		i  int
+	)
+	sb.WriteByte(cusbeg)
+	for k, v := range md {
+		sb.WriteString(k)
+		sb.WriteByte(cusepa)
+		sb.WriteString(v)
+		i++
+		if i < l-1 {
+			sb.WriteByte(cusdlm)
+		}
+	}
+	sb.WriteByte(cusend)
+	return sb.String()
+}
+
+// (compare w/ CustomMD2S above)
+func CustomProps2S(nvs ...string) string {
+	var (
+		sb strings.Builder
+		l  = len(nvs)
+	)
+	sb.WriteByte(cusbeg)
+	for i := 0; i < l; i += 2 {
+		sb.WriteString(nvs[i])
+		sb.WriteByte(cusepa)
+		sb.WriteString(nvs[i+1])
+		if i < l-2 {
+			sb.WriteByte(cusdlm)
+		}
+	}
+	sb.WriteByte(cusend)
+	return sb.String()
+}
+
+func S2CustomMD(custom, version string) (md cos.StrKVs) {
+	l := len(custom) - 1
+	if l < 2 {
+		return nil
+	}
+	md = make(cos.StrKVs, numStdCustomProps)
+	for i := 1; i < l; {
+		j := strings.IndexByte(custom[i:], cusepa)
+		if j < 0 {
+			debug.Assert(false, custom)
+			return
+		}
+		name := custom[i : i+j]
+		i += j
+		k := strings.IndexByte(custom[i:], cusdlm)
+		if k < 0 {
+			k = strings.IndexByte(custom[i:], cusend)
+		}
+		if k < 0 {
+			debug.Assert(false, custom)
+			return
+		}
+		md[name] = custom[i : i+k]
+		i += k + 1
+	}
+	if md[VersionObjMD] == "" && version != "" {
+		md[VersionObjMD] = version
+	}
+	return md
+}
+
+func S2CustomVal(custom, name string) (v string) {
+	i := strings.Index(custom, name)
+	if i < 0 {
+		return
+	}
+	j := strings.IndexByte(custom[i:], cusepa)
+	if j < 0 {
+		debug.Assert(false, custom)
+		return
+	}
+
+	i += j
+	k := strings.IndexByte(custom[i:], cusdlm)
+	if k < 0 {
+		k = strings.IndexByte(custom[i:], cusend)
+	}
+	if k < 0 {
+		debug.Assert(false, custom)
+		return
+	}
+	return custom[i : i+k]
+}

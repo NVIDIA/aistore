@@ -392,7 +392,7 @@ func (r *LsoXact) nextPageR() (err error) {
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {
-		err = fmt.Errorf("%s: \"paging\" %s is down or inactive, %s", r, meta.Tname(r.msg.SID), smap)
+		err = fmt.Errorf("%s: designated (\"paging\") %s is down or inactive, %s", r, meta.Tname(r.msg.SID), smap)
 		goto ex
 	}
 	r.wiCnt.Inc()

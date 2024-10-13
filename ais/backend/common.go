@@ -6,7 +6,6 @@ package backend
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -212,24 +211,4 @@ func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {
 		params.ColdGET = true
 	}
 	return params
-}
-
-// "map[ETag:67c24314d6587da16bfa50dd4d2f6a0a LastModified:2024-09-20T21:04:51Z]
-// (compare w/ cmn.CustomMD2S)
-func custom2S(nvs ...string) string {
-	var (
-		sb strings.Builder
-		l  = len(nvs)
-	)
-	sb.WriteString("map[")
-	for i := 0; i < l; i += 2 {
-		sb.WriteString(nvs[i])
-		sb.WriteByte(':')
-		sb.WriteString(nvs[i+1])
-		if i < l-2 {
-			sb.WriteByte(' ')
-		}
-	}
-	sb.WriteByte(']')
-	return sb.String()
 }

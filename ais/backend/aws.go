@@ -340,7 +340,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			}
 			if wantCustom {
 				mtime := *(obj.LastModified)
-				en.Custom = custom2S(cmn.ETag, en.Checksum, cmn.LastModified, fmtTime(mtime))
+				en.Custom = cmn.CustomProps2S(cmn.ETag, en.Checksum, cmn.LastModified, fmtTime(mtime))
 			}
 		}
 		lst.Entries = append(lst.Entries, &en)

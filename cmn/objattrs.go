@@ -77,11 +77,6 @@ var (
 	props2hdr cos.StrKVs
 )
 
-// custom MD prop string => map (see S2CustomMD)
-var (
-	customProps = [...]string{SourceObjMD, CRC32CObjMD, MD5ObjMD, ETag, LastModified, VersionObjMD}
-)
-
 func InitObjProps2Hdr() {
 	props2hdr = make(cos.StrKVs, 18)
 
@@ -132,83 +127,6 @@ func (oa *ObjAttrs) SetVersion(ver string) {
 func (oa *ObjAttrs) SetSize(size int64) {
 	debug.Assert(oa.Size == 0)
 	oa.Size = size
-}
-
-//
-// custom metadata
-//
-
-// "map[ETag:67c24314d6587da16bfa50dd4d2f6a0a LastModified:2024-09-20T21:04:51Z]
-// (compare w/ ais/backend custom2S)
-func CustomMD2S(md cos.StrKVs) string {
-	var (
-		sb strings.Builder
-		l  = len(md)
-		i  int
-	)
-	sb.WriteString("map[")
-	for k, v := range md {
-		sb.WriteString(k)
-		sb.WriteByte(':')
-		sb.WriteString(v)
-		i++
-		if i < l-1 {
-			sb.WriteByte(' ')
-		}
-	}
-	sb.WriteByte(']')
-	return sb.String()
-}
-
-// TODO: optimize out
-func S2CustomMD(custom, version string) (md cos.StrKVs) {
-	if custom == "" || !strings.HasPrefix(custom, "map[") { // see CustomMD2S above
-		return nil
-	}
-	s := custom[4 : len(custom)-1]
-	lst := strings.Split(s, " ")
-	md = make(cos.StrKVs, len(lst))
-
-	for _, key := range customProps {
-		keyX := key + ":"
-		for _, kv := range lst {
-			if strings.HasPrefix(kv, keyX) {
-				md[key] = kv[len(keyX):]
-				break
-			}
-		}
-	}
-	if md[VersionObjMD] == "" {
-		md[VersionObjMD] = version
-	}
-
-	return md
-}
-
-func S2LastModified(custom string) (v string) {
-	if custom == "" || !strings.HasPrefix(custom, "map[") { // see CustomMD2S above
-		return
-	}
-	i := strings.Index(custom, LastModified)
-	if i < 0 {
-		return
-	}
-	j := strings.IndexByte(custom[i:], ':')
-	if j < 0 {
-		debug.Assert(false, custom)
-		return
-	}
-
-	i += j
-	k := strings.IndexByte(custom[i:], ' ')
-	if k < 0 {
-		k = strings.IndexByte(custom[i:], ']')
-	}
-	if k < 0 {
-		debug.Assert(false, custom)
-		return
-	}
-	return custom[i : i+k]
 }
 
 func (oa *ObjAttrs) GetCustomMD() cos.StrKVs   { return oa.CustomMD }

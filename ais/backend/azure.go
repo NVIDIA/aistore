@@ -306,7 +306,7 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 			if blob.VersionID != nil {
 				custom = append(custom, cmn.VersionObjMD, *blob.VersionID)
 			}
-			en.Custom = custom2S(custom...)
+			en.Custom = cmn.CustomProps2S(custom...)
 		}
 		lst.Entries = append(lst.Entries, &en)
 	}
