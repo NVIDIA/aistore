@@ -30,6 +30,7 @@ type (
 		lomVisitedCb lomVisitedCb
 		markerDir    string
 		wanted       cos.BitFlags
+		custom       cos.StrKVs
 	}
 )
 
@@ -50,6 +51,9 @@ func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 		if wi.markerDir == "." {
 			wi.markerDir = ""
 		}
+	}
+	if msg.IsFlagSet(apc.LsVerChanged) {
+		wi.custom = make(cos.StrKVs)
 	}
 	return
 }

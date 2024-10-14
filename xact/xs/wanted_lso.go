@@ -76,12 +76,13 @@ func (wi *walkInfo) setWanted(e *cmn.LsoEnt, lom *core.LOM) {
 		//
 		// slow path: extensive 'version-changed' check
 		//
-		md := cmn.S2CustomMD(e.Custom, e.Version)
-		if len(md) > 0 {
-			oa := cmn.ObjAttrs{Size: e.Size, CustomMD: md}
+		cmn.S2CustomMD(wi.custom, e.Custom, e.Version)
+		if len(wi.custom) > 0 {
+			oa := cmn.ObjAttrs{Size: e.Size, CustomMD: wi.custom}
 			if lom.CheckEq(&oa) != nil {
 				e.SetVerChanged()
 			}
+			clear(wi.custom)
 		}
 	}
 }

@@ -145,8 +145,8 @@ func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	oa.CustomMD[k] = v
 }
 
-func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
-	for _, key := range keys {
+func (oa *ObjAttrs) DelStdCustom() {
+	for _, key := range stdCustomProps {
 		delete(oa.CustomMD, key)
 	}
 }

@@ -268,25 +268,47 @@ const (
 	cusdlm = ' ' // k1:v1 k2:v2
 )
 
-const (
-	numStdCustomProps = 6 // {SourceObjMD, CRC32CObjMD, MD5ObjMD, ETag, LastModified, VersionObjMD}
+// set by the backend.PutObj()
+// see also: DelStdCustom()
+var (
+	stdCustomProps = [...]string{SourceObjMD, ETag, LastModified, CRC32CObjMD, MD5ObjMD, VersionObjMD}
 )
 
 // (compare w/ CustomProps2S below)
 func CustomMD2S(md cos.StrKVs) string {
 	var (
-		sb strings.Builder
-		l  = len(md)
-		i  int
+		sb   strings.Builder
+		l    = len(md)
+		prev bool
 	)
 	sb.WriteByte(cusbeg)
-	for k, v := range md {
+	for _, k := range stdCustomProps {
+		v, ok := md[k]
+		if !ok {
+			continue
+		}
+		if prev {
+			sb.WriteByte(cusdlm)
+		}
 		sb.WriteString(k)
 		sb.WriteByte(cusepa)
 		sb.WriteString(v)
-		i++
-		if i < l-1 {
-			sb.WriteByte(cusdlm)
+		prev = true
+		l--
+	}
+	if l > 0 {
+		// add remaining (non-standard) attr-s in an arbitrary sorting order
+		for k, v := range md {
+			if cos.StringInSlice(k, stdCustomProps[:]) {
+				continue
+			}
+			if prev {
+				sb.WriteByte(cusdlm)
+			}
+			sb.WriteString(k)
+			sb.WriteByte(cusepa)
+			sb.WriteString(v)
+			prev = true
 		}
 	}
 	sb.WriteByte(cusend)
@@ -312,12 +334,12 @@ func CustomProps2S(nvs ...string) string {
 	return sb.String()
 }
 
-func S2CustomMD(custom, version string) (md cos.StrKVs) {
+func S2CustomMD(md cos.StrKVs, custom, version string) {
+	debug.Assert(len(md) == 0)
 	l := len(custom) - 1
 	if l < 2 {
-		return nil
+		return
 	}
-	md = make(cos.StrKVs, numStdCustomProps)
 	for i := 1; i < l; {
 		j := strings.IndexByte(custom[i:], cusepa)
 		if j < 0 {
@@ -340,7 +362,6 @@ func S2CustomMD(custom, version string) (md cos.StrKVs) {
 	if md[VersionObjMD] == "" && version != "" {
 		md[VersionObjMD] = version
 	}
-	return md
 }
 
 func S2CustomVal(custom, name string) (v string) {

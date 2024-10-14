@@ -394,8 +394,7 @@ func (poi *putOI) putRemote() (int, error) {
 		return 0, cmn.NewErrFailedTo(poi.t, "open", poi.workFQN, err)
 	}
 	if poi.owt == cmn.OwtPut && !lom.Bck().IsRemoteAIS() {
-		// some/all of those are set by the backend.PutObj()
-		lom.ObjAttrs().DelCustomKeys(cmn.SourceObjMD, cmn.CRC32CObjMD, cmn.ETag, cmn.MD5ObjMD, cmn.VersionObjMD)
+		lom.ObjAttrs().DelStdCustom() // backend.PutObj() will set updated values
 	}
 	var (
 		ecode   int

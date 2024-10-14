@@ -10,6 +10,7 @@ package xs
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -34,6 +35,9 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInv
 			smap:         core.T.Sowner().Get(),
 		},
 		ctx: ctx,
+	}
+	if msg.IsFlagSet(apc.LsVerChanged) {
+		npg.wi.custom = make(cos.StrKVs)
 	}
 	return
 }
