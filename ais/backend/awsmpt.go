@@ -111,14 +111,10 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 	return etag, ecode, err
 }
 
-func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, parts *aiss3.CompleteMptUpload) (etag string,
+func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (etag string,
 	ecode int, _ error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		body, err := xml.Marshal(parts)
-		if err != nil {
-			return "", http.StatusBadRequest, err
-		}
-		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(body)), oq)
+		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err

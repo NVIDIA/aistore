@@ -237,12 +237,12 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 
-	output, err := cos.ReadAllN(r.Body, r.ContentLength)
+	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
 	}
-	partList, err := decodeXML[*s3.CompleteMptUpload](output)
+	partList, err := decodeXML[*s3.CompleteMptUpload](body)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
@@ -270,7 +270,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		remote  = bck.IsRemoteS3()
 	)
 	if remote {
-		v, ecode, err := backend.CompleteMpt(lom, r, q, uploadID, partList)
+		v, ecode, err := backend.CompleteMpt(lom, r, q, uploadID, body, partList)
 		if err != nil {
 			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 			return
