@@ -70,16 +70,20 @@ func parseCredentialHeader(hdr string) (region string) {
 	return parts[2]
 }
 
-// (used by ais/backend/aws)
 func (pts *PresignedReq) DoHead(client *http.Client) (*PresignedResp, error) {
 	resp, err := pts.DoReader(client)
 	if err != nil || resp == nil {
 		return resp, err
 	}
+	if err := resp.BodyR.Close(); err != nil {
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to close response body, err: %w", err)
+	}
 	return &PresignedResp{Header: resp.Header, StatusCode: resp.StatusCode}, nil
 }
 
-// (used by ais/backend/aws)
+// Do sends request and returns already read body if successful.
+//
+// NOTE: If error occurs `PresignedResp` with `StatusCode` will be set.
 func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 	resp, err := pts.DoReader(client)
 	if err != nil || resp == nil {
@@ -88,9 +92,12 @@ func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 
 	var output []byte
 	output, err = cos.ReadAllN(resp.BodyR, resp.Size)
-	resp.BodyR.Close()
+	errClose := resp.BodyR.Close()
 	if err != nil {
-		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response body: %v", err)
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response body, err: %w", err)
+	}
+	if errClose != nil {
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to close response body, err: %w", errClose)
 	}
 
 	nsize := int64(len(output)) // == ContentLength == resp.Size
@@ -99,7 +106,9 @@ func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 
 // DoReader sends request and returns opened body/reader if successful.
 // Caller is responsible for closing the reader.
-// (used by ais/backend/aws)
+//
+// NOTE: If error occurs `PresignedResp` with `StatusCode` will be set.
+// NOTE: `BodyR` will be set only if `err` is `nil`.
 func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	region := parseSignatureV4(pts.query, pts.oreq.Header)
 	if region == "" {
