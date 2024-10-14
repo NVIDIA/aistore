@@ -74,7 +74,7 @@ func NewDiskTab(dsh []*DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, u
 			if ds.Tcdf != nil {
 				for _, cdf := range ds.Tcdf.Mountpaths {
 					// TODO: multi-disk mountpath
-					if cdf.Disks[0] != ds.DiskName {
+					if len(cdf.Disks) == 0 || cdf.Disks[0] != ds.DiskName {
 						continue
 					}
 					used := FmtStatValue("", "", int64(cdf.PctUsed), units) + "%"

@@ -5,7 +5,6 @@
 package cos
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -141,7 +140,7 @@ func (twg *TimeoutGroup) Done() {
 			twg.fin <- struct{}{}
 		}
 	} else if n < 0 {
-		AssertMsg(false, fmt.Sprintf("invalid num pending %d", n))
+		debug.Assertf(false, "invalid num pending %d", n)
 	}
 }
 
@@ -201,7 +200,7 @@ func (s *DynSemaphore) Size() int {
 }
 
 func (s *DynSemaphore) SetSize(n int) {
-	Assert(n >= 1)
+	debug.Assert(n >= 1, n)
 	s.mu.Lock()
 	s.size = n
 	s.mu.Unlock()
@@ -233,7 +232,7 @@ func (s *DynSemaphore) Release(cnts ...int) {
 
 	s.mu.Lock()
 
-	Assert(s.cur >= cnt)
+	debug.Assert(s.cur >= cnt, s.cur, " vs ", cnt)
 
 	s.cur -= cnt
 	s.c.Broadcast()
@@ -246,7 +245,7 @@ func (s *DynSemaphore) Release(cnts ...int) {
 
 // usage: no more than `limit` (e.g., sys.NumCPU()) goroutines in parallel
 func NewLimitedWaitGroup(limit, wanted int) WG {
-	debug.Assert(limit > 0 || wanted > 0)
+	debug.Assert(limit > 0 || wanted > 0, limit, " ", wanted)
 	if wanted == 0 || wanted > limit {
 		return &LimitedWaitGroup{wg: &sync.WaitGroup{}, sema: NewDynSemaphore(limit)}
 	}
@@ -272,7 +271,7 @@ func (lwg *LimitedWaitGroup) Wait() {
 //////////////////
 
 func (msm *MultiSyncMap) Get(idx int) *sync.Map {
-	Assert(idx >= 0 && idx < MultiSyncMapCount)
+	debug.Assert(idx >= 0 && idx < MultiSyncMapCount, idx)
 	return &msm.M[idx]
 }
 

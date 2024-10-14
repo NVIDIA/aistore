@@ -23,7 +23,7 @@ const (
 	oomEvictAtime = time.Minute * 5  // OOM
 	mpeEvictAtime = time.Minute * 10 // extreme
 	mphEvictAtime = time.Minute * 20 // high
-	mpnEvictAtime = time.Hour        // normal
+	mpnEvictAtime = time.Hour        // low
 
 	iniEvictAtime = mpnEvictAtime / 2 // initial
 	maxEvictAtime = mpnEvictAtime * 2 // maximum
@@ -74,14 +74,10 @@ func UncacheBck(b *meta.Bck) {
 	wg.Wait()
 }
 
-// NOTE: watch https://github.com/golang/go/pull/61702 for `sync.Map.Clear`, likely Go 22
 func UncacheMountpath(mi *fs.Mountpath) {
 	for idx := range cos.MultiSyncMapCount {
 		cache := mi.LomCache(idx)
-		cache.Range(func(hkey any, _ any) bool {
-			cache.Delete(hkey)
-			return true
-		})
+		cache.Clear()
 	}
 }
 
@@ -122,6 +118,7 @@ func (*lchk) mp() (d time.Duration, tag string) {
 		tag = "high"
 	default:
 		d = mpnEvictAtime
+		tag = "low"
 	}
 	return
 }
@@ -148,9 +145,8 @@ func (lchk *lchk) evictOlder(d time.Duration) {
 		cache.Range(lchk.frun)
 	}
 
-	if _, tag := lchk.mp(); tag != "" {
-		nlog.Infoln("post-evict memory pressure:", tag, "total:", lchk.totalCnt, "evicted:", lchk.evictedCnt)
-	}
+	_, tag := lchk.mp()
+	nlog.Infoln("post-evict memory pressure:", tag, "total:", lchk.totalCnt, "evicted:", lchk.evictedCnt)
 
 	// stats
 	g.tstats.Add(LcacheEvictedCount, lchk.evictedCnt)
@@ -194,7 +190,10 @@ func (lchk *lchk) frun(hkey, value any) bool {
 	} else if md.atimefs != uint64(md.Atime) {
 		lchk.flush(md, atime)
 	}
-	lchk.cache.Delete(hkey)
+	if md, loaded := lchk.cache.LoadAndDelete(hkey); loaded {
+		lmd := md.(*lmeta)
+		*lmd = lmeta0
+	}
 	lchk.evictedCnt++
 	return true
 }

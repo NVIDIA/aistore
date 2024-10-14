@@ -462,7 +462,7 @@ atime            30 Aug 54 17:47 LMT
 cached           yes
 checksum         md5[a38030ea13e1b59c...]
 copies           1 [/tmp/ais/mp3/11]
-custom           map[ETag:"e3be082db698af7c15b0502f6a88265d-16" source:aws version:3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2]
+custom           [source:aws ETag:"e3be082db698af7c15b0502f6a88265d-16" version:3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2]
 ec               -
 location         t[MKpt8091]:mp[/tmp/ais/mp3/11, nvme0n1]
 name             s3://abc/aisnode

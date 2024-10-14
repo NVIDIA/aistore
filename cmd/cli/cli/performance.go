@@ -151,14 +151,16 @@ func showCountersHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	selected := make(cos.StrKVs, len(metrics))
-
+	var (
+		selected = make(cos.StrKVs, len(metrics))
+		regexStr = parseStrFlag(c, regexColsFlag)
+	)
 	for name, kind := range metrics {
 		if metrics[name] == stats.KindCounter || metrics[name] == stats.KindSize {
 			//
-			// skip assorted internal counters and sizes, unless verbose
+			// skip assorted internal counters and sizes, unless verbose or regex
 			//
-			if !flagIsSet(c, verboseFlag) {
+			if !flagIsSet(c, verboseFlag) && regexStr == "" {
 				if cos.StringInSlice(name, verboseCounters[:]) {
 					continue
 				}

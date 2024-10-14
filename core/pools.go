@@ -10,6 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+var lmeta0 lmeta
+
 var (
 	lomPool sync.Pool
 	lom0    LOM
