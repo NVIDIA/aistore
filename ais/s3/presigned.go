@@ -47,18 +47,27 @@ func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q ur
 	return &PresignedReq{oreq, lom, body, q}
 }
 
-// FIXME: handle error cases
+// See https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html
 func parseSignatureV4(query url.Values, header http.Header) (region string) {
 	if credentials := query.Get(HeaderCredentials); credentials != "" {
-		region = strings.Split(credentials, "/")[2]
-	} else if credentials := header.Get(apc.HdrAuthorization); strings.HasPrefix(credentials, signatureV4) {
-		credentials = strings.TrimPrefix(credentials, signatureV4)
-		credentials = strings.TrimSpace(credentials)
-		credentials = strings.Split(credentials, ", ")[0]
-		credentials = strings.TrimPrefix(credentials, "Credential=")
-		region = strings.Split(credentials, "/")[2]
+		region = parseCredentialHeader(credentials)
+	} else if authorization := header.Get(apc.HdrAuthorization); strings.HasPrefix(authorization, signatureV4) {
+		authorization = strings.TrimPrefix(authorization, signatureV4)
+		authorization = strings.TrimSpace(authorization)
+		credentials := strings.Split(authorization, ", ")[0]
+		region = parseCredentialHeader(credentials)
 	}
 	return region
+}
+
+// See https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+func parseCredentialHeader(hdr string) (region string) {
+	credentials := strings.TrimPrefix(strings.TrimSpace(hdr), "Credential=")
+	parts := strings.Split(credentials, "/")
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[2]
 }
 
 // (used by ais/backend/aws)
