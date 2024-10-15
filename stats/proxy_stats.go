@@ -67,7 +67,9 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	idle := s.copyT(r.ctracker)
 	s.promUnlock()
 
-	if now >= r.next || !idle {
+	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
+
+	if (!idle && now >= r.next) || verbose {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
 		r.ctracker.write(s.sgl, r.sorted, false /*target*/, idle)
 		if l := s.sgl.Len(); l > 3 { // skip '{}'
@@ -78,9 +80,7 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 				r.prev = line
 			}
 		}
-		if idle {
-			r._next(config, now)
-		}
+		r._next(config, now)
 	}
 
 	r._mem(r.node.PageMM(), 0, 0)

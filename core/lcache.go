@@ -192,7 +192,7 @@ func (lchk *lchk) frun(hkey, value any) bool {
 	}
 	if md, loaded := lchk.cache.LoadAndDelete(hkey); loaded {
 		lmd := md.(*lmeta)
-		*lmd = lmeta0
+		*lmd = lom0.md
 	}
 	lchk.evictedCnt++
 	return true

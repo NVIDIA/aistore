@@ -122,7 +122,7 @@ type (
 )
 
 const (
-	minLogDiskUtil = 10 // skip logging idle disks
+	minLogDiskUtil = 15 // skip logging idle disks
 
 	numTargetStats = 48 // approx. initial
 )
@@ -576,7 +576,8 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	idle := s.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
 	s.promUnlock()
 
-	if now >= r.next || !idle {
+	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
+	if (!idle && now >= r.next) || verbose {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
 		r.ctracker.write(s.sgl, r.sorted, true /*target*/, idle)
 		if l := s.sgl.Len(); l > 3 { // skip '{}'
@@ -587,10 +588,11 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 				r.prev = line
 			}
 		}
+		r._next(config, now)
 	}
 
 	// 3. capacity, mountpath alerts, and associated node state flags
-	set, clr := r._cap(config, now)
+	set, clr := r._cap(config, now, verbose)
 
 	if !refreshCap && set != 0 {
 		// refill r.disk (ios.AllDiskStats) prior to logging
@@ -598,10 +600,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 4. append disk stats to log subject to (idle) filtering (see related: `ignoreIdle`)
-	r.logDiskStats(now)
+	r.logDiskStats(verbose)
 
 	// 5. jobs
-	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if !idle {
 		var ln string
 		r.xallRun.Running = r.xallRun.Running[:0]
@@ -640,14 +641,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 7. separately, memory w/ set/clr flags cumulative
 	r._mem(r.t.PageMM(), set, clr)
-
-	// idle
-	if now > r.next {
-		r._next(config, now)
-	}
 }
 
-func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFlags) {
+func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr cos.NodeStateFlags) {
 	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.Tcdf)
 	if err != nil {
 		nlog.Errorln(err)
@@ -678,36 +674,10 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 	}
 
 	//
-	// (periodically | on error): log mountpath cap and state
+	// (periodically | on error | verbose): log mountpath cap and state
 	//
-	if now >= min(r.next, r.cs.last+maxCapLogInterval) || errCap != nil || hasAlerts {
-		fast := fs.NoneShared(len(r.Tcdf.Mountpaths))
-		unique := fast
-		if !fast {
-			r.fsIDs = r.fsIDs[:0]
-		}
-		for mpath, cdf := range r.Tcdf.Mountpaths {
-			if !fast {
-				r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
-			}
-			if unique { // to avoid log duplication
-				var sb strings.Builder
-				sb.WriteString(mpath)
-				sb.WriteString(cdf.Label.ToLog())
-				if alert, _ := fs.HasAlert(cdf.Disks); alert != "" {
-					sb.WriteString(": ")
-					sb.WriteString(alert)
-				} else {
-					sb.WriteString(": used ")
-					sb.WriteString(strconv.Itoa(int(cdf.Capacity.PctUsed)))
-					sb.WriteByte('%')
-					sb.WriteString(", avail ")
-					sb.WriteString(cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2))
-				}
-				r.lines = append(r.lines, sb.String())
-			}
-		}
-		r.cs.last = now
+	if now >= r.cs.last+dlftCapLogInterval || errCap != nil || hasAlerts || verbose {
+		r.logCapacity(now)
 	}
 
 	// and more
@@ -730,12 +700,42 @@ func (r *Trunner) _cap(config *cmn.Config, now int64) (set, clr cos.NodeStateFla
 	return set, clr
 }
 
+func (r *Trunner) logCapacity(now int64) {
+	fast := fs.NoneShared(len(r.Tcdf.Mountpaths))
+	unique := fast // and vice versa
+	if !fast {
+		r.fsIDs = r.fsIDs[:0]
+	}
+	for mpath, cdf := range r.Tcdf.Mountpaths {
+		if !fast {
+			r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
+		}
+		if unique { // to avoid log duplication
+			var sb strings.Builder
+			sb.WriteString(mpath)
+			sb.WriteString(cdf.Label.ToLog())
+			if alert, _ := fs.HasAlert(cdf.Disks); alert != "" {
+				sb.WriteString(": ")
+				sb.WriteString(alert)
+			} else {
+				sb.WriteString(": used ")
+				sb.WriteString(strconv.Itoa(int(cdf.Capacity.PctUsed)))
+				sb.WriteByte('%')
+				sb.WriteString(", avail ")
+				sb.WriteString(cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2))
+			}
+			r.lines = append(r.lines, sb.String())
+		}
+	}
+	r.cs.last = now
+}
+
 // log formatted disk stats:
 // [ disk: read throughput, average read size, write throughput, average write size, disk utilization ]
 // e.g.: [ sda: 94MiB/s, 68KiB, 25MiB/s, 21KiB, 82% ]
-func (r *Trunner) logDiskStats(now int64) {
+func (r *Trunner) logDiskStats(verbose bool) {
 	for disk, stats := range r.disk.stats {
-		if stats.Util < minLogDiskUtil/2 || (stats.Util < minLogDiskUtil && now < r.next) {
+		if stats.Util < minLogDiskUtil && !verbose {
 			continue
 		}
 

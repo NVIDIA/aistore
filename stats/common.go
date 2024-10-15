@@ -38,11 +38,11 @@ import (
 
 // defaults and tunables
 const (
-	dfltKaliveClearAlert  = 5 * time.Minute        // clear `cos.KeepAliveErrors` alert when `ErrKaliveCount` doesn't inc that much time
-	dfltPeriodicFlushTime = time.Minute            // when `config.Log.FlushTime` is 0 (zero)
-	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
-	maxStatsLogInterval   = int64(3 * time.Minute) // when idle; secondly, an upper limit on `config.Log.StatsTime`
-	maxCapLogInterval     = int64(4 * time.Hour)   // to see capacity at least few times a day (when idle)
+	dfltKaliveClearAlert  = 5 * time.Minute      // clear `cos.KeepAliveErrors` alert when `ErrKaliveCount` doesn't inc that much time
+	dfltPeriodicFlushTime = time.Minute          // when `config.Log.FlushTime` is 0 (zero)
+	dfltPeriodicTimeStamp = time.Hour            // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
+	dfltStatsLogInterval  = int64(time.Minute)   // stats logging interval when not idle; `config.Log.StatsTime` takes precedence if defined
+	dlftCapLogInterval    = int64(4 * time.Hour) // capacity logging interval
 )
 
 // periodic
@@ -356,7 +356,7 @@ func (r *runner) _next(config *cmn.Config, now int64) {
 	if config.Log.StatsTime >= config.Periodic.StatsTime {
 		r.next = now + int64(config.Log.StatsTime)
 	} else {
-		r.next = now + maxStatsLogInterval // default
+		r.next = now + dfltStatsLogInterval
 	}
 }
 
