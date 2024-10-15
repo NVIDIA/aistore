@@ -144,8 +144,9 @@ const (
 )
 
 const (
-	ActEcOpen  = "open-ec-streams"
-	ActEcClose = "close-ec-streams"
+	ActEcOpen    = "open-ec-streams"
+	ActEcClose   = "close-ec-streams"
+	ActEcRecover = "obj-recover"
 )
 
 // ActMsg is a JSON-formatted control structures used in a majority of API calls

@@ -83,3 +83,7 @@ func (*TargetMock) GetColdBlob(*core.BlobParams, *cmn.ObjAttrs) (core.Xact, erro
 func (*TargetMock) Health(*meta.Snode, time.Duration, url.Values) ([]byte, int, error) {
 	return nil, 0, nil
 }
+
+func (*TargetMock) ECRestoreReq(*core.CT, *meta.Snode) error {
+	return nil
+}

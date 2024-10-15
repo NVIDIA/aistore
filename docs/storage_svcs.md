@@ -148,7 +148,7 @@ A bucket inherits EC settings from global configuration. But it can be overridde
 
 Choose the number data and parity slices depending on the required level of protection and the cluster configuration. The number of storage targets must be greater than the sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
 
-Rebalance supports erasure-coded buckets. Besides moving existing objects between targets, it repairs damaged objects and their slices if possible.
+Rebalance supports erasure-coded buckets.
 
 Notes:
 

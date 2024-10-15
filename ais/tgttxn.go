@@ -360,7 +360,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
 			flt := xreg.Flt{Kind: apc.ActECEncode, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-ec"))
-			rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit)
+			rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit, false)
 			if rns.Err != nil {
 				return "", rns.Err
 			}
@@ -758,7 +758,7 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit)
+		rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit, c.msg.Name == apc.ActEcRecover)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err

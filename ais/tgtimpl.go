@@ -363,3 +363,25 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 
 	return size, err
 }
+
+func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode) error {
+	q := ct.Bck().NewQuery()
+	ct.Bck().AddUnameToQuery(q, apc.QparamBckTo)
+	q.Set(apc.QparamECRecover, "true")
+	q.Set(apc.QparamECObject, ct.ObjectName())
+	cargs := allocCargs()
+	{
+		cargs.si = tsi
+		cargs.req = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Base:   tsi.URL(cmn.NetIntraControl),
+			Path:   apc.URLPathEC.Join(apc.ActEcRecover),
+			Query:  q,
+		}
+	}
+	res := t.call(cargs, t.owner.smap.get())
+	freeCargs(cargs)
+	err := res.toErr()
+	freeCR(res)
+	return err
+}

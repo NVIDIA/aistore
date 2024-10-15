@@ -135,6 +135,10 @@ const (
 
 	// (see api.AttachMountpath vs. LocalConfig.FSP)
 	QparamMpathLabel = "mountpath_label"
+
+	// Request to restore an object
+	QparamECRecover = "recover"
+	QparamECObject  = "object"
 )
 
 // QparamFltPresence enum.

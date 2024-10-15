@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/hk"
@@ -83,6 +84,36 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	}
 	action := items[0]
 	switch action {
+	case apc.ActEcRecover:
+		query := r.URL.Query()
+		if isRecover := cos.IsParseBool(query.Get(apc.QparamECRecover)); !isRecover {
+			nlog.Errorf("EC: invalid request to recover an object. '%s' is not set", apc.QparamECRecover)
+			return
+		}
+		objPath := query.Get(apc.QparamECObject)
+		if objPath == "" {
+			nlog.Errorf("EC: invalid request to recover an object. Object name(%s) is undefined", apc.QparamECRecover)
+			return
+		}
+		objName := objPath
+		lom := core.AllocLOM(objName)
+		mbck, err := newBckFromQuname(r.URL.Query(), true)
+		if err != nil {
+			nlog.Errorln("Failed to recover object:", err)
+			core.FreeLOM(lom)
+			return
+		}
+		bck := mbck.Clone()
+		if err := lom.InitBck(&bck); err != nil {
+			nlog.Errorln("LOM init failed:", err)
+			core.FreeLOM(lom)
+			return
+		}
+		if err := ec.ECM.TryRecoverObj(lom); err != nil {
+			nlog.Errorln("Failed to recover object:", err)
+			core.FreeLOM(lom)
+		}
+		return
 	case apc.ActEcOpen:
 		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time
 		ec.ECM.OpenStreams(false /*with refc*/)

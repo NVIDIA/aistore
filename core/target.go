@@ -128,6 +128,8 @@ type (
 		Promote(params *PromoteParams) (ecode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
 
+		ECRestoreReq(ct *CT, si *meta.Snode) error
+
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 	}
 )

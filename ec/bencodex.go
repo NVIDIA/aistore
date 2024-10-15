@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -29,9 +28,10 @@ type (
 	}
 	XactBckEncode struct {
 		xact.Base
-		bck  *meta.Bck
-		wg   *sync.WaitGroup // to wait for EC finishes all objects
-		smap *meta.Smap
+		bck       *meta.Bck
+		wg        *sync.WaitGroup // to wait for EC finishes all objects
+		smap      *meta.Smap
+		doRecover bool
 	}
 )
 
@@ -52,7 +52,8 @@ func (*encFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *encFactory) Start() error {
-	p.xctn = newXactBckEncode(p.Bck, p.UUID())
+	custom := p.Args.Custom.(*xreg.ECEncodeArgs)
+	p.xctn = newXactBckEncode(p.Bck, p.UUID(), custom.Recover)
 	return nil
 }
 
@@ -74,8 +75,8 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *meta.Bck, uuid string) (r *XactBckEncode) {
-	r = &XactBckEncode{bck: bck, wg: &sync.WaitGroup{}, smap: core.T.Sowner().Get()}
+func newXactBckEncode(bck *meta.Bck, uuid string, doRecover bool) (r *XactBckEncode) {
+	r = &XactBckEncode{bck: bck, wg: &sync.WaitGroup{}, smap: core.T.Sowner().Get(), doRecover: doRecover}
 	r.InitBase(uuid, apc.ActECEncode, bck)
 	return
 }
@@ -96,9 +97,14 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 
 	ECM.incActive(r)
 
+	ctList := []string{fs.ObjectType}
+	if r.doRecover {
+		ctList = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
+	}
 	opts := &mpather.JgroupOpts{
-		CTs:      []string{fs.ObjectType},
+		CTs:      ctList,
 		VisitObj: r.bckEncode,
+		VisitCT:  r.bckEncodeMD,
 		DoLoad:   mpather.LoadUnsafe,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
@@ -146,17 +152,22 @@ func (r *XactBckEncode) bckEncode(lom *core.LOM, _ []byte) error {
 	}
 	mdFQN, _, err := core.HrwFQN(lom.Bck().Bucket(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
-		nlog.Warningf("metadata FQN generation failed %q: %v", lom, err)
+		nlog.Warningln("metadata FQN generation failed", lom, ":", err)
 		return nil
 	}
-	err = cos.Stat(mdFQN)
-	// Metadata file exists - the object was already EC'ed before.
-	if err == nil {
+	md, err := LoadMetadata(mdFQN)
+	// If metafile exists, the object has been already encoded. But for
+	// replicated objects we have to fall through. Otherwise, bencode
+	// won't recover any missing replicas
+	if err == nil && !md.IsCopy {
 		return nil
 	}
-	if !os.IsNotExist(err) {
-		nlog.Warningf("failed to stat %q: %v", mdFQN, err)
-		return nil
+	if err != nil && !os.IsNotExist(err) {
+		nlog.Warningln("failed to stat ", mdFQN, ":", err, "Deleting...")
+		if errDel := os.Remove(mdFQN); errDel != nil {
+			nlog.Warningln("failed to delete broken metafile ", mdFQN, ":", errDel)
+			return nil
+		}
 	}
 
 	// beforeECObj increases a counter, and callback afterECObj decreases it.
@@ -179,4 +190,19 @@ func (r *XactBckEncode) Snap() (snap *core.Snap) {
 
 	snap.IdleX = r.IsIdle()
 	return
+}
+
+// Walks through all metafiles and request the "main" target to restore
+// the object if it does not exist
+func (r *XactBckEncode) bckEncodeMD(ct *core.CT, _ []byte) error {
+	tsi, err := r.smap.HrwName2T([]byte(*ct.UnamePtr()))
+	if err != nil {
+		nlog.Errorf("%s: %s", ct, err)
+		return nil
+	}
+	// This target is the main one. Skip recovery
+	if tsi.ID() == core.T.SID() {
+		return nil
+	}
+	return core.T.ECRestoreReq(ct, tsi)
 }

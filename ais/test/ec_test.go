@@ -2799,3 +2799,152 @@ func TestECGenerations(t *testing.T) {
 		})
 	}
 }
+
+func newObjSlices(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName string, idx int, o *ecOptions) map[string]ecSliceMD {
+	// Call it so only big and erasure encoded objects are created
+	totalCnt, objSize, sliceSize, doEC := randObjectSize(idx, idx+2, o)
+	objPath := ecTestDir + objName
+	ecStr, delStr := "-", "obj"
+	if doEC {
+		ecStr = "EC"
+	}
+	tlog.LogfCond(!o.silent, "Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
+	r, err := readers.NewRand(objSize, cos.ChecksumNone)
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
+	tassert.CheckFatal(t, err)
+
+	tlog.LogfCond(!o.silent, "waiting for %s\n", objPath)
+	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objPath)
+
+	ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
+	tassert.Errorf(t, mainObjPath != "", "Full copy is not found")
+	return foundParts
+}
+
+// Check that BckEncode recovers objects and slices
+func TestECBckEncodeRecover(t *testing.T) {
+	var (
+		bck = cmn.Bck{
+			Name:     testBucketName + "-benc",
+			Provider: apc.AIS,
+		}
+		proxyURL   = tools.RandomProxyURL()
+		baseParams = tools.BaseAPIParams(proxyURL)
+	)
+
+	o := ecOptions{
+		minTargets:  4,
+		objCount:    40,
+		concurrency: 8,
+		pattern:     "obj-%04d",
+		silent:      testing.Short(),
+	}.init(t, proxyURL)
+	// Damage this number of objects for each case: object and slice
+	objToDamage := o.objCount / 8
+	initMountpaths(t, proxyURL)
+
+	tassert.Fatalf(t, o.objCount > 2*objToDamage, "The total number of objects must be twice as greater as the number of damaged ones")
+
+	var (
+		mtx           sync.Mutex
+		objSlicesOrig = make(map[string]map[string]ecSliceMD, o.objCount)
+	)
+
+	for _, test := range ecTests {
+		types := []string{"%ob", "%ec"}
+		// In case of only 1 data and parity, there is no slice, so %ec directory is empty
+		if test.data == 1 && test.parity == 1 {
+			types = []string{"%ob"}
+		}
+		testName := fmt.Sprintf("%s - %v", test.name, types)
+		t.Run(testName, func(t *testing.T) {
+			if o.smap.CountActiveTs() <= test.parity+test.data {
+				t.Skip(cmn.ErrNotEnoughTargets)
+			}
+			o.parityCnt = test.parity
+			o.dataCnt = test.data
+			o.objSizeLimit = test.objSizeLimit
+			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+
+			wg := sync.WaitGroup{}
+			wg.Add(o.objCount)
+			for i := range o.objCount {
+				o.sema.Acquire()
+				go func(i int) {
+					defer func() {
+						o.sema.Release()
+						wg.Done()
+					}()
+					objName := fmt.Sprintf(o.pattern, i)
+					parts := newObjSlices(t, baseParams, bck, objName, i, o)
+					mtx.Lock()
+					objSlicesOrig[objName] = parts
+					mtx.Unlock()
+				}(i)
+			}
+			wg.Wait()
+			assertBucketSize(t, baseParams, bck, o.objCount)
+
+			// Delete a few slices and objects their metafiles
+			touched := make(map[string]bool)
+			for _, tp := range types {
+				damaged := make(map[string]bool, objToDamage)
+				toDel := objToDamage
+				for objName, parts := range objSlicesOrig {
+					// Skip objects damaged during the previous loop
+					if yes, ok := touched[objName]; ok && yes {
+						continue
+					}
+					for k := range parts {
+						if !strings.Contains(k, tp) {
+							continue
+						}
+						tlog.Logf("1. %s - deleting slice/object %s\n", objName, k)
+						os.Remove(k)
+						damaged[objName] = true
+						mdFile := strings.Replace(k, tp, "%mt", 1)
+						tlog.Logf("2. %s - deleting its MD %s\n", objName, mdFile)
+						tassert.CheckFatal(t, os.Remove(mdFile))
+						break
+					}
+					toDel--
+					if toDel == 0 {
+						break
+					}
+				}
+				touched = damaged
+			}
+			xid, err := api.ECEncodeBucket(tools.BaseAPIParams(proxyURL), bck, test.data, test.parity, true)
+			tassert.CheckFatal(t, err)
+			// First, wait for EC-encode xaction to complete
+			reqArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECEncode, Bck: bck}
+			api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
+			// Second, wait for EC-recover xaction to complete
+			reqECArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECRespond, Bck: bck}
+			api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqECArgs)
+
+			// Recovering replicas sometimes takes extra time, so check for
+			// recovered slices/replicas more than once
+			var errStr string
+			for range 3 {
+				errStr = ""
+				// Check that all slices and metafiles are recovered
+				for objName, parts := range objSlicesOrig {
+					for k := range parts {
+						if _, err := os.Stat(k); err == nil {
+							continue
+						}
+						tlog.Logf("Slice/MD of object %s: %s is not found\n", objName, k)
+						errStr = "Some objects were not recovered"
+					}
+				}
+				if errStr == "" {
+					break
+				}
+				time.Sleep(3 * time.Second)
+			}
+			tassert.Error(t, errStr == "", errStr)
+		})
+	}
+}
