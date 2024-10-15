@@ -21,9 +21,9 @@ import (
 
 const (
 	oomEvictAtime = time.Minute * 5  // OOM
-	mpeEvictAtime = time.Minute * 10 // extreme
-	mphEvictAtime = time.Minute * 20 // high
-	mpnEvictAtime = time.Hour        // low
+	mpeEvictAtime = time.Minute * 20 // extreme
+	mphEvictAtime = time.Hour        // high
+	mpnEvictAtime = 8 * time.Hour    // low
 
 	iniEvictAtime = mpnEvictAtime / 2 // initial
 	maxEvictAtime = mpnEvictAtime * 2 // maximum
@@ -48,7 +48,7 @@ func regLomCacheWithHK() {
 }
 
 //
-// evictions
+// evictions, mountpaths
 //
 
 func UncacheBck(b *meta.Bck) {
@@ -56,6 +56,7 @@ func UncacheBck(b *meta.Bck) {
 		caches = lomCaches()
 		n      = max(sys.NumCPU()/4, 4)
 		wg     = cos.NewLimitedWaitGroup(n, len(caches))
+		rmb    = (*cmn.Bck)(b)
 	)
 	for _, lcache := range caches {
 		wg.Add(1)
@@ -63,8 +64,9 @@ func UncacheBck(b *meta.Bck) {
 			cache.Range(func(hkey, value any) bool {
 				lmd := value.(*lmeta)
 				bck, _ := cmn.ParseUname(*lmd.uname)
-				if bck.Equal((*cmn.Bck)(b)) {
+				if bck.Equal(rmb) {
 					cache.Delete(hkey)
+					*lmd = lom0.md
 				}
 				return true
 			})
@@ -75,11 +77,13 @@ func UncacheBck(b *meta.Bck) {
 }
 
 func UncacheMountpath(mi *fs.Mountpath) {
-	for idx := range cos.MultiSyncMapCount {
-		cache := mi.LomCache(idx)
+	for idx := range cos.MultiHashMapCount {
+		cache := mi.LomCaches.Get(idx)
 		cache.Clear()
 	}
 }
+
+func lcacheIdx(digest uint64) int { return int(digest & cos.MultiHashMapMask) }
 
 //////////
 // lchk //
@@ -190,10 +194,9 @@ func (lchk *lchk) frun(hkey, value any) bool {
 	} else if md.atimefs != uint64(md.Atime) {
 		lchk.flush(md, atime)
 	}
-	if md, loaded := lchk.cache.LoadAndDelete(hkey); loaded {
-		lmd := md.(*lmeta)
-		*lmd = lom0.md
-	}
+
+	lchk.cache.Delete(hkey)
+	*md = lom0.md // zero out
 	lchk.evictedCnt++
 	return true
 }

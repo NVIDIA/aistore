@@ -7,7 +7,6 @@ package core
 import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 // LOM In Flight (LIF)
@@ -67,7 +66,7 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 
 // deferred unlocking
 
-func (lif *LIF) CacheIdx() int   { return fs.LcacheIdx(lif.digest) }
+func (lif *LIF) CacheIdx() int   { return lcacheIdx(lif.digest) }
 func (lif *LIF) getLocker() *nlc { return &g.locker[lif.CacheIdx()] }
 
 func (lif *LIF) Unlock(exclusive bool) {

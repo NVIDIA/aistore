@@ -154,7 +154,7 @@ func (reb *Reb) isQuiescent() bool {
 // lomAcks TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit
 /////////////
 
-func (reb *Reb) lomAcks() *[cos.MultiSyncMapCount]*lomAcks { return &reb.lomacks }
+func (reb *Reb) lomAcks() *[cos.MultiHashMapCount]*lomAcks { return &reb.lomacks }
 
 func (reb *Reb) addLomAck(lom *core.LOM) {
 	lomAck := reb.lomAcks()[lom.CacheIdx()]

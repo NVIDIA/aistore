@@ -47,7 +47,7 @@ const (
 )
 
 type (
-	lmeta struct {
+	lmeta struct { // sizeof = 72
 		copies fs.MPI
 		uname  *string
 		cmn.ObjAttrs
@@ -537,8 +537,8 @@ func (lom *LOM) UncacheUnless() {
 	}
 }
 
-func (lom *LOM) CacheIdx() int     { return fs.LcacheIdx(lom.digest) } // (lif.CacheIdx())
-func (lom *LOM) lcache() *sync.Map { return lom.mi.LomCache(lom.CacheIdx()) }
+func (lom *LOM) CacheIdx() int     { return lcacheIdx(lom.digest) }
+func (lom *LOM) lcache() *sync.Map { return lom.mi.LomCaches.Get(lom.CacheIdx()) }
 
 func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	lcache = lom.lcache()
@@ -591,12 +591,12 @@ func lomCaches() []*sync.Map {
 	var (
 		i         int
 		avail     = fs.GetAvail()
-		cachesCnt = len(avail) * cos.MultiSyncMapCount
+		cachesCnt = len(avail) * cos.MultiHashMapCount
 		caches    = make([]*sync.Map, cachesCnt)
 	)
 	for _, mi := range avail {
-		for idx := range cos.MultiSyncMapCount {
-			caches[i] = mi.LomCache(idx)
+		for idx := range cos.MultiHashMapCount {
+			caches[i] = mi.LomCaches.Get(idx)
 			i++
 		}
 	}

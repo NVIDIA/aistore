@@ -12,12 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-const (
-	// Number of sync maps
-	MultiSyncMapCount = 0x40 // m.b. a power of two
-	MultiSyncMapMask  = MultiSyncMapCount - 1
-)
-
 type (
 	// TimeoutGroup is similar to sync.WaitGroup with the difference on Wait
 	// where we only allow timing out.
@@ -67,10 +61,6 @@ type (
 	LimitedWaitGroup struct {
 		wg   *sync.WaitGroup
 		sema *DynSemaphore
-	}
-
-	MultiSyncMap struct {
-		M [MultiSyncMapCount]sync.Map
 	}
 
 	NopLocker struct{}
@@ -264,17 +254,4 @@ func (lwg *LimitedWaitGroup) Done() {
 
 func (lwg *LimitedWaitGroup) Wait() {
 	lwg.wg.Wait()
-}
-
-//////////////////
-// MultiSyncMap //
-//////////////////
-
-func (msm *MultiSyncMap) Get(idx int) *sync.Map {
-	debug.Assert(idx >= 0 && idx < MultiSyncMapCount, idx)
-	return &msm.M[idx]
-}
-
-func (msm *MultiSyncMap) GetByHash(hash uint32) *sync.Map {
-	return &msm.M[hash%MultiSyncMapCount]
 }

@@ -62,7 +62,6 @@ type (
 		ObjectName() string
 		Bucket() *cmn.Bck
 		Mountpath() *Mountpath
-		CacheIdx() int
 	}
 
 	ContentInfo struct {

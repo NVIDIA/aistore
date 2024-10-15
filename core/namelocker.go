@@ -23,7 +23,7 @@ const nlpTryDefault = time.Second // nlp.TryLock default duration
 // The lock can be exclusive (write) or shared (read).
 
 type (
-	nameLocker []nlc
+	nameLocker [cos.MultiHashMapCount]nlc
 	nlc        struct {
 		m  map[string]*lockInfo
 		mu sync.Mutex
@@ -63,7 +63,6 @@ const (
 ////////////////
 
 func newNameLocker() (nl nameLocker) {
-	nl = make(nameLocker, cos.MultiSyncMapCount)
 	for idx := range nl {
 		nl[idx].init()
 	}
@@ -191,7 +190,7 @@ func NewNLP(name []byte) NLP {
 	var (
 		nlp  = &nlp{uname: cos.UnsafeS(name)}
 		hash = xxhash.Checksum64S(name, cos.MLCG32)
-		idx  = int(hash & cos.MultiSyncMapMask)
+		idx  = int(hash & cos.MultiHashMapMask)
 	)
 	nlp.nlc = &bckLocker[idx] // NOTE: bckLocker
 	return nlp

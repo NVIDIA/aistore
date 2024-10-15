@@ -55,7 +55,7 @@ type HC interface {
 
 type (
 	Mountpath struct {
-		lomCaches  cos.MultiSyncMap // LOM caches
+		LomCaches  cos.MultiHashMap // LOM caches
 		info       string
 		Path       string    // clean path
 		Label      ios.Label // (disk sharing; storage class; user-defined grouping)
@@ -164,10 +164,6 @@ func (mi *Mountpath) String() string {
 	l := len(mi.info)
 	return mi.info[:l-1] + ", waiting-dd]"
 }
-
-func (mi *Mountpath) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
-
-func LcacheIdx(digest uint64) int { return int(digest & cos.MultiSyncMapMask) }
 
 func (mi *Mountpath) IsIdle(config *cmn.Config) bool {
 	curr := mfs.ios.GetMpathUtil(mi.Path)

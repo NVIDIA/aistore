@@ -78,7 +78,7 @@ type (
 		semaCh    *cos.Semaphore
 		ecClient  *http.Client
 		stages    *nodeStages
-		lomacks   [cos.MultiSyncMapCount]*lomAcks
+		lomacks   [cos.MultiHashMapCount]*lomAcks
 		awaiting  struct {
 			targets meta.Nodes // targets for which we are waiting for
 			ts      int64      // last time we have recomputed
