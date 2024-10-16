@@ -5,14 +5,14 @@ variables:
   RUNNER_TAG_K8s: "ais-k8s"
   SCRIPTS_DIR: "./scripts"
   NUM_TARGET:
-    value: "5"
-    description: "Number of targets deployed."
-  NUM_PROXY:
-    value: "5"
-    description: "Number of proxies deployed."
-  FS_CNT:
     value: "6"
-    description: "Number of disks defined for each target."
+    description: "Number of targets."
+  NUM_PROXY:
+    value: "6"
+    description: "Number of proxies."
+  FS_CNT:
+    value: "4"
+    description: "Number of mountpaths (disks) in each target."
   CLOUD_BCKS:
     value: "aws://ais-blossom gs://ais-ci-kube" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
     description: "Set of buckets used when running cloud tests."
@@ -312,7 +312,6 @@ test:short:azure:
 test:long:
   <<: *test_long_skip_scheduled_def
   variables:
-    NUM_PROXY: 6
     BUCKET: "ais://ais-ci"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --ht
@@ -321,7 +320,6 @@ test:long:
 test:long:aws:
   <<: *test_long_def
   variables:
-    NUM_PROXY: 6
     BUCKET: "aws://ais-cicd"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws --ht
@@ -330,7 +328,6 @@ test:long:aws:
 test:long:gcp:
   <<: *test_long_def
   variables:
-    NUM_PROXY: 6
     BUCKET: "gs://ais-ci"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --ht
@@ -339,7 +336,6 @@ test:long:gcp:
 test:long:azure:
   <<: *test_long_def
   variables:
-    NUM_PROXY: 6
     BUCKET: "az://ais-ci"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht
