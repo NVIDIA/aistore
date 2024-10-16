@@ -230,7 +230,7 @@ func isObjPresent(c *cli.Context, bck cmn.Bck, objName string) error {
 	_, err := api.HeadObject(apiBP, bck, objName, hargs)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
-			fmt.Fprintf(c.App.Writer, "%s is not present (\"not cached\")\n", name)
+			fmt.Fprintf(c.App.Writer, "%s is not present (\"not cached\") in cluster\n", name)
 			return nil
 		}
 		return V(err)
@@ -260,6 +260,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) (notfound bool, _
 			FltPresence: apc.FltPresentCluster,
 			Silent:      flagIsSet(c, silentFlag),
 		}
+		isList      = actionIsHandler(c.Command.Action, listAnyHandler)
+		isRemote    = bck.IsRemote()
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -267,6 +269,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) (notfound bool, _
 	}
 	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		hargs.FltPresence = apc.FltExists
+	} else if isList && !hargs.Silent {
+		hargs.Silent = isRemote // silence 404 when called via 'ais ls <remote-bucket>'
 	}
 	objProps, err := api.HeadObject(apiBP, bck, objName, hargs)
 	if err != nil {
@@ -275,9 +279,11 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) (notfound bool, _
 			return notfound, err
 		}
 		var hint string
-		if apc.IsFltPresent(hargs.FltPresence) && bck.IsRemote() {
-			if actionIsHandler(c.Command.Action, listAnyHandler) {
-				hint = fmt.Sprintf(" (tip: try %s option)", qflprn(allObjsOrBcksFlag))
+		if apc.IsFltPresent(hargs.FltPresence) && isRemote {
+			if isList {
+				if flagIsSet(c, listObjCachedFlag) {
+					hint = fmt.Sprintf(" (tip: try 'ais ls' without %s option)", qflprn(listObjCachedFlag))
+				}
 			} else {
 				hint = fmt.Sprintf(" (tip: try %s option)", qflprn(objNotCachedPropsFlag))
 			}

@@ -107,7 +107,7 @@ var (
 func showPerfHandler(c *cli.Context) error {
 	allPerfTabs = true // global (TODO: consider passing as param)
 
-	if c.NArg() > 1 && strings.HasPrefix(c.Args().Get(1), "-") {
+	if argIsFlag(c, 1) {
 		return fmt.Errorf("misplaced flags in %v (hint: change the order of arguments or %s specific view)",
 			c.Args(), tabtab)
 	}

@@ -196,8 +196,8 @@ func _evictOne(c *cli.Context, shift int) error {
 			return V(err)
 		}
 		// not found
-		suffix := " (not \"cached\")"
-		if c.NArg() > 1 {
+		suffix := " (not \"cached\" in cluster)"
+		if !argIsFlag(c, 1) {
 			suffix = " (hint: missing double or single quotes?)"
 		}
 		return &errDoesNotExist{what: "object", name: bck.Cname(objName), suffix: suffix}

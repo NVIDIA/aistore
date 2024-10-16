@@ -31,6 +31,10 @@ var (
 	_ cli.Flag   = &DurationFlag{}
 )
 
+func argIsFlag(c *cli.Context, idx int) bool {
+	return c.NArg() > idx && strings.HasPrefix(c.Args().Get(idx), flagPrefix)
+}
+
 /////////////////////
 // DurationFlagVar //
 /////////////////////
