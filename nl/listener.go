@@ -216,8 +216,11 @@ func (nlb *ListenerBase) Status() *Status {
 	return &Status{Kind: nlb.Kind(), UUID: nlb.UUID(), EndTimeX: nlb.EndTimeX.Load(), AbortedX: nlb.Aborted()}
 }
 
-func (nlb *ListenerBase) _name() *strings.Builder {
+func (nlb *ListenerBase) _name(l int) *strings.Builder {
 	var sb strings.Builder
+	l += 3 + len(nlb.Kind()) + 1 + len(nlb.UUID()) + 1
+	sb.Grow(l)
+
 	sb.WriteString("nl-")
 	sb.WriteString(nlb.Kind())
 	sb.WriteByte('[')
@@ -227,14 +230,14 @@ func (nlb *ListenerBase) _name() *strings.Builder {
 }
 
 func (nlb *ListenerBase) Name() string {
-	sb := nlb._name()
+	sb := nlb._name(0)
 	return sb.String()
 }
 
 func (nlb *ListenerBase) String() string {
 	var (
 		tm, res  string
-		sb       = nlb._name()
+		sb       = nlb._name(128)
 		finCount = nlb.FinCount()
 	)
 	if nlb.Cause() != "" {
@@ -267,7 +270,6 @@ func (nlb *ListenerBase) String() string {
 		sb.WriteByte('/')
 		sb.WriteString(strconv.Itoa(len(nlb.Srcs)))
 		sb.WriteByte(')')
-		return sb.String()
 	}
 	return sb.String()
 }

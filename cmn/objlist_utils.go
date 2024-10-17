@@ -281,6 +281,8 @@ func CustomMD2S(md cos.StrKVs) string {
 		l    = len(md)
 		prev bool
 	)
+	sb.Grow(256)
+
 	sb.WriteByte(cusbeg)
 	for _, k := range stdCustomProps {
 		v, ok := md[k]
@@ -319,18 +321,25 @@ func CustomMD2S(md cos.StrKVs) string {
 func CustomProps2S(nvs ...string) string {
 	var (
 		sb strings.Builder
-		l  = len(nvs)
+		l  int
 	)
+	for _, s := range nvs {
+		l += len(s) + 2
+	}
+	sb.Grow(l + 2)
+
+	np := len(nvs)
 	sb.WriteByte(cusbeg)
-	for i := 0; i < l; i += 2 {
+	for i := 0; i < np; i += 2 {
 		sb.WriteString(nvs[i])
 		sb.WriteByte(cusepa)
 		sb.WriteString(nvs[i+1])
-		if i < l-2 {
+		if i < np-2 {
 			sb.WriteByte(cusdlm)
 		}
 	}
 	sb.WriteByte(cusend)
+
 	return sb.String()
 }
 

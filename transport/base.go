@@ -150,7 +150,11 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 }
 
 func (s *streamBase) _lid(sid, dstID string, extra *Extra) {
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = 2 + len(s.trname) + len(sid) + 32 + len(dstID)
+	)
+	sb.Grow(l)
 
 	sb.WriteString("s-")
 	sb.WriteString(s.trname)

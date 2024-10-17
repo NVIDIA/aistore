@@ -100,7 +100,11 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 }
 
 func (lom *LOM) String() string {
-	sb := &strings.Builder{}
+	var (
+		sb strings.Builder
+		l  = 2 + len(lom.bck.Name) + 1 + len(lom.ObjName) + 4
+	)
+	sb.Grow(l)
 	sb.WriteString("o[")
 	sb.WriteString(lom.bck.Name)
 	sb.WriteByte('/')

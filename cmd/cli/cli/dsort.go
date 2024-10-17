@@ -305,7 +305,11 @@ func (d dsortResult) String() string {
 		return apc.ActDsort + " job was aborted"
 	}
 
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = 1024
+	)
+	sb.Grow(l)
 
 	sb.WriteString(fmt.Sprintf("Created %d new shards. Job duration: %s", d.created, d.dur))
 	if len(d.errors) > 0 {

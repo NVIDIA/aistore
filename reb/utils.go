@@ -39,7 +39,11 @@ func (reb *Reb) xctn() *xs.Rebalance        { return reb.xreb.Load() }
 func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(xctn) }
 
 func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) string {
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = 64
+	)
+	sb.Grow(l)
 
 	sb.WriteString(core.T.String())
 	sb.WriteString("[g")
@@ -57,6 +61,7 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 	sb.WriteByte(',')
 	sb.WriteString(stages[reb.stages.stage.Load()])
 	sb.WriteByte(']')
+
 	return sb.String() // "%s[g%d,%s,%s]"
 }
 

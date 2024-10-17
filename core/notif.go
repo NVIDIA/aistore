@@ -56,7 +56,12 @@ type (
 )
 
 func (msg *NotifMsg) String() (s string) {
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = 5 + len(msg.Kind) + 1 + len(msg.UUID) + 1 + 2 + len(msg.NodeID) + 7 + len(msg.ErrMsg)
+	)
+	sb.Grow(l)
+
 	sb.WriteString("nmsg-")
 	sb.WriteString(msg.Kind)
 	sb.WriteByte('[')
@@ -70,5 +75,6 @@ func (msg *NotifMsg) String() (s string) {
 		sb.WriteString(", err: ")
 		sb.WriteString(msg.ErrMsg)
 	}
+
 	return sb.String()
 }

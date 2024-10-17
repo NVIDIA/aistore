@@ -808,7 +808,11 @@ func (sessConf *sessConf) options(options *s3.Options) {
 }
 
 func _cid(profile, region, endpoint string) string {
-	sb := &strings.Builder{}
+	var (
+		sb strings.Builder
+		l  = len(profile) + 1 + len(region) + 1 + len(endpoint)
+	)
+	sb.Grow(l)
 	if profile != "" {
 		sb.WriteString(profile)
 	}

@@ -264,7 +264,11 @@ func initDaemon(version, buildTime string) cos.Runner {
 }
 
 func _loghdr2(si *meta.Snode, loghdr string) string {
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = 5 + len(si.Name()) + 2 + len(loghdr) + 2
+	)
+	sb.Grow(l)
 	sb.WriteString("Node ")
 	sb.WriteString(si.Name())
 	sb.WriteString(", ")
@@ -274,7 +278,11 @@ func _loghdr2(si *meta.Snode, loghdr string) string {
 }
 
 func _loghdr() (loghdr string) {
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = 128
+	)
+	sb.Grow(l)
 	sb.WriteString("Version ")
 	sb.WriteString(daemon.version)
 	if debug.ON() {

@@ -243,13 +243,19 @@ func (xctn *Base) Cname() string { return Cname(xctn.Kind(), xctn.ID()) }
 
 func (xctn *Base) Name() (s string) { return xctn._nam }
 
-func (xctn *Base) _sb() (sb strings.Builder) {
+func (xctn *Base) String() string {
+	var (
+		sb strings.Builder
+		l  = 256
+	)
+	sb.Grow(l)
+
 	sb.WriteString(xctn._nam)
 	sb.WriteByte('-')
 	sb.WriteString(cos.FormatTime(xctn.StartTime(), cos.StampMicro))
 
 	if !xctn.Finished() { // ok to (rarely) miss _aborted_ state as this is purely informational
-		return sb
+		return sb.String()
 	}
 	etime := cos.FormatTime(xctn.EndTime(), cos.StampMicro)
 	if xctn.IsAborted() {
@@ -257,11 +263,7 @@ func (xctn *Base) _sb() (sb strings.Builder) {
 	}
 	sb.WriteByte('-')
 	sb.WriteString(etime)
-	return sb
-}
 
-func (xctn *Base) String() string {
-	sb := xctn._sb()
 	return sb.String()
 }
 

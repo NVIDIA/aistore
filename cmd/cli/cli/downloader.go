@@ -79,8 +79,11 @@ func (d downloadingResult) String() string {
 			d.finishedFiles, d.errFiles)
 	}
 
-	var sb strings.Builder
-
+	var (
+		sb strings.Builder
+		l  = 1024
+	)
+	sb.Grow(l)
 	if d.totalFiles > 0 {
 		sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.", d.finishedFiles, d.totalFiles))
 	} else {

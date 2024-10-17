@@ -403,10 +403,15 @@ func (m *Smap) String() string {
 }
 
 func (m *Smap) StringEx() string {
-	var sb strings.Builder
 	if m == nil {
 		return "Smap <nil>"
 	}
+
+	var (
+		sb strings.Builder
+		l  = 80
+	)
+	sb.Grow(l)
 	sb.WriteString("Smap v")
 	sb.WriteString(strconv.FormatInt(m.Version, 10))
 	sb.WriteByte('[')
@@ -422,6 +427,7 @@ func (m *Smap) StringEx() string {
 	sb.WriteString(", p=")
 	_counts(&sb, m.CountProxies(), m.CountActivePs())
 	sb.WriteByte(']')
+
 	return sb.String()
 }
 

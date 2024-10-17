@@ -67,7 +67,11 @@ func NewShardFactory(baseParams api.BaseParams, fromBck, toBck cmn.Bck, ext, sha
 	sf.shardIter.InitIter()
 
 	if dryRun.IsSet {
-		var sb strings.Builder
+		var (
+			sb strings.Builder
+			l  = 4096
+		)
+		sb.Grow(l)
 		sb.WriteString("{{$shard := .}}{{appendExt $shard.Name}}\t{{formatSize $shard.Size}}\n")
 		sb.WriteString("{{range $rec := .Records.All}}")
 		if dryRun.Mode == "show_keys" {

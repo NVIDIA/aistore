@@ -188,7 +188,12 @@ func (r *Trunner) InitCDF(config *cmn.Config) error {
 }
 
 func (r *Trunner) _dmetric(disk, metric string) string {
-	var sb strings.Builder
+	var (
+		sb strings.Builder
+		l  = len(diskMetricLabel) + 1 + len(disk) + 1 + len(metric)
+	)
+	sb.Grow(l)
+
 	sb.WriteString(diskMetricLabel)
 	sb.WriteByte('.')
 	sb.WriteString(disk)
@@ -604,29 +609,9 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 5. jobs
 	if !idle {
-		var ln string
-		r.xallRun.Running = r.xallRun.Running[:0]
-		r.xallRun.Idle = r.xallRun.Idle[:0]
-		orig := r.xallRun.Idle
-		if !verbose {
-			r.xallRun.Idle = nil
-		}
-		r.t.GetAllRunning(&r.xallRun, true /*periodic*/)
-		if !verbose {
-			r.xallRun.Idle = orig
-		}
-		if len(r.xallRun.Running) > 0 {
-			ln = "running: " + strings.Join(r.xallRun.Running, " ")
-			if len(r.xallRun.Idle) > 0 {
-				ln += ";  idle: " + strings.Join(r.xallRun.Idle, " ")
-			}
-		} else if len(r.xallRun.Idle) > 0 {
-			ln += "idle: " + strings.Join(r.xallRun.Idle, " ")
-		}
-		if ln != "" && ln != r.xln {
-			r.lines = append(r.lines, ln)
-		}
-		r.xln = ln
+		r.xln = r._jobs(verbose)
+	} else {
+		r.xln = ""
 	}
 
 	// 6. log
@@ -711,9 +696,15 @@ func (r *Trunner) logCapacity(now int64) {
 			r.fsIDs, unique = cos.AddUniqueFsID(r.fsIDs, cdf.FS.FsID)
 		}
 		if unique { // to avoid log duplication
-			var sb strings.Builder
+			var (
+				sb    strings.Builder
+				label = cdf.Label.ToLog()
+				l     = 48 + len(mpath) + len(label)
+			)
+			sb.Grow(l)
+
 			sb.WriteString(mpath)
-			sb.WriteString(cdf.Label.ToLog())
+			sb.WriteString(label)
 			if alert, _ := fs.HasAlert(cdf.Disks); alert != "" {
 				sb.WriteString(": ")
 				sb.WriteString(alert)
@@ -724,6 +715,7 @@ func (r *Trunner) logCapacity(now int64) {
 				sb.WriteString(", avail ")
 				sb.WriteString(cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2))
 			}
+
 			r.lines = append(r.lines, sb.String())
 		}
 	}
@@ -759,6 +751,36 @@ func (r *Trunner) logDiskStats(verbose bool) {
 		buf = append(buf, "%"...)
 		r.lines = append(r.lines, *(*string)(unsafe.Pointer(&buf)))
 	}
+}
+
+func (r *Trunner) _jobs(verbose bool) string {
+	r.xallRun.Running = r.xallRun.Running[:0]
+	r.xallRun.Idle = r.xallRun.Idle[:0]
+	orig := r.xallRun.Idle
+	if !verbose {
+		r.xallRun.Idle = nil
+	}
+	r.t.GetAllRunning(&r.xallRun, true /*periodic*/)
+	if !verbose {
+		r.xallRun.Idle = orig
+	}
+
+	var sb strings.Builder
+	if len(r.xallRun.Running) > 0 {
+		cos.AppendStrings(&sb, "running: ", ' ', r.xallRun.Running...)
+		if len(r.xallRun.Idle) > 0 {
+			cos.AppendStrings(&sb, ";  idle: ", ' ', r.xallRun.Idle...)
+		}
+	} else if len(r.xallRun.Idle) > 0 {
+		cos.AppendStrings(&sb, "idle: ", ' ', r.xallRun.Idle...)
+	}
+
+	ln := sb.String()
+	if ln != "" && ln != r.xln {
+		r.lines = append(r.lines, ln)
+	}
+
+	return ln
 }
 
 func (r *Trunner) statsTime(newval time.Duration) {

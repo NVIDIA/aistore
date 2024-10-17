@@ -199,6 +199,8 @@ func (j *Job) String() string {
 		pending  = j.PendingCnt()
 		finished = j.JobFinished()
 	)
+	sb.Grow(256)
+
 	sb.WriteString(j.ID)
 	if j.Description != "" {
 		sb.WriteString(" (")
@@ -215,6 +217,7 @@ func (j *Job) String() string {
 	default:
 		sb.WriteString(fmt.Sprintf("%d file%s still being downloaded", pending, cos.Plural(pending)))
 	}
+
 	return sb.String()
 }
 
