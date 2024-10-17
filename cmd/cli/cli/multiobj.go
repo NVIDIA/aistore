@@ -72,6 +72,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		msg.LatestVer = flagIsSet(c, latestVerFlag)
 		msg.Sync = flagIsSet(c, syncFlag)
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
+		msg.Prepend = parseStrFlag(c, copyPrependFlag)
 		if flagIsSet(c, numListRangeWorkersFlag) {
 			msg.NumWorkers = parseIntFlag(c, numListRangeWorkersFlag)
 		}

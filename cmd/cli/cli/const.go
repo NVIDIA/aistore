@@ -993,9 +993,11 @@ var (
 	}
 	copyPrependFlag = cli.StringFlag{
 		Name: "prepend",
-		Usage: "prefix to prepend to every copied object name, e.g.:\n" +
-			indent4 + "\t--prepend=abc\t- prefix all copied object names with \"abc\"\n" +
-			indent4 + "\t--prepend=abc/\t- copy objects into a virtual directory \"abc\" (note trailing filepath separator)",
+		Usage: "prefix to prepend to every object name during operation (copy or transform), e.g.:\n" +
+			indent4 + "\t--prepend=abc\t- prefix all object names with \"abc\"\n" +
+			indent4 + "\t--prepend=abc/\t- use \"abc\" as a virtual directory (note trailing filepath separator)\n" +
+			indent4 + "\t\t- during 'copy', this flag applies to copied objects\n" +
+			indent4 + "\t\t- during 'transform', this flag applies to transformed objects",
 	}
 
 	// ETL
