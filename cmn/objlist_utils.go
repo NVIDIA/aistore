@@ -384,7 +384,7 @@ func S2CustomVal(custom, name string) (v string) {
 		return
 	}
 
-	i += j
+	i += j + 1
 	k := strings.IndexByte(custom[i:], cusdlm)
 	if k < 0 {
 		k = strings.IndexByte(custom[i:], cusend)
