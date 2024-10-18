@@ -34,7 +34,7 @@ type (
 		PageMM() *memsys.MMSA
 		ByteMM() *memsys.MMSA
 
-		IsIdle(util int64, load float64) bool
+		MaxUtilLoad() (util int64, load float64)
 	}
 )
 

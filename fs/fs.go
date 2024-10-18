@@ -165,12 +165,6 @@ func (mi *Mountpath) String() string {
 	return mi.info[:l-1] + ", waiting-dd]"
 }
 
-// (see also: DisksIdle)
-func (mi *Mountpath) IsIdle(config *cmn.Config, util int64) bool {
-	curr := mfs.ios.GetMpathUtil(mi.Path)
-	return curr >= 0 && curr < min(config.Disk.DiskUtilLowWM, util)
-}
-
 func (mi *Mountpath) IsAvail() bool {
 	avail := GetAvail()
 	_, ok := avail[mi.Path]
@@ -577,9 +571,31 @@ func TestNew(iostater ios.IOS) {
 	PutMPI(make(MPI, num), make(MPI, num))
 }
 
-// `ios` delegations
+//
+// disk utilizations (helpers)
+//
+
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
+
+func GetMaxUtil() (util int64) {
+	var (
+		utils = GetAllMpathUtils()
+		avail = GetAvail()
+	)
+	for _, mi := range avail {
+		if u := utils.Get(mi.Path); u > util {
+			util = u
+		}
+	}
+	return util
+}
+
+func (mi *Mountpath) GetUtil() int64 { return mfs.ios.GetMpathUtil(mi.Path) }
+
+//
+// more `ios` delegations
+//
 
 func putAvailMPI(avail MPI)    { mfs.available.Store(&avail) }
 func putDisabMPI(disabled MPI) { mfs.disabled.Store(&disabled) }
@@ -1176,19 +1192,6 @@ func DiskStats(allds ios.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCa
 			}
 		}
 	}
-}
-
-func DisksIdle(util int64) bool {
-	var (
-		config = cmn.GCO.Get()
-		avail  = GetAvail()
-	)
-	for _, mi := range avail {
-		if !mi.IsIdle(config, util) {
-			return false
-		}
-	}
-	return true
 }
 
 //

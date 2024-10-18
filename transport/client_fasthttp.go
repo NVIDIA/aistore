@@ -39,7 +39,7 @@ func NewIntraDataClient() Client {
 	config := cmn.GCO.Get()
 	httcfg := &config.Net.HTTP
 
-	// (compare with ais/httpcommon.go)
+	// (compare with cmn/client.go)
 	cl := &fasthttp.Client{
 		Dial:            dialTimeout,
 		ReadBufferSize:  cos.NonZero(httcfg.ReadBufferSize, int(cmn.DefaultReadBufferSize)),   // 4K
