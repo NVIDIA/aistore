@@ -412,7 +412,7 @@ func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
 }
 
 func (j *lruJ) _throttle(usedPct int64) (err error) {
-	if j.mi.IsIdle(j.config) {
+	if j.mi.IsIdle(j.config, j.config.Disk.DiskUtilLowWM) {
 		return
 	}
 	// throttle self

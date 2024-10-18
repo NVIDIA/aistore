@@ -33,6 +33,11 @@ func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	xreg.GetAllRunning(inout, periodic)
 }
 
+// TODO: consider adding 'no-running-jobs'
+func (t *target) IsIdle(util int64, load float64) bool {
+	return t.htrun.IsIdle(util, load) && fs.DisksIdle(util)
+}
+
 func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
 	return t.reqHealth(si, timeout, query, t.owner.smap.get(), false /*retry*/)
 }

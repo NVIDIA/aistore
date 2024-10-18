@@ -203,7 +203,7 @@ func (r *MMSA) freeIdle() (total int64) {
 func (r *MMSA) freeMemToOS(mingc int64, force bool) {
 	avg, err := sys.LoadAverage()
 	if err != nil {
-		nlog.Errorf("Failed to load averages: %v", err) // (unlikely)
+		nlog.Errorln(err) // (unlikely)
 		avg.One = 999
 	}
 	togc := r.toGC.Load()

@@ -38,14 +38,15 @@ func NewTarget(bo meta.Bowner) *TargetMock {
 func (t *TargetMock) Bowner() meta.Bowner { return t.BO }
 func (t *TargetMock) Sowner() meta.Sowner { return t.SO }
 
-func (*TargetMock) SID() string              { return mockID }
-func (*TargetMock) String() string           { return "tmock" }
-func (*TargetMock) Snode() *meta.Snode       { return &meta.Snode{DaeID: mockID} }
-func (*TargetMock) ClusterStarted() bool     { return true }
-func (*TargetMock) NodeStarted() bool        { return true }
-func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
-func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
-func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
+func (*TargetMock) SID() string                { return mockID }
+func (*TargetMock) String() string             { return "tmock" }
+func (*TargetMock) Snode() *meta.Snode         { return &meta.Snode{DaeID: mockID} }
+func (*TargetMock) ClusterStarted() bool       { return true }
+func (*TargetMock) NodeStarted() bool          { return true }
+func (*TargetMock) IsIdle(int64, float64) bool { return true }
+func (*TargetMock) DataClient() *http.Client   { return http.DefaultClient }
+func (*TargetMock) PageMM() *memsys.MMSA       { return memsys.PageMM() }
+func (*TargetMock) ByteMM() *memsys.MMSA       { return memsys.ByteMM() }
 
 func (*TargetMock) GetAllRunning(*core.AllRunningInOut, bool)                      {}
 func (*TargetMock) PutObject(*core.LOM, *core.PutParams) error                     { return nil }

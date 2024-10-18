@@ -6,6 +6,7 @@ package sys
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"runtime"
 	"strconv"
@@ -73,13 +74,22 @@ func containerNumCPU() (int, error) {
 	return int(max(approx, 1)), nil
 }
 
-// LoadAverage returns the system load average
-func LoadAverage() (avg LoadAvg, err error) {
-	avg = LoadAvg{}
+//
+// load averages
+//
 
+type errLoadAvg struct {
+	err error
+}
+
+func (e *errLoadAvg) Error() string {
+	return fmt.Sprint("failed to load averages: ", e.err)
+}
+
+func LoadAverage() (avg LoadAvg, _ error) {
 	line, err := cos.ReadOneLine(hostLoadAvgPath)
 	if err != nil {
-		return avg, err
+		return avg, &errLoadAvg{err}
 	}
 
 	fields := strings.Fields(line)
@@ -90,6 +100,8 @@ func LoadAverage() (avg LoadAvg, err error) {
 	if err == nil {
 		avg.Fifteen, err = strconv.ParseFloat(fields[2], 64)
 	}
-
-	return avg, err
+	if err == nil {
+		return avg, nil
+	}
+	return avg, &errLoadAvg{err}
 }

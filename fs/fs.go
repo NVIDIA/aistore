@@ -165,9 +165,10 @@ func (mi *Mountpath) String() string {
 	return mi.info[:l-1] + ", waiting-dd]"
 }
 
-func (mi *Mountpath) IsIdle(config *cmn.Config) bool {
+// (see also: DisksIdle)
+func (mi *Mountpath) IsIdle(config *cmn.Config, util int64) bool {
 	curr := mfs.ios.GetMpathUtil(mi.Path)
-	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
+	return curr >= 0 && curr < min(config.Disk.DiskUtilLowWM, util)
 }
 
 func (mi *Mountpath) IsAvail() bool {
@@ -795,7 +796,7 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 	} else {
 		nlog.Infof("removed mountpath %s (remain available: %d)", mi, availCnt)
 	}
-	moveMarkers(availableCopy, mi)
+	_moveMarkers(availableCopy, mi)
 	putAvailMPI(availableCopy)
 	if availCnt > 0 && len(cb) > 0 {
 		cb[0]()
@@ -875,7 +876,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		mfs.ios.RemoveMpath(cleanMpath, config.TestingEnv())
 		delete(availableCopy, cleanMpath)
 		delete(mfs.fsIDs, mi.FsID)
-		moveMarkers(availableCopy, mi)
+		_moveMarkers(availableCopy, mi)
 		PutMPI(availableCopy, disabledCopy)
 		if l := len(availableCopy); l == 0 {
 			nlog.Errorf("disabled the last available mountpath %s", mi)
@@ -893,6 +894,50 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 	}
 	return nil, cmn.NewErrMpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 }
+
+func _moveMarkers(avail MPI, from *Mountpath) {
+	var (
+		fromPath    = filepath.Join(from.Path, fname.MarkersDir)
+		finfos, err = os.ReadDir(fromPath)
+	)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			nlog.Errorf("Failed to read markers' dir %q: %v", fromPath, err)
+		}
+		return
+	}
+	if len(finfos) == 0 {
+		return // no markers, nothing to do
+	}
+
+	// NOTE: `from` path must no longer be in the available mountpaths
+	_, ok := avail[from.Path]
+	debug.Assert(!ok, from.String())
+	for _, mi := range avail {
+		ok = true
+		for _, fi := range finfos {
+			debug.Assert(!fi.IsDir(), fname.MarkersDir+cos.PathSeparator+fi.Name()) // marker is a file
+			var (
+				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
+				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())
+			)
+			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
+			if err != nil && os.IsNotExist(err) {
+				nlog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
+				mfs.hc.FSHC(err, mi, "")
+				ok = false
+			}
+		}
+		if ok {
+			break
+		}
+	}
+	from.ClearMDs(true /*inclBMD*/)
+}
+
+//
+// avail & disabled
+//
 
 func NumAvail() int {
 	avail := GetAvail()
@@ -921,6 +966,10 @@ func getDisabled() MPI {
 	debug.Assert(disabled != nil)
 	return *disabled
 }
+
+//
+// buckets
+//
 
 func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
 	var (
@@ -1013,49 +1062,10 @@ func RenameBucketDirs(bckFrom, bckTo *cmn.Bck) (err error) {
 	return
 }
 
-func moveMarkers(avail MPI, from *Mountpath) {
-	var (
-		fromPath    = filepath.Join(from.Path, fname.MarkersDir)
-		finfos, err = os.ReadDir(fromPath)
-	)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			nlog.Errorf("Failed to read markers' dir %q: %v", fromPath, err)
-		}
-		return
-	}
-	if len(finfos) == 0 {
-		return // no markers, nothing to do
-	}
+//
+// load node ID - traverses all mountpaths to load and validate
+//
 
-	// NOTE: `from` path must no longer be in the available mountpaths
-	_, ok := avail[from.Path]
-	debug.Assert(!ok, from.String())
-	for _, mi := range avail {
-		ok = true
-		for _, fi := range finfos {
-			debug.Assert(!fi.IsDir(), fname.MarkersDir+cos.PathSeparator+fi.Name()) // marker is a file
-			var (
-				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
-				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())
-			)
-			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
-			if err != nil && os.IsNotExist(err) {
-				nlog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
-				mfs.hc.FSHC(err, mi, "")
-				ok = false
-			}
-		}
-		if ok {
-			break
-		}
-	}
-	from.ClearMDs(true /*inclBMD*/)
-}
-
-// load node ID
-
-// traverses all mountpaths to load and validate node ID
 func LoadNodeID(mpaths cos.StrKVs) (mDaeID string, err error) {
 	for mp := range mpaths {
 		daeID, err := _loadXattrID(mp)
@@ -1166,6 +1176,19 @@ func DiskStats(allds ios.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCa
 			}
 		}
 	}
+}
+
+func DisksIdle(util int64) bool {
+	var (
+		config = cmn.GCO.Get()
+		avail  = GetAvail()
+	)
+	for _, mi := range avail {
+		if !mi.IsIdle(config, util) {
+			return false
+		}
+	}
+	return true
 }
 
 //
@@ -1322,26 +1345,6 @@ func CapStatusGetWhat() (fsInfo apc.CapacityInfo) {
 	return
 }
 
-/////////
-// MPI //
-/////////
-
-func (mpi MPI) String() string {
-	return fmt.Sprintf("%v", mpi.toSlice())
-}
-
-func (mpi MPI) toSlice() []string {
-	var (
-		paths = make([]string, len(mpi))
-		idx   int
-	)
-	for key := range mpi {
-		paths[idx] = key
-		idx++
-	}
-	return paths
-}
-
 ///////////////
 // CapStatus //
 ///////////////
@@ -1394,4 +1397,29 @@ func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 	}
 	ratio := (util - umin) * 100 / (umax - umin)
 	return time.Duration(100-ratio)*(tmax-tmin)/100 + tmin
+}
+
+/////////
+// MPI //
+/////////
+
+func (mpi MPI) String() string {
+	var (
+		sb   strings.Builder
+		i, l int
+	)
+	for key := range mpi {
+		l += len(key) + 1
+	}
+	sb.Grow(l + 2)
+	sb.WriteByte('[')
+	for key := range mpi {
+		sb.WriteString(key)
+		i++
+		if i < l-1 {
+			sb.WriteByte(' ')
+		}
+	}
+	sb.WriteByte(']')
+	return sb.String()
 }

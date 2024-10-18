@@ -33,6 +33,8 @@ type (
 		// Memory allocators
 		PageMM() *memsys.MMSA
 		ByteMM() *memsys.MMSA
+
+		IsIdle(util int64, load float64) bool
 	}
 )
 

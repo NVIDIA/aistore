@@ -38,6 +38,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -89,6 +90,15 @@ type htrun struct {
 
 // interface guard
 var _ core.Node = (*htrun)(nil)
+
+func (*htrun) IsIdle(_ int64, load float64) bool {
+	avg, err := sys.LoadAverage()
+	if err != nil {
+		nlog.Errorln(err)
+		return false
+	}
+	return avg.One < load && avg.Five < load
+}
 
 func (h *htrun) Snode() *meta.Snode { return h.si }
 func (h *htrun) callerName() string { return h.si.String() }
