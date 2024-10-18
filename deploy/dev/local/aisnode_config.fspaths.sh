@@ -36,8 +36,9 @@ cat > $AIS_CONF_FILE <<EOL
 		"max_host_busy":        "20s",
 		"startup_time":         "1m",
 		"join_startup_time":    "3m",
-		"send_file_time":       "5m"
-		"ec_streams_time":	"10m"
+		"send_file_time":       "5m",
+		"ec_streams_time":      "10m",
+		"object_md":            "2h"
 	},
 	"client": {
 		"client_timeout":      "10s",

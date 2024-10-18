@@ -263,6 +263,8 @@ type (
 		SendFile        cos.Duration `json:"send_file_time"`    // large file or blob and/or slow network
 		// intra-cluster EC streams; default=EcStreamsDflt; never timeout when negative
 		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
+		// object metadata timeout; for training apps an approx. duration of 2 (two) epochs
+		ObjectMD cos.Duration `json:"object_md"`
 	}
 	TimeoutConfToSet struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
@@ -272,6 +274,7 @@ type (
 		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty"`
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
 		EcStreams       *cos.Duration `json:"ec_streams_time,omitempty"`
+		ObjectMD        *cos.Duration `json:"object_md"`
 	}
 
 	ClientConf struct {
@@ -1702,6 +1705,10 @@ func (c *TimeoutConf) Validate() error {
 	if c.EcStreams > 0 && c.EcStreams.D() < EcStreamsMini {
 		return fmt.Errorf("invalid timeout.ec_streams_time=%s (no timeout: %v; minimum: %s; default: %s)",
 			c.EcStreams, EcStreamsEver, EcStreamsMini, EcStreamsDflt)
+	}
+	if c.ObjectMD != 0 && c.ObjectMD.D() < 20*time.Minute {
+		return fmt.Errorf("invalid timeout.object_md=%s (expecting 0 (zero) for system default or a value greater or equal 20m)",
+			c.ObjectMD)
 	}
 	return nil
 }
