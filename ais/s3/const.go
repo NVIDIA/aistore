@@ -4,8 +4,6 @@
  */
 package s3
 
-import "fmt"
-
 const (
 	// AWS URL params
 	QparamVersioning        = "versioning"
@@ -43,12 +41,7 @@ const (
 	MaxPartsPerUpload = 10000
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
-	s3URL       = "https://%s.s3.%s.amazonaws.com/%s?%s"
 
 	AISRegion = "ais"
 	AISServer = "AIStore"
 )
-
-func makeS3URL(region, bucketName, objectName, query string) string {
-	return fmt.Sprintf(s3URL, bucketName, region, objectName, query)
-}

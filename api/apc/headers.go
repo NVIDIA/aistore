@@ -78,6 +78,18 @@ const (
 	HdrClusterUptime = aisPrefix + "Cluster-Uptime"
 )
 
+// Custom S3 headers
+const (
+	// HdrSignedRequestStyle describes what type of request style was used to sign the request.
+	// This is important because we don't really have way of knowing if the request
+	// was signed with the style:
+	//	* `virtual-hosted` - https://<bucket>.s3.<region>.amazonaws.com/<path_to_object> or,
+	//	* `path`           - https://s3.<region>.amazonaws.com/<bucket>/<path_to_object>.
+	// By default, (if the header is empty or not set) we use `virtual-hosted` style.
+	// In case, the value of this header is not valid, the error will be thrown.
+	HdrSignedRequestStyle = aisPrefix + "S3-Signed-Request-Style"
+)
+
 // AuthN consts
 const (
 	HdrAuthorization         = "Authorization" // https://developer.mozilla.org/en-US/docs/Web/HTTP/Hdrs/Authorization

@@ -134,15 +134,22 @@ $ aws s3 presign s3://bucket/test.txt
 https://bucket.s3.us-west-2.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
 ```
 
+> [!NOTE] 
+> In some cases signed request may be in form of `https://s3.us-west-2.amazonaws.com/bucket/test.txt?...` (`path` style) and not `https://bucket.s3.us-west-2.amazonaws.com/test.txt?...` (`virtual-hosted` style).
+> If your requests are signed this way, they might fail when sending to AIStore as it has no way of knowing which style was used to sign, and it always assumes the `virtual-hosted` style by default.
+> To fix this you need to provide `ais-s3-signed-request-style: path` header to instruct AIStore to use `path` style.
+
 ### 3. Execute presigned S3 request
 
 Let's assumes that there's S3 bucket called `s3://bucket`, and we have read/write access to it.
 
-Further, `https://localhost:8080` address (below) simply indicates [Local Playground](/docs/getting_started.md#local-playground) and must be understood as a demonstration-only placeholder for an _arbitrary_ aistore endpoint (`AIS_ENDPOINT`).
+Further, `https://localhost:8080` address (below) simply indicates [Local Playground](/docs/getting_started.md#local-playground) and must be understood as a demonstration-only placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 ```console
 $ curl -L -X PUT -d 'testing 1 2 3' "https://localhost:8080/s3/bucket/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456"
 ```
+
+(as it was pointed in previous step, you might need to pass `-H "ais-s3-signed-request-style: path"` option in case your requests were signed with `path` style)
 
 At this point, AIStore will send the presigned (PUT) URL to S3 and, if successful, store the object in cluster.
 
@@ -160,7 +167,7 @@ In this case, simply ask it to skip checking, e.g.: `echo insecure >> ~/.curlrc`
 Finally (and optionally), let's check the status of the new object - `s3://bucket/test.txt`, in this case:
 
 ```console
-ais bucket ls s3://bucket
+$ ais bucket ls s3://bucket
 NAME          SIZE   CACHED  STATUS
 test.txt      13B    yes     ok
 ```

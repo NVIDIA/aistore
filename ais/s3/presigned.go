@@ -23,6 +23,11 @@ const (
 	signatureV4 = "AWS4-HMAC-SHA256"
 )
 
+const (
+	virtualHostedRequestStyle = "virtual-hosted"
+	pathRequestStyle          = "path"
+)
+
 type (
 	PresignedReq struct {
 		oreq  *http.Request
@@ -45,6 +50,39 @@ type (
 
 func NewPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser, q url.Values) *PresignedReq {
 	return &PresignedReq{oreq, lom, body, q}
+}
+
+func makeS3URL(requestStyle, region, bucketName, objName, query string) (string, error) {
+	requestStyle = strings.TrimSpace(strings.ToLower(requestStyle))
+	switch requestStyle {
+	// `virtual-hosted` style is used by default as this is default in S3.
+	case virtualHostedRequestStyle, "":
+		b := &strings.Builder{}
+		b.Grow(8 + len(bucketName) + 4 + len(region) + 15 + len(objName) + 1 + len(query))
+		b.WriteString("https://")
+		b.WriteString(bucketName)
+		b.WriteString(".s3.")
+		b.WriteString(region)
+		b.WriteString(".amazonaws.com/")
+		b.WriteString(objName)
+		b.WriteByte('?')
+		b.WriteString(query)
+		return b.String(), nil
+	case pathRequestStyle:
+		b := &strings.Builder{}
+		b.Grow(11 + len(region) + 15 + len(bucketName) + 1 + len(objName) + 1 + len(query))
+		b.WriteString("https://s3.")
+		b.WriteString(region)
+		b.WriteString(".amazonaws.com/")
+		b.WriteString(bucketName)
+		b.WriteByte('/')
+		b.WriteString(objName)
+		b.WriteByte('?')
+		b.WriteString(query)
+		return b.String(), nil
+	default:
+		return "", fmt.Errorf("unrecognized request style provided: %v", requestStyle)
+	}
 }
 
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html
@@ -120,8 +158,13 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	pts.query.Del(apc.QparamUnixTime)
 	queryEncoded := pts.query.Encode()
 
+	signedRequestStyle := pts.oreq.Header.Get(apc.HdrSignedRequestStyle)
+	s3url, err := makeS3URL(signedRequestStyle, region, pts.lom.Bck().Name, pts.lom.ObjName, queryEncoded)
+	if err != nil {
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, err
+	}
+
 	// produce a new request (nreq) from the old/original one (oreq)
-	s3url := makeS3URL(region, pts.lom.Bck().Name, pts.lom.ObjName, queryEncoded)
 	nreq, err := http.NewRequest(pts.oreq.Method, s3url, pts.body)
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusInternalServerError}, err
