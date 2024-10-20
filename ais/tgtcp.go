@@ -849,11 +849,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	// evict LOM cache
 	if len(rmbcks) > 0 {
 		wg := &sync.WaitGroup{}
-		bcks := make([]*cmn.Bck, 0, len(rmbcks))
-		for _, b := range rmbcks {
-			bcks = append(bcks, b.Bucket())
-		}
-		core.UncacheBck(wg, bcks...)
+		core.UncacheBcks(wg, rmbcks...)
 
 		errV := fmt.Errorf("[post-bmd] %s %s: remove bucket%s", tag, newBMD, cos.Plural(len(rmbcks)))
 		xreg.AbortAllBuckets(errV, rmbcks...)

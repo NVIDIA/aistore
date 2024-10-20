@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
@@ -66,8 +67,8 @@ func (lchk *lchk) init(timeout time.Duration) {
 }
 
 // evict bucket
-// TODO: (1) consider dropping cache when > maxEvictThreashold; (2) take in account time spent
-func UncacheBck(wg *sync.WaitGroup, bcks ...*cmn.Bck) bool {
+// TODO: consider dropping caches when > maxEvictThreashold; take in account time spent in
+func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
 
@@ -80,21 +81,20 @@ func UncacheBck(wg *sync.WaitGroup, bcks ...*cmn.Bck) bool {
 		avail = fs.GetAvail()
 		pct   = _throttlePct()
 	)
+	nlog.Infoln("uncache:", bcks[0].String(), "num:", len(bcks), "throttle:", pct)
 	if pct > maxEvictThreashold {
-		nlog.Warningln(bcks[0].String(), "throttle [", pct, "greater than max", maxEvictThreashold, "]")
-	} else {
-		nlog.Infoln(bcks[0].String(), "(-), throttle:", pct)
+		nlog.Warningln("high utilization and/or load average:", pct)
 	}
 	for _, mi := range avail {
 		if wg != nil {
 			wg.Add(1)
 		}
-		go _uncacheBck(mi, wg, pct, bcks)
+		go _rmib(mi, wg, pct, bcks)
 	}
 	return false
 }
 
-func _uncacheBck(mi *fs.Mountpath, wg *sync.WaitGroup, pct int /*throttle pct*/, bcks []*cmn.Bck) {
+func _rmib(mi *fs.Mountpath, wg *sync.WaitGroup, pct int /*throttle pct*/, bcks []*meta.Bck) {
 	defer wg.Done()
 
 	var nd int
@@ -108,9 +108,9 @@ func _uncacheBck(mi *fs.Mountpath, wg *sync.WaitGroup, pct int /*throttle pct*/,
 			if lmd.uname == nil {
 				return true
 			}
-			bck, _ := cmn.ParseUname(*lmd.uname)
+			b, _ := cmn.ParseUname(*lmd.uname)
 			for _, rmb := range bcks {
-				if !bck.Equal(rmb) {
+				if !rmb.Eq(&b) {
 					continue
 				}
 				lmd2, _ := cache.LoadAndDelete(hkey)

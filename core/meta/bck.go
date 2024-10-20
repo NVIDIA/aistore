@@ -116,6 +116,8 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 	return true
 }
 
+func (b *Bck) Eq(other *cmn.Bck) bool { return other.Equal(b.Bucket()) }
+
 // when the bucket is not present in the BMD:
 // - always returns the corresponding *DoesNotExist error
 // - Cloud bucket: fills in the props with defaults from config
