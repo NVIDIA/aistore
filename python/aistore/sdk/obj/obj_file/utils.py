@@ -58,3 +58,38 @@ def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
     if resume_total > max_resume:
         raise ObjectFileMaxResumeError(err, resume_total) from err
     return resume_total
+
+
+def handle_chunked_encoding_error(
+    content_iterator: ContentIterator,
+    resume_position: int,
+    resume_total: int,
+    max_resume: int,
+    err: Exception,
+) -> tuple[Iterator[bytes], int]:
+    """
+    Handle the chunked encoding error by incrementing the resume count, logging a warning,
+    and resetting the iterator from the last known position.
+
+    Args:
+        content_iterator (ContentIterator): The content iterator used to read the data.
+        resume_position (int): The byte position from which to resume reading.
+        resume_total (int): The current number of resume attempts.
+        max_resume (int): The maximum number of resume attempts allowed.
+        err (Exception): The error that caused the resume attempt.
+
+    Returns:
+        tuple[Iterator[bytes], int]: The new iterator and the updated resume total.
+
+    Raises:
+        ObjectFileMaxResumeError: If the maximum number of resume attempts is exceeded.
+    """
+    resume_total = increment_resume(resume_total, max_resume, err)
+    logger.warning(
+        "Chunked encoding error (%s), retrying %d/%d",
+        err,
+        resume_total,
+        max_resume,
+    )
+    chunk_iterator = reset_iterator(content_iterator, resume_position)
+    return chunk_iterator, resume_total

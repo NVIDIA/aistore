@@ -28,7 +28,8 @@ class ObjectReader:
         chunk_size: int = DEFAULT_CHUNK_SIZE,
     ):
         self._object_client = object_client
-        self._content_iterator = ContentIterator(self._object_client, chunk_size)
+        self._chunk_size = chunk_size
+        self._content_iterator = ContentIterator(self._object_client, self._chunk_size)
         self._attributes = None
 
     def head(self) -> ObjectAttributes:
@@ -93,6 +94,7 @@ class ObjectReader:
 
     def as_file(
         self,
+        buffer_size: Optional[int] = None,
         max_resume: Optional[int] = 5,
     ) -> ObjectFile:
         """
@@ -102,18 +104,35 @@ class ObjectReader:
 
         Args:
             max_resume (int, optional): Maximum number of resume attempts in case of streaming failure. Defaults to 5.
+            buffer_size (int, optional): The size of the internal buffer in bytes. If not provided, defaults to the
+                                         chunk size of the content iterator (no buffering).
 
         Returns:
             ObjectFile: A file-like object that can be used to read the object content.
 
         Raises:
+            ValueError: If `buffer_size` is not a positive integer or if `max_resume` is negative.
             requests.RequestException: An ambiguous exception occurred while handling the request.
             requests.ConnectionError: A connection error occurred.
             requests.ConnectionTimeout: The connection to AIStore timed out.
             requests.ReadTimeout: Waiting for a response from AIStore timed out.
             requests.exceptions.HTTPError(404): The object does not exist.
         """
-        return ObjectFile(self._content_iterator, max_resume=max_resume)
+        if buffer_size is not None and buffer_size < 0:
+            raise ValueError(
+                f"Invalid value for buffer_size: {buffer_size}. It must be a non-negative integer."
+            )
+        if max_resume < 0:
+            raise ValueError(
+                f"Invalid value for max_resume: {max_resume}. It must be a non-negative integer."
+            )
+
+        if buffer_size is None:
+            buffer_size = self._chunk_size
+
+        return ObjectFile(
+            self._content_iterator, buffer_size=buffer_size, max_resume=max_resume
+        )
 
     def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
         """

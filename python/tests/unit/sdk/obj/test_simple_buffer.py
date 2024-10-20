@@ -2,79 +2,57 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-# pylint: disable=protected-access, duplicate-code, too-few-public-methods
+# pylint: disable=protected-access
 
-import io
-import os
 import unittest
 
 from unittest.mock import Mock
-from requests.exceptions import ChunkedEncodingError
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from aistore.sdk.obj.obj_file.buffer import SimpleBuffer
+from aistore.sdk.obj.obj_file.simple_buffer import SimpleBuffer
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.obj.obj_file.errors import (
     ObjectFileMaxResumeError,
     ObjectFileStreamError,
 )
-
-
-class BadObjectStream(io.BytesIO):
-    """
-    Simulates a stream that fails with ChunkedEncodingError intermittently every `fail_on_read`
-    chunks read.
-    """
-
-    def __init__(self, *args, fail_on_read=2, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.read_count = 0
-        self.fail_on_read = fail_on_read
-
-    def read(self, size=-1):
-        """Overrides `BytesIO.read` to simulate failure after a specific number of reads."""
-        self.read_count += 1
-        if self.read_count == self.fail_on_read:
-            raise ChunkedEncodingError("Simulated ChunkedEncodingError")
-        return super().read(size)
-
-
-class BadContentIterator(ContentIterator):
-    """
-    Simulates an ContentIterator that streams data using BadObjectStream that fails with ChunksEncoding
-    error every `fail_on_read` chunks read.
-
-    This class extends `ContentIterator` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
-    parent class `ContentIterator`.
-
-    The streaming starts from a specific position (`start_position`), allowing the object to resume
-    reading from that point if necessary.
-    """
-
-    def __init__(self, data=None, fail_on_read=2):
-        super().__init__(client=Mock(), chunk_size=DEFAULT_CHUNK_SIZE)
-        self.data = data
-        self.fail_on_read = fail_on_read
-
-    def iter_from_position(self, start_position=0):
-        """Simulate streaming the object from the specified position `start_position`."""
-
-        def iterator():
-            stream = BadObjectStream(
-                self.data[start_position:], fail_on_read=self.fail_on_read
-            )
-            while True:
-                chunk = stream.read(self._chunk_size)
-                if not chunk:
-                    break
-                yield chunk
-
-        return iterator()
+from tests.utils import BadContentIterator
 
 
 class TestSimpleBuffer(unittest.TestCase):
     def setUp(self):
         self.content_iterator = Mock(ContentIterator)
-        self.simple_buffer = SimpleBuffer(self.content_iterator, max_resume=3)
+        self.simple_buffer = SimpleBuffer(
+            self.content_iterator, max_resume=0, buffer_size=0
+        )
+
+    def test_len(self):
+        """
+        Test overridden __len__ method returns the correct length of the buffer.
+        """
+        # Simulate the buffer filled with some data
+        self.simple_buffer._buffer = bytearray(b"chunk1")
+
+        # Call len() on the simple_buffer and assert it matches the actual buffer length
+        self.assertEqual(len(self.simple_buffer), 6)
+
+        # Modify the buffer and test len() again
+        self.simple_buffer._buffer = bytearray(b"chunk1chunk2")
+        self.assertEqual(len(self.simple_buffer), 12)
+
+    def test_eof_property(self):
+        """
+        Test eof property correctly reflects the end-of-file state.
+        """
+        # Simulate content iterator returning two chunks
+        self.simple_buffer._chunk_iterator = iter([b"chunk1", b"chunk2"])
+
+        # Initially, eof should be False
+        self.assertFalse(self.simple_buffer.eof)
+
+        # Set buffer size to 15 bytes (larger than total data)
+        self.simple_buffer._buffer_size = 15
+
+        # Fill the buffer, it should be at EOF
+        self.simple_buffer.fill()
+        self.assertTrue(self.simple_buffer.eof)
 
     # Read Tests
 
@@ -102,7 +80,7 @@ class TestSimpleBuffer(unittest.TestCase):
 
         # Should read all bytes and leave the buffer empty
         self.assertEqual(result, b"chunk1chunk2")
-        self.assertEqual(len(self.simple_buffer._buffer), 0)
+        self.assertEqual(len(self.simple_buffer), 0)
 
     def test_read_more_than_buffer(self):
         """
@@ -115,7 +93,7 @@ class TestSimpleBuffer(unittest.TestCase):
 
         # Should read all bytes and leave the buffer empty
         self.assertEqual(result, b"chunk1chunk2")
-        self.assertEqual(len(self.simple_buffer._buffer), 0)
+        self.assertEqual(len(self.simple_buffer), 0)
 
     def test_read_fixed_empty_buffer(self):
         """
@@ -125,7 +103,7 @@ class TestSimpleBuffer(unittest.TestCase):
 
         # Should return an empty byte string
         self.assertEqual(result, b"")
-        self.assertEqual(len(self.simple_buffer._buffer), 0)
+        self.assertEqual(len(self.simple_buffer), 0)
 
     def test_read_all_empty_buffer(self):
         """
@@ -135,50 +113,50 @@ class TestSimpleBuffer(unittest.TestCase):
 
         # Should return an empty byte string
         self.assertEqual(result, b"")
-        self.assertEqual(len(self.simple_buffer._buffer), 0)
+        self.assertEqual(len(self.simple_buffer), 0)
 
     # Fill Tests
 
     def test_fill_buffer_until_eof(self):
         """
-        Test filling the buffer with data from the content iterator until the iterator
-        is exhausted.
+        Test filling the buffer until EOF is reached with data that fits within the buffer.
         """
-        # Simulate the content iterator returning two chunks
+        # Simulate the content iterator returning two chunks, totaling less than the buffer size
         self.simple_buffer._chunk_iterator = iter([b"chunk1", b"chunk2"])
+
+        self.simple_buffer._buffer_size = (
+            15  # Set buffer size to 15 bytes (larger than total data)
+        )
 
         # Fill the buffer
         self.simple_buffer.fill()
 
-        # Buffer should be filled with the two chunks
+        # Buffer should be filled with both chunks, but not exceed the buffer size (15 bytes)
         self.assertEqual(self.simple_buffer._buffer, b"chunk1chunk2")
 
-    def test_fill_buffer_more_than_available(self):
+        # Ensure the buffer is at EOF
+        self.assertTrue(self.simple_buffer.eof)
+
+    def test_fill_buffer_up_to_buffer_size(self):
         """
-        Test filling the buffer with more data than available from the content iterator
-        returns what is available.
+        Test that the buffer fills to the buffer size and no more.
         """
-        # Simulate the content iterator returning two chunks
-        self.simple_buffer._chunk_iterator = iter([b"chunk1", b"chunk2"])
+        # Set the buffer size to 15 bytes
+        self.simple_buffer._buffer_size = 15
+
+        self.simple_buffer._chunk_iterator = iter(
+            [b"chunk1", b"chunk2", b"chunk3", b"chunk4"]
+        )
 
         # Fill the buffer
-        self.simple_buffer.fill(20)  # More than is available
+        self.simple_buffer.fill()
 
-        # Buffer should be filled with the two chunks that are available
-        self.assertEqual(self.simple_buffer._buffer, b"chunk1chunk2")
+        # The buffer should only be filled to the buffer size
+        self.assertEqual(self.simple_buffer._buffer, b"chunk1chunk2chunk3")
+        self.assertEqual(len(self.simple_buffer), 18)
 
-    def test_fill_buffer(self):
-        """
-        Test filling the buffer with fixed bytes from the content iterator.
-        """
-        # Simulate the content iterator returning two chunks
-        self.simple_buffer._chunk_iterator = iter([b"chunk1", b"chunk2"])
-
-        # Fill the buffer
-        self.simple_buffer.fill(3)
-
-        # Buffer should be filled with one chunk only
-        self.assertEqual(self.simple_buffer._buffer, b"chunk1")
+        # Ensure the buffer is not at EOF
+        self.assertFalse(self.simple_buffer.eof)
 
     # Resume Tests
 
@@ -190,15 +168,16 @@ class TestSimpleBuffer(unittest.TestCase):
 
         # Attempt to initialize the buffer, which should raise an ObjectFileStreamError due to the connection failure
         with self.assertRaises(ObjectFileStreamError):
-            SimpleBuffer(mock_content_iterator, max_resume=2)
+            SimpleBuffer(mock_content_iterator, max_resume=Mock(), buffer_size=Mock())
 
     def test_mid_fill_raises_stream_error(self):
         """Test that SimpleBuffer raises ObjectFileStreamError if no stream can be established mid-fill."""
         # Simulate the first iterator working and the second failing
+        data = b"chunk1"
         stream_creation_err = Exception("Can't connect to AIS")
-        bad_iterator = BadContentIterator(
-            data=b"some data", fail_on_read=2
-        ).iter_from_position(0)
+        bad_iterator = BadContentIterator(data=data, fail_on_read=2).iter_from_position(
+            0
+        )
 
         # Mock the content iterator to return a valid iterator first and then simulate connection failure
         mock_content_iterator = Mock(spec=ContentIterator)
@@ -207,54 +186,60 @@ class TestSimpleBuffer(unittest.TestCase):
             stream_creation_err,  # Failure after retry (on the second attempt)
         ]
 
-        # Initialize the SimpleBuffer with the mock content iterator
-        buffer = SimpleBuffer(mock_content_iterator, max_resume=2)
+        # Set a large buffer size so it doesn't affect the test logic
+        self.simple_buffer._content_iterator = mock_content_iterator
+        self.simple_buffer._chunk_iterator = (
+            self.simple_buffer._content_iterator.iter_from_position(0)
+        )
+        self.simple_buffer._buffer_size = len(data) * 2
+        self.simple_buffer._max_resume = 2
 
         with self.assertRaises(ObjectFileStreamError):
-            buffer.fill()
+            self.simple_buffer.fill()
 
-    def test_fill_all_success_after_retries(self):
+        # Ensure the buffer is not at EOF
+        self.assertFalse(self.simple_buffer.eof)
+
+    def test_fill_success_after_retries(self):
         """Test that SimpleBuffer retries and succeeds after intermittent ChunkedEncodingError."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        buffer = SimpleBuffer(mock_reader, max_resume=4)
+        # Simulate content iterator returning chunks with intermittent failures
+        data = b"chunk1chunk2chunk3chunk4"
+        bad_iterator = BadContentIterator(data=data, fail_on_read=2, chunk_size=6)
 
-        # Try to fill the buffer with the entire data
-        buffer.fill()
+        # Set a large buffer size so it doesn't affect the test logic
+        self.simple_buffer._content_iterator = bad_iterator
+        self.simple_buffer._chunk_iterator = (
+            self.simple_buffer._content_iterator.iter_from_position(0)
+        )
+        self.simple_buffer._buffer_size = len(data) * 2
+        self.simple_buffer._max_resume = 4
 
-        # Ensure the buffer was correctly filled after retries
-        result = buffer.read(DEFAULT_CHUNK_SIZE * 4)
-        self.assertEqual(result, data)
+        # Try to fill the buffer with the entire data (retries will be needed)
+        self.simple_buffer.fill()
 
-    def test_fill_all_fails_after_max_retries(self):
+        # The result should match the original data
+        self.assertEqual(bytes(self.simple_buffer._buffer), data)
+
+        # Ensure the buffer is at EOF
+        self.assertTrue(self.simple_buffer.eof)
+
+    def test_fill_fails_after_max_retries(self):
         """Test that SimpleBuffer gives up after exceeding max retry attempts for fill."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        buffer = SimpleBuffer(mock_reader, max_resume=2)
+        # Simulate content iterator returning chunks with intermittent failures
+        data = b"chunk1chunk2chunk3chunk4"
+        bad_iterator = BadContentIterator(data=data, fail_on_read=2, chunk_size=6)
+
+        # Set a large buffer size so it doesn't affect the test logic
+        self.simple_buffer._content_iterator = bad_iterator
+        self.simple_buffer._chunk_iterator = (
+            self.simple_buffer._content_iterator.iter_from_position(0)
+        )
+        self.simple_buffer._buffer_size = len(data) * 2
+        self.simple_buffer._max_resume = 2
 
         # Test that fill fails after 2 retry attempts
         with self.assertRaises(ObjectFileMaxResumeError):
-            buffer.fill()
+            self.simple_buffer.fill()
 
-    def test_fill_fixed_success_after_retries(self):
-        """Test that SimpleBuffer retries and succeeds for fixed-size fill after intermittent ChunkedEncodingError."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        buffer = SimpleBuffer(mock_reader, max_resume=4)
-
-        # Attempt to fill the buffer with a fixed size
-        buffer.fill(size=DEFAULT_CHUNK_SIZE * 4)
-
-        # Ensure the buffer was correctly filled after retries
-        result = buffer.read(DEFAULT_CHUNK_SIZE * 4)
-        self.assertEqual(result, data)
-
-    def test_fill_fixed_fails_after_max_retries(self):
-        """Test that SimpleBuffer gives up after exceeding max retry attempts for fixed-size fill."""
-        data = os.urandom(DEFAULT_CHUNK_SIZE * 4)
-        mock_reader = BadContentIterator(data=data, fail_on_read=2)
-        buffer = SimpleBuffer(mock_reader, max_resume=2)
-
-        # Test that fill fails after 2 retry attempts
-        with self.assertRaises(ObjectFileMaxResumeError):
-            buffer.fill(size=DEFAULT_CHUNK_SIZE * 4)
+        # Ensure the buffer is not at EOF
+        self.assertFalse(self.simple_buffer.eof)

@@ -3,9 +3,8 @@
 #
 
 import requests
-
 from aistore.sdk.obj.content_iterator import ContentIterator
-from aistore.sdk.obj.obj_file.utils import reset_iterator, increment_resume
+from aistore.sdk.obj.obj_file.utils import handle_chunked_encoding_error, reset_iterator
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -16,7 +15,9 @@ class SimpleBuffer:
     A buffer for handling chunked streamed data with the ability to resume from the last known position.
     """
 
-    def __init__(self, content_iterator: ContentIterator, max_resume: int):
+    def __init__(
+        self, content_iterator: ContentIterator, max_resume: int, buffer_size: int
+    ):
         self._content_iterator = content_iterator
         self._resume_position = 0
         self._chunk_iterator = reset_iterator(
@@ -25,6 +26,16 @@ class SimpleBuffer:
         self._max_resume = max_resume
         self._resume_total = 0
         self._buffer = bytearray()
+        self._buffer_size = buffer_size
+        self._eof = False
+
+    @property
+    def eof(self) -> bool:
+        """The end-of-file status of the content iterator."""
+        return self._eof
+
+    def __len__(self) -> int:
+        return len(self._buffer)
 
     def read(self, size: int = -1) -> bytes:
         """
@@ -46,13 +57,9 @@ class SimpleBuffer:
         self._buffer = self._buffer[size:]
         return bytes(retval)
 
-    def fill(self, size: int = -1) -> None:
+    def fill(self) -> None:
         """
-        Fill the buffer with chunks up to the specified size or until the stream is exhausted.
-
-        Args:
-            size (int, optional): The target size to fill the buffer up to. Default is -1
-                                  (until stream is exhausted).
+        Fill the buffer with chunks up to the buffer size or until the stream is exhausted.
 
         Raises:
             ObjectFileStreamError if a connection cannot be made.
@@ -60,23 +67,23 @@ class SimpleBuffer:
         """
         while True:
             try:
-                while size == -1 or len(self._buffer) < size:
+                # Keep filling the buffer until it reaches the buffer size or stream ends
+                while len(self._buffer) < self._buffer_size:
                     chunk = next(self._chunk_iterator)
                     self._buffer.extend(chunk)
                     self._resume_position += len(chunk)
                 return
             except StopIteration:
+                # No more data in the stream (EOF)
+                self._eof = True
                 return
             except requests.exceptions.ChunkedEncodingError as err:
-                self._resume_total = increment_resume(
-                    self._resume_total, self._max_resume, err
-                )
-                logger.warning(
-                    "Chunked encoding error (%s), retrying %d/%d",
-                    err,
-                    self._resume_total,
-                    self._max_resume,
-                )
-                self._chunk_iterator = reset_iterator(
-                    self._content_iterator, self._resume_position
+                self._chunk_iterator, self._resume_total = (
+                    handle_chunked_encoding_error(
+                        self._content_iterator,
+                        self._resume_position,
+                        self._resume_total,
+                        self._max_resume,
+                        err,
+                    )
                 )

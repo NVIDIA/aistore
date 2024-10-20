@@ -4,13 +4,71 @@ import shutil
 import string
 import tarfile
 import io
+from itertools import product
 from pathlib import Path
+from unittest.mock import Mock
 
 from typing import Dict, List
+from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk import Client
-from aistore.sdk.const import UTF_ENCODING
+from aistore.sdk.const import DEFAULT_CHUNK_SIZE, UTF_ENCODING
 from aistore.sdk.provider import Provider
+from aistore.sdk.obj.content_iterator import ContentIterator
+
+
+# pylint: disable=too-few-public-methods
+class BadObjectStream(io.BytesIO):
+    """
+    Simulates a stream that fails with ChunkedEncodingError intermittently every `fail_on_read`
+    chunks read.
+    """
+
+    def __init__(self, *args, fail_on_read=2, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.read_count = 0
+        self.fail_on_read = fail_on_read
+
+    def read(self, size=-1):
+        """Overrides `BytesIO.read` to simulate failure after a specific number of reads."""
+        self.read_count += 1
+        if self.read_count == self.fail_on_read:
+            raise ChunkedEncodingError("Simulated ChunkedEncodingError")
+        return super().read(size)
+
+
+# pylint: disable=too-few-public-methods
+class BadContentIterator(ContentIterator):
+    """
+    Simulates an ContentIterator that streams data using BadObjectStream that fails with ChunksEncoding
+    error every `fail_on_read` chunks read.
+
+    This class extends `ContentIterator` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
+    parent class `ContentIterator`.
+
+    The streaming starts from a specific position (`start_position`), allowing the object to resume
+    reading from that point if necessary.
+    """
+
+    def __init__(self, data=None, fail_on_read=2, chunk_size=DEFAULT_CHUNK_SIZE):
+        super().__init__(client=Mock(), chunk_size=chunk_size)
+        self.data = data
+        self.fail_on_read = fail_on_read
+
+    def iter_from_position(self, start_position=0):
+        """Simulate streaming the object from the specified position `start_position`."""
+
+        def iterator():
+            stream = BadObjectStream(
+                self.data[start_position:], fail_on_read=self.fail_on_read
+            )
+            while True:
+                chunk = stream.read(self._chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+        return iterator()
 
 
 # pylint: disable=unused-variable
@@ -71,6 +129,18 @@ def test_cases(*args):
             for arg in args:
                 with self.subTest(arg=arg):
                     func(self, arg, *inner_args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def test_cases_combinations(*args_list):
+    def decorator(func):
+        def wrapper(self):
+            for args in product(*args_list):
+                with self.subTest(args=args):
+                    func(self, *args)
 
         return wrapper
 
