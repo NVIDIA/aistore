@@ -40,6 +40,12 @@ const (
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 
+const (
+	Throttle1ms   = time.Millisecond
+	Throttle10ms  = 10 * time.Millisecond
+	Throttle100ms = 100 * time.Millisecond
+)
+
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
 // - each mountpath is, simply, a local directory that is serviced by a local filesystem;
@@ -578,6 +584,7 @@ func TestNew(iostater ios.IOS) {
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
 
+// max disk utilization across mountpaths
 func GetMaxUtil() (util int64) {
 	var (
 		utils = GetAllMpathUtils()

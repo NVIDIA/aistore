@@ -55,7 +55,7 @@ func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
 func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
 	if err := bck.Init(t.owner.bmd); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
-			t.writeErr(w, r, err, Silent)
+			t.writeErr(w, r, err, 0, Silent)
 			return
 		}
 	}

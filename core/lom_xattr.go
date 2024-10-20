@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -245,25 +244,6 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 	}
 	g.smm.Free(buf)
 	return
-}
-
-// NOTE: not clearing dirty flag as the caller will uncache anyway
-func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
-	if err := lom.flushAtime(atime); err != nil {
-		return
-	}
-	if !md.isDirty() || lom.WritePolicy() == apc.WriteNever {
-		return
-	}
-	lom.md = *md
-	if err := lom.syncMetaWithCopies(); err != nil {
-		return
-	}
-	buf := lom.pack()
-	if err := fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		T.FSHC(err, lom.Mountpath(), lom.FQN)
-	}
-	g.smm.Free(buf)
 }
 
 func (lom *LOM) flushAtime(atime time.Time) error {

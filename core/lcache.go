@@ -5,77 +5,137 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/sys"
 )
 
+// throttle tunables
 const (
-	oomEvictAtime = time.Minute * 5  // OOM
-	mpeEvictAtime = time.Minute * 20 // extreme
-	mphEvictAtime = time.Hour        // high
-	mpnEvictAtime = 8 * time.Hour    // low
+	throttleBatch = 0xf // each goroutine independently
 
-	iniEvictAtime = mpnEvictAtime / 2 // initial
-	maxEvictAtime = mpnEvictAtime * 2 // maximum
+	skipEvictThreashold = 20 // likely not running when above
+	maxEvictThreashold  = 60 // never running when above
+
+	maxTimeWithNoEvictions = 16 * time.Hour
 )
 
-type lchk struct {
-	cache *sync.Map
-	// runtime
-	now      time.Time
-	d        time.Duration
-	totalCnt int64
-	// stats
-	evictedCnt   int64
-	flushColdCnt int64
-	// single entry
-	running atomic.Bool
+type (
+	// g.lchk
+	lchk struct {
+		timeout time.Duration
+		last    time.Time
+		total   atomic.Int64
+		rc      atomic.Int32
+		running atomic.Bool
+	}
+	// HK flush & evict
+	evct struct {
+		parent *lchk
+		mi     *fs.Mountpath
+		wg     *sync.WaitGroup
+		now    time.Time
+		d      time.Duration
+		pct    int
+		// runtime
+		cache   *sync.Map
+		evicted int64
+	}
+	// termination
+	term struct {
+		mi *fs.Mountpath
+		wg *sync.WaitGroup
+	}
+)
+
+// g.lchk
+func (lchk *lchk) init(timeout time.Duration) {
+	lchk.running.Store(false)
+	lchk.timeout = timeout
+	lchk.last = time.Now()
+	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, timeout)
 }
 
-func regLomCacheWithHK() {
-	g.lchk.running.Store(false)
-	hk.Reg("lcache"+hk.NameSuffix, g.lchk.housekeep, iniEvictAtime)
-}
+// evict bucket
+// TODO: (1) consider dropping cache when > maxEvictThreashold; (2) take in account time spent
+func UncacheBck(wg *sync.WaitGroup, bcks ...*cmn.Bck) bool {
+	g.lchk.rc.Inc()
+	defer g.lchk.rc.Dec()
 
-//
-// evictions, mountpaths
-//
+	// mem pressure
+	if g.lchk.mempDropAll() {
+		return true // dropped all caches, nothing to do
+	}
 
-func UncacheBck(b *meta.Bck) {
 	var (
-		caches = lomCaches()
-		n      = max(sys.NumCPU()/4, 4)
-		wg     = cos.NewLimitedWaitGroup(n, len(caches))
-		rmb    = (*cmn.Bck)(b)
+		avail = fs.GetAvail()
+		pct   = _throttlePct()
 	)
-	for _, lcache := range caches {
-		wg.Add(1)
-		go func(cache *sync.Map) {
-			cache.Range(func(hkey, value any) bool {
-				lmd := value.(*lmeta)
-				bck, _ := cmn.ParseUname(*lmd.uname)
-				if bck.Equal(rmb) {
-					cache.Delete(hkey)
+	if pct > maxEvictThreashold {
+		nlog.Warningln(bcks[0].String(), "throttle [", pct, "greater than max", maxEvictThreashold, "]")
+	} else {
+		nlog.Infoln(bcks[0].String(), "(-), throttle:", pct)
+	}
+	for _, mi := range avail {
+		if wg != nil {
+			wg.Add(1)
+		}
+		go _uncacheBck(mi, wg, pct, bcks)
+	}
+	return false
+}
+
+func _uncacheBck(mi *fs.Mountpath, wg *sync.WaitGroup, pct int /*throttle pct*/, bcks []*cmn.Bck) {
+	defer wg.Done()
+
+	var nd int
+	for idx := range cos.MultiHashMapCount {
+		if !mi.IsAvail() {
+			return
+		}
+		cache := mi.LomCaches.Get(idx)
+		cache.Range(func(hkey, value any) bool {
+			lmd := value.(*lmeta)
+			if lmd.uname == nil {
+				return true
+			}
+			bck, _ := cmn.ParseUname(*lmd.uname)
+			for _, rmb := range bcks {
+				if !bck.Equal(rmb) {
+					continue
+				}
+				lmd2, _ := cache.LoadAndDelete(hkey)
+				if lmd2 == lmd {
 					*lmd = lom0.md
 				}
-				return true
-			})
-			wg.Done()
-		}(lcache)
+				// throttle
+				nd++
+				if nd&throttleBatch == throttleBatch {
+					// compare with _throttle(evct.pct)
+					// (caller's waiting on wg)
+					if pct >= maxEvictThreashold {
+						time.Sleep(fs.Throttle10ms)
+					} else {
+						runtime.Gosched()
+					}
+				}
+				break
+			}
+			return true
+		})
 	}
-	wg.Wait()
 }
 
+// evict mountpath (see also: mempDropAll)
 func UncacheMountpath(mi *fs.Mountpath) {
 	for idx := range cos.MultiHashMapCount {
 		cache := mi.LomCaches.Get(idx)
@@ -85,130 +145,279 @@ func UncacheMountpath(mi *fs.Mountpath) {
 
 func lcacheIdx(digest uint64) int { return int(digest & cos.MultiHashMapMask) }
 
-//////////
-// lchk //
-//////////
+//
+// term
+//
 
-func (lchk *lchk) housekeep(int64) time.Duration {
-	d, tag := lchk.mp()
-	if !lchk.running.CAS(false, true) {
-		nlog.Infoln("running now; memory pressure:", tag, "next HK:", d)
-		return d
-	}
-
-	go func(d time.Duration) {
-		lchk.evictOlder(d)
-		lchk.running.Store(false)
-	}(d)
-
-	return d
-}
-
-const termDuration = time.Duration(-1)
-
-func (lchk *lchk) terminating() bool { return lchk.d == termDuration }
-
-func (*lchk) mp() (d time.Duration, tag string) {
-	p := g.pmm.Pressure()
-	switch p {
-	case memsys.OOM:
-		d = oomEvictAtime
-		tag = "OOM"
-	case memsys.PressureExtreme:
-		d = mpeEvictAtime
-		tag = "extreme"
-	case memsys.PressureHigh:
-		d = mphEvictAtime
-		tag = "high"
-	default:
-		d = mpnEvictAtime
-		tag = "low"
-	}
-	return
-}
-
-func (lchk *lchk) evictOlder(d time.Duration) {
-	lchk.now = time.Now()
-	lchk.d = d
-
-	lchk.evictedCnt, lchk.flushColdCnt, lchk.totalCnt = 0, 0, 0
-
-	// single-threaded: one cache at a time
-	caches := lomCaches()
-	if lchk.terminating() {
-		nlog.Infoln("terminating -->")
-		for _, cache := range caches {
-			lchk.cache = cache
-			cache.Range(lchk.fterm)
+func (lchk *lchk) term() {
+	var (
+		avail = fs.GetAvail()
+		wg    = &sync.WaitGroup{}
+	)
+	lchk.rc.Inc()
+	defer lchk.rc.Dec()
+	for _, mi := range avail {
+		wg.Add(1)
+		term := &term{
+			mi: mi,
+			wg: wg,
 		}
-		return
+		go term.do()
 	}
-
-	for _, cache := range caches {
-		lchk.cache = cache
-		cache.Range(lchk.frun)
-	}
-
-	_, tag := lchk.mp()
-	nlog.Infoln("post-evict memory pressure:", tag, "total:", lchk.totalCnt, "evicted:", lchk.evictedCnt)
-
-	// stats
-	g.tstats.Add(LcacheEvictedCount, lchk.evictedCnt)
-	g.tstats.Add(LcacheFlushColdCount, lchk.flushColdCnt)
+	wg.Wait()
 }
 
-func (lchk *lchk) fterm(_, value any) bool {
+func (term *term) do() {
+	defer term.wg.Done()
+	for idx := range cos.MultiHashMapCount {
+		cache := term.mi.LomCaches.Get(idx)
+		cache.Range(term.f)
+	}
+}
+
+func (*term) f(_, value any) bool {
 	md := value.(*lmeta)
+	if md.uname == nil {
+		return true
+	}
+	lif := LIF{uname: *md.uname, lid: md.lid}
+	lom, err := lif.LOM()
+	if err != nil {
+		return true
+	}
+	if lom.WritePolicy() == apc.WriteNever {
+		return true
+	}
 	if md.Atime < 0 {
 		// prefetched, not yet accessed
-		lchk.flush(md, time.Unix(0, -md.Atime))
+		mdTime := -md.Atime
+		_flushAtime(md, time.Unix(0, mdTime), mdTime)
 		return true
 	}
 	if md.isDirty() || md.atimefs != uint64(md.Atime) {
-		lchk.flush(md, time.Unix(0, md.Atime))
+		_flushAtime(md, time.Unix(0, md.Atime), md.Atime)
 	}
 	return true
 }
 
-func (lchk *lchk) frun(hkey, value any) bool {
-	var (
-		md     = value.(*lmeta)
-		mdTime = md.Atime
-	)
-	lchk.totalCnt++
+//
+// HK evict
+//
 
+func (lchk *lchk) housekeep(int64) time.Duration {
+	// refresh
+	config := cmn.GCO.Get()
+	lchk.timeout = config.Timeout.ObjectMD.D()
+
+	// concurrent term, uncache-bck, etc.
+	rc := lchk.rc.Load()
+	if rc > 0 {
+		nlog.Warningln("(not) running now, rc:", rc)
+		return lchk.timeout
+	}
+
+	// mem pressure
+	if lchk.mempDropAll() {
+		return lchk.timeout
+	}
+
+	// load, utilization
+	pct := _throttlePct()
+	if pct > maxEvictThreashold {
+		nlog.Warningln("not running: throttle [", pct, "greater than max", maxEvictThreashold, "]")
+		return min(lchk.timeout>>1, time.Hour)
+	}
+	now := time.Now()
+	if pct > skipEvictThreashold {
+		if now.Sub(lchk.last) < min(maxTimeWithNoEvictions, max(lchk.timeout, time.Hour)*8) {
+			nlog.Warningln("not running: throttle [", pct, "greater than", skipEvictThreashold, "]")
+			return min(lchk.timeout>>1, time.Hour)
+		}
+	}
+
+	// still running?
+	if !lchk.running.CAS(false, true) {
+		nlog.Warningln("(not) running now")
+		return lchk.timeout
+	}
+
+	// finally, run
+	nlog.Infoln("hk begin")
+	lchk.last = now
+	go lchk.evict(config.Timeout.ObjectMD.D(), now, pct)
+
+	return lchk.timeout
+}
+
+func (lchk *lchk) mempDropAll() bool /*dropped*/ {
+	p := g.pmm.Pressure()
+	switch p {
+	case memsys.OOM, memsys.PressureExtreme:
+		nlog.ErrorDepth(1, "oom [", p, "] - dropping all caches")
+		lchk._drop()
+		lchk.last = time.Now()
+		return true
+	case memsys.PressureHigh:
+		nlog.Warningln("high memory pressure")
+	}
+	return false
+}
+
+func (*lchk) _drop() {
+	avail := fs.GetAvail()
+	for _, mi := range avail {
+		UncacheMountpath(mi)
+	}
+}
+
+func (lchk *lchk) evict(d time.Duration, now time.Time, pct int) {
+	defer lchk.running.Store(false)
+	var (
+		avail   = fs.GetAvail()
+		wg      = &sync.WaitGroup{}
+		evicted = g.tstats.Get(LcacheEvictedCount)
+	)
+	lchk.total.Store(0)
+	for _, mi := range avail {
+		wg.Add(1)
+		evct := &evct{
+			parent: lchk,
+			mi:     mi,
+			wg:     wg,
+			now:    now,
+			d:      d,
+			pct:    pct,
+		}
+		go evct.do()
+	}
+	wg.Wait()
+	evicted = g.tstats.Get(LcacheEvictedCount) - evicted
+	nlog.Infoln("hk done:", lchk.total.Load(), evicted)
+}
+
+func (evct *evct) do() {
+	defer evct.wg.Done()
+	for idx := range cos.MultiHashMapCount {
+		if !evct.mi.IsAvail() {
+			return
+		}
+		cache := evct.mi.LomCaches.Get(idx)
+		evct.cache = cache
+		cache.Range(evct.f)
+		if evct.parent.rc.Load() > 0 {
+			break
+		}
+	}
+}
+
+func (evct *evct) f(hkey, value any) bool {
+	evct.parent.total.Inc()
+
+	md := value.(*lmeta)
+	mdTime := md.Atime
 	if mdTime < 0 {
 		// prefetched, not yet accessed
 		mdTime = -mdTime
 	}
+
 	atime := time.Unix(0, mdTime)
-	elapsed := lchk.now.Sub(atime)
-	if elapsed < lchk.d {
-		return true
-	}
-	if md.isDirty() {
-		if lchk.d > mphEvictAtime && elapsed < maxEvictAtime {
-			return true
-		}
-		lchk.flush(md, atime)
-	} else if md.atimefs != uint64(md.Atime) {
-		lchk.flush(md, atime)
+	elapsed := evct.now.Sub(atime)
+	if elapsed < evct.d {
+		return evct.parent.rc.Load() == 0
 	}
 
-	lchk.cache.Delete(hkey)
-	*md = lom0.md // zero out
-	lchk.evictedCnt++
-	return true
+	// flush
+	if md.isDirty() || md.atimefs != uint64(md.Atime) {
+		_flushAtime(md, atime, mdTime)
+	}
+
+	// evict
+	lmd2, _ := evct.cache.LoadAndDelete(hkey)
+	if lmd2 == md {
+		*md = lom0.md // zero out
+	}
+	g.tstats.Inc(LcacheEvictedCount)
+
+	// throttle
+	evct.evicted++
+	if evct.evicted&throttleBatch == throttleBatch {
+		_throttle(evct.pct)
+	}
+
+	return evct.parent.rc.Load() == 0
 }
 
-func (lchk *lchk) flush(md *lmeta, atime time.Time) {
+func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
+	if md.uname == nil {
+		return
+	}
 	lif := LIF{uname: *md.uname, lid: md.lid}
 	lom, err := lif.LOM()
-	if err == nil {
-		lom.Lock(true)
-		lom.flushCold(md, atime)
-		lom.Unlock(true)
-		FreeLOM(lom)
-		lchk.flushColdCnt++
+	if err != nil {
+		return
+	}
+	if lom.WritePolicy() == apc.WriteNever {
+		return
+	}
+	if err = lom.flushAtime(atime); err != nil {
+		g.tstats.Inc(LcacheErrCount)
+		T.FSHC(err, lom.Mountpath(), lom.FQN)
+		return
+	}
+
+	// stats
+	g.tstats.Inc(LcacheFlushColdCount)
+
+	if !md.isDirty() {
+		return
+	}
+
+	// special [dirty] case: clear and flush
+	md.Atime = mdTime
+	md.atimefs = uint64(mdTime)
+	lom.md = *md
+
+	buf := lom.pack()
+	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+		T.FSHC(err, lom.Mountpath(), lom.FQN)
+	} else {
+		for copyFQN := range lom.md.copies {
+			if copyFQN == lom.FQN {
+				continue
+			}
+			if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
+				g.tstats.Inc(LcacheErrCount)
+				nlog.Errorln("set-xattr [", copyFQN, err, "]")
+				break
+			}
+		}
+	}
+	g.smm.Free(buf)
+	FreeLOM(lom)
+}
+
+//
+// throttle
+//
+
+func _throttlePct() int {
+	var (
+		util, lavg = T.MaxUtilLoad()
+		cpus       = runtime.NumCPU()
+		maxload    = max((cpus>>1)-(cpus>>3), 1)
+	)
+	if lavg >= float64(maxload) {
+		return 100
+	}
+	ru := cos.RatioPct(100, 2, util)
+	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
+	return int(max(ru, rl))
+}
+
+func _throttle(pct int) {
+	if pct < 10 {
+		runtime.Gosched()
+	} else {
+		time.Sleep(time.Duration(pct) * time.Millisecond)
 	}
 }

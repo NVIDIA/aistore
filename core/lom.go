@@ -43,6 +43,7 @@ const (
 	// lcache stats
 	LcacheCollisionCount = "lcache.collision.n"
 	LcacheEvictedCount   = "lcache.evicted.n"
+	LcacheErrCount       = "err.lcache.n" // errPrefix + "lcache.n"
 	LcacheFlushColdCount = "lcache.flush.cold.n"
 )
 
@@ -95,7 +96,7 @@ var (
 
 func Pinit() { bckLocker = newNameLocker() }
 
-func Tinit(t Target, tstats cos.StatsUpdater, runHK bool) {
+func Tinit(t Target, tstats cos.StatsUpdater, timeout time.Duration, runHK bool) {
 	bckLocker = newNameLocker()
 	T = t
 	{
@@ -106,7 +107,7 @@ func Tinit(t Target, tstats cos.StatsUpdater, runHK bool) {
 		g.smm = t.ByteMM()
 	}
 	if runHK {
-		regLomCacheWithHK()
+		g.lchk.init(timeout)
 	}
 	for i := range recordSepa {
 		recdupSepa[i] = recordSepa[i]
@@ -118,7 +119,7 @@ func Term() {
 	for i := 0; i < 8 && !g.lchk.running.CAS(false, true); i++ {
 		time.Sleep(sleep)
 	}
-	g.lchk.evictOlder(termDuration)
+	g.lchk.term()
 }
 
 /////////
@@ -585,22 +586,6 @@ func (lom *LOM) FromFS() error {
 
 func (lom *LOM) whingeSize(size int64) error {
 	return fmt.Errorf("errsize (%d != %d)", lom.md.Size, size)
-}
-
-func lomCaches() []*sync.Map {
-	var (
-		i         int
-		avail     = fs.GetAvail()
-		cachesCnt = len(avail) * cos.MultiHashMapCount
-		caches    = make([]*sync.Map, cachesCnt)
-	)
-	for _, mi := range avail {
-		for idx := range cos.MultiHashMapCount {
-			caches[i] = mi.LomCaches.Get(idx)
-			i++
-		}
-	}
-	return caches
 }
 
 //

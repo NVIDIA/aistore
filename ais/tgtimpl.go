@@ -33,6 +33,8 @@ func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	xreg.GetAllRunning(inout, periodic)
 }
 
+// - max disk utilization across mountpaths
+// - max (1 minute, 5 minute) load average
 func (t *target) MaxUtilLoad() (util int64, load float64) {
 	util, load = t.htrun.MaxUtilLoad()
 	return max(util, fs.GetMaxUtil()), load

@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	MultiHashMapCount = 0x80 // m.b. a power of two
+	MultiHashMapCount = 0x40 // m.b. a power of two
 	MultiHashMapMask  = MultiHashMapCount - 1
 )
 

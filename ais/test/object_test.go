@@ -202,6 +202,11 @@ func TestHttpProviderObjectGet(t *testing.T) {
 	getArgs.Query = make(url.Values, 1)
 	getArgs.Query.Set(apc.QparamOrigURL, httpObjectURL)
 	_, err := api.GetObject(baseParams, hbo.Bck, httpObjectName, &getArgs)
+
+	if strings.Contains(err.Error(), "backend is missing in the cluster configuration") {
+		t.Skipf("test %q requires 'ht://' backend ('aisnode' build with build tag 'ht')", t.Name())
+	}
+
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, strings.TrimSpace(w.String()) == httpObjectOutput, "bad content (expected:%s got:%s)",
 		httpObjectOutput, w.String())

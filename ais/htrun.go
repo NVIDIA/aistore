@@ -91,13 +91,14 @@ type htrun struct {
 // interface guard
 var _ core.Node = (*htrun)(nil)
 
+// return max(1 minute, 5 minute) load average
 func (*htrun) MaxUtilLoad() (_ int64, load float64) {
 	avg, err := sys.LoadAverage()
 	if err != nil {
 		nlog.Errorln(err)
 		return 100, 0
 	}
-	return 0, max(avg.One, avg.Five) // NOTE: (decision)
+	return 0, max(avg.One, avg.Five)
 }
 
 func (h *htrun) Snode() *meta.Snode { return h.si }

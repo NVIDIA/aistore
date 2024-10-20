@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -365,23 +366,30 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	switch msg.Action {
 	case apc.ActEvictRemoteBck:
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
-		if keepMD {
-			nlp := newBckNLP(apireq.bck)
-			nlp.Lock()
-			defer nlp.Unlock()
+		if !keepMD {
+			t.writeErrAct(w, r, apc.ActEvictRemoteBck) // (instead, expecting updated BMD from primary)
+			return
+		}
+		// arrived via p.destroyBucketData()
+		var (
+			wg  = &sync.WaitGroup{}
+			nlp = newBckNLP(apireq.bck)
+		)
+		nlp.Lock()
+		defer nlp.Unlock()
+		defer wg.Wait()
 
-			core.UncacheBck(apireq.bck)
-			err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-			// Recreate bucket directories (now empty), since bck is still in BMD
-			errs := fs.CreateBucket(apireq.bck.Bucket(), false /*nilbmd*/)
-			if len(errs) > 0 {
-				debug.AssertNoErr(errs[0])
-				t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
-			}
+		core.UncacheBck(wg, apireq.bck.Bucket())
+		err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		// Recreate bucket directories (now empty), since bck is still in BMD
+		errs := fs.CreateBucket(apireq.bck.Bucket(), false /*nilbmd*/)
+		if len(errs) > 0 {
+			debug.AssertNoErr(errs[0])
+			t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
 		}
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
 		lrMsg := &apc.ListRange{}

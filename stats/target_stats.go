@@ -92,6 +92,7 @@ const (
 
 	LcacheCollisionCount = core.LcacheCollisionCount
 	LcacheEvictedCount   = core.LcacheEvictedCount
+	LcacheErrCount       = core.LcacheErrCount
 	LcacheFlushColdCount = core.LcacheFlushColdCount
 
 	// variable label used for prometheus disk metrics
@@ -371,6 +372,12 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, IOErrDeleteCount, KindCounter,
 		&Extra{
 			Help: "DELETE(object): number of I/O errors _not_ including remote backend and network errors",
+		},
+	)
+
+	r.reg(snode, LcacheErrCount, KindCounter,
+		&Extra{
+			Help: "number of LOM flush errors (core, internal)",
 		},
 	)
 

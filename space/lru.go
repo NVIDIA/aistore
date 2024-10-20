@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -415,15 +414,16 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 	if u := j.mi.GetUtil(); u >= 0 && u < j.config.Disk.DiskUtilLowWM {
 		return
 	}
-	// throttle self
-	ratioCapacity := cos.Ratio(j.config.Space.HighWM, j.config.Space.LowWM, usedPct)
-	curr := fs.GetMpathUtil(j.mi.Path)
-	ratioUtilization := cos.Ratio(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
-	if ratioUtilization > ratioCapacity {
+	var (
+		ratioCap  = cos.RatioPct(j.config.Space.HighWM, j.config.Space.LowWM, usedPct)
+		curr      = fs.GetMpathUtil(j.mi.Path)
+		ratioUtil = cos.RatioPct(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
+	)
+	if ratioUtil > ratioCap {
 		if usedPct < (j.config.Space.LowWM+j.config.Space.HighWM)/2 {
 			j.throttle = true
 		}
-		time.Sleep(mpather.ThrottleMaxDur)
+		time.Sleep(fs.Throttle100ms)
 		err = j.yieldTerm()
 	}
 	return
@@ -469,7 +469,7 @@ func (j *lruJ) yieldTerm() error {
 		return cmn.NewErrAborted(xlru.Name(), "", nil)
 	default:
 		if j.throttle {
-			time.Sleep(mpather.ThrottleMinDur)
+			time.Sleep(fs.Throttle1ms)
 		}
 		break
 	}

@@ -161,6 +161,9 @@ func (r *ListObjectResult) Add(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) {
 }
 
 func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
+	// [NOTE]: as we do not track mtime we make a debatable choice here to "prefer" atime
+	// even when mtime (a.k.a. "LastModified") exists. Which is not always true (e.g.,
+	// when using S3 compatibility API to access non-S3 buckets)
 	oi = &ObjInfo{Key: entry.Name, Size: entry.Size, LastModified: entry.Atime}
 	if oi.LastModified == "" && entry.Custom != "" {
 		oi.LastModified = cmn.S2CustomVal(entry.Custom, cmn.LastModified)

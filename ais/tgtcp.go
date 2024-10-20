@@ -848,20 +848,25 @@ func (f *delb) do(nbck *meta.Bck) bool {
 func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	// evict LOM cache
 	if len(rmbcks) > 0 {
+		wg := &sync.WaitGroup{}
+		bcks := make([]*cmn.Bck, 0, len(rmbcks))
+		for _, b := range rmbcks {
+			bcks = append(bcks, b.Bucket())
+		}
+		core.UncacheBck(wg, bcks...)
+
 		errV := fmt.Errorf("[post-bmd] %s %s: remove bucket%s", tag, newBMD, cos.Plural(len(rmbcks)))
 		xreg.AbortAllBuckets(errV, rmbcks...)
-		go func(bcks ...*meta.Bck) {
-			for _, b := range bcks {
-				core.UncacheBck(b)
-			}
-		}(rmbcks...)
+
+		defer wg.Wait()
 	}
+	// EC
 	if tag != bmdReg {
 		if err := ec.ECM.BMDChanged(); err != nil {
-			nlog.Errorf("Failed to initialize EC manager: %v", err)
+			nlog.Errorln("failed to initialize EC upon BMD change:", err)
 		}
 	}
-	// since some buckets may have been destroyed
+	// capacity (since some buckets may have been destroyed)
 	cs := fs.Cap()
 	if cs.Err() != nil {
 		_ = t.oos(cmn.GCO.Get())

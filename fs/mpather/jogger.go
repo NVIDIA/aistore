@@ -38,12 +38,6 @@ const (
 	Load
 )
 
-const (
-	ThrottleMinDur = time.Millisecond
-	ThrottleAvgDur = time.Millisecond * 10
-	ThrottleMaxDur = time.Millisecond * 100
-)
-
 type (
 	JgroupOpts struct {
 		onFinish              func()
@@ -455,7 +449,7 @@ func (sg *joggerSyncGroup) abortAsyncTasks() error {
 func (j *jogger) throttle() {
 	curUtil := fs.GetMpathUtil(j.mi.Path)
 	if curUtil >= j.config.Disk.DiskUtilHighWM {
-		time.Sleep(ThrottleMinDur)
+		time.Sleep(fs.Throttle1ms)
 	}
 }
 

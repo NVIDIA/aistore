@@ -4,6 +4,8 @@
  */
 package cos
 
+import "github.com/NVIDIA/aistore/cmn/debug"
+
 func DivCeil(a, b int64) int64 {
 	d, r := a/b, a%b
 	if r > 0 {
@@ -32,19 +34,8 @@ func CeilAlignInt64(val, align int64) int64 {
 	return val
 }
 
-func Ratio(high, low, curr int64) float32 {
-	Assert(high > low && high <= 100 && low > 0)
-	if curr <= low {
-		return 0
-	}
-	if curr >= high {
-		return 1
-	}
-	return float32(curr-low) / float32(high-low)
-}
-
 func RatioPct(high, low, curr int64) int64 {
-	Assert(high > low && high <= 100 && low > 0)
+	debug.Assert(high > low && low > 0)
 	if curr <= low {
 		return 0
 	}

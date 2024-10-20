@@ -31,7 +31,7 @@ var _ core.Target = (*TargetMock)(nil)
 
 func NewTarget(bo meta.Bowner) *TargetMock {
 	t := &TargetMock{BO: bo}
-	core.Tinit(t, NewStatsTracker(), false)
+	core.Tinit(t, NewStatsTracker(), time.Hour, false)
 	return t
 }
 
