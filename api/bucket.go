@@ -267,7 +267,7 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xid string, err error)
 // Erasure-code entire `bck` bucket at a given `data`:`parity` redundancy.
 // The operation requires at least (`data + `parity` + 1) storage targets in the cluster.
 // Returns xaction ID if successful, an error otherwise.
-func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int, doRecover ...bool) (xid string, err error) {
+func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int, checkAndRecover bool) (xid string, err error) {
 	bp.Method = http.MethodPost
 	// Without `string` conversion it makes base64 from []byte in `Body`.
 	ecConf := string(cos.MustMarshal(&cmn.ECConfToSet{
@@ -280,7 +280,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int, doRecover ...b
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		msg := apc.ActMsg{Action: apc.ActECEncode, Value: ecConf}
-		if len(doRecover) > 0 && doRecover[0] {
+		if checkAndRecover {
 			msg.Name = apc.ActEcRecover
 		}
 		reqParams.Body = cos.MustMarshal(msg)

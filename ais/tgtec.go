@@ -86,33 +86,30 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case apc.ActEcRecover:
 		query := r.URL.Query()
-		if isRecover := cos.IsParseBool(query.Get(apc.QparamECRecover)); !isRecover {
-			nlog.Errorf("EC: invalid request to recover an object. '%s' is not set", apc.QparamECRecover)
+		objName := query.Get(apc.QparamECObject)
+		if objName == "" {
+			err := fmt.Errorf("%s: invalid request to recover an object: name's empty", t)
+			t.writeErr(w, r, err)
 			return
 		}
-		objPath := query.Get(apc.QparamECObject)
-		if objPath == "" {
-			nlog.Errorf("EC: invalid request to recover an object. Object name(%s) is undefined", apc.QparamECRecover)
-			return
-		}
-		objName := objPath
 		lom := core.AllocLOM(objName)
-		mbck, err := newBckFromQuname(r.URL.Query(), true)
+
+		mbck, err := newBckFromQuname(query, true)
 		if err != nil {
-			nlog.Errorln("Failed to recover object:", err)
 			core.FreeLOM(lom)
+			err = fmt.Errorf("%s: %v", t, err) // FATAL/unlikely
+			t.writeErr(w, r, err)
 			return
 		}
-		bck := mbck.Clone()
-		if err := lom.InitBck(&bck); err != nil {
-			nlog.Errorln("LOM init failed:", err)
+
+		bck := mbck.Bucket()
+		if err := lom.InitBck(bck); err != nil {
 			core.FreeLOM(lom)
+			err = fmt.Errorf("%s: %v", t, err)
+			t.writeErr(w, r, err)
 			return
 		}
-		if err := ec.ECM.TryRecoverObj(lom); err != nil {
-			nlog.Errorln("Failed to recover object:", err)
-			core.FreeLOM(lom)
-		}
+		ec.ECM.TryRecoverObj(lom) // free LOM inside
 		return
 	case apc.ActEcOpen:
 		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time

@@ -2915,8 +2915,11 @@ func TestECBckEncodeRecover(t *testing.T) {
 				}
 				touched = damaged
 			}
-			xid, err := api.ECEncodeBucket(tools.BaseAPIParams(proxyURL), bck, test.data, test.parity, true)
+
+			bp := tools.BaseAPIParams(tools.RandomProxyURL())
+			xid, err := api.ECEncodeBucket(bp, bck, test.data, test.parity, true /*recover missing ...*/)
 			tassert.CheckFatal(t, err)
+
 			// First, wait for EC-encode xaction to complete
 			reqArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECEncode, Bck: bck}
 			api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)

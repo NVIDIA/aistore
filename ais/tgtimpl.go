@@ -374,7 +374,6 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode) error {
 	q := ct.Bck().NewQuery()
 	ct.Bck().AddUnameToQuery(q, apc.QparamBckTo)
-	q.Set(apc.QparamECRecover, "true")
 	q.Set(apc.QparamECObject, ct.ObjectName())
 	cargs := allocCargs()
 	{

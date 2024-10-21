@@ -146,7 +146,7 @@ const (
 const (
 	ActEcOpen    = "open-ec-streams"
 	ActEcClose   = "close-ec-streams"
-	ActEcRecover = "obj-recover"
+	ActEcRecover = "recover" // check and recover missing or corrupted EC metadata and/or slices, if any
 )
 
 // ActMsg is a JSON-formatted control structures used in a majority of API calls

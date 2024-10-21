@@ -28,10 +28,10 @@ type (
 	}
 	XactBckEncode struct {
 		xact.Base
-		bck       *meta.Bck
-		wg        *sync.WaitGroup // to wait for EC finishes all objects
-		smap      *meta.Smap
-		doRecover bool
+		bck             *meta.Bck
+		wg              *sync.WaitGroup // to wait for EC finishes all objects
+		smap            *meta.Smap
+		checkAndRecover bool
 	}
 )
 
@@ -75,8 +75,12 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *meta.Bck, uuid string, doRecover bool) (r *XactBckEncode) {
-	r = &XactBckEncode{bck: bck, wg: &sync.WaitGroup{}, smap: core.T.Sowner().Get(), doRecover: doRecover}
+func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode) {
+	r = &XactBckEncode{
+		bck:             bck,
+		wg:              &sync.WaitGroup{},
+		smap:            core.T.Sowner().Get(),
+		checkAndRecover: checkAndRecover}
 	r.InitBase(uuid, apc.ActECEncode, bck)
 	return
 }
@@ -98,15 +102,16 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	ECM.incActive(r)
 
 	ctList := []string{fs.ObjectType}
-	if r.doRecover {
-		ctList = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
-	}
 	opts := &mpather.JgroupOpts{
 		CTs:      ctList,
 		VisitObj: r.bckEncode,
-		VisitCT:  r.bckEncodeMD,
 		DoLoad:   mpather.LoadUnsafe,
 	}
+	if r.checkAndRecover {
+		opts.CTs = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
+		opts.VisitCT = r.bckEncodeMD
+	}
+
 	opts.Bck.Copy(r.bck.Bucket())
 	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
 	jg.Run()

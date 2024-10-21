@@ -595,6 +595,11 @@ var (
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Value: 2, Usage: "number of data slices", Required: true}
 	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Value: 2, Usage: "number of parity slices", Required: true}
 
+	checkAndRecoverFlag = cli.BoolFlag{
+		Name:  "recover",
+		Usage: "check and recover missing or corrupted EC metadata and/or slices, if any",
+	}
+
 	compactPropFlag = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 
 	nameOnlyFlag = cli.BoolFlag{

@@ -32,6 +32,7 @@ var (
 			dataSlicesFlag,
 			paritySlicesFlag,
 			nonverboseFlag,
+			checkAndRecoverFlag,
 		},
 	}
 
@@ -147,7 +148,7 @@ func ecEncodeHandler(c *cli.Context) error {
 }
 
 func ecEncode(c *cli.Context, bck cmn.Bck, bprops *cmn.Bprops, data, parity int, warned bool) error {
-	xid, err := api.ECEncodeBucket(apiBP, bck, data, parity)
+	xid, err := api.ECEncodeBucket(apiBP, bck, data, parity, flagIsSet(c, checkAndRecoverFlag))
 	if err != nil {
 		return err
 	}

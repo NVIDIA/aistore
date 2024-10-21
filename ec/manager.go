@@ -349,14 +349,12 @@ func (mgr *Manager) BMDChanged() error {
 	return nil
 }
 
-func (mgr *Manager) TryRecoverObj(lom *core.LOM) error {
-	// RestoreObject is blocking: it waits for the object is recovered
+// TODO -- FIXME: joggers, etc.
+func (mgr *Manager) TryRecoverObj(lom *core.LOM) {
 	go func() {
 		if err := mgr.RestoreObject(lom); err != nil {
-			nlog.Errorf("Failed to recover an object '%s': %v", lom, err)
+			nlog.Errorln(core.T.String(), "failed to recover", lom.Cname(), "err:", err)
 		}
 		core.FreeLOM(lom)
 	}()
-
-	return nil
 }
