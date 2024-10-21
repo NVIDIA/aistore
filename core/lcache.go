@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -58,13 +59,15 @@ type (
 	}
 	// uncache buckets
 	rmbcks struct {
-		mi   *fs.Mountpath
-		wg   *sync.WaitGroup
-		bcks []*meta.Bck
-		pct  int
-		// runtime
-		nd    int
+		mi    *fs.Mountpath
+		wg    *sync.WaitGroup
 		cache *sync.Map
+		bcks  []*meta.Bck
+		begin int64
+		pct   int
+		nd    int
+		// on => off at half-time
+		throttle bool
 	}
 )
 
@@ -88,24 +91,27 @@ func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 		return true // dropped all caches, nothing to do
 	}
 
-	var (
-		avail = fs.GetAvail()
-		pct   = _throttlePct()
-	)
-	nlog.Infoln("uncache:", bcks[0].String(), "throttle:", pct)
-	if num := len(bcks); num > 1 {
-		nlog.Infoln("uncache multiple:", bcks[1].String(), "..., num:", num)
-	}
+	pct, util, lavg := _throttlePct()
+	flog := nlog.Infoln
 	if pct > maxEvictThreashold {
-		nlog.Warningln("high utilization and/or load average:", pct)
+		flog = nlog.Warningln
 	}
+	flog("uncache:", bcks[0].String(), "[ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
+	if num := len(bcks); num > 1 {
+		flog("\tmultiple buckets:", bcks[0].String(), bcks[1].String(), "... [ num:", num, "]")
+	}
+
+	avail := fs.GetAvail()
+	begin := mono.NanoTime()
 	for _, mi := range avail {
 		wg.Add(1)
 		u := &rmbcks{
-			mi:   mi,
-			wg:   wg,
-			bcks: bcks,
-			pct:  pct,
+			mi:       mi,
+			wg:       wg,
+			bcks:     bcks,
+			pct:      pct,
+			begin:    begin,
+			throttle: true,
 		}
 		go u.do()
 	}
@@ -121,6 +127,11 @@ func (u *rmbcks) do() {
 		}
 		u.cache = u.mi.LomCaches.Get(idx)
 		u.cache.Range(u.f)
+
+		// stop throttling at half-timeout (see metasync)
+		if u.throttle && mono.Since(u.begin) > cmn.Rom.MaxKeepalive()>>1 {
+			u.throttle = false
+		}
 	}
 }
 
@@ -140,7 +151,7 @@ func (u *rmbcks) f(hkey, value any) bool {
 		}
 		// throttle
 		u.nd++
-		if u.nd&throttleBatch == throttleBatch {
+		if u.throttle && (u.nd&throttleBatch == throttleBatch) {
 			// compare with _throttle(evct.pct)
 			// (and note: caller's waiting on wg)
 			if u.pct >= maxEvictThreashold {
@@ -241,15 +252,17 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	}
 
 	// load, utilization
-	pct := _throttlePct()
+	pct, util, lavg := _throttlePct()
+	nlog.Infoln("hk: [ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
+
 	if pct > maxEvictThreashold {
-		nlog.Warningln("not running: throttle [", pct, "greater than max", maxEvictThreashold, "]")
+		nlog.Warningln("max-evict threshold:", maxEvictThreashold, "- not running")
 		return min(lchk.timeout>>1, time.Hour)
 	}
 	now := time.Now()
 	if pct > skipEvictThreashold {
-		if now.Sub(lchk.last) < min(maxTimeWithNoEvictions, max(lchk.timeout, time.Hour)*8) {
-			nlog.Warningln("not running: throttle [", pct, "greater than", skipEvictThreashold, "]")
+		if elapsed := now.Sub(lchk.last); elapsed < min(maxTimeWithNoEvictions, max(lchk.timeout, time.Hour)*8) {
+			nlog.Warningln("skip-evict threshold:", skipEvictThreashold, "elapsed:", elapsed, "- not running")
 			return min(lchk.timeout>>1, time.Hour)
 		}
 	}
@@ -422,18 +435,18 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 // [NOTE]:
 // - artificially reducing `maxload` to maybe wait longer for truly idle ("nothing running") state
 // - OTOH, see `maxTimeWithNoEvictions`
-func _throttlePct() int {
+func _throttlePct() (int, int64, float64) {
 	var (
 		util, lavg = T.MaxUtilLoad()
 		cpus       = runtime.NumCPU()
 		maxload    = max((cpus>>1)-(cpus>>3), 1)
 	)
 	if lavg >= float64(maxload) {
-		return 100
+		return 100, util, lavg
 	}
 	ru := cos.RatioPct(100, 2, util)
 	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
-	return int(max(ru, rl))
+	return int(max(ru, rl)), util, lavg
 }
 
 func _throttle(pct int) {
