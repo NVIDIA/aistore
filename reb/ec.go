@@ -235,7 +235,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 			return tsi, nil
 		}
 		if err != nil {
-			nlog.Errorf("Failed to read metadata from %s: %v", tsi.StringEx(), err)
+			nlog.Errorf("g[%d]: failed to read EC meta from %s: %v", reb.RebID(), tsi.StringEx(), err)
 		}
 	}
 	return nil, errors.New("no _free_ targets")

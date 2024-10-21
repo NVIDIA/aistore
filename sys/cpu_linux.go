@@ -39,7 +39,7 @@ func isContainerized() (yes bool) {
 		return nil
 	})
 	if err != nil {
-		nlog.Errorf("Failed to read system info: %v", err)
+		nlog.Errorln("Failed to read system info:", err)
 	}
 	return
 }

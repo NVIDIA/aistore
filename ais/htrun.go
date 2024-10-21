@@ -452,7 +452,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	loaded, err := h.owner.smap.load(smap)
 
 	if err != nil {
-		nlog.Errorf("Failed to load cluster map (\"Smap\"): %v - reinitializing", err)
+		nlog.Errorln(h.String(), "failed to load Smap:", err, "- reinitializing")
 		return
 	}
 	if !loaded {
@@ -1111,7 +1111,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		var err error
 		body, err = h.cluMeta(cmetaFillOpt{htext: htext, skipPrimeTime: true})
 		if err != nil {
-			nlog.Errorf("failed to fetch cluster config, err: %v", err)
+			nlog.Errorln("clu-meta failure:", err)
 		}
 	case apc.WhatSnode:
 		body = h.si
@@ -1891,10 +1891,10 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	// Failed to join cluster using config, try getting primary URL using existing smap.
 	nsti, _ := h.bcastHealth(smap, false /*checkAll*/)
 	if nsti == nil {
-		return res, fmt.Errorf("%s: failed to discover a new smap", h)
+		return res, fmt.Errorf("%s: failed to discover new Smap", h)
 	}
 	if nsti.Smap.Version < smap.version() {
-		return res, fmt.Errorf("%s: current %s version is newer than %d from the primary proxy (%s)",
+		return res, fmt.Errorf("%s: current %s version is newer than %d from the primary (%s)",
 			h, smap, nsti.Smap.Version, nsti.Smap.Primary.ID)
 	}
 	primaryURL = nsti.Smap.Primary.PubURL

@@ -285,7 +285,7 @@ func (g *fsprungroup) checkEnable(action string, mi *fs.Mountpath) {
 	} else {
 		nlog.Infoln(action, "the first mountpath", mi.String())
 		if err := g.t.enable(); err != nil {
-			nlog.Errorf("Failed to re-join %s (self): %v", g.t, err) // (FATAL, unlikely)
+			nlog.Errorln(g.t.String(), "(self) failed to rejoin cluster:", err) // (FATAL, unlikely)
 		}
 	}
 }

@@ -56,12 +56,23 @@ type (
 		mi *fs.Mountpath
 		wg *sync.WaitGroup
 	}
+	// uncache buckets
+	rmbcks struct {
+		mi   *fs.Mountpath
+		wg   *sync.WaitGroup
+		bcks []*meta.Bck
+		pct  int
+		// runtime
+		nd    int
+		cache *sync.Map
+	}
 )
 
 // g.lchk
 func (lchk *lchk) init(timeout time.Duration) {
 	lchk.running.Store(false)
 	lchk.timeout = timeout
+
 	lchk.last = time.Now()
 	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, timeout)
 }
@@ -81,58 +92,66 @@ func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 		avail = fs.GetAvail()
 		pct   = _throttlePct()
 	)
-	nlog.Infoln("uncache:", bcks[0].String(), "num:", len(bcks), "throttle:", pct)
+	nlog.Infoln("uncache:", bcks[0].String(), "throttle:", pct)
+	if num := len(bcks); num > 1 {
+		nlog.Infoln("uncache multiple:", bcks[1].String(), "..., num:", num)
+	}
 	if pct > maxEvictThreashold {
 		nlog.Warningln("high utilization and/or load average:", pct)
 	}
 	for _, mi := range avail {
-		if wg != nil {
-			wg.Add(1)
+		wg.Add(1)
+		u := &rmbcks{
+			mi:   mi,
+			wg:   wg,
+			bcks: bcks,
+			pct:  pct,
 		}
-		go _rmib(mi, wg, pct, bcks)
+		go u.do()
 	}
 	return false
 }
 
-func _rmib(mi *fs.Mountpath, wg *sync.WaitGroup, pct int /*throttle pct*/, bcks []*meta.Bck) {
-	defer wg.Done()
+func (u *rmbcks) do() {
+	defer u.wg.Done()
 
-	var nd int
 	for idx := range cos.MultiHashMapCount {
-		if !mi.IsAvail() {
+		if !u.mi.IsAvail() {
 			return
 		}
-		cache := mi.LomCaches.Get(idx)
-		cache.Range(func(hkey, value any) bool {
-			lmd := value.(*lmeta)
-			if lmd.uname == nil {
-				return true
-			}
-			b, _ := cmn.ParseUname(*lmd.uname)
-			for _, rmb := range bcks {
-				if !rmb.Eq(&b) {
-					continue
-				}
-				lmd2, _ := cache.LoadAndDelete(hkey)
-				if lmd2 == lmd {
-					*lmd = lom0.md
-				}
-				// throttle
-				nd++
-				if nd&throttleBatch == throttleBatch {
-					// compare with _throttle(evct.pct)
-					// (caller's waiting on wg)
-					if pct >= maxEvictThreashold {
-						time.Sleep(fs.Throttle10ms)
-					} else {
-						runtime.Gosched()
-					}
-				}
-				break
-			}
-			return true
-		})
+		u.cache = u.mi.LomCaches.Get(idx)
+		u.cache.Range(u.f)
 	}
+}
+
+func (u *rmbcks) f(hkey, value any) bool {
+	lmd := value.(*lmeta)
+	if lmd.uname == nil {
+		return true
+	}
+	b, _ := cmn.ParseUname(*lmd.uname)
+	for _, rmb := range u.bcks {
+		if !rmb.Eq(&b) {
+			continue
+		}
+		lmd2, _ := u.cache.LoadAndDelete(hkey)
+		if lmd2 == lmd {
+			*lmd = lom0.md
+		}
+		// throttle
+		u.nd++
+		if u.nd&throttleBatch == throttleBatch {
+			// compare with _throttle(evct.pct)
+			// (and note: caller's waiting on wg)
+			if u.pct >= maxEvictThreashold {
+				time.Sleep(fs.Throttle10ms)
+			} else {
+				runtime.Gosched()
+			}
+		}
+		break
+	}
+	return true
 }
 
 // evict mountpath (see also: mempDropAll)
@@ -244,7 +263,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	// finally, run
 	nlog.Infoln("hk begin")
 	lchk.last = now
-	go lchk.evict(config.Timeout.ObjectMD.D(), now, pct)
+	go lchk.evict(lchk.timeout, now, pct)
 
 	return lchk.timeout
 }
@@ -270,7 +289,7 @@ func (*lchk) _drop() {
 	}
 }
 
-func (lchk *lchk) evict(d time.Duration, now time.Time, pct int) {
+func (lchk *lchk) evict(timeout time.Duration, now time.Time, pct int) {
 	defer lchk.running.Store(false)
 	var (
 		avail   = fs.GetAvail()
@@ -285,7 +304,7 @@ func (lchk *lchk) evict(d time.Duration, now time.Time, pct int) {
 			mi:     mi,
 			wg:     wg,
 			now:    now,
-			d:      d,
+			d:      timeout,
 			pct:    pct,
 		}
 		go evct.do()
@@ -400,6 +419,9 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 // throttle
 //
 
+// [NOTE]:
+// - artificially reducing `maxload` to maybe wait longer for truly idle ("nothing running") state
+// - OTOH, see `maxTimeWithNoEvictions`
 func _throttlePct() int {
 	var (
 		util, lavg = T.MaxUtilLoad()

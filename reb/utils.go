@@ -72,7 +72,7 @@ func (reb *Reb) warnID(remoteID int64, tid string) (s string) {
 	} else {
 		s = fmt.Sprintf(warn, tid, "older", remoteID, id)
 	}
-	return
+	return s
 }
 
 func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
@@ -108,14 +108,14 @@ func (reb *Reb) changeStage(newStage uint32) {
 	reb.stages.stage.Store(newStage)
 	var (
 		req = stageNtfn{
-			daemonID: core.T.SID(), stage: newStage, rebID: reb.rebID.Load(),
+			daemonID: core.T.SID(), stage: newStage, rebID: reb.RebID(),
 		}
 		hdr = transport.ObjHdr{}
 	)
 	hdr.Opaque = reb.encodeStageNtfn(&req)
 	// second, notify all
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		nlog.Warningln("Failed to push new-stage notif:", req.rebID, stages[newStage], "err:", err)
+		nlog.Warningln("failed to push new-stage notif: [", req.rebID, stages[newStage], err, "]")
 	}
 }
 
@@ -138,7 +138,7 @@ func (reb *Reb) abortAndBroadcast(err error) {
 	)
 	hdr.Opaque = reb.encodeStageNtfn(&req)
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		nlog.Errorf("Failed to broadcast abort notification: %v", err)
+		nlog.Errorln("failed to broadcast abort notif: [", req.rebID, err, "]")
 	}
 }
 

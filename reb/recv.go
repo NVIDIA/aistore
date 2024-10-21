@@ -48,7 +48,7 @@ func (reb *Reb) recvObj(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
-		nlog.Errorf("Failed to read message type: %v", err)
+		nlog.Errorf("g[%d]: failed to recv recv-obj action (regular or EC): %v", reb.RebID(), err)
 		return reb._recvErr(err)
 	}
 	if act == rebMsgRegular {
@@ -69,7 +69,7 @@ func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
-		err = fmt.Errorf("failed to read message type: %v", err)
+		err = fmt.Errorf("g[%d]: failed to read recv-ack message type: %v", reb.RebID(), err)
 		return reb._recvErr(err)
 	}
 	if act == rebMsgEC {
@@ -83,7 +83,7 @@ func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 
 func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) error {
 	if errRx != nil {
-		nlog.Errorf("%s: %v", core.T, errRx)
+		nlog.Errorf("%s g[%d]: stage err %v", core.T, reb.RebID(), errRx)
 		return errRx
 	}
 	ntfn, err := reb.decodeStageNtfn(hdr.Opaque)
@@ -136,7 +136,7 @@ func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) e
 func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		nlog.Errorf("Failed to parse ACK: %v", err)
+		nlog.Errorf("g[%d]: failed to parse ACK: %v", reb.RebID(), err)
 		return err
 	}
 	if ack.rebID != reb.RebID() {
@@ -158,7 +158,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 				core.T.Snode(), meta.Tname(tsid), lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
-		nlog.Errorf("%s: early receive from %s %s (stage %s)", core.T, meta.Tname(tsid), lom, stages[stage])
+		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.RebID(), meta.Tname(tsid), lom, stages[stage])
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
@@ -186,7 +186,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 	// ACK
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {
-		err := fmt.Errorf("%s is not in the %s", meta.Tname(tsid), smap)
+		err := fmt.Errorf("g[%d]: %s is not in the %s", reb.RebID(), meta.Tname(tsid), smap)
 		nlog.Errorln(err)
 		return err
 	}
@@ -205,11 +205,11 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		nlog.Errorf("Failed to parse ACK: %v", err)
+		nlog.Errorf("g[%d]: failed to receive ACK: %v", reb.RebID(), err)
 		return err
 	}
 	if ack.rebID != reb.rebID.Load() {
-		nlog.Warningln("ACK from", ack.daemonID, reb.warnID(ack.rebID, ack.daemonID))
+		nlog.Warningln("ACK from", ack.daemonID, "[", reb.warnID(ack.rebID, ack.daemonID), "]")
 		return nil
 	}
 
@@ -232,11 +232,11 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 // EC receive
 //
 
-func (*Reb) recvECAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) (err error) {
+func (reb *Reb) recvECAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) (err error) {
 	ack := &ecAck{}
 	err = unpacker.ReadAny(ack)
 	if err != nil {
-		nlog.Errorf("Failed to unmarshal EC ACK for %s: %v", hdr.Cname(), err)
+		nlog.Errorf("g[%d]: failed to unpack EC ACK for %s: %v", reb.RebID(), hdr.Cname(), err)
 	}
 	return
 }
