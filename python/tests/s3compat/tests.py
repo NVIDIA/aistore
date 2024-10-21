@@ -1618,7 +1618,7 @@ def test_presigned_post_policy(log_entry):
 
         policy = PostPolicy(
             bucket_name,
-            datetime.utcnow() + timedelta(days=no_of_days),
+            datetime.now(timezone.utc) + timedelta(days=no_of_days),
         )
         policy.add_starts_with_condition("key", prefix)
         policy.add_content_length_range_condition(64 * KB, 10 * MB)

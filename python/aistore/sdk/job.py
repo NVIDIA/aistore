@@ -6,7 +6,7 @@ from __future__ import annotations  # pylint: disable=unused-variable
 
 import itertools
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict
 import time
 
@@ -246,11 +246,15 @@ class Job:
             # Truncate or pad the fractional part to 6 digits (microseconds)
             frac_part = (frac_part + "000000")[:6]
             dt_str = f"{date_part}.{frac_part}"
-            return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S.%f")
-        return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+            dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S.%f")
+        else:
+            dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
+
+        # Always return the datetime as UTC-aware
+        return dt.replace(tzinfo=timezone.utc)
 
     def get_within_timeframe(
-        self, start_time: datetime.datetime, end_time: datetime.datetime
+        self, start_time: datetime, end_time: datetime
     ) -> List[JobSnapshot]:
         """
         Checks for jobs that started and finished within a specified timeframe.

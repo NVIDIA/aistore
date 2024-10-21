@@ -5,7 +5,7 @@ import random
 import unittest
 import io
 import tarfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from aistore.sdk.blob_download_config import BlobDownloadConfig
@@ -206,7 +206,7 @@ class TestObjectOps(RemoteEnabledTest):
         self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
 
         for obj_name, content in objects.items():
-            start_time = datetime.now()
+            start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
             blob_config = BlobDownloadConfig(chunk_size=testcase, num_workers="4")
             resp = (
                 self.bucket.object(obj_name)
@@ -214,7 +214,7 @@ class TestObjectOps(RemoteEnabledTest):
                 .read_all()
             )
             self.assertEqual(content, resp)
-            end_time = datetime.now()
+            end_time = datetime.now(timezone.utc) + timedelta(seconds=1)
             jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
                 start_time=start_time, end_time=end_time
             )

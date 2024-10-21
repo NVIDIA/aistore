@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from unittest.mock import Mock, patch, call
 
@@ -308,8 +308,8 @@ class TestJob(unittest.TestCase):
         self.mock_client.request_deserialize.assert_called()
 
     def test_get_within_timeframe_found_jobs(self):
-        start_time = datetime.now() - timedelta(days=1)
-        end_time = datetime.now()
+        start_time = datetime.now(timezone.utc) - timedelta(days=1)
+        end_time = datetime.now(timezone.utc)
 
         mock_snapshots = [
             JobSnapshot(
@@ -333,8 +333,8 @@ class TestJob(unittest.TestCase):
             self.assertEqual(found_job.end_time, expected_snapshot.end_time)
 
     def test_get_within_timeframe_no_jobs_found(self):
-        start_time = datetime.now() - timedelta(days=1)
-        end_time = datetime.now()
+        start_time = datetime.now(timezone.utc) - timedelta(days=1)
+        end_time = datetime.now(timezone.utc)
         self.mock_client.request_deserialize.return_value = {}
 
         with self.assertRaises(JobInfoNotFound):
