@@ -2,7 +2,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Tuple
 
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.utils import get_logger
@@ -66,7 +66,7 @@ def handle_chunked_encoding_error(
     resume_total: int,
     max_resume: int,
     err: Exception,
-) -> tuple[Iterator[bytes], int]:
+) -> Tuple[Iterator[bytes], int]:
     """
     Handle the chunked encoding error by incrementing the resume count, logging a warning,
     and resetting the iterator from the last known position.
@@ -79,7 +79,7 @@ def handle_chunked_encoding_error(
         err (Exception): The error that caused the resume attempt.
 
     Returns:
-        tuple[Iterator[bytes], int]: The new iterator and the updated resume total.
+        Tuple[Iterator[bytes], int]: The new iterator and the updated resume total.
 
     Raises:
         ObjectFileMaxResumeError: If the maximum number of resume attempts is exceeded.
