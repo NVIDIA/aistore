@@ -118,7 +118,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			// - requires API & CLI
 			// - remove warning when done
 			nlog.Warningf("%s[%s] not running or finished - proceeding with %s anyway", t, apc.ActECEncode, uuid, lom.Cname())
-			ec.ECM.TryRecoverObj(lom, nil) // free(lom) inside
+			go ec.ECM.TryRecoverObj(lom, nil) // free(lom) inside
 		} else {
 			xbenc, ok := xctn.(*ec.XactBckEncode)
 			debug.Assert(ok, xctn.String())

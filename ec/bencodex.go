@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/prob"
@@ -25,6 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+const workChanSize = 512
+
 type (
 	encFactory struct {
 		xreg.RenewBase
@@ -33,12 +36,21 @@ type (
 	}
 	XactBckEncode struct {
 		xact.Base
-		bck             *meta.Bck
-		wg              *sync.WaitGroup // to wait for EC finishes all objects
-		smap            *meta.Smap
+		bck  *meta.Bck
+		wg   *sync.WaitGroup // to wait for EC finishes all objects
+		smap *meta.Smap
+		//
+		// check and recover slices and metafiles
+		//
 		probFilter      *prob.Filter
+		rcvyJG          map[string]*rcvyJogger
 		last            atomic.Int64
 		checkAndRecover bool
+	}
+	rcvyJogger struct {
+		mi     *fs.Mountpath
+		workCh chan *core.LOM
+		parent *XactBckEncode
 	}
 )
 
@@ -105,22 +117,40 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		return
 	}
 	if !bck.Props.EC.Enabled {
-		r.AddErr(fmt.Errorf("%s does not have EC enabled", r.bck.Cname("")))
+		r.AddErr(fmt.Errorf("EC disabled for %s", r.bck.Cname("")))
 		r.Finish()
 		return
 	}
 
 	ECM.incActive(r)
 
-	ctList := []string{fs.ObjectType}
 	opts := &mpather.JgroupOpts{
-		CTs:      ctList,
+		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,
 		DoLoad:   mpather.LoadUnsafe,
 	}
 	if r.checkAndRecover {
+		// additionally, traverse and visit
 		opts.CTs = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
 		opts.VisitCT = r.bckEncodeMD
+
+		avail := fs.GetAvail()
+		if len(avail) == 0 {
+			r.AddErr(cmn.ErrNoMountpaths) // FATAL
+			r.Finish()
+			return
+		}
+		// run recovery joggers
+		r.rcvyJG = make(map[string]*rcvyJogger, len(avail))
+		for _, mi := range avail {
+			j := &rcvyJogger{
+				mi:     mi,
+				workCh: make(chan *core.LOM, workChanSize),
+				parent: r,
+			}
+			r.rcvyJG[mi.Path] = j
+			go j.run()
+		}
 	}
 
 	opts.Bck.Copy(r.bck.Bucket())
@@ -138,9 +168,14 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		}
 	}
 	if r.checkAndRecover {
-		r.Quiesce(cmn.Rom.MaxKeepalive(), r._quiesce)
+		// wait for in-flight and pending recovery
+		r.Quiesce(config.Timeout.MaxKeepalive.D(), r._quiesce)
 	}
 	r.wg.Wait() // Need to wait for all async actions to finish.
+
+	for _, j := range r.rcvyJG {
+		close(j.workCh)
+	}
 
 	r.Finish()
 }
@@ -247,15 +282,36 @@ func (r *XactBckEncode) RecvEncodeMD(lom *core.LOM) {
 	}
 
 	r.probFilter.Insert(*bname)
-	ECM.TryRecoverObj(lom, r.setLast) // free(lom) inside
+	j, ok := r.rcvyJG[lom.Mountpath().Path]
+	if !ok {
+		err := fmt.Errorf("unexpected mountpath %s", lom.Mountpath())
+		debug.Assert(false, err)
+		r.Abort(err)
+		return
+	}
+	j.workCh <- lom
 }
 
+// TODO: add stats counting recovered slices, etc.
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 	if err == nil {
 		r.last.Store(mono.NanoTime())
-		// r.LomAdd(lom) TODO: add stats
 	} else if err != errSkipped {
 		r.AddErr(err)
 		_errec(lom, err)
+	}
+}
+
+////////////////
+// rcvyJogger //
+////////////////
+
+func (j *rcvyJogger) run() {
+	for {
+		lom, ok := <-j.workCh
+		if !ok {
+			break
+		}
+		ECM.TryRecoverObj(lom, j.parent.setLast) // free(lom) inside
 	}
 }
