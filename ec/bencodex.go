@@ -12,7 +12,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/core"
@@ -35,6 +37,7 @@ type (
 		wg              *sync.WaitGroup // to wait for EC finishes all objects
 		smap            *meta.Smap
 		probFilter      *prob.Filter
+		last            atomic.Int64
 		checkAndRecover bool
 	}
 )
@@ -135,12 +138,21 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		}
 	}
 	if r.checkAndRecover {
-		// TODO -- FIXME: rm sleep; may still terminate prematurely vs RecvEncodeMD flow
-		time.Sleep(config.Timeout.MaxKeepalive.D() << 1)
+		r.Quiesce(cmn.Rom.MaxKeepalive(), r._quiesce)
 	}
 	r.wg.Wait() // Need to wait for all async actions to finish.
 
 	r.Finish()
+}
+
+func (r *XactBckEncode) _quiesce(elapsed time.Duration) core.QuiRes {
+	if mono.Since(r.last.Load()) > cmn.Rom.MaxKeepalive()-(cmn.Rom.MaxKeepalive()>>2) {
+		return core.QuiDone
+	}
+	if elapsed > time.Minute {
+		return core.QuiTimeout
+	}
+	return core.QuiInactiveCB
 }
 
 func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
@@ -150,11 +162,7 @@ func (r *XactBckEncode) afterECObj(lom *core.LOM, err error) {
 		r.LomAdd(lom)
 	} else if err != errSkipped {
 		r.AddErr(err)
-		if r.checkAndRecover {
-			nlog.Errorln("failed to check-and-recover", lom.Cname(), "err:", err)
-		} else {
-			nlog.Errorln("failed to erasure-code", lom.Cname(), "err:", err)
-		}
+		nlog.Errorln(r.Name(), "failed to ec-encode", lom.Cname(), "err:", err)
 	}
 	r.wg.Done()
 }
@@ -219,8 +227,8 @@ func (r *XactBckEncode) Snap() (snap *core.Snap) {
 func (r *XactBckEncode) bckEncodeMD(ct *core.CT, _ []byte) error {
 	tsi, err := r.smap.HrwName2T([]byte(*ct.UnamePtr()))
 	if err != nil {
-		nlog.Errorf("%s: %s", ct, err)
-		return nil
+		nlog.Errorln(ct.Cname(), "err:", err)
+		return err
 	}
 	// This target is the main one. Skip recovery
 	if tsi.ID() == core.T.SID() {
@@ -230,15 +238,24 @@ func (r *XactBckEncode) bckEncodeMD(ct *core.CT, _ []byte) error {
 }
 
 func (r *XactBckEncode) RecvEncodeMD(lom *core.LOM) {
-	r.beforeECObj()
+	r.last.Store(mono.NanoTime())
 
 	uname := lom.UnamePtr()
 	bname := cos.UnsafeBptr(uname)
 	if r.probFilter.Lookup(*bname) {
-		r.afterECObj(lom, nil)
 		return
 	}
 
 	r.probFilter.Insert(*bname)
-	ECM.TryRecoverObj(lom, r.afterECObj) // free LOM inside
+	ECM.TryRecoverObj(lom, r.setLast) // free(lom) inside
+}
+
+func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
+	if err == nil {
+		r.last.Store(mono.NanoTime())
+		// r.LomAdd(lom) TODO: add stats
+	} else if err != errSkipped {
+		r.AddErr(err)
+		_errec(lom, err)
+	}
 }

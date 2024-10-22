@@ -2835,11 +2835,15 @@ func TestECBckEncodeRecover(t *testing.T) {
 
 	o := ecOptions{
 		minTargets:  4,
-		objCount:    128,
+		objCount:    512,
 		concurrency: 8,
 		pattern:     "obj-%04d",
 		silent:      testing.Short(),
 	}.init(t, proxyURL)
+
+	if testing.Short() {
+		o.objCount = max(o.objCount/4, 128)
+	}
 
 	// Damage this number of objects for each test case
 	objToDamage := o.objCount / 8

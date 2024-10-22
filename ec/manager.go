@@ -354,10 +354,15 @@ func (mgr *Manager) BMDChanged() error {
 func (mgr *Manager) TryRecoverObj(lom *core.LOM, cb core.OnFinishObj) {
 	go func() {
 		err := mgr.RestoreObject(lom, cb)
-		if err != nil {
-			nlog.Errorln(core.T.String(), "failed to recover", lom.Cname(), "err:", err)
+		if cb != nil {
+			cb(lom, err)
+		} else if err != nil {
+			_errec(lom, err)
 		}
-		cb(lom, err)
 		core.FreeLOM(lom)
 	}()
+}
+
+func _errec(lom *core.LOM, err error) {
+	nlog.Errorln(core.T.String(), "failed to check-and-recover", lom.Cname(), "err:", err)
 }

@@ -110,24 +110,20 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// [TODO]
-		// this target's endpoint can also be used to recover individual objects
-		// and selected (multi)objects
-		// but right now we only run it as part of a bucket encoding xaction
-		// (see checkAndRecover)
 		uuid := query.Get(apc.QparamUUID)
 		xctn, errN := xreg.GetXact(uuid)
 		if errN != nil || xctn == nil {
-			err := fmt.Errorf("%s: failed to find %s[%s] to recover %s: %v",
-				t, apc.ActECEncode, uuid, lom.Cname(), errN)
-			t.writeErr(w, r, err)
-			return
+			// [TODO]
+			// - to be used to recover individual objects and assorted (ranges, lists of) objects
+			// - requires API & CLI
+			// - remove warning when done
+			nlog.Warningf("%s[%s] not running or finished - proceeding with %s anyway", t, apc.ActECEncode, uuid, lom.Cname())
+			ec.ECM.TryRecoverObj(lom, nil) // free(lom) inside
+		} else {
+			xbenc, ok := xctn.(*ec.XactBckEncode)
+			debug.Assert(ok, xctn.String())
+			xbenc.RecvEncodeMD(lom)
 		}
-		xbenc, ok := xctn.(*ec.XactBckEncode)
-		debug.Assert(ok, xctn.String())
-
-		// do
-		xbenc.RecvEncodeMD(lom)
 	case apc.ActEcOpen:
 		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time
 		ec.ECM.OpenStreams(false /*with refc*/)
