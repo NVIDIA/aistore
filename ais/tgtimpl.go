@@ -371,10 +371,11 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	return size, err
 }
 
-func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode) error {
+func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode, uuid string) error {
 	q := ct.Bck().NewQuery()
 	ct.Bck().AddUnameToQuery(q, apc.QparamBckTo)
 	q.Set(apc.QparamECObject, ct.ObjectName())
+	q.Set(apc.QparamUUID, uuid)
 	cargs := allocCargs()
 	{
 		cargs.si = tsi

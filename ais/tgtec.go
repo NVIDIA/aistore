@@ -15,11 +15,13 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 var errCloseStreams = errors.New("EC is currently active, cannot close streams")
@@ -88,29 +90,44 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		objName := query.Get(apc.QparamECObject)
 		if objName == "" {
-			err := fmt.Errorf("%s: invalid request to recover an object: name's empty", t)
+			err := fmt.Errorf("%s: invalid ec-recover request: object name's empty", t)
 			t.writeErr(w, r, err)
 			return
 		}
-		lom := core.AllocLOM(objName)
 
-		mbck, err := newBckFromQuname(query, true)
+		lom := core.AllocLOM(objName)
+		bck, err := newBckFromQuname(query, true)
 		if err != nil {
 			core.FreeLOM(lom)
-			err = fmt.Errorf("%s: %v", t, err) // FATAL/unlikely
+			err := fmt.Errorf("%s: %v", t, err) // (unlikely)
+			t.writeErr(w, r, err)
+			return
+		}
+		if err := lom.InitBck(bck.Bucket()); err != nil {
+			core.FreeLOM(lom)
+			err := fmt.Errorf("%s: %v", t, err)
 			t.writeErr(w, r, err)
 			return
 		}
 
-		bck := mbck.Bucket()
-		if err := lom.InitBck(bck); err != nil {
-			core.FreeLOM(lom)
-			err = fmt.Errorf("%s: %v", t, err)
+		// [TODO]
+		// this target's endpoint can also be used to recover individual objects
+		// and selected (multi)objects
+		// but right now we only run it as part of a bucket encoding xaction
+		// (see checkAndRecover)
+		uuid := query.Get(apc.QparamUUID)
+		xctn, errN := xreg.GetXact(uuid)
+		if errN != nil || xctn == nil {
+			err := fmt.Errorf("%s: failed to find %s[%s] to recover %s: %v",
+				t, apc.ActECEncode, uuid, lom.Cname(), errN)
 			t.writeErr(w, r, err)
 			return
 		}
-		ec.ECM.TryRecoverObj(lom) // free LOM inside
-		return
+		xbenc, ok := xctn.(*ec.XactBckEncode)
+		debug.Assert(ok, xctn.String())
+
+		// do
+		xbenc.RecvEncodeMD(lom)
 	case apc.ActEcOpen:
 		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time
 		ec.ECM.OpenStreams(false /*with refc*/)

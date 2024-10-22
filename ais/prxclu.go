@@ -940,8 +940,11 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	debug.Assert(clone._sgl != nil)
 
 	config, err := p.ensureConfigURLs()
+	if err != nil {
+		debug.Assert(nlog.Stopping(), err)
+		return
+	}
 	if config != nil /*updated*/ {
-		debug.AssertNoErr(err)
 		pairs = append(pairs, revsPair{config, aisMsg})
 	}
 

@@ -2835,17 +2835,18 @@ func TestECBckEncodeRecover(t *testing.T) {
 
 	o := ecOptions{
 		minTargets:  4,
-		objCount:    40,
+		objCount:    128,
 		concurrency: 8,
 		pattern:     "obj-%04d",
 		silent:      testing.Short(),
 	}.init(t, proxyURL)
-	// Damage this number of objects for each case: object and slice
+
+	// Damage this number of objects for each test case
 	objToDamage := o.objCount / 8
 	initMountpaths(t, proxyURL)
 
-	tassert.Fatalf(t, o.objCount > 2*objToDamage, "The total number of objects must be twice as greater as the number of damaged ones")
-
+	tassert.Fatalf(t, o.objCount > 2*objToDamage,
+		"The total number of objects must be twice as greater as the number of damaged ones")
 	var (
 		mtx           sync.Mutex
 		objSlicesOrig = make(map[string]map[string]ecSliceMD, o.objCount)

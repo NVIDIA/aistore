@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -31,6 +34,7 @@ type (
 		bck             *meta.Bck
 		wg              *sync.WaitGroup // to wait for EC finishes all objects
 		smap            *meta.Smap
+		probFilter      *prob.Filter
 		checkAndRecover bool
 	}
 )
@@ -80,7 +84,11 @@ func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *Xact
 		bck:             bck,
 		wg:              &sync.WaitGroup{},
 		smap:            core.T.Sowner().Get(),
-		checkAndRecover: checkAndRecover}
+		checkAndRecover: checkAndRecover,
+	}
+	if checkAndRecover {
+		r.probFilter = prob.NewDefaultFilter()
+	}
 	r.InitBase(uuid, apc.ActECEncode, bck)
 	return
 }
@@ -113,7 +121,8 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	}
 
 	opts.Bck.Copy(r.bck.Bucket())
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
+	config := cmn.GCO.Get()
+	jg := mpather.NewJoggerGroup(opts, config, nil)
 	jg.Run()
 
 	select {
@@ -124,6 +133,10 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		if err != nil {
 			r.AddErr(err)
 		}
+	}
+	if r.checkAndRecover {
+		// TODO -- FIXME: rm sleep; may still terminate prematurely vs RecvEncodeMD flow
+		time.Sleep(config.Timeout.MaxKeepalive.D() << 1)
 	}
 	r.wg.Wait() // Need to wait for all async actions to finish.
 
@@ -136,9 +149,13 @@ func (r *XactBckEncode) afterECObj(lom *core.LOM, err error) {
 	if err == nil {
 		r.LomAdd(lom)
 	} else if err != errSkipped {
-		nlog.Errorf("failed to erasure-code %s: %v", lom.Cname(), err)
+		r.AddErr(err)
+		if r.checkAndRecover {
+			nlog.Errorln("failed to check-and-recover", lom.Cname(), "err:", err)
+		} else {
+			nlog.Errorln("failed to erasure-code", lom.Cname(), "err:", err)
+		}
 	}
-
 	r.wg.Done()
 }
 
@@ -148,8 +165,7 @@ func (r *XactBckEncode) afterECObj(lom *core.LOM, err error) {
 func (r *XactBckEncode) bckEncode(lom *core.LOM, _ []byte) error {
 	_, local, err := lom.HrwTarget(r.smap)
 	if err != nil {
-		nlog.Errorf("%s: %s", lom, err)
-		return nil
+		return err
 	}
 	// An object replica - skip EC.
 	if !local {
@@ -157,9 +173,10 @@ func (r *XactBckEncode) bckEncode(lom *core.LOM, _ []byte) error {
 	}
 	mdFQN, _, err := core.HrwFQN(lom.Bck().Bucket(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
-		nlog.Warningln("metadata FQN generation failed", lom, ":", err)
-		return nil
+		nlog.Warningln("failed to generate md FQN for", lom.Cname(), "err:", err)
+		return err
 	}
+
 	md, err := LoadMetadata(mdFQN)
 	// If metafile exists, the object has been already encoded. But for
 	// replicated objects we have to fall through. Otherwise, bencode
@@ -168,9 +185,9 @@ func (r *XactBckEncode) bckEncode(lom *core.LOM, _ []byte) error {
 		return nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		nlog.Warningln("failed to stat ", mdFQN, ":", err, "Deleting...")
+		nlog.Warningln("failed to fstat", mdFQN, "err:", err)
 		if errDel := os.Remove(mdFQN); errDel != nil {
-			nlog.Warningln("failed to delete broken metafile ", mdFQN, ":", errDel)
+			nlog.Warningln("nested err: failed to delete broken metafile:", errDel)
 			return nil
 		}
 	}
@@ -209,5 +226,19 @@ func (r *XactBckEncode) bckEncodeMD(ct *core.CT, _ []byte) error {
 	if tsi.ID() == core.T.SID() {
 		return nil
 	}
-	return core.T.ECRestoreReq(ct, tsi)
+	return core.T.ECRestoreReq(ct, tsi, r.ID())
+}
+
+func (r *XactBckEncode) RecvEncodeMD(lom *core.LOM) {
+	r.beforeECObj()
+
+	uname := lom.UnamePtr()
+	bname := cos.UnsafeBptr(uname)
+	if r.probFilter.Lookup(*bname) {
+		r.afterECObj(lom, nil)
+		return
+	}
+
+	r.probFilter.Insert(*bname)
+	ECM.TryRecoverObj(lom, r.afterECObj) // free LOM inside
 }

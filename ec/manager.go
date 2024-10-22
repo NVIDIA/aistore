@@ -288,7 +288,7 @@ func (mgr *Manager) CleanupObject(lom *core.LOM) {
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }
 
-func (mgr *Manager) RestoreObject(lom *core.LOM) error {
+func (mgr *Manager) RestoreObject(lom *core.LOM, cb core.OnFinishObj) error {
 	if !lom.ECEnabled() {
 		return ErrorECDisabled
 	}
@@ -301,6 +301,7 @@ func (mgr *Manager) RestoreObject(lom *core.LOM) error {
 	req := allocateReq(ActRestore, lom.LIF())
 	errCh := make(chan error) // unbuffered
 	req.ErrCh = errCh
+	req.Callback = cb
 	mgr.RestoreBckGetXact(lom.Bck()).decode(req, lom)
 
 	// wait for EC completes restoring the object
@@ -350,11 +351,13 @@ func (mgr *Manager) BMDChanged() error {
 }
 
 // TODO -- FIXME: joggers, etc.
-func (mgr *Manager) TryRecoverObj(lom *core.LOM) {
+func (mgr *Manager) TryRecoverObj(lom *core.LOM, cb core.OnFinishObj) {
 	go func() {
-		if err := mgr.RestoreObject(lom); err != nil {
+		err := mgr.RestoreObject(lom, cb)
+		if err != nil {
 			nlog.Errorln(core.T.String(), "failed to recover", lom.Cname(), "err:", err)
 		}
+		cb(lom, err)
 		core.FreeLOM(lom)
 	}()
 }

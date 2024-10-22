@@ -248,13 +248,16 @@ func (r *XactGet) stop() {
 // a nil value from channel but ecrunner keeps working - it reuploads all missing
 // slices or copies
 func (r *XactGet) decode(req *request, lom *core.LOM) {
-	debug.Assert(req.Action == ActRestore, "invalid action for restore: "+req.Action)
+	debug.Assert(req.Action == ActRestore, "invalid action: ", req.Action)
 	r.stats.updateDecode()
 	req.putTime = time.Now()
-	req.tm = time.Now()
+	req.tm = req.putTime
 
 	if err := r.dispatchRequest(req, lom); err != nil {
-		nlog.Errorf("failed to restore %s: %v", lom, err)
+		if req.Callback != nil {
+			req.Callback(lom, err)
+		}
+		nlog.Errorln("failed to restore", lom.Cname(), "err:", err)
 		freeReq(req)
 	}
 }
