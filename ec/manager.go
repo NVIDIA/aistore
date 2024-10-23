@@ -288,26 +288,6 @@ func (mgr *Manager) CleanupObject(lom *core.LOM) {
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }
 
-func (mgr *Manager) RestoreObject(lom *core.LOM, cb core.OnFinishObj) error {
-	if !lom.ECEnabled() {
-		return ErrorECDisabled
-	}
-	cs := fs.Cap()
-	if err := cs.Err(); err != nil {
-		return err
-	}
-
-	debug.Assert(lom.Mountpath() != nil && lom.Mountpath().Path != "")
-	req := allocateReq(ActRestore, lom.LIF())
-	errCh := make(chan error) // unbuffered
-	req.ErrCh = errCh
-	req.Callback = cb
-	mgr.RestoreBckGetXact(lom.Bck()).decode(req, lom)
-
-	// wait for EC completes restoring the object
-	return <-errCh
-}
-
 // disableBck starts to reject new EC requests, rejects pending ones
 func (mgr *Manager) disableBck(bck *meta.Bck) {
 	mgr.RestoreBckGetXact(bck).ClearRequests()
@@ -350,19 +330,20 @@ func (mgr *Manager) BMDChanged() error {
 	return nil
 }
 
-// TODO -- FIXME: joggers, etc.
-func (mgr *Manager) TryRecoverObj(lom *core.LOM, cb core.OnFinishObj) {
-	go func() {
-		err := mgr.RestoreObject(lom, cb)
-		if cb != nil {
-			cb(lom, err)
-		} else if err != nil {
-			_errec(lom, err)
-		}
-		core.FreeLOM(lom)
-	}()
-}
+func (mgr *Manager) Recover(lom *core.LOM) error {
+	if !lom.ECEnabled() {
+		return ErrorECDisabled
+	}
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
+		return err
+	}
 
-func _errec(lom *core.LOM, err error) {
-	nlog.Errorln(core.T.String(), "failed to check-and-recover", lom.Cname(), "err:", err)
+	req := allocateReq(ActRestore, lom.LIF())
+	errCh := make(chan error) // unbuffered
+	req.ErrCh = errCh
+	mgr.RestoreBckGetXact(lom.Bck()).decode(req, lom)
+
+	// wait
+	return <-errCh
 }

@@ -117,12 +117,20 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			// - to be used to recover individual objects and assorted (ranges, lists of) objects
 			// - requires API & CLI
 			// - remove warning when done
-			nlog.Warningf("%s[%s] not running or finished - proceeding with %s anyway", t, apc.ActECEncode, uuid, lom.Cname())
-			go ec.ECM.TryRecoverObj(lom, nil) // free(lom) inside
+			nlog.Warningf("%s[%s] not running - proceeding to ec-recover %s anyway..", t, apc.ActECEncode, uuid, lom)
+
+			err := ec.ECM.Recover(lom)
+			cname := lom.Cname()
+			core.FreeLOM(lom)
+			if err != nil {
+				t.writeErr(w, r, cmn.NewErrFailedTo(t, "EC-recover", cname, err))
+			}
 		} else {
 			xbenc, ok := xctn.(*ec.XactBckEncode)
 			debug.Assert(ok, xctn.String())
-			xbenc.RecvEncodeMD(lom)
+
+			// async, via j.work
+			xbenc.RecvRecover(lom)
 		}
 	case apc.ActEcOpen:
 		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time

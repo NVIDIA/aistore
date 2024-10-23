@@ -248,7 +248,6 @@ func (r *XactGet) stop() {
 // a nil value from channel but ecrunner keeps working - it reuploads all missing
 // slices or copies
 func (r *XactGet) decode(req *request, lom *core.LOM) {
-	debug.Assert(req.Action == ActRestore, "invalid action: ", req.Action)
 	r.stats.updateDecode()
 	req.putTime = time.Now()
 	req.tm = req.putTime

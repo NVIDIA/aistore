@@ -898,8 +898,8 @@ gfn:
 		}
 	}
 
-	// restore from existing EC slices, if possible
-	ecErr := ec.ECM.RestoreObject(goi.lom, nil /*on-finished callback*/)
+	// restore from existing EC slices
+	ecErr := ec.ECM.Recover(goi.lom)
 	if ecErr == nil {
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		if ecErr == nil {

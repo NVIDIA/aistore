@@ -7,6 +7,7 @@ package ec
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -48,9 +49,10 @@ type (
 		checkAndRecover bool
 	}
 	rcvyJogger struct {
-		mi     *fs.Mountpath
-		workCh chan *core.LOM
-		parent *XactBckEncode
+		mi       *fs.Mountpath
+		workCh   chan *core.LOM
+		parent   *XactBckEncode
+		chanFull atomic.Int64
 	}
 )
 
@@ -272,7 +274,7 @@ func (r *XactBckEncode) bckEncodeMD(ct *core.CT, _ []byte) error {
 	return core.T.ECRestoreReq(ct, tsi, r.ID())
 }
 
-func (r *XactBckEncode) RecvEncodeMD(lom *core.LOM) {
+func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 	r.last.Store(mono.NanoTime())
 
 	uname := lom.UnamePtr()
@@ -292,13 +294,20 @@ func (r *XactBckEncode) RecvEncodeMD(lom *core.LOM) {
 	j.workCh <- lom
 }
 
-// TODO: add stats counting recovered slices, etc.
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
-	if err == nil {
+	switch {
+	case err == nil:
+		r.LomAdd(lom) // TODO: instead, count restored slices, metafiles, possibly - objects
 		r.last.Store(mono.NanoTime())
-	} else if err != errSkipped {
+	case err == ErrorECDisabled:
+		r.Abort(err)
+	case err == errSkipped:
+		// do nothing
+	default:
 		r.AddErr(err)
-		_errec(lom, err)
+		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+			nlog.Warningln(core.T.String(), "failed to check-and-recover", lom.Cname(), "err:", err)
+		}
 	}
 }
 
@@ -312,6 +321,21 @@ func (j *rcvyJogger) run() {
 		if !ok {
 			break
 		}
-		ECM.TryRecoverObj(lom, j.parent.setLast) // free(lom) inside
+		if l, c := len(j.workCh), cap(j.workCh); l > (c - c>>2) {
+			runtime.Gosched() // poor man's throttle
+			if l == c {
+				j.chanFull.Inc()
+			}
+		}
+		err := ECM.Recover(lom)
+		j.parent.setLast(lom, err)
+		core.FreeLOM(lom)
 	}
+	if cnt := j.chanFull.Load(); cnt > 1 {
+		nlog.Warningln(j.String(), cos.ErrWorkChanFull, "cnt:", cnt)
+	}
+}
+
+func (j *rcvyJogger) String() string {
+	return fmt.Sprint("[ rcvy-j", j.mi.String(), j.parent.Name(), "]")
 }
