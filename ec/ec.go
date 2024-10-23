@@ -534,3 +534,7 @@ func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *core.LOM, err error) {
 	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)
 	return lom, nil
 }
+
+func errLossMpath(r core.Xact, lom *core.LOM) error {
+	return fmt.Errorf("%s: loss of a mountpath [%s, %s]", r.Name(), lom, lom.Mountpath())
+}

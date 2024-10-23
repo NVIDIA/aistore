@@ -27,7 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-const workChanSize = 512
+const rcvyWorkChanSize = 256
 
 type (
 	encFactory struct {
@@ -128,13 +128,13 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 
 	opts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
-		VisitObj: r.bckEncode,
+		VisitObj: r.encode,
 		DoLoad:   mpather.LoadUnsafe,
 	}
 	if r.checkAndRecover {
 		// additionally, traverse and visit
 		opts.CTs = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
-		opts.VisitCT = r.bckEncodeMD
+		opts.VisitCT = r.checkRecover
 
 		avail := fs.GetAvail()
 		if len(avail) == 0 {
@@ -147,7 +147,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		for _, mi := range avail {
 			j := &rcvyJogger{
 				mi:     mi,
-				workCh: make(chan *core.LOM, workChanSize),
+				workCh: make(chan *core.LOM, rcvyWorkChanSize),
 				parent: r,
 			}
 			r.rcvyJG[mi.Path] = j
@@ -173,7 +173,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		// wait for in-flight and pending recovery
 		r.Quiesce(config.Timeout.MaxKeepalive.D(), r._quiesce)
 	}
-	r.wg.Wait() // Need to wait for all async actions to finish.
+	r.wg.Wait() // wait for before/afterEncode
 
 	for _, j := range r.rcvyJG {
 		close(j.workCh)
@@ -192,9 +192,9 @@ func (r *XactBckEncode) _quiesce(elapsed time.Duration) core.QuiRes {
 	return core.QuiInactiveCB
 }
 
-func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
+func (r *XactBckEncode) beforeEncode() { r.wg.Add(1) }
 
-func (r *XactBckEncode) afterECObj(lom *core.LOM, err error) {
+func (r *XactBckEncode) afterEncode(lom *core.LOM, err error) {
 	if err == nil {
 		r.LomAdd(lom)
 	} else if err != errSkipped {
@@ -207,7 +207,7 @@ func (r *XactBckEncode) afterECObj(lom *core.LOM, err error) {
 // Walks through all files in 'obj' directory, and calls EC.Encode for every
 // file whose HRW points to this file and the file does not have corresponding
 // metadata file in 'meta' directory
-func (r *XactBckEncode) bckEncode(lom *core.LOM, _ []byte) error {
+func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
 	_, local, err := lom.HrwTarget(r.smap)
 	if err != nil {
 		return err
@@ -237,13 +237,9 @@ func (r *XactBckEncode) bckEncode(lom *core.LOM, _ []byte) error {
 		}
 	}
 
-	// beforeECObj increases a counter, and callback afterECObj decreases it.
-	// After Walk finishes, the xaction waits until counter drops to zero.
-	// That means all objects have been processed and xaction can finalize.
-	r.beforeECObj()
-	if err = ECM.EncodeObject(lom, r.afterECObj); err != nil {
-		// something went wrong: abort xaction
-		r.afterECObj(lom, err)
+	r.beforeEncode() // (see r.wg.Wait above)
+	if err = ECM.EncodeObject(lom, r.afterEncode); err != nil {
+		r.afterEncode(lom, err)
 		if err != errSkipped {
 			return err
 		}
@@ -259,15 +255,13 @@ func (r *XactBckEncode) Snap() (snap *core.Snap) {
 	return
 }
 
-// Walks through all metafiles and request the "main" target to restore
-// the object if it does not exist
-func (r *XactBckEncode) bckEncodeMD(ct *core.CT, _ []byte) error {
+// given CT, ask the "main" target to restore the corresponding object and slices, if need be
+func (r *XactBckEncode) checkRecover(ct *core.CT, _ []byte) error {
 	tsi, err := r.smap.HrwName2T([]byte(*ct.UnamePtr()))
 	if err != nil {
 		nlog.Errorln(ct.Cname(), "err:", err)
 		return err
 	}
-	// This target is the main one. Skip recovery
 	if tsi.ID() == core.T.SID() {
 		return nil
 	}
@@ -286,7 +280,7 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 	r.probFilter.Insert(*bname)
 	j, ok := r.rcvyJG[lom.Mountpath().Path]
 	if !ok {
-		err := fmt.Errorf("unexpected mountpath %s", lom.Mountpath())
+		err := errLossMpath(r, lom)
 		debug.Assert(false, err)
 		r.Abort(err)
 		return
@@ -304,10 +298,7 @@ func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 	case err == errSkipped:
 		// do nothing
 	default:
-		r.AddErr(err)
-		if cmn.Rom.FastV(4, cos.SmoduleEC) {
-			nlog.Warningln(core.T.String(), "failed to check-and-recover", lom.Cname(), "err:", err)
-		}
+		r.AddErr(err, 4, cos.SmoduleEC)
 	}
 }
 
@@ -316,6 +307,7 @@ func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 ////////////////
 
 func (j *rcvyJogger) run() {
+	var n int
 	for {
 		lom, ok := <-j.workCh
 		if !ok {
@@ -330,6 +322,14 @@ func (j *rcvyJogger) run() {
 		err := ECM.Recover(lom)
 		j.parent.setLast(lom, err)
 		core.FreeLOM(lom)
+
+		n++
+		if err == nil && (n&throttleBatch == throttleBatch) {
+			pct, _, _ := _throttlePct()
+			if pct >= maxThreashold {
+				runtime.Gosched() // ditto
+			}
+		}
 	}
 	if cnt := j.chanFull.Load(); cnt > 1 {
 		nlog.Warningln(j.String(), cos.ErrWorkChanFull, "cnt:", cnt)
@@ -337,5 +337,28 @@ func (j *rcvyJogger) run() {
 }
 
 func (j *rcvyJogger) String() string {
-	return fmt.Sprint("[ rcvy-j", j.mi.String(), j.parent.Name(), "]")
+	return fmt.Sprint("rcvy[ ", j.mi.String(), " ", j.parent.ID(), " ]")
+}
+
+//
+// TODO -- FIXME: dedup core/lcache
+//
+
+const (
+	throttleBatch = 0xf
+	maxThreashold = 60
+)
+
+func _throttlePct() (int, int64, float64) {
+	var (
+		util, lavg = core.T.MaxUtilLoad()
+		cpus       = runtime.NumCPU()
+		maxload    = max((cpus>>1)-(cpus>>3), 1)
+	)
+	if lavg >= float64(maxload) {
+		return 100, util, lavg
+	}
+	ru := cos.RatioPct(100, 2, util)
+	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
+	return int(max(ru, rl)), util, lavg
 }

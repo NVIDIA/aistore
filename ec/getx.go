@@ -136,8 +136,8 @@ func (r *XactGet) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 			r.AddErr(err, 0)
 		}
 	default:
-		debug.Assert(false, "opcode", hdr.Opcode)
-		nlog.Errorf("Invalid request: %d", hdr.Opcode)
+		debug.Assert(false, "invalid opcode ", hdr.Opcode)
+		nlog.Errorln(r.Name(), "invalid request opcode:", hdr.Opcode)
 	}
 }
 
@@ -161,7 +161,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 	return j
 }
 
-func (r *XactGet) dispatchRequest(req *request, lom *core.LOM) error {
+func (r *XactGet) dispatchReq(req *request, lom *core.LOM) error {
 	if !r.ecRequestsEnabled() {
 		if req.ErrCh != nil {
 			req.ErrCh <- ErrorECDisabled
@@ -174,8 +174,11 @@ func (r *XactGet) dispatchRequest(req *request, lom *core.LOM) error {
 
 	jogger, ok := r.getJoggers[lom.Mountpath().Path]
 	if !ok {
-		debug.Assert(false, "invalid "+lom.Mountpath().String())
+		err := errLossMpath(r, lom)
+		r.Abort(err)
+		return err
 	}
+
 	r.stats.updateQueue(len(jogger.workCh))
 	jogger.workCh <- req
 	return nil
@@ -252,13 +255,15 @@ func (r *XactGet) decode(req *request, lom *core.LOM) {
 	req.putTime = time.Now()
 	req.tm = req.putTime
 
-	if err := r.dispatchRequest(req, lom); err != nil {
-		if req.Callback != nil {
-			req.Callback(lom, err)
-		}
-		nlog.Errorln("failed to restore", lom.Cname(), "err:", err)
-		freeReq(req)
+	err := r.dispatchReq(req, lom)
+	if err == nil {
+		return
 	}
+	if req.Callback != nil {
+		req.Callback(lom, err)
+	}
+	nlog.Errorln("failed to restore", lom.Cname(), "err:", err)
+	freeReq(req)
 }
 
 // ClearRequests disables receiving new EC requests, they will be terminated with error
@@ -298,7 +303,10 @@ func (r *XactGet) addMpath(mpath string) {
 func (r *XactGet) removeMpath(mpath string) {
 	getJog, ok := r.getJoggers[mpath]
 	if !ok {
-		debug.Assert(false, "invalid mountpath: "+mpath)
+		err := fmt.Errorf("%s: invalid or lost mountpath %q", r, mpath)
+		debug.Assert(false, err)
+		r.Abort(err)
+		return
 	}
 	getJog.stop()
 	delete(r.getJoggers, mpath)

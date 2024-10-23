@@ -487,16 +487,24 @@ func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 	_ = r.mem.Get()
 	pressure := mm.Pressure(&r.mem)
 
+	flags := r.nodeStateFlags() // current/old
 	switch {
 	case pressure >= memsys.PressureExtreme:
-		set |= cos.OOM
-		nlog.Errorln(mm.Str(&r.mem))
+		if !flags.IsSet(cos.OOM) {
+			set |= cos.OOM
+			nlog.Errorln(mm.Str(&r.mem))
+		}
 	case pressure >= memsys.PressureHigh:
 		set |= cos.LowMemory
 		clr |= cos.OOM
-		nlog.Warningln(mm.Str(&r.mem))
+		if !flags.IsSet(cos.LowMemory) {
+			nlog.Warningln(mm.Str(&r.mem))
+		}
 	default:
 		clr |= cos.OOM | cos.LowMemory
+		if flags.IsSet(cos.LowMemory | cos.OOM) {
+			nlog.Infoln(mm.Name, "back to normal")
+		}
 	}
 	r.SetClrFlag(NodeAlerts, set, clr)
 }

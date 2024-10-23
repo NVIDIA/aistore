@@ -131,12 +131,15 @@ func (r *XactPut) dispatchRequest(req *request, lom *core.LOM) error {
 	case ActDelete:
 		r.stats.updateDelete()
 	default:
-		return fmt.Errorf("invalid request's action %s for putxaction", req.Action)
+		return fmt.Errorf("%s: invalid action %q", r, req.Action)
 	}
 
 	jogger, ok := r.putJoggers[lom.Mountpath().Path]
 	if !ok {
-		debug.Assert(false, "invalid "+lom.Mountpath().String())
+		err := errLossMpath(r, lom)
+		debug.Assert(false, err)
+		r.Abort(err)
+		return err
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)

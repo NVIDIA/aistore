@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -2836,7 +2837,7 @@ func TestECBckEncodeRecover(t *testing.T) {
 	o := ecOptions{
 		minTargets:  4,
 		objCount:    512,
-		concurrency: 8,
+		concurrency: 4,
 		pattern:     "obj-%04d",
 		silent:      testing.Short(),
 	}.init(t, proxyURL)
@@ -2872,15 +2873,11 @@ func TestECBckEncodeRecover(t *testing.T) {
 			o.objSizeLimit = test.objSizeLimit
 			newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
 
-			wg := sync.WaitGroup{}
-			wg.Add(o.objCount)
+			wg := cos.NewLimitedWaitGroup(o.concurrency, sys.NumCPU())
 			for i := range o.objCount {
-				o.sema.Acquire()
+				wg.Add(1)
 				go func(i int) {
-					defer func() {
-						o.sema.Release()
-						wg.Done()
-					}()
+					defer wg.Done()
 					objName := fmt.Sprintf(o.pattern, i)
 					parts := newObjSlices(t, baseParams, bck, objName, i, o)
 					mtx.Lock()
@@ -2932,10 +2929,10 @@ func TestECBckEncodeRecover(t *testing.T) {
 			reqECArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECRespond, Bck: bck}
 			api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqECArgs)
 
-			// Recovering replicas sometimes takes extra time, so check for
-			// recovered slices/replicas more than once
+			// [RETRY]
 			var errStr string
-			for range 3 {
+			for range 4 {
+				time.Sleep(8 * time.Second)
 				errStr = ""
 				// Check that all slices and metafiles are recovered
 				for objName, parts := range objSlicesOrig {
@@ -2950,7 +2947,6 @@ func TestECBckEncodeRecover(t *testing.T) {
 				if errStr == "" {
 					break
 				}
-				time.Sleep(3 * time.Second)
 			}
 			tassert.Error(t, errStr == "", errStr)
 		})

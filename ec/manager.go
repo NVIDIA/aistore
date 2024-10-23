@@ -342,8 +342,9 @@ func (mgr *Manager) Recover(lom *core.LOM) error {
 	req := allocateReq(ActRestore, lom.LIF())
 	errCh := make(chan error) // unbuffered
 	req.ErrCh = errCh
-	mgr.RestoreBckGetXact(lom.Bck()).decode(req, lom)
+	xctn := mgr.RestoreBckGetXact(lom.Bck())
+	xctn.decode(req, lom)
 
-	// wait
+	// wait here
 	return <-errCh
 }

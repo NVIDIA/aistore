@@ -365,7 +365,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 
 	for k, v := range ctx.nodes {
 		if v.SliceID < 1 || v.SliceID > sliceCnt {
-			nlog.Warningf("Node %s has invalid slice ID %d", k, v.SliceID)
+			nlog.Warningf("node %s has invalid slice ID %d", k, v.SliceID)
 			continue
 		}
 

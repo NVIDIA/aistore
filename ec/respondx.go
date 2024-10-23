@@ -176,8 +176,8 @@ func (r *XactRespond) dispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 			r.AddErr(err, 0)
 		}
 	default:
-		debug.Assert(false, "opcode", hdr.Opcode)
-		nlog.Errorf("Invalid request type %d", hdr.Opcode)
+		debug.Assert(false, "invalid opcode ", hdr.Opcode)
+		nlog.Errorln(r.Name(), "invalid request opcode:", hdr.Opcode)
 	}
 }
 

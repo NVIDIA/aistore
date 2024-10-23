@@ -155,7 +155,7 @@ func (c *putJogger) ec(req *request, lom *core.LOM) (err error) {
 		err = c.cleanup(lom)
 		c.parent.stats.updateDeleteTime(time.Since(req.tm), err != nil)
 	default:
-		err = fmt.Errorf("invalid EC action for putJogger: %v", req.Action)
+		err = fmt.Errorf("%s: invalid action %q", c.parent, req.Action)
 	}
 
 	if err == nil {
