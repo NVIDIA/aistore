@@ -117,8 +117,6 @@ class TestObjectReader(unittest.TestCase):
         self.assertIsInstance(args[0], ContentIterator)
         # Check the max_resume argument
         self.assertEqual(kwargs.get("max_resume"), 5)
-        # Check the buffer_size argument
-        self.assertEqual(kwargs.get("buffer_size"), self.chunk_size)
 
     @patch("aistore.sdk.obj.object_reader.ObjectFile", autospec=True)
     def test_as_file_max_resume(self, mock_obj_file):
@@ -140,27 +138,5 @@ class TestObjectReader(unittest.TestCase):
             self.object_reader.as_file(max_resume=-1)
         self.assertEqual(
             str(context.exception),
-            "Invalid value for max_resume: -1. It must be a non-negative integer.",
-        )
-
-    @patch("aistore.sdk.obj.object_reader.ObjectFile", autospec=True)
-    def test_as_file_chunk_size(self, mock_obj_file):
-        buffer_size = 4096
-        res = self.object_reader.as_file(buffer_size=buffer_size)
-        self.assertIsInstance(res, ObjectFile)
-        mock_obj_file.assert_called_once()
-        # Get the arguments passed to the mock
-        args, kwargs = mock_obj_file.call_args
-        # Check that we provided a content iterator
-        self.assertIsInstance(args[0], ContentIterator)
-        # Check the buffer_size argument matches the value we set
-        self.assertEqual(kwargs.get("buffer_size"), buffer_size)
-
-    def test_as_file_invalid_buffer_size(self):
-        # Test for invalid buffer_size value
-        with self.assertRaises(ValueError) as context:
-            self.object_reader.as_file(buffer_size=-1)
-        self.assertEqual(
-            str(context.exception),
-            "Invalid value for buffer_size: -1. It must be a non-negative integer.",
+            "Invalid max_resume (must be a non-negative integer): -1.",
         )

@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
+
 from typing import Iterator
 
 from aistore.sdk.obj.object_client import ObjectClient
@@ -20,13 +21,13 @@ class ContentIterator:
         self._client = client
         self._chunk_size = chunk_size
 
-    def iter_from_position(self, start_position: int) -> Iterator[bytes]:
+    def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
         """
         Make a request to get a stream from the provided object starting at a specific byte position
         and yield chunks of the stream content.
 
         Args:
-            start_position (int): The byte position from which to start reading.
+            start_position (int): The byte position from which to start reading. Defaults to 0.
 
         Returns:
             Iterator[bytes]: An iterator over each chunk of bytes in the object starting from the specific position

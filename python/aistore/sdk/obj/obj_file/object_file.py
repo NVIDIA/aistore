@@ -2,10 +2,13 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-from io import BufferedIOBase
+import requests
 
+from io import BufferedIOBase
+from overrides import override
+from typing import Optional
 from aistore.sdk.obj.content_iterator import ContentIterator
-from aistore.sdk.obj.obj_file.simple_buffer import SimpleBuffer
+from aistore.sdk.obj.obj_file.utils import handle_chunked_encoding_error
 from aistore.sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -13,131 +16,120 @@ logger = get_logger(__name__)
 
 class ObjectFile(BufferedIOBase):
     """
-    A file-like object extending `BufferedIOBase` for reading object data, with support for both
+    A sequential read-only file-like object extending `BufferedIOBase` for reading object data, with support for both
     reading a fixed size of data and reading until the end of file (EOF).
 
-    Data is retrieved from the provided `content_iterator` in chunks and read through an internal
-    buffer. The buffer manages retries and error recovery (e.g., ChunkedEncodingError) as needed.
-    The `max_resume` setting applies to the entire ObjectFile instance, specifying the maximum number
-    of retry attempts allowed to recover from unexpected stream interruptions during reads.
+    When a read is requested, any remaining data from a previously fetched chunk is returned first. If the remaining
+    data is insufficient to satisfy the request, the `read()` method fetches additional chunks from the provided
+    `content_iterator` as needed, until the requested size is fulfilled or the end of the stream is reached.
+
+    In case of stream interruptions (e.g., `ChunkedEncodingError`), the `read()` method automatically retries and
+    resumes fetching data from the last successfully retrieved chunk. The `max_resume` parameter controls how many
+    retry attempts are made before an error is raised.
 
     Args:
         content_iterator (ContentIterator): An iterator that can fetch object data from AIS in chunks.
-        max_resume (int): Maximum number of retry attempts in case of a streaming failure.
-        buffer_size (int): The size of the internal buffer to use for reading data.
+        max_resume (int): Maximum number of resumes allowed for an ObjectFile instance.
     """
 
-    def __init__(
-        self, content_iterator: ContentIterator, max_resume: int, buffer_size: int
-    ):
+    def __init__(self, content_iterator: ContentIterator, max_resume: int):
         self._content_iterator = content_iterator
-        self._max_resume = max_resume
-        self._read_position = 0
+        self._iterable = self._content_iterator.iter_from_position(0)
+        self._max_resume = max_resume  # Maximum number of resume attempts allowed
+        self._remainder = b""  # Holds leftover data from the last chunk
+        self._resume_position = 0  # Tracks the current position in the stream
+        self._resume_total = 0  # Tracks the number of resume attempts
         self._closed = False
-        self._buffer_size = buffer_size
-        self._buffer = SimpleBuffer(
-            self._content_iterator, self._max_resume, self._buffer_size
-        )
 
+    @override
     def __enter__(self):
-        logger.debug("Entering context, resetting file state.")
+        self._iterable = self._content_iterator.iter_from_position(0)
+        self._remainder = b""
+        self._resume_position = 0
+        self._resume_total = 0
         self._closed = False
-        self._read_position = 0
-        self._buffer = SimpleBuffer(
-            self._content_iterator, self._max_resume, self._buffer_size
-        )
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        logger.debug("Exiting context, closing file.")
-        self.close()
-
-    def close(self) -> None:
-        """
-        Close the file and release resources.
-
-        Raises:
-            ValueError: I/O operation on closed file.
-        """
-        if self._closed:
-            raise ValueError("I/O operation on closed file.")
-
-        logger.debug("Closing file.")
-        self._closed = True
-
-    def tell(self) -> int:
-        """
-        Return the current file position.
-
-        Returns:
-            The current file position.
-
-        Raises:
-            ValueError: I/O operation on closed file.
-        """
-        if self._closed:
-            raise ValueError("I/O operation on closed file.")
-        return self._read_position
-
+    @override
     def readable(self) -> bool:
-        """
-        Return whether the file is readable.
+        """Return whether the file is readable."""
+        return not self._closed
 
-        Returns:
-            True if the file is readable, False otherwise.
-
-        Raises:
-            ValueError: I/O operation on closed file.
+    @override
+    def read(self, size: Optional[int] = -1) -> bytes:
         """
-        if self._closed:
-            return False
-        return True
-
-    def seekable(self) -> bool:
-        """
-        Return whether the file supports seeking.
-
-        Returns:
-            False since the file does not support seeking.
-        """
-        return False
-
-    def read(self, size=-1):
-        """
-        Read bytes from the object, handling retries in case of stream errors.
+        Read up to 'size' bytes from the object. If size is -1, read until the end of the stream.
 
         Args:
-            size (int, optional): Number of bytes to read. If -1, reads until the end of the stream.
+            size (int, optional): The number of bytes to read. If -1, reads until EOF.
 
         Returns:
-            bytes: The data read from the object.
+            bytes: The read data as a bytes object.
 
         Raises:
             ObjectFileStreamError if a connection cannot be made.
             ObjectFileMaxResumeError if the stream is interrupted more than the allowed maximum.
             ValueError: I/O operation on a closed file.
+            Exception: Any other errors while streaming and reading.
         """
         if self._closed:
             raise ValueError("I/O operation on closed file.")
         if size == 0:
             return b""
 
+        # If size is -1, set it to infinity to read until the end of the stream
+        size = float("inf") if size == -1 else size
+
         result = bytearray()
 
-        while size == -1 or len(result) < size:
-            data = self._buffer.read(size - len(result) if size != -1 else -1)
+        try:
+            # Consume any remaining data from a previous chunk before fetching new data
+            if self._remainder:
+                to_consume = min(len(self._remainder), size)
+                result.extend(memoryview(self._remainder[:to_consume]))
+                self._remainder = self._remainder[to_consume:]
+                size -= to_consume
 
-            if not data:
-                if self._buffer.eof:
-                    break  # No more data to read
+            # Fetch more chunks from the stream as needed
+            while size:
                 try:
-                    self._buffer.fill()  # Try to refill the buffer
-                except Exception as err:
-                    logger.error("Error filling buffer, closing file: (%s)", err)
-                    self.close()
-                    raise err
-            else:
-                result.extend(data)
+                    chunk = next(self._iterable)
+                except StopIteration:
+                    # End of stream, exit loop
+                    break
+                except requests.exceptions.ChunkedEncodingError as err:
+                    # Handle ChunkedEncodingError and attempt to resume the stream
+                    self._iterable, self._resume_total = handle_chunked_encoding_error(
+                        self._content_iterator,
+                        self._resume_position,
+                        self._resume_total,
+                        self._max_resume,
+                        err,
+                    )
 
-        self._read_position += len(result)
+                    # Retry fetching the chunk after resuming
+                    continue
+
+                # Track the position of the stream by adding the length
+                # of each fetched chunk
+                self._resume_position += len(chunk)
+
+                # Add the part of the chunk that fits within the requested size and
+                # store any leftover data for the next read
+                to_consume = min(len(chunk), size)
+                result.extend(memoryview(chunk[:to_consume]))
+                self._remainder = memoryview(chunk)[to_consume:]
+                size -= to_consume
+
+        except Exception as err:
+            # Handle any unexpected errors, log them, close the file, and re-raise
+            logger.error("Error reading, closing file: (%s)", err)
+            self.close()
+            raise err
+
         return bytes(result)
+
+    @override
+    def close(self) -> None:
+        """Close the file."""
+        self._closed = True

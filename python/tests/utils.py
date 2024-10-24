@@ -8,64 +8,77 @@ from itertools import product
 from pathlib import Path
 from unittest.mock import Mock
 
-from typing import Dict, List
+from typing import Dict, List, Iterator
 from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk import Client
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE, UTF_ENCODING
+from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.provider import Provider
 from aistore.sdk.obj.content_iterator import ContentIterator
 
 
 # pylint: disable=too-few-public-methods
-class BadObjectStream(io.BytesIO):
+class BadContentStream(io.BytesIO):
     """
-    Simulates a stream that fails with ChunkedEncodingError intermittently every `fail_on_read`
-    chunks read.
+    Simulates a stream that fails intermittently with a specified error after a set number of reads.
+
+    Args:
+        data (bytes): The data to be streamed.
+        fail_on_read (int): The number of reads after which the error is raised.
+        error (Exception): The error instance to raise after `fail_on_read` reads.
     """
 
-    def __init__(self, *args, fail_on_read=2, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, data: bytes, fail_on_read: int, error: Exception):
+        super().__init__(data)
         self.read_count = 0
         self.fail_on_read = fail_on_read
+        self.error = error
 
-    def read(self, size=-1):
-        """Overrides `BytesIO.read` to simulate failure after a specific number of reads."""
+    def read(self, size: int = -1) -> bytes:
+        """Overrides `BytesIO.read` to raise an error after a specific number of reads."""
         self.read_count += 1
         if self.read_count == self.fail_on_read:
-            raise ChunkedEncodingError("Simulated ChunkedEncodingError")
+            raise self.error
         return super().read(size)
 
 
 # pylint: disable=too-few-public-methods
 class BadContentIterator(ContentIterator):
     """
-    Simulates an ContentIterator that streams data using BadObjectStream that fails with ChunksEncoding
-    error every `fail_on_read` chunks read.
+    Simulates a ContentIterator that streams data in chunks and intermittently raises errors
+    via a `BadContentStream`.
 
-    This class extends `ContentIterator` and the chunk size (DEFAULT_CHUNK_SIZE) is inherited from the
-    parent class `ContentIterator`.
-
-    The streaming starts from a specific position (`start_position`), allowing the object to resume
-    reading from that point if necessary.
+    Args:
+        data (bytes): The data to be streamed in chunks.
+        fail_on_read (int): The number of reads after which an error will be raised.
+        chunk_size (int): The size of each chunk to be read from the data.
+        error (Exception): The error instance to raise after `fail_on_read` reads.
     """
 
-    def __init__(self, data=None, fail_on_read=2, chunk_size=DEFAULT_CHUNK_SIZE):
+    def __init__(
+        self,
+        data: bytes,
+        fail_on_read: int,
+        chunk_size: int,
+        error: Exception = ChunkedEncodingError("Simulated ChunkedEncodingError"),
+    ):
         super().__init__(client=Mock(), chunk_size=chunk_size)
         self.data = data
         self.fail_on_read = fail_on_read
+        self.error = error
+        self.read_position = 0
 
-    def iter_from_position(self, start_position=0):
-        """Simulate streaming the object from the specified position `start_position`."""
+    def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
+        """Streams data using `BadContentStream`, starting from `start_position`."""
+        stream = BadContentStream(
+            self.data[start_position:], fail_on_read=self.fail_on_read, error=self.error
+        )
+        self.read_position = start_position
 
         def iterator():
-            stream = BadObjectStream(
-                self.data[start_position:], fail_on_read=self.fail_on_read
-            )
-            while True:
+            while self.read_position < len(self.data):
                 chunk = stream.read(self._chunk_size)
-                if not chunk:
-                    break
+                self.read_position += len(chunk)
                 yield chunk
 
         return iterator()
