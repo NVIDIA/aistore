@@ -10,7 +10,7 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 
-from aistore.sdk.const import AIS_CLIENT_CA
+from aistore.sdk.const import AIS_CLIENT_CA, HTTPS, HTTP
 
 DEFAULT_RETRY = Retry(total=6, connect=3, backoff_factor=1)
 
@@ -89,6 +89,6 @@ class SessionManager:
         """
         request_session = Session()
         self._set_session_verification(request_session)
-        for protocol in ("http://", "https://"):
+        for protocol in (HTTP, HTTPS):
             request_session.mount(protocol, HTTPAdapter(max_retries=self._retry))
         return request_session

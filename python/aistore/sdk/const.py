@@ -7,6 +7,7 @@ HEADER_ACCEPT = "Accept"
 HEADER_USER_AGENT = "User-Agent"
 HEADER_CONTENT_TYPE = "Content-Type"
 HEADER_CONTENT_LENGTH = "Content-Length"
+HEADER_LOCATION = "Location"
 # Standard Header Values
 USER_AGENT_BASE = "ais/python"
 JSON_CONTENT_TYPE = "application/json"
@@ -133,6 +134,12 @@ STATUS_ACCEPTED = 202
 STATUS_OK = 200
 STATUS_BAD_REQUEST = 400
 STATUS_PARTIAL_CONTENT = 206
+STATUS_REDIRECT_TMP = 307
+STATUS_REDIRECT_PERM = 301
+
+# Protocol
+HTTP = "http://"
+HTTPS = "https://"
 
 # Environment Variables
 AIS_CLIENT_CA = "AIS_CLIENT_CA"

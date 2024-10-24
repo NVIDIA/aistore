@@ -11,6 +11,10 @@ from aistore.sdk.const import (
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
     HEADER_AUTHORIZATION,
+    HTTPS,
+    HEADER_LOCATION,
+    STATUS_REDIRECT_PERM,
+    STATUS_REDIRECT_TMP,
 )
 from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.utils import raise_ais_error, handle_errors, decode_response
@@ -145,16 +149,61 @@ class RequestClient:
         if self.token:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
 
-        resp = self.session_manager.session.request(
-            method,
-            url,
-            headers=headers,
-            timeout=self._timeout,
-            **kwargs,
-        )
+        if url.startswith(HTTPS) and "data" in kwargs:
+            resp = self._request_with_manual_redirect(method, url, headers, **kwargs)
+        else:
+            resp = self._session_request(method, url, headers, **kwargs)
+
         if resp.status_code < 200 or resp.status_code >= 300:
             handle_errors(resp, self._error_handler)
+
         return resp
+
+    def _request_with_manual_redirect(
+        self, method: str, url: str, headers, **kwargs
+    ) -> Response:
+        """
+        Make a request to the proxy, close the session, and use a new session to make a request to the redirected
+        target.
+
+        This exists because the current implementation of `requests` does not seem to handle a 307 redirect
+        properly from a server with TLS enabled with data in the request, and will error with the following on the
+        initial connection to the proxy:
+            SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')
+        Instead, this implementation will not send the data to the proxy, and only use it to access the proper target.
+
+        Args:
+            method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
+            url (str): Initial AIS url.
+            headers (dict): Extra headers to be passed with the request. Content-Type and User-Agent will be overridden.
+            **kwargs (optional): Optional keyword arguments to pass with the call to request.
+
+        Returns:
+            Final response from AIS target
+
+        """
+        # Do not include data payload in the initial request to the proxy
+        proxy_request_kwargs = {
+            "headers": headers,
+            "allow_redirects": False,
+            **{k: v for k, v in kwargs.items() if k != "data"},
+        }
+
+        # Request to proxy, which should redirect
+        resp = self.session_manager.session.request(method, url, **proxy_request_kwargs)
+        self.session_manager.session.close()
+        if resp.status_code in (STATUS_REDIRECT_PERM, STATUS_REDIRECT_TMP):
+            target_url = resp.headers.get(HEADER_LOCATION)
+            # Redirected request to target
+            resp = self._session_request(method, target_url, headers, **kwargs)
+        return resp
+
+    def _session_request(self, method, url, headers, **kwargs) -> Response:
+        request_kwargs = {"headers": headers, **kwargs}
+        if self._timeout is not None:
+            request_kwargs["timeout"] = self._timeout
+
+        return self.session_manager.session.request(method, url, **request_kwargs)
 
     def get_full_url(self, path: str, params: Dict[str, Any]) -> str:
         """

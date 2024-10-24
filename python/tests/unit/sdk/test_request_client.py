@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, call
 
 from requests import Response, Session
 
@@ -85,7 +85,6 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             method,
             expected_url,
             headers=self.request_headers,
-            timeout=None,
             keyword=custom_kw,
         )
         mock_decode.assert_called_with(str, self.mock_response)
@@ -118,13 +117,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             res = self.default_request_client.request(
                 method, path, headers=extra_headers, keyword=extra_kw_arg
             )
-        self.mock_session.request.assert_called_with(
-            method,
-            req_url,
-            headers=self.request_headers,
-            timeout=timeout,
-            keyword=extra_kw_arg,
-        )
+        self._request_assert(method, req_url, timeout, extra_kw_arg)
         self.assertEqual(self.mock_response, res)
 
         for response_code in [199, 300]:
@@ -137,15 +130,65 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                     headers=extra_headers,
                     keyword=extra_kw_arg,
                 )
-                self.mock_session.request.assert_called_with(
-                    method,
-                    req_url,
-                    headers=self.request_headers,
-                    timeout=timeout,
-                    keyword=extra_kw_arg,
-                )
+                self._request_assert(method, req_url, timeout, extra_kw_arg)
                 self.assertEqual(self.mock_response, res)
                 mock_handle_err.assert_called_once()
+
+    def _request_assert(self, method, url, timeout, expected_kw):
+        if timeout:
+            self.mock_session.request.assert_called_with(
+                method,
+                url,
+                headers=self.request_headers,
+                timeout=timeout,
+                keyword=expected_kw,
+            )
+        else:
+            self.mock_session.request.assert_called_with(
+                method,
+                url,
+                headers=self.request_headers,
+                keyword=expected_kw,
+            )
+
+    def test_request_https_data(self):
+        method = "request_method"
+        path = "request_path"
+        extra_kw_arg = "arg"
+        data = "my_data"
+        expected_url = self.endpoint + "/v1/" + path
+        redirect_url = "target" + "/v1/" + path
+
+        redirect_response = Mock(spec=Response)
+        redirect_response.status_code = 307
+        redirect_response.headers = {"Location": redirect_url}
+        self.mock_response.status_code = 200
+        self.mock_session.request.side_effect = [redirect_response, self.mock_response]
+
+        response = self.default_request_client.request(
+            method, path, data=data, keyword=extra_kw_arg
+        )
+
+        self.assertEqual(self.mock_response, response)
+
+        expected_proxy_call = call(
+            method,
+            expected_url,
+            headers=self.request_headers,
+            allow_redirects=False,
+            keyword=extra_kw_arg,
+        )
+        expected_target_call = call(
+            method,
+            redirect_url,
+            headers=self.request_headers,
+            keyword=extra_kw_arg,
+            data=data,
+        )
+
+        self.mock_session.request.assert_has_calls(
+            [expected_proxy_call, expected_target_call]
+        )
 
     def test_get_full_url(self):
         path = "/testpath/to_obj"
