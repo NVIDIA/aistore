@@ -28,6 +28,7 @@ const (
 	skipEvictThreashold = 20 // likely not running when above
 	maxEvictThreashold  = 60 // never running when above
 
+	dfltEvictTime          = 2 * time.Hour
 	maxTimeWithNoEvictions = 16 * time.Hour
 )
 
@@ -72,12 +73,12 @@ type (
 )
 
 // g.lchk
-func (lchk *lchk) init(timeout time.Duration) {
+func (lchk *lchk) init(config *cmn.Config) {
 	lchk.running.Store(false)
-	lchk.timeout = timeout
+	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), dfltEvictTime)
 
 	lchk.last = time.Now()
-	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, timeout)
+	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, lchk.timeout)
 }
 
 // evict bucket
@@ -237,7 +238,7 @@ func (*term) f(_, value any) bool {
 func (lchk *lchk) housekeep(int64) time.Duration {
 	// refresh
 	config := cmn.GCO.Get()
-	lchk.timeout = config.Timeout.ObjectMD.D()
+	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), dfltEvictTime)
 
 	// concurrent term, uncache-bck, etc.
 	rc := lchk.rc.Load()
@@ -257,13 +258,13 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 
 	if pct > maxEvictThreashold {
 		nlog.Warningln("max-evict threshold:", maxEvictThreashold, "- not running")
-		return min(lchk.timeout>>1, time.Hour)
+		return min(lchk.timeout>>1, dfltEvictTime>>1)
 	}
 	now := time.Now()
 	if pct > skipEvictThreashold {
 		if elapsed := now.Sub(lchk.last); elapsed < min(maxTimeWithNoEvictions, max(lchk.timeout, time.Hour)*8) {
 			nlog.Warningln("skip-evict threshold:", skipEvictThreashold, "elapsed:", elapsed, "- not running")
-			return min(lchk.timeout>>1, time.Hour)
+			return min(lchk.timeout>>1, dfltEvictTime>>1)
 		}
 	}
 

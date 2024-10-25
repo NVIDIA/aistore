@@ -96,7 +96,7 @@ var (
 
 func Pinit() { bckLocker = newNameLocker() }
 
-func Tinit(t Target, tstats cos.StatsUpdater, timeout time.Duration, runHK bool) {
+func Tinit(t Target, tstats cos.StatsUpdater, config *cmn.Config, runHK bool) {
 	bckLocker = newNameLocker()
 	T = t
 	{
@@ -107,7 +107,7 @@ func Tinit(t Target, tstats cos.StatsUpdater, timeout time.Duration, runHK bool)
 		g.smm = t.ByteMM()
 	}
 	if runHK {
-		g.lchk.init(timeout)
+		g.lchk.init(config)
 	}
 	for i := range recordSepa {
 		recdupSepa[i] = recordSepa[i]

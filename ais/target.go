@@ -316,7 +316,7 @@ func (t *target) Run() error {
 
 	tstats := t.statsT.(*stats.Trunner)
 
-	core.Tinit(t, tstats, config.Timeout.ObjectMD.D(), true /*run hk*/)
+	core.Tinit(t, tstats, config, true /*run hk*/)
 
 	fatalErr, writeErr := t.checkRestarted(config)
 	if fatalErr != nil {
