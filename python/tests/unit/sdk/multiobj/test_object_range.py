@@ -2,7 +2,7 @@ import unittest
 
 from aistore.sdk.errors import InvalidObjectRangeIndex
 from aistore.sdk.multiobj import ObjectRange
-from tests.utils import test_cases
+from tests.utils import cases
 from tests.const import PREFIX_NAME, SUFFIX_NAME
 
 
@@ -41,7 +41,7 @@ class TestObjectRange(unittest.TestCase):
         with self.assertRaises(ValueError):
             ObjectRange(prefix=self.prefix, suffix="anything")
 
-    @test_cases(
+    @cases(
         (1, 25, 0, True),
         (25, 1, 0, False),
         (20, 25, 1, False),

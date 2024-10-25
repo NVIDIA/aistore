@@ -14,7 +14,7 @@ from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
 from tests.const import ETL_NAME
-from tests.utils import test_cases
+from tests.utils import cases
 
 
 class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
@@ -33,7 +33,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             token=None,
         )
 
-    @test_cases(
+    @cases(
         (True, None, None, None, "dummy.token"),
         (False, "ca_cert_location", None, None, None),
         (False, None, 30.0, Retry(total=4), None),
@@ -61,7 +61,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             token=token,
         )
 
-    @test_cases(*Provider)
+    @cases(*Provider)
     def test_bucket(self, provider):
         bck_name = "bucket_123"
         namespace = Namespace(uuid="id", name="namespace")

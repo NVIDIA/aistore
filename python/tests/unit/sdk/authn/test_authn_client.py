@@ -11,7 +11,7 @@ from aistore.sdk.authn import AuthNClient
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
 from aistore.sdk.authn.utils import raise_authn_error
 
-from tests.utils import test_cases
+from tests.utils import cases
 
 
 # pylint: disable=unused-variable, duplicate-code
@@ -32,7 +32,7 @@ class TestAuthNClient(unittest.TestCase):
             error_handler=raise_authn_error,
         )
 
-    @test_cases(
+    @cases(
         (True, None, None, None, "dummy.token"),
         (False, "ca_cert_location", None, None, None),
         (False, None, 30.0, Retry(total=20), None),

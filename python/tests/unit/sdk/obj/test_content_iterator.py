@@ -3,7 +3,7 @@ from unittest.mock import Mock
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from aistore.sdk.obj.content_iterator import ContentIterator
-from tests.utils import test_cases
+from tests.utils import cases
 
 byte_chunks = [b"chunk1", b"chunk2", b"chunk3"]
 
@@ -13,7 +13,7 @@ class TestContentIterator(unittest.TestCase):
         self.mock_client = Mock(spec=ObjectClient)
         self.iterator = ContentIterator(self.mock_client, DEFAULT_CHUNK_SIZE)
 
-    @test_cases(None, 1234)
+    @cases(None, 1234)
     def test_iter_from_position(self, chunk_size):
         mock_stream = Mock()
         mock_stream.iter_content.return_value = byte_chunks

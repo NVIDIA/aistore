@@ -38,7 +38,7 @@ from aistore.sdk.types import (
     NodeThroughput,
 )
 
-from tests.utils import test_cases
+from tests.utils import cases
 
 
 class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
@@ -58,7 +58,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             params={QPARAM_WHAT: WHAT_SMAP},
         )
 
-    @test_cases(*Provider)
+    @cases(*Provider)
     def test_list_buckets(self, provider):
         expected_params = {QPARAM_PROVIDER: provider.value}
         self.list_buckets_exec_assert(expected_params, provider=provider)
@@ -86,7 +86,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_client.request.side_effect = Exception
         self.assertFalse(self.cluster.is_ready())
 
-    @test_cases(True, False)
+    @cases(True, False)
     def test_is_ready(self, test_case):
         expected_params = {QPARAM_PRIMARY_READY_REB: "true"}
         primary_proxy_endpoint = "primary_proxy_url"

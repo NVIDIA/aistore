@@ -63,7 +63,7 @@ from aistore.sdk.types import (
 from aistore.sdk.enums import FLTPresence
 from aistore.sdk.provider import Provider
 from tests.const import ETL_NAME, PREFIX_NAME
-from tests.utils import test_cases
+from tests.utils import cases
 
 BCK_NAME = "bucket_name"
 
@@ -108,7 +108,7 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(BCK_NAME, bck.name)
         self.assertEqual(expected_ns, bck.namespace)
 
-    @test_cases(("gs", Provider.GOOGLE), ("s3", Provider.AMAZON))
+    @cases(("gs", Provider.GOOGLE), ("s3", Provider.AMAZON))
     def test_init_mapped_provider(self, test_case):
         alias, provider = test_case
         bck = Bucket(
@@ -226,7 +226,7 @@ class TestBucket(unittest.TestCase):
         )
         self.assertEqual(headers, mock_header.headers)
 
-    @test_cases(*Provider)
+    @cases(*Provider)
     def test_copy_default_params(self, provider):
         dest_bck = Bucket(
             client=self.mock_client,

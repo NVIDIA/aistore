@@ -19,7 +19,7 @@ from aistore.sdk.provider import Provider
 from aistore.sdk.multiobj import ObjectRange, ObjectNames
 from tests.integration import CLUSTER_ENDPOINT
 from tests.const import TEST_TIMEOUT
-from tests.utils import test_cases, random_string, create_random_tarballs
+from tests.utils import cases, random_string, create_random_tarballs
 
 
 class TestDsortOps(unittest.TestCase):
@@ -112,11 +112,11 @@ class TestDsortOps(unittest.TestCase):
         return expected_contents
 
     # pylint: disable=too-many-locals
-    @test_cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
+    @cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
     def test_dsort_json(self, test_case):
         self._test_dsort_from_spec(test_case, spec_type="json")
 
-    @test_cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
+    @cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
     def test_dsort_yaml(self, test_case):
         self._test_dsort_from_spec(test_case, spec_type="yaml")
 
@@ -303,7 +303,7 @@ class TestDsortOps(unittest.TestCase):
         self.assertNotEqual(tar_names, sorted_tar_names)
         self.assertEqual(len(tar_names), num_shards * num_files)
 
-    @test_cases(
+    @cases(
         (".loss", "int", False),
         (".cls", "float", False),
         (".smth", "string", False),

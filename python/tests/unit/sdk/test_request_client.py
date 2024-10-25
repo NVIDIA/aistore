@@ -12,7 +12,7 @@ from aistore.sdk.const import (
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
-from tests.utils import test_cases
+from tests.utils import cases
 
 
 class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
@@ -37,7 +37,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         )
         self.assertIsNone(self.default_request_client.timeout)
 
-    @test_cases(
+    @cases(
         10,
         30.0,
         (10, 30.0),
@@ -57,7 +57,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.default_request_client.token = auth_token
         self.assertEqual(auth_token, self.default_request_client.token)
 
-    @test_cases(
+    @cases(
         10,
         30.0,
         (10, 30.0),
@@ -90,7 +90,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         )
         mock_decode.assert_called_with(str, self.mock_response)
 
-    @test_cases((None, None), ("http://custom_endpoint", 30))
+    @cases((None, None), ("http://custom_endpoint", 30))
     def test_request(self, test_case):
         endpoint_arg, timeout = test_case
         if timeout:

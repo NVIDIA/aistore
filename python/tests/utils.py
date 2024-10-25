@@ -123,7 +123,7 @@ def create_and_put_objects(
     return obj_names
 
 
-def test_cases(*args):
+def cases(*args):
     def decorator(func):
         def wrapper(self, *inner_args, **kwargs):
             for arg in args:
@@ -135,12 +135,12 @@ def test_cases(*args):
     return decorator
 
 
-def test_cases_combinations(*args_list):
+def case_matrix(*args_list):
     def decorator(func):
-        def wrapper(self):
+        def wrapper(self, *inner_args, **kwargs):
             for args in product(*args_list):
                 with self.subTest(args=args):
-                    func(self, *args)
+                    func(self, *args, *inner_args, **kwargs)
 
         return wrapper
 

@@ -1,12 +1,12 @@
 import unittest
 
 from aistore.sdk import ListObjectFlag
-from tests.utils import test_cases
+from tests.utils import cases
 
 
 # pylint: disable=unused-variable
 class TestListObjectFlag(unittest.TestCase):
-    @test_cases(
+    @cases(
         ([], 0),
         ([ListObjectFlag.ALL], 2),
         ([ListObjectFlag.ONLY_REMOTE_PROPS], 1024),

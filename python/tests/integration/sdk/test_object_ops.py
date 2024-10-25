@@ -28,7 +28,7 @@ from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import (
     random_string,
     cleanup_local,
-    test_cases,
+    cases,
     create_archive,
     string_to_dict,
 )
@@ -198,7 +198,7 @@ class TestObjectOps(RemoteEnabledTest):
         not REMOTE_SET,
         "Remote bucket is not set",
     )
-    @test_cases("1mb", "1MiB", "1048576", "128k")
+    @cases("1mb", "1MiB", "1048576", "128k")
     def test_get_blob_download(self, testcase):
         objects = self._put_objects(1, SMALL_FILE_SIZE)
         obj_names = list(objects.keys())

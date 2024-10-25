@@ -9,7 +9,7 @@ from aistore.sdk.client import Client
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_string, test_cases_combinations
+from tests.utils import create_and_put_object, random_string, case_matrix
 
 
 class TestObjectFileOps(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestObjectFileOps(unittest.TestCase):
     def tearDownClass(cls):
         cls.bucket.delete(missing_ok=True)
 
-    @test_cases_combinations(
+    @case_matrix(
         [
             DEFAULT_CHUNK_SIZE // 2,
             DEFAULT_CHUNK_SIZE,
@@ -68,7 +68,7 @@ class TestObjectFileOps(unittest.TestCase):
         self.assertEqual(object_file.tell(), expected_size)
         self.assertEqual(data, self.test_data[:expected_size])
 
-    @test_cases_combinations(
+    @case_matrix(
         [
             DEFAULT_CHUNK_SIZE // 2,
             DEFAULT_CHUNK_SIZE,

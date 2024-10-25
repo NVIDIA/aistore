@@ -21,7 +21,7 @@ from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
 
-from tests.utils import random_string, cleanup_local, test_cases
+from tests.utils import random_string, cleanup_local, cases
 from tests.const import OBJECT_COUNT, OBJ_CONTENT, PREFIX_NAME
 from tests.integration import REMOTE_SET
 
@@ -66,7 +66,7 @@ class TestBucketOps(RemoteEnabledTest):
         bucket_names = {bck.name for bck in res}
         self.assertIn(new_bck.name, bucket_names)
 
-    @test_cases(
+    @cases(
         "*", ".", "", " ", "bucket/name", "bucket and name", "#name", "$name", "~name"
     )
     def test_create_bucket_invalid_name(self, testcase):
@@ -290,7 +290,7 @@ class TestBucketOps(RemoteEnabledTest):
         # Verify the put files call does not actually create objects
         self._verify_obj_res(TOP_LEVEL_FILES, expect_err=True)
 
-    @test_cases((None, OBJECT_COUNT), (7, 7), (OBJECT_COUNT * 2, OBJECT_COUNT))
+    @cases((None, OBJECT_COUNT), (7, 7), (OBJECT_COUNT * 2, OBJECT_COUNT))
     def test_list_objects(self, test_case):
         page_size, response_size = test_case
         # Only create the bucket entries on the first subtest run
