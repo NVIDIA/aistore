@@ -46,6 +46,7 @@ type (
 		probFilter      *prob.Filter
 		rcvyJG          map[string]*rcvyJogger
 		last            atomic.Int64
+		done            atomic.Bool
 		checkAndRecover bool
 	}
 	rcvyJogger struct {
@@ -142,6 +143,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 			r.Finish()
 			return
 		}
+		r.last.Store(mono.NanoTime())
 		// run recovery joggers
 		r.rcvyJG = make(map[string]*rcvyJogger, len(avail))
 		for _, mi := range avail {
@@ -171,7 +173,8 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	}
 	if r.checkAndRecover {
 		// wait for in-flight and pending recovery
-		r.Quiesce(config.Timeout.MaxKeepalive.D(), r._quiesce)
+		r.Quiesce(time.Minute, r._quiesce)
+		r.done.Store(true)
 	}
 	r.wg.Wait() // wait for before/afterEncode
 
@@ -182,12 +185,9 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *XactBckEncode) _quiesce(elapsed time.Duration) core.QuiRes {
-	if mono.Since(r.last.Load()) > cmn.Rom.MaxKeepalive()-(cmn.Rom.MaxKeepalive()>>2) {
+func (r *XactBckEncode) _quiesce(time.Duration) core.QuiRes {
+	if mono.Since(r.last.Load()) > cmn.Rom.MaxKeepalive() {
 		return core.QuiDone
-	}
-	if elapsed > time.Minute {
-		return core.QuiTimeout
 	}
 	return core.QuiInactiveCB
 }
@@ -285,7 +285,9 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 		r.Abort(err)
 		return
 	}
-	j.workCh <- lom
+	if !r.done.Load() {
+		j.workCh <- lom
+	}
 }
 
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
@@ -327,7 +329,7 @@ func (j *rcvyJogger) run() {
 		if err == nil && (n&throttleBatch == throttleBatch) {
 			pct, _, _ := _throttlePct()
 			if pct >= maxThreashold {
-				runtime.Gosched() // ditto
+				time.Sleep(fs.Throttle10ms)
 			}
 		}
 	}
@@ -337,7 +339,7 @@ func (j *rcvyJogger) run() {
 }
 
 func (j *rcvyJogger) String() string {
-	return fmt.Sprint("rcvy[ ", j.mi.String(), " ", j.parent.ID(), " ]")
+	return fmt.Sprintf("j-rcvy %s[%s/%s]", j.parent.ID(), j.mi, j.parent.Bck())
 }
 
 //

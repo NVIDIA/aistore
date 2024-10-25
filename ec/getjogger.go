@@ -850,6 +850,9 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		ctx.nodes = make(map[string]*Metadata, len(nodes))
 		for _, node := range nodes {
 			wg.Add(1)
+			if node.InMaintOrDecomm() {
+				continue
+			}
 			go func(si *meta.Snode, c *getJogger, mtx *sync.Mutex, mdExists bool) {
 				ctx.requestMeta(si, c, mtx, mdExists)
 				wg.Done()
@@ -860,6 +863,9 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		ctx.nodes = make(map[string]*Metadata, len(tmap))
 		for _, node := range tmap {
 			if node.ID() == core.T.SID() {
+				continue
+			}
+			if node.InMaintOrDecomm() {
 				continue
 			}
 			wg.Add(1)
@@ -895,10 +901,11 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 func (ctx *restoreCtx) requestMeta(si *meta.Snode, c *getJogger, mtx *sync.Mutex, mdExists bool) {
 	md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
 	if err != nil {
+		warn := fmt.Sprintf("%s: %s failed request-meta(%s) request: %v", core.T, ctx.lom.Cname(), si, err)
 		if mdExists {
-			nlog.Errorf("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
+			nlog.Warningln(warn)
 		} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
-			nlog.Infof("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
+			nlog.Infoln(warn)
 		}
 		return
 	}

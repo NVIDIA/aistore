@@ -592,12 +592,12 @@ var (
 
 	copiesFlag = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 
-	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Value: 2, Usage: "number of data slices", Required: true}
-	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Value: 2, Usage: "number of parity slices", Required: true}
+	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,d", Value: 2, Usage: "number of data slices"}
+	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,p", Value: 2, Usage: "number of parity slices"}
 
 	checkAndRecoverFlag = cli.BoolFlag{
 		Name:  "recover",
-		Usage: "check and recover missing or corrupted EC metadata and/or slices, if any",
+		Usage: "check and make sure that each and every object is properly erasure coded",
 	}
 
 	compactPropFlag = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}

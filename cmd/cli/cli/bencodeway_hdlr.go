@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
 
@@ -19,8 +20,10 @@ const mirrorUsage = "configure (or unconfigure) bucket as n-way mirror, and run 
 	indent1 + "(see also: 'ais start ec-encode')"
 
 const bencodeUsage = "erasure code entire bucket, e.g.:\n" +
-	indent1 + "\t- 'ais start ec-encode ais://m -d 8 -p 2'\t- erasure-code ais://m for (D=8, P=2).\n" +
-	indent1 + "(see also: 'ais start mirror')"
+	indent1 + "\t- 'ais start ec-encode ais://nnn -d 8 -p 2'\t- erasure-code ais://nnn for 8 data and 2 parity slices;\n" +
+	indent1 + "\t- 'ais start ec-encode ais://nnn --data-slices 8 --parity-slices 2'\t- same as above;\n" +
+	indent1 + "\t- 'ais start ec-encode ais://nnn --recover'\t- check and make sure that every ais://nnn object is properly erasure-coded.\n" +
+	indent1 + "see also: 'ais start mirror'"
 
 var (
 	storageSvcCmdsFlags = map[string][]cli.Flag{
@@ -115,8 +118,13 @@ func ecEncodeHandler(c *cli.Context) error {
 	if bprops, err = headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
-	numd = c.Int(fl1n(dataSlicesFlag.Name))
-	nump = c.Int(fl1n(paritySlicesFlag.Name))
+	numd = parseIntFlag(c, dataSlicesFlag)
+	nump = parseIntFlag(c, paritySlicesFlag)
+
+	if bprops.EC.Enabled {
+		numd = cos.NonZero(numd, bprops.EC.DataSlices)
+		nump = cos.NonZero(nump, bprops.EC.ParitySlices)
+	}
 
 	// compare with ECConf.Validate
 	if numd < cmn.MinSliceCount || numd > cmn.MaxSliceCount {
@@ -126,29 +134,31 @@ func ecEncodeHandler(c *cli.Context) error {
 		return fmt.Errorf("invalid number %d of parity slices (valid range: [%d, %d])", nump, cmn.MinSliceCount, cmn.MaxSliceCount)
 	}
 
+	checkAndRecover := flagIsSet(c, checkAndRecoverFlag)
 	if bprops.EC.Enabled {
 		if bprops.EC.DataSlices != numd || bprops.EC.ParitySlices != nump {
 			// not supported yet:
-			warn := fmt.Sprintf("%s is already erasure-coded, cannot change existing (D=%d, P=%d) configuration to (D=%d, P=%d)",
+			err := fmt.Errorf("%s is already (D=%d, P=%d) erasure-coded - cannot change this existing configuration to (D=%d, P=%d)",
 				bck.Cname(""), bprops.EC.DataSlices, bprops.EC.ParitySlices, numd, nump)
-			actionWarn(c, warn)
-			return nil
+			return err
 		}
-		var warn string
-		if bprops.EC.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate {
-			warn = fmt.Sprintf("%s is already configured for (P + 1 = %d copies)", bck.Cname(""), bprops.EC.ParitySlices+1)
-		} else {
-			warn = fmt.Sprintf("%s is already erasure-coded for (D=%d, P=%d)", bck.Cname(""), numd, nump)
+		if !checkAndRecover {
+			var warn string
+			if bprops.EC.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate {
+				warn = fmt.Sprintf("%s is already configured for (P + 1 = %d copies)", bck.Cname(""), bprops.EC.ParitySlices+1)
+			} else {
+				warn = fmt.Sprintf("%s is already erasure-coded for (D=%d, P=%d)", bck.Cname(""), numd, nump)
+			}
+			actionWarn(c, warn+" - proceeding to run anyway")
+			warned = true
 		}
-		actionWarn(c, warn+" - proceeding to run anyway")
-		warned = true
 	}
 
-	return ecEncode(c, bck, bprops, numd, nump, warned)
+	return ecEncode(c, bck, bprops, numd, nump, warned, checkAndRecover)
 }
 
-func ecEncode(c *cli.Context, bck cmn.Bck, bprops *cmn.Bprops, data, parity int, warned bool) error {
-	xid, err := api.ECEncodeBucket(apiBP, bck, data, parity, flagIsSet(c, checkAndRecoverFlag))
+func ecEncode(c *cli.Context, bck cmn.Bck, bprops *cmn.Bprops, data, parity int, warned, checkAndRecover bool) error {
+	xid, err := api.ECEncodeBucket(apiBP, bck, data, parity, checkAndRecover)
 	if err != nil {
 		return err
 	}
@@ -161,9 +171,14 @@ func ecEncode(c *cli.Context, bck cmn.Bck, bprops *cmn.Bprops, data, parity int,
 	} else {
 		var msg string
 		if bprops.EC.ObjSizeLimit == cmn.ObjSizeToAlwaysReplicate {
-			msg = fmt.Sprintf("Erasure-coding %s for (P + 1 = %d copies). ", bck.Cname(""), bprops.EC.ParitySlices+1)
+			msg = fmt.Sprintf("Erasure-coding %s for (P + 1 = %d copies)", bck.Cname(""), bprops.EC.ParitySlices+1)
 		} else {
-			msg = fmt.Sprintf("Erasure-coding %s for (D=%d, P=%d). ", bck.Cname(""), data, parity)
+			msg = fmt.Sprintf("Erasure-coding %s for (D=%d, P=%d)", bck.Cname(""), data, parity)
+		}
+		if checkAndRecover {
+			msg += ". Running in recovery mode. "
+		} else {
+			msg += ". "
 		}
 		actionDone(c, msg+toMonitorMsg(c, xid, ""))
 	}

@@ -125,11 +125,11 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.writeErr(w, r, cmn.NewErrFailedTo(t, "EC-recover", cname, err))
 			}
-		} else {
+		} else if !xctn.Finished() {
 			xbenc, ok := xctn.(*ec.XactBckEncode)
 			debug.Assert(ok, xctn.String())
 
-			// async, via j.work
+			// async, via j.workCh
 			xbenc.RecvRecover(lom)
 		}
 	case apc.ActEcOpen:

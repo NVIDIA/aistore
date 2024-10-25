@@ -18,10 +18,14 @@ redirect_from:
   - [Example setting space properties](#example-setting-space-properties)
   - [Example enabling LRU eviction for a given bucket](#example-enabling-lru-eviction-for-a-given-bucket)
 - [Erasure coding](#erasure-coding)
+  - [Example setting bucket properties](#example-setting-bucket-properties)
+  - [Limitations](#limitations)
 - [N-way mirror](#n-way-mirror)
   - [Read load balancing](#read-load-balancing)
-  - [More examples](#more-examples)
+  - [Another n-way example](#another-n-way-example)
 - [Data redundancy: summary of the available options (and considerations)](#data-redundancy-summary-of-the-available-options-and-considerations)
+- [Erasure-coding: with and without recovery](#erasure-coding-with-and-without-recovery)
+  - [Example recovering lost or damaged slices and/or objects](#example-recovering-lost-or-damaged-slices-and-objects)
 
 ## Storage Services
 
@@ -134,11 +138,31 @@ Bucket props successfully updated.
 
 AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [n-way mirroring](#n-way-mirror), replication (for *small* objects), and erasure coding.
 
-Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into N fragments or slices, computing K redundant (parity) slices, and then storing the resulting (N+K) slices on (N+K) storage servers - one slice per target server.
+Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into D fragments or slices, computing P redundant (parity) slices, and then storing the resulting (D+P) slices on (D+P) storage servers - one slice per target server.
 
-EC schemas are flexible and user-configurable: users can select the N and the K (above), thus ensuring that user data remains available even if the cluster loses **any** (emphasis on the **any**) of its K servers.
+EC schemas are flexible and user-configurable: users can select the D and the P (above), thus ensuring that user data remains available even if the cluster loses **any** (emphasis on the **any**) of its P servers.
 
 A bucket inherits EC settings from global configuration. But it can be overridden on a per bucket basis.
+
+```console
+$ ais start ec-encode --help
+NAME:
+   ais start ec-encode - erasure code entire bucket, e.g.:
+     - 'ais start ec-encode ais://nnn -d 8 -p 2'                          - erasure-code ais://nnn for 8 data and 2 parity slices;
+     - 'ais start ec-encode ais://nnn --data-slices 8 --parity-slices 2'  - same as above;
+     - 'ais start ec-encode ais://nnn --recover'                          - check and make sure that every ais://nnn object is properly erasure-coded.
+   see also: 'ais start mirror'
+
+USAGE:
+   ais start ec-encode [command options] BUCKET
+
+OPTIONS:
+   --data-slices value, -d value    number of data slices (default: 2)
+   --parity-slices value, -p value  number of parity slices (default: 2)
+   --non-verbose, --nv              non-verbose (quiet) output, minimized reporting, fewer warnings
+   --recover                        check and make sure that each and every object is properly erasure coded
+   --help, -h                       show help
+```
 
 * `ec.enabled`: bool - enables or disabled data protection the bucket
 * `ec.data_slices`: integer in the range [2, 100], representing the number of fragments the object is broken into
@@ -146,17 +170,19 @@ A bucket inherits EC settings from global configuration. But it can be overridde
 * `ec.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated.
 * `ec.compression`: string that contains rules for LZ4 compression used by EC when it sends its fragments and replicas over network. Value "never" disables compression. Other values enable compression: it can be "always" - use compression for all transfers, or list of compression options, like "ratio=1.5" that means "disable compression automatically when compression ratio drops below 1.5"
 
-Choose the number data and parity slices depending on the required level of protection and the cluster configuration. The number of storage targets must be greater than the sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
+Choose the number data and parity slices depending on the required level of protection and the cluster configuration.
 
-Rebalance supports erasure-coded buckets.
+The number of storage targets must be greater than the sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
 
-Notes:
+Global rebalance supports erasure-coded buckets.
 
-- Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, AIStore requires at least `ec.data_slices` slices in total out of data and parity sets
-- Small objects are replicated `ec.parity_slices` times to have the same level of data protection that big objects do
-- Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
+**Notes**:
 
-Example of setting bucket properties:
+> Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, AIStore requires at least `ec.data_slices` slices in total out of data and parity sets
+> Small objects are replicated `ec.parity_slices` times to have the same level of data protection that big objects do
+> Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
+
+### Example setting bucket properties
 
 ```console
 $ ais bucket props ais://<bucket-name> lru.lowwm=1 lru.highwm=90 ec.enabled=true ec.data_slices=4 ec.parity_slices=2
@@ -226,11 +252,11 @@ With respect to n-way mirrors, the usual pros-and-cons consideration boils down 
 
 Since object replicas are end-to-end protected by [checksums](#checksumming) all of them and any one in particular can be used interchangeably to satisfy a GET request thus providing for multiple possible choices of local filesystems and, ultimately, local drives. Given n > 1, AIS will utilize the least loaded drive(s).
 
-### More examples
+## Another n-way example
 The following sequence creates a bucket named `abc`, PUTs an object into it and then converts it into a 3-way mirror:
 
 ```console
-$ ais create abc
+$ ais create ais://abc
 $ ais put /tmp/obj1 ais://abc/obj1
 $ ais start mirror --copies 3 ais://abc
 ```
@@ -262,14 +288,56 @@ This option won't protect from node failures but it will provide a fairly good p
 
 Further, you could at some point in time decide to associate a given AIS bucket with a Cloud (backend) bucket, thus making sure that your data is stored in one of the AIS-supported Clouds: Amazon S3, Google Cloud Storage, Azure Blob Storage.
 
-Finally, you could erasure code (EC) a given bucket for `D + P` redundancy, where `D` and `P` are, respectively, the numbers of data and parity slices. For example:
+Finally, you could erasure code (EC) a given bucket for `D + P` redundancy, where `D` and `P` are, respectively, the numbers of data and parity slices:
 
 ```console
-$ ais start ec-encode -d 6 -p 4 abc
+$ ais start ec-encode --help
+NAME:
+   ais start ec-encode - erasure code entire bucket, e.g.:
+     - 'ais start ec-encode ais://nnn -d 8 -p 2'                          - erasure-code ais://nnn for 8 data and 2 parity slices;
+     - 'ais start ec-encode ais://nnn --data-slices 8 --parity-slices 2'  - same as above;
+     - 'ais start ec-encode ais://nnn --recover'                          - check and make sure that every ais://nnn object is properly erasure-coded.
+   see also: 'ais start mirror'
+
+USAGE:
+   ais start ec-encode [command options] BUCKET
+
+OPTIONS:
+   --data-slices value, -d value    number of data slices (default: 2)
+   --parity-slices value, -p value  number of parity slices (default: 2)
+   --non-verbose, --nv              non-verbose (quiet) output, minimized reporting, fewer warnings
+   --recover                        check and make sure that each and every object is properly erasure coded
+   --help, -h                       show help
 ```
 
-will erasure-code all objects in the `abc` bucket for the total of 10 slices stored on different AIS targets, plus 1 (one) full replica. In other words, this example requires at least `10 + 1 = 11` targets in the cluster.
+## Erasure-coding: with and without recovery
+
+Assuming, ais://abc is not erasure-coded (or its erasure-coding property is disabled):
+
+```console
+$ ais start ec-encode ais://abc -d 8 -p 2
+
+## or, same:
+##
+$ ais start ec-encode ais://abc --data-slices 8 --parity-slices 2
+```
+
+This will erasure-code all objects in the `ais://abc` bucket for the total of 10 slices stored on different AIS targets, plus 1 (one) full replica. In other words, this example requires at least `10 + 1 = 11` targets in the cluster.
 
 > Generally, `D + P` erasure coding requires that AIS cluster has `D + P + 1` targets, or more.
 
 > In addition to Reed-Solomon encoded slices, we currently always store a full replica - the strategy that uses available capacity but pays back with read performance.
+
+### Example recovering lost or damaged slices and objects
+
+But what if there's an accident that involves corrupted or deleted data, lost disks, and/or entire nodes?
+
+Well, erasure-coding supports a special _recovery_ mode to "check and make sure that each and every object is properly erasure coded."
+
+```console
+$ ais start ec-encode ais://abc --recover
+
+## or same, assuming the bucket is (D=8, P=2) erasure-coded:
+##
+$ ais start ec-encode ais://abc --data-slices 8 --parity-slices 2
+```
