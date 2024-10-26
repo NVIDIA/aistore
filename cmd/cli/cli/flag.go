@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -198,20 +197,19 @@ func parseRetriesFlag(c *cli.Context, flag cli.IntFlag, warn bool) (retries int)
 }
 
 //nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
-func parseNumWorkersFlag(c *cli.Context, flag cli.IntFlag) (n int) {
+func parseNumWorkersFlag(c *cli.Context, flag cli.IntFlag) (n int, err error) {
 	n = parseIntFlag(c, flag)
-	maxParallelism := 2 * cmn.MaxParallelism()
-
-	// Check if the number of workers exceeds twice the available CPU cores
-	if n > maxParallelism {
-		actionWarn(c, fmt.Sprintf("number of workers exceeds the maximum allowed (2 * CPU cores), using '%d' workers", maxParallelism))
+	if n < 0 {
+		return n, fmt.Errorf("%s cannot be negative", qflprn(flag))
 	}
-
-	if n > 0 {
-		return min(maxParallelism, n)
+	mp := 2 * cmn.MaxParallelism() // NOTE: imposing (hard-coded) limit
+	if n > mp {
+		warn := fmt.Sprintf("%s exceeds allowed maximum (2 * CPU cores) = %d - proceeding with %d workers...",
+			qflprn(flag), mp, mp)
+		actionWarn(c, warn)
+		n = mp
 	}
-	debug.Assert(n < 0, "flag '", flag.Name, "' must have positive default value")
-	return 1
+	return n, nil
 }
 
 func rmFlags(flags []cli.Flag, fs ...cli.Flag) (out []cli.Flag) {

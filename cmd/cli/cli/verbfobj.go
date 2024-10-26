@@ -102,8 +102,10 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		}
 	}
 	refresh := calcPutRefresh(c)
-	numWorkers := parseNumWorkersFlag(c, numPutWorkersFlag)
-
+	numWorkers, err := parseNumWorkersFlag(c, numPutWorkersFlag)
+	if err != nil {
+		return err
+	}
 	uparams := &uparams{
 		wop:        wop,
 		bck:        bck,
