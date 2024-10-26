@@ -309,7 +309,7 @@ func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 ////////////////
 
 func (j *rcvyJogger) run() {
-	var n int
+	var n int64
 	for {
 		lom, ok := <-j.workCh
 		if !ok {
@@ -326,9 +326,10 @@ func (j *rcvyJogger) run() {
 		core.FreeLOM(lom)
 
 		n++
-		if err == nil && (n&throttleBatch == throttleBatch) {
+		// (compare with ec/putjogger where we also check memory pressure)
+		if err == nil && fs.IsThrottle(n) {
 			pct, _, _ := _throttlePct()
-			if pct >= maxThreashold {
+			if pct >= maxThrottlePct {
 				time.Sleep(fs.Throttle10ms)
 			}
 		}
@@ -347,8 +348,7 @@ func (j *rcvyJogger) String() string {
 //
 
 const (
-	throttleBatch = 0xf
-	maxThreashold = 60
+	maxThrottlePct = 60
 )
 
 func _throttlePct() (int, int64, float64) {

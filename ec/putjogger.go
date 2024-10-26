@@ -52,7 +52,8 @@ type (
 		xactCh chan *request // low priority operation (ec-encode)
 		stopCh cos.StopCh    // jogger management channel: to stop it
 
-		toDisk bool // use files or SGL
+		ntotal int64 // (throttle to prevent OOM)
+		toDisk bool  // use files or SGL (NOTE: toDisk == false may cause OOM)
 	}
 )
 
@@ -87,10 +88,10 @@ func (c *putJogger) run(wg *sync.WaitGroup) {
 	for {
 		select {
 		case req := <-c.putCh:
-			c.processRequest(req)
+			c.do(req)
 			freeReq(req)
 		case req := <-c.xactCh:
-			c.processRequest(req)
+			c.do(req)
 			freeReq(req)
 		case <-c.stopCh.Listen():
 			c.freeResources()
@@ -105,23 +106,31 @@ func (c *putJogger) freeResources() {
 	c.slab = nil
 }
 
-func (c *putJogger) processRequest(req *request) {
+func (c *putJogger) do(req *request) {
 	lom, err := req.LIF.LOM()
 	if err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+			nlog.Warningln(err)
+		}
 		return
 	}
-
 	c.parent.IncPending()
-	defer func() {
-		if req.Callback != nil {
-			req.Callback(lom, err)
-		}
-		core.FreeLOM(lom)
-		c.parent.DecPending()
-	}()
 
+	c._do(req, lom)
+
+	if req.Callback != nil {
+		req.Callback(lom, err)
+	}
+	core.FreeLOM(lom)
+	c.parent.DecPending()
+}
+
+func (c *putJogger) _do(req *request, lom *core.LOM) {
 	if req.Action == ActSplit {
-		if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+		if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+			if cmn.Rom.FastV(4, cos.SmoduleEC) {
+				nlog.Warningln(err)
+			}
 			return
 		}
 		ecConf := lom.Bprops().EC
@@ -129,11 +138,22 @@ func (c *putJogger) processRequest(req *request) {
 		c.toDisk = useDisk(memRequired, c.parent.config)
 	}
 
-	c.parent.stats.updateWaitTime(time.Since(req.tm))
-	req.tm = time.Now()
-	if err = c.ec(req, lom); err != nil {
+	now := time.Now()
+	c.parent.stats.updateWaitTime(now.Sub(req.tm))
+	req.tm = now
+
+	if err := c.ec(req, lom); err != nil {
 		err = cmn.NewErrFailedTo(core.T, req.Action, lom.Cname(), err)
 		c.parent.AddErr(err, 0)
+	} else if !c.toDisk { // throttle
+		c.ntotal++
+		if fs.IsMiniThrottle(c.ntotal) {
+			if pressure := g.pmm.Pressure(); pressure >= memsys.PressureExtreme {
+				time.Sleep(fs.Throttle100ms)
+			} else if pressure == memsys.PressureHigh {
+				time.Sleep(fs.Throttle10ms)
+			}
+		}
 	}
 }
 

@@ -40,12 +40,6 @@ const (
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 
-const (
-	Throttle1ms   = time.Millisecond
-	Throttle10ms  = 10 * time.Millisecond
-	Throttle100ms = 100 * time.Millisecond
-)
-
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
 // - each mountpath is, simply, a local directory that is serviced by a local filesystem;

@@ -23,8 +23,6 @@ import (
 
 // throttle tunables
 const (
-	throttleBatch = 0xf // each goroutine independently
-
 	skipEvictThreashold = 20 // likely not running when above
 	maxEvictThreashold  = 60 // never running when above
 
@@ -66,7 +64,7 @@ type (
 		bcks  []*meta.Bck
 		begin int64
 		pct   int
-		nd    int
+		nd    int64
 		// on => off at half-time
 		throttle bool
 	}
@@ -152,9 +150,8 @@ func (u *rmbcks) f(hkey, value any) bool {
 		}
 		// throttle
 		u.nd++
-		if u.throttle && (u.nd&throttleBatch == throttleBatch) {
-			// compare with _throttle(evct.pct)
-			// (and note: caller's waiting on wg)
+		if u.throttle && fs.IsThrottle(u.nd) {
+			// compare with _throttle(evct.pct) but note: caller's waiting on wg
 			if u.pct >= maxEvictThreashold {
 				time.Sleep(fs.Throttle10ms)
 			} else {
@@ -373,7 +370,7 @@ func (evct *evct) f(hkey, value any) bool {
 
 	// throttle
 	evct.evicted++
-	if evct.evicted&throttleBatch == throttleBatch {
+	if fs.IsMiniThrottle(evct.evicted) {
 		_throttle(evct.pct)
 	}
 

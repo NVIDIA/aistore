@@ -26,10 +26,6 @@ import (
 
 // walk all or selected buckets, one at a time
 
-const (
-	throttleNumObjects = 64 // unit of self-throttling
-)
-
 type LoadType int
 
 const (
@@ -353,7 +349,7 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 
 	if j.opts.Throttle {
 		j.num++
-		if (j.num % throttleNumObjects) == 0 {
+		if fs.IsThrottle(j.num) {
 			j.throttle()
 		} else {
 			runtime.Gosched()
