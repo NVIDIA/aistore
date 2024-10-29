@@ -221,7 +221,7 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 	if a.rsrc.bck, objNameOrTmpl, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/); err != nil {
 		return err
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, a.rsrc.bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}

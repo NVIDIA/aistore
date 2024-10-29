@@ -252,7 +252,7 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 }
 
 // via `ais ls bucket/object` and `ais show bucket/object`
-func showObjProps(c *cli.Context, bck cmn.Bck, objName string) (notfound bool, _ error) {
+func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (notfound bool, _ error) {
 	var (
 		propsFlag     []string
 		selectedProps []string
@@ -269,8 +269,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) (notfound bool, _
 	}
 	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		hargs.FltPresence = apc.FltExists
-	} else if isList && !hargs.Silent {
-		hargs.Silent = isRemote // silence 404 when called via 'ais ls <remote-bucket>'
+	} else if silent && !hargs.Silent {
+		hargs.Silent = isRemote // silence 404 when called via 'ais ls <remote-bucket>', `ais prefetch`, etc.
 	}
 	objProps, err := api.HeadObject(apiBP, bck, objName, hargs)
 	if err != nil {

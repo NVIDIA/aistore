@@ -42,9 +42,10 @@ const copyBucketUsage = "copy entire bucket or selected objects (to select, use 
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --sync'\t- same as above, but in addition delete in-cluster copies that do not exist (any longer) in the remote source\n" +
 	indent1 + "\t\t  with template, prefix, and/or progress bar;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --prepend backup/'\t- copy objects into 'backup/' virtual subdirectory in destination bucket;\n" +
-	indent1 + "\t- 'ais cp ais://nnn/111 ais://mmm'\t- copy a single object (assuming, prefix '111' corresponds to a single object);\n" +
+	indent1 + "\t- 'ais cp ais://nnn/111 ais://mmm'\t- copy all ais://nnn objects that match prefix '111';\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'\t- copy up to 1000 objects that share the specified prefix;\n" +
-	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens'"
+	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens';\n" +
+	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above"
 
 // ais ls
 var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
@@ -90,8 +91,9 @@ const evictUsage = "evict one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
 	indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
 	indent1 + "\t- 'evict gs:'\t- evict all GCP buckets from the cluster;\n" +
-	indent1 + "\t- 'evict gs://abc --template images/'\t- evict all objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- 'evict gs://abc --prefix images/'\t- evict all gs://abc objects from the virtual subdirectory \"images\";\n" +
 	indent1 + "\t- 'evict gs://abc/images/'\t- same as above;\n" +
+	indent1 + "\t- 'evict gs://abc --template images/'\t- same as above;\n" +
 	indent1 + "\t- 'evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- evict the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'evict \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
@@ -631,7 +633,7 @@ func listAnyHandler(c *cli.Context) error {
 		if _, err := headBucket(bck, true /* don't add */); err != nil {
 			return err
 		}
-		notfound, err := showObjProps(c, bck, objName)
+		notfound, err := showObjProps(c, bck, objName, true /*silent*/)
 		if err == nil {
 			// (2)
 			if _, errV := archive.Mime("", objName); errV == nil {

@@ -173,7 +173,7 @@ func _evictOne(c *cli.Context, shift int) error {
 	if _, err := headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,9 @@ func _rmOne(c *cli.Context, shift int) error {
 	if _, err := headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	// NOTE: passing empty bck _not_ to interpret embedded objName as prefix
+	// TODO: instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, cmn.Bck{}, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
@@ -291,6 +293,7 @@ func startPrefetchHandler(c *cli.Context) error {
 func _prefetchOne(c *cli.Context, shift int) error {
 	uri := preparseBckObjURI(c.Args().Get(shift))
 	bck, objNameOrTmpl, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
+
 	if err != nil {
 		return err
 	}
@@ -300,7 +303,7 @@ func _prefetchOne(c *cli.Context, shift int) error {
 	if !bck.IsRemote() {
 		return fmt.Errorf("expecting remote bucket (have %s)", bck.Cname(""))
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}

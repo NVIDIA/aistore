@@ -78,7 +78,7 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		text1, text2 = "transform", "Transforming"
 	}
 
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bckFrom, objNameOrTmpl)
 	if err != nil {
 		return err
 	}

@@ -60,8 +60,9 @@ const objPromoteUsage = "PROMOTE target-accessible files and directories.\n" +
 const objRmUsage = "remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +
 	indent1 + "\t- 'rm ais://nnn --all'\t- remove all objects from the bucket ais://nnn;\n" +
 	indent1 + "\t- 'rm s3://abc' --all\t- remove all objects including those that are not _present_ in the cluster;\n" +
-	indent1 + "\t- 'rm gs://abc --template images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- 'rm gs://abc --prefix images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
 	indent1 + "\t- 'rm gs://abc/images/'\t- same as above;\n" +
+	indent1 + "\t- 'rm gs://abc --template images/'\t- same as above;\n" +
 	indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 

@@ -193,7 +193,7 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 	return bck, objName, err
 }
 
-func parseObjListTemplate(c *cli.Context, objNameOrTmpl string) (objName, listObjs, tmplObjs string, err error) {
+func parseObjListTemplate(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (objName, listObjs, tmplObjs string, err error) {
 	var prefix string
 	if flagIsSet(c, listFlag) {
 		listObjs = parseStrFlag(c, listFlag)
@@ -227,8 +227,22 @@ func parseObjListTemplate(c *cli.Context, objNameOrTmpl string) (objName, listOb
 				what, objNameOrTmpl, qflprn(listFlag), qflprn(templateFlag))
 		} else if isPattern(objNameOrTmpl) {
 			tmplObjs = objNameOrTmpl
-		} else {
+		} else if bck.IsEmpty() {
+			// [TODO] instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
 			objName = objNameOrTmpl
+		} else {
+			// [NOTE] additional HEAD(obj) to differentiate embedded prefix from object name
+			objName = objNameOrTmpl
+			notfound, errH := showObjProps(c, bck, objName, true /*silent*/)
+			switch {
+			case errH == nil:
+				// (operation on a single object)
+			case notfound:
+				// (operation on all 'prefix'-ed objects)
+				tmplObjs = objNameOrTmpl
+			default:
+				return "", "", "", errH
+			}
 		}
 	}
 	return objName, listObjs, tmplObjs, err
