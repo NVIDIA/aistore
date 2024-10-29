@@ -2,111 +2,91 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-# This script tests AIStore's ObjectFile and its ability to resume object 
-# reading with interruptions to the underlying object stream (e.g. 
-# simulating intermittent AIStore K8s node failures).
+# This script tests AIStore's ObjectFile and its ability to resume object reading with interruptions 
+# to the underlying object stream (e.g. simulating intermittent AIStore K8s node failures). Run with
+# a one-node cluster to best and most consistently observe the behavior of the ObjectFile's resume 
+# functionality.
 
 import logging
 import os
-import shutil
 import time
-from pathlib import Path
-
 import urllib3
-from aistore.sdk.client import Client
 from kubernetes import client as k8s_client, config as k8s_config
+from aistore.sdk.client import Client
+from aistore.sdk.obj.object_reader import ObjectReader
+from utils import create_and_put_object, obj_file_read, start_pod_killer, stop_pod_killer
 
-from utils import generate_data, start_pod_killer, stop_pod_killer, obj_file_read
-
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more detailed logs
 
 KB = 1024
 MB = 1024 * KB
 GB = 1024 * MB
 
-ENDPOINT = os.getenv("AIS_ENDPOINT", "http://localhost:51080")  # AIStore endpoint to communicate with
-BUCKET_NAME = "objfile-test-data"  # Name of the AIStore bucket where tar files are stored
-GENERATED_DIR = Path("gen-data")  # Directory to generate data
-OUT_DIR = Path("output")  # Directory to store outputs
-NUM_TARS = 1  # Number of tar archives to generate
-NUM_FILES = 20  # Number of files in each tar archive
-FILE_SIZE = 1 * GB  # Size of each file in the tar archive
-NAMESPACE = "ais"  # Kubernetes namespace for the pod killer
-POD_PREFIX = "ais"  # Prefix to identify pods to be killed during the test
-POD_KILL_INTERVAL = (30, 60)  # Interval (in seconds) between pod killings
-READ_SIZES = [-1, 16 * KB, 32 * KB, 64 * KB, 128 * KB]  # Read sizes to test
+# Adjust the object size, pod kill interval, and chunk size to control how often interruptions 
+# occur based on your specific test machine configuration and network setup. For example, increase 
+# object size or decrease chunk size / pod kill interval to trigger more frequent disruptions.
+# Test on a one-node cluster to best observe the behavior of the ObjectFile's resume functionality.
+
+AIS_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://localhost:51080")
+BUCKET_NAME = "stress-test"
+OBJECT_NAME = "stress-test-file"
+OBJECT_SIZE = 1 * GB
+MAX_RESUME = 100  # Set to a high value to allow resumes for stress-test
+INTERRUPT = True
+POD_KILL_NAMESPACE = "ais"
+POD_KILL_NAME = "ais-target-0"
+POD_KILL_INTERVAL = 1e-3
+CHUNK_SIZE = 128
+READ_SIZE = -1
+BUFFER_SIZE = 20 * MB  # To be used for MT implementation
 
 
-def validate(bucket, outputs):
-    """
-    Validate the downloaded objects by comparing to local files.
+def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, object_reader: ObjectReader, generated_data: bytes):
+    """Test object file read with pod interruptions and validate data."""
+    logging.info("Starting test")
 
-    Args:
-        bucket (Bucket): The AIStore bucket for validation.
-        outputs (list): List of local file paths to validate.
-    """
-    for output in outputs:
-        logging.info(f"Validating object {output.parts[-1]}...")
-        with open(output, 'rb') as result:
-            result_bytes = result.read()
-        ais_bytes = bucket.object(obj_name=output.parts[-1]).get().read_all()
-        assert ais_bytes == result_bytes, f"Validation failed for {output.parts[-1]}"
-    logging.info("All objects validated successfully.")
-    shutil.rmtree(OUT_DIR, ignore_errors=True)
+    start_time = time.time()
 
+    # Start pod killer process
+    if INTERRUPT:
+        logging.info("Starting pod killer process...")
+        pod_killer_process = start_pod_killer(k8s_client, POD_KILL_NAMESPACE, POD_KILL_NAME, POD_KILL_INTERVAL)
 
-def test_with_interruptions(bucket, read_size):
-    """
-    Run the object file read test with pod-killing interruptions.
+    # Perform object file read
+    downloaded_data, resume_total = obj_file_read(object_reader, READ_SIZE, BUFFER_SIZE, MAX_RESUME)
 
-    Args:
-        bucket (Bucket): The AIStore bucket to read from.
-        read_size (int): Size of chunks to read in bytes.
-    """
-    logging.info(f"Starting test with interruptions for read size: {read_size} bytes")
-    
-    # Start the pod killer process
-    stop_event, pod_killer_process = start_pod_killer(
-        namespace=NAMESPACE, k8s_client=v1, pod_prefix=POD_PREFIX, pod_kill_interval=POD_KILL_INTERVAL
-    )
-    
-    # Call the imported obj_file_read function from utils.py
-    result = obj_file_read(bucket, read_size=read_size, out_dir=OUT_DIR)
-    
+    end_time = time.time()
+
+    logging.info(f"Stress-test completed in {end_time - start_time:.2f} seconds w/ {resume_total} resumes")
+
     # Stop the pod killer process
-    stop_pod_killer(stop_event=stop_event, pod_killer_process=pod_killer_process)
-    
-    time.sleep(20)  # Wait for any pods to settle
-    
-    # Validate the downloaded files
-    validate(bucket, result)
+    if INTERRUPT:
+        logging.info("Stopping pod killer process...")
+        stop_pod_killer(pod_killer_process)
+
+    # Validate the downloaded data by comparing it to the generated data
+    assert downloaded_data == generated_data, "Validation Failed: Downloaded data does not match generated data"
+    logging.info("Validation Passed: Downloaded data matches the generated data")
 
 
 def main():
-    """
-    Main function to run the ObjectFile read tests with interruptions.
-    """
-    # Initialize AIStore client (with retry on 400 and 404 errors)
+    """Main function to run the stress-test."""
     retry = urllib3.Retry(total=10, backoff_factor=0.5, status_forcelist=[400, 404])
-    client = Client(endpoint=ENDPOINT, retry=retry)
-
-    # Initialize Kubernetes client
+    client = Client(endpoint=AIS_ENDPOINT, retry=retry)
     k8s_config.load_kube_config()
-    global v1
     v1 = k8s_client.CoreV1Api()
-
-    # Generate Data & Populate Bucket:
     bucket = client.bucket(BUCKET_NAME).create()
-    generate_data(bucket=bucket, num_tars=NUM_TARS, num_files=NUM_FILES, file_size=FILE_SIZE, dest=GENERATED_DIR)
+    obj = bucket.object(OBJECT_NAME)
 
     try:
-        # Test reading in various read sizes with pod interruptions
-        for read_size in READ_SIZES:
-            test_with_interruptions(bucket, read_size=read_size)
+        # Generate data and upload to the bucket
+        logging.info("Generating data and uploading to the bucket...")
+        generated_data = create_and_put_object(obj, OBJECT_SIZE)
+        object_reader = obj.get(chunk_size=CHUNK_SIZE)
+
+        # Test reading the object with pod interruptions
+        test_with_interruptions(v1, object_reader, generated_data)
     finally:
-        # Cleanup any leftover data
-        shutil.rmtree(GENERATED_DIR, ignore_errors=True)
-        shutil.rmtree(OUT_DIR, ignore_errors=True)
         bucket.delete(missing_ok=True)
         logging.info("Cleanup completed.")
 
