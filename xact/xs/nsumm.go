@@ -277,9 +277,9 @@ func (r *XactNsumm) Snap() (snap *core.Snap) {
 
 func (r *XactNsumm) Result() (cmn.AllBsummResults, error) {
 	if r.single {
-		var res cmn.BsummResult
-		r.cloneRes(&res, &r.oneRes)
-		return cmn.AllBsummResults{&res}, r.Err()
+		var dst cmn.BsummResult
+		r.cloneRes(&dst, &r.oneRes)
+		return cmn.AllBsummResults{&dst}, r.Err()
 	}
 
 	all := make(cmn.AllBsummResults, 0, len(r.mapRes))
@@ -303,12 +303,11 @@ func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
 		dst.TotalSize.RemoteObjs = ratomic.LoadUint64(&src.TotalSize.RemoteObjs)
 	}
 
-	dst.ObjSize.Min = ratomic.LoadInt64(&src.ObjSize.Min)
-	if dst.ObjSize.Min == math.MaxInt64 {
-		dst.ObjSize.Min = 0
-	}
 	dst.ObjSize.Max = ratomic.LoadInt64(&src.ObjSize.Max)
-
+	dst.ObjSize.Min = ratomic.LoadInt64(&src.ObjSize.Min)
+	if dst.ObjSize.Max > 0 {
+		dst.ObjSize.Min = min(dst.ObjSize.Min, dst.ObjSize.Max)
+	}
 	// compute the current (maybe, running-and-changing) average and used %%
 	if dst.ObjCount.Present > 0 {
 		dst.ObjSize.Avg = int64(cos.DivRoundU64(dst.TotalSize.PresentObjs, dst.ObjCount.Present))

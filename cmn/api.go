@@ -8,6 +8,7 @@ package cmn
 import (
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -317,12 +318,8 @@ func (s AllBsummResults) Aggregate(from *BsummResult) AllBsummResults {
 
 // across targets
 func aggr(from, to *BsummResult) {
-	if from.ObjSize.Min < to.ObjSize.Min {
-		to.ObjSize.Min = from.ObjSize.Min
-	}
-	if from.ObjSize.Max > to.ObjSize.Max {
-		to.ObjSize.Max = from.ObjSize.Max
-	}
+	to.ObjSize.Min = min(from.ObjSize.Min, to.ObjSize.Min)
+	to.ObjSize.Max = max(from.ObjSize.Max, to.ObjSize.Max)
 	to.ObjCount.Present += from.ObjCount.Present
 	to.ObjCount.Remote += from.ObjCount.Remote
 	to.TotalSize.OnDisk += from.TotalSize.OnDisk
@@ -342,6 +339,9 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 	for _, summ := range s {
 		if summ.ObjCount.Present > 0 {
 			summ.ObjSize.Avg = int64(cos.DivRoundU64(summ.TotalSize.PresentObjs, summ.ObjCount.Present))
+		}
+		if summ.ObjSize.Min == math.MaxInt64 {
+			summ.ObjSize.Min = 0
 		}
 		if totalDisksSize > 0 {
 			summ.UsedPct = cos.DivRoundU64(summ.TotalSize.OnDisk*100, totalDisksSize)
