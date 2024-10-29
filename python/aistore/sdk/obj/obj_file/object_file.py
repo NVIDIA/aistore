@@ -36,7 +36,7 @@ class ObjectFile(BufferedIOBase):
         self._content_iterator = content_iterator
         self._iterable = self._content_iterator.iter_from_position(0)
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
-        self._remainder = b""  # Holds leftover data from the last chunk
+        self._remainder = bytearray()  # Holds leftover data from the last chunk
         self._resume_position = 0  # Tracks the current position in the stream
         self._resume_total = 0  # Tracks the number of resume attempts
         self._closed = False
@@ -44,7 +44,7 @@ class ObjectFile(BufferedIOBase):
     @override
     def __enter__(self):
         self._iterable = self._content_iterator.iter_from_position(0)
-        self._remainder = b""
+        self._remainder = bytearray()
         self._resume_position = 0
         self._resume_total = 0
         self._closed = False
@@ -85,12 +85,16 @@ class ObjectFile(BufferedIOBase):
         try:
             # Consume any remaining data from a previous chunk before fetching new data
             if self._remainder:
-                to_consume = min(len(self._remainder), size)
-                result.extend(memoryview(self._remainder[:to_consume]))
-                self._remainder = self._remainder[to_consume:]
-                size -= to_consume
+                if size < len(self._remainder):
+                    result += self._remainder[:size]
+                    del self._remainder[:size]
+                    size = 0
+                else:
+                    result += self._remainder
+                    size -= len(self._remainder)
+                    self._remainder.clear()
 
-            # Fetch more chunks from the stream as needed
+            # Fetch new chunks from the stream as needed
             while size:
                 try:
                     chunk = next(self._iterable)
@@ -106,8 +110,6 @@ class ObjectFile(BufferedIOBase):
                         self._max_resume,
                         err,
                     )
-
-                    # Retry fetching the chunk after resuming
                     continue
 
                 # Track the position of the stream by adding the length
@@ -116,10 +118,13 @@ class ObjectFile(BufferedIOBase):
 
                 # Add the part of the chunk that fits within the requested size and
                 # store any leftover data for the next read
-                to_consume = min(len(chunk), size)
-                result.extend(memoryview(chunk[:to_consume]))
-                self._remainder = memoryview(chunk)[to_consume:]
-                size -= to_consume
+                if size < len(chunk):
+                    result += chunk[:size]
+                    self._remainder += chunk[size:]
+                    size = 0
+                else:
+                    result += chunk
+                    size -= len(chunk)
 
         except Exception as err:
             # Handle any unexpected errors, log them, close the file, and re-raise

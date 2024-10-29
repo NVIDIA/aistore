@@ -31,7 +31,7 @@ class TestObjectFile(unittest.TestCase):
         self.assertEqual(self.object_file._max_resume, 3)
         self.assertEqual(self.object_file._resume_position, 0)
         self.assertEqual(self.object_file._resume_total, 0)
-        self.assertEqual(self.object_file._remainder, b"")
+        self.assertEqual(self.object_file._remainder, bytearray())
         self.assertFalse(self.object_file._closed)
 
         # Verify that iter_from_position(0) is called
@@ -74,7 +74,7 @@ class TestObjectFile(unittest.TestCase):
         self.assertEqual(self.object_file._resume_position, 12)
 
         # Check that the remainder contains the rest of 'chunk2'
-        self.assertEqual(self.object_file._remainder, b"k2")
+        self.assertEqual(self.object_file._remainder, bytearray(b"k2"))
 
     def test_read_less_data_than_requested(self):
         """Test that read() returns available data if less than requested and hits EOF."""
@@ -92,7 +92,9 @@ class TestObjectFile(unittest.TestCase):
     def test_read_remainder_then_new_chunk(self):
         """Test that read() first consumes the remainder before fetching new chunks."""
         # Simulate the remainder being part of a previous chunk ('chunk0') and resume position at 6
-        self.object_file._remainder = b"hunk0"  # Leftover part of chunk0 (5 bytes)
+        self.object_file._remainder = bytearray(
+            b"hunk0"
+        )  # Leftover part of chunk0 (5 bytes)
         self.object_file._resume_position = 6
 
         # Read 10 bytes total, remainder should provide the first 5 bytes ('hunk0')
@@ -108,7 +110,7 @@ class TestObjectFile(unittest.TestCase):
 
         # Ensure the remainder has only the leftover part of chunk1
         self.assertEqual(
-            self.object_file._remainder, b"1"
+            self.object_file._remainder, bytearray(b"1")
         )  # The remaining part of chunk1 is '1'
 
     def test_read_raises_exception_when_closed(self):
@@ -123,12 +125,13 @@ class TestObjectFile(unittest.TestCase):
         # Modify the object's state to simulate previous use
         self.object_file._resume_position = 10
         self.object_file._closed = True
+        self.object_file._remainder = bytearray(b"remainder")
 
         with self.object_file as obj_file:
             # State should be reset inside context
             self.assertFalse(obj_file._closed)
             self.assertEqual(self.object_file._resume_position, 0)
-            self.assertEqual(self.object_file._remainder, b"")
+            self.assertEqual(self.object_file._remainder, bytearray())
 
         # After context, file should be closed
         self.assertTrue(self.object_file._closed)
