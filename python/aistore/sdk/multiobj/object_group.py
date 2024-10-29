@@ -32,7 +32,6 @@ from aistore.sdk.types import (
 from aistore.sdk.request_client import RequestClient
 
 
-# pylint: disable=unused-variable
 class ObjectGroup(AISSource):
     """
     A class representing multiple objects within the same bucket. Only one of obj_names, obj_range, or obj_template
@@ -350,6 +349,7 @@ class ObjectGroup(AISSource):
             HTTP_METHOD_POST, ACT_TRANSFORM_OBJECTS, value=value
         ).text
 
+    # pylint: disable=too-many-arguments
     def archive(
         self,
         archive_name: str,

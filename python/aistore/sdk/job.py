@@ -2,10 +2,7 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
-from __future__ import annotations  # pylint: disable=unused-variable
-
 import itertools
-import logging
 from datetime import datetime, timezone
 from typing import List, Dict
 import time
@@ -25,10 +22,11 @@ from aistore.sdk.const import (
 from aistore.sdk.errors import Timeout, JobInfoNotFound
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import JobStatus, JobArgs, ActionMsg, JobSnapshot, BucketModel
-from aistore.sdk.utils import probing_frequency
+from aistore.sdk.utils import probing_frequency, get_logger
+
+logger = get_logger(__name__)
 
 
-# pylint: disable=unused-variable
 class Job:
     """
     A class containing job-related functions.
@@ -39,7 +37,6 @@ class Job:
         job_kind (str, optional): Specific kind of job, empty for all kinds
     """
 
-    # pylint: disable=duplicate-code
     def __init__(self, client: RequestClient, job_id: str = "", job_kind: str = ""):
         self._client = client
         self._job_id = job_id
@@ -106,7 +103,6 @@ class Job:
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """
-        logger = logging.getLogger(f"{__name__}.wait")
         logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
@@ -157,10 +153,8 @@ class Job:
             errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
         """
         action = f"job '{self._job_id}' to reach idle state"
-        logger_name = "wait_for_idle"
-        self._wait_for_condition(
-            self._check_job_idle, action, logger_name, verbose, timeout
-        )
+        logger.disabled = not verbose
+        self._wait_for_condition(self._check_job_idle, action, timeout)
 
     def wait_single_node(
         self,
@@ -185,11 +179,9 @@ class Job:
             errors.Timeout: Timeout while waiting for the job to finish
             errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
         """
-        logger_name = "wait_single_node"
         action = f"job '{self._job_id}' to finish"
-        self._wait_for_condition(
-            self._check_snapshot_finished, action, logger_name, verbose, timeout
-        )
+        logger.disabled = not verbose
+        self._wait_for_condition(self._check_snapshot_finished, action, timeout)
 
     def start(
         self,
@@ -294,7 +286,7 @@ class Job:
         snapshots = list(itertools.chain.from_iterable(snapshot_lists))
         return snapshots
 
-    def _check_snapshot_finished(self, snapshots, logger):
+    def _check_snapshot_finished(self, snapshots):
         job_found = False
         snapshot = None
         for snap in snapshots:
@@ -316,7 +308,7 @@ class Job:
             return True
         return False
 
-    def _check_job_idle(self, snapshots, logger):
+    def _check_job_idle(self, snapshots):
         job_found = False
         for snap in snapshots:
             if snap.id != self._job_id:
@@ -330,18 +322,14 @@ class Job:
         logger.info("Job '%s' reached idle state", self._job_id)
         return True
 
-    # pylint: disable=too-many-arguments
-    def _wait_for_condition(self, condition_fn, action, logger_name, verbose, timeout):
-        logger = logging.getLogger(f"{__name__}.{logger_name}")
-        logger.disabled = not verbose
+    def _wait_for_condition(self, condition_fn, action, timeout):
         passed = 0
         sleep_time = probing_frequency(timeout)
 
         while True:
-            snapshots = []
             snapshots = self._query_job_snapshots()
             try:
-                if condition_fn(snapshots, logger):
+                if condition_fn(snapshots):
                     return
             except JobInfoNotFound:
                 logger.info("No information found for job %s, retrying", self._job_id)

@@ -25,7 +25,7 @@ authors = [
 ]
 description = "A (growing) set of client-side APIs to access and utilize clusters, buckets, and objects on AIStore."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = {text = "MIT License"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -41,8 +41,9 @@ dependencies = [
     "requests",
     "packaging",
     "overrides",
-    "pydantic==1.10.14",
-    "cloudpickle==2.2.0",
+    "PyYAML",
+    "pydantic>=1.10.14",
+    "cloudpickle>=2.2.0",
     "humanize>=4.6.0",
     "braceexpand>=0.1.7",
     "msgspec>=0.15.1",

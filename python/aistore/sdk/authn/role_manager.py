@@ -1,9 +1,6 @@
 #
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
-
-# pylint: disable=too-many-arguments, duplicate-code
-
 from typing import List
 
 from aistore.sdk.provider import Provider
@@ -42,6 +39,7 @@ class RoleManager:
         client (RequestClient): The RequestClient used to make HTTP requests.
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(self, client: RequestClient):
         self._client = client
 

@@ -23,7 +23,6 @@ from aistore.version import __version__ as sdk_version
 T = TypeVar("T")
 
 
-# pylint: disable=unused-variable, duplicate-code, too-many-arguments
 class RequestClient:
     """
     Internal client for making requests to an AIS cluster or a specific proxy (e.g. AuthN).
@@ -39,6 +38,7 @@ class RequestClient:
             raise_ais_error.
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         endpoint: str,

@@ -1,8 +1,6 @@
 #
 # Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
 #
-
-from __future__ import annotations  # pylint: disable=unused-variable
 from typing import Optional, Tuple, Union
 import os
 
@@ -23,7 +21,6 @@ from aistore.sdk.obj.object import Object
 from aistore.sdk.errors import InvalidURLException
 
 
-# pylint: disable=unused-variable, duplicate-code, too-many-arguments
 class Client:
     """
     AIStore client for managing buckets, objects, ETL jobs
@@ -41,6 +38,7 @@ class Client:
             will be used. Defaults to None.
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         endpoint: str,

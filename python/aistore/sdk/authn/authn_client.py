@@ -21,7 +21,6 @@ from aistore.sdk.const import (
 logger = get_logger(__name__)
 
 
-# pylint: disable=too-many-arguments, too-few-public-methods
 class AuthNClient:
     """
     AuthN client for managing authentication.
@@ -40,6 +39,7 @@ class AuthNClient:
         token (str, optional): Authorization token.
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         endpoint: str,
