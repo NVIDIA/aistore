@@ -1091,9 +1091,9 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		toUpdate: toUpdate,
 		wait:     true,
 	}
+	config := cmn.GCO.Get()
 	// NOTE: critical cluster-wide config updates requiring restart (of the cluster)
 	if toUpdate.Net != nil && toUpdate.Net.HTTP != nil {
-		config := cmn.GCO.Get()
 		from, _ := jsoniter.Marshal(config.Net.HTTP)
 		to, _ := jsoniter.Marshal(toUpdate.Net.HTTP)
 		whingeToUpdate("net.http", string(from), string(to))
@@ -1110,13 +1110,13 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		}
 	}
 	if toUpdate.Auth != nil {
-		from, _ := jsoniter.Marshal(cmn.GCO.Get().Auth)
+		from, _ := jsoniter.Marshal(config.Auth)
 		to, _ := jsoniter.Marshal(toUpdate.Auth)
 		whingeToUpdate("config.auth", string(from), string(to))
 	}
 	if toUpdate.Tracing != nil {
-		from, _ := jsoniter.Marshal(cmn.GCO.Get().Tracing)
-		to, _ := jsoniter.Marshal(cmn.GCO.Get().Tracing)
+		from, _ := jsoniter.Marshal(config.Tracing)
+		to, _ := jsoniter.Marshal(toUpdate.Tracing)
 		whingeToUpdate("config.tracing", string(from), string(to))
 	}
 

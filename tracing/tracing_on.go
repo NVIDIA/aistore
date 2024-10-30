@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -86,7 +85,7 @@ func IsEnabled() bool {
 
 func Init(conf *cmn.TracingConf, snode *meta.Snode, version string) {
 	if conf == nil || !conf.Enabled {
-		nlog.Infof("distributed tracing not enabled")
+		cos.ExitLogf("distributed tracing not enabled (%+v)", conf)
 		return
 	}
 
@@ -95,7 +94,7 @@ func Init(conf *cmn.TracingConf, snode *meta.Snode, version string) {
 	cos.AssertNoErr(err)
 
 	tp = trace.NewTracerProvider(
-		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(*conf.SamplerProbablity))),
+		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(conf.SamplerProbablity))),
 		trace.WithBatcher(exp),
 		trace.WithResource(newResource(conf, snode, version)),
 	)

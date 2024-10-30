@@ -17,7 +17,7 @@ For more details:
 > WARNING: Enabling distributed tracing introduces slight overhead in AIStore's critical data path. Enable this feature only after carefully considering its performance impact and ensuring that the benefits of enhanced observability justify the potential trade-offs.
 
 
-## Table of Contents 
+## Table of Contents
 
 - [Getting Started](#getting-started)
   - [Example operations](#example-operations)
@@ -99,9 +99,11 @@ Sample aistore cluster configuration:
 
 ### Build AIStore with tracing
 
-Distributed tracing is a build time option controlled using *oteltracing* build tag. For an `aisnode` binary built without this build tag, tracing configuration is ignored.
+Distributed tracing is a build-time option controlled using *oteltracing* build tag.
 
-```sh 
+When `aisnode` binary is built without this build tag, tracing configuration is ignored and the entire tracing functionality becomes a no-op.
+
+```console
 # build with tracing support
 TAGS=oteltracing make node
 
