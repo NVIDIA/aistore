@@ -73,10 +73,10 @@ func (*encFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *encFactory) Start() error {
+func (p *encFactory) Start() (err error) {
 	custom := p.Args.Custom.(*xreg.ECEncodeArgs)
-	p.xctn = newXactBckEncode(p.Bck, p.UUID(), custom.Recover)
-	return nil
+	p.xctn, err = newXactBckEncode(p.Bck, p.UUID(), custom.Recover)
+	return err
 }
 
 func (*encFactory) Kind() string     { return apc.ActECEncode }
@@ -97,7 +97,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode) {
+func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode, err error) {
 	r = &XactBckEncode{
 		bck:             bck,
 		wg:              &sync.WaitGroup{},
@@ -108,43 +108,19 @@ func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *Xact
 		r.probFilter = prob.NewDefaultFilter()
 	}
 	r.InitBase(uuid, apc.ActECEncode, bck)
-	return
-}
 
-func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
-	wg.Done()
-	bck := r.bck
-	if err := bck.Init(core.T.Bowner()); err != nil {
-		r.AddErr(err)
-		r.Finish()
-		return
+	if err = bck.Init(core.T.Bowner()); err != nil {
+		return nil, err
 	}
 	if !bck.Props.EC.Enabled {
-		r.AddErr(fmt.Errorf("EC disabled for %s", r.bck.Cname("")))
-		r.Finish()
-		return
+		return nil, fmt.Errorf("EC is disabled for %s", bck.Cname(""))
 	}
-
-	ECM.incActive(r)
-
-	opts := &mpather.JgroupOpts{
-		CTs:      []string{fs.ObjectType},
-		VisitObj: r.encode,
-		DoLoad:   mpather.LoadUnsafe,
+	avail := fs.GetAvail()
+	if len(avail) == 0 {
+		return nil, cmn.ErrNoMountpaths
 	}
 	if r.checkAndRecover {
-		// additionally, traverse and visit
-		opts.CTs = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
-		opts.VisitCT = r.checkRecover
-
-		avail := fs.GetAvail()
-		if len(avail) == 0 {
-			r.AddErr(cmn.ErrNoMountpaths) // FATAL
-			r.Finish()
-			return
-		}
-		r.last.Store(mono.NanoTime())
-		// run recovery joggers
+		// construct recovery joggers
 		r.rcvyJG = make(map[string]*rcvyJogger, len(avail))
 		for _, mi := range avail {
 			j := &rcvyJogger{
@@ -153,11 +129,36 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 				parent: r,
 			}
 			r.rcvyJG[mi.Path] = j
+		}
+	}
+
+	return r, nil
+}
+
+func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
+	wg.Done()
+
+	ECM.incActive(r)
+
+	opts := &mpather.JgroupOpts{
+		CTs:      []string{fs.ObjectType},
+		VisitObj: r.encode,
+		DoLoad:   mpather.LoadUnsafe,
+	}
+	opts.Bck.Copy(r.bck.Bucket())
+
+	if r.checkAndRecover {
+		// additionally, traverse and visit
+		opts.CTs = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
+		opts.VisitCT = r.checkRecover
+
+		r.last.Store(mono.NanoTime())
+		// run recovery joggers
+		for _, j := range r.rcvyJG {
 			go j.run()
 		}
 	}
 
-	opts.Bck.Copy(r.bck.Bucket())
 	config := cmn.GCO.Get()
 	jg := mpather.NewJoggerGroup(opts, config, nil)
 	jg.Run()
