@@ -176,6 +176,7 @@ Since AIS natively supports [remote backends](/docs/providers.md), you can also 
   - [Prometheus](/docs/prometheus.md)
     - [Reference: all supported metrics](/docs/metrics-reference.md)
   - [Observability overview: StatsD and Prometheus, logs, and CLI](/docs/metrics.md)
+  - [Distributed Tracing](/docs/distributed-tracing.md)
   - [CLI: `ais show performance`](/docs/cli/show.md)
 - For users and developers
   - [Getting started](/docs/getting_started.md)

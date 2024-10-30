@@ -9,6 +9,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"burst_buffer": 128,
 		"enabled":      ${AIS_MIRROR_ENABLED:-false}
 	},
+	$(make_tracing_conf)
 	"ec": {
 		"objsize_limit":	${AIS_OBJ_SIZE_LIMIT:-262144},
 		"compression":		"${AIS_EC_COMPRESSION:-never}",

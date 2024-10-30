@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tracing"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -832,7 +833,7 @@ func loadConfig(endpoint, profile string) (aws.Config, error) {
 	// NOTE: The AWS SDK for Go v2, uses lower case header maps by default.
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
-		config.WithHTTPClient(cmn.NewClient(cmn.TransportArgs{})),
+		config.WithHTTPClient(tracing.NewTraceableClient(cmn.NewClient(cmn.TransportArgs{}))),
 		config.WithSharedConfigProfile(profile),
 	)
 	if err != nil {

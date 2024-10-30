@@ -197,3 +197,73 @@ rm_loopbacks() {
     done
   fi
 }
+
+set_env_tracing_or_skip() {
+  echo "$AIS_TRACING_ENDPOINT"
+  if [[ -n "${AIS_TRACING_ENDPOINT}" ]]; then
+    TAGS="${TAGS} oteltracing"
+    return
+  fi
+
+  echo "Enable distributed tracings (y/n)?"
+  read -r enable_tracing
+
+  ## check presence
+  if [[ "$enable_tracing" == "" || "$enable_tracing" == "n" ]] ; then
+    return
+  fi
+
+  is_boolean "${enable_tracing}"
+
+  ## check presence
+  if [[ "$enable_tracing" == "y" ]] ; then
+    TAGS="${TAGS} oteltracing"
+  else
+    return
+  fi
+
+  echo "Exporter endpoint (default:'localhost:4317' jaeger)"
+  read -r exporter_endpoint
+  if [[ -z "${AIS_TRACING_ENDPOINT}" ]]; then
+    AIS_TRACING_ENDPOINT=${exporter_endpoint:-"localhost:4317"}
+  fi
+
+  echo "Exporter auth-header (default:'')"
+  read -r exporter_auth_header
+  if [[ -z "${AIS_TRACING_AUTH_TOKEN_HEADER}" ]]; then
+    AIS_TRACING_AUTH_TOKEN_HEADER=${exporter_auth_header}
+  fi
+
+  echo "Exporter auth-token-file (default:'')"
+  read -r exporter_auth_token_file
+  if [[ -z "${AIS_TRACING_AUTH_TOKEN_FILE}" ]]; then
+    AIS_TRACING_AUTH_TOKEN_FILE={exporter_auth_token_file}
+  fi
+}
+
+
+make_tracing_conf() {
+  tracing_auth_conf=""
+  if [[ -n "${AIS_TRACING_AUTH_TOKEN_HEADER}" && -n "${AIS_TRACING_AUTH_TOKEN_FILE}" ]]; then
+    tracing_auth_conf=',
+      "exporter_auth": {
+        "token_header": "'"${AIS_TRACING_AUTH_TOKEN_HEADER}"'",
+        "token_file": "'"${AIS_TRACING_AUTH_TOKEN_FILE}"'"
+      }'
+  fi
+
+  tracing_conf=""
+  if [[ -n "${AIS_TRACING_ENDPOINT}" ]]; then
+    tracing_conf='
+      "tracing": {
+        "enabled": true,
+        "exporter_endpoint": "'${AIS_TRACING_ENDPOINT}'",
+        "skip_verify": true,
+        "service_name_prefix": "'${AIS_TRACING_SERVICE_PREFIX:-aistore}'",
+        "sampler_probability": "'${AIS_TRACING_SAMPLING_PROBABILITY:-1.0}'"'${tracing_auth_conf}'
+      },
+    '
+  fi
+
+  echo "${tracing_conf}"
+}

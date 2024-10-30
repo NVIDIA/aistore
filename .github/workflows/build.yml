@@ -35,7 +35,7 @@ jobs:
           AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
           # 5) cloud backends, debug, statsd
           # (build with StatsD, and note that Prometheus is the default when `statsd` tag is not defined)
-          TAGS="aws azure gcp statsd debug" make node
+          TAGS="aws azure gcp statsd debug oteltracing" make node
           # 6) statsd, debug, nethttp (note that fasthttp is used by default)
           TAGS="nethttp statsd debug" make node
           # 7) w/ mem profile (see cmd/aisnodeprofile)

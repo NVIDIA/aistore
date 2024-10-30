@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tracing"
 )
 
 // ServeMux is an HTTP request multiplexer.
@@ -58,10 +59,11 @@ import (
 // header, stripping the port number and redirecting any request containing . or
 // .. elements or repeated slashes to an equivalent, cleaner URL.
 type ServeMux struct {
-	mu    sync.RWMutex
-	m     map[string]muxEntry
-	es    []muxEntry // slice of entries sorted from longest to shortest.
-	hosts bool       // whether any patterns contain hostnames
+	mu             sync.RWMutex
+	m              map[string]muxEntry
+	es             []muxEntry // slice of entries sorted from longest to shortest.
+	hosts          bool       // whether any patterns contain hostnames
+	tracingEnabled bool       // enable tracing
 }
 
 type muxEntry struct {
@@ -70,7 +72,9 @@ type muxEntry struct {
 }
 
 // NewServeMux allocates and returns a new ServeMux.
-func NewServeMux() *ServeMux { return new(ServeMux) }
+func NewServeMux(enableTracing bool) *ServeMux {
+	return &ServeMux{tracingEnabled: enableTracing}
+}
 
 // DefaultServeMux is the default ServeMux used by Serve.
 var DefaultServeMux = &defaultServeMux
@@ -299,8 +303,12 @@ func appendSorted(es []muxEntry, e muxEntry) []muxEntry {
 }
 
 // HandleFunc registers the handler function for the given pattern.
-func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+func (mux *ServeMux) HandleFunc(pattern string, handlerFunc http.HandlerFunc) {
 	mux.mu.Lock()
-	mux._handle(pattern, http.HandlerFunc(handler))
+	var handler http.Handler = handlerFunc
+	if mux.tracingEnabled {
+		handler = tracing.NewTraceableHandler(handler, pattern)
+	}
+	mux._handle(pattern, handler)
 	mux.mu.Unlock()
 }

@@ -96,6 +96,7 @@ type (
 		Mirror     MirrorConf     `json:"mirror" allow:"cluster"`
 		EC         ECConf         `json:"ec" allow:"cluster"`
 		Log        LogConf        `json:"log"`
+		Tracing    TracingConf    `json:"tracing"`
 		Periodic   PeriodConf     `json:"periodic"`
 		Timeout    TimeoutConf    `json:"timeout"`
 		Client     ClientConf     `json:"client"`
@@ -138,6 +139,7 @@ type (
 		EC          *ECConfToSet          `json:"ec,omitempty"`
 		Log         *LogConfToSet         `json:"log,omitempty"`
 		Periodic    *PeriodConfToSet      `json:"periodic,omitempty"`
+		Tracing     *TracingConfToSet     `json:"tracing,omitempty"`
 		Timeout     *TimeoutConfToSet     `json:"timeout,omitempty"`
 		Client      *ClientConfToSet      `json:"client,omitempty"`
 		Space       *SpaceConfToSet       `json:"space,omitempty"`
@@ -239,6 +241,46 @@ type (
 		MaxTotal  *cos.SizeIEC  `json:"max_total,omitempty"`
 		FlushTime *cos.Duration `json:"flush_time,omitempty"`
 		StatsTime *cos.Duration `json:"stats_time,omitempty"`
+	}
+
+	// TracingConf defines the configuration used for the OpenTelemetry (OTEL) trace exporter.
+	// It includes settings for enabling tracing, sampling ratio, exporter endpoint, and other
+	// parameters necessary for distributed tracing in AIStore.
+	TracingConf struct {
+		ExporterEndpoint  string                `json:"exporter_endpoint"`       // gRPC exporter endpoint
+		ExporterAuth      TraceExporterAuthConf `json:"exporter_auth,omitempty"` // exporter auth config
+		ServiceNamePrefix string                `json:"service_name_prefix"`     // service name prefix used by trace exporter
+		ExtraAttributes   map[string]string     `json:"attributes,omitempty"`    // any extra-attributes to be added to traces
+
+		// SamplerProbablityStr is the percentage of traces to be sampled, expressed as a float64.
+		// It's stored as a string to avoid potential floating-point precision issues during json unmarshal.
+		// Valid values range from 0.0 to 1.0, where 1.0 means 100% sampling.
+		SamplerProbablityStr string `json:"sampler_probability,omitempty"`
+		Enabled              bool   `json:"enabled"`
+		SkipVerify           bool   `json:"skip_verify"` // allow insecure exporter gRPC connection
+
+		SamplerProbablity float64 `json:"-"`
+	}
+
+	// NOTE: Updating TracingConfig requires daemon restart.
+	TracingConfToSet struct {
+		ExporterEndpoint     *string                     `json:"exporter_endpoint,omitempty"`   // gRPC exporter endpoint
+		ExporterAuth         *TraceExporterAuthConfToSet `json:"exporter_auth,omitempty"`       // exporter auth config
+		ServiceNamePrefix    *string                     `json:"service_name_prefix,omitempty"` // service name used by trace exporter
+		ExtraAttributes      map[string]string           `json:"attributes,omitempty"`          // any extra-attributes to be added to traces
+		SamplerProbablityStr *string                     `json:"sampler_probability,omitempty"` // percentage of traces to be sampled
+		Enabled              *bool                       `json:"enabled,omitempty"`
+		SkipVerify           *bool                       `json:"skip_verify,omitempty"` // allow insecure exporter gRPC connection
+	}
+
+	TraceExporterAuthConf struct {
+		TokenHeader string `json:"token_header"` // header used to pass exporter auth token
+		TokenFile   string `json:"token_file"`   // filepath from where auth token can be obtained
+	}
+
+	TraceExporterAuthConfToSet struct {
+		TokenHeader *string `json:"token_header,omitempty"` // header used to pass exporter auth token
+		TokenFile   *string `json:"token_file,omitempty"`   // filepath from where auth token can be obtained
 	}
 
 	// NOTE: StatsTime is a one important timer
@@ -691,6 +733,7 @@ var (
 	_ Validator = (*MemsysConf)(nil)
 	_ Validator = (*TCBConf)(nil)
 	_ Validator = (*WritePolicyConf)(nil)
+	_ Validator = (*TracingConf)(nil)
 
 	_ PropsValidator = (*CksumConf)(nil)
 	_ PropsValidator = (*SpaceConf)(nil)
@@ -1756,6 +1799,35 @@ func (c *ResilverConf) String() string {
 		return "Enabled"
 	}
 	return "Disabled"
+}
+
+///////////////////
+// Tracing Conf //
+/////////////////
+
+const defaultSampleProbability = 1.0
+
+func (c *TracingConf) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.ExporterEndpoint == "" {
+		return errors.New("invalid tracing.exporter_endpoint can't be empty when tracing is enabled")
+	}
+	if c.SamplerProbablityStr == "" {
+		c.SamplerProbablity = defaultSampleProbability
+	} else {
+		prob, err := strconv.ParseFloat(c.SamplerProbablityStr, 64)
+		if err != nil {
+			return nil
+		}
+		c.SamplerProbablity = prob
+	}
+	return nil
+}
+
+func (tac TraceExporterAuthConf) IsEnabled() bool {
+	return tac.TokenFile != "" && tac.TokenHeader != ""
 }
 
 ////////////////////

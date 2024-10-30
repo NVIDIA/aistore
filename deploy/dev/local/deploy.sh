@@ -171,18 +171,22 @@ rm $TMPF 2>/dev/null
 # 4. conditionally linked backends
   set_env_backends
 
-# 5. finally, /dev/loop* devices, if any
+# 5. /dev/loop* devices, if any
 # see also: TEST_LOOPBACK_SIZE
   TEST_LOOPBACK_COUNT=0
   create_loopbacks_or_skip
 
+# 6. conditionally enable distributed tracing
+  set_env_tracing_or_skip
+
 ### end reading STDIN ============================ 5 steps above =================================
+
 
 ## NOTE: to enable StatsD instead of Prometheus, use build tag `statsd` in the make command, as follows:
 ## TAGS=statsd make ...
 ## see docs/metrics.md and docs/prometheus.md for more information.
 ##
-if ! AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS} make --no-print-directory -C ${AISTORE_PATH} node; then
+if ! TAGS=${TAGS} AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS} make --no-print-directory -C ${AISTORE_PATH} node; then
   exit_error "failed to compile 'aisnode' binary"
 fi
 

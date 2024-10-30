@@ -32,6 +32,7 @@ mountpath_cnt=5
 deployment="local"
 remote_alias="remais"
 cleanup="false"
+tracing="n"
 
 usage="NAME:
   $(basename "$0") - locally deploy AIS clusters for development
@@ -55,6 +56,7 @@ OPTIONS:
   --https             Use HTTPS (note: X509 certificates may be required)
   --standby           When starting up, do not join cluster - wait instead for admin request (advanced usage, target-only)
   --transient         Do not store config changes, keep all the updates in memory
+  --tracing           Enable distributed tracing
   -h, --help          Show this help text
 "
 
@@ -81,6 +83,7 @@ while (( "$#" )); do
     --azure) AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"; shift;;
     --gcp)   AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} gcp"; shift;;
     --ht)    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} ht"; shift;;
+    --tracing) tracing="y\n${AIS_TRACING_ENDPOINT}\n${AIS_TRACING_AUTH_TOKEN_HEADER}\n${AIS_TRACING_AUTH_TOKEN_FILE}"; shift;;
 
     --loopback) loopback=$2;
 
@@ -158,7 +161,7 @@ if [[ ${cleanup} == "true" ]]; then
 fi
 
 if [[ ${deployment} == "local" || ${deployment} == "all" ]]; then
-  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\nn\nn\nn\n${loopback}\n" |\
+  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\nn\nn\nn\n${loopback}\n${tracing}\n" |\
 	  AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" make deploy "RUN_ARGS=${RUN_ARGS}"
 fi
 

@@ -39,6 +39,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/tracing"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -291,16 +292,21 @@ func (h *htrun) init(config *cmn.Config) {
 		tcpbuf = cmn.DefaultSendRecvBufferSize // ditto: targets use AIS default when not configured
 	}
 
-	muxers := newMuxers()
+	// PubNet enable tracing when configuration is set.
+	muxers := newMuxers(tracing.IsEnabled())
 	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
 	g.netServ.control = g.netServ.pub // if not separately configured, intra-control net is public
 	if config.HostNet.UseIntraControl {
-		muxers = newMuxers()
+		// TODO: for now tracing is always disabled for intra-cluster traffic.
+		// Allow enabling through config.
+		muxers = newMuxers(false /*enableTracing*/)
 		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
 	}
 	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
 	if config.HostNet.UseIntraData {
-		muxers = newMuxers()
+		// TODO: for now tracing is always disabled for intra-data traffic.
+		// Allow enabling through config.
+		muxers = newMuxers(false /*enableTracing*/)
 		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
 	}
 
@@ -450,7 +456,6 @@ func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 
 func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	smap = newSmap()
 	loaded, err := h.owner.smap.load(smap)
-
 	if err != nil {
 		nlog.Errorln(h.String(), "failed to load Smap:", err, "- reinitializing")
 		return

@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/tracing"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -242,6 +243,10 @@ func initDaemon(version, buildTime string) cos.Runner {
 		// aux plumbing
 		nlog.SetTitle(title)
 		cmn.InitErrs(p.si.Name(), nil)
+
+		// init distributed tracing
+		tracing.Init(&config.Tracing, p.si, version)
+
 		return p
 	}
 
@@ -257,6 +262,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	// aux plumbing
 	nlog.SetTitle(title)
 	cmn.InitErrs(t.si.Name(), fs.CleanPathErr)
+
+	// init distributed tracing
+	tracing.Init(&config.Tracing, t.si, version)
 
 	cmn.InitObjProps2Hdr()
 
@@ -325,6 +333,9 @@ func newTarget(co *configOwner) *target {
 func Run(version, buildTime string) int {
 	rmain := initDaemon(version, buildTime)
 	err := daemon.rg.runAll(rmain)
+
+	// stop traceprovider, if running.
+	tracing.Shutdown()
 
 	if err == nil {
 		nlog.Infoln("Terminated OK")

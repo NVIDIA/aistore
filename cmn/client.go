@@ -142,7 +142,6 @@ func NewClientTLS(cargs TransportArgs, sargs TLSArgs, intra bool) *http.Client {
 		cos.ExitLog(err) // FATAL
 	}
 	transport.TLSClientConfig = tlsConfig
-
 	return &http.Client{Transport: transport, Timeout: cargs.Timeout}
 }
 

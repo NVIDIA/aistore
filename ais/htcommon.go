@@ -634,10 +634,10 @@ func (server *netServer) shutdown(config *cmn.Config) {
 // interface guard
 var _ http.Handler = (*httpMuxers)(nil)
 
-func newMuxers() httpMuxers {
+func newMuxers(enableTracing bool) httpMuxers {
 	m := make(httpMuxers, len(htverbs))
 	for _, v := range htverbs {
-		m[v] = mux.NewServeMux()
+		m[v] = mux.NewServeMux(enableTracing)
 	}
 	return m
 }

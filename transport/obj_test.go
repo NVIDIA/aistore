@@ -94,7 +94,7 @@ func TestMain(t *testing.M) {
 	sc := transport.Init(&dummyStatsTracker{})
 	go sc.Run()
 
-	objmux = mux.NewServeMux()
+	objmux = mux.NewServeMux(false /*enableTracing*/)
 	path := transport.ObjURLPath("")
 	objmux.HandleFunc(path, transport.RxAnyStream)
 	objmux.HandleFunc(path+"/", transport.RxAnyStream)

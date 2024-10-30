@@ -1114,6 +1114,11 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		to, _ := jsoniter.Marshal(toUpdate.Auth)
 		whingeToUpdate("config.auth", string(from), string(to))
 	}
+	if toUpdate.Tracing != nil {
+		from, _ := jsoniter.Marshal(cmn.GCO.Get().Tracing)
+		to, _ := jsoniter.Marshal(cmn.GCO.Get().Tracing)
+		whingeToUpdate("config.tracing", string(from), string(to))
+	}
 
 	// do
 	if _, err := p.owner.config.modify(ctx); err != nil {

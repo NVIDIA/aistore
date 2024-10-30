@@ -234,7 +234,8 @@ func (rp *reverseProxy) init() {
 }
 
 func (rp *reverseProxy) loadOrStore(uuid string, u *url.URL,
-	errHdlr func(w http.ResponseWriter, r *http.Request, err error)) *httputil.ReverseProxy {
+	errHdlr func(w http.ResponseWriter, r *http.Request, err error),
+) *httputil.ReverseProxy {
 	revProxyIf, exists := rp.nodes.Load(uuid)
 	if exists {
 		shrp := revProxyIf.(*singleRProxy)

@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/tracing"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -113,7 +114,7 @@ func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {
 		}
 		return nil, cmn.NewErrFailedTo(nil, "gcp-backend: create", "http transport", err)
 	}
-	opts = append(opts, option.WithHTTPClient(&http.Client{Transport: transport}))
+	opts = append(opts, option.WithHTTPClient(tracing.NewTraceableClient(&http.Client{Transport: transport})))
 	// create HTTP client
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
