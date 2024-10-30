@@ -16,9 +16,24 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-type ParseURIOpts struct {
-	DefaultProvider string // If set the provider will be used as provider.
-	IsQuery         bool   // Determines if the URI should be parsed as query.
+type (
+	ParseURIOpts struct {
+		DefaultProvider string // If set the provider will be used as provider.
+		IsQuery         bool   // Determines if the URI should be parsed as query.
+	}
+	ErrEmptyProvider struct {
+		name   string
+		detail string
+	}
+)
+
+func (e *ErrEmptyProvider) Error() string {
+	return fmt.Sprintf("backend provider cannot be empty%s (did you mean \"ais://%s\"?)", e.detail, e.name)
+}
+
+func IsErrEmptyProvider(err error) bool {
+	_, ok := err.(*ErrEmptyProvider)
+	return ok
 }
 
 //
@@ -45,7 +60,6 @@ func OrigURLBck2Name(origURLBck string) (bckName string) {
 }
 
 func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, err error) {
-	const fmtErrEmpty = "backend provider cannot be empty%s (did you mean \"ais://%s\"?)"
 	parts := strings.SplitN(uri, apc.BckProviderSeparator, 2)
 	if len(parts) > 1 && parts[0] != "" {
 		if bck.Provider, err = NormalizeProvider(parts[0]); err != nil {
@@ -63,7 +77,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 			return bck, "", err
 		}
 		if !opts.IsQuery && bck.Provider == "" {
-			return bck, "", fmt.Errorf(fmtErrEmpty, " when namespace is not", bck)
+			return bck, "", &ErrEmptyProvider{uri, " when namespace is not"}
 		}
 		if len(parts) == 1 {
 			if parts[0] == string(apc.NsUUIDPrefix) && opts.IsQuery {
@@ -87,7 +101,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 			return bck, "", err
 		}
 		if bck.Provider == "" {
-			return bck, "", fmt.Errorf(fmtErrEmpty, "", bck)
+			return bck, "", &ErrEmptyProvider{uri, ""}
 		}
 	}
 	if len(parts) > 1 {

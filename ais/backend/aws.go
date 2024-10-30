@@ -893,6 +893,14 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 			code   = reqErr.ErrorCode()
 		)
 		if errors.As(awsError, &rspErr) {
+			// [NOTE] when bucket does not exist, or is not accessible AWS may
+			// return http status 301 ("MovedPermanently") and,
+			// to further confusion, supplies it with ErrorCode() == "PermanentRedirect",
+			// which is supposed to be 308
+			if rspErr.HTTPStatusCode() == http.StatusMovedPermanently {
+				return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+			}
+
 			return rspErr.HTTPStatusCode(), _awsErr(awsError, code)
 		}
 

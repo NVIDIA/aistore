@@ -258,7 +258,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		selectedProps []string
 		hargs         = api.HeadArgs{
 			FltPresence: apc.FltPresentCluster,
-			Silent:      flagIsSet(c, silentFlag),
+			Silent:      flagIsSet(c, silentFlag) || silent,
 		}
 		isList      = actionIsHandler(c.Command.Action, listAnyHandler)
 		isRemote    = bck.IsRemote()
@@ -269,26 +269,29 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	}
 	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		hargs.FltPresence = apc.FltExists
-	} else if silent && !hargs.Silent {
-		hargs.Silent = isRemote // silence 404 when called via 'ais ls <remote-bucket>', `ais prefetch`, etc.
 	}
+
+	// do
 	objProps, err := api.HeadObject(apiBP, bck, objName, hargs)
 	if err != nil {
 		notfound = cmn.IsStatusNotFound(err)
 		if !notfound {
 			return notfound, err
 		}
-		var hint string
+		var hint, tag string
+		if !isList {
+			tag = "object "
+		}
 		if apc.IsFltPresent(hargs.FltPresence) && isRemote {
 			if isList {
 				if flagIsSet(c, listObjCachedFlag) {
 					hint = fmt.Sprintf(" (tip: try 'ais ls' without %s option)", qflprn(listObjCachedFlag))
 				}
 			} else {
-				hint = fmt.Sprintf(" (tip: try %s option)", qflprn(objNotCachedPropsFlag))
+				hint = fmt.Sprintf(" (tip: try %s option or use 'ais ls' to lookup by prefix)", qflprn(objNotCachedPropsFlag))
 			}
 		}
-		return notfound, fmt.Errorf("%q not found in %s%s", objName, bck.Cname(""), hint)
+		return notfound, fmt.Errorf("%s%q not found in %s%s", tag, objName, bck.Cname(""), hint)
 	}
 
 	if flagIsSet(c, allPropsFlag) {

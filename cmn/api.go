@@ -203,14 +203,15 @@ func (bp *Bprops) Validate(targetCnt int) error {
 	debug.Assert(apc.IsProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
 		if bp.Provider != apc.AIS {
-			return fmt.Errorf("wrong bucket provider %q: only AIS buckets can have remote backend (%q)",
+			return fmt.Errorf("invalid provider %q: only ais:// buckets can have remote backend (%q)",
 				bp.Provider, bp.BackendBck)
 		}
 		if bp.BackendBck.Provider == "" {
+			// (compare with `ErrEmptyProvider`)
 			return fmt.Errorf("backend bucket %q: provider is empty", bp.BackendBck)
 		}
 		if bp.BackendBck.Name == "" {
-			return fmt.Errorf("backend bucket %q name is empty", bp.BackendBck)
+			return fmt.Errorf("backend bucket %q: name is empty", bp.BackendBck)
 		}
 		if !bp.BackendBck.IsRemote() {
 			return fmt.Errorf("backend bucket %q must be remote", bp.BackendBck)
