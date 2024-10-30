@@ -1,6 +1,6 @@
 boto3==1.35.51
 braceexpand==0.1.7
-cloudpickle==3.1.0
+cloudpickle==2.2.0
 humanize==4.10.0
 msgspec>=0.15.1
 overrides==7.7.0
