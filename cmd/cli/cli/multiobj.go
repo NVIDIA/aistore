@@ -232,7 +232,7 @@ func _rmOne(c *cli.Context, shift int) error {
 	}
 	// NOTE: passing empty bck _not_ to interpret embedded objName as prefix
 	// TODO: instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, cmn.Bck{}, objNameOrTmpl)
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}

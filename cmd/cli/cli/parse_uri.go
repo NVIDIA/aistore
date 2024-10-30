@@ -227,21 +227,18 @@ func parseObjListTemplate(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (ob
 				what, objNameOrTmpl, qflprn(listFlag), qflprn(templateFlag))
 		} else if isPattern(objNameOrTmpl) {
 			tmplObjs = objNameOrTmpl
-		} else if bck.IsEmpty() {
-			// [TODO] instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
-			objName = objNameOrTmpl
 		} else {
-			// [NOTE] additional HEAD(obj) to differentiate embedded prefix from object name
+			// [NOTE]
+			// make an additional list-objects call to differentiate
+			// embedded prefix from object name
 			objName = objNameOrTmpl
-			notfound, errH := showObjProps(c, bck, objName, true /*silent*/)
-			switch {
-			case errH == nil:
-				// (operation on a single object)
-			case notfound:
+			isPrefix, err := objnameIsPrefix(bck, objName)
+			if err != nil {
+				return "", "", "", err
+			}
+			if isPrefix {
 				// (operation on all 'prefix'-ed objects)
-				tmplObjs = objNameOrTmpl
-			default:
-				return "", "", "", errH
+				tmplObjs, objName = objNameOrTmpl, ""
 			}
 		}
 	}

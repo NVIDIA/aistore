@@ -78,13 +78,8 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		text1, text2 = "transform", "Transforming"
 	}
 
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bckFrom, objNameOrTmpl)
-	if err != nil {
-		return err
-	}
-
 	// HEAD(from)
-	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
+	if bckFrom.Props, err = headBucket(bckFrom, true /* don't add */); err != nil {
 		return err
 	}
 
@@ -101,6 +96,11 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom)
 		actionNote(c, note)
 		return nil
+	}
+
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bckFrom, objNameOrTmpl)
+	if err != nil {
+		return err
 	}
 
 	// HEAD(to)

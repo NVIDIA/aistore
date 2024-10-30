@@ -676,6 +676,25 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 	return len(objList.Entries) == 0, nil
 }
 
+// disambiguate objname as prefix
+// NOTE: never "cached"
+func objnameIsPrefix(bck cmn.Bck, oname string) (bool, error) {
+	msg := &apc.LsoMsg{Prefix: oname}
+	msg.SetFlag(apc.LsNameOnly)
+	objList, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 3})
+
+	if err != nil {
+		return false, V(err)
+	}
+	if len(objList.Entries) > 1 {
+		return true, nil
+	}
+	if len(objList.Entries) == 1 {
+		return objList.Entries[0].Name != oname, nil
+	}
+	return false, nil
+}
+
 func ensureRemoteProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
 		return fmt.Errorf("invalid bucket %q: missing backend provider", bck)
