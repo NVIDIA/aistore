@@ -129,6 +129,7 @@ build:linux:
     - AIS_BACKEND_PROVIDERS="aws azure gcp ht" MODE="debug" make node # Build with all backends (debug mode).
     - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
     - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
+    - TAGS="oteltracing" make node # Build with oteltracing (disabled by default).
     - make authn
     - make cli
     - make aisloader
