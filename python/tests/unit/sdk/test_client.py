@@ -34,25 +34,30 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         )
 
     @cases(
-        (True, None, None, None, "dummy.token"),
-        (False, "ca_cert_location", None, None, None),
-        (False, None, 30.0, Retry(total=4), None),
-        (False, None, (10, 30.0), Retry(total=5, connect=2), "dummy.token"),
+        (True, None, None, None, None, "dummy.token"),
+        (False, "ca_cert_location", None, None, None, None),
+        (False, None, "client_cert_location", None, None, None),
+        (False, None, None, 30.0, Retry(total=4), None),
+        (False, None, None, (10, 30.0), Retry(total=5, connect=2), "dummy.token"),
     )
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")
     def test_init(self, test_case, mock_request_client, mock_sm):
-        skip_verify, ca_cert, timeout, retry, token = test_case
+        skip_verify, ca_cert, client_cert, timeout, retry, token = test_case
         Client(
             self.endpoint,
             skip_verify=skip_verify,
             ca_cert=ca_cert,
+            client_cert=client_cert,
             timeout=timeout,
             retry=retry,
             token=token,
         )
         mock_sm.assert_called_with(
-            retry=retry, ca_cert=ca_cert, skip_verify=skip_verify
+            retry=retry,
+            ca_cert=ca_cert,
+            client_cert=client_cert,
+            skip_verify=skip_verify,
         )
         mock_request_client.assert_called_with(
             endpoint=self.endpoint,

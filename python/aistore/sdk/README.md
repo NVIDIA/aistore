@@ -105,6 +105,13 @@ The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTP
      - Use the environment variable
        - Set `AIS_CLIENT_CA` to the path of your certificate before initializing the client
     - If your AIS cluster is using a certificate signed by a trusted CA, the client will default to using verification without needing to provide a CA cert.
+4. Options to configure the SDK to work with mTLS:
+   - Pass a tuple argument containing path to client certificate and key pair
+      - `client = Client(client_cert=('client.crt', 'client.key'))
+   - Pass a path to a PEM file that contains both client certificate and key
+      - `client = Client(client_cert='client.pem')
+   - Use the environment variable
+      - Set 'AIS_CRT' and 'AIS_CRT_KEY' to the path of client certificate and key respectively before initializing the client
 ---
 
 ### ETLs

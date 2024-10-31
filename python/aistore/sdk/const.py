@@ -144,6 +144,8 @@ HTTPS = "https://"
 # Environment Variables
 AIS_CLIENT_CA = "AIS_CLIENT_CA"
 AIS_AUTHN_TOKEN = "AIS_AUTHN_TOKEN"
+AIS_CLIENT_CRT = "AIS_CRT"
+AIS_CLIENT_KEY = "AIS_CRT_KEY"
 
 # Content Constants
 LOREM = (
