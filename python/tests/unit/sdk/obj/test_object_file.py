@@ -31,7 +31,7 @@ class TestObjectFile(unittest.TestCase):
         self.assertEqual(self.object_file._max_resume, 3)
         self.assertEqual(self.object_file._resume_position, 0)
         self.assertEqual(self.object_file._resume_total, 0)
-        self.assertEqual(self.object_file._remainder, bytearray())
+        self.assertIsNone(self.object_file._remainder)
         self.assertFalse(self.object_file._closed)
 
         # Verify that iter_from_position(0) is called
@@ -131,7 +131,7 @@ class TestObjectFile(unittest.TestCase):
             # State should be reset inside context
             self.assertFalse(obj_file._closed)
             self.assertEqual(self.object_file._resume_position, 0)
-            self.assertEqual(self.object_file._remainder, bytearray())
+            self.assertIsNone(self.object_file._remainder)
 
         # After context, file should be closed
         self.assertTrue(self.object_file._closed)
