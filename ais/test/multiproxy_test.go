@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -1007,7 +1006,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *meta.Smap, directURL, toI
 
 	baseParams := tools.BaseAPIParams(directURL)
 	tlog.Logf("Setting primary from %s to %s\n", smap.Primary.ID(), toID)
-	err := api.SetPrimaryProxy(baseParams, toID, false /*force*/)
+	err := api.SetPrimary(baseParams, toID, "" /*toURL*/, false /*force*/)
 	tassert.CheckFatal(t, err)
 
 	newSmap, err = tools.WaitForNewSmap(proxyURL, smap.Version)
@@ -1243,17 +1242,9 @@ func networkFailurePrimary(t *testing.T) {
 	}
 
 	// Forcefully set new primary for the original one
+
 	baseParams := tools.BaseAPIParams(oldPrimaryURL)
-	baseParams.Method = http.MethodPut
-	reqParams := &api.ReqParams{
-		BaseParams: baseParams,
-		Path:       apc.URLPathDaeProxy.Join(newPrimaryID),
-		Query: url.Values{
-			apc.QparamForce:            {"true"},
-			apc.QparamPrimaryCandidate: {newPrimaryURL},
-		},
-	}
-	err = reqParams.DoRequest()
+	err = api.SetPrimary(baseParams, newPrimaryID, newPrimaryURL /*toURL*/, true /*force*/)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(

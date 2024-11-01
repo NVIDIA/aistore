@@ -202,13 +202,20 @@ func JoinCluster(bp BaseParams, nodeInfo *meta.Snode) (rebID, sid string, err er
 
 // SetPrimaryProxy given a daemonID sets that corresponding proxy as the
 // primary proxy of the cluster.
-func SetPrimaryProxy(bp BaseParams, newPrimaryID string, force bool) error {
+func SetPrimary(bp BaseParams, newPrimaryID, newPrimaryURL string, force bool) error {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	reqParams.BaseParams = bp
 	reqParams.Path = apc.URLPathCluProxy.Join(newPrimaryID)
-	if force {
-		reqParams.Query = url.Values{apc.QparamForce: []string{"true"}}
+	if force || newPrimaryURL != "" {
+		q := make(url.Values, 2)
+		if force {
+			q.Set(apc.QparamForce, "true")
+		}
+		if newPrimaryURL != "" {
+			q.Set(apc.QparamPrimaryCandidate, newPrimaryURL)
+		}
+		reqParams.Query = q
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)

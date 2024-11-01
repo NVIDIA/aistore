@@ -70,6 +70,9 @@ const concatUsage = "append a file, a directory, or multiple files and/or direct
 	indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
 	indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory."
 
+const setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
+	indent1 + "mykey1=value1 mykey2=value2 OR (same) '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
+
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
 		commandRemove: append(

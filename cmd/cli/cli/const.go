@@ -287,10 +287,6 @@ const (
 
 	renameObjectArgument = objectArgument + " NEW_OBJECT_NAME"
 
-	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
-		indent1 +
-		"mykey1=value1 mykey2=value2 OR '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
-
 	// nodes
 	nodeIDArgument            = "NODE_ID"
 	optionalNodeIDArgument    = "[NODE_ID]"

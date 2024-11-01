@@ -287,7 +287,7 @@ drain:
 		}
 	}
 	y.workCh <- revsReq{}
-	nlog.Infof("%s: becoming non-primary", y.p)
+	nlog.Infoln(y.p.String(), "becoming non-primary")
 }
 
 // main method; see top of the file; returns number of "sync" failures

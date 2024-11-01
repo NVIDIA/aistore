@@ -137,7 +137,7 @@ var (
 			{
 				Name:         cmdPrimary,
 				Usage:        "select a new primary proxy/gateway",
-				ArgsUsage:    nodeIDArgument,
+				ArgsUsage:    nodeIDArgument + " [URL]",
 				Flags:        clusterCmdsFlags[cmdPrimary],
 				Action:       setPrimaryHandler,
 				BashComplete: suggestProxies,
@@ -492,7 +492,24 @@ func setPrimaryHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	node, sname, err := getNode(c, c.Args().Get(0))
+	var (
+		toID  = c.Args().Get(0)
+		toURL = c.Args().Get(1)
+		force = flagIsSet(c, forceFlag)
+	)
+	if force {
+		err := api.SetPrimary(apiBP, toID, toURL, force)
+		if err == nil {
+			var s string
+			if toURL != "" {
+				s = " (at " + toURL + ")"
+			}
+			actionDone(c, fmt.Sprintf("%s%s is now a new primary", toID, s))
+		}
+		return err
+	}
+
+	node, sname, err := getNode(c, toID)
 	if err != nil {
 		return err
 	}
@@ -509,7 +526,7 @@ func setPrimaryHandler(c *cli.Context) error {
 		return fmt.Errorf("%s is non-electable", sname)
 	}
 
-	err = api.SetPrimaryProxy(apiBP, node.ID(), flagIsSet(c, forceFlag))
+	err = api.SetPrimary(apiBP, toID, toURL, force)
 	if err == nil {
 		actionDone(c, sname+" is now a new primary")
 	}
