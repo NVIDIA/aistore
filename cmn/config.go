@@ -252,25 +252,25 @@ type (
 		ServiceNamePrefix string                `json:"service_name_prefix"`     // service name prefix used by trace exporter
 		ExtraAttributes   map[string]string     `json:"attributes,omitempty"`    // any extra-attributes to be added to traces
 
-		// SamplerProbablityStr is the percentage of traces to be sampled, expressed as a float64.
+		// SamplerProbabilityStr is the percentage of traces to be sampled, expressed as a float64.
 		// It's stored as a string to avoid potential floating-point precision issues during json unmarshal.
 		// Valid values range from 0.0 to 1.0, where 1.0 means 100% sampling.
-		SamplerProbablityStr string `json:"sampler_probability,omitempty"`
-		Enabled              bool   `json:"enabled"`
-		SkipVerify           bool   `json:"skip_verify"` // allow insecure exporter gRPC connection
+		SamplerProbabilityStr string `json:"sampler_probability,omitempty"`
+		Enabled               bool   `json:"enabled"`
+		SkipVerify            bool   `json:"skip_verify"` // allow insecure exporter gRPC connection
 
 		SamplerProbablity float64 `json:"-"`
 	}
 
 	// NOTE: Updating TracingConfig requires daemon restart.
 	TracingConfToSet struct {
-		ExporterEndpoint     *string                     `json:"exporter_endpoint,omitempty"`   // gRPC exporter endpoint
-		ExporterAuth         *TraceExporterAuthConfToSet `json:"exporter_auth,omitempty"`       // exporter auth config
-		ServiceNamePrefix    *string                     `json:"service_name_prefix,omitempty"` // service name used by trace exporter
-		ExtraAttributes      map[string]string           `json:"attributes,omitempty"`          // any extra-attributes to be added to traces
-		SamplerProbablityStr *string                     `json:"sampler_probability,omitempty"` // percentage of traces to be sampled
-		Enabled              *bool                       `json:"enabled,omitempty"`
-		SkipVerify           *bool                       `json:"skip_verify,omitempty"` // allow insecure exporter gRPC connection
+		ExporterEndpoint      *string                     `json:"exporter_endpoint,omitempty"`   // gRPC exporter endpoint
+		ExporterAuth          *TraceExporterAuthConfToSet `json:"exporter_auth,omitempty"`       // exporter auth config
+		ServiceNamePrefix     *string                     `json:"service_name_prefix,omitempty"` // service name used by trace exporter
+		ExtraAttributes       map[string]string           `json:"attributes,omitempty"`          // any extra-attributes to be added to traces
+		SamplerProbabilityStr *string                     `json:"sampler_probability,omitempty"` // percentage of traces to be sampled
+		Enabled               *bool                       `json:"enabled,omitempty"`
+		SkipVerify            *bool                       `json:"skip_verify,omitempty"` // allow insecure exporter gRPC connection
 	}
 
 	TraceExporterAuthConf struct {
@@ -1814,10 +1814,10 @@ func (c *TracingConf) Validate() error {
 	if c.ExporterEndpoint == "" {
 		return errors.New("invalid tracing.exporter_endpoint can't be empty when tracing is enabled")
 	}
-	if c.SamplerProbablityStr == "" {
+	if c.SamplerProbabilityStr == "" {
 		c.SamplerProbablity = defaultSampleProbability
 	} else {
-		prob, err := strconv.ParseFloat(c.SamplerProbablityStr, 64)
+		prob, err := strconv.ParseFloat(c.SamplerProbabilityStr, 64)
 		if err != nil {
 			return nil
 		}
