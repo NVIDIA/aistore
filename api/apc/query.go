@@ -182,8 +182,8 @@ const (
 // Internal query params.
 const (
 	QparamProxyID          = "pid" // ID of the redirecting proxy.
-	QparamPrimaryCandidate = "can" // ID of the candidate for the primary proxy.
-	QparamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
+	QparamPrimaryCandidate = "can" // candidate for the primary proxy (voting ID, force URL)
+	QparamPrepare          = "prp" // 2-phase commit where 'true' corresponds to 'begin'; usage: (primary election; set-primary)
 	QparamNonElectable     = "nel" // true: proxy is non-electable for the primary role
 	QparamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
 	QparamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor

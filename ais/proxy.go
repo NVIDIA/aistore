@@ -2899,69 +2899,23 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 	return
 }
 
-// forceful primary change - is used when the original primary network is down
-// for a while and the remained nodes selected a new primary. After the
-// original primary is back it does not attach automatically to the new primary
-// and the cluster gets into split-brain mode. This request makes original
-// primary connect to the new primary
-func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
-	newPrimaryURL := r.URL.Query().Get(apc.QparamPrimaryCandidate)
-	nlog.Infof("%s: force new primary %s (URL: %s)", p, proxyID, newPrimaryURL)
-
-	if p.SID() == proxyID {
-		nlog.Warningf("%s is already primary", p)
-		return
-	}
-	smap := p.owner.smap.get()
-	psi := smap.GetProxy(proxyID)
-	if psi == nil && newPrimaryURL == "" {
-		err := &errNodeNotFound{"failed to find new primary", proxyID, p.si, smap}
-		p.writeErr(w, r, err, http.StatusNotFound)
-		return
-	}
-	if newPrimaryURL == "" {
-		newPrimaryURL = psi.ControlNet.URL
-	}
-	if newPrimaryURL == "" {
-		err := &errNodeNotFound{"failed to get new primary's direct URL", proxyID, p.si, smap}
-		p.writeErr(w, r, err)
-		return
-	}
-	newSmap, err := p.smapFromURL(newPrimaryURL)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	primary := newSmap.Primary
-	if proxyID != primary.ID() {
-		p.writeErrf(w, r, "%s: proxy %s is not the primary, current %s", p.si, proxyID, newSmap.pp())
-		return
-	}
-
-	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
-	p.owner.smap.put(newSmap)
-	res := p.regTo(primary.ControlNet.URL, primary, apc.DefaultTimeout, nil, nil, false /*keepalive*/)
-	if res.err != nil {
-		p.writeErr(w, r, res.toErr())
-	}
-}
-
 func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 2, false)
 	if err != nil {
 		return
 	}
-	proxyID := apiItems[1]
-	query := r.URL.Query()
-	force := cos.IsParseBool(query.Get(apc.QparamForce))
-
+	var (
+		proxyID = apiItems[1]
+		query   = r.URL.Query()
+		force   = cos.IsParseBool(query.Get(apc.QparamForce))
+	)
 	// force primary change
 	if force && apiItems[0] == apc.Proxy {
 		if smap := p.owner.smap.get(); !smap.isPrimary(p.si) {
 			p.writeErr(w, r, newErrNotPrimary(p.si, smap))
 			return
 		}
-		p.forcefulJoin(w, r, proxyID)
+		p.forceJoin(w, r, proxyID, query) // TODO -- FIXME: test
 		return
 	}
 	prepare, err := cos.ParseBool(query.Get(apc.QparamPrepare))
@@ -2970,7 +2924,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.owner.smap.get().isPrimary(p.si) {
-		p.writeErrf(w, r, "%s: am PRIMARY, expecting '/v1/cluster/...' when designating a new one", p)
+		p.writeErrf(w, r, "%s (self) is primary, expecting '/v1/cluster/...' when designating a new one", p)
 		return
 	}
 	if prepare {
@@ -3255,7 +3209,7 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 	logmsync(oldConfig.Version, newConfig, msg, caller)
 
 	p.owner.config.Lock()
-	err = p._recvCfg(newConfig, payload)
+	err = p._recvCfg(newConfig, msg, payload)
 	p.owner.config.Unlock()
 	if err != nil {
 		return
@@ -3399,6 +3353,11 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 
 	p.owner.bmd.Lock()
 	bmd = p.owner.bmd.get()
+
+	if msg.Action == apc.ActPrimaryForce {
+		goto skip
+	}
+
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
 		cos.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
@@ -3407,6 +3366,8 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 		p.owner.bmd.Unlock()
 		return newErrDowngrade(p.si, bmd.String(), newBMD.String())
 	}
+
+skip:
 	err = p.owner.bmd.putPersist(newBMD, payload)
 	debug.AssertNoErr(err)
 	p.owner.bmd.Unlock()

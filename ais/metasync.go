@@ -312,7 +312,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 			msg, tag = pair.msg, pair.revs.tag()
 			revs     = pair.revs
 		)
-		if reqT == reqNotify {
+		if reqT == reqNotify || msg.Action == apc.ActPrimaryForce {
 			revsBody = revs.marshal()
 		} else {
 			revs = y.jit(pair)

@@ -1956,32 +1956,35 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	npid := apiItems[0]
-	if p.forwardCP(w, r, nil, "designate new primary proxy '"+npid+"'") {
+	if p.forwardCP(w, r, nil, "designate new primary '"+npid+"'") {
 		return
 	}
 
-	// am current primary - validating
+	// am primary, validating...
 	smap := p.owner.smap.get()
 	npsi := smap.GetProxy(npid)
+
 	if npsi == nil {
-		p.writeErrf(w, r, "new primary proxy %s is not present in the %s", npid, smap.StringEx())
+		query := r.URL.Query()
+		force := cos.IsParseBool(query.Get(apc.QparamForce))
+		if force {
+			// proceed w/ force
+			p.forceJoin(w, r, npid, query)
+		} else {
+			err := &errNodeNotFound{msg: "set-primary failure:", id: npid, si: p.si, smap: smap}
+			p.writeErr(w, r, err, http.StatusNotFound)
+		}
 		return
 	}
+
 	if npid == p.SID() {
 		debug.Assert(p.SID() == smap.Primary.ID()) // must be forwardCP-ed
-		// TODO: return http.StatusNoContent
-		nlog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
+		nlog.Warningln(p.String(), "(self) is already primary, nothing to do")
 		return
 	}
-	if smap.InMaintOrDecomm(npsi) {
-		var err error
-		if smap.InMaint(npsi) {
-			err = fmt.Errorf("%s cannot become the new primary as it's currently under maintenance", npsi)
-		} else {
-			err = fmt.Errorf("%s cannot become the new primary as it's currently being decommissioned", npsi)
-		}
-		debug.AssertNoErr(err)
-		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+
+	if err := _validateNewPrimary(npsi); err != nil {
+		p.writeErr(w, r, err)
 		return
 	}
 
@@ -1989,7 +1992,23 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	if p.settingNewPrimary.CAS(false, true) {
 		p._setPrimary(w, r, npsi)
 		p.settingNewPrimary.Store(false)
+	} else {
+		nlog.Warningln("setting new primary in progress now...")
 	}
+}
+
+func _validateNewPrimary(npsi *meta.Snode) error {
+	if npsi.InMaintOrDecomm() {
+		s := "under maintenance"
+		if !npsi.InMaint() {
+			s = "being decommissioned"
+		}
+		return fmt.Errorf("%s cannot become a new primary as it is currently %s", npsi, s)
+	}
+	if npsi.Flags.IsSet(meta.SnodeNonElectable) {
+		return fmt.Errorf("%s is non-electable and cannot become a new primary", npsi)
+	}
+	return nil
 }
 
 func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.Snode) {
@@ -1997,7 +2016,7 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	// (I.1) Prepare phase - inform other nodes.
 	//
 	urlPath := apc.URLPathDaeProxy.Join(npsi.ID())
-	q := url.Values{}
+	q := make(url.Values, 1)
 	q.Set(apc.QparamPrepare, "true")
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
@@ -2009,6 +2028,8 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	}
 	args.req.Body = cos.MustMarshal(cluMeta)
 
+	npname := npsi.StringEx()
+
 	args.to = core.AllNodes
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -2016,7 +2037,7 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 		if res.err == nil {
 			continue
 		}
-		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, npsi.StringEx())
+		err := res.errorf("node %s failed to set primary %s in the prepare phase (err: %v)", res.si, npname, res.err)
 		p.writeErr(w, r, err)
 		freeBcastRes(results)
 		return
@@ -2047,13 +2068,163 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 			continue
 		}
 		if res.si.ID() == npsi.ID() {
-			cos.ExitLogf("commit phase failure: new primary %s returned %v", npsi.StringEx(), res.err)
+			// FATAL
+			cos.ExitLogf("commit phase failure: new primary %s returned %v", npname, res.err)
 		} else {
-			nlog.Errorf("Commit phase failure: %s returned %v when setting primary = %s",
-				res.si.ID(), res.err, npsi.StringEx())
+			nlog.Errorf("node %s failed to set new primary %s in the commit phase (err: %v)", res.si, npname, res.err)
 		}
 	}
 	freeBcastRes(results)
+}
+
+// forced primary change - is used when the original primary's network is down
+// for a while, long enough for the remaining nodes to elect new primary. When the
+// original primary gets back online it does not join automatically to the
+// new (elected) primary, which may further lead to split-brain situation.
+
+// TODO -- FIXME: two-phase commit via apc.QparamPrepare = (true | false)
+
+func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q url.Values) {
+	const (
+		tag = "designated primary"
+		act = "force-join"
+	)
+	// 1. validate args
+	if p.SID() == npid {
+		nlog.Warningln(p.String(), "(self) is the", tag, "- nothing to do")
+		return
+	}
+	var (
+		smap          = p.owner.smap.get()
+		psi           = smap.GetProxy(npid)
+		newPrimaryURL = q.Get(apc.QparamPrimaryCandidate)
+		nurl          = newPrimaryURL
+	)
+	if psi == nil && newPrimaryURL == "" {
+		msg := act + " failure (w/ empty destination URL):"
+		err := &errNodeNotFound{msg: msg, id: npid, si: p.si, smap: smap}
+		p.writeErr(w, r, err, http.StatusNotFound)
+		return
+	}
+	if nurl == "" {
+		nurl = cos.Left(psi.ControlNet.URL, psi.PubNet.URL)
+	}
+	if nurl == "" {
+		err := fmt.Errorf("cannot %s %s (and cluster %s) to %s[%s]: missing destination URL", act, p, smap, tag, npid)
+		p.writeErr(w, r, err)
+		return
+	}
+
+	// 2. validate destination cluster
+	newSmap, err := p.smapFromURL(nurl)
+	if err != nil && psi.PubNet.URL != psi.ControlNet.URL {
+		newSmap, err = p.smapFromURL(psi.PubNet.URL)
+	}
+	if err != nil {
+		err := fmt.Errorf("%s %s to %s[%q, %q]: %s", act, p, tag, npid, newPrimaryURL, err)
+		p.writeErr(w, r, err)
+		return
+	}
+	npsi := newSmap.Primary
+	if npid != npsi.ID() {
+		err := fmt.Errorf("%s: according to the destination %s %s[%s] is _not_ primary", p, newSmap.StringEx(), tag, npid)
+		p.writeErr(w, r, err)
+		return
+	}
+	if err := _validateNewPrimary(npsi); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	npname := npsi.StringEx()
+
+	// 3. begin
+	what := "(split-brain):"
+	if smap.UUID != newSmap.UUID {
+		what = "a different cluster:"
+	}
+	nlog.Warningln(act, "entire cluster [", p.String(), smap.StringEx(), "] to:\n", "\t", what, "[", npname, newSmap.StringEx(), "]")
+
+	// 4. get destination cluMeta from npsi
+	cargs := allocCargs()
+	{
+		cargs.si = npsi
+		cargs.timeout = cmn.Rom.MaxKeepalive()
+		cargs.req = cmn.HreqArgs{Path: apc.URLPathDae.S, Query: url.Values{apc.QparamWhat: []string{apc.WhatSmapVote}}}
+		cargs.cresv = cresCM{} // -> cluMeta
+	}
+	res := p.call(cargs, smap)
+	err = res.unwrap()
+	freeCargs(cargs)
+	if err != nil {
+		freeCR(res)
+		p.writeErr(w, r, err)
+		return
+	}
+	ncm, ok := res.v.(*cluMeta)
+	debug.Assert(ok)
+	freeCR(res)
+
+	// backup (to rollback, if need be)
+	cm, err := p.cluMeta(cmetaFillOpt{skipPrimeTime: true})
+	if err != nil {
+		p.writeErrf(w, r, "cannot %s %s to %s: %v", act, p, npname, err) // (unlikely)
+		return
+	}
+
+	// TODO -- FIXME: add 'prepare' step whereby all members health(npsi)
+
+	// 5. metasync destination cluMeta to _this_ cluster members
+	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, smap)
+	wg := p.metasyncer.sync(revsPair{ncm.Smap, aimsg}, revsPair{ncm.BMD, aimsg}, revsPair{ncm.Config, aimsg}, revsPair{ncm.RMD, aimsg})
+	wg.Wait()
+
+	// 6. update cluMeta in memory (= destination)
+	if err = cmn.GCO.Update(&ncm.Config.ClusterConfig); err != nil {
+		// rollback #1
+		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
+		wg.Wait()
+
+		p.writeErr(w, r, err)
+		return
+	}
+	bmdOwnerPrx, ok := p.owner.bmd.(*bmdOwnerPrx)
+	debug.Assert(ok)
+	bmdOwnerPrx.put(ncm.BMD)
+
+	// 7. finally, join self
+	joinURL, secondURL := npsi.ControlNet.URL, npsi.PubNet.URL
+	if nurl == npsi.PubNet.URL {
+		joinURL, secondURL = npsi.PubNet.URL, npsi.ControlNet.URL
+	}
+
+	p.owner.smap.put(newSmap)
+	res = p.regTo(joinURL, npsi, apc.DefaultTimeout, nil, nil, false /*keepalive*/)
+	e, eh := res.err, res.toErr()
+	freeCR(res)
+	if e != nil {
+		if joinURL != secondURL {
+			nlog.Warningln(res.toErr(), "- 2nd attempt via", secondURL)
+			res = p.regTo(secondURL, npsi, apc.DefaultTimeout, nil, nil, false)
+			eh = res.toErr()
+			freeCR(res)
+		}
+	}
+	if eh != nil {
+		// rollback #2
+		if nested := cmn.GCO.Update(&cm.Config.ClusterConfig); nested != nil {
+			nlog.Errorf("FATAL: nested config-update error when rolling back [%s %s to %s]: %v",
+				act, p, npname, nested) // (unlikely)
+		}
+		bmdOwnerPrx.put(cm.BMD)
+		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
+		wg.Wait()
+
+		p.writeErr(w, r, eh)
+		return
+	}
+	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
+
+	// TODO -- FIXME: persist ncm locally
 }
 
 //////////////////////////////////////////
@@ -2151,7 +2322,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})
 	}
 
-	nlog.InfoDepth(1, p.String()+":", msg.Action, sname)
+	nlog.InfoDepth(1, p.String(), msg.Action, sname)
 	res := p.call(cargs, smap)
 	err = res.unwrap()
 	freeCargs(cargs)

@@ -1562,7 +1562,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(config.Version, newConfig, msg, caller)
 	}
-	if newConfig.version() <= config.Version {
+	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
 		if newConfig.version() < config.Version {
 			err = newErrDowngrade(h.si, config.String(), newConfig.String())
 		}
@@ -1592,7 +1592,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(etlMD.Version, newMD, msg, caller)
 	}
-	if newMD.version() <= etlMD.version() {
+	if newMD.version() <= etlMD.version() && msg.Action != apc.ActPrimaryForce {
 		if newMD.version() < etlMD.version() {
 			err = newErrDowngrade(h.si, etlMD.String(), newMD.String())
 		}
@@ -1602,13 +1602,14 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 }
 
 func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (newSmap *smapX, msg *aisMsg, err error) {
+	const act = "extract-smap"
 	if _, ok := payload[revsSmapTag]; !ok {
 		return
 	}
 	newSmap, msg = &smapX{}, &aisMsg{}
 	smapValue := payload[revsSmapTag]
 	reader := bytes.NewBuffer(smapValue)
-	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), "extractSmap"); err1 != nil {
+	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), act); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Smap", cos.BHead(smapValue), err1)
 		return
 	}
@@ -1635,8 +1636,22 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		err = cmn.NewErrFailedTo(h, "extract", newSmap, newSmap.validate())
 		return
 	}
+
+	if msg.Action == apc.ActPrimaryForce {
+		var origSmap smapX
+		if err := cos.MorphMarshal(msg.Value, &origSmap); err != nil {
+			debug.AssertNoErr(err) // unlikely
+		}
+		if !origSmap.isPresent(h.si) {
+			err = &errSelfNotFound{act: act + " (with force)", si: h.si, tag: "orig", smap: &origSmap}
+			return
+		}
+		logmsync(smap.Version, newSmap, msg, caller)
+		return
+	}
+
 	if !newSmap.isPresent(h.si) {
-		err = fmt.Errorf("%s: not finding ourselves in %s", h, newSmap)
+		err = &errSelfNotFound{act: act, si: h.si, tag: "new", smap: newSmap}
 		return
 	}
 	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
@@ -1685,7 +1700,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(rmd.Version, newRMD, msg, caller)
 	}
-	if newRMD.version() <= rmd.version() {
+	if newRMD.version() <= rmd.version() && msg.Action != apc.ActPrimaryForce {
 		if newRMD.version() < rmd.version() {
 			err = newErrDowngrade(h.si, rmd.String(), newRMD.String())
 		}
@@ -1719,7 +1734,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	if h.si.IsTarget() && msg.UUID != "" {
 		return
 	}
-	if newBMD.version() <= bmd.version() {
+	if newBMD.version() <= bmd.version() && msg.Action != apc.ActPrimaryForce {
 		if newBMD.version() < bmd.version() {
 			err = newErrDowngrade(h.si, bmd.StringEx(), newBMD.StringEx())
 		}
@@ -1735,8 +1750,8 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, call
 	smap := h.owner.smap.get()
 	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx())
 
-	if !newSmap.isPresent(h.si) {
-		return fmt.Errorf("%s: not finding self in the new %s", h, newSmap)
+	if !newSmap.isPresent(h.si) && msg.Action != apc.ActPrimaryForce {
+		return &errSelfNotFound{act: "receive-smap", si: h.si, tag: "new", smap: newSmap}
 	}
 	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
 }
@@ -1750,7 +1765,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload, ca
 
 	h.owner.etl.Lock()
 	etlMD = h.owner.etl.get()
-	if newEtlMD.version() <= etlMD.version() {
+	if newEtlMD.version() <= etlMD.version() && msg.Action != apc.ActPrimaryForce {
 		h.owner.etl.Unlock()
 		if newEtlMD.version() < etlMD.version() {
 			err = newErrDowngrade(h.si, etlMD.String(), newEtlMD.String())
@@ -1768,9 +1783,9 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload, ca
 }
 
 // under lock
-func (h *htrun) _recvCfg(newConfig *globalConfig, payload msPayload) (err error) {
+func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload) (err error) {
 	config := cmn.GCO.Get()
-	if newConfig.version() <= config.Version {
+	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
 		if newConfig.version() == config.Version {
 			return
 		}

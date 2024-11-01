@@ -771,7 +771,13 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		destroyErrs []error
 		bmd         = t.owner.bmd.get()
 	)
+
+	if msg.Action == apc.ActPrimaryForce {
+		goto skip
+	}
+
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
+		nlog.Errorln(msg.String(), "-> cluster integrity error")
 		cos.ExitLog(err) // FATAL: cluster integrity error (cie)
 		return
 	}
@@ -782,6 +788,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		}
 		return
 	}
+skip:
 	nilbmd := bmd.version() == 0 || t.regstate.prevbmd.Load()
 
 	// 1. create
@@ -1158,7 +1165,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 	logmsync(oldConfig.Version, newConfig, msg, caller)
 
 	t.owner.config.Lock()
-	err = t._recvCfg(newConfig, payload)
+	err = t._recvCfg(newConfig, msg, payload)
 	t.owner.config.Unlock()
 	if err != nil {
 		return

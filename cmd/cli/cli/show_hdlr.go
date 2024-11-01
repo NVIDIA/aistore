@@ -645,7 +645,7 @@ func showBMDHandler(c *cli.Context) error {
 	}
 
 	if bmd.IsEmpty() {
-		msg := fmt.Sprintf("%s is empty - no buckets", bmd)
+		msg := bmd.StringEx() + " - is empty"
 		actionDone(c, msg)
 		return nil
 	}

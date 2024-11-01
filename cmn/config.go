@@ -677,16 +677,8 @@ type (
 )
 
 // assorted named fields that require (cluster | node) restart for changes to make an effect
+// (used by CLI)
 var ConfigRestartRequired = [...]string{"auth.secret", "memsys", "net"}
-
-// dsort
-const (
-	IgnoreReaction = "ignore"
-	WarnReaction   = "warn"
-	AbortReaction  = "abort"
-)
-
-var SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 
 //
 // config meta-versioning & serialization
@@ -1442,7 +1434,15 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 // DsortConf //
 ///////////////
 
+const (
+	IgnoreReaction = "ignore"
+	WarnReaction   = "warn"
+	AbortReaction  = "abort"
+)
+
 const _idsort = "invalid distributed_sort."
+
+var SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 
 func (c *DsortConf) Validate() (err error) {
 	if c.SbundleMult < 0 || c.SbundleMult > 16 {

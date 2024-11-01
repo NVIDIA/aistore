@@ -103,13 +103,13 @@ const (
 
 // internal use
 const (
-	ActAddRemoteBck    = "add-remote-bck"         // add to BMD existing remote bucket, usually on the fly
-	ActRmNodeUnsafe    = "rm-unsafe"              // primary => the node to be removed
-	ActStartGFN        = "start-gfn"              // get-from-neighbor
-	ActStopGFN         = "stop-gfn"               // off
-	ActCleanupMarkers  = "cleanup-markers"        // part of the target joining sequence
-	ActSelfRemove      = "self-initiated-removal" // e.g., when losing last mountpath
-	ActSetPrimaryForce = "set-primary-force"      // BEWARE! advanced usage only
+	ActAddRemoteBck   = "add-remote-bck"         // add to BMD existing remote bucket, usually on the fly
+	ActRmNodeUnsafe   = "rm-unsafe"              // primary => the node to be removed
+	ActStartGFN       = "start-gfn"              // get-from-neighbor
+	ActStopGFN        = "stop-gfn"               // off
+	ActCleanupMarkers = "cleanup-markers"        // part of the target joining sequence
+	ActSelfRemove     = "self-initiated-removal" // e.g., when losing last mountpath
+	ActPrimaryForce   = "primary-force"          // BEWARE! advanced usage only
 )
 
 const (
@@ -130,7 +130,7 @@ const (
 	ActTransient = "transient" // transient - in-memory only
 )
 
-// xaction begin-commit phases and related control
+// xaction 2-phase commit and related control (compare w/ QparamPrepare)
 const (
 	ActBegin  = "begin"
 	ActCommit = "commit"

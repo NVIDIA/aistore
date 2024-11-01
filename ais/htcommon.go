@@ -193,7 +193,13 @@ type (
 	errNodeNotFound     struct {
 		msg  string
 		id   string
+		si   *meta.Snode // self
+		smap *smapX
+	}
+	errSelfNotFound struct {
+		act  string
 		si   *meta.Snode
+		tag  string
 		smap *smapX
 	}
 	errNotEnoughTargets struct {
@@ -236,6 +242,9 @@ func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
 func (e *errNodeNotFound) Error() string {
 	return fmt.Sprintf("%s: %s node %s not present in the %s", e.si, e.msg, e.id, e.smap)
+}
+func (e *errSelfNotFound) Error() string {
+	return fmt.Sprintf("%s: %s failure: not finding self in the %s %s", e.si, e.act, e.tag, e.smap.StringEx())
 }
 
 /////////////////////
