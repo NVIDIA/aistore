@@ -135,10 +135,9 @@ func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *Xact
 	return r, nil
 }
 
-func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
-	wg.Done()
-
+func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	ECM.incActive(r)
+	gowg.Done()
 
 	opts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},

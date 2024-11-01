@@ -63,7 +63,8 @@ func (p *rspFactory) Start() error {
 	xec := ECM.NewRespondXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
-	go xec.Run(nil)
+
+	xact.GoRunW(xec)
 	return nil
 }
 
@@ -77,10 +78,11 @@ func newRespondXact(bck *cmn.Bck, mgr *Manager) *XactRespond {
 	return xctn
 }
 
-func (r *XactRespond) Run(*sync.WaitGroup) {
+func (r *XactRespond) Run(gowg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 
 	ECM.incActive(r)
+	gowg.Done()
 
 	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()

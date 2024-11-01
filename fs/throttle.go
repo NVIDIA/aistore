@@ -12,9 +12,11 @@ const (
 	Throttle10ms  = 10 * time.Millisecond
 	Throttle100ms = 100 * time.Millisecond
 
-	throttleBatch = 0x1f      // a.k.a. unit or period
-	throMiniBatch = 0x1f >> 1 // ditto
+	throttleBatch  = 0x1f // a.k.a. unit or period
+	throMiniBatch  = 0x1f >> 1
+	throMicroBatch = 0x1f >> 2
 )
 
-func IsThrottle(n int64) bool     { return n&throttleBatch == throttleBatch }
-func IsMiniThrottle(n int64) bool { return n&throMiniBatch == throMiniBatch }
+func IsThrottle(n int64) bool      { return n&throttleBatch == throttleBatch }
+func IsMiniThrottle(n int64) bool  { return n&throMiniBatch == throMiniBatch }
+func IsMicroThrottle(n int64) bool { return n&throMicroBatch == throMicroBatch }

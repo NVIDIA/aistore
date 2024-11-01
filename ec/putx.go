@@ -68,7 +68,8 @@ func (p *putFactory) Start() error {
 	xec := ECM.NewPutXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
-	go xec.Run(nil)
+
+	xact.GoRunW(xec)
 	return nil
 }
 
@@ -153,7 +154,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *core.LOM) error {
 	return nil
 }
 
-func (r *XactPut) Run(*sync.WaitGroup) {
+func (r *XactPut) Run(gowg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 
 	var wg sync.WaitGroup
@@ -163,6 +164,7 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 	}
 
 	ECM.incActive(r)
+	gowg.Done()
 
 	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	r.mainLoop(ticker)
@@ -172,7 +174,6 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 	r.Finish()
 }
 
-// all requests are equal, throttle TODO
 func (r *XactPut) mainLoop(ticker *time.Ticker) {
 	for {
 		select {

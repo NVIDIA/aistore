@@ -68,7 +68,8 @@ func (p *getFactory) Start() error {
 	xec := ECM.NewGetXact(p.Bck.Bucket())
 	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
-	go xec.Run(nil)
+
+	xact.GoRunW(xec)
 	return nil
 }
 func (*getFactory) Kind() string     { return apc.ActECGet }
@@ -184,7 +185,7 @@ func (r *XactGet) dispatchReq(req *request, lom *core.LOM) error {
 	return nil
 }
 
-func (r *XactGet) Run(*sync.WaitGroup) {
+func (r *XactGet) Run(gowg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 	for _, jog := range r.getJoggers {
 		go jog.run()
@@ -194,6 +195,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	defer ticker.Stop()
 
 	ECM.incActive(r)
+	gowg.Done()
 
 	// as of now all requests are equal. Some may get throttling later
 	for {

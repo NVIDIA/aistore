@@ -53,6 +53,7 @@ type (
 		stopCh cos.StopCh    // jogger management channel: to stop it
 
 		ntotal int64 // (throttle to prevent OOM)
+		micro  bool  // (throttle tuneup)
 		toDisk bool  // use files or SGL (NOTE: toDisk == false may cause OOM)
 	}
 )
@@ -147,11 +148,12 @@ func (c *putJogger) _do(req *request, lom *core.LOM) {
 		c.parent.AddErr(err, 0)
 	} else if !c.toDisk { // throttle
 		c.ntotal++
-		if fs.IsMiniThrottle(c.ntotal) {
-			if pressure := g.pmm.Pressure(); pressure >= memsys.PressureExtreme {
+		if (c.micro && fs.IsMicroThrottle(c.ntotal)) || fs.IsMiniThrottle(c.ntotal) {
+			if pressure := g.pmm.Pressure(); pressure >= memsys.PressureHigh {
 				time.Sleep(fs.Throttle100ms)
-			} else if pressure == memsys.PressureHigh {
-				time.Sleep(fs.Throttle10ms)
+				if !c.micro && pressure >= memsys.PressureExtreme {
+					c.micro = true
+				}
 			}
 		}
 	}
