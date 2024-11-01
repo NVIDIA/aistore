@@ -73,6 +73,13 @@ jobs:
           IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
           popd
 
+      - name: Build and push `aisnode` image with tracing support
+        if: ${{ inputs.build_aisnode_image }}
+        run: |
+          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
+          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}-oteltracing" BUILD_TAGS="oteltracing" make -e all
+          popd
+
       - name: Build and push `cluster-minimal` image
         if: ${{ inputs.build_cluster_minimal_image }}
         run: |

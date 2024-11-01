@@ -23,8 +23,10 @@ BASE_IMAGE      ?=
 # By default we build image in "production" mode. It can be set to `debug`
 # to enable extra checks.
 BUILD_MODE      ?=
+# Build tags to build `aisnode` binary.
+BUILD_TAGS      ?=
 
-BUILD_ARGS = --build-arg "mode=$(BUILD_MODE)" --build-arg "providers=$(AIS_BACKEND_PROVIDERS)"
+BUILD_ARGS = --build-arg "mode=$(BUILD_MODE)" --build-arg "providers=$(AIS_BACKEND_PROVIDERS)" --build-arg "tags=$(BUILD_TAGS)"
 ifneq ("$(INSTALLER_IMAGE)","")
 	BUILD_ARGS += --build-arg "INSTALLER_IMAGE=$(INSTALLER_IMAGE)"
 endif
