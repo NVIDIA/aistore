@@ -66,9 +66,12 @@ type (
 // assorted aistore errors
 type (
 	ErrBucketAlreadyExists struct{ bck Bck }
-	ErrRemoteBckNotFound   struct{ bck Bck }
 	ErrRemoteBucketOffline struct{ bck Bck }
 	ErrBckNotFound         struct{ bck Bck }
+	ErrRemoteBckNotFound   struct {
+		bck Bck
+		ctx string
+	}
 
 	ErrBusy struct {
 		whereOrType string
@@ -353,11 +356,14 @@ func NewErrRemoteBckNotFound(bck *Bck) *ErrRemoteBckNotFound {
 	return &ErrRemoteBckNotFound{bck: *bck}
 }
 
+func (e *ErrRemoteBckNotFound) Set(ctx string) { e.ctx = ctx }
+
 func (e *ErrRemoteBckNotFound) Error() string {
 	if e.bck.IsCloud() {
-		return fmt.Sprintf("%s bucket %q does not exist", apc.NormalizeProvider(e.bck.Provider), e.bck.Cname(""))
+		np := apc.NormalizeProvider(e.bck.Provider)
+		return fmt.Sprintf("%s bucket %q does not exist%s", np, e.bck.Cname(""), e.ctx)
 	}
-	return fmt.Sprintf("remote bucket %q does not exist", e.bck)
+	return fmt.Sprintf("remote bucket %q does not exist%s", e.bck, e.ctx)
 }
 
 func IsErrRemoteBckNotFound(err error) bool {

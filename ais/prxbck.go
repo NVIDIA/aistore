@@ -243,13 +243,13 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 		return bck, err
 	case cmn.IsErrBucketAlreadyExists(err):
 		// e.g., when (re)setting backend two times in a row
-		// TODO: return http.StatusNoContent
 		nlog.Infoln(bctx.p.String(), err, " - nothing to do")
 		return bck, nil
 	default:
 		if bctx.perms == apc.AceBckHEAD {
 			bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
 		} else {
+			// likely, apc.AceObjLIST
 			bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 		}
 		return bck, err
@@ -287,7 +287,14 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 	action = apc.ActAddRemoteBck // only if requested via bctx
 
 	// lookup remote
-	if remoteHdr, ecode, err = bctx.lookup(bck); err != nil {
+	remoteHdr, ecode, err = bctx.lookup(bck)
+	if err == nil && ecode != http.StatusOK && bck.IsCloud() {
+		debug.Assert(ecode == http.StatusNotFound, ecode)
+		e := cmn.NewErrRemoteBckNotFound(bck.Bucket())
+		e.Set(" (cannot create cloud bucket on the fly)")
+		err = e
+	}
+	if err != nil {
 		return nil, ecode, err
 	}
 

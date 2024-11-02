@@ -899,12 +899,13 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 			// to further confusion, supplies it with ErrorCode() == "PermanentRedirect",
 			// which is supposed to be 308
 			if rspErr.HTTPStatusCode() == http.StatusMovedPermanently {
-				return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+				err := cmn.NewErrRemoteBckNotFound(bck)
+				err.Set(" (PermanentRedirect)")
+				return http.StatusNotFound, err
 			}
 
 			return rspErr.HTTPStatusCode(), _awsErr(awsError, code)
 		}
-
 		return http.StatusBadRequest, _awsErr(awsError, code)
 	}
 }

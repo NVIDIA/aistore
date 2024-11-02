@@ -134,13 +134,21 @@ func TestListBuckets(t *testing.T) {
 				i = rand.IntN(len(bcks))
 			}
 			pbck := bcks[i]
+			tlog.Logf("lookup and add '%s'\n", pbck)
 			_, err := api.HeadBucket(baseParams, pbck, false /* don't add */)
+			if err != nil {
+				// TODO: extend api.HeadBucket to return status as well(?)
+				if _, ok := err.(*cmn.ErrHTTP); ok && strings.Contains(err.Error(), "does not exist") {
+					tlog.Logf("Warning: cannot HEAD(%s): not permitted(?)\n", pbck)
+					continue
+				}
+			}
 			tassert.CheckFatal(t, err)
 
 			presbcks, err = api.ListBuckets(baseParams, qbck, apc.FltPresent)
 			tassert.CheckFatal(t, err)
 
-			tlog.Logf("%s: now present %s\n", provider, pbck)
+			tlog.Logf("bucket %s is now in BMD\n", pbck)
 			t.Cleanup(func() {
 				err = api.EvictRemoteBucket(baseParams, pbck, false /*keep md*/)
 				tassert.CheckFatal(t, err)

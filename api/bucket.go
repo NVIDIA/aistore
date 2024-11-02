@@ -95,9 +95,14 @@ func hdr2msg(bck cmn.Bck, status int, err error) error {
 		return err
 	}
 
-	quoted := "\"" + bck.Cname("") + "\""
 	if !bck.IsQuery() && status == http.StatusNotFound {
-		herr.Message = "bucket " + quoted + " does not exist"
+		// when message already resulted from (unwrap)
+		if herr2 := cmn.Str2HTTPErr(err.Error()); herr2 != nil {
+			herr.Message = herr2.Message
+		} else {
+			quoted := "\"" + bck.Cname("") + "\""
+			herr.Message = "bucket " + quoted + " does not exist"
+		}
 		return herr
 	}
 	// common
@@ -109,6 +114,7 @@ func hdr2msg(bck cmn.Bck, status int, err error) error {
 	if bck.IsQuery() {
 		herr.Message += "query "
 	}
+	quoted := "\"" + bck.Cname("") + "\""
 	herr.Message += quoted
 	return herr
 }

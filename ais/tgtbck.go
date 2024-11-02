@@ -514,7 +514,6 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
-				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
 				t.writeErr(w, r, err, code, Silent)
 			} else {
 				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)

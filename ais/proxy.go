@@ -1574,11 +1574,9 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		// remote: check existence and get (cloud) props
 		rhdr, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
 		if err != nil {
-			if bck.IsCloud() {
+			if statusCode == http.StatusNotFound && msg.Action == apc.ActCreateBck {
 				statusCode = http.StatusNotImplemented
-				err = cmn.NewErrNotImpl("create", bck.Provider+"(cloud) bucket")
-			} else if !bck.IsRemoteAIS() {
-				err = cmn.NewErrUnsupp("create", bck.Provider+":// bucket")
+				err = cmn.NewErrNotImpl("create", bck.Provider+" bucket")
 			}
 			p.writeErr(w, r, err, statusCode)
 			return
@@ -2236,7 +2234,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 
 	if res.err != nil {
 		err = res.toErr()
-		p.writeErr(w, r, err, res.status)
+		p.writeErr(w, r, err, res.status, Silent) // always silent
 		return
 	}
 
@@ -3425,7 +3423,9 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 	}
 	res := p.call(cargs, smap)
 	if res.status == http.StatusNotFound {
-		err = cmn.NewErrRemoteBckNotFound(bck)
+		if err = res.err; err == nil {
+			err = cmn.NewErrRemoteBckNotFound(bck)
+		}
 	} else if res.status == http.StatusGone {
 		err = cmn.NewErrRemoteBckOffline(bck)
 	} else {
