@@ -1440,7 +1440,7 @@ func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap
 			b, status, err = res.bytes, res.status, res.err
 			freeCR(res)
 			if err != nil {
-				nlog.Warningln(h.si.String(), "=>", si.StringEx(), "failed slow-ping retry:", err)
+				nlog.Warningln(h.si.String(), "=>", si.StringEx(), "failed req-health retry:", err)
 			}
 		}
 	}
@@ -1638,12 +1638,12 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 	}
 
 	if msg.Action == apc.ActPrimaryForce {
-		var origSmap smapX
-		if err := cos.MorphMarshal(msg.Value, &origSmap); err != nil {
+		origSmap := &smapX{}
+		if err := cos.MorphMarshal(msg.Value, origSmap); err != nil {
 			debug.AssertNoErr(err) // unlikely
 		}
 		if !origSmap.isPresent(h.si) {
-			err = &errSelfNotFound{act: act + " (with force)", si: h.si, tag: "orig", smap: &origSmap}
+			err = &errSelfNotFound{act: act + " (with force)", si: h.si, tag: "orig", smap: origSmap}
 			return
 		}
 		logmsync(smap.Version, newSmap, msg, caller)
@@ -2190,6 +2190,35 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 		responded = true
 	}
 	return
+}
+
+// (primary forceJoin() calling)
+func (h *htrun) prepForceJoin(w http.ResponseWriter, r *http.Request) {
+	const tag = "prep-force-join"
+	q := r.URL.Query()
+	if !cos.IsParseBool(q.Get(apc.QparamPrepare)) {
+		err := errors.New(tag + ": expecting '" + apc.QparamPrepare + "=true' query")
+		h.writeErr(w, r, err)
+		return
+	}
+	msg, err := h.readAisMsg(w, r)
+	if err != nil {
+		return
+	}
+	newSmap := &smapX{}
+	if err := cos.MorphMarshal(msg.Value, &newSmap); err != nil {
+		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h.si, msg.Action, msg.Value, err)
+		return
+	}
+	var (
+		npsi = newSmap.Primary
+		smap = h.owner.smap.get()
+		tout = cmn.Rom.CplaneOperation()
+	)
+	if _, code, err := h.reqHealth(npsi, tout, nil, smap, true /*retry pub-addr*/); err != nil {
+		err = fmt.Errorf("%s: failed to reach %s [%v(%d)]", tag, npsi.StringEx(), err, code)
+		h.writeErr(w, r, err)
+	}
 }
 
 //

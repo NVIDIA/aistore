@@ -1572,13 +1572,13 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		}
 
 		// remote: check existence and get (cloud) props
-		rhdr, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
+		rhdr, code, err := p.headRemoteBck(bck.RemoteBck(), nil)
 		if err != nil {
-			if statusCode == http.StatusNotFound && msg.Action == apc.ActCreateBck {
-				statusCode = http.StatusNotImplemented
+			if msg.Action == apc.ActCreateBck && (code == http.StatusNotFound || code == http.StatusBadRequest) {
+				code = http.StatusNotImplemented
 				err = cmn.NewErrNotImpl("create", bck.Provider+" bucket")
 			}
-			p.writeErr(w, r, err, statusCode)
+			p.writeErr(w, r, err, code)
 			return
 		}
 		remoteHdr = rhdr
@@ -2848,11 +2848,20 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if len(apiItems) == 0 || apiItems[0] != apc.AdminJoin {
+	if len(apiItems) == 0 {
 		p.writeErrURL(w, r)
 		return
 	}
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+		return
+	}
+	act := apiItems[0]
+	if act == apc.ActPrimaryForce {
+		p.prepForceJoin(w, r)
+		return
+	}
+	if act != apc.AdminJoin {
+		p.writeErrURL(w, r)
 		return
 	}
 	if !p.keepalive.paused() {

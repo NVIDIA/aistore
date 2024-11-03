@@ -480,12 +480,16 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		t.writeErrURL(w, r)
 		return
 	}
-	apiOp := apiItems[0]
-	if apiOp == apc.Mountpaths {
+	act := apiItems[0]
+	if act == apc.Mountpaths {
 		t.handleMountpathReq(w, r)
 		return
 	}
-	if apiOp != apc.AdminJoin {
+	if act == apc.ActPrimaryForce {
+		t.prepForceJoin(w, r)
+		return
+	}
+	if act != apc.AdminJoin {
 		t.writeErrURL(w, r)
 		return
 	}

@@ -128,6 +128,7 @@ var (
 	URLPathDaeProxy     = urlpath(Version, Daemon, Proxy)
 	URLPathDaeSetConf   = urlpath(Version, Daemon, ActSetConfig)
 	URLPathDaeAdminJoin = urlpath(Version, Daemon, AdminJoin)
+	URLPathDaeForceJoin = urlpath(Version, Daemon, ActPrimaryForce)
 
 	URLPathDaeBendDisable = urlpath(Version, Daemon, ActDisableBackend)
 	URLPathDaeBendEnable  = urlpath(Version, Daemon, ActEnableBackend)

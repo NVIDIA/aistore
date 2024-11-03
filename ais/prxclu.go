@@ -959,10 +959,11 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 /////////////////////
 
 // - cluster membership, including maintenance and decommission
-// - start/stop xactions
 // - rebalance
+// - set-primary
 // - cluster-wide configuration
-// - cluster membership, xactions, rebalance, configuration
+// - start/stop xactions
+// - logs...
 func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 0, true)
 	if err != nil {
@@ -2115,9 +2116,9 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 
-	// 2. validate destination cluster
+	// 2. get destination smap (henceforth, newSmap)
 	newSmap, err := p.smapFromURL(nurl)
-	if err != nil && psi.PubNet.URL != psi.ControlNet.URL {
+	if err != nil && psi != nil && psi.PubNet.URL != psi.ControlNet.URL {
 		newSmap, err = p.smapFromURL(psi.PubNet.URL)
 	}
 	if err != nil {
@@ -2126,6 +2127,17 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 	npsi := newSmap.Primary
+	if nurl != npsi.PubNet.URL && nurl != npsi.ControlNet.URL {
+		// must be reachable via its own (new)Smap
+		err := fmt.Errorf("%s: %s URLs %q vs (pub %q, ctrl %q)", p, tag, nurl, npsi.PubNet.URL, npsi.ControlNet.URL)
+		nlog.Warningln(err)
+		if _, e := p.smapFromURL(npsi.ControlNet.URL); e != nil {
+			if _, e = p.smapFromURL(npsi.PubNet.URL); e != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+		}
+	}
 	if npid != npsi.ID() {
 		err := fmt.Errorf("%s: according to the destination %s %s[%s] is _not_ primary", p, newSmap.StringEx(), tag, npid)
 		p.writeErr(w, r, err)
@@ -2164,21 +2176,39 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	debug.Assert(ok)
 	freeCR(res)
 
-	// backup (to rollback, if need be)
+	// 5. backup (to rollback, if need be)
 	cm, err := p.cluMeta(cmetaFillOpt{skipPrimeTime: true})
 	if err != nil {
 		p.writeErrf(w, r, "cannot %s %s to %s: %v", act, p, npname, err) // (unlikely)
 		return
 	}
 
-	// TODO -- FIXME: add 'prepare' step whereby all members health(npsi)
+	// 6. prepare phase whereby all members health-ping(npsi)
+	bargs := allocBcArgs()
+	{
+		aimsg := p.newAmsgActVal(apc.ActPrimaryForce, newSmap)
+		q := make(url.Values, 1)
+		q.Set(apc.QparamPrepare, "true")
+		bargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathDaeForceJoin.S, Query: q, Body: cos.MustMarshal(aimsg)}
+		bargs.to = core.AllNodes
+	}
+	results := p.bcastGroup(bargs)
+	freeBcArgs(bargs)
+	for _, res := range results {
+		if res.err != nil {
+			p.writeErrf(w, r, "node %s failed to contact new primary %s in the prepare phase (err: %v)", res.si, npname, res.err)
+			freeBcastRes(results)
+			return
+		}
+	}
+	freeBcastRes(results)
 
-	// 5. metasync destination cluMeta to _this_ cluster members
+	// 7. metasync destination cluMeta to _this_ cluster members
 	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, smap)
 	wg := p.metasyncer.sync(revsPair{ncm.Smap, aimsg}, revsPair{ncm.BMD, aimsg}, revsPair{ncm.Config, aimsg}, revsPair{ncm.RMD, aimsg})
 	wg.Wait()
 
-	// 6. update cluMeta in memory (= destination)
+	// 8. update cluMeta in memory (= destination)
 	if err = cmn.GCO.Update(&ncm.Config.ClusterConfig); err != nil {
 		// rollback #1
 		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
@@ -2191,7 +2221,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	debug.Assert(ok)
 	bmdOwnerPrx.put(ncm.BMD)
 
-	// 7. finally, join self
+	// 9. finally, join self
 	joinURL, secondURL := npsi.ControlNet.URL, npsi.PubNet.URL
 	if nurl == npsi.PubNet.URL {
 		joinURL, secondURL = npsi.PubNet.URL, npsi.ControlNet.URL
@@ -2224,7 +2254,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	}
 	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
 
-	// TODO -- FIXME: persist ncm locally
+	// TODO -- FIXME: in turn, npsi must metasync all joined members - including this former primary - using apc.ActPrimaryForce message
 }
 
 //////////////////////////////////////////
