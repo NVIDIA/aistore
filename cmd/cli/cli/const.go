@@ -1052,6 +1052,10 @@ var (
 		Name: "role", Required: true,
 		Usage: "role of this AIS daemon: proxy or target",
 	}
+	nonElectableFlag = cli.BoolFlag{
+		Name:  "non-electable",
+		Usage: "this proxy must not be elected as primary (advanced use)",
+	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
 		Usage: "do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only!)",

@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -50,6 +51,7 @@ var (
 		},
 		cmdJoin: {
 			roleFlag,
+			nonElectableFlag,
 		},
 		cmdStartMaint: {
 			noRebalanceFlag,
@@ -357,7 +359,15 @@ func joinNodeHandler(c *cli.Context) (err error) {
 		// for the primary to perform initial handshake, validation, and the rest of it (NOTE: control-net)
 		ControlNet: netInfo,
 	}
-	if rebID, nodeInfo.DaeID, err = api.JoinCluster(apiBP, nodeInfo); err != nil {
+
+	var flags cos.BitFlags
+	if flagIsSet(c, nonElectableFlag) {
+		if daemonType == apc.Target {
+			return fmt.Errorf("option %s does not apply - targets are non-electable", qflprn(nonElectableFlag))
+		}
+		flags = meta.SnodeNonElectable
+	}
+	if rebID, nodeInfo.DaeID, err = api.JoinCluster(apiBP, nodeInfo, flags); err != nil {
 		return
 	}
 

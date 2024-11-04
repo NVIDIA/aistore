@@ -262,7 +262,7 @@ type (
 		SamplerProbablity float64 `json:"-"`
 	}
 
-	// NOTE: Updating TracingConfig requires daemon restart.
+	// NOTE: Updating TracingConfig requires restart.
 	TracingConfToSet struct {
 		ExporterEndpoint      *string                     `json:"exporter_endpoint,omitempty"`   // gRPC exporter endpoint
 		ExporterAuth          *TraceExporterAuthConfToSet `json:"exporter_auth,omitempty"`       // exporter auth config
@@ -283,7 +283,7 @@ type (
 		TokenFile   *string `json:"token_file,omitempty"`   // filepath from where auth token can be obtained
 	}
 
-	// NOTE: StatsTime is a one important timer
+	// NOTE: StatsTime is one important timer - a pulse
 	PeriodConf struct {
 		StatsTime     cos.Duration `json:"stats_time"`      // collect and publish stats; other house-keeping
 		RetrySyncTime cos.Duration `json:"retry_sync_time"` // metasync retry
@@ -334,13 +334,12 @@ type (
 		PrimaryURL   string `json:"primary_url"`
 		OriginalURL  string `json:"original_url"`
 		DiscoveryURL string `json:"discovery_url"`
-		NonElectable bool   `json:"non_electable"`
+		NonElectable bool   `json:"non_electable"` // NOTE: deprecated, not used
 	}
 	ProxyConfToSet struct {
 		PrimaryURL   *string `json:"primary_url,omitempty"`
 		OriginalURL  *string `json:"original_url,omitempty"`
 		DiscoveryURL *string `json:"discovery_url,omitempty"`
-		NonElectable *bool   `json:"non_electable,omitempty"`
 	}
 
 	SpaceConf struct {

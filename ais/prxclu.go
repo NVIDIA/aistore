@@ -394,7 +394,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nsi = regReq.SI
-	case apc.AdminJoin: // administrative join
+	case apc.AdminJoin: // (administrative join)
 		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 			return
 		}
@@ -410,7 +410,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		// NOTE: node ID and 3-networks configuration is obtained from the node itself
 		*nsi = *si
-	case apc.SelfJoin: // auto-join at node startup
+	case apc.SelfJoin: // (auto-join at node startup)
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
@@ -456,15 +456,6 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var (
-		nonElectable bool
-	)
-	if nsi.IsProxy() {
-		s := r.URL.Query().Get(apc.QparamNonElectable)
-		if nonElectable, err = cos.ParseBool(s); err != nil {
-			nlog.Errorf("%s: failed to parse %s for non-electability: %v", p, s, err)
-		}
-	}
 	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname); err != nil {
 		p.writeErrf(w, r, "%s: failed to %s %s: invalid hostname: %v", p.si, apiOp, nsi.StringEx(), err)
 		return
@@ -474,8 +465,24 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if osi := smap.GetNode(nsi.ID()); osi != nil {
 		nsi.Flags = osi.Flags
 	}
-	if nonElectable {
-		nsi.Flags = nsi.Flags.Set(meta.SnodeNonElectable)
+	if s := r.Header.Get(apc.HdrNodeFlags); s != "" {
+		fl, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			p.writeErrf(w, r, "%s joining %s: failed to parse %s: %v", p, nsi, apc.HdrNodeFlags, err)
+			return
+		}
+		flags := cos.BitFlags(fl)
+		if flags != 0 {
+			nsi.Flags = nsi.Flags.Set(meta.SnodeNonElectable)
+			// [NOTE]
+			// - limiting support to 'non-electability'
+			// - rest upon demand, including resetting non-electable -> electable
+			if !nsi.IsProxy() || flags != meta.SnodeNonElectable {
+				p.writeErrf(w, r, "%s joining %s: expecting only 'non-electable' bit (and only proxies), got %s=%s",
+					p, nsi, apc.HdrNodeFlags, nsi.Fl2S())
+				return
+			}
+		}
 	}
 
 	// handshake | check dup
@@ -542,6 +549,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// go ahead to join
 	nlog.Infof("%s: %s(%q) %s (%s)", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == apc.AdminJoin {
@@ -723,13 +731,13 @@ func (p *proxy) rereg(nsi, osi *meta.Snode) bool {
 	if !p.NodeStarted() {
 		return true
 	}
-	if osi.Eq(nsi) {
-		nlog.Infoln(p.String()+":", nsi.StringEx(), "is already _in_")
+	if osi.Eq(nsi) && osi.Flags == nsi.Flags {
+		nlog.Infoln(p.String(), "node", nsi.StringEx(), "is already _in_ - nothing to do")
 		return false
 	}
 
-	// NOTE: see also ref0417 (ais/earlystart)
-	nlog.Warningln(p.String()+":", "renewing", nsi.StringEx(), "=>", nsi.StrURLs())
+	// NOTE: also ref0417 (ais/earlystart)
+	nlog.Warningf("%s: renewing %s(flags %s) => %s(flags %s)", p, osi.StringEx(), osi.Fl2S(), nsi.StringEx(), nsi.Fl2S())
 	return true
 }
 
@@ -2183,7 +2191,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 
-	// 6. prepare phase whereby all members health-ping(npsi)
+	// 6. prepare phase whereby all members health-ping => npsi
 	bargs := allocBcArgs()
 	{
 		aimsg := p.newAmsgActVal(apc.ActPrimaryForce, newSmap)
@@ -2228,13 +2236,13 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	}
 
 	p.owner.smap.put(newSmap)
-	res = p.regTo(joinURL, npsi, apc.DefaultTimeout, nil, nil, false /*keepalive*/)
+	res = p.regTo(joinURL, npsi, apc.DefaultTimeout, nil, false /*keepalive*/)
 	e, eh := res.err, res.toErr()
 	freeCR(res)
 	if e != nil {
 		if joinURL != secondURL {
 			nlog.Warningln(res.toErr(), "- 2nd attempt via", secondURL)
-			res = p.regTo(secondURL, npsi, apc.DefaultTimeout, nil, nil, false)
+			res = p.regTo(secondURL, npsi, apc.DefaultTimeout, nil, false)
 			eh = res.toErr()
 			freeCR(res)
 		}
@@ -2245,6 +2253,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 			nlog.Errorf("FATAL: nested config-update error when rolling back [%s %s to %s]: %v",
 				act, p, npname, nested) // (unlikely)
 		}
+		p.owner.smap.put(cm.Smap)
 		bmdOwnerPrx.put(cm.BMD)
 		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
 		wg.Wait()

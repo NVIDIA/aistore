@@ -362,31 +362,43 @@ Target		Disk	Read		Write		%Util
 
 ## Join a node
 
-`ais cluster add-remove-nodes join --role=proxy IP:PORT`
+```console
+$ ais cluster add-remove-nodes join --help
+NAME:
+   ais cluster add-remove-nodes join - add a node to the cluster
 
-Join a proxy to the cluster.
+USAGE:
+   ais cluster add-remove-nodes join [command options] IP:PORT
 
-`ais cluster add-remove-nodes join --role=target IP:PORT`
+OPTIONS:
+   --role value     role of this AIS daemon: proxy or target
+   --non-electable  this proxy must not be elected as primary (advanced use)
+   --help, -h       show help
+```
 
-Join a target to the cluster.
+AIStore has two kinds of node: proxie (gateways) and targets (storage nodes). That's why `--role` is a mandatory option that must have one of the two values:
+* `--role=proxy`
+or
+* `--role=target`
 
-Note: The node will try to join the cluster using an ID it detects (either in the filesystem's xattrs or on disk) or that it generates for itself.
-If you would like to specify an ID, you can do so while starting the [`aisnode` executable](/docs/command_line.md).
+> Note: aisnode will try to join cluster using its persistent ID. If you need to specify an ID, you can do so via [`aisnode` executable](/docs/command_line.md) command line.
 
-### Examples
-
-#### Join node
-
-Join a proxy node with socket address `192.168.0.185:8086`
+### Example: join a proxy node
 
 ```console
 $ ais cluster add-remove-nodes join --role=proxy 192.168.0.185:8086
 Proxy with ID "23kfa10f" successfully joined the cluster.
 ```
 
+Any proxy can be potentially elected as _primary_; to mark certain proxies as **non-electable**, run (e.g.):
+
+```console
+$ ais cluster add-remove-nodes join 192.168.0.185:8086 --role=proxy --non-electable
+```
+
 ## Remove a node
 
-**Temporarily remove an existing node from the cluster:**
+### Temporarily remove an existing node from the cluster
 
 `ais cluster add-remove-nodes start-maintenance NODE_ID`
 `ais cluster add-remove-nodes stop-maintenance NODE_ID`
@@ -400,8 +412,7 @@ maintenance will revert this.
 Shutting down a node will put the node in maintenance mode first, and then shut down the `aisnode`
 process on the node.
 
-
-**Permanently remove an existing node from the cluster:**
+### Permanently remove an existing node from the cluster
 
 `ais cluster add-remove-nodes decommission NODE_ID`
 

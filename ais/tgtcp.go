@@ -48,7 +48,7 @@ type delb struct {
 }
 
 func (t *target) joinCluster(action string, primaryURLs ...string) (status int, err error) {
-	res, err := t.join(nil, t, primaryURLs...)
+	res, err := t.join(t /*htext*/, primaryURLs...)
 	if err != nil {
 		return status, err
 	}

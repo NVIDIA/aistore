@@ -1854,21 +1854,29 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 //   - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res *callResult, err error) {
+func (h *htrun) join(htext htext, contactURLs ...string) (res *callResult, err error) {
 	var (
-		config                   = cmn.GCO.Get()
+		config             = cmn.GCO.Get()
+		_, primaryURL, psi = h._primus(nil, config)
+	)
+	if psi != nil && psi.ID() == h.SID() {
+		debug.Assert(h.si.IsProxy())
+		return nil, fmt.Errorf("%s (self) - not joining, am primary [%q]", h, primaryURL) // (unlikely)
+	}
+
+	var (
 		candidates               = make([]string, 0, 4+len(contactURLs))
 		selfPublicURL, pubValid  = cos.ParseURL(h.si.URL(cmn.NetPublic))
 		selfIntraURL, intraValid = cos.ParseURL(h.si.URL(cmn.NetIntraControl))
 		resPrev                  *callResult
 	)
-	debug.Assert(pubValid && intraValid)
+	debug.Assertf(pubValid && intraValid, "%q (%t), %q (%t)", selfPublicURL, pubValid, selfIntraURL, intraValid)
 
-	// env goes first
+	// env first
 	if daemon.EP != "" {
 		candidates = _addCan(daemon.EP, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
-	_, primaryURL, psi := h._primus(nil, config)
+
 	candidates = _addCan(primaryURL, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	if psi != nil {
 		candidates = _addCan(psi.URL(cmn.NetPublic), selfPublicURL.Host, selfIntraURL.Host, candidates)
@@ -1890,7 +1898,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 				freeCR(resPrev)
 				resPrev = nil //nolint:ineffassign // readability
 			}
-			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
+			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
 			if res.err == nil {
 				nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
 				return // ok
@@ -1923,7 +1931,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	if nlog.Stopping() {
 		return res, h.errStopping()
 	}
-	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
+	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
 	if res.err == nil {
 		nlog.Infoln(h.String()+": joined cluster via", primaryURL)
 	}
@@ -1940,7 +1948,7 @@ func _addCan(url, selfPub, selfCtrl string, candidates []string) []string {
 	return append(candidates, url)
 }
 
-func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Values, htext htext, keepalive bool) *callResult {
+func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext htext, keepalive bool) *callResult {
 	var (
 		path          string
 		skipPrxKalive = h.si.IsProxy() || keepalive
@@ -1970,7 +1978,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 	cargs := allocCargs()
 	{
 		cargs.si = psi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: q, Body: cos.MustMarshal(cm)}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Body: cos.MustMarshal(cm)}
 		cargs.timeout = tout
 	}
 	smap := cm.Smap
@@ -2019,7 +2027,7 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (str
 	}
 	pid, primaryURL, psi := h._primus(smap, nil)
 
-	res := h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
+	res := h.regTo(primaryURL, psi, timeout, htext, true /*keepalive*/)
 	if res.err == nil {
 		freeCR(res)
 		return pid, 0, nil
@@ -2042,7 +2050,7 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (str
 		nlog.Warningln("retrying via pub addr", primaryURL, "[", s, pid, "]")
 
 		freeCR(res)
-		res = h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
+		res = h.regTo(primaryURL, psi, timeout, htext, true /*keepalive*/)
 	}
 
 	status, err := res.status, res.err

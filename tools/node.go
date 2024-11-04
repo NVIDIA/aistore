@@ -749,7 +749,7 @@ func _joinCluster(proxyURL string, node *meta.Snode, timeout time.Duration) (reb
 	if err != nil {
 		return "", err
 	}
-	if rebID, _, err = api.JoinCluster(bp, node); err != nil {
+	if rebID, _, err = api.JoinCluster(bp, node, 0 /*node flags*/); err != nil {
 		return
 	}
 

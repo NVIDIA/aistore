@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -184,7 +185,7 @@ func GetConfiguredBackends(bp BaseParams) (out []string, err error) {
 }
 
 // JoinCluster add a node to a cluster.
-func JoinCluster(bp BaseParams, nodeInfo *meta.Snode) (rebID, sid string, err error) {
+func JoinCluster(bp BaseParams, nodeInfo *meta.Snode, flags cos.BitFlags) (rebID, sid string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -192,6 +193,9 @@ func JoinCluster(bp BaseParams, nodeInfo *meta.Snode) (rebID, sid string, err er
 		reqParams.Path = apc.URLPathCluUserReg.S
 		reqParams.Body = cos.MustMarshal(nodeInfo)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+		if flags != 0 {
+			reqParams.Header.Set(apc.HdrNodeFlags, strconv.FormatUint(uint64(flags), 10))
+		}
 	}
 
 	var info apc.JoinNodeResult

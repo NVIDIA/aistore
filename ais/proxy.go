@@ -255,14 +255,7 @@ func (p *proxy) Run() error {
 }
 
 func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, err error) {
-	var query url.Values
-	if smap := p.owner.smap.get(); smap.isPrimary(p.si) {
-		return 0, fmt.Errorf("%s should not be joining: is primary, %s", p, smap.StringEx())
-	}
-	if cmn.GCO.Get().Proxy.NonElectable {
-		query = url.Values{apc.QparamNonElectable: []string{"true"}}
-	}
-	res, err := p.join(query, nil /*htext*/, primaryURLs...)
+	res, err := p.join(nil /*htext*/, primaryURLs...)
 	if err != nil {
 		return status, err
 	}

@@ -76,6 +76,8 @@ const (
 	// uptimes, respectively
 	HdrNodeUptime    = aisPrefix + "Node-Uptime"
 	HdrClusterUptime = aisPrefix + "Cluster-Uptime"
+
+	HdrNodeFlags = aisPrefix + "Node-Flags"
 )
 
 // Custom S3 headers
