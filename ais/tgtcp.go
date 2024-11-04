@@ -243,7 +243,7 @@ func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []
 		}
 		nlog.Infof("%s: %s %s done", t, apc.SyncSmap, newsmap)
 	case apc.Mountpaths:
-		t.handleMountpathReq(w, r)
+		t.handleMpathReq(w, r)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		t.setDaemonConfigQuery(w, r)
 	case apc.ActEnableBackend:
@@ -481,19 +481,19 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	act := apiItems[0]
-	if act == apc.Mountpaths {
-		t.handleMountpathReq(w, r)
-		return
-	}
-	if act == apc.ActPrimaryForce {
+	switch act {
+	case apc.Mountpaths:
+		t.handleMpathReq(w, r)
+	case apc.ActPrimaryForce:
 		t.prepForceJoin(w, r)
-		return
-	}
-	if act != apc.AdminJoin {
+	case apc.AdminJoin:
+		t.adminJoin(w, r)
+	default:
 		t.writeErrURL(w, r)
-		return
 	}
+}
 
+func (t *target) adminJoin(w http.ResponseWriter, r *http.Request) {
 	// user request to join cluster (compare with `apc.SelfJoin`)
 	if !t.regstate.disabled.Load() {
 		if t.keepalive.paused() {
@@ -533,7 +533,7 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	}
 	switch apiItems[0] {
 	case apc.Mountpaths:
-		t.handleMountpathReq(w, r)
+		t.handleMpathReq(w, r)
 	default:
 		t.writeErrURL(w, r)
 	}
@@ -562,7 +562,7 @@ func (t *target) cleanupMark(ctx *cleanmark) {
 	}
 }
 
-func (t *target) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
+func (t *target) handleMpathReq(w http.ResponseWriter, r *http.Request) {
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return

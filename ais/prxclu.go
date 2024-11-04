@@ -1003,19 +1003,17 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if msg.Action != apc.ActSendOwnershipTbl {
-		// must be primary to execute all the rest actions
-		if p.forwardCP(w, r, msg, "") {
-			return
-		}
+	// must be primary to execute all the rest actions
+	if p.forwardCP(w, r, msg, "") {
+		return
+	}
 
-		// not just 'cluster-started' - must be ready to rebalance as well
-		// with two distinct exceptions
-		withRR := (msg.Action != apc.ActShutdownCluster && msg.Action != apc.ActXactStop)
-		if err := p.pready(nil, withRR); err != nil {
-			p.writeErr(w, r, err, http.StatusServiceUnavailable)
-			return
-		}
+	// not just 'cluster-started' - must be ready to rebalance as well
+	// with two distinct exceptions
+	withRR := (msg.Action != apc.ActShutdownCluster && msg.Action != apc.ActXactStop)
+	if err := p.pready(nil, withRR); err != nil {
+		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		return
 	}
 
 	switch msg.Action {
@@ -1085,11 +1083,19 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 		p.xstart(w, r, msg)
 	case apc.ActXactStop:
 		p.xstop(w, r, msg)
-	case apc.ActSendOwnershipTbl:
-		p.sendOwnTbl(w, r, msg)
+
+	// internal
+	case apc.ActBumpMetasync:
+		p.bumpMsyncAll(w, r)
+
+	// fail
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
+}
+
+// TODO -- FIXME: niy
+func (*proxy) bumpMsyncAll(http.ResponseWriter, *http.Request) {
 }
 
 func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
@@ -1388,57 +1394,6 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 	writeXid(w, rmdCtx.rebID)
 }
 
-func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	var (
-		smap  = p.owner.smap.get()
-		dstID string
-	)
-	if err := cos.MorphMarshal(msg.Value, &dstID); err != nil {
-		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-		return
-	}
-	dst := smap.GetProxy(dstID)
-	if dst == nil {
-		p.writeErrf(w, r, "%s: unknown proxy node p[%s]", p.si, dstID)
-		return
-	}
-	if !smap.IsIC(dst) {
-		p.writeErrf(w, r, "%s: not an IC member", dst)
-		return
-	}
-	if smap.IsIC(p.si) && !p.si.Eq(dst) {
-		// node has older version than dst node handle locally
-		if err := p.ic.sendOwnershipTbl(dst, smap); err != nil {
-			p.writeErr(w, r, err)
-		}
-		return
-	}
-	// forward
-	var (
-		err   error
-		cargs = allocCargs()
-	)
-	{
-		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathClu.S, Body: cos.MustMarshal(msg)}
-		cargs.timeout = apc.DefaultTimeout
-	}
-	for pid, psi := range smap.Pmap {
-		if !smap.IsIC(psi) || pid == dstID {
-			continue
-		}
-		cargs.si = psi
-		res := p.call(cargs, smap)
-		if res.err != nil {
-			err = res.toErr()
-		}
-		freeCR(res)
-	}
-	if err != nil {
-		p.writeErr(w, r, err)
-	}
-	freeCargs(cargs)
-}
-
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
 func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var (
@@ -1648,7 +1603,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 	tout := cmn.Rom.CplaneOperation()
 	if _, status, err := p.reqHealth(si, tout, nil, smap, false /*retry pub-addr*/); err != nil {
-		// TODO -- FIXME: use cmn.KeepaliveRetryDuration()
+		// TODO: use cmn.KeepaliveRetryDuration()
 		sleep, retries := tout/2, 4
 
 		time.Sleep(sleep)
@@ -2086,13 +2041,14 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	freeBcastRes(results)
 }
 
-// forced primary change - is used when the original primary's network is down
-// for a while, long enough for the remaining nodes to elect new primary. When the
-// original primary gets back online it does not join automatically to the
-// new (elected) primary, which may further lead to split-brain situation.
-
-// TODO -- FIXME: two-phase commit via apc.QparamPrepare = (true | false)
-
+// Force primary change (*****)
+// 10-steps sequence that now supports merging two different clusters
+// Background:
+// - when for whatever reason some of the nodes that include at least one proxy stop seeing the _current_ primary
+// they may, after keep-aliving for a while and talking to each other, go ahead and elect a new primary -
+// from themselves and for themselves;
+// - when the network is back up again we then discover split-brain in progress, and we may not like it.
+// Beware!.. well, just beware.
 func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q url.Values) {
 	const (
 		tag = "designated primary"
@@ -2191,6 +2147,8 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 
+	nlog.Infoln(act, "prepare (6)")
+
 	// 6. prepare phase whereby all members health-ping => npsi
 	bargs := allocBcArgs()
 	{
@@ -2211,14 +2169,19 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	}
 	freeBcastRes(results)
 
+	nlog.Infoln(act, "metasync (7)")
+
 	// 7. metasync destination cluMeta to _this_ cluster members
 	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, smap)
 	wg := p.metasyncer.sync(revsPair{ncm.Smap, aimsg}, revsPair{ncm.BMD, aimsg}, revsPair{ncm.Config, aimsg}, revsPair{ncm.RMD, aimsg})
 	wg.Wait()
 
+	nlog.Infoln(act, "update clu-meta (8)")
+
 	// 8. update cluMeta in memory (= destination)
 	if err = cmn.GCO.Update(&ncm.Config.ClusterConfig); err != nil {
 		// rollback #1
+		nlog.Errorln(act, "rollback #1", err)
 		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
 		wg.Wait()
 
@@ -2229,7 +2192,9 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	debug.Assert(ok)
 	bmdOwnerPrx.put(ncm.BMD)
 
-	// 9. finally, join self
+	nlog.Infoln(act, "join self (9)")
+
+	// 9. join self (up to 3 attempts)
 	joinURL, secondURL := npsi.ControlNet.URL, npsi.PubNet.URL
 	if nurl == npsi.PubNet.URL {
 		joinURL, secondURL = npsi.PubNet.URL, npsi.ControlNet.URL
@@ -2243,12 +2208,20 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		if joinURL != secondURL {
 			nlog.Warningln(res.toErr(), "- 2nd attempt via", secondURL)
 			res = p.regTo(secondURL, npsi, apc.DefaultTimeout, nil, false)
-			eh = res.toErr()
+			e, eh = res.err, res.toErr()
 			freeCR(res)
+			if e != nil {
+				time.Sleep(time.Second)
+				nlog.Warningln(res.toErr(), "- 3d (final) attempt via", joinURL)
+				res = p.regTo(joinURL, npsi, apc.DefaultTimeout, nil, false)
+				eh = res.toErr()
+				freeCR(res)
+			}
 		}
 	}
 	if eh != nil {
 		// rollback #2
+		nlog.Errorln(act, "rollback #2", eh)
 		if nested := cmn.GCO.Update(&cm.Config.ClusterConfig); nested != nil {
 			nlog.Errorf("FATAL: nested config-update error when rolling back [%s %s to %s]: %v",
 				act, p, npname, nested) // (unlikely)
@@ -2263,7 +2236,25 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	}
 	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
 
-	// TODO -- FIXME: in turn, npsi must metasync all joined members - including this former primary - using apc.ActPrimaryForce message
+	time.Sleep(time.Second)
+
+	nlog.Infoln(act, "ask npsi to bump metasync (10)")
+
+	// 10. finally, ask npsi to bump versions and metasync all
+	cargs = allocCargs()
+	{
+		cargs.si = npsi
+		cargs.timeout = cmn.Rom.MaxKeepalive()
+		aimsg := p.newAmsgActVal(apc.ActBumpMetasync, nil)
+		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathClu.S, Body: cos.MustMarshal(aimsg)}
+	}
+	res = p.call(cargs, newSmap)
+	err = res.unwrap()
+	freeCargs(cargs)
+	if err != nil {
+		p.writeErr(w, r, err)
+	}
+	freeCR(res)
 }
 
 //////////////////////////////////////////

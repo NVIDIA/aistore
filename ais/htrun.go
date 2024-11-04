@@ -1954,11 +1954,11 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 		skipPrxKalive = h.si.IsProxy() || keepalive
 		opts          = cmetaFillOpt{
 			htext:         htext,
-			skipSmap:      skipPrxKalive,
-			skipBMD:       skipPrxKalive,
-			skipRMD:       keepalive,
-			skipConfig:    keepalive,
-			skipEtlMD:     keepalive,
+			skipSmap:      skipPrxKalive, // when targets self- or admin-join
+			skipBMD:       skipPrxKalive, // ditto
+			skipRMD:       true,          // NOTE: not used yet
+			skipConfig:    true,          // ditto
+			skipEtlMD:     true,          // ditto
 			fillRebMarker: !keepalive,
 			skipPrimeTime: true,
 		}

@@ -707,6 +707,7 @@ func showAnyConfigHandler(c *cli.Context) error {
 	}
 }
 
+// TODO: prune config.ClusterConfig - hide deprecated "non_electable"
 func showClusterConfig(c *cli.Context, section string) error {
 	var (
 		usejs          = flagIsSet(c, jsonFlag)

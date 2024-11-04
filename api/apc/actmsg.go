@@ -95,7 +95,6 @@ const (
 	ActKeepaliveUpdate = "keepalive-update"
 
 	// IC
-	ActSendOwnershipTbl  = "ic-send-own-tbl"
 	ActListenToNotif     = "watch-xaction"
 	ActMergeOwnershipTbl = "ic-merge-own-tbl"
 	ActRegGlobalXaction  = "reg-global-xaction"
@@ -110,6 +109,7 @@ const (
 	ActCleanupMarkers = "cleanup-markers"        // part of the target joining sequence
 	ActSelfRemove     = "self-initiated-removal" // e.g., when losing last mountpath
 	ActPrimaryForce   = "primary-force"          // BEWARE! advanced usage only
+	ActBumpMetasync   = "bump-metasync"          // when executing ActPrimaryForce - the final step
 )
 
 const (

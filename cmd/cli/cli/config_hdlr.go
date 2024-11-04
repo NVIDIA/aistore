@@ -133,6 +133,7 @@ var (
 	}
 )
 
+// TODO: prune config.ClusterConfig - hide deprecated "non_electable"
 func setCluConfigHandler(c *cli.Context) error {
 	var (
 		nvs      cos.StrKVs
