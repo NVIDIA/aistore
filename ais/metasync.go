@@ -109,6 +109,7 @@ type (
 	revs interface {
 		tag() string         // enum { revsSmapTag, ... }
 		version() int64      // the version
+		uuid() string        // UUID
 		marshal() (b []byte) // marshals the revs
 		jit(p *proxy) revs   // current (just-in-time) instance
 		sgl() *memsys.SGL    // jsp-encoded SGL

@@ -1519,25 +1519,63 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 // metasync Rx
 //
 
-func logmsync(ver int64, revs revs, msg *aisMsg, opts ...string) {
+// TODO: reinforce - make it another `ensure*` method
+func (h *htrun) warnMsync(r *http.Request, smap *smapX) {
+	const (
+		tag = "metasync-recv"
+	)
+	if !smap.isValid() {
+		return
+	}
+	pid := r.Header.Get(apc.HdrCallerID)
+	psi := smap.GetNode(pid)
+	if psi == nil {
+		err := &errNodeNotFound{msg: tag + " warning:", id: pid, si: h.si, smap: smap}
+		nlog.Warningln(err)
+	} else if !smap.isPrimary(psi) {
+		nlog.Warningln(h.String(), tag, "expecting primary, got", psi.StringEx(), smap.StringEx())
+	}
+}
+
+func logmsync(lver int64, revs revs, msg *aisMsg, opts ...string) { // caller [, what, luuid]
 	const tag = "msync Rx:"
 	var (
 		what   string
 		caller = opts[0]
-		lv     = strconv.FormatInt(ver, 10)
+		lv     = "v" + strconv.FormatInt(lver, 10)
 	)
-	if len(opts) == 1 {
+	switch len(opts) {
+	case 1:
 		what = revs.String()
-	} else {
+		if uuid := revs.uuid(); uuid != "" {
+			what += "[" + uuid + "]"
+		}
+	case 2:
 		what = opts[1]
+		if strings.IndexByte(what, '[') < 0 {
+			if uuid := revs.uuid(); uuid != "" {
+				what += "[" + uuid + "]"
+			}
+		}
+	case 3:
+		what = opts[1]
+		luuid := opts[2]
+		lv += "[" + luuid + "]"
+
+		if uuid := revs.uuid(); luuid != "" && uuid != luuid {
+			// versions incomparable (see apc.ActPrimaryForce)
+			nlog.InfoDepth(1, "Warning", tag, what, "( different cluster", lv, msg.String(), "<--", caller, ")")
+			return
+		}
 	}
+
 	switch {
-	case ver == revs.version():
-		nlog.InfoDepth(1, tag, what, "(same v"+lv+",", msg.String(), "<--", caller+")")
-	case ver > revs.version():
-		nlog.InfoDepth(1, "Warning", tag, what, "(down from v"+lv+",", msg.String(), "<--", caller+")")
+	case lver == revs.version():
+		nlog.InfoDepth(1, tag, what, "( same", lv, msg.String(), "<--", caller, ")")
+	case lver > revs.version():
+		nlog.InfoDepth(1, "Warning", tag, what, "( down from", lv, msg.String(), "<--", caller, ")")
 	default:
-		nlog.InfoDepth(1, tag, "new", what, "(have v"+lv+",", msg.String(), "<--", caller+")")
+		nlog.InfoDepth(1, tag, "new", what, "( have", lv, msg.String(), "<--", caller, ")")
 	}
 }
 
@@ -1560,7 +1598,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	}
 	config := cmn.GCO.Get()
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		logmsync(config.Version, newConfig, msg, caller)
+		logmsync(config.Version, newConfig, msg, caller, newConfig.String(), config.UUID)
 	}
 	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
 		if newConfig.version() < config.Version {
@@ -1637,28 +1675,22 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		return
 	}
 
-	if msg.Action == apc.ActPrimaryForce {
-		origSmap := &smapX{}
-		if err := cos.MorphMarshal(msg.Value, origSmap); err != nil {
-			debug.AssertNoErr(err) // unlikely
-		}
-		if !origSmap.isPresent(h.si) {
-			err = &errSelfNotFound{act: act + " (with force)", si: h.si, tag: "orig", smap: origSmap}
+	if !newSmap.isPresent(h.si) {
+		err = &errSelfNotFound{act: act, si: h.si, tag: "new", smap: newSmap}
+
+		if msg.Action != apc.ActPrimaryForce {
 			return
 		}
-		logmsync(smap.Version, newSmap, msg, caller)
+		nlog.Warningln(err, "- proceeding with force")
+		err = nil
 		return
 	}
 
-	if !newSmap.isPresent(h.si) {
-		err = &errSelfNotFound{act: act, si: h.si, tag: "new", smap: newSmap}
-		return
-	}
 	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
 		return // FATAL: cluster integrity error
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		logmsync(smap.Version, newSmap, msg, caller)
+		logmsync(smap.Version, newSmap, msg, caller, newSmap.String(), smap.UUID)
 	}
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	debug.Assert(sameOrigin)
@@ -1692,13 +1724,13 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 
 	rmd := h.owner.rmd.get()
 	if newRMD.CluID != "" && newRMD.CluID != rmd.CluID && rmd.CluID != "" {
-		logmsync(rmd.Version, newRMD, msg, caller)
+		logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
 		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID, rmd.Version)
 		cos.ExitLog(err) // FATAL
 	}
 
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		logmsync(rmd.Version, newRMD, msg, caller)
+		logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
 	}
 	if newRMD.version() <= rmd.version() && msg.Action != apc.ActPrimaryForce {
 		if newRMD.version() < rmd.version() {
@@ -1728,7 +1760,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	}
 	bmd := h.owner.bmd.get()
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		logmsync(bmd.Version, newBMD, msg, caller)
+		logmsync(bmd.Version, newBMD, msg, caller, newBMD.String(), bmd.UUID)
 	}
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
@@ -1748,7 +1780,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, call
 		return nil
 	}
 	smap := h.owner.smap.get()
-	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx())
+	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx(), smap.UUID)
 
 	if !newSmap.isPresent(h.si) && msg.Action != apc.ActPrimaryForce {
 		return &errSelfNotFound{act: "receive-smap", si: h.si, tag: "new", smap: newSmap}
@@ -1791,13 +1823,17 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload
 		}
 		return newErrDowngrade(h.si, config.String(), newConfig.String())
 	}
+	if config.UUID != "" && config.UUID != newConfig.UUID {
+		err = fmt.Errorf("%s: cluster configs have different UUIDs: (curr %q vs new %q)", ciError(110), config.UUID, newConfig.UUID)
+		if msg.Action != apc.ActPrimaryForce {
+			return err
+		}
+		nlog.Warningln(err, "- proceeding with force")
+	}
 	if err = h.owner.config.persist(newConfig, payload); err != nil {
-		return
+		return err
 	}
-	if err = cmn.GCO.Update(&newConfig.ClusterConfig); err != nil {
-		return
-	}
-	return
+	return cmn.GCO.Update(&newConfig.ClusterConfig)
 }
 
 func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*tokenList, error) {
@@ -2368,8 +2404,8 @@ func (h *htrun) newAmsgActVal(act string, val any) *aisMsg {
 	return h.newAmsg(&apc.ActMsg{Action: act, Value: val}, nil)
 }
 
-func (h *htrun) newAmsg(actionMsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *aisMsg {
-	msg := &aisMsg{ActMsg: *actionMsg}
+func (h *htrun) newAmsg(amsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *aisMsg {
+	msg := &aisMsg{ActMsg: *amsg}
 	if bmd != nil {
 		msg.BMDVersion = bmd.Version
 	} else {

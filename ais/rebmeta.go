@@ -77,6 +77,7 @@ var _ revs = (*rebMD)(nil)
 // as revs
 func (*rebMD) tag() string       { return revsRMDTag }
 func (r *rebMD) version() int64  { return r.Version }
+func (r *rebMD) uuid() string    { return r.CluID }
 func (r *rebMD) marshal() []byte { return cos.MustMarshal(r) }
 func (*rebMD) jit(p *proxy) revs { return p.owner.rmd.get() }
 func (*rebMD) sgl() *memsys.SGL  { return nil }

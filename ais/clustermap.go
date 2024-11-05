@@ -102,6 +102,7 @@ var (
 // as revs
 func (*smapX) tag() string       { return revsSmapTag }
 func (m *smapX) version() int64  { return m.Version }
+func (m *smapX) uuid() string    { return m.UUID }
 func (*smapX) jit(p *proxy) revs { return p.owner.smap.get() }
 
 func (m *smapX) sgl() *memsys.SGL {

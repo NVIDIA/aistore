@@ -1016,6 +1016,8 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	p.warnMsync(r, smap)
+
 	payload := make(msPayload)
 	if errP := payload.unmarshal(r.Body, "metasync put"); errP != nil {
 		cmn.WriteErr(w, r, errP)
@@ -3206,7 +3208,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 // compare w/ t.receiveConfig
 func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	logmsync(oldConfig.Version, newConfig, msg, caller)
+	logmsync(oldConfig.Version, newConfig, msg, caller, newConfig.String(), oldConfig.UUID)
 
 	p.owner.config.Lock()
 	err = p._recvCfg(newConfig, msg, payload)
@@ -3299,7 +3301,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
 	rmd := p.owner.rmd.get()
-	logmsync(rmd.Version, newRMD, msg, caller)
+	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
 
 	p.owner.rmd.Lock()
 	rmd = p.owner.rmd.get()
@@ -3349,7 +3351,7 @@ func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags) {
 
 func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, caller string) (err error) {
 	bmd := p.owner.bmd.get()
-	logmsync(bmd.Version, newBMD, msg, caller)
+	logmsync(bmd.Version, newBMD, msg, caller, newBMD.String(), bmd.UUID)
 
 	p.owner.bmd.Lock()
 	bmd = p.owner.bmd.get()

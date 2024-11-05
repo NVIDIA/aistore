@@ -108,7 +108,7 @@ const (
 	ActStopGFN        = "stop-gfn"               // off
 	ActCleanupMarkers = "cleanup-markers"        // part of the target joining sequence
 	ActSelfRemove     = "self-initiated-removal" // e.g., when losing last mountpath
-	ActPrimaryForce   = "primary-force"          // BEWARE! advanced usage only
+	ActPrimaryForce   = "primary-force"          // set primary with force (BEWARE! advanced usage only)
 	ActBumpMetasync   = "bump-metasync"          // when executing ActPrimaryForce - the final step
 )
 

@@ -705,10 +705,8 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	var oldVer int64
 	if msg.UUID == "" {
 		oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
-		if newBMD.Version > oldVer {
-			if err == nil {
-				logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
-			}
+		if err == nil && newBMD.Version > oldVer {
+			logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
 		}
 		return
 	}
@@ -768,8 +766,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 }
 
 // executes under lock
-func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *meta.Snode) (rmbcks []*meta.Bck,
-	oldVer int64, emsg string, err error) {
+func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *meta.Snode) (rmbcks []*meta.Bck, oldVer int64, emsg string, err error) {
 	var (
 		createErrs  []error
 		destroyErrs []error
@@ -777,6 +774,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 	)
 
 	if msg.Action == apc.ActPrimaryForce {
+		nlog.Warningln(t.String(), "sync BMD with force [", bmd.String(), bmd.UUID, "] <- [", newBMD.String(), newBMD.UUID, "]")
 		goto skip
 	}
 
@@ -1113,6 +1111,9 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, errP)
 		return
 	}
+
+	t.warnMsync(r, t.owner.smap.get())
+
 	// 1. extract
 	var (
 		caller                       = r.Header.Get(apc.HdrCallerName)
@@ -1134,7 +1135,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	}
 	if errRMD == nil && newRMD != nil {
 		rmd := t.owner.rmd.get()
-		logmsync(rmd.Version, newRMD, msgRMD, caller)
+		logmsync(rmd.Version, newRMD, msgRMD, caller, newRMD.String(), rmd.CluID)
 
 		t.owner.rmd.Lock()
 		errRMD = t.receiveRMD(newRMD, msgRMD)
@@ -1166,7 +1167,7 @@ func _stopETLs(newEtlMD, oldEtlMD *etlMD) {
 // compare w/ p.receiveConfig
 func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	logmsync(oldConfig.Version, newConfig, msg, caller)
+	logmsync(oldConfig.Version, newConfig, msg, caller, newConfig.String(), oldConfig.UUID)
 
 	t.owner.config.Lock()
 	err = t._recvCfg(newConfig, msg, payload)

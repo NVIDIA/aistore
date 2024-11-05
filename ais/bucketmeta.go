@@ -227,6 +227,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *meta.Snode, caller stri
 // as revs
 func (*bucketMD) tag() string       { return revsBMDTag }
 func (m *bucketMD) version() int64  { return m.Version }
+func (m *bucketMD) uuid() string    { return m.UUID }
 func (*bucketMD) jit(p *proxy) revs { return p.owner.bmd.get() }
 
 func (m *bucketMD) sgl() *memsys.SGL {

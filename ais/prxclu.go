@@ -1086,7 +1086,7 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 
 	// internal
 	case apc.ActBumpMetasync:
-		p.bumpMsyncAll(w, r)
+		p.bumpMsyncAll(w, r, msg)
 
 	// fail
 	default:
@@ -1094,8 +1094,14 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO -- FIXME: niy
-func (*proxy) bumpMsyncAll(http.ResponseWriter, *http.Request) {
+func (p *proxy) bumpMsyncAll(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	cm, err := p.cluMeta(cmetaFillOpt{})
+	if err != nil {
+		p.writeErr(w, r, err) // (unlikely)
+		return
+	}
+	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, msg)
+	cm.metasync(p, aimsg, false)
 }
 
 func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
@@ -1919,25 +1925,19 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	npid := apiItems[0]
-	if p.forwardCP(w, r, nil, "designate new primary '"+npid+"'") {
+
+	smap := p.owner.smap.get()
+	if err := smap.validate(); err != nil {
+		p.writeErr(w, r, err)
 		return
 	}
-
-	// am primary, validating...
-	smap := p.owner.smap.get()
+	debug.Assert(smap.IsPrimary(p.si))
+	npid := apiItems[0]
 	npsi := smap.GetProxy(npid)
 
 	if npsi == nil {
-		query := r.URL.Query()
-		force := cos.IsParseBool(query.Get(apc.QparamForce))
-		if force {
-			// proceed w/ force
-			p.forceJoin(w, r, npid, query)
-		} else {
-			err := &errNodeNotFound{msg: "set-primary failure:", id: npid, si: p.si, smap: smap}
-			p.writeErr(w, r, err, http.StatusNotFound)
-		}
+		// a) go with force
+		p._withForce(w, r, npid, smap)
 		return
 	}
 
@@ -1947,12 +1947,12 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := _validateNewPrimary(npsi); err != nil {
+	if err := _checkFlags(npsi); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 
-	// executing
+	// b) regular set-primary
 	if p.settingNewPrimary.CAS(false, true) {
 		p._setPrimary(w, r, npsi)
 		p.settingNewPrimary.Store(false)
@@ -1961,7 +1961,24 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func _validateNewPrimary(npsi *meta.Snode) error {
+func (p *proxy) _withForce(w http.ResponseWriter, r *http.Request, npid string, smap *smapX) {
+	query := r.URL.Query()
+	force := cos.IsParseBool(query.Get(apc.QparamForce))
+	if !force {
+		err := &errNodeNotFound{msg: "set-primary failure:", id: npid, si: p.si, smap: smap}
+		p.writeErr(w, r, err, http.StatusNotFound)
+		return
+	}
+	if p.settingNewPrimary.CAS(false, true) {
+		p.forceJoin(w, r, npid, query)
+		p.settingNewPrimary.Store(false)
+	} else {
+		err := errors.New("setting new primary is in progress, cannot use force")
+		p.writeErr(w, r, err)
+	}
+}
+
+func _checkFlags(npsi *meta.Snode) error {
 	if npsi.InMaintOrDecomm() {
 		s := "under maintenance"
 		if !npsi.InMaint() {
@@ -2080,7 +2097,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 
-	// 2. get destination smap (henceforth, newSmap)
+	// 2. get destination Smap (henceforth, newSmap)
 	newSmap, err := p.smapFromURL(nurl)
 	if err != nil && psi != nil && psi.PubNet.URL != psi.ControlNet.URL {
 		newSmap, err = p.smapFromURL(psi.PubNet.URL)
@@ -2107,13 +2124,15 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		p.writeErr(w, r, err)
 		return
 	}
-	if err := _validateNewPrimary(npsi); err != nil {
+	if err := _checkFlags(npsi); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	npname := npsi.StringEx()
 
+	//
 	// 3. begin
+	//
 	what := "(split-brain):"
 	if smap.UUID != newSmap.UUID {
 		what = "a different cluster:"
@@ -2140,16 +2159,16 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	debug.Assert(ok)
 	freeCR(res)
 
-	// 5. backup (to rollback, if need be)
+	// 5. backup (see rollback below)
 	cm, err := p.cluMeta(cmetaFillOpt{skipPrimeTime: true})
 	if err != nil {
 		p.writeErrf(w, r, "cannot %s %s to %s: %v", act, p, npname, err) // (unlikely)
 		return
 	}
 
-	nlog.Infoln(act, "prepare (6)")
+	nlog.Infoln(act, "(6) prepare")
 
-	// 6. prepare phase whereby all members health-ping => npsi
+	// 6. prepare phase whereby all members health-ping => npsi (see `prepForceJoin`)
 	bargs := allocBcArgs()
 	{
 		aimsg := p.newAmsgActVal(apc.ActPrimaryForce, newSmap)
@@ -2169,22 +2188,19 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	}
 	freeBcastRes(results)
 
-	nlog.Infoln(act, "metasync (7)")
+	nlog.Infoln(act, "(7) metasync")
 
 	// 7. metasync destination cluMeta to _this_ cluster members
-	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, smap)
-	wg := p.metasyncer.sync(revsPair{ncm.Smap, aimsg}, revsPair{ncm.BMD, aimsg}, revsPair{ncm.Config, aimsg}, revsPair{ncm.RMD, aimsg})
-	wg.Wait()
+	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, nil)
+	ncm.metasync(p, aimsg, true)
 
-	nlog.Infoln(act, "update clu-meta (8)")
+	nlog.Infoln(act, "(8) update clu-meta")
 
 	// 8. update cluMeta in memory (= destination)
 	if err = cmn.GCO.Update(&ncm.Config.ClusterConfig); err != nil {
 		// rollback #1
 		nlog.Errorln(act, "rollback #1", err)
-		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
-		wg.Wait()
-
+		cm.metasync(p, aimsg, true)
 		p.writeErr(w, r, err)
 		return
 	}
@@ -2192,7 +2208,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	debug.Assert(ok)
 	bmdOwnerPrx.put(ncm.BMD)
 
-	nlog.Infoln(act, "join self (9)")
+	nlog.Infoln(act, "(9) join self")
 
 	// 9. join self (up to 3 attempts)
 	joinURL, secondURL := npsi.ControlNet.URL, npsi.PubNet.URL
@@ -2228,33 +2244,47 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		}
 		p.owner.smap.put(cm.Smap)
 		bmdOwnerPrx.put(cm.BMD)
-		wg := p.metasyncer.sync(revsPair{cm.Smap, aimsg}, revsPair{cm.BMD, aimsg}, revsPair{cm.Config, aimsg}, revsPair{cm.RMD, aimsg})
-		wg.Wait()
+
+		cm.metasync(p, aimsg, true)
 
 		p.writeErr(w, r, eh)
 		return
 	}
-	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
+
+	p.metasyncer.becomeNonPrimary() // point of no return
 
 	time.Sleep(time.Second)
 
-	nlog.Infoln(act, "ask npsi to bump metasync (10)")
+	nlog.Infoln(act, "(10) ask npsi to bump metasync")
 
-	// 10. finally, ask npsi to bump versions and metasync all
+	// 10. finally, ask npsi to bump versions and metasync all (see `bumpMsyncAll`)
 	cargs = allocCargs()
+	msg := &apc.ActMsg{Action: apc.ActBumpMetasync}
 	{
 		cargs.si = npsi
 		cargs.timeout = cmn.Rom.MaxKeepalive()
-		aimsg := p.newAmsgActVal(apc.ActBumpMetasync, nil)
-		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathClu.S, Body: cos.MustMarshal(aimsg)}
+		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathClu.S, Body: cos.MustMarshal(msg)}
 	}
 	res = p.call(cargs, newSmap)
 	err = res.unwrap()
-	freeCargs(cargs)
-	if err != nil {
-		p.writeErr(w, r, err)
-	}
 	freeCR(res)
+	if err != nil {
+		freeCargs(cargs)
+		// retry once
+		cargs = allocCargs()
+		cargs.si = npsi
+		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Base: npsi.PubNet.URL, Path: apc.URLPathClu.S, Body: cos.MustMarshal(msg)}
+		cargs.timeout = cmn.Rom.MaxKeepalive() + time.Second
+
+		nlog.Errorln(err, "- failed to bump metasync, retrying...")
+		res := p.call(cargs, newSmap)
+		err = res.unwrap()
+		freeCR(res)
+	}
+	if err != nil {
+		p.writeErrf(w, r, "%s: failed to bump metasync => %s: %v", p, npname, err)
+	}
+	freeCargs(cargs)
 }
 
 //////////////////////////////////////////
@@ -2486,4 +2516,32 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 		}
 	}
 	return false
+}
+
+/////////////
+// cluMeta //
+/////////////
+
+func (cm *cluMeta) metasync(p *proxy, msg *aisMsg, wait bool) {
+	revs := make([]revsPair, 0, 5)
+	if cm.Smap != nil && cm.Smap.isValid() {
+		revs = append(revs, revsPair{cm.Smap, msg})
+	}
+	if cm.BMD != nil && cm.BMD.version() > 0 && cos.IsValidUUID(cm.BMD.UUID) {
+		revs = append(revs, revsPair{cm.BMD, msg})
+	}
+	if cm.Config != nil && cm.Config.version() > 0 && cos.IsValidUUID(cm.Config.UUID) {
+		revs = append(revs, revsPair{cm.Config, msg})
+	}
+	if cm.RMD != nil {
+		revs = append(revs, revsPair{cm.RMD, msg})
+	}
+	if cm.EtlMD != nil {
+		revs = append(revs, revsPair{cm.EtlMD, msg})
+	}
+	nlog.Infoln(p.String(), "metasync-all", msg.Action, len(revs))
+	wg := p.metasyncer.sync(revs...)
+	if wait {
+		wg.Wait()
+	}
 }

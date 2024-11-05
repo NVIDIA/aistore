@@ -80,6 +80,7 @@ func newEtlMD() (e *etlMD) {
 // as revs
 func (*etlMD) tag() string       { return revsEtlMDTag }
 func (e *etlMD) version() int64  { return e.Version }
+func (*etlMD) uuid() string      { return "" } // TODO: add
 func (*etlMD) jit(p *proxy) revs { return p.owner.etl.get() }
 func (*etlMD) sgl() *memsys.SGL  { return nil }
 

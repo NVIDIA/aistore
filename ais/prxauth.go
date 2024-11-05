@@ -156,6 +156,7 @@ var _ revs = (*tokenList)(nil)
 
 func (*tokenList) tag() string         { return revsTokenTag }
 func (t *tokenList) version() int64    { return t.Version } // no versioning: receivers keep adding tokens to their lists
+func (*tokenList) uuid() string        { return "" }        // TODO: add
 func (t *tokenList) marshal() []byte   { return cos.MustMarshal(t) }
 func (t *tokenList) jit(_ *proxy) revs { return t }
 func (*tokenList) sgl() *memsys.SGL    { return nil }
