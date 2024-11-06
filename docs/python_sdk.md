@@ -135,8 +135,11 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
 * [multiobj.object\_template](#multiobj.object_template)
   * [ObjectTemplate](#multiobj.object_template.ObjectTemplate)
 * [obj.object](#obj.object)
+  * [BucketDetails](#obj.object.BucketDetails)
   * [Object](#obj.object.Object)
-    * [bucket](#obj.object.Object.bucket)
+    * [bucket\_name](#obj.object.Object.bucket_name)
+    * [bucket\_provider](#obj.object.Object.bucket_provider)
+    * [query\_params](#obj.object.Object.query_params)
     * [name](#obj.object.Object.name)
     * [props](#obj.object.Object.props)
     * [head](#obj.object.Object.head)
@@ -159,18 +162,11 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [as\_file](#obj.object_reader.ObjectReader.as_file)
     * [iter\_from\_position](#obj.object_reader.ObjectReader.iter_from_position)
     * [\_\_iter\_\_](#obj.object_reader.ObjectReader.__iter__)
-* [obj.object\_file](#obj.object_file)
-  * [SimpleBuffer](#obj.object_file.SimpleBuffer)
-    * [\_\_len\_\_](#obj.object_file.SimpleBuffer.__len__)
-    * [read](#obj.object_file.SimpleBuffer.read)
-    * [fill](#obj.object_file.SimpleBuffer.fill)
-    * [empty](#obj.object_file.SimpleBuffer.empty)
-  * [ObjectFile](#obj.object_file.ObjectFile)
-    * [close](#obj.object_file.ObjectFile.close)
-    * [tell](#obj.object_file.ObjectFile.tell)
-    * [readable](#obj.object_file.ObjectFile.readable)
-    * [seekable](#obj.object_file.ObjectFile.seekable)
-    * [read](#obj.object_file.ObjectFile.read)
+* [obj.obj\_file.object\_file](#obj.obj_file.object_file)
+  * [ObjectFile](#obj.obj_file.object_file.ObjectFile)
+    * [readable](#obj.obj_file.object_file.ObjectFile.readable)
+    * [read](#obj.obj_file.object_file.ObjectFile.read)
+    * [close](#obj.obj_file.object_file.ObjectFile.close)
 * [obj.object\_props](#obj.object_props)
   * [ObjectProps](#obj.object_props.ObjectProps)
     * [bucket\_name](#obj.object_props.ObjectProps.bucket_name)
@@ -860,7 +856,7 @@ A class representing a bucket that contains user data.
 
 - `client` _RequestClient_ - Client for interfacing with AIS cluster
 - `name` _str_ - name of bucket
-- `provider` _str, optional_ - Provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
+- `provider` _str or Provider, optional_ - Provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
 - `namespace` _Namespace, optional_ - Namespace of bucket, defaults to None
 
 <a id="bucket.Bucket.client"></a>
@@ -872,7 +868,7 @@ A class representing a bucket that contains user data.
 def client() -> RequestClient
 ```
 
-The client bound to this bucket.
+The client used by this bucket.
 
 <a id="bucket.Bucket.client"></a>
 
@@ -880,10 +876,10 @@ The client bound to this bucket.
 
 ```python
 @client.setter
-def client(client) -> RequestClient
+def client(client)
 ```
 
-Update the client bound to this bucket.
+Update the client used by this bucket.
 
 <a id="bucket.Bucket.qparam"></a>
 
@@ -902,7 +898,7 @@ Default query parameters to use with API calls from this bucket.
 
 ```python
 @property
-def provider() -> str
+def provider() -> Provider
 ```
 
 The provider for this bucket.
@@ -1456,7 +1452,7 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 **Arguments**:
 
 - `obj_name` _str_ - Name of object
-- `size` _int, optional_ - Size of object in bytes
+- `props` _ObjectProps, optional_ - Properties of the object, as updated by head(), optionally pre-initialized.
   
 
 **Returns**:
@@ -1578,6 +1574,9 @@ AIStore client for managing buckets, objects, ETL jobs
 - `skip_verify` _bool, optional_ - If True, skip SSL certificate verification. Defaults to False.
 - `ca_cert` _str, optional_ - Path to a CA certificate file for SSL verification. If not provided, the
   'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
+- `client_cert` _Union[str, Tuple[str, str], None], optional_ - Path to a client certificate PEM file
+  or a path pair (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY'
+  environment variables will be used. Defaults to None.
 - `timeout` _Union[float, Tuple[float, float], None], optional_ - Request timeout in seconds; a single float
   for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
   or None to disable timeout.
@@ -1591,7 +1590,7 @@ AIStore client for managing buckets, objects, ETL jobs
 
 ```python
 def bucket(bck_name: str,
-           provider: str = PROVIDER_AIS,
+           provider: Union[Provider, str] = Provider.AIS,
            namespace: Namespace = None)
 ```
 
@@ -1601,7 +1600,8 @@ Does not make any HTTP request, only instantiates a bucket object.
 **Arguments**:
 
 - `bck_name` _str_ - Name of bucket
-- `provider` _str_ - Provider of bucket, one of "ais", "aws", "gcp", ... (optional, defaults to ais)
+- `provider` _str or Provider_ - Provider of bucket, one of "ais", "aws", "gcp", ...
+  (optional, defaults to ais)
 - `namespace` _Namespace_ - Namespace of bucket (optional, defaults to None)
   
 
@@ -1764,14 +1764,14 @@ Returns: URL of primary proxy
 ### list\_buckets
 
 ```python
-def list_buckets(provider: str = PROVIDER_AIS)
+def list_buckets(provider: Union[str, Provider] = Provider.AIS)
 ```
 
 Returns list of buckets in AIStore cluster.
 
 **Arguments**:
 
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az" or "ht".
+- `provider` _str or Provider, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az" or "ht".
   Defaults to "ais". Empty provider returns buckets of all providers.
   
 
@@ -2090,8 +2090,8 @@ Start a job and return its ID.
 ### get\_within\_timeframe
 
 ```python
-def get_within_timeframe(start_time: datetime.datetime,
-                         end_time: datetime.datetime) -> List[JobSnapshot]
+def get_within_timeframe(start_time: datetime,
+                         end_time: datetime) -> List[JobSnapshot]
 ```
 
 Checks for jobs that started and finished within a specified timeframe.
@@ -2490,6 +2490,17 @@ A collection of object names specified by a template in the bash brace expansion
 
 - `template` _str_ - A string template that defines the names of objects to include in the collection
 
+<a id="obj.object.BucketDetails"></a>
+
+## Class: BucketDetails
+
+```python
+@dataclass
+class BucketDetails()
+```
+
+Metadata about a bucket, used by objects within that bucket.
+
 <a id="obj.object.Object"></a>
 
 ## Class: Object
@@ -2498,25 +2509,47 @@ A collection of object names specified by a template in the bash brace expansion
 class Object()
 ```
 
-A class representing an object of a bucket bound to a client.
+Provides methods for interacting with an object in AIS.
 
 **Arguments**:
 
-- `bucket` _Bucket_ - Bucket to which this object belongs
-- `name` _str_ - name of object
-- `size` _int, optional_ - size of object in bytes
-- `props` _ObjectProps, optional_ - Properties of object
+- `client` _RequestClient_ - Client used for all http requests.
+- `bck_details` _BucketDetails_ - Metadata about the bucket to which this object belongs.
+- `name` _str_ - Name of the object.
+- `props` _ObjectProps, optional_ - Properties of the object, as updated by head(), optionally pre-initialized.
 
-<a id="obj.object.Object.bucket"></a>
+<a id="obj.object.Object.bucket_name"></a>
 
-### bucket
+### bucket\_name
 
 ```python
 @property
-def bucket()
+def bucket_name() -> str
 ```
 
-Bucket containing this object.
+Name of the bucket where this object resides.
+
+<a id="obj.object.Object.bucket_provider"></a>
+
+### bucket\_provider
+
+```python
+@property
+def bucket_provider() -> Provider
+```
+
+Provider of the bucket where this object resides (e.g. ais, s3, gcp).
+
+<a id="obj.object.Object.query_params"></a>
+
+### query\_params
+
+```python
+@property
+def query_params() -> Dict[str, str]
+```
+
+Query params used as a base for constructing all requests for this object.
 
 <a id="obj.object.Object.name"></a>
 
@@ -2545,7 +2578,7 @@ Properties of this object.
 ### head
 
 ```python
-def head() -> Header
+def head() -> CaseInsensitiveDict
 ```
 
 Requests object properties and returns headers. Updates props.
@@ -2667,14 +2700,14 @@ Puts bytes as an object to a bucket in AIS storage.
 ### put\_file
 
 ```python
-def put_file(path: str = None) -> Response
+def put_file(path: str or Path) -> Response
 ```
 
 Puts a local file as an object to a bucket in AIS storage.
 
 **Arguments**:
 
-- `path` _str_ - Path to local file
+- `path` _str or Path_ - Path to local file
   
 
 **Raises**:
@@ -2910,30 +2943,30 @@ Return the raw byte stream of object content.
 ### as\_file
 
 ```python
-def as_file(max_resume: Optional[int] = 5) -> ObjectFile
+def as_file(buffer_size: Optional[int] = None,
+            max_resume: Optional[int] = 5) -> BufferedIOBase
 ```
 
-Create an `ObjectFile` for reading object data in chunks. `ObjectFile` supports
-resuming and retrying from the last known position in the case the object stream
-is prematurely closed due to an unexpected error.
+Create a read-only, non-seekable `ObjectFile` instance for streaming object data in chunks.
+This file-like object primarily implements the `read()` method to retrieve data sequentially,
+with automatic retry/resumption in case of stream interruptions such as `ChunkedEncodingError`.
 
 **Arguments**:
 
-- `max_resume` _int, optional_ - Maximum number of resume attempts in case of streaming failure. Defaults to 5.
+- `buffer_size` _int, optional_ - Currently unused; retained for backward compatibility and future
+  enhancements.
+- `max_resume` _int, optional_ - Total number of retry attempts allowed to resume the stream in case of
+  interruptions. Defaults to 5.
   
 
 **Returns**:
 
-- `ObjectFile` - A file-like object that can be used to read the object content.
+- `BufferedIOBase` - A read-only, non-seekable file-like object for streaming object content.
   
 
 **Raises**:
 
-- `requests.RequestException` - An ambiguous exception occurred while handling the request.
-- `requests.ConnectionError` - A connection error occurred.
-- `requests.ConnectionTimeout` - The connection to AIStore timed out.
-- `requests.ReadTimeout` - Waiting for a response from AIStore timed out.
-- `requests.exceptions.HTTPError(404)` - The object does not exist.
+- `ValueError` - If `max_resume` is invalid (must be a non-negative integer).
 
 <a id="obj.object_reader.ObjectReader.iter_from_position"></a>
 
@@ -2969,84 +3002,7 @@ Make a request to get a stream from the provided object and yield chunks of the 
 
 - `Iterator[bytes]` - An iterator over each chunk of bytes in the object.
 
-<a id="obj.object_file.SimpleBuffer"></a>
-
-## Class: SimpleBuffer
-
-```python
-class SimpleBuffer()
-```
-
-A buffer for efficiently handling streamed data with position tracking.
-
-It stores incoming chunks of data in a bytearray and tracks the current read position.
-Once data is read, it is discarded from the buffer to free memory, ensuring efficient
-usage.
-
-<a id="obj.object_file.SimpleBuffer.__len__"></a>
-
-### \_\_len\_\_
-
-```python
-def __len__()
-```
-
-Return the number of unread bytes in the buffer.
-
-**Returns**:
-
-- `int` - The number of unread bytes remaining in the buffer.
-
-<a id="obj.object_file.SimpleBuffer.read"></a>
-
-### read
-
-```python
-def read(size: int = -1) -> bytes
-```
-
-Read bytes from the buffer and advance the read position.
-
-**Arguments**:
-
-- `size` _int, optional_ - Number of bytes to read from the buffer. If -1, reads all
-  remaining bytes.
-  
-
-**Returns**:
-
-- `bytes` - The data read from the buffer.
-
-<a id="obj.object_file.SimpleBuffer.fill"></a>
-
-### fill
-
-```python
-def fill(source: Iterator[bytes], size: int = -1)
-```
-
-Fill the buffer with data from the source, up to the specified size.
-
-**Arguments**:
-
-- `source` _Iterator[bytes]_ - The data source (chunks).
-- `size` _int, optional_ - The target size to fill the buffer up to. Default is -1 for unlimited.
-
-**Returns**:
-
-- `int` - Number of bytes in the buffer.
-
-<a id="obj.object_file.SimpleBuffer.empty"></a>
-
-### empty
-
-```python
-def empty()
-```
-
-Empty the buffer.
-
-<a id="obj.object_file.ObjectFile"></a>
+<a id="obj.obj_file.object_file.ObjectFile"></a>
 
 ## Class: ObjectFile
 
@@ -3054,109 +3010,71 @@ Empty the buffer.
 class ObjectFile(BufferedIOBase)
 ```
 
-A file-like object for reading object data, with support for both reading a fixed size of data
-and reading until the end of the stream (EOF). It provides the ability to resume and continue
-reading from the last known position in the event of a ChunkedEncodingError.
+A sequential read-only file-like object extending `BufferedIOBase` for reading object data, with support for both
+reading a fixed size of data and reading until the end of file (EOF).
 
-Data is fetched in chunks via the object reader iterator and temporarily stored in an internal
-buffer. The buffer is filled either to the required size or until EOF is reached. If a
-`ChunkedEncodingError` occurs during this process, ObjectFile catches and automatically attempts
-to resume the buffer filling process from the last known chunk position. The number of resume
-attempts is tracked across the entire object file, and if the total number of attempts exceeds
-the configurable `max_resume`, a `ChunkedEncodingError` is raised.
+When a read is requested, any remaining data from a previously fetched chunk is returned first. If the remaining
+data is insufficient to satisfy the request, the `read()` method fetches additional chunks from the provided
+`content_iterator` as needed, until the requested size is fulfilled or the end of the stream is reached.
 
-Once the buffer is adequately filled, the `read()` method reads and returns the requested amount
-of data from the buffer.
+In case of stream interruptions (e.g., `ChunkedEncodingError`), the `read()` method automatically retries and
+resumes fetching data from the last successfully retrieved chunk. The `max_resume` parameter controls how many
+retry attempts are made before an error is raised.
 
 **Arguments**:
 
 - `content_iterator` _ContentIterator_ - An iterator that can fetch object data from AIS in chunks.
-- `max_resume` _int_ - Maximum number of retry attempts in case of a streaming failure.
+- `max_resume` _int_ - Maximum number of resumes allowed for an ObjectFile instance.
 
-<a id="obj.object_file.ObjectFile.close"></a>
-
-### close
-
-```python
-def close() -> None
-```
-
-Close the file and release resources.
-
-**Raises**:
-
-- `ValueError` - I/O operation on closed file.
-
-<a id="obj.object_file.ObjectFile.tell"></a>
-
-### tell
-
-```python
-def tell() -> int
-```
-
-Return the current file position.
-
-**Returns**:
-
-  The current file position.
-  
-
-**Raises**:
-
-- `ValueError` - I/O operation on closed file.
-
-<a id="obj.object_file.ObjectFile.readable"></a>
+<a id="obj.obj_file.object_file.ObjectFile.readable"></a>
 
 ### readable
 
 ```python
+@override
 def readable() -> bool
 ```
 
 Return whether the file is readable.
 
-**Returns**:
-
-  True if the file is readable, False otherwise.
-  
-
-**Raises**:
-
-- `ValueError` - I/O operation on closed file.
-
-<a id="obj.object_file.ObjectFile.seekable"></a>
-
-### seekable
-
-```python
-def seekable() -> bool
-```
-
-Return whether the file supports seeking.
-
-**Returns**:
-
-  False since the file does not support seeking.
-
-<a id="obj.object_file.ObjectFile.read"></a>
+<a id="obj.obj_file.object_file.ObjectFile.read"></a>
 
 ### read
 
 ```python
-def read(size=-1)
+@override
+def read(size: Optional[int] = -1) -> bytes
 ```
 
-Read bytes from the object, handling retries in case of stream errors.
+Read up to 'size' bytes from the object. If size is -1, read until the end of the stream.
 
 **Arguments**:
 
-- `size` _int, optional_ - Number of bytes to read. If -1, reads until the end of the stream.
+- `size` _int, optional_ - The number of bytes to read. If -1, reads until EOF.
   
 
 **Returns**:
 
-- `bytes` - The data read from the object.
+- `bytes` - The read data as a bytes object.
+  
+
+**Raises**:
+
+  ObjectFileStreamError if a connection cannot be made.
+  ObjectFileMaxResumeError if the stream is interrupted more than the allowed maximum.
+- `ValueError` - I/O operation on a closed file.
+- `Exception` - Any other errors while streaming and reading.
+
+<a id="obj.obj_file.object_file.ObjectFile.close"></a>
+
+### close
+
+```python
+@override
+def close() -> None
+```
+
+Close the file.
 
 <a id="obj.object_props.ObjectProps"></a>
 
