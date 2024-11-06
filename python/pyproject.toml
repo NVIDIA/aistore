@@ -42,7 +42,7 @@ dependencies = [
     "packaging",
     "overrides",
     "PyYAML",
-    "pydantic>=1.10.14",
+    "pydantic==1.10.14",
     "cloudpickle>=2.2.0",
     "humanize>=4.6.0",
     "braceexpand>=0.1.7",
