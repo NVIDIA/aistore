@@ -415,7 +415,9 @@ func showClusterHandler(c *cli.Context) error {
 func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {
 	// override the caller's choice if explicitly identified
 	if xargs.ID != "" {
-		debug.Assert(xact.IsValidUUID(xargs.ID), xargs.ID)
+		if !xact.IsValidUUID(xargs.ID) {
+			return 0, fmt.Errorf("UUID %q is invalid (typo?)", xargs.ID)
+		}
 		xargs.OnlyRunning = false
 	}
 
