@@ -259,7 +259,7 @@ type (
 		Enabled               bool   `json:"enabled"`
 		SkipVerify            bool   `json:"skip_verify"` // allow insecure exporter gRPC connection
 
-		SamplerProbablity float64 `json:"-"`
+		SamplerProbability float64 `json:"-"`
 	}
 
 	// NOTE: Updating TracingConfig requires restart.
@@ -1814,13 +1814,13 @@ func (c *TracingConf) Validate() error {
 		return errors.New("invalid tracing.exporter_endpoint can't be empty when tracing is enabled")
 	}
 	if c.SamplerProbabilityStr == "" {
-		c.SamplerProbablity = defaultSampleProbability
+		c.SamplerProbability = defaultSampleProbability
 	} else {
 		prob, err := strconv.ParseFloat(c.SamplerProbabilityStr, 64)
 		if err != nil {
 			return nil
 		}
-		c.SamplerProbablity = prob
+		c.SamplerProbability = prob
 	}
 	return nil
 }

@@ -12,8 +12,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -34,7 +36,7 @@ func loadAccessToken(tokenFilePath string) string {
 	return strings.TrimSpace(string(data))
 }
 
-func newExporter(conf *cmn.TracingConf) (trace.SpanExporter, error) {
+var newExporter = func(conf *cmn.TracingConf) (trace.SpanExporter, error) {
 	headers := map[string]string{}
 	if conf.ExporterAuth.IsEnabled() {
 		token := loadAccessToken(conf.ExporterAuth.TokenFile)
@@ -64,7 +66,7 @@ func newResource(conf *cmn.TracingConf, snode *meta.Snode, version string) *reso
 		semconv.ServiceNameKey.String(serviceName),
 		attribute.String("version", version),
 		attribute.String("daemonID", snode.DaeID),
-		attribute.String("pod", os.Getenv("MY_POD")), // TODO: get from consts
+		attribute.String("pod", os.Getenv(env.AIS.K8sPod)),
 	}
 	for k, v := range conf.ExtraAttributes {
 		attrs = append(attrs, attribute.String(k, v))
@@ -85,7 +87,7 @@ func IsEnabled() bool {
 
 func Init(conf *cmn.TracingConf, snode *meta.Snode, version string) {
 	if conf == nil || !conf.Enabled {
-		cos.ExitLogf("distributed tracing not enabled (%+v)", conf)
+		nlog.Infof("distributed tracing not enabled (%+v)", conf)
 		return
 	}
 
@@ -94,7 +96,7 @@ func Init(conf *cmn.TracingConf, snode *meta.Snode, version string) {
 	cos.AssertNoErr(err)
 
 	tp = trace.NewTracerProvider(
-		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(conf.SamplerProbablity))),
+		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(conf.SamplerProbability))),
 		trace.WithBatcher(exp),
 		trace.WithResource(newResource(conf, snode, version)),
 	)
@@ -109,7 +111,7 @@ func Init(conf *cmn.TracingConf, snode *meta.Snode, version string) {
 }
 
 func Shutdown() {
-	if tp != nil {
+	if !IsEnabled() {
 		return
 	}
 	if err := tp.Shutdown(context.Background()); err != nil {
@@ -118,7 +120,10 @@ func Shutdown() {
 }
 
 func NewTraceableHandler(handler http.Handler, operation string) http.Handler {
-	return otelhttp.NewHandler(handler, operation)
+	if IsEnabled() {
+		return otelhttp.NewHandler(handler, operation)
+	}
+	return handler
 }
 
 func NewTraceableClient(client *http.Client) *http.Client {

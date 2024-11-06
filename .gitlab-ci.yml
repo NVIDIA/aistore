@@ -183,6 +183,7 @@ test:short:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-short
     - FLAGS="--duration=10s" make test-aisloader
+    - make test-tracing-unit
 
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:python:

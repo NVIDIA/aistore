@@ -223,6 +223,9 @@ test-short: test-envcheck ## Run short tests
 	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 
+test-tracing-unit:
+	@cd tracing && go test -v -tags=oteltracing ./...
+
 test-assorted: test-envcheck # Run specific tests
 	@RE="ETLBucket|ETLConnectionError|ETLInitCode" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 
