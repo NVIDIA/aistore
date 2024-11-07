@@ -4,7 +4,7 @@ cloudpickle==2.2.0
 humanize==4.10.0
 msgspec>=0.15.1
 overrides==7.7.0
-pydantic==1.10.14
+pydantic==2.9.2
 pylint==3.2.7
 pytest==7.4.4
 PyYAML==6.0.2

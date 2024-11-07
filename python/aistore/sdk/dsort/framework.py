@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 import yaml
 
-from pydantic import BaseModel, root_validator
+from pydantic.v1 import BaseModel, root_validator
 
 from aistore.sdk.types import BucketModel
 from aistore.sdk.multiobj import ObjectNames, ObjectRange

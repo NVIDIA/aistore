@@ -8,7 +8,7 @@ from typing import Any, Mapping, List, Optional, Dict
 
 import msgspec
 import humanize
-from pydantic import BaseModel, Field, validator
+from pydantic.v1 import BaseModel, Field, validator
 
 from requests.structures import CaseInsensitiveDict
 

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 from typing import Optional, Union, Dict, List
-from pydantic import BaseModel, Field
+from pydantic.v1 import BaseModel, Field
 from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.const import NANOSECONDS_IN_SECOND
 from aistore.sdk.types import BucketModel

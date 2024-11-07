@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-import pydantic.tools
+from pydantic.v1 import parse_raw_as
 
 from aistore.sdk.utils import HttpError
 from aistore.sdk.authn.errors import (
@@ -34,7 +34,7 @@ def raise_authn_error(text: str):
         ErrClusterAlreadyRegistered: If the error message indicates the cluster is already registered.
         ErrUserInvalidCredentials: If the error message indicates invalid user credentials.
     """
-    err = pydantic.tools.parse_raw_as(HttpError, text)
+    err = parse_raw_as(HttpError, text)
     if 400 <= err.status <= 500:
         if "does not exist" in err.message:
             if "cluster" in err.message:

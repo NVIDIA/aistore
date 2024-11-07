@@ -11,9 +11,8 @@ import braceexpand
 import humanize
 
 from msgspec import msgpack
-import pydantic.tools
 import requests
-from pydantic import BaseModel, parse_raw_as
+from pydantic.v1 import BaseModel, parse_raw_as
 from requests import Response
 
 from aistore.sdk.const import (
@@ -61,7 +60,7 @@ def raise_ais_error(text: str) -> None:
         ErrBckAlreadyExists: If the error message indicates a bucket already exists.
         ErrETLAlreadyExists: If the error message indicates an ETL already exists
     """
-    err = pydantic.tools.parse_raw_as(HttpError, text)
+    err = parse_raw_as(HttpError, text)
     if 400 <= err.status < 500:
         if "does not exist" in err.message:
             if "cloud bucket" in err.message or "remote bucket" in err.message:
