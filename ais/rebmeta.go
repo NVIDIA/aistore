@@ -134,6 +134,19 @@ func (r *rmdOwner) load() {
 func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(rmd) }
 func (r *rmdOwner) get() *rebMD    { return r.rmd.Load() }
 
+func (r *rmdOwner) synch(rmd *rebMD, locked bool) (err error) {
+	if !locked {
+		r.Lock()
+	}
+	r.put(rmd)
+	err = r.persist(rmd)
+	debug.AssertNoErr(err)
+	if !locked {
+		r.Unlock()
+	}
+	return err
+}
+
 func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 	r.Lock()
 	clone, err = r.do(ctx)

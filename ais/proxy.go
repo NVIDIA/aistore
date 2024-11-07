@@ -2901,135 +2901,6 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 	return
 }
 
-func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 2, false)
-	if err != nil {
-		return
-	}
-	var (
-		proxyID = apiItems[1]
-		query   = r.URL.Query()
-		force   = cos.IsParseBool(query.Get(apc.QparamForce))
-	)
-	// force primary change
-	if force && apiItems[0] == apc.Proxy {
-		if smap := p.owner.smap.get(); !smap.isPrimary(p.si) {
-			p.writeErr(w, r, newErrNotPrimary(p.si, smap))
-			return
-		}
-		p.forceJoin(w, r, proxyID, query) // TODO -- FIXME: test
-		return
-	}
-	prepare, err := cos.ParseBool(query.Get(apc.QparamPrepare))
-	if err != nil {
-		p.writeErrf(w, r, "failed to parse URL query %q: %v", apc.QparamPrepare, err)
-		return
-	}
-	if p.owner.smap.get().isPrimary(p.si) {
-		p.writeErrf(w, r, "%s (self) is primary, expecting '/v1/cluster/...' when designating a new one", p)
-		return
-	}
-	if prepare {
-		var cluMeta cluMeta
-		if err := cmn.ReadJSON(w, r, &cluMeta); err != nil {
-			return
-		}
-		if err := p.recvCluMeta(&cluMeta, "set-primary", cluMeta.SI.String()); err != nil {
-			p.writeErrf(w, r, "%s: failed to receive clu-meta: %v", p, err)
-			return
-		}
-	}
-
-	// self
-	if p.SID() == proxyID {
-		smap := p.owner.smap.get()
-		if smap.GetActiveNode(proxyID) == nil {
-			p.writeErrf(w, r, "%s: in maintenance or decommissioned", p)
-			return
-		}
-		if !prepare {
-			p.becomeNewPrimary("")
-		}
-		return
-	}
-
-	// other
-	smap := p.owner.smap.get()
-	psi := smap.GetProxy(proxyID)
-	if psi == nil {
-		err := &errNodeNotFound{"cannot set new primary", proxyID, p.si, smap}
-		p.writeErr(w, r, err)
-		return
-	}
-	if prepare {
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			nlog.Infoln("Preparation step: do nothing")
-		}
-		return
-	}
-	ctx := &smapModifier{pre: func(_ *smapModifier, clone *smapX) error { clone.Primary = psi; return nil }}
-	err = p.owner.smap.modify(ctx)
-	debug.AssertNoErr(err)
-}
-
-func (p *proxy) becomeNewPrimary(proxyIDToRemove string) {
-	ctx := &smapModifier{
-		pre:   p._becomePre,
-		final: p._becomeFinal,
-		sid:   proxyIDToRemove,
-	}
-	err := p.owner.smap.modify(ctx)
-	cos.AssertNoErr(err)
-}
-
-func (p *proxy) _becomePre(ctx *smapModifier, clone *smapX) error {
-	if !clone.isPresent(p.si) {
-		cos.Assertf(false, "%s must always be present in the %s", p.si, clone.pp())
-	}
-	if ctx.sid != "" && clone.GetNode(ctx.sid) != nil {
-		// decision is made: going ahead to remove
-		nlog.Infof("%s: removing failed primary %s", p, ctx.sid)
-		clone.delProxy(ctx.sid)
-
-		// Remove reverse proxy entry for the node.
-		p.rproxy.nodes.Delete(ctx.sid)
-	}
-
-	clone.Primary = clone.GetProxy(p.SID())
-	clone.Version += 100
-	clone.staffIC()
-	return nil
-}
-
-func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
-	var (
-		bmd   = p.owner.bmd.get()
-		rmd   = p.owner.rmd.get()
-		msg   = p.newAmsgStr(apc.ActNewPrimary, bmd)
-		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
-	)
-	nlog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
-	config, err := p.ensureConfigURLs()
-	if err != nil {
-		nlog.Errorln(err)
-	}
-	if config != nil {
-		pairs = append(pairs, revsPair{config, msg})
-		nlog.Infof("%s: plus %s", p, config)
-	}
-	etl := p.owner.etl.get()
-	if etl != nil && etl.version() > 0 {
-		pairs = append(pairs, revsPair{etl, msg})
-		nlog.Infof("%s: plus %s", p, etl)
-	}
-	// metasync
-	debug.Assert(clone._sgl != nil)
-	_ = p.metasyncer.sync(pairs...)
-
-	// synchronize IC tables
-	p.syncNewICOwners(ctx.smap, clone)
-}
-
 func (p *proxy) ensureConfigURLs() (config *globalConfig, err error) {
 	config, err = p.owner.config.modify(&configModifier{pre: p._configURLs})
 	if err != nil {
@@ -3302,6 +3173,11 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
 	rmd := p.owner.rmd.get()
 	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
+
+	if msg.Action == apc.ActPrimaryForce {
+		err = p.owner.rmd.synch(newRMD, false)
+		return err
+	}
 
 	p.owner.rmd.Lock()
 	rmd = p.owner.rmd.get()

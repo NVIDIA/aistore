@@ -880,6 +880,11 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 
 // is called under lock
 func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
+	if msg.Action == apc.ActPrimaryForce {
+		err = t.owner.rmd.synch(newRMD, true)
+		return err
+	}
+
 	rmd := t.owner.rmd.get()
 	if newRMD.Version <= rmd.Version {
 		if newRMD.Version < rmd.Version {
@@ -1134,9 +1139,6 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, caller, false /*silent*/)
 	}
 	if errRMD == nil && newRMD != nil {
-		rmd := t.owner.rmd.get()
-		logmsync(rmd.Version, newRMD, msgRMD, caller, newRMD.String(), rmd.CluID)
-
 		t.owner.rmd.Lock()
 		errRMD = t.receiveRMD(newRMD, msgRMD)
 		t.owner.rmd.Unlock()

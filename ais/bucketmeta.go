@@ -38,7 +38,7 @@ import (
 // - bucketMD versioning is monotonic and incremental
 //
 // - bucketMD typical update transaction:
-// lock -- clone() -- modify the clone -- bmdOwner.put(clone) -- unlock
+//   lock -- clone() -- modify the clone -- bmdOwner.put(clone) -- unlock
 //
 // (*) for merges and conflict resolution, check the current version prior to put()
 //     (note that version check must be protected by the same critical section)
@@ -59,6 +59,7 @@ type (
 
 		init() bool // true when loaded previous version
 		get() (bmd *bucketMD)
+		put(bmd *bucketMD)
 		putPersist(bmd *bucketMD, payload msPayload) error
 		persist(clone *bucketMD, payload msPayload) error
 		modify(*bmdModifier) (*bucketMD, error)

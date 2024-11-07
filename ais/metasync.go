@@ -524,7 +524,8 @@ func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 					if !ok || v < revs.version() {
 						inSync = false
 						break
-					} else if v > revs.version() {
+					}
+					if v > revs.version() {
 						// skip older versions (TODO: don't skip sending associated aisMsg)
 						nlog.Errorf("v: %d; revs.version: %d", v, revs.version())
 					}

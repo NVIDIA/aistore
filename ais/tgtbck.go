@@ -39,7 +39,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	if err != nil {
 		return
 	}
-	if err = t.isIntraCall(r.Header, false); err != nil {
+	if err = t.checkIntraCall(r.Header, false); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -301,7 +301,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 	if phase == apc.ActBegin {
 		rns := xreg.RenewBckSummary(bck, msg)
 		if rns.Err != nil {
-			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
+			t.writeErr(w, r, rns.Err, http.StatusInternalServerError, Silent)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

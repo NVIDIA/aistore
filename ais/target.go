@@ -670,7 +670,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if apireq.dpq.ptime == "" /*isRedirect*/ && t.isIntraCall(r.Header, false /*from primary*/) != nil {
+		if apireq.dpq.ptime == "" /*isRedirect*/ && t.checkIntraCall(r.Header, false /*from primary*/) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return
@@ -1011,7 +1011,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	query, bck, objName := apireq.query, apireq.bck, apireq.items[1]
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
 		// validates that the request is internal (by a node in the same cluster)
-		if isRedirect(query) == "" && t.isIntraCall(r.Header, false) != nil {
+		if isRedirect(query) == "" && t.checkIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return
@@ -1164,7 +1164,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if isRedirect(apireq.query) == "" && t.isIntraCall(r.Header, false) != nil {
+		if isRedirect(apireq.query) == "" && t.checkIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return

@@ -17,7 +17,8 @@ while (( "$#" )); do
 done
 
 make kill clean
-./scripts/clean_deploy.sh --target-cnt 6 --proxy-cnt 6 --mountpath-cnt 4 --deployment all --debug --aws --gcp --azure >/dev/null
+./scripts/clean_deploy.sh --target-cnt 6 --proxy-cnt 6 --mountpath-cnt 4 --deployment all --debug --aws --gcp --azure \
+	--remote-target-cnt 3 --remote-proxy-cnt 3 >/dev/null
 
 if ! [ -x "$(command -v ais)" ]; then
   echo "Error: ais (CLI) not installed" >&2
@@ -59,12 +60,15 @@ fi
 
 
 if [[ ${smap} == "true" ]]; then
+  ais config cluster rebalance.enabled false
   tsi=$(ais show cluster -H target | awk '{print $1}')
   for i in {1..10}; do
     ais cluster add-remove-nodes start-maintenance $tsi --yes >/dev/null
     ais cluster add-remove-nodes stop-maintenance $tsi --yes >/dev/null
   done
   echo "victim smap:"
+  ais config cluster rebalance.enabled true
+  sleep 1
   ais show cluster smap --json | tail -4
 fi
 
@@ -77,7 +81,10 @@ unset -v AIS_ENDPOINT
 echo "AIS_ENDPOINT=$AIS_ENDPOINT"
 aisloader -bucket=ais://nnn -cleanup=false -numworkers=8 -quiet -pctput=100 -minsize=4K -maxsize=4K --duration 20s
 
-find /tmp/ais_next -type f | grep "mp[1-4].*/1/" | wc -l
+echo "one remote-target that joined from a different cluster now has that many objects:"
+find /tmp/ais_next -type f | grep "mp[1-4].*/3/" | wc -l
+echo "another remote-target:"
+find /tmp/ais_next -type f | grep "mp[1-4].*/4/" | wc -l
 
 if [[ ${config} == "true" ]]; then
   echo "resulting config:"

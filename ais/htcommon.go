@@ -231,6 +231,7 @@ var (
 	errForwarded         = errors.New("forwarded")
 	errSendingResp       = errors.New("err-sending-resp")
 	errFastKalive        = errors.New("cannot fast-keepalive")
+	errIntraControl      = errors.New("expected intra-control request")
 )
 
 // BMD uuid errs

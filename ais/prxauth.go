@@ -260,7 +260,7 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 		tk     *tok.Token
 		bucket *cmn.Bck
 	)
-	if p.isIntraCall(hdr, false /*from primary*/) == nil {
+	if p.checkIntraCall(hdr, false /*from primary*/) == nil {
 		return nil
 	}
 	if cmn.Rom.AuthEnabled() { // config.Auth.Enabled

@@ -1542,7 +1542,9 @@ func logmsync(lver int64, revs revs, msg *aisMsg, opts ...string) { // caller [,
 	var (
 		what   string
 		caller = opts[0]
+		uuid   = revs.uuid()
 		lv     = "v" + strconv.FormatInt(lver, 10)
+		luuid  string
 	)
 	switch len(opts) {
 	case 1:
@@ -1553,7 +1555,7 @@ func logmsync(lver int64, revs revs, msg *aisMsg, opts ...string) { // caller [,
 	case 2:
 		what = opts[1]
 		if strings.IndexByte(what, '[') < 0 {
-			if uuid := revs.uuid(); uuid != "" {
+			if uuid != "" {
 				what += "[" + uuid + "]"
 			}
 		}
@@ -1561,19 +1563,23 @@ func logmsync(lver int64, revs revs, msg *aisMsg, opts ...string) { // caller [,
 		what = opts[1]
 		luuid := opts[2]
 		lv += "[" + luuid + "]"
-
-		if uuid := revs.uuid(); luuid != "" && uuid != luuid {
-			// versions incomparable (see apc.ActPrimaryForce)
-			nlog.InfoDepth(1, "Warning", tag, what, "( different cluster", lv, msg.String(), "<--", caller, ")")
-			return
-		}
+	}
+	// different uuids (clusters) - versions cannot be compared
+	if luuid != "" && uuid != "" && uuid != luuid {
+		nlog.InfoDepth(1, "Warning", tag, what, "( different cluster", lv, msg.String(), "<--", caller, msg.String(), ")")
+		return
 	}
 
+	// compare l(ocal) and newly received
 	switch {
 	case lver == revs.version():
-		nlog.InfoDepth(1, tag, what, "( same", lv, msg.String(), "<--", caller, ")")
+		s := "( same"
+		if lver == 0 {
+			s = "( initial"
+		}
+		nlog.InfoDepth(1, tag, what, s, lv, msg.String(), "<--", caller, ")")
 	case lver > revs.version():
-		nlog.InfoDepth(1, "Warning", tag, what, "( down from", lv, msg.String(), "<--", caller, ")")
+		nlog.InfoDepth(1, "Warning", tag, what, "( down from", lv, msg.String(), "<--", caller, msg.String(), ")")
 	default:
 		nlog.InfoDepth(1, tag, "new", what, "( have", lv, msg.String(), "<--", caller, ")")
 	}
@@ -1657,7 +1663,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 			return
 		}
 	}
-	if skipValidation {
+	if skipValidation || (msg.Action == apc.ActPrimaryForce && newSmap.isValid()) {
 		return
 	}
 
@@ -1723,15 +1729,17 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	}
 
 	rmd := h.owner.rmd.get()
+	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
+
+	if msg.Action == apc.ActPrimaryForce {
+		return
+	}
+
 	if newRMD.CluID != "" && newRMD.CluID != rmd.CluID && rmd.CluID != "" {
-		logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
 		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID, rmd.Version)
 		cos.ExitLog(err) // FATAL
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
-	}
 	if newRMD.version() <= rmd.version() && msg.Action != apc.ActPrimaryForce {
 		if newRMD.version() < rmd.version() {
 			err = newErrDowngrade(h.si, rmd.String(), newRMD.String())
@@ -1782,7 +1790,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, call
 	smap := h.owner.smap.get()
 	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx(), smap.UUID)
 
-	if !newSmap.isPresent(h.si) && msg.Action != apc.ActPrimaryForce {
+	if !newSmap.isPresent(h.si) {
 		return &errSelfNotFound{act: "receive-smap", si: h.si, tag: "new", smap: newSmap}
 	}
 	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
@@ -1989,13 +1997,14 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 		path          string
 		skipPrxKalive = h.si.IsProxy() || keepalive
 		opts          = cmetaFillOpt{
-			htext:         htext,
-			skipSmap:      skipPrxKalive, // when targets self- or admin-join
-			skipBMD:       skipPrxKalive, // ditto
-			skipRMD:       true,          // NOTE: not used yet
-			skipConfig:    true,          // ditto
-			skipEtlMD:     true,          // ditto
-			fillRebMarker: !keepalive,
+			htext:      htext,
+			skipSmap:   skipPrxKalive, // when targets self- or admin-join
+			skipBMD:    skipPrxKalive, // ditto
+			skipRMD:    true,          // NOTE: not used yet
+			skipConfig: true,          // ditto
+			skipEtlMD:  true,          // ditto
+
+			fillRebMarker: !keepalive && htext != nil, // TODO -- FIXME
 			skipPrimeTime: true,
 		}
 	)
@@ -2228,7 +2237,7 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 	// intra-cluster health ping
 	// - pub addr permitted (see reqHealth)
 	// - compare w/ h.ensureIntraControl
-	err := h.isIntraCall(r.Header, false /* from primary */)
+	err := h.checkIntraCall(r.Header, false /* from primary */)
 	if err != nil {
 		h.writeErr(w, r, err)
 		responded = true
@@ -2236,40 +2245,11 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 	return
 }
 
-// (primary forceJoin() calling)
-func (h *htrun) prepForceJoin(w http.ResponseWriter, r *http.Request) {
-	const tag = "prep-force-join"
-	q := r.URL.Query()
-	if !cos.IsParseBool(q.Get(apc.QparamPrepare)) {
-		err := errors.New(tag + ": expecting '" + apc.QparamPrepare + "=true' query")
-		h.writeErr(w, r, err)
-		return
-	}
-	msg, err := h.readAisMsg(w, r)
-	if err != nil {
-		return
-	}
-	newSmap := &smapX{}
-	if err := cos.MorphMarshal(msg.Value, &newSmap); err != nil {
-		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h.si, msg.Action, msg.Value, err)
-		return
-	}
-	var (
-		npsi = newSmap.Primary
-		smap = h.owner.smap.get()
-		tout = cmn.Rom.CplaneOperation()
-	)
-	if _, code, err := h.reqHealth(npsi, tout, nil, smap, true /*retry pub-addr*/); err != nil {
-		err = fmt.Errorf("%s: failed to reach %s [%v(%d)]", tag, npsi.StringEx(), err, code)
-		h.writeErr(w, r, err)
-	}
-}
-
 //
 // intra-cluster request validations and helpers
 //
 
-func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
+func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 	debug.Assert(hdr != nil)
 	var (
 		smap       = h.owner.smap.get()
@@ -2280,7 +2260,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		erP        error
 	)
 	if ok := callerID != "" && callerName != ""; !ok {
-		return fmt.Errorf("%s: expected %s request", h, cmn.NetIntraControl)
+		return errIntraControl
 	}
 	if !smap.isValid() {
 		return
@@ -2299,7 +2279,9 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
 			if h.ClusterStarted() {
-				nlog.Errorf("%s: %s < Smap(v%s) from %s - proceeding anyway...", h, smap, callerSver, callerName)
+				// (exception: setting primary w/ force)
+				warn := h.String() + ": local " + smap.String() + " is older than (caller's) " + callerName + " Smap v" + callerSver
+				nlog.ErrorDepth(1, warn, "- proceeding anyway...")
 			}
 			runtime.Gosched()
 			return
@@ -2316,7 +2298,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
-	err := h.isIntraCall(r.Header, onlyPrimary)
+	err := h.checkIntraCall(r.Header, onlyPrimary)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return
