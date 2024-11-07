@@ -28,6 +28,8 @@ AIS_BACKEND_PROVIDERS=""
 loopback=0
 target_cnt=5
 proxy_cnt=5
+remote_target_cnt=1
+remote_proxy_cnt=1
 mountpath_cnt=5
 deployment="local"
 remote_alias="remais"
@@ -47,6 +49,8 @@ OPTIONS:
   --cleanup           Cleanup data and metadata from the previous deployments
   --deployment        Choose which AIS cluster(s) to deploy, one of: 'local', 'remote', 'all' (default: 'local')
   --remote-alias      Alias to assign to the remote cluster (default: 'remais')
+  --remote-target-cnt Number of remote cluster (remais) target nodes in the cluster (default: 1)
+  --remote-proxy-cnt  Number of remote proxies/gateways (default: 1)
   --aws               Build with AWS S3 backend
   --gcp               Build with Google Cloud Storage backend
   --azure             Build with Azure Blob Storage backend
@@ -140,6 +144,8 @@ while (( "$#" )); do
     --cleanup) cleanup="true"; shift;;
     --transient) RUN_ARGS="$RUN_ARGS -transient"; shift;;
     --standby) RUN_ARGS="$RUN_ARGS -standby"; shift;;
+    --remote-proxy-cnt) remote_proxy_cnt=$2; shift; shift;;
+    --remote-target-cnt) remote_target_cnt=$2; shift; shift;;
     --https)
       export AIS_USE_HTTPS="true"
       export AIS_SKIP_VERIFY_CRT="true"
@@ -175,7 +181,7 @@ if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   ## NOTE: must have the same build tags and, in particular, same backends -
   ## otherwise, `make deploy` below will rebuild and replace aisnode binary
 
-  echo -e "1\n1\n3\n" | DEPLOY_AS_NEXT_TIER="true" AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" AIS_AUTHN_ENABLED=false make deploy
+  echo -e "${remote_target_cnt}\n${remote_proxy_cnt}\n3\n" | DEPLOY_AS_NEXT_TIER="true" AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" AIS_AUTHN_ENABLED=false make deploy
 
   # Do not try attach remote cluster if the main cluster did not start.
   if [[ ${deployment} == "all" ]]; then
