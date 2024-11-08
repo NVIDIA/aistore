@@ -155,17 +155,12 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 		goto eret
 	}
 
-	// Minimal locking, optimistic concurrency ====================================================
-	// Not setting atime (a.k.a. access time) as prefetching != actual access.
-	//
-	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
-	// housekeeping traversal will remove it. Using negative `-now` value for subsequent correction
-	// (see core/lcache.go).                                             ==========================
-	lom.SetAtimeUnix(-time.Now().UnixNano())
+	// NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
 
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && r.blob.num.Load() < maxNumBlobDls {
 		err = r.blobdl(lom, oa)
 	} else {
+		// OwtGetPrefetchLock: minimal locking, optimistic concurrency
 		ecode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 		if err == nil { // done
 			r.ObjsAdd(1, lom.Lsize())

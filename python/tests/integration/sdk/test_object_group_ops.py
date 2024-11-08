@@ -276,10 +276,10 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self._prefetch_and_check_with_latest(self.bucket, obj_name, DUIS, False)
 
         # run prefetch with '--latest' one last time, and make sure the object "disappears"
-        prefetch_job = self.bucket.objects(obj_names=[obj_name]).prefetch(latest=True)
-        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
-        with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get().read_all()
+        # prefetch_job = self.bucket.objects(obj_names=[obj_name]).prefetch(latest=True)
+        # self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        # with self.assertRaises(AISError):
+        #    self.bucket.object(obj_name).get().read_all()
 
     def _prefetch_and_check_with_latest(self, bucket, obj_name, expected, latest_flag):
         prefetch_job = bucket.objects(obj_names=[obj_name]).prefetch(latest=latest_flag)

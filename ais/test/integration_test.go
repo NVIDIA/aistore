@@ -1421,12 +1421,14 @@ func TestAtimePrefetch(t *testing.T) {
 	if len(lst.Entries) != numObjs {
 		t.Errorf("Number of objects mismatch: expected %d, found %d", numObjs, len(lst.Entries))
 	}
+
+	// NOTE ref 6735188: _not_ setting negative atime any longer
+
 	for _, en := range lst.Entries {
 		atime, err := time.Parse(timeFormat, en.Atime)
 		tassert.CheckFatal(t, err)
 		if atime.After(timeAfterPut) {
-			t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",
-				timeAfterPut.Format(timeFormat), atime.Format(timeFormat))
+			t.Logf("%s: atime after PUT: %s, atime after GET: %s\n", en.Name, timeAfterPut.Format(timeFormat), atime.Format(timeFormat))
 		}
 	}
 }
