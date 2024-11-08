@@ -260,10 +260,12 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		err     error
 		ecode   int
 		lst     *cmn.LsoRes
-		msg     = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
-		npg     = newNpgCtx(r.bck, msg, noopCb, nil /*core.LsoInvCtx bucket inventory*/)
+		lsmsg   = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
+		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil /*core.LsoInvCtx bucket inventory*/)
 		bremote = r.bck.IsRemote()
 	)
+	lsmsg.SetFlag(apc.LsNoDirs)
+
 	if err := r.bck.Init(core.T.Bowner()); err != nil {
 		return err
 	}
@@ -276,7 +278,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		}
 		if bremote {
 			lst = &cmn.LsoRes{Entries: allocLsoEntries()}
-			ecode, err = core.T.Backend(r.bck).ListObjects(r.bck, msg, lst) // (TODO comment above)
+			ecode, err = core.T.Backend(r.bck).ListObjects(r.bck, lsmsg, lst) // (TODO comment above)
 		} else {
 			npg.page.Entries = allocLsoEntries()
 			err = npg.nextPageA()
@@ -315,7 +317,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 			break
 		}
 		// token for the next page
-		msg.ContinuationToken = lst.ContinuationToken
+		lsmsg.ContinuationToken = lst.ContinuationToken
 	}
 	return nil
 }
