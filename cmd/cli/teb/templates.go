@@ -280,33 +280,32 @@ See '--help' and docs/cli for details.`
 		"{{end}}\n" +
 		"{{end}}"
 
-	AuthNUserVerboseTmpl = "Name\t{{ .Name }}\n" +
-		"Roles\t{{ JoinList .Roles }}\n" +
-		"{{ if ne (len .ClusterACLs) 0 }}" +
+	AuthNUserVerboseTmpl = "Name\t{{ .ID }}\n" +
+		"Roles\t{{ range $i, $role := .Roles }}{{ if $i }}, {{ end }}{{ $role.Name }}{{ end }}\n" +
+		"{{ range $role := .Roles }}" +
+		"{{ if ne (len $role.ClusterACLs) 0 }}" +
 		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
-		"{{ range $clu := .ClusterACLs}}" +
-		"{{ $clu.ID}}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
+		"{{ range $clu := $role.ClusterACLs }}" +
+		"{{ $clu.ID }}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
 		"{{end}}{{end}}" +
-		"{{ if ne (len .BucketACLs) 0 }}" +
+		"{{ if ne (len $role.BucketACLs) 0 }}" +
 		"BUCKET\tPERMISSIONS\n" +
-		"{{ range $bck := .BucketACLs}}" +
-		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
-		"{{end}}{{end}}"
+		"{{ range $bck := $role.BucketACLs }}" +
+		"{{ FormatBckName $bck.Bck }}\t{{ FormatACL $bck.Access }}\n" +
+		"{{end}}{{end}}" +
+		"{{ end }}"
 
 	AuthNRoleVerboseTmpl = "Role\t{{ .Name }}\n" +
 		"Description\t{{ .Description }}\n" +
-		"{{ if ne (len .Roles) 0 }}" +
-		"Roles\t{{ JoinList .Roles }}\n" +
-		"{{ end }}" +
 		"{{ if ne (len .ClusterACLs) 0 }}" +
 		"CLUSTER ID\tALIAS\tPERMISSIONS\n" +
-		"{{ range $clu := .ClusterACLs}}" +
-		"{{ $clu.ID}}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
+		"{{ range $clu := .ClusterACLs }}" +
+		"{{ $clu.ID }}\t{{ $clu.Alias }}\t{{ FormatACL $clu.Access }}\n" +
 		"{{end}}{{end}}" +
 		"{{ if ne (len .BucketACLs) 0 }}" +
 		"BUCKET\tPERMISSIONS\n" +
-		"{{ range $bck := .BucketACLs}}" +
-		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
+		"{{ range $bck := .BucketACLs }}" +
+		"{{ FormatBckName $bck.Bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
 
 	// `search`
