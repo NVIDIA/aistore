@@ -206,9 +206,6 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = validateAdminPerms(w, r); err != nil {
-		return
-	}
 	var (
 		userID    = apiItems[0]
 		updateReq = &authn.User{}
@@ -218,12 +215,14 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
+	if err = validateUpdatePerms(w, r, userID, updateReq); err != nil {
+		return
+	}
 	if Conf.Verbose() {
 		nlog.Infof("PUT user %q", userID)
 	}
 	if err := h.mgr.updateUser(userID, updateReq); err != nil {
 		cmn.WriteErr(w, r, err)
-		return
 	}
 }
 
@@ -278,22 +277,27 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, uInfo, "get user")
 }
 
+func getToken(r *http.Request) (*tok.Token, error) {
+	tokenStr, err := tok.ExtractToken(r.Header)
+	if err != nil {
+		return nil, err
+	}
+	secret := Conf.Secret()
+	tk, err := tok.DecryptToken(tokenStr, secret)
+	if err != nil {
+		return nil, err
+	}
+	if tk.Expires.Before(time.Now()) {
+		return nil, fmt.Errorf("not authorized (token expired): %s", tk)
+	}
+	return tk, nil
+}
+
 // Checks if the request header contains valid admin credentials.
 // (admin is created at deployment time and cannot be modified via API)
 func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
-	token, err := tok.ExtractToken(r.Header)
+	tk, err := getToken(r)
 	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
-		return err
-	}
-	secret := Conf.Secret()
-	tk, err := tok.DecryptToken(token, secret)
-	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
-		return err
-	}
-	if tk.Expires.Before(time.Now()) {
-		err := fmt.Errorf("not authorized: %s", tk)
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
 	}
@@ -303,6 +307,23 @@ func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return nil
+}
+
+func validateUpdatePerms(w http.ResponseWriter, r *http.Request, userID string, updateReq *authn.User) error {
+	tk, err := getToken(r)
+	if err != nil {
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
+		return err
+	}
+	if tk.IsAdmin {
+		return nil
+	}
+	if tk.UserID == userID && len(updateReq.Roles) == 0 {
+		return nil
+	}
+	err = fmt.Errorf("not authorized: (%s)", tk)
+	cmn.WriteErr(w, r, err, http.StatusUnauthorized)
+	return err
 }
 
 // Generate h token for h user if provided credentials are valid.
