@@ -2852,7 +2852,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 	act := apiItems[0]
 	if act == apc.ActPrimaryForce {
-		p.prepForceJoin(w, r)
+		p.daeForceJoin(w, r)
 		return
 	}
 	if act != apc.AdminJoin {

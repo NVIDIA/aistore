@@ -2004,7 +2004,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 			skipConfig: true,          // ditto
 			skipEtlMD:  true,          // ditto
 
-			fillRebMarker: !keepalive && htext != nil, // TODO -- FIXME
+			fillRebMarker: !keepalive && htext != nil,
 			skipPrimeTime: true,
 		}
 	)

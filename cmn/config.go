@@ -767,10 +767,10 @@ func (c *Config) Validate() error {
 	}
 
 	opts := IterOpts{VisitAll: true}
-	return IterFields(c, vdate, opts)
+	return IterFields(c, _validateFld, opts)
 }
 
-func vdate(_ string, field IterField) (error, bool) {
+func _validateFld(_ string, field IterField) (error, bool) {
 	if v, ok := field.Value().(Validator); ok {
 		if err := v.Validate(); err != nil {
 			return err, false

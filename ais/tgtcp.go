@@ -485,7 +485,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	case apc.Mountpaths:
 		t.handleMpathReq(w, r)
 	case apc.ActPrimaryForce:
-		t.prepForceJoin(w, r)
+		t.daeForceJoin(w, r)
 	case apc.AdminJoin:
 		t.adminJoin(w, r)
 	default:
