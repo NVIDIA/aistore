@@ -104,12 +104,8 @@ func (*LOM) AppendWork(wfqn string) (fh cos.LomWriter, err error) {
 // remove
 //
 
-func (lom *LOM) RemoveMain() (err error) {
-	err = cos.RemoveFile(lom.FQN)
-	if os.IsNotExist(err) {
-		err = nil
-	}
-	return err
+func (lom *LOM) RemoveMain() error {
+	return cos.RemoveFile(lom.FQN)
 }
 
 func (lom *LOM) RemoveObj(force ...bool) (err error) {

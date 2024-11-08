@@ -1303,6 +1303,13 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	err := lom.Load(false /*cache it*/, true /*locked*/)
 	if err != nil {
 		if !cos.IsNotExist(err, 0) {
+			if cmn.IsErrObjNought(err) {
+				// cleanup in place
+				if errNested := lom.RemoveMain(); errNested != nil {
+					nlog.Errorln(t.String(), "failed to cleanup in place", errNested)
+				}
+				return http.StatusNotFound, nil, false
+			}
 			return 0, err, false
 		}
 		if !delFromBackend {
