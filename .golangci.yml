@@ -47,7 +47,7 @@ linters-settings:
     ignore-generated-header: true
     severity: warning
     rules:
-      # name: import-shadowing
+      # name: import-shadowing ## TODO: enable
       # name: unhandled-error
       # name: line-length-limit
       # name: dot-imports
@@ -84,7 +84,7 @@ linters-settings:
   govet:
     enable-all: true
     disable:
-      - fieldalignment # TODO: Enable, for now reports a lot of problems.
+      - fieldalignment # TODO: enable to select and fix a few; then disable
       - shadow # Reports a lot of false-positives and conflicts with other linters.
   errcheck:
     check-blank: true
@@ -94,15 +94,13 @@ linters-settings:
       - performance
       - style
     disabled-checks:
-      - ifElseChain
+      - ifElseChain ## TODO: enable
       - unnamedResult
   gosec:
-    excludes: ## TODO: revisit
+    excludes: ## integer overflow; week rand
       - G115
-      - G401
       - G402
       - G404
-      - G501
   prealloc:
     simple: true # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them
     range-loops: true # Report preallocation suggestions on range loops, true by default

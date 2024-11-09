@@ -1,17 +1,15 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"regexp"
 	"strconv"
@@ -39,7 +37,7 @@ type (
 	}
 
 	md5KeyExtractor struct {
-		h hash.Hash
+		cksum *cos.CksumHash
 	}
 
 	nameKeyExtractor    struct{}
@@ -64,12 +62,12 @@ type (
 /////////////////////
 
 func NewMD5KeyExtractor() (KeyExtractor, error) {
-	return &md5KeyExtractor{h: md5.New()}, nil
+	return &md5KeyExtractor{cksum: cos.NewCksumHash(cos.ChecksumMD5)}, nil
 }
 
 func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
-	s := hex.EncodeToString(ke.h.Sum([]byte(ske.name)))
-	ke.h.Reset()
+	s := hex.EncodeToString(ke.cksum.H.Sum(cos.UnsafeB(ske.name)))
+	ke.cksum.H.Reset()
 	return s, nil
 }
 

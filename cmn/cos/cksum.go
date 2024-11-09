@@ -5,7 +5,7 @@
 package cos
 
 import (
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501 have to support Cloud's MD5
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding"
@@ -112,7 +112,7 @@ func (ck *CksumHash) Init(ty string) {
 	case ChecksumXXHash:
 		ck.H = xxhash.New64()
 	case ChecksumMD5:
-		ck.H = md5.New()
+		ck.H = md5.New() //nolint:gosec // G401 ditto (see G501 above)
 	case ChecksumCRC32C:
 		ck.H = NewCRC32C()
 	case ChecksumSHA256:
