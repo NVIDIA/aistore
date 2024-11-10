@@ -157,6 +157,85 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 
 > Note as well that AIS provides [5 (five) easy ways to populate its *remote buckets*](overview.md) - including, but not limited to conventional on-demand caching (aka *cold GET*).
 
+## Example: accessing Cloud storage via remote AIS
+
+There are, essentially, two different capabilities:
+
+* attach _other_ AIS clusters
+* redirect AIS bucket to read, write, and otherwise operate on a different bucket
+
+Here's a quick and commented example where we access (e.g.) `s3://data` indirectly, via another bucket called `ais://nnn`.
+
+Notice that the cluster that contains `ais://nnn` does no necessarily has to have AWS credentials to access `s3://data`.
+
+### Step 1: show remote cluster
+
+```console
+$ ais show remote-cluster
+
+UUID        URL                     Alias   Primary  Smap    Targets  Uptime
+A9A78a_cSc  http://aistore:51080    remais           v2145   4        64d23h
+```
+
+### Step 2: list s3://data directly via remote cluster
+
+```console
+$ AIS_ENDPOINT=http://aistore:51080 ais ls s3://data
+
+NAME             SIZE
+aaa/bbb/ccc      16.26KiB
+aaa/bbb/eee      16.26KiB
+aaa/ddd          16.26KiB
+aaabbb           16.26KiB
+aaaccc           16.26KiB
+bbb/111          16.26KiB
+ttt/hhh          16.26KiB
+ttt/qqq          16.26KiB
+```
+
+### Step 3: redirect "local" `ais://nnn` to Cloud-based `s3://data` via remote AIS cluster
+
+```console
+$ ais bucket props set ais://nnn <TAB-TAB>
+
+backend_bck.name               checksum.validate_cold_get     lru.enabled                    ec.bundle_multiplier           features
+backend_bck.provider           checksum.validate_warm_get     mirror.copies                  ec.data_slices                 write_policy.data
+versioning.enabled             checksum.validate_obj_move     mirror.burst_buffer            ec.parity_slices               write_policy.md
+versioning.validate_warm_get   checksum.enable_read_range     mirror.enabled                 ec.enabled
+versioning.synchronize         lru.dont_evict_time            ec.objsize_limit               ec.disk_only
+checksum.type                  lru.capacity_upd_time          ec.compression                 access
+
+$ ais bucket props set ais://nnn backend_bck=s3://@A9A78a_cSc/data
+
+"backend_bck.name" set to: "data" (was: "")
+"backend_bck.provider" set to: "aws" (was: "")
+
+Bucket props successfully updated.
+```
+
+Note that attached clusters have (human-readable) aliases that often may be easier to use, e.g.:
+
+```console
+$ ais bucket props set ais://nnn backend_bck=s3://@remais/data
+```
+
+In other words, actual cluster UUID (`A9A78a_cSc` above) and its alias (`remais`) can be used interchangibly.
+
+### Step 4: finally, list `s3//data` via "local" `ais://nnn`
+
+```console
+$ ais ls ais://nnn
+
+aaa/bbb/ccc      16.26KiB
+aaa/bbb/eee      16.26KiB
+aaa/ddd          16.26KiB
+aaabbb           16.26KiB
+aaaccc           16.26KiB
+bbb/111          16.26KiB
+ttt/hhh          16.26KiB
+ttt/qqq          16.26KiB
+```
+
 ## HTTP(S) based dataset
 
 AIS bucket may be implicitly defined by HTTP(S) based dataset, where files such as, for instance:
