@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.32
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.65.3
 	github.com/aws/smithy-go v1.22.0
-	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/json-iterator/go v1.1.12
 	github.com/karrick/godirwalk v1.17.0
 	github.com/klauspost/reedsolomon v1.12.4
