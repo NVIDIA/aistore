@@ -111,6 +111,9 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// TODO: not checking `xargs.Buckets` vs `xargs.Bck` and not initializing the former :NOTE
+
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infoln(msg.Action, xargs.String())
 	}
@@ -118,7 +121,6 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	case apc.ActXactStart:
 		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())
 		if xargs.Kind == apc.ActPrefetchObjects {
-			// TODO: consider adding `Value any` to generic `xact.ArgsMsg`
 			ecode, err := t.runPrefetch(xargs.ID, bck, &apc.PrefetchMsg{})
 			if err != nil {
 				t.writeErr(w, r, err, ecode)
@@ -200,11 +202,17 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		}
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
+		if len(args.Buckets) == 0 && !args.Bck.IsEmpty() {
+			args.Buckets = []cmn.Bck{args.Bck}
+		}
 		go t.runLRU(args.ID, wg, args.Force, args.Buckets...)
 		wg.Wait()
 	case apc.ActStoreCleanup:
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
+		if len(args.Buckets) == 0 && !args.Bck.IsEmpty() {
+			args.Buckets = []cmn.Bck{args.Bck}
+		}
 		go t.runStoreCleanup(args.ID, wg, args.Buckets...)
 		wg.Wait()
 	case apc.ActResilver:

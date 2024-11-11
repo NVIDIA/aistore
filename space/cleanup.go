@@ -8,9 +8,11 @@ package space
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -135,6 +137,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		xcln.Finish()
 		return fs.CapStatus{}
 	}
+	now := time.Now().UnixNano()
 	for mpath, mi := range avail {
 		joggers[mpath] = &clnJ{
 			oldWork: make([]string, 0, 64),
@@ -143,6 +146,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 			config:  config,
 			ini:     &parent.ini,
 			p:       parent,
+			now:     now,
 		}
 		joggers[mpath].misplaced.loms = make([]*core.LOM, 0, 64)
 		joggers[mpath].misplaced.ec = make([]*core.CT, 0, 64)
@@ -351,7 +355,6 @@ func (j *clnJ) jogBck() (size int64, err error) {
 		Callback: j.walk,
 		Sorted:   false,
 	}
-	j.now = time.Now().UnixNano()
 	if err = fs.Walk(opts); err != nil {
 		return
 	}
@@ -415,8 +418,9 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	}
 }
 
-// TODO: add stats error counters (stats.ErrLmetaCorruptedCount, ...)
-// TODO: revisit rm-ed byte counting
+// [TODO]
+// - add stats error counters (stats.ErrLmetaCorruptedCount, ...)
+// - revisit rm-ed byte counting
 func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	if err := lom.InitFQN(fqn, &j.bck); err != nil {
 		return
@@ -456,7 +460,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	// too early
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-			nlog.Infof("too early for %s: atime %v", lom, lom.Atime())
+			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String())
 		}
 		return
 	}
@@ -504,13 +508,15 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 }
 
 func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
-	var parsed fs.ParsedFQN
 	if de.IsDir() {
+		j._rmEmptyDir(fqn)
 		return nil
 	}
 	if err := j.yieldTerm(); err != nil {
 		return err
 	}
+
+	var parsed fs.ParsedFQN
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
 		return nil
 	}
@@ -524,7 +530,44 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
-// TODO: remove disfunctional files as soon as possible without adding them to slices.
+func (j *clnJ) _rmEmptyDir(fqn string) {
+	base := filepath.Base(fqn)
+
+	if fs.LikelyCT(base) {
+		return
+	}
+	if len(fqn) < len(base)+len(j.bck.Name)+8 {
+		return
+	}
+	if !fs.ContainsCT(fqn[0:len(fqn)-len(base)], j.bck.Name) {
+		return
+	}
+
+	fh, err := os.Open(fqn)
+	if err != nil {
+		j.ini.Xaction.AddErr(fmt.Errorf("check-empty-dir: failed to open %q: %v", fqn, err))
+		core.T.FSHC(err, j.mi, "")
+		return
+	}
+	names, ern := fh.Readdirnames(1)
+	cos.Close(fh)
+
+	switch ern {
+	case nil:
+		// do nothing
+	case io.EOF:
+		// note: removing a child may render its parent empty as well, but we do not recurs
+		debug.Assert(len(names) == 0, names)
+		err := syscall.Rmdir(fqn)
+		debug.AssertNoErr(err)
+		if cmn.Rom.FastV(4, cos.SmoduleSpace) {
+			nlog.Infoln(j.String(), "rm empty dir:", fqn)
+		}
+	default:
+		nlog.Warningf("%s: failed to read dir %q: %v", j, fqn, ern)
+	}
+}
+
 func (j *clnJ) rmLeftovers() (size int64, err error) {
 	var (
 		fevicted, bevicted int64
@@ -598,7 +641,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 	}
 	j.misplaced.ec = j.misplaced.ec[:0]
 
-	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted) // TODO -- FIXME
+	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted)
 	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
 	xcln.ObjsAdd(int(fevicted), bevicted)
 	return

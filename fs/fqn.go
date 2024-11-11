@@ -45,6 +45,21 @@ type ParsedFQN struct {
 	Bck         cmn.Bck
 }
 
+func LikelyCT(s string) bool { return len(s) == 1+contentTypeLen && s[0] == prefCT }
+
+func ContainsCT(fqn, bname string) bool {
+	i := strings.Index(fqn, cos.PathSeparator+bname+cos.PathSeparator)
+	if i < 0 {
+		return false
+	}
+	ct := fqn[i+2+len(bname):]
+	j := strings.IndexByte(ct, filepath.Separator)
+	if j < 0 {
+		return false
+	}
+	return LikelyCT(ct[:j])
+}
+
 ///////////////
 // ParsedFQN //
 ///////////////
