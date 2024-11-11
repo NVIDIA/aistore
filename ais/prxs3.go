@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -758,13 +759,24 @@ func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snod
 	h.Set(cos.HdrLocation, redirectURL)
 	h.Set(cos.HdrContentType, "text/xml; charset=utf-8")
 	h.Set(cos.HdrServer, s3.AISServer)
+
+	var (
+		ep = extractEndpoint(redirectURL)
+		ll = max(256, 175+len(ep)+len(bucket)-27)
+		bb = bytes.NewBuffer(make([]byte, ll)) // TODO: consider using smm (small-size allocator) - here and elsewhere
+	)
+	bb.Reset()
+	bb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+	bb.WriteString("<Error><Code>TemporaryRedirect</Code><Message>Redirect</Message>")
+	bb.WriteString("<Endpoint>")
+	bb.WriteString(ep)
+	bb.WriteString("</Endpoint>")
+	bb.WriteString("<Bucket>")
+	bb.WriteString(bucket)
+	bb.WriteString("</Bucket></Error>")
+
 	w.WriteHeader(http.StatusTemporaryRedirect)
-	ep := extractEndpoint(redirectURL)
-	body := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-		"<Error><Code>TemporaryRedirect</Code><Message>Redirect</Message>" +
-		"<Endpoint>" + ep + "</Endpoint>" +
-		"<Bucket>" + bucket + "</Bucket></Error>"
-	fmt.Fprint(w, body)
+	w.Write(bb.Bytes())
 }
 
 // extractEndpoint extracts an S3 endpoint from the full URL path.
