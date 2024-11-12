@@ -40,6 +40,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 //
@@ -115,7 +116,7 @@ type (
 		size    int64         // Content-Length
 	}
 
-	copyOI core.CopyParams
+	coi xs.CoiParams
 
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
@@ -1399,7 +1400,7 @@ func (a *apndOI) pack(workFQN string) string {
 //
 
 // main method
-func (coi *copyOI) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, err error) {
+func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, err error) {
 	if coi.DryRun {
 		return coi._dryRun(lom, coi.ObjnameTo)
 	}
@@ -1438,7 +1439,7 @@ func (coi *copyOI) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int6
 	return size, err
 }
 
-func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
+func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
 	if coi.DP == nil {
 		uname := coi.BckTo.MakeUname(objnameTo)
 		if lom.Uname() != cos.UnsafeS(uname) {
@@ -1470,7 +1471,7 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 //
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ int, _ error) {
+func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ int, _ error) {
 	reader, oah, errN := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 	if errN != nil {
 		return 0, 0, errN
@@ -1511,7 +1512,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 	return size, ecode, err
 }
 
-func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
+func (coi *coi) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
 		return
 	}
@@ -1554,7 +1555,7 @@ func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error)
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *copyOI) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
+func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
 	debug.Assert(coi.OWT > 0)
 	sargs := allocSnda()
 	{
@@ -1572,7 +1573,7 @@ func (coi *copyOI) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameT
 	return
 }
 
-func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
+func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 	debug.Assert(!coi.DryRun)
 	if sargs.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
@@ -1638,7 +1639,7 @@ func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64,
 
 // use data mover to transmit objects to other targets
 // (compare with coi.put())
-func (coi *copyOI) _dm(lom *core.LOM, sargs *sendArgs) error {
+func (coi *coi) _dm(lom *core.LOM, sargs *sendArgs) error {
 	debug.Assert(sargs.dm.OWT() == sargs.owt)
 	debug.Assert(sargs.dm.GetXact() == coi.Xact || sargs.dm.GetXact().ID() == coi.Xact.ID())
 	o := transport.AllocSend()
@@ -1656,7 +1657,7 @@ func (coi *copyOI) _dm(lom *core.LOM, sargs *sendArgs) error {
 
 // PUT(lom) => destination target (compare with coi.dm())
 // always closes params.Reader, either explicitly or via Do()
-func (coi *copyOI) put(t *target, sargs *sendArgs) error {
+func (coi *coi) put(t *target, sargs *sendArgs) error {
 	var (
 		hdr   = make(http.Header, 8)
 		query = sargs.bckTo.NewQuery()
@@ -1690,7 +1691,7 @@ func (coi *copyOI) put(t *target, sargs *sendArgs) error {
 	return nil
 }
 
-func (coi *copyOI) stats(size int64, err error) {
+func (coi *coi) stats(size int64, err error) {
 	if err == nil && coi.Xact != nil {
 		coi.Xact.ObjsAdd(1, size)
 	}

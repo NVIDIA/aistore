@@ -317,7 +317,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
 
-	coiParams := core.AllocCOI()
+	coiParams := AllocCOI()
 	{
 		coiParams.DP = wi.r.args.DP
 		coiParams.Xact = wi.r
@@ -325,13 +325,17 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 		coiParams.BckTo = wi.r.args.BckTo
 		coiParams.ObjnameTo = objNameTo
 		coiParams.Buf = buf
-		coiParams.OWT = wi.r.owt
 		coiParams.DryRun = wi.msg.DryRun
 		coiParams.LatestVer = wi.msg.LatestVer
 		coiParams.Sync = wi.msg.Sync
+		coiParams.OWT = wi.r.owt
+		coiParams.Finalize = false
+		if coiParams.ObjnameTo == "" {
+			coiParams.ObjnameTo = lom.ObjName
+		}
 	}
-	_, err := core.T.CopyObject(lom, wi.r.p.dm, coiParams)
-	core.FreeCOI(coiParams)
+	_, err := gcoi.CopyObject(lom, wi.r.p.dm, coiParams)
+	FreeCOI(coiParams)
 	slab.Free(buf)
 
 	if err != nil {

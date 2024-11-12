@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const fmtErrBckObj = "invalid %s request: expecting bucket and object (names) in the URL, have %v"
@@ -143,16 +144,16 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 
-	coiParams := core.AllocCOI()
+	coiParams := xs.AllocCOI()
 	{
 		coiParams.Config = config
 		coiParams.BckTo = bckTo
 		coiParams.ObjnameTo = s3.ObjName(items)
 		coiParams.OWT = cmn.OwtCopy
 	}
-	coi := (*copyOI)(coiParams)
+	coi := (*coi)(coiParams)
 	_, err = coi.do(t, nil /*DM*/, lom)
-	core.FreeCOI(coiParams)
+	xs.FreeCOI(coiParams)
 
 	if err != nil {
 		if err == cmn.ErrSkip {

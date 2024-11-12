@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 func (*target) DataClient() *http.Client { return g.client.data }
@@ -134,19 +135,9 @@ func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *core.LOM, dm core.DM, params *core.CopyParams) (size int64, err error) {
-	coi := (*copyOI)(params)
-	// defaults
-	coi.OWT = cmn.OwtCopy
-	coi.Finalize = false
-	if coi.ObjnameTo == "" {
-		coi.ObjnameTo = lom.ObjName
-	}
-	realDM, ok := dm.(*bundle.DataMover) // TODO -- FIXME: eliminate typecast
-	debug.Assert(ok)
-
-	size, err = coi.do(t, realDM, lom)
-
+func (t *target) CopyObject(lom *core.LOM, dm *bundle.DataMover, params *xs.CoiParams) (size int64, err error) {
+	coi := (*coi)(params)
+	size, err = coi.do(t, dm, lom)
 	coi.stats(size, err)
 	return size, err
 }
@@ -347,8 +338,9 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 	return
 }
 
-// TODO: use DM streams
-// TODO: Xact.InObjsAdd on the receive side
+// [TODO]
+// - use DM streams
+// - Xact.InObjsAdd on the receive side
 func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *meta.Snode, smap *smapX) (int64, error) {
 	lom.FQN = params.SrcFQN
 
@@ -357,16 +349,16 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 		return -1, nil
 	}
 
-	coiParams := core.AllocCOI()
+	coiParams := xs.AllocCOI()
 	{
 		coiParams.BckTo = lom.Bck()
 		coiParams.OWT = cmn.OwtPromote
 		coiParams.Xact = params.Xact
 		coiParams.Config = params.Config
 	}
-	coi := (*copyOI)(coiParams)
+	coi := (*coi)(coiParams)
 	size, err := coi.send(t, nil /*DM*/, lom, lom.ObjName, tsi)
-	core.FreeCOI(coiParams)
+	xs.FreeCOI(coiParams)
 
 	return size, err
 }

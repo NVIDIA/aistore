@@ -6,16 +6,26 @@
 package xs
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+var (
+	gcoi COI // target
+
+	coiPool sync.Pool // mem pool
+	coi0    CoiParams
+)
+
 // for additional startup-time reg-s see lru, downloader, ec
-func Xreg(xeleOnly bool) {
+func Preg() {
 	xreg.RegNonBckXact(&eleFactory{})
-	if xeleOnly {
-		return
-	}
+}
+
+func Treg(coi COI) {
+	xreg.RegNonBckXact(&eleFactory{})
 
 	xreg.RegNonBckXact(&resFactory{})
 	xreg.RegNonBckXact(&rebFactory{})
@@ -31,13 +41,31 @@ func Xreg(xeleOnly bool) {
 	xreg.RegBckXact(&proFactory{})
 	xreg.RegBckXact(&llcFactory{})
 
+	gcoi = coi
 	xreg.RegBckXact(&tcbFactory{kind: apc.ActCopyBck})
 	xreg.RegBckXact(&tcbFactory{kind: apc.ActETLBck})
-
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActETLObjects}})
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActCopyObjects}})
+
 	xreg.RegBckXact(&archFactory{streamingF: streamingF{kind: apc.ActArchive}})
 	xreg.RegBckXact(&lsoFactory{streamingF: streamingF{kind: apc.ActList}})
 
 	xreg.RegBckXact(&blobFactory{})
+}
+
+//
+// CoiParams pool
+//
+
+func AllocCOI() (a *CoiParams) {
+	if v := coiPool.Get(); v != nil {
+		a = v.(*CoiParams)
+		return
+	}
+	return &CoiParams{}
+}
+
+func FreeCOI(a *CoiParams) {
+	*a = coi0
+	coiPool.Put(a)
 }

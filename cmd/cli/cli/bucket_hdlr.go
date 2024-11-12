@@ -32,20 +32,24 @@ Usage examples:
 `
 
 // ais cp
-const copyBucketUsage = "copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'), e.g.:\n" +
+const copyBucketUsage = "copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),\n" +
+	indent1 + "\te.g.:\n" +
 	indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
-	indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy entire Cloud bucket that may not be _present_ in the cluster;\n" +
+	indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy entire Cloud bucket that may _not_ be in-cluster;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all --num-workers 16'\t- same as above employing 16 concurrent workers;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all --num-workers 16 --prefix dir/subdir/'\t- same as above, but limit copying to a given virtual subdirectory;\n" +
-	indent1 + "\t- 'ais cp s3://abc gs://xyz --all'\t- copy Cloud bucket to another Cloud;\n" +
-	indent1 + "\t- 'ais cp s3://abc ais://nnn --latest'\t- copy Cloud bucket, and make sure that already present in-cluster copies are updated to the latest (remote) versions;\n" +
-	indent1 + "\t- 'ais cp s3://abc ais://nnn --sync'\t- same as above, but in addition delete in-cluster copies that do not exist (any longer) in the remote source\n" +
-	indent1 + "\t\t  with template, prefix, and/or progress bar;\n" +
+	indent1 + "\t- 'ais cp s3://abc gs://xyz --all'\t- copy Cloud bucket to another Cloud.\n" +
+	indent1 + "\tsimilar to prefetch:\n" +
+	indent1 + "\t- 'ais cp s3://data s3://data --all'\t- copy remote source (and create namesake destination in-cluster bucket if doesn't exist).\n" +
+	indent1 + "\tsynchronize with out-of-band updates:\n" +
+	indent1 + "\t- 'ais cp s3://abc ais://nnn --latest'\t- copy Cloud bucket; make sure that already present in-cluster copies are updated to the latest versions;\n" +
+	indent1 + "\t- 'ais cp s3://abc ais://nnn --sync'\t- same as above, but in addition delete in-cluster copies that do not exist (any longer) in the remote source.\n" +
+	indent1 + "\twith template, prefix, and progress:\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --prepend backup/'\t- copy objects into 'backup/' virtual subdirectory in destination bucket;\n" +
 	indent1 + "\t- 'ais cp ais://nnn/111 ais://mmm'\t- copy all ais://nnn objects that match prefix '111';\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'\t- copy up to 1000 objects that share the specified prefix;\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens';\n" +
-	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above"
+	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above."
 
 // ais ls
 var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +

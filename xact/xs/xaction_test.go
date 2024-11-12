@@ -37,7 +37,7 @@ func init() {
 	cmn.GCO.CommitUpdate(config)
 
 	xreg.Init()
-	xs.Xreg(false)
+	xs.Treg(nil)
 	fs.TestNew(nil)
 }
 

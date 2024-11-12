@@ -264,7 +264,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
 	}
-	coiParams := core.AllocCOI()
+	coiParams := AllocCOI()
 	{
 		coiParams.DP = args.DP
 		coiParams.Xact = r
@@ -272,13 +272,17 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 		coiParams.BckTo = args.BckTo
 		coiParams.ObjnameTo = toName
 		coiParams.Buf = buf
-		coiParams.OWT = r.p.owt
 		coiParams.DryRun = args.Msg.DryRun
 		coiParams.LatestVer = args.Msg.LatestVer
 		coiParams.Sync = args.Msg.Sync
+		coiParams.OWT = r.p.owt
+		coiParams.Finalize = false
+		if coiParams.ObjnameTo == "" {
+			coiParams.ObjnameTo = lom.ObjName
+		}
 	}
-	_, err = core.T.CopyObject(lom, r.dm, coiParams)
-	core.FreeCOI(coiParams)
+	_, err = gcoi.CopyObject(lom, r.dm, coiParams)
+	FreeCOI(coiParams)
 	switch {
 	case err == nil:
 		if args.Msg.Sync {

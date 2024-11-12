@@ -50,19 +50,6 @@ type (
 		Xact            Xact        // responsible xaction
 		apc.PromoteArgs             // all of the above
 	}
-	CopyParams struct {
-		DP        DP // copy or transform via data provider, see impl-s: (ext/etl/dp.go, core/ldp.go)
-		Xact      Xact
-		Config    *cmn.Config
-		BckTo     *meta.Bck
-		ObjnameTo string
-		Buf       []byte
-		OWT       cmn.OWT
-		Finalize  bool // copies and EC (as in poi.finalize())
-		DryRun    bool
-		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
-		Sync      bool // ditto -  bucket's 'versioning.synchronize'
-	}
 
 	// blob
 	WriteSGL func(*memsys.SGL) error
@@ -124,7 +111,6 @@ type (
 
 		HeadCold(lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 
-		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
 		Promote(params *PromoteParams) (ecode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
 

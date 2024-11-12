@@ -16,9 +16,6 @@ var (
 
 	putObjPool sync.Pool
 	putObj0    PutParams
-
-	coiPool sync.Pool
-	coi0    CopyParams
 )
 
 /////////////
@@ -57,21 +54,4 @@ func AllocPutParams() (a *PutParams) {
 func FreePutParams(a *PutParams) {
 	*a = putObj0
 	putObjPool.Put(a)
-}
-
-//
-// CopyParams pool
-//
-
-func AllocCOI() (a *CopyParams) {
-	if v := coiPool.Get(); v != nil {
-		a = v.(*CopyParams)
-		return
-	}
-	return &CopyParams{}
-}
-
-func FreeCOI(a *CopyParams) {
-	*a = coi0
-	coiPool.Put(a)
 }

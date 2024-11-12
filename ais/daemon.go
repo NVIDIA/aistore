@@ -234,7 +234,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	// fork (proxy | target)
 	co := newConfigOwner(config)
 	if daemon.cli.role == apc.Proxy {
-		xs.Xreg(true /* x-ele only */)
+		xs.Preg()
 		p := newProxy(co)
 		p.init(config)
 		title := _loghdr2(p.si, loghdr)
@@ -250,12 +250,13 @@ func initDaemon(version, buildTime string) cos.Runner {
 		return p
 	}
 
-	// reg xaction factories
-	xs.Xreg(false /* x-ele only */)
-	space.Xreg()
-
 	t := newTarget(co)
 	t.init(config)
+
+	// reg xaction factories
+	xs.Treg(t)
+	space.Xreg()
+
 	title := _loghdr2(t.si, loghdr)
 	nlog.Infoln(title)
 

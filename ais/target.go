@@ -1363,7 +1363,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 	}
 
 	buf, slab := t.gmm.Alloc()
-	coiParams := core.AllocCOI()
+	coiParams := xs.AllocCOI()
 	{
 		coiParams.BckTo = lom.Bck()
 		coiParams.ObjnameTo = msg.Name /* new object name */
@@ -1372,9 +1372,9 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 		coiParams.OWT = cmn.OwtCopy
 		coiParams.Finalize = true
 	}
-	coi := (*copyOI)(coiParams)
+	coi := (*coi)(coiParams)
 	_, err = coi.do(t, nil /*DM*/, lom)
-	core.FreeCOI(coiParams)
+	xs.FreeCOI(coiParams)
 	slab.Free(buf)
 	if err != nil {
 		return err
