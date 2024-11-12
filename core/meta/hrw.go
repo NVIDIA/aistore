@@ -24,6 +24,8 @@ func (smap *Smap) HrwName2T(uname []byte) (*Snode, error) {
 	return smap.HrwHash2T(digest)
 }
 
+// TODO: control plane multihoming: return LRU data plane interface
+
 func (smap *Smap) HrwMultiHome(uname []byte) (si *Snode, netName string, err error) {
 	digest := xxhash.Checksum64S(uname, cos.MLCG32)
 	si, err = smap.HrwHash2T(digest)

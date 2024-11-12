@@ -1491,7 +1491,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 		poi.cksumToUse = oah.Checksum()
 	}
 	if dm != nil {
-		poi.owt = dm.OWT() // (compare with _send)
+		poi.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
 	}
 	ecode, err := poi.putObject()
 	freePOI(poi)
@@ -1555,7 +1555,7 @@ func (coi *copyOI) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameT
 		sargs.owt = coi.OWT
 	}
 	if dm != nil {
-		sargs.owt = dm.OWT() // takes precedence
+		sargs.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
 	}
 	size, err = coi._send(t, lom, sargs)
 	freeSnda(sargs)

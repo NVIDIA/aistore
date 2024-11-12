@@ -2136,6 +2136,9 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 	if err != nil {
 		return
 	}
+
+	// TODO: control plane multihoming: return LRU data plane interface - here and elsewhere (bcast)
+
 	smap := p.owner.smap.get()
 	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
