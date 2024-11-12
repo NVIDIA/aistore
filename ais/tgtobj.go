@@ -526,7 +526,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 
 func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 	switch poi.owt {
-	case cmn.OwtRebalance, cmn.OwtCopy:
+	case cmn.OwtRebalance, cmn.OwtCopy, cmn.OwtCopySameBucket:
 		v = c.ValidateObjMove
 	case cmn.OwtPut:
 		v = true
@@ -1466,7 +1466,8 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 //
 // If destination bucket is remote:
 // - create a local replica of the object on one of the targets, and
-// - PUT to the relevant backend
+// - putRemote (with one exception below)
+//
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ int, _ error) {
@@ -1474,25 +1475,33 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 	if errN != nil {
 		return 0, 0, errN
 	}
-	if lom.Bck().Equal(coi.BckTo, true, true) {
-		dst.CopyVersion(oah)
-	}
-
 	poi := allocPOI()
 	{
 		poi.t = t
 		poi.lom = dst
 		poi.config = coi.Config
 		poi.r = reader
-		poi.owt = coi.OWT
 		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
 		poi.atime = oah.AtimeUnix()
 		poi.cksumToUse = oah.Checksum()
+
+		poi.owt = coi.OWT
+		if dm != nil {
+			poi.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
+		}
 	}
-	if dm != nil {
-		poi.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
+	if poi.owt == cmn.OwtCopy {
+		// preserve src metadata when copying (vs. transforming)
+		dst.CopyVersion(lom)
+		dst.SetCustomMD(lom.GetCustomMD())
+
+		// [special] when src == dst (`ais cp s3://data s3://data --all`)
+		if backend := lom.Bck().RemoteBck(); backend != nil && backend.Equal(coi.BckTo.Bucket()) {
+			poi.owt = cmn.OwtCopySameBucket
+		}
 	}
+
 	ecode, err := poi.putObject()
 	freePOI(poi)
 	if err == nil {
@@ -1552,10 +1561,11 @@ func (coi *copyOI) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameT
 		sargs.objNameTo = objNameTo
 		sargs.tsi = tsi
 		sargs.dm = dm
+
 		sargs.owt = coi.OWT
-	}
-	if dm != nil {
-		sargs.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
+		if dm != nil {
+			sargs.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
+		}
 	}
 	size, err = coi._send(t, lom, sargs)
 	freeSnda(sargs)

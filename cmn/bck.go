@@ -200,7 +200,7 @@ func (n Ns) contains(other Ns) bool {
 // Bck (value)
 /////////
 
-func (b Bck) Equal(other *Bck) bool {
+func (b *Bck) Equal(other *Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }
 
@@ -503,7 +503,10 @@ func (qbck *QueryBcks) Validate() (err error) {
 	return nil
 }
 
-func (qbck QueryBcks) Equal(bck *Bck) bool { return Bck(qbck).Equal(bck) }
+func (qbck *QueryBcks) Equal(bck *Bck) bool {
+	b := (*Bck)(qbck)
+	return b.Equal(bck)
+}
 
 // NOTE: a named bucket with no provider is assumed to be ais://
 func (qbck QueryBcks) Contains(other *Bck) bool {
