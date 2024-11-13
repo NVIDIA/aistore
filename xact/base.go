@@ -26,18 +26,17 @@ import (
 
 type (
 	Base struct {
-		notif  *NotifXact
-		bck    meta.Bck
-		id     string
-		kind   string
-		_nam   string
-		sutime atomic.Int64
-		eutime atomic.Int64
-		abort  struct {
+		notif *NotifXact
+		bck   meta.Bck
+		abort struct {
 			ch   chan error
 			err  ratomic.Pointer[error]
 			done atomic.Bool
 		}
+		id    string
+		kind  string
+		_nam  string
+		err   cos.Errs
 		stats struct {
 			objs     atomic.Int64 // locally processed
 			bytes    atomic.Int64
@@ -46,7 +45,8 @@ type (
 			inobjs   atomic.Int64 // receive
 			inbytes  atomic.Int64
 		}
-		err cos.Errs
+		sutime atomic.Int64
+		eutime atomic.Int64
 	}
 	Marked struct {
 		Xact        core.Xact

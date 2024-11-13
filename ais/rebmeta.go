@@ -48,10 +48,10 @@ type (
 	// rmdOwner is used to keep the information about the rebalances. Currently
 	// it keeps the Version of the latest rebalance.
 	rmdOwner struct {
+		rmd   ratomic.Pointer[rebMD]
 		cluID string
 		fpath string
 		sync.Mutex
-		rmd         ratomic.Pointer[rebMD]
 		interrupted atomic.Bool // when joining target reports interrupted rebalance
 		starting    atomic.Bool // when starting up
 	}
@@ -60,14 +60,15 @@ type (
 		pre   func(ctx *rmdModifier, clone *rebMD)
 		final func(ctx *rmdModifier, clone *rebMD)
 
-		prev  *rebMD // pre-modification rmd
-		cur   *rebMD // CoW clone
-		rebID string // cluster-wide rebalance ID, "g[uuid]" in the logs
-
-		cluID   string // cluster ID (== smap.UUID) - never changes
+		prev    *rebMD // pre-modification rmd
+		cur     *rebMD // CoW clone
 		p       *proxy
 		smapCtx *smapModifier
-		wait    bool
+
+		rebID string // cluster-wide rebalance ID, "g[uuid]" in the logs
+		cluID string // cluster ID (== smap.UUID) - never changes
+
+		wait bool
 	}
 )
 

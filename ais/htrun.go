@@ -67,22 +67,22 @@ type htext interface {
 }
 
 type htrun struct {
-	si        *meta.Snode
-	keepalive keepaliver
-	statsT    stats.Tracker
-	owner     struct {
+	owner struct {
 		smap   *smapOwner
-		bmd    bmdOwner // an interface with proxy and target impl-s
+		bmd    bmdOwner // interface with proxy and target impl-s
 		rmd    *rmdOwner
 		config *configOwner
-		etl    etlOwner // ditto
+		etl    etlOwner
 	}
-	startup struct {
+	keepalive keepaliver
+	statsT    stats.Tracker
+	si        *meta.Snode
+	gmm       *memsys.MMSA // system pagesize-based memory manager and slab allocator
+	smm       *memsys.MMSA // small-size allocator (up to 4K)
+	startup   struct {
 		cluster atomic.Int64 // mono.NanoTime() since cluster startup, zero prior to that
-		node    atomic.Int64 // ditto - for the node
+		node    atomic.Int64 // ditto - for this node
 	}
-	gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
-	smm *memsys.MMSA // system MMSA for small-size allocations
 }
 
 ///////////
@@ -788,7 +788,7 @@ func (h *htrun) _nfy(n core.Notif, err error, upon string, aborted bool) {
 			if si := smap.GetActiveNode(dst); si != nil {
 				nodes = append(nodes, si)
 			} else {
-				nlog.Errorln(&errNodeNotFound{"failed to notify", dst, h.si, smap})
+				nlog.Errorln(&errNodeNotFound{h.si, smap, "failed to notify", dst})
 			}
 		}
 	}

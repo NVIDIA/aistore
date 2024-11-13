@@ -25,12 +25,12 @@ type (
 		ErrCode  int
 	}
 	LsoInvCtx struct {
-		Lom    *LOM
 		Lmfh   cos.LomReader
+		Lom    *LOM
+		SGL    *memsys.SGL
 		Name   string
 		ID     string
 		Schema []string
-		SGL    *memsys.SGL
 		Size   int64
 		EOF    bool
 	}

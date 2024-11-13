@@ -496,7 +496,7 @@ repeat:
 			delete(remnl, uuid)
 			goto repeat
 		}
-		err := &errNodeNotFound{"abort " + nl.String() + " via 'smap-changed':", sid, n.p.si, smap}
+		err := &errNodeNotFound{n.p.si, smap, "abort " + nl.String() + " via 'smap-changed':", sid}
 		nl.Lock()
 		nl.AddErr(err)
 		nl.SetAborted()

@@ -67,10 +67,10 @@ type (
 			mu   sync.RWMutex
 		}
 		remais struct {
-			meta.RemAisVec
 			old []*meta.RemAis // to facilitate a2u resolution (and, therefore, offline access)
-			mu  sync.RWMutex
-			in  atomic.Bool
+			meta.RemAisVec
+			mu sync.RWMutex
+			in atomic.Bool
 		}
 		ec struct {
 			last atomic.Int64 // last active EC via apc.HdrActiveEC (mono time)
@@ -833,7 +833,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	} else {
 		if tsi = smap.GetTarget(nodeID); tsi == nil {
 			p.statsT.IncErr(errcnt)
-			err = &errNodeNotFound{verb + " failure:", nodeID, p.si, smap}
+			err = &errNodeNotFound{p.si, smap, verb + " failure:", nodeID}
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1793,7 +1793,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 	if lsmsg.SID != "" {
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil || tsi.InMaintOrDecomm() {
-			err = &errNodeNotFound{lsotag + " failure:", lsmsg.SID, p.si, smap}
+			err = &errNodeNotFound{p.si, smap, lsotag + " failure:", lsmsg.SID}
 			nlog.Errorln(err)
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
@@ -1871,7 +1871,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if args.DaemonID != "" {
 			smap := p.owner.smap.get()
 			if tsi = smap.GetTarget(args.DaemonID); tsi == nil {
-				err := &errNodeNotFound{apc.ActPromote + " failure:", args.DaemonID, p.si, smap}
+				err := &errNodeNotFound{p.si, smap, apc.ActPromote + " failure:", args.DaemonID}
 				p.writeErr(w, r, err)
 				return
 			}
@@ -2590,7 +2590,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 			if !smap.IsPrimary(p.si) {
 				s = "non-primary, " // TODO above
 			}
-			err = &errNodeNotFound{s + "cannot forward request to node", nodeID, p.si, smap}
+			err = &errNodeNotFound{p.si, smap, s + "cannot forward request to node", nodeID}
 			p.writeErr(w, r, err, http.StatusNotFound)
 			return
 		}

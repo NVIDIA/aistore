@@ -78,13 +78,14 @@ type (
 		pre   func(*bmdModifier, *bucketMD) error
 		final func(*bmdModifier, *bucketMD)
 
-		msg   *apc.ActMsg
-		txnID string // transaction UUID
-		bcks  []*meta.Bck
+		msg *apc.ActMsg
 
 		propsToUpdate *cmn.BpropsToSet // update existing props
 		revertProps   *cmn.BpropsToSet // props to revert
 		setProps      *cmn.Bprops      // new props to set
+
+		txnID string // transaction UUID
+		bcks  []*meta.Bck
 
 		wait         bool
 		needReMirror bool

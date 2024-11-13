@@ -27,7 +27,6 @@ type (
 	tokenList   authn.TokenList       // token strings
 	tkList      map[string]*tok.Token // tk structs
 	authManager struct {
-		sync.Mutex
 		// cache of decrypted tokens
 		tkList tkList
 		// list of invalid tokens(revoked or of deleted users)
@@ -36,6 +35,8 @@ type (
 		version       int64
 		// signing key secret
 		secret string
+		// lock
+		sync.Mutex
 	}
 )
 

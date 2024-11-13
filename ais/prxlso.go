@@ -64,14 +64,14 @@ type (
 
 	// Request buffer that corresponds to a single `uuid`.
 	lsobjBuffer struct {
+		// Buffers for each target that are finally merged and the entries are
+		// appended to the `currentBuff`.
+		leftovers map[string]*lsobjBufferTarget // targetID (string) -> target buffer
 		// Contains the last entry that was returned to the user.
 		nextToken string
 		// Currently maintained buffer that keeps the entries sorted
 		// and ready to be dispatched to the client.
 		currentBuff cmn.LsoEntries
-		// Buffers for each target that are finally merged and the entries are
-		// appended to the `currentBuff`.
-		leftovers map[string]*lsobjBufferTarget // targetID (string) -> target buffer
 		// Timestamp of the last access to this buffer. Idle buffers get removed
 		// after `lsobjBufferTTL`.
 		lastAccess atomic.Int64
@@ -113,8 +113,8 @@ type (
 
 	// Single cache that corresponds to single `cacheReqID`.
 	lsobjCache struct {
-		mtx       sync.RWMutex
 		intervals []*cacheInterval
+		mtx       sync.RWMutex
 	}
 
 	// Contains all lsobj caches.

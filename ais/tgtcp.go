@@ -365,7 +365,7 @@ func (t *target) _setPrim(ctx *smapModifier, clone *smapX) (err error) {
 	}
 	psi := clone.GetProxy(ctx.sid)
 	if psi == nil {
-		return &errNodeNotFound{"cannot set new primary", ctx.sid, t.si, clone}
+		return &errNodeNotFound{t.si, clone, "cannot set new primary", ctx.sid}
 	}
 	clone.Primary = psi
 	return

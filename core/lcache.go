@@ -33,22 +33,21 @@ const (
 type (
 	// g.lchk
 	lchk struct {
-		timeout time.Duration
 		last    time.Time
+		timeout time.Duration
 		total   atomic.Int64
 		rc      atomic.Int32
 		running atomic.Bool
 	}
 	// HK flush & evict
 	evct struct {
-		parent *lchk
-		mi     *fs.Mountpath
-		wg     *sync.WaitGroup
-		now    time.Time
-		d      time.Duration
-		pct    int
-		// runtime
+		now     time.Time
+		parent  *lchk
+		mi      *fs.Mountpath
+		wg      *sync.WaitGroup
 		cache   *sync.Map
+		d       time.Duration
+		pct     int
 		evicted int64
 	}
 	// termination

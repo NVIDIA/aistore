@@ -721,7 +721,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil {
-		err := &errNodeNotFound{"cannot set new primary", proxyID, p.si, smap}
+		err := &errNodeNotFound{p.si, smap, "cannot set new primary", proxyID}
 		p.writeErr(w, r, err)
 		return
 	}

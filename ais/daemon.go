@@ -35,7 +35,6 @@ const usecli = " -role=<proxy|target> -config=</dir/config.json> -local_config=<
 
 type (
 	daemonCtx struct {
-		cli       cliFlags
 		rg        *rungroup
 		version   string // major.minor.build (see cmd/aisnode)
 		buildTime string // YYYY-MM-DD HH:MM:SS-TZ
@@ -44,6 +43,7 @@ type (
 			reason   string // Reason why resilver needs to be run.
 			required bool   // Determines if the resilver needs to be started.
 		}
+		cli cliFlags
 	}
 	cliFlags struct {
 		localConfigPath  string // path to local config
@@ -67,8 +67,8 @@ type (
 		usage bool // show usage and exit
 	}
 	runRet struct {
-		name string
 		err  error
+		name string
 	}
 	rungroup struct {
 		rs    map[string]cos.Runner
@@ -374,7 +374,7 @@ func (g *rungroup) run(r cos.Runner) {
 	if err != nil {
 		nlog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
 	}
-	g.errCh <- runRet{r.Name(), err}
+	g.errCh <- runRet{err, r.Name()}
 }
 
 func (g *rungroup) runAll(mainRunner cos.Runner) error {

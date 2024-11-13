@@ -21,8 +21,8 @@ const (
 )
 
 type errBdir struct {
-	cname string
 	err   error
+	cname string
 }
 
 func (e *errBdir) Error() string {
@@ -86,7 +86,7 @@ func (lom *LOM) _checkBdir() (err error) {
 	if err = cos.Stat(bdir); err == nil {
 		return nil
 	}
-	err = &errBdir{lom.Cname(), err}
+	err = &errBdir{cname: lom.Cname(), err: err}
 	bmd := T.Bowner().Get()
 	if _, present := bmd.Get(&lom.bck); present {
 		err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
@@ -142,7 +142,7 @@ func (lom *LOM) RenameToMain(wfqn string) error {
 func (lom *LOM) RenameFinalize(wfqn string) error {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
-		return &errBdir{lom.Cname(), err}
+		return &errBdir{cname: lom.Cname(), err: err}
 	}
 	if err := lom.RenameToMain(wfqn); err != nil {
 		T.FSHC(err, lom.Mountpath(), wfqn)

@@ -57,9 +57,9 @@ type (
 	}
 
 	voteResult struct {
-		yes      bool
-		daemonID string
 		err      error
+		daemonID string
+		yes      bool
 	}
 )
 
@@ -602,7 +602,7 @@ func (h *htrun) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 	newPrimary, oldPrimary := ctx.nid, ctx.sid
 	psi := clone.GetProxy(newPrimary)
 	if psi == nil {
-		return &errNodeNotFound{"cannot accept new primary election:", newPrimary, h.si, clone}
+		return &errNodeNotFound{h.si, clone, "cannot accept new primary election:", newPrimary}
 	}
 	clone.Primary = psi
 	if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {

@@ -48,9 +48,9 @@ type (
 		String() string
 	}
 	rndzvs struct { // rendezvous records
-		timestamp  int64
 		err        *txnError
 		callerName string
+		timestamp  int64
 	}
 	// two maps, two locks
 	transactions struct {

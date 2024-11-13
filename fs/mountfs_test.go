@@ -275,8 +275,8 @@ func TestMoveToDeleted(t *testing.T) {
 
 func TestMoveMarkers(t *testing.T) {
 	tests := []struct {
-		name string
 		f    func(string, ...func()) (*fs.Mountpath, error)
+		name string
 	}{
 		{name: "remove", f: fs.Remove},
 		{name: "disable", f: fs.Disable},

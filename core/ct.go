@@ -22,13 +22,13 @@ import (
 //////////////////////////////
 
 type CT struct {
-	fqn         string
-	objName     string
-	contentType string
 	hrwFQN      *string
 	bck         *meta.Bck
 	mi          *fs.Mountpath
 	uname       *string
+	fqn         string
+	objName     string
+	contentType string
 	digest      uint64
 	size        int64
 	mtime       int64
@@ -171,7 +171,7 @@ func (ct *CT) Make(toType string) string {
 func (ct *CT) Write(reader io.Reader, size int64, workFQN string) (err error) {
 	bdir := ct.mi.MakePathBck(ct.Bucket())
 	if err = cos.Stat(bdir); err != nil {
-		return &errBdir{ct.Cname(), err}
+		return &errBdir{cname: ct.Cname(), err: err}
 	}
 	buf, slab := g.pmm.Alloc()
 	if workFQN == "" {

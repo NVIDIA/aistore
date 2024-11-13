@@ -39,10 +39,10 @@ const (
 
 type ParsedFQN struct {
 	Mountpath   *Mountpath
+	Bck         cmn.Bck
 	ContentType string // enum: { ObjectType, WorkfileType, ECSliceType, ... }
 	ObjName     string
 	Digest      uint64
-	Bck         cmn.Bck
 }
 
 func LikelyCT(s string) bool { return len(s) == 1+contentTypeLen && s[0] == prefCT }

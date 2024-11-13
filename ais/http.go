@@ -12,15 +12,15 @@ import (
 )
 
 type global struct {
-	netServ struct {
-		pub      *netServer
-		pubExtra []*netServer
-		control  *netServer
-		data     *netServer
-	}
 	client struct {
 		control *http.Client // http client for intra-cluster comm
 		data    *http.Client // http client to execute target <=> target GET & PUT (object)
+	}
+	netServ struct {
+		pub      *netServer
+		control  *netServer
+		data     *netServer
+		pubExtra []*netServer
 	}
 }
 

@@ -105,7 +105,6 @@ type (
 		workFQN      string
 	}
 	apndOI struct {
-		started int64         // start time (nanoseconds)
 		r       io.ReadCloser // content reader
 		t       *target       // this
 		config  *cmn.Config   // (during this request)
@@ -113,6 +112,7 @@ type (
 		cksum   *cos.Cksum    // checksum expected once Flush-ed
 		hdl     aoHdl         // (packed)
 		op      string        // enum {apc.AppendOp, apc.FlushOp}
+		started int64         // start time (nanoseconds)
 		size    int64         // Content-Length
 	}
 

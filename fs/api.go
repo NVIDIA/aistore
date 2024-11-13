@@ -38,20 +38,20 @@ type (
 	}
 	// Capacity, Disks, Filesystem (CDF)
 	CDF struct {
-		Capacity
-		Disks []string  `json:"disks"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
 		Label ios.Label `json:"mountpath_label"`
 		FS    cos.FS    `json:"fs"`
+		Disks []string  `json:"disks"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
+		Capacity
 	}
 	// Target (cumulative) CDF
 	Tcdf struct {
 		Mountpaths map[string]*CDF // mpath => [Capacity, Disks, FS (CDF)]
+		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message; disk fault
 		TotalUsed  uint64          `json:"total_used,string"`  // bytes
 		TotalAvail uint64          `json:"total_avail,string"` // bytes
 		PctMax     int32           `json:"pct_max"`            // max used (%)
 		PctAvg     int32           `json:"pct_avg"`            // avg used (%)
 		PctMin     int32           `json:"pct_min"`            // min used (%)
-		CsErr      string          `json:"cs_err"`             // OOS or high-wm error message; disk fault
 	}
 	TcdfExt struct {
 		ios.AllDiskStats
@@ -62,16 +62,16 @@ type (
 // [backward compatibility]: v3.22 cdf* structures
 type (
 	CDFv322 struct {
-		Capacity
-		Disks []string `json:"disks"`
 		FS    string   `json:"fs"`
+		Disks []string `json:"disks"`
+		Capacity
 	}
 	TargetCDFv322 struct {
 		Mountpaths map[string]*CDFv322
+		CsErr      string `json:"cs_err"`
 		PctMax     int32  `json:"pct_max"`
 		PctAvg     int32  `json:"pct_avg"`
 		PctMin     int32  `json:"pct_min"`
-		CsErr      string `json:"cs_err"`
 	}
 )
 

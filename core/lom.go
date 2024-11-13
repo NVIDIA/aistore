@@ -69,10 +69,11 @@ type (
 type (
 	global struct {
 		tstats   cos.StatsUpdater // (stats.Trunner)
-		pmm, smm *memsys.MMSA
-		maxLmeta atomic.Int64
+		pmm      *memsys.MMSA
+		smm      *memsys.MMSA
 		locker   nameLocker
 		lchk     lchk
+		maxLmeta atomic.Int64
 	}
 )
 

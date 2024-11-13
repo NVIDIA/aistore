@@ -1256,7 +1256,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		args.smap = p.owner.smap.get()
 		tsi := args.smap.GetTarget(xargs.DaemonID)
 		if tsi == nil {
-			err := &errNodeNotFound{"cannot resilver", xargs.DaemonID, p.si, args.smap}
+			err := &errNodeNotFound{p.si, args.smap, "cannot resilver", xargs.DaemonID}
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1684,7 +1684,7 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 			smap := p.owner.smap.get()
 			node := smap.GetNode(sid)
 			if node == nil {
-				err := &errNodeNotFound{"X.509 load failure:", sid, p.si, smap}
+				err := &errNodeNotFound{p.si, smap, "X.509 load failure:", sid}
 				p.writeErr(w, r, err, http.StatusNotFound)
 				return
 			}
@@ -1873,7 +1873,7 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 	node := clone.GetNode(ctx.sid)
 	if node == nil {
 		ctx.status = http.StatusNotFound
-		return &errNodeNotFound{fmt.Sprintf(efmt, ctx.sid), ctx.sid, p.si, clone}
+		return &errNodeNotFound{p.si, clone, fmt.Sprintf(efmt, ctx.sid), ctx.sid}
 	}
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
 	if node.IsProxy() {
@@ -1925,7 +1925,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		node = smap.GetNode(sid)
 	)
 	if node == nil {
-		err = &errNodeNotFound{"cannot remove", sid, p.si, smap}
+		err = &errNodeNotFound{p.si, smap, "cannot remove", sid}
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -1986,7 +1986,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 	)
 	if node == nil {
 		txt := "cannot \"" + msg.Action + "\""
-		return http.StatusNotFound, &errNodeNotFound{txt, si.ID(), p.si, smap}
+		return http.StatusNotFound, &errNodeNotFound{p.si, smap, txt, si.ID()}
 	}
 
 	var (
@@ -2067,7 +2067,7 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	node := clone.GetNode(sid)
 	if node == nil {
 		ctx.status = http.StatusNotFound
-		return &errNodeNotFound{"failed to " + verb, sid, p.si, clone}
+		return &errNodeNotFound{p.si, clone, "failed to " + verb, sid}
 	}
 	if node.IsProxy() {
 		clone.delProxy(sid)

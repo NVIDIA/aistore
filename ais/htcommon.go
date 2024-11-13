@@ -141,9 +141,9 @@ type (
 	}
 
 	networkHandler struct {
-		r   string           // resource
 		h   http.HandlerFunc // handler
-		net netAccess        // handler network access
+		r   string           // resource
+		net netAccess        // handler's network access
 	}
 
 	nodeRegPool []cluMeta
@@ -175,10 +175,10 @@ type (
 
 	// http server and http runner (common for proxy and target)
 	netServer struct {
-		sync.Mutex
 		s             *http.Server
 		muxers        httpMuxers
 		sndRcvBufSize int
+		sync.Mutex
 	}
 
 	nlogWriter struct{}
@@ -191,16 +191,16 @@ type (
 	errBmdUUIDSplit     struct{ detail string }
 	errSmapUUIDDiffer   struct{ detail string } // ditto Smap
 	errNodeNotFound     struct {
-		msg  string
-		id   string
 		si   *meta.Snode // self
 		smap *smapX
+		msg  string
+		id   string
 	}
 	errSelfNotFound struct {
-		act  string
 		si   *meta.Snode
-		tag  string
 		smap *smapX
+		act  string
+		tag  string
 	}
 	errNotEnoughTargets struct {
 		si       *meta.Snode

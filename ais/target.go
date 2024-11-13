@@ -75,9 +75,9 @@ type (
 
 type redial struct {
 	t         *target
+	inUse     string
 	dialTout  time.Duration
 	totalTout time.Duration
-	inUse     string
 }
 
 // interface guard
