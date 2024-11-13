@@ -27,9 +27,9 @@ const (
 
 type (
 	LsoCounter struct {
+		callback  LsoCB
 		startTime int64 // time operation started
 		callAfter int64 // callback after
-		callback  LsoCB
 		count     int
 		done      bool
 	}
@@ -38,8 +38,8 @@ type (
 	// additional and optional list-objects args (compare with: GetArgs, PutArgs)
 	ListArgs struct {
 		Callback  LsoCB
-		CallAfter time.Duration
 		Header    http.Header // to optimize listing very large buckets, e.g.: Header.Set(apc.HdrInventory, "true")
+		CallAfter time.Duration
 		Limit     int64
 	}
 )

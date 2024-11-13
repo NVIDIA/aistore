@@ -32,9 +32,9 @@ type (
 		DontWait  bool
 	}
 	BinfoArgs struct {
+		UUID   string
+		Prefix string
 		BsummArgs
-		UUID          string
-		Prefix        string
 		FltPresence   int
 		Summarize     bool
 		WithRemote    bool

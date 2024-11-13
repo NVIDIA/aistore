@@ -47,12 +47,12 @@ type (
 		bp   api.BaseParams
 	}
 	AISbp struct {
-		t             core.TargetPut
-		remote        map[string]*remAis // by UUID
-		alias         cos.StrKVs         // alias => UUID
-		mu            sync.RWMutex
-		appliedCfgVer int64
+		t      core.TargetPut
+		alias  cos.StrKVs         // alias => UUID
+		remote map[string]*remAis // by UUID
 		base
+		appliedCfgVer int64
+		mu            sync.RWMutex
 	}
 )
 

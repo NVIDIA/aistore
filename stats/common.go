@@ -135,11 +135,11 @@ type (
 		ticker    *time.Ticker
 		core      *coreStats
 		ctracker  copyTracker // to avoid making it at runtime
-		sorted    []string    // sorted names
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
-		next      int64       // mono.Nano
+		sorted    []string    // sorted names
 		mem       sys.MemStat
+		next      int64 // mono.Nano
 		startedUp atomic.Bool
 	}
 )

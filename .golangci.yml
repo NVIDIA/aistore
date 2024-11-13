@@ -84,7 +84,7 @@ linters-settings:
   govet:
     enable-all: true
     disable:
-      - fieldalignment # TODO: enable to select and fix a few; then disable
+      - fieldalignment # TODO: enable once in a while (lots of noise though)
       - shadow # Reports a lot of false-positives and conflicts with other linters.
   errcheck:
     check-blank: true

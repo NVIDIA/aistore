@@ -19,8 +19,8 @@ import (
 )
 
 type base struct {
-	provider string
 	metrics  cos.StrKVs // this backend's metric names (below)
+	provider string
 }
 
 // NOTE: `stats.LatencyToCounter()` - a public helper that relies on the naming convention below

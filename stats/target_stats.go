@@ -103,21 +103,22 @@ type (
 	dmetric map[string]string // "read.bps" => full metric name, etc.
 
 	Trunner struct {
-		runner // the base (compare w/ Prunner)
-		t      core.Target
-		Tcdf   fs.Tcdf `json:"cdf"`
-		disk   struct {
+		t    core.Target
+		disk struct {
 			stats   ios.AllDiskStats   // numbers
 			metrics map[string]dmetric // respective names
 		}
-		xln string
-		cs  struct {
+		xln     string
+		xallRun core.AllRunningInOut
+		lines   []string // respective names
+
+		fsIDs  []cos.FsID
+		Tcdf   fs.Tcdf `json:"cdf"`
+		runner         // the base (compare w/ Prunner)
+		cs     struct {
 			last int64 // mono.Nano
 		}
 		ioErrs  int64 // sum values of (ioErrNames) counters
-		lines   []string
-		fsIDs   []cos.FsID
-		xallRun core.AllRunningInOut
 		standby bool
 	}
 )

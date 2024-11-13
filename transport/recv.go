@@ -65,10 +65,10 @@ type (
 		now    int64
 	}
 	hdlExtra struct {
-		hdl
-		hkName      string
 		sessions    sync.Map
 		oldSessions sync.Map
+		hkName      string
+		hdl
 	}
 )
 

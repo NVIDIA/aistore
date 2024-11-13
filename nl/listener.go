@@ -64,12 +64,18 @@ type (
 	Callback func(n Listener)
 
 	NodeStats struct {
-		sync.RWMutex
 		stats map[string]any // daeID => Stats (e.g. cmn.SnapExt)
+		sync.RWMutex
 	}
 
 	ListenerBase struct {
-		mu     sync.RWMutex
+		// construction
+		Srcs        meta.NodeMap     // all notifiers
+		ActiveSrcs  meta.NodeMap     // running notifiers
+		F           Callback         `json:"-"` // optional listening-side callback
+		Stats       *NodeStats       // [daeID => Stats (e.g. cmn.SnapExt)]
+		lastUpdated map[string]int64 // [daeID => last update time(nanoseconds)]
+
 		Common struct {
 			UUID  string
 			Kind  string // async operation kind (see api/apc/actmsg.go)
@@ -77,19 +83,15 @@ type (
 			Owned string // "": not owned | equalIC: IC | otherwise, pid + IC
 			Bck   []*cmn.Bck
 		}
-		// construction
-		Srcs        meta.NodeMap     // all notifiers
-		ActiveSrcs  meta.NodeMap     // running notifiers
-		F           Callback         `json:"-"` // optional listening-side callback
-		Stats       *NodeStats       // [daeID => Stats (e.g. cmn.SnapExt)]
-		lastUpdated map[string]int64 // [daeID => last update time(nanoseconds)]
-		progress    time.Duration    // time interval to monitor the progress
-		addedTime   atomic.Int64     // Time when `nl` is added
+
+		Errs      cos.Errs      // reported error and count
+		progress  time.Duration // time interval to monitor the progress
+		addedTime atomic.Int64  // Time when `nl` is added
 
 		// runtime
 		EndTimeX atomic.Int64 // timestamp when finished
-		AbortedX atomic.Bool  // sets if the xaction is Aborted
-		Errs     cos.Errs     // reported error and count
+		mu       sync.RWMutex
+		AbortedX atomic.Bool // sets if the xaction is Aborted
 	}
 
 	Status struct {

@@ -112,8 +112,8 @@ type (
 	PutApndArchArgs struct {
 		ArchPath string // filename _in_ archive
 		Mime     string // user-specified mime type (NOTE: takes precedence if defined)
-		Flags    int64  // apc.ArchAppend and apc.ArchAppendIfExist (the former requires destination shard to exist)
 		PutArgs
+		Flags int64 // apc.ArchAppend and apc.ArchAppendIfExist (the former requires destination shard to exist)
 	}
 
 	// APPEND(object)

@@ -69,21 +69,21 @@ type (
 
 	// (includes stats.Node and more; NOTE: direct API call w/ no proxying)
 	NodeStatus struct {
-		Node
-		Cluster cos.NodeStateInfo
 		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
 		// assorted props
-		Status         string         `json:"status"`
-		DeploymentType string         `json:"deployment"`
-		Version        string         `json:"ais_version"`  // major.minor.build
-		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
-		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
-		Reserved1      string         `json:"reserved1,omitempty"`
-		Reserved2      string         `json:"reserved2,omitempty"`
-		MemCPUInfo     apc.MemCPUInfo `json:"sys_info"`
-		SmapVersion    int64          `json:"smap_version,string"`
-		Reserved3      int64          `json:"reserved3,omitempty"`
-		Reserved4      int64          `json:"reserved4,omitempty"`
+		Status         string `json:"status"`
+		DeploymentType string `json:"deployment"`
+		Version        string `json:"ais_version"`  // major.minor.build
+		BuildTime      string `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
+		K8sPodName     string `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
+		Reserved1      string `json:"reserved1,omitempty"`
+		Reserved2      string `json:"reserved2,omitempty"`
+		Node
+		Cluster     cos.NodeStateInfo
+		MemCPUInfo  apc.MemCPUInfo `json:"sys_info"`
+		SmapVersion int64          `json:"smap_version,string"`
+		Reserved3   int64          `json:"reserved3,omitempty"`
+		Reserved4   int64          `json:"reserved4,omitempty"`
 	}
 )
 
@@ -95,24 +95,24 @@ type (
 		Tcdf    fs.TargetCDFv322 `json:"capacity"`
 	}
 	NodeStatusV322 struct {
-		NodeV322
 		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
 		// assorted props
-		Status         string         `json:"status"`
-		DeploymentType string         `json:"deployment"`
-		Version        string         `json:"ais_version"`  // major.minor.build
-		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
-		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
-		MemCPUInfo     apc.MemCPUInfo `json:"sys_info"`
-		SmapVersion    int64          `json:"smap_version,string"`
+		Status         string `json:"status"`
+		DeploymentType string `json:"deployment"`
+		Version        string `json:"ais_version"`  // major.minor.build
+		BuildTime      string `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
+		K8sPodName     string `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
+		NodeV322
+		MemCPUInfo  apc.MemCPUInfo `json:"sys_info"`
+		SmapVersion int64          `json:"smap_version,string"`
 	}
 )
 
 type (
 	Extra struct {
+		Labels  cos.StrKVs
 		StrName string
 		Help    string
-		Labels  cos.StrKVs
 	}
 )
 
