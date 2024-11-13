@@ -88,8 +88,8 @@ const (
 )
 
 type URLPath struct {
-	L []string
 	S string
+	L []string
 }
 
 func urlpath(words ...string) URLPath {

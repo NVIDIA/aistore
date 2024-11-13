@@ -43,20 +43,20 @@ type (
 // See also: `IterFields`, `IterFieldNameSepa`
 type (
 	Config struct {
-		role          string `list:"omit"` // Proxy or Target
-		ClusterConfig `json:",inline"`
+		role          string `list:"omit"` // apc.Proxy | apc.Target
 		LocalConfig   `json:",inline"`
+		ClusterConfig `json:",inline"`
 	}
 )
 
 // local config
 type (
 	LocalConfig struct {
+		FSP       FSPConf        `json:"fspaths"`
 		ConfigDir string         `json:"confdir"`
 		LogDir    string         `json:"log_dir"`
-		HostNet   LocalNetConfig `json:"host_net"`
-		FSP       FSPConf        `json:"fspaths"`
 		TestFSP   TestFSPConf    `json:"test_fspaths"`
+		HostNet   LocalNetConfig `json:"host_net"`
 	}
 
 	// ais node: (local) network config
@@ -91,46 +91,41 @@ type (
 // global configuration
 type (
 	ClusterConfig struct {
-		Ext        any            `json:"ext,omitempty"` // within meta-version extensions
-		Backend    BackendConf    `json:"backend" allow:"cluster"`
-		Mirror     MirrorConf     `json:"mirror" allow:"cluster"`
-		EC         ECConf         `json:"ec" allow:"cluster"`
-		Log        LogConf        `json:"log"`
-		Tracing    TracingConf    `json:"tracing"`
-		Periodic   PeriodConf     `json:"periodic"`
-		Timeout    TimeoutConf    `json:"timeout"`
-		Client     ClientConf     `json:"client"`
-		Proxy      ProxyConf      `json:"proxy" allow:"cluster"`
-		Space      SpaceConf      `json:"space"`
-		LRU        LRUConf        `json:"lru"`
-		Disk       DiskConf       `json:"disk"`
-		Rebalance  RebalanceConf  `json:"rebalance" allow:"cluster"`
-		Resilver   ResilverConf   `json:"resilver"`
-		Cksum      CksumConf      `json:"checksum"`
-		Versioning VersionConf    `json:"versioning" allow:"cluster"`
-		Net        NetConf        `json:"net"`
-		FSHC       FSHCConf       `json:"fshc"`
-		Auth       AuthConf       `json:"auth"`
-		Keepalive  KeepaliveConf  `json:"keepalivetracker"`
-		Downloader DownloaderConf `json:"downloader"`
-		Dsort      DsortConf      `json:"distributed_sort"`
-		Transport  TransportConf  `json:"transport"`
-		Memsys     MemsysConf     `json:"memsys"`
-
-		// Transform (offline) or Copy src Bucket => dst bucket
-		TCB TCBConf `json:"tcb"`
-
-		// metadata write policy: (immediate | delayed | never)
-		WritePolicy WritePolicyConf `json:"write_policy"`
+		Backend     BackendConf     `json:"backend" allow:"cluster"`
+		Ext         any             `json:"ext,omitempty"` // within meta-version extensions
+		WritePolicy WritePolicyConf `json:"write_policy"`  // metadata write policy: (immediate | delayed | never)
+		LastUpdated string          `json:"lastupdate_time"`
+		UUID        string          `json:"uuid"`
+		Dsort       DsortConf       `json:"distributed_sort"`
+		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
+		Auth        AuthConf        `json:"auth"`
+		Cksum       CksumConf       `json:"checksum"`
+		TCB         TCBConf         `json:"tcb"` // transform (offline) or copy src bucket => dst bucket
+		Tracing     TracingConf     `json:"tracing"`
+		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
+		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
+		Log         LogConf         `json:"log"`
+		EC          ECConf          `json:"ec" allow:"cluster"`
+		Net         NetConf         `json:"net"`
+		Timeout     TimeoutConf     `json:"timeout"`
+		Transport   TransportConf   `json:"transport"`
+		Memsys      MemsysConf      `json:"memsys"`
+		FSHC        FSHCConf        `json:"fshc"`
+		Disk        DiskConf        `json:"disk"`
+		Space       SpaceConf       `json:"space"`
+		LRU         LRUConf         `json:"lru"`
+		Client      ClientConf      `json:"client"`
+		Periodic    PeriodConf      `json:"periodic"`
+		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
+		Downloader  DownloaderConf  `json:"downloader"`
 
 		// standalone enumerated features that can be configured
 		// to flip assorted global defaults (see cmn/feat/feat.go)
 		Features feat.Flags `json:"features,string" allow:"cluster"`
 
-		// read-only
-		LastUpdated string `json:"lastupdate_time"`       // timestamp
-		UUID        string `json:"uuid"`                  // UUID
-		Version     int64  `json:"config_version,string"` // version
+		Version    int64        `json:"config_version,string"`
+		Versioning VersionConf  `json:"versioning" allow:"cluster"`
+		Resilver   ResilverConf `json:"resilver"`
 	}
 	ConfigToSet struct {
 		// ClusterConfig
@@ -599,9 +594,9 @@ type (
 		EKMMalformedLine    string       `json:"ekm_malformed_line"`
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
-		CallTimeout         cos.Duration `json:"call_timeout"`
 		DsorterMemThreshold string       `json:"dsorter_mem_threshold"`
-		Compression         string       `json:"compression"`       // {CompressAlways,...} in api/apc/compression.go
+		Compression         string       `json:"compression"` // {CompressAlways,...} in api/apc/compression.go
+		CallTimeout         cos.Duration `json:"call_timeout"`
 		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num to destination
 	}
 	DsortConfToSet struct {

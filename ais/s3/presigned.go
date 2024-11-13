@@ -36,10 +36,10 @@ type (
 		query url.Values
 	}
 	PresignedResp struct {
-		Body       []byte
 		BodyR      io.ReadCloser // Set when invoked `Do` with `async` option.
-		Size       int64
 		Header     http.Header
+		Body       []byte
+		Size       int64
 		StatusCode int
 	}
 )

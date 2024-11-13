@@ -51,9 +51,9 @@ type ArchiveMsg struct {
 // multi-object copy & transform
 // [NOTE] see cmn/api for cmn.TCOMsg (that also contains ToBck); see also TCBMsg
 type TCOMsg struct {
-	ListRange
-	TxnUUID    string // (plstcx client, internal use)
-	NumWorkers int    `json:"num-workers"` // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
+	TxnUUID string // (plstcx client, internal use)
 	TCBMsg
+	ListRange
+	NumWorkers      int  `json:"num-workers"` // user-defined num concurrent workers; 0 - number of mountpaths (default); (-1) none
 	ContinueOnError bool `json:"coer"`
 }

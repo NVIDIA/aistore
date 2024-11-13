@@ -29,10 +29,10 @@ type (
 		Num  int32  // part number (*)
 	}
 	mpt struct {
+		ctime   time.Time // InitUpload time
 		bckName string
 		objName string
 		parts   []*MptPart // by part number
-		ctime   time.Time  // InitUpload time
 	}
 	uploads map[string]*mpt // by upload ID
 )

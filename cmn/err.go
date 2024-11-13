@@ -87,8 +87,9 @@ type (
 		status int    // http status, if available
 	}
 	ErrUnsupp struct {
-		action, what string
-		err          error
+		err    error
+		action string
+		what   string
 	}
 	ErrNotImpl struct {
 		action, what string
@@ -136,9 +137,9 @@ type (
 		cause string
 	}
 	ErrMpathNoDisks struct {
+		err   error
 		mpath string
 		fs    string
-		err   error
 	}
 	ErrMpathLostDisk struct {
 		mpath   string
@@ -202,8 +203,8 @@ type (
 		err error
 	}
 	ErrLmetaNotFound struct {
-		name string
 		err  error
+		name string
 	}
 
 	ErrLimitedCoexistence struct {
@@ -233,8 +234,8 @@ type (
 		prefix string
 	}
 	ErrNotRemoteBck struct {
-		act string
 		bck *Bck
+		act string
 	}
 	ErrRangeNotSatisfiable struct {
 		err    error    // original (backend reported) error
@@ -835,7 +836,7 @@ func IsErrLmetaCorrupted(err error) bool {
 }
 
 func NewErrLmetaNotFound(name string, err error) *ErrLmetaNotFound {
-	return &ErrLmetaNotFound{name, err}
+	return &ErrLmetaNotFound{name: name, err: err}
 }
 
 func (e *ErrLmetaNotFound) Error() string       { return e.name + ", err: " + e.err.Error() }
@@ -924,7 +925,7 @@ func (e *ErrInvalidPrefix) Error() string {
 
 func ValidateRemoteBck(act string, bck *Bck) (err *ErrNotRemoteBck) {
 	if !bck.IsRemote() {
-		err = &ErrNotRemoteBck{act, bck}
+		err = &ErrNotRemoteBck{act: act, bck: bck}
 	}
 	return err
 }

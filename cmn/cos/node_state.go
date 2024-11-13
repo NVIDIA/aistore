@@ -161,8 +161,8 @@ type (
 				CtrlURL string `json:"control_url"`
 				ID      string `json:"id"`
 			}
-			Version int64  `json:"version,string"`
 			UUID    string `json:"uuid"`
+			Version int64  `json:"version,string"`
 		} `json:"smap"`
 		BMD struct {
 			UUID    string `json:"uuid"`

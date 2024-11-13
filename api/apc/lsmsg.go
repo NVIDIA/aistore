@@ -141,6 +141,7 @@ var (
 )
 
 type LsoMsg struct {
+	Header            http.Header `json:"hdr,omitempty"`         // (for pointers, see `ListArgs` in api/ls.go)
 	UUID              string      `json:"uuid"`                  // ID to identify a single multi-page request
 	Props             string      `json:"props"`                 // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
 	TimeFormat        string      `json:"time_format,omitempty"` // RFC822 is the default
@@ -150,7 +151,6 @@ type LsoMsg struct {
 	SID               string      `json:"target"`                // selected target to solely execute backend.list-objects
 	Flags             uint64      `json:"flags,string"`          // enum {LsObjCached, ...} - "LsoMsg flags" above
 	PageSize          int64       `json:"pagesize"`              // max entries returned by list objects call
-	Header            http.Header `json:"hdr,omitempty"`         // (for pointers, see `ListArgs` in api/ls.go)
 }
 
 ////////////

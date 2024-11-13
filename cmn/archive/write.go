@@ -46,26 +46,26 @@ type (
 	baseW struct {
 		wmul io.Writer
 		lck  sync.Locker // serialize: (multi-object => single shard)
-		buf  []byte
 		cb   HeaderCallback
 		slab *memsys.Slab
+		buf  []byte
 	}
 	tarWriter struct {
+		tw *tar.Writer
 		baseW
 		format tar.Format
-		tw     *tar.Writer
 	}
 	tgzWriter struct {
-		tw  tarWriter
 		gzw *gzip.Writer
+		tw  tarWriter
 	}
 	zipWriter struct {
-		baseW
 		zw *zip.Writer
+		baseW
 	}
 	lz4Writer struct {
-		tw  tarWriter
 		lzw *lz4.Writer
+		tw  tarWriter
 	}
 )
 

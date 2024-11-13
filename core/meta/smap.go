@@ -68,17 +68,17 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		LocalNet   *net.IPNet   `json:"-"`
-		PubNet     NetInfo      `json:"public_net"` // cmn.NetPublic
+		nmr        NetNamer
+		LocalNet   *net.IPNet `json:"-"`
+		PubNet     NetInfo    `json:"public_net"`        // cmn.NetPublic
+		DataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetIntraData
+		ControlNet NetInfo    `json:"intra_control_net"` // cmn.NetIntraControl
+		DaeType    string     `json:"daemon_type"`       // apc.Proxy | apc.Target
+		DaeID      string     `json:"daemon_id"`
+		name       string
 		PubExtra   []NetInfo    `json:"pub_extra,omitempty"`
-		DataNet    NetInfo      `json:"intra_data_net"`    // cmn.NetIntraData
-		ControlNet NetInfo      `json:"intra_control_net"` // cmn.NetIntraControl
-		DaeType    string       `json:"daemon_type"`       // "target" or "proxy"
-		DaeID      string       `json:"daemon_id"`
-		name       string       // cached
 		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
-		idDigest   uint64       // cached
-		nmr        NetNamer     // (multihoming)
+		idDigest   uint64
 	}
 
 	Nodes   []*Snode          // slice of Snodes

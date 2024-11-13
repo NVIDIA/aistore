@@ -30,20 +30,20 @@ type (
 		Name                  string          `xml:"Name"`
 		Ns                    string          `xml:"xmlns,attr"`
 		Prefix                string          `xml:"Prefix"`
-		KeyCount              int             `xml:"KeyCount"`                 // number of object names in the response
-		MaxKeys               int             `xml:"MaxKeys"`                  // "The maximum number of keys returned ..." (s3)
-		IsTruncated           bool            `xml:"IsTruncated"`              // true if there are more pages to read
-		ContinuationToken     string          `xml:"ContinuationToken"`        // original ContinuationToken
-		NextContinuationToken string          `xml:"NextContinuationToken"`    // NextContinuationToken to read the next page
-		Contents              []*ObjInfo      `xml:"Contents"`                 // list of objects
+		ContinuationToken     string          `xml:"ContinuationToken"`        // original
+		NextContinuationToken string          `xml:"NextContinuationToken"`    // to read the next page
+		Contents              []*ObjInfo      `xml:"Contents"`                 // list of object
 		CommonPrefixes        []*CommonPrefix `xml:"CommonPrefixes,omitempty"` // list of dirs (used with `apc.LsNoRecursion`)
+		KeyCount              int             `xml:"KeyCount"`                 // number of object names in the response
+		MaxKeys               int             `xml:"MaxKeys"`                  // "The maximum number of keys returned ..."
+		IsTruncated           bool            `xml:"IsTruncated"`              // true if there are more pages to read
 	}
 	ObjInfo struct {
 		Key          string `xml:"Key"`
 		LastModified string `xml:"LastModified"`
 		ETag         string `xml:"ETag"`
-		Size         int64  `xml:"Size"`
 		Class        string `xml:"StorageClass"`
+		Size         int64  `xml:"Size"`
 	}
 	CommonPrefix struct {
 		Prefix string `xml:"Prefix"`
@@ -84,9 +84,9 @@ type (
 
 	// Active upload info
 	UploadInfoResult struct {
+		Initiated time.Time `xml:"Initiated"`
 		Key       string    `xml:"Key"`
 		UploadID  string    `xml:"UploadId"`
-		Initiated time.Time `xml:"Initiated"`
 	}
 
 	// List of active multipart uploads response

@@ -65,10 +65,9 @@ type ErrMatchMode struct{ mmode string }
 // private
 type (
 	matcher struct {
+		re    *regexp.Regexp // when (and if) compiled
 		regex string
 		mmode string
-		// when (and if) compiled
-		re *regexp.Regexp
 	}
 )
 
@@ -86,8 +85,8 @@ type (
 	}
 	zipReader struct {
 		baseR
-		size int64
 		zr   *zip.Reader
+		size int64
 	}
 	lz4Reader struct {
 		tr  tarReader
