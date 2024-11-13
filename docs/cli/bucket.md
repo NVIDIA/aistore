@@ -626,20 +626,28 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 `ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET`
 
 ```console
-$ ais cp --help
 NAME:
-   ais cp - (alias for "bucket cp") copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'), e.g.:
-     - 'ais cp gs://webdaset-coco ais://dst'                                    - copy entire Cloud bucket;
-     - 'ais cp s3://abc ais://nnn --all'                                        - copy entire Cloud bucket that may not be _present_ in the cluster;
-     - 'ais cp s3://abc ais://nnn --all --num-workers 16'                       - same as above employing 16 concurrent workers;
-     - 'ais cp s3://abc ais://nnn --all --num-workers 16 --prefix dir/subdir/'  - same as above, but limit copying to a given virtual subdirectory;
-     - 'ais cp s3://abc gs://xyz --all'                                         - copy Cloud bucket to another Cloud;
-     - 'ais cp s3://abc ais://nnn --latest'                                     - copy Cloud bucket, and make sure that already present in-cluster copies are updated to the latest (remote) versions;
-     - 'ais cp s3://abc ais://nnn --sync'                                       - same as above, but in addition delete in-cluster copies that do not exist (any longer) in the remote source
-   with template, prefix, and/or progress bar:
-     - 'ais cp ais://nnn/111 ais://mmm'                                                           - copy a single object (assuming, prefix '111' corresponds to a single object);
+   ais cp - (alias for "bucket cp") copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),
+     e.g.:
+     - 'ais cp gs://webdaset-coco ais://dst'                                   - copy entire Cloud bucket;
+     - 'ais cp s3://abc ais://nnn --all'                                       - copy Cloud bucket that may _not_ be present in cluster (and create destination if doesn't exist);
+     - 'ais cp s3://abc ais://nnn --all --num-workers 16'                      - same as above employing 16 concurrent workers;
+     - 'ais cp s3://abc ais://nnn --all --num-workers 16 --prefix dir/subdir/' - same as above, but limit copying to a given virtual subdirectory;
+     - 'ais cp s3://abc gs://xyz --all'                                        - copy Cloud bucket to another Cloud.
+
+     similar to prefetch:
+     - 'ais cp s3://data s3://data --all'  - copy remote source (and create namesake destination in-cluster bucket if doesn't exist).
+
+     synchronize with out-of-band updates:
+     - 'ais cp s3://abc ais://nnn --latest'  - copy Cloud bucket; make sure that already present in-cluster copies are updated to the latest versions;
+     - 'ais cp s3://abc ais://nnn --sync'    - same as above, but in addition delete in-cluster copies that do not exist (any longer) in the remote source.
+
+     with template, prefix, and progress:
+     - 'ais cp s3://abc ais://nnn --prepend backup/'                                              - copy objects into 'backup/' virtual subdirectory in destination bucket;
+     - 'ais cp ais://nnn/111 ais://mmm'                                                           - copy all ais://nnn objects that match prefix '111';
      - 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'  - copy up to 1000 objects that share the specified prefix;
-     - 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'                 - show progress while copying virtual subdirectory 'd-tokens'
+     - 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'                 - show progress while copying virtual subdirectory 'd-tokens';
+     - 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'                          - same as above.
 
 USAGE:
    ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET
