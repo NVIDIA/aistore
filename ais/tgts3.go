@@ -166,7 +166,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 
 	var cksumValue string
-	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
+	if cksum := lom.Checksum(); cksum != nil && cksum.Type() == cos.ChecksumMD5 {
 		cksumValue = cksum.Value()
 	}
 	result := s3.CopyObjectResult{
@@ -326,21 +326,38 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 	custom := op.GetCustomMD()
 	lom.SetCustomMD(custom)
+
+	// see aws.go `_getCustom`
 	if v, ok := custom[cos.HdrETag]; ok {
 		hdr.Set(cos.HdrETag, v)
 	}
 	s3.SetEtag(hdr, lom)
+
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))
 	if v, ok := custom[cos.HdrContentType]; ok {
 		hdr.Set(cos.HdrContentType, v)
 	}
-	// e.g. https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_Examples
-	// (compare w/ `p.listObjectsS3()`
+
+	// [NOTE] time formatting; choosing atime vs mtime
+	// - https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_Examples
+	// - list-objects RFC3339 vs head-object RFC1123
+	// - compare w/ `listObjectsS3`
+	// - see related: `entryToS3` in s3/types
 	lastModified := cos.FormatNanoTime(op.Atime, cos.RFC1123GMT)
 	hdr.Set(cos.S3LastModified, lastModified)
 
-	// TODO: lom.Checksum() via apc.HeaderPrefix+apc.HdrObjCksumType/Val via
-	// s3 obj Metadata map[string]*string
+	// - https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	// - https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
+	if cksum := lom.Checksum(); cksum != nil && cksum.Ty() != cos.ChecksumNone {
+		hdr.Set(cos.S3MetadataChecksumType, cksum.Ty())
+		hdr.Set(cos.S3MetadataChecksumVal, cksum.Val())
+	}
+	// see aws.go `_getCustom`
+	if v, ok := custom[cmn.VersionObjMD]; ok {
+		hdr.Set(cos.S3VersionHeader, v)
+	}
+
+	// TODO: add custom user keys, if any
 }
 
 // DELETE /s3/<bucket-name>/<object-name>

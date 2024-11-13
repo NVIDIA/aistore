@@ -12,6 +12,8 @@ s3://$BUCKET$OBJECT (object):
    Policy:    none
    CORS:      none
    ACL:       none
+   x-amz-meta-ais-cksum-type: md5
+   x-amz-meta-ais-cksum-val: 3749f52bb326ae96782b42dc0a97b4c1
 0123456789
 Loremipsumdolorsitamet,consecteturadipiscingelit.
 Bucket 's3://$BUCKET/' removed
