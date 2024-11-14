@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -41,7 +42,9 @@ const (
 	dfltNumWorkers = 4
 
 	maxInitialSizeSGL = 128           // vec length
-	maxTotalChunks    = 128 * cos.MiB // max mem per blob downloader
+	maxTotalChunksMem = 128 * cos.MiB // max mem per blob downloader
+
+	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
 )
 
 type (
@@ -186,7 +189,7 @@ func (p *blobFactory) Start() error {
 	case memsys.PressureHigh:
 		slabSize = memsys.DefaultBufSize
 		r.numWorkers = 1
-		nlog.Warningln(r.Name() + ": high memory pressure detected...")
+		nlog.Warningln(r.Name(), "high memory pressure detected...")
 	case memsys.PressureModerate:
 		slabSize >>= 1
 		r.numWorkers = min(3, r.numWorkers)
@@ -199,12 +202,16 @@ func (p *blobFactory) Start() error {
 		cnt = maxInitialSizeSGL
 	}
 
-	// add a reader, if possible
 	nr := int64(r.numWorkers)
-	if pressure == memsys.PressureLow && r.numWorkers < cmn.MaxParallelism() &&
-		nr < (r.fullSize+r.chunkSize-1)/r.chunkSize &&
-		nr*r.chunkSize < maxTotalChunks-r.chunkSize {
-		r.numWorkers++
+	nc := (r.fullSize + r.chunkSize - 1) / r.chunkSize
+	if pressure == memsys.PressureLow && r.numWorkers < cmn.MaxParallelism() {
+		if nr < nc && nr*r.chunkSize < maxTotalChunksMem {
+			r.numWorkers++ // add a reader
+		}
+		if r.numWorkers == 1 && r.chunkSize > minChunkSize<<1 {
+			r.numWorkers = 2
+			r.chunkSize >>= 1
+		}
 	}
 
 	// open channels
@@ -275,6 +282,22 @@ func (p *blobFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 //
 
 func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.args.Lom.ObjName }
+func (r *XactBlobDl) Size() int64  { return r.fullSize }
+
+func (r *XactBlobDl) String() string {
+	var sb strings.Builder
+	sb.Grow(len(r.args.Lom.ObjName) + 3*16)
+	sb.WriteString("-[")
+	sb.WriteString(r.args.Lom.ObjName)
+	sb.WriteByte('-')
+	sb.WriteString(strconv.FormatInt(r.fullSize, 10))
+	sb.WriteByte('-')
+	sb.WriteString(strconv.FormatInt(r.chunkSize, 10))
+	sb.WriteByte('-')
+	sb.WriteString(strconv.Itoa(r.numWorkers))
+	sb.WriteByte(']')
+	return r.Base.String() + sb.String()
+}
 
 func (r *XactBlobDl) Run(*sync.WaitGroup) {
 	var (
@@ -282,7 +305,7 @@ func (r *XactBlobDl) Run(*sync.WaitGroup) {
 		pending []chunkDone
 		eof     bool
 	)
-	nlog.Infoln(r.Name()+": chunk-size", cos.ToSizeIEC(r.chunkSize, 0)+", num-concurrent-readers", r.numWorkers)
+	nlog.Infoln(r.String())
 	r.start()
 outer:
 	for {
