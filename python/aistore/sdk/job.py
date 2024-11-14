@@ -4,7 +4,7 @@
 
 import itertools
 from datetime import datetime, timezone
-from typing import List, Dict
+from typing import List, Dict, Optional
 import time
 
 from aistore.sdk.bucket import Bucket
@@ -246,30 +246,34 @@ class Job:
         return dt.replace(tzinfo=timezone.utc)
 
     def get_within_timeframe(
-        self, start_time: datetime, end_time: datetime
+        self, start_time: datetime, end_time: Optional[datetime] = None
     ) -> List[JobSnapshot]:
         """
-        Checks for jobs that started and finished within a specified timeframe.
+        Retrieves jobs that started after a specified start_time and optionally ended before a specified end_time.
 
         Args:
-            start_time (datetime.datetime): The start of the timeframe for monitoring jobs.
-            end_time (datetime.datetime): The end of the timeframe for monitoring jobs.
+            start_time (datetime): The start of the timeframe for monitoring jobs.
+            end_time (datetime, optional): The end of the timeframe for monitoring jobs.
 
         Returns:
-            List[JobSnapshot]: A list of jobs that have finished within the specified timeframe.
+            List[JobSnapshot]: A list of jobs that meet the specified timeframe criteria.
 
         Raises:
-            JobInfoNotFound: Raised when information on a job's status could not be found.
+            JobInfoNotFound: Raised when no relevant job info is found.
         """
         snapshots = self._query_job_snapshots()
         jobs_found = []
         for snapshot in snapshots:
             if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
                 snapshot_start_time = self._parse_iso_datetime(snapshot.start_time)
-                snapshot_end_time = self._parse_iso_datetime(snapshot.end_time)
-                if snapshot_start_time >= start_time and snapshot_end_time <= end_time:
-                    jobs_found.append(snapshot)
-        if len(jobs_found) == 0:
+                if snapshot_start_time >= start_time:
+                    if end_time is None:
+                        jobs_found.append(snapshot)
+                    else:
+                        snapshot_end_time = self._parse_iso_datetime(snapshot.end_time)
+                        if snapshot_end_time <= end_time:
+                            jobs_found.append(snapshot)
+        if not jobs_found:
             raise JobInfoNotFound("No relevant job info found")
         return jobs_found
 

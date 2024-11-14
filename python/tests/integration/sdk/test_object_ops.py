@@ -214,9 +214,8 @@ class TestObjectOps(RemoteEnabledTest):
                 .read_all()
             )
             self.assertEqual(content, resp)
-            end_time = datetime.now(timezone.utc) + timedelta(seconds=1)
             jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
-                start_time=start_time, end_time=end_time
+                start_time=start_time
             )
             self.assertTrue(len(jobs_list) > 0)
 

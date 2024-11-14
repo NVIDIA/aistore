@@ -100,15 +100,13 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def test_prefetch_blob_download(self):
         obj_group = self.bucket.objects(obj_names=self.obj_names)
         self._evict_objects(obj_group)
-        #
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         # Use a threshold that's just low enough for our object size to require blob
         job_id = obj_group.prefetch(blob_threshold=self.file_size)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now(timezone.utc) + timedelta(seconds=1)
 
         jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
-            start_time=start_time, end_time=end_time
+            start_time=start_time
         )
         filtered_jobs = [
             job for job in jobs_list if job.bucket.name == self.bucket.name
@@ -129,11 +127,10 @@ class TestObjectGroupOps(RemoteEnabledTest):
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         job_id = obj_group.prefetch(blob_threshold=self.file_size + 1)
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now(timezone.utc) + timedelta(seconds=1)
 
         with self.assertRaises(JobInfoNotFound):
             self.client.job(job_kind="blob-download").get_within_timeframe(
-                start_time=start_time, end_time=end_time
+                start_time=start_time
             )
         self._check_all_objects_cached(
             len(obj_group.list_names()), expected_cached=True
