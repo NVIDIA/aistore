@@ -27,11 +27,10 @@ import (
 )
 
 // TODO:
-// - user-assigned (configurable) num-workers
-// - jogger(s) per mountpath type concurrency
 // - blob downloading (when msg.BlobThreshold > 0):
 //   - configurable num concurrent x-blob
 //   - configurable chunk-size and num-workers
+//   - max-threshold that forces blob-downloading for, say, 5G objects and larger
 
 type (
 	prfFactory struct {
@@ -161,6 +160,21 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && r.pebl.num() < maxPebls {
 		err = r.blobdl(lom, oa)
 	} else {
+		if r.msg.BlobThreshold == 0 && size > cos.GiB {
+			var sb strings.Builder
+			sb.Grow(256)
+			sb.WriteString(r.Name())
+			sb.WriteString(": prefetching large size ")
+			sb.WriteString(cos.ToSizeIEC(size, 1))
+			sb.WriteString(" with blob-downloading disabled [")
+			sb.WriteString(lom.Cname())
+			sb.WriteByte(']')
+			if size >= 5*cos.GiB {
+				nlog.Errorln(sb.String())
+			} else {
+				nlog.Warningln(sb.String())
+			}
+		}
 		// OwtGetPrefetchLock: minimal locking, optimistic concurrency
 		ecode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 		if err == nil { // done
