@@ -227,6 +227,12 @@ func parseObjListTemplate(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (ob
 				what, objNameOrTmpl, qflprn(listFlag), qflprn(templateFlag))
 		} else if isPattern(objNameOrTmpl) {
 			tmplObjs = objNameOrTmpl
+		} else if cfg.Cluster.SimpleMode {
+			if objnameIsPrefixSimple(objNameOrTmpl) {
+				tmplObjs, objName = objNameOrTmpl, ""
+			} else {
+				objName = objNameOrTmpl
+			}
 		} else {
 			// [NOTE]
 			// make an additional list-objects call to differentiate

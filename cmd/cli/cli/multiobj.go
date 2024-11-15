@@ -227,8 +227,10 @@ func _rmOne(c *cli.Context, shift int) error {
 	if err != nil {
 		return err
 	}
-	if _, err := headBucket(bck, false /* don't add */); err != nil {
-		return err
+	if !cfg.Cluster.SimpleMode {
+		if _, err := headBucket(bck, false /* don't add */); err != nil {
+			return err
+		}
 	}
 	// NOTE: passing empty bck _not_ to interpret embedded objName as prefix
 	// TODO: instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
