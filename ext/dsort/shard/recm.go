@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
@@ -219,7 +220,7 @@ func (recm *RecordManager) MergeEnqueuedRecords() {
 
 		recm.Records.merge(records)
 	}
-	cos.FreeMemToOS(false /*force*/)
+	oom.FreeToOS(false /*force*/)
 }
 
 func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName string) (contentPath, fullContentPath string) {
@@ -359,7 +360,7 @@ func (recm *RecordManager) Cleanup() {
 	})
 	recm.contents = nil
 
-	// NOTE: may call cos.FreeMemToOS
+	// NOTE: may call oom.FreeToOS
 	core.T.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,

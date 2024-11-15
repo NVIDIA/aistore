@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -49,7 +50,7 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 	//
 	// NOTE: calling an expensive serialized goroutine
 	//
-	if started := cos.FreeMemToOS(force); !started {
+	if started := oom.FreeToOS(force); !started {
 		return
 	}
 	nlog.Warningln(r.String(), "free mem to OS [", r.pressure2S(p), force, cos.ToSizeIEC(togc, 1), load, "]")
