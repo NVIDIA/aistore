@@ -198,15 +198,16 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 
 // (compare w/ cmn/objattrs FromHeader)
 func (resp *PresignedResp) ObjAttrs() (oa *cmn.ObjAttrs) {
+	h := cmn.BackendHelpers.Amazon
+
 	oa = &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 3)
-
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AWS)
-	etag := cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
-	debug.Assert(etag != "")
-	oa.SetCustomKey(cmn.ETag, etag)
-	if !cmn.IsS3MultipartEtag(etag) {
-		oa.SetCustomKey(cmn.MD5ObjMD, etag)
+	if v, ok := h.EncodeETag(resp.Header.Get(cos.HdrETag)); ok {
+		oa.SetCustomKey(cmn.ETag, v)
+	}
+	if v, ok := h.EncodeCksum(resp.Header.Get(cos.S3CksumHeader)); ok {
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if sz := resp.Header.Get(cos.HdrContentLength); sz != "" {
 		size, err := strconv.ParseInt(sz, 10, 64)

@@ -23,31 +23,70 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 type customTransport struct {
-	rt http.RoundTripper
+	pathStyle bool
+	rt        http.RoundTripper
 }
 
 func (t *customTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	bucket := strings.Split(req.URL.Host, ".")[0]
-	u, _ := url.Parse(proxyURL)
-	req.URL.Host = u.Host
-	req.URL.Path = "/s3/" + bucket + req.URL.Path
+	if !strings.HasPrefix(req.URL.Path, "/s3") {
+		if t.pathStyle {
+			req.URL.Path = "/s3" + req.URL.Path
+		} else {
+			bucket := strings.Split(req.URL.Host, ".")[0]
+			u, _ := url.Parse(proxyURL)
+			req.URL.Host = u.Host
+			req.URL.Path = "/s3/" + bucket + req.URL.Path
+		}
+	}
 	return t.rt.RoundTrip(req)
 }
 
-func newCustomTransport() *customTransport {
+type addGetBodyMiddleware struct{}
+
+func (*addGetBodyMiddleware) ID() string {
+	return "AddGetBodyMiddleware"
+}
+
+func (*addGetBodyMiddleware) HandleFinalize(ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
+	req, ok := in.Request.(*smithyhttp.Request)
+	if !ok {
+		return next.HandleFinalize(ctx, in)
+	}
+
+	// NOTE: This fixes a problem with `write: connection reset by peer`.
+	delete(req.Header, "Expect")
+
+	if req.IsStreamSeekable() {
+		req.GetBody = func() (io.ReadCloser, error) {
+			if err := req.RewindStream(); err != nil {
+				return nil, err
+			}
+			return io.NopCloser(req.GetStream()), nil
+		}
+	}
+	return next.HandleFinalize(ctx, in)
+}
+
+func newCustomTransport(pathStyle bool) *customTransport {
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 
 	return &customTransport{
+		pathStyle: pathStyle,
 		rt: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           dialer.DialContext,
@@ -62,9 +101,9 @@ func newCustomTransport() *customTransport {
 	}
 }
 
-func newS3Client() *http.Client {
+func newS3Client(pathStyle bool) *http.Client {
 	return &http.Client{
-		Transport: newCustomTransport(),
+		Transport: newCustomTransport(pathStyle),
 	}
 }
 
@@ -110,7 +149,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 	cfg.HTTPClient = newS3Client()
 	s3Client := s3.NewFromConfig(cfg)
 	*/
-	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
+	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
 	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
@@ -152,7 +191,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 	})
 
-	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
+	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
 	createMultipartUploadOutput, err := s3Client.CreateMultipartUpload(context.Background(), &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(bck.Name),
@@ -228,7 +267,7 @@ func TestDisableColdGet(t *testing.T) {
 		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 	})
 
-	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(), Region: env.AwsDefaultRegion()})
+	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
 	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
@@ -247,4 +286,90 @@ func TestDisableColdGet(t *testing.T) {
 		Key:    aws.String(objName),
 	})
 	tassert.Fatalf(t, err != nil, "Expected GET to fail %v", err)
+}
+
+// export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ETag" -count=1 ./ais/test/.
+func TestS3ETag(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, Bck: cliBck, RequiredCloudProvider: apc.AWS})
+
+	var (
+		bck     = cliBck
+		objName = "object.txt"
+		objSize = 50 * cos.KiB
+	)
+
+	_, err := api.HeadBucket(baseParams, bck, false)
+	tassert.CheckFatal(t, err)
+
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithSharedConfigProfile(cos.GetEnvOrDefault("AWS_PROFILE", "default")),
+	)
+	tassert.CheckFatal(t, err)
+	s3Client := s3.NewFromConfig(cfg)
+
+	t.Run("PutObject", func(t *testing.T) {
+		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		tassert.CheckFatal(t, err)
+		oah, err := api.PutObject(&api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			ObjName:    objName,
+			Reader:     reader,
+		})
+		tassert.CheckFatal(t, err)
+
+		output, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+			Bucket: aws.String(bck.Name),
+			Key:    aws.String(objName),
+		})
+		tassert.CheckFatal(t, err)
+
+		attrs := oah.Attrs()
+		etag, _ := attrs.GetCustomKey(cmn.ETag)
+		md5Hash, _ := attrs.GetCustomKey(cmn.MD5ObjMD)
+		tassert.Errorf(t, etag == *output.ETag, "ETag for PUT does not match (local: %v != remote: %v)", etag, *output.ETag)
+		tassert.Errorf(t, etag == `"`+md5Hash+`"`, "ETag must be equivalent to MD5 hash (etag: %v != md5: %v)", etag, md5Hash)
+	})
+
+	t.Run("PutObjectMultipart", func(t *testing.T) {
+		const (
+			objSize  = 20 * cos.MiB
+			partSize = 5 * cos.MiB
+		)
+
+		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		tassert.CheckFatal(t, err)
+		cfg.HTTPClient = newS3Client(true /*pathStyle*/)
+		aisClient := s3.NewFromConfig(cfg)
+		uploader := s3manager.NewUploader(aisClient, func(uploader *s3manager.Uploader) {
+			uploader.PartSize = partSize
+			uploader.ClientOptions = []func(*s3.Options){
+				func(opts *s3.Options) {
+					opts.BaseEndpoint = aws.String(proxyURL)
+				},
+			}
+		}, func(uploader *s3manager.Uploader) {
+			uploader.ClientOptions = append(uploader.ClientOptions, func(options *s3.Options) {
+				options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
+					return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+				})
+			})
+		})
+		multipartOutput, err := uploader.Upload(context.Background(), &s3.PutObjectInput{
+			Bucket:        aws.String(bck.Name),
+			Key:           aws.String(objName),
+			Body:          reader,
+			ContentLength: aws.Int64(objSize),
+		})
+		tassert.CheckFatal(t, err)
+
+		headOutput, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+			Bucket: aws.String(bck.Name),
+			Key:    aws.String(objName),
+		})
+		tassert.CheckFatal(t, err)
+
+		tassert.Errorf(t, *multipartOutput.ETag == *headOutput.ETag, "ETag for PUT does not match (local: %v != remote: %v)", *multipartOutput.ETag, *headOutput.ETag)
+	})
 }

@@ -187,15 +187,19 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 }
 
 func SetEtag(hdr http.Header, lom *core.LOM) {
-	if hdr.Get(cos.S3CksumHeader) != "" {
+	if etag := hdr.Get(cos.HdrETag); etag != "" {
+		debug.AssertFunc(func() bool {
+			// Ensure that `etag` is a quoted string.
+			return etag[0] == '"' && etag[len(etag)-1] == '"'
+		})
 		return
 	}
-	if v, exists := lom.GetCustomKey(cmn.ETag); exists && !cmn.IsS3MultipartEtag(v) {
-		hdr.Set(cos.S3CksumHeader /*"ETag"*/, v)
+	if v, exists := lom.GetCustomKey(cmn.ETag); exists {
+		hdr.Set(cos.HdrETag, v)
 		return
 	}
 	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
-		hdr.Set(cos.S3CksumHeader, cksum.Value())
+		hdr.Set(cos.HdrETag, `"`+cksum.Value()+`"`)
 	}
 }
 

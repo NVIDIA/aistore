@@ -476,17 +476,11 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 		oa.SetVersion(v)
 	}
-	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
+	if v, ok := h.EncodeETag(headOutput.ETag); ok {
 		oa.SetCustomKey(cmn.ETag, v)
-		// assuming SSE-S3 or plaintext encryption
-		// from https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html:
-		// - "The entity tag is a hash of the object. The ETag reflects changes only
-		//    to the contents of an object, not its metadata."
-		// - "The ETag may or may not be an MD5 digest of the object data. Whether or
-		//    not it is depends on how the object was created and how it is encrypted..."
-		if !cmn.IsS3MultipartEtag(v) {
-			oa.SetCustomKey(cmn.MD5ObjMD, v)
-		}
+	}
+	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 
 	// AIS custom (see also: PutObject, GetObjReader)
@@ -614,13 +608,12 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 		lom.SetVersion(v)
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 	}
-	// see ETag/MD5 NOTE above
-	if v, ok := h.EncodeCksum(obj.ETag); ok {
+	if v, ok := h.EncodeETag(obj.ETag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
-		if !cmn.IsS3MultipartEtag(v) {
-			md5 = cos.NewCksum(cos.ChecksumMD5, v)
-			lom.SetCustomKey(cmn.MD5ObjMD, v)
-		}
+	}
+	if v, ok := h.EncodeCksum(obj.ETag); ok {
+		md5 = cos.NewCksum(cos.ChecksumMD5, v)
+		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	mtime := *(obj.LastModified)
 	lom.SetCustomKey(cmn.LastModified, fmtTime(mtime))
@@ -685,12 +678,11 @@ exit:
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 		lom.SetVersion(v)
 	}
-	if v, ok := h.EncodeCksum(uploadOutput.ETag); ok {
+	if v, ok := h.EncodeETag(uploadOutput.ETag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
-		// see ETag/MD5 NOTE above
-		if !cmn.IsS3MultipartEtag(v) {
-			lom.SetCustomKey(cmn.MD5ObjMD, v)
-		}
+	}
+	if v, ok := h.EncodeCksum(uploadOutput.ETag); ok {
+		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln(tag, lom.String())

@@ -71,6 +71,8 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 
 func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (etag string,
 	ecode int, _ error) {
+	h := cmn.BackendHelpers.Amazon
+
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, r, oq)
 		resp, err := pts.Do(core.T.DataClient())
@@ -79,7 +81,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 		}
 		if resp != nil {
 			ecode = resp.StatusCode
-			etag = cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
+			etag, _ = h.EncodeETag(resp.Header.Get(cos.HdrETag))
 			return
 		}
 	}
@@ -105,7 +107,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
-		etag = cmn.UnquoteCEV(*out.ETag)
+		etag, _ = h.EncodeETag(out.ETag)
 	}
 
 	return etag, ecode, err
@@ -113,6 +115,8 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 
 func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (etag string,
 	ecode int, _ error) {
+	h := cmn.BackendHelpers.Amazon
+
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oq)
 		resp, err := pts.Do(core.T.DataClient())
@@ -124,7 +128,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 			if err != nil {
 				return "", http.StatusBadRequest, err
 			}
-			etag = result.ETag
+			etag, _ = h.EncodeETag(result.ETag)
 			return
 		}
 	}
@@ -151,7 +155,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
-		etag = cmn.UnquoteCEV(*out.ETag)
+		etag, _ = h.EncodeETag(out.ETag)
 	}
 
 	return etag, ecode, err

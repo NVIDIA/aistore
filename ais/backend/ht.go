@@ -134,7 +134,7 @@ func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
 	}
-	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
+	if v, ok := h.EncodeETag(resp.Header.Get(cos.HdrETag)); ok {
 		oa.SetCustomKey(cmn.ETag, v)
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
@@ -200,7 +200,7 @@ func (htbp *htbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 
 	lom.SetCustomKey(cmn.SourceObjMD, apc.HT)
 	lom.SetCustomKey(cmn.OrigURLObjMD, origURL)
-	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
+	if v, ok := h.EncodeETag(resp.Header.Get(cos.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
 	res.Size = resp.ContentLength

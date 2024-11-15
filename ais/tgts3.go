@@ -327,10 +327,6 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	custom := op.GetCustomMD()
 	lom.SetCustomMD(custom)
 
-	// see aws.go `_getCustom`
-	if v, ok := custom[cos.HdrETag]; ok {
-		hdr.Set(cos.HdrETag, v)
-	}
 	s3.SetEtag(hdr, lom)
 
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))

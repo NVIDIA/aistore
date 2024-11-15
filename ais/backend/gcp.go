@@ -212,7 +212,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 				en.Version = v
 			}
 			if wantCustom {
-				etag, _ := h.EncodeCksum(attrs.Etag)
+				etag, _ := h.EncodeETag(attrs.Etag)
 				en.Custom = cmn.CustomProps2S(cmn.ETag, etag, cmn.LastModified, fmtTime(attrs.Updated),
 					cos.HdrContentType, attrs.ContentType)
 			}
@@ -291,7 +291,7 @@ func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *c
 	if v, ok := h.EncodeCksum(attrs.CRC32C); ok {
 		oa.SetCustomKey(cmn.CRC32CObjMD, v)
 	}
-	if v, ok := h.EncodeCksum(attrs.Etag); ok {
+	if v, ok := h.EncodeETag(attrs.Etag); ok {
 		oa.SetCustomKey(cmn.ETag, v)
 	}
 
@@ -385,7 +385,7 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 			expCksum = cos.NewCksum(cos.ChecksumCRC32C, v)
 		}
 	}
-	if v, ok := h.EncodeCksum(attrs.Etag); ok {
+	if v, ok := h.EncodeETag(attrs.Etag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
 	lom.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
