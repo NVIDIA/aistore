@@ -24,7 +24,8 @@ import (
 // throttle tunables
 const (
 	skipEvictThreashold = 20 // likely not running when above
-	maxEvictThreashold  = 60 // never running when above
+
+	maxEvictThreashold = fs.MaxThrottlePct // not running when above
 
 	dfltEvictTime          = 2 * time.Hour
 	maxTimeWithNoEvictions = 16 * time.Hour
@@ -79,7 +80,6 @@ func (lchk *lchk) init(config *cmn.Config) {
 }
 
 // evict bucket
-// TODO: consider dropping caches when > maxEvictThreashold; take in account time spent in
 func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
@@ -89,7 +89,7 @@ func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 		return true // dropped all caches, nothing to do
 	}
 
-	pct, util, lavg := _throttlePct()
+	pct, util, lavg := fs.ThrottlePct()
 	flog := nlog.Infoln
 	if pct > maxEvictThreashold {
 		flog = nlog.Warningln
@@ -249,7 +249,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	}
 
 	// load, utilization
-	pct, util, lavg := _throttlePct()
+	pct, util, lavg := fs.ThrottlePct()
 	nlog.Infoln("hk: [ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
 
 	if pct > maxEvictThreashold {
@@ -428,23 +428,6 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 //
 // throttle
 //
-
-// [NOTE]:
-// - artificially reducing `maxload` to maybe wait longer for truly idle ("nothing running") state
-// - OTOH, see `maxTimeWithNoEvictions`
-func _throttlePct() (int, int64, float64) {
-	var (
-		util, lavg = T.MaxUtilLoad()
-		cpus       = runtime.NumCPU()
-		maxload    = max((cpus>>1)-(cpus>>3), 1)
-	)
-	if lavg >= float64(maxload) {
-		return 100, util, lavg
-	}
-	ru := cos.RatioPct(100, 2, util)
-	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
-	return int(max(ru, rl)), util, lavg
-}
 
 func _throttle(pct int) {
 	if pct < 10 {

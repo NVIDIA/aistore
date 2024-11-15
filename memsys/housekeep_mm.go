@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/sys"
 )
 
 const (
@@ -57,7 +56,8 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 		if spec.MinSize == 0 {
 			spec.MinSize = sizeToGC // using default
 		}
-		r.freeMemToOS(spec.MinSize, spec.ToOS /* force */)
+		pressure := r.Pressure()
+		r.freeMemToOS(spec.MinSize, pressure, spec.ToOS /* force */)
 	}
 }
 
@@ -87,7 +87,7 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 		r.optDepth.Store(optDepth)
 		if freed := r.freeIdle(); freed > 0 {
 			r.toGC.Add(freed)
-			r.freeMemToOS(sizeToGC, false)
+			r.freeMemToOS(sizeToGC, pressure)
 		}
 		return r.hkIval(pressure)
 	}
@@ -125,7 +125,7 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 	}
 
 	// 6. GC and free mem to OS
-	r.freeMemToOS(mingc, pressure >= PressureHigh /*force*/)
+	r.freeMemToOS(mingc, pressure)
 	return r.hkIval(pressure)
 }
 
@@ -197,30 +197,6 @@ func (r *MMSA) freeIdle() (total int64) {
 		}
 	}
 	return
-}
-
-// check "minimum" and "load" conditions and calls (expensive, serialized) goroutine
-func (r *MMSA) freeMemToOS(mingc int64, force bool) {
-	avg, err := sys.LoadAverage()
-	if err != nil {
-		nlog.Errorln(err) // (unlikely)
-		avg.One = 999
-	}
-	togc := r.toGC.Load()
-
-	// too little to bother?
-	if togc < mingc {
-		return
-	}
-	// too loaded w/ no urgency?
-	if avg.One > loadAvg /*idle*/ && !force {
-		return
-	}
-
-	if started := cos.FreeMemToOS(force); started {
-		nlog.Infof("%s: free mem to OS: %s, load %.2f, force %t", r, cos.ToSizeIEC(togc, 1), avg.One, force)
-		r.toGC.Store(0)
-	}
 }
 
 func (r *MMSA) _snap(stats *Stats, now int64) {

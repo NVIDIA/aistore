@@ -16,11 +16,6 @@ type LoadAvg struct {
 	One, Five, Fifteen float64
 }
 
-// TODO -- FIXME:
-// - see cpu_linux.go comment on detecting containerization
-// - blog https://www.riverphillips.dev/blog/go-cfs
-// - available "maxprocs" open-source
-
 var (
 	contCPUs      int
 	containerized bool
@@ -55,4 +50,14 @@ func GoEnvMaxprocs() {
 		nlog.Warningf("Reducing GOMAXPROCS (prev = %d) to %d", maxprocs, ncpu)
 		runtime.GOMAXPROCS(ncpu)
 	}
+}
+
+// return max(1 minute, 5 minute) load average
+func MaxLoad() (load float64) {
+	avg, err := LoadAverage()
+	if err != nil {
+		nlog.ErrorDepth(1, err) // unlikely
+		return 100
+	}
+	return max(avg.One, avg.Five)
 }

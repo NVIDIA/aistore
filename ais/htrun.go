@@ -38,7 +38,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tracing"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -91,16 +90,6 @@ type htrun struct {
 
 // interface guard
 var _ core.Node = (*htrun)(nil)
-
-// return max(1 minute, 5 minute) load average
-func (*htrun) MaxUtilLoad() (_ int64, load float64) {
-	avg, err := sys.LoadAverage()
-	if err != nil {
-		nlog.Errorln(err)
-		return 100, 0
-	}
-	return 0, max(avg.One, avg.Five)
-}
 
 func (h *htrun) Snode() *meta.Snode { return h.si }
 func (h *htrun) callerName() string { return h.si.String() }

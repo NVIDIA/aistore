@@ -33,8 +33,6 @@ type (
 		// Memory allocators
 		PageMM() *memsys.MMSA
 		ByteMM() *memsys.MMSA
-
-		MaxUtilLoad() (util int64, load float64)
 	}
 )
 

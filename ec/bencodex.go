@@ -328,8 +328,8 @@ func (j *rcvyJogger) run() {
 		n++
 		// (compare with ec/putjogger where we also check memory pressure)
 		if err == nil && fs.IsThrottle(n) {
-			pct, _, _ := _throttlePct()
-			if pct >= maxThrottlePct {
+			pct, _, _ := fs.ThrottlePct()
+			if pct >= fs.MaxThrottlePct {
 				time.Sleep(fs.Throttle10ms)
 			}
 		}
@@ -341,26 +341,4 @@ func (j *rcvyJogger) run() {
 
 func (j *rcvyJogger) String() string {
 	return fmt.Sprintf("j-rcvy %s[%s/%s]", j.parent.ID(), j.mi, j.parent.Bck())
-}
-
-//
-// TODO -- FIXME: dedup core/lcache
-//
-
-const (
-	maxThrottlePct = 60
-)
-
-func _throttlePct() (int, int64, float64) {
-	var (
-		util, lavg = core.T.MaxUtilLoad()
-		cpus       = runtime.NumCPU()
-		maxload    = max((cpus>>1)-(cpus>>3), 1)
-	)
-	if lavg >= float64(maxload) {
-		return 100, util, lavg
-	}
-	ru := cos.RatioPct(100, 2, util)
-	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
-	return int(max(ru, rl)), util, lavg
 }
