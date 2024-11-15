@@ -278,11 +278,12 @@ func (e *ErrBadCksum) Error() string {
 	cka, ok1 := e.a.(*Cksum)
 	ckb, ok2 := e.b.(*Cksum)
 	if ok1 && ok2 {
-		if cka != nil && ckb == nil {
+		switch {
+		case cka != nil && ckb == nil:
 			return fmt.Sprintf("%s (%s != %v)%s", e.prefix, cka, ckb, context)
-		} else if cka == nil && ckb != nil {
+		case cka == nil && ckb != nil:
 			return fmt.Sprintf("%s (%v != %s)%s", e.prefix, cka, ckb, context)
-		} else if cka == nil && ckb == nil {
+		case cka == nil && ckb == nil:
 			return fmt.Sprintf("%s (nil != nil)%s", e.prefix, context)
 		}
 		t1, v1 := cka.Get()

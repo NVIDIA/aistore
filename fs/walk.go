@@ -108,10 +108,11 @@ func Walk(opts *WalkOpts) error {
 		err  error
 		ew   = &errCallbackWrapper{}
 	)
-	if opts.Dir != "" {
+	switch {
+	case opts.Dir != "":
 		debug.Assert(opts.Prefix == "")
 		fqns = append(fqns, opts.Dir)
-	} else if opts.Bck.Name != "" {
+	case opts.Bck.Name != "":
 		debug.Assert(len(opts.CTs) > 0)
 		// one bucket
 		for _, ct := range opts.CTs {
@@ -122,8 +123,7 @@ func Walk(opts *WalkOpts) error {
 				fqns = append(fqns, bdir)
 			}
 		}
-	} else {
-		// all buckets
+	default: // all buckets
 		debug.Assert(len(opts.CTs) > 0)
 		fqns, err = allMpathCTpaths(opts)
 		if len(fqns) == 0 || err != nil {

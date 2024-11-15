@@ -222,11 +222,12 @@ func (bp *Bprops) Validate(targetCnt int) error {
 	var softErr error
 	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy} {
 		var err error
-		if pv == &bp.EC {
+		switch {
+		case pv == &bp.EC:
 			err = bp.EC.ValidateAsProps(targetCnt)
-		} else if pv == &bp.Extra {
+		case pv == &bp.Extra:
 			err = bp.Extra.ValidateAsProps(bp.Provider)
-		} else {
+		default:
 			err = pv.ValidateAsProps()
 		}
 		if err != nil {

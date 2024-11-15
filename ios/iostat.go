@@ -480,18 +480,21 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 			ncache.rbps[disk] = statsCache.rbps[disk]
 			ncache.wbps[disk] = statsCache.wbps[disk]
 		}
-		if reads > 0 {
+		// averages
+		switch {
+		case reads > 0:
 			ncache.ravg[disk] = cos.DivRound(readBytes, reads)
-		} else if elapsedSeconds == 0 {
+		case elapsedSeconds == 0:
 			ncache.ravg[disk] = statsCache.ravg[disk]
-		} else {
+		default:
 			ncache.ravg[disk] = 0
 		}
-		if writes > 0 {
+		switch {
+		case writes > 0:
 			ncache.wavg[disk] = cos.DivRound(writeBytes, writes)
-		} else if elapsedSeconds == 0 {
+		case elapsedSeconds == 0:
 			ncache.wavg[disk] = statsCache.wavg[disk]
-		} else {
+		default:
 			ncache.wavg[disk] = 0
 		}
 	}

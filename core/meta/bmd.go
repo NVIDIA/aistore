@@ -1,6 +1,6 @@
 // Package meta: cluster-level metadata
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package meta
 
@@ -192,23 +192,25 @@ func (m *BMD) numBuckets(checkEmpty bool) (na, nar, nc, no int) {
 	for provider, namespaces := range m.Providers {
 		for nsUname, buckets := range namespaces {
 			ns := cmn.ParseNsUname(nsUname)
-			if provider == apc.AIS {
+			switch {
+			case provider == apc.AIS:
 				if ns.IsRemote() {
 					nar += len(buckets)
 				} else {
 					na += len(buckets)
 				}
-			} else if apc.IsCloudProvider(provider) {
+			case apc.IsCloudProvider(provider):
 				nc += len(buckets)
-			} else {
+			default:
 				no += len(buckets)
 			}
+
 			if checkEmpty && (na+nar+nc+no > 0) {
-				return
+				return na, nar, nc, no
 			}
 		}
 	}
-	return
+	return na, nar, nc, no
 }
 
 func (m *BMD) initBckGlobalNs(bck *Bck) bool {

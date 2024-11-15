@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -142,11 +142,12 @@ func (pdu *rpdu) readFrom() (n int, err error) {
 //
 
 func fl2s(flags uint64) (s string) {
-	if flags&msgFl == 0 && flags&pduFl == 0 {
+	switch {
+	case flags&msgFl == 0 && flags&pduFl == 0:
 		s += "[obj]"
-	} else if flags&msgFl != 0 {
+	case flags&msgFl != 0:
 		s += "[msg]"
-	} else if flags&pduFl != 0 {
+	case flags&pduFl != 0:
 		s += "[pdu]"
 	}
 	if flags&pduStreamFl != 0 {

@@ -682,12 +682,13 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 	}
 
 	// cap alert
-	if cs.IsOOS() {
+	switch {
+	case cs.IsOOS():
 		set = cos.OOS
-	} else if cs.Err() != nil {
+	case cs.Err() != nil:
 		clr = cos.OOS
 		set |= cos.LowCapacity
-	} else {
+	default:
 		clr = cos.OOS | cos.LowCapacity
 	}
 	return set, clr

@@ -285,12 +285,13 @@ func (x *xcert) ini(finfo os.FileInfo) (rem time.Duration, err error) {
 		x.notAfter = x.Certificate.Leaf.NotAfter
 	}
 	now := time.Now()
-	if now.After(x.notAfter) {
+	switch {
+	case now.After(x.notAfter):
 		msg := fmt.Sprintf(fmtErrExpired, name, x.parent.certFile, x.notAfter)
 		err = &errExpired{msg}
-	} else if now.Before(x.notBefore) {
+	case now.Before(x.notBefore):
 		err = fmt.Errorf("%s: %s not valid yet: (%v, %v)", name, x.parent.certFile, x.notBefore, x.notAfter)
-	} else {
+	default:
 		rem = x.notAfter.Sub(now)
 	}
 	return rem, err

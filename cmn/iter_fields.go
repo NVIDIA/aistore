@@ -158,7 +158,8 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 		}
 
 		var dirtyField bool
-		if srcValField.Kind() == reflect.Slice {
+		switch {
+		case srcValField.Kind() == reflect.Slice:
 			if !jsonTagPresent {
 				continue
 			}
@@ -166,7 +167,7 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 			field := &field{name: name, v: srcValField, listTag: listTag, opts: opts}
 			err, stop = updf(name, field)
 			dirtyField = field.dirty
-		} else if srcValField.Kind() != reflect.Struct {
+		case srcValField.Kind() != reflect.Struct:
 			// We require that not-omitted fields have JSON tag.
 			debug.Assert(jsonTagPresent, prefix+"["+fieldName+"]")
 
@@ -175,37 +176,30 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 			field := &field{name: name, v: srcValField, listTag: listTag, opts: opts}
 			err, stop = updf(name, field)
 			dirtyField = field.dirty
-		} else {
+		default:
 			// Recurse into struct
-
 			// Always take address if possible (assuming that we will set value)
 			if srcValField.CanAddr() {
 				srcValField = srcValField.Addr()
 			}
-
 			p := prefix
 			if fieldName != "" {
 				// If struct has JSON tag, we want to include it.
 				p += fieldName
 			}
-
 			if opts.VisitAll {
 				field := &field{name: p, v: srcValField, listTag: listTag, opts: opts}
 				err, stop = updf(p, field)
 				dirtyField = field.dirty
 			}
-
 			if !strings.HasSuffix(p, IterFieldNameSepa) && !isInline {
 				p += IterFieldNameSepa
 			}
-
 			if err == nil && !stop {
 				dirtyField, stop, err = iterFields(p, srcValField.Interface(), updf, opts)
 				if allocatedStruct && !dirtyField {
-					// If we initialized new struct but no field inside
-					// it was set we must set the value of the field to
-					// `nil` (as it was before) otherwise we manipulated
-					// the field for no reason.
+					// if we initialized new struct with no fields set inside
+					// we must restore the value back to `nil`
 					srcValField = srcVal.Field(i)
 					srcValField.Set(reflect.Zero(srcValField.Type()))
 				}

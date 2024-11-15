@@ -208,16 +208,17 @@ func (r *MMSA) NewSGL(immediateSize int64, sbufSize ...int64) *SGL {
 		err  error
 	)
 	// 1. slab
-	if len(sbufSize) > 0 {
+	switch {
+	case len(sbufSize) > 0:
 		slab, err = r.GetSlab(sbufSize[0])
-	} else if immediateSize <= r.maxSlabSize {
+	case immediateSize <= r.maxSlabSize:
 		// NOTE allocate imm. size in one shot when below max
 		if immediateSize == 0 {
 			immediateSize = r.defBufSize
 		}
 		i := cos.DivCeil(immediateSize, r.slabIncStep)
 		slab = r.rings[i-1]
-	} else {
+	default:
 		slab = r._large2slab(immediateSize)
 	}
 	debug.AssertNoErr(err)
@@ -271,14 +272,12 @@ func (r *MMSA) Alloc() (buf []byte, slab *Slab) {
 
 func (r *MMSA) Free(buf []byte) {
 	size := int64(cap(buf))
-	if size > r.maxSlabSize && !r.isPage() {
+	switch {
+	case size > r.maxSlabSize && !r.isPage():
 		r.sibling.Free(buf)
-	} else if size < r.slabIncStep && r.isPage() {
+	case size < r.slabIncStep && r.isPage():
 		r.sibling.Free(buf)
-	} else {
-		debug.Assert(size%r.slabIncStep == 0)
-		debug.Assert(size/r.slabIncStep <= int64(r.numSlabs))
-
+	default:
 		slab := r._selectSlab(size)
 		slab.Free(buf)
 	}
@@ -298,11 +297,12 @@ func (r *MMSA) SelectMemAndSlab(size int64) (mmsa *MMSA, slab *Slab) {
 }
 
 func (r *MMSA) _selectSlab(size int64) (slab *Slab) {
-	if size >= r.maxSlabSize {
+	switch {
+	case size >= r.maxSlabSize:
 		slab = r.rings[len(r.rings)-1]
-	} else if size <= r.slabIncStep {
+	case size <= r.slabIncStep:
 		slab = r.rings[0]
-	} else {
+	default:
 		i := (size + r.slabIncStep - 1) / r.slabIncStep
 		slab = r.rings[i-1]
 	}

@@ -45,13 +45,14 @@ type (
 func _mpathGreaterEq(curr, prev *VMD, mpath string) bool {
 	currMd, currOk := curr.Mountpaths[mpath]
 	prevMd, prevOk := prev.Mountpaths[mpath]
-	if !currOk {
+	switch {
+	case !currOk:
 		return false
-	} else if !prevOk {
+	case !prevOk:
 		return true
-	} else if currMd.Enabled {
+	case currMd.Enabled:
 		return true
-	} else if currMd.Enabled == prevMd.Enabled {
+	case currMd.Enabled == prevMd.Enabled:
 		return true
 	}
 	return false

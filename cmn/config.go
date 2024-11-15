@@ -1246,11 +1246,12 @@ func (c *WritePolicyConf) ValidateAsProps(...any) error { return c.Validate() }
 ///////////////////
 
 func (c *KeepaliveConf) Validate() (err error) {
-	if c.Proxy.Name != "heartbeat" {
+	switch {
+	case c.Proxy.Name != "heartbeat":
 		err = fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
-	} else if c.Target.Name != "heartbeat" {
+	case c.Target.Name != "heartbeat":
 		err = fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
-	} else if c.RetryFactor < 1 || c.RetryFactor > 10 {
+	case c.RetryFactor < 1 || c.RetryFactor > 10:
 		err = fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting 1 thru 10)", c.RetryFactor)
 	}
 	return err

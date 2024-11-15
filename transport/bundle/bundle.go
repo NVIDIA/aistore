@@ -156,14 +156,15 @@ func (sb *Streams) Close(gracefully bool) {
 func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*meta.Snode) (err error) {
 	debug.Assert(!transport.ReservedOpcode(obj.Hdr.Opcode))
 	streams := sb.get()
-	if len(streams) == 0 {
+	// validate
+	switch {
+	case len(streams) == 0:
 		err = fmt.Errorf("no streams %s => .../%s", core.T.Snode(), sb.trname)
-	} else if nodes != nil && len(nodes) == 0 {
+	case nodes != nil && len(nodes) == 0:
 		err = fmt.Errorf("no destinations %s => .../%s", core.T.Snode(), sb.trname)
-	} else if obj.IsUnsized() && sb.extra.SizePDU == 0 {
+	case obj.IsUnsized() && sb.extra.SizePDU == 0:
 		err = fmt.Errorf("[%s] sending unsized object supported only with PDUs", obj.Hdr.Cname())
 	}
-
 	if err != nil {
 		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
 			nlog.Warningln(err)
@@ -172,6 +173,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 		_doCmpl(obj, roc, err)
 		return
 	}
+
 	if obj.Callback == nil {
 		obj.Callback = sb.extra.Callback
 	}
