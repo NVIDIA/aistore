@@ -13,7 +13,7 @@ from aistore.sdk.const import LOREM, DUIS
 from aistore.sdk.provider import Provider
 from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
 from tests.const import (
-    SMALL_FILE_SIZE,
+    MEDIUM_FILE_SIZE,
     OBJECT_COUNT,
     TEST_TIMEOUT,
     PREFIX_NAME,
@@ -29,8 +29,8 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
         self.suffix = SUFFIX_NAME
-        # Use a slightly larger file size to allow for blob threshold (must be > 128KiB)
-        self.file_size = SMALL_FILE_SIZE * 5
+        # Use a slightly larger file size to allow for blob threshold (must be > 1MiB)
+        self.file_size = MEDIUM_FILE_SIZE
         self.obj_names = self._create_objects(
             suffix=self.suffix, obj_size=self.file_size
         )
