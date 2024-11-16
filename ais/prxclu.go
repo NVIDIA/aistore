@@ -656,18 +656,20 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 		}
 	} else {
 		if osi.Type() != nsi.Type() {
-			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)", osi.StringEx(), nsi.StringEx(), smap.StringEx(), keepalive)
+			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
+				osi.StringEx(), nsi.StringEx(), smap.StringEx(), keepalive)
 			return
 		}
-		if keepalive {
+		switch {
+		case keepalive:
 			upd = p.kalive(nsi, osi)
-		} else if regReq.Flags.IsSet(cos.Restarted) {
+		case regReq.Flags.IsSet(cos.Restarted):
 			upd = true
-		} else {
+		default:
 			upd = p.rereg(nsi, osi)
 		}
 		if !upd {
-			return
+			return // ==> nothing to do
 		}
 	}
 	// check for cluster integrity errors (cie)

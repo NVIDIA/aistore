@@ -129,14 +129,15 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 		return xreg.RenewRes{Err: err}
 	}
 
-	// validate, assign defaults (tune-up below)
-	if pre.chunkSize == 0 {
+	// validate, assign defaults (further tune-up below)
+	switch {
+	case pre.chunkSize == 0:
 		pre.chunkSize = dfltChunkSize
-	} else if pre.chunkSize < minChunkSize {
+	case pre.chunkSize < minChunkSize:
 		nlog.Infoln("Warning: chunk size", cos.ToSizeIEC(pre.chunkSize, 1), "is below permitted minimum",
 			cos.ToSizeIEC(minChunkSize, 0))
 		pre.chunkSize = minChunkSize
-	} else if pre.chunkSize > maxChunkSize {
+	case pre.chunkSize > maxChunkSize:
 		nlog.Infoln("Warning: chunk size", cos.ToSizeIEC(pre.chunkSize, 1), "exceeds permitted maximum",
 			cos.ToSizeIEC(maxChunkSize, 0))
 		pre.chunkSize = maxChunkSize

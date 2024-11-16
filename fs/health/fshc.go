@@ -78,22 +78,26 @@ func (f *FSHC) OnErr(mi *fs.Mountpath, fqn string) {
 	)
 	if loaded {
 		r = a.(*ror)
-		prev := ratomic.LoadInt64(&r.last)
-		elapsed := time.Duration(now - prev)
-		if elapsed < minTimeBetweenRuns {
-			nlog.Infoln("not enough time passed since the previous run:", elapsed)
+		since := time.Duration(now - ratomic.LoadInt64(&r.last))
+		if since < minTimeBetweenRuns {
+			nlog.Infoln("not enough time passed since the previous run [", since, "]")
 			return
 		}
 		if !ratomic.CompareAndSwapInt64(&r.running, 0, now) {
-			nlog.Infoln(mi.String(), "still running:", elapsed, "- nothing to do")
+			nlog.Infoln(mi.String(), "still running [", since, "]")
 			return
 		}
 	}
+
 	go run(f, mi, r, fqn, now)
 }
 
-func run(f *FSHC, mi *fs.Mountpath, r *ror, fqn string, now int64) {
+func run(f *FSHC, mi *fs.Mountpath, r *ror, fqn string, started int64) {
 	f.run(mi, fqn)
+
+	now := mono.NanoTime()
+	nlog.Warningln("runtime:", time.Duration(now-started))
+
 	ratomic.StoreInt64(&r.last, now)
 	ratomic.StoreInt64(&r.running, 0)
 }

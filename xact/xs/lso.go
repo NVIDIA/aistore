@@ -413,11 +413,12 @@ func (r *LsoXact) nextPageR() (err error) {
 		debug.Assert(!r.msg.WantOnlyRemoteProps() && /*same*/ !r.walk.wor)
 		select {
 		case rsp := <-r.remtCh:
-			if rsp == nil {
+			switch {
+			case rsp == nil:
 				err = ErrGone
-			} else if rsp.Err != nil {
+			case rsp.Err != nil:
 				err = rsp.Err
-			} else {
+			default:
 				page = rsp.Lst
 				err = npg.populate(page)
 			}

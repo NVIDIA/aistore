@@ -13,11 +13,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-// FreeToOS executes in a separate goroutine with at least so-many minutes (above)
+// FreeToOS executes in a separate goroutine with at least so-many minutes
 // between the runs. It calls GC and returns allocated memory to the operating system.
 // Notes:
 // - forceTime (below) is expected to be >> the time spent in the goroutine
-// - still, an unlikely overlap is handled via `running` atomic
+// - unlikely overlap is handled via `running` atomic
 
 const (
 	ivalTime  = 32 * time.Minute

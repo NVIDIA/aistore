@@ -211,16 +211,18 @@ func (m *smapX) configURLsIC(original, discovery string) (orig, disc string) {
 		}
 	}
 	// pick alternatives
+outer:
 	for _, psi := range m.Pmap {
 		if !m.IsIC(psi) {
 			continue
 		}
-		if orig == "" {
+		switch {
+		case orig == "":
 			orig = psi.URL(cmn.NetIntraControl)
-		} else if disc == "" {
+		case disc == "":
 			disc = psi.URL(cmn.NetIntraControl)
-		} else {
-			break
+		default:
+			break outer
 		}
 	}
 	return orig, disc

@@ -3009,11 +3009,12 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		dsort.PgetHandler(w, r)
 	case http.MethodDelete:
-		if len(apiItems) == 1 && apiItems[0] == apc.Abort {
+		switch {
+		case len(apiItems) == 1 && apiItems[0] == apc.Abort:
 			dsort.PabortHandler(w, r)
-		} else if len(apiItems) == 0 {
+		case len(apiItems) == 0:
 			dsort.PremoveHandler(w, r)
-		} else {
+		default:
 			p.writeErrURL(w, r)
 		}
 	default:
@@ -3304,17 +3305,21 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Path: path, Query: q}
 		cargs.timeout = apc.DefaultTimeout
 	}
+
+	// call
 	res := p.call(cargs, smap)
-	if res.status == http.StatusNotFound {
+	switch {
+	case res.status == http.StatusNotFound:
 		if err = res.err; err == nil {
 			err = cmn.NewErrRemoteBckNotFound(bck)
 		}
-	} else if res.status == http.StatusGone {
+	case res.status == http.StatusGone:
 		err = cmn.NewErrRemoteBckOffline(bck)
-	} else {
+	default:
 		err = res.err
 		header = res.header
 	}
+
 	statusCode = res.status
 	freeCargs(cargs)
 	freeCR(res)

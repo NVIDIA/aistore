@@ -247,6 +247,10 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 //
 // Note that mismatch in any given checksum type immediately renders inequality and return
 // from the function.
+//
+// TODO -- FIXME: ETag:
+// - when comparing ETags, either disregard double quotes OR fix it elsewhere to always contain those
+// - when comparing ETag and MD5, don't even try to compare if ETag is multi-part
 func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	var (
 		ver      string

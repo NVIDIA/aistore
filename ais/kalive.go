@@ -377,16 +377,17 @@ loop:
 		select {
 		case sid := <-pkr.toRemoveCh:
 			metaction += " ["
-			if clone.GetProxy(sid) != nil {
+			switch {
+			case clone.GetProxy(sid) != nil:
 				clone.delProxy(sid)
 				clone.staffIC()
 				metaction += apc.Proxy
 				cnt++
-			} else if clone.GetTarget(sid) != nil {
+			case clone.GetTarget(sid) != nil:
 				clone.delTarget(sid)
 				metaction += apc.Target
 				cnt++
-			} else {
+			default:
 				metaction += unknownDaemonID
 				nlog.Warningf("node %s not present in the %s (old %s)", sid, clone, ctx.smap)
 			}

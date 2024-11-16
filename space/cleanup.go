@@ -603,14 +603,16 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				removed bool
 			)
 			lom := core.AllocLOM(mlom.ObjName) // yes placed
-			if lom.InitBck(&j.bck) != nil {
+			switch {
+			case lom.InitBck(&j.bck) != nil:
 				removed = os.Remove(fqn) == nil
-			} else if lom.FromFS() != nil {
+			case lom.FromFS() != nil:
 				removed = os.Remove(fqn) == nil
-			} else {
+			default:
 				removed, _ = lom.DelExtraCopies(fqn)
 			}
 			core.FreeLOM(lom)
+
 			if removed {
 				fevicted++
 				bevicted += mlom.Lsize(true /*not loaded*/)

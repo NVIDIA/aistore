@@ -243,13 +243,14 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 			continue
 		}
 		// none of the above
-		if !config.HostNet.UseIntraControl && !config.HostNet.UseIntraData {
+		switch {
+		case !config.HostNet.UseIntraControl && !config.HostNet.UseIntraData:
 			// no intra-cluster networks: default to pub net
 			handlePub(path, nh.h)
-		} else if config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraData) {
+		case config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraData):
 			// (not configured) data defaults to (configured) control
 			handleControl(path, nh.h)
-		} else {
+		default:
 			debug.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
 			// (not configured) control defaults to (configured) data
 			handleData(path, nh.h)
