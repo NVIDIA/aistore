@@ -97,8 +97,8 @@ cat > $AIS_CONF_FILE <<EOL
 	"memsys": {
 		"min_free":		"2gb",
 		"default_buf":		"32kb",
-		"to_gc":		"2gb",
-		"hk_time":		"90s",
+		"to_gc":		"4gb",
+		"hk_time":		"3m",
 		"min_pct_total":	0,
 		"min_pct_free":		0
 	},

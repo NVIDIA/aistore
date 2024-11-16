@@ -30,20 +30,24 @@ var (
 )
 
 func FreeToOS(force bool) bool {
-	prev := ratomic.LoadInt64(&last)
-	ival := ivalTime
+	var (
+		since time.Duration
+		now   = mono.NanoTime()
+		prev  = ratomic.LoadInt64(&last)
+		ival  = ivalTime
+	)
 	if force {
 		ival = forceTime
 	}
-
-	now := mono.NanoTime()
-	elapsed := time.Duration(now - prev)
-	if elapsed < ival {
-		nlog.Infoln("not running - only", elapsed, "passed since the previous run")
-		return false
+	if prev > 0 {
+		since = time.Duration(now - prev)
+		if since < ival {
+			nlog.Infoln("not running - only", since, "<", ival, "passed since the previous run")
+			return false
+		}
 	}
 	if !ratomic.CompareAndSwapInt64(&running, 0, now) {
-		nlog.Infoln("(still) running for", elapsed, "- nothing to do")
+		nlog.Infoln("still running [", since, "]")
 		return false
 	}
 
@@ -55,9 +59,8 @@ func do(started int64) {
 	rdebug.FreeOSMemory()
 
 	now := mono.NanoTime()
-	if elapsed := time.Duration(now - started); elapsed > (forceTime >> 1) {
-		nlog.Warningln("spent", elapsed.String(), "freeing memory")
-	}
+	nlog.Warningln("free-mem runtime:", time.Duration(now-started))
+
 	ratomic.StoreInt64(&last, now)
 	ratomic.StoreInt64(&running, 0)
 }

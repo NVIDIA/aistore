@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
@@ -183,6 +184,7 @@ func (p *blobFactory) Start() error {
 		pressure = mm.Pressure()
 	)
 	if pressure >= memsys.PressureExtreme {
+		oom.FreeToOS(true)
 		return errors.New(r.Name() + ": extreme memory pressure - not starting")
 	}
 	switch pressure {

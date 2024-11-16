@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -84,7 +85,7 @@ func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
 
-	// mem pressure
+	// mem pressure; NOTE: may call oom.FreeToOS
 	if g.lchk.mempDropAll() {
 		return true // dropped all caches, nothing to do
 	}
@@ -243,7 +244,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 		return lchk.timeout
 	}
 
-	// mem pressure
+	// mem pressure; NOTE: may call oom.FreeToOS
 	if lchk.mempDropAll() {
 		return lchk.timeout
 	}
@@ -285,6 +286,8 @@ func (lchk *lchk) mempDropAll() bool /*dropped*/ {
 		nlog.ErrorDepth(1, "oom [", p, "] - dropping all caches")
 		lchk._drop()
 		lchk.last = time.Now()
+
+		oom.FreeToOS(true)
 		return true
 	case memsys.PressureHigh:
 		nlog.Warningln("high memory pressure")

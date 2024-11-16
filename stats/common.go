@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
@@ -494,6 +495,7 @@ func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 			set |= cos.OOM
 			nlog.Errorln(mm.Str(&r.mem))
 		}
+		oom.FreeToOS(true)
 	case pressure >= memsys.PressureHigh:
 		set |= cos.LowMemory
 		clr |= cos.OOM
