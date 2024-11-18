@@ -1,0 +1,33 @@
+# Admin Login
+echo "/tmp/auth-token.$RANDOM.admin" > /tmp/e2e.admin.rand
+tf=$(cat /tmp/e2e.admin.rand)
+ais auth login admin -p admin -f $tf  // IGNORE
+
+AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add cluster http://localhost:8080 cluster-test  // IGNORE
+AIS_AUTHN_TOKEN_FILE=$tf ais bucket create ais://test-bucket  // IGNORE
+echo "This is a test object for upload" > ./test-object.txt  // IGNORE
+AIS_AUTHN_TOKEN_FILE=$tf ais object put ./test-object.txt ais://test-bucket/test-object.txt  // IGNORE
+
+AIS_AUTHN_TOKEN_FILE=$tf ais auth add role test-role --cluster cluster-test --bucket ais://test-bucket DELETE-OBJECT  // IGNORE
+AIS_AUTHN_TOKEN_FILE=$tf ais auth add user test-user -p test-password  // IGNORE
+AIS_AUTHN_TOKEN_FILE=$tf ais auth set user test-user test-role  // IGNORE
+
+# Login as Test User
+echo "/tmp/auth-token.$RANDOM.user" > /tmp/e2e.user.rand
+user_tf=$(cat /tmp/e2e.user.rand)
+ais auth login test-user -p test-password -f $user_tf  // IGNORE
+
+# Try Deleting Object without Simple Mode
+AIS_AUTHN_TOKEN_FILE=$user_tf ais object rm ais://test-bucket/test-object.txt  // FAIL "user `test-user` has insufficient permissions"
+
+# Enable Simple Mode and Try Again
+AIS_AUTHN_TOKEN_FILE=$tf ais config cli set cluster.simple_mode true
+AIS_AUTHN_TOKEN_FILE=$user_tf ais object rm ais://test-bucket/test-object.txt
+
+# Cleanup
+AIS_AUTHN_TOKEN_FILE=$tf ais auth rm user test-user  // IGNORE
+AIS_AUTHN_TOKEN_FILE=$tf ais auth rm role test-role  // IGNORE
+AIS_AUTHN_TOKEN_FILE=$tf ais bucket rm ais://test-bucket  // IGNORE
+rm $tf /tmp/e2e.admin.rand  // IGNORE
+rm $user_tf /tmp/e2e.user.rand  // IGNORE
+rm ./test-object.txt  // IGNORE

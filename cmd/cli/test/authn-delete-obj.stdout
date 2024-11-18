@@ -1,0 +1,2 @@
+"cluster.simple_mode" set to: "true" (was: "false")
+deleted "test-object.txt" from ais://test-bucket
