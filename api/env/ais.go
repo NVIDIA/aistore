@@ -43,6 +43,8 @@ var (
 		K8sPod       string
 		K8sNode      string
 		K8sNamespace string
+
+		SimpleMode string
 	}{
 		// the way to designate primary when cluster's starting up
 		Endpoint:  "AIS_ENDPOINT",
@@ -83,5 +85,8 @@ var (
 		K8sPod:       "MY_POD",
 		K8sNode:      "MY_NODE",
 		K8sNamespace: "K8S_NS",
+
+		// AuthN compliance (simple calls only)
+		SimpleMode: "AIS_SIMPLE_MODE", // cluster config: "auth.simple_mode"
 	}
 )

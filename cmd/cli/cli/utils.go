@@ -695,6 +695,14 @@ func objnameIsPrefix(bck cmn.Bck, oname string) (bool, error) {
 	return false, nil
 }
 
+func objnameIsPrefixSimple(oname string) bool {
+	// Must indicate intent through the input format. For example:
+	//      * Specific object: bucket/file.txt
+	//      * Prefix: bucket/file* or bucket/file/
+	// Treat as prefix if it contains wildcards or ends with a slash
+	return strings.HasSuffix(oname, "/") || strings.ContainsAny(oname, "*?")
+}
+
 func ensureRemoteProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
 		return fmt.Errorf("invalid bucket %q: missing backend provider", bck)

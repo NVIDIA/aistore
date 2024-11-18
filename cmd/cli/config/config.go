@@ -40,6 +40,7 @@ type (
 		CertKey       string `json:"client_crt_key"` // X.509 key
 		ClientCA      string `json:"client_ca_tls"`  // #6410
 		SkipVerifyCrt bool   `json:"skip_verify_crt"`
+		SimpleMode    bool   `json:"simple_mode"` // AuthN compliance
 	}
 	TimeoutConfig struct {
 		TCPTimeoutStr  string        `json:"tcp_timeout"`
@@ -105,6 +106,7 @@ func init() {
 			DefaultAISHost:    aisURL,
 			DefaultDockerHost: fmt.Sprintf(urlFmt, proto, defaultDockerIP, defaultAISPort),
 			SkipVerifyCrt:     cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt)),
+			SimpleMode:        cos.IsParseBool(os.Getenv(env.AIS.SimpleMode)),
 		},
 		Timeout: TimeoutConfig{
 			TCPTimeoutStr:  "60s",
