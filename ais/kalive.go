@@ -27,9 +27,6 @@ const (
 	kaStopMsg    = "stop"
 	kaResumeMsg  = "resume"
 	kaSuspendMsg = "suspend"
-
-	// NOTE: number of keepalive failures prior to removing nodes from Smap = (1 + 1 + kaNumRetries)
-	kaNumRetries = 3
 )
 
 const (
@@ -344,7 +341,7 @@ func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (
 	pkr.statsT.IncErr(stats.ErrKaliveCount)
 
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
-	ok, stopped = pkr.retry(si, ticker, tout)
+	ok, stopped = pkr.retry(si, ticker, tout, config.Keepalive.NumRetries)
 	ticker.Stop()
 
 	return ok, stopped
@@ -413,7 +410,8 @@ func (pkr *palive) _final(ctx *smapModifier, clone *smapX) {
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
 }
 
-func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration) (ok, stopped bool) {
+// NOTE: total number of keepalive failures prior to removing a node from Smap: (1 + 1 + kaNumRetries)
+func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration, kaNumRetries int) (ok, stopped bool) {
 	var i int
 	for {
 		if !pkr.timeToPing(si.ID()) {
@@ -622,7 +620,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			// repeat up to `kaNumRetries` times with max-keepalive timeout
 			tout = config.Timeout.MaxKeepalive.D()
 
-			if i == kaNumRetries {
+			if i == config.Keepalive.NumRetries {
 				nlog.Warningln(sname, "=>", pname, "failed after", i, "attempts")
 				return true
 			}

@@ -149,6 +149,7 @@ cat > $AIS_CONF_FILE <<EOL
 			"name":     "heartbeat",
 			"factor":   3
 		},
+		"num_retries":    3,
 		"retry_factor":   4
 	},
 	"downloader": {

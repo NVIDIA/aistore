@@ -561,13 +561,15 @@ type (
 
 	// keepalive
 	KeepaliveConf struct {
-		Proxy       KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
-		Target      KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
+		Proxy       KeepaliveTrackerConf `json:"proxy"`       // how proxy tracks target keepalives
+		Target      KeepaliveTrackerConf `json:"target"`      // how target tracks primary proxies keepalives
+		NumRetries  int                  `json:"num_retries"` // default: `kaNumRetries`
 		RetryFactor uint8                `json:"retry_factor"`
 	}
 	KeepaliveConfToSet struct {
 		Proxy       *KeepaliveTrackerConfToSet `json:"proxy,omitempty"`
 		Target      *KeepaliveTrackerConfToSet `json:"target,omitempty"`
+		NumRetries  *int                       `json:"num_retries,omitempty"`
 		RetryFactor *uint8                     `json:"retry_factor,omitempty"`
 	}
 	KeepaliveTrackerConf struct {
@@ -1245,16 +1247,27 @@ func (c *WritePolicyConf) ValidateAsProps(...any) error { return c.Validate() }
 // KeepaliveConf //
 ///////////////////
 
-func (c *KeepaliveConf) Validate() (err error) {
-	switch {
-	case c.Proxy.Name != "heartbeat":
-		err = fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
-	case c.Target.Name != "heartbeat":
-		err = fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
-	case c.RetryFactor < 1 || c.RetryFactor > 10:
-		err = fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting 1 thru 10)", c.RetryFactor)
+// default number of keepalive retries
+// see palive.retry in re "total number of failures prior to removing"
+const kaNumRetries = 3
+
+func (c *KeepaliveConf) Validate() error {
+	if c.Proxy.Name != "heartbeat" {
+		return fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
 	}
-	return err
+	if c.Target.Name != "heartbeat" {
+		return fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
+	}
+	if c.RetryFactor < 1 || c.RetryFactor > 10 {
+		return fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting range [1, 10])", c.RetryFactor)
+	}
+	if c.NumRetries == 0 {
+		c.NumRetries = kaNumRetries
+	}
+	if c.NumRetries < 1 || c.NumRetries > 10 {
+		return fmt.Errorf("invalid keepalivetracker.num_retries %d (expecting range [1, 10])", c.NumRetries)
+	}
+	return nil
 }
 
 func KeepaliveRetryDuration(c *Config) time.Duration {
