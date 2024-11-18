@@ -294,14 +294,14 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 		count++
 	}
 
-	// custom MD: ETag check
+	// custom MD: ETag check (NOTE: compare ignoring double quotes)
 	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(ETag); ok && locMeta != "" {
-			if remMeta != locMeta {
+			if !_eqIgnoreQuotes(remMeta, locMeta) {
 				return fmt.Errorf("ETag %s != %s remote", locMeta, remMeta)
 			}
 			etag = locMeta
-			if ver != locMeta && cksumVal != locMeta { // against double-counting
+			if !_eqIgnoreQuotes(ver, locMeta) && !_eqIgnoreQuotes(cksumVal, locMeta) { // against double-counting
 				count++
 				sameEtag = true
 			}
@@ -328,7 +328,7 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 					return fmt.Errorf("MD5 %s != %s remote", locMeta, remMeta)
 				}
 				md5 = locMeta
-				if etag != md5 && cksumVal != md5 {
+				if !_eqIgnoreQuotes(etag, md5) && cksumVal != md5 {
 					count++ //  (ditto)
 				}
 			}
@@ -352,4 +352,20 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	}
 
 	return fmt.Errorf("local (%v) vs remote (%v)", oa.GetCustomMD(), rem.GetCustomMD())
+}
+
+// background: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+// NOTE: _not_ ignoring 'W/` weak validator
+func _eqIgnoreQuotes(a, b string) bool {
+	la, lb := len(a), len(b)
+	if la < 16 || lb < 16 || a[0] == b[0] {
+		return a == b
+	}
+	if a[0] == '"' && a[la-1] == '"' {
+		return b == a[1:la-1]
+	}
+	if b[0] == '"' && b[lb-1] == '"' {
+		return a == b[1:lb-1]
+	}
+	return a == b
 }

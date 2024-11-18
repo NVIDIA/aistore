@@ -13,6 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+// TODO below
+
 // FreeToOS executes in a separate goroutine with at least so-many minutes
 // between the runs. It calls GC and returns allocated memory to the operating system.
 // Notes:
@@ -60,6 +62,8 @@ func do(started int64) {
 
 	now := mono.NanoTime()
 	nlog.Warningln("free-mem runtime:", time.Duration(now-started))
+
+	// TODO: check mem pressure right away and, possibly, repeat after a while
 
 	ratomic.StoreInt64(&last, now)
 	ratomic.StoreInt64(&running, 0)
