@@ -132,6 +132,7 @@ cli-autocompletions: ## Add CLI autocompletions
 authn: build-authn         ## Build AuthN
 aisloader: build-aisloader ## Build aisloader
 xmeta: build-xmeta         ## Build xmeta
+aisinit: build-aisinit     ## Build aisinit
 
 build-%:
 	@echo -n "Building $*... "
