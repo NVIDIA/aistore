@@ -170,7 +170,7 @@ lint:linux:
   <<: *default_only_def
   script:
     - make lint
-    - TAGS="statsd ht" make lint
+    - TAGS="oteltracing statsd ht" make lint
     - make fmt-check
     - make spell-check
 

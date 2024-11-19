@@ -37,10 +37,10 @@ func loadAccessToken(tokenFilePath string) string {
 }
 
 var newExporter = func(conf *cmn.TracingConf) (trace.SpanExporter, error) {
-	headers := map[string]string{}
+	var headers map[string]string
 	if conf.ExporterAuth.IsEnabled() {
 		token := loadAccessToken(conf.ExporterAuth.TokenFile)
-		headers[conf.ExporterAuth.TokenHeader] = token
+		headers = map[string]string{conf.ExporterAuth.TokenHeader: token}
 	}
 
 	options := []otlptracegrpc.Option{
