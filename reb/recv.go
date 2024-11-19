@@ -26,7 +26,7 @@ import (
 
 func (reb *Reb) _recvErr(err error) error {
 	if err == nil {
-		return err
+		return nil
 	}
 	if xreb := reb.xctn(); xreb != nil {
 		xreb.Abort(err)
@@ -65,20 +65,22 @@ func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 		nlog.Errorln(err)
 		return err
 	}
-
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
-	if err != nil {
-		err = fmt.Errorf("g[%d]: failed to read recv-ack message type: %v", reb.RebID(), err)
+	switch {
+	case err != nil:
+		err := fmt.Errorf("g[%d]: failed to read ACK message type: %v", reb.RebID(), err)
 		return reb._recvErr(err)
-	}
-	if act == rebMsgEC {
+	case act == rebMsgEC:
 		err := reb.recvECAck(hdr, unpacker)
 		return reb._recvErr(err)
+	case act == rebMsgRegular:
+		err := reb.recvRegularAck(hdr, unpacker)
+		return reb._recvErr(err)
+	default:
+		err := fmt.Errorf("g[%d]: invalid ACK message type '%d' (expecting '%d')", reb.RebID(), act, rebMsgRegular)
+		return reb._recvErr(err)
 	}
-	debug.Assertf(act == rebMsgRegular, "act=%d", act)
-	err = reb.recvRegularAck(hdr, unpacker)
-	return reb._recvErr(err)
 }
 
 func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) error {
@@ -205,8 +207,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		nlog.Errorf("g[%d]: failed to receive ACK: %v", reb.RebID(), err)
-		return err
+		return fmt.Errorf("g[%d]: failed to unpack regular ACK: %v", reb.RebID(), err)
 	}
 	if ack.rebID != reb.rebID.Load() {
 		nlog.Warningln("ACK from", ack.daemonID, "[", reb.warnID(ack.rebID, ack.daemonID), "]")
@@ -220,11 +221,12 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 		return nil
 	}
 
-	// No immediate file deletion: let LRU cleanup the "misplaced" object
-	// TODO: mark the object "Deleted"
-
-	reb.delLomAck(lom, ack.rebID, true /*free pending (orig) transmitted LOM*/)
+	// [NOTE]
+	// - remove migrated object and copies (unless disallowed by feature flag)
+	// - free pending (original) transmitted LOM
+	reb.delLomAck(lom, ack.rebID, true)
 	core.FreeLOM(lom)
+
 	return nil
 }
 

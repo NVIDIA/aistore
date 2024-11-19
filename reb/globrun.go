@@ -600,10 +600,10 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 				}
 			}
 			if cnt == 0 {
-				nlog.Infof("%s: received all ACKs", logHdr)
+				nlog.Infoln(logHdr, "received all ACKs")
 				break
 			}
-			nlog.Warningf("%s: waiting for %d ACKs", logHdr, cnt)
+			nlog.Warningln(logHdr, "waiting for", cnt, "ACKs")
 			if err := xreb.AbortedAfter(sleep); err != nil {
 				nlog.Infoln(logHdr, "abort wait-ack:", err)
 				return
@@ -889,6 +889,7 @@ func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenClos
 		o      = transport.AllocSend()
 		opaque = ack.NewPack()
 	)
+	debug.Assert(ack.rebID != 0)
 	o.Hdr.Bck.Copy(lom.Bucket())
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque

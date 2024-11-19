@@ -12,6 +12,8 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -169,22 +171,38 @@ func (reb *Reb) addLomAck(lom *core.LOM) {
 }
 
 func (reb *Reb) delLomAck(lom *core.LOM, rebID int64, freeLOM bool) {
-	if rebID != 0 && rebID != reb.rebID.Load() {
+	debug.Assert(rebID != 0)
+	if rebID != reb.rebID.Load() {
 		return
 	}
 	lomAck := reb.lomAcks()[lom.CacheIdx()]
-	lomAck.mu.Lock()
-	if rebID == 0 || rebID == reb.rebID.Load() {
-		if lomOrig, ok := lomAck.q[lom.Uname()]; ok {
-			delete(lomAck.q, lom.Uname())
-			if freeLOM {
-				// counting acknowledged migrations (as initiator)
-				xreb := reb.xctn()
-				xreb.ObjsAdd(1, lomOrig.Lsize())
 
-				core.FreeLOM(lomOrig)
-			}
-		}
+	lomAck.mu.Lock()
+	uname := lom.Uname()
+	lomOrig, ok := lomAck.q[uname]
+	if !ok {
+		lomAck.mu.Unlock()
+		return
 	}
+	debug.Assert(uname == lomOrig.Uname(), "uname ", uname, " vs ", lomOrig.Uname())
+	delete(lomAck.q, uname)
 	lomAck.mu.Unlock()
+
+	if !freeLOM {
+		return
+	}
+
+	// counting acknowledged migrations (as initiator)
+	xreb := reb.xctn()
+	xreb.ObjsAdd(1, lomOrig.Lsize())
+
+	// NOTE: rm migrated object (and local copies, if any) right away
+	// TODO [feature]: mark "deleted" instead
+	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
+		lom.Lock(true)
+		err := lom.RemoveObj()
+		lom.Unlock(true)
+		debug.AssertNoErr(err)
+	}
+	core.FreeLOM(lomOrig)
 }
