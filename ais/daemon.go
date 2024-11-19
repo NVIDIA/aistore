@@ -245,7 +245,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cmn.InitErrs(p.si.Name(), nil)
 
 		// init distributed tracing
-		tracing.Init(&config.Tracing, p.si, version)
+		tracing.Init(&config.Tracing, p.si, nil, version)
 
 		return p
 	}
@@ -265,7 +265,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	cmn.InitErrs(t.si.Name(), fs.CleanPathErr)
 
 	// init distributed tracing
-	tracing.Init(&config.Tracing, t.si, version)
+	tracing.Init(&config.Tracing, t.si, nil, version)
 
 	cmn.InitObjProps2Hdr()
 

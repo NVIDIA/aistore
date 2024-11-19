@@ -15,7 +15,7 @@ import (
 
 func IsEnabled() bool { return false }
 
-func Init(_ *cmn.TracingConf, _ *meta.Snode, _ string) {}
+func Init(*cmn.TracingConf, *meta.Snode, any, string) {}
 
 func Shutdown() {}
 

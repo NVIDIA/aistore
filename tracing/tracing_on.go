@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -36,7 +37,7 @@ func loadAccessToken(tokenFilePath string) string {
 	return strings.TrimSpace(string(data))
 }
 
-var newExporter = func(conf *cmn.TracingConf) (trace.SpanExporter, error) {
+func newExporter(conf *cmn.TracingConf) (trace.SpanExporter, error) {
 	var headers map[string]string
 	if conf.ExporterAuth.IsEnabled() {
 		token := loadAccessToken(conf.ExporterAuth.TokenFile)
@@ -85,19 +86,30 @@ func IsEnabled() bool {
 	return tp != nil
 }
 
-func Init(conf *cmn.TracingConf, snode *meta.Snode, version string) {
+func Init(conf *cmn.TracingConf, snode *meta.Snode, exp any /* trace.SpanExporter */, version string) {
 	if conf == nil || !conf.Enabled {
 		nlog.Infof("distributed tracing not enabled (%+v)", conf)
 		return
 	}
-
 	cos.AssertMsg(conf.ExporterEndpoint != "", "exporter endpoint can't be empty")
-	exp, err := newExporter(conf)
-	cos.AssertNoErr(err)
 
+	var (
+		exporter trace.SpanExporter
+		err      error
+		ok       bool
+	)
+	if exp == nil {
+		// default trace.SpanExporter
+		exporter, err = newExporter(conf)
+		cos.AssertNoErr(err)
+	} else {
+		// unit test
+		exporter, ok = exp.(trace.SpanExporter)
+		debug.Assertf(ok, "invalid exporter type %T", exp)
+	}
 	tp = trace.NewTracerProvider(
 		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(conf.SamplerProbability))),
-		trace.WithBatcher(exp),
+		trace.WithBatcher(exporter),
 		trace.WithResource(newResource(conf, snode, version)),
 	)
 

@@ -18,7 +18,6 @@ import (
 	. "github.com/onsi/gomega"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
@@ -28,8 +27,7 @@ var _ = Describe("Tracing", func() {
 	var (
 		exporter *tracetest.InMemoryExporter
 
-		origExporter = newExporter
-		dummySnode   = &meta.Snode{DaeID: "test", DaeType: "proxy"}
+		dummySnode = &meta.Snode{DaeID: "test", DaeType: "proxy"}
 
 		newTestHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -56,17 +54,6 @@ var _ = Describe("Tracing", func() {
 		}
 	)
 
-	BeforeEach(func() {
-		exporter = tracetest.NewInMemoryExporter()
-		newExporter = func(_ *cmn.TracingConf) (trace.SpanExporter, error) {
-			return exporter, nil
-		}
-	})
-
-	AfterEach(func() {
-		newExporter = origExporter
-	})
-
 	Describe("Server", func() {
 		AfterEach(func() {
 			Shutdown()
@@ -77,7 +64,7 @@ var _ = Describe("Tracing", func() {
 				ExporterEndpoint:   "dummy",
 				Enabled:            true,
 				SamplerProbability: 1.0,
-			}, dummySnode, aisVersion)
+			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
 			Expect(IsEnabled()).To(BeTrue())
 
 			server := httptest.NewServer(NewTraceableHandler(newTestHandler, "testendpoint"))
@@ -96,7 +83,7 @@ var _ = Describe("Tracing", func() {
 		It("should do nothing when tracing disabled", func() {
 			Init(&cmn.TracingConf{
 				Enabled: false,
-			}, dummySnode, aisVersion)
+			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
 			Expect(IsEnabled()).To(BeFalse())
 
 			server := httptest.NewServer(NewTraceableHandler(newTestHandler, "testendpoint"))
@@ -119,7 +106,7 @@ var _ = Describe("Tracing", func() {
 				ExporterEndpoint:   "dummy",
 				Enabled:            true,
 				SamplerProbability: 1.0,
-			}, dummySnode, aisVersion)
+			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
 			Expect(IsEnabled()).To(BeTrue())
 
 			server := httptest.NewServer(newTestHandler)
@@ -145,7 +132,7 @@ var _ = Describe("Tracing", func() {
 		It("should do nothing when tracing disabled", func() {
 			Init(&cmn.TracingConf{
 				Enabled: false,
-			}, dummySnode, aisVersion)
+			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
 			Expect(IsEnabled()).To(BeFalse())
 
 			server := httptest.NewServer(newTestHandler)
