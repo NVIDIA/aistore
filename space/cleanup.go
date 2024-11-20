@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,6 +37,7 @@ type (
 		StatsT  stats.Tracker
 		Buckets []cmn.Bck // optional list of specific buckets to cleanup
 		WG      *sync.WaitGroup
+		Force   bool
 	}
 	XactCln struct {
 		xact.Base
@@ -185,41 +187,46 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	return parent.cs.c
 }
 
+// check other conditions (other than too-early) prior to going ahead to remove misplaced
 func (p *clnP) rmMisplaced() bool {
 	var (
 		g = xreg.GetRebMarked()
 		l = xreg.GetResilverMarked()
 	)
 	if g.Xact == nil && l.Xact == nil && !g.Interrupted && !g.Restarted && !l.Interrupted {
-		// TODO -- FIXME: force
 		return true
 	}
 
-	// log
-	var warn, info string
-	if p.cs.a.Err() != nil {
-		warn = fmt.Sprintf("%s: %s but not removing misplaced/obsolete copies: ", p.ini.Xaction, p.cs.a.String())
-	} else {
-		warn = fmt.Sprintf("%s: not removing misplaced/obsolete copies: ", p.ini.Xaction)
-	}
+	// force(?) and log
+	var (
+		why   string
+		flog  = nlog.Warningln
+		cserr = p.cs.a.Err()
+		ok    bool
+	)
 	switch {
 	case g.Xact != nil:
-		info = g.Xact.String() + " is running"
+		why = g.Xact.String() + " is running"
 	case g.Interrupted:
-		info = "rebalance interrupted"
+		why = "rebalance interrupted"
+		ok = p.ini.Force
 	case g.Restarted:
-		info = "node restarted"
+		why = "node restarted"
+		ok = p.ini.Force
 	case l.Xact != nil:
-		info = l.Xact.String() + " is running"
+		why = l.Xact.String() + " is running"
 	case l.Interrupted:
-		info = "resilver interrupted"
+		why = "resilver interrupted"
 	}
-	if p.cs.a.Err() != nil {
-		nlog.Errorln(warn + info)
+	if cserr != nil {
+		flog = nlog.Errorln
+	}
+	if ok {
+		flog(core.T.String(), p.ini.Xaction.String(), "proceeding to remove misplaced obj-s with force, ignoring: [", cserr, why, "]")
 	} else {
-		nlog.Warningln(warn + info)
+		flog(core.T.String(), p.ini.Xaction.String(), "not removing misplaced obj-s: [", cserr, why, "]")
 	}
-	return false
+	return ok
 }
 
 //////////
@@ -229,7 +236,15 @@ func (p *clnP) rmMisplaced() bool {
 // mountpath cleanup j
 
 func (j *clnJ) String() string {
-	return fmt.Sprintf("%s: jog-%s", j.ini.Xaction, j.mi)
+	var sb strings.Builder
+	sb.Grow(128)
+	sb.WriteString(j.ini.Xaction.String())
+	sb.WriteString(": jog-")
+	sb.WriteString(j.mi.String())
+	if j.ini.Force {
+		sb.WriteString("-with-force")
+	}
+	return sb.String()
 }
 
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
@@ -415,15 +430,18 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		}
 		j.oldWork = append(j.oldWork, fqn)
 	default:
-		debug.Assertf(false, "Unsupported content type: %s", parsedFQN.ContentType)
+		debug.Assert(false, "Unsupported content type: ", parsedFQN.ContentType)
 	}
 }
 
 // [TODO]
 // - add stats error counters (stats.ErrLmetaCorruptedCount, ...)
 // - revisit rm-ed byte counting
+// - dry-run (feature) with all to-be removed listed
 func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	if err := lom.InitFQN(fqn, &j.bck); err != nil {
+		nlog.Errorln(j.String(), "unexpected object fqn", fqn, err)
+		// TODO -- FIXME: consider applying force
 		return
 	}
 	// handle load err
@@ -458,10 +476,11 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		}
 		return
 	}
-	// too early
+
+	// too early; NOTE: default dont-evict = 2h
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String())
+			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-evict", j.config.LRU.DontEvictTime.D())
 		}
 		return
 	}
@@ -472,15 +491,17 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		return
 	}
 	if lom.IsCopy() {
+		// will be _visited_ separately (if not already)
 		return
 	}
 	if lom.ECEnabled() {
+		// misplaced EC
 		metaFQN := fs.CSM.Gen(lom, fs.ECMetaType, "")
 		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, core.NewCTFromLOM(lom, fs.ObjectType))
 		}
 	} else {
-		// TODO -- FIXME: instead, do not free in the visitObj() caller
+		// misplaced object
 		lom = lom.CloneMD(lom.FQN)
 		j.misplaced.loms = append(j.misplaced.loms, lom)
 	}

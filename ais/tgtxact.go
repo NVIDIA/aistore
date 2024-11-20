@@ -213,7 +213,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		if len(args.Buckets) == 0 && !args.Bck.IsEmpty() {
 			args.Buckets = []cmn.Bck{args.Bck}
 		}
-		go t.runStoreCleanup(args.ID, wg, args.Buckets...)
+		go t.runSpaceCleanup(args, wg)
 		wg.Wait()
 	case apc.ActResilver:
 		if bck != nil {

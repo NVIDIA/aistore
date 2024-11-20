@@ -55,7 +55,24 @@ $ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
 
 ## Storage cleanup
 
-As all other supported batch operations (aka `xactions`), cleanup runs asynchronously and can be monitored during its run, e.g.:
+```console
+$ ais storage cleanup --help
+NAME:
+   ais storage cleanup - perform storage cleanup: remove deleted objects and old/obsolete workfiles
+
+USAGE:
+   ais storage cleanup [command options] PROVIDER:[//BUCKET_NAME]
+
+OPTIONS:
+   --force, -f      disregard interrupted rebalance and possibly other conditions preventing full cleanup
+                    (tip: check 'ais config cluster lru.dont_evict_time' as well)
+   --wait           wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value  maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --help, -h       show help
+```
+
+Similar to all supported batch operations (aka `xactions`), cleanup runs asynchronously and can be monitored during its run, e.g.:
 
 ```console
 # ais storage cleanup

@@ -88,6 +88,8 @@ var (
 		apc.ActDsort:    "job start " + apc.ActDsort,
 		apc.ActDownload: "job start " + apc.ActDownload,
 		apc.ActBlobDl:   "job start " + apc.ActBlobDl,
+		// storage
+		"space-cleanup": "storage cleanup",
 	}
 )
 

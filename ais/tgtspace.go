@@ -55,6 +55,11 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 			return
 		}
 	}
+
+	//
+	// TODO: refactor
+	//
+
 	if errCap == nil {
 		return // unlikely; nothing to do
 	}
@@ -69,15 +74,20 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 		t.statsT.SetFlag(cos.NodeAlerts, cos.LowCapacity)
 	}
 	nlog.Warningln(t.String(), "running store cleanup:", cs.String())
-	// run serially, cleanup first and LRU second, iff out-of-space persists
+
+	//
+	// run serially - cleanup first, LRU second (but only if out-of-space persists)
+	//
 	go func() {
-		cs := t.runStoreCleanup("" /*uuid*/, nil /*wg*/)
+		var xargs xact.ArgsMsg // no bucket, no xid - nothing
+		cs := t.runSpaceCleanup(&xargs, nil /*wg*/)
 		lastTrigOOS.Store(mono.NanoTime())
 		if cs.Err() != nil {
 			nlog.Warningln(t.String(), "still out of space, running LRU eviction now:", cs.String())
 			t.runLRU("" /*uuid*/, nil /*wg*/, false)
 		}
 	}()
+
 	return
 }
 
@@ -118,12 +128,12 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	space.RunLRU(&ini)
 }
 
-func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck) fs.CapStatus {
-	regToIC := id == ""
-	if regToIC {
-		id = cos.GenUUID()
+func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.CapStatus {
+	regToIC := xargs.ID != ""
+	if !regToIC {
+		xargs.ID = cos.GenUUID()
 	}
-	rns := xreg.RenewStoreCleanup(id)
+	rns := xreg.RenewStoreCleanup(xargs.ID)
 	if rns.Err != nil || rns.IsRunning() {
 		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
 		if wg != nil {
@@ -132,9 +142,9 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 		return fs.CapStatus{}
 	}
 	xcln := rns.Entry.Get()
-	if regToIC && xcln.ID() == id {
+	if regToIC && xcln.ID() == xargs.ID {
 		// pre-existing UUID: notify IC members
-		regMsg := xactRegMsg{UUID: id, Kind: apc.ActStoreCleanup, Srcs: []string{t.SID()}}
+		regMsg := xactRegMsg{UUID: xargs.ID, Kind: apc.ActStoreCleanup, Srcs: []string{t.SID()}}
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
@@ -142,8 +152,9 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 		Xaction: xcln.(*space.XactCln),
 		Config:  cmn.GCO.Get(),
 		StatsT:  t.statsT,
-		Buckets: bcks,
+		Buckets: xargs.Buckets,
 		WG:      wg,
+		Force:   xargs.Force,
 	}
 	xcln.AddNotif(&xact.NotifXact{
 		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
