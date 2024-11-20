@@ -234,17 +234,19 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 }
 
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
-	// TODO -- FIXME =======================
-	if cnt := r.ErrCnt(); cnt > 0 {
-		// to break quiescence - the waiter will look at r.Err() first anyway
-		return core.QuiTimeout
+	since := mono.Since(r.rxlast.Load())
+
+	// log
+	if (tot > cmn.Rom.MaxKeepalive() || since > cmn.Rom.MaxKeepalive()) &&
+		(cmn.Rom.FastV(4, cos.SmoduleXs) || tot < cmn.Rom.MaxKeepalive()<<1) {
+		nlog.Warningln(r.Name(), "quiescing [", since, tot, "rc", r.refc.Load(), "errs", r.ErrCnt(), "]")
 	}
 
-	since := mono.Since(r.rxlast.Load())
 	if r.refc.Load() > 0 {
 		if since > cmn.Rom.MaxKeepalive() {
+			conf := &r.BckJog.Config.Timeout
 			// idle on the Rx side despite having some (refc > 0) senders
-			if tot > r.BckJog.Config.Timeout.SendFile.D() {
+			if tot > conf.SendFile.D() || (since > conf.MaxHostBusy.D() && tot > conf.MaxHostBusy.D()) {
 				return core.QuiTimeout
 			}
 		}

@@ -477,6 +477,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		return
 	}
 
+	// TODO: switch
 	// too early; NOTE: default dont-evict = 2h
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
@@ -512,6 +513,9 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 		return // must be busy
 	}
 	defer lom.Unlock(true)
+
+	// TODO: switch
+
 	// reload under lock and check atime - again
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {
