@@ -19,8 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// Start xaction
-func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string) (xid string, err error) {
+func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string /* e.g. blob-downloader objname */) (xid string, err error) {
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
@@ -43,7 +42,7 @@ func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string) (xid string, 
 	return
 }
 
-// Abort ("stop") xactions
+// a.k.a. stop
 func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
 	msg := apc.ActMsg{Action: apc.ActXactStop, Value: args}
 	bp.Method = http.MethodPut

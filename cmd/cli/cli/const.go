@@ -495,7 +495,12 @@ var (
 			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",
 	}
 
-	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+	forceFlag    = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+	forceClnFlag = cli.BoolFlag{
+		Name: forceFlag.Name,
+		Usage: "disregard interrupted rebalance and possibly other conditions preventing full cleanup\n" +
+			indent1 + "\t(tip: check 'ais config cluster lru.dont_evict_time' as well)",
+	}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{

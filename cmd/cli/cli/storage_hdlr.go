@@ -111,6 +111,7 @@ var (
 
 var (
 	cleanupFlags = []cli.Flag{
+		forceClnFlag,
 		waitFlag,
 		waitJobXactFinishedFlag,
 	}
@@ -210,7 +211,7 @@ func showStorageHandler(c *cli.Context) (err error) {
 }
 
 //
-// cleanup
+// cleanup space: remove deleted, misplaced
 //
 
 func cleanupStorageHandler(c *cli.Context) (err error) {
@@ -227,10 +228,13 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 			return
 		}
 	}
-	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck}
+
+	force := flagIsSet(c, forceFlag)
+	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck, Force: force}
 	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
 		return
 	}
+
 	xargs.ID = id
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		if id != "" {

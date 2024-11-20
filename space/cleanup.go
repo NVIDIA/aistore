@@ -191,6 +191,7 @@ func (p *clnP) rmMisplaced() bool {
 		l = xreg.GetResilverMarked()
 	)
 	if g.Xact == nil && l.Xact == nil && !g.Interrupted && !g.Restarted && !l.Interrupted {
+		// TODO -- FIXME: force
 		return true
 	}
 
@@ -437,17 +438,17 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			return
 		}
 		// too early to remove anything
-		if atimefs+int64(j.config.LRU.DontEvictTime) < j.now {
+		if atimefs+int64(j.config.LRU.DontEvictTime) > j.now {
 			return
 		}
-		if cmn.IsErrLmetaCorrupted(err) {
+		if cmn.IsErrLmetaCorrupted(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
 				nlog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
 				j.ini.Xaction.AddErr(err)
 			} else {
 				nlog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
 			}
-		} else if cmn.IsErrLmetaNotFound(err) {
+		} else if cmn.IsErrLmetaNotFound(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
 				nlog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
 				j.ini.Xaction.AddErr(err)
@@ -479,6 +480,8 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			j.misplaced.ec = append(j.misplaced.ec, core.NewCTFromLOM(lom, fs.ObjectType))
 		}
 	} else {
+		// TODO -- FIXME: instead, do not free in the visitObj() caller
+		lom = lom.CloneMD(lom.FQN)
 		j.misplaced.loms = append(j.misplaced.loms, lom)
 	}
 }
@@ -602,7 +605,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				fqn     = mlom.FQN
 				removed bool
 			)
-			lom := core.AllocLOM(mlom.ObjName) // yes placed
+			lom := core.AllocLOM(mlom.ObjName)
 			switch {
 			case lom.InitBck(&j.bck) != nil:
 				removed = os.Remove(fqn) == nil
