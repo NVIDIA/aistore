@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -121,6 +123,20 @@ func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Fl
 		_, err := api.SetBucketProps(baseParams, bck, props)
 		tassert.CheckFatal(t, err)
 	})
+}
+
+func loadCredentials(t *testing.T) (f func(*config.LoadOptions) error) {
+	if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
+		f = config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), ""),
+		)
+	} else if os.Getenv("AWS_PROFILE") != "" {
+		f = config.WithSharedConfigProfile(os.Getenv("AWS_PROFILE"))
+	} else {
+		t.Skip("Failed to load credentials, none of AWS_PROFILE, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY are set")
+		f = func(*config.LoadOptions) error { return nil }
+	}
+	return f
 }
 
 func TestS3PresignedPutGet(t *testing.T) {
@@ -288,7 +304,7 @@ func TestDisableColdGet(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "Expected GET to fail %v", err)
 }
 
-// export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ETag" -count=1 ./ais/test/.
+// export AWS_PROFILE=default; export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ETag" -count=1 ./ais/test/.
 func TestS3ETag(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, Bck: cliBck, RequiredCloudProvider: apc.AWS})
 
@@ -303,7 +319,7 @@ func TestS3ETag(t *testing.T) {
 
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
-		config.WithSharedConfigProfile(cos.GetEnvOrDefault("AWS_PROFILE", "default")),
+		loadCredentials(t),
 	)
 	tassert.CheckFatal(t, err)
 	s3Client := s3.NewFromConfig(cfg)
