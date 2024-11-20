@@ -122,6 +122,9 @@ func Init(conf *cmn.TracingConf, snode *meta.Snode, exp any /* trace.SpanExporte
 	otel.SetTracerProvider(tp)
 }
 
+// used in tests only
+func ForceFlush() { tp.ForceFlush(context.Background()) }
+
 func Shutdown() {
 	if !IsEnabled() {
 		return

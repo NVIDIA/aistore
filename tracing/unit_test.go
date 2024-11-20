@@ -4,16 +4,16 @@
 /*
  * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
  */
-package tracing
+package tracing_test
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/tracing"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -56,24 +56,23 @@ var _ = Describe("Tracing", func() {
 
 	Describe("Server", func() {
 		AfterEach(func() {
-			Shutdown()
-			tp = nil
+			tracing.Shutdown()
 		})
 		It("should export server trace when tracing enabled", func() {
-			Init(&cmn.TracingConf{
+			tracing.Init(&cmn.TracingConf{
 				ExporterEndpoint:   "dummy",
 				Enabled:            true,
 				SamplerProbability: 1.0,
 			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
-			Expect(IsEnabled()).To(BeTrue())
+			Expect(tracing.IsEnabled()).To(BeTrue())
 
-			server := httptest.NewServer(NewTraceableHandler(newTestHandler, "testendpoint"))
+			server := httptest.NewServer(tracing.NewTraceableHandler(newTestHandler, "testendpoint"))
 			defer server.Close()
 
 			_, err := http.Get(server.URL)
 			Expect(err).NotTo(HaveOccurred())
 
-			tp.ForceFlush(context.Background())
+			tracing.ForceFlush()
 
 			Expect(len(exporter.GetSpans())).To(BeEquivalentTo(1))
 			span := exporter.GetSpans()[0]
@@ -81,12 +80,12 @@ var _ = Describe("Tracing", func() {
 		})
 
 		It("should do nothing when tracing disabled", func() {
-			Init(&cmn.TracingConf{
+			tracing.Init(&cmn.TracingConf{
 				Enabled: false,
 			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
-			Expect(IsEnabled()).To(BeFalse())
+			Expect(tracing.IsEnabled()).To(BeFalse())
 
-			server := httptest.NewServer(NewTraceableHandler(newTestHandler, "testendpoint"))
+			server := httptest.NewServer(tracing.NewTraceableHandler(newTestHandler, "testendpoint"))
 			defer server.Close()
 
 			_, err := http.Get(server.URL)
@@ -98,21 +97,20 @@ var _ = Describe("Tracing", func() {
 
 	Describe("Client", func() {
 		AfterEach(func() {
-			Shutdown()
-			tp = nil
+			tracing.Shutdown()
 		})
 		It("should export client trace when tracing enabled", func() {
-			Init(&cmn.TracingConf{
+			tracing.Init(&cmn.TracingConf{
 				ExporterEndpoint:   "dummy",
 				Enabled:            true,
 				SamplerProbability: 1.0,
 			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
-			Expect(IsEnabled()).To(BeTrue())
+			Expect(tracing.IsEnabled()).To(BeTrue())
 
 			server := httptest.NewServer(newTestHandler)
 			defer server.Close()
 
-			client := NewTraceableClient(http.DefaultClient)
+			client := tracing.NewTraceableClient(http.DefaultClient)
 			_, isOtelType := client.Transport.(*otelhttp.Transport)
 			Expect(isOtelType).To(BeTrue())
 
@@ -122,7 +120,7 @@ var _ = Describe("Tracing", func() {
 			_, err = io.ReadAll(resp.Body)
 			Expect(err).NotTo(HaveOccurred())
 
-			tp.ForceFlush(context.Background())
+			tracing.ForceFlush()
 
 			Expect(len(exporter.GetSpans())).To(BeEquivalentTo(1))
 			span := exporter.GetSpans()[0]
@@ -130,15 +128,15 @@ var _ = Describe("Tracing", func() {
 		})
 
 		It("should do nothing when tracing disabled", func() {
-			Init(&cmn.TracingConf{
+			tracing.Init(&cmn.TracingConf{
 				Enabled: false,
 			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
-			Expect(IsEnabled()).To(BeFalse())
+			Expect(tracing.IsEnabled()).To(BeFalse())
 
 			server := httptest.NewServer(newTestHandler)
 			defer server.Close()
 
-			client := NewTraceableClient(http.DefaultClient)
+			client := tracing.NewTraceableClient(http.DefaultClient)
 
 			resp, err := client.Get(server.URL)
 			Expect(err).NotTo(HaveOccurred())
