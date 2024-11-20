@@ -849,10 +849,10 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		nodes := md.RemoteTargets()
 		ctx.nodes = make(map[string]*Metadata, len(nodes))
 		for _, node := range nodes {
-			wg.Add(1)
 			if node.InMaintOrDecomm() {
 				continue
 			}
+			wg.Add(1)
 			go func(si *meta.Snode, c *getJogger, mtx *sync.Mutex, mdExists bool) {
 				ctx.requestMeta(si, c, mtx, mdExists)
 				wg.Done()
