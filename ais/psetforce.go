@@ -27,61 +27,63 @@ import (
 // cluster
 //
 
+// validation followed by either a) or b) below
 func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
+	const (
+		warn = "setting new primary is already in progress"
+	)
 	apiItems, err := p.parseURL(w, r, apc.URLPathCluProxy.L, 1, false)
 	if err != nil {
 		return
 	}
-
 	smap := p.owner.smap.get()
 	if err := smap.validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	debug.Assert(smap.IsPrimary(p.si))
-	npid := apiItems[0]
-	npsi := smap.GetProxy(npid)
-
-	if npsi == nil {
-		// a) go with force
-		p._withForce(w, r, npid, smap)
+	if !smap.IsPrimary(p.si) {
+		err := fmt.Errorf("%s is (already?) not primary, please review cluster map for changes (%s) and, possibly, try again", p, smap.StringEx())
+		debug.AssertNoErr(err)
+		p.writeErr(w, r, err)
 		return
 	}
-
+	npid := apiItems[0]
 	if npid == p.SID() {
-		debug.Assert(p.SID() == smap.Primary.ID()) // must be forwardCP-ed
+		debug.Assert(p.SID() == smap.Primary.ID())
 		nlog.Warningln(p.String(), "(self) is already primary, nothing to do")
 		return
 	}
 
+	npsi := smap.GetProxy(npid)
+
+	// a) another cluster, with force?
+	if npsi == nil {
+		query := r.URL.Query()
+		if !cos.IsParseBool(query.Get(apc.QparamForce)) {
+			err := &errNodeNotFound{msg: "set-primary failure (force == false):", id: npid, si: p.si, smap: smap}
+			p.writeErr(w, r, err, http.StatusNotFound)
+			return
+		}
+		if !p.settingNewPrimary.CAS(false, true) {
+			p.writeErr(w, r, errors.New(warn+", cannot use force"))
+			return
+		}
+		// join with force
+		p.forceJoin(w, r, npid, query)
+		p.settingNewPrimary.Store(false)
+		return
+	}
+
+	// b) regular 'set-primary', same cluster
 	if err := _checkFlags(npsi); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-
-	// b) regular set-primary
 	if p.settingNewPrimary.CAS(false, true) {
 		p._setPrimary(w, r, npsi)
 		p.settingNewPrimary.Store(false)
 	} else {
-		nlog.Warningln("setting new primary in progress now...")
-	}
-}
-
-func (p *proxy) _withForce(w http.ResponseWriter, r *http.Request, npid string, smap *smapX) {
-	query := r.URL.Query()
-	force := cos.IsParseBool(query.Get(apc.QparamForce))
-	if !force {
-		err := &errNodeNotFound{msg: "set-primary failure:", id: npid, si: p.si, smap: smap}
-		p.writeErr(w, r, err, http.StatusNotFound)
-		return
-	}
-	if p.settingNewPrimary.CAS(false, true) {
-		p.forceJoin(w, r, npid, query)
-		p.settingNewPrimary.Store(false)
-	} else {
-		err := errors.New("setting new primary is in progress, cannot use force")
-		p.writeErr(w, r, err)
+		nlog.Warningln(warn)
 	}
 }
 
@@ -205,38 +207,54 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		return
 	}
 
-	// 2. get destination Smap (henceforth, nsmap)
-	nsmap, err := p.smapFromURL(nurl)
-	if err != nil && psi != nil && psi.PubNet.URL != psi.ControlNet.URL {
-		nsmap, err = p.smapFromURL(psi.PubNet.URL)
+	// 2. get destination Smap (henceforth, nsmap) and validate even more
+	nsmap, ern := p.smapFromURL(nurl)
+	if ern != nil && psi != nil && psi.PubNet.URL != psi.ControlNet.URL {
+		nsmap, ern = p.smapFromURL(psi.PubNet.URL)
 	}
-	if err != nil {
-		err := fmt.Errorf("%s %s to %s[%q, %q]: %s", act, p, tag, npid, newPrimaryURL, err)
+	if ern != nil {
+		err := fmt.Errorf("%s %s to %s[%q, %q]: %s", act, p, tag, npid, newPrimaryURL, ern)
+		p.writeErr(w, r, err)
+		return
+	}
+	if err := nsmap.validate(); err != nil {
+		err := fmt.Errorf("%s: destination %s is invalid [%v] - cannot %s", p, nsmap.StringEx(), err, act)
+		p.writeErr(w, r, err)
+		return
+	}
+	if !cos.IsValidUUID(smap.UUID) || !cos.IsValidUUID(nsmap.UUID) {
+		err := fmt.Errorf("%s: local %s and/or remote %s have invalid UUID(s)", p, smap.StringEx(), nsmap.StringEx()) // (unlikely)
+		debug.AssertNoErr(err)
 		p.writeErr(w, r, err)
 		return
 	}
 	npsi := nsmap.Primary
-	if nurl != npsi.PubNet.URL && nurl != npsi.ControlNet.URL {
-		// must be reachable via its own (new)Smap
-		err := fmt.Errorf("%s: %s URLs %q vs (pub %q, ctrl %q)", p, tag, nurl, npsi.PubNet.URL, npsi.ControlNet.URL)
-		nlog.Warningln(err)
+	npname := npsi.StringEx()
+	if npid != npsi.ID() {
+		err := fmt.Errorf("%s: according to the destination %s %s %s is not _the_ primary", p, nsmap.StringEx(), tag, npname)
+		p.writeErr(w, r, err)
+		return
+	}
+	if nurl != npsi.ControlNet.URL {
+		//
+		// must be reachable via its own `nsmap`, with control-plane network preferable
+		//
 		if _, e := p.smapFromURL(npsi.ControlNet.URL); e != nil {
+			nlog.Warningln(tag, npname, "is not reachable via its ctrl URL", npsi.ControlNet.URL)
+			//
+			// TODO: require "double-force" or "super-force" flag to proceed
+			//
 			if _, e = p.smapFromURL(npsi.PubNet.URL); e != nil {
+				err := fmt.Errorf("%s: %s %s is no reachable via both (pub %q, ctrl %q) URLs", p, tag, npname, npsi.PubNet.URL, npsi.ControlNet.URL)
 				p.writeErr(w, r, err)
 				return
 			}
 		}
 	}
-	if npid != npsi.ID() {
-		err := fmt.Errorf("%s: according to the destination %s %s[%s] is not _the_ primary", p, nsmap.StringEx(), tag, npid)
-		p.writeErr(w, r, err)
-		return
-	}
 	if err := _checkFlags(npsi); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	npname := npsi.StringEx()
 
 	//
 	// 3. begin
@@ -245,7 +263,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	if smap.UUID != nsmap.UUID {
 		what = "a different cluster:"
 	}
-	nlog.Warningln(act, "entire cluster [", p.String(), smap.StringEx(), "] to:\n", "\t", what, "[", npname, nsmap.StringEx(), "]")
+	nlog.Warningln(act, "entire cluster [", p.String(), smap.StringEx(), "] to", what, "\n\t[", npname, nsmap.StringEx(), "]")
 
 	// 4. get destination cluMeta from npsi
 	cargs := allocCargs()
@@ -256,11 +274,11 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		cargs.cresv = cresCM{} // -> cluMeta
 	}
 	res := p.call(cargs, nsmap /* -> header */)
-	err = res.unwrap()
+	eri := res.unwrap()
 	freeCargs(cargs)
-	if err != nil {
+	if eri != nil {
 		freeCR(res)
-		p.writeErr(w, r, err)
+		p.writeErr(w, r, eri)
 		return
 	}
 	ncm, ok := res.v.(*cluMeta)
@@ -271,11 +289,24 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		p.writeErrf(w, r, "cannot %s %s(self, primary) -> %s: destination cluMeta [%v]", act, p, npname, err)
 		return
 	}
+	if ncm.Smap.UUID != nsmap.UUID {
+		// (unlikely)
+		err := fmt.Errorf("cannot %s %s(self, primary) -> %s: unexpected UUID mismatch (%q vs %q)", act, p, npname,
+			ncm.Smap.StringEx(), nsmap.StringEx())
+		debug.AssertNoErr(err)
+		p.writeErr(w, r, err)
+		return
+	}
+	if ncm.Smap.Version != nsmap.Version {
+		debug.Assert(ncm.Smap.Version > nsmap.Version, ncm.Smap.String(), " vs ", nsmap.String())
+		p.writeErrf(w, r, "cannot %s %s(self, primary) -> %s: detected version change (%s vs %s) at the destination",
+			act, p, npname, ncm.Smap.String(), nsmap.String())
+	}
 
 	// 5. backup (see rollback below)
-	cm, err := p.cluMeta(cmetaFillOpt{skipPrimeTime: true})
-	if err != nil {
-		p.writeErrf(w, r, "cannot %s %s to %s: %v", act, p, npname, err) // (unlikely)
+	cm, erj := p.cluMeta(cmetaFillOpt{skipPrimeTime: true})
+	if erj != nil {
+		p.writeErrf(w, r, "cannot %s %s to %s: %v", act, p, npname, erj) // (unlikely)
 		return
 	}
 	if err := cm.validate(); err != nil {
@@ -292,7 +323,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 
 	// 7. update cluMeta in memory (= destination)
 	nlog.Infoln(act, "(7) update clu-meta in mem")
-	if err = cmn.GCO.Update(&ncm.Config.ClusterConfig); err != nil {
+	if err := cmn.GCO.Update(&ncm.Config.ClusterConfig); err != nil {
 		// rollback #1
 		nlog.Errorln(act, "rollback #1", err)
 		cm.metasync(p, aimsg, true)
@@ -331,32 +362,33 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	time.Sleep(time.Second)
 
 	// 10. finally, ask npsi to bump versions and metasync all (see `msyncForceAll`)
-	nlog.Infoln(act, "(10) npsi to bump metasync")
+	const act2 = "\"bump\""
+	nlog.Infoln(act, "(10) npsi to", act2, "metasync")
 	cargs = allocCargs()
-	msg := &apc.ActMsg{Action: apc.ActBumpMetasync}
+	msg := &apc.ActMsg{Action: apc.ActBumpMetasync, Value: float64(smap.Version)}
 	{
 		cargs.si = npsi
 		cargs.timeout = cmn.Rom.MaxKeepalive()
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathClu.S, Body: cos.MustMarshal(msg)}
 	}
 	res = p.call(cargs, nsmap)
-	err = res.unwrap()
+	err := res.unwrap()
 	freeCR(res)
 	if err != nil {
 		freeCargs(cargs)
-		// retry once
+		// retry just once
 		cargs = allocCargs()
 		cargs.si = npsi
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Base: npsi.PubNet.URL, Path: apc.URLPathClu.S, Body: cos.MustMarshal(msg)}
 		cargs.timeout = cmn.Rom.MaxKeepalive() + time.Second
 
-		nlog.Errorln(err, "- failed to bump metasync, retrying...")
+		nlog.Errorln(err, "- failed to", act2, "metasync, retrying...")
 		res := p.call(cargs, nsmap)
 		err = res.unwrap()
 		freeCR(res)
 	}
 	if err != nil {
-		p.writeErrf(w, r, "%s: failed to bump metasync => %s: %v", p, npname, err)
+		p.writeErrf(w, r, "%s: failed to %s metasync => %s: %v", p, act2, npname, err)
 	}
 	freeCargs(cargs)
 }
@@ -461,25 +493,51 @@ func (p *proxy) _bcastCommitForceJoin(w http.ResponseWriter, r *http.Request, sm
 func (p *proxy) msyncForceAll(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	cm, err := p.cluMeta(cmetaFillOpt{})
 	if err != nil {
+		debug.AssertNoErr(err)
 		p.writeErr(w, r, err) // (unlikely)
 		return
 	}
-
-	if true { // DEBUG
-		aimsg := p.newAmsgActVal(apc.ActPrimaryForce, nil)
-		cm.metasync(p, aimsg, false)
-		return
+	var (
+		victimVer int64
+		v, ok     = msg.Value.(float64)
+	)
+	if !ok {
+		nlog.Errorf("unexpected \"victim-version\" type (%v, %T)", msg.Value, msg.Value)
+	} else {
+		victimVer = int64(v)
 	}
-	ctx := &smapModifier{
-		pre: func(_ *smapModifier, clone *smapX) error { clone.Version += 100; return nil }, // TODO -- FIXME: max(smap.Version, nsmap.Version) + 100
+
+	// 1. Smap (special care)
+	nver := max(cm.Smap.Version, victimVer) + 100
+	nlog.Warningln("metasync \"bumped\" Smap", cm.Smap.Version, "=>", nver)
+	sctx := &smapModifier{
+		pre: func(_ *smapModifier, clone *smapX) error { clone.Version = nver; return nil },
 		final: func(_ *smapModifier, clone *smapX) {
 			aimsg := p.newAmsgActVal(apc.ActPrimaryForce, msg)
-			cm.Smap = clone
-			cm.metasync(p, aimsg, false)
+			wg := p.metasyncer.sync(revsPair{clone, aimsg})
+			wg.Wait()
 		},
 	}
-	err = p.owner.smap.modify(ctx)
-	debug.AssertNoErr(err) // TODO -- FIXME: handle
+	err = p.owner.smap.modify(sctx)
+	if err != nil {
+		debug.AssertNoErr(err)
+		p.writeErr(w, r, err) // FATAL
+		return
+	}
+
+	// 2. the rest, with msg=force
+	cm, err = p.cluMeta(cmetaFillOpt{})
+	if err != nil {
+		debug.AssertNoErr(err)
+		p.writeErr(w, r, err) // (unlikely)
+		return
+	}
+	if cm.Smap.Version < nver {
+		debug.Assert(false, cm.Smap.Version, " vs ", nver)
+		nlog.Errorf("invalid %s version (expected >= %d post-modifier)", cm.Smap.StringEx(), nver) // (unlikely)
+	}
+	aimsg := p.newAmsgActVal(apc.ActPrimaryForce, nil)
+	cm.metasync(p, aimsg, false)
 }
 
 //
@@ -522,7 +580,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		msg   = p.newAmsgStr(apc.ActNewPrimary, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
-	nlog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
+	nlog.Infof("%s: distributing (%s, %s, %s) with newly elected or selected primary (self)", p, clone, bmd, rmd)
 	config, err := p.ensureConfigURLs()
 	if err != nil {
 		nlog.Errorln(err)
