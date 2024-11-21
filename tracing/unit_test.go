@@ -6,6 +6,9 @@
  */
 package tracing_test
 
+// usage:
+// go test -v -tags="debug oteltracing"
+
 import (
 	"io"
 	"net/http"
@@ -25,8 +28,6 @@ var _ = Describe("Tracing", func() {
 	const aisVersion = "v3.33"
 
 	var (
-		exporter *tracetest.InMemoryExporter
-
 		dummySnode = &meta.Snode{DaeID: "test", DaeType: "proxy"}
 
 		newTestHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -59,11 +60,12 @@ var _ = Describe("Tracing", func() {
 			tracing.Shutdown()
 		})
 		It("should export server trace when tracing enabled", func() {
+			exporter := tracetest.NewInMemoryExporter()
 			tracing.Init(&cmn.TracingConf{
 				ExporterEndpoint:   "dummy",
 				Enabled:            true,
 				SamplerProbability: 1.0,
-			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
+			}, dummySnode, exporter, aisVersion)
 			Expect(tracing.IsEnabled()).To(BeTrue())
 
 			server := httptest.NewServer(tracing.NewTraceableHandler(newTestHandler, "testendpoint"))
@@ -80,9 +82,10 @@ var _ = Describe("Tracing", func() {
 		})
 
 		It("should do nothing when tracing disabled", func() {
+			exporter := tracetest.NewInMemoryExporter()
 			tracing.Init(&cmn.TracingConf{
 				Enabled: false,
-			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
+			}, dummySnode, exporter, aisVersion)
 			Expect(tracing.IsEnabled()).To(BeFalse())
 
 			server := httptest.NewServer(tracing.NewTraceableHandler(newTestHandler, "testendpoint"))
@@ -100,11 +103,12 @@ var _ = Describe("Tracing", func() {
 			tracing.Shutdown()
 		})
 		It("should export client trace when tracing enabled", func() {
+			exporter := tracetest.NewInMemoryExporter()
 			tracing.Init(&cmn.TracingConf{
 				ExporterEndpoint:   "dummy",
 				Enabled:            true,
 				SamplerProbability: 1.0,
-			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
+			}, dummySnode, exporter, aisVersion)
 			Expect(tracing.IsEnabled()).To(BeTrue())
 
 			server := httptest.NewServer(newTestHandler)
@@ -128,9 +132,10 @@ var _ = Describe("Tracing", func() {
 		})
 
 		It("should do nothing when tracing disabled", func() {
+			exporter := tracetest.NewInMemoryExporter()
 			tracing.Init(&cmn.TracingConf{
 				Enabled: false,
-			}, dummySnode, tracetest.NewInMemoryExporter(), aisVersion)
+			}, dummySnode, exporter, aisVersion)
 			Expect(tracing.IsEnabled()).To(BeFalse())
 
 			server := httptest.NewServer(newTestHandler)

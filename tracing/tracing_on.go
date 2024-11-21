@@ -132,6 +132,7 @@ func Shutdown() {
 	if err := tp.Shutdown(context.Background()); err != nil {
 		cos.ExitLog(err)
 	}
+	tp = nil
 }
 
 func NewTraceableHandler(handler http.Handler, operation string) http.Handler {
