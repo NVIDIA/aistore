@@ -927,6 +927,8 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 		mockBackend, _ = backend.NewGCP(tMock, mock.NewStatsTracker())
 	case apc.Azure:
 		mockBackend, _ = backend.NewAzure(tMock, mock.NewStatsTracker())
+	case apc.OCI:
+		mockBackend, _ = backend.NewOCI(tMock, mock.NewStatsTracker())
 	default:
 		t.Fatalf("unexpected backend provider %q", m.bck.Provider)
 	}

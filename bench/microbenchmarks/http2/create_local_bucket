@@ -1,6 +1,0 @@
-#!/bin/bash
-
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "create_bck"}' http://localhost:8080/v1/buckets/$1
-
-# For HTTPS
-#curl -i -k -X POST -H 'Content-Type: application/json' -d '{"action": "create_bck"}' https://localhost:8080/v1/buckets/$1

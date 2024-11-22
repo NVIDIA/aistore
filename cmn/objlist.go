@@ -11,9 +11,11 @@ import (
 
 const MsgpLsoBufSize = 32 * cos.KiB
 
-//
 // NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
 // NOTE: all json tags except `Flags` must belong to the (apc.GetPropsName, apc.GetPropsSize, etc.) enumeration
+//
+// [TODO] We should consider making allocation of LsoEntries a less multi-malloc experience
+//        (e.g. by making LsoEntries a []LsoEnt and, perhaps, not using var-length'd strings in LsoEnt)
 //
 
 type (

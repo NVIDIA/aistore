@@ -427,7 +427,11 @@ func (opts *bcmplop) remoteBuckets(c *cli.Context) {
 	var (
 		buckets []cmn.Bck
 	)
-	for _, provider := range []string{apc.AWS, apc.GCP, apc.Azure} {
+	for provider := range apc.Providers {
+		if !apc.IsCloudProvider(provider) {
+			// Filter out non-cloud providers
+			continue
+		}
 		qbck := cmn.QueryBcks{Provider: provider}
 		bcks, err := api.ListBuckets(apiBP, qbck, apc.FltPresent) // NOTE: `present` only
 		if err != nil {

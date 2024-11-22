@@ -136,6 +136,8 @@ func (t *target) _initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) err
 			add, err = backend.NewGCP(t, tstats)
 		case apc.Azure:
 			add, err = backend.NewAzure(t, tstats)
+		case apc.OCI:
+			add, err = backend.NewOCI(t, tstats)
 		case apc.HT:
 			add, err = backend.NewHT(t, config, tstats)
 		case apc.AIS:

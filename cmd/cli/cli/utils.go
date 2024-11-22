@@ -967,7 +967,7 @@ type (
 	}
 )
 
-// Replace protocol (gs://, s3://, az://) with proper GCP/AWS/Azure URL
+// Replace protocol (gs://, s3://, az://, oc://) with proper GCP/AWS/Azure/OCI URL
 func parseSource(rawURL string) (source dlSource, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -1012,6 +1012,11 @@ func parseSource(rawURL string) (source dlSource, err error) {
 				prefix: strings.TrimPrefix(fullPath, "/"),
 			},
 		}, nil
+	case apc.OCIScheme:
+		cloudSource = dlSourceBackend{
+			bck:    cmn.Bck{Name: host, Provider: apc.OCI},
+			prefix: strings.TrimPrefix(fullPath, "/"),
+		}
 	case apc.AISScheme:
 		// TODO: add support for the remote cluster
 		scheme = "http" // TODO: How about `https://`?

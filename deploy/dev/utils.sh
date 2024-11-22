@@ -38,7 +38,7 @@ run_cmd() {
 # 3. when adding/deleting backends, update the 3 (three) functions that follow below:
 
 set_env_backends() {
-  known_backends=( aws gcp azure ht )
+  known_backends=( aws gcp azure oci ht )
   if [[ ! -z $TAGS ]]; then
     ## environment var TAGS may contain any/all build tags, including backends
     for b in "${known_backends[@]}"; do
@@ -63,8 +63,9 @@ set_env_backends() {
         aws)   ;;
         azure) ;;
         gcp)   ;;
+        oci)   ;;
         ht)    ;;
-	*) echo "fatal: unknown backend '$b' in 'AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}'"; exit 1;;
+        *)     echo "fatal: unknown backend '$b' in 'AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}'"; exit 1;;
       esac
     done
     ## consume (and discard) all reads
@@ -107,6 +108,15 @@ _set_env_backends() {
   if  [[ "${cld_azure}" == "y" ]] ; then
     AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"
   fi
+  echo "OCI: (y/n) ?"
+  read -r cld_oci
+  if [[ "$cld_oci" == "" ]] ; then
+    return
+  fi
+  is_boolean "${cld_oci}"
+  if  [[ "${cld_oci}" == "y" ]] ; then
+    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} oci"
+  fi
 }
 
 make_backend_conf() {
@@ -116,6 +126,7 @@ make_backend_conf() {
       aws)   backend_conf+=('"aws":   {}') ;;
       azure) backend_conf+=('"azure": {}') ;;
       gcp)   backend_conf+=('"gcp":   {}') ;;
+      oci)   backend_conf+=('"oci":   {}') ;;
       ht)    backend_conf+=('"ht":    {}') ;;
     esac
   done

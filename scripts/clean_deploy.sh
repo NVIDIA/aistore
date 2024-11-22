@@ -54,6 +54,7 @@ OPTIONS:
   --aws               Build with AWS S3 backend
   --gcp               Build with Google Cloud Storage backend
   --azure             Build with Azure Blob Storage backend
+  --oci               Build with OCI Object Storage backend
   --ht                Build with ht:// backend (experimental)
   --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means emulated mountpaths (with no loopback devices).
   --dir               The root directory of the aistore repository
@@ -86,6 +87,7 @@ while (( "$#" )); do
     --aws)   AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} aws"; shift;;
     --azure) AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} azure"; shift;;
     --gcp)   AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} gcp"; shift;;
+    --oci)   AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} oci"; shift;;
     --ht)    AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS} ht"; shift;;
     --tracing) tracing="y\n${AIS_TRACING_ENDPOINT}\n${AIS_TRACING_AUTH_TOKEN_HEADER}\n${AIS_TRACING_AUTH_TOKEN_FILE}"; shift;;
 
@@ -167,7 +169,7 @@ if [[ ${cleanup} == "true" ]]; then
 fi
 
 if [[ ${deployment} == "local" || ${deployment} == "all" ]]; then
-  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\nn\nn\nn\n${loopback}\n${tracing}\n" |\
+  echo -e "${target_cnt}\n${proxy_cnt}\n${mountpath_cnt}\nn\nn\nn\nn\n${loopback}\n${tracing}\n" |\
 	  AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" make deploy "RUN_ARGS=${RUN_ARGS}"
 fi
 

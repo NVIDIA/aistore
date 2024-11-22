@@ -27,6 +27,7 @@ AIStore runs on commodity Linux machines with no special requirements whatsoever
 * [Go 1.23 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS), Google Cloud Platform (GCP), and/or Azure Cloud Storage accounts.
+* Optionally, [golangci-lint 1.62 or later](https://golangci-lint.run/welcome/install/)
 
 > (**) [Mac](#macOS) is also supported albeit in a limited (development only) way.
 

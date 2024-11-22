@@ -34,7 +34,7 @@ const (
 	TB = 1000 * GB
 )
 
-var unitx = [...]string{"KIB", "MIB", "GIB", "TIB", "KB", "MB", "GB", "TB", "K", "M", "G", "T", "B"}
+var unitx = [...]string{"KIB", "MIB", "GIB", "TIB", "KB", "MB", "GB", "TB", "KI", "MI", "GI", "TI", "K", "M", "G", "T", "B"}
 
 /////////////
 // SizeIEC //
@@ -96,7 +96,8 @@ func ParseSize(size, units string) (int64, error) {
 		s      = strings.ToUpper(strings.TrimSpace(size))
 		suffix = _suffix(s)
 	)
-	if suffix == "KIB" || suffix == "MIB" || suffix == "GIB" || suffix == "TIB" {
+	if suffix == "KIB" || suffix == "MIB" || suffix == "GIB" || suffix == "TIB" ||
+		suffix == "KI" || suffix == "MI" || suffix == "GI" || suffix == "TI" {
 		u = UnitsIEC
 		if units != "" && units != UnitsIEC {
 			return 0, fmt.Errorf("ParseSize %q error: %q vs %q units", size, u, units)

@@ -277,6 +277,8 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 			bp, err = backend.NewGCP(t, t.statsT)
 		case apc.Azure:
 			bp, err = backend.NewAzure(t, t.statsT)
+		case apc.OCI:
+			bp, err = backend.NewOCI(t, t.statsT)
 		}
 		if err != nil {
 			debug.AssertNoErr(err) // (unlikely)

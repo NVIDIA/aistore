@@ -311,6 +311,14 @@ test:short:azure:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-short
 
+test:short:oci:
+  <<: *test_short_skip_scheduled_def
+  variables:
+    BUCKET: "oc://ais-ci"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci
+    - make test-short
+
 test:long:
   <<: *test_long_skip_scheduled_def
   variables:
@@ -341,6 +349,14 @@ test:long:azure:
     BUCKET: "az://ais-ci"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht
+    - make test-long
+
+test:long:oci:
+  <<: *test_long_def
+  variables:
+    BUCKET: "oc://ais-ci"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --ht
     - make test-long
 
 test:long:aisloader:
