@@ -317,22 +317,27 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 
 	propNVs := make(nvpairList, 0, len(selectedProps))
 	for _, name := range selectedProps {
-		if v := propVal(objProps, name); v != "" {
-			if name == apc.GetPropsAtime && isUnsetTime(c, v) {
-				v = teb.NotSetVal
-			}
-			if name == apc.GetPropsSize && units != "" {
-				// reformat
-				size, err := cos.ParseSize(v, "")
-				if err != nil {
-					warn := fmt.Sprintf("failed to parse 'size': %v", err)
-					actionWarn(c, warn)
-				} else {
-					v = teb.FmtSize(size, units, 2)
-				}
-			}
-			propNVs = append(propNVs, nvpair{name, v})
+		v, err := propVal(objProps, name)
+		if err != nil {
+			return false, err
 		}
+		if v == "" {
+			continue
+		}
+		if name == apc.GetPropsAtime && isUnsetTime(c, v) {
+			v = teb.NotSetVal
+		}
+		if name == apc.GetPropsSize && units != "" {
+			// reformat
+			size, err := cos.ParseSize(v, "")
+			if err != nil {
+				warn := fmt.Sprintf("failed to parse 'size': %v", err)
+				actionWarn(c, warn)
+			} else {
+				v = teb.FmtSize(size, units, 2)
+			}
+		}
+		propNVs = append(propNVs, nvpair{name, v})
 	}
 	sort.Slice(propNVs, func(i, j int) bool {
 		return propNVs[i].Name < propNVs[j].Name
@@ -344,7 +349,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	return false, teb.Print(propNVs, teb.PropValTmpl)
 }
 
-func propVal(op *cmn.ObjectProps, name string) (v string) {
+func propVal(op *cmn.ObjectProps, name string) (v string, err error) {
 	switch name {
 	case apc.GetPropsName:
 		v = op.Bck.Cname(op.Name)
@@ -380,7 +385,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 	case apc.GetPropsStatus:
 		// no "object status" in `cmn.ObjectProps` - nothing to do (see also: `cmn.LsoEnt`)
 	default:
-		debug.Assert(false, "obj prop name: \""+name+"\"")
+		return "", fmt.Errorf("invalid object property %q (expecting one of: %v)", name, apc.GetPropsAll)
 	}
 	return
 }
