@@ -51,6 +51,10 @@ var _ = Describe("Bck", func() {
 				"bck", apc.GCP, cmn.NsGlobal, "obj",
 			),
 			Entry(
+				"oci provider",
+				"bck", apc.OCI, cmn.NsGlobal, "obj",
+			),
+			Entry(
 				"backend provider",
 				"bck", apc.GCP, cmn.NsGlobal, "obj",
 			),
