@@ -253,6 +253,9 @@ func (b *Bck) MaxPageSize() int64 {
 	case apc.Azure:
 		// ref: https://docs.microsoft.com/en-us/connectors/azureblob/#general-limits
 		return apc.MaxPageSizeAzure
+	case apc.OCI:
+		// ref: https://docs.oracle.com/en-us/iaas/api/#/en/objectstorage/20160918/Object/ListObjects
+		return apc.MaxPageSizeOCI
 	default:
 		return 1000
 	}

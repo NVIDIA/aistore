@@ -87,6 +87,7 @@ const (
 	MaxPageSizeAWS   = 1000
 	MaxPageSizeGCP   = 1000
 	MaxPageSizeAzure = 5000
+	MaxPageSizeOCI   = 1000
 )
 
 const (

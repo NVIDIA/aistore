@@ -172,7 +172,7 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 //     otherwise the copy operation won't be successful.
 //   - There are no limitations on copying buckets across Backend providers:
 //     you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
-//     bucket, etc.
+//     or OCI bucket, etc.
 //   - Copying multiple buckets to the same destination bucket is also permitted.
 //
 // `fltPresence` applies exclusively to remote `bckFrom` and is ignored if the source is ais://
