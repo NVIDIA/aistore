@@ -101,12 +101,8 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEnt) {
 	return
 }
 
-// NOTE: slow path
+// NOTE: slow path if lom.Bck is remote
 func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
-	if !lom.Bucket().HasVersioningMD() {
-		debug.Assert(false, lom.Cname())
-		return
-	}
 	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/, nil /*origReq*/)
 	switch {
 	case res.Eq:

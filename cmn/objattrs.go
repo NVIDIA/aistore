@@ -248,34 +248,24 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 // Note that mismatch in any given checksum type immediately renders inequality and return
 // from the function.
 //
-// TODO -- FIXME: ETag:
-// - when comparing ETags, either disregard double quotes OR fix it elsewhere to always contain those
-// - when comparing ETag and MD5, don't even try to compare if ETag is multi-part
+// TODO: count == 1 with matching checksum being xxhash - must be configurable :NOTE
 func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	var (
-		ver      string
-		md5      string
-		etag     string
-		cksumVal string
-		count    int
-		sameEtag bool
+		ver       string
+		md5       string
+		etag      string
+		cksumVal  string
+		count     int // number of matches
+		sameEtag  bool
+		sameCksum bool
 	)
 	// size check
 	if remSize := rem.Lsize(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
 		return fmt.Errorf("size %d != %d remote", oa.Size, remSize)
 	}
 
-	// version check
-	if remVer, v := rem.Version(true), oa.Version(); remVer != "" && v != "" {
-		if v != remVer {
-			return fmt.Errorf("version %s != %s remote", oa.Version(), remVer)
-		}
-		ver = v
-		// NOTE: ais own version is, currently, a nonunique sequence number - not counting
-		if remSrc, _ := rem.GetCustomKey(SourceObjMD); remSrc != apc.AIS {
-			count++
-		}
-	} else if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
+	// Cloud version check (NOTE: ais own version is currently a non-unique sequence number)
+	if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(VersionObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
 				return fmt.Errorf("version-md %s != %s remote", locMeta, remMeta)
@@ -291,10 +281,17 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 			return fmt.Errorf("%s checksum %s != %s remote", a.Ty(), b, a)
 		}
 		cksumVal = a.Val()
+		//
+		// NOTE: including xxhash in trusted checksums
+		//
+		switch a.Ty() {
+		case cos.ChecksumXXHash, cos.ChecksumSHA256, cos.ChecksumSHA512:
+			sameCksum = true
+		}
 		count++
 	}
 
-	// custom MD: ETag check (NOTE: compare ignoring double quotes)
+	// custom MD: ETag check (ignoring enclosing quotes)
 	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(ETag); ok && locMeta != "" {
 			if !_eqIgnoreQuotes(remMeta, locMeta) {
@@ -339,16 +336,9 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	case count >= 2: // e.g., equal because they have the same (version & md5, where version != md5)
 		return nil
 	case count == 0:
-	default:
-		// same version or ETag from the same (remote) backend
-		// (arguably, must be configurable)
-		if remMeta, ok := rem.GetCustomKey(SourceObjMD); ok && remMeta != "" {
-			if locMeta, ok := oa.GetCustomKey(SourceObjMD); ok && locMeta != "" {
-				if (ver != "" || etag != "") && remMeta == locMeta {
-					return nil
-				}
-			}
-		}
+	case sameEtag || sameCksum:
+		// making exception for the same (trusted) checksum or ETag
+		return nil
 	}
 
 	return fmt.Errorf("local (%v) vs remote (%v)", oa.GetCustomMD(), rem.GetCustomMD())

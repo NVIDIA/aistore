@@ -1406,7 +1406,7 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, 
 	}
 
 	// DP == nil: use default (no-op transform) if source bucket is remote
-	if coi.DP == nil && lom.Bck().IsRemote() {
+	if coi.DP == nil && (lom.Bck().IsRemote() || coi.BckTo.IsRemote()) {
 		coi.DP = &core.LDP{}
 	}
 
@@ -1423,20 +1423,52 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, 
 	// dst is this target
 	// 2, 3: with transformation and without
 	dst := core.AllocLOM(coi.ObjnameTo)
+	defer core.FreeLOM(dst)
+
 	if err := dst.InitBck(coi.BckTo.Bucket()); err != nil {
-		core.FreeLOM(dst)
 		return 0, err
 	}
+	// check for no-op
+	if coi.isNOP(lom, dst, dm) {
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
+		}
+		return
+	}
+	// do
 	if coi.DP != nil {
 		var ecode int
 		size, ecode, err = coi._reader(t, dm, lom, dst)
 		debug.Assert(ecode != http.StatusNotFound || cos.IsNotExist(err, 0), err, ecode)
 	} else {
+		// fast path (Copy2FQN)
 		size, err = coi._regular(t, lom, dst)
 	}
-	core.FreeLOM(dst)
-
 	return size, err
+}
+
+func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DataMover) bool {
+	if coi.LatestVer || coi.Sync {
+		return false
+	}
+	owt := coi.OWT
+	if dm != nil {
+		owt = dm.OWT()
+	}
+	if owt != cmn.OwtCopy {
+		return false
+	}
+	if err := lom.Load(true, false); err != nil {
+		return false
+	}
+	if err := dst.Load(true, false); err != nil {
+		return false
+	}
+	if lom.CheckEq(dst) != nil {
+		return false
+	}
+	res := dst.CheckRemoteMD(false /*locked*/, false, nil /*origReq*/)
+	return res.Eq
 }
 
 func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
@@ -1692,7 +1724,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 }
 
 func (coi *coi) stats(size int64, err error) {
-	if err == nil && coi.Xact != nil {
+	if err == nil && coi.Xact != nil && size > 0 {
 		coi.Xact.ObjsAdd(1, size)
 	}
 }
