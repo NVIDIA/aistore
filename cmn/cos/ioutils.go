@@ -95,18 +95,11 @@ func Rename(src, dst string) (err error) {
 		return nil
 	}
 	if !os.IsNotExist(err) {
-		if os.IsExist(err) {
-			if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
-				// [design tradeoff] keeping objects under (e.g.) their respective sha256
-				// would eliminate this one, in part
-				return fmt.Errorf("move destination '../%s' already exists (and is a virtual directory)", filepath.Base(dst))
-			}
-		}
-		return err
+		return CheckMvToVirtDir(err, dst)
 	}
 	// create and retry (slow path)
 	err = CreateDir(filepath.Dir(dst))
-	if err == nil {
+	if err == nil || os.IsExist(err) /*race*/ {
 		err = os.Rename(src, dst)
 	}
 	return err

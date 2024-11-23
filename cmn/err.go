@@ -291,6 +291,11 @@ func (e *ErrFailedTo) Error() string {
 
 func (e *ErrFailedTo) Unwrap() (err error) { return e.err }
 
+func IsErrFailedTo(err error) bool {
+	_, ok := err.(*ErrFailedTo)
+	return ok
+}
+
 // ErrStreamTerminated
 
 func NewErrStreamTerminated(stream string, err error, reason, detail string) *ErrStreamTerminated {

@@ -5,6 +5,8 @@
 package ais
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -47,7 +49,8 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 		return
 	}
 
-	nlog.Errorf("%s: waking up FSHC to check %s, err: %v", t, mi, err)
+	warn := fmt.Sprintf("%s: waking up FSHC to check %s, err: %v", t, mi, err)
+	nlog.ErrorDepth(1, warn)
 
 	//
 	// counting I/O errors on a per mountpath

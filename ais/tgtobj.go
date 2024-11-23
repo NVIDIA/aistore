@@ -225,8 +225,12 @@ func (poi *putOI) putObject() (ecode int, err error) {
 rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
 		poi.t.statsT.IncErr(stats.ErrPutCount)
-		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF && !cos.IsRetriableConnErr(err) {
+		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF &&
+			!cos.IsRetriableConnErr(err) && !cos.IsErrMvToVirtDir(err) {
 			poi.t.statsT.IncErr(stats.IOErrPutCount)
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+				nlog.Warningln("io-error [", err, "]", poi.loghdr())
+			}
 		}
 	}
 	return ecode, err
@@ -346,9 +350,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 		// do nothing: lom is already wlocked
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
-			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-				nlog.Warningln(poi.loghdr(), "is busy")
-			}
+			nlog.Warningln(poi.loghdr(), "is busy")
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 		}
 		defer lom.Unlock(true)
@@ -676,7 +678,7 @@ do:
 			goi.lom.Unlock(true)
 			goi.unlocked = true
 			if !cos.IsNotExist(res.Err, res.ErrCode) {
-				nlog.Infoln(ftcg+"(read)", goi.lom.Cname(), res.Err, res.ErrCode)
+				nlog.Infoln(ftcg, "(read)", goi.lom.Cname(), res.Err, res.ErrCode)
 			}
 			return res.ErrCode, res.Err
 		}
@@ -742,7 +744,7 @@ func (goi *getOI) _coldPut(res *core.GetReaderResult) (int, error) {
 
 	if err != nil {
 		lom.Unlock(true)
-		nlog.Infoln(ftcg+"(put)", lom.Cname(), err)
+		nlog.Infoln(ftcg, "(put)", lom.Cname(), err)
 		return code, err
 	}
 

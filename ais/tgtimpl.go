@@ -167,7 +167,11 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		nlog.Infoln(t.String()+":", "failed to GET remote", lom.Cname()+":", err, ecode)
+		if cmn.IsErrFailedTo(err) {
+			nlog.Warningln(err)
+		} else {
+			nlog.Warningln("failed to GET remote", lom.Cname(), "[", err, ecode, "]")
+		}
 		return ecode, err
 	}
 

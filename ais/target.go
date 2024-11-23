@@ -766,6 +766,9 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		t.statsT.IncErr(stats.ErrGetCount)
 		if goi.isIOErr {
 			t.statsT.IncErr(stats.IOErrGetCount)
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+				nlog.Warningln("io-error [", err, "]", goi.lom.String())
+			}
 		}
 
 		// handle right here, return nil

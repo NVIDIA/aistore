@@ -339,9 +339,9 @@ func (xctn *Base) Finish() {
 	case err == nil:
 		nlog.Infoln(xctn.String(), "finished")
 	case aborted:
-		nlog.Warningln(xctn.String(), "aborted:", err.Error(), info)
+		nlog.Warningln(xctn.String(), "aborted:", err, info)
 	default:
-		nlog.Infoln("Warning:", xctn.String(), "finished w/err:", err.Error())
+		nlog.Warningln(xctn.String(), "finished w/err:", err)
 	}
 }
 

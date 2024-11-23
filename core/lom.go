@@ -557,6 +557,12 @@ func (lom *LOM) FromFS() error {
 	size, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
 		if !os.IsNotExist(err) {
+			if cos.IsPathErr(err) && strings.Contains(err.Error(), "not a directory") {
+				// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
+				err := fmt.Errorf("%w (path error)", err)
+				nlog.Errorln(err)
+				return err
+			}
 			err = os.NewSyscallError("stat", err)
 			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		}

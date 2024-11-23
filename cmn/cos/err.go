@@ -8,10 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sync"
 	ratomic "sync/atomic"
 	"syscall"
@@ -31,6 +33,9 @@ type (
 		errs []error
 		cnt  int64
 		mu   sync.Mutex
+	}
+	ErrMvToVirtDir struct {
+		dst string
 	}
 )
 
@@ -150,6 +155,13 @@ func IsErrSyscallTimeout(err error) bool {
 	return ok && syscallErr.Timeout()
 }
 
+func IsPathErr(err error) (ok bool) {
+	if pathErr := (*iofs.PathError)(nil); errors.As(err, &pathErr) {
+		ok = true
+	}
+	return
+}
+
 // likely out of socket descriptors
 func IsErrConnectionNotAvail(err error) (yes bool) {
 	return errors.Is(err, syscall.EADDRNOTAVAIL)
@@ -209,4 +221,37 @@ func Err2ClientURLErr(err error) (uerr *url.Error) {
 func IsErrClientURLTimeout(err error) bool {
 	uerr := Err2ClientURLErr(err)
 	return uerr != nil && uerr.Timeout()
+}
+
+//
+// ErrMvToVirtDir
+// NOTE [design tradeoff] keeping objects under (e.g.) their respective sha256, etc.
+//
+
+func CheckMvToVirtDir(err error, dst string) error {
+	if IsErrMvToVirtDir(err) {
+		return err
+	}
+	if os.IsExist(err) {
+		if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
+			return &ErrMvToVirtDir{dst}
+		}
+	}
+	return err
+}
+
+func IsErrMvToVirtDir(err error) bool {
+	_, ok := err.(*ErrMvToVirtDir)
+	return ok
+}
+
+func (e *ErrMvToVirtDir) Error() string {
+	var (
+		b = filepath.Base(e.dst)
+		d string
+	)
+	if l, lb := len(e.dst), len(b); lb > 1 && l > lb+8 {
+		d = filepath.Base(e.dst[0 : l-lb])
+	}
+	return fmt.Sprintf("destination '../%s/%s' exists and is a virtual directory", d, b)
 }

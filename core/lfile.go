@@ -66,6 +66,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		return fh, nil
 	}
 	if !os.IsNotExist(err) {
+		// TODO: cos.CheckMvToVirtDir(err, fqn)
 		T.FSHC(err, lom.Mountpath(), "")
 		return nil, err
 	}
@@ -145,7 +146,9 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		return &errBdir{cname: lom.Cname(), err: err}
 	}
 	if err := lom.RenameToMain(wfqn); err != nil {
-		T.FSHC(err, lom.Mountpath(), wfqn)
+		if !cos.IsErrMvToVirtDir(err) {
+			T.FSHC(err, lom.Mountpath(), wfqn)
+		}
 		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 	}
 	return nil
