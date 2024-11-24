@@ -122,6 +122,8 @@ const (
 	objSizeHighMem = 50 * cos.MiB
 )
 
+const invalOpcode = "invalid opcode"
+
 type (
 	// request - structure to request an object to be EC'ed or restored
 	request struct {

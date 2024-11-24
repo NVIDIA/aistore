@@ -133,12 +133,15 @@ func (r *XactGet) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 			return
 		}
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", core.T, bck.Cname(objName), err, uname)
-			r.AddErr(err, 0)
+			errN := fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", core.T, bck.Cname(objName), err, uname)
+			r.AddErr(errN, 0)
+			if err == io.ErrUnexpectedEOF {
+				r.Abort(errN)
+			}
 		}
 	default:
-		debug.Assert(false, "invalid opcode ", hdr.Opcode)
-		nlog.Errorln(r.Name(), "invalid request opcode:", hdr.Opcode)
+		debug.Assert(false, invalOpcode, " ", hdr.Opcode)
+		nlog.Errorln(r.Name(), invalOpcode, hdr.Opcode)
 	}
 }
 
