@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -158,8 +158,10 @@ func (reb *Reb) isQuiescent() bool {
 }
 
 /////////////
-// lomAcks TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit
+// lomAcks //
 /////////////
+
+// transaction: addLomAck => (cleanupLomAck | ackLomAck)
 
 func (reb *Reb) lomAcks() *[cos.MultiHashMapCount]*lomAcks { return &reb.lomacks }
 
@@ -170,31 +172,36 @@ func (reb *Reb) addLomAck(lom *core.LOM) {
 	lomAck.mu.Unlock()
 }
 
-func (reb *Reb) delLomAck(lom *core.LOM, rebID int64, freeLOM bool) {
-	debug.Assert(rebID != 0)
-	if rebID != reb.rebID.Load() {
-		return
-	}
+// called upon failure to send
+func (reb *Reb) cleanupLomAck(lom *core.LOM) {
+	lomAck := reb.lomAcks()[lom.CacheIdx()]
+
+	lomAck.mu.Lock()
+	delete(lomAck.q, lom.Uname())
+	lomAck.mu.Unlock()
+}
+
+// called by recvRegularAck
+func (reb *Reb) ackLomAck(lom *core.LOM) {
 	lomAck := reb.lomAcks()[lom.CacheIdx()]
 
 	lomAck.mu.Lock()
 	uname := lom.Uname()
-	lomOrig, ok := lomAck.q[uname]
+	lomOrig, ok := lomAck.q[uname] // via addLomAck() above
 	if !ok {
 		lomAck.mu.Unlock()
 		return
 	}
-	debug.Assert(uname == lomOrig.Uname(), "uname ", uname, " vs ", lomOrig.Uname())
 	delete(lomAck.q, uname)
 	lomAck.mu.Unlock()
 
-	if !freeLOM {
-		return
-	}
+	debug.Assert(uname == lomOrig.Uname())
+	size := lomOrig.Lsize()
+	core.FreeLOM(lomOrig)
 
 	// counting acknowledged migrations (as initiator)
 	xreb := reb.xctn()
-	xreb.ObjsAdd(1, lomOrig.Lsize())
+	xreb.ObjsAdd(1, size)
 
 	// NOTE: rm migrated object (and local copies, if any) right away
 	// TODO [feature]: mark "deleted" instead
@@ -204,5 +211,4 @@ func (reb *Reb) delLomAck(lom *core.LOM, rebID int64, freeLOM bool) {
 		lom.Unlock(true)
 		debug.AssertNoErr(err)
 	}
-	core.FreeLOM(lomOrig)
 }

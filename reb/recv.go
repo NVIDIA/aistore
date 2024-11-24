@@ -209,6 +209,9 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 	if err := unpacker.ReadAny(ack); err != nil {
 		return fmt.Errorf("g[%d]: failed to unpack regular ACK: %v", reb.RebID(), err)
 	}
+	if ack.rebID == 0 {
+		return fmt.Errorf("g[%d]: invalid g[0] ACK from %s", reb.RebID(), meta.Tname(ack.daemonID))
+	}
 	if ack.rebID != reb.rebID.Load() {
 		nlog.Warningln("ACK from", ack.daemonID, "[", reb.warnID(ack.rebID, ack.daemonID), "]")
 		return nil
@@ -224,7 +227,7 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 	// [NOTE]
 	// - remove migrated object and copies (unless disallowed by feature flag)
 	// - free pending (original) transmitted LOM
-	reb.delLomAck(lom, ack.rebID, true)
+	reb.ackLomAck(lom)
 	core.FreeLOM(lom)
 
 	return nil

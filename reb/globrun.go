@@ -854,7 +854,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	// transmit (unlock via transport completion => roc.Close)
 	rj.m.addLomAck(lom)
 	if err := rj.doSend(lom, tsi, roc); err != nil {
-		rj.m.delLomAck(lom, 0, false /*free LOM*/)
+		rj.m.cleanupLomAck(lom)
 		return err
 	}
 
