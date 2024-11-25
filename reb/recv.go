@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -40,6 +41,7 @@ func (reb *Reb) recvObj(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 		nlog.Errorln(err)
 		return err
 	}
+	reb.lastrx.Store(mono.NanoTime())
 
 	smap, err := reb._waitForSmap()
 	if err != nil {
@@ -65,6 +67,8 @@ func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 		nlog.Errorln(err)
 		return err
 	}
+	reb.lastrx.Store(mono.NanoTime())
+
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	switch {
@@ -92,6 +96,8 @@ func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) e
 	if err != nil {
 		return reb._recvErr(err)
 	}
+
+	reb.lastrx.Store(mono.NanoTime())
 
 	var (
 		rebID      = reb.RebID()
@@ -153,15 +159,17 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 		nlog.Errorln(err)
 		return nil
 	}
+
+	// log warn
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
-		reb.laterx.Store(true)
-		if stage > rebStageFin && cmn.Rom.FastV(4, cos.SmoduleReb) {
-			nlog.Infof("Warning: %s: post stage-fin receive from %s %s (stage %s)",
-				core.T.Snode(), meta.Tname(tsid), lom, stages[stage])
+		if stage > rebStageFin {
+			warn := fmt.Sprintf("%s g[%d]: post stage-fin receive from %s %s (stage %s)", core.T, ack.rebID, meta.Tname(tsid), lom, stages[stage])
+			nlog.Warningln(warn)
 		}
 	} else if stage < rebStageTraverse {
 		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.RebID(), meta.Tname(tsid), lom, stages[stage])
 	}
+
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
 	if xreb.IsAborted() {
@@ -319,11 +327,12 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	// Broadcast updated MD
 	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
 	nodes := req.md.RemoteTargets()
+
+	err = nil // keep the first errSend (TODO: count failures)
 	for _, tsi := range nodes {
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
 			continue
 		}
-		reb.onAir.Inc()
 		xreb := reb.xctn()
 		if xreb.IsAborted() {
 			break
@@ -332,9 +341,9 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: 0}}
 		o.Hdr.Bck.Copy(ct.Bck().Bucket())
 		o.Hdr.Opaque = ntfnMD.NewPack(rebMsgEC)
-		o.Callback = reb.transportECCB
 		if errSend := reb.dm.Send(o, nil, tsi); errSend != nil && err == nil {
-			err = fmt.Errorf("failed to send updated metafile: %v", err)
+			// TODO: consider r.AddErr(errSend)
+			err = fmt.Errorf("%s %s: failed to send updated EC MD: %v", core.T, xreb.ID(), err)
 		}
 	}
 	return err
@@ -345,24 +354,24 @@ func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, read
 	req := &stageNtfn{}
 	err := unpacker.ReadAny(req)
 	if err != nil {
-		nlog.Errorf("invalid stage notification %s: %v", hdr.ObjName, err)
+		err = fmt.Errorf("%s recvECData: invalid stage notification from t[%s] for %s: %v", core.T, hdr.SID, hdr.Cname(), err)
 		return err
 	}
 	if req.rebID != reb.rebID.Load() {
-		nlog.Warningf("%s: not yet started or already finished rebalancing (%d, %d)",
-			core.T.Snode(), req.rebID, reb.rebID.Load())
+		nlog.Warningf("%s: not yet started or already finished rebalancing (%d, %d) - dropping EC MD for %s from t[%s]",
+			core.T, req.rebID, reb.rebID.Load(), hdr.Cname(), hdr.SID)
 		return nil
 	}
 	if req.action == rebActUpdateMD {
 		err := receiveMD(req, hdr)
 		if err != nil {
-			nlog.Errorf("failed to receive MD for %s: %v", hdr.Cname(), err)
-			nlog.Errorf("Warning: (g%d, %s) ignoring, proceeding anyway...", req.rebID, core.T) // TODO: revisit
+			nlog.Errorf("Warning: %s g[%d]: failed to receive EC MD from t[%s] for %s: [%v]", core.T, req.rebID, hdr.SID, hdr.Cname(), err)
 		}
 		return nil
 	}
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
-		nlog.Errorf("failed to receive CT for %s: %v", hdr.Cname(), err)
+		err = fmt.Errorf("%s g[%d]: failed to receive CT from t[%s] for %s: %v", core.T, req.rebID, hdr.SID, hdr.Cname(), err)
+		nlog.Errorln(err)
 		return err
 	}
 	return nil

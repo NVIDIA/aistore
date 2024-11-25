@@ -95,10 +95,9 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup) {
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) (err error) {
+func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) error {
 	var (
 		lom    *core.LOM
-		roc    cos.ReadOpenCloser
 		fqn    = ct.FQN()
 		action = uint32(rebActRebCT)
 	)
@@ -110,29 +109,33 @@ func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode,
 	// TODO: unify acquiring a reader for LOM and CT
 	if ct.ContentType() == fs.ObjectType {
 		lom = core.AllocLOM(ct.ObjectName())
-		if err = lom.InitBck(ct.Bck().Bucket()); err != nil {
+		if err := lom.InitBck(ct.Bck().Bucket()); err != nil {
 			core.FreeLOM(lom)
-			return
+			return err
 		}
 		lom.Lock(false)
-		if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
 			core.FreeLOM(lom)
-			return
+			return err
 		}
 	} else {
 		lom = nil // sending slice; TODO: rlock
 	}
 
 	// open
+	var (
+		errReader error
+		roc       cos.ReadOpenCloser
+	)
 	if lom != nil {
 		defer core.FreeLOM(lom)
-		roc, err = lom.NewDeferROC()
+		roc, errReader = lom.NewDeferROC()
 	} else {
-		roc, err = cos.NewFileHandle(fqn)
+		roc, errReader = cos.NewFileHandle(fqn)
 	}
-	if err != nil {
-		return
+	if errReader != nil {
+		return errReader
 	}
 
 	// transmit
@@ -146,20 +149,15 @@ func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode,
 	if meta.SliceID != 0 {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
 	}
-	reb.onAir.Inc()
+
 	o.Hdr.Opaque = ntfn.NewPack(rebMsgEC)
-	o.Callback = reb.transportECCB
-	if err = reb.dm.Send(o, roc, target); err != nil {
-		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
-		return
+	if err := reb.dm.Send(o, roc, target); err != nil {
+		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
+
 	xreb := reb.xctn()
 	xreb.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
-	return
-}
-
-func (reb *Reb) transportECCB(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
-	reb.onAir.Dec()
+	return nil
 }
 
 // Saves received CT to a local drive if needed:

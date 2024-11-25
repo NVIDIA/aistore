@@ -173,7 +173,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	}
 	if r.checkAndRecover {
 		// wait for in-flight and pending recovery
-		r.Quiesce(time.Minute, r._quiesce)
+		r.Quiesce(config.Timeout.MaxHostBusy.D(), r._quiesce)
 		r.done.Store(true)
 	}
 	r.wg.Wait() // wait for before/afterEncode
@@ -185,9 +185,12 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	r.Finish()
 }
 
+// at least max-host-busy without Rx or jogger action _prior_ to counting towards timeout
 func (r *XactBckEncode) _quiesce(time.Duration) core.QuiRes {
-	if mono.Since(r.last.Load()) > cmn.Rom.MaxKeepalive() {
-		return core.QuiDone
+	last := r.last.Load()
+	debug.Assert(last != 0)
+	if mono.Since(last) < max(cmn.Rom.MaxKeepalive(), 4*time.Second) {
+		return core.QuiActive
 	}
 	return core.QuiInactiveCB
 }
@@ -291,10 +294,10 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 }
 
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
+	r.last.Store(mono.NanoTime())
 	switch {
 	case err == nil:
 		r.LomAdd(lom) // TODO: instead, count restored slices, metafiles, possibly - objects
-		r.last.Store(mono.NanoTime())
 	case err == ErrorECDisabled:
 		r.Abort(err)
 	case err == errSkipped:

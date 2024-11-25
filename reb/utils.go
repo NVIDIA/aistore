@@ -144,19 +144,6 @@ func (reb *Reb) abortAndBroadcast(err error) {
 	}
 }
 
-// Returns if the target is quiescent: transport queue is empty, or xaction
-// has already aborted or finished.
-func (reb *Reb) isQuiescent() bool {
-	// Finished or aborted xaction = no traffic
-	xctn := reb.xctn()
-	if xctn == nil || xctn.IsAborted() || xctn.Finished() {
-		return true
-	}
-
-	// Check for both regular and EC transport queues are empty
-	return reb.inQueue.Load() == 0 && reb.onAir.Load() == 0
-}
-
 /////////////
 // lomAcks //
 /////////////

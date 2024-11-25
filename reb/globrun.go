@@ -85,12 +85,12 @@ type (
 			mtx     sync.Mutex
 		}
 		// (smap, xreb) + atomic state
-		rebID   atomic.Int64
-		nxtID   atomic.Int64
-		inQueue atomic.Int64
-		onAir   atomic.Int64
-		mu      sync.RWMutex
-		laterx  atomic.Bool
+		rebID atomic.Int64
+		nxtID atomic.Int64
+		// quiescence
+		lastrx atomic.Int64 // mono time
+		// this state
+		mu sync.Mutex
 	}
 	lomAcks struct {
 		mu *sync.Mutex
@@ -222,6 +222,8 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	// At this point, only one rebalance is running
 
+	reb.lastrx.Store(0)
+
 	if rargs.ecUsed {
 		ec.ECM.OpenStreams(true /*with refc*/)
 	}
@@ -229,18 +231,17 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
-	errCnt := 0
-	err := reb.run(rargs)
+	var (
+		errCnt int
+		err    = reb.run(rargs)
+	)
 	if err == nil {
 		errCnt = reb.rebWaitAck(rargs)
 	} else {
 		nlog.Warningln(err)
 	}
+	nlog.Infoln(logHdr, "=> stage-fin", "[", err, errCnt, "]")
 	reb.changeStage(rebStageFin)
-
-	for errCnt != 0 && !reb.xctn().IsAborted() {
-		errCnt = bcast(rargs, reb.waitFinExtended)
-	}
 
 	reb.fini(rargs, logHdr, err)
 	tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
@@ -479,9 +480,6 @@ func (reb *Reb) beginStreams(config *cmn.Config) {
 		Extra:      &transport.Extra{SenderID: xreb.ID(), Config: config},
 	}
 	reb.pushes = bundle.New(transport.NewIntraDataClient(), pushArgs)
-
-	reb.laterx.Store(false)
-	reb.inQueue.Store(0)
 }
 
 func (reb *Reb) abortStreams() {
@@ -626,7 +624,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 
 		// 8. synchronize
 		nlog.Infof("%s: poll targets for: stage=(%s or %s***)", logHdr, stages[rebStageFin], stages[rebStageWaitAck])
-		errCnt = bcast(rargs, reb.waitFinExtended)
+		errCnt = bcast(rargs, reb.waitAcksExtended)
 		if xreb.IsAborted() {
 			return
 		}
@@ -715,22 +713,23 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 }
 
 func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
+	var (
+		stats core.Stats
+		qui   = &qui{rargs, reb, 0}
+		xreb  = reb.xctn()
+	)
 	nlog.Infoln(logHdr, "fini")
 
 	// prior to closing the streams
-	if q := reb.quiesce(rargs, rargs.config.Transport.QuiesceTime.D(), reb.nodesQuiescent); q != core.QuiAborted {
+	if xreb.Quiesce(rargs.config.Transport.QuiesceTime.D(), qui.quicb) != core.QuiAborted {
 		if errM := fs.RemoveMarker(fname.RebalanceMarker); errM == nil {
-			nlog.Infof("%s: %s removed marker ok", core.T, reb.xctn())
+			nlog.Infoln(logHdr, "removed marker ok")
 		}
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev)
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()
 
-	var (
-		stats core.Stats
-		xreb  = reb.xctn()
-	)
 	xreb.ToStats(&stats)
 	if stats.Objs > 0 || stats.OutObjs > 0 || stats.InObjs > 0 {
 		s, e := jsoniter.MarshalIndent(&stats, "", " ")
@@ -782,7 +781,6 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 
 // send completion
 func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
-	rj.m.inQueue.Dec()
 	if err == nil {
 		rj.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
 		return
@@ -895,6 +893,5 @@ func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenClos
 	o.Hdr.Opaque = opaque
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 	o.Callback, o.CmplArg = rj.objSentCallback, lom
-	rj.m.inQueue.Inc()
 	return rj.m.dm.Send(o, roc, tsi)
 }

@@ -27,16 +27,15 @@ func (reb *Reb) RebStatus(status *Status) {
 	status.Running = marked.Xact != nil && marked.Xact.Running()
 
 	// rlock
-	reb.mu.RLock()
+	reb.mu.Lock()
 	status.Stage = reb.stages.stage.Load()
 	status.RebID = reb.rebID.Load()
-	status.Quiescent = reb.isQuiescent()
 	status.SmapVersion = tsmap.Version
 	smap := reb.smap.Load()
 	if smap != nil {
 		status.RebVersion = smap.Version
 	}
-	reb.mu.RUnlock()
+	reb.mu.Unlock()
 
 	// xreb, ?running
 	xreb := reb.xctn()

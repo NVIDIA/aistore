@@ -1,49 +1,60 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
 
-type quiArgs struct {
+//
+// quiesce prior to closing streams (fin-streams stage)
+//
+
+const logIval = 10 * time.Second
+
+type qui struct {
 	rargs *rebArgs
 	reb   *Reb
-	done  func(rargs *rebArgs) bool
+	i     time.Duration // to log every logIval
 }
 
-func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) core.QuiRes {
-	if q.done(q.rargs) {
-		return core.QuiDone
+func (q *qui) quicb(total time.Duration) core.QuiRes {
+	xctn := q.reb.xctn()
+	if xctn == nil || xctn.IsAborted() || xctn.Finished() {
+		return core.QuiInactiveCB
 	}
-	if q.reb.laterx.CAS(true, false) {
+
+	//
+	// a) at least 2*max-keepalive _prior_ to counting towards config.Transport.QuiesceTime.D()
+	//
+	lastrx := q.reb.lastrx.Load()
+	timout := max(q.rargs.config.Timeout.MaxKeepalive.D()<<1, 8*time.Second)
+	if lastrx != 0 && mono.Since(lastrx) < timout {
 		return core.QuiActive
 	}
-	return core.QuiInactiveCB
-}
 
-// Uses generic xact.Quiesce to make sure that no objects are received
-// during a given `maxWait` interval of time.
-func (reb *Reb) quiesce(rargs *rebArgs, maxWait time.Duration, cb func(rargs *rebArgs) bool) core.QuiRes {
-	q := &quiArgs{rargs, reb, cb}
-	return reb.xctn().Quiesce(maxWait, q.quicb)
-}
-
-// Returns true if all transport queues are empty
-func (reb *Reb) nodesQuiescent(rargs *rebArgs) (quiescent bool) {
-	locStage := reb.stages.stage.Load()
-	for _, si := range rargs.smap.Tmap {
-		if si.ID() == core.T.SID() && !reb.isQuiescent() {
-			return
-		}
-		status, ok := reb.checkStage(si, rargs, locStage)
-		if !ok || !status.Quiescent {
-			return
+	//
+	// b) secondly and separately, all other targets must finish sending
+	//
+	locStage := q.reb.stages.stage.Load()
+	debug.Assert(locStage >= rebStageFin || xctn.IsAborted(), locStage, " vs ", rebStageFin)
+	for _, tsi := range q.rargs.smap.Tmap {
+		status, ok := q.reb.checkStage(tsi, q.rargs, locStage)
+		if ok && status.Running && status.Stage < rebStageFin {
+			if i := total / logIval; i > q.i {
+				q.i = i
+				nlog.Infof("%s g[%d]: waiting for %s(stage %s) to quiesce", core.T, q.reb.RebID(), tsi.StringEx(), stages[status.Stage])
+			}
+			return core.QuiActiveDontBump
 		}
 	}
-	return true
+
+	return core.QuiInactiveCB
 }

@@ -226,8 +226,10 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 		case core.QuiInactiveCB: // NOTE: used by callbacks, converts to one of the returned codes
 			idle += sleep
 		case core.QuiActive:
-			idle = 0                  // reset
-			dur = min(dur+sleep, 2*d) // bump up to 2x initial
+			idle = 0                   // reset
+			dur = min(dur+sleep, d<<1) // bump inactivity duration (cannot increase beyond 2x initial)
+		case core.QuiActiveDontBump: //       reset, don't bump
+			idle = 0
 		case core.QuiActiveRet:
 			return core.QuiActiveRet
 		case core.QuiDone:

@@ -32,7 +32,6 @@ type (
 		Stage       uint32     `json:"stage"`               // the current stage - see enum above
 		Aborted     bool       `json:"aborted"`             // aborted?
 		Running     bool       `json:"running"`             // running?
-		Quiescent   bool       `json:"quiescent"`           // true when queue is empty
 	}
 )
 
@@ -122,10 +121,10 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	return
 }
 
-// wait for the target to reach strage = rebStageFin (i.e., finish traversing and sending)
+// wait for the target to reach `rebStageFin` (i.e., finish traversing and sending)
 // if the target that has reached rebStageWaitAck but not yet in the rebStageFin stage,
 // separately check whether it is waiting for my ACKs
-func (reb *Reb) waitFinExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
+func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	var (
 		curwt      time.Duration
 		status     *Status
