@@ -715,7 +715,7 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	var (
 		stats core.Stats
-		qui   = &qui{rargs, reb, 0}
+		qui   = &qui{rargs: rargs, reb: reb, logHdr: logHdr}
 		xreb  = reb.xctn()
 	)
 	nlog.Infoln(logHdr, "fini")

@@ -52,6 +52,7 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 	sb.WriteString(strconv.FormatInt(rebID, 10))
 	sb.WriteByte(',')
 	if smap != nil {
+		sb.WriteByte('v')
 		sb.WriteString(strconv.FormatInt(smap.Version, 10))
 	} else {
 		sb.WriteString("v<???>")

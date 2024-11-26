@@ -17,12 +17,13 @@ import (
 // quiesce prior to closing streams (fin-streams stage)
 //
 
-const logIval = 10 * time.Second
+const logIval = time.Minute
 
 type qui struct {
-	rargs *rebArgs
-	reb   *Reb
-	i     time.Duration // to log every logIval
+	rargs  *rebArgs
+	reb    *Reb
+	logHdr string
+	i      time.Duration // to log every logIval
 }
 
 func (q *qui) quicb(total time.Duration) core.QuiRes {
@@ -34,9 +35,14 @@ func (q *qui) quicb(total time.Duration) core.QuiRes {
 	//
 	// a) at least 2*max-keepalive _prior_ to counting towards config.Transport.QuiesceTime.D()
 	//
-	lastrx := q.reb.lastrx.Load()
-	timout := max(q.rargs.config.Timeout.MaxKeepalive.D()<<1, 8*time.Second)
-	if lastrx != 0 && mono.Since(lastrx) < timout {
+	_lastrx := q.reb.lastrx.Load()
+	timeout := max(q.rargs.config.Timeout.MaxKeepalive.D()<<1, 8*time.Second)
+	if _lastrx != 0 && mono.Since(_lastrx) < timeout {
+		if i := total / logIval; i > q.i {
+			q.i = i
+			locStage := q.reb.stages.stage.Load()
+			nlog.Infoln(q.logHdr, "keep receiving in", stages[locStage], "stage")
+		}
 		return core.QuiActive
 	}
 
@@ -46,11 +52,11 @@ func (q *qui) quicb(total time.Duration) core.QuiRes {
 	locStage := q.reb.stages.stage.Load()
 	debug.Assert(locStage >= rebStageFin || xctn.IsAborted(), locStage, " vs ", rebStageFin)
 	for _, tsi := range q.rargs.smap.Tmap {
-		status, ok := q.reb.checkStage(tsi, q.rargs, locStage)
-		if ok && status.Running && status.Stage < rebStageFin {
+		status, _ := q.reb.checkStage(tsi, q.rargs, locStage)
+		if status != nil && status.Running && status.Stage < rebStageFin {
 			if i := total / logIval; i > q.i {
 				q.i = i
-				nlog.Infof("%s g[%d]: waiting for %s(stage %s) to quiesce", core.T, q.reb.RebID(), tsi.StringEx(), stages[status.Stage])
+				nlog.Infoln(q.logHdr, "in", stages[locStage], "waiting for:", tsi.StringEx(), stages[status.Stage])
 			}
 			return core.QuiActiveDontBump
 		}
