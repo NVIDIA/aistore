@@ -72,9 +72,7 @@ type ecOptions struct {
 // Initializes the EC options, validates the number of targets.
 // If initial dataCnt value is negative, it sets the number of data and
 // parity slices to maximum possible for the cluster.
-//
-//nolint:revive,gocritic // modifies-value-receiver on purpose
-func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
+func (o *ecOptions) init(t *testing.T, proxyURL string) {
 	o.smap = tools.GetClusterMap(t, proxyURL)
 	if cnt := o.smap.CountActiveTs(); cnt < o.minTargets {
 		t.Skipf("not enough targets in the cluster: expected at least %d, got %d", o.minTargets, cnt)
@@ -89,7 +87,6 @@ func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 		o.parityCnt = total / 2
 		o.dataCnt = total - o.parityCnt
 	}
-	return &o
 }
 
 func (o *ecOptions) sliceTotal() int {
@@ -789,13 +786,14 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 		useDisks   = []bool{false, true}
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		objCount:     25,
 		concurrency:  8,
 		pattern:      "obj-rest-remote-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
@@ -875,13 +873,14 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		useDisks   = []bool{false, true}
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:  4,
 		objCount:    50,
 		concurrency: 8,
 		pattern:     "obj-rest-%04d",
 		silent:      testing.Short(),
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 	if testing.Short() {
 		useDisks = []bool{false}
@@ -978,13 +977,14 @@ func TestECChecksum(t *testing.T) {
 		}
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		dataCnt:      1,
 		parityCnt:    1,
 		pattern:      "obj-cksum-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	baseParams := tools.BaseAPIParams(proxyURL)
 	initMountpaths(t, proxyURL)
 
@@ -1044,7 +1044,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		dataCnt:      1,
 		parityCnt:    1,
@@ -1052,7 +1052,8 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 		concurrency:  8,
 		pattern:      "obj-rest-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	initMountpaths(t, proxyURL)
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1142,7 +1143,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		dataCnt:      1,
 		parityCnt:    1,
@@ -1150,7 +1151,8 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		concurrency:  8,
 		pattern:      "obj-disable-enable-load-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	initMountpaths(t, proxyURL)
 	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
@@ -1252,12 +1254,13 @@ func TestECStress(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:  4,
 		objCount:    400,
 		concurrency: 12,
 		pattern:     "obj-stress-%04d",
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	for _, test := range ecTests {
@@ -1296,7 +1299,7 @@ func TestECStressManyBuckets(t *testing.T) {
 		proxyURL = tools.RandomProxyURL()
 	)
 
-	o1 := ecOptions{
+	o1 := &ecOptions{
 		minTargets:   4,
 		parityCnt:    1,
 		dataCnt:      1,
@@ -1304,8 +1307,9 @@ func TestECStressManyBuckets(t *testing.T) {
 		concurrency:  12,
 		pattern:      "obj-stress-manybck-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
-	o2 := ecOptions{
+	}
+	o1.init(t, proxyURL)
+	o2 := &ecOptions{
 		minTargets:   4,
 		parityCnt:    1,
 		dataCnt:      1,
@@ -1313,7 +1317,8 @@ func TestECStressManyBuckets(t *testing.T) {
 		concurrency:  12,
 		pattern:      "obj-stress-manybck-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o2.init(t, proxyURL)
 
 	initMountpaths(t, proxyURL)
 	baseParams := tools.BaseAPIParams(proxyURL)
@@ -1366,12 +1371,13 @@ func TestECExtraStress(t *testing.T) {
 		proxyURL = tools.RandomProxyURL()
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:  4,
 		objCount:    400,
 		concurrency: 12,
 		pattern:     objStart + "%04d",
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	for _, test := range ecTests {
@@ -1493,7 +1499,7 @@ func TestECXattrs(t *testing.T) {
 		proxyURL = tools.RandomProxyURL()
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		dataCnt:      1,
 		parityCnt:    1,
@@ -1501,7 +1507,8 @@ func TestECXattrs(t *testing.T) {
 		concurrency:  8,
 		pattern:      "obj-xattr-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	baseParams := tools.BaseAPIParams(proxyURL)
@@ -1613,7 +1620,7 @@ func TestECDestroyBucket(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		dataCnt:      1,
 		parityCnt:    1,
@@ -1621,7 +1628,8 @@ func TestECDestroyBucket(t *testing.T) {
 		concurrency:  10,
 		pattern:      "obj-destroy-bck-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	initMountpaths(t, proxyURL)
 	bckProps := defaultECBckProps(o)
@@ -1705,14 +1713,15 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   5,
 		dataCnt:      -1,
 		objCount:     100,
 		concurrency:  12,
 		pattern:      "obj-emt-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	// Increase number of EC data slices, now there's just enough targets to handle EC requests
@@ -1802,14 +1811,15 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		proxyURL = tools.RandomProxyURL()
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   5,
 		dataCnt:      -1,
 		objCount:     50,
 		concurrency:  8,
 		pattern:      "obj-rest-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	if o.smap.CountActiveTs() > 10 {
 		// Reason: calculating main obj directory based on DeamonID
@@ -1954,7 +1964,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   5,
 		dataCnt:      1,
 		parityCnt:    1,
@@ -1962,7 +1972,8 @@ func TestECEmergencyMountpath(t *testing.T) {
 		concurrency:  24,
 		pattern:      "obj-em-mpath-%04d",
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	removeTarget, _ := o.smap.GetRandTarget()
 	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
@@ -2066,13 +2077,14 @@ func TestECRebalance(t *testing.T) {
 		}
 		proxyURL = tools.RandomProxyURL()
 	)
-	o := ecOptions{
+	o := &ecOptions{
 		objCount:     30,
 		concurrency:  8,
 		pattern:      "obj-reb-chk-%04d",
 		silent:       true,
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	for _, test := range ecTests {
@@ -2098,13 +2110,14 @@ func TestECMountpaths(t *testing.T) {
 		}
 		proxyURL = tools.RandomProxyURL()
 	)
-	o := ecOptions{
+	o := &ecOptions{
 		objCount:     30,
 		concurrency:  8,
 		pattern:      "obj-reb-mp-%04d",
 		silent:       true,
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	for _, test := range ecTests {
@@ -2273,14 +2286,15 @@ func TestECAndRegularRebalance(t *testing.T) {
 		}
 		proxyURL = tools.RandomProxyURL()
 	)
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   5,
 		objCount:     90,
 		concurrency:  8,
 		pattern:      "obj-reb-chk-%04d",
 		silent:       true,
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	for _, test := range ecTests {
@@ -2404,13 +2418,14 @@ func TestECResilver(t *testing.T) {
 		}
 		proxyURL = tools.RandomProxyURL()
 	)
-	o := ecOptions{
+	o := &ecOptions{
 		objCount:     100,
 		concurrency:  8,
 		pattern:      "obj-reb-loc-%04d",
 		silent:       true,
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 
 	for _, test := range ecTests {
@@ -2504,15 +2519,16 @@ func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
 		}
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams(proxyURL)
-		o          = ecOptions{
+		o          = &ecOptions{
 			minTargets:   5,
 			objCount:     300,
 			concurrency:  8,
 			pattern:      "obj-reb-chk-%04d",
 			silent:       true,
 			objSizeLimit: ecObjLimit,
-		}.init(t, proxyURL)
+		}
 	)
+	o.init(t, proxyURL)
 
 	initMountpaths(t, proxyURL)
 	for _, test := range ecTests {
@@ -2745,14 +2761,15 @@ func TestECGenerations(t *testing.T) {
 		generations = 3
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:   4,
 		objCount:     10,
 		concurrency:  4,
 		pattern:      "obj-gen-%04d",
 		silent:       testing.Short(),
 		objSizeLimit: ecObjLimit,
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 	initMountpaths(t, proxyURL)
 	lastWrite := make([]int64, o.objCount)
 
@@ -2834,13 +2851,14 @@ func TestECBckEncodeRecover(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	o := ecOptions{
+	o := &ecOptions{
 		minTargets:  4,
 		objCount:    512,
 		concurrency: 4,
 		pattern:     "obj-%04d",
 		silent:      testing.Short(),
-	}.init(t, proxyURL)
+	}
+	o.init(t, proxyURL)
 
 	if testing.Short() {
 		o.objCount = max(o.objCount/4, 128)
