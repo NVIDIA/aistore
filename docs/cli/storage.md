@@ -58,7 +58,7 @@ $ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
 ```console
 $ ais storage cleanup --help
 NAME:
-   ais storage cleanup - perform storage cleanup: remove deleted objects and old/obsolete workfiles
+   ais storage cleanup - remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects
 
 USAGE:
    ais storage cleanup [command options] PROVIDER:[//BUCKET_NAME]
@@ -66,6 +66,7 @@ USAGE:
 OPTIONS:
    --force, -f      disregard interrupted rebalance and possibly other conditions preventing full cleanup
                     (tip: check 'ais config cluster lru.dont_evict_time' as well)
+   --rm-zero-size   remove zero-size objects (caution: advanced usage only)
    --wait           wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    --timeout value  maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                     valid time units: ns, us (or µs), ms, s (default), m, h

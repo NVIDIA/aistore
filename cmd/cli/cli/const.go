@@ -40,7 +40,7 @@ const (
 	commandShow = "show"
 )
 
-// advanced command and subcommands
+// 'ais advanced' subcommands
 const (
 	cmdGenShards     = "gen-shards"
 	cmdPreload       = "preload"
@@ -49,6 +49,8 @@ const (
 	cmdRandMountpath = "random-mountpath"
 	cmdRotateLogs    = "rotate-logs"
 )
+
+const advancedUsageOnly = "(caution: advanced usage only)"
 
 // - 2nd level subcommands (mostly, verbs)
 // - show subcommands (`show <what>`)
@@ -501,6 +503,8 @@ var (
 		Usage: "disregard interrupted rebalance and possibly other conditions preventing full cleanup\n" +
 			indent1 + "\t(tip: check 'ais config cluster lru.dont_evict_time' as well)",
 	}
+
+	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "remove zero size objects " + advancedUsageOnly}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
@@ -1059,11 +1063,11 @@ var (
 	}
 	nonElectableFlag = cli.BoolFlag{
 		Name:  "non-electable",
-		Usage: "this proxy must not be elected as primary (advanced use)",
+		Usage: "this proxy must not be elected as primary " + advancedUsageOnly,
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
-		Usage: "do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only!)",
+		Usage: "do _not_ run global rebalance after putting node in maintenance " + advancedUsageOnly,
 	}
 	mountpathLabelFlag = cli.StringFlag{
 		Name: "label",

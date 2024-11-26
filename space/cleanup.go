@@ -32,12 +32,11 @@ import (
 
 type (
 	IniCln struct {
+		StatsT  stats.Tracker
 		Config  *cmn.Config
 		Xaction *XactCln
-		StatsT  stats.Tracker
-		Buckets []cmn.Bck // optional list of specific buckets to cleanup
 		WG      *sync.WaitGroup
-		Force   bool
+		Args    *xact.ArgsMsg
 	}
 	XactCln struct {
 		xact.Base
@@ -209,10 +208,10 @@ func (p *clnP) rmMisplaced() bool {
 		why = g.Xact.String() + " is running"
 	case g.Interrupted:
 		why = "rebalance interrupted"
-		ok = p.ini.Force
+		ok = p.ini.Args.Force
 	case g.Restarted:
 		why = "node restarted"
-		ok = p.ini.Force
+		ok = p.ini.Args.Force
 	case l.Xact != nil:
 		why = l.Xact.String() + " is running"
 	case l.Interrupted:
@@ -241,7 +240,7 @@ func (j *clnJ) String() string {
 	sb.WriteString(j.ini.Xaction.String())
 	sb.WriteString(": jog-")
 	sb.WriteString(j.mi.String())
-	if j.ini.Force {
+	if j.ini.Args.Force {
 		sb.WriteString("-with-force")
 	}
 	return sb.String()
@@ -262,8 +261,8 @@ func (j *clnJ) run(providers []string) {
 	}
 
 	// traverse
-	if len(j.ini.Buckets) != 0 {
-		size, err = j.jogBcks(j.ini.Buckets)
+	if len(j.ini.Args.Buckets) != 0 {
+		size, err = j.jogBcks(j.ini.Args.Buckets)
 	} else {
 		size, err = j.jog(providers)
 	}
@@ -488,6 +487,15 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	if lom.IsHRW() {
 		if lom.HasCopies() {
 			j.rmExtraCopies(lom)
+		}
+		if lom.Lsize() == 0 {
+			if j.ini.Args.Flags&xact.XrmZeroSize == xact.XrmZeroSize {
+				if ecode, err := core.T.DeleteObject(lom, false /*evict*/); err != nil {
+					nlog.Errorln("failed to remove zero-size", lom.Cname(), "err:", err, "code:", ecode)
+				} else {
+					nlog.Warningln("removed zero-size", lom.Cname())
+				}
+			}
 		}
 		return
 	}

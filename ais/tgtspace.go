@@ -149,12 +149,11 @@ func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.Cap
 		t.bcastAsyncIC(msg)
 	}
 	ini := space.IniCln{
+		StatsT:  t.statsT,
 		Xaction: xcln.(*space.XactCln),
 		Config:  cmn.GCO.Get(),
-		StatsT:  t.statsT,
-		Buckets: xargs.Buckets,
 		WG:      wg,
-		Force:   xargs.Force,
+		Args:    xargs,
 	}
 	xcln.AddNotif(&xact.NotifXact{
 		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},

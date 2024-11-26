@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -360,6 +361,7 @@ func newInitStoreCln() *space.IniCln {
 		Xaction: xcln,
 		Config:  cmn.GCO.Get(),
 		StatsT:  mock.NewStatsTracker(),
+		Args:    &xact.ArgsMsg{},
 	}
 }
 

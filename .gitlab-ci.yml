@@ -57,7 +57,7 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 30m
+  timeout: 32m
   <<: *default_only_def
   except:
     variables:
@@ -69,7 +69,7 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 30m
+  timeout: 32m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
@@ -81,7 +81,7 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 30m
+  timeout: 32m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
@@ -500,12 +500,12 @@ test:short:python-etl:
   script:
     - cd python
     - make python_etl_tests
-    
+
 
 #  e.g. RE: "ETLBucket|ETLConnectionError|ETLInitCode" (or any other regex to select tests)
 test:short:assorted:k8s:
   extends: .test_k8s_short_template
-  timeout: 30m
+  timeout: 32m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual

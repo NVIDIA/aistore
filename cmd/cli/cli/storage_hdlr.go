@@ -92,7 +92,7 @@ var (
 			{
 				Name: cmdMpathRescanDisks,
 				Usage: "re-resolve (mountpath, filesystem) to its underlying disk(s) and revalidate the disks\n" +
-					indent1 + "\t(advanced use only)",
+					indent1 + "\t" + advancedUsageOnly,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags["default"],
 				Action:       mpathRescanHandler,
@@ -112,12 +112,13 @@ var (
 var (
 	cleanupFlags = []cli.Flag{
 		forceClnFlag,
+		rmZeroSizeFlag,
 		waitFlag,
 		waitJobXactFinishedFlag,
 	}
 	cleanupCmd = cli.Command{
 		Name:         cmdStgCleanup,
-		Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
+		Usage:        "remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        cleanupFlags,
 		Action:       cleanupStorageHandler,
@@ -229,8 +230,14 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	force := flagIsSet(c, forceFlag)
+	// xargs
+	force := flagIsSet(c, forceClnFlag)
 	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck, Force: force}
+	if flagIsSet(c, rmZeroSizeFlag) {
+		xargs.Flags = xact.XrmZeroSize
+	}
+
+	// do
 	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
 		return
 	}

@@ -135,7 +135,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		// all other "startables"
+		// all other _startable_ xactions
 		xid, err := t.xstart(&xargs, bck, msg)
 		if err != nil {
 			t.writeErr(w, r, err)
