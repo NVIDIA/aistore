@@ -5,9 +5,9 @@
 package xact
 
 import (
-	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,18 +49,22 @@ const (
 	NumConsecutiveIdle = 2
 )
 
+// ArgsMsg.Flags
+const (
+	XrmZeroSize = 1 << iota
+)
+
 type (
 	// either xaction ID or Kind must be specified
 	// is getting passed via ActMsg.Value w/ MorphMarshal extraction
 	ArgsMsg struct {
-		ID   string // xaction UUID
-		Kind string // xaction kind _or_ name (see `xact.Table`)
-
-		// optional parameters
+		ID          string        // xaction UUID
+		Kind        string        // xaction kind _or_ name (see `xact.Table`)
 		DaemonID    string        // node that runs this xaction
 		Bck         cmn.Bck       // bucket
 		Buckets     []cmn.Bck     // list of buckets (e.g., copy-bucket, lru-evict, etc.)
 		Timeout     time.Duration // max time to wait
+		Flags       uint32        // enum (XrmZeroSize, ...) bitwise
 		Force       bool          // force
 		OnlyRunning bool          // only for running xactions
 	}
@@ -262,11 +266,6 @@ var Table = map[string]Descriptor{
 	apc.ActInvalListCache: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false},
 }
 
-func IsValidKind(kind string) bool {
-	_, ok := Table[kind]
-	return ok
-}
-
 func GetDescriptor(kindOrName string) (string, Descriptor, error) {
 	kind, dtor := getDtor(kindOrName)
 	if dtor == nil {
@@ -353,26 +352,63 @@ func getDtor(kindOrName string) (string, *Descriptor) {
 	return "", nil
 }
 
+//
+// validators (helpers)
+//
+
+func IsValidKind(kind string) bool {
+	_, ok := Table[kind]
+	return ok
+}
+
+func CheckValidKind(kind string) (err error) {
+	if _, ok := Table[kind]; !ok {
+		err = fmt.Errorf("invalid xaction (job) kind %q", kind)
+	}
+	return err
+}
+
+func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
+
+func CheckValidUUID(id string) (err error) {
+	if !cos.IsValidUUID(id) && !IsValidRebID(id) {
+		err = fmt.Errorf("invalid xaction (job) UUID %q", id)
+	}
+	return err
+}
+
 /////////////
 // ArgsMsg //
 /////////////
 
-func (args *ArgsMsg) String() (s string) {
-	if args.ID == "" {
-		s = "x-" + args.Kind
-	} else {
-		s = fmt.Sprintf("x-%s[%s]", args.Kind, args.ID)
+func (args *ArgsMsg) String() string {
+	var sb strings.Builder
+	sb.Grow(128)
+	sb.WriteString("xargs-")
+	sb.WriteString(args.Kind)
+	sb.WriteByte('[')
+	if args.ID != "" {
+		sb.WriteString(args.ID)
 	}
+	sb.WriteByte(']')
 	if !args.Bck.IsEmpty() {
-		s += "-" + args.Bck.String()
+		sb.WriteByte('-')
+		sb.WriteString(args.Bck.String())
 	}
 	if args.Timeout > 0 {
-		s += "-" + args.Timeout.String()
+		sb.WriteByte('-')
+		sb.WriteString(args.Timeout.String())
 	}
 	if args.DaemonID != "" {
-		s += "-node[" + args.DaemonID + "]"
+		sb.WriteString("-node[")
+		sb.WriteString(args.DaemonID)
+		sb.WriteByte(']')
 	}
-	return
+	if args.Flags > 0 {
+		sb.WriteString("-0x")
+		sb.WriteString(strconv.FormatUint(uint64(args.Flags), 16))
+	}
+	return sb.String()
 }
 
 //////////////
@@ -554,7 +590,7 @@ func (xs MultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
 		}
 	}
 	if !found {
-		return 0, errors.New("xaction [" + xid + "] not found")
+		return 0, fmt.Errorf("xaction (job) UUID=%q not found", xid)
 	}
 	if running {
 		end = time.Now()

@@ -60,7 +60,12 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &xactMsg) != nil {
 		return
 	}
-	debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
+	if xactMsg.Kind != "" {
+		if err := xact.CheckValidKind(xactMsg.Kind); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	}
 
 	//
 	// TODO: add user option to return idle xactions (separately)
@@ -119,7 +124,10 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case apc.ActXactStart:
-		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())
+		if err := xact.CheckValidKind(xargs.Kind); err != nil {
+			t.writeErrf(w, r, "%v: %s", err, xargs.String())
+			return
+		}
 		if xargs.Kind == apc.ActPrefetchObjects {
 			ecode, err := t.runPrefetch(xargs.ID, bck, &apc.PrefetchMsg{})
 			if err != nil {
@@ -137,7 +145,23 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			writeXid(w, xid)
 		}
 	case apc.ActXactStop:
-		debug.Assert(xact.IsValidKind(xargs.Kind) || xact.IsValidUUID(xargs.ID), xargs.String())
+		if xargs.Kind != "" {
+			if err := xact.CheckValidKind(xargs.Kind); err != nil {
+				t.writeErrf(w, r, "%v: %s", err, xargs.String())
+				return
+			}
+		}
+		if xargs.ID != "" {
+			if err := xact.CheckValidUUID(xargs.ID); err != nil {
+				t.writeErrf(w, r, "%v: %s", err, xargs.String())
+				return
+			}
+		}
+		if xargs.Kind == "" && xargs.ID == "" {
+			t.writeErrf(w, r, "cannot stop xaction given '%s' - expecting a valid kind and/or UUID", xargs.String())
+			return
+		}
+
 		err := cmn.ErrXactUserAbort
 		if msg.Name == cmn.ErrXactICNotifAbort.Error() {
 			err = cmn.ErrXactICNotifAbort
@@ -188,9 +212,6 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
-	if !xact.IsValidKind(args.Kind) {
-		return xid, fmt.Errorf(cmn.FmtErrUnknown, t, "xaction kind", args.Kind)
-	}
 	if dtor := xact.Table[args.Kind]; dtor.Scope == xact.ScopeB && bck == nil {
 		return xid, fmt.Errorf(erfmn, args.Kind)
 	}

@@ -139,10 +139,9 @@ func RegWithHK() {
 
 func GetXact(uuid string) (core.Xact, error) { return dreg.getXact(uuid) }
 
-func (r *registry) getXact(uuid string) (xctn core.Xact, err error) {
-	if !xact.IsValidUUID(uuid) {
-		err = fmt.Errorf("invalid UUID %q", uuid)
-		return
+func (r *registry) getXact(uuid string) (xctn core.Xact, _ error) {
+	if err := xact.CheckValidUUID(uuid); err != nil {
+		return nil, err
 	}
 	e := &r.entries
 	e.mtx.RLock()
@@ -157,7 +156,7 @@ outer:
 		}
 	}
 	e.mtx.RUnlock()
-	return
+	return xctn, nil
 }
 
 func GetAllRunning(inout *core.AllRunningInOut, periodic bool) {

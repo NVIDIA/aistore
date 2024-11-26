@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
@@ -204,7 +203,20 @@ func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err
 // - xact.IdlesBeforeFinishing()
 // - x-resilver (as it usually runs on a single node)
 func WaitForXactionNode(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) error {
-	debug.Assert(args.Kind != "" || xact.IsValidUUID(args.ID))
+	if args.Kind != "" {
+		if err := xact.CheckValidKind(args.Kind); err != nil {
+			return err
+		}
+	}
+	if args.ID != "" {
+		if err := xact.CheckValidUUID(args.ID); err != nil {
+			return err
+		}
+	}
+	if args.Kind == "" && args.ID == "" {
+		return fmt.Errorf("cannot wait for xaction given '%s' - expecting a valid kind and/or UUID", args.String())
+	}
+
 	_, err := _waitx(bp, args, fn)
 	return err
 }

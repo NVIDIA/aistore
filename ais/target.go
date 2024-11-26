@@ -141,7 +141,7 @@ func (t *target) _initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) err
 		case apc.AIS:
 			continue
 		default:
-			return fmt.Errorf(cmn.FmtErrUnknown, t, "backend provider", provider)
+			return fmt.Errorf("unknown backend provider %q", provider)
 		}
 		t.backend[provider] = add
 

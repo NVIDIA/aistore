@@ -65,8 +65,6 @@ func GoRunW(xctn core.Xact) {
 	wg.Wait()
 }
 
-func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
-
 //////////////
 // Base - partially implements `core.Xact` interface
 //////////////
