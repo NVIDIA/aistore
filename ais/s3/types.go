@@ -186,20 +186,23 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 	}
 }
 
-func SetEtag(hdr http.Header, lom *core.LOM) {
+func SetS3Headers(hdr http.Header, lom *core.LOM) {
 	if etag := hdr.Get(cos.HdrETag); etag != "" {
 		debug.AssertFunc(func() bool {
 			// Ensure that `etag` is a quoted string.
 			return etag[0] == '"' && etag[len(etag)-1] == '"'
 		})
-		return
+	} else {
+		if v, exists := lom.GetCustomKey(cmn.ETag); exists {
+			hdr.Set(cos.HdrETag, v)
+		} else if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
+			hdr.Set(cos.HdrETag, `"`+cksum.Value()+`"`)
+		}
 	}
-	if v, exists := lom.GetCustomKey(cmn.ETag); exists {
-		hdr.Set(cos.HdrETag, v)
-		return
-	}
-	if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
-		hdr.Set(cos.HdrETag, `"`+cksum.Value()+`"`)
+	if hdr.Get(cos.S3VersionHeader) == "" {
+		if v, exists := lom.GetCustomKey(cmn.VersionObjMD); exists {
+			hdr.Set(cos.S3VersionHeader, v)
+		}
 	}
 }
 

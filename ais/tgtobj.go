@@ -1078,6 +1078,9 @@ func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htra
 	// set response header
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
+	if goi.dpq.isS3 {
+		s3.SetS3Headers(whdr, lom)
+	}
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
 	err = goi.transmit(r, buf, fqn)
@@ -1101,7 +1104,7 @@ func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error
 	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
 	if dpq.isS3 {
 		// (expecting user to set bucket checksum = md5)
-		s3.SetEtag(whdr, lom)
+		s3.SetS3Headers(whdr, lom)
 	}
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))

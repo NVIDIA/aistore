@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/ais/s3"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -266,17 +267,19 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 
 	// call s3
 	var (
+		version string
 		etag    string
 		started = time.Now()
 		remote  = bck.IsRemoteS3()
 	)
 	if remote {
-		v, ecode, err := backend.CompleteMpt(lom, r, q, uploadID, body, partList)
+		v, e, ecode, err := backend.CompleteMpt(lom, r, q, uploadID, body, partList)
 		if err != nil {
 			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 			return
 		}
-		etag = v
+		version = v
+		etag = e
 	}
 
 	// append parts and finalize locally
@@ -348,6 +351,12 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 
 	// .5 finalize
 	lom.SetSize(size)
+	if remote {
+		lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
+		if version != "" {
+			lom.SetCustomKey(cmn.VersionObjMD, version)
+		}
+	}
 	lom.SetCustomKey(cmn.ETag, etag)
 
 	poi := allocPOI()
@@ -379,7 +388,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
-	w.Header().Set(cos.S3CksumHeader, etag)
+	s3.SetS3Headers(w.Header(), lom)
 	sgl.WriteTo2(w)
 	sgl.Free()
 

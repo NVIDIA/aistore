@@ -113,7 +113,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 	return etag, ecode, err
 }
 
-func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (etag string,
+func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (version string, etag string,
 	ecode int, _ error) {
 	h := cmn.BackendHelpers.Amazon
 
@@ -121,13 +121,14 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oq)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
-			return "", resp.StatusCode, err
+			return "", "", resp.StatusCode, err
 		}
 		if resp != nil {
 			result, err := decodeXML[aiss3.CompleteMptUploadResult](resp.Body)
 			if err != nil {
-				return "", http.StatusBadRequest, err
+				return "", "", http.StatusBadRequest, err
 			}
+			version, _ = h.EncodeVersion(resp.Header.Get(cos.S3VersionHeader))
 			etag, _ = h.EncodeETag(result.ETag)
 			return
 		}
@@ -155,10 +156,11 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	} else {
+		version, _ = h.EncodeVersion(out.VersionId)
 		etag, _ = h.EncodeETag(out.ETag)
 	}
 
-	return etag, ecode, err
+	return version, etag, ecode, err
 }
 
 func AbortMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {

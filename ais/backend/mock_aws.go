@@ -30,8 +30,8 @@ func PutMptPart(*core.LOM, io.ReadCloser, *http.Request, url.Values, string, int
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("put-mpt-part", mock)
 }
 
-func CompleteMpt(*core.LOM, *http.Request, url.Values, string, []byte, *s3types.CompleteMptUpload) (string, int, error) {
-	return "", http.StatusBadRequest, cmn.NewErrUnsupp("complete-part", mock)
+func CompleteMpt(*core.LOM, *http.Request, url.Values, string, []byte, *s3types.CompleteMptUpload) (string, string, int, error) {
+	return "", "", http.StatusBadRequest, cmn.NewErrUnsupp("complete-part", mock)
 }
 
 func AbortMpt(*core.LOM, *http.Request, url.Values, string) (int, error) {

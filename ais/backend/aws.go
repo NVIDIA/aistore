@@ -648,7 +648,8 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 		}
 		if resp != nil {
 			uploadOutput = &s3manager.UploadOutput{
-				ETag: aws.String(resp.Header.Get(cos.HdrETag)),
+				VersionID: aws.String(resp.Header.Get(cos.S3VersionHeader)),
+				ETag:      aws.String(resp.Header.Get(cos.HdrETag)),
 			}
 			goto exit
 		}

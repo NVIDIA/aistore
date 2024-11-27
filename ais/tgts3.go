@@ -217,7 +217,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		t.FSHC(err, lom.Mountpath(), lom.FQN)
 		s3.WriteErr(w, r, err, ecode)
 	} else {
-		s3.SetEtag(w.Header(), lom)
+		s3.SetS3Headers(w.Header(), lom)
 	}
 	dpqFree(dpq)
 }
@@ -327,7 +327,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	custom := op.GetCustomMD()
 	lom.SetCustomMD(custom)
 
-	s3.SetEtag(hdr, lom)
+	s3.SetS3Headers(hdr, lom)
 
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(op.Size, 10))
 	if v, ok := custom[cos.HdrContentType]; ok {
