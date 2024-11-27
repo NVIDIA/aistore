@@ -375,9 +375,9 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 		return fmt.Errorf("%q requires bucket to run", xargs.Kind)
 	}
 
-	xid, err := api.StartXaction(apiBP, xargs, extra)
+	xid, err := xstart(c, xargs, extra)
 	if err != nil {
-		return V(err)
+		return err
 	}
 	if xid == "" {
 		warn := fmt.Sprintf("The operation returned an empty UUID (a no-op?). %s\n",
@@ -674,7 +674,7 @@ func waitDownload(c *cli.Context, id string) (err error) {
 	return nil
 }
 
-func startLRUHandler(c *cli.Context) (err error) {
+func startLRUHandler(c *cli.Context) error {
 	if !flagIsSet(c, lruBucketsFlag) {
 		return startXactionHandler(c)
 	}
@@ -683,7 +683,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		warn := fmt.Sprintf("LRU eviction with %s option will evict buckets _ignoring_ their respective `lru.enabled` properties.",
 			qflprn(forceFlag))
 		if ok := confirm(c, "Would you like to continue?", warn); !ok {
-			return
+			return nil
 		}
 	}
 
@@ -698,16 +698,14 @@ func startLRUHandler(c *cli.Context) (err error) {
 		buckets[idx] = bck
 	}
 
-	var (
-		id    string
-		xargs = xact.ArgsMsg{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
-	)
-	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
-		return
+	xargs := xact.ArgsMsg{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
+	xid, err := xstart(c, &xargs, "")
+	if err != nil {
+		return err
 	}
 
-	actionX(c, &xact.ArgsMsg{Kind: apc.ActLRU, ID: id}, "")
-	return
+	actionX(c, &xact.ArgsMsg{Kind: apc.ActLRU, ID: xid}, "")
+	return nil
 }
 
 //
@@ -830,8 +828,8 @@ func stopJobHandler(c *cli.Context) error {
 
 	// call to abort
 	args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
-	if err := api.AbortXaction(apiBP, &args); err != nil {
-		return V(err)
+	if err := xstop(&args); err != nil {
+		return err
 	}
 	actionDone(c, fmt.Sprintf("Stopped %s\n", msg))
 	return nil
@@ -859,7 +857,7 @@ func stopXactionKindOrAll(c *cli.Context, xactKind, xname string, bck cmn.Bck) e
 			continue
 		}
 		args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
-		if err := api.AbortXaction(apiBP, &args); err != nil {
+		if err := xstop(&args); err != nil {
 			actionWarn(c, fmt.Sprintf("failed to stop %s: %v", cname, err))
 		} else {
 			actionDone(c, "Stopped "+cname)

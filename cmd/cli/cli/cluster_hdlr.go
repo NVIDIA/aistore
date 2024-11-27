@@ -558,7 +558,7 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 	}
 
 	xargs.ID, xargs.OnlyRunning = snap.ID, false
-	if err := api.AbortXaction(apiBP, &xargs); err != nil {
+	if err := xstop(&xargs); err != nil {
 		return V(err)
 	}
 	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)

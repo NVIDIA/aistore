@@ -215,18 +215,16 @@ func showStorageHandler(c *cli.Context) (err error) {
 // cleanup space: remove deleted, misplaced
 //
 
-func cleanupStorageHandler(c *cli.Context) (err error) {
-	var (
-		bck cmn.Bck
-		id  string
-	)
+func cleanupStorageHandler(c *cli.Context) error {
+	var bck cmn.Bck
 	if c.NArg() != 0 {
+		var err error
 		bck, err = parseBckURI(c, c.Args().Get(0), false)
 		if err != nil {
-			return
+			return err
 		}
 		if _, err = headBucket(bck, true /* don't add */); err != nil {
-			return
+			return err
 		}
 	}
 
@@ -238,21 +236,22 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	}
 
 	// do
-	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
-		return
+	xid, err := xstart(c, &xargs, "")
+	if err != nil {
+		return err
 	}
 
-	xargs.ID = id
+	xargs.ID = xid
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		if id != "" {
+		if xid != "" {
 			actionX(c, &xargs, "")
 		} else {
 			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
 		}
-		return
+		return nil
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", id)
+	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", xid)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}

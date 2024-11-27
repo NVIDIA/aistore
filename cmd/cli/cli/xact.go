@@ -356,3 +356,31 @@ func extractXactIDsForKind(xs xact.MultiSnap, xactKind string) (xactIDs []string
 	})
 	return
 }
+
+// [backward compatibility] added xargs.Flags in 44f77dfe56376e
+func xstart(c *cli.Context, xargs *xact.ArgsMsg, extra string) (xid string, err error) {
+	if xid, err = api.StartXaction(apiBP, xargs, extra); err == nil {
+		return xid, nil
+	}
+	if !strings.Contains(err.Error(), "marshal") {
+		return "", V(err)
+	}
+	if smap, e1 := getClusterMap(c); e1 == nil {
+		if ds, e2 := api.GetStatsAndStatus(apiBP, smap.Primary); e2 == nil {
+			err = fmt.Errorf("CLI version %s is not compatible with (an older) AIS v%s", c.App.Version, ds.Version)
+		}
+	}
+	return "", err
+}
+
+func xstop(xargs *xact.ArgsMsg) (err error) {
+	if xargs.Flags != 0 {
+		err = errors.New("invalid 'ais stop' command - expecting zero flags")
+		debug.AssertNoErr(err)
+		return err
+	}
+	if err = api.AbortXaction(apiBP, xargs); err != nil {
+		return V(err)
+	}
+	return nil
+}
