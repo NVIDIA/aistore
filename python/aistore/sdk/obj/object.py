@@ -38,6 +38,7 @@ from aistore.sdk.const import (
 from aistore.sdk.provider import Provider
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
+from aistore.sdk.obj.object_writer import ObjectWriter
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
@@ -131,6 +132,7 @@ class Object:
         self._props = ObjectProps(headers)
         return headers
 
+    # TODO: Rename to `get_reader` aand deprecate `get` method (call `get_reader`)
     # pylint: disable=too-many-arguments
     def get(
         self,
@@ -276,6 +278,17 @@ class Object:
             params=self.query_params,
             data=data,
         )
+
+    # TODO: Move all object writing methods to ObjectWriter class (e.g.
+    #       put_content, put_file, append_content, and set_custom_props).
+    def get_writer(self) -> ObjectWriter:
+        """
+        Create an ObjectWriter to write to object contents and attributes.
+
+        Returns:
+            An ObjectWriter which can be used to write to an object's contents and attributes.
+        """
+        return ObjectWriter(self)
 
     # pylint: disable=too-many-arguments
     def promote(

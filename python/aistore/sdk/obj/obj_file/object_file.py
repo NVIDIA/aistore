@@ -3,7 +3,7 @@
 #
 
 import requests
-from io import BufferedIOBase
+from io import BufferedIOBase, BufferedWriter
 from typing import Optional
 from overrides import override
 from aistore.sdk.obj.content_iterator import ContentIterator
@@ -13,6 +13,7 @@ from aistore.sdk.utils import get_logger
 logger = get_logger(__name__)
 
 
+# TODO: Rename to `ObjectFileReader`
 class ObjectFile(BufferedIOBase):
     """
     A sequential read-only file-like object extending `BufferedIOBase` for reading object data, with support for both
@@ -137,3 +138,81 @@ class ObjectFile(BufferedIOBase):
     def close(self) -> None:
         """Close the file."""
         self._closed = True
+
+
+class ObjectFileWriter(BufferedWriter):
+    """
+    A file-like writer object for AIStore, extending `BufferedWriter`.
+
+    Args:
+        obj (Object): The Object instance for handling write operations.
+        mode (str): Specifies the mode in which the file is opened.
+            - `'w'`: Write mode. Opens the object for writing, truncating any existing content.
+                     Writing starts from the beginning of the object.
+            - `'a'`: Append mode. Opens the object for appending. Existing content is preserved,
+                     and writing starts from the end of the object.
+    """
+
+    def __init__(self, obj: "Object", mode: str):
+        self._obj = obj
+        self._mode = mode
+        self._handle = ""
+        self._closed = False
+        if self._mode == "w":
+            self._obj.put_content(b"")
+
+    @override
+    def __enter__(self, *args, **kwargs):
+        if self._mode == "w":
+            self._obj.put_content(b"")
+        return self
+
+    @override
+    def write(self, buffer: bytes) -> int:
+        """
+        Write data to the object.
+
+        Args:
+            data (bytes): The data to write.
+
+        Returns:
+            int: Number of bytes written.
+
+        Raises:
+            ValueError: I/O operation on a closed file.
+        """
+        if self._closed:
+            raise ValueError("I/O operation on closed file.")
+
+        self._handle = self._obj.append_content(buffer, handle=self._handle)
+
+        return len(buffer)
+
+    @override
+    def flush(self) -> None:
+        """
+        Flush the writer, ensuring the object is finalized.
+
+        This does not close the writer but makes the current state accessible.
+
+        Raises:
+            ValueError: I/O operation on a closed file.
+        """
+        if self._closed:
+            raise ValueError("I/O operation on closed file.")
+
+        if self._handle:
+            # Finalize the current state with flush
+            self._obj.append_content(content=b"", handle=self._handle, flush=True)
+            # Reset the handle to prepare for further appends
+            self._handle = ""
+
+    @override
+    def close(self) -> None:
+        """
+        Close the writer and finalize the object.
+        """
+        if not self._closed:
+            # Flush the data before closing
+            self.flush()
+            self._closed = True
