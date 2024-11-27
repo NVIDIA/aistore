@@ -64,7 +64,7 @@ type (
 		Bck         cmn.Bck       // bucket
 		Buckets     []cmn.Bck     // list of buckets (e.g., copy-bucket, lru-evict, etc.)
 		Timeout     time.Duration // max time to wait
-		Flags       uint32        // enum (XrmZeroSize, ...) bitwise
+		Flags       uint32        `json:"flags,omitempty"` // enum (XrmZeroSize, ...) bitwise
 		Force       bool          // force
 		OnlyRunning bool          // only for running xactions
 	}
