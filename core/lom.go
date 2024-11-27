@@ -560,7 +560,6 @@ func (lom *LOM) FromFS() error {
 			if cos.IsPathErr(err) && strings.Contains(err.Error(), "not a directory") {
 				// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
 				err := fmt.Errorf("%w (path error)", err)
-				nlog.Errorln(err)
 				return err
 			}
 			err = os.NewSyscallError("stat", err)

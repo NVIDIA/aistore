@@ -232,10 +232,8 @@ func CheckMvToVirtDir(err error, dst string) error {
 	if IsErrMvToVirtDir(err) {
 		return err
 	}
-	if os.IsExist(err) {
-		if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
-			return &ErrMvToVirtDir{dst}
-		}
+	if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
+		return &ErrMvToVirtDir{dst}
 	}
 	return err
 }

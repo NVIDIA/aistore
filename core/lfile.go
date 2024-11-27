@@ -145,11 +145,13 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	if err := cos.Stat(bdir); err != nil {
 		return &errBdir{cname: lom.Cname(), err: err}
 	}
-	if err := lom.RenameToMain(wfqn); err != nil {
-		if !cos.IsErrMvToVirtDir(err) {
-			T.FSHC(err, lom.Mountpath(), wfqn)
-		}
-		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
+	err := lom.RenameToMain(wfqn)
+	if err == nil {
+		return nil
 	}
-	return nil
+	if cos.IsErrMvToVirtDir(err) {
+		return err
+	}
+	T.FSHC(err, lom.Mountpath(), wfqn)
+	return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 }

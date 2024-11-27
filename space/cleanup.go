@@ -30,6 +30,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// stats counters "cleanup.store.n" & "cleanup.store.size" (not to confuse with generic ""loc-objs", "in-objs", etc.)
+
 type (
 	IniCln struct {
 		StatsT  stats.Tracker
@@ -490,10 +492,16 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		}
 		if lom.Lsize() == 0 {
 			if j.ini.Args.Flags&xact.XrmZeroSize == xact.XrmZeroSize {
+				// remove in place
 				if ecode, err := core.T.DeleteObject(lom, false /*evict*/); err != nil {
-					nlog.Errorln("failed to remove zero-size", lom.Cname(), "err:", err, "code:", ecode)
+					nlog.Errorln("failed to remove zero size", lom.Cname(), "err: [", err, ecode, "]")
 				} else {
-					nlog.Warningln("removed zero-size", lom.Cname())
+					if lom.Bck().IsRemote() {
+						nlog.Warningln("removed zero size", lom.Cname(), "(both cluster and remote)")
+					} else {
+						nlog.Warningln("removed zero size", lom.Cname())
+					}
+					j.ini.StatsT.Inc(stats.CleanupStoreCount)
 				}
 			}
 		}

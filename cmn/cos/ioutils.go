@@ -79,8 +79,9 @@ func CreateDir(dir string) error {
 }
 
 // CreateFile creates a new write-only (O_WRONLY) file with default cos.PermRWR permissions.
-// NOTE: if the file pathname doesn't exist it'll be created.
-// NOTE: if the file already exists it'll be also silently truncated.
+// [NOTE]
+// - if the file pathname doesn't exist it'll be created
+// - but if it does it'll be also silently truncated
 func CreateFile(fqn string) (*os.File, error) {
 	if err := CreateDir(filepath.Dir(fqn)); err != nil {
 		return nil, err
@@ -89,20 +90,24 @@ func CreateFile(fqn string) (*os.File, error) {
 }
 
 // (creates destination directory if doesn't exist)
-func Rename(src, dst string) (err error) {
-	err = os.Rename(src, dst)
+func Rename(src, dst string) error {
+	err := os.Rename(src, dst)
 	if err == nil {
 		return nil
 	}
 	if !os.IsNotExist(err) {
 		return CheckMvToVirtDir(err, dst)
 	}
-	// create and retry (slow path)
+
+	// slow path
 	err = CreateDir(filepath.Dir(dst))
 	if err == nil || os.IsExist(err) /*race*/ {
 		err = os.Rename(src, dst)
 	}
-	return err
+	if err == nil {
+		return nil
+	}
+	return CheckMvToVirtDir(err, dst)
 }
 
 // RemoveFile removes path; returns nil upon success or if the path does not exist.
@@ -114,36 +119,36 @@ func RemoveFile(path string) (err error) {
 	return
 }
 
-// and computes checksum if requested
+// and computes checksum, if requested
 func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cksum *CksumHash, err error) {
-	var srcFile, dstFile *os.File
-	if srcFile, err = os.Open(src); err != nil {
-		return
+	const tag = "copy-file:"
+	var srcfh, dstfh *os.File
+	if srcfh, err = os.Open(src); err != nil {
+		return 0, nil, err
 	}
-	if dstFile, err = CreateFile(dst); err != nil {
-		nlog.Errorln("Failed to create", dst+":", err)
-		Close(srcFile)
-		return
+	if dstfh, err = CreateFile(dst); err != nil {
+		nlog.Errorln(tag, err)
+		Close(srcfh)
+		return 0, nil, err
 	}
-	written, cksum, err = CopyAndChecksum(dstFile, srcFile, buf, cksumType)
-	Close(srcFile)
-	defer func() {
-		if err == nil {
-			return
-		}
-		if nestedErr := RemoveFile(dst); nestedErr != nil {
-			nlog.Errorf("Nested (%v): failed to remove %s, err: %v", err, dst, nestedErr)
-		}
-	}()
+	written, cksum, err = CopyAndChecksum(dstfh, srcfh, buf, cksumType)
+	Close(srcfh)
 	if err != nil {
-		nlog.Errorln("Failed to copy", src, "=>", dst+":", err)
-		Close(dstFile)
-		return
+		Close(dstfh)
+		goto eret
 	}
-	if err = FlushClose(dstFile); err != nil {
-		nlog.Errorln("Failed to flush and close", dst+":", err)
+	if err = FlushClose(dstfh); err != nil {
+		dstfh.Close()
+		goto eret
 	}
-	return
+	return written, cksum, err
+
+eret:
+	nlog.Errorln(tag, err)
+	if nerr := RemoveFile(dst); nerr != nil {
+		nlog.Errorln(tag, "nested err: [", nerr, "]")
+	}
+	return 0, nil, err
 }
 
 // Saves the `reader` directly to `fqn`, checksums if requested

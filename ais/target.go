@@ -1309,7 +1309,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 			if cmn.IsErrObjNought(err) {
 				// cleanup in place
 				if errNested := lom.RemoveMain(); errNested != nil {
-					nlog.Errorln(t.String(), "failed to cleanup in place", errNested)
+					nlog.Errorln(t.String(), "failed to cleanup in place: nested err [", err, errNested, "]")
 				}
 				return http.StatusNotFound, nil, false
 			}

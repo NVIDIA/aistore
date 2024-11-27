@@ -365,6 +365,7 @@ func xstart(c *cli.Context, xargs *xact.ArgsMsg, extra string) (xid string, err 
 	if !strings.Contains(err.Error(), "marshal") {
 		return "", V(err)
 	}
+	debug.Assert(xargs.Flags != 0) // ditto
 	if smap, e1 := getClusterMap(c); e1 == nil {
 		if ds, e2 := api.GetStatsAndStatus(apiBP, smap.Primary); e2 == nil {
 			err = fmt.Errorf("CLI version %s is not compatible with (an older) AIS v%s", c.App.Version, ds.Version)
