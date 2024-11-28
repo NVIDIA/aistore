@@ -31,7 +31,6 @@ ls           promote      concat       evict        mv           cat
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [Out of band updates](/docs/out_of_band.md)
-
 - [PUT object](#put-object)
   - [Object names](#object-names)
   - [Put single file](#put-single-file)
@@ -48,11 +47,11 @@ ls           promote      concat       evict        mv           cat
   - [Put multiple directories using Bash range notation](#put-multiple-directories-using-bash-range-notation)
   - [Put multiple directories using filename-matching pattern (wildcard)](#put-multiple-directories-using-filename-matching-pattern-wildcard)
   - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
-
 - [Tips for copying files from Lustre (NFS)](#tips-for-copying-files-from-lustre-nfs)
 - [Promote files and directories](#promote-files-and-directories)
 - [APPEND object](#append-object)
 - [Delete object](#delete-object)
+  - [Disambiguating multi-object operation](#disambiguating-multi-object-operation)
 - [Evict object](#evict-object)
 - [Move object](#move-object)
 - [Concat objects](#concat-objects)
@@ -1315,11 +1314,92 @@ version          3
 
 # Delete object
 
-`ais object rm BUCKET/[OBJECT_NAME]...`
-
 Delete an object or list/range of objects from the bucket.
 
-* For multi-object delete operation, please see: [Operations on Lists and Ranges (and entire buckets)](#operations-on-lists-and-ranges-and-entire-buckets) below.
+```console
+NAME:
+   ais object rm - remove object or selected objects from the specified bucket, or buckets - e.g.:
+     - 'rm ais://nnn --all'                                   - remove all objects from the bucket ais://nnn;
+     - 'rm s3://abc' --all                                    - remove all objects including those that are not _present_ in the cluster;
+     - 'rm gs://abc --prefix images/'                         - remove all objects from the virtual subdirectory "images";
+     - 'rm gs://abc/images/'                                  - same as above;
+     - 'rm gs://abc --template images/'                       - same as above;
+     - 'rm gs://abc --template "shard-{0000..9999}.tar.lz4"'  - remove the matching range (prefix + brace expansion);
+     - 'rm "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
+
+USAGE:
+   ais object rm [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+
+OPTIONS:
+   --list value           comma-separated list of object or file names, e.g.:
+                          --list 'o1,o2,o3'
+                          --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                          or, when listing files and/or directories:
+                          --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value       template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                          (with optional steps and gaps), e.g.:
+                          --template "" # (an empty or '*' template matches eveything)
+                          --template 'dir/subdir/'
+                          --template 'shard-{1000..9999}.tar'
+                          --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                          and similarly, when specifying files and directories:
+                          --template '/home/dir/subdir/'
+                          --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait                 wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value        maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress             show progress bar(s) and progress of execution in real time
+   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --prefix value         select objects that have names starting with the specified prefix, e.g.:
+                          '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+   --all                  remove all objects (use it with extreme caution!)
+   --verbose, -v          verbose output
+   --non-verbose, --nv    non-verbose (quiet) output, minimized reporting, fewer warnings
+   --non-recursive, --nr  list objects without including nested virtual subdirectories
+   --yes, -y              assume 'yes' to all questions
+   --help, -h             show help
+```
+
+> For multi-object delete operation, see also [Operations on Lists and Ranges (and entire buckets)](#operations-on-lists-and-ranges-and-entire-buckets) below.
+
+## Disambiguating multi-object operation
+
+Let's say, in its initial state the bucket consists of:
+
+```console
+$ ais ls s3://mybucket
+NAME                                     SIZE            CACHED
+README.md                                16.26KiB        no
+aaa                                      16.26KiB        yes
+aaa/bbb/111                              16.26KiB        no
+aaa/bbb/ccc/README.md                    5.09KiB         no
+...
+```
+
+**Notice** that `aaa` here is both an object and a virtual directory.
+
+That's why:
+
+```console
+$ ais rmo s3://mybucket/aaa
+Error: part of the URI "aaa" can be interpreted as an object name and/or mutli-object matching prefix
+(Tip:  to disambiguate, use either '--non-recursive' or '--prefix')
+```
+
+And so, as per the Tip (above), we can go ahead and disambiguate one way or another, e.g.:
+
+```console
+$ ais rmo s3://mybucket/aaa --nr
+deleted "aaa" from s3://mybucket
+
+$ ais ls s3://mybucket
+NAME                                     SIZE            CACHED
+README.md                                16.26KiB        no
+aaa/bbb/111                              16.26KiB        no
+aaa/bbb/ccc/README.md                    5.09KiB         no
+...
+```
 
 ## Delete a single object
 
@@ -1345,12 +1425,59 @@ obj2.tgz deleted from aws://cloudbck bucket
 
 # Evict object
 
-`ais bucket evict BUCKET/[OBJECT_NAME]...`
+```console
+NAME:
+   ais object evict - evict one remote bucket, multiple remote buckets, or
+   selected objects in a given remote bucket or buckets, e.g.:
+     - 'evict gs://abc'                                          - evict entire bucket (all gs://abc objects in aistore);
+     - 'evict gs:'                                               - evict all GCP buckets from the cluster;
+     - 'evict gs://abc --prefix images/'                         - evict all gs://abc objects from the virtual subdirectory "images";
+     - 'evict gs://abc/images/'                                  - same as above;
+     - 'evict gs://abc --template images/'                       - same as above;
+     - 'evict gs://abc --template "shard-{0000..9999}.tar.lz4"'  - evict the matching range (prefix + brace expansion);
+     - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
+
+USAGE:
+   ais object evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+
+OPTIONS:
+   --list value           comma-separated list of object or file names, e.g.:
+                          --list 'o1,o2,o3'
+                          --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                          or, when listing files and/or directories:
+                          --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value       template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                          (with optional steps and gaps), e.g.:
+                          --template "" # (an empty or '*' template matches eveything)
+                          --template 'dir/subdir/'
+                          --template 'shard-{1000..9999}.tar'
+                          --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                          and similarly, when specifying files and directories:
+                          --template '/home/dir/subdir/'
+                          --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait                 wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value        maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress             show progress bar(s) and progress of execution in real time
+   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --keep-md              keep bucket metadata
+   --prefix value         select objects that have names starting with the specified prefix, e.g.:
+                          '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                          '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --dry-run              preview the results without really running the action
+   --non-recursive, --nr  list objects without including nested virtual subdirectories
+   --verbose, -v          verbose output
+   --non-verbose, --nv    non-verbose (quiet) output, minimized reporting, fewer warnings
+   --help, -h             show help
+
+```
 
 [Evict](/docs/bucket.md#prefetchevict-objects) object(s) from a bucket that has [remote backend](/docs/bucket.md).
 
 * NOTE: for each space-separated object name CLI sends a separate request.
 * For multi-object eviction that operates on a `--list` or `--template`, please see: [Operations on Lists and Ranges (and entire buckets)](#operations-on-lists-and-ranges-and-entire-buckets) below.
+* Similar to delete, prefetch and copy operations, `evict` also supports embedded prefix - see [disambiguating multi-object operation](#disambiguating-multi-object-operation)
 
 ## Evict a single object
 
@@ -1542,6 +1669,7 @@ Note usage examples above. You can always run `--help` option to see the most re
 
 ### See also
 * [Prefetch/Evict objects](/docs/bucket.md#prefetchevict-objects)
+* Similar to delete, evict and copy operations, `prefetch`also supports embedded prefix - see [disambiguating multi-object operation](#disambiguating-multi-object-operation)
 
 ### Example: prefetch using prefix
 

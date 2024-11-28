@@ -676,23 +676,35 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 	return len(objList.Entries) == 0, nil
 }
 
-// disambiguate objname as prefix
-// NOTE: never "cached"
-func objnameIsPrefix(bck cmn.Bck, oname string) (bool, error) {
+// disambiguate objname vs prefix
+type disambiguateObjPref struct {
+	isObj, isPref bool
+}
+
+func lsObjVsPref(bck cmn.Bck, oname string) (dop disambiguateObjPref, _ error) {
 	msg := &apc.LsoMsg{Prefix: oname}
+
+	// NOTE: never "cached" (apc.LsObjCached)
 	msg.SetFlag(apc.LsNameOnly)
-	objList, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 3})
+	msg.SetFlag(apc.LsNoRecursion)
+	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 32})
 
 	if err != nil {
-		return false, V(err)
+		return dop, V(err)
 	}
-	if len(objList.Entries) > 1 {
-		return true, nil
+	if len(lst.Entries) == 0 {
+		dop.isObj = true // caller to further deal with it
+		return dop, nil
 	}
-	if len(objList.Entries) == 1 {
-		return objList.Entries[0].Name != oname, nil
+
+	for _, en := range lst.Entries {
+		if en.Name == oname {
+			dop.isObj = true
+			break
+		}
 	}
-	return false, nil
+	dop.isPref = len(lst.Entries) > 1 || !dop.isObj
+	return dop, nil
 }
 
 func ensureRemoteProvider(bck cmn.Bck) error {

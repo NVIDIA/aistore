@@ -218,25 +218,33 @@ func parseObjListTemplate(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (ob
 	}
 
 	if objNameOrTmpl != "" {
-		if listObjs != "" || tmplObjs != "" {
+		switch {
+		case listObjs != "" || tmplObjs != "":
 			what := "object name or prefix"
 			if isPattern(objNameOrTmpl) {
 				what = "pattern or template"
 			}
-			err = fmt.Errorf("%s (%s) cannot be used together with flags %s and %s (tip: use either one or the other)",
+			err = fmt.Errorf("%s (%s) cannot be used together with flags %s and %s (tip: use one or the other)",
 				what, objNameOrTmpl, qflprn(listFlag), qflprn(templateFlag))
-		} else if isPattern(objNameOrTmpl) {
+			return "", "", "", err
+		case isPattern(objNameOrTmpl):
 			tmplObjs = objNameOrTmpl
-		} else {
-			// [NOTE]
-			// make an additional list-objects call to differentiate
-			// embedded prefix from object name
+		case flagIsSet(c, noRecursFlag):
 			objName = objNameOrTmpl
-			isPrefix, err := objnameIsPrefix(bck, objName)
-			if err != nil {
+
+		default:
+			// [NOTE] additional list-objects call to disambiguate: differentiate embedded prefix from object name
+			dop, err := lsObjVsPref(bck, objNameOrTmpl)
+			switch {
+			case err != nil:
 				return "", "", "", err
-			}
-			if isPrefix {
+			case dop.isObj && dop.isPref:
+				err := fmt.Errorf("part of the URI %q can be interpreted as an object name and/or mutli-object matching prefix\n"+
+					"(Tip:  to disambiguate, use either %s or %s)", objNameOrTmpl, qflprn(noRecursFlag), qflprn(verbObjPrefixFlag))
+				return "", "", "", err
+			case dop.isObj:
+				objName = objNameOrTmpl
+			case dop.isPref:
 				// (operation on all 'prefix'-ed objects)
 				tmplObjs, objName = objNameOrTmpl, ""
 			}

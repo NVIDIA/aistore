@@ -89,7 +89,11 @@ func (e *errAdditionalInfo) Error() string {
 /////////////////////
 
 func (e *errDoesNotExist) Error() string {
-	return fmt.Sprintf("%s %q does not exist%s", e.what, e.name, e.suffix)
+	s := fmt.Sprintf("%q does not exist%s", e.name, e.suffix)
+	if e.what != "" {
+		return e.what + " " + s
+	}
+	return s
 }
 
 func isErrDoesNotExist(err error) bool {

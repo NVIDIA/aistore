@@ -708,6 +708,8 @@ Source bucket must exist. When the destination bucket is remote (e.g. in the Clo
 
 Moreover, when the destination is AIS (`ais://`) or remote AIS (`ais://@remote-alias`) bucket, the existence is optional: the destination will be created on the fly, with bucket properties copied from the source (`SRC_BUCKET`).
 
+>  **NOTE:** similar to delete, evict and prefetch operations, `cp` also supports embedded prefix - see [disambiguating multi-object operation](/docs/cli/object.md#disambiguating-multi-object-operation)
+
 Finally, the option to copy remote bucket onto itself is also supported - syntax-wise. Here's an example that'll shed some light:
 
 ```console

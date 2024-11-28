@@ -99,8 +99,9 @@ var (
 		commandPrefetch: append(
 			listRangeProgressWaitFlags,
 			dryRunFlag,
-			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
+			verbObjPrefixFlag,
 			latestVerFlag,
+			noRecursFlag, // (embedded prefix parseObjListTemplate dop)
 			blobThresholdFlag,
 			numListRangeWorkersFlag,
 		),

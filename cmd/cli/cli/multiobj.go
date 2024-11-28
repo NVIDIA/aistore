@@ -201,7 +201,7 @@ func _evictOne(c *cli.Context, shift int) error {
 		if !argIsFlag(c, 1) {
 			suffix = " (hint: missing double or single quotes?)"
 		}
-		return &errDoesNotExist{what: "object", name: bck.Cname(objName), suffix: suffix}
+		return &errDoesNotExist{name: bck.Cname(objName), suffix: suffix}
 	}
 }
 
@@ -270,7 +270,7 @@ func _rmOne(c *cli.Context, shift int) error {
 		if c.NArg() > 1 {
 			suffix = " (hint: missing double or single quotes?)"
 		}
-		return &errDoesNotExist{what: "object", name: bck.Cname(objName), suffix: suffix}
+		return &errDoesNotExist{name: bck.Cname(objName), suffix: suffix}
 	}
 }
 
