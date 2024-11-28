@@ -126,23 +126,22 @@ func initPID(config *cmn.Config) (pid string) {
 	// 1. ID from env
 	if pid = envDaemonID(apc.Proxy); pid != "" {
 		if err := cos.ValidateDaemonID(pid); err != nil {
-			nlog.Errorf("Warning: %v", err)
+			nlog.Errorln("Daemon ID loaded from env is invalid:", err)
 		}
+		nlog.Infof("Initialized %s from env", meta.Pname(pid))
 		return
 	}
 
-	// 2. proxy, K8s
+	// 2. ID from Kubernetes Node name.
 	if k8s.IsK8s() {
-		// NOTE: always generate i.e., compute
-		if net.ParseIP(k8s.NodeName) != nil { // does not parse as IP
-			nlog.Warningf("using K8s node name %q, an IP addr, to compute _persistent_ proxy ID", k8s.NodeName)
-		}
-		return cos.HashK8sProxyID(k8s.NodeName)
+		pid = cos.HashK8sProxyID(k8s.NodeName)
+		nlog.Infof("Initialized %s from K8s node name %q", meta.Pname(pid), k8s.NodeName)
+		return pid
 	}
 
-	// 3. try to read ID
+	// 3. Read ID from persistent file.
 	if pid = readProxyID(config); pid != "" {
-		nlog.Infof("p[%s] from %q", pid, fname.ProxyID)
+		nlog.Infof("Initialized %s from file %q", meta.Pname(pid), fname.ProxyID)
 		return
 	}
 
@@ -154,7 +153,7 @@ func initPID(config *cmn.Config) (pid string) {
 	// store ID on disk
 	err = os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR)
 	debug.AssertNoErr(err)
-	nlog.Infof("p[%s] ID randomly generated", pid)
+	nlog.Infof("Initialized %s with randomly generated ID", meta.Pname(pid))
 	return
 }
 

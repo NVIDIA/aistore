@@ -278,24 +278,24 @@ func (t *target) initHostIP(config *cmn.Config) {
 func initTID(config *cmn.Config) (tid string, generated bool) {
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
-			nlog.Errorln("Warning:", err)
+			nlog.Errorln("Daemon ID loaded from env is invalid:", err)
 		}
+		nlog.Infof("Initialized %s from env", meta.Tname(tid))
 		return tid, false
 	}
 
-	var err error
-	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
+	if tid, err := fs.LoadNodeID(config.FSP.Paths); err != nil {
 		cos.ExitLog(err) // FATAL
-	}
-	if tid != "" {
+	} else if tid != "" {
+		nlog.Infof("Initialized %s from file", meta.Tname(tid))
 		return tid, false
 	}
 
 	// this target: generate random ID
 	tid = genDaemonID(apc.Target, config)
-	err = cos.ValidateDaemonID(tid)
+	err := cos.ValidateDaemonID(tid)
 	debug.AssertNoErr(err)
-	nlog.Infoln(meta.Tname(tid) + ": ID randomly generated")
+	nlog.Infof("Initialized %s with randomly generated ID", meta.Tname(tid))
 	return tid, true
 }
 

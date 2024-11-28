@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	v1 "k8s.io/api/core/v1"
@@ -44,8 +45,8 @@ func Init() {
 
 	var (
 		pod      *v1.Pod
-		nodeName = os.Getenv(env.AIS.K8sNode)
 		podName  = os.Getenv(env.AIS.K8sPod)
+		nodeName = os.Getenv(env.AIS.K8sNode)
 	)
 	if podName != "" {
 		debug.Func(func() {
@@ -57,36 +58,34 @@ func Init() {
 	}
 	nlog.Infof("Checking pod: %q, node: %q", podName, nodeName)
 
-	// node name specified - proceed directly to check
-	if nodeName != "" {
-		goto checkNode
-	}
 	if podName == "" {
-		nlog.Infoln("environment (above) not set =>", nonK8s)
+		if nodeName != "" {
+			// If the Pod is not set but the Node is, we should continue checking.
+			goto checkNode
+		}
+		nlog.Infof("Env %q and %q are not set => %s", env.AIS.K8sNode, env.AIS.K8sPod, nonK8s)
 		return
 	}
 
-	// check POD
+	// Check Pod.
 	pod, err = client.Pod(podName)
 	if err != nil {
-		nlog.Errorf("Failed to get pod %q: %v", podName, err)
+		cos.ExitLogf("Failed to get Pod %q, err: %v", podName, err)
 		return
 	}
 	nodeName = pod.Spec.NodeName
-	nlog.Infoln("pod.Spec: Node", nodeName, "Hostname", pod.Spec.Hostname, "HostNetwork", pod.Spec.HostNetwork)
+	nlog.Infoln("Pod spec", "name", podName, "namespace", pod.Namespace, "node", nodeName, "hostname", pod.Spec.Hostname, "host_network", pod.Spec.HostNetwork)
 	_ppvols(pod.Spec.Volumes)
 
-checkNode: // always check Node
+checkNode:
+	// Check Node.
 	node, err := client.Node(nodeName)
 	if err != nil {
-		nlog.Errorf("Failed to get Node %q: %v", nodeName, err)
+		cos.ExitLogf("Failed to get Node %q, err: %v", nodeName, err)
 		return
 	}
 
 	NodeName = node.Name
-	if node.Namespace != "" {
-		nlog.Infoln("Node", NodeName, "Namespace", node.Namespace)
-	}
 }
 
 func _ppvols(volumes []v1.Volume) {
