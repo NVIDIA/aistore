@@ -695,7 +695,11 @@ exit:
 // DELETE OBJECT
 //
 
-// [NOTE] returns (0, nil) when the object does not exist
+// [NOTE]
+// - returns (0, nil) when the object does not exist
+// - `s3.DeleteObjectOutput` does not help to differentiate
+// - to fight it, specify some sort of matching criteria as per:
+// - https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html#ExampleVersionObjectDelete
 func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	const tag = "[delete_object]"
 	var (

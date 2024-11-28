@@ -1296,6 +1296,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	return code, err
 }
 
+// NOTE: s3 will return err=nil with OK status to indicate (not deleting) non-existing object (see also aws.go)
 func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	var (
 		aisErr, backendErr         error
