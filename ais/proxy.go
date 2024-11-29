@@ -2238,8 +2238,9 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	hdr := w.Header()
 	hdr.Set(cos.HdrContentType, res.header.Get(cos.HdrContentType))
 	hdr.Set(cos.HdrContentLength, strconv.Itoa(len(res.bytes)))
-	_, err = w.Write(res.bytes)
-	debug.AssertNoErr(err)
+	if _, err := w.Write(res.bytes); err != nil {
+		nlog.Warningln(err) // (broken pipe; benign)
+	}
 }
 
 func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIntra string, netPubs ...string) (redirect string) {

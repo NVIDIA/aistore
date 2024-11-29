@@ -105,8 +105,9 @@ cnt3=$(ais show performance counters --regex ${cold_counter} -H | awk '{sum+=$2;
 echo "9. out-of-band DELETE"
 s3cmd del "$bucket/lorem-duis" $host 1>/dev/null || exit $?
 
-echo "10. prefetch without '--latest': expecting no changes"
-ais prefetch "$bucket/lorem-duis" --wait
+## '--yes' to auto-confirm non-existence
+echo "10. prefetch without '--latest --yes': expecting no changes"
+ais prefetch "$bucket/lorem-duis" --wait --yes
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
@@ -114,8 +115,9 @@ echo "11. remember 'remote-deleted' counter _and_ enable version synchronization
 cnt4=$(ais show performance counters --regex REMOTE-DEL -H | awk '{sum+=$2;}END{print sum;}')
 ais bucket props set $bucket versioning.synchronize=true
 
-echo "12. run 'prefetch --latest' one last time, and make sure the object \"disappears\""
-ais prefetch "$bucket/lorem-duis" --latest --wait 2>/dev/null
+## '--yes' ditto
+echo "12. run 'prefetch --latest --yes' one last time, and make sure the object \"disappears\""
+ais prefetch "$bucket/lorem-duis" --latest --wait --yes 2>/dev/null
 [[ $? == 0 ]] || { echo "FAIL: expecting 'prefetch --wait' to return Ok, got $?"; exit 1; }
 
 echo "13. 'remote-deleted' counter must increment (because 'versioning.synchronize=true')"

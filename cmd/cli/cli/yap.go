@@ -221,17 +221,18 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 	if a.rsrc.bck, objNameOrTmpl, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/); err != nil {
 		return err
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, a.rsrc.bck, objNameOrTmpl)
+
+	oltp, err := dopOLTP(c, a.rsrc.bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
-	if listObjs == "" && tmplObjs == "" {
-		listObjs = objName // NOTE: "pure" prefix comment in parseObjListTemplate (above)
+	if oltp.list == "" && oltp.tmpl == "" {
+		oltp.list = oltp.objName // (compare with `_prefetchOne`, `copyTransform`)
 	}
-	if listObjs != "" {
-		a.rsrc.lr.ObjNames = splitCsv(listObjs)
+	if oltp.list != "" {
+		a.rsrc.lr.ObjNames = splitCsv(oltp.list)
 	} else {
-		a.rsrc.lr.Template = tmplObjs
+		a.rsrc.lr.Template = oltp.tmpl
 	}
 	return
 }

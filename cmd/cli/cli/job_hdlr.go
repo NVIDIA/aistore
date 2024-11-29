@@ -101,8 +101,9 @@ var (
 			dryRunFlag,
 			verbObjPrefixFlag,
 			latestVerFlag,
-			noRecursFlag, // (embedded prefix parseObjListTemplate dop)
+			noRecursFlag, // (embedded prefix dopOLTP)
 			blobThresholdFlag,
+			yesFlag,
 			numListRangeWorkersFlag,
 		),
 		cmdBlobDownload: {

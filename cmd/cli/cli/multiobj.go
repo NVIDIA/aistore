@@ -173,22 +173,22 @@ func _evictOne(c *cli.Context, shift int) error {
 	if _, err := headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bck, objNameOrTmpl)
+	oltp, err := dopOLTP(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
 
 	switch {
-	case listObjs != "" || tmplObjs != "": // 1. multi-obj
-		lrCtx := &lrCtx{listObjs, tmplObjs, bck}
+	case oltp.list != "" || oltp.tmpl != "": // 1. multi-obj
+		lrCtx := &lrCtx{oltp.list, oltp.tmpl, bck}
 		return lrCtx.do(c)
-	case objName == "": // 2. entire bucket
+	case oltp.objName == "": // 2. entire bucket
 		return evictBucket(c, bck)
 	default: // 3. one(?) obj to evict
-		err := api.EvictObject(apiBP, bck, objName)
+		err := api.EvictObject(apiBP, bck, oltp.objName)
 		if err == nil {
 			if !flagIsSet(c, nonverboseFlag) {
-				fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objName, bck.Cname(""))
+				fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", oltp.objName, bck.Cname(""))
 			}
 			return nil
 		}
@@ -201,7 +201,7 @@ func _evictOne(c *cli.Context, shift int) error {
 		if !argIsFlag(c, 1) {
 			suffix = " (hint: missing double or single quotes?)"
 		}
-		return &errDoesNotExist{name: bck.Cname(objName), suffix: suffix}
+		return &errDoesNotExist{name: bck.Cname(oltp.objName), suffix: suffix}
 	}
 }
 
@@ -230,18 +230,19 @@ func _rmOne(c *cli.Context, shift int) error {
 	if _, err := headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
-	// NOTE: passing empty bck _not_ to interpret embedded objName as prefix
-	// TODO: instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bck, objNameOrTmpl)
+	// [NOTE]
+	// - passing empty bck _not_ to interpret embedded objName as prefix
+	// - instead of HEAD(obj) do list-objects(prefix=objNameOrTmpl)  - here and everywhere
+	oltp, err := dopOLTP(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
 
 	switch {
-	case listObjs != "" || tmplObjs != "": // 1. multi-obj
-		lrCtx := &lrCtx{listObjs, tmplObjs, bck}
+	case oltp.list != "" || oltp.tmpl != "": // 1. multi-obj
+		lrCtx := &lrCtx{oltp.list, oltp.tmpl, bck}
 		return lrCtx.do(c)
-	case objName == "": // 2. all objects
+	case oltp.objName == "": // 2. all objects
 		if flagIsSet(c, rmrfFlag) {
 			if !flagIsSet(c, yesFlag) {
 				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!", bck)
@@ -251,13 +252,19 @@ func _rmOne(c *cli.Context, shift int) error {
 			}
 			return rmRfAllObjects(c, bck)
 		}
-		return incorrectUsageMsg(c, "use one of: (%s or %s or %s) to indicate _which_ objects to remove",
+		return incorrectUsageMsg(c, "to select objects to be removed use one of: (%s or %s or %s)",
 			qflprn(listFlag), qflprn(templateFlag), qflprn(rmrfFlag))
 	default: // 3. one obj
-		err := api.DeleteObject(apiBP, bck, objName)
+		err := api.DeleteObject(apiBP, bck, oltp.objName)
+		if err == nil && oltp.notFound {
+			// [NOTE]
+			// - certain backends return OK when specified object does not exist (see aws.go)
+			// - compensate here
+			return cos.NewErrNotFound(nil, bck.Cname(oltp.objName))
+		}
 		if err == nil {
 			if !flagIsSet(c, nonverboseFlag) {
-				fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.Cname(""))
+				fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", oltp.objName, bck.Cname(""))
 			}
 			return nil
 		}
@@ -270,7 +277,7 @@ func _rmOne(c *cli.Context, shift int) error {
 		if c.NArg() > 1 {
 			suffix = " (hint: missing double or single quotes?)"
 		}
-		return &errDoesNotExist{name: bck.Cname(objName), suffix: suffix}
+		return &errDoesNotExist{name: bck.Cname(oltp.objName), suffix: suffix}
 	}
 }
 
@@ -303,15 +310,25 @@ func _prefetchOne(c *cli.Context, shift int) error {
 	if !bck.IsRemote() {
 		return fmt.Errorf("expecting remote bucket (have %s)", bck.Cname(""))
 	}
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bck, objNameOrTmpl)
+	oltp, err := dopOLTP(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
-
-	if listObjs == "" && tmplObjs == "" {
-		listObjs = objName
+	if oltp.notFound { // (true only when list-objects says so)
+		err := cos.NewErrNotFound(nil, "\""+uri+"\"")
+		if !flagIsSet(c, yesFlag) {
+			if ok := confirm(c, err.Error()+" - proceed anyway?"); !ok {
+				return err
+			}
+		} else {
+			actionWarn(c, err.Error()+" - proceeding anyway")
+		}
 	}
-	lrCtx := &lrCtx{listObjs, tmplObjs, bck}
+
+	if oltp.list == "" && oltp.tmpl == "" {
+		oltp.list = oltp.objName // ("prefetch" is not one of those primitive verbs)
+	}
+	lrCtx := &lrCtx{oltp.list, oltp.tmpl, bck}
 	return lrCtx.do(c)
 }
 

@@ -130,7 +130,7 @@ var (
 			waitJobXactFinishedFlag,
 			latestVerFlag,
 			syncFlag,
-			noRecursFlag, // (embedded prefix parseObjListTemplate dop)
+			noRecursFlag, // (embedded prefix dopOLTP)
 			nonverboseFlag,
 		},
 		commandRename: {
@@ -143,7 +143,7 @@ var (
 			keepMDFlag,
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			dryRunFlag,
-			noRecursFlag, // (embedded prefix parseObjListTemplate dop)
+			noRecursFlag, // (embedded prefix dopOLTP)
 			verboseFlag,  // not yet used
 			nonverboseFlag,
 		),

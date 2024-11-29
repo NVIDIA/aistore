@@ -98,26 +98,6 @@ func arg0Node(c *cli.Context) (node *meta.Snode, sname string, err error) {
 	return
 }
 
-//
-// misplaced or mistyped flag(s)
-//
-
-func errArgIsFlag(c *cli.Context, arg string) (err error) {
-	if len(arg) > 1 && arg[0] == '-' {
-		err = incorrectUsageMsg(c, "missing command line argument (hint: flag '%s' misplaced?)", arg)
-	}
-	return err
-}
-
-func errTailArgsContainFlag(tail []string) error {
-	for _, arg := range tail {
-		if len(arg) > 1 && arg[0] == '-' {
-			return fmt.Errorf("unrecognized or misplaced option %q", arg)
-		}
-	}
-	return nil
-}
-
 func reorderTailArgs(left string, middle []string, right ...string) string {
 	var sb strings.Builder
 	sb.WriteString(left)
@@ -674,37 +654,6 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 		return false, V(err)
 	}
 	return len(objList.Entries) == 0, nil
-}
-
-// disambiguate objname vs prefix
-type disambiguateObjPref struct {
-	isObj, isPref bool
-}
-
-func lsObjVsPref(bck cmn.Bck, oname string) (dop disambiguateObjPref, _ error) {
-	msg := &apc.LsoMsg{Prefix: oname}
-
-	// NOTE: never "cached" (apc.LsObjCached)
-	msg.SetFlag(apc.LsNameOnly)
-	msg.SetFlag(apc.LsNoRecursion)
-	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 32})
-
-	if err != nil {
-		return dop, V(err)
-	}
-	if len(lst.Entries) == 0 {
-		dop.isObj = true // caller to further deal with it
-		return dop, nil
-	}
-
-	for _, en := range lst.Entries {
-		if en.Name == oname {
-			dop.isObj = true
-			break
-		}
-	}
-	dop.isPref = len(lst.Entries) > 1 || !dop.isObj
-	return dop, nil
 }
 
 func ensureRemoteProvider(bck cmn.Bck) error {

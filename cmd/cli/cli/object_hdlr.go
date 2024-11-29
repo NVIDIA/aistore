@@ -81,7 +81,7 @@ var (
 			rmrfFlag,
 			verboseFlag, // rm -rf
 			nonverboseFlag,
-			noRecursFlag, // (embedded prefix parseObjListTemplate dop)
+			noRecursFlag, // (embedded prefix dopOLTP dop)
 			yesFlag,
 		),
 		commandRename: {},

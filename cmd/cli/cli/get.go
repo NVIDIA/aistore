@@ -730,8 +730,3 @@ func (ex *extractor) _write(filename string, size int64, wfh *os.File, reader io
 func discardOutput(outf string) bool {
 	return outf == "/dev/null" || outf == "dev/null" || outf == "dev/nil"
 }
-
-// rr
-func errRangeReadArch(what string) error {
-	return fmt.Errorf("cannot range-read (%s, %s) archived content (%s) - "+NIY, qflprn(lengthFlag), qflprn(offsetFlag), what)
-}
