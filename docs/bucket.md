@@ -23,7 +23,6 @@ redirect_from:
   - [Remote AIS cluster](#remote-ais-cluster)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Remote Bucket](#evict-remote-bucket)
-  - [Out of band updates](/docs/out_of_band.md)
 - [Backend Bucket](#backend-bucket)
   - [AIS bucket as a reference](#ais-bucket-as-a-reference)
 - [Bucket Properties](#bucket-properties)
@@ -407,6 +406,7 @@ $ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
 ### See also
 
 * [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
+* to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
 
 ## Evict Remote Bucket
 
@@ -476,6 +476,7 @@ This behavior can be applied to other remote buckets by using the `--keep-md` fl
 ### See also
 
 * [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
+* to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
 
 # Backend Bucket
 

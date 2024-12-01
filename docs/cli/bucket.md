@@ -706,6 +706,8 @@ Source bucket must exist. When the destination bucket is remote (e.g. in the Clo
 
 > **NOTE:** not to confuse in-cluster _presence_ and existence. Remote object may exist (remotely), etc.
 
+> **NOTE:** to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md).
+
 Moreover, when the destination is AIS (`ais://`) or remote AIS (`ais://@remote-alias`) bucket, the existence is optional: the destination will be created on the fly, with bucket properties copied from the source (`SRC_BUCKET`).
 
 >  **NOTE:** similar to delete, evict and prefetch operations, `cp` also supports embedded prefix - see [disambiguating multi-object operation](/docs/cli/object.md#disambiguating-multi-object-operation)
@@ -859,7 +861,10 @@ Notice a certain limitation (that also shows up as the last step #15):
 
 * However, to see an out-of-band added content, you currently need to run [multi-object copy](#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets), with multiple source objects specified using `--list` or `--template`.
 
-* See `ais cp --help` for details.
+### See also
+
+* `ais cp --help` for the most recently updated options
+* to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
 
 ## Show bucket summary
 

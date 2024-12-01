@@ -1805,6 +1805,10 @@ $ ais object rm ais://dsort-testing --template 'shard-{900..999}.tar'
 removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor the progress
 ```
 
+### See also:
+
+To fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
+
 ## Evict multiple objects
 
 `ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]`
