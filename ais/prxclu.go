@@ -1318,33 +1318,30 @@ func (p *proxy) blobdl(smap *smapX, xargs *xact.ArgsMsg, msg *apc.ActMsg) (tsi *
 }
 
 func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	var (
-		xargs = xact.ArgsMsg{}
-	)
+	var xargs xact.ArgsMsg
 	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
+
+	// note: of all xaction kinds only rebalance can have a "valid rebalance ID" (see `cos.GenUUID`)
+	// make an exception for rebalance: assign its kind to reinforce maintenance check below
+	if xargs.Kind == "" && xact.IsValidRebID(xargs.ID) {
+		xargs.Kind = apc.ActRebalance
+	}
 
 	// (lso + tco) special
 	p.lstca.abort(&xargs)
 
 	if xargs.Kind == apc.ActRebalance {
+		// unless forced:
 		// disallow aborting rebalance during
 		// critical (meta.SnodeMaint => meta.SnodeMaintPostReb) and (meta.SnodeDecomm => removed) transitions
-		smap := p.owner.smap.get()
-		for _, tsi := range smap.Tmap {
-			if tsi.Flags.IsAnySet(meta.SnodeMaint) && !tsi.Flags.IsAnySet(meta.SnodeMaintPostReb) {
-				p.writeErrf(w, r, "cannot abort %s: putting %s in maintenance mode - rebalancing...",
-					xargs.String(), tsi.StringEx())
-				return
-			}
-			if tsi.Flags.IsAnySet(meta.SnodeDecomm) {
-				p.writeErrf(w, r, "cannot abort %s: decommissioning %s - rebalancing...",
-					xargs.String(), tsi.StringEx())
-				return
-			}
+		if err := p._checkMaint(&xargs); err != nil {
+			p.writeErr(w, r, err)
+			return
 		}
 	}
 
@@ -1362,6 +1359,29 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 		}
 	}
 	freeBcastRes(results)
+}
+
+func (p *proxy) _checkMaint(xargs *xact.ArgsMsg) error {
+	smap := p.owner.smap.get()
+	for _, tsi := range smap.Tmap {
+		switch {
+		case tsi.Flags == 0:
+			// do nothing
+		case tsi.Flags.IsAnySet(meta.SnodeMaint) && !tsi.Flags.IsAnySet(meta.SnodeMaintPostReb):
+			warn := "cluster is currently rebalancing while " + tsi.StringEx() + " transitions to maintenance mode"
+			if !xargs.Force {
+				return fmt.Errorf("cannot abort %s: %s", xargs.String(), warn)
+			}
+			nlog.Errorln("Warning:", warn, "- proceeding anyway")
+		case tsi.Flags.IsAnySet(meta.SnodeDecomm):
+			warn := "cluster is currently rebalancing while " + tsi.StringEx() + " is being decommissioned"
+			if !xargs.Force {
+				return fmt.Errorf("cannot abort %s: %s", xargs.String(), warn)
+			}
+			nlog.Errorln("Warning:", warn, "- proceeding anyway")
+		}
+	}
+	return nil
 }
 
 func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {

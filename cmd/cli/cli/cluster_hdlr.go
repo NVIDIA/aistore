@@ -92,13 +92,13 @@ var (
 		Name:   commandStart,
 		Usage:  "rebalance ais cluster",
 		Flags:  clusterCmdsFlags[commandStart],
-		Action: startClusterRebalanceHandler,
+		Action: startRebHandler,
 	}
 	stopRebalance = cli.Command{
 		Name:   commandStop,
 		Usage:  "stop rebalancing ais cluster",
 		Flags:  clusterCmdsFlags[commandStop],
-		Action: stopClusterRebalanceHandler,
+		Action: stopRebHandler,
 	}
 
 	clusterCmd = cli.Command{
@@ -543,11 +543,11 @@ func setPrimaryHandler(c *cli.Context) error {
 	return err
 }
 
-func startClusterRebalanceHandler(c *cli.Context) (err error) {
+func startRebHandler(c *cli.Context) (err error) {
 	return startXactionKind(c, apc.ActRebalance)
 }
 
-func stopClusterRebalanceHandler(c *cli.Context) error {
+func stopRebHandler(c *cli.Context) error {
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true}
 	_, snap, err := getAnyXactSnap(&xargs)
 	if err != nil {
@@ -556,12 +556,15 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 	if snap == nil {
 		return errors.New("rebalance is not running")
 	}
+	return stopReb(c, snap.ID)
+}
 
-	xargs.ID, xargs.OnlyRunning = snap.ID, false
+func stopReb(c *cli.Context, xid string) error {
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, ID: xid, Force: flagIsSet(c, forceFlag)}
 	if err := xstop(&xargs); err != nil {
 		return V(err)
 	}
-	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)
+	actionDone(c, fmt.Sprintf("Stopped %s[%s]\n", apc.ActRebalance, xid))
 	return nil
 }
 

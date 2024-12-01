@@ -51,6 +51,7 @@ const stopUsage = "terminate a single batch job or multiple jobs, e.g.:\n" +
 	indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given job identified by its unique ID;\n" +
 	indent1 + "\t- 'stop copy-listrange'\t- terminate all multi-object copies;\n" +
 	indent1 + "\t- 'stop copy-objects'\t- same as above (using display name);\n" +
+	indent1 + "\t- 'stop g731 --force'\t- forcefully abort global rebalance g731 (advanced usage only);\n" +
 	indent1 + "\t- 'stop --all'\t- terminate all running jobs\n" +
 	indent1 + tabHelpOpt + "."
 
@@ -184,7 +185,7 @@ var (
 				Name:   commandRebalance,
 				Usage:  "rebalance ais cluster",
 				Flags:  clusterCmdsFlags[commandStart],
-				Action: startClusterRebalanceHandler,
+				Action: startRebHandler,
 			},
 			cleanupCmd,
 			jobStartResilver,
@@ -198,6 +199,7 @@ var (
 	stopCmdsFlags = []cli.Flag{
 		allRunningJobsFlag,
 		regexJobsFlag,
+		forceFlag,
 		yesFlag,
 	}
 	jobStopSub = cli.Command{
@@ -732,25 +734,27 @@ func stopJobHandler(c *cli.Context) error {
 		actionWarn(c, warn)
 	}
 
-	regex := parseStrFlag(c, regexJobsFlag)
-
-	if xid != "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
-		warn := fmt.Sprintf("in presence of %s argument ('%s') flags %s and %s will be ignored",
-			jobIDArgument, xid, qflprn(allRunningJobsFlag), qflprn(regexJobsFlag))
-		actionWarn(c, warn)
-	} else if xid == "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
-		switch name {
-		case cmdDownload, cmdDsort:
-			// regex supported
-		case commandRebalance:
-			warn := fmt.Sprintf("global rebalance is global (ignoring %s and %s flags)",
-				qflprn(allRunningJobsFlag), qflprn(regexJobsFlag))
-			actionWarn(c, warn)
-		default:
-			if regex != "" {
-				warn := fmt.Sprintf("ignoring flag %s - "+NIY, qflprn(regexJobsFlag))
-				actionWarn(c, warn)
-			}
+	// warn
+	var (
+		warn  string
+		regex = parseStrFlag(c, regexJobsFlag)
+	)
+	switch {
+	case flagIsSet(c, allRunningJobsFlag) && regex != "":
+		warn = fmt.Sprintf("flags %s and %s", qflprn(allRunningJobsFlag), qflprn(regexJobsFlag))
+	case flagIsSet(c, allRunningJobsFlag):
+		warn = "flag " + qflprn(allRunningJobsFlag)
+	case regex != "":
+		warn = "option " + qflprn(regexJobsFlag)
+	}
+	if warn != "" {
+		switch {
+		case xid != "":
+			actionWarn(c, fmt.Sprintf("ignoring %s in presence of %s argument ('%s')", warn, jobIDArgument, xid))
+		case name == commandRebalance:
+			actionWarn(c, "global rebalance is _global_ - ignoring"+warn)
+		case regex != "" && name != cmdDownload && name != cmdDsort:
+			actionWarn(c, "ignoring "+warn+" -"+NIY)
 		}
 	}
 
@@ -794,7 +798,11 @@ func stopJobHandler(c *cli.Context) error {
 	case commandETL:
 		return stopETLs(c, otherID /*etl name*/)
 	case commandRebalance:
-		return stopClusterRebalanceHandler(c)
+		if xid == "" {
+			return stopRebHandler(c)
+		} else {
+			return stopReb(c, xid)
+		}
 	}
 
 	// generic xstop

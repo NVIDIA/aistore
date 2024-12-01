@@ -384,7 +384,7 @@ func CheckValidUUID(id string) (err error) {
 func (args *ArgsMsg) String() string {
 	var sb strings.Builder
 	sb.Grow(128)
-	sb.WriteString("xargs-")
+	sb.WriteString("xa-")
 	sb.WriteString(args.Kind)
 	sb.WriteByte('[')
 	if args.ID != "" {

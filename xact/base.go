@@ -416,7 +416,7 @@ func IsValidRebID(id string) (valid bool) {
 		_, err := S2RebID(id)
 		valid = err == nil
 	}
-	return
+	return valid
 }
 
 func CompareRebIDs(someID, fltID string) int {
