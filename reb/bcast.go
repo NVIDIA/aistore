@@ -5,6 +5,7 @@
 package reb
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -96,7 +98,7 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 }
 
 // wait for target to get ready to receive objects (type syncCallback)
-func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
+func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) bool /*ready*/ {
 	var (
 		curwt time.Duration
 		sleep = cmn.Rom.CplaneOperation() * 2
@@ -108,17 +110,23 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 			// do not request the node stage if it has sent stage notification
 			return true
 		}
-		if _, ok = reb.checkStage(tsi, rargs, rebStageTraverse); ok {
-			return
+		status, ok := reb.checkStage(tsi, rargs, rebStageTraverse)
+		if ok {
+			debug.Assert(status.Running, "running: ", status.Running)
+			debug.Assert(xact.RebID2S(status.RebID) == xreb.ID(), "xid: ", status.RebID, " vs ", xreb.ID())
+			return true
+		}
+		if xreb.IsAborted() {
+			return false
 		}
 		if err := xreb.AbortedAfter(sleep); err != nil {
-			return
+			return false
 		}
 		curwt += sleep
 	}
 	logHdr, tname := reb.logHdr(rargs.id, rargs.smap), tsi.StringEx()
 	nlog.Errorln(logHdr, "timed out waiting for", tname, "to reach", stages[rebStageTraverse], "stage")
-	return
+	return false
 }
 
 // wait for the target to reach `rebStageFin` (i.e., finish traversing and sending)
@@ -213,22 +221,28 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		reb.abortAndBroadcast(err)
 		return
 	}
-	// enforce global transaction ID
+	//
+	// enforce global RebID
+	//
+	otherXid := xact.RebID2S(status.RebID)
 	if status.RebID > reb.rebID.Load() {
-		err := cmn.NewErrAborted(xreb.Name(), logHdr, fmt.Errorf("%s runs newer g%d", tname, status.RebID))
+		err := cmn.NewErrAborted(xreb.Name(), logHdr, errors.New(tname+" runs newer "+otherXid))
 		reb.abortAndBroadcast(err)
 		return
 	}
 	if xreb.IsAborted() {
 		return
 	}
-	// let the target to catch-up
+	// keep waiting
 	if status.RebID < reb.RebID() {
-		nlog.Warningf("%s: %s runs older (g%d) global rebalance - keep waiting...", logHdr, tname, status.RebID)
+		var what = "runs"
+		if !status.Running {
+			what = "transitioning(?) from"
+		}
+		nlog.Warningf("%s: %s[%s, v%d] %s older rebalance - keep waiting", logHdr, tname, otherXid, status.RebVersion, what)
 		return
 	}
-	// Remote target has aborted its running rebalance with the same ID.
-	// Do not call `reb.abortAndBroadcast()` - no need.
+	// other target aborted same ID (do not call `reb.abortAndBroadcast` - no need)
 	if status.RebID == reb.RebID() && status.Aborted {
 		err := cmn.NewErrAborted(xreb.Name(), logHdr, fmt.Errorf("status 'aborted' from %s", tname))
 		xreb.Abort(err)
@@ -236,8 +250,9 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	}
 	if status.Stage >= desiredStage {
 		ok = true
-		return
+		return // Ok
 	}
-	nlog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tname, stages[status.Stage], stages[desiredStage])
+
+	nlog.Infof("%s: %s[%s, v%d] not yet at the right stage %s", logHdr, tname, stages[status.Stage], status.RebVersion, stages[desiredStage])
 	return
 }

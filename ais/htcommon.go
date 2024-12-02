@@ -72,18 +72,11 @@ type (
 	}
 
 	// extend control msg: ActionMsg with an extra information for node <=> node control plane communications
-	aisMsg struct {
+	actMsgExt struct {
 		apc.ActMsg
 		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
 		BMDVersion int64  `json:"bmdversion,string"`
 		RMDVersion int64  `json:"rmdversion,string"`
-	}
-
-	cleanmark struct {
-		OldVer      int64 `json:"oldver,string"`
-		NewVer      int64 `json:"newver,string"`
-		Interrupted bool  `json:"interrupted"`
-		Restarted   bool  `json:"restarted"`
 	}
 )
 
@@ -678,15 +671,19 @@ func (p *proxy) fillNsti(nsti *cos.NodeStateInfo) {
 func (t *target) fillNsti(nsti *cos.NodeStateInfo) {
 	t.htrun.fill(nsti)
 	marked := xreg.GetRebMarked()
-	if marked.Xact != nil {
+
+	// (running | interrupted | ok)
+	if xreb := marked.Xact; xreb != nil && !xreb.IsAborted() && !xreb.Finished() {
 		nsti.Flags = nsti.Flags.Set(cos.Rebalancing)
-	}
-	if marked.Interrupted {
+	} else if marked.Interrupted {
 		nsti.Flags = nsti.Flags.Set(cos.RebalanceInterrupted)
 	}
+
+	// node restarted
 	if marked.Restarted {
-		nsti.Flags = nsti.Flags.Set(cos.Restarted)
+		nsti.Flags = nsti.Flags.Set(cos.NodeRestarted)
 	}
+
 	marked = xreg.GetResilverMarked()
 	if marked.Xact != nil {
 		nsti.Flags = nsti.Flags.Set(cos.Resilvering)

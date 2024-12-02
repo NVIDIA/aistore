@@ -23,7 +23,7 @@ const (
 	RebalanceInterrupted                             // warning
 	Resilvering                                      // warning
 	ResilverInterrupted                              // warning
-	Restarted                                        // warning
+	NodeRestarted                                    // warning (powercycle, crash)
 	OOS                                              // red alert (see IsRed below)
 	OOM                                              // red alert
 	MaintenanceMode                                  // warning
@@ -48,7 +48,7 @@ func (f NodeStateFlags) IsRed() bool {
 func (f NodeStateFlags) IsWarn() bool {
 	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
 		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
-		f.IsSet(Restarted) || f.IsSet(MaintenanceMode) ||
+		f.IsSet(NodeRestarted) || f.IsSet(MaintenanceMode) ||
 		f.IsSet(LowCapacity) || f.IsSet(LowMemory) ||
 		f.IsSet(CertWillSoonExpire)
 }
@@ -94,7 +94,7 @@ func (f NodeStateFlags) String() string {
 	if f&ResilverInterrupted == ResilverInterrupted {
 		sb = append(sb, "resilver-interrupted")
 	}
-	if f&Restarted == Restarted {
+	if f&NodeRestarted == NodeRestarted {
 		sb = append(sb, "restarted")
 	}
 	if f&OOS == OOS {

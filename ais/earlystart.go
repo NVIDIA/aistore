@@ -339,8 +339,8 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	// 10. metasync (smap, config, etl & bmd) and startup as primary
 	smap = p.owner.smap.get()
 	var (
-		aisMsg = p.newAmsgStr(metaction2, bmd)
-		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
+		actMsgExt = p.newAmsgStr(metaction2, bmd)
+		pairs     = []revsPair{{smap, actMsgExt}, {bmd, actMsgExt}, {cluConfig, actMsgExt}}
 	)
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
@@ -349,7 +349,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	nlog.Infoln(smap.StringEx()+",", bmd.StringEx())
 
 	if etlMD.Version > 0 {
-		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})
+		_ = p.metasyncer.sync(revsPair{etlMD, actMsgExt})
 	}
 
 	// 11. Clear regpool
@@ -453,9 +453,9 @@ until:
 
 	// do
 	var (
-		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
-		aisMsg = p.newAmsg(msg, nil)
-		ctx    = &rmdModifier{
+		msg       = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
+		actMsgExt = p.newAmsg(msg, nil)
+		ctx       = &rmdModifier{
 			pre:     func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
 			smapCtx: &smapModifier{smap: smap},
 			cluID:   smap.UUID,
@@ -465,7 +465,7 @@ until:
 	if err != nil {
 		cos.ExitLog(err)
 	}
-	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
+	wg := p.metasyncer.sync(revsPair{rmd, actMsgExt})
 
 	p.owner.rmd.starting.Store(false) // done
 	p.owner.smap.mu.Unlock()

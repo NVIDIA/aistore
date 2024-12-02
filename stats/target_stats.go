@@ -629,7 +629,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// clear 'node-restarted'
 	if uptime > 10*time.Hour {
-		clr |= cos.Restarted
+		clr |= cos.NodeRestarted
 	}
 
 	// 7. separately, memory w/ set/clr flags cumulative

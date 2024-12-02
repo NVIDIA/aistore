@@ -55,7 +55,7 @@ const (
 		indent1 + "Software:\t{{FormatCluSoft .Version .BuildTime}}\n" +
 		indent1 + "Deployment:\t{{ ( Deployments .Status) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Status) }}\n" +
-		indent1 + "Rebalance:\t{{ ( Rebalance .Status) }}\n" +
+		indent1 + "Rebalance:\t{{FormatRebalance .Status .CluConfig}}\n" +
 		indent1 + "Authentication:\t{{if .CluConfig.Auth.Enabled}}enabled{{else}}disabled{{end}}\n" +
 		indent1 + "Version:\t{{ ( Versions .Status) }}\n" +
 		indent1 + "Build:\t{{ ( BuildTimes .Status) }}\n"
@@ -400,6 +400,7 @@ var (
 		"FormatDaemonID":      fmtDaemonID,
 		"FormatSmap":          fmtSmap,
 		"FormatCluSoft":       fmtCluSoft,
+		"FormatRebalance":     fmtRebalance,
 		"FormatProxiesSumm":   fmtProxiesSumm,
 		"FormatTargetsSumm":   fmtTargetsSumm,
 		"FormatCapPctMAM":     fmtCapPctMAM,
@@ -424,7 +425,6 @@ var (
 		"Deployments":  func(h StatsAndStatusHelper) string { return toString(h.deployments()) },
 		"Versions":     func(h StatsAndStatusHelper) string { return toString(h.versions()) },
 		"BuildTimes":   func(h StatsAndStatusHelper) string { return toString(h.buildTimes()) },
-		"Rebalance":    func(h StatsAndStatusHelper) string { return toString(h.rebalance()) },
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +

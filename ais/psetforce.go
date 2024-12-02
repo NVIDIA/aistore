@@ -630,7 +630,7 @@ func (h *htrun) daeForceJoin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *aisMsg) {
+func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt) {
 	const tag = "prep-force-join:"
 	var (
 		callerID = r.Header.Get(apc.HdrCallerID)
@@ -662,7 +662,7 @@ func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *aisM
 	nlog.Infoln(tag, h.String(), smap.StringEx(), "-> [", npname, nsmap.StringEx(), "]")
 }
 
-func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *aisMsg) {
+func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt) {
 	const tag = "commit-force-join:"
 
 	ncm := &cluMeta{}
@@ -830,7 +830,7 @@ func (cm *cluMeta) validate() error {
 	return nil
 }
 
-func (cm *cluMeta) metasync(p *proxy, msg *aisMsg, wait bool) {
+func (cm *cluMeta) metasync(p *proxy, msg *actMsgExt, wait bool) {
 	var (
 		detail string
 		revs   = make([]revsPair, 0, 5)

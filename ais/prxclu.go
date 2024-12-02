@@ -516,9 +516,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	if !config.Rebalance.Enabled {
 		regReq.Flags = regReq.Flags.Clear(cos.RebalanceInterrupted)
-		regReq.Flags = regReq.Flags.Clear(cos.Restarted)
+		regReq.Flags = regReq.Flags.Clear(cos.NodeRestarted)
 	}
-	interrupted, restarted := regReq.Flags.IsSet(cos.RebalanceInterrupted), regReq.Flags.IsSet(cos.Restarted)
+	interrupted, restarted := regReq.Flags.IsSet(cos.RebalanceInterrupted), regReq.Flags.IsSet(cos.NodeRestarted)
 	if nsi.IsTarget() && (interrupted || restarted) {
 		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			// handle via rmd.starting + resumeReb
@@ -663,7 +663,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 		switch {
 		case keepalive:
 			upd = p.kalive(nsi, osi)
-		case regReq.Flags.IsSet(cos.Restarted):
+		case regReq.Flags.IsSet(cos.NodeRestarted):
 			upd = true
 		default:
 			upd = p.rereg(nsi, osi)
@@ -692,8 +692,8 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 		p.owner.smap.put(clone)
 		upd = false
 		if a {
-			aisMsg := p.newAmsg(msg, nil)
-			_ = p.metasyncer.sync(revsPair{clone, aisMsg})
+			actMsgExt := p.newAmsg(msg, nil)
+			_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
 		}
 		return
 	}
@@ -752,7 +752,7 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		msg:         msg,
 		flags:       flags,
 		interrupted: regReq.Flags.IsSet(cos.RebalanceInterrupted),
-		restarted:   regReq.Flags.IsSet(cos.Restarted),
+		restarted:   regReq.Flags.IsSet(cos.NodeRestarted),
 	}
 	if err = p._earlyGFN(ctx, ctx.nsi, msg.Action, true /*joining*/); err != nil {
 		return
@@ -767,14 +767,17 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		xid = ctx.rmdCtx.rebID
 		return
 	}
-	// cleanup target state
-	if ctx.restarted || ctx.interrupted {
-		go p.cleanupMark(ctx)
-	}
+
+	// [NOTE]
+	// one (arguably, cosmetic) side effect of not rebalancing is: markers and node state flags
+	// e.g. when a node crashes (and then rejoins back again) in a cluster with rebalance disabled
+	// the node's marker will state "restarted"
+	// and will remain as such until and if the cluster gets eventually rebalanced
+
 	if ctx.gfn {
-		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil) // "stop-gfn" timed
-		aisMsg.UUID = ctx.nsi.ID()
-		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, aisMsg}
+		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil) // "stop-gfn" timed
+		actMsgExt.UUID = ctx.nsi.ID()
+		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
 		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
 	return
@@ -812,43 +815,6 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 	}
 	ctx.gfn = true // to undo if need be
 	return nil
-}
-
-// calls t.cleanupMark
-func (p *proxy) cleanupMark(ctx *smapModifier) {
-	var (
-		val = cleanmark{OldVer: ctx.smap.version(), NewVer: ctx.nver,
-			Interrupted: ctx.interrupted, Restarted: ctx.restarted,
-		}
-		msg     = apc.ActMsg{Action: apc.ActCleanupMarkers, Value: &val}
-		cargs   = allocCargs()
-		smap    = p.owner.smap.get()
-		timeout = cmn.Rom.CplaneOperation()
-		sleep   = timeout >> 1
-	)
-	{
-		cargs.si = ctx.nsi
-		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
-		cargs.timeout = timeout
-	}
-	time.Sleep(sleep)
-	for i := range 4 { // retry
-		res := p.call(cargs, smap)
-		err := res.err
-		freeCR(res)
-		if err == nil {
-			break
-		}
-		if cos.IsRetriableConnErr(err) {
-			time.Sleep(sleep)
-			smap = p.owner.smap.get()
-			nlog.Warningf("%s: %v (cleanmark #%d)", p, err, i+1)
-			continue
-		}
-		nlog.Errorln(err)
-		break
-	}
-	freeCargs(cargs)
 }
 
 func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
@@ -894,11 +860,11 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 
 func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	var (
-		tokens = p.authn.revokedTokenList()
-		bmd    = p.owner.bmd.get()
-		etlMD  = p.owner.etl.get()
-		aisMsg = p.newAmsg(ctx.msg, bmd)
-		pairs  = make([]revsPair, 0, 5)
+		tokens    = p.authn.revokedTokenList()
+		bmd       = p.owner.bmd.get()
+		etlMD     = p.owner.etl.get()
+		actMsgExt = p.newAmsg(ctx.msg, bmd)
+		pairs     = make([]revsPair, 0, 5)
 	)
 	// when targets join as well (redundant?, minor)
 	config, err := p.ensureConfigURLs()
@@ -909,27 +875,27 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		nlog.Errorln(err)
 		// proceed anyway
 	} else if config != nil {
-		pairs = append(pairs, revsPair{config, aisMsg})
+		pairs = append(pairs, revsPair{config, actMsgExt})
 	}
 
-	pairs = append(pairs, revsPair{clone, aisMsg}, revsPair{bmd, aisMsg})
+	pairs = append(pairs, revsPair{clone, actMsgExt}, revsPair{bmd, actMsgExt})
 	if etlMD != nil && etlMD.version() > 0 {
-		pairs = append(pairs, revsPair{etlMD, aisMsg})
+		pairs = append(pairs, revsPair{etlMD, actMsgExt})
 	}
 
 	reb := ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
 	if !reb {
 		// replicate RMD across (existing nodes will drop it upon version comparison)
 		rmd := p.owner.rmd.get()
-		pairs = append(pairs, revsPair{rmd, aisMsg})
+		pairs = append(pairs, revsPair{rmd, actMsgExt})
 	} else {
 		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
-		aisMsg.UUID = ctx.rmdCtx.rebID
-		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
+		actMsgExt.UUID = ctx.rmdCtx.rebID
+		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
 	}
 
 	if tokens != nil {
-		pairs = append(pairs, revsPair{tokens, aisMsg})
+		pairs = append(pairs, revsPair{tokens, actMsgExt})
 	}
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
@@ -937,15 +903,15 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
-		aisMsg = p.newAmsg(ctx.msg, nil)
-		pairs  = make([]revsPair, 0, 2)
-		reb    = ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
+		actMsgExt = p.newAmsg(ctx.msg, nil)
+		pairs     = make([]revsPair, 0, 2)
+		reb       = ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
 	)
-	pairs = append(pairs, revsPair{clone, aisMsg})
+	pairs = append(pairs, revsPair{clone, actMsgExt})
 	if reb {
 		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
-		aisMsg.UUID = ctx.rmdCtx.rebID
-		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
+		actMsgExt.UUID = ctx.rmdCtx.rebID
+		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
 	}
 	debug.Assert(clone._sgl != nil)
 
@@ -955,7 +921,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 		return
 	}
 	if config != nil /*updated*/ {
-		pairs = append(pairs, revsPair{config, aisMsg})
+		pairs = append(pairs, revsPair{config, actMsgExt})
 	}
 
 	wg := p.metasyncer.sync(pairs...)
@@ -1518,9 +1484,9 @@ func (p *proxy) rmTarget(si *meta.Snode, msg *apc.ActMsg, reb bool) (rebID strin
 	} else if ctx.rmdCtx != nil {
 		rebID = ctx.rmdCtx.rebID
 		if rebID == "" && ctx.gfn { // stop early gfn
-			aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
-			aisMsg.UUID = si.ID()
-			revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, aisMsg}
+			actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
+			actMsgExt.UUID = si.ID()
+			revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
 			_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 		}
 	}

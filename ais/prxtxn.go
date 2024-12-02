@@ -32,7 +32,7 @@ import (
 type txnCln struct {
 	p        *proxy
 	smap     *smapX
-	msg      *aisMsg
+	msg      *actMsgExt
 	uuid     string
 	path     string
 	req      cmn.HreqArgs

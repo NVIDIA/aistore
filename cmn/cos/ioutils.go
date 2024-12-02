@@ -116,7 +116,7 @@ func RemoveFile(path string) (err error) {
 	if os.IsNotExist(err) {
 		err = nil
 	}
-	return
+	return err
 }
 
 // and computes checksum, if requested

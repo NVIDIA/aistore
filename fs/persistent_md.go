@@ -74,18 +74,25 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 	return fatalErr, writeErr
 }
 
-func RemoveMarker(marker string) (err error) {
+func RemoveMarker(marker string, stup cos.StatsUpdater) (err error) {
 	var (
 		avail   = GetAvail()
 		relname = filepath.Join(fname.MarkersDir, marker)
 	)
 	for _, mi := range avail {
 		if er1 := cos.RemoveFile(filepath.Join(mi.Path, relname)); er1 != nil {
-			nlog.Errorf("Failed to remove %q marker from %q: %v", relname, mi.Path, er1)
 			err = er1
 		}
 	}
-	return
+	switch marker {
+	case fname.RebalanceMarker:
+		stup.ClrFlag(cos.NodeAlerts, cos.RebalanceInterrupted|cos.Rebalancing)
+	case fname.ResilverMarker:
+		stup.ClrFlag(cos.NodeAlerts, cos.ResilverInterrupted|cos.Resilvering)
+	case fname.NodeRestartedPrev:
+		stup.ClrFlag(cos.NodeAlerts, cos.NodeRestarted)
+	}
+	return err
 }
 
 // PersistOnMpaths persists `what` on mountpaths under "mountpath.Path/path" filename.

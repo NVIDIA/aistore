@@ -55,16 +55,7 @@ const (
 
 const maxWackTargets = 4
 
-var stages = map[uint32]string{
-	rebStageInactive:   "<inactive>",
-	rebStageInit:       "<init>",
-	rebStageTraverse:   "<traverse>",
-	rebStageWaitAck:    "<wack>",
-	rebStageFin:        "<fin>",
-	rebStageFinStreams: "<fin-streams>",
-	rebStageDone:       "<done>",
-	rebStageAbort:      "<abort>",
-}
+const initCapLomAcks = 128
 
 const fmtpend = "%s: newer rebalance[g%d] pending - not running"
 
@@ -115,6 +106,17 @@ type (
 		ecUsed bool
 	}
 )
+
+var stages = map[uint32]string{
+	rebStageInactive:   "<inactive>",
+	rebStageInit:       "<init>",
+	rebStageTraverse:   "<traverse>",
+	rebStageWaitAck:    "<wack>",
+	rebStageFin:        "<fin>",
+	rebStageFinStreams: "<fin-streams>",
+	rebStageDone:       "<done>",
+	rebStageAbort:      "<abort>",
+}
 
 func New(config *cmn.Config) *Reb {
 	var (
@@ -211,8 +213,8 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 		reb.stages.stage.Store(rebStageDone)
 		reb.unregRecv()
 		reb.semaCh.Release()
-		fs.RemoveMarker(fname.RebalanceMarker)
-		fs.RemoveMarker(fname.NodeRestartedPrev)
+		fs.RemoveMarker(fname.RebalanceMarker, tstats)
+		fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
 		reb.xctn().Finish()
 		return
 	}
@@ -220,7 +222,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	// abort all running `dtor.AbortRebRes` xactions (download, dsort, etl)
 	xreg.AbortByNewReb(errors.New("reason: starting " + reb.xctn().Name()))
 
-	// At this point, only one rebalance is running
+	// only one rebalance is running -----------------
 
 	reb.lastrx.Store(0)
 
@@ -231,19 +233,21 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
-	var (
-		errCnt int
-		err    = reb.run(rargs)
-	)
+	// run
+	err := reb.run(rargs)
 	if err == nil {
-		errCnt = reb.rebWaitAck(rargs)
+		errCnt := reb.rebWaitAck(rargs)
+		if errCnt == 0 {
+			nlog.Infoln(logHdr, "=> stage-fin")
+		} else {
+			nlog.Warningln(logHdr, "=> stage-fin", "[ num-errors:", errCnt, "]")
+		}
 	} else {
-		nlog.Warningln(err)
+		nlog.Errorln(logHdr, "fail => stage-fin:", err)
 	}
-	nlog.Infoln(logHdr, "=> stage-fin", "[", err, errCnt, "]")
 	reb.changeStage(rebStageFin)
 
-	reb.fini(rargs, logHdr, err)
+	reb.fini(rargs, logHdr, err, tstats)
 	tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	offGFN()
@@ -260,23 +264,23 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 //  2. Multi-bucket rebalance may start both non-EC and EC in parallel.
 //     It then waits until everything finishes.
 func (reb *Reb) run(rargs *rebArgs) error {
-	// 6. Capture stats, start mpath joggers
 	reb.stages.stage.Store(rebStageTraverse)
 
 	// No EC-enabled buckets - run only regular rebalance
+	xid := xact.RebID2S(rargs.id)
 	if !rargs.ecUsed {
-		nlog.Infof("starting g%d", rargs.id)
+		nlog.Infoln("starting", xid)
 		return reb.runNoEC(rargs)
 	}
 
 	// In all other cases run both rebalances simultaneously
 	group := &errgroup.Group{}
 	group.Go(func() error {
-		nlog.Infof("starting non-EC g%d", rargs.id)
+		nlog.Infoln("starting non-EC", xid)
 		return reb.runNoEC(rargs)
 	})
 	group.Go(func() error {
-		nlog.Infof("starting EC g%d", rargs.id)
+		nlog.Infoln("starting EC", xid)
 		return reb.runEC(rargs)
 	})
 	return group.Wait()
@@ -346,7 +350,7 @@ func (reb *Reb) acquire(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning
 		err := reb._preempt(rargs, logHdr, total, maxTotal, errcnt)
 		if err != nil {
 			if total > maxwt {
-				cos.ExitLog(err)
+				cos.ExitLog(err) // TODO -- FIXME: rewrite
 			}
 			errcnt++
 		}
@@ -417,17 +421,25 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 		nlog.Warningf(fmtpend, logHdr, id)
 		return false
 	}
+
 	reb.stages.stage.Store(rebStageInit)
 	xreb := xctn.(*xs.Rebalance)
 	reb.setXact(xreb)
 	reb.rebID.Store(rargs.id)
 
-	// check Smap _prior_ to opening streams
+	// prior to opening streams:
+	// not every change in Smap warants a different rebalance but this one (below) definitely does
 	smap := core.T.Sowner().Get()
-	if smap.Version != rargs.smap.Version {
+	if smap.CountActiveTs() != rargs.smap.CountActiveTs() {
 		debug.Assert(smap.Version > rargs.smap.Version)
-		nlog.Errorf("Warning %s: %s post-init version change %s => %s", core.T, xreb, rargs.smap, smap)
-		// TODO: handle an unlikely corner case keeping in mind that not every change warants a different rebalance
+		err := fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
+		xctn.Abort(err)
+		reb.mu.Unlock()
+		nlog.Errorln(err)
+		return false
+	}
+	if smap.Version != rargs.smap.Version {
+		nlog.Warningln(logHdr, "post-renew change:", rargs.smap.StringEx(), "=>", smap.StringEx(), "- proceeding anyway")
 	}
 
 	// 3. init streams and data structures
@@ -442,7 +454,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	}
 	acks := reb.lomAcks()
 	for i := range len(acks) { // init lom acks
-		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*core.LOM, 64)}
+		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*core.LOM, initCapLomAcks)}
 	}
 
 	// 4. create persistent mark
@@ -463,7 +475,8 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	reb.stages.cleanup()
 
 	reb.mu.Unlock()
-	nlog.Infoln(reb.logHdr(rargs.id, rargs.smap), "- running", reb.xctn())
+
+	nlog.Infoln(logHdr, "- running", reb.xctn())
 	return true
 }
 
@@ -712,21 +725,36 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 	return
 }
 
-func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
+func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error, tstats cos.StatsUpdater) {
 	var (
+		tag   string
 		stats core.Stats
 		qui   = &qui{rargs: rargs, reb: reb, logHdr: logHdr}
 		xreb  = reb.xctn()
+		cnt   = xreb.ErrCnt()
 	)
-	nlog.Infoln(logHdr, "fini")
+	if cnt == 0 {
+		nlog.Infoln(logHdr, "fini => quiesce")
+	} else {
+		nlog.Warningln(logHdr, "fini [", cnt, "] => quiesce")
+	}
 
-	// prior to closing the streams
-	if xreb.Quiesce(rargs.config.Transport.QuiesceTime.D(), qui.quicb) != core.QuiAborted {
-		if errM := fs.RemoveMarker(fname.RebalanceMarker); errM == nil {
+	// prior to closing streams
+	ret := xreb.Quiesce(rargs.config.Transport.QuiesceTime.D(), qui.quicb)
+	cnt = xreb.ErrCnt()
+
+	// cleanup markers
+	if ret != core.QuiAborted && ret != core.QuiTimeout {
+		tag = "qui-aborted"
+		if errM := fs.RemoveMarker(fname.RebalanceMarker, tstats); errM == nil {
 			nlog.Infoln(logHdr, "removed marker ok")
 		}
-		_ = fs.RemoveMarker(fname.NodeRestartedPrev)
+		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
+		if ret == core.QuiTimeout {
+			tag = "qui-timeout"
+		}
 	}
+
 	reb.endStreams(err)
 	reb.filterGFN.Reset()
 
@@ -741,10 +769,13 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 
 	reb.unregRecv()
 	reb.semaCh.Release()
-	if !xreb.Finished() {
-		xreb.Finish()
+	xreb.Finish()
+
+	if ret != core.QuiAborted && ret != core.QuiTimeout && cnt == 0 {
+		nlog.Infoln(logHdr, "done", xreb.String())
+	} else {
+		nlog.Infoln(logHdr, "finished with errors [", tag, cnt, "]", xreb.String())
 	}
-	nlog.Infoln(logHdr, "done", xreb.String())
 }
 
 //////////////////////////////

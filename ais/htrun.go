@@ -170,7 +170,7 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 			cm.Flags = cm.Flags.Set(cos.RebalanceInterrupted)
 		}
 		if restarted {
-			cm.Flags = cm.Flags.Set(cos.Restarted)
+			cm.Flags = cm.Flags.Set(cos.NodeRestarted)
 		}
 	}
 	if !opts.skipPrimeTime && smap.IsPrimary(h.si) {
@@ -897,7 +897,7 @@ func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	return results.s
 }
 
-func (h *htrun) bcastAsyncIC(msg *aisMsg) {
+func (h *htrun) bcastAsyncIC(msg *actMsgExt) {
 	var (
 		wg   = &sync.WaitGroup{}
 		smap = h.owner.smap.get()
@@ -1527,7 +1527,7 @@ func (h *htrun) warnMsync(r *http.Request, smap *smapX) {
 	}
 }
 
-func logmsync(lver int64, revs revs, msg *aisMsg, opts ...string) { // caller [, what, luuid]
+func logmsync(lver int64, revs revs, msg *actMsgExt, opts ...string) { // caller [, what, luuid]
 	const tag = "msync Rx:"
 	var (
 		what   string
@@ -1575,11 +1575,11 @@ func logmsync(lver int64, revs revs, msg *aisMsg, opts ...string) { // caller [,
 	}
 }
 
-func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
+func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *actMsgExt, err error) {
 	if _, ok := payload[revsConfTag]; !ok {
 		return
 	}
-	newConfig, msg = &globalConfig{}, &aisMsg{}
+	newConfig, msg = &globalConfig{}, &actMsgExt{}
 	confValue := payload[revsConfTag]
 	reader := bytes.NewBuffer(confValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
@@ -1605,11 +1605,11 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	return
 }
 
-func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, msg *aisMsg, err error) {
+func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, msg *actMsgExt, err error) {
 	if _, ok := payload[revsEtlMDTag]; !ok {
 		return
 	}
-	newMD, msg = newEtlMD(), &aisMsg{}
+	newMD, msg = newEtlMD(), &actMsgExt{}
 	etlMDValue := payload[revsEtlMDTag]
 	reader := bytes.NewBuffer(etlMDValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
@@ -1635,12 +1635,12 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	return
 }
 
-func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (newSmap *smapX, msg *aisMsg, err error) {
+func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (newSmap *smapX, msg *actMsgExt, err error) {
 	const act = "extract-smap"
 	if _, ok := payload[revsSmapTag]; !ok {
 		return
 	}
-	newSmap, msg = &smapX{}, &aisMsg{}
+	newSmap, msg = &smapX{}, &actMsgExt{}
 	smapValue := payload[revsSmapTag]
 	reader := bytes.NewBuffer(smapValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), act); err1 != nil {
@@ -1701,11 +1701,11 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 	return
 }
 
-func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg *aisMsg, err error) {
+func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg *actMsgExt, err error) {
 	if _, ok := payload[revsRMDTag]; !ok {
 		return
 	}
-	newRMD, msg = &rebMD{}, &aisMsg{}
+	newRMD, msg = &rebMD{}, &actMsgExt{}
 	rmdValue := payload[revsRMDTag]
 	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new RMD", cos.BHead(rmdValue), err1)
@@ -1739,11 +1739,11 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	return
 }
 
-func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, msg *aisMsg, err error) {
+func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, msg *actMsgExt, err error) {
 	if _, ok := payload[revsBMDTag]; !ok {
 		return
 	}
-	newBMD, msg = &bucketMD{}, &aisMsg{}
+	newBMD, msg = &bucketMD{}, &actMsgExt{}
 	bmdValue := payload[revsBMDTag]
 	reader := bytes.NewBuffer(bmdValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
@@ -1773,7 +1773,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	return
 }
 
-func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, caller string, cb smapUpdatedCB) error {
+func (h *htrun) receiveSmap(newSmap *smapX, msg *actMsgExt, payload msPayload, caller string, cb smapUpdatedCB) error {
 	if newSmap == nil {
 		return nil
 	}
@@ -1786,7 +1786,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, call
 	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
 }
 
-func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload, caller string, cb func(ne, oe *etlMD)) (err error) {
+func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *actMsgExt, payload msPayload, caller string, cb func(ne, oe *etlMD)) (err error) {
 	if newEtlMD == nil {
 		return
 	}
@@ -1813,7 +1813,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload, ca
 }
 
 // under lock
-func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload) (err error) {
+func (h *htrun) _recvCfg(newConfig *globalConfig, msg *actMsgExt, payload msPayload) (err error) {
 	config := cmn.GCO.Get()
 	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
 		if newConfig.version() == config.Version {
@@ -1836,7 +1836,7 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload
 
 func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*tokenList, error) {
 	var (
-		msg       aisMsg
+		msg       actMsgExt
 		bytes, ok = payload[revsTokenTag]
 	)
 	if !ok {
@@ -2340,16 +2340,16 @@ func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
 }
 
 //
-// aisMsg reader & constructors
+// actMsgExt reader & constructors
 //
 
-func (*htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg, err error) {
-	msg = &aisMsg{}
+func (*htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *actMsgExt, err error) {
+	msg = &actMsgExt{}
 	err = cmn.ReadJSON(w, r, msg)
 	return
 }
 
-func (msg *aisMsg) String() string {
+func (msg *actMsgExt) String() string {
 	s := "aism[" + msg.Action
 	if msg.UUID != "" {
 		s += "[" + msg.UUID + "]"
@@ -2360,7 +2360,7 @@ func (msg *aisMsg) String() string {
 	return s + "]"
 }
 
-func (msg *aisMsg) StringEx() (s string) {
+func (msg *actMsgExt) StringEx() (s string) {
 	s = msg.String()
 	vs, err := jsoniter.Marshal(msg.Value)
 	debug.AssertNoErr(err)
@@ -2368,16 +2368,16 @@ func (msg *aisMsg) StringEx() (s string) {
 	return
 }
 
-func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
+func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *actMsgExt {
 	return h.newAmsg(&apc.ActMsg{Value: msgStr}, bmd)
 }
 
-func (h *htrun) newAmsgActVal(act string, val any) *aisMsg {
+func (h *htrun) newAmsgActVal(act string, val any) *actMsgExt {
 	return h.newAmsg(&apc.ActMsg{Action: act, Value: val}, nil)
 }
 
-func (h *htrun) newAmsg(amsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *aisMsg {
-	msg := &aisMsg{ActMsg: *amsg}
+func (h *htrun) newAmsg(amsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *actMsgExt {
+	msg := &actMsgExt{ActMsg: *amsg}
 	if bmd != nil {
 		msg.BMDVersion = bmd.Version
 	} else {

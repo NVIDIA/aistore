@@ -77,7 +77,7 @@ func (res *Res) _end() {
 	res.end.Store(mono.NanoTime())
 }
 
-func (res *Res) RunResilver(args Args) {
+func (res *Res) RunResilver(args Args, tstats cos.StatsUpdater) {
 	res._begin()
 	defer res._end()
 	if fatalErr, writeErr := fs.PersistMarker(fname.ResilverMarker); fatalErr != nil || writeErr != nil {
@@ -128,7 +128,7 @@ func (res *Res) RunResilver(args Args) {
 	// run and block waiting
 	res.end.Store(0)
 	jg.Run()
-	err = wait(jg, xres)
+	err = wait(jg, xres, tstats)
 	if err != nil {
 		xres.AddErr(err)
 	}
@@ -140,7 +140,7 @@ func (res *Res) RunResilver(args Args) {
 }
 
 // Wait for an abort or for resilvering joggers to finish.
-func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
+func wait(jg *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) (err error) {
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
@@ -151,7 +151,7 @@ func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 			}
 			return cmn.NewErrAborted(xres.Name(), "", errCause)
 		case <-jg.ListenFinished():
-			if err = fs.RemoveMarker(fname.ResilverMarker); err == nil {
+			if err = fs.RemoveMarker(fname.ResilverMarker, tstats); err == nil {
 				nlog.Infoln(core.T.String()+":", xres.Name(), "removed marker ok")
 			}
 			return

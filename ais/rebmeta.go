@@ -214,7 +214,7 @@ func rmdInc(_ *rmdModifier, clone *rebMD) { clone.inc() }
 func rmdSync(m *rmdModifier, clone *rebMD) {
 	debug.Assert(m.cur == clone)
 	m.listen(nil)
-	msg := &aisMsg{ActMsg: apc.ActMsg{Action: apc.ActRebalance}, UUID: m.rebID} // user-requested rebalance
+	msg := &actMsgExt{ActMsg: apc.ActMsg{Action: apc.ActRebalance}, UUID: m.rebID} // user-requested rebalance
 	wg := m.p.metasyncer.sync(revsPair{m.cur, msg})
 	if m.wait {
 		wg.Wait()

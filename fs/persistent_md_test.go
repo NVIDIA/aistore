@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -28,6 +29,7 @@ func checkMarkersExist(t *testing.T, xs ...markerEntry) {
 func TestMarkers(t *testing.T) {
 	const mpathsCnt = 5
 	mpaths := tools.PrepareMountPaths(t, mpathsCnt)
+	mockst := mock.NewStatsTracker()
 	defer tools.RemoveMpaths(t, mpaths)
 
 	checkMarkersExist(t,
@@ -53,14 +55,14 @@ func TestMarkers(t *testing.T) {
 		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
-	fs.RemoveMarker(fname.RebalanceMarker)
+	fs.RemoveMarker(fname.RebalanceMarker, mockst)
 
 	checkMarkersExist(t,
 		markerEntry{marker: fname.RebalanceMarker, exists: false},
 		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
-	fs.RemoveMarker(fname.ResilverMarker)
+	fs.RemoveMarker(fname.ResilverMarker, mockst)
 
 	checkMarkersExist(t,
 		markerEntry{marker: fname.RebalanceMarker, exists: false},

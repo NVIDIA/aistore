@@ -55,7 +55,7 @@ func (reb *Reb) RebStatus(status *Status) {
 			}
 		}
 	} else if status.Running {
-		nlog.Warningln(core.T.String()+": transitioning (renewing) to", marked.Xact.String())
+		nlog.Warningln(core.T.String(), "transitioning (renewing) to", marked.Xact.String())
 		status.Running = false
 	}
 

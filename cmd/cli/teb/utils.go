@@ -195,6 +195,18 @@ func fmtCluSoft(version, build string) string {
 	return version + " (build: " + build + ")"
 }
 
+func fmtRebalance(h StatsAndStatusHelper, config *cmn.ClusterConfig) (out string) {
+	out = toString(h.rebalance())
+	if config.Rebalance.Enabled {
+		return out
+	}
+	disabled := fred("disabled")
+	if out == NotSetVal || out == UnknownStatusVal {
+		return disabled
+	}
+	return out + " (" + disabled + ")"
+}
+
 func fmtStringList(lst []string) string {
 	if len(lst) == 0 {
 		return unknownVal

@@ -408,7 +408,7 @@ func (xctn *Base) ToStats(stats *core.Stats) {
 
 // RebID helpers
 
-func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }
+func RebID2S(id int64) string          { return "g" + strconv.FormatInt(id, 10) }
 func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }
 
 func IsValidRebID(id string) (valid bool) {

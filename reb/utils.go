@@ -49,7 +49,7 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 
 	sb.WriteString(core.T.String())
 	sb.WriteString("[g")
-	sb.WriteString(strconv.FormatInt(rebID, 10))
+	sb.WriteString(strconv.FormatInt(rebID, 10)) // (compare with `xact.RebID2S`)
 	sb.WriteByte(',')
 	if smap != nil {
 		sb.WriteByte('v')

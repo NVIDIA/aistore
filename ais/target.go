@@ -91,10 +91,10 @@ var (
 func (*target) Name() string { return apc.Target } // as cos.Runner
 
 // as htext
-func (*target) interruptedRestarted() (interrupted, restarted bool) {
-	interrupted = fs.MarkerExists(fname.RebalanceMarker)
-	restarted = fs.MarkerExists(fname.NodeRestartedPrev)
-	return
+func (*target) interruptedRestarted() (i, r bool) {
+	i = fs.MarkerExists(fname.RebalanceMarker)
+	r = fs.MarkerExists(fname.NodeRestartedPrev)
+	return i, r
 }
 
 //
@@ -408,9 +408,12 @@ func (t *target) Run() error {
 
 	err = t.htrun.run(config)
 
-	etl.StopAll()                              // stop all running ETLs if any
-	cos.Close(db)                              // close kv db
-	fs.RemoveMarker(fname.NodeRestartedMarker) // exit gracefully
+	etl.StopAll() // stop all running ETLs if any
+	cos.Close(db) // close kv db
+
+	// gracefully
+	fs.RemoveMarker(fname.NodeRestartedPrev, t.statsT)
+	fs.RemoveMarker(fname.NodeRestartedMarker, t.statsT)
 	return err
 }
 
@@ -460,7 +463,7 @@ func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
 	if wg != nil {
 		wg.Done() // compare w/ xact.GoRunW(()
 	}
-	t.res.RunResilver(args)
+	t.res.RunResilver(args, t.statsT)
 }
 
 func (t *target) endStartupStandby() (err error) {
@@ -514,7 +517,7 @@ func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, red.inUse)
 			return
 		}
-		t.statsT.SetFlag(cos.NodeAlerts, cos.Restarted)
+		t.statsT.SetFlag(cos.NodeAlerts, cos.NodeRestarted)
 		fs.PersistMarker(fname.NodeRestartedPrev)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
@@ -906,7 +909,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	var msg aisMsg
+	var msg actMsgExt
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}

@@ -345,7 +345,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 // DELETE { action } /v1/buckets/bucket-name
 // (evict | delete) (list | range)
 func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	msg := aisMsg{}
+	msg := actMsgExt{}
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}

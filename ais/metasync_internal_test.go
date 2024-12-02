@@ -607,7 +607,7 @@ func TestMetasyncData(t *testing.T) {
 		bmd      = newBucketMD()
 	)
 
-	emptyAisMsg, err := jsoniter.Marshal(aisMsg{})
+	emptyAisMsg, err := jsoniter.Marshal(actMsgExt{})
 	if err != nil {
 		t.Fatal("Failed to marshal empty apc.ActMsg, err =", err)
 	}
@@ -634,7 +634,7 @@ func TestMetasyncData(t *testing.T) {
 	exp[revsSmapTag+revsActionTag] = emptyAisMsg
 	expRetry[revsSmapTag+revsActionTag] = emptyAisMsg
 
-	syncer.sync(revsPair{smap, &aisMsg{}})
+	syncer.sync(revsPair{smap, &actMsgExt{}})
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
@@ -656,7 +656,7 @@ func TestMetasyncData(t *testing.T) {
 	exp[revsBMDTag+revsActionTag] = emptyAisMsg
 	expRetry[revsBMDTag+revsActionTag] = emptyAisMsg
 
-	syncer.sync(revsPair{bmd, &aisMsg{}})
+	syncer.sync(revsPair{bmd, &actMsgExt{}})
 	match(t, exp, ch, 1)
 	match(t, expRetry, ch, 1)
 
@@ -794,7 +794,7 @@ func TestMetasyncMembership(t *testing.T) {
 // TestMetasyncReceive tests extracting received sync data.
 func TestMetasyncReceive(t *testing.T) {
 	{
-		emptyAisMsg := func(a *aisMsg) {
+		emptyAisMsg := func(a *actMsgExt) {
 			if a.Action != "" || a.Name != "" || a.Value != nil {
 				t.Fatal("Expecting empty action message", a)
 			}
@@ -847,7 +847,7 @@ func TestMetasyncReceive(t *testing.T) {
 			t.Fatal("Extract smap from empty payload returned data")
 		}
 
-		wg1 := syncer.sync(revsPair{primary.owner.smap.get(), &aisMsg{}})
+		wg1 := syncer.sync(revsPair{primary.owner.smap.get(), &actMsgExt{}})
 		wg1.Wait()
 		payload := <-chProxy
 
