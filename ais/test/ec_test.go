@@ -1828,13 +1828,9 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	}
 	initMountpaths(t, proxyURL)
 
-	for _, target := range o.smap.Tmap {
-		target.Digest()
-	}
-
 	// Increase number of EC data slices, now there's just enough targets to handle EC requests
 	// Encoding will fail if even one is missing, restoring should still work
-	o.dataCnt++
+	o.parityCnt++
 
 	baseParams := tools.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps(o)
@@ -1858,9 +1854,9 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		t.FailNow()
 	}
 
-	// kill #dataslices of targets, normal EC restore won't be possible
+	// kill #parity-slices of targets, normal EC restore won't be possible
 	// 2. Kill a random target
-	removedTargets := make(meta.Nodes, 0, o.dataCnt)
+	removedTargets := make(meta.Nodes, 0, o.parityCnt)
 	smap := tools.GetClusterMap(t, proxyURL)
 
 	for i := o.dataCnt - 1; i >= 0; i-- {
