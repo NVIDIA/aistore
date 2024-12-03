@@ -796,7 +796,7 @@ class Bucket(AISSource):
                 continue
             obj_name = self._get_uploaded_obj_name(file, path, basename, prepend)
             if not dry_run:
-                self.object(obj_name).put_file(str(file))
+                self.object(obj_name).get_writer().put_file(str(file))
             logger.info(
                 "%s File '%s' uploaded as object '%s' with size %s",
                 dry_run_prefix,
@@ -947,7 +947,7 @@ class Bucket(AISSource):
 
         def combined_post_processing(shard_path):
             original_post(shard_path)
-            self.object(shard_path).put_file(shard_path)
+            self.object(shard_path).get_writer().put_file(shard_path)
             os.unlink(shard_path)
 
         kwargs["post"] = combined_post_processing

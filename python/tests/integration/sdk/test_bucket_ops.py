@@ -120,8 +120,8 @@ class TestBucketOps(RemoteEnabledTest):
         new_prefix = "new-"
         content = b"test"
         expected_name = prefix + "-obj"
-        from_bck.object(expected_name).put_content(content)
-        from_bck.object("notprefix-obj").put_content(content)
+        from_bck.object(expected_name).get_writer().put_content(content)
+        from_bck.object("notprefix-obj").get_writer().put_content(content)
 
         job_id = from_bck.copy(to_bck, prefix_filter=prefix, prepend=new_prefix)
 
@@ -151,30 +151,30 @@ class TestBucketOps(RemoteEnabledTest):
         s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=LOREM)
 
         # cold GET, and check
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band PUT: 2nd version (overwrite)
         s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=DUIS)
 
         # warm GET and check (expecting the first version's content)
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # warm GET with `--latest` flag, content should be updated
-        content = self.bucket.object(obj_name).get(latest=True).read_all()
+        content = self.bucket.object(obj_name).get_reader(latest=True).read_all()
         self.assertEqual(DUIS, content.decode("utf-8"))
 
         # out-of-band DELETE
         s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
         # warm GET must be fine
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(DUIS, content.decode("utf-8"))
 
         # cold GET must result in Error
         with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get(latest=True).read_all()
+            self.bucket.object(obj_name).get_reader(latest=True).read_all()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -220,10 +220,12 @@ class TestBucketOps(RemoteEnabledTest):
         if expect_err:
             for obj_name in expected_res_dict:
                 with self.assertRaises(AISError):
-                    self.bucket.object(self.obj_prefix + obj_name).get().read_all()
+                    self.bucket.object(
+                        self.obj_prefix + obj_name
+                    ).get_reader().read_all()
         else:
             for obj_name, expected_data in expected_res_dict.items():
-                res = self.bucket.object(self.obj_prefix + obj_name).get()
+                res = self.bucket.object(self.obj_prefix + obj_name).get_reader()
                 self.assertEqual(expected_data, res.read_all())
 
     def test_put_files_default_args(self):
@@ -276,11 +278,11 @@ class TestBucketOps(RemoteEnabledTest):
             prefix_filter=PREFIX_NAME,
             pattern="*.txt",
         )
-        self.bucket.object(self.obj_prefix + included_filename).get()
+        self.bucket.object(self.obj_prefix + included_filename).get_reader()
         with self.assertRaises(AISError):
-            self.bucket.object(excluded_by_pattern).get().read_all()
+            self.bucket.object(excluded_by_pattern).get_reader().read_all()
         with self.assertRaises(AISError):
-            self.bucket.object(excluded_by_prefix).get().read_all()
+            self.bucket.object(excluded_by_prefix).get_reader().read_all()
 
     def test_put_files_dry_run(self):
         self._create_put_files_structure(TOP_LEVEL_FILES, LOWER_LEVEL_FILES)
@@ -356,7 +358,7 @@ class TestBucketOps(RemoteEnabledTest):
         # Upload objects to the bucket with different prefixes
         obj_names = ["prefix1_obj1", "prefix1_obj2", "prefix2_obj1", "prefix2_obj2"]
         for obj_name in obj_names:
-            summ_test_bck.object(obj_name).put_content(OBJ_CONTENT)
+            summ_test_bck.object(obj_name).get_writer().put_content(OBJ_CONTENT)
 
         # Verify the info with no prefix (should include all objects)
         bck_summ = summ_test_bck.summary()
@@ -397,7 +399,7 @@ class TestBucketOps(RemoteEnabledTest):
         # Upload objects to the bucket with different prefixes
         obj_names = ["prefix1_obj1", "prefix1_obj2", "prefix2_obj1"]
         for obj_name in obj_names:
-            info_test_bck.object(obj_name).put_content(OBJ_CONTENT)
+            info_test_bck.object(obj_name).get_writer().put_content(OBJ_CONTENT)
 
         # Verify the info with no prefix (should include all objects)
         _, bck_info = info_test_bck.info()

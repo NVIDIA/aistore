@@ -28,7 +28,7 @@ class TestObjectFileOps(unittest.TestCase):
         cls.test_data = create_and_put_object(
             cls.client, cls.BUCKET_NAME, cls.OBJECT_NAME, obj_size=cls.OBJECT_SIZE
         )
-        cls.object_reader = cls.bucket.object(cls.OBJECT_NAME).get()
+        cls.object_reader = cls.bucket.object(cls.OBJECT_NAME).get_reader()
 
     @classmethod
     def tearDownClass(cls):
@@ -88,7 +88,7 @@ class TestObjectFileOps(unittest.TestCase):
 
     def test_context_manager(self):
         """Test the context manager functionality."""
-        object_file = self.bucket.object(self.OBJECT_NAME).get().as_file()
+        object_file = self.bucket.object(self.OBJECT_NAME).get_reader().as_file()
         with object_file as f:
             self.assertTrue(f.readable())
             data = f.read(DEFAULT_CHUNK_SIZE)

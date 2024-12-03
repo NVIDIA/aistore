@@ -120,7 +120,7 @@ class TestObject(unittest.TestCase):
         mock_obj_client.return_value = mock_obj_client_instance
         mock_obj_reader.return_value = Mock(spec=ObjectReader)
 
-        res = self.object.get(**kwargs)
+        res = self.object.get_reader(**kwargs)
 
         blob_config = kwargs.get("blob_download_config", BlobDownloadConfig())
         initial_headers = kwargs.get("expected_headers", {})
@@ -178,7 +178,7 @@ class TestObject(unittest.TestCase):
         path = "any/filepath"
         mock_file = mock_open(read_data=b"file content")
         with patch("builtins.open", mock_file):
-            self.object.put_file(path)
+            self.object.get_writer().put_file(path)
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
@@ -189,7 +189,7 @@ class TestObject(unittest.TestCase):
 
     def test_put_content(self):
         content = b"user-supplied-bytes"
-        self.object.put_content(content)
+        self.object.get_writer().put_content(content)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
@@ -209,7 +209,7 @@ class TestObject(unittest.TestCase):
         mock_response.headers = resp_headers
         self.mock_client.request.return_value = mock_response
 
-        next_handle = self.object.append_content(content)
+        next_handle = self.object.get_writer().append_content(content)
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
@@ -228,7 +228,7 @@ class TestObject(unittest.TestCase):
         mock_response.headers = resp_headers
         self.mock_client.request.return_value = mock_response
 
-        next_handle = self.object.append_content(b"", prev_handle, True)
+        next_handle = self.object.get_writer().append_content(b"", prev_handle, True)
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
@@ -241,7 +241,7 @@ class TestObject(unittest.TestCase):
         custom_metadata = {"key1": "value1", "key2": "value2"}
         expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
 
-        self.object.set_custom_props(custom_metadata)
+        self.object.get_writer().set_custom_props(custom_metadata)
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PATCH,
@@ -255,7 +255,9 @@ class TestObject(unittest.TestCase):
         self.expected_params[QPARAM_NEW_CUSTOM] = "true"
         expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
 
-        self.object.set_custom_props(custom_metadata, replace_existing=True)
+        self.object.get_writer().set_custom_props(
+            custom_metadata, replace_existing=True
+        )
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PATCH,

@@ -60,14 +60,14 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, obj):
 
     # Validate written data after interruptions
     logging.info("Validating written content...")
-    actual_data = obj.get().read_all()
+    actual_data = obj.get_reader().read_all()
     assert actual_data == expected_data, "Validation Failed: Written content does not match expected content"
     logging.info("Validation Passed: Written content matches expected content.")
 
 
 def obj_file_write(obj):
     """Perform the write workload using ObjectFileWriter and return expected data."""
-    writer = obj.put().as_file(mode="a")
+    writer = obj.get_writer().as_file(mode="a")
     expected_data = []  # Track all chunks written
     with writer:
         for i in range(WRITE_COUNT):

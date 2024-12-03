@@ -38,7 +38,7 @@ def benchmark_obj_reader(obj: Object) -> List[float]:
     times = []
     for _ in range(NUM_READS):
         start_time = time.perf_counter()
-        with tarfile.open(fileobj=obj.get().raw(), mode="r|*") as tar:
+        with tarfile.open(fileobj=obj.get_reader().raw(), mode="r|*") as tar:
             tar.extractall(path=EXTRACT_PATH)
         times.append(time.perf_counter() - start_time)
         clear_directory(EXTRACT_PATH)
@@ -48,7 +48,7 @@ def benchmark_obj_file(obj: Object) -> List[float]:
     times = []
     for _ in range(NUM_READS):
         start_time = time.perf_counter()
-        with obj.get().as_file() as obj_file:
+        with obj.get_reader().as_file() as obj_file:
             with tarfile.open(fileobj=obj_file, mode="r|*") as tar:
                 tar.extractall(path=EXTRACT_PATH)
         times.append(time.perf_counter() - start_time)

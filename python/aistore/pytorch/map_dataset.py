@@ -40,7 +40,7 @@ class AISMapDataset(AISBaseMapDataset):
     def __getitem__(self, index: int):
         try:
             obj = self._obj_list[index]
-            content = obj.get(etl_name=self._etl_name).read_all()
+            content = obj.get_reader(etl_name=self._etl_name).read_all()
             return obj.name, content
         except IndexError:
             raise IndexError(

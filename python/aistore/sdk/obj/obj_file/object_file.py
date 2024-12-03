@@ -145,7 +145,7 @@ class ObjectFileWriter(BufferedWriter):
     A file-like writer object for AIStore, extending `BufferedWriter`.
 
     Args:
-        obj (Object): The Object instance for handling write operations.
+        obj_writer (ObjectWriter): The ObjectWriter instance for handling write operations.
         mode (str): Specifies the mode in which the file is opened.
             - `'w'`: Write mode. Opens the object for writing, truncating any existing content.
                      Writing starts from the beginning of the object.
@@ -153,18 +153,18 @@ class ObjectFileWriter(BufferedWriter):
                      and writing starts from the end of the object.
     """
 
-    def __init__(self, obj: "Object", mode: str):
-        self._obj = obj
+    def __init__(self, obj_writer: "ObjectWriter", mode: str):
+        self._obj_writer = obj_writer
         self._mode = mode
         self._handle = ""
         self._closed = False
         if self._mode == "w":
-            self._obj.put_content(b"")
+            self._obj_writer.put_content(b"")
 
     @override
     def __enter__(self, *args, **kwargs):
         if self._mode == "w":
-            self._obj.put_content(b"")
+            self._obj_writer.put_content(b"")
         return self
 
     @override
@@ -184,7 +184,7 @@ class ObjectFileWriter(BufferedWriter):
         if self._closed:
             raise ValueError("I/O operation on closed file.")
 
-        self._handle = self._obj.append_content(buffer, handle=self._handle)
+        self._handle = self._obj_writer.append_content(buffer, handle=self._handle)
 
         return len(buffer)
 
@@ -203,7 +203,9 @@ class ObjectFileWriter(BufferedWriter):
 
         if self._handle:
             # Finalize the current state with flush
-            self._obj.append_content(content=b"", handle=self._handle, flush=True)
+            self._obj_writer.append_content(
+                content=b"", handle=self._handle, flush=True
+            )
             # Reset the handle to prepare for further appends
             self._handle = ""
 

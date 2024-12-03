@@ -62,7 +62,7 @@ class Dsort:
                 input_bck_name = dsort_framework.input_shards.bck.name
                 input_bck = Bucket(name=input_bck_name, client=self._client)
                 ekm_file_obj = input_bck.object(EKM_FILE_NAME)
-                ekm_file_obj.put_content(
+                ekm_file_obj.get_writer().put_content(
                     json.dumps(output_format.as_dict()).encode("utf-8")
                 )
                 spec["ekm_file"] = ekm_file_obj.get_url()

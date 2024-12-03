@@ -1,6 +1,9 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
+
+import warnings
+
 from dataclasses import dataclass
 from io import BufferedWriter
 from pathlib import Path
@@ -15,21 +18,15 @@ from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_HEAD,
-    HTTP_METHOD_PUT,
     QPARAM_ARCHPATH,
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
-    QPARAM_OBJ_APPEND,
-    QPARAM_OBJ_APPEND_HANDLE,
     QPARAM_ETL_NAME,
     QPARAM_LATEST,
-    QPARAM_NEW_CUSTOM,
     ACT_PROMOTE,
-    HTTP_METHOD_PATCH,
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
     HEADER_RANGE,
-    HEADER_OBJECT_APPEND_HANDLE,
     ACT_BLOB_DOWNLOAD,
     HEADER_OBJECT_BLOB_DOWNLOAD,
     HEADER_OBJECT_BLOB_WORKERS,
@@ -45,7 +42,6 @@ from aistore.sdk.types import (
     PromoteAPIArgs,
     BlobMsg,
 )
-from aistore.sdk.utils import validate_file
 from aistore.sdk.obj.object_props import ObjectProps
 
 
@@ -132,9 +128,8 @@ class Object:
         self._props = ObjectProps(headers)
         return headers
 
-    # TODO: Rename to `get_reader` aand deprecate `get` method (call `get_reader`)
     # pylint: disable=too-many-arguments
-    def get(
+    def get_reader(
         self,
         archive_config: ArchiveConfig = None,
         blob_download_config: BlobDownloadConfig = None,
@@ -208,6 +203,59 @@ class Object:
             writer.writelines(obj_reader)
         return obj_reader
 
+    # pylint: disable=too-many-arguments
+    def get(
+        self,
+        archive_config: ArchiveConfig = None,
+        blob_download_config: BlobDownloadConfig = None,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        etl_name: str = None,
+        writer: BufferedWriter = None,
+        latest: bool = False,
+        byte_range: str = None,
+    ) -> ObjectReader:
+        """
+        Deprecated: Use 'get_reader' instead.
+
+        Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
+
+        Args:
+            archive_config (ArchiveConfig, optional): Settings for archive extraction
+            blob_download_config (BlobDownloadConfig, optional): Settings for using blob download
+            chunk_size (int, optional): chunk_size to use while reading from stream
+            etl_name (str, optional): Transforms an object based on ETL with etl_name
+            writer (BufferedWriter, optional): User-provided writer for writing content output
+                User is responsible for closing the writer
+            latest (bool, optional): GET the latest object version from the associated remote bucket
+            byte_range (str, optional): Specify a specific data segment of the object for transfer, including
+                both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+
+        Returns:
+            An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
+            directly.
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+        """
+        warnings.warn(
+            "The 'get' method is deprecated and will be removed in a future release. "
+            "Please use 'get_reader' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_reader(
+            archive_config=archive_config,
+            blob_download_config=blob_download_config,
+            chunk_size=chunk_size,
+            etl_name=etl_name,
+            writer=writer,
+            latest=latest,
+            byte_range=byte_range,
+        )
+
     def get_semantic_url(self) -> str:
         """
         Get the semantic URL to the object
@@ -240,6 +288,8 @@ class Object:
 
     def put_content(self, content: bytes) -> Response:
         """
+        Deprecated: Use 'ObjectWriter.put_content' instead.
+
         Puts bytes as an object to a bucket in AIS storage.
 
         Args:
@@ -251,10 +301,18 @@ class Object:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        return self._put_data(data=content)
+        warnings.warn(
+            "The 'put_content' method is deprecated and will be removed in a future release. "
+            "Please use 'ObjectWriter.put_content' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_writer().put_content(content)
 
     def put_file(self, path: str or Path) -> Response:
         """
+        Deprecated: Use 'ObjectWriter.put_file' instead.
+
         Puts a local file as an object to a bucket in AIS storage.
 
         Args:
@@ -267,20 +325,14 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             ValueError: The path provided is not a valid file
         """
-        validate_file(path)
-        with open(path, "rb") as f:
-            return self._put_data(f)
-
-    def _put_data(self, data) -> Response:
-        return self._client.request(
-            HTTP_METHOD_PUT,
-            path=self._object_path,
-            params=self.query_params,
-            data=data,
+        warnings.warn(
+            "The 'put_file' method is deprecated and will be removed in a future release. "
+            "Please use 'ObjectWriter.put_file' instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return self.get_writer().put_file(path)
 
-    # TODO: Move all object writing methods to ObjectWriter class (e.g.
-    #       put_content, put_file, append_content, and set_custom_props).
     def get_writer(self) -> ObjectWriter:
         """
         Create an ObjectWriter to write to object contents and attributes.
@@ -288,7 +340,7 @@ class Object:
         Returns:
             An ObjectWriter which can be used to write to an object's contents and attributes.
         """
-        return ObjectWriter(self)
+        return ObjectWriter(self._client, self._object_path, self.query_params)
 
     # pylint: disable=too-many-arguments
     def promote(
@@ -404,6 +456,8 @@ class Object:
         self, content: bytes, handle: str = "", flush: bool = False
     ) -> str:
         """
+        Deprecated: Use 'ObjectWriter.append_content' instead.
+
         Append bytes as an object to a bucket in AIS storage.
 
         Args:
@@ -421,35 +475,30 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             requests.exceptions.HTTPError(404): The object does not exist
         """
-        params = self.query_params.copy()
-        params[QPARAM_OBJ_APPEND] = "append" if not flush else "flush"
-        params[QPARAM_OBJ_APPEND_HANDLE] = handle
-
-        resp_headers = self._client.request(
-            HTTP_METHOD_PUT,
-            path=self._object_path,
-            params=params,
-            data=content,
-        ).headers
-
-        return resp_headers.get(HEADER_OBJECT_APPEND_HANDLE, "")
+        warnings.warn(
+            "The 'append_content' method is deprecated and will be removed in a future release. "
+            "Please use 'ObjectWriter.append_content' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_writer().append_content(content, handle, flush)
 
     def set_custom_props(
         self, custom_metadata: Dict[str, str], replace_existing: bool = False
     ) -> Response:
         """
+        Deprecated: Use 'ObjectWriter.set_custom_props' instead.
+
         Set custom properties for the object.
 
         Args:
             custom_metadata (Dict[str, str]): Custom metadata key-value pairs.
             replace_existing (bool, optional): Whether to replace existing metadata. Defaults to False.
         """
-        params = self.query_params.copy()
-        if replace_existing:
-            params[QPARAM_NEW_CUSTOM] = "true"
-
-        json_val = ActionMsg(action="", value=custom_metadata).dict()
-
-        return self._client.request(
-            HTTP_METHOD_PATCH, path=self._object_path, params=params, json=json_val
+        warnings.warn(
+            "The 'set_custom_props' method is deprecated and will be removed in a future release. "
+            "Please use 'ObjectWriter.set_custom_props' instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return self.get_writer().set_custom_props(custom_metadata, replace_existing)

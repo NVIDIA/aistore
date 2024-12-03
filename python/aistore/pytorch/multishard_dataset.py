@@ -58,7 +58,7 @@ class AISMultiShardStream(IterableDataset):
             for obj in objects_iter:
                 if obj.name != path:
                     obj_name = obj.name.replace(f"{path}/", "", 1)
-                    yield bucket.object(path).get(
+                    yield bucket.object(path).get_reader(
                         etl_name=etl_name,
                         archive_config=ArchiveConfig(archpath=obj_name),
                     ).read_all()

@@ -31,7 +31,7 @@ class TestObjectReaderOps(unittest.TestCase):
             obj_size=cls.object_size,
         )
         cls.object = cls.bucket.object(object_name)
-        cls.object_reader = cls.object.get()
+        cls.object_reader = cls.object.get_reader()
 
     @classmethod
     def tearDownClass(cls):

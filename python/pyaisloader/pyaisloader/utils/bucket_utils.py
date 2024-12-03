@@ -43,6 +43,6 @@ def add_one_object(benchmark):
     print_in_progress("Adding one object")
     content, _ = generate_bytes(1000, 1000)
     obj_name = "initial-object"
-    benchmark.bucket.object(obj_name).put_content(content)
+    benchmark.bucket.object(obj_name).get_writer().put_content(content)
     benchmark.objs_created.append(obj_name)
     print_success("Added one object")

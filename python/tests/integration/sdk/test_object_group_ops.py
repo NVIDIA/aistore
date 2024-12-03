@@ -183,7 +183,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # copy, and check
         self._copy_and_check_with_latest(self.bucket, to_bck, obj_name, LOREM, False)
         # create a cached copy in src bucket
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band PUT: 2nd version (overwrite)
@@ -195,7 +195,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # copy latest: update in-cluster copy
         self._copy_and_check_with_latest(self.bucket, to_bck, obj_name, DUIS, True)
         # check if cached copy is src bck is still on prev version
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band DELETE
@@ -210,7 +210,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
         with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get().read_all()
+            self.bucket.object(obj_name).get_reader().read_all()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -276,13 +276,13 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # prefetch_job = self.bucket.objects(obj_names=[obj_name]).prefetch(latest=True)
         # self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
         # with self.assertRaises(AISError):
-        #    self.bucket.object(obj_name).get().read_all()
+        #    self.bucket.object(obj_name).get_reader().read_all()
 
     def _prefetch_and_check_with_latest(self, bucket, obj_name, expected, latest_flag):
         prefetch_job = bucket.objects(obj_names=[obj_name]).prefetch(latest=latest_flag)
         self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
-        content = bucket.object(obj_name).get().read_all()
+        content = bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
     # pylint: disable=too-many-arguments
@@ -294,7 +294,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
         self.assertEqual(1, len(to_bck.list_all_objects()))
-        content = to_bck.object(obj_name).get().read_all()
+        content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
     def test_archive_objects_without_copy(self):
@@ -313,7 +313,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
         archived_names = self.obj_names[1:5]
         expected_contents = {}
         for name in archived_names:
-            expected_contents[name] = src_bck.object(obj_name=name).get().read_all()
+            expected_contents[name] = (
+                src_bck.object(obj_name=name).get_reader().read_all()
+            )
 
         arch_job = src_bck.objects(obj_names=archived_names).archive(
             archive_name=arch_name, **kwargs
@@ -321,7 +323,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.client.job(job_id=arch_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
         # Read the tar archive and assert the object names and contents match
-        res_bytes = res_bck.object(arch_name).get().read_all()
+        res_bytes = res_bck.object(arch_name).get_reader().read_all()
         with tarfile.open(fileobj=io.BytesIO(res_bytes), mode="r") as tar:
             member_names = []
             for member in tar.getmembers():
@@ -365,11 +367,12 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         # Get the md5 transform of each source object and verify the destination bucket contains those results
         from_obj_hashes = [
-            transform(self.bucket.object(name).get().read_all())
+            transform(self.bucket.object(name).get_reader().read_all())
             for name in self.obj_names
         ]
         to_obj_values = [
-            to_bck.object(new_prefix + name).get().read_all() for name in self.obj_names
+            to_bck.object(new_prefix + name).get_reader().read_all()
+            for name in self.obj_names
         ]
         self.assertEqual(to_obj_values, from_obj_hashes)
 

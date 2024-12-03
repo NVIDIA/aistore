@@ -82,7 +82,7 @@ def main():
         # Generate data and upload to the bucket
         logging.info("Generating data and uploading to the bucket...")
         generated_data = create_and_put_object(obj, OBJECT_SIZE)
-        object_reader = obj.get(chunk_size=CHUNK_SIZE)
+        object_reader = obj.get_reader(chunk_size=CHUNK_SIZE)
 
         # Test reading the object with pod interruptions
         test_with_interruptions(v1, object_reader, generated_data)

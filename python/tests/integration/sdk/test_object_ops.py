@@ -50,7 +50,7 @@ class TestObjectOps(RemoteEnabledTest):
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
-        reader = self.bucket.object(obj_name).get(chunk_size=chunk_size)
+        reader = self.bucket.object(obj_name).get_reader(chunk_size=chunk_size)
 
         self.assertEqual(reader.attributes.size, len(exp_content))
         self.assertNotEqual(reader.attributes.checksum_type, "")
@@ -77,8 +77,8 @@ class TestObjectOps(RemoteEnabledTest):
     def test_put_content(self):
         content = b"content for the object"
         obj = self._create_object()
-        obj.put_content(content)
-        res = obj.get()
+        obj.get_writer().put_content(content)
+        res = obj.get_reader()
         self.assertEqual(content, res.read_all())
 
     def test_put_file(self):
@@ -88,18 +88,18 @@ class TestObjectOps(RemoteEnabledTest):
         with open(filename, "wb") as writer:
             writer.write(content)
         obj = self._create_object()
-        obj.put_file(filename)
-        res = obj.get()
+        obj.get_writer().put_file(filename)
+        res = obj.get_reader()
         self.assertEqual(content, res.read_all())
 
     def test_put_file_invalid(self):
         with self.assertRaises(ValueError):
-            self.bucket.object("any").put_file("non-existent-file")
+            self.bucket.object("any").get_writer().put_file("non-existent-file")
         self.local_test_files.mkdir()
         inner_dir = self.local_test_files.joinpath("inner_dir_not_file")
         inner_dir.mkdir()
         with self.assertRaises(ValueError):
-            self.bucket.object("any").put_file(inner_dir)
+            self.bucket.object("any").get_writer().put_file(inner_dir)
 
     def test_put_head_get(self):
         objects = self._put_objects(5)
@@ -114,27 +114,27 @@ class TestObjectOps(RemoteEnabledTest):
     def test_append_content(self):
         content = b"object head before append"
         obj = self._create_object()
-        obj.put_content(content)
+        obj.get_writer().put_content(content)
 
         obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
         next_handle = ""
         for data in obj_partitions:
-            next_handle = obj.append_content(data, next_handle)
-        flushed = obj.append_content(b"", next_handle, True)
-        res = obj.get()
+            next_handle = obj.get_writer().append_content(data, next_handle)
+        flushed = obj.get_writer().append_content(b"", next_handle, True)
+        res = obj.get_reader()
         self.assertEqual(content + bytearray().join(obj_partitions), res.read_all())
         self.assertEqual(flushed, "")
 
     def test_get_object_appended_without_flush(self):
         original_content = b"object head before append"
         obj = self._create_object()
-        obj.put_content(original_content)
+        obj.get_writer().put_content(original_content)
 
         obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
         next_handle = ""
         for data in obj_partitions:
-            next_handle = obj.append_content(data, next_handle)
-        res = obj.get()
+            next_handle = obj.get_writer().append_content(data, next_handle)
+        res = obj.get_reader()
         self.assertEqual(original_content, res.read_all())
 
     def test_get_with_writer(self):
@@ -145,7 +145,7 @@ class TestObjectOps(RemoteEnabledTest):
         for obj_name, content in objects.items():
             # Pass a writer that appends to a file
             with open(filename, "ab") as writer:
-                self.bucket.object(obj_name).get(writer=writer)
+                self.bucket.object(obj_name).get_reader(writer=writer)
             all_content += content
         # Verify file contents are written from each object
         with open(filename, "rb") as reader:
@@ -156,15 +156,19 @@ class TestObjectOps(RemoteEnabledTest):
     def test_get_range(self):
         objects = self._put_objects(5)
         for obj_name, content in objects.items():
-            resp = self.bucket.object(obj_name).get(byte_range="bytes=5-100").read_all()
+            resp = (
+                self.bucket.object(obj_name)
+                .get_reader(byte_range="bytes=5-100")
+                .read_all()
+            )
             self.assertEqual(content[5:101], resp)
 
     def test_set_custom_props(self):
         cont = b"test content"
         obj = self._create_object()
-        obj.put_content(cont)
+        obj.get_writer().put_content(cont)
 
-        obj.set_custom_props(
+        obj.get_writer().set_custom_props(
             custom_metadata={"testkey1": "testval1", "testkey2": "testval2"}
         )
         self.assertTrue(
@@ -172,7 +176,7 @@ class TestObjectOps(RemoteEnabledTest):
             <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
         )
 
-        obj.set_custom_props(custom_metadata={"testkey3": "testval3"})
+        obj.get_writer().set_custom_props(custom_metadata={"testkey3": "testval3"})
         self.assertTrue(
             {
                 "testkey1": "testval1",
@@ -182,7 +186,7 @@ class TestObjectOps(RemoteEnabledTest):
             <= string_to_dict(obj.head()[AIS_CUSTOM_MD]).items()
         )
 
-        obj.set_custom_props(
+        obj.get_writer().set_custom_props(
             custom_metadata={"testkey4": "testval4"}, replace_existing=True
         )
         self.assertTrue(
@@ -210,7 +214,7 @@ class TestObjectOps(RemoteEnabledTest):
             blob_config = BlobDownloadConfig(chunk_size=testcase, num_workers="4")
             resp = (
                 self.bucket.object(obj_name)
-                .get(blob_download_config=blob_config)
+                .get_reader(blob_download_config=blob_config)
                 .read_all()
             )
             self.assertEqual(content, resp)
@@ -258,7 +262,7 @@ class TestObjectOps(RemoteEnabledTest):
 
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
-        top_object = self.bucket.object(obj_name + top_item).get()
+        top_object = self.bucket.object(obj_name + top_item).get_reader()
         self.assertEqual(top_item_contents, top_object.read_all().decode(UTF_ENCODING))
 
         # Update local top item contents
@@ -283,11 +287,13 @@ class TestObjectOps(RemoteEnabledTest):
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))
         expected_top_obj = obj_name + top_item
-        top_obj = self.bucket.object(expected_top_obj).get()
+        top_obj = self.bucket.object(expected_top_obj).get_reader()
         self.assertEqual(
             top_item_updated_contents, top_obj.read_all().decode(UTF_ENCODING)
         )
-        inner_obj = self.bucket.object(obj_name + inner_folder_name + inner_item).get()
+        inner_obj = self.bucket.object(
+            obj_name + inner_folder_name + inner_item
+        ).get_reader()
         self.assertEqual(inner_item_contents, inner_obj.read_all().decode(UTF_ENCODING))
         # Check source deleted
         top_level_files = [
@@ -346,19 +352,23 @@ class TestObjectOps(RemoteEnabledTest):
         create_archive(archive_path, content_dict)
         obj_name = f"{self.obj_prefix}-{archive_name}"
         obj = self.bucket.object(obj_name)
-        obj.put_file(archive_path)
+        obj.get_writer().put_file(archive_path)
         objs = self.bucket.list_objects_iter(
             prefix=obj.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
         )
         obj_names = [obj.name for obj in objs]
         self.assertEqual(len(obj_names), 7)
         archive_config = ArchiveConfig(archpath="file1.txt")
-        extracted_content_archpath = obj.get(archive_config=archive_config).read_all()
+        extracted_content_archpath = obj.get_reader(
+            archive_config=archive_config
+        ).read_all()
         self.assertEqual(extracted_content_archpath, content_dict["file1.txt"])
 
         # PREFIX Mode
         archive_config = ArchiveConfig(regex="file2", mode=ArchiveMode.PREFIX)
-        extracted_content_regx = obj.get(archive_config=archive_config).read_all()
+        extracted_content_regx = obj.get_reader(
+            archive_config=archive_config
+        ).read_all()
         file_like_object = io.BytesIO(extracted_content_regx)
         with tarfile.open(fileobj=file_like_object, mode="r:") as tar:
             self.assertEqual(tar.getnames(), ["file2.txt", "file2.cls"])
@@ -369,7 +379,9 @@ class TestObjectOps(RemoteEnabledTest):
 
         # WDSKEY Mode
         archive_config = ArchiveConfig(regex="file3", mode=ArchiveMode.WDSKEY)
-        extracted_content_regx = obj.get(archive_config=archive_config).read_all()
+        extracted_content_regx = obj.get_reader(
+            archive_config=archive_config
+        ).read_all()
         file_like_object = io.BytesIO(extracted_content_regx)
         with tarfile.open(fileobj=file_like_object, mode="r:") as tar:
             self.assertEqual(tar.getnames(), ["file3.txt", "file3.cls"])
@@ -383,5 +395,5 @@ class TestObjectOps(RemoteEnabledTest):
         for obj_name, content in objects.items():
             url = f"{self.bucket.provider.value}://{self.bucket.name}/{obj_name}"
             fetched_obj = self.client.fetch_object_by_url(url)
-            fetched_content = fetched_obj.get().read_all()
+            fetched_content = fetched_obj.get_reader().read_all()
             self.assertEqual(content, fetched_content)

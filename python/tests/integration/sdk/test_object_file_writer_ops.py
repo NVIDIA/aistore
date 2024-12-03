@@ -35,13 +35,13 @@ class TestObjectFileWriterOps(unittest.TestCase):
     def test_write_mode_w_existing_object(self):
         """Test writing in 'w' mode to an existing object with multiple writes."""
         # Ensure the object exists with some content
-        self.object.put_content(b"existing-content")
+        self.object.get_writer().put_content(b"existing-content")
 
         # Open ObjectFileWriter in 'w' mode
         object_file_w = self.object.get_writer().as_file(mode="w")
 
         # The object should be truncated
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, b"")
 
         # Write data
@@ -49,7 +49,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
             object_file_w.write(data_chunk)
 
             # Attempt to read the object before flushing
-            current_content = self.object.get().read_all()
+            current_content = self.object.get_reader().read_all()
             self.assertEqual(current_content, b"")
 
         # Flush the data
@@ -57,7 +57,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
 
         # Now the data should be visible
         expected_content = b"".join(self.data_to_write)
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, expected_content)
 
     def test_write_mode_w_non_existing_object(self):
@@ -66,7 +66,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
         object_file_w = self.object.get_writer().as_file(mode="w")
 
         # The object should now exist but be empty
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, b"")
 
         # Write data
@@ -74,7 +74,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
             object_file_w.write(data_chunk)
 
             # Attempt to read the object before flushing
-            current_content = self.object.get().read_all()
+            current_content = self.object.get_reader().read_all()
             self.assertEqual(current_content, b"")
 
         # Flush the data
@@ -82,20 +82,20 @@ class TestObjectFileWriterOps(unittest.TestCase):
 
         # Now the data should be visible
         expected_content = b"".join(self.data_to_write)
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, expected_content)
 
     def test_write_mode_a_existing_object(self):
         """Test writing in 'a' mode to an existing object with multiple writes."""
         # Ensure the object exists with some content
         existing_content = b"existing-content"
-        self.object.put_content(existing_content)
+        self.object.get_writer().put_content(existing_content)
 
         # Open ObjectFileWriter in 'a' mode
         object_file_w = self.object.get_writer().as_file(mode="a")
 
         # The object should retain existing content
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, existing_content)
 
         # Write data
@@ -103,7 +103,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
             object_file_w.write(data_chunk)
 
             # Attempt to read the object before flushing
-            current_content = self.object.get().read_all()
+            current_content = self.object.get_reader().read_all()
             self.assertEqual(current_content, existing_content)
 
         # Flush the data
@@ -111,7 +111,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
 
         # Now the new data should be appended
         expected_content = existing_content + b"".join(self.data_to_write)
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, expected_content)
 
     def test_write_mode_a_non_existing_object(self):
@@ -122,7 +122,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
         # Attempting to read the object before flushing will raise an exception
         # as the object does not exist
         with self.assertRaises(Exception):
-            self.object.get().read_all()
+            self.object.get_reader().read_all()
 
         # Write data
         for data_chunk in self.data_to_write:
@@ -131,12 +131,12 @@ class TestObjectFileWriterOps(unittest.TestCase):
             # Attempting to read the object before flushing will still raise an exception
             # as until flushed, the object does not exist
             with self.assertRaises(Exception):
-                self.object.get().read_all()
+                self.object.get_reader().read_all()
 
         # Flush the data
         object_file_w.flush()
 
         # Now the data should be visible
         expected_content = b"".join(self.data_to_write)
-        current_content = self.object.get().read_all()
+        current_content = self.object.get_reader().read_all()
         self.assertEqual(current_content, expected_content)

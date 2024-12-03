@@ -59,7 +59,7 @@ def create_sample(classes, trimap_dir, index, image_file):
 def load_data(bucket, sample_generator):
 
     def upload_shard(filename):
-        bucket.object(filename).put_file(filename)
+        bucket.object(filename).get_writer().put_file(filename)
         os.unlink(filename)
 
     # Writes data as tar to disk, uses callback function "post" to upload to AIS and delete

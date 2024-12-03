@@ -68,7 +68,7 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
         bck = self.client.bucket(bck_name).create()
         new_bck = self.client.bucket(new_bck_name).create()
         try:
-            bck.object(obj_name).put_content("any content")
+            bck.object(obj_name).get_writer().put_content("any content")
             idle_job = bck.objects(obj_names=[obj_name]).copy(to_bck=new_bck)
 
             expected_res = f"{ACT_COPY_OBJECTS}[{idle_job}]"

@@ -102,7 +102,9 @@ class TestDsortOps(unittest.TestCase):
     def _get_object_content_map(self, bucket_name, object_names):
         expected_contents = {}
         for obj in object_names:
-            output_bytes = self.client.bucket(bucket_name).object(obj).get().read_all()
+            output_bytes = (
+                self.client.bucket(bucket_name).object(obj).get_reader().read_all()
+            )
             output = io.BytesIO(output_bytes)
             with tarfile.open(fileobj=output) as result_tar:
                 for tar in result_tar:
@@ -156,7 +158,7 @@ class TestDsortOps(unittest.TestCase):
         dsort.start(spec_file)
 
         dsort.wait(timeout=TEST_TIMEOUT)
-        output_bytes = out_bck.object("out-shard-0.tar").get().read_all()
+        output_bytes = out_bck.object("out-shard-0.tar").get_reader().read_all()
         output = io.BytesIO(output_bytes)
         result_contents = {}
         with tarfile.open(fileobj=output) as result_tar:
@@ -203,7 +205,7 @@ class TestDsortOps(unittest.TestCase):
         dsort.wait(timeout=TEST_TIMEOUT)
 
         for output_shard in self.client.bucket(out_bck_name).list_all_objects_iter():
-            output_bytes = output_shard.get().read_all()
+            output_bytes = output_shard.get_reader().read_all()
             output = io.BytesIO(output_bytes)
             with tarfile.open(fileobj=output) as result_tar:
                 for tar in result_tar:
@@ -247,7 +249,7 @@ class TestDsortOps(unittest.TestCase):
         for output_shard in self.client.bucket(out_bck.name).list_all_objects_iter(
             prefix="output-shards-"
         ):
-            output_bytes = output_shard.get().read_all()
+            output_bytes = output_shard.get_reader().read_all()
             output = io.BytesIO(output_bytes)
             with tarfile.open(fileobj=output) as result_tar:
                 tar_names.extend([tar.name for tar in result_tar])
@@ -289,7 +291,7 @@ class TestDsortOps(unittest.TestCase):
         for output_shard in self.client.bucket(out_bck.name).list_all_objects_iter(
             prefix="output-shards-"
         ):
-            output_bytes = output_shard.get().read_all()
+            output_bytes = output_shard.get_reader().read_all()
             output = io.BytesIO(output_bytes)
             with tarfile.open(fileobj=output) as result_tar:
                 tar_names.extend([tar.name for tar in result_tar])
@@ -362,7 +364,7 @@ class TestDsortOps(unittest.TestCase):
         for output_shard in self.client.bucket(out_bck.name).list_all_objects_iter(
             prefix="output-shards-"
         ):
-            output_bytes = output_shard.get().read_all()
+            output_bytes = output_shard.get_reader().read_all()
             output = io.BytesIO(output_bytes)
             with tarfile.open(fileobj=output) as tar:
                 for file_info in tar:
