@@ -24,7 +24,7 @@ func (reb *Reb) RebStatus(status *Status) {
 		marked = xreg.GetRebMarked()
 	)
 	status.Aborted = marked.Interrupted
-	status.Running = marked.Xact != nil && marked.Xact.Running()
+	status.Running = marked.Xact != nil
 
 	// rlock
 	reb.mu.Lock()

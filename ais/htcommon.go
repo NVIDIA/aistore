@@ -673,7 +673,7 @@ func (t *target) fillNsti(nsti *cos.NodeStateInfo) {
 	marked := xreg.GetRebMarked()
 
 	// (running | interrupted | ok)
-	if xreb := marked.Xact; xreb != nil && !xreb.IsAborted() && !xreb.Finished() {
+	if xreb := marked.Xact; xreb != nil {
 		nsti.Flags = nsti.Flags.Set(cos.Rebalancing)
 	} else if marked.Interrupted {
 		nsti.Flags = nsti.Flags.Set(cos.RebalanceInterrupted)
