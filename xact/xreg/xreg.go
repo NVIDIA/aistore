@@ -832,7 +832,10 @@ func (rns *RenewRes) beingRenewed() {
 /////////
 
 func (flt *Flt) String() string {
-	msg := xact.QueryMsg{OnlyRunning: flt.OnlyRunning, Bck: flt.Bck.Clone(), ID: flt.ID, Kind: flt.Kind}
+	msg := xact.QueryMsg{OnlyRunning: flt.OnlyRunning, ID: flt.ID, Kind: flt.Kind}
+	if flt.Bck != nil {
+		msg.Bck = flt.Bck.Clone()
+	}
 	return msg.String()
 }
 

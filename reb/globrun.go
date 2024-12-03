@@ -10,12 +10,10 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	"runtime"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -57,8 +55,6 @@ const maxWackTargets = 4
 
 const initCapLomAcks = 128
 
-const fmtpend = "%s: newer rebalance[g%d] pending - not running"
-
 type (
 	Reb struct {
 		smap      ratomic.Pointer[meta.Smap] // next smap (new that'll become current after rebalance)
@@ -66,7 +62,6 @@ type (
 		dm        *bundle.DataMover
 		pushes    *bundle.Streams // broadcast notifications
 		filterGFN *prob.Filter
-		semaCh    *cos.Semaphore
 		ecClient  *http.Client
 		stages    *nodeStages
 		lomacks   [cos.MultiHashMapCount]*lomAcks
@@ -77,7 +72,6 @@ type (
 		}
 		// (smap, xreb) + atomic state
 		rebID atomic.Int64
-		nxtID atomic.Int64
 		// quiescence
 		lastrx atomic.Int64 // mono time
 		// this state
@@ -144,24 +138,45 @@ func New(config *cmn.Config) *Reb {
 	debug.Assert(dm != nil)
 	reb.dm = dm
 
-	// serialize one global rebalance at a time
-	reb.semaCh = cos.NewSemaphore(1)
 	return reb
 }
 
-func (reb *Reb) regRecv() {
+func (reb *Reb) regRecv() error {
 	if err := reb.dm.RegRecv(); err != nil {
-		cos.ExitLog(err)
+		return err
 	}
 	if err := transport.Handle(trnamePsh, reb.recvStageNtfn /*RecvObj*/); err != nil {
-		cos.ExitLog(err)
+		debug.AssertNoErr(err)
+		return err
 	}
+	return nil
 }
 
 func (reb *Reb) unregRecv() {
 	reb.dm.UnregRecv()
 	err := transport.Unhandle(trnamePsh)
 	debug.AssertNoErr(err)
+}
+
+func (reb *Reb) _preempt(logHdr, oxid string) error {
+	oxreb, err := xreg.GetXact(oxid)
+	if err != nil {
+		return err
+	}
+	if oxreb != nil && !oxreb.IsAborted() {
+		oxreb.Abort(cmn.ErrXactRenewAbort)
+		nlog.Warningln(logHdr, "[", cmn.ErrXactRenewAbort, oxreb.String(), "]", reb.dm.String())
+	}
+	for i := range 10 { // TODO: config
+		if reb.dm.IsFree() {
+			break
+		}
+		time.Sleep(time.Second)
+		if i > 2 && i&1 == 1 {
+			nlog.Warningln(logHdr, "preempt: polling for", reb.dm.String())
+		}
+	}
+	return nil
 }
 
 // run sequence: non-EC and EC global
@@ -174,37 +189,33 @@ func (reb *Reb) unregRecv() {
 //  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, tstats cos.StatsUpdater) {
-	if reb.nxtID.Load() >= id {
-		return
-	}
-	reb.mu.Lock()
-	if reb.nxtID.Load() >= id {
-		reb.mu.Unlock()
-		return
-	}
-	debug.Assert(id > reb.rebID.Load())
-	reb.nxtID.Store(id)
-	reb.mu.Unlock()
-
+func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, tstats cos.StatsUpdater, oxid string) {
 	logHdr := reb.logHdr(id, smap, true /*initializing*/)
-	nlog.Infoln(logHdr, "initializing")
-
-	bmd := core.T.Bowner().Get()
-	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed()}
-	if !reb.serialize(rargs, logHdr) {
-		return
+	// preempt
+	if xact.IsValidRebID(oxid) {
+		if err := reb._preempt(logHdr, oxid); err != nil {
+			nlog.Errorln(logHdr, "failed to preempt:", err)
+			return
+		}
 	}
 
-	reb.regRecv()
-
+	var (
+		bmd   = core.T.Bowner().Get()
+		rargs = &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed()}
+	)
+	if !reb.pingall(rargs, logHdr) {
+		return
+	}
+	if err := reb.regRecv(); err != nil {
+		nlog.Errorln(logHdr, err) // (race to run)
+		return
+	}
 	haveStreams := smap.HasPeersToRebalance(core.T.SID())
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}
 	if !reb.initRenew(rargs, notif, logHdr, haveStreams) {
 		reb.unregRecv()
-		reb.semaCh.Release()
 		return
 	}
 	if !haveStreams {
@@ -212,12 +223,13 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 		nlog.Infof("%s: nothing to do: %s, %s", logHdr, smap.StringEx(), bmd.StringEx())
 		reb.stages.stage.Store(rebStageDone)
 		reb.unregRecv()
-		reb.semaCh.Release()
 		fs.RemoveMarker(fname.RebalanceMarker, tstats)
 		fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
 		reb.xctn().Finish()
 		return
 	}
+
+	nlog.Infoln(logHdr, "initializing")
 
 	// abort all running `dtor.AbortRebRes` xactions (download, dsort, etl)
 	xreg.AbortByNewReb(errors.New("reason: starting " + reb.xctn().Name()))
@@ -286,17 +298,13 @@ func (reb *Reb) run(rargs *rebArgs) error {
 	return group.Wait()
 }
 
-func (reb *Reb) serialize(rargs *rebArgs, logHdr string) bool {
-	// 1. check whether other targets are up and running
-	if errCnt := bcast(rargs, reb.pingTarget); errCnt > 0 {
-		return false
-	}
+func (reb *Reb) pingall(rargs *rebArgs, logHdr string) bool {
 	if rargs.smap.Version == 0 {
 		rargs.smap = core.T.Sowner().Get()
 	}
-	// 2. serialize global rebalance and start new xaction -
-	//    but only if the one that handles the current version is _not_ already in progress
-	if newerRMD, alreadyRunning := reb.acquire(rargs, logHdr); newerRMD || alreadyRunning {
+	// whether other targets are up and running
+	if errCnt := bcast(rargs, reb.pingTarget); errCnt > 0 {
+		nlog.Errorln(logHdr, "not starting: ping err-s", errCnt)
 		return false
 	}
 	if rargs.smap.Version == 0 {
@@ -306,108 +314,14 @@ func (reb *Reb) serialize(rargs *rebArgs, logHdr string) bool {
 	return true
 }
 
-func (reb *Reb) acquire(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning bool) {
-	var (
-		total    time.Duration
-		sleep    = rargs.config.Timeout.CplaneOperation.D()
-		maxTotal = max(20*sleep, 10*time.Second) // time to abort prev. streams
-		maxwt    = max(rargs.config.Rebalance.DestRetryTime.D(), 2*maxTotal)
-		errcnt   int
-		acquired bool
-	)
-	for {
-		select {
-		case <-reb.semaCh.TryAcquire():
-			acquired = true
-		default:
-			runtime.Gosched()
-		}
-		if id := reb.nxtID.Load(); id > rargs.id {
-			nlog.Warningf(fmtpend, logHdr, id)
-			newerRMD = true
-			if acquired {
-				reb.semaCh.Release()
-			}
-			return
-		}
-		if reb.rebID.Load() == rargs.id {
-			if acquired {
-				reb.semaCh.Release()
-			}
-			nlog.Warningf("%s: rebalance[g%d] is already running", logHdr, rargs.id)
-			alreadyRunning = true
-			return
-		}
-
-		if acquired { // ok
-			if errcnt > 1 {
-				nlog.Infof("%s: resolved (%d)", logHdr, errcnt)
-			}
-			return
-		}
-
-		// try to preempt
-		err := reb._preempt(rargs, logHdr, total, maxTotal, errcnt)
-		if err != nil {
-			if total > maxwt {
-				cos.ExitLog(err) // TODO -- FIXME: rewrite
-			}
-			errcnt++
-		}
-		time.Sleep(sleep)
-		total += sleep
-	}
-}
-
-func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Duration, errcnt int) (err error) {
-	entry := xreg.GetRunning(xreg.Flt{Kind: apc.ActRebalance})
-	if entry == nil {
-		var (
-			rebID   = reb.RebID()
-			rsmap   = reb.smap.Load()
-			rlogHdr = reb.logHdr(rebID, rsmap, true)
-			xreb    = reb.xctn()
-			s       string
-		)
-		if xreb != nil {
-			s = ", " + xreb.String()
-		}
-		err = fmt.Errorf("%s: acquire/release asymmetry vs %s%s", logHdr, rlogHdr, s)
-		if errcnt%2 == 1 {
-			nlog.Errorln(err)
-		}
-		return
-	}
-	otherXreb := entry.Get().(*xs.Rebalance) // running or previous
-	otherRebID := otherXreb.RebID()
-	if otherRebID >= rargs.id {
-		return
-	}
-	if !otherXreb.IsAborted() {
-		otherXreb.Abort(cmn.ErrXactRenewAbort)
-		nlog.Warningf("%s: aborting older %s", logHdr, otherXreb)
-		return
-	}
-	if total > maxTotal {
-		err = fmt.Errorf("%s: preempting older %s takes too much time", logHdr, otherXreb)
-		nlog.Errorln(err)
-		if xreb := reb.xctn(); xreb != nil && xreb.ID() == otherXreb.ID() {
-			debug.Assert(reb.dm.GetXact().ID() == otherXreb.ID())
-			nlog.Warningf("%s: aborting older streams...", logHdr)
-			reb.abortStreams()
-		}
-	}
-	return
-}
-
 func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, haveStreams bool) bool {
-	if id := reb.nxtID.Load(); id > rargs.id {
-		nlog.Warningf(fmtpend, logHdr, id)
+	rns := xreg.RenewRebalance(rargs.id)
+	if rns.Err != nil {
+		nlog.Errorln(logHdr, "not running:", rns.Err) // DEBUG
 		return false
 	}
-	rns := xreg.RenewRebalance(rargs.id)
-	debug.AssertNoErr(rns.Err)
 	if rns.IsRunning() {
+		nlog.Errorln(logHdr, "already running") // DEBUG
 		return false
 	}
 	xctn := rns.Entry.Get()
@@ -416,11 +330,6 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	xctn.AddNotif(notif)
 
 	reb.mu.Lock()
-	if id := reb.nxtID.Load(); id > rargs.id {
-		reb.mu.Unlock()
-		nlog.Warningf(fmtpend, logHdr, id)
-		return false
-	}
 
 	reb.stages.stage.Store(rebStageInit)
 	xreb := xctn.(*xs.Rebalance)
@@ -493,11 +402,6 @@ func (reb *Reb) beginStreams(config *cmn.Config) {
 		Extra:      &transport.Extra{SenderID: xreb.ID(), Config: config},
 	}
 	reb.pushes = bundle.New(transport.NewIntraDataClient(), pushArgs)
-}
-
-func (reb *Reb) abortStreams() {
-	reb.dm.Abort()
-	reb.pushes.Abort()
 }
 
 func (reb *Reb) endStreams(err error) {
@@ -768,7 +672,6 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error, tstats cos.StatsU
 	reb.stages.cleanup()
 
 	reb.unregRecv()
-	reb.semaCh.Release()
 	xreb.Finish()
 
 	if ret != core.QuiAborted && ret != core.QuiTimeout && cnt == 0 {

@@ -873,9 +873,10 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) (err error) {
 		}
 	}
 	if !t.regstate.disabled.Load() {
-		t._runRe(newRMD, msg, smap)
+		oxid := xact.RebID2S(rmd.Version)
+		t._runRe(newRMD, msg, smap, oxid)
 	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
-		nlog.Warningln(t.String()+": standby => join", msg.String())
+		nlog.Warningln(t.String(), "standby => join:", msg.String())
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}
@@ -884,24 +885,31 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) (err error) {
 	return
 }
 
-func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX) {
+func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string) {
 	const tag = "rebalance["
-	notif := &xact.NotifXact{
-		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+	var (
+		notif = &xact.NotifXact{
+			Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		}
+		nxid  = xact.RebID2S(newRMD.Version)
+		tname = t.String()
+	)
+	if msg.UUID != nxid {
+		nlog.Warningln(tag, msg.UUID, "vs", nxid)
 	}
 
 	// 1. by user
 	if msg.Action == apc.ActRebalance {
 		xname := tag + msg.UUID + "]"
-		nlog.Infoln(t.String(), "starting user-requested", t, xname)
+		nlog.Infoln(tname, "starting user-requested", t, xname, nxid)
 
 		// (##a)
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
 		return
 	}
 
 	// 2. by RMD
-	xname := tag + xact.RebID2S(newRMD.Version) + "]"
+	xname := tag + nxid + "]"
 
 	switch msg.Action {
 	// 2.1. action => metasync(newRMD)
@@ -909,15 +917,16 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX) {
 		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 			debug.AssertNoErr(err) // unlikely
-		} else {
-			var s string
-			if opts.DaemonID == t.SID() {
-				s = " (to subsequently deactivate or remove _this_ target)"
-			}
-			nlog.Infof("%s: starting '%s' triggered %s%s: %+v", t, msg.Action, xname, s, opts)
+			return
 		}
+
+		var s string
+		if opts.DaemonID == t.SID() {
+			s = " (to subsequently deactivate or remove _this_ target)"
+		}
+		nlog.Infoln(tname, "starting", msg.String(), "-triggered", xname, s, opts)
 		// (##b)
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
 
 	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config
 	default:
@@ -925,9 +934,9 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX) {
 		debug.Assert(config.Version > 0 && config.UUID == smap.UUID, config.String(), " vs ", smap.StringEx())
 
 		if config.Rebalance.Enabled {
-			nlog.Infoln(t.String(), "starting", xname)
+			nlog.Infoln(tname, "starting", xname)
 			// (##c)
-			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
 		} else {
 			runtime.Gosched()
 
@@ -942,19 +951,19 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX) {
 					//
 					// NOTE: trusting local copy of the config, _not_ checking with primary via reqHealth()
 					//
-					nlog.Warningln(t.String(), "not starting", xname, "- disabled in the", config.String())
+					nlog.Warningln(tname, "not starting", xname, "- disabled in the", config.String())
 					return
 				}
 
 				// (##d)
-				nlog.Infoln(t.String(), "starting", xname)
-				t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+				nlog.Infoln(tname, "starting", xname)
+				t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
 			}()
 		}
 	}
 
 	if newRMD.Resilver != "" {
-		nlog.Infoln(t.String(), "... and resilver")
+		nlog.Infoln(tname, "... and resilver")
 
 		// (##resilver)
 		go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
