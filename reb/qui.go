@@ -20,10 +20,9 @@ import (
 const logIval = time.Minute
 
 type qui struct {
-	rargs  *rebArgs
-	reb    *Reb
-	logHdr string
-	i      time.Duration // to log every logIval
+	rargs *rebArgs
+	reb   *Reb
+	i     time.Duration // to log every logIval
 }
 
 func (q *qui) quicb(total time.Duration) core.QuiRes {
@@ -41,7 +40,7 @@ func (q *qui) quicb(total time.Duration) core.QuiRes {
 		if i := total / logIval; i > q.i {
 			q.i = i
 			locStage := q.reb.stages.stage.Load()
-			nlog.Infoln(q.logHdr, "keep receiving in", stages[locStage], "stage")
+			nlog.Infoln(q.rargs.logHdr, "keep receiving in", stages[locStage], "stage")
 		}
 		return core.QuiActive
 	}
@@ -56,7 +55,7 @@ func (q *qui) quicb(total time.Duration) core.QuiRes {
 		if status != nil && status.Running && status.Stage < rebStageFin {
 			if i := total / logIval; i > q.i {
 				q.i = i
-				nlog.Infoln(q.logHdr, "in", stages[locStage], "waiting for:", tsi.StringEx(), stages[status.Stage])
+				nlog.Infoln(q.rargs.logHdr, "in", stages[locStage], "waiting for:", tsi.StringEx(), stages[status.Stage])
 			}
 			return core.QuiActiveDontBump
 		}
