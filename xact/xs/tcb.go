@@ -112,10 +112,7 @@ func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 		SizePDU:     sizePDU,
 	}
 	// in re cmn.OwtPut: see comment inside _recv()
-	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, p.owt, dmExtra)
-	if err != nil {
-		return err
-	}
+	dm := bundle.NewDM(trname+"-"+uuid, p.xctn.recv, p.owt, dmExtra)
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}

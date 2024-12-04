@@ -14,6 +14,7 @@ import (
 	ratomic "sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -131,12 +132,7 @@ func New(config *cmn.Config) *Reb {
 		Compression: config.Rebalance.Compression,
 		Multiplier:  config.Rebalance.SbundleMult,
 	}
-	dm, err := bundle.NewDataMover(trname, reb.recvObj, cmn.OwtRebalance, dmExtra)
-	if err != nil {
-		cos.ExitLog(err)
-	}
-	debug.Assert(dm != nil)
-	reb.dm = dm
+	reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, dmExtra) // (compare with dm.Renew below)
 
 	return reb
 }
@@ -163,7 +159,7 @@ func (reb *Reb) _preempt(logHdr, oxid string) error {
 	if err != nil {
 		return err
 	}
-	if oxreb != nil && !oxreb.IsAborted() {
+	if oxreb != nil && oxreb.Running() {
 		oxreb.Abort(cmn.ErrXactRenewAbort)
 		nlog.Warningln(logHdr, "[", cmn.ErrXactRenewAbort, oxreb.String(), "]", reb.dm.String())
 	}
@@ -177,6 +173,26 @@ func (reb *Reb) _preempt(logHdr, oxid string) error {
 		}
 	}
 	return nil
+}
+
+func _preempt2(logHdr string, id int64) bool {
+	entry := xreg.GetRunning(xreg.Flt{Kind: apc.ActRebalance})
+	if entry == nil {
+		return true
+	}
+	oxreb := entry.Get()
+	if oid, err := xact.S2RebID(oxreb.ID()); err != nil /*unlikely*/ || oid >= id {
+		return false // already running
+	}
+
+	s := oxreb.String()
+	if oxreb.Running() {
+		oxreb.Abort(cmn.ErrXactRenewAbort)
+		nlog.Warningln(logHdr, "aborted _older_", s)
+	} else {
+		nlog.Warningln(logHdr, "found _older_", s)
+	}
+	return true
 }
 
 // run sequence: non-EC and EC global
@@ -207,8 +223,16 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 		return
 	}
 	if err := reb.regRecv(); err != nil {
-		nlog.Errorln(logHdr, err) // (race to run)
-		return
+		if !_preempt2(logHdr, id) {
+			nlog.Errorln(logHdr, "failed to preempt #2:", err)
+			return
+		}
+		// sleep and retry just once
+		time.Sleep(rargs.config.Timeout.MaxKeepalive.D())
+		if err = reb.regRecv(); err != nil {
+			nlog.Errorln(logHdr, err)
+			return
+		}
 	}
 	haveStreams := smap.HasPeersToRebalance(core.T.SID())
 	if bmd.IsEmpty() {
@@ -317,11 +341,9 @@ func (reb *Reb) pingall(rargs *rebArgs, logHdr string) bool {
 func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, haveStreams bool) bool {
 	rns := xreg.RenewRebalance(rargs.id)
 	if rns.Err != nil {
-		nlog.Errorln(logHdr, "not running:", rns.Err) // DEBUG
 		return false
 	}
 	if rns.IsRunning() {
-		nlog.Errorln(logHdr, "already running") // DEBUG
 		return false
 	}
 	xctn := rns.Entry.Get()
@@ -353,6 +375,15 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 
 	// 3. init streams and data structures
 	if haveStreams {
+		dmExtra := bundle.Extra{
+			RecvAck:     reb.recvAck,
+			Config:      rargs.config,
+			Compression: rargs.config.Rebalance.Compression,
+			Multiplier:  rargs.config.Rebalance.SbundleMult,
+		}
+		if dm := reb.dm.Renew(trname, reb.recvObj, cmn.OwtRebalance, dmExtra); dm != nil {
+			reb.dm = dm
+		}
 		reb.beginStreams(rargs.config)
 	}
 

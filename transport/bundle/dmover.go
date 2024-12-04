@@ -7,7 +7,6 @@ package bundle
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -70,7 +69,7 @@ var _ core.DM = (*DataMover)(nil) // via t.CopyObject()
 // For DMs that do not create new objects (e.g, rebalance) `owt` should
 // be set to `OwtMigrateRepl`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
 
-func NewDataMover(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
+func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DataMover {
 	debug.Assert(extra.Config != nil)
 	dm := &DataMover{config: extra.Config}
 	dm.owt = owt
@@ -78,14 +77,10 @@ func NewDataMover(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Ex
 	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
 	dm.stage.regout.Store(true)
 
-	switch extra.Compression {
-	case "":
-		dm.compression = apc.CompressNever
-	case apc.CompressAlways, apc.CompressNever:
-		dm.compression = extra.Compression
-	default:
-		return nil, fmt.Errorf("invalid compression %q", extra.Compression)
+	if extra.Compression == "" {
+		extra.Compression = apc.CompressNever
 	}
+	dm.compression = extra.Compression
 
 	dm.data.trname, dm.data.recv = trname, recvCB
 	if dm.data.net == "" {
@@ -98,11 +93,11 @@ func NewDataMover(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Ex
 	}
 	dm.ack.recv = extra.RecvAck
 	if !dm.useACKs() {
-		return dm, nil
+		return dm
 	}
 	dm.ack.trname = "ack." + trname
 	dm.ack.client = transport.NewIntraDataClient()
-	return dm, nil
+	return dm
 }
 
 func (dm *DataMover) useACKs() bool { return dm.ack.recv != nil }
@@ -113,6 +108,20 @@ func (dm *DataMover) OWT() cmn.OWT  { return dm.owt }
 // xaction that drives and utilizes this data mover
 func (dm *DataMover) SetXact(xctn core.Xact) { dm.xctn = xctn }
 func (dm *DataMover) GetXact() core.Xact     { return dm.xctn }
+
+// when config changes
+func (dm *DataMover) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DataMover {
+	dm.config = extra.Config // always refresh
+	if extra.Compression == "" {
+		extra.Compression = apc.CompressNever
+	}
+	debug.Assert(owt == dm.owt)
+	if dm.multiplier == extra.Multiplier && dm.compression == extra.Compression && dm.sizePDU == extra.SizePDU && dm.maxHdrSize == extra.MaxHdrSize {
+		return nil
+	}
+	nlog.Infoln("renew DM", dm.String(), "=> [", extra.Compression, extra.Multiplier, "]")
+	return NewDM(trname, recvCB, owt, extra)
+}
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() error {

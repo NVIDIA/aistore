@@ -147,18 +147,15 @@ func (p *lsoFactory) Start() error {
 	return nil
 }
 
-func (p *lsoFactory) beginStreams(r *LsoXact) (err error) {
+func (p *lsoFactory) beginStreams(r *LsoXact) error {
 	if !r.walk.this {
 		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
 	}
 	trname := "lso-" + p.UUID()
 	dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
-	p.dm, err = bundle.NewDataMover(trname, r.recv, cmn.OwtPut, dmxtra)
-	if err != nil {
-		return err
-	}
-	debug.Assert(p.dm != nil)
-	if err = p.dm.RegRecv(); err != nil {
+	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, dmxtra)
+
+	if err := p.dm.RegRecv(); err != nil {
 		if p.msg.ContinuationToken != "" {
 			err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", core.T,
 				p.msg.UUID, p.msg.ContinuationToken, err)
