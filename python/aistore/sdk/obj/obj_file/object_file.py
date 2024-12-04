@@ -34,7 +34,7 @@ class ObjectFile(BufferedIOBase):
 
     def __init__(self, content_iterator: ContentIterator, max_resume: int):
         self._content_iterator = content_iterator
-        self._iterable = self._content_iterator.iter_from_position(0)
+        self._iterable = self._content_iterator.iter()
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
         self._remainder = None  # Remainder from the last chunk as a memoryview
         self._resume_position = 0  # Tracks the current position in the stream
@@ -43,7 +43,7 @@ class ObjectFile(BufferedIOBase):
 
     @override
     def __enter__(self):
-        self._iterable = self._content_iterator.iter_from_position(0)
+        self._iterable = self._content_iterator.iter()
         self._remainder = None
         self._resume_position = 0
         self._resume_total = 0

@@ -25,9 +25,7 @@ class ObjectReader:
     """
 
     def __init__(
-        self,
-        object_client: ObjectClient,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        self, object_client: ObjectClient, chunk_size: int = DEFAULT_CHUNK_SIZE
     ):
         self._object_client = object_client
         self._chunk_size = chunk_size
@@ -44,21 +42,18 @@ class ObjectReader:
         self._attributes = self._object_client.head()
         return self._attributes
 
-    def _make_request(
-        self, stream: bool = True, start_position: int = 0
-    ) -> requests.Response:
+    def _make_request(self, stream: bool = True) -> requests.Response:
         """
         Use the object client to get a response from AIS and update the reader's object attributes.
 
         Args:
             stream (bool, optional): If True, use the `requests` library `stream` option to stream the response content.
-             Defaults to True.
-            start_position (int, optional): The byte position to start reading from. Defaults to 0.
+                                     Defaults to True.
 
         Returns:
             The response object from the request.
         """
-        resp = self._object_client.get(stream=stream, start_position=start_position)
+        resp = self._object_client.get(stream=stream)
         self._attributes = ObjectAttributes(resp.headers)
         return resp
 
@@ -124,19 +119,6 @@ class ObjectReader:
 
         return ObjectFile(self._content_iterator, max_resume=max_resume)
 
-    def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
-        """
-        Make a request to get a stream from the provided object starting at a specific byte position
-        and yield chunks of the stream content.
-
-        Args:
-            start_position (int, optional): The byte position to start reading from. Defaults to 0.
-
-        Returns:
-            Iterator[bytes]: An iterator over each chunk of bytes in the object starting from the specific position.
-        """
-        return self._content_iterator.iter_from_position(start_position)
-
     def __iter__(self) -> Iterator[bytes]:
         """
         Make a request to get a stream from the provided object and yield chunks of the stream content.
@@ -144,4 +126,4 @@ class ObjectReader:
         Returns:
             Iterator[bytes]: An iterator over each chunk of bytes in the object.
         """
-        return self.iter_from_position(start_position=0)
+        return self._content_iterator.iter()

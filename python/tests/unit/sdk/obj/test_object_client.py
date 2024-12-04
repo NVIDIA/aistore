@@ -7,6 +7,8 @@ from aistore.sdk.const import HTTP_METHOD_HEAD, HTTP_METHOD_GET, HEADER_RANGE
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.obj.object_client import ObjectClient
 
+from tests.utils import cases
+
 
 class TestObjectClient(unittest.TestCase):
     def setUp(self) -> None:
@@ -23,35 +25,54 @@ class TestObjectClient(unittest.TestCase):
         self.get_exec_assert(
             self.object_client,
             stream=True,
-            start_position=0,
+            offset=0,
             expected_headers=self.headers,
         )
 
     def test_get_no_headers(self):
         object_client = ObjectClient(self.request_client, self.path, self.params)
-        self.get_exec_assert(
-            object_client, stream=True, start_position=0, expected_headers={}
+        self.get_exec_assert(object_client, stream=True, offset=0, expected_headers={})
+
+    @cases(
+        {"byte_range_tuple": (None, None), "expected_range": "bytes=50-"},
+        {"byte_range_tuple": (100, 200), "expected_range": "bytes=150-200"},
+        {"byte_range_tuple": (100, None), "expected_range": "bytes=150-"},
+        {"byte_range_tuple": (None, 200), "expected_range": "bytes=-150"},
+    )
+    def test_get_with_options(self, case):
+        byte_range_tuple = case["byte_range_tuple"]
+        expected_range = case["expected_range"]
+        offset = 50
+
+        object_client = ObjectClient(
+            self.request_client,
+            self.path,
+            self.params,
+            self.headers,
+            byte_range_tuple,
         )
 
-    def test_get_with_options(self):
-        # Test with stream=False, start position set
+        expected_headers = self.headers.copy()
+        if expected_range:
+            expected_headers[HEADER_RANGE] = expected_range
+
         mock_response = Mock(spec=requests.Response, headers=self.response_headers)
         self.request_client.request.return_value = mock_response
-        # Any int
-        start_position = 4
-        self.headers[HEADER_RANGE] = f"bytes={start_position}-"
 
-        res = self.object_client.get(stream=False, start_position=start_position)
+        res = object_client.get(stream=False, offset=offset)
 
-        self.assert_get(expected_stream=False, expected_headers=self.headers)
+        self.assert_get(expected_stream=False, expected_headers=expected_headers)
+
         self.assertEqual(res, mock_response)
         mock_response.raise_for_status.assert_called_once()
 
-    def get_exec_assert(self, object_client, stream, start_position, expected_headers):
+        self.request_client.request.reset_mock()
+
+    def get_exec_assert(self, object_client, stream, offset, expected_headers):
         mock_response = Mock(spec=requests.Response)
         self.request_client.request.return_value = mock_response
 
-        res = object_client.get(stream=stream, start_position=start_position)
+        res = object_client.get(stream=stream, offset=offset)
 
         self.assert_get(stream, expected_headers)
         self.assertEqual(res, mock_response)

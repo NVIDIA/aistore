@@ -15,6 +15,7 @@ from requests.structures import CaseInsensitiveDict
 from aistore.sdk.archive_config import ArchiveConfig
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.const import (
+    BYTE_RANGE_PREFIX_LENGTH,
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_HEAD,
@@ -150,8 +151,8 @@ class Object:
             writer (BufferedWriter, optional): User-provided writer for writing content output
                 User is responsible for closing the writer
             latest (bool, optional): GET the latest object version from the associated remote bucket
-            byte_range (str, optional): Specify a specific data segment of the object for transfer, including
-                both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+            byte_range (str, optional): Byte range in RFC 7233 format for single-range requests (e.g., "bytes=0-499",
+                "bytes=500-", "bytes=-500"). See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
 
         Returns:
             An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
@@ -165,6 +166,7 @@ class Object:
         """
         params = self.query_params.copy()
         headers = {}
+        byte_range_tuple = None
         if archive_config:
             if archive_config.mode:
                 params[QPARAM_ARCHMODE] = archive_config.mode.value
@@ -187,12 +189,21 @@ class Object:
             # For range formatting, see the spec:
             # https://www.rfc-editor.org/rfc/rfc7233#section-2.1
             headers = {HEADER_RANGE: byte_range}
+            # Extract left (range_l) and right (range_r) bounds from the byte range string
+            byte_range_l, _, byte_range_r = byte_range[
+                BYTE_RANGE_PREFIX_LENGTH:
+            ].partition("-")
+            byte_range_tuple = (
+                int(byte_range_l) if byte_range_l else None,
+                int(byte_range_r) if byte_range_r else None,
+            )
 
         obj_client = ObjectClient(
             request_client=self._client,
             path=self._object_path,
             params=params,
             headers=headers,
+            byte_range=byte_range_tuple,
         )
 
         obj_reader = ObjectReader(

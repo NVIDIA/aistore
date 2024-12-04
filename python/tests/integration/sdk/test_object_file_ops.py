@@ -25,10 +25,12 @@ class TestObjectFileOps(unittest.TestCase):
         cls.client = Client(CLUSTER_ENDPOINT)
         cls.bucket = cls.client.bucket(cls.BUCKET_NAME).create()
 
-        cls.test_data = create_and_put_object(
+        create_and_put_object(
             cls.client, cls.BUCKET_NAME, cls.OBJECT_NAME, obj_size=cls.OBJECT_SIZE
         )
-        cls.object_reader = cls.bucket.object(cls.OBJECT_NAME).get_reader()
+        cls.object_reader = cls.bucket.object(cls.OBJECT_NAME).get_reader(
+            byte_range="bytes=5-"
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -48,15 +50,12 @@ class TestObjectFileOps(unittest.TestCase):
         """
         object_file = self.object_reader.as_file()
 
-        # Expected size based on read_size
-        expected_size = len(self.test_data) if read_size == -1 else read_size
-
         # Read the file with the specified read_size
         data = object_file.read(read_size)
 
         # Validate the read data
-        self.assertEqual(len(data), expected_size)
-        self.assertEqual(data, self.test_data[:expected_size])
+        self.assertEqual(len(data), read_size)
+        self.assertEqual(data, self.object_reader.raw().read(read_size))
 
     @case_matrix(
         [
@@ -79,8 +78,9 @@ class TestObjectFileOps(unittest.TestCase):
             read_data.extend(data)
 
         # Validate the read data
-        self.assertEqual(len(read_data), len(self.test_data))
-        self.assertEqual(bytes(read_data), self.test_data)
+        expected_data = self.object_reader.raw().read()
+        self.assertEqual(len(read_data), len(expected_data))
+        self.assertEqual(bytes(read_data), expected_data)
 
         # Attempt to read again after EOF
         extra_data = object_file.read()
@@ -88,11 +88,11 @@ class TestObjectFileOps(unittest.TestCase):
 
     def test_context_manager(self):
         """Test the context manager functionality."""
-        object_file = self.bucket.object(self.OBJECT_NAME).get_reader().as_file()
+        object_file = self.object_reader.as_file()
         with object_file as f:
             self.assertTrue(f.readable())
             data = f.read(DEFAULT_CHUNK_SIZE)
-            self.assertEqual(data, self.test_data[:DEFAULT_CHUNK_SIZE])
+            self.assertEqual(data, self.object_reader.raw().read(DEFAULT_CHUNK_SIZE))
         # After exiting the context, the file should be closed
         self.assertFalse(object_file.readable())
         with self.assertRaises(ValueError):

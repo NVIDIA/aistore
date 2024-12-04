@@ -21,18 +21,18 @@ class ContentIterator:
         self._client = client
         self._chunk_size = chunk_size
 
-    def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
+    def iter(self, offset: int = 0) -> Iterator[bytes]:
         """
-        Make a request to get a stream from the provided object starting at a specific byte position
-        and yield chunks of the stream content.
+        Create an iterator over the object content, applying an optional offset.
 
         Args:
-            start_position (int): The byte position from which to start reading. Defaults to 0.
+            offset (int, optional): The offset in bytes to apply. If not provided, no offset
+                                    is applied.
 
         Returns:
-            Iterator[bytes]: An iterator over each chunk of bytes in the object starting from the specific position
+            Iterator[bytes]: An iterator over chunks of the object's content.
         """
-        stream = self._client.get(stream=True, start_position=start_position)
+        stream = self._client.get(stream=True, offset=offset)
         try:
             yield from stream.iter_content(chunk_size=self._chunk_size)
         finally:

@@ -64,13 +64,3 @@ class TestObjectReaderOps(unittest.TestCase):
         combined_content = b"".join(chunks)
         self.assertEqual(combined_content, self.object_content)
         self.assertEqual(len(chunks), 2)
-
-    def test_iter_from_position(self):
-        start_position = DEFAULT_CHUNK_SIZE
-        chunks = list(self.object_reader.iter_from_position(start_position))
-
-        combined_content = b"".join(chunks)
-        expected_content = self.object_content[start_position:]
-        self.assertEqual(combined_content, expected_content)
-
-        self.assertEqual(len(chunks), 1)

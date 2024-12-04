@@ -16,7 +16,7 @@ class TestObjectFile(unittest.TestCase):
 
     def setUp(self):
         self.content_iterator_mock = Mock()
-        self.content_iterator_mock.iter_from_position.return_value = iter(
+        self.content_iterator_mock.iter.return_value = iter(
             [b"chunk1", b"chunk2", b"chunk3"]
         )
         self.object_file = ObjectFile(
@@ -34,8 +34,8 @@ class TestObjectFile(unittest.TestCase):
         self.assertIsNone(self.object_file._remainder)
         self.assertFalse(self.object_file._closed)
 
-        # Verify that iter_from_position(0) is called
-        self.content_iterator_mock.iter_from_position.assert_called_once_with(0)
+        # Verify that iter() is called
+        self.content_iterator_mock.iter.assert_called_once_with()
 
         # Verify ObjectFile extends IOBase
         self.assertIsInstance(self.object_file, IOBase)

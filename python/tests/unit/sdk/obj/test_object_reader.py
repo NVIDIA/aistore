@@ -55,7 +55,7 @@ class TestObjectReader(unittest.TestCase):
 
         # Assert the result, the call to object client
         self.assertEqual(chunk1 + chunk2, content)
-        self.object_client.get.assert_called_with(stream=False, start_position=0)
+        self.object_client.get.assert_called_with(stream=False)
         # Assert attributes parsed and updated
         self.assertIsInstance(self.object_reader.attributes, ObjectAttributes)
         mock_attr.assert_called_with(self.response_headers)
@@ -71,7 +71,7 @@ class TestObjectReader(unittest.TestCase):
 
         # Assert the result, the call to object client
         self.assertEqual(mock_response.raw, raw_stream)
-        self.object_client.get.assert_called_with(stream=True, start_position=0)
+        self.object_client.get.assert_called_with(stream=True)
         # Assert attributes parsed and updated
         self.assertIsInstance(self.object_reader.attributes, ObjectAttributes)
         mock_attr.assert_called_with(self.response_headers)
@@ -82,24 +82,14 @@ class TestObjectReader(unittest.TestCase):
 
         res = iter(self.object_reader)
 
-        mock_cont_iter.iter_from_position.assert_called_with(0)
-        self.assertEqual(iterable_bytes, res)
-
-    @patch("aistore.sdk.obj.object_reader.ContentIterator")
-    def test_iter_start_position(self, mock_cont_iter_class):
-        mock_cont_iter, iterable_bytes = self.setup_mock_iterator(mock_cont_iter_class)
-        start_position = 2048
-
-        res = self.object_reader.iter_from_position(start_position)
-
-        mock_cont_iter.iter_from_position.assert_called_with(start_position)
+        mock_cont_iter.iter.assert_called_with()
         self.assertEqual(iterable_bytes, res)
 
     def setup_mock_iterator(self, mock_cont_iter_class):
         # We patch the class, so use it to create a new instance of a mock content iterator
         mock_cont_iter = Mock()
         iterable_bytes = iter(b"test")
-        mock_cont_iter.iter_from_position.return_value = iterable_bytes
+        mock_cont_iter.iter.return_value = iterable_bytes
         mock_cont_iter_class.return_value = mock_cont_iter
         # Re-create to use the patched ContentIterator in constructor
         self.object_reader = ObjectReader(self.object_client)

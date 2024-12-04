@@ -68,12 +68,12 @@ class BadContentIterator(ContentIterator):
         self.error = error
         self.read_position = 0
 
-    def iter_from_position(self, start_position: int = 0) -> Iterator[bytes]:
-        """Streams data using `BadContentStream`, starting from `start_position`."""
+    def iter(self, offset: int = 0) -> Iterator[bytes]:
+        """Streams data using `BadContentStream`, starting from `offset`."""
         stream = BadContentStream(
-            self.data[start_position:], fail_on_read=self.fail_on_read, error=self.error
+            self.data[offset:], fail_on_read=self.fail_on_read, error=self.error
         )
-        self.read_position = start_position
+        self.read_position = offset
 
         def iterator():
             while self.read_position < len(self.data):
