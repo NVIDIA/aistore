@@ -482,33 +482,85 @@ waitStartup:
 
 func (r *runner) StartedUp() bool { return r.startedUp.Load() }
 
-// - check OOM, and
+// - check OOM and OOCPU
 // - set NodeStateFlags with both capacity and memory flags
-func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
+func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 	_ = r.mem.Get()
 	pressure := mm.Pressure(&r.mem)
 
 	flags := r.nodeStateFlags() // current/old
+
+	// memory, first
 	switch {
 	case pressure >= memsys.PressureExtreme:
 		if !flags.IsSet(cos.OOM) {
 			set |= cos.OOM
+			clr |= cos.LowMemory
 			nlog.Errorln(mm.Str(&r.mem))
 		}
 		oom.FreeToOS(true)
 	case pressure >= memsys.PressureHigh:
-		set |= cos.LowMemory
 		clr |= cos.OOM
 		if !flags.IsSet(cos.LowMemory) {
+			set |= cos.LowMemory
 			nlog.Warningln(mm.Str(&r.mem))
 		}
 	default:
-		clr |= cos.OOM | cos.LowMemory
 		if flags.IsSet(cos.LowMemory | cos.OOM) {
+			clr |= cos.OOM | cos.LowMemory
 			nlog.Infoln(mm.Name, "back to normal")
 		}
 	}
-	r.SetClrFlag(NodeAlerts, set, clr)
+
+	// load, second
+	nset, nclr := _load(flags, set, clr)
+
+	r.SetClrFlag(NodeAlerts, nset, nclr)
+}
+
+// CPU utilization, load average
+// - notice hardcoded watermarks: (80%, 70%, 50%); TODO config
+// - compare with `fs.ThrottlePct`
+func _load(flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
+	const tag = "CPU utilization:"
+	var (
+		load = sys.MaxLoad()
+		cpus = runtime.NumCPU()
+	)
+	// ok
+	if load < float64(cpus>>1) { // 50%
+		if flags.IsSet(cos.LowCPU | cos.OOCPU) {
+			clr |= cos.OOCPU | cos.LowCPU
+			nlog.Infoln(tag, "back to normal")
+		}
+		return set, clr
+	}
+	// extreme
+	var (
+		fcpus = float64(cpus)
+		oocpu = max(fcpus*0.8, 1) // 80%
+	)
+	if load >= oocpu {
+		if !flags.IsSet(cos.OOCPU) {
+			set |= cos.OOCPU
+			clr |= cos.LowCPU
+			nlog.Errorln(tag, "extremely high [", load, cpus, "]")
+		}
+		return set, clr
+	}
+	// high
+	highcpu := fcpus * 0.7 // 70%
+	if load >= highcpu {
+		clr |= cos.OOCPU
+		if !flags.IsSet(cos.LowCPU) {
+			set |= cos.LowCPU
+			nlog.Warningln(tag, "high [", load, cpus, "]")
+		}
+	}
+
+	// (50%, 70%) is, effectively, hysteresis interval
+
+	return set, clr
 }
 
 func (r *runner) GetStats() *Node {

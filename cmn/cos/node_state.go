@@ -24,8 +24,8 @@ const (
 	Resilvering                                      // warning
 	ResilverInterrupted                              // warning
 	NodeRestarted                                    // warning (powercycle, crash)
-	OOS                                              // red alert (see IsRed below)
-	OOM                                              // red alert
+	OOS                                              // out of space; red alert (see IsRed below)
+	OOM                                              // out of memory; red alert
 	MaintenanceMode                                  // warning
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
@@ -36,12 +36,14 @@ const (
 	CertificateExpired                               // red --/--
 	CertificateInvalid                               // red --/--
 	KeepAliveErrors                                  // warning (new keep-alive errors during the last 5m)
+	OOCPU                                            // out of CPU; red
+	LowCPU                                           // warning
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsRed() bool {
-	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines) ||
+	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(OOCPU) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines) ||
 		f.IsSet(CertificateExpired)
 }
 
@@ -49,7 +51,7 @@ func (f NodeStateFlags) IsWarn() bool {
 	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
 		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
 		f.IsSet(NodeRestarted) || f.IsSet(MaintenanceMode) ||
-		f.IsSet(LowCapacity) || f.IsSet(LowMemory) ||
+		f.IsSet(LowCapacity) || f.IsSet(LowMemory) || f.IsSet(LowCPU) ||
 		f.IsSet(CertWillSoonExpire)
 }
 
@@ -68,7 +70,7 @@ func (f NodeStateFlags) String() string {
 		return "ok"
 	}
 
-	var sb []string
+	sb := make([]string, 0, 4)
 	if f&VoteInProgress == VoteInProgress {
 		sb = append(sb, "vote-in-progress")
 	}
@@ -132,6 +134,12 @@ func (f NodeStateFlags) String() string {
 	}
 	if f&KeepAliveErrors == KeepAliveErrors {
 		sb = append(sb, "keep-alive-errors")
+	}
+	if f&OOCPU == OOCPU {
+		sb = append(sb, "out-of-cpu")
+	}
+	if f&LowCPU == LowCPU {
+		sb = append(sb, "low-cpu")
 	}
 
 	l := len(sb)
