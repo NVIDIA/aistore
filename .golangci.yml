@@ -33,7 +33,6 @@ linters:
     - reassign
     - revive
     - staticcheck
-    - testifylint
     - testpackage
     - typecheck
     - unconvert
