@@ -1382,6 +1382,13 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			fltPresence, _ = strconv.Atoi(v)
 		}
 		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
+
+		// [NOTE]
+		// - when an "entire bucket" x-tcb job suddenly becomes a "multi-object" x-tco (next case in the switch)
+		// - pros: lists remote bucket only once, and distributes relevant (listed) content to each target
+		// - cons: given tcbmsg.Sync (--sync) option, x-tco that is from-starters "x-tco" deletes deleted content -
+		//         this one does not
+
 		if !apc.IsFltPresent(fltPresence) && (bckFrom.IsCloud() || bckFrom.IsRemoteAIS()) {
 			lstcx := &lstcx{
 				p:       p,
@@ -1391,9 +1398,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				config:  cmn.GCO.Get(),
 			}
 			lstcx.tcomsg.TCBMsg = *tcbmsg
+			nlog.Infoln("x-tco:", bckFrom.String(), "=>", bckTo.String(), "[", tcbmsg.Prefix, tcbmsg.LatestVer, tcbmsg.Sync, "]")
 			xid, err = lstcx.do()
 		} else {
-			nlog.Infoln("x-tcb:", bckFrom.String(), "=>", bckTo.String())
+			nlog.Infoln("x-tcb:", bckFrom.String(), "=>", bckTo.String(), "[", tcbmsg.Prefix, tcbmsg.LatestVer, tcbmsg.Sync, "]")
 			xid, err = p.tcb(bckFrom, bckTo, msg, tcbmsg.DryRun)
 		}
 		if err != nil {
