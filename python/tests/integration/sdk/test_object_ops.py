@@ -390,10 +390,10 @@ class TestObjectOps(RemoteEnabledTest):
             file_content = tar.extractfile("file3.cls").read()
             self.assertEqual(file_content, content_dict["file3.cls"])
 
-    def test_fetch_object_by_url(self):
+    def test_get_object_from_url(self):
         objects = self._put_objects(5)
         for obj_name, content in objects.items():
             url = f"{self.bucket.provider.value}://{self.bucket.name}/{obj_name}"
-            fetched_obj = self.client.fetch_object_by_url(url)
+            fetched_obj = self.client.get_object_from_url(url)
             fetched_content = fetched_obj.get_reader().read_all()
             self.assertEqual(content, fetched_content)

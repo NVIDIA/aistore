@@ -112,7 +112,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         expected_object = Mock()
         mock_bucket_instance.object.return_value = expected_object
 
-        result = self.client.fetch_object_by_url(url)
+        result = self.client.get_object_from_url(url)
 
         mock_bucket.assert_called_once_with(bck_name, provider=provider)
         mock_bucket_instance.object.assert_called_once_with(obj_name)

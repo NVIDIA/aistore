@@ -3,6 +3,7 @@
 #
 from typing import Optional, Tuple, Union
 import os
+import warnings
 
 from urllib3 import Retry
 
@@ -149,13 +150,40 @@ class Client:
 
     def fetch_object_by_url(self, url: str) -> Object:
         """
-        Retrieve an object based on its URL.
+        Deprecated: Use `get_object_from_url` instead.
+
+        Creates an Object instance from a URL.
+
+        This method does not make any HTTP requests.
 
         Args:
             url (str): Full URL of the object (e.g., "ais://bucket1/file.txt")
 
         Returns:
-            Object: The object retrieved from the specified URL
+            Object: The object constructed from the specified URL
+        """
+        warnings.warn(
+            "The 'fetch_object_by_url' method is deprecated and will be removed in a future release. "
+            "Please use 'get_object_from_url' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.get_object_from_url(url)
+
+    def get_object_from_url(self, url: str) -> Object:
+        """
+        Creates an Object instance from a URL.
+
+        This method does not make any HTTP requests.
+
+        Args:
+            url (str): Full URL of the object (e.g., "ais://bucket1/file.txt")
+
+        Returns:
+            Object: The object constructed from the specified URL
+
+        Raises:
+            InvalidURLException: If the URL is invalid.
         """
         try:
             provider, bck_name, obj_name = parse_url(url)
