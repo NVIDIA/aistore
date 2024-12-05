@@ -888,23 +888,37 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) (err error) {
 func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string) {
 	const tag = "rebalance["
 	var (
-		notif = &xact.NotifXact{
-			Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		nxid    = xact.RebID2S(newRMD.Version)
+		tname   = t.String()
+		extArgs = reb.ExtArgs{
+			Notif: &xact.NotifXact{
+				Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+			},
+			Tstats: t.statsT,
+			Oxid:   oxid,
+			NID:    newRMD.Version,
 		}
-		nxid  = xact.RebID2S(newRMD.Version)
-		tname = t.String()
 	)
 	if msg.UUID != nxid {
 		nlog.Warningln(tag, msg.UUID, "vs", nxid)
 	}
 
-	// 1. by user
+	// 1. by user aka admin
 	if msg.Action == apc.ActRebalance {
 		xname := tag + msg.UUID + "]"
-		nlog.Infoln(tname, "starting user-requested", t, xname, nxid)
+
+		if msg.Value != nil {
+			var xargs xact.ArgsMsg
+			if err := cos.MorphMarshal(msg.Value, &xargs); err == nil {
+				extArgs.Bck = (*meta.Bck)(&xargs.Bck)
+				extArgs.Prefix = msg.Name
+			}
+		}
+
+		nlog.Infoln(tname, "starting user-requested", xname, nxid)
 
 		// (##a)
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
+		go t.reb.RunRebalance(&smap.Smap, &extArgs)
 		return
 	}
 
@@ -926,7 +940,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		}
 		nlog.Infoln(tname, "starting", msg.String(), "-triggered", xname, s, opts)
 		// (##b)
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
+		go t.reb.RunRebalance(&smap.Smap, &extArgs)
 
 	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config
 	default:
@@ -936,7 +950,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		if config.Rebalance.Enabled {
 			nlog.Infoln(tname, "starting", xname)
 			// (##c)
-			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
+			go t.reb.RunRebalance(&smap.Smap, &extArgs)
 		} else {
 			runtime.Gosched()
 
@@ -957,7 +971,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 
 				// (##d)
 				nlog.Infoln(tname, "starting", xname)
-				t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT, oxid)
+				t.reb.RunRebalance(&smap.Smap, &extArgs)
 			}()
 		}
 	}

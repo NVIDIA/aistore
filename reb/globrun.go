@@ -78,6 +78,17 @@ type (
 		// this state
 		mu sync.Mutex
 	}
+	ExtArgs struct {
+		Notif  *xact.NotifXact
+		Tstats cos.StatsUpdater
+		Bck    *meta.Bck // advanced usage, limited scope
+		Prefix string    // ditto
+		Oxid   string
+		NID    int64 // newRMD.Version
+	}
+)
+
+type (
 	lomAcks struct {
 		mu *sync.Mutex
 		q  map[string]*core.LOM // on the wire, waiting for ACK
@@ -93,6 +104,7 @@ type (
 		opts fs.WalkOpts
 		ver  int64
 	}
+	// internal runtime context (compare with caller's ExtArgs{} above)
 	rebArgs struct {
 		smap   *meta.Smap
 		config *cmn.Config
@@ -207,14 +219,14 @@ func _preempt2(logHdr string, id int64) bool {
 //  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, tstats cos.StatsUpdater, oxid string) {
-	if reb.rebID.Load() == id {
+func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
+	if reb.rebID.Load() == extArgs.NID {
 		return
 	}
-	logHdr := reb.logHdr(id, smap, true /*initializing*/)
+	logHdr := reb.logHdr(extArgs.NID, smap, true /*initializing*/)
 	// preempt
-	if xact.IsValidRebID(oxid) {
-		if err := reb._preempt(logHdr, oxid); err != nil {
+	if xact.IsValidRebID(extArgs.Oxid) {
+		if err := reb._preempt(logHdr, extArgs.Oxid); err != nil {
 			nlog.Errorln(logHdr, "failed to preempt:", err)
 			return
 		}
@@ -222,16 +234,16 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 
 	var (
 		bmd   = core.T.Bowner().Get()
-		rargs = &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed(), logHdr: logHdr} // and run with it
+		rargs = &rebArgs{id: extArgs.NID, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed(), logHdr: logHdr} // and run with it
 	)
 	if !_pingall(rargs) {
 		return
 	}
-	if reb.rebID.Load() == id {
+	if reb.rebID.Load() == extArgs.NID {
 		return
 	}
 	if err := reb.regRecv(); err != nil {
-		if !_preempt2(logHdr, id) {
+		if !_preempt2(logHdr, extArgs.NID) {
 			nlog.Errorln(logHdr, "failed to preempt #2:", err)
 			return
 		}
@@ -246,7 +258,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}
-	if !reb.initRenew(rargs, notif, haveStreams) {
+	if !reb.initRenew(rargs, extArgs.Notif, haveStreams) {
 		reb.unregRecv()
 		return
 	}
@@ -255,13 +267,17 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 		nlog.Infof("%s: nothing to do: %s, %s", logHdr, smap.StringEx(), bmd.StringEx())
 		reb.stages.stage.Store(rebStageDone)
 		reb.unregRecv()
-		fs.RemoveMarker(fname.RebalanceMarker, tstats)
-		fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
+		fs.RemoveMarker(fname.RebalanceMarker, extArgs.Tstats)
+		fs.RemoveMarker(fname.NodeRestartedPrev, extArgs.Tstats)
 		rargs.xreb.Finish()
 		return
 	}
 
-	nlog.Infoln(logHdr, "initializing")
+	if extArgs.Bck == nil {
+		nlog.Infoln(logHdr, "initializing")
+	} else {
+		nlog.Warningln(logHdr, "initializing - limited scope: [", extArgs.Bck.Cname(extArgs.Prefix), "]")
+	}
 
 	// abort all running `dtor.AbortRebRes` xactions (download, dsort, etl)
 	xreg.AbortByNewReb(errors.New("reason: starting " + rargs.xreb.Name()))
@@ -275,7 +291,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	}
 	onGFN()
 
-	tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
+	extArgs.Tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	// run
 	err := reb.run(rargs)
@@ -291,8 +307,8 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 	}
 	reb.changeStage(rebStageFin)
 
-	reb.fini(rargs, err, tstats)
-	tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
+	reb.fini(rargs, err, extArgs.Tstats)
+	extArgs.Tstats.ClrFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	offGFN()
 	if rargs.ecUsed {

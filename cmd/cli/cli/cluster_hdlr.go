@@ -544,7 +544,28 @@ func setPrimaryHandler(c *cli.Context) error {
 }
 
 func startRebHandler(c *cli.Context) (err error) {
-	return startXactionKind(c, apc.ActRebalance)
+	var (
+		extra string
+		xargs = xact.ArgsMsg{Kind: apc.ActRebalance}
+	)
+	if c.NArg() > 0 {
+		uri := preparseBckObjURI(c.Args().Get(0))
+		bck, prefix, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
+		if err != nil {
+			return err
+		}
+		if _, err := headBucket(bck, false /* don't add */); err != nil {
+			return err
+		}
+		actionWarn(c, "limiting the scope of rebalance to only '"+uri+"' is not recommended!")
+		briefPause(2)
+
+		// beware
+		xargs.Bck = bck
+		extra = prefix
+	}
+
+	return startXaction(c, &xargs, extra)
 }
 
 func stopRebHandler(c *cli.Context) error {

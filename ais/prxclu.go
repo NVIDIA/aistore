@@ -1193,14 +1193,28 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 // xstart: rebalance, resilver, other "startables" (see xaction/api.go)
 func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var xargs xact.ArgsMsg
-	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
-		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-		return
+	if msg.Value != nil {
+		if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+			return
+		}
 	}
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
 
 	// rebalance
 	if xargs.Kind == apc.ActRebalance {
+		if !xargs.Bck.IsEmpty() {
+			// NOTE: limiting the scope of rebalance to a given bucket[/prefix] (advanced usage)
+			b := (*meta.Bck)(&xargs.Bck)
+			if _, present := p.owner.bmd.get().Get(b); !present {
+				if b.IsRemote() {
+					p.writeErr(w, r, cmn.NewErrRemoteBckNotFound(&xargs.Bck))
+				} else {
+					p.writeErr(w, r, cmn.NewErrBckNotFound(&xargs.Bck))
+				}
+				return
+			}
+		}
 		p.rebalanceCluster(w, r, msg)
 		return
 	}
