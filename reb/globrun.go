@@ -208,6 +208,9 @@ func _preempt2(logHdr string, id int64) bool {
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
 func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, tstats cos.StatsUpdater, oxid string) {
+	if reb.rebID.Load() == id {
+		return
+	}
 	logHdr := reb.logHdr(id, smap, true /*initializing*/)
 	// preempt
 	if xact.IsValidRebID(oxid) {
@@ -222,6 +225,9 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact, t
 		rargs = &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed(), logHdr: logHdr} // and run with it
 	)
 	if !_pingall(rargs) {
+		return
+	}
+	if reb.rebID.Load() == id {
 		return
 	}
 	if err := reb.regRecv(); err != nil {
