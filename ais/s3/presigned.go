@@ -165,7 +165,9 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	}
 
 	// produce a new request (nreq) from the old/original one (oreq)
-	nreq, err := http.NewRequest(pts.oreq.Method, s3url, pts.body)
+	// NOTE: The original request's context includes tracing attributes.
+	// It is essential to pass the original context to new request to ensure traces are correctly linked.
+	nreq, err := http.NewRequestWithContext(pts.oreq.Context(), pts.oreq.Method, s3url, pts.body)
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusInternalServerError}, err
 	}
