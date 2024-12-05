@@ -87,7 +87,7 @@ var AIS = struct {
 	K8sPod:                  "MY_POD",
 	K8sNode:                 "MY_NODE",
 	K8sNamespace:            "K8S_NS",
-	K8sServiceName:          "AIS_K8S_CLUSTER_DOMAIN",
+	K8sServiceName:          "MY_SERVICE",
 	K8sPublicHostname:       "AIS_PUBLIC_HOSTNAME",
 	K8sClusterDomain:        "AIS_K8S_CLUSTER_DOMAIN",
 	K8sHostNetwork:          "HOST_NETWORK",

@@ -1,8 +1,6 @@
 #
 # Dockerfile to build an aisinit Docker image
 #
-
-ARG INSTALLER_IMAGE=debian:bookworm
 ARG BUILDER_IMAGE=golang:1.23
 ARG BASE_IMAGE=gcr.io/distroless/static:nonroot
 
@@ -15,8 +13,7 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} make aisinit
-
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} make aisinit
 
 FROM ${BASE_IMAGE}
 COPY --from=builder /go/bin/aisinit /usr/bin
