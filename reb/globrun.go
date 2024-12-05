@@ -79,12 +79,12 @@ type (
 		mu sync.Mutex
 	}
 	ExtArgs struct {
-		Notif  *xact.NotifXact
 		Tstats cos.StatsUpdater
+		Notif  *xact.NotifXact
 		Bck    *meta.Bck // advanced usage, limited scope
 		Prefix string    // ditto
-		Oxid   string
-		NID    int64 // newRMD.Version
+		Oxid   string    // oldRMD g[version]
+		NID    int64     // newRMD version
 	}
 )
 
@@ -100,17 +100,19 @@ type (
 	}
 	rebJogger struct {
 		joggerBase
-		smap *meta.Smap
-		opts fs.WalkOpts
-		ver  int64
+		rargs *rebArgs
+		opts  fs.WalkOpts
+		ver   int64
 	}
 	// internal runtime context (compare with caller's ExtArgs{} above)
 	rebArgs struct {
 		smap   *meta.Smap
 		config *cmn.Config
 		xreb   *xs.Rebalance
+		bck    *meta.Bck // advanced usage, limited scope
 		apaths fs.MPI
 		logHdr string
+		prefix string // ditto, as in: traverse only bck[/prefix]
 		id     int64
 		ecUsed bool
 	}
@@ -233,9 +235,21 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 	}
 
 	var (
-		bmd   = core.T.Bowner().Get()
-		rargs = &rebArgs{id: extArgs.NID, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed(), logHdr: logHdr} // and run with it
+		bmd = core.T.Bowner().Get()
+		// runtime context (scope: this uniquely ID-ed rebalance)
+		rargs = &rebArgs{
+			id:     extArgs.NID, // == newRMD.Version
+			smap:   smap,
+			config: cmn.GCO.Get(),
+			bck:    extArgs.Bck,    // advanced usage
+			prefix: extArgs.Prefix, // ditto
+			logHdr: logHdr,
+			ecUsed: bmd.IsECUsed(),
+		}
 	)
+	if rargs.bck != nil {
+		rargs.logHdr += "::" + rargs.bck.Cname(rargs.prefix)
+	}
 	if !_pingall(rargs) {
 		return
 	}
@@ -499,7 +513,8 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	for _, mi := range rargs.apaths {
 		rl := &rebJogger{
 			joggerBase: joggerBase{m: reb, xreb: rargs.xreb, wg: wg},
-			smap:       rargs.smap, ver: ver,
+			rargs:      rargs,
+			ver:        ver,
 		}
 		wg.Add(1)
 		go rl.jog(mi)
@@ -610,7 +625,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 				xreb: rargs.xreb,
 				wg:   &sync.WaitGroup{},
 			},
-			smap: rargs.smap,
+			rargs: rargs,
 		}
 		loghdr = rargs.logHdr
 	)
@@ -737,6 +752,12 @@ func (rj *rebJogger) jog(mi *fs.Mountpath) {
 		rj.opts.Callback = rj.visitObj
 		rj.opts.Sorted = false
 	}
+	// limited scope
+	if rj.rargs.bck != nil {
+		rj.walkBck(rj.rargs.bck)
+		return
+	}
+	// global
 	bmd := core.T.Bowner().Get()
 	bmd.Range(nil, nil, rj.walkBck)
 }
@@ -766,7 +787,7 @@ func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg
 	if cmn.Rom.FastV(4, cos.SmoduleReb) || !cos.IsRetriableConnErr(err) {
 		switch {
 		case bundle.IsErrDestinationMissing(err):
-			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.smap)
+			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.rargs.smap.StringEx())
 		case cmn.IsErrStreamTerminated(err):
 			rj.xreb.Abort(err)
 			nlog.Errorln("stream term-ed: [", err, rj.xreb.Name(), "]")
@@ -800,6 +821,7 @@ func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
 func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		if cmn.IsErrBucketLevel(err) {
+			nlog.Errorln(rj.rargs.logHdr, err)
 			return err
 		}
 		return cmn.ErrSkip
@@ -808,7 +830,19 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	if lom.ECEnabled() {
 		return filepath.SkipDir
 	}
-	tsi, err := rj.smap.HrwHash2T(lom.Digest())
+	// limited scope
+	if rj.rargs.prefix != "" {
+		debug.Assert(rj.rargs.bck != nil)
+		if !cmn.ObjHasPrefix(lom.ObjName, rj.rargs.prefix) {
+			if len(lom.ObjName) > len(rj.rargs.prefix)+1 {
+				nlog.Warningln(rj.rargs.logHdr, "skip-dir", lom.ObjName)
+				return filepath.SkipDir
+			}
+			return cmn.ErrSkip
+		}
+	}
+
+	tsi, err := rj.rargs.smap.HrwHash2T(lom.Digest())
 	if err != nil {
 		return err
 	}

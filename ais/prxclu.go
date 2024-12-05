@@ -1214,6 +1214,9 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 				}
 				return
 			}
+		} else if msg.Name != "" {
+			p.writeErrf(w, r, "invalid limited-scope %q: (n/a bucket, %q prefix)", apc.ActRebalance, msg.Name)
+			return
 		}
 		p.rebalanceCluster(w, r, msg)
 		return

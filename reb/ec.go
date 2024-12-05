@@ -48,7 +48,7 @@ import (
 func (reb *Reb) runECjoggers(rargs *rebArgs) {
 	var (
 		wg = &sync.WaitGroup{}
-		b  = rargs.xreb.Bck()
+		b  = rargs.bck // limited scope
 	)
 	for _, mi := range rargs.apaths {
 		bck := cmn.Bck{Provider: apc.AIS}
@@ -78,6 +78,7 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs 
 		Mi:       mi,
 		CTs:      []string{fs.ECMetaType},
 		Callback: reb.walkEC,
+		Prefix:   rargs.prefix,
 		Sorted:   false,
 	}
 	opts.Bck.Copy(bck)
