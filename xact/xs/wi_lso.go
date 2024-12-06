@@ -66,7 +66,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 		return nil
 	}
 
-	if !cmn.DirHasOrIsPrefix(ct.ObjectName(), wi.msg.Prefix) {
+	if wi.msg.Prefix != "" && !cmn.DirHasOrIsPrefix(ct.ObjectName(), wi.msg.Prefix) {
 		return filepath.SkipDir
 	}
 
@@ -81,7 +81,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 }
 
 func (wi *walkInfo) match(objName string) bool {
-	if !cmn.ObjHasPrefix(objName, wi.msg.Prefix) {
+	if wi.msg.Prefix != "" && !cmn.ObjHasPrefix(objName, wi.msg.Prefix) {
 		return false
 	}
 	return wi.msg.ContinuationToken == "" || !cmn.TokenGreaterEQ(wi.msg.ContinuationToken, objName)

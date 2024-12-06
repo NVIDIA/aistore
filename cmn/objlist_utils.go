@@ -225,12 +225,14 @@ func TokenGreaterEQ(token, objName string) bool { return token >= objName }
 // an alternative name for this function could be smth. like SameBranch()
 // see also: cos.TrimPrefix
 func DirHasOrIsPrefix(dirPath, prefix string) bool {
-	return prefix == "" || (strings.HasPrefix(prefix, dirPath) || strings.HasPrefix(dirPath, prefix))
+	debug.Assert(prefix != "")
+	return strings.HasPrefix(prefix, dirPath) || strings.HasPrefix(dirPath, prefix)
 }
 
 // see also: cos.TrimPrefix
 func ObjHasPrefix(objName, prefix string) bool {
-	return prefix == "" || strings.HasPrefix(objName, prefix)
+	debug.Assert(prefix != "")
+	return strings.HasPrefix(objName, prefix)
 }
 
 // no recursion (LsNoRecursion) helper function:

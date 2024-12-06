@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -834,8 +835,14 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	if rj.rargs.prefix != "" {
 		debug.Assert(rj.rargs.bck != nil)
 		if !cmn.ObjHasPrefix(lom.ObjName, rj.rargs.prefix) {
-			if len(lom.ObjName) > len(rj.rargs.prefix)+1 {
-				nlog.Warningln(rj.rargs.logHdr, "skip-dir", lom.ObjName)
+			//
+			// TODO: unify via (fs.WalkBck => validateCb => cmn.DirHasOrIsPrefix)
+			//
+			i := strings.IndexByte(lom.ObjName, filepath.Separator)
+			if i > 0 && !cmn.DirHasOrIsPrefix(lom.ObjName[:i], rj.rargs.prefix) {
+				if cmn.Rom.FastV(4, cos.SmoduleReb) {
+					nlog.Warningln(rj.rargs.logHdr, "skip-dir", lom.ObjName, "prefix", rj.rargs.prefix)
+				}
 				return filepath.SkipDir
 			}
 			return cmn.ErrSkip
