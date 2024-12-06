@@ -89,10 +89,11 @@ var (
 	}
 
 	startRebalance = cli.Command{
-		Name:   commandStart,
-		Usage:  "rebalance ais cluster",
-		Flags:  clusterCmdsFlags[commandStart],
-		Action: startRebHandler,
+		Name:      commandStart,
+		Usage:     jobStartRebalance.Usage,
+		ArgsUsage: jobStartRebalance.ArgsUsage,
+		Flags:     jobStartRebalance.Flags,
+		Action:    jobStartRebalance.Action,
 	}
 	stopRebalance = cli.Command{
 		Name:   commandStop,
@@ -545,26 +546,42 @@ func setPrimaryHandler(c *cli.Context) error {
 
 func startRebHandler(c *cli.Context) (err error) {
 	var (
-		extra string
-		xargs = xact.ArgsMsg{Kind: apc.ActRebalance}
+		extra, prefix string
+		xargs         = xact.ArgsMsg{Kind: apc.ActRebalance}
 	)
+	if flagIsSet(c, verbObjPrefixFlag) {
+		prefix = parseStrFlag(c, verbObjPrefixFlag)
+	}
 	if c.NArg() > 0 {
 		uri := preparseBckObjURI(c.Args().Get(0))
-		bck, prefix, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
+		bck, pref, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
 		if err != nil {
 			return err
 		}
 		if _, err := headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
-		actionWarn(c, "limiting the scope of rebalance to only '"+uri+"' is not recommended!")
-		briefPause(2)
-
-		// beware
 		xargs.Bck = bck
-		extra = prefix
-	}
 
+		switch {
+		case pref != "" && prefix != "":
+			s := fmt.Sprintf(": via '%s' and %s option", uri, qflprn(verbObjPrefixFlag))
+			if pref != prefix {
+				return errors.New("two different prefix values" + s)
+			}
+			actionWarn(c, "redundant and duplicated prefix assignment"+s)
+		case pref != "":
+			prefix = pref
+		}
+	}
+	if xargs.Bck.IsEmpty() && prefix != "" {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if !xargs.Bck.IsEmpty() {
+		extra = prefix
+		actionWarn(c, "limiting the scope of rebalance to only '"+xargs.Bck.Cname(extra)+"' is not recommended!")
+		briefPause(2)
+	}
 	return startXaction(c, &xargs, extra)
 }
 

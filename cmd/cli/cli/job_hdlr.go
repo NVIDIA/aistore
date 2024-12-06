@@ -80,6 +80,9 @@ var (
 		nonverboseFlag,
 	}
 	startSpecialFlags = map[string][]cli.Flag{
+		commandRebalance: {
+			verbObjPrefixFlag,
+		},
 		cmdDownload: {
 			dloadTimeoutFlag,
 			descJobFlag,
@@ -125,6 +128,13 @@ var (
 		},
 	}
 
+	jobStartRebalance = cli.Command{
+		Name:      commandRebalance,
+		Usage:     "rebalance ais cluster",
+		ArgsUsage: "[BUCKET[/PREFIX]]",
+		Flags:     startSpecialFlags[commandRebalance],
+		Action:    startRebHandler,
+	}
 	jobStartResilver = cli.Command{
 		Name:         commandResilver,
 		Usage:        resilverUsage,
@@ -181,15 +191,12 @@ var (
 					bckCmdETL,
 				},
 			},
-			{
-				Name:      commandRebalance,
-				Usage:     "rebalance ais cluster",
-				ArgsUsage: "[BUCKET[/PREFIX]]",
-				Flags:     clusterCmdsFlags[commandStart],
-				Action:    startRebHandler,
-			},
-			cleanupCmd,
+
+			jobStartRebalance,
 			jobStartResilver,
+
+			cleanupCmd,
+
 			// NOTE: append all `startableXactions`
 		},
 	}

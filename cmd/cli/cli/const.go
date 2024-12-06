@@ -412,7 +412,7 @@ var (
 	}
 	verbObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
-		Usage: "select objects that have names starting with the specified prefix, e.g.:\n" +
+		Usage: "select virtual directories or objects that have names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c'\t- matches names 'a/b/c/d', 'a/b/cdef', and similar;\n" +
 			indent4 + "\t'--prefix a/b/c/'\t- only matches objects from the virtual directory a/b/c/",
 	}
