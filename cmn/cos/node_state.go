@@ -43,19 +43,19 @@ const (
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsRed() bool {
-	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(OOCPU) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines) ||
-		f.IsSet(CertificateExpired)
+	return f.IsAnySet(OOS | OOM | OOCPU | DiskFault | NoMountpaths | NumGoroutines | CertificateExpired)
 }
 
 func (f NodeStateFlags) IsWarn() bool {
-	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
-		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
-		f.IsSet(NodeRestarted) || f.IsSet(MaintenanceMode) ||
-		f.IsSet(LowCapacity) || f.IsSet(LowMemory) || f.IsSet(LowCPU) ||
-		f.IsSet(CertWillSoonExpire)
+	return f.IsAnySet(Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
+		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire)
 }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
+
+func (f NodeStateFlags) IsAnySet(flag NodeStateFlags) bool {
+	return BitFlags(f).IsAnySet(BitFlags(flag))
+}
 
 func (f NodeStateFlags) Set(flags NodeStateFlags) NodeStateFlags {
 	return NodeStateFlags(BitFlags(f).Set(BitFlags(flags)))

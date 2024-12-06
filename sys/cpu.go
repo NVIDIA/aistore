@@ -12,6 +12,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+// used with MaxLoad()
+// floating point; compare with HighLoadWM() below
+const (
+	ExtremeLoad = 92
+	HighLoad    = 82
+)
+
 type LoadAvg struct {
 	One, Five, Fifteen float64
 }
@@ -45,12 +52,16 @@ func GoEnvMaxprocs() {
 	}
 
 	maxprocs := runtime.GOMAXPROCS(0)
-	ncpu := NumCPU() // TODO: (see comment at the top)
+	ncpu := NumCPU()
 	if maxprocs > ncpu {
 		nlog.Warningf("Reducing GOMAXPROCS (prev = %d) to %d", maxprocs, ncpu)
 		runtime.GOMAXPROCS(ncpu)
 	}
 }
+
+// "high-load watermark", to maybe throttle when MaxLoad() is above
+// see also (ExtremeLoad, HighLoad) defaults
+func HighLoadWM(ncpu int) int { return max(ncpu-ncpu>>3, 1) }
 
 // return max(1 minute, 5 minute) load average
 func MaxLoad() (load float64) {

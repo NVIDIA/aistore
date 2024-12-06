@@ -6,8 +6,6 @@
 package memsys
 
 import (
-	"runtime"
-
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
@@ -33,16 +31,16 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 	}
 
 	var (
-		load    = sys.MaxLoad()
-		cpus    = runtime.NumCPU()
-		maxload = max(cpus>>1, 1) // compare w/ fs.ThrottlePct
+		load     = sys.MaxLoad()
+		ncpu     = sys.NumCPU()
+		highLoad = sys.HighLoadWM(ncpu)
 	)
 	if !force {
 		// too busy and not too "pressured"
 		switch {
-		case load >= float64(maxload) && p <= PressureHigh:
+		case load >= float64(highLoad) && p <= PressureHigh:
 			return
-		case load >= max(float64(maxload>>1), 1.0) && p <= PressureModerate:
+		case load >= max(float64(highLoad>>1), 1.0) && p <= PressureModerate:
 			return
 		}
 	}

@@ -506,7 +506,7 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 			nlog.Warningln(mm.Str(&r.mem))
 		}
 	default:
-		if flags.IsSet(cos.LowMemory | cos.OOM) {
+		if flags.IsAnySet(cos.LowMemory | cos.OOM) {
 			clr |= cos.OOM | cos.LowMemory
 			nlog.Infoln(mm.Name, "back to normal")
 		}
@@ -519,17 +519,18 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 }
 
 // CPU utilization, load average
-// - notice hardcoded watermarks: (80%, 70%, 50%); TODO config
-// - compare with `fs.ThrottlePct`
+// - for watermarks, using system defaults from sys/cpu.go
+// - compare with fs/throttle and memsys/gc
+
 func _load(flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
 	const tag = "CPU utilization:"
 	var (
 		load = sys.MaxLoad()
-		cpus = runtime.NumCPU()
+		ncpu = sys.NumCPU()
 	)
 	// ok
-	if load < float64(cpus>>1) { // 50%
-		if flags.IsSet(cos.LowCPU | cos.OOCPU) {
+	if load < float64(ncpu>>1) { // 50%
+		if flags.IsAnySet(cos.LowCPU | cos.OOCPU) {
 			clr |= cos.OOCPU | cos.LowCPU
 			nlog.Infoln(tag, "back to normal")
 		}
@@ -537,28 +538,28 @@ func _load(flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStat
 	}
 	// extreme
 	var (
-		fcpus = float64(cpus)
-		oocpu = max(fcpus*0.8, 1) // 80%
+		fcpu  = float64(ncpu)
+		oocpu = max(fcpu*sys.ExtremeLoad/100, 1)
 	)
 	if load >= oocpu {
 		if !flags.IsSet(cos.OOCPU) {
 			set |= cos.OOCPU
 			clr |= cos.LowCPU
-			nlog.Errorln(tag, "extremely high [", load, cpus, "]")
+			nlog.Errorln(tag, "extremely high [", load, ncpu, "]")
 		}
 		return set, clr
 	}
 	// high
-	highcpu := fcpus * 0.7 // 70%
+	highcpu := fcpu * sys.HighLoad / 100
 	if load >= highcpu {
 		clr |= cos.OOCPU
 		if !flags.IsSet(cos.LowCPU) {
 			set |= cos.LowCPU
-			nlog.Warningln(tag, "high [", load, cpus, "]")
+			nlog.Warningln(tag, "high [", load, ncpu, "]")
 		}
 	}
 
-	// (50%, 70%) is, effectively, hysteresis interval
+	// (50%, highLoad) is, effectively, hysteresis
 
 	return set, clr
 }
