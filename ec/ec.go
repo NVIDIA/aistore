@@ -125,12 +125,14 @@ const (
 const invalOpcode = "invalid opcode"
 
 type (
+	onFin = func(lom *core.LOM, err error)
+
 	// request - structure to request an object to be EC'ed or restored
 	request struct {
 		LIF      core.LIF   // object info
 		Action   string     // what to do with the object (see Act* consts)
 		ErrCh    chan error // for final EC result (used only in restore)
-		Callback core.OnFinishObj
+		Callback onFin
 
 		putTime time.Time // time when the object is put into main queue
 		tm      time.Time // to measure different steps

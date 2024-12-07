@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -51,7 +52,7 @@ type (
 		Callback     ObjSentCB     // typical usage: to free SGLs, close files, etc.
 		Config       *cmn.Config   // (to optimize-out GCO.Get())
 		Compression  string        // see CompressAlways, etc. enum
-		SenderID     string        // e.g., xaction ID (optional)
+		Xact         core.Xact     // usage: sender ID; abort
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
 		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below maxSizePDU; unknown size _requires_ PDUs
 		MaxHdrSize   int32         // overrides config.Transport.MaxHeaderSize

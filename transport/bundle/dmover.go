@@ -62,8 +62,6 @@ type (
 	}
 )
 
-var _ core.DM = (*DataMover)(nil) // via t.CopyObject()
-
 // In re `owt` (below): data mover passes it to the target's `PutObject`
 // to properly finalize received payload.
 // For DMs that do not create new objects (e.g, rebalance) `owt` should
@@ -191,9 +189,7 @@ func (dm *DataMover) Open() {
 		Multiplier:   dm.multiplier,
 		ManualResync: true,
 	}
-	if dm.xctn != nil {
-		dataArgs.Extra.SenderID = dm.xctn.ID()
-	}
+	dataArgs.Extra.Xact = dm.xctn
 	dm.data.streams = New(dm.data.client, dataArgs)
 	if dm.useACKs() {
 		ackArgs := Args{
@@ -203,9 +199,7 @@ func (dm *DataMover) Open() {
 			Ntype:        core.Targets,
 			ManualResync: true,
 		}
-		if dm.xctn != nil {
-			ackArgs.Extra.SenderID = dm.xctn.ID()
-		}
+		ackArgs.Extra.Xact = dm.xctn
 		dm.ack.streams = New(dm.ack.client, ackArgs)
 	}
 

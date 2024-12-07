@@ -460,7 +460,7 @@ func (reb *Reb) beginStreams(rargs *rebArgs) {
 		Net:        reb.dm.NetC(),
 		Trname:     trnamePsh,
 		Multiplier: rargs.config.Rebalance.SbundleMult,
-		Extra:      &transport.Extra{SenderID: rargs.xreb.ID(), Config: rargs.config},
+		Extra:      &transport.Extra{Xact: rargs.xreb, Config: rargs.config},
 	}
 	reb.pushes = bundle.New(transport.NewIntraDataClient(), pushArgs)
 }
