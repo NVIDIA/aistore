@@ -689,7 +689,6 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 
 func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 	var (
-		tag   string
 		stats core.Stats
 		qui   = &qui{rargs: rargs, reb: reb}
 		xreb  = rargs.xreb
@@ -707,14 +706,10 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 
 	// cleanup markers
 	if ret != core.QuiAborted && ret != core.QuiTimeout {
-		tag = "qui-aborted"
 		if errM := fs.RemoveMarker(fname.RebalanceMarker, tstats); errM == nil {
 			nlog.Infoln(rargs.logHdr, "removed marker ok")
 		}
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
-		if ret == core.QuiTimeout {
-			tag = "qui-timeout"
-		}
 	}
 
 	reb.endStreams(err)
@@ -731,11 +726,13 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 
 	reb.unregRecv()
 	xreb.Finish()
-
-	if ret != core.QuiAborted && ret != core.QuiTimeout && cnt == 0 {
+	switch {
+	case ret != core.QuiAborted && ret != core.QuiTimeout && cnt == 0:
 		nlog.Infoln(rargs.logHdr, "done", xreb.String())
-	} else {
-		nlog.Infoln(rargs.logHdr, "finished with errors: [", tag, cnt, "]", xreb.String())
+	case cnt == 0:
+		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", ret, "]", xreb.String())
+	default:
+		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", ret, "errs =", cnt, "]", xreb.String())
 	}
 }
 
