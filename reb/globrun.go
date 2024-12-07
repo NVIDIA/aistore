@@ -159,6 +159,7 @@ func (reb *Reb) regRecv() error {
 		return err
 	}
 	if err := transport.Handle(trnamePsh, reb.recvStageNtfn /*RecvObj*/); err != nil {
+		reb.dm.UnregRecv()
 		debug.AssertNoErr(err)
 		return err
 	}
