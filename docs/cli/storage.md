@@ -47,7 +47,7 @@ $ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
 ## Table of Contents
 - [Storage cleanup](#storage-cleanup)
 - [Show capacity usage](#show-capacity-usage)
-- [Validate buckets](#validate-buckets)
+- [Validate in-cluster content for misplaced objects and missing copies](#validate-in-cluster-content-for-misplaced-objects-and-missing-copies)
 - [Mountpath (and disk) management](#mountpath-and-disk-management)
 - [Show mountpaths](#show-mountpaths)
 - [Attach mountpath](#attach-mountpath)
@@ -91,32 +91,70 @@ For command line options and usage examples, please refer to:
 
 * [bucket summary](/docs/cli/bucket.md#show-bucket-summary)
 
-## Validate buckets
+## Validate in-cluster content for misplaced objects and missing copies
 
-`ais storage validate [BUCKET | PROVIDER]`
+```console
+NAME:
+   ais storage validate - check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
+   e.g.:
+     * ais storage validate                 - validate all in-cluster buckets;
+     * ais scrub                            - same as above;
+     * ais scrub ais                        - all ais buckets;
+     * ais scrub s3                         - all s3 buckets present in the cluster;
+     * ais scrub s3 --refresh 10            - same as above while refreshing runtime counter(s) every 10s;
+     * ais scrub gs://abc/images/           - validate part of the gcp bucket under 'images/`;
+     * ais scrub gs://abc --prefix images/  - same as above.
 
-Checks all objects of the bucket `BUCKET` and show the number of found issues:
-the number of misplaced objects, the number of objects that have insufficient number of copies etc.
-Non-zero number of misplaced objects may mean a bucket needs rebalancing.
+USAGE:
+   ais storage validate [command options] [BUCKET[/PREFIX]] or [PROVIDER]
 
-If the optional argument is omitted, show information about all buckets.
-
-Because the command checks every object, it may take a lot of time for big buckets.
-It is recommended to set bucket name or provider name to decrease execution time.
-
-### Example
-
-Validate only AIS buckets
-
+OPTIONS:
+   --refresh value  time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value    used together with '--refresh' to limit the number of generated reports, e.g.:
+                     '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --prefix value   for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                    '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
+                    a/b that have names (relative to this directory) starting with the letter c
+   --timeout value  maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --help, -h       show help
 ```
-$ ais storage validate  ais://
-BUCKET            OBJECTS         MISPLACED       MISSING COPIES
-ais://bck1        2               0               0
-ais://bck2        3               1               0
+
+Checks all objects of the bucket `BUCKET` and show number of misplaced objects, number of objects that have insufficient number of copies, etc.
+
+If optional arguments are omitted, show information about all in-cluster buckets.
+
+### Example: validate a given (prefix-defined) portion of s3 bucket
+
+```console
+$ ais storage validate s3://abc/birds
+
+Please wait, the operation may take some time...
+
+BUCKET          OBJECTS     MISPLACED   MISSING COPIES  ZERO SIZE  5+GB
+s3://abc        84603       0           0               0          329
 ```
 
-The bucket `ais://bck2` has 3 objects and one of them is misplaced, i.e. it is inaccessible by a client.
-It results in `ais ls ais://bck2` returns only 2 objects.
+### Example: same as above
+
+```console
+$ ais storage validate s3://abc --prefix birds
+```
+
+### Example: validate all `ais://` buckets
+
+```console
+$ ais storage validate ais
+
+BUCKET          OBJECTS     MISPLACED   MISSING COPIES  ZERO SIZE  5+GB
+ais://aa        12345       0           0               0          678
+ais://bb        67890       0           0               0          901
+...
+...
+```
+
+
 
 ## Mountpath (and disk) management
 

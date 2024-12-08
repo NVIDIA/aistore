@@ -298,44 +298,44 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 		u.barObjs = totalBars[0]
 		u.barSize = totalBars[1]
 	}
-	for _, entry := range objList.Entries {
+	for _, en := range objList.Entries {
 		var shardName string
 
 		// NOTE: s3.ListObjectsV2 _may_ return a directory - filtering out
-		if cos.IsLastB(entry.Name, '/') {
-			actionNote(c, "virtual directory '"+entry.Name+"' in 'list-objects' results (skipping)")
+		if cos.IsLastB(en.Name, filepath.Separator) {
+			actionNote(c, "virtual directory '"+en.Name+"' in 'list-objects' results (skipping)")
 			continue
 		}
-		if err := cmn.ValidOname(entry.Name); err != nil {
+		if err := cmn.ValidOname(en.Name); err != nil {
 			continue
 		}
 
-		if entry.IsInsideArch() {
+		if en.IsInsideArch() {
 			if origPrefix != msg.Prefix {
-				if !strings.HasPrefix(entry.Name, origPrefix) {
+				if !strings.HasPrefix(en.Name, origPrefix) {
 					// skip
 					if u.showProgress {
 						u.barObjs.IncrInt64(1)
-						u.barSize.IncrInt64(entry.Size)
+						u.barSize.IncrInt64(en.Size)
 					}
 					continue
 				}
 			}
 			for _, shardEntry := range objList.Entries {
-				if shardEntry.IsListedArch() && strings.HasPrefix(entry.Name, shardEntry.Name+"/") {
+				if shardEntry.IsListedArch() && strings.HasPrefix(en.Name, shardEntry.Name+"/") {
 					shardName = shardEntry.Name
 					break
 				}
 			}
 			if shardName == "" {
 				// should not be happening
-				warn := fmt.Sprintf("archived file %q: cannot find parent shard in the listed results", entry.Name)
+				warn := fmt.Sprintf("archived file %q: cannot find parent shard in the listed results", en.Name)
 				actionWarn(c, warn)
 				continue
 			}
 		}
 		u.wg.Add(1)
-		go u.get(c, bck, entry, shardName, outFile, quiet, extract)
+		go u.get(c, bck, en, shardName, outFile, quiet, extract)
 	}
 	u.wg.Wait()
 

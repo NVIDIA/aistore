@@ -563,6 +563,7 @@ func startRebHandler(c *cli.Context) (err error) {
 		}
 		xargs.Bck = bck
 
+		// embedded prefix vs '--prefix'
 		switch {
 		case pref != "" && prefix != "":
 			s := fmt.Sprintf(": via '%s' and %s option", uri, qflprn(verbObjPrefixFlag))

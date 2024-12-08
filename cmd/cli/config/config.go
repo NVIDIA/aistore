@@ -90,6 +90,7 @@ var (
 		apc.ActBlobDl:   "job start " + apc.ActBlobDl,
 		// storage
 		"space-cleanup": "storage cleanup",
+		"scrub":         "storage validate",
 	}
 )
 

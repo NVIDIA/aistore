@@ -914,11 +914,41 @@ A few additional words must be said about `--validate`. The option is provided t
 
 ### Notes
 
-1. `--validate` may take considerable time to execute (depending, of course, on sizes of the datasets in question and the capabilities of the underlying hardware);
-2. non-zero *misplaced* objects in the (validated) output is a direct indication that the cluster requires rebalancing and/or resilvering;
-3. `--fast=false` is another command line option that may also significantly increase execution time;
-4. by default, `--fast` is set to `true`, which also means that bucket summary executes a *faster* logic (that may have a certain minor speed/accuracy trade-off);
-5. to obtain the most precise results, run the command with `--fast=false` - and prepare to wait.
+> `--validate` may take considerable time to execute (depending, of course, on sizes of the datasets in question and the capabilities of the underlying hardware);
+> non-zero *misplaced* objects in the (validated) output is a direct indication that the cluster requires rebalancing and/or resilvering;
+> an alternative way to execute _validation_ is to run `ais strorage validate` or (simply) `ais scrub`:
+
+```console
+NAME:
+   ais storage validate - check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
+   e.g.:
+     * ais storage validate                 - validate all in-cluster buckets;
+     * ais scrub                            - same as above;
+     * ais scrub ais                        - all ais buckets;
+     * ais scrub s3                         - all s3 buckets present in the cluster;
+     * ais scrub s3 --refresh 10            - same as above while refreshing runtime counter(s) every 10s;
+     * ais scrub gs://abc/images/           - validate part of the gcp bucket under 'images/`;
+     * ais scrub gs://abc --prefix images/  - same as above.
+
+USAGE:
+   ais storage validate [command options] [BUCKET[/PREFIX]] or [PROVIDER]
+
+OPTIONS:
+   --refresh value  time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value    used together with '--refresh' to limit the number of generated reports, e.g.:
+                     '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --prefix value   for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                    '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
+                    a/b that have names (relative to this directory) starting with the letter c
+   --timeout value  maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --help, -h       show help
+```
+
+For details and additional examples, please see:
+
+* [Validate in-cluster content for misplaced objects and missing copies](/docs/cli/storage.md#validate-in-cluster-content-for-misplaced-objects-and-missing-copies)
 
 ### Examples
 

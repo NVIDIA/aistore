@@ -262,6 +262,8 @@ const (
 
 	bucketObjectOrTemplateMultiArg = "BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]"
 
+	bucketEmbeddedPrefixArg = "[BUCKET[/PREFIX]]"
+
 	bucketSrcArgument       = "SRC_BUCKET"
 	bucketObjectSrcArgument = "SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE]"
 	bucketDstArgument       = "DST_BUCKET"
@@ -321,9 +323,8 @@ const (
 	// backend enable/disable
 	cloudProviderArg = "CLOUD_PROVIDER"
 
-	// List command
-	listAnyCommandArgument = "PROVIDER:[//BUCKET_NAME]"
-	listObjCommandArgument = "PROVIDER://BUCKET_NAME"
+	// 'ais ls'
+	lsAnyCommandArgument = bucketEmbeddedPrefixArg + " or [PROVIDER]"
 
 	// Auth
 	userLoginArgument = "USER_NAME"
@@ -557,7 +558,7 @@ var (
 	// bucket summary
 	validateSummaryFlag = cli.BoolFlag{
 		Name:  "validate",
-		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
+		Usage: "check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more",
 	}
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",

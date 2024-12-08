@@ -122,19 +122,17 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	return
 }
 
-func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
+func parseQueryBckURI(uri string) (cmn.QueryBcks, string, error) {
 	uri = preparseBckObjURI(uri)
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
-		return cmn.QueryBcks(bck), nil
+		return cmn.QueryBcks(bck), "", nil
 	}
-	bck, objName, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{IsQuery: true})
-	if err != nil {
-		return cmn.QueryBcks(bck), err
-	} else if objName != "" {
-		return cmn.QueryBcks(bck), objectNameArgNotExpected(c, objName)
+	bck, prefix, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{IsQuery: true})
+	if prefix != "" && bck.IsQuery() {
+		return cmn.QueryBcks(bck), prefix, fmt.Errorf("bucket query (%q) with embedded prefix (%q) is not supported", bck, prefix)
 	}
-	return cmn.QueryBcks(bck), nil
+	return cmn.QueryBcks(bck), prefix, err
 }
 
 func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bck, objName string, err error) {

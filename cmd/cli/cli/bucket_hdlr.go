@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -58,6 +57,7 @@ var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts 
 	indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
 	indent1 + "\t* ais ls ais://abc -props all \t- same as above but include all properties;\n" +
 	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list a very large bucket (20 items in each page), report progress every 3s;\n" +
+	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3 \t- same as above;\n" +
 	indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
 	indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in the cluster;\n" +
 	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets, both in-cluster and remote.\n" +
@@ -199,7 +199,7 @@ var (
 	bucketsObjectsCmdList = cli.Command{
 		Name:         commandList,
 		Usage:        listAnyUsage,
-		ArgsUsage:    listAnyCommandArgument,
+		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
 		Action:       listAnyHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -331,90 +331,11 @@ func createBucketHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func checkObjectHealth(queryBcks cmn.QueryBcks) error {
-	type bucketHealth struct {
-		Bck           cmn.Bck
-		ObjectCnt     uint64
-		Misplaced     uint64
-		MissingCopies uint64
-	}
-	bcks, err := api.ListBuckets(apiBP, queryBcks, apc.FltPresent)
-	if err != nil {
-		return V(err)
-	}
-	bckSums := make([]*bucketHealth, 0)
-	msg := &apc.LsoMsg{Flags: apc.LsMissing}
-	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
-
-	for i := range bcks {
-		bck := bcks[i]
-		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {
-			continue
-		}
-		var (
-			objList *cmn.LsoRes
-			obj     *cmn.LsoEnt
-		)
-		p, err := headBucket(bck, true /* don't add */)
-		if err != nil {
-			return err
-		}
-		copies := int16(p.Mirror.Copies)
-		stats := &bucketHealth{Bck: bck}
-		objList, err = api.ListObjects(apiBP, bck, msg, api.ListArgs{})
-		if err != nil {
-			return err
-		}
-
-		updateStats := func(obj *cmn.LsoEnt) {
-			if obj == nil {
-				return
-			}
-			stats.ObjectCnt++
-			if !obj.IsStatusOK() {
-				stats.Misplaced++
-			} else if obj.IsPresent() && p.Mirror.Enabled && obj.Copies < copies {
-				stats.MissingCopies++
-			}
-		}
-
-		for _, entry := range objList.Entries {
-			if obj == nil {
-				obj = entry
-				continue
-			}
-			if obj.Name == entry.Name {
-				if entry.IsStatusOK() {
-					obj = entry
-				}
-				continue
-			}
-			updateStats(obj)
-			obj = entry
-		}
-		updateStats(obj)
-
-		bckSums = append(bckSums, stats)
-	}
-	return teb.Print(bckSums, teb.BucketSummaryValidateTmpl)
-}
-
 func summaryBucketHandler(c *cli.Context) error {
 	if flagIsSet(c, validateSummaryFlag) {
-		return showMisplacedAndMore(c)
+		return prelimScrub(c)
 	}
 	return summaryStorageHandler(c)
-}
-
-func showMisplacedAndMore(c *cli.Context) error {
-	queryBcks, err := parseQueryBckURI(c, c.Args().Get(0))
-	if err != nil {
-		return err
-	}
-	f := func() error {
-		return checkObjectHealth(queryBcks)
-	}
-	return waitForFunc(f, longClientTimeout)
 }
 
 func mvBucketHandler(c *cli.Context) error {
@@ -526,7 +447,6 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 	if section == "" || isValid {
 		if errV := showBucketProps(c); errV == nil {
-			fmt.Fprint(c.App.ErrWriter, examplesBckSetProps)
 			return nil
 		}
 	}

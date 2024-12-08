@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -38,6 +39,16 @@ type bsummCtx struct {
 	n       int
 	res     cmn.AllBsummResults
 }
+
+var validateUsage = validateSummaryFlag.Usage + "\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
+	indent1 + "\t* ais scrub \t- same as above;\n" +
+	indent1 + "\t* ais scrub ais \t- all ais buckets;\n" +
+	indent1 + "\t* ais scrub s3 \t- all s3 buckets present in the cluster;\n" +
+	indent1 + "\t* ais scrub s3 --refresh 10\t- same as above while refreshing runtime counter(s) every 10s;\n" +
+	indent1 + "\t* ais scrub gs://abc/images/\t- validate part of the gcp bucket under 'images/`;\n" +
+	indent1 + "\t* ais scrub gs://abc --prefix images/\t- same as above."
 
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
@@ -119,7 +130,7 @@ var (
 	cleanupCmd = cli.Command{
 		Name:         cmdStgCleanup,
 		Usage:        "remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
-		ArgsUsage:    listAnyCommandArgument,
+		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        cleanupFlags,
 		Action:       cleanupStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -154,6 +165,7 @@ var (
 		),
 		cmdStgValidate: append(
 			longRunFlags,
+			bsummPrefixFlag,
 			waitJobXactFinishedFlag,
 		),
 	}
@@ -172,7 +184,7 @@ var (
 	showCmdStgSummary = cli.Command{
 		Name:         cmdSummary,
 		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
-		ArgsUsage:    listAnyCommandArgument,
+		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        storageSummFlags,
 		Action:       summaryStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -194,10 +206,10 @@ var (
 			showCmdStgSummary,
 			{
 				Name:         cmdStgValidate,
-				Usage:        "check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices",
-				ArgsUsage:    listAnyCommandArgument,
+				Usage:        validateUsage,
+				ArgsUsage:    lsAnyCommandArgument,
 				Flags:        storageFlags[cmdStgValidate],
-				Action:       showMisplacedAndMore,
+				Action:       prelimScrub,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			mpathCmd,
@@ -359,17 +371,27 @@ func showDiskStats(c *cli.Context, tid string) error {
 // - currently, only in-cluster buckets - TODO
 
 func summaryStorageHandler(c *cli.Context) error {
-	uri := c.Args().Get(0)
-	qbck, errV := parseQueryBckURI(c, uri)
+	uri := preparseBckObjURI(c.Args().Get(0))
+	qbck, pref, errV := parseQueryBckURI(uri)
 	if errV != nil {
 		return errV
 	}
-	var (
-		prefix     = parseStrFlag(c, bsummPrefixFlag)
-		objCached  = flagIsSet(c, listObjCachedFlag)
-		bckPresent = true // currently, only in-cluster buckets
-	)
-	ctx, err := newBsummCtxMsg(c, qbck, prefix, objCached, bckPresent)
+
+	// embedded prefix vs '--prefix'
+	prefix := parseStrFlag(c, bsummPrefixFlag)
+	switch {
+	case pref != "" && prefix != "":
+		s := fmt.Sprintf(": via '%s' and %s option", uri, qflprn(bsummPrefixFlag))
+		if pref != prefix {
+			return errors.New("two different prefix values" + s)
+		}
+		actionWarn(c, "redundant and duplicated prefix assignment"+s)
+	case pref != "":
+		prefix = pref
+	}
+
+	bckPresent := true // TODO: currently, only in-cluster buckets
+	ctx, err := newBsummCtxMsg(c, qbck, prefix, flagIsSet(c, listObjCachedFlag), bckPresent)
 	if err != nil {
 		return err
 	}

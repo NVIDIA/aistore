@@ -228,9 +228,10 @@ const (
 		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
-	BucketSummaryValidateTmpl = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\n" + bucketSummaryValidateBody
+	BucketSummaryValidateHdr  = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\t ZERO SIZE\t 5+GB\n"
+	BucketSummaryValidateTmpl = BucketSummaryValidateHdr + bucketSummaryValidateBody
 	bucketSummaryValidateBody = "{{range $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\n" +
+		"{{FormatBckName $v.Bck}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\t {{$v.ZeroSize}}\t {{$v.FiveGBplus}}\n" +
 		"{{end}}"
 
 	// For `object put` mass uploader. A caller adds to the template

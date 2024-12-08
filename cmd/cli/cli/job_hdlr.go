@@ -131,7 +131,7 @@ var (
 	jobStartRebalance = cli.Command{
 		Name:      commandRebalance,
 		Usage:     "rebalance ais cluster",
-		ArgsUsage: "[BUCKET[/PREFIX]]",
+		ArgsUsage: bucketEmbeddedPrefixArg,
 		Flags:     startSpecialFlags[commandRebalance],
 		Action:    startRebHandler,
 	}
