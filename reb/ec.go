@@ -45,60 +45,58 @@ import (
 //        update their metafiles. Targets do not overwrite their metafiles with a new
 //        one. They update only `Daemons` and `FullReplica` fields.
 
-func (reb *Reb) runECjoggers() {
+func (reb *Reb) runECjoggers(rargs *rebArgs) {
 	var (
-		wg    = &sync.WaitGroup{}
-		avail = fs.GetAvail()
-		cfg   = cmn.GCO.Get()
-		b     = reb.xctn().Bck()
+		wg = &sync.WaitGroup{}
+		b  = rargs.bck // limited scope
 	)
-	for _, mi := range avail {
+	for _, mi := range rargs.apaths {
 		bck := cmn.Bck{Provider: apc.AIS}
 		if b != nil {
 			bck = cmn.Bck{Name: b.Name, Provider: apc.AIS, Ns: b.Ns}
 		}
 		wg.Add(1)
-		go reb.jogEC(mi, &bck, wg)
+		go reb.jogEC(mi, &bck, wg, rargs)
 	}
-	for _, provider := range cfg.Backend.Providers {
-		for _, mi := range avail {
+	for _, provider := range rargs.config.Backend.Providers {
+		for _, mi := range rargs.apaths {
 			bck := cmn.Bck{Provider: provider.Name}
 			if b != nil {
 				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
 			}
 			wg.Add(1)
-			go reb.jogEC(mi, &bck, wg)
+			go reb.jogEC(mi, &bck, wg, rargs)
 		}
 	}
 	wg.Wait()
 }
 
 // mountpath walker - walks through files in /meta/ directory
-func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup) {
+func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs *rebArgs) {
 	defer wg.Done()
 	opts := &fs.WalkOpts{
 		Mi:       mi,
 		CTs:      []string{fs.ECMetaType},
 		Callback: reb.walkEC,
+		Prefix:   rargs.prefix,
 		Sorted:   false,
 	}
 	opts.Bck.Copy(bck)
 	if err := fs.Walk(opts); err != nil {
-		xreb := reb.xctn()
+		xreb := rargs.xreb
 		if xreb.IsAborted() || xreb.Finished() {
-			nlog.Infof("aborting traversal")
+			nlog.Infoln(rargs.logHdr, "aborting traversal")
 		} else {
-			nlog.Warningf("failed to traverse, err: %v", err)
+			nlog.Warningln(rargs.logHdr, "failed to traverse, err:", err)
 		}
 	}
 }
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) (err error) {
+func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) error {
 	var (
 		lom    *core.LOM
-		roc    cos.ReadOpenCloser
 		fqn    = ct.FQN()
 		action = uint32(rebActRebCT)
 	)
@@ -110,29 +108,33 @@ func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode,
 	// TODO: unify acquiring a reader for LOM and CT
 	if ct.ContentType() == fs.ObjectType {
 		lom = core.AllocLOM(ct.ObjectName())
-		if err = lom.InitBck(ct.Bck().Bucket()); err != nil {
+		if err := lom.InitBck(ct.Bck().Bucket()); err != nil {
 			core.FreeLOM(lom)
-			return
+			return err
 		}
 		lom.Lock(false)
-		if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
 			core.FreeLOM(lom)
-			return
+			return err
 		}
 	} else {
 		lom = nil // sending slice; TODO: rlock
 	}
 
 	// open
+	var (
+		errReader error
+		roc       cos.ReadOpenCloser
+	)
 	if lom != nil {
 		defer core.FreeLOM(lom)
-		roc, err = lom.NewDeferROC()
+		roc, errReader = lom.NewDeferROC() // + unlock
 	} else {
-		roc, err = cos.NewFileHandle(fqn)
+		roc, errReader = cos.NewFileHandle(fqn)
 	}
-	if err != nil {
-		return
+	if errReader != nil {
+		return errReader
 	}
 
 	// transmit
@@ -146,48 +148,44 @@ func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode,
 	if meta.SliceID != 0 {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
 	}
-	reb.onAir.Inc()
-	o.Hdr.Opaque = ntfn.NewPack(rebMsgEC)
-	o.Callback = reb.transportECCB
-	if err = reb.dm.Send(o, roc, target); err != nil {
-		err = fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
-		return
-	}
-	xreb := reb.xctn()
-	xreb.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
-	return
-}
 
-func (reb *Reb) transportECCB(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
-	reb.onAir.Dec()
+	o.Hdr.Opaque = ntfn.NewPack(rebMsgEC)
+	if err := reb.dm.Send(o, roc, target); err != nil {
+		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
+	}
+
+	xctn := reb.xctn()
+	xctn.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
+	return nil
 }
 
 // Saves received CT to a local drive if needed:
 //  1. Full object/replica is received
 //  2. A CT is received and this target is not the default target (it
 //     means that the CTs came from default target after EC had been rebuilt)
-func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader) error {
-	cos.Assert(ntfn.md != nil)
+func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader) (err error) {
 	var (
-		err error
-		bck = meta.CloneBck(&hdr.Bck)
+		bck  = meta.CloneBck(&hdr.Bck)
+		xctn = reb.xctn()
 	)
-	if err := bck.Init(core.T.Bowner()); err != nil {
-		return err
+	if ern := bck.Init(core.T.Bowner()); ern != nil {
+		return ern
 	}
+
 	md := ntfn.md.NewPack()
 	if ntfn.md.SliceID != 0 {
-		args := &ec.WriteArgs{Reader: data, MD: md, Xact: reb.xctn()}
+		args := &ec.WriteArgs{Reader: data, MD: md, Xact: xctn}
 		err = ec.WriteSliceAndMeta(hdr, args)
 	} else {
 		var lom *core.LOM
 		lom, err = ec.AllocLomFromHdr(hdr)
 		if err == nil {
-			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: reb.xctn()}
+			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: xctn}
 			err = ec.WriteReplicaAndMeta(lom, args)
 		}
 		core.FreeLOM(lom)
 	}
+
 	return err
 }
 
@@ -285,10 +283,10 @@ func (reb *Reb) renameLocalCT(req *stageNtfn, ct *core.CT, md *ec.Metadata) (
 }
 
 func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
-	xreb := reb.xctn()
-	if err := xreb.AbortErr(); err != nil {
+	xctn := reb.xctn()
+	if err := xctn.AbortErr(); err != nil {
 		// notify `dir.Walk` to stop iterations
-		nlog.Infoln(xreb.Name(), "walk-ec aborted", err)
+		nlog.Infoln(xctn.Name(), "walk-ec aborted", err)
 		return err
 	}
 

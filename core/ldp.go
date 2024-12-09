@@ -117,7 +117,7 @@ remote:
 // - [Sync] when Sync option is used (via bucket config and/or `sync` argument) caller MUST take wlock or rlock
 // - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
 //
-// Returns NotFound also after having removed local replica (the Sync option)
+// also returns `NotFound` after removing local replica - the Sync option
 func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRMD) {
 	bck := lom.Bck()
 	if !bck.HasVersioningMD() {

@@ -146,7 +146,7 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
             yield url, StreamWrapper(
                 self.client.bucket(bck_name=bck_name, provider=provider)
                 .object(obj_name=obj_name)
-                .get(etl_name=self.etl_name)
+                .get_reader(etl_name=self.etl_name)
                 .raw()
             )
 

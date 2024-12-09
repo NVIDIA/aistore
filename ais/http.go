@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tracing"
 )
 
 type global struct {
@@ -95,6 +96,10 @@ func initDataClient(config *cmn.Config) {
 	} else {
 		g.client.data = cmn.NewClient(cargs)
 	}
+
+	// The g.client.data is used for the AWS MPT/presigned URL features.
+	// Enable tracing on the data client to capture traces for related AWS client calls.
+	g.client.data = tracing.NewTraceableClient(g.client.data)
 }
 
 func shuthttp() {

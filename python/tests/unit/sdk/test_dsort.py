@@ -204,7 +204,7 @@ class TestDsort(unittest.TestCase):
         spec["ekm_file"] = ekm_url
         spec["ekm_file_sep"] = ""
 
-        # Ensure object.put_content and dsort.start are called
+        # Ensure object.get_writer().put_content and dsort.start are called
         self.mock_client.request.assert_has_calls(
             [
                 call(

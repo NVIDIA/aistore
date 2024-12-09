@@ -46,7 +46,7 @@ import (
 //
 //         (shared-replicated-object, associated action-message),
 //
-// where `associated action-message` (aisMsg) provides receivers with the operation
+// where `associated action-message` (actMsgExt) provides receivers with the operation
 // ("action") and other relevant context.
 //
 // Further, the metasyncer:
@@ -117,7 +117,7 @@ type (
 	}
 	revsPair struct {
 		revs revs
-		msg  *aisMsg
+		msg  *actMsgExt
 	}
 	revsReq struct {
 		wg        *sync.WaitGroup
@@ -446,7 +446,7 @@ func (y *metasyncer) jit(pair revsPair) revs {
 	return revs
 }
 
-// keeping track of per-daemon versioning - TODO: extend to take care of aisMsg where pairs may be empty
+// keeping track of per-daemon versioning - TODO: extend to take care of actMsgExt where pairs may be empty
 func (y *metasyncer) syncDone(si *meta.Snode, pairs []revsPair) {
 	ndr, ok := y.nodesRevs[si.ID()]
 	smap := y.p.owner.smap.get()
@@ -526,7 +526,7 @@ func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 						break
 					}
 					if v > revs.version() {
-						// skip older versions (TODO: don't skip sending associated aisMsg)
+						// skip older versions (TODO: don't skip sending associated actMsgExt)
 						nlog.Errorf("v: %d; revs.version: %d", v, revs.version())
 					}
 				}

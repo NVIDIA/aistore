@@ -89,7 +89,11 @@ func (e *errAdditionalInfo) Error() string {
 /////////////////////
 
 func (e *errDoesNotExist) Error() string {
-	return fmt.Sprintf("%s %q does not exist%s", e.what, e.name, e.suffix)
+	s := fmt.Sprintf("%q does not exist%s", e.name, e.suffix)
+	if e.what != "" {
+		return e.what + " " + s
+	}
+	return s
 }
 
 func isErrDoesNotExist(err error) bool {
@@ -421,4 +425,50 @@ func isStartingUp(err error) bool {
 		}
 	}
 	return false
+}
+
+//
+// misplaced or mistyped flag(s)
+//
+
+func errArgIsFlag(c *cli.Context, arg string) (err error) {
+	if len(arg) > 1 && arg[0] == '-' {
+		err = incorrectUsageMsg(c, "missing command line argument (hint: flag '%s' misplaced?)", arg)
+	}
+	return err
+}
+
+func errTailArgsContainFlag(tail []string) error {
+	for _, arg := range tail {
+		if len(arg) > 1 && arg[0] == '-' {
+			return fmt.Errorf("unrecognized or misplaced option %q", arg)
+		}
+	}
+	return nil
+}
+
+//
+// range read
+//
+
+func errRangeReadArch(what string) error {
+	return fmt.Errorf("cannot range-read (%s, %s) archived content (%s) - "+NIY, qflprn(lengthFlag), qflprn(offsetFlag), what)
+}
+
+//
+// parse uri
+//
+
+func errBucketNameInvalid(c *cli.Context, arg string, err error) error {
+	if errV := errArgIsFlag(c, arg); errV != nil {
+		return errV
+	}
+	if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+		if strings.Contains(arg, ":/") && !strings.Contains(arg, apc.BckProviderSeparator) {
+			a := strings.Replace(arg, ":/", apc.BckProviderSeparator, 1)
+			return fmt.Errorf("bucket name in %q is invalid: (did you mean %q?)", arg, a)
+		}
+		return fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, arg)
+	}
+	return nil
 }

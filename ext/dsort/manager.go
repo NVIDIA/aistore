@@ -368,7 +368,7 @@ func (m *Manager) finalCleanup() {
 	// that this can be freed once we cleanup streams - streams are asynchronous
 	// and we may have race between in-flight request and cleanup.
 	// Also, NOTE:
-	// recm.Cleanup => gmm.freeMemToOS => cos.FreeMemToOS to forcefully free memory to the OS
+	// recm.Cleanup => gmm.freeMemToOS => oom.FreeToOS to forcefully free memory to the OS
 	m.recm.Cleanup()
 
 	m.creationPhase.metadata.SendOrder = nil

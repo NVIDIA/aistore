@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -24,7 +25,8 @@ import (
 // throttle tunables
 const (
 	skipEvictThreashold = 20 // likely not running when above
-	maxEvictThreashold  = 60 // never running when above
+
+	maxEvictThreashold = fs.MaxThrottlePct // not running when above
 
 	dfltEvictTime          = 2 * time.Hour
 	maxTimeWithNoEvictions = 16 * time.Hour
@@ -79,17 +81,16 @@ func (lchk *lchk) init(config *cmn.Config) {
 }
 
 // evict bucket
-// TODO: consider dropping caches when > maxEvictThreashold; take in account time spent in
 func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
 
-	// mem pressure
+	// mem pressure; NOTE: may call oom.FreeToOS
 	if g.lchk.mempDropAll() {
 		return true // dropped all caches, nothing to do
 	}
 
-	pct, util, lavg := _throttlePct()
+	pct, util, lavg := fs.ThrottlePct()
 	flog := nlog.Infoln
 	if pct > maxEvictThreashold {
 		flog = nlog.Warningln
@@ -243,13 +244,13 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 		return lchk.timeout
 	}
 
-	// mem pressure
+	// mem pressure; NOTE: may call oom.FreeToOS
 	if lchk.mempDropAll() {
 		return lchk.timeout
 	}
 
 	// load, utilization
-	pct, util, lavg := _throttlePct()
+	pct, util, lavg := fs.ThrottlePct()
 	nlog.Infoln("hk: [ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
 
 	if pct > maxEvictThreashold {
@@ -285,6 +286,8 @@ func (lchk *lchk) mempDropAll() bool /*dropped*/ {
 		nlog.ErrorDepth(1, "oom [", p, "] - dropping all caches")
 		lchk._drop()
 		lchk.last = time.Now()
+
+		oom.FreeToOS(true)
 		return true
 	case memsys.PressureHigh:
 		nlog.Warningln("high memory pressure")
@@ -428,23 +431,6 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 //
 // throttle
 //
-
-// [NOTE]:
-// - artificially reducing `maxload` to maybe wait longer for truly idle ("nothing running") state
-// - OTOH, see `maxTimeWithNoEvictions`
-func _throttlePct() (int, int64, float64) {
-	var (
-		util, lavg = T.MaxUtilLoad()
-		cpus       = runtime.NumCPU()
-		maxload    = max((cpus>>1)-(cpus>>3), 1)
-	)
-	if lavg >= float64(maxload) {
-		return 100, util, lavg
-	}
-	ru := cos.RatioPct(100, 2, util)
-	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
-	return int(max(ru, rl)), util, lavg
-}
 
 func _throttle(pct int) {
 	if pct < 10 {

@@ -55,7 +55,7 @@ class TestAuthNAccess(
         self.bucket = self.ais_client.bucket(bucket_name).create()
         object_name = "Test-Object"
         self.object = self.bucket.object(object_name)
-        self.object.put_content(b"Test-Data")
+        self.object.get_writer().put_content(b"Test-Data")
 
     def tearDown(self) -> None:
         self.admin_token = self.authn_client.login(AIS_AUTHN_SU_NAME, AIS_AUTHN_SU_PASS)
@@ -117,7 +117,7 @@ class TestAuthNAccess(
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(self.object.name)
-            .get()
+            .get_reader()
             .read_all()
         )
 
@@ -136,6 +136,7 @@ class TestAuthNAccess(
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(self.object.name)
+            .get_writer()
             .put_content(b"Test-Data")
         )
 
@@ -172,6 +173,7 @@ class TestAuthNAccess(
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(self.object.name)
+            .get_writer()
             .append_content(b"Test-Data")
         )
 
@@ -327,7 +329,7 @@ class TestAuthNAccess(
         # Verify Access
         self.ais_client.bucket(self.bucket.name).object(
             self.object.name
-        ).set_custom_props(custom_metadata={"Test-Key": "Test-Value"})
+        ).get_writer().set_custom_props(custom_metadata={"Test-Key": "Test-Value"})
 
     # Test Derived Roles (RO, RW, SU)
 
@@ -346,7 +348,7 @@ class TestAuthNAccess(
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(self.object.name)
-            .get()
+            .get_reader()
             .read_all()
         )
         self._assert_does_not_raise(
@@ -392,11 +394,13 @@ class TestAuthNAccess(
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(test_rw_object.name)
+            .get_writer()
             .put_content(b"Test-Data")
         )
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(test_rw_object.name)
+            .get_writer()
             .append_content(b"Test-Data")
         )
         self._assert_does_not_raise(
@@ -412,7 +416,7 @@ class TestAuthNAccess(
         self._assert_does_not_raise(
             lambda: self.ais_client.bucket(self.bucket.name)
             .object(self.object.name)
-            .get()
+            .get_reader()
             .read_all()
         )
         self._assert_does_not_raise(

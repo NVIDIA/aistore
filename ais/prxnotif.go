@@ -421,7 +421,10 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			}
 			nl.SetStats(res.si.ID(), stats)
 			nl.Unlock()
-		} else if res.status == http.StatusNotFound {
+			continue
+		}
+		// err
+		if res.status == http.StatusNotFound {
 			if mono.Since(nl.AddedTime()) < progressInterval {
 				// likely didn't start yet - skipping
 				continue

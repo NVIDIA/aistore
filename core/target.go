@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/transport"
 )
 
 //
@@ -26,12 +25,6 @@ import (
 
 // intra-cluster data path: control structures and types
 type (
-	OnFinishObj = func(lom *LOM, err error)
-
-	DM interface {
-		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error
-	}
-
 	PutParams struct {
 		Reader  io.ReadCloser
 		Cksum   *cos.Cksum // checksum to check

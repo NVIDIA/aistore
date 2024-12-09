@@ -6,11 +6,11 @@
 package xs
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -20,6 +20,8 @@ import (
 )
 
 // rebalance & resilver xactions
+
+const fmtpend = "%s: rebalance[%s] is "
 
 type (
 	rebFactory struct {
@@ -48,6 +50,8 @@ var (
 	_ xreg.Renewable = (*resFactory)(nil)
 )
 
+var _rebID atomic.Int64
+
 ///////////////
 // Rebalance //
 ///////////////
@@ -56,33 +60,57 @@ func (*rebFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
-func (p *rebFactory) Start() error {
-	p.xctn = NewRebalance(p.Args.UUID, p.Kind())
-	return nil
+func (p *rebFactory) Start() (err error) {
+	p.xctn, err = newRebalance(p)
+	return err
 }
 
 func (*rebFactory) Kind() string     { return apc.ActRebalance }
 func (p *rebFactory) Get() core.Xact { return p.xctn }
 
 func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	xreb := prevEntry.(*rebFactory)
-	wpr = xreg.WprAbort
-	if xreb.Args.UUID > p.Args.UUID {
-		nlog.Errorf("(reb: %s) %s is greater than %s", xreb.xctn, xreb.Args.UUID, p.Args.UUID)
-		wpr = xreg.WprUse
-	} else if xreb.Args.UUID == p.Args.UUID {
-		if cmn.Rom.FastV(4, cos.SmoduleXs) {
-			nlog.Infof("%s already running, nothing to do", xreb.xctn)
-		}
-		wpr = xreg.WprUse
+	prev := prevEntry.(*rebFactory)
+	if prev.Args.UUID == p.Args.UUID {
+		return xreg.WprUse, nil
 	}
-	return
+
+	//
+	// NOTE: we always abort _previous_ (via `reb._preempt`) prior to starting a new one
+	//
+	nlog.Errorln(core.T.String(), "unexpected when-prev-running call:", prev.Args.UUID, p.Args.UUID)
+
+	ic, ec := xact.S2RebID(p.Args.UUID)
+	if ec != nil {
+		nlog.Errorln("FATAL:", p.Args.UUID, ec)
+		return xreg.WprAbort, ec // (unlikely)
+	}
+	ip, ep := xact.S2RebID(prev.Args.UUID)
+	if ep != nil {
+		nlog.Errorln("FATAL:", prev.Args.UUID, ep)
+		return xreg.WprAbort, ep
+	}
+	debug.Assert(ip < ic)
+	return xreg.WprAbort, nil
 }
 
-func NewRebalance(id, kind string) (xreb *Rebalance) {
+func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	xreb = &Rebalance{}
-	xreb.InitBase(id, kind, nil)
-	return
+	xreb.InitBase(p.Args.UUID, p.Kind(), nil)
+
+	id, err := xact.S2RebID(p.Args.UUID)
+	if err != nil {
+		return nil, err
+	}
+	rebID := _rebID.Load()
+	if rebID > id {
+		return nil, fmt.Errorf(fmtpend+"old", core.T.String(), p.Args.UUID)
+	}
+	if rebID == id {
+		return nil, fmt.Errorf(fmtpend+"current", core.T.String(), p.Args.UUID)
+	}
+	_rebID.Store(id)
+
+	return xreb, nil
 }
 
 func (*Rebalance) Run(*sync.WaitGroup) { debug.Assert(false) }

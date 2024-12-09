@@ -108,7 +108,7 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	return "", err
 }
 
-func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, owt cmn.OWT, sizePDU int32) (err error) {
+func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, owt cmn.OWT, sizePDU int32) error {
 	smap := core.T.Sowner().Get()
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
@@ -119,20 +119,19 @@ func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Co
 
 	// consider adding config.X.Compression, config.X.SbundleMult (currently, always 1), etc.
 	dmxtra := bundle.Extra{Config: config, Multiplier: 1, SizePDU: sizePDU}
-	p.dm, err = bundle.NewDataMover(trname, recv, owt, dmxtra)
-	if err != nil {
-		return err
-	}
-	if err = p.dm.RegRecv(); err == nil {
+	p.dm = bundle.NewDM(trname, recv, owt, dmxtra)
+
+	err := p.dm.RegRecv()
+	if err == nil {
 		return nil
 	}
-
 	nlog.Errorln(err)
 	sleep := cos.ProbingFrequency(waitRegRecv)
 	for total := time.Duration(0); err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv; total += sleep {
 		time.Sleep(sleep)
 		err = p.dm.RegRecv()
 	}
+
 	return err
 }
 

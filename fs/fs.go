@@ -281,7 +281,8 @@ func (mi *Mountpath) MakePathCT(bck *cmn.Bck, contentType string) string {
 }
 
 func (mi *Mountpath) MakePathFQN(bck *cmn.Bck, contentType, objName string) string {
-	debug.Assert(contentType != "" && objName != "")
+	debug.Assert(contentType != "")
+	debug.Assert(objName != "")
 	buf := mi.makePathBuf(bck, contentType, 1+len(objName))
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)

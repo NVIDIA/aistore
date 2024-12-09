@@ -15,6 +15,12 @@ on:
         type: boolean
         default: false
 
+      build_aisinit_image:
+        description: 'Build aisinit image (aistorage/ais-init)'
+        required: true
+        type: boolean
+        default: false
+
       build_cluster_minimal_image:
         description: 'Build cluster-minimal image (aistorage/cluster-minimal)'
         required: true
@@ -41,6 +47,7 @@ on:
 env:
   UTIL_IMAGE: 'aistorage/ais-util'
   AISNODE_IMAGE: 'aistorage/aisnode'
+  AISINIT_IMAGE: 'aistorage/ais-init'
   CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
   CI_IMAGE: 'aistorage/ci'
   AISNODE_MINIKUBE_IMAGE: 'aistorage/aisnode-minikube'
@@ -71,6 +78,13 @@ jobs:
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
           IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+          popd
+
+      - name: Build and push `ais-init` image
+        if: ${{ inputs.build_aisinit_image }}
+        run: |
+          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisinit_container
+          IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
           popd
 
       - name: Build and push `aisnode` image with tracing support

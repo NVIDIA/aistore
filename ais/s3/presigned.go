@@ -165,7 +165,9 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	}
 
 	// produce a new request (nreq) from the old/original one (oreq)
-	nreq, err := http.NewRequest(pts.oreq.Method, s3url, pts.body)
+	// NOTE: The original request's context includes tracing attributes.
+	// It is essential to pass the original context to new request to ensure traces are correctly linked.
+	nreq, err := http.NewRequestWithContext(pts.oreq.Context(), pts.oreq.Method, s3url, pts.body)
 	if err != nil {
 		return &PresignedResp{StatusCode: http.StatusInternalServerError}, err
 	}
@@ -198,15 +200,16 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 
 // (compare w/ cmn/objattrs FromHeader)
 func (resp *PresignedResp) ObjAttrs() (oa *cmn.ObjAttrs) {
+	h := cmn.BackendHelpers.Amazon
+
 	oa = &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 3)
-
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AWS)
-	etag := cmn.UnquoteCEV(resp.Header.Get(cos.HdrETag))
-	debug.Assert(etag != "")
-	oa.SetCustomKey(cmn.ETag, etag)
-	if !cmn.IsS3MultipartEtag(etag) {
-		oa.SetCustomKey(cmn.MD5ObjMD, etag)
+	if v, ok := h.EncodeETag(resp.Header.Get(cos.HdrETag)); ok {
+		oa.SetCustomKey(cmn.ETag, v)
+	}
+	if v, ok := h.EncodeCksum(resp.Header.Get(cos.S3CksumHeader)); ok {
+		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if sz := resp.Header.Get(cos.HdrContentLength); sz != "" {
 		size, err := strconv.ParseInt(sz, 10, 64)

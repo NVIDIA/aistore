@@ -65,8 +65,6 @@ func GoRunW(xctn core.Xact) {
 	wg.Wait()
 }
 
-func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
-
 //////////////
 // Base - partially implements `core.Xact` interface
 //////////////
@@ -226,8 +224,10 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 		case core.QuiInactiveCB: // NOTE: used by callbacks, converts to one of the returned codes
 			idle += sleep
 		case core.QuiActive:
-			idle = 0                  // reset
-			dur = min(dur+sleep, 2*d) // bump up to 2x initial
+			idle = 0                   // reset
+			dur = min(dur+sleep, d<<1) // bump inactivity duration (cannot increase beyond 2x initial)
+		case core.QuiActiveDontBump: //       reset, don't bump
+			idle = 0
 		case core.QuiActiveRet:
 			return core.QuiActiveRet
 		case core.QuiDone:
@@ -339,9 +339,9 @@ func (xctn *Base) Finish() {
 	case err == nil:
 		nlog.Infoln(xctn.String(), "finished")
 	case aborted:
-		nlog.Warningln(xctn.String(), "aborted:", err.Error(), info)
+		nlog.Warningln(xctn.String(), "aborted:", err, info)
 	default:
-		nlog.Infoln("Warning:", xctn.String(), "finished w/err:", err.Error())
+		nlog.Warningln(xctn.String(), "finished w/err:", err)
 	}
 }
 
@@ -408,7 +408,7 @@ func (xctn *Base) ToStats(stats *core.Stats) {
 
 // RebID helpers
 
-func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }
+func RebID2S(id int64) string          { return "g" + strconv.FormatInt(id, 10) }
 func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }
 
 func IsValidRebID(id string) (valid bool) {
@@ -416,7 +416,7 @@ func IsValidRebID(id string) (valid bool) {
 		_, err := S2RebID(id)
 		valid = err == nil
 	}
-	return
+	return valid
 }
 
 func CompareRebIDs(someID, fltID string) int {

@@ -34,4 +34,4 @@ job_id = client.bucket("from-bck").transform(
 client.job(job_id).wait()
 
 # load an object from transformed bucket
-print(np.frombuffer(to_bck.object("obj-id.npy").get().read_all(), dtype=np.uint8))
+print(np.frombuffer(to_bck.object("obj-id.npy").get_reader().read_all(), dtype=np.uint8))

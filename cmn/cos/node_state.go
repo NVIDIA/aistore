@@ -23,9 +23,9 @@ const (
 	RebalanceInterrupted                             // warning
 	Resilvering                                      // warning
 	ResilverInterrupted                              // warning
-	Restarted                                        // warning
-	OOS                                              // red alert (see IsRed below)
-	OOM                                              // red alert
+	NodeRestarted                                    // warning (powercycle, crash)
+	OOS                                              // out of space; red alert (see IsRed below)
+	OOM                                              // out of memory; red alert
 	MaintenanceMode                                  // warning
 	LowCapacity                                      // (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
@@ -36,24 +36,26 @@ const (
 	CertificateExpired                               // red --/--
 	CertificateInvalid                               // red --/--
 	KeepAliveErrors                                  // warning (new keep-alive errors during the last 5m)
+	OOCPU                                            // out of CPU; red
+	LowCPU                                           // warning
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsRed() bool {
-	return f.IsSet(OOS) || f.IsSet(OOM) || f.IsSet(DiskFault) || f.IsSet(NoMountpaths) || f.IsSet(NumGoroutines) ||
-		f.IsSet(CertificateExpired)
+	return f.IsAnySet(OOS | OOM | OOCPU | DiskFault | NoMountpaths | NumGoroutines | CertificateExpired)
 }
 
 func (f NodeStateFlags) IsWarn() bool {
-	return f.IsSet(Rebalancing) || f.IsSet(RebalanceInterrupted) ||
-		f.IsSet(Resilvering) || f.IsSet(ResilverInterrupted) ||
-		f.IsSet(Restarted) || f.IsSet(MaintenanceMode) ||
-		f.IsSet(LowCapacity) || f.IsSet(LowMemory) ||
-		f.IsSet(CertWillSoonExpire)
+	return f.IsAnySet(Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
+		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire)
 }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
+
+func (f NodeStateFlags) IsAnySet(flag NodeStateFlags) bool {
+	return BitFlags(f).IsAnySet(BitFlags(flag))
+}
 
 func (f NodeStateFlags) Set(flags NodeStateFlags) NodeStateFlags {
 	return NodeStateFlags(BitFlags(f).Set(BitFlags(flags)))
@@ -68,7 +70,7 @@ func (f NodeStateFlags) String() string {
 		return "ok"
 	}
 
-	var sb []string
+	sb := make([]string, 0, 4)
 	if f&VoteInProgress == VoteInProgress {
 		sb = append(sb, "vote-in-progress")
 	}
@@ -94,7 +96,7 @@ func (f NodeStateFlags) String() string {
 	if f&ResilverInterrupted == ResilverInterrupted {
 		sb = append(sb, "resilver-interrupted")
 	}
-	if f&Restarted == Restarted {
+	if f&NodeRestarted == NodeRestarted {
 		sb = append(sb, "restarted")
 	}
 	if f&OOS == OOS {
@@ -132,6 +134,12 @@ func (f NodeStateFlags) String() string {
 	}
 	if f&KeepAliveErrors == KeepAliveErrors {
 		sb = append(sb, "keep-alive-errors")
+	}
+	if f&OOCPU == OOCPU {
+		sb = append(sb, "out-of-cpu")
+	}
+	if f&LowCPU == LowCPU {
+		sb = append(sb, "low-cpu")
 	}
 
 	l := len(sb)

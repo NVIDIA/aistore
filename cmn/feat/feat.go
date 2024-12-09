@@ -38,6 +38,7 @@ const (
 	StreamingColdGET          // write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 	S3ReverseProxy            // intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
 	S3UsePathStyle            // use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
+	DontDeleteWhenRebalancing // when objects get rebalanced to their proper destinations, keep the sources - do not delete
 )
 
 var Cluster = [...]string{
@@ -56,6 +57,7 @@ var Cluster = [...]string{
 	"Streaming-Cold-GET",
 	"S3-Reverse-Proxy",
 	"S3-Use-Path-Style", // https://aws.amazon.com/blogs/aws/amazon-s3-path-deprecation-plan-the-rest-of-the-story
+	"Dont-Delete-When-Rebalancing",
 	// "none" ====================
 }
 

@@ -40,7 +40,7 @@ const ActCleanup = "cleanup" // in addition to (apc.ActBegin, ...)
 // (compare with txnCln)
 type txnSrv struct {
 	t          *target
-	msg        *aisMsg
+	msg        *actMsgExt
 	bck        *meta.Bck // aka bckFrom
 	bckTo      *meta.Bck
 	query      url.Values
@@ -281,7 +281,7 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 	return "", nil
 }
 
-func (t *target) validateMakeNCopies(bck *meta.Bck, msg *aisMsg) (curCopies, newCopies int64, err error) {
+func (t *target) validateMakeNCopies(bck *meta.Bck, msg *actMsgExt) (curCopies, newCopies int64, err error) {
 	curCopies = bck.Props.Mirror.Copies
 	newCopies, err = _parseNCopies(msg.Value)
 	if err == nil {
@@ -383,7 +383,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 	return "", nil
 }
 
-func (t *target) validateNprops(bck *meta.Bck, msg *aisMsg) (nprops *cmn.Bprops, err error) {
+func (t *target) validateNprops(bck *meta.Bck, msg *actMsgExt) (nprops *cmn.Bprops, err error) {
 	var (
 		body = cos.MustMarshal(msg.Value)
 		cs   = fs.Cap()
@@ -474,7 +474,7 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 	return "", nil
 }
 
-func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *aisMsg) error {
+func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) error {
 	cs := fs.Cap()
 	if err := cs.Err(); err != nil {
 		return err
@@ -777,7 +777,7 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 	return "", nil
 }
 
-func (t *target) validateECEncode(bck *meta.Bck, msg *aisMsg) error {
+func (t *target) validateECEncode(bck *meta.Bck, msg *actMsgExt) error {
 	cs := fs.Cap()
 	if err := cs.Err(); err != nil {
 		return err

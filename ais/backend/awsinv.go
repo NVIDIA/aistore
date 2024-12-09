@@ -352,7 +352,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 				}
 			case types.InventoryOptionalFieldETag:
 				if custom != nil {
-					custom[cmn.ETag] = cmn.UnquoteCEV(line[i])
+					custom[cmn.ETag] = line[i]
 				}
 			case types.InventoryOptionalFieldLastModifiedDate:
 				if custom != nil {

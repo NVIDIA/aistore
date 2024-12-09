@@ -173,7 +173,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	}
 	if r.checkAndRecover {
 		// wait for in-flight and pending recovery
-		r.Quiesce(time.Minute, r._quiesce)
+		r.Quiesce(config.Timeout.MaxHostBusy.D(), r._quiesce)
 		r.done.Store(true)
 	}
 	r.wg.Wait() // wait for before/afterEncode
@@ -185,9 +185,12 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	r.Finish()
 }
 
+// at least max-host-busy without Rx or jogger action _prior_ to counting towards timeout
 func (r *XactBckEncode) _quiesce(time.Duration) core.QuiRes {
-	if mono.Since(r.last.Load()) > cmn.Rom.MaxKeepalive() {
-		return core.QuiDone
+	last := r.last.Load()
+	debug.Assert(last != 0)
+	if mono.Since(last) < max(cmn.Rom.MaxKeepalive(), 4*time.Second) {
+		return core.QuiActive
 	}
 	return core.QuiInactiveCB
 }
@@ -291,10 +294,10 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 }
 
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
+	r.last.Store(mono.NanoTime())
 	switch {
 	case err == nil:
 		r.LomAdd(lom) // TODO: instead, count restored slices, metafiles, possibly - objects
-		r.last.Store(mono.NanoTime())
 	case err == ErrorECDisabled:
 		r.Abort(err)
 	case err == errSkipped:
@@ -328,8 +331,8 @@ func (j *rcvyJogger) run() {
 		n++
 		// (compare with ec/putjogger where we also check memory pressure)
 		if err == nil && fs.IsThrottle(n) {
-			pct, _, _ := _throttlePct()
-			if pct >= maxThrottlePct {
+			pct, _, _ := fs.ThrottlePct()
+			if pct >= fs.MaxThrottlePct {
 				time.Sleep(fs.Throttle10ms)
 			}
 		}
@@ -341,26 +344,4 @@ func (j *rcvyJogger) run() {
 
 func (j *rcvyJogger) String() string {
 	return fmt.Sprintf("j-rcvy %s[%s/%s]", j.parent.ID(), j.mi, j.parent.Bck())
-}
-
-//
-// TODO -- FIXME: dedup core/lcache
-//
-
-const (
-	maxThrottlePct = 60
-)
-
-func _throttlePct() (int, int64, float64) {
-	var (
-		util, lavg = core.T.MaxUtilLoad()
-		cpus       = runtime.NumCPU()
-		maxload    = max((cpus>>1)-(cpus>>3), 1)
-	)
-	if lavg >= float64(maxload) {
-		return 100, util, lavg
-	}
-	ru := cos.RatioPct(100, 2, util)
-	rl := cos.RatioPct(int64(10*maxload), 1, int64(10*lavg))
-	return int(max(ru, rl)), util, lavg
 }

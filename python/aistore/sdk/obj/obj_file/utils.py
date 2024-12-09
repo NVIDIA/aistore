@@ -33,7 +33,7 @@ def reset_iterator(
         ObjectFileStreamError if a connection cannot be made.
     """
     try:
-        return content_iterator.iter_from_position(resume_position)
+        return content_iterator.iter(offset=resume_position)
     except Exception as err:
         logger.error("Error establishing object stream: (%s)", err)
         raise ObjectFileStreamError(err) from err

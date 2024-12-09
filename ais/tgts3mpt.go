@@ -342,7 +342,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		_, err = resMD5.H.Write([]byte(concatMD5))
 		debug.AssertNoErr(err)
 		resMD5.Finalize()
-		etag = resMD5.Value() + cmn.AwsMultipartDelim + strconv.Itoa(len(partList.Parts))
+		etag = `"` + resMD5.Value() + cmn.AwsMultipartDelim + strconv.Itoa(len(partList.Parts)) + `"`
 	}
 
 	// .5 finalize

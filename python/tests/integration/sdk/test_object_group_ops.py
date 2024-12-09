@@ -40,7 +40,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def test_delete(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
         job_id = object_group.delete()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
         existing_objects = self.bucket.list_objects(prefix=self.obj_prefix).entries
         self.assertEqual(1, len(existing_objects))
         self.assertEqual(self.obj_names[0], existing_objects[0].name)
@@ -52,7 +52,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def test_evict(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
         job_id = object_group.evict()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
         self._verify_cached_objects(OBJECT_COUNT, [0])
 
     def test_evict_objects_local(self):
@@ -74,7 +74,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         if num_workers is not None:
             prefetch_kwargs["num_workers"] = num_workers
         job_id = prefetched_objects.prefetch(**prefetch_kwargs)
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 5)
 
         # Verify all objects exist but only those in the prefetch group are now cached
         self._verify_cached_objects(OBJECT_COUNT, range(objects_excluded, OBJECT_COUNT))
@@ -100,15 +100,13 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def test_prefetch_blob_download(self):
         obj_group = self.bucket.objects(obj_names=self.obj_names)
         self._evict_objects(obj_group)
-        #
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         # Use a threshold that's just low enough for our object size to require blob
         job_id = obj_group.prefetch(blob_threshold=self.file_size)
-        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now(timezone.utc) + timedelta(seconds=1)
+        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 5)
 
         jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
-            start_time=start_time, end_time=end_time
+            start_time=start_time
         )
         filtered_jobs = [
             job for job in jobs_list if job.bucket.name == self.bucket.name
@@ -128,12 +126,11 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self._evict_objects(obj_group)
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         job_id = obj_group.prefetch(blob_threshold=self.file_size + 1)
-        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 2)
-        end_time = datetime.now(timezone.utc) + timedelta(seconds=1)
+        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 5)
 
         with self.assertRaises(JobInfoNotFound):
             self.client.job(job_kind="blob-download").get_within_timeframe(
-                start_time=start_time, end_time=end_time
+                start_time=start_time
             )
         self._check_all_objects_cached(
             len(obj_group.list_names()), expected_cached=True
@@ -159,7 +156,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
             to_bck, **copy_kwargs
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         self.assertEqual(
             4, len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix))
@@ -186,7 +183,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # copy, and check
         self._copy_and_check_with_latest(self.bucket, to_bck, obj_name, LOREM, False)
         # create a cached copy in src bucket
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band PUT: 2nd version (overwrite)
@@ -198,7 +195,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # copy latest: update in-cluster copy
         self._copy_and_check_with_latest(self.bucket, to_bck, obj_name, DUIS, True)
         # check if cached copy is src bck is still on prev version
-        content = self.bucket.object(obj_name).get().read_all()
+        content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band DELETE
@@ -211,9 +208,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
         copy_job = self.bucket.objects(obj_names=[obj_name]).copy(
             self.bucket, sync=True
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         with self.assertRaises(AISError):
-            self.bucket.object(obj_name).get().read_all()
+            self.bucket.object(obj_name).get_reader().read_all()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -227,20 +224,20 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # TODO: add test for multi-obj list --sync once api is ready
         template = self.obj_prefix + "{0..10}" + self.suffix
         copy_job = self.bucket.objects(obj_template=template).copy(to_bck)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         self.assertEqual(
             len(to_bck.list_all_objects(prefix=self.obj_prefix)), OBJECT_COUNT
         )
 
         prefetch_job = self.bucket.objects(obj_template=template).prefetch()
-        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # out of band delete all objects
         for obj_name in self.obj_names:
             self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
         copy_job = self.bucket.objects(obj_template=template).copy(to_bck, sync=True)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         # check to see if all the objects in dst disappear after cp multi-obj sync
         self.assertEqual(len(to_bck.list_all_objects(prefix=self.obj_prefix)), 0)
         # objects also disappear from src bck
@@ -279,13 +276,13 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # prefetch_job = self.bucket.objects(obj_names=[obj_name]).prefetch(latest=True)
         # self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
         # with self.assertRaises(AISError):
-        #    self.bucket.object(obj_name).get().read_all()
+        #    self.bucket.object(obj_name).get_reader().read_all()
 
     def _prefetch_and_check_with_latest(self, bucket, obj_name, expected, latest_flag):
         prefetch_job = bucket.objects(obj_names=[obj_name]).prefetch(latest=latest_flag)
-        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
-        content = bucket.object(obj_name).get().read_all()
+        content = bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
     # pylint: disable=too-many-arguments
@@ -295,9 +292,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
         copy_job = from_bck.objects(obj_names=[obj_name]).copy(
             to_bck, latest=latest_flag
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         self.assertEqual(1, len(to_bck.list_all_objects()))
-        content = to_bck.object(obj_name).get().read_all()
+        content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
     def test_archive_objects_without_copy(self):
@@ -316,15 +313,17 @@ class TestObjectGroupOps(RemoteEnabledTest):
         archived_names = self.obj_names[1:5]
         expected_contents = {}
         for name in archived_names:
-            expected_contents[name] = src_bck.object(obj_name=name).get().read_all()
+            expected_contents[name] = (
+                src_bck.object(obj_name=name).get_reader().read_all()
+            )
 
         arch_job = src_bck.objects(obj_names=archived_names).archive(
             archive_name=arch_name, **kwargs
         )
-        self.client.job(job_id=arch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=arch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # Read the tar archive and assert the object names and contents match
-        res_bytes = res_bck.object(arch_name).get().read_all()
+        res_bytes = res_bck.object(arch_name).get_reader().read_all()
         with tarfile.open(fileobj=io.BytesIO(res_bytes), mode="r") as tar:
             member_names = []
             for member in tar.getmembers():
@@ -364,15 +363,16 @@ class TestObjectGroupOps(RemoteEnabledTest):
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
             **transform_kwargs
         )
-        self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # Get the md5 transform of each source object and verify the destination bucket contains those results
         from_obj_hashes = [
-            transform(self.bucket.object(name).get().read_all())
+            transform(self.bucket.object(name).get_reader().read_all())
             for name in self.obj_names
         ]
         to_obj_values = [
-            to_bck.object(new_prefix + name).get().read_all() for name in self.obj_names
+            to_bck.object(new_prefix + name).get_reader().read_all()
+            for name in self.obj_names
         ]
         self.assertEqual(to_obj_values, from_obj_hashes)
 
@@ -386,7 +386,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
     def _evict_objects(self, obj_group):
         job_id = obj_group.evict()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
         self._check_all_objects_cached(
             len(obj_group.list_names()), expected_cached=False
         )

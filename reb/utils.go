@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -12,6 +12,8 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -47,9 +49,10 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 
 	sb.WriteString(core.T.String())
 	sb.WriteString("[g")
-	sb.WriteString(strconv.FormatInt(rebID, 10))
+	sb.WriteString(strconv.FormatInt(rebID, 10)) // (compare with `xact.RebID2S`)
 	sb.WriteByte(',')
 	if smap != nil {
+		sb.WriteByte('v')
 		sb.WriteString(strconv.FormatInt(smap.Version, 10))
 	} else {
 		sb.WriteString("v<???>")
@@ -142,22 +145,11 @@ func (reb *Reb) abortAndBroadcast(err error) {
 	}
 }
 
-// Returns if the target is quiescent: transport queue is empty, or xaction
-// has already aborted or finished.
-func (reb *Reb) isQuiescent() bool {
-	// Finished or aborted xaction = no traffic
-	xctn := reb.xctn()
-	if xctn == nil || xctn.IsAborted() || xctn.Finished() {
-		return true
-	}
-
-	// Check for both regular and EC transport queues are empty
-	return reb.inQueue.Load() == 0 && reb.onAir.Load() == 0
-}
-
 /////////////
-// lomAcks TODO: lomAck.q[lom.Uname()] = lom.Bprops().BID and, subsequently, LIF => LOM reinit
+// lomAcks //
 /////////////
+
+// transaction: addLomAck => (cleanupLomAck | ackLomAck)
 
 func (reb *Reb) lomAcks() *[cos.MultiHashMapCount]*lomAcks { return &reb.lomacks }
 
@@ -168,23 +160,43 @@ func (reb *Reb) addLomAck(lom *core.LOM) {
 	lomAck.mu.Unlock()
 }
 
-func (reb *Reb) delLomAck(lom *core.LOM, rebID int64, freeLOM bool) {
-	if rebID != 0 && rebID != reb.rebID.Load() {
+// called upon failure to send
+func (reb *Reb) cleanupLomAck(lom *core.LOM) {
+	lomAck := reb.lomAcks()[lom.CacheIdx()]
+
+	lomAck.mu.Lock()
+	delete(lomAck.q, lom.Uname())
+	lomAck.mu.Unlock()
+}
+
+// called by recvRegularAck
+func (reb *Reb) ackLomAck(lom *core.LOM) {
+	lomAck := reb.lomAcks()[lom.CacheIdx()]
+
+	lomAck.mu.Lock()
+	uname := lom.Uname()
+	lomOrig, ok := lomAck.q[uname] // via addLomAck() above
+	if !ok {
+		lomAck.mu.Unlock()
 		return
 	}
-	lomAck := reb.lomAcks()[lom.CacheIdx()]
-	lomAck.mu.Lock()
-	if rebID == 0 || rebID == reb.rebID.Load() {
-		if lomOrig, ok := lomAck.q[lom.Uname()]; ok {
-			delete(lomAck.q, lom.Uname())
-			if freeLOM {
-				// counting acknowledged migrations (as initiator)
-				xreb := reb.xctn()
-				xreb.ObjsAdd(1, lomOrig.Lsize())
-
-				core.FreeLOM(lomOrig)
-			}
-		}
-	}
+	delete(lomAck.q, uname)
 	lomAck.mu.Unlock()
+
+	debug.Assert(uname == lomOrig.Uname())
+	size := lomOrig.Lsize()
+	core.FreeLOM(lomOrig)
+
+	// counting acknowledged migrations (as initiator)
+	xreb := reb.xctn()
+	xreb.ObjsAdd(1, size)
+
+	// NOTE: rm migrated object (and local copies, if any) right away
+	// TODO [feature]: mark "deleted" instead
+	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
+		lom.Lock(true)
+		err := lom.RemoveObj()
+		lom.Unlock(true)
+		debug.AssertNoErr(err)
+	}
 }

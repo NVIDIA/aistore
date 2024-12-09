@@ -450,7 +450,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	// alternatively (when `--paged` not specified) list all pages up to a limit, show progress
 	var (
 		callAfter = listObjectsWaitTime
-		_listed   = &_listed{c: c, bck: &bck, limit: int(limit)}
+		_listed   = &_listed{c: c, bck: &bck, msg: msg, limit: int(limit), tip: true}
 	)
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
@@ -689,10 +689,12 @@ func splitObjnameShardBoundary(fullName string) (objName, fileName string) {
 type _listed struct {
 	c     *cli.Context
 	bck   *cmn.Bck
+	msg   *apc.LsoMsg
 	limit int
 	l     int
 	done  bool
 	cptn  bool
+	tip   bool
 }
 
 func (u *_listed) cb(ctx *api.LsoCounter) {
@@ -713,15 +715,15 @@ func (u *_listed) cb(ctx *api.LsoCounter) {
 	s := listedText + " " + cos.FormatBigNum(ctx.Count()) + " names"
 	if u.l == 0 {
 		u.l = len(s) + 3
-		if u.bck.IsRemote() {
-			var tip string
-			if flagIsSet(u.c, listObjCachedFlag) {
-				tip = fmt.Sprintf("use %s to show pages immediately - one page at a time", qflprn(pagedFlag))
-			} else {
-				tip = fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
+		if u.tip {
+			if u.msg.IsFlagSet(apc.LsObjCached) {
+				tip := fmt.Sprintf("use %s to show pages immediately - one page at a time (tip)", qflprn(pagedFlag))
+				actionNote(u.c, tip)
+			} else if u.bck.IsRemote() {
+				tip := fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
+				note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
+				actionNote(u.c, note)
 			}
-			note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
-			actionNote(u.c, note)
 		}
 	} else if len(s) > u.l {
 		u.l = len(s) + 2

@@ -47,5 +47,5 @@ client.job(job_id).wait()
 
 # read the numpy array
 np.frombuffer(
-    client.bucket("to-bck").object("obj-id.npy").get().read_all(), dtype=np.uint8
+    client.bucket("to-bck").object("obj-id.npy").get_reader().read_all(), dtype=np.uint8
 )

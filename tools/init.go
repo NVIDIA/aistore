@@ -191,8 +191,7 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 	if err = initProxyURL(); err != nil {
 		return
 	}
-	initPmap()
-	return
+	return initPmap()
 }
 
 func initProxyURL() (err error) {
@@ -227,11 +226,14 @@ func initProxyURL() (err error) {
 	return
 }
 
-func initPmap() {
+func initPmap() error {
 	bp := BaseAPIParams(proxyURLReadOnly)
 	smap, err := waitForStartup(bp)
-	cos.AssertNoErr(err)
+	if err != nil {
+		return err
+	}
 	pmapReadOnly = smap.Pmap
+	return nil
 }
 
 func initRemAis() {

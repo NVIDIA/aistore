@@ -345,7 +345,8 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 			if i < iters-1 {
 				s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, fobj.path, e)
 				fmt.Fprintln(c.App.ErrWriter, s)
-				time.Sleep(time.Second)
+				briefPause(1)
+
 				ffh, errO := fh.Open()
 				if errO != nil {
 					fmt.Fprintf(c.App.ErrWriter, "failed to reopen %s: %v\n", fobj.path, errO)
@@ -455,7 +456,8 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		if i < iters-1 {
 			s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, path, e)
 			fmt.Fprintln(c.App.ErrWriter, s)
-			time.Sleep(time.Second)
+			briefPause(1)
+
 			putArgs.Reader, err = fh.Open()
 			if isTimeout(e) {
 				putArgs.BaseParams.Client.Timeout = longClientTimeout

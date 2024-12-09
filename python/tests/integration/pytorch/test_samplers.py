@@ -34,7 +34,7 @@ class TestAISSampler(TestCase):
 
         for i in range(NUM_OBJECTS):
             content = b"\0" * (randint(0, (MAX_OBJ_SIZE - MIN_OBJ_SIZE)) + MIN_OBJ_SIZE)
-            self.bck.object(f"object-{i}").put_content(content)
+            self.bck.object(f"object-{i}").get_writer().put_content(content)
 
         self.dataset = AISMapDataset(ais_source_list=self.bck)
 

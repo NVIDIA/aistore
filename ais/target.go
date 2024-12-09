@@ -91,10 +91,10 @@ var (
 func (*target) Name() string { return apc.Target } // as cos.Runner
 
 // as htext
-func (*target) interruptedRestarted() (interrupted, restarted bool) {
-	interrupted = fs.MarkerExists(fname.RebalanceMarker)
-	restarted = fs.MarkerExists(fname.NodeRestartedPrev)
-	return
+func (*target) interruptedRestarted() (i, r bool) {
+	i = fs.MarkerExists(fname.RebalanceMarker)
+	r = fs.MarkerExists(fname.NodeRestartedPrev)
+	return i, r
 }
 
 //
@@ -141,7 +141,7 @@ func (t *target) _initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) err
 		case apc.AIS:
 			continue
 		default:
-			return fmt.Errorf(cmn.FmtErrUnknown, t, "backend provider", provider)
+			return fmt.Errorf("unknown backend provider %q", provider)
 		}
 		t.backend[provider] = add
 
@@ -278,24 +278,24 @@ func (t *target) initHostIP(config *cmn.Config) {
 func initTID(config *cmn.Config) (tid string, generated bool) {
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
-			nlog.Errorln("Warning:", err)
+			nlog.Errorln("Daemon ID loaded from env is invalid:", err)
 		}
+		nlog.Infof("Initialized %s from env", meta.Tname(tid))
 		return tid, false
 	}
 
-	var err error
-	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
+	if tid, err := fs.LoadNodeID(config.FSP.Paths); err != nil {
 		cos.ExitLog(err) // FATAL
-	}
-	if tid != "" {
+	} else if tid != "" {
+		nlog.Infof("Initialized %s from file", meta.Tname(tid))
 		return tid, false
 	}
 
 	// this target: generate random ID
 	tid = genDaemonID(apc.Target, config)
-	err = cos.ValidateDaemonID(tid)
+	err := cos.ValidateDaemonID(tid)
 	debug.AssertNoErr(err)
-	nlog.Infoln(meta.Tname(tid) + ": ID randomly generated")
+	nlog.Infof("Initialized %s with randomly generated ID", meta.Tname(tid))
 	return tid, true
 }
 
@@ -408,9 +408,12 @@ func (t *target) Run() error {
 
 	err = t.htrun.run(config)
 
-	etl.StopAll()                              // stop all running ETLs if any
-	cos.Close(db)                              // close kv db
-	fs.RemoveMarker(fname.NodeRestartedMarker) // exit gracefully
+	etl.StopAll() // stop all running ETLs if any
+	cos.Close(db) // close kv db
+
+	// gracefully
+	fs.RemoveMarker(fname.NodeRestartedPrev, t.statsT)
+	fs.RemoveMarker(fname.NodeRestartedMarker, t.statsT)
 	return err
 }
 
@@ -460,7 +463,7 @@ func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
 	if wg != nil {
 		wg.Done() // compare w/ xact.GoRunW(()
 	}
-	t.res.RunResilver(args)
+	t.res.RunResilver(args, t.statsT)
 }
 
 func (t *target) endStartupStandby() (err error) {
@@ -514,7 +517,7 @@ func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, red.inUse)
 			return
 		}
-		t.statsT.SetFlag(cos.NodeAlerts, cos.Restarted)
+		t.statsT.SetFlag(cos.NodeAlerts, cos.NodeRestarted)
 		fs.PersistMarker(fname.NodeRestartedPrev)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
@@ -766,6 +769,9 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		t.statsT.IncErr(stats.ErrGetCount)
 		if goi.isIOErr {
 			t.statsT.IncErr(stats.IOErrGetCount)
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+				nlog.Warningln("io-error [", err, "]", goi.lom.String())
+			}
 		}
 
 		// handle right here, return nil
@@ -903,7 +909,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	var msg aisMsg
+	var msg actMsgExt
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -1293,6 +1299,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	return code, err
 }
 
+// NOTE: s3 will return err=nil with OK status to indicate (not deleting) non-existing object (see also aws.go)
 func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	var (
 		aisErr, backendErr         error
@@ -1306,7 +1313,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 			if cmn.IsErrObjNought(err) {
 				// cleanup in place
 				if errNested := lom.RemoveMain(); errNested != nil {
-					nlog.Errorln(t.String(), "failed to cleanup in place", errNested)
+					nlog.Errorln(t.String(), "failed to cleanup in place: nested err [", err, errNested, "]")
 				}
 				return http.StatusNotFound, nil, false
 			}

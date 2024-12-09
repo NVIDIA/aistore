@@ -45,7 +45,7 @@ def load_data():
     bucket = client.bucket(bucket_name).create()
     bucket.put_files("images/", pattern="*.jpg")
     # Show a random (non-transformed) image from the dataset
-    image_data = bucket.object("Bengal_171.jpg").get().read_all()
+    image_data = bucket.object("Bengal_171.jpg").get_reader().read_all()
     show_image(image_data)
 
 
@@ -64,7 +64,7 @@ def show_etl(etl):
 
 
 def get_with_etl(etl):
-    transformed_data = client.bucket(bucket_name).object("Bengal_171.jpg").get(etl_name=etl.name).read_all()
+    transformed_data = client.bucket(bucket_name).object("Bengal_171.jpg").get_reader(etl_name=etl.name).read_all()
     show_image(transformed_data)
 
 

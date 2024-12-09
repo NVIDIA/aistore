@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -213,16 +212,6 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 		}
 		t.termKaliveX(msg.Action, opts.NoShutdown)
 		t.decommission(msg.Action, &opts)
-	case apc.ActCleanupMarkers:
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		var ctx cleanmark
-		if err := cos.MorphMarshal(msg.Value, &ctx); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		t.cleanupMark(&ctx)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -539,29 +528,6 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// called by p.cleanupMark
-func (t *target) cleanupMark(ctx *cleanmark) {
-	smap := t.owner.smap.get()
-	if smap.version() > ctx.NewVer {
-		nlog.Warningf("%s: %s is newer - ignoring (and dropping) %v", t, smap, ctx)
-		return
-	}
-	if ctx.Interrupted {
-		if err := fs.RemoveMarker(fname.RebalanceMarker); err == nil {
-			nlog.Infof("%s: cleanmark 'rebalance', %s", t, smap)
-		} else {
-			nlog.Errorf("%s: failed to cleanmark 'rebalance': %v, %s", t, err, smap)
-		}
-	}
-	if ctx.Restarted {
-		if err := fs.RemoveMarker(fname.NodeRestartedPrev); err == nil {
-			nlog.Infof("%s: cleanmark 'restarted', %s", t, smap)
-		} else {
-			nlog.Errorf("%s: failed to cleanmark 'restarted': %v, %s", t, err, smap)
-		}
-	}
-}
-
 func (t *target) handleMpathReq(w http.ResponseWriter, r *http.Request) {
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
@@ -701,7 +667,7 @@ func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	}
 }
 
-func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
+func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag, caller string, silent bool) (err error) {
 	var oldVer int64
 	if msg.UUID == "" {
 		oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
@@ -740,7 +706,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	return
 }
 
-func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag string) (int64, error) {
+func (t *target) applyBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag string) (int64, error) {
 	var (
 		smap = t.owner.smap.get()
 		psi  *meta.Snode
@@ -766,7 +732,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 }
 
 // executes under lock
-func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *meta.Snode) (rmbcks []*meta.Bck, oldVer int64, emsg string, err error) {
+func (t *target) _syncBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, psi *meta.Snode) (rmbcks []*meta.Bck, oldVer int64, emsg string, err error) {
 	var (
 		createErrs  []error
 		destroyErrs []error
@@ -879,7 +845,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 }
 
 // is called under lock
-func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
+func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) (err error) {
 	if msg.Action == apc.ActPrimaryForce {
 		err = t.owner.rmd.synch(newRMD, true)
 		return err
@@ -907,9 +873,10 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		}
 	}
 	if !t.regstate.disabled.Load() {
-		t._runRe(newRMD, msg, smap)
+		oxid := xact.RebID2S(rmd.Version)
+		t._runRe(newRMD, msg, smap, oxid)
 	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
-		nlog.Warningln(t.String()+": standby => join", msg.String())
+		nlog.Warningln(t.String(), "standby => join:", msg.String())
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}
@@ -918,24 +885,45 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	return
 }
 
-func (t *target) _runRe(newRMD *rebMD, msg *aisMsg, smap *smapX) {
+func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string) {
 	const tag = "rebalance["
-	notif := &xact.NotifXact{
-		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+	var (
+		nxid    = xact.RebID2S(newRMD.Version)
+		tname   = t.String()
+		extArgs = reb.ExtArgs{
+			Notif: &xact.NotifXact{
+				Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+			},
+			Tstats: t.statsT,
+			Oxid:   oxid,
+			NID:    newRMD.Version,
+		}
+	)
+	if msg.UUID != nxid {
+		nlog.Warningln(tag, msg.UUID, "vs", nxid)
 	}
 
-	// 1. by user
+	// 1. by user aka admin
 	if msg.Action == apc.ActRebalance {
 		xname := tag + msg.UUID + "]"
-		nlog.Infoln(t.String(), "starting user-requested", t, xname)
+
+		if msg.Value != nil {
+			var xargs xact.ArgsMsg
+			if err := cos.MorphMarshal(msg.Value, &xargs); err == nil {
+				extArgs.Bck = (*meta.Bck)(&xargs.Bck)
+				extArgs.Prefix = msg.Name
+			}
+		}
+
+		nlog.Infoln(tname, "starting user-requested", xname, nxid)
 
 		// (##a)
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+		go t.reb.RunRebalance(&smap.Smap, &extArgs)
 		return
 	}
 
 	// 2. by RMD
-	xname := tag + xact.RebID2S(newRMD.Version) + "]"
+	xname := tag + nxid + "]"
 
 	switch msg.Action {
 	// 2.1. action => metasync(newRMD)
@@ -943,15 +931,16 @@ func (t *target) _runRe(newRMD *rebMD, msg *aisMsg, smap *smapX) {
 		var opts apc.ActValRmNode
 		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 			debug.AssertNoErr(err) // unlikely
-		} else {
-			var s string
-			if opts.DaemonID == t.SID() {
-				s = " (to subsequently deactivate or remove _this_ target)"
-			}
-			nlog.Infof("%s: starting '%s' triggered %s%s: %+v", t, msg.Action, xname, s, opts)
+			return
 		}
+
+		var s string
+		if opts.DaemonID == t.SID() {
+			s = " (to subsequently deactivate or remove _this_ target)"
+		}
+		nlog.Infoln(tname, "starting", msg.String(), "-triggered", xname, s, opts)
 		// (##b)
-		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+		go t.reb.RunRebalance(&smap.Smap, &extArgs)
 
 	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config
 	default:
@@ -959,9 +948,9 @@ func (t *target) _runRe(newRMD *rebMD, msg *aisMsg, smap *smapX) {
 		debug.Assert(config.Version > 0 && config.UUID == smap.UUID, config.String(), " vs ", smap.StringEx())
 
 		if config.Rebalance.Enabled {
-			nlog.Infoln(t.String(), "starting", xname)
+			nlog.Infoln(tname, "starting", xname)
 			// (##c)
-			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+			go t.reb.RunRebalance(&smap.Smap, &extArgs)
 		} else {
 			runtime.Gosched()
 
@@ -976,19 +965,19 @@ func (t *target) _runRe(newRMD *rebMD, msg *aisMsg, smap *smapX) {
 					//
 					// NOTE: trusting local copy of the config, _not_ checking with primary via reqHealth()
 					//
-					nlog.Warningln(t.String(), "not starting", xname, "- disabled in the", config.String())
+					nlog.Warningln(tname, "not starting", xname, "- disabled in the", config.String())
 					return
 				}
 
 				// (##d)
-				nlog.Infoln(t.String(), "starting", xname)
-				t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif, t.statsT)
+				nlog.Infoln(tname, "starting", xname)
+				t.reb.RunRebalance(&smap.Smap, &extArgs)
 			}()
 		}
 	}
 
 	if newRMD.Resilver != "" {
-		nlog.Infoln(t.String(), "... and resilver")
+		nlog.Infoln(tname, "... and resilver")
 
 		// (##resilver)
 		go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
@@ -997,7 +986,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *aisMsg, smap *smapX) {
 	t.owner.rmd.put(newRMD)
 }
 
-func (t *target) ensureLatestBMD(msg *aisMsg, r *http.Request) {
+func (t *target) ensureLatestBMD(msg *actMsgExt, r *http.Request) {
 	bmd, bmdVersion := t.owner.bmd.Get(), msg.BMDVersion
 	if bmd.Version < bmdVersion {
 		nlog.Errorf("%s: local %s < v%d %s - running fixup...", t, bmd, bmdVersion, msg)
@@ -1167,7 +1156,7 @@ func _stopETLs(newEtlMD, oldEtlMD *etlMD) {
 }
 
 // compare w/ p.receiveConfig
-func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
+func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
 	logmsync(oldConfig.Version, newConfig, msg, caller, newConfig.String(), oldConfig.UUID)
 
@@ -1205,7 +1194,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 }
 
 // NOTE: apply the entire config: add new and update existing entries (remote clusters)
-func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *aisMsg) (err error) {
+func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *actMsgExt) (err error) {
 	var (
 		aisbp   *backend.AISbp
 		aisConf = newConfig.Backend.Get(apc.AIS)

@@ -294,25 +294,29 @@ func TestMakePairsErrors(t *testing.T) {
 
 func TestParseQueryBckURI(t *testing.T) {
 	positiveTests := []struct {
-		uri string
-		bck cmn.QueryBcks
+		uri  string
+		bck  cmn.QueryBcks
+		pref string
 	}{
-		{uri: "", bck: cmn.QueryBcks{}},
-		{uri: "ais://", bck: cmn.QueryBcks{Provider: apc.AIS}},
-		{uri: "ais://#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns"}}},
-		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}}},
-		{uri: "ais://@uuid#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}},
-		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}},
-		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}},
-		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
-		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}},
+		{uri: "", bck: cmn.QueryBcks{}, pref: ""},
+		{uri: "ais://", bck: cmn.QueryBcks{Provider: apc.AIS}, pref: ""},
+		{uri: "ais://#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns"}}, pref: ""},
+		{uri: "ais://@uuid", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{UUID: "uuid"}}, pref: ""},
+		{uri: "ais://@uuid#ns", bck: cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}, pref: ""},
+		{uri: "ais://bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}, pref: ""},
+		{uri: "ais://#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns"}}, pref: ""},
+		{uri: "ais://@uuid#ns/bucket", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket", Ns: cmn.Ns{Name: "ns", UUID: "uuid"}}, pref: ""},
+		{uri: "http://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}, pref: ""},
+		{uri: "https://web.url/dataset", bck: cmn.QueryBcks{Provider: apc.HT, Name: "ZWUyYWFiOGEzYjEwMTJkNw"}, pref: ""},
+		{uri: "ais://bucket/objname", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}, pref: "objname"},
+		{uri: "ais://bucket/aaa/bbb/objname", bck: cmn.QueryBcks{Provider: apc.AIS, Name: "bucket"}, pref: "aaa/bbb/objname"},
 	}
 	for _, test := range positiveTests {
-		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
+		bck, pref, err := parseQueryBckURI(test.uri)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
 		b := cmn.Bck(bck)
 		tassert.Errorf(t, test.bck.Equal(&b), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		tassert.Errorf(t, test.pref == pref, "parsed %s to invalid embedded prefix %q (expected %q)", test.uri, pref, test.pref)
 	}
 
 	negativeTests := []struct {
@@ -323,13 +327,13 @@ func TestParseQueryBckURI(t *testing.T) {
 		{uri: "://"},
 		{uri: "aiss://"},
 		{uri: "aiss://bucket"},
-		{uri: "ais://bucket/objname"},
 		{uri: "ais:///objectname"},
+		{uri: "ais:///aaa/bbb/objectname"},
 		{uri: "ftp://unsupported"},
 	}
 	for _, test := range negativeTests {
-		bck, err := parseQueryBckURI(&cli.Context{}, test.uri)
-		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q)", test.uri, bck)
+		bck, pref, err := parseQueryBckURI(test.uri)
+		tassert.Errorf(t, err != nil, "expected error parsing %q, got: (bck %q, pref %q)", test.uri, bck, pref)
 	}
 }
 

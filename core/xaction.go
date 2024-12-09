@@ -15,13 +15,14 @@ import (
 type QuiRes int
 
 const (
-	QuiInactiveCB = QuiRes(iota) // e.g., no pending requests (NOTE: used exclusively by `quicb` callbacks)
-	QuiActive                    // active (e.g., receiving data)
-	QuiActiveRet                 // active that immediately breaks waiting for quiecscence
-	QuiDone                      // all done
-	QuiAborted                   // aborted
-	QuiTimeout                   // timeout
-	Quiescent                    // idle => quiescent
+	QuiInactiveCB     = QuiRes(iota) // e.g., no pending requests (NOTE: used exclusively by `quicb` callbacks)
+	QuiActive                        // active (e.g., receiving data)
+	QuiActiveRet                     // active that immediately breaks waiting for quiecscence
+	QuiActiveDontBump                // active that does not increase inactivity duration (ie., keeps initial setting)
+	QuiDone                          // all done
+	QuiAborted                       // aborted
+	QuiTimeout                       // timeout
+	Quiescent                        // idle => quiescent
 )
 
 type (

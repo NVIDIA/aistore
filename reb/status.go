@@ -24,19 +24,18 @@ func (reb *Reb) RebStatus(status *Status) {
 		marked = xreg.GetRebMarked()
 	)
 	status.Aborted = marked.Interrupted
-	status.Running = marked.Xact != nil && marked.Xact.Running()
+	status.Running = marked.Xact != nil
 
 	// rlock
-	reb.mu.RLock()
+	reb.mu.Lock()
 	status.Stage = reb.stages.stage.Load()
 	status.RebID = reb.rebID.Load()
-	status.Quiescent = reb.isQuiescent()
 	status.SmapVersion = tsmap.Version
 	smap := reb.smap.Load()
 	if smap != nil {
 		status.RebVersion = smap.Version
 	}
-	reb.mu.RUnlock()
+	reb.mu.Unlock()
 
 	// xreb, ?running
 	xreb := reb.xctn()
@@ -56,7 +55,7 @@ func (reb *Reb) RebStatus(status *Status) {
 			}
 		}
 	} else if status.Running {
-		nlog.Warningln(core.T.String()+": transitioning (renewing) to", marked.Xact.String())
+		nlog.Warningln(core.T.String(), "transitioning (renewing) to", marked.Xact.String())
 		status.Running = false
 	}
 

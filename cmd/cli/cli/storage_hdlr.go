@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -38,6 +39,16 @@ type bsummCtx struct {
 	n       int
 	res     cmn.AllBsummResults
 }
+
+var validateUsage = validateSummaryFlag.Usage + "\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
+	indent1 + "\t* ais scrub \t- same as above;\n" +
+	indent1 + "\t* ais storage validate ais \t- validate (a.k.a. scrub) all ais buckets;\n" +
+	indent1 + "\t* ais scrub s3 \t- all s3 buckets present in the cluster;\n" +
+	indent1 + "\t* ais scrub s3 --refresh 10\t- same as above while refreshing runtime counter(s) every 10s;\n" +
+	indent1 + "\t* ais scrub gs://abc/images/\t- validate part of the gcp bucket under 'images/`;\n" +
+	indent1 + "\t* ais scrub gs://abc --prefix images/\t- same as above."
 
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
@@ -92,7 +103,7 @@ var (
 			{
 				Name: cmdMpathRescanDisks,
 				Usage: "re-resolve (mountpath, filesystem) to its underlying disk(s) and revalidate the disks\n" +
-					indent1 + "\t(advanced use only)",
+					indent1 + "\t" + advancedUsageOnly,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags["default"],
 				Action:       mpathRescanHandler,
@@ -111,13 +122,15 @@ var (
 
 var (
 	cleanupFlags = []cli.Flag{
+		forceClnFlag,
+		rmZeroSizeFlag,
 		waitFlag,
 		waitJobXactFinishedFlag,
 	}
 	cleanupCmd = cli.Command{
 		Name:         cmdStgCleanup,
-		Usage:        "perform storage cleanup: remove deleted objects and old/obsolete workfiles",
-		ArgsUsage:    listAnyCommandArgument,
+		Usage:        "remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
+		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        cleanupFlags,
 		Action:       cleanupStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -150,9 +163,13 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		cmdStgValidate: append(
+		cmdScrub: append(
 			longRunFlags,
-			waitJobXactFinishedFlag,
+			bsummPrefixFlag,
+			objLimitFlag,
+			noHeaderFlag,
+			maxPagesFlag,
+			noRecursFlag,
 		),
 	}
 
@@ -170,7 +187,7 @@ var (
 	showCmdStgSummary = cli.Command{
 		Name:         cmdSummary,
 		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
-		ArgsUsage:    listAnyCommandArgument,
+		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        storageSummFlags,
 		Action:       summaryStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
@@ -191,11 +208,11 @@ var (
 			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
 			showCmdStgSummary,
 			{
-				Name:         cmdStgValidate,
-				Usage:        "check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices",
-				ArgsUsage:    listAnyCommandArgument,
-				Flags:        storageFlags[cmdStgValidate],
-				Action:       showMisplacedAndMore,
+				Name:         cmdScrub,
+				Usage:        validateUsage,
+				ArgsUsage:    lsAnyCommandArgument,
+				Flags:        storageFlags[cmdScrub],
+				Action:       prelimScrub,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			mpathCmd,
@@ -210,38 +227,46 @@ func showStorageHandler(c *cli.Context) (err error) {
 }
 
 //
-// cleanup
+// cleanup space: remove deleted, misplaced
 //
 
-func cleanupStorageHandler(c *cli.Context) (err error) {
-	var (
-		bck cmn.Bck
-		id  string
-	)
+func cleanupStorageHandler(c *cli.Context) error {
+	var bck cmn.Bck
 	if c.NArg() != 0 {
+		var err error
 		bck, err = parseBckURI(c, c.Args().Get(0), false)
 		if err != nil {
-			return
+			return err
 		}
 		if _, err = headBucket(bck, true /* don't add */); err != nil {
-			return
+			return err
 		}
 	}
-	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck}
-	if id, err = api.StartXaction(apiBP, &xargs, ""); err != nil {
-		return
+
+	// xargs
+	force := flagIsSet(c, forceClnFlag)
+	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck, Force: force}
+	if flagIsSet(c, rmZeroSizeFlag) {
+		xargs.Flags = xact.XrmZeroSize
 	}
-	xargs.ID = id
+
+	// do
+	xid, err := xstart(c, &xargs, "")
+	if err != nil {
+		return err
+	}
+
+	xargs.ID = xid
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		if id != "" {
+		if xid != "" {
 			actionX(c, &xargs, "")
 		} else {
 			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
 		}
-		return
+		return nil
 	}
 
-	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", id)
+	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", xid)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
@@ -349,17 +374,27 @@ func showDiskStats(c *cli.Context, tid string) error {
 // - currently, only in-cluster buckets - TODO
 
 func summaryStorageHandler(c *cli.Context) error {
-	uri := c.Args().Get(0)
-	qbck, errV := parseQueryBckURI(c, uri)
+	uri := preparseBckObjURI(c.Args().Get(0))
+	qbck, pref, errV := parseQueryBckURI(uri)
 	if errV != nil {
 		return errV
 	}
-	var (
-		prefix     = parseStrFlag(c, bsummPrefixFlag)
-		objCached  = flagIsSet(c, listObjCachedFlag)
-		bckPresent = true // currently, only in-cluster buckets
-	)
-	ctx, err := newBsummCtxMsg(c, qbck, prefix, objCached, bckPresent)
+
+	// embedded prefix vs '--prefix'
+	prefix := parseStrFlag(c, bsummPrefixFlag)
+	switch {
+	case pref != "" && prefix != "":
+		s := fmt.Sprintf(": via '%s' and %s option", uri, qflprn(bsummPrefixFlag))
+		if pref != prefix {
+			return errors.New("two different prefix values" + s)
+		}
+		actionWarn(c, "redundant and duplicated prefix assignment"+s)
+	case pref != "":
+		prefix = pref
+	}
+
+	bckPresent := true // TODO: currently, only in-cluster buckets
+	ctx, err := newBsummCtxMsg(c, qbck, prefix, flagIsSet(c, listObjCachedFlag), bckPresent)
 	if err != nil {
 		return err
 	}

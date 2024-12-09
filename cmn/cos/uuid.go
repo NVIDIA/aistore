@@ -57,12 +57,11 @@ func InitShortID(seed uint64) {
 func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
-	if !isAlpha(uuid[0]) {
+	if c := uuid[0]; c == 'g' || !isAlpha(c) { // see also: `xact.RebID2S`
 		tie := int(rtie.Add(1))
 		h = string(rune('A' + tie%26))
 	}
-	c := uuid[len(uuid)-1]
-	if c == '-' || c == '_' {
+	if c := uuid[len(uuid)-1]; c == '-' || c == '_' {
 		tie := int(rtie.Add(1))
 		t = string(rune('a' + tie%26))
 	}

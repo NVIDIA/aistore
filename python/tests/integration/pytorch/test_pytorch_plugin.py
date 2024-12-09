@@ -148,7 +148,7 @@ class TestPytorchPlugin(unittest.TestCase):
         shard1_archive_path = self.local_test_files.joinpath(shard1_archive_name)
         create_archive(shard1_archive_path, shard1_content_dict)
         shard1_obj = bucket.object(obj_name=shard1_archive_name)
-        shard1_obj.put_file(shard1_archive_path)
+        shard1_obj.get_writer().put_file(shard1_archive_path)
 
         shard2_content_dict = {
             "file1.cls": b"1",
@@ -159,7 +159,7 @@ class TestPytorchPlugin(unittest.TestCase):
         shard2_archive_path = self.local_test_files.joinpath(shard2_archive_name)
         create_archive(shard2_archive_path, shard2_content_dict)
         shard2_obj = bucket.object(obj_name=shard2_archive_name)
-        shard2_obj.put_file(shard2_archive_path)
+        shard2_obj.get_writer().put_file(shard2_archive_path)
 
         shard1 = DataShard(
             client_url=CLUSTER_ENDPOINT,
@@ -197,7 +197,7 @@ class TestPytorchPlugin(unittest.TestCase):
         shard_one_archive_path = self.local_test_files.joinpath(shard_one_archive_name)
         create_archive(shard_one_archive_path, shard_one_dict)
         shard_one_obj = bucket.object(obj_name=shard_one_archive_name)
-        shard_one_obj.put_file(shard_one_archive_path)
+        shard_one_obj.get_writer().put_file(shard_one_archive_path)
 
         shard_two_dict = {
             "sample_3.cls": b"Class content of sample three",
@@ -211,7 +211,7 @@ class TestPytorchPlugin(unittest.TestCase):
         shard_two_archive_path = self.local_test_files.joinpath(shard_two_archive_name)
         create_archive(shard_two_archive_path, shard_two_dict)
         shard_two_obj = bucket.object(obj_name=shard_two_archive_name)
-        shard_two_obj.put_file(shard_two_archive_path)
+        shard_two_obj.get_writer().put_file(shard_two_archive_path)
 
         # Expected output from the reader
         expected_sample_dicts = [

@@ -96,7 +96,7 @@ func Load() (err error) {
 
 func Props() (out cos.StrKVs) {
 	flags := cos.NodeStateFlags(gcl.tstats.Get(cos.NodeAlerts))
-	if flags.IsSet(cos.CertificateInvalid) || flags.IsSet(cos.CertificateExpired) {
+	if flags.IsAnySet(cos.CertificateInvalid | cos.CertificateExpired) {
 		out = make(cos.StrKVs, 1)
 		flags &= (cos.CertificateInvalid | cos.CertificateExpired)
 		out["error"] = flags.String()
@@ -138,7 +138,7 @@ func (cl *certLoader) hk(int64) time.Duration {
 
 func (cl *certLoader) hktime() (d time.Duration) {
 	flags := cos.NodeStateFlags(cl.tstats.Get(cos.NodeAlerts))
-	if flags.IsSet(cos.CertificateExpired) || flags.IsSet(cos.CertificateInvalid) {
+	if flags.IsAnySet(cos.CertificateExpired | cos.CertificateInvalid) {
 		return dfltTimeInvalid
 	}
 

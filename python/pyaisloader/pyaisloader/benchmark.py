@@ -130,7 +130,7 @@ class Benchmark:
     def __prepopulate_h(self, objs_created, prefix, suffix):
         content, size = generate_bytes(self.minsize, self.maxsize)
         obj = self.bucket.object(prefix + (str(suffix)))
-        obj.put_content(content)
+        obj.get_writer().put_content(content)
         objs_created.append(obj.name)
         return size, objs_created
 
@@ -354,7 +354,7 @@ class PutGetMixedBenchmark(Benchmark):
         content, size = generate_bytes(self.minsize, self.maxsize)
         obj = self.bucket.object(prefix + str(suffix))
         op_start = time.time()
-        obj.put_content(content)
+        obj.get_writer().put_content(content)
         op_end = time.time()
         latency = op_end - op_start
         stats.objs_created.append(obj.name)
@@ -374,7 +374,7 @@ class PutGetMixedBenchmark(Benchmark):
 
     def __get_benchmark_h(self, stats, objs):  # Done
         op_start = time.time()
-        content = self.bucket.object(random.choice(objs).name).get(
+        content = self.bucket.object(random.choice(objs).name).get_reader(
             etl_name=(self.etl.name if self.etl else None)
         )
         size = len(content.read_all())

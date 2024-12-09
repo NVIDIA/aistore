@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -146,14 +147,15 @@ func (c *putJogger) _do(req *request, lom *core.LOM) {
 	if err := c.ec(req, lom); err != nil {
 		err = cmn.NewErrFailedTo(core.T, req.Action, lom.Cname(), err)
 		c.parent.AddErr(err, 0)
-	} else if !c.toDisk { // throttle
-		c.ntotal++
-		if (c.micro && fs.IsMicroThrottle(c.ntotal)) || fs.IsMiniThrottle(c.ntotal) {
-			if pressure := g.pmm.Pressure(); pressure >= memsys.PressureHigh {
-				time.Sleep(fs.Throttle100ms)
-				if !c.micro && pressure >= memsys.PressureExtreme {
-					c.micro = true
-				}
+	}
+	c.ntotal++
+	if (c.micro && fs.IsMicroThrottle(c.ntotal)) || fs.IsMiniThrottle(c.ntotal) {
+		if pressure := g.pmm.Pressure(); pressure >= memsys.PressureHigh {
+			time.Sleep(fs.Throttle100ms)
+			if !c.micro && pressure >= memsys.PressureExtreme {
+				// too late?
+				c.micro = true
+				oom.FreeToOS(true /*force*/)
 			}
 		}
 	}

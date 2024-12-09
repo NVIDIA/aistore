@@ -168,3 +168,6 @@ AWS_DEFAULT_REGION = "us-east-1"
 NANOSECONDS_IN_SECOND = 1_000_000_000
 
 DEFAULT_LOG_FORMAT = "%(asctime)s %(levelname)s: %(message)s"
+
+# Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
+BYTE_RANGE_PREFIX_LENGTH = 6

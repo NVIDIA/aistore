@@ -296,11 +296,11 @@ outer:
 		nlog.Warningln(xname, "::", xblob.String(), "[", msg.String(), err, "]")
 	default:
 		if xblob.Size() >= cos.GiB/2 || cmn.Rom.FastV(4, cos.SmoduleXs) {
-			var s string
 			if n := int(pebl.num()); n > 0 {
-				s = " (num-pending " + strconv.Itoa(n) + ")"
+				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(n), ")")
+			} else {
+				nlog.Infoln(xname, "::", xblob.String())
 			}
-			nlog.Infoln(xname, "::", xblob.String(), s)
 		}
 	}
 }

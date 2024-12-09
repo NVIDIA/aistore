@@ -551,7 +551,7 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(self.ais_bck.qparam, new_obj.query_params)
         self.assertEqual(props, new_obj.props)
 
-    @patch("aistore.sdk.obj.object.validate_file")
+    @patch("aistore.sdk.obj.object_writer.validate_file")
     @patch("aistore.sdk.bucket.validate_directory")
     @patch("pathlib.Path.glob")
     def test_put_files(self, mock_glob, mock_validate_dir, mock_validate_file):

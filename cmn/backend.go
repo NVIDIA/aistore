@@ -16,6 +16,7 @@ import (
 
 type backendFuncs struct {
 	EncodeVersion func(v any) (version string, isSet bool)
+	EncodeETag    func(v any) (etag string, isSet bool)
 	EncodeCksum   func(v any) (cksumValue string, isSet bool)
 }
 
@@ -24,7 +25,7 @@ type backendFuncs struct {
 // not it is depends on how the object was created and how it is encrypted..."
 const AwsMultipartDelim = "-"
 
-func IsS3MultipartEtag(etag string) bool {
+func isS3MultipartEtag(etag string) bool {
 	return strings.Contains(etag, AwsMultipartDelim)
 }
 
@@ -60,15 +61,43 @@ var BackendHelpers = struct {
 				return "", false
 			}
 		},
+		// ETag is set whenever it is non-empty. Store with quotes.
+		EncodeETag: func(v any) (string, bool) {
+			switch x := v.(type) {
+			case *string:
+				return *x, *x != ""
+			case string:
+				return x, x != ""
+			default:
+				debug.FailTypeCast(v)
+				return "", false
+			}
+		},
+		// Cksum is set whenever it is non-empty, and it is not a multipart etag,
+		// we just need to remove quotes.
+		// From https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html:
+		// - "The entity tag is a hash of the object. The ETag reflects changes only
+		//    to the contents of an object, not its metadata."
+		// - "The ETag may or may not be an MD5 digest of the object data. Whether or
+		//    not it is depends on how the object was created and how it is encrypted..."
 		EncodeCksum: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case *string:
-				if IsS3MultipartEtag(*x) {
-					return *x, true // return as-is multipart
+				if x == nil || *x == "" {
+					return "", false
+				}
+				if isS3MultipartEtag(*x) {
+					return "", false
 				}
 				return UnquoteCEV(*x), true
 			case string:
-				return x, true
+				if x == "" {
+					return "", false
+				}
+				if isS3MultipartEtag(x) {
+					return "", false
+				}
+				return UnquoteCEV(x), true
 			default:
 				debug.FailTypeCast(v)
 				return "", false
@@ -82,6 +111,15 @@ var BackendHelpers = struct {
 				return x, x != ""
 			case int64:
 				return strconv.FormatInt(x, 10), true
+			default:
+				debug.FailTypeCast(v)
+				return "", false
+			}
+		},
+		EncodeETag: func(v any) (string, bool) {
+			switch x := v.(type) {
+			case string:
+				return x, x != ""
 			default:
 				debug.FailTypeCast(v)
 				return "", false
@@ -109,12 +147,10 @@ var BackendHelpers = struct {
 		},
 	},
 	HTTP: backendFuncs{
-		EncodeVersion: func(v any) (string, bool) {
+		EncodeETag: func(v any) (string, bool) {
 			switch x := v.(type) {
 			case string:
 				// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
-				x = strings.TrimPrefix(x, "W/")
-				x = UnquoteCEV(x)
 				return x, x != ""
 			default:
 				debug.FailTypeCast(v)

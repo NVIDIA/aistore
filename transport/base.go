@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -68,6 +69,7 @@ type (
 	streamBase struct {
 		streamer streamer
 		client   Client        // stream's http client
+		xctn     core.Xact     // xaction
 		stopCh   cos.StopCh    // stop/abort stream
 		lastCh   cos.StopCh    // end-of-stream
 		pdu      *spdu         // PDU buffer
@@ -121,8 +123,9 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.postCh = make(chan struct{}, 1)
 
 	// default overrides
-	if extra.SenderID != "" {
-		sid = "-" + extra.SenderID
+	if extra.Xact != nil {
+		s.xctn = extra.Xact
+		sid = "-" + extra.Xact.ID()
 	}
 	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
 	if extra.UsePDU() {
@@ -162,7 +165,7 @@ func (s *streamBase) _lid(sid, dstID string, extra *Extra) {
 	sb.WriteByte('[')
 	sb.WriteString(strconv.FormatInt(s.sessID, 10))
 
-	extra.Lid(&sb)
+	extra.Lid(&sb) // + compressed
 
 	sb.WriteString("]=>")
 	sb.WriteString(dstID)
@@ -304,7 +307,12 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// termination is caused by anything other than Fin()
 	// (reasonStopped is, effectively, abort via Stop() - totally legit)
 	if reason != reasonStopped {
-		nlog.Errorf("%s: terminating (%s, %v)", s, reason, err)
+		errExt := fmt.Errorf("%s[term-reason: %s, err: %v]", s, reason, err)
+		nlog.Errorln(errExt)
+		// NOTE: abort grandparent xaction
+		if s.xctn != nil {
+			s.xctn.Abort(errExt)
+		}
 	}
 
 	// wait for the SCQ/cmplCh to empty
@@ -313,9 +321,10 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
 
-	verbose := cmn.Rom.FastV(5, cos.SmoduleTransport)
-	if cnt := s.chanFull.Load(); (cnt >= 10 && cnt <= 20) || (cnt > 0 && verbose) {
-		nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
+	if cnt := s.chanFull.Load(); cnt > 0 {
+		if (cnt >= 10 && cnt <= 20) || cmn.Rom.FastV(4, cos.SmoduleTransport) {
+			nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
+		}
 	}
 }
 

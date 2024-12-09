@@ -216,7 +216,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	return
 }
 
-// terminate this MMSA instance and, possibly, GC as well
+// [tests only] terminate this MMSA instance, run GC
 func (r *MMSA) Terminate(unregHK bool) {
 	var freed int64
 	if unregHK {
@@ -226,6 +226,6 @@ func (r *MMSA) Terminate(unregHK bool) {
 		freed += s.cleanup()
 	}
 	r.toGC.Add(freed)
-	r.freeMemToOS(sizeToGC, true /*force*/)
+	r.freeMemToOS(sizeToGC, PressureLow, true /*force*/)
 	debug.Infof("%s terminated", r)
 }

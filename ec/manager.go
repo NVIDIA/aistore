@@ -254,7 +254,7 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 //   - lom - object to encode
 //   - intra - if true, it is internal request and has low priority
 //   - cb - optional callback that is called after the object is encoded
-func (mgr *Manager) EncodeObject(lom *core.LOM, cb core.OnFinishObj) error {
+func (mgr *Manager) EncodeObject(lom *core.LOM, cb onFin) error {
 	if !lom.ECEnabled() {
 		return ErrorECDisabled
 	}

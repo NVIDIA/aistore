@@ -39,7 +39,7 @@ type (
 		isDone() (done bool, err error)
 		set(nlps []core.NLP)
 		// triggers
-		commitAfter(caller string, msg *aisMsg, err error, args ...any) (bool, error)
+		commitAfter(caller string, msg *actMsgExt, err error, args ...any) (bool, error)
 		rsvp(err error)
 		// cleanup
 		abort(error)
@@ -217,7 +217,7 @@ func (txns *transactions) find(uuid, act string) (txn, error) {
 	return txn, nil
 }
 
-func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
+func (txns *transactions) commitBefore(caller string, msg *actMsgExt) error {
 	var (
 		rndzvs rndzvs
 		ok     bool
@@ -233,7 +233,7 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 	return fmt.Errorf("rendezvous record %s:%d already exists", msg.UUID, rndzvs.timestamp)
 }
 
-func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...any) (errDone error) {
+func (txns *transactions) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (errDone error) {
 	txns.mtx.Lock()
 	txn, ok := txns.m[msg.UUID]
 	txns.mtx.Unlock()
@@ -489,7 +489,7 @@ func (txn *txnBckBase) String() string {
 	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args ...any) (found bool, errDone error) {
+func (txn *txnBckBase) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (found bool, errDone error) {
 	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}

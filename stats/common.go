@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
@@ -481,32 +482,86 @@ waitStartup:
 
 func (r *runner) StartedUp() bool { return r.startedUp.Load() }
 
-// - check OOM, and
+// - check OOM and OOCPU
 // - set NodeStateFlags with both capacity and memory flags
-func (r *runner) _mem(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
+func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 	_ = r.mem.Get()
 	pressure := mm.Pressure(&r.mem)
 
 	flags := r.nodeStateFlags() // current/old
+
+	// memory, first
 	switch {
 	case pressure >= memsys.PressureExtreme:
 		if !flags.IsSet(cos.OOM) {
 			set |= cos.OOM
+			clr |= cos.LowMemory
 			nlog.Errorln(mm.Str(&r.mem))
 		}
+		oom.FreeToOS(true)
 	case pressure >= memsys.PressureHigh:
-		set |= cos.LowMemory
 		clr |= cos.OOM
 		if !flags.IsSet(cos.LowMemory) {
+			set |= cos.LowMemory
 			nlog.Warningln(mm.Str(&r.mem))
 		}
 	default:
-		clr |= cos.OOM | cos.LowMemory
-		if flags.IsSet(cos.LowMemory | cos.OOM) {
+		if flags.IsAnySet(cos.LowMemory | cos.OOM) {
+			clr |= cos.OOM | cos.LowMemory
 			nlog.Infoln(mm.Name, "back to normal")
 		}
 	}
-	r.SetClrFlag(NodeAlerts, set, clr)
+
+	// load, second
+	nset, nclr := _load(flags, set, clr)
+
+	r.SetClrFlag(NodeAlerts, nset, nclr)
+}
+
+// CPU utilization, load average
+// - for watermarks, using system defaults from sys/cpu.go
+// - compare with fs/throttle and memsys/gc
+
+func _load(flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
+	const tag = "CPU utilization:"
+	var (
+		load = sys.MaxLoad()
+		ncpu = sys.NumCPU()
+	)
+	// ok
+	if load < float64(ncpu>>1) { // 50%
+		if flags.IsAnySet(cos.LowCPU | cos.OOCPU) {
+			clr |= cos.OOCPU | cos.LowCPU
+			nlog.Infoln(tag, "back to normal")
+		}
+		return set, clr
+	}
+	// extreme
+	var (
+		fcpu  = float64(ncpu)
+		oocpu = max(fcpu*sys.ExtremeLoad/100, 1)
+	)
+	if load >= oocpu {
+		if !flags.IsSet(cos.OOCPU) {
+			set |= cos.OOCPU
+			clr |= cos.LowCPU
+			nlog.Errorln(tag, "extremely high [", load, ncpu, "]")
+		}
+		return set, clr
+	}
+	// high
+	highcpu := fcpu * sys.HighLoad / 100
+	if load >= highcpu {
+		clr |= cos.OOCPU
+		if !flags.IsSet(cos.LowCPU) {
+			set |= cos.LowCPU
+			nlog.Warningln(tag, "high [", load, ncpu, "]")
+		}
+	}
+
+	// (50%, highLoad) is, effectively, hysteresis
+
+	return set, clr
 }
 
 func (r *runner) GetStats() *Node {

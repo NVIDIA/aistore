@@ -28,14 +28,14 @@ def generate_and_upload_tar(obj: Object, num_files: int, file_size: int, dest: P
                 f.write(os.urandom(file_size))
             tar.add(file_path, arcname=f"file_{i}.bin")
             os.remove(file_path)
-    obj.put_file(tar_path)  # Upload to the specified object
+    obj.get_writer().put_file(tar_path)  # Upload to the specified object
     tar_path.unlink()
 
 
 def create_and_put_object(obj: Object, obj_size: int) -> bytes:
     """Creates an object with random data and puts it in the bucket."""
     data = os.urandom(obj_size)
-    obj.put_content(data)
+    obj.get_writer().put_content(data)
     return data
 
 

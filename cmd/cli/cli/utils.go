@@ -98,26 +98,6 @@ func arg0Node(c *cli.Context) (node *meta.Snode, sname string, err error) {
 	return
 }
 
-//
-// misplaced or mistyped flag(s)
-//
-
-func errArgIsFlag(c *cli.Context, arg string) (err error) {
-	if len(arg) > 1 && arg[0] == '-' {
-		err = incorrectUsageMsg(c, "missing command line argument (hint: flag '%s' misplaced?)", arg)
-	}
-	return err
-}
-
-func errTailArgsContainFlag(tail []string) error {
-	for _, arg := range tail {
-		if len(arg) > 1 && arg[0] == '-' {
-			return fmt.Errorf("unrecognized or misplaced option %q", arg)
-		}
-	}
-	return nil
-}
-
 func reorderTailArgs(left string, middle []string, right ...string) string {
 	var sb strings.Builder
 	sb.WriteString(left)
@@ -674,33 +654,6 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 		return false, V(err)
 	}
 	return len(objList.Entries) == 0, nil
-}
-
-// disambiguate objname as prefix
-// NOTE: never "cached"
-func objnameIsPrefix(bck cmn.Bck, oname string) (bool, error) {
-	msg := &apc.LsoMsg{Prefix: oname}
-	msg.SetFlag(apc.LsNameOnly)
-	objList, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 3})
-
-	if err != nil {
-		return false, V(err)
-	}
-	if len(objList.Entries) > 1 {
-		return true, nil
-	}
-	if len(objList.Entries) == 1 {
-		return objList.Entries[0].Name != oname, nil
-	}
-	return false, nil
-}
-
-func objnameIsPrefixSimple(oname string) bool {
-	// Must indicate intent through the input format. For example:
-	//      * Specific object: bucket/file.txt
-	//      * Prefix: bucket/file* or bucket/file/
-	// Treat as prefix if it contains wildcards or ends with a slash
-	return strings.HasSuffix(oname, "/") || strings.ContainsAny(oname, "*?")
 }
 
 func ensureRemoteProvider(bck cmn.Bck) error {

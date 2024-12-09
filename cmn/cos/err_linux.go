@@ -38,6 +38,10 @@ var ioErrs = [...]error{
 func IsIOError(err error) bool {
 	debug.Assert(err != nil)
 
+	if IsErrMvToVirtDir(err) {
+		return false
+	}
+
 	// via os.NewSyscallError(), with a prior check !os.IsNotExist()
 	if e, ok := err.(*os.SyscallError); ok {
 		nlog.Infoln("by syscall-error", e)

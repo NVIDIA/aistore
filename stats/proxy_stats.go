@@ -83,7 +83,8 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		r._next(config, now)
 	}
 
-	r._mem(r.node.PageMM(), 0, 0)
+	// memory and CPU alerts
+	r._memload(r.node.PageMM(), 0, 0)
 }
 
 func (r *Prunner) statsTime(newval time.Duration) {

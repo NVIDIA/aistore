@@ -130,7 +130,7 @@ class AISShardReader(AISBaseIterDataset):
 
         # Read shard, get samples, and yield
         for shard in worker_iter:
-            shard_content = shard.get(
+            shard_content = shard.get_reader(
                 etl_name=self._etl_name,
             ).read_all()
 

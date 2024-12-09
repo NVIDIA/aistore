@@ -141,7 +141,7 @@ func (alg *SortFlag) Set(value string) error {
 			}
 		}
 	default:
-		return fmt.Errorf("invalid sort kind, expected 'alpha' or 'shuffle'")
+		return fmt.Errorf("invalid sorting algorithm, expected 'alpha' or 'shuffle'")
 	}
 
 	return nil

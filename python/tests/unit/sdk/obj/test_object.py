@@ -18,6 +18,7 @@ from aistore.sdk.const import (
     QPARAM_NEW_CUSTOM,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
+    HEADER_RANGE,
     HEADER_OBJECT_APPEND_HANDLE,
     HTTP_METHOD_POST,
     ACT_PROMOTE,
@@ -46,6 +47,7 @@ from aistore.sdk.types import (
     BucketEntry,
 )
 from tests.const import SMALL_FILE_SIZE, ETL_NAME
+from tests.utils import cases
 
 BCK_NAME = "bucket_name"
 OBJ_NAME = "object_name"
@@ -83,25 +85,38 @@ class TestObject(unittest.TestCase):
     def test_get_default_params(self):
         self.get_exec_assert()
 
-    def test_get(self):
+    @cases(
+        # Blob download case
+        {"blob_config": BlobDownloadConfig(chunk_size="4mb", num_workers="10")},
+        # Byte range cases
+        {"byte_range": "bytes=100-200", "byte_range_tuple": (100, 200)},
+        {"byte_range": "bytes=500-", "byte_range_tuple": (500, None)},
+        {"byte_range": "bytes=-300", "byte_range_tuple": (None, 300)},
+    )
+    def test_get(self, case):
         archpath_param = "archpath"
-        chunk_size = "4mb"
-        num_workers = "10"
         self.expected_params[QPARAM_ARCHPATH] = archpath_param
         self.expected_params[QPARAM_ARCHREGX] = ""
         self.expected_params[QPARAM_ARCHMODE] = None
         self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
+
         archive_config = ArchiveConfig(archpath=archpath_param)
-        blob_config = BlobDownloadConfig(
-            chunk_size=chunk_size,
-            num_workers=num_workers,
-        )
+
+        blob_config = case.get("blob_config", None)
+        byte_range = case.get("byte_range", None)
+        byte_range_tuple = case.get("byte_range_tuple", None)
+
+        expected_headers = self.get_expected_headers({}, blob_config, byte_range)
+
         self.get_exec_assert(
             archive_config=archive_config,
             chunk_size=3,
             etl_name=ETL_NAME,
             writer=self.mock_writer,
             blob_download_config=blob_config,
+            byte_range=byte_range,
+            expected_byte_range_tuple=byte_range_tuple,
+            expected_headers=expected_headers,
         )
 
     def test_get_archregex(self):
@@ -120,13 +135,11 @@ class TestObject(unittest.TestCase):
         mock_obj_client.return_value = mock_obj_client_instance
         mock_obj_reader.return_value = Mock(spec=ObjectReader)
 
-        res = self.object.get(**kwargs)
-
-        blob_config = kwargs.get("blob_download_config", BlobDownloadConfig())
-        initial_headers = kwargs.get("expected_headers", {})
-        expected_headers = self.get_expected_headers(initial_headers, blob_config)
-
+        expected_headers = kwargs.pop("expected_headers", {})
+        expected_byte_range_tuple = kwargs.pop("expected_byte_range_tuple", None)
         expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
+
+        res = self.object.get_reader(**kwargs)
 
         self.assertIsInstance(res, ObjectReader)
 
@@ -135,7 +148,9 @@ class TestObject(unittest.TestCase):
             path=REQUEST_PATH,
             params=self.expected_params,
             headers=expected_headers,
+            byte_range=expected_byte_range_tuple,
         )
+
         mock_obj_reader.assert_called_with(
             object_client=mock_obj_client_instance,
             chunk_size=expected_chunk_size,
@@ -144,16 +159,20 @@ class TestObject(unittest.TestCase):
             self.mock_writer.writelines.assert_called_with(res)
 
     @staticmethod
-    def get_expected_headers(initial_headers, blob_config):
-        expected_headers = initial_headers
-        blob_chunk_size = blob_config.chunk_size
-        blob_workers = blob_config.num_workers
-        if blob_chunk_size or blob_workers:
-            expected_headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
-        if blob_chunk_size:
-            expected_headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
-        if blob_workers:
-            expected_headers[HEADER_OBJECT_BLOB_WORKERS] = blob_workers
+    def get_expected_headers(initial_headers, blob_config=None, byte_range=None):
+        expected_headers = initial_headers.copy()
+        if blob_config:
+            blob_chunk_size = blob_config.chunk_size
+            blob_workers = blob_config.num_workers
+            if blob_chunk_size or blob_workers:
+                expected_headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
+            if blob_chunk_size:
+                expected_headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_chunk_size
+            if blob_workers:
+                expected_headers[HEADER_OBJECT_BLOB_WORKERS] = blob_workers
+        if byte_range:
+            expected_headers[HEADER_RANGE] = byte_range
+
         return expected_headers
 
     def test_get_url(self):
@@ -178,7 +197,7 @@ class TestObject(unittest.TestCase):
         path = "any/filepath"
         mock_file = mock_open(read_data=b"file content")
         with patch("builtins.open", mock_file):
-            self.object.put_file(path)
+            self.object.get_writer().put_file(path)
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
@@ -189,7 +208,7 @@ class TestObject(unittest.TestCase):
 
     def test_put_content(self):
         content = b"user-supplied-bytes"
-        self.object.put_content(content)
+        self.object.get_writer().put_content(content)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
@@ -209,7 +228,7 @@ class TestObject(unittest.TestCase):
         mock_response.headers = resp_headers
         self.mock_client.request.return_value = mock_response
 
-        next_handle = self.object.append_content(content)
+        next_handle = self.object.get_writer().append_content(content)
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
@@ -228,7 +247,7 @@ class TestObject(unittest.TestCase):
         mock_response.headers = resp_headers
         self.mock_client.request.return_value = mock_response
 
-        next_handle = self.object.append_content(b"", prev_handle, True)
+        next_handle = self.object.get_writer().append_content(b"", prev_handle, True)
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
             path=REQUEST_PATH,
@@ -241,7 +260,7 @@ class TestObject(unittest.TestCase):
         custom_metadata = {"key1": "value1", "key2": "value2"}
         expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
 
-        self.object.set_custom_props(custom_metadata)
+        self.object.get_writer().set_custom_props(custom_metadata)
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PATCH,
@@ -255,7 +274,9 @@ class TestObject(unittest.TestCase):
         self.expected_params[QPARAM_NEW_CUSTOM] = "true"
         expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
 
-        self.object.set_custom_props(custom_metadata, replace_existing=True)
+        self.object.get_writer().set_custom_props(
+            custom_metadata, replace_existing=True
+        )
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PATCH,

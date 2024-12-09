@@ -73,13 +73,16 @@ func (p *proxy) bootstrap() {
 	// 3: start as primary
 	forcePrimaryChange := prim.isCfg || prim.isEP
 	if prim.isSmap || forcePrimaryChange {
-		if prim.isSmap {
+		// log
+		switch {
+		case prim.isSmap:
 			nlog.Infof("%s: assuming primary role _for now_ %+v", p, prim)
-		} else if prim.isEP && isSelf != "" {
+		case prim.isEP && isSelf != "":
 			nlog.Infof("%s: assuming primary role (and note that env %s=%s is redundant)", p, env.AIS.PrimaryEP, daemon.EP)
-		} else {
+		default:
 			nlog.Infof("%s: assuming primary role as per: %+v", p, prim)
 		}
+		// go
 		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets, prim)
 		return
 	}
@@ -336,8 +339,8 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	// 10. metasync (smap, config, etl & bmd) and startup as primary
 	smap = p.owner.smap.get()
 	var (
-		aisMsg = p.newAmsgStr(metaction2, bmd)
-		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
+		actMsgExt = p.newAmsgStr(metaction2, bmd)
+		pairs     = []revsPair{{smap, actMsgExt}, {bmd, actMsgExt}, {cluConfig, actMsgExt}}
 	)
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
@@ -346,7 +349,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	nlog.Infoln(smap.StringEx()+",", bmd.StringEx())
 
 	if etlMD.Version > 0 {
-		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})
+		_ = p.metasyncer.sync(revsPair{etlMD, actMsgExt})
 	}
 
 	// 11. Clear regpool
@@ -450,9 +453,9 @@ until:
 
 	// do
 	var (
-		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
-		aisMsg = p.newAmsg(msg, nil)
-		ctx    = &rmdModifier{
+		msg       = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
+		actMsgExt = p.newAmsg(msg, nil)
+		ctx       = &rmdModifier{
 			pre:     func(_ *rmdModifier, clone *rebMD) { clone.Version += 100 },
 			smapCtx: &smapModifier{smap: smap},
 			cluID:   smap.UUID,
@@ -462,7 +465,7 @@ until:
 	if err != nil {
 		cos.ExitLog(err)
 	}
-	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
+	wg := p.metasyncer.sync(revsPair{rmd, actMsgExt})
 
 	p.owner.rmd.starting.Store(false) // done
 	p.owner.smap.mu.Unlock()
@@ -743,11 +746,12 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 		cm, ok := res.v.(*cluMeta)
 		debug.Assert(ok)
 		if cm.BMD != nil && cm.BMD.version() > 0 {
-			if out.BMD == nil { // 1. init
+			switch {
+			case out.BMD == nil: // 1. init
 				borigin, out.BMD = cm.BMD.UUID, cm.BMD
-			} else if borigin != "" && borigin != cm.BMD.UUID { // 2. slow path
+			case borigin != "" && borigin != cm.BMD.UUID: // 2. slow path
 				slowp = true
-			} else if !slowp && out.BMD.Version < cm.BMD.Version { // 3. fast path max(version)
+			case !slowp && out.BMD.Version < cm.BMD.Version: // 3. fast path max(version)
 				out.BMD = cm.BMD
 				borigin = cm.BMD.UUID
 			}
@@ -780,11 +784,12 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 			break
 		}
 		if cm.Smap != nil && cm.Smap.version() > 0 {
-			if out.Smap == nil { // 1. init
+			switch {
+			case out.Smap == nil: // 1. init
 				sorigin, out.Smap = cm.Smap.UUID, cm.Smap
-			} else if sorigin != "" && sorigin != cm.Smap.UUID { // 2. slow path
+			case sorigin != "" && sorigin != cm.Smap.UUID: // 2. slow path
 				slowp = true
-			} else if !slowp && out.Smap.Version < cm.Smap.Version { // 3. fast path max(version)
+			case !slowp && out.Smap.Version < cm.Smap.Version: // 3. fast path max(version)
 				out.Smap = cm.Smap
 				sorigin = cm.Smap.UUID
 			}

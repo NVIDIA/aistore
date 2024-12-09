@@ -143,11 +143,13 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [name](#obj.object.Object.name)
     * [props](#obj.object.Object.props)
     * [head](#obj.object.Object.head)
+    * [get\_reader](#obj.object.Object.get_reader)
     * [get](#obj.object.Object.get)
     * [get\_semantic\_url](#obj.object.Object.get_semantic_url)
     * [get\_url](#obj.object.Object.get_url)
     * [put\_content](#obj.object.Object.put_content)
     * [put\_file](#obj.object.Object.put_file)
+    * [get\_writer](#obj.object.Object.get_writer)
     * [promote](#obj.object.Object.promote)
     * [delete](#obj.object.Object.delete)
     * [blob\_download](#obj.object.Object.blob_download)
@@ -167,6 +169,10 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [readable](#obj.obj_file.object_file.ObjectFile.readable)
     * [read](#obj.obj_file.object_file.ObjectFile.read)
     * [close](#obj.obj_file.object_file.ObjectFile.close)
+  * [ObjectFileWriter](#obj.obj_file.object_file.ObjectFileWriter)
+    * [write](#obj.obj_file.object_file.ObjectFileWriter.write)
+    * [flush](#obj.obj_file.object_file.ObjectFileWriter.flush)
+    * [close](#obj.obj_file.object_file.ObjectFileWriter.close)
 * [obj.object\_props](#obj.object_props)
   * [ObjectProps](#obj.object_props.ObjectProps)
     * [bucket\_name](#obj.object_props.ObjectProps.bucket_name)
@@ -2090,26 +2096,27 @@ Start a job and return its ID.
 ### get\_within\_timeframe
 
 ```python
-def get_within_timeframe(start_time: datetime,
-                         end_time: datetime) -> List[JobSnapshot]
+def get_within_timeframe(
+        start_time: datetime,
+        end_time: Optional[datetime] = None) -> List[JobSnapshot]
 ```
 
-Checks for jobs that started and finished within a specified timeframe.
+Retrieves jobs that started after a specified start_time and optionally ended before a specified end_time.
 
 **Arguments**:
 
-- `start_time` _datetime.datetime_ - The start of the timeframe for monitoring jobs.
-- `end_time` _datetime.datetime_ - The end of the timeframe for monitoring jobs.
+- `start_time` _datetime_ - The start of the timeframe for monitoring jobs.
+- `end_time` _datetime, optional_ - The end of the timeframe for monitoring jobs.
   
 
 **Returns**:
 
-- `List[JobSnapshot]` - A list of jobs that have finished within the specified timeframe.
+- `List[JobSnapshot]` - A list of jobs that meet the specified timeframe criteria.
   
 
 **Raises**:
 
-- `JobInfoNotFound` - Raised when information on a job's status could not be found.
+- `JobInfoNotFound` - Raised when no relevant job info is found.
 
 <a id="multiobj.object_group.ObjectGroup"></a>
 
@@ -2596,6 +2603,48 @@ Requests object properties and returns headers. Updates props.
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exceptions.HTTPError(404)` - The object does not exist
 
+<a id="obj.object.Object.get_reader"></a>
+
+### get\_reader
+
+```python
+def get_reader(archive_config: ArchiveConfig = None,
+               blob_download_config: BlobDownloadConfig = None,
+               chunk_size: int = DEFAULT_CHUNK_SIZE,
+               etl_name: str = None,
+               writer: BufferedWriter = None,
+               latest: bool = False,
+               byte_range: str = None) -> ObjectReader
+```
+
+Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
+
+**Arguments**:
+
+- `archive_config` _ArchiveConfig, optional_ - Settings for archive extraction
+- `blob_download_config` _BlobDownloadConfig, optional_ - Settings for using blob download
+- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
+- `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
+- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output
+  User is responsible for closing the writer
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
+- `byte_range` _str, optional_ - Specify a specific data segment of the object for transfer, including
+  both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+  
+
+**Returns**:
+
+  An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
+  directly.
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
 <a id="obj.object.Object.get"></a>
 
 ### get
@@ -2609,6 +2658,8 @@ def get(archive_config: ArchiveConfig = None,
         latest: bool = False,
         byte_range: str = None) -> ObjectReader
 ```
+
+Deprecated: Use 'get_reader' instead.
 
 Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
 
@@ -2681,6 +2732,8 @@ Get the full url to the object including base url and any query parameters
 def put_content(content: bytes) -> Response
 ```
 
+Deprecated: Use 'ObjectWriter.put_content' instead.
+
 Puts bytes as an object to a bucket in AIS storage.
 
 **Arguments**:
@@ -2703,6 +2756,8 @@ Puts bytes as an object to a bucket in AIS storage.
 def put_file(path: str or Path) -> Response
 ```
 
+Deprecated: Use 'ObjectWriter.put_file' instead.
+
 Puts a local file as an object to a bucket in AIS storage.
 
 **Arguments**:
@@ -2717,6 +2772,20 @@ Puts a local file as an object to a bucket in AIS storage.
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `ValueError` - The path provided is not a valid file
+
+<a id="obj.object.Object.get_writer"></a>
+
+### get\_writer
+
+```python
+def get_writer() -> ObjectWriter
+```
+
+Create an ObjectWriter to write to object contents and attributes.
+
+**Returns**:
+
+  An ObjectWriter which can be used to write to an object's contents and attributes.
 
 <a id="obj.object.Object.promote"></a>
 
@@ -2825,6 +2894,8 @@ def append_content(content: bytes,
                    flush: bool = False) -> str
 ```
 
+Deprecated: Use 'ObjectWriter.append_content' instead.
+
 Append bytes as an object to a bucket in AIS storage.
 
 **Arguments**:
@@ -2855,6 +2926,8 @@ Append bytes as an object to a bucket in AIS storage.
 def set_custom_props(custom_metadata: Dict[str, str],
                      replace_existing: bool = False) -> Response
 ```
+
+Deprecated: Use 'ObjectWriter.set_custom_props' instead.
 
 Set custom properties for the object.
 
@@ -3075,6 +3148,78 @@ def close() -> None
 ```
 
 Close the file.
+
+<a id="obj.obj_file.object_file.ObjectFileWriter"></a>
+
+## Class: ObjectFileWriter
+
+```python
+class ObjectFileWriter(BufferedWriter)
+```
+
+A file-like writer object for AIStore, extending `BufferedWriter`.
+
+**Arguments**:
+
+- `obj_writer` _ObjectWriter_ - The ObjectWriter instance for handling write operations.
+- `mode` _str_ - Specifies the mode in which the file is opened.
+  - `'w'`: Write mode. Opens the object for writing, truncating any existing content.
+  Writing starts from the beginning of the object.
+  - `'a'`: Append mode. Opens the object for appending. Existing content is preserved,
+  and writing starts from the end of the object.
+
+<a id="obj.obj_file.object_file.ObjectFileWriter.write"></a>
+
+### write
+
+```python
+@override
+def write(buffer: bytes) -> int
+```
+
+Write data to the object.
+
+**Arguments**:
+
+- `data` _bytes_ - The data to write.
+  
+
+**Returns**:
+
+- `int` - Number of bytes written.
+  
+
+**Raises**:
+
+- `ValueError` - I/O operation on a closed file.
+
+<a id="obj.obj_file.object_file.ObjectFileWriter.flush"></a>
+
+### flush
+
+```python
+@override
+def flush() -> None
+```
+
+Flush the writer, ensuring the object is finalized.
+
+This does not close the writer but makes the current state accessible.
+
+**Raises**:
+
+- `ValueError` - I/O operation on a closed file.
+
+<a id="obj.obj_file.object_file.ObjectFileWriter.close"></a>
+
+### close
+
+```python
+@override
+def close() -> None
+```
+
+Close the writer and finalize the object.
 
 <a id="obj.object_props.ObjectProps"></a>
 

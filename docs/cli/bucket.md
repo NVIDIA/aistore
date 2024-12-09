@@ -706,7 +706,11 @@ Source bucket must exist. When the destination bucket is remote (e.g. in the Clo
 
 > **NOTE:** not to confuse in-cluster _presence_ and existence. Remote object may exist (remotely), etc.
 
+> **NOTE:** to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md).
+
 Moreover, when the destination is AIS (`ais://`) or remote AIS (`ais://@remote-alias`) bucket, the existence is optional: the destination will be created on the fly, with bucket properties copied from the source (`SRC_BUCKET`).
+
+>  **NOTE:** similar to delete, evict and prefetch operations, `cp` also supports embedded prefix - see [disambiguating multi-object operation](/docs/cli/object.md#disambiguating-multi-object-operation)
 
 Finally, the option to copy remote bucket onto itself is also supported - syntax-wise. Here's an example that'll shed some light:
 
@@ -857,7 +861,10 @@ Notice a certain limitation (that also shows up as the last step #15):
 
 * However, to see an out-of-band added content, you currently need to run [multi-object copy](#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets), with multiple source objects specified using `--list` or `--template`.
 
-* See `ais cp --help` for details.
+### See also
+
+* `ais cp --help` for the most recently updated options
+* to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
 
 ## Show bucket summary
 
@@ -907,11 +914,46 @@ A few additional words must be said about `--validate`. The option is provided t
 
 ### Notes
 
-1. `--validate` may take considerable time to execute (depending, of course, on sizes of the datasets in question and the capabilities of the underlying hardware);
-2. non-zero *misplaced* objects in the (validated) output is a direct indication that the cluster requires rebalancing and/or resilvering;
-3. `--fast=false` is another command line option that may also significantly increase execution time;
-4. by default, `--fast` is set to `true`, which also means that bucket summary executes a *faster* logic (that may have a certain minor speed/accuracy trade-off);
-5. to obtain the most precise results, run the command with `--fast=false` - and prepare to wait.
+> `--validate` may take considerable time to execute (depending, of course, on sizes of the datasets in question and the capabilities of the underlying hardware);
+> non-zero *misplaced* objects in the (validated) output is a direct indication that the cluster requires rebalancing and/or resilvering;
+> an alternative way to execute _validation_ is to run `ais strorage validate` or (simply) `ais scrub`:
+
+```console
+$ ais storage validate --help
+NAME:
+   ais storage validate - check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
+   e.g.:
+     * ais storage validate                 - validate all in-cluster buckets;
+     * ais scrub                            - same as above;
+     * ais storage validate ais             - validate (a.k.a. scrub) all ais buckets;
+     * ais scrub s3                         - all s3 buckets present in the cluster;
+     * ais scrub s3 --refresh 10            - same as above while refreshing runtime counter(s) every 10s;
+     * ais scrub gs://abc/images/           - validate part of the gcp bucket under 'images/`;
+     * ais scrub gs://abc --prefix images/  - same as above.
+
+USAGE:
+   ais storage validate [command options] [BUCKET[/PREFIX]] or [PROVIDER]
+
+OPTIONS:
+   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value          used together with '--refresh' to limit the number of generated reports, e.g.:
+                           '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --prefix value         for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                          '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
+                          a/b that have names (relative to this directory) starting with the letter c
+   --limit value          maximum number of object names to list (0 - unlimited; see also '--max-pages')
+                          e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
+   --no-headers, -H       display tables without headers
+   --max-pages value      maximum number of pages to display (see also '--page-size' and '--limit')
+                          e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
+   --non-recursive, --nr  list objects without including nested virtual subdirectories
+   --help, -h             show help
+```
+
+For details and additional examples, please see:
+
+* [Validate in-cluster content for misplaced objects and missing copies](/docs/cli/storage.md#validate-in-cluster-content-for-misplaced-objects-and-missing-copies)
 
 ### Examples
 

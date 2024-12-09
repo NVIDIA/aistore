@@ -89,16 +89,17 @@ var (
 	}
 
 	startRebalance = cli.Command{
-		Name:   commandStart,
-		Usage:  "rebalance ais cluster",
-		Flags:  clusterCmdsFlags[commandStart],
-		Action: startClusterRebalanceHandler,
+		Name:      commandStart,
+		Usage:     jobStartRebalance.Usage,
+		ArgsUsage: jobStartRebalance.ArgsUsage,
+		Flags:     jobStartRebalance.Flags,
+		Action:    jobStartRebalance.Action,
 	}
 	stopRebalance = cli.Command{
 		Name:   commandStop,
 		Usage:  "stop rebalancing ais cluster",
 		Flags:  clusterCmdsFlags[commandStop],
-		Action: stopClusterRebalanceHandler,
+		Action: stopRebHandler,
 	}
 
 	clusterCmd = cli.Command{
@@ -543,11 +544,49 @@ func setPrimaryHandler(c *cli.Context) error {
 	return err
 }
 
-func startClusterRebalanceHandler(c *cli.Context) (err error) {
-	return startXactionKind(c, apc.ActRebalance)
+func startRebHandler(c *cli.Context) (err error) {
+	var (
+		extra, prefix string
+		xargs         = xact.ArgsMsg{Kind: apc.ActRebalance}
+	)
+	if flagIsSet(c, verbObjPrefixFlag) {
+		prefix = parseStrFlag(c, verbObjPrefixFlag)
+	}
+	if c.NArg() > 0 {
+		uri := preparseBckObjURI(c.Args().Get(0))
+		bck, pref, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
+		if err != nil {
+			return err
+		}
+		if _, err := headBucket(bck, false /* don't add */); err != nil {
+			return err
+		}
+		xargs.Bck = bck
+
+		// embedded prefix vs '--prefix'
+		switch {
+		case pref != "" && prefix != "":
+			s := fmt.Sprintf(": via '%s' and %s option", uri, qflprn(verbObjPrefixFlag))
+			if pref != prefix {
+				return errors.New("two different prefix values" + s)
+			}
+			actionWarn(c, "redundant and duplicated prefix assignment"+s)
+		case pref != "":
+			prefix = pref
+		}
+	}
+	if xargs.Bck.IsEmpty() && prefix != "" {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if !xargs.Bck.IsEmpty() {
+		extra = prefix
+		actionWarn(c, "limiting the scope of rebalance to only '"+xargs.Bck.Cname(extra)+"' is not recommended!")
+		briefPause(2)
+	}
+	return startXaction(c, &xargs, extra)
 }
 
-func stopClusterRebalanceHandler(c *cli.Context) error {
+func stopRebHandler(c *cli.Context) error {
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true}
 	_, snap, err := getAnyXactSnap(&xargs)
 	if err != nil {
@@ -556,12 +595,15 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 	if snap == nil {
 		return errors.New("rebalance is not running")
 	}
+	return stopReb(c, snap.ID)
+}
 
-	xargs.ID, xargs.OnlyRunning = snap.ID, false
-	if err := api.AbortXaction(apiBP, &xargs); err != nil {
+func stopReb(c *cli.Context, xid string) error {
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, ID: xid, Force: flagIsSet(c, forceFlag)}
+	if err := xstop(&xargs); err != nil {
 		return V(err)
 	}
-	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)
+	actionDone(c, fmt.Sprintf("Stopped %s[%s]\n", apc.ActRebalance, xid))
 	return nil
 }
 

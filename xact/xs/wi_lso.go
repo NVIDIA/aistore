@@ -66,7 +66,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 		return nil
 	}
 
-	if !cmn.DirHasOrIsPrefix(ct.ObjectName(), wi.msg.Prefix) {
+	if wi.msg.Prefix != "" && !cmn.DirHasOrIsPrefix(ct.ObjectName(), wi.msg.Prefix) {
 		return filepath.SkipDir
 	}
 
@@ -81,7 +81,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 }
 
 func (wi *walkInfo) match(objName string) bool {
-	if !cmn.ObjHasPrefix(objName, wi.msg.Prefix) {
+	if wi.msg.Prefix != "" && !cmn.ObjHasPrefix(objName, wi.msg.Prefix) {
 		return false
 	}
 	return wi.msg.ContinuationToken == "" || !cmn.TokenGreaterEQ(wi.msg.ContinuationToken, objName)
@@ -101,12 +101,8 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEnt) {
 	return
 }
 
-// NOTE: slow path
+// NOTE: slow path if lom.Bck is remote
 func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
-	if !lom.Bucket().HasVersioningMD() {
-		debug.Assert(false, lom.Cname())
-		return
-	}
 	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/, nil /*origReq*/)
 	switch {
 	case res.Eq:

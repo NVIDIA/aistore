@@ -7,6 +7,46 @@ redirect_from:
  - /docs/out_of_band.md/
 ---
 
+
+**Table of Contents**
+- [Example](#example)
+- [Out-of-band updates](#out-of-band-updates)
+- [Lesser scope](#lesser-scope)
+- [Out-of-band writes, deletes and more](#out-of-band-writes-deletes-and-more)
+- [When reading in-cluster data causes deletion](#when-reading-in-cluster-data-causes-deletion)
+- [GET latest version](#get-latest-version)
+- [References](#references)
+
+There are multiple ways to fully synchronize in-cluster content with remote backend. Let's first take a look at the following `ais cp` and `ais prefetch` examples:
+
+## Example
+
+```console
+$ ais cp s3://BUCKET s3://BUCKET --prefix PREFIX --num-workers 64 --sync
+```
+
+Notice the `--sync` option.
+
+Alternatively, to fully synchronize in-cluster content (and since "prefetch" typically does not imply any deletions) we can also use `ais evict` followed by `ais prefetch`:
+
+```console
+## run "evict" and wait for the job to finish; optionally use `--wait` option
+##
+$ ais evict BUCKET[/PREFIX] --keep-md
+
+## optionally, `ais ls` to show that nothing is "cached"
+##
+$ ais ls BUCKET[/PREFIX] --cached
+
+## no need to use `--latest` option (redundant and slowing-down).
+##
+$ ais prefetch BUCKET[/PREFIX] --num-workers 64 --blob-threshold 1GiB
+```
+
+> Notice the `--keep-md` option above.
+
+> TIP: always a good idea to check `--help` for the most recent updates.
+
 ## Out-of-band updates
 
 One (but not the only one) way to deal with out-of-band updates is to configure bucket as follows:

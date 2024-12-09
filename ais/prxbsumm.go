@@ -50,14 +50,14 @@ func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error)
 	q := qbck.NewQuery()
 
 	msg.UUID = cos.GenUUID()
-	aisMsg := p.newAmsgActVal(apc.ActSummaryBck, msg)
+	actMsgExt := p.newAmsgActVal(apc.ActSummaryBck, msg)
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.ActBegin), // compare w/ txn
 		Query:  q,
-		Body:   cos.MustMarshal(aisMsg),
+		Body:   cos.MustMarshal(actMsgExt),
 	}
 	// not using default control-plane timeout -
 	// returning only _after_ all targets start running this new job
@@ -84,14 +84,14 @@ func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error)
 
 func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.AllBsummResults, status int, err error) {
 	var (
-		q      = make(url.Values, 4)
-		aisMsg = p.newAmsgActVal(apc.ActSummaryBck, msg)
-		args   = allocBcArgs()
+		q         = make(url.Values, 4)
+		actMsgExt = p.newAmsgActVal(apc.ActSummaryBck, msg)
+		args      = allocBcArgs()
 	)
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.ActQuery),
-		Body:   cos.MustMarshal(aisMsg),
+		Body:   cos.MustMarshal(actMsgExt),
 	}
 	args.smap = p.owner.smap.get()
 	if cnt := args.smap.CountActiveTs(); cnt < 1 {

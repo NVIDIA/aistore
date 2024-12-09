@@ -193,6 +193,9 @@ func attrsFromLink(link string, resp *http.Response, oah cos.OAH) (size int64) {
 		if v, ok := h.EncodeVersion(resp.Header.Get(cos.S3VersionHeader)); ok {
 			oah.SetCustomKey(cmn.VersionObjMD, v)
 		}
+		if v, ok := h.EncodeETag(resp.Header.Get(cos.HdrETag)); ok {
+			oah.SetCustomKey(cmn.ETag, v)
+		}
 		if v, ok := h.EncodeCksum(resp.Header.Get(cos.S3CksumHeader)); ok {
 			oah.SetCustomKey(cmn.MD5ObjMD, v)
 		}

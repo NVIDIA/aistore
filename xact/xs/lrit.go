@@ -254,6 +254,8 @@ func (r *lrit) _range(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
+// TODO -- FIXME: this is the last remaining place where we list remote bucket by each and every target
+
 // (compare with ais/plstcx)
 func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (

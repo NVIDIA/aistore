@@ -1,7 +1,8 @@
 #
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import Optional, Dict
+
+from typing import Optional, Tuple, Dict
 
 import requests
 
@@ -17,36 +18,50 @@ class ObjectClient:
     Args:
         request_client (RequestClient): The RequestClient used to make HTTP requests
         path (str): URL Path to the object
-        params (List[str]): Query parameters for the request
+        params (Dict[str, str]): Query parameters for the request
         headers (Optional[Dict[str, str]]): HTTP request headers
+        byte_range (Optional[Tuple[Optional[int], Optional[int]]): Tuple representing the byte range
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         request_client: RequestClient,
         path: str,
         params: Dict[str, str],
         headers: Optional[Dict[str, str]] = None,
+        byte_range: Optional[Tuple[Optional[int], Optional[int]]] = (None, None),
     ):
         self._request_client = request_client
         self._request_path = path
         self._request_params = params
         self._request_headers = headers
+        self._byte_range = byte_range
 
-    def get(self, stream: bool, start_position: int) -> requests.Response:
+    def get(self, stream: bool, offset: Optional[int] = None) -> requests.Response:
         """
-        Make a request to AIS to get the object content, optionally starting at a specific byte position.
+        Make a request to AIS to get the object content, applying an optional offset.
 
         Args:
             stream (bool): If True, stream the response content.
-            start_position (int): The byte position to start reading from.
+            offset (int, optional): The offset in bytes to apply. If not provided, no offset
+                                    is applied.
 
         Returns:
             requests.Response: The response object from the request.
         """
         headers = self._request_headers.copy() if self._request_headers else {}
-        if start_position != 0:
-            headers[HEADER_RANGE] = f"bytes={start_position}-"
+
+        if offset:
+            l, r = self._byte_range
+            if l is not None:
+                l = l + offset
+            elif r is not None:
+                r = r - offset
+            else:
+                l = offset
+
+            headers[HEADER_RANGE] = f"bytes={l or ''}-{r or ''}"
 
         resp = self._request_client.request(
             HTTP_METHOD_GET,

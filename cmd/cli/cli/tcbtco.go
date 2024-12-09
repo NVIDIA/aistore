@@ -98,12 +98,12 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		return nil
 	}
 
-	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, bckFrom, objNameOrTmpl)
+	oltp, err := dopOLTP(c, bckFrom, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
 
-	// HEAD(to)
+	// bck-to exists?
 	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
 			return err
@@ -115,8 +115,10 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 
 	dryRun := flagIsSet(c, copyDryRunFlag)
 
-	// either 1. copy/transform bucket (x-tcb)
-	if objName == "" && listObjs == "" && tmplObjs == "" {
+	//
+	// either (1) copy/transform bucket (x-tcb)
+	//
+	if oltp.objName == "" && oltp.list == "" && oltp.tmpl == "" {
 		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
 		if bckFrom.Equal(&bckTo) && !bckFrom.IsRemote() {
 			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
@@ -132,21 +134,23 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		return copyBucket(c, bckFrom, bckTo)
 	}
 
-	// or 2. multi-object x-tco
-	if listObjs == "" && tmplObjs == "" {
-		listObjs = objName // NOTE: "pure" prefix comment in parseObjListTemplate (above)
+	//
+	// or (2) multi-object x-tco
+	//
+	if oltp.list == "" && oltp.tmpl == "" {
+		oltp.list = oltp.objName // (compare with `_prefetchOne`)
 	}
 	if dryRun {
 		var prompt string
-		if listObjs != "" {
-			prompt = fmt.Sprintf("%s %q ...\n", text2, listObjs)
+		if oltp.list != "" {
+			prompt = fmt.Sprintf("%s %q ...\n", text2, oltp.list)
 		} else {
-			prompt = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, tmplObjs)
+			prompt = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, oltp.tmpl)
 		}
 		dryRunCptn(c) // TODO: ditto
 		actionDone(c, prompt)
 	}
-	return runTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
+	return runTCO(c, bckFrom, bckTo, oltp.list, oltp.tmpl, etlName)
 }
 
 func _iniCopyBckMsg(c *cli.Context, msg *apc.CopyBckMsg) (err error) {

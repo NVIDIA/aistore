@@ -40,7 +40,7 @@ const (
 	commandShow = "show"
 )
 
-// advanced command and subcommands
+// 'ais advanced' subcommands
 const (
 	cmdGenShards     = "gen-shards"
 	cmdPreload       = "preload"
@@ -49,6 +49,8 @@ const (
 	cmdRandMountpath = "random-mountpath"
 	cmdRotateLogs    = "rotate-logs"
 )
+
+const advancedUsageOnly = "(caution: advanced usage only)"
 
 // - 2nd level subcommands (mostly, verbs)
 // - show subcommands (`show <what>`)
@@ -94,7 +96,7 @@ const (
 	cmdRebalance    = apc.ActRebalance
 	cmdLRU          = apc.ActLRU
 	cmdStgCleanup   = "cleanup" // display name for apc.ActStoreCleanup
-	cmdStgValidate  = "validate"
+	cmdScrub        = "validate"
 	cmdSummary      = "summary" // ditto apc.ActSummaryBck
 
 	cmdCluster    = commandCluster
@@ -260,6 +262,8 @@ const (
 
 	bucketObjectOrTemplateMultiArg = "BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]"
 
+	bucketEmbeddedPrefixArg = "[BUCKET[/PREFIX]]"
+
 	bucketSrcArgument       = "SRC_BUCKET"
 	bucketObjectSrcArgument = "SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE]"
 	bucketDstArgument       = "DST_BUCKET"
@@ -319,9 +323,8 @@ const (
 	// backend enable/disable
 	cloudProviderArg = "CLOUD_PROVIDER"
 
-	// List command
-	listAnyCommandArgument = "PROVIDER:[//BUCKET_NAME]"
-	listObjCommandArgument = "PROVIDER://BUCKET_NAME"
+	// 'ais ls'
+	lsAnyCommandArgument = bucketEmbeddedPrefixArg + " or [PROVIDER]"
 
 	// Auth
 	userLoginArgument = "USER_NAME"
@@ -410,7 +413,7 @@ var (
 	}
 	verbObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
-		Usage: "select objects that have names starting with the specified prefix, e.g.:\n" +
+		Usage: "select virtual directories or objects that have names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c'\t- matches names 'a/b/c/d', 'a/b/cdef', and similar;\n" +
 			indent4 + "\t'--prefix a/b/c/'\t- only matches objects from the virtual directory a/b/c/",
 	}
@@ -495,7 +498,14 @@ var (
 			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",
 	}
 
-	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
+	forceFlag    = cli.BoolFlag{Name: "force,f", Usage: "force execution of the command " + advancedUsageOnly}
+	forceClnFlag = cli.BoolFlag{
+		Name: forceFlag.Name,
+		Usage: "disregard interrupted rebalance and possibly other conditions preventing full cleanup\n" +
+			indent1 + "\t(tip: check 'ais config cluster lru.dont_evict_time' as well)",
+	}
+
+	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "remove zero size objects " + advancedUsageOnly}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
@@ -522,7 +532,7 @@ var (
 	//
 	objLimitFlag = cli.IntFlag{
 		Name: "limit",
-		Usage: "maximum number of object names to display (0 - unlimited; see also '--max-pages')\n" +
+		Usage: "maximum number of object names to list (0 - unlimited; see also '--max-pages')\n" +
 			indent4 + "\te.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom",
 	}
 	pageSizeFlag = cli.IntFlag{
@@ -548,7 +558,7 @@ var (
 	// bucket summary
 	validateSummaryFlag = cli.BoolFlag{
 		Name:  "validate",
-		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
+		Usage: "check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more",
 	}
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",
@@ -1054,11 +1064,11 @@ var (
 	}
 	nonElectableFlag = cli.BoolFlag{
 		Name:  "non-electable",
-		Usage: "this proxy must not be elected as primary (advanced use)",
+		Usage: "this proxy must not be elected as primary " + advancedUsageOnly,
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
-		Usage: "do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only!)",
+		Usage: "do _not_ run global rebalance after putting node in maintenance " + advancedUsageOnly,
 	}
 	mountpathLabelFlag = cli.StringFlag{
 		Name: "label",
