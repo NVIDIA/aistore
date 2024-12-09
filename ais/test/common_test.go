@@ -269,15 +269,15 @@ func (m *ioContext) remoteRefill() {
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
-	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 
 	m.objNames = m.objNames[:0]
-	for _, obj := range objList.Entries {
+	for _, obj := range lst.Entries {
 		m.objNames = append(m.objNames, obj.Name)
 	}
 
-	leftToFill := m.num - len(objList.Entries)
+	leftToFill := m.num - len(lst.Entries)
 	tassert.Errorf(m.t, leftToFill > 0, "leftToFill %d", leftToFill)
 
 	m._remoteFill(leftToFill, false /*evict*/, false /*override*/)
@@ -331,10 +331,10 @@ func (m *ioContext) evict() {
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
-	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
-	if len(objList.Entries) != m.num {
-		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
+	if len(lst.Entries) != m.num {
+		m.t.Fatalf("list_objects err: %d != %d", len(lst.Entries), m.num)
 	}
 
 	tlog.Logf("evicting remote bucket %s...\n", m.bck)
@@ -348,13 +348,13 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
-	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 
 	tlog.Logf("remote PREFETCH %d objects...\n", prefetchCnt)
 
 	wg := &sync.WaitGroup{}
-	for idx, obj := range objList.Entries {
+	for idx, obj := range lst.Entries {
 		if idx >= prefetchCnt {
 			break
 		}
@@ -421,7 +421,7 @@ func (m *ioContext) del(opts ...int) {
 	if toRemoveCnt < 0 && m.prefix != "" {
 		lsmsg.Prefix = "" // all means all
 	}
-	objList, err := api.ListObjects(baseParams, m.bck, lsmsg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, m.bck, lsmsg, api.ListArgs{})
 	if err != nil {
 		if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
 			return
@@ -435,7 +435,7 @@ func (m *ioContext) del(opts ...int) {
 	tassert.CheckFatal(m.t, err)
 
 	// delete
-	toRemove := objList.Entries
+	toRemove := lst.Entries
 	if toRemoveCnt >= 0 {
 		toRemove = toRemove[:toRemoveCnt]
 	}

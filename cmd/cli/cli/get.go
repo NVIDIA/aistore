@@ -218,16 +218,16 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	}
 
 	// list-objects
-	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
+	lst, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return V(err)
 	}
 	if lstFilter._len() > 0 {
-		objList.Entries, _ = lstFilter.apply(objList.Entries)
+		lst.Entries, _ = lstFilter.apply(lst.Entries)
 	}
 
 	// can't do many to one
-	l := len(objList.Entries)
+	l := len(lst.Entries)
 	if l > 1 {
 		if outFile != "" && outFile != fileStdIO && !discardOutput(outFile) {
 			finfo, errEx := os.Stat(outFile)
@@ -239,7 +239,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	}
 	// total size
 	var totalSize int64
-	for _, entry := range objList.Entries {
+	for _, entry := range lst.Entries {
 		totalSize += entry.Size
 	}
 	// announce, confirm
@@ -283,7 +283,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	if u.showProgress {
 		var (
 			filesBarArg = barArgs{ // bar[0]
-				total:   int64(len(objList.Entries)),
+				total:   int64(len(lst.Entries)),
 				barText: "Objects:    ",
 				barType: unitsArg,
 			}
@@ -298,7 +298,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 		u.barObjs = totalBars[0]
 		u.barSize = totalBars[1]
 	}
-	for _, en := range objList.Entries {
+	for _, en := range lst.Entries {
 		var shardName string
 
 		// NOTE: s3.ListObjectsV2 _may_ return a directory - filtering out
@@ -321,7 +321,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 					continue
 				}
 			}
-			for _, shardEntry := range objList.Entries {
+			for _, shardEntry := range lst.Entries {
 				if shardEntry.IsListedArch() && strings.HasPrefix(en.Name, shardEntry.Name+"/") {
 					shardName = shardEntry.Name
 					break

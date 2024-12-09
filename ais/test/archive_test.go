@@ -362,28 +362,28 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				tlog.Logf("List %s\n", bckTo)
 				msg := &apc.LsoMsg{Prefix: "test_"}
 				msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-				objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
+				lst, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
-				for _, en := range objList.Entries {
+				for _, en := range lst.Entries {
 					tlog.Logf("%s: %dB\n", en.Name, en.Size)
 				}
-				num := len(objList.Entries)
+				num := len(lst.Entries)
 				if num < numArchs && ii == 0 {
 					tlog.Logf("Warning: expected %d, have %d - retrying...\n", numArchs, num)
 					time.Sleep(7 * time.Second) // TODO: ditto
 					continue
 				}
 				tassert.Errorf(t, num == numArchs || test.abrt, "expected %d, have %d", numArchs, num)
-				lstToAppend = objList
+				lstToAppend = lst
 				break
 			}
 
 			msg := &apc.LsoMsg{Prefix: "test_"}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			msg.SetFlag(apc.LsArchDir)
-			objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
+			lst, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			num := len(objList.Entries)
+			num := len(lst.Entries)
 			expectedNum := numArchs + numArchs*numInArch
 
 			tassert.Errorf(t, num == expectedNum || test.abrt, "expected %d, have %d", expectedNum, num)
@@ -418,7 +418,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				objName string
 				mime    = "application/x-" + test.ext[1:]
 			)
-			for _, en := range objList.Entries {
+			for _, en := range lst.Entries {
 				if !en.IsInsideArch() {
 					objName = en.Name
 					continue
@@ -541,9 +541,9 @@ func TestAppendToArch(t *testing.T) {
 
 			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
 			lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, bckTo, lsmsg, api.ListArgs{})
+			lst, err := api.ListObjects(baseParams, bckTo, lsmsg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			num := len(objList.Entries)
+			num := len(lst.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
 			sparcePrint := max(numArchs/10, 1)
@@ -598,9 +598,9 @@ func TestAppendToArch(t *testing.T) {
 			}
 
 			lsmsg.SetFlag(apc.LsArchDir)
-			objList, err = api.ListObjects(baseParams, bckTo, lsmsg, api.ListArgs{})
+			lst, err = api.ListObjects(baseParams, bckTo, lsmsg, api.ListArgs{})
 			tassert.CheckError(t, err)
-			num = len(objList.Entries)
+			num = len(lst.Entries)
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)
 
 			if num < expectedNum && test.multi && expectedNum-num < 10 {

@@ -408,7 +408,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			if catOnly {
 				now = mono.NanoTime()
 			}
-			objList, err := api.ListObjectsPage(apiBP, bck, msg, lsargs)
+			lst, err := api.ListObjectsPage(apiBP, bck, msg, lsargs)
 			if err != nil {
 				return lsoErr(msg, err)
 			}
@@ -416,10 +416,10 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			// print exact number of objects if it is `limit`ed: in case of
 			// limit > page size, the last page is printed partially
 			var toPrint cmn.LsoEntries
-			if limit > 0 && toShow < len(objList.Entries) {
-				toPrint = objList.Entries[:toShow]
+			if limit > 0 && toShow < len(lst.Entries) {
+				toPrint = lst.Entries[:toShow]
 			} else {
-				toPrint = objList.Entries
+				toPrint = lst.Entries
 			}
 			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, now,
 				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
@@ -439,7 +439,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 				return nil
 			}
 			if limit > 0 {
-				toShow -= len(objList.Entries)
+				toShow -= len(lst.Entries)
 				if toShow <= 0 {
 					return nil
 				}
@@ -450,7 +450,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	// alternatively (when `--paged` not specified) list all pages up to a limit, show progress
 	var (
 		callAfter = listObjectsWaitTime
-		_listed   = &_listed{c: c, bck: &bck, msg: msg, limit: int(limit), tip: true}
+		_listed   = &_listed{c: c, bck: &bck, msg: msg, limit: int(limit)}
 	)
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
@@ -460,14 +460,14 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	lsargs.Callback = _listed.cb
 	lsargs.CallAfter = callAfter
-	objList, err := api.ListObjects(apiBP, bck, msg, lsargs)
+	lst, err := api.ListObjects(apiBP, bck, msg, lsargs)
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	if len(objList.Entries) == 0 && !printEmpty {
+	if len(lst.Entries) == 0 && !printEmpty {
 		return fmt.Errorf("%s/%s not found", bck.Cname(""), msg.Prefix)
 	}
-	return printLso(c, objList.Entries, lstFilter, propsStr, _listed, now,
+	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now,
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
 }
 
@@ -694,40 +694,48 @@ type _listed struct {
 	l     int
 	done  bool
 	cptn  bool
-	tip   bool
 }
 
-func (u *_listed) cb(ctx *api.LsoCounter) {
-	if ctx.Count() < 0 || u.done {
+func (u *_listed) cb(lsoCounter *api.LsoCounter) {
+	if lsoCounter.Count() < 0 || u.done {
 		return
 	}
-	if ctx.IsFinished() || (u.limit > 0 && u.limit <= ctx.Count()) {
+	if lsoCounter.IsFinished() || (u.limit > 0 && u.limit <= lsoCounter.Count()) {
 		u.done = true
 		if !flagIsSet(u.c, noFooterFlag) {
-			elapsed := teb.FormatDuration(ctx.Elapsed())
-			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigNum(ctx.Count()), elapsed)
+			elapsed := teb.FormatDuration(lsoCounter.Elapsed())
+			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigNum(lsoCounter.Count()), elapsed)
 			u.cptn = true
 			briefPause(1)
 		}
 		return
 	}
 
-	s := listedText + " " + cos.FormatBigNum(ctx.Count()) + " names"
+	var (
+		sb strings.Builder
+	)
+	sb.Grow(128)
+	sb.WriteString(listedText)
+	sb.WriteByte(' ')
+	sb.WriteString(cos.FormatBigNum(lsoCounter.Count()))
+	sb.WriteString(" names")
+	l := sb.Len()
 	if u.l == 0 {
-		u.l = len(s) + 3
-		if u.tip {
-			if u.msg.IsFlagSet(apc.LsObjCached) {
-				tip := fmt.Sprintf("use %s to show pages immediately - one page at a time (tip)", qflprn(pagedFlag))
-				actionNote(u.c, tip)
-			} else if u.bck.IsRemote() {
-				tip := fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
-				note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
-				actionNote(u.c, note)
-			}
+		u.l = l + 3
+		// tip
+		if u.msg.IsFlagSet(apc.LsObjCached) {
+			tip := fmt.Sprintf("consider using %s to show pages one at a time (tip)", qflprn(pagedFlag))
+			actionNote(u.c, tip)
+		} else if u.bck.IsRemote() {
+			tip := fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
+			note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
+			actionNote(u.c, note)
 		}
-	} else if len(s) > u.l {
-		u.l = len(s) + 2
+	} else if l > u.l {
+		u.l = l + 2
 	}
-	s += strings.Repeat(" ", u.l-len(s))
-	fmt.Fprintf(u.c.App.Writer, "\r%s", s)
+	for range u.l - l {
+		sb.WriteByte(' ')
+	}
+	fmt.Fprintf(u.c.App.Writer, "\r%s", sb.String())
 }

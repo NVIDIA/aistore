@@ -9,41 +9,48 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
 )
 
-// TODO: revisit
-
 type (
-	preScrub struct {
-		Bck           cmn.Bck
-		ObjectCnt     uint64
-		Misplaced     uint64
-		MissingCopies uint64
-		ZeroSize      uint64
-		FiveGBplus    uint64
-	}
-	ctxScrub struct {
+	scrubCtx struct {
 		c      *cli.Context
-		scrubs []*preScrub
+		scrubs []*scrubOne
 		qbck   cmn.QueryBcks
 		pref   string
 		tmpl   string
+		// timing
+		ival time.Duration
+		last atomic.Int64
+	}
+	scrubOne struct {
+		bck    cmn.Bck
+		listed uint64
+		stats  struct {
+			misplaced uint64
+			missingcp uint64
+			zerosz    uint64
+			largesz   uint64
+		}
 	}
 )
 
-func prelimScrub(c *cli.Context) (err error) {
+func scrubHandler(c *cli.Context) (err error) {
 	var (
-		ctx = ctxScrub{c: c}
+		ctx = scrubCtx{c: c}
 		uri = preparseBckObjURI(c.Args().Get(0))
 	)
 	ctx.qbck, ctx.pref, err = parseQueryBckURI(uri)
@@ -64,41 +71,66 @@ func prelimScrub(c *cli.Context) (err error) {
 		ctx.pref = prefix
 	}
 
+	ctx.last.Store(mono.NanoTime()) // pace interim results
 	ctx.tmpl = teb.BucketSummaryValidateTmpl
 	if flagIsSet(ctx.c, noHeaderFlag) {
 		ctx.tmpl = teb.BucketSummaryValidateBody
 	}
-	if ctx.qbck.IsBucket() {
-		return waitForFunc(ctx.one, longClientTimeout)
+
+	ctx.ival = listObjectsWaitTime
+	if flagIsSet(c, refreshFlag) {
+		ctx.ival = parseDurationFlag(c, refreshFlag)
 	}
-	return waitForFunc(ctx.many, longClientTimeout)
+	ctx.ival = max(ctx.ival, 5*time.Second)
+
+	// TODO -- FIXME: support async execution
+	if ctx.qbck.IsBucket() {
+		return waitForFunc(ctx.one, ctx.ival)
+	}
+	return waitForFunc(ctx.many, ctx.ival)
 }
 
 //////////////
-// preScrub //
+// scrubOne //
 //////////////
 
-func (scr *preScrub) upd(en *cmn.LsoEnt, bprops *cmn.Bprops) {
-	scr.ObjectCnt++
+func (scr *scrubOne) upd(en *cmn.LsoEnt, bprops *cmn.Bprops) {
+	scr.listed++
 	if !en.IsStatusOK() {
-		scr.Misplaced++
+		scr.stats.misplaced++
 		return
 	}
 	if bprops.Mirror.Enabled && en.Copies < int16(bprops.Mirror.Copies) {
-		scr.MissingCopies++
+		scr.stats.missingcp++
 	}
 	if en.Size == 0 {
-		scr.ZeroSize++
+		scr.stats.zerosz++
 	} else if en.Size >= 5*cos.GB {
-		scr.FiveGBplus++
+		scr.stats.largesz++
 	}
 }
 
+func (scr *scrubOne) toSB(sb *strings.Builder, total int) {
+	sb.WriteString(scr.bck.Cname(""))
+	sb.WriteString(": scrubbed ")
+	sb.WriteString(cos.FormatBigNum(total))
+	sb.WriteString(" names")
+
+	var scr0 scrubOne
+	if scr.stats == scr0.stats {
+		return
+	}
+
+	sb.WriteByte(' ')
+	s := fmt.Sprintf("%+v", scr.stats)
+	sb.WriteString(s)
+}
+
 //////////////
-// ctxScrub //
+// scrubCtx //
 //////////////
 
-func (ctx *ctxScrub) many() error {
+func (ctx *scrubCtx) many() error {
 	bcks, err := api.ListBuckets(apiBP, ctx.qbck, apc.FltPresent)
 	if err != nil {
 		return V(err)
@@ -108,7 +140,7 @@ func (ctx *ctxScrub) many() error {
 		wg  = cos.NewLimitedWaitGroup(sys.NumCPU(), num)
 		mu  = &sync.Mutex{}
 	)
-	ctx.scrubs = make([]*preScrub, 0, num)
+	ctx.scrubs = make([]*scrubOne, 0, num)
 	for i := range bcks {
 		bck := bcks[i]
 		if ctx.qbck.Name != "" && !ctx.qbck.Equal(&bck) {
@@ -123,7 +155,7 @@ func (ctx *ctxScrub) many() error {
 	return teb.Print(ctx.scrubs, ctx.tmpl)
 }
 
-func (ctx *ctxScrub) gols(bck cmn.Bck, wg cos.WG, mu *sync.Mutex) {
+func (ctx *scrubCtx) gols(bck cmn.Bck, wg cos.WG, mu *sync.Mutex) {
 	defer wg.Done()
 	scr, err := ctx.ls(bck)
 	if err != nil {
@@ -136,47 +168,40 @@ func (ctx *ctxScrub) gols(bck cmn.Bck, wg cos.WG, mu *sync.Mutex) {
 	mu.Unlock()
 }
 
-func (ctx *ctxScrub) one() error {
+func (ctx *scrubCtx) one() error {
 	scr, err := ctx.ls(cmn.Bck(ctx.qbck))
 	if err != nil {
 		return err
 	}
-	return teb.Print([]*preScrub{scr}, ctx.tmpl)
+	return teb.Print([]*scrubOne{scr}, ctx.tmpl)
 }
 
-func (ctx *ctxScrub) ls(bck cmn.Bck) (*preScrub, error) {
-	bprops, err := headBucket(bck, true /* don't add */)
-	if err != nil {
-		return nil, err
+func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
+	bprops, errV := headBucket(bck, true /* don't add */)
+	if errV != nil {
+		return nil, errV
 	}
 	bck.Props = bprops
 	var (
-		callAfter = listObjectsWaitTime
-		lsargs    api.ListArgs
-		lsmsg     = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
-		_listed   = &_listed{c: ctx.c, bck: &bck, msg: lsmsg}
+		lsargs api.ListArgs
+		scr    = &scrubOne{bck: bck}
+		lsmsg  = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
 	)
 	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-
-	if flagIsSet(ctx.c, refreshFlag) {
-		callAfter = parseDurationFlag(ctx.c, refreshFlag)
-	}
-
-	scr := &preScrub{Bck: bck}
 
 	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)
 	if err != nil {
 		return nil, err
 	}
 	lsmsg.PageSize = pageSize
-	{
-		lsargs.Callback = _listed.cb
-		lsargs.CallAfter = callAfter
-		lsargs.Limit = limit
-	}
+	lsargs.Limit = limit
 
+	var (
+		pgcnt  int
+		listed int
+		yelped bool
+	)
 	// pages
-	pageCounter, toShow := 0, int(limit)
 	for {
 		lst, err := api.ListObjectsPage(apiBP, bck, lsmsg, lsargs)
 		if err != nil {
@@ -194,16 +219,49 @@ func (ctx *ctxScrub) ls(bck cmn.Bck) (*preScrub, error) {
 		if lsmsg.ContinuationToken == "" {
 			break
 		}
-		pageCounter++
-		if maxPages > 0 && pageCounter >= int(maxPages) {
+		pgcnt++
+		if maxPages > 0 && pgcnt >= int(maxPages) {
 			break
 		}
-		if limit > 0 {
-			toShow -= len(lst.Entries)
-			if toShow <= 0 {
-				break
+		listed += len(lst.Entries)
+		if limit > 0 && listed >= int(limit) {
+			break
+		}
+
+		//
+		// show interim results
+		//
+		const maxline = 128
+		var (
+			sb   strings.Builder
+			now  = mono.NanoTime()
+			last = ctx.last.Load()
+		)
+		if !yelped {
+			if time.Duration(now-last) < ctx.ival+2*time.Second {
+				continue
+			}
+		} else {
+			if time.Duration(now-last) < ctx.ival {
+				continue
 			}
 		}
+		if ctx.last.CAS(last, now) {
+			sb.Grow(maxline)
+			scr.toSB(&sb, listed)
+			l := sb.Len()
+			if len(ctx.scrubs) > 1 {
+				// in an attempt to fit multiple gols() updaters
+				for range maxline - l {
+					sb.WriteByte(' ')
+				}
+			}
+			fmt.Fprintf(ctx.c.App.Writer, "\r%s", sb.String())
+			yelped = true
+		}
+	}
+	if yelped {
+		fmt.Fprintln(ctx.c.App.Writer)
 	}
 
 	return scr, nil

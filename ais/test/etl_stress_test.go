@@ -255,11 +255,11 @@ def transform(input_bytes):
 			tassert.CheckFatal(t, err)
 			tlog.Logf("Transforming bucket %s took %v\n", bckFrom.Cname(""), total)
 
-			objList, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
+			lst, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(
-				t, len(objList.Entries) == m.num,
-				"expected %d objects to be transformed, got %d", m.num, len(objList.Entries),
+				t, len(lst.Entries) == m.num,
+				"expected %d objects to be transformed, got %d", m.num, len(lst.Entries),
 			)
 		})
 	}

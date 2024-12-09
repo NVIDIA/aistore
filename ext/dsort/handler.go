@@ -359,13 +359,13 @@ func dsorterType(pars *parsedReqSpec) (string, error) {
 	// 	URL:    g.smap.Get().Primary.URL(cmn.NetIntraControl),
 	// }
 	// msg := &apc.LsoMsg{Props: "size,status"}
-	// objList, err := api.ListObjects(baseParams, pars.Bucket, msg, 0)
+	// lst, err := api.ListObjects(baseParams, pars.Bucket, msg, 0)
 	// if err != nil {
 	// 	return "", err
 	// }
 	//
 	// totalBucketSize := uint64(0)
-	// for _, obj := range objList.Entries {
+	// for _, obj := range lst.Entries {
 	// 	if obj.IsStatusOK() {
 	// 		totalBucketSize += uint64(obj.Size)
 	// 	}

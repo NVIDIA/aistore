@@ -260,20 +260,20 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		return
 	}
 	decoder := xml.NewDecoder(r.Body)
-	objList := &s3.Delete{}
-	if err := decoder.Decode(objList); err != nil {
+	lst := &s3.Delete{}
+	if err := decoder.Decode(lst); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if len(objList.Object) == 0 {
+	if len(lst.Object) == 0 {
 		return
 	}
 
 	var (
 		msg   = apc.ActMsg{Action: apc.ActDeleteObjects}
-		lrMsg = &apc.ListRange{ObjNames: make([]string, 0, len(objList.Object))}
+		lrMsg = &apc.ListRange{ObjNames: make([]string, 0, len(lst.Object))}
 	)
-	for _, obj := range objList.Object {
+	for _, obj := range lst.Object {
 		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)
 	}
 	msg.Value = lrMsg

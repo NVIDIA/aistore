@@ -391,11 +391,11 @@ func propVal(op *cmn.ObjectProps, name string) (v string, err error) {
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
-	objList, err := api.ListObjects(apiBP, bck, nil, api.ListArgs{})
+	lst, err := api.ListObjects(apiBP, bck, nil, api.ListArgs{})
 	if err != nil {
 		return err
 	}
-	l := len(objList.Entries)
+	l := len(lst.Entries)
 	if l == 0 {
 		fmt.Fprintln(c.App.Writer, bck.Cname(""), "is empty, nothing to do.")
 		return nil
@@ -413,7 +413,7 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	if bck.IsCloud() {
 		period = 100
 	}
-	for _, entry := range objList.Entries {
+	for _, entry := range lst.Entries {
 		wg.Add(1)
 		// delete one
 		go func(objName string) {

@@ -125,7 +125,7 @@ func (md *checkerMD) runTestAsync(method string, target *meta.Snode, mpath strin
 }
 
 func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string, mpathList *apc.MountpathList,
-	objList []string, suffix string) {
+	lst []string, suffix string) {
 	breakMountpath(md.t, mpath, suffix)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 
@@ -133,7 +133,7 @@ func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string
 	case http.MethodPut:
 		p, err := api.HeadBucket(md.baseParams, md.bck, true /* don't add */)
 		tassert.CheckFatal(md.t, err)
-		for _, objName := range objList {
+		for _, objName := range lst {
 			r, _ := readers.NewRand(md.fileSize, p.Cksum.Type)
 			_, err := api.PutObject(&api.PutArgs{
 				BaseParams: md.baseParams,
@@ -147,7 +147,7 @@ func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string
 			}
 		}
 	case http.MethodGet:
-		for _, objName := range objList {
+		for _, objName := range lst {
 			// GetObject must fail - so no error checking
 			_, err := api.GetObject(md.baseParams, md.bck, objName, nil)
 			if err == nil {
@@ -410,16 +410,16 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	}()
 
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
-	objList := make([]string, 0, 5)
+	lst := make([]string, 0, 5)
 	for n := range 5 {
 		objName := fmt.Sprintf("obj-fshc-%d", n)
-		objList = append(objList, objName)
+		lst = append(lst, objName)
 	}
 
 	// Checking detection on object PUT
-	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList, suffix)
+	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, lst, suffix)
 	// Checking detection on object GET
-	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, suffix)
+	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, lst, suffix)
 }
 
 func TestFSCheckerEnablingMountpath(t *testing.T) {

@@ -649,11 +649,11 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 		msg.SetFlag(apc.LsObjCached)
 	}
 	msg.SetFlag(apc.LsNameOnly)
-	objList, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})
 	if err != nil {
 		return false, V(err)
 	}
-	return len(objList.Entries) == 0, nil
+	return len(lst.Entries) == 0, nil
 }
 
 func ensureRemoteProvider(bck cmn.Bck) error {

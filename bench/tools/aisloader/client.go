@@ -454,13 +454,13 @@ func listObjectNames(p *params) ([]string, error) {
 		msg.Flags |= apc.LsNoDirs // aisloader's default (to override, use --list-dirs)
 	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
-	objList, err := api.ListObjects(bp, bck, msg, args)
+	lst, err := api.ListObjects(bp, bck, msg, args)
 	if err != nil {
 		return nil, err
 	}
 
-	objs := make([]string, 0, len(objList.Entries))
-	for _, obj := range objList.Entries {
+	objs := make([]string, 0, len(lst.Entries))
+	for _, obj := range lst.Entries {
 		objs = append(objs, obj.Name)
 	}
 	return objs, nil

@@ -441,9 +441,9 @@ func assertBucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objC
 
 func bucketSize(t *testing.T, baseParams api.BaseParams, bck cmn.Bck) int {
 	msg := &apc.LsoMsg{Props: "size,status"}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	return len(objList.Entries)
+	return len(lst.Entries)
 }
 
 func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath string, size int) {
@@ -1275,10 +1275,10 @@ func TestECStress(t *testing.T) {
 			doECPutsAndCheck(t, baseParams, bck, o)
 
 			msg := &apc.LsoMsg{Props: "size,status"}
-			objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+			lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, len(objList.Entries) == o.objCount,
-				"Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
+			tassert.Fatalf(t, len(lst.Entries) == o.objCount,
+				"Invalid number of objects: %d, expected %d", len(lst.Entries), o.objCount)
 		})
 	}
 }
@@ -1339,14 +1339,14 @@ func TestECStressManyBuckets(t *testing.T) {
 	wg.Wait()
 
 	msg := &apc.LsoMsg{Props: "size,status"}
-	objList, err := api.ListObjects(baseParams, bck1, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck1, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1.String(), len(objList.Entries), o1.objCount)
+	tassert.Fatalf(t, len(lst.Entries) == o1.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1.String(), len(lst.Entries), o1.objCount)
 
 	msg = &apc.LsoMsg{Props: "size,status"}
-	objList, err = api.ListObjects(baseParams, bck2, msg, api.ListArgs{})
+	lst, err = api.ListObjects(baseParams, bck2, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2.String(), len(objList.Entries), o2.objCount)
+	tassert.Fatalf(t, len(lst.Entries) == o2.objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2.String(), len(lst.Entries), o2.objCount)
 }
 
 // ExtraStress test to check that EC works as expected
@@ -1473,9 +1473,9 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	t.Logf("Total test time %v\n", delta)
 
 	msg := &apc.LsoMsg{Props: "size,status"}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
+	tassert.Fatalf(t, len(lst.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(lst.Entries), o.objCount)
 }
 
 // Quick check that EC keeps xattrs:
@@ -1587,18 +1587,18 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	msg := &apc.LsoMsg{Props: "size,status,version"}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	// check that all returned objects and their repicas have the same version
-	for _, e := range objList.Entries {
+	for _, e := range lst.Entries {
 		if e.Version != finalVersion {
 			t.Errorf("%s[status=%d] must have version %s but it is %s\n", e.Name, e.Flags, finalVersion, e.Version)
 		}
 	}
 
-	if len(objList.Entries) != o.objCount {
-		t.Fatalf("Invalid number of objects: %d, expected %d", len(objList.Entries), 1)
+	if len(lst.Entries) != o.objCount {
+		t.Fatalf("Invalid number of objects: %d, expected %d", len(lst.Entries), 1)
 	}
 }
 
@@ -1686,9 +1686,9 @@ func TestECDestroyBucket(t *testing.T) {
 
 	// check if get requests are successful
 	msg := &apc.LsoMsg{Props: "size,status,version"}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
+	tassert.Errorf(t, len(lst.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(lst.Entries), o.objCount)
 }
 
 // Lost target test:
@@ -1795,9 +1795,9 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	// 4. Check that ListObjects returns correct number of items
 	tlog.Logln("Reading bucket list...")
 	msg := &apc.LsoMsg{Props: "size,status,version"}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(objList.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
+	tassert.Errorf(t, len(lst.Entries) == o.objCount, "Invalid number of objects: %d, expected %d", len(lst.Entries), o.objCount)
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
@@ -2052,10 +2052,10 @@ func TestECEmergencyMountpath(t *testing.T) {
 	// 4. Check that ListObjects returns correct number of items
 	tlog.Logf("DONE\nReading bucket list...\n")
 	msg := &apc.LsoMsg{Props: "size,status,version"}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	if len(objList.Entries) != o.objCount {
-		t.Fatalf("Invalid number of objects: %d, expected %d", len(objList.Entries), o.objCount)
+	if len(lst.Entries) != o.objCount {
+		t.Fatalf("Invalid number of objects: %d, expected %d", len(lst.Entries), o.objCount)
 	}
 
 	// Wait for ec to finish
@@ -2230,11 +2230,11 @@ func TestECBucketEncode(t *testing.T) {
 
 	m.puts()
 
-	objList, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Object count: %d\n", len(objList.Entries))
-	if len(objList.Entries) != m.num {
-		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(objList.Entries), m.num)
+	tlog.Logf("Object count: %d\n", len(lst.Entries))
+	if len(lst.Entries) != m.num {
+		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(lst.Entries), m.num)
 	}
 
 	tlog.Logf("Enabling EC\n")
@@ -2254,13 +2254,13 @@ func TestECBucketEncode(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
 
-	objList, err = api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
+	lst, err = api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
-	if len(objList.Entries) != m.num {
-		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck, m.num, len(objList.Entries))
+	if len(lst.Entries) != m.num {
+		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck, m.num, len(lst.Entries))
 	}
-	tlog.Logf("Object counts after EC finishes: %d (%d)\n", len(objList.Entries), (parityCnt+1)*m.num)
+	tlog.Logf("Object counts after EC finishes: %d (%d)\n", len(lst.Entries), (parityCnt+1)*m.num)
 	//
 	// TODO: support querying bucket for total number of entries with respect to mirroring and EC
 	//
@@ -2707,9 +2707,9 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	}
 
 	msg := &apc.LsoMsg{Props: apc.GetPropsSize}
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects created, removing %d mountpaths\n", len(objList.Entries), o.parityCnt)
+	tlog.Logf("%d objects created, removing %d mountpaths\n", len(lst.Entries), o.parityCnt)
 
 	allMpaths := tools.GetTargetsMountpaths(t, o.smap, baseParams)
 	removed := make(map[string]*removedMpath, o.parityCnt)
@@ -2739,7 +2739,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		}
 	}
 
-	for _, en := range objList.Entries {
+	for _, en := range lst.Entries {
 		_, err := api.GetObject(baseParams, bck, en.Name, nil)
 		tassert.CheckError(t, err)
 	}

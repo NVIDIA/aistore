@@ -91,13 +91,13 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		msg := &apc.LsoMsg{Prefix: lookFor}
-		objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+		lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
 		}
 
-		numFiles := len(objList.Entries)
+		numFiles := len(lst.Entries)
 		realNumFiles := numberOfFilesWithPrefix(fileNames, key)
 
 		if numFiles == realNumFiles {
@@ -107,7 +107,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 		} else {
 			t.Errorf("Expected number of files with prefix %q is %v but found %v files", key, realNumFiles, numFiles)
 			tlog.Logf("Objects returned:\n")
-			for id, oo := range objList.Entries {
+			for id, oo := range lst.Entries {
 				tlog.Logf("    %d[%d]. %s\n", i, id, oo.Name)
 			}
 		}
@@ -157,16 +157,16 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 
 		tlog.Logf("%d. Prefix: %s [%s]\n", idx, test.title, fullPrefix)
 		msg := &apc.LsoMsg{Prefix: fullPrefix}
-		objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+		lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
 		}
 
-		if len(objList.Entries) != expCnt {
-			t.Errorf("prefix %q: expected %d objects, got %d", fullPrefix, expCnt, len(objList.Entries))
+		if len(lst.Entries) != expCnt {
+			t.Errorf("prefix %q: expected %d objects, got %d", fullPrefix, expCnt, len(lst.Entries))
 			tlog.Logln("namely:")
-			for _, en := range objList.Entries {
+			for _, en := range lst.Entries {
 				tlog.Logln("    " + en.Name)
 			}
 			tlog.Logln("whereby the complete list:")

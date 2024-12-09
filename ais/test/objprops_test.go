@@ -89,10 +89,10 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 	return
 }
 
-func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[string]string) {
+func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, lst map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
 	baseParams := tools.BaseAPIParams(proxyURL)
-	for objName := range objList {
+	for objName := range lst {
 		_, err := api.GetObject(baseParams, bck, objName, nil)
 		if err != nil {
 			t.Errorf("Failed to GET %s: %v", bck.Cname(objName), err)

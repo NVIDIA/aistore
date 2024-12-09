@@ -333,7 +333,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 
 func summaryBucketHandler(c *cli.Context) error {
 	if flagIsSet(c, validateSummaryFlag) {
-		return prelimScrub(c)
+		return scrubHandler(c)
 	}
 	return summaryStorageHandler(c)
 }

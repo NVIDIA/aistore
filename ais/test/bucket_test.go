@@ -443,14 +443,14 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 
 	tlog.Logf("List %s\n", m.bck)
 	msg := &apc.LsoMsg{Props: apc.GetPropsName}
-	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
-		m.num, len(objList.Entries))
+	tassert.Fatalf(t, len(lst.Entries) == m.num, "expecting %d entries, have %d",
+		m.num, len(lst.Entries))
 
 	tlog.Logf("Overwrite %s objects with newer versions\n", m.bck)
 	nsize := int64(m.fileSize) * 10
-	for _, en := range objList.Entries {
+	for _, en := range lst.Entries {
 		reader, err := readers.NewRand(nsize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		_, err = api.PutObject(&api.PutArgs{
@@ -468,12 +468,12 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	tlog.Logf("List %s new versions\n", m.bck)
 	msg = &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsAll...)
-	objList, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+	lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(objList.Entries) == m.num, "expecting %d entries, have %d",
-		m.num, len(objList.Entries))
+	tassert.Fatalf(t, len(lst.Entries) == m.num, "expecting %d entries, have %d",
+		m.num, len(lst.Entries))
 
-	for _, en := range objList.Entries {
+	for _, en := range lst.Entries {
 		n, s, c := en.Name, en.Size, en.Copies
 		tassert.Fatalf(t, s == nsize, "%s: expecting size = %d, got %d", n, nsize, s)
 		tassert.Fatalf(t, c == 2, "%s: expecting copies = %d, got %d", n, 2, c)
@@ -722,12 +722,12 @@ func TestListObjectsSmoke(t *testing.T) {
 		// Run couple iterations to see that we get deterministic results.
 		tlog.Logf("run %d list objects iterations\n", iters)
 		for iter := range iters {
-			objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+			lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
-				t, len(objList.Entries) == m.num,
+				t, len(lst.Entries) == m.num,
 				"unexpected number of entries (got: %d, expected: %d) on iter: %d",
-				len(objList.Entries), m.num, iter,
+				len(lst.Entries), m.num, iter,
 			)
 		}
 	})
@@ -827,8 +827,8 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			defer m.del()
 		}
 		var (
-			err     error
-			objList *cmn.LsoRes
+			err error
+			lst *cmn.LsoRes
 
 			totalCnt = 0
 			msg      = &apc.LsoMsg{PageSize: 10}
@@ -838,11 +838,11 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			prevToken := msg.ContinuationToken
 			for range rerequests {
 				msg.ContinuationToken = prevToken
-				objList, err = api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+				lst, err = api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 			}
-			totalCnt += len(objList.Entries)
-			if objList.ContinuationToken == "" {
+			totalCnt += len(lst.Entries)
+			if lst.ContinuationToken == "" {
 				break
 			}
 		}
@@ -874,20 +874,20 @@ func TestListObjectsStartAfter(t *testing.T) {
 		if m.bck.IsRemote() {
 			defer m.del()
 		}
-		objList, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
+		lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 
-		middleObjName := objList.Entries[m.num/2-1].Name
+		middleObjName := lst.Entries[m.num/2-1].Name
 		tlog.Logf("start listing bucket after: %q...\n", middleObjName)
 
 		msg := &apc.LsoMsg{PageSize: 10, StartAfter: middleObjName}
-		objList, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+		lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 		if bck.IsAIS() {
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
-				t, len(objList.Entries) == m.num/2,
+				t, len(lst.Entries) == m.num/2,
 				"unexpected number of entries (got: %d, expected: %d)",
-				len(objList.Entries), m.num/2,
+				len(lst.Entries), m.num/2,
 			)
 		} else if err != nil {
 			herr := cmn.Err2HTTPErr(err)
@@ -935,13 +935,13 @@ func TestListObjectsProps(t *testing.T) {
 				msg.SetFlag(apc.UseListObjsCache)
 			}
 			msg.AddProps(props...)
-			objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+			lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
-				t, len(objList.Entries) == m.num,
-				"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+				t, len(lst.Entries) == m.num,
+				"unexpected number of entries (got: %d, expected: %d)", len(lst.Entries), m.num,
 			)
-			for _, en := range objList.Entries {
+			for _, en := range lst.Entries {
 				tassert.Errorf(t, en.Name != "", "name is not set")
 				f(en)
 			}
@@ -1051,19 +1051,19 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		msg.AddProps(apc.GetPropsDefaultAIS...)
 		msg.AddProps(apc.GetPropsVersion)
 
-		objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+		lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if evict {
 			tassert.Errorf(
-				t, len(objList.Entries) == 0,
-				"unexpected number of entries (got: %d, expected: 0)", len(objList.Entries),
+				t, len(lst.Entries) == 0,
+				"unexpected number of entries (got: %d, expected: 0)", len(lst.Entries),
 			)
 		} else {
 			tassert.Errorf(
-				t, len(objList.Entries) == m.num,
-				"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+				t, len(lst.Entries) == m.num,
+				"unexpected number of entries (got: %d, expected: %d)", len(lst.Entries), m.num,
 			)
-			for _, en := range objList.Entries {
+			for _, en := range lst.Entries {
 				tassert.Errorf(t, en.Name != "", "name is not set")
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
@@ -1105,10 +1105,10 @@ func TestListObjectsRandProxy(t *testing.T) {
 		}
 		for {
 			baseParams := tools.BaseAPIParams()
-			objList, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+			lst, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			totalCnt += len(objList.Entries)
-			if objList.ContinuationToken == "" {
+			totalCnt += len(lst.Entries)
+			if lst.ContinuationToken == "" {
 				break
 			}
 		}
@@ -1146,14 +1146,14 @@ func TestListObjectsRandPageSize(t *testing.T) {
 		for {
 			msg.PageSize = rand.Int64N(50) + 50
 
-			objList, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
+			lst, err := api.ListObjectsPage(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			totalCnt += len(objList.Entries)
-			if objList.ContinuationToken == "" {
+			totalCnt += len(lst.Entries)
+			if lst.ContinuationToken == "" {
 				break
 			}
-			tassert.Errorf(t, len(objList.Entries) == int(msg.PageSize), "wrong page size %d (expected %d)",
-				len(objList.Entries), msg.PageSize,
+			tassert.Errorf(t, len(lst.Entries) == int(msg.PageSize), "wrong page size %d (expected %d)",
+				len(lst.Entries), msg.PageSize,
 			)
 		}
 		tassert.Fatalf(
@@ -1495,7 +1495,7 @@ func TestListObjectsCache(t *testing.T) {
 				if useCache {
 					msg.SetFlag(apc.UseListObjsCache)
 				}
-				objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+				lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 
 				tlog.Logf(
@@ -1504,8 +1504,8 @@ func TestListObjectsCache(t *testing.T) {
 				)
 
 				tassert.Errorf(
-					t, len(objList.Entries) == m.num,
-					"unexpected number of entries (got: %d, expected: %d)", len(objList.Entries), m.num,
+					t, len(lst.Entries) == m.num,
+					"unexpected number of entries (got: %d, expected: %d)", len(lst.Entries), m.num,
 				)
 			}
 
@@ -3454,12 +3454,12 @@ func TestBucketListAndSummary(t *testing.T) {
 				if test.cached {
 					msg.Flags = apc.LsObjCached
 				}
-				objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+				lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 
-				if len(objList.Entries) != expectedFiles {
+				if len(lst.Entries) != expectedFiles {
 					t.Errorf("number of listed objects (%d) is different from expected (%d)",
-						len(objList.Entries), expectedFiles)
+						len(lst.Entries), expectedFiles)
 				}
 			}
 		})

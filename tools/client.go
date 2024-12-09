@@ -468,9 +468,9 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	return api.BaseParams{Client: gctx.Client, URL: u, Token: LoggedUserToken, UA: "tools/test"}
 }
 
-func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
+func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, lst []string) {
 	bp := BaseAPIParams(proxyURL)
-	xid, err := api.EvictMultiObj(bp, bck, objList, "" /*template*/)
+	xid, err := api.EvictMultiObj(bp, bck, lst, "" /*template*/)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}

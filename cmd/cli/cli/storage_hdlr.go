@@ -166,6 +166,7 @@ var (
 		cmdScrub: append(
 			longRunFlags,
 			bsummPrefixFlag,
+			pageSizeFlag,
 			objLimitFlag,
 			noHeaderFlag,
 			maxPagesFlag,
@@ -212,7 +213,7 @@ var (
 				Usage:        validateUsage,
 				ArgsUsage:    lsAnyCommandArgument,
 				Flags:        storageFlags[cmdScrub],
-				Action:       prelimScrub,
+				Action:       scrubHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			mpathCmd,

@@ -143,8 +143,8 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 
-		objList        = pt.ToSlice()
-		objCnt         = len(objList)
+		lst            = pt.ToSlice()
+		objCnt         = len(lst)
 		requestTimeout = 30 * time.Second
 		tcomsg         = cmn.TCOMsg{ToBck: bckTo}
 	)
@@ -152,7 +152,7 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	tcomsg.Transform.Timeout = cos.Duration(requestTimeout)
 
 	if opType == "list" {
-		tcomsg.ListRange.ObjNames = objList
+		tcomsg.ListRange.ObjNames = lst
 	} else {
 		tcomsg.ListRange.Template = fileRange
 	}
@@ -174,7 +174,7 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	list, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
-	for _, objName := range objList {
+	for _, objName := range lst {
 		err := api.DeleteObject(baseParams, bckTo, objName)
 		tassert.CheckError(t, err)
 		tlog.Logf("%s\n", bckTo.Cname(objName))

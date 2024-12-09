@@ -166,10 +166,10 @@ func TestIshardShardSize(t *testing.T) {
 				lsmsg.SetFlag(apc.LsArchDir)
 				recs := shard.NewRecords(tc.numRecords)
 
-				objList, err := api.ListObjects(baseParams, cfg.DstBck, lsmsg, api.ListArgs{})
+				lst, err := api.ListObjects(baseParams, cfg.DstBck, lsmsg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 
-				for _, en := range objList.Entries {
+				for _, en := range lst.Entries {
 					// Only counts objects inside archive
 					if !en.IsInsideArch() {
 						continue
@@ -853,13 +853,13 @@ func checkOutputShards(t *testing.T, baseParams api.BaseParams, bucket cmn.Bck, 
 
 func getShardContents(baseParams api.BaseParams, bucket cmn.Bck) (map[string][]string, error) {
 	msg := &apc.LsoMsg{}
-	objList, err := api.ListObjects(baseParams, bucket, msg, api.ListArgs{})
+	lst, err := api.ListObjects(baseParams, bucket, msg, api.ListArgs{})
 	if err != nil {
 		return nil, err
 	}
 
 	shardContents := make(map[string][]string)
-	for _, en := range objList.Entries {
+	for _, en := range lst.Entries {
 		var buffer bytes.Buffer
 		_, err := api.GetObject(baseParams, bucket, en.Name, &api.GetArgs{Writer: &buffer})
 		if err != nil {

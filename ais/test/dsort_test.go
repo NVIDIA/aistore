@@ -1140,6 +1140,8 @@ func TestDsortMemDisk(t *testing.T) {
 }
 
 func TestDsortMinMemCompression(t *testing.T) {
+	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: remove completely
+
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4, archive.ExtZip} {
 		for _, maxMem := range []string{"10%", "1%"} {

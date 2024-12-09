@@ -2355,9 +2355,9 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 			freeBcastRes(results)
 			return nil, err
 		}
-		objList := res.v.(*cmn.LsoRes)
-		flags |= objList.Flags
-		p.qm.b.set(lsmsg.UUID, res.si.ID(), objList.Entries, pageSize)
+		lst := res.v.(*cmn.LsoRes)
+		flags |= lst.Flags
+		p.qm.b.set(lsmsg.UUID, res.si.ID(), lst.Entries, pageSize)
 	}
 	freeBcastRes(results)
 	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
