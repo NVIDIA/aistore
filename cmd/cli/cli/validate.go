@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
 )
 
@@ -31,9 +33,11 @@ type (
 		FiveGBplus    uint64
 	}
 	ctxScrub struct {
-		c    *cli.Context
-		qbck cmn.QueryBcks
-		pref string
+		c      *cli.Context
+		scrubs []*preScrub
+		qbck   cmn.QueryBcks
+		pref   string
+		tmpl   string
 	}
 )
 
@@ -60,7 +64,14 @@ func prelimScrub(c *cli.Context) (err error) {
 		ctx.pref = prefix
 	}
 
-	return waitForFunc(ctx.do, longClientTimeout)
+	ctx.tmpl = teb.BucketSummaryValidateTmpl
+	if flagIsSet(ctx.c, noHeaderFlag) {
+		ctx.tmpl = teb.BucketSummaryValidateBody
+	}
+	if ctx.qbck.IsBucket() {
+		return waitForFunc(ctx.one, longClientTimeout)
+	}
+	return waitForFunc(ctx.many, longClientTimeout)
 }
 
 //////////////
@@ -87,56 +98,113 @@ func (scr *preScrub) upd(en *cmn.LsoEnt, bprops *cmn.Bprops) {
 // ctxScrub //
 //////////////
 
-func (ctx *ctxScrub) do() error {
-	// TODO: when !ctx.qbck.IsQuery do HEAD instead of list-buckets, skip HEADing below
+func (ctx *ctxScrub) many() error {
 	bcks, err := api.ListBuckets(apiBP, ctx.qbck, apc.FltPresent)
 	if err != nil {
 		return V(err)
 	}
-
 	var (
-		scrubs = make([]*preScrub, 0, len(bcks))
-		msg    = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
+		num = len(bcks)
+		wg  = cos.NewLimitedWaitGroup(sys.NumCPU(), num)
+		mu  = &sync.Mutex{}
 	)
-	msg.AddProps(apc.GetPropsAll...)
-
+	ctx.scrubs = make([]*preScrub, 0, num)
 	for i := range bcks {
 		bck := bcks[i]
 		if ctx.qbck.Name != "" && !ctx.qbck.Equal(&bck) {
 			continue
 		}
 
-		bprops, err := headBucket(bck, true /* don't add */)
-		if err != nil {
-			return err
-		}
+		wg.Add(1)
+		go ctx.gols(bck, wg, mu)
+	}
+	wg.Wait()
 
-		var (
-			callAfter = listObjectsWaitTime
-			_listed   = &_listed{c: ctx.c, bck: &bck, msg: msg}
-			lsargs    api.ListArgs
-		)
-		if flagIsSet(ctx.c, refreshFlag) {
-			callAfter = parseDurationFlag(ctx.c, refreshFlag)
-		}
+	return teb.Print(ctx.scrubs, ctx.tmpl)
+}
 
+func (ctx *ctxScrub) gols(bck cmn.Bck, wg cos.WG, mu *sync.Mutex) {
+	defer wg.Done()
+	scr, err := ctx.ls(bck)
+	if err != nil {
+		warn := fmt.Sprintf("cannot validate %s: %v", bck.Cname(ctx.pref), err)
+		actionWarn(ctx.c, warn)
+		return
+	}
+	mu.Lock()
+	ctx.scrubs = append(ctx.scrubs, scr)
+	mu.Unlock()
+}
+
+func (ctx *ctxScrub) one() error {
+	scr, err := ctx.ls(cmn.Bck(ctx.qbck))
+	if err != nil {
+		return err
+	}
+	return teb.Print([]*preScrub{scr}, ctx.tmpl)
+}
+
+func (ctx *ctxScrub) ls(bck cmn.Bck) (*preScrub, error) {
+	bprops, err := headBucket(bck, true /* don't add */)
+	if err != nil {
+		return nil, err
+	}
+	bck.Props = bprops
+	var (
+		callAfter = listObjectsWaitTime
+		lsargs    api.ListArgs
+		lsmsg     = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
+		_listed   = &_listed{c: ctx.c, bck: &bck, msg: lsmsg}
+	)
+	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
+
+	if flagIsSet(ctx.c, refreshFlag) {
+		callAfter = parseDurationFlag(ctx.c, refreshFlag)
+	}
+
+	scr := &preScrub{Bck: bck}
+
+	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)
+	if err != nil {
+		return nil, err
+	}
+	lsmsg.PageSize = pageSize
+	{
 		lsargs.Callback = _listed.cb
 		lsargs.CallAfter = callAfter
-		lst, err := api.ListObjects(apiBP, bck, msg, lsargs)
-		if err != nil {
-			return err
-		}
+		lsargs.Limit = limit
+	}
 
-		scr := &preScrub{Bck: bck}
+	// pages
+	pageCounter, toShow := 0, int(limit)
+	for {
+		lst, err := api.ListObjectsPage(apiBP, bck, lsmsg, lsargs)
+		if err != nil {
+			return nil, err
+		}
+		// one page
 		for _, en := range lst.Entries {
 			if en.IsDir() || cos.IsLastB(en.Name, filepath.Separator) {
 				continue
 			}
-			debug.Assert(en.IsPresent(), bck.Cname(en.Name), " expected to be present") // vs apc.LsObjCached
+			debug.Assert(en.IsPresent(), bck.Cname(en.Name), " must be present") // (LsObjCached)
 			scr.upd(en, bprops)
 		}
-		scrubs = append(scrubs, scr)
+
+		if lsmsg.ContinuationToken == "" {
+			break
+		}
+		pageCounter++
+		if maxPages > 0 && pageCounter >= int(maxPages) {
+			break
+		}
+		if limit > 0 {
+			toShow -= len(lst.Entries)
+			if toShow <= 0 {
+				break
+			}
+		}
 	}
 
-	return teb.Print(scrubs, teb.BucketSummaryValidateTmpl)
+	return scr, nil
 }

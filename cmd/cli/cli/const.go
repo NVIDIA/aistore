@@ -96,7 +96,7 @@ const (
 	cmdRebalance    = apc.ActRebalance
 	cmdLRU          = apc.ActLRU
 	cmdStgCleanup   = "cleanup" // display name for apc.ActStoreCleanup
-	cmdStgValidate  = "validate"
+	cmdScrub        = "validate"
 	cmdSummary      = "summary" // ditto apc.ActSummaryBck
 
 	cmdCluster    = commandCluster
@@ -532,7 +532,7 @@ var (
 	//
 	objLimitFlag = cli.IntFlag{
 		Name: "limit",
-		Usage: "maximum number of object names to display (0 - unlimited; see also '--max-pages')\n" +
+		Usage: "maximum number of object names to list (0 - unlimited; see also '--max-pages')\n" +
 			indent4 + "\te.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom",
 	}
 	pageSizeFlag = cli.IntFlag{

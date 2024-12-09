@@ -229,8 +229,8 @@ const (
 		"{{end}}"
 
 	BucketSummaryValidateHdr  = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\t ZERO SIZE\t 5+GB\n"
-	BucketSummaryValidateTmpl = BucketSummaryValidateHdr + bucketSummaryValidateBody
-	bucketSummaryValidateBody = "{{range $v := . }}" +
+	BucketSummaryValidateTmpl = BucketSummaryValidateHdr + BucketSummaryValidateBody
+	BucketSummaryValidateBody = "{{range $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\t {{$v.ZeroSize}}\t {{$v.FiveGBplus}}\n" +
 		"{{end}}"
 

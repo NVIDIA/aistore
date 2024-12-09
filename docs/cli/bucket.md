@@ -919,12 +919,13 @@ A few additional words must be said about `--validate`. The option is provided t
 > an alternative way to execute _validation_ is to run `ais strorage validate` or (simply) `ais scrub`:
 
 ```console
+$ ais storage validate --help
 NAME:
    ais storage validate - check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
    e.g.:
      * ais storage validate                 - validate all in-cluster buckets;
      * ais scrub                            - same as above;
-     * ais scrub ais                        - all ais buckets;
+     * ais storage validate ais             - validate (a.k.a. scrub) all ais buckets;
      * ais scrub s3                         - all s3 buckets present in the cluster;
      * ais scrub s3 --refresh 10            - same as above while refreshing runtime counter(s) every 10s;
      * ais scrub gs://abc/images/           - validate part of the gcp bucket under 'images/`;
@@ -934,16 +935,20 @@ USAGE:
    ais storage validate [command options] [BUCKET[/PREFIX]] or [PROVIDER]
 
 OPTIONS:
-   --refresh value  time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                    valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value    used together with '--refresh' to limit the number of generated reports, e.g.:
-                     '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
-   --prefix value   for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
-                    '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
-                    a/b that have names (relative to this directory) starting with the letter c
-   --timeout value  maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
-                    valid time units: ns, us (or µs), ms, s (default), m, h
-   --help, -h       show help
+   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value          used together with '--refresh' to limit the number of generated reports, e.g.:
+                           '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --prefix value         for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                          '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
+                          a/b that have names (relative to this directory) starting with the letter c
+   --limit value          maximum number of object names to list (0 - unlimited; see also '--max-pages')
+                          e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
+   --no-headers, -H       display tables without headers
+   --max-pages value      maximum number of pages to display (see also '--page-size' and '--limit')
+                          e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
+   --non-recursive, --nr  list objects without including nested virtual subdirectories
+   --help, -h             show help
 ```
 
 For details and additional examples, please see:

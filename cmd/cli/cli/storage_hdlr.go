@@ -44,7 +44,7 @@ var validateUsage = validateSummaryFlag.Usage + "\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
 	indent1 + "\t* ais scrub \t- same as above;\n" +
-	indent1 + "\t* ais scrub ais \t- all ais buckets;\n" +
+	indent1 + "\t* ais storage validate ais \t- validate (a.k.a. scrub) all ais buckets;\n" +
 	indent1 + "\t* ais scrub s3 \t- all s3 buckets present in the cluster;\n" +
 	indent1 + "\t* ais scrub s3 --refresh 10\t- same as above while refreshing runtime counter(s) every 10s;\n" +
 	indent1 + "\t* ais scrub gs://abc/images/\t- validate part of the gcp bucket under 'images/`;\n" +
@@ -163,10 +163,13 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		cmdStgValidate: append(
+		cmdScrub: append(
 			longRunFlags,
 			bsummPrefixFlag,
-			waitJobXactFinishedFlag,
+			objLimitFlag,
+			noHeaderFlag,
+			maxPagesFlag,
+			noRecursFlag,
 		),
 	}
 
@@ -205,10 +208,10 @@ var (
 			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
 			showCmdStgSummary,
 			{
-				Name:         cmdStgValidate,
+				Name:         cmdScrub,
 				Usage:        validateUsage,
 				ArgsUsage:    lsAnyCommandArgument,
-				Flags:        storageFlags[cmdStgValidate],
+				Flags:        storageFlags[cmdScrub],
 				Action:       prelimScrub,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
