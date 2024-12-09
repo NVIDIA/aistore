@@ -311,6 +311,8 @@ test:short:azure:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-short
 
+# [TODO] test:short:oci
+
 test:long:
   <<: *test_long_skip_scheduled_def
   variables:
@@ -342,6 +344,8 @@ test:long:azure:
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht
     - make test-long
+
+# [TODO] test:long:oci
 
 test:long:aisloader:
   stage: test-long

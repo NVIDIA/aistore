@@ -183,6 +183,7 @@ run:
     - aws
     - azure
     - gcp
+    - oci
     # - nethttp
     # - statsd
 

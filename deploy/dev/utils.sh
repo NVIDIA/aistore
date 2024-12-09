@@ -65,7 +65,7 @@ set_env_backends() {
         gcp)   ;;
         oci)   ;;
         ht)    ;;
-	*) echo "fatal: unknown backend '$b' in 'AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}'"; exit 1;;
+        *)     echo "fatal: unknown backend '$b' in 'AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}'"; exit 1;;
       esac
     done
     ## consume (and discard) all reads
