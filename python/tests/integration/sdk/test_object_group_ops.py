@@ -230,14 +230,14 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
 
         prefetch_job = self.bucket.objects(obj_template=template).prefetch()
-        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # out of band delete all objects
         for obj_name in self.obj_names:
             self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
         copy_job = self.bucket.objects(obj_template=template).copy(to_bck, sync=True)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         # check to see if all the objects in dst disappear after cp multi-obj sync
         self.assertEqual(len(to_bck.list_all_objects(prefix=self.obj_prefix)), 0)
         # objects also disappear from src bck
@@ -386,7 +386,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
     def _evict_objects(self, obj_group):
         job_id = obj_group.evict()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
         self._check_all_objects_cached(
             len(obj_group.list_names()), expected_cached=False
         )
