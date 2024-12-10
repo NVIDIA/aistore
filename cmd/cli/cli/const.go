@@ -814,8 +814,15 @@ var (
 	disableFlag = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 
-	noRecursFlag = cli.BoolFlag{Name: "non-recursive,nr", Usage: "list objects without including nested virtual subdirectories"}
-	noDirsFlag   = cli.BoolFlag{Name: "no-dirs", Usage: "do not return virtual subdirectories (applies to remote buckets only)"}
+	noRecursFlag = cli.BoolFlag{
+		Name: "non-recursive,nr",
+		Usage: "non-recursive operation, e.g.:\n" +
+			"\t'ais ls gs://bucket/prefix --nr'  -\tlist objects and/or virtual subdirectories with names starting with the specified prefix;\n" +
+			"\t'ais ls gs://bucket/prefix/ --nr' -\tlist contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;\n" +
+			"\t'ais prefetch s3://bck/abcd --nr' -\tprefetch a single named object (see 'ais prefetch --help' for details);\n" +
+			"\t'ais rmo gs://bucket/prefix --nr' -\tremove a single object with the specified name (see 'ais rmo --help' for details)",
+	}
+	noDirsFlag = cli.BoolFlag{Name: "no-dirs", Usage: "do not return virtual subdirectories (applies to remote buckets only)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
