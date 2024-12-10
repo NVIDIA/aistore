@@ -188,6 +188,10 @@ func IsErrDNSLookup(err error) bool {
 	return errors.As(err, &wrapped)
 }
 
+func IsClientTimeout(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded)
+}
+
 func IsUnreachable(err error, status int) bool {
 	return IsErrConnectionRefused(err) ||
 		IsErrDNSLookup(err) ||

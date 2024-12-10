@@ -5,8 +5,6 @@
 package api
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -204,7 +202,7 @@ func lsoPage(reqParams *ReqParams) (_ *cmn.LsoRes, err error) {
 		if _, err = reqParams.DoReqAny(page); err == nil {
 			return page, nil
 		}
-		if !errors.Is(err, context.DeadlineExceeded) {
+		if !cos.IsClientTimeout(err) {
 			break
 		}
 		client := *reqParams.BaseParams.Client

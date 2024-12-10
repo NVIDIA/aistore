@@ -880,15 +880,25 @@ func (c *LogConf) Validate() error {
 // ClientConf //
 ////////////////
 
+const (
+	minClientTimeout = time.Second
+	maxClientTimeout = 30 * time.Minute
+
+	errExpectedRange = "(expected range [1s, 30m] or zero)"
+)
+
 func (c *ClientConf) Validate() error {
-	if j := c.Timeout.D(); j < time.Second || j > 2*time.Minute {
-		return fmt.Errorf("invalid client.client_timeout=%s (expected range [1s, 2m])", j)
+	if j := c.Timeout.D(); j != 0 && (j < minClientTimeout || j > maxClientTimeout) {
+		return fmt.Errorf("invalid client_timeout=%s %s", j, errExpectedRange)
 	}
-	if j := c.TimeoutLong.D(); j < 30*time.Second || j < c.Timeout.D() || j > 30*time.Minute {
-		return fmt.Errorf("invalid client.client_long_timeout=%s (expected range [30s, 30m])", j)
+	if j := c.TimeoutLong.D(); j != 0 && (j < minClientTimeout || j > maxClientTimeout) {
+		return fmt.Errorf("invalid client_long_timeout=%s %s", j, errExpectedRange)
 	}
-	if j := c.ListObjTimeout.D(); j < 2*time.Second || j > 15*time.Minute {
-		return fmt.Errorf("invalid client.list_timeout=%s (expected range [2s, 15m])", j)
+	if j := c.TimeoutLong.D(); j != 0 && j < c.Timeout.D() {
+		return fmt.Errorf("client_long_timeout=%s cannot be less than client_timeout=%s", j, c.Timeout.D())
+	}
+	if j := c.ListObjTimeout.D(); j != 0 && (j < minClientTimeout || j > maxClientTimeout) {
+		return fmt.Errorf("invalid list_timeout=%s %s", j, errExpectedRange)
 	}
 	return nil
 }

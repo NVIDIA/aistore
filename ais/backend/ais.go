@@ -45,6 +45,7 @@ type (
 		url  string
 		uuid string
 		bp   api.BaseParams
+		bpL  api.BaseParams // long & list
 	}
 	AISbp struct {
 		t      core.TargetPut
@@ -93,6 +94,9 @@ func unsetUUID(bck *cmn.Bck) { bck.Ns.UUID = "" }
 func extractErrCode(e error, uuid string) (int, error) {
 	if e == nil {
 		return http.StatusOK, nil
+	}
+	if cos.IsClientTimeout(e) {
+		return http.StatusRequestTimeout, e
 	}
 	herr := cmn.Err2HTTPErr(e)
 	if herr == nil {
@@ -257,7 +261,9 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	var (
 		url           string
 		remSmap, smap *meta.Smap
-		cliH, cliTLS  = remaisClients(&cfg.Client)
+
+		clientL      http.Client
+		cliH, cliTLS = remaisClients(&cfg.Client)
 	)
 	for _, u := range confURLs {
 		client := cliH
@@ -289,10 +295,17 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	r.smap, r.url = remSmap, url
 	if cos.IsHTTPS(url) {
 		r.bp = api.BaseParams{Client: cliTLS, URL: url, UA: ua}
+		clientL = *cliTLS
 	} else {
 		r.bp = api.BaseParams{Client: cliH, URL: url, UA: ua}
+		clientL = *cliH
 	}
+
+	r.bpL = r.bp
+	clientL.Timeout = cfg.Client.TimeoutLong.D()
+	r.bpL.Client = &clientL
 	r.uuid = remSmap.UUID
+
 	return
 }
 
@@ -446,7 +459,7 @@ func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRe
 	unsetUUID(&bck)
 
 	var lstRes *cmn.LsoRes
-	if lstRes, err = api.ListObjectsPage(remAis.bp, bck, remoteMsg, api.ListArgs{}); err != nil {
+	if lstRes, err = api.ListObjectsPage(remAis.bpL, bck, remoteMsg, api.ListArgs{}); err != nil {
 		ecode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
@@ -540,6 +553,7 @@ func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *
 	return
 }
 
+// TODO: retry
 func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
 	var (
 		remAis    *remAis
@@ -551,7 +565,7 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 		return
 	}
 	unsetUUID(&remoteBck)
-	if r, size, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/); err != nil {
+	if r, size, err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, nil /*api.GetArgs*/); err != nil {
 		return extractErrCode(err, remAis.uuid)
 	}
 	params := core.AllocPutParams()
@@ -564,6 +578,9 @@ func (m *AISbp) GetObj(_ context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Re
 	}
 	err = m.t.PutObject(lom, params)
 	core.FreePutParams(params)
+
+	// TODO: retry upon 'unreachable' or timeout
+
 	return extractErrCode(err, remAis.uuid)
 }
 
@@ -599,11 +616,12 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 		res.ExpCksum = oa.Cksum
 		lom.SetCksum(nil)
 	}
-	res.R, res.Size, res.Err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, args)
+	res.R, res.Size, res.Err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, args)
 	res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
 	return
 }
 
+// TODO: retry upon 'unreachable' or timeout
 func (m *AISbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	var (
 		oah       api.ObjAttrs
@@ -617,7 +635,7 @@ func (m *AISbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode i
 	unsetUUID(&remoteBck)
 	size := lom.Lsize(true) // _special_ as it's still a workfile at this point
 	args := api.PutArgs{
-		BaseParams: remAis.bp,
+		BaseParams: remAis.bpL,
 		Bck:        remoteBck,
 		ObjName:    lom.ObjName,
 		Cksum:      lom.Checksum(),
