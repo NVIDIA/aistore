@@ -1258,8 +1258,16 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	daemonID = c.Args().Get(shift + 2)
 
 	// validate and reassign
+	if name == commandCopy {
+		err = fmt.Errorf("'%s' is ambiguous and may correspond to copying multiple objects (%s) or entire bucket (%s)",
+			commandCopy, apc.ActCopyObjects, apc.ActCopyBck)
+		return
+	}
+	if name == commandList {
+		name = apc.ActList
+	}
 	if name != "" && name != apc.ActDsort {
-		if xactKind, _ := xact.GetKindName(name); xactKind == "" {
+		if xactKind, _ := xact.GetSimilar(name); xactKind == "" {
 			daemonID = xid
 			xid = name
 			name = ""
