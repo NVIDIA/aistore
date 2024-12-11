@@ -109,6 +109,7 @@ var (
 			blobThresholdFlag,
 			yesFlag,
 			numListRangeWorkersFlag,
+			dontHeadRemoteFlag,
 		),
 		cmdBlobDownload: {
 			refreshFlag,

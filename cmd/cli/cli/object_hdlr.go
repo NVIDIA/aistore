@@ -83,6 +83,7 @@ var (
 			nonverboseFlag,
 			noRecursFlag, // (embedded prefix dopOLTP dop)
 			yesFlag,
+			dontHeadRemoteFlag,
 		),
 		commandRename: {},
 		commandGet: {

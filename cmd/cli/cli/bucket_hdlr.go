@@ -146,6 +146,7 @@ var (
 			noRecursFlag, // (embedded prefix dopOLTP)
 			verboseFlag,  // not yet used
 			nonverboseFlag,
+			dontHeadRemoteFlag,
 		),
 		cmdSetBprops: {
 			forceFlag,
