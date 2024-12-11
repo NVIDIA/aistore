@@ -223,9 +223,15 @@ func showJobsHandler(c *cli.Context) error {
 	var l int
 	l, err = showJobsDo(c, name, xid, daemonID, bck)
 	if err == nil && l == 0 && !flagIsSet(c, allJobsFlag) {
-		n, h := qflprn(allJobsFlag), qflprn(cli.HelpFlag)
-		fmt.Fprintf(c.App.Writer, "No running jobs. "+
-			"Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", n, n, h)
+		var (
+			what string
+			n, h = qflprn(allJobsFlag), qflprn(cli.HelpFlag)
+		)
+		if name != "" {
+			what = " '" + name + "'"
+		}
+		fmt.Fprintf(c.App.Writer, "No running%s jobs. "+
+			"Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", what, n, n, h)
 	}
 	return err
 }

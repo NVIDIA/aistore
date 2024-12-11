@@ -302,7 +302,7 @@ func GetSimilar(kindOrName string) (simKind, simName string) {
 					if simKind != "" {
 						return "", "" // ambiguity
 					}
-					simKind, simName = kind, dtor.DisplayName
+					simKind, simName = kind, cos.Left(dtor.DisplayName, kind)
 					break
 				}
 			}

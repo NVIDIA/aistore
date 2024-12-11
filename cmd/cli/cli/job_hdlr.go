@@ -48,9 +48,13 @@ const resilverUsage = "resilver user data on a given target (or all targets in t
 	indent1 + "\t- remove migrated objects and old/obsolete workfiles."
 
 const stopUsage = "terminate a single batch job or multiple jobs, e.g.:\n" +
-	indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given job identified by its unique ID;\n" +
+	indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given (multi-object copy/transform) job identified by its unique ID;\n" +
 	indent1 + "\t- 'stop copy-listrange'\t- terminate all multi-object copies;\n" +
 	indent1 + "\t- 'stop copy-objects'\t- same as above (using display name);\n" +
+	indent1 + "\t- 'stop list'\t- stop all list-objects jobs;\n" +
+	indent1 + "\t- 'stop ls'\t- same as above;\n" +
+	indent1 + "\t- 'stop prefetch-listrange'\t- stop all prefetch jobs;\n" +
+	indent1 + "\t- 'stop prefetch'\t- same as above;\n" +
 	indent1 + "\t- 'stop g731 --force'\t- forcefully abort global rebalance g731 (advanced usage only);\n" +
 	indent1 + "\t- 'stop --all'\t- terminate all running jobs\n" +
 	indent1 + tabHelpOpt + "."
@@ -1266,12 +1270,13 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	}
 	if name == commandList {
 		name = apc.ActList
-	}
-	if name != "" && name != apc.ActDsort {
-		if xactKind, _ := xact.GetSimilar(name); xactKind == "" {
+	} else if name != "" && name != apc.ActDsort {
+		if xactKind, xactName := xact.GetSimilar(name); xactKind == "" {
 			daemonID = xid
 			xid = name
 			name = ""
+		} else {
+			name = cos.Left(xactName, xactKind)
 		}
 	}
 	if xid != "" {
