@@ -3,7 +3,7 @@ from unittest.mock import patch, Mock
 import requests
 
 from aistore.sdk.obj.content_iterator import ContentIterator
-from aistore.sdk.obj.obj_file.object_file import ObjectFile
+from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 
@@ -95,11 +95,11 @@ class TestObjectReader(unittest.TestCase):
         self.object_reader = ObjectReader(self.object_client)
         return mock_cont_iter, iterable_bytes
 
-    @patch("aistore.sdk.obj.object_reader.ObjectFile", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectFileReader", autospec=True)
     def test_as_file(self, mock_obj_file):
-        # Returns an object file with the default resume count
+        # Returns an ObjectFileReader with the default resume count
         res = self.object_reader.as_file()
-        self.assertIsInstance(res, ObjectFile)
+        self.assertIsInstance(res, ObjectFileReader)
         mock_obj_file.assert_called_once()
         # Get the arguments passed to the mock
         args, kwargs = mock_obj_file.call_args
@@ -108,12 +108,12 @@ class TestObjectReader(unittest.TestCase):
         # Check the max_resume argument
         self.assertEqual(kwargs.get("max_resume"), 5)
 
-    @patch("aistore.sdk.obj.object_reader.ObjectFile", autospec=True)
+    @patch("aistore.sdk.obj.object_reader.ObjectFileReader", autospec=True)
     def test_as_file_max_resume(self, mock_obj_file):
         max_resume = 12
-        # Returns an object file with the default resume count
+        # Returns an ObjectFileReader with the default resume count
         res = self.object_reader.as_file(max_resume=max_resume)
-        self.assertIsInstance(res, ObjectFile)
+        self.assertIsInstance(res, ObjectFileReader)
         mock_obj_file.assert_called_once()
         # Get the arguments passed to the mock
         args, kwargs = mock_obj_file.call_args

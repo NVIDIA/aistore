@@ -9,7 +9,7 @@ import requests
 
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.obj.object_client import ObjectClient
-from aistore.sdk.obj.obj_file.object_file import ObjectFile
+from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
 from aistore.sdk.obj.object_attributes import ObjectAttributes
 
@@ -96,7 +96,7 @@ class ObjectReader:
         max_resume: Optional[int] = 5,
     ) -> BufferedIOBase:
         """
-        Create a read-only, non-seekable `ObjectFile` instance for streaming object data in chunks.
+        Create a read-only, non-seekable `ObjectFileReader` instance for streaming object data in chunks.
         This file-like object primarily implements the `read()` method to retrieve data sequentially,
         with automatic retry/resumption in case of stream interruptions such as `ChunkedEncodingError`.
 
@@ -117,7 +117,7 @@ class ObjectReader:
                 f"Invalid max_resume (must be a non-negative integer): {max_resume}."
             )
 
-        return ObjectFile(self._content_iterator, max_resume=max_resume)
+        return ObjectFileReader(self._content_iterator, max_resume=max_resume)
 
     def __iter__(self) -> Iterator[bytes]:
         """

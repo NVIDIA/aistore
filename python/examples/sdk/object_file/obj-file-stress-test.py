@@ -2,9 +2,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-# This script tests AIStore's ObjectFile and its ability to resume object reading with interruptions 
+# This script tests AIStore's ObjectFileReader and its ability to resume object reading with interruptions 
 # to the underlying object stream (e.g. simulating intermittent AIStore K8s node failures). Run with
-# a one-node cluster to best and most consistently observe the behavior of the ObjectFile's resume 
+# a one-node cluster to best and most consistently observe the behavior of the ObjectFileReader's resume 
 # functionality.
 
 import logging
@@ -14,7 +14,7 @@ import urllib3
 from kubernetes import client as k8s_client, config as k8s_config
 from aistore.sdk.client import Client
 from aistore.sdk.obj.object_reader import ObjectReader
-from utils import create_and_put_object, obj_file_read, start_pod_killer, stop_pod_killer
+from utils import create_and_put_object, obj_file_reader_read, start_pod_killer, stop_pod_killer
 
 logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more detailed logs
 
@@ -25,7 +25,7 @@ GB = 1024 * MB
 # Adjust the object size, pod kill interval, and chunk size to control how often interruptions 
 # occur based on your specific test machine configuration and network setup. For example, increase 
 # object size or decrease chunk size / pod kill interval to trigger more frequent disruptions.
-# Test on a one-node cluster to best observe the behavior of the ObjectFile's resume functionality.
+# Test on a one-node cluster to best observe the behavior of the ObjectFileReader's resume functionality.
 
 AIS_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://localhost:51080")
 BUCKET_NAME = "stress-test"
@@ -42,7 +42,7 @@ BUFFER_SIZE = 20 * MB  # To be used for MT implementation
 
 
 def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, object_reader: ObjectReader, generated_data: bytes):
-    """Test object file read with pod interruptions and validate data."""
+    """Test ObjectFileReader read with pod interruptions and validate data."""
     logging.info("Starting test")
 
     start_time = time.time()
@@ -52,8 +52,8 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, object_reader: Obj
         logging.info("Starting pod killer process...")
         pod_killer_process = start_pod_killer(k8s_client, POD_KILL_NAMESPACE, POD_KILL_NAME, POD_KILL_INTERVAL)
 
-    # Perform object file read
-    downloaded_data, resume_total = obj_file_read(object_reader, READ_SIZE, BUFFER_SIZE, MAX_RESUME)
+    # Perform ObjectFileReader read
+    downloaded_data, resume_total = obj_file_reader_read(object_reader, READ_SIZE, BUFFER_SIZE, MAX_RESUME)
 
     end_time = time.time()
 

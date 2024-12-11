@@ -13,8 +13,7 @@ from aistore.sdk.utils import get_logger
 logger = get_logger(__name__)
 
 
-# TODO: Rename to `ObjectFileReader`
-class ObjectFile(BufferedIOBase):
+class ObjectFileReader(BufferedIOBase):
     """
     A sequential read-only file-like object extending `BufferedIOBase` for reading object data, with support for both
     reading a fixed size of data and reading until the end of file (EOF).
@@ -29,7 +28,7 @@ class ObjectFile(BufferedIOBase):
 
     Args:
         content_iterator (ContentIterator): An iterator that can fetch object data from AIS in chunks.
-        max_resume (int): Maximum number of resumes allowed for an ObjectFile instance.
+        max_resume (int): Maximum number of resumes allowed for an ObjectFileReader instance.
     """
 
     def __init__(self, content_iterator: ContentIterator, max_resume: int):
@@ -67,8 +66,8 @@ class ObjectFile(BufferedIOBase):
             bytes: The read data as a bytes object.
 
         Raises:
-            ObjectFileStreamError if a connection cannot be made.
-            ObjectFileMaxResumeError if the stream is interrupted more than the allowed maximum.
+            ObjectFileReaderStreamError: If a connection cannot be made.
+            ObjectFileReaderMaxResumeError: If the stream is interrupted more than the allowed maximum.
             ValueError: I/O operation on a closed file.
             Exception: Any other errors while streaming and reading.
         """

@@ -7,8 +7,8 @@ from typing import Iterator, Optional, Tuple
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.utils import get_logger
 from aistore.sdk.obj.obj_file.errors import (
-    ObjectFileStreamError,
-    ObjectFileMaxResumeError,
+    ObjectFileReaderStreamError,
+    ObjectFileReaderMaxResumeError,
 )
 
 logger = get_logger(__name__)
@@ -30,13 +30,13 @@ def reset_iterator(
         Iterator[bytes]: An iterator to read chunks of data from the object stream.
 
     Raises:
-        ObjectFileStreamError if a connection cannot be made.
+        ObjectFileReaderStreamError if a connection cannot be made.
     """
     try:
         return content_iterator.iter(offset=resume_position)
     except Exception as err:
         logger.error("Error establishing object stream: (%s)", err)
-        raise ObjectFileStreamError(err) from err
+        raise ObjectFileReaderStreamError(err) from err
 
 
 def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
@@ -52,11 +52,11 @@ def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
         int: The updated number of resume attempts.
 
     Raises:
-        ObjectFileMaxResumeError: If the number of resume attempts exceeds the maximum allowed.
+        ObjectFileReaderMaxResumeError: If the number of resume attempts exceeds the maximum allowed.
     """
     resume_total += 1
     if resume_total > max_resume:
-        raise ObjectFileMaxResumeError(err, resume_total) from err
+        raise ObjectFileReaderMaxResumeError(err, resume_total) from err
     return resume_total
 
 
@@ -82,7 +82,7 @@ def handle_chunked_encoding_error(
         Tuple[Iterator[bytes], int]: The new iterator and the updated resume total.
 
     Raises:
-        ObjectFileMaxResumeError: If the maximum number of resume attempts is exceeded.
+        ObjectFileReaderMaxResumeError: If the maximum number of resume attempts is exceeded.
     """
     resume_total = increment_resume(resume_total, max_resume, err)
     logger.warning(

@@ -12,7 +12,7 @@ from tests.integration import CLUSTER_ENDPOINT
 from tests.utils import create_and_put_object, random_string, case_matrix
 
 
-class TestObjectFileOps(unittest.TestCase):
+class TestObjectFileReaderOps(unittest.TestCase):
     OBJECT_NAME = "test-object"
     BUCKET_NAME = f"test-bucket-{random_string(8)}"
     OBJECT_SIZE = 5242880
