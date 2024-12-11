@@ -290,6 +290,27 @@ func GetKindName(kindOrName string) (kind, name string) {
 	return
 }
 
+func GetSimilar(kindOrName string) (simKind, simName string) {
+	for kind, dtor := range Table {
+		if kind == kindOrName || dtor.DisplayName == kindOrName {
+			return kind, dtor.DisplayName
+		}
+		// e.g., "prefetch" vs "prefetch-listrange"
+		for _, s := range []string{kind, dtor.DisplayName} {
+			if strings.HasPrefix(s, kindOrName) && len(s) > len(kindOrName) {
+				if s[len(kindOrName)] == '-' {
+					if simKind != "" {
+						return "", "" // ambiguity
+					}
+					simKind, simName = kind, dtor.DisplayName
+					break
+				}
+			}
+		}
+	}
+	return
+}
+
 func Cname(kind, uuid string) string { return kind + LeftID + uuid + RightID }
 
 func ParseCname(cname string) (xactKind, xactID string, _ error) {
