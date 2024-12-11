@@ -328,6 +328,10 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	}
 }
 
+func (s *streamBase) yelp(err error) {
+	nlog.WarningDepth(1, "Error:", s.String(), "[", err, "]")
+}
+
 ///////////
 // Extra //
 ///////////

@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+const DialupTimeoutDftl = 30 * time.Second
+
 type (
 	// assorted http(s) client options
 	TransportArgs struct {
@@ -45,7 +47,7 @@ type (
 func NewTransport(cargs TransportArgs) *http.Transport {
 	var (
 		defaultTransport = http.DefaultTransport.(*http.Transport)
-		dialTimeout      = cos.NonZero(cargs.DialTimeout, 30*time.Second)
+		dialTimeout      = cos.NonZero(cargs.DialTimeout, DialupTimeoutDftl)
 	)
 
 	dialer := &net.Dialer{

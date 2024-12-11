@@ -159,7 +159,7 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 func (s *Stream) doRequest() error {
 	s.numCur, s.sizeCur = 0, 0
 	if !s.compressed() {
-		return s.do(s)
+		return s.doPlain(s)
 	}
 	s.lz4s.sgl.Reset()
 	if s.lz4s.zw == nil {
@@ -171,7 +171,7 @@ func (s *Stream) doRequest() error {
 	s.lz4s.zw.Header.BlockChecksum = false
 	s.lz4s.zw.Header.NoChecksum = !s.lz4s.frameChecksum
 	s.lz4s.zw.Header.BlockMaxSize = s.lz4s.blockMaxSize
-	return s.do(s.lz4s)
+	return s.doCmpr(s.lz4s)
 }
 
 // as io.Reader
