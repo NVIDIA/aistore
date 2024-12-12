@@ -23,8 +23,8 @@ For datasets, say, below 50TB a single host may suffice and should, therefore, b
 AIStore runs on commodity Linux machines with no special requirements whatsoever. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#key-concepts-and-diagrams) are identical, hardware-wise.
 
 * [Linux](#Linux) distribution with `GCC`, `sysstat`, `attr` and `util-linux` packages(**)
-* Linux kernel 5.15+
-* [Go 1.21 or later](https://golang.org/dl/)
+* Linux kernel 6.8+
+* [Go 1.23 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS), Google Cloud Platform (GCP), and/or Azure Cloud Storage accounts.
 
