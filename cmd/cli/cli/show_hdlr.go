@@ -28,6 +28,21 @@ import (
 	"github.com/urfave/cli"
 )
 
+const showJobUsage = "show running and/or finished jobs\n" +
+	indent1 + "\t- 'show job tco-cysbohAGL'\t- show a given (multi-object copy/transform) job identified by its unique ID;\n" +
+	indent1 + "\t- 'show job copy-listrange'\t- show all running multi-object copies;\n" +
+	indent1 + "\t- 'show job copy-objects'\t- same as above (using display name);\n" +
+	indent1 + "\t- 'show job copy-objects --all'\t- show both running and already finished (or stopped) multi-object copies;\n" +
+	indent1 + "\t- 'show job list'\t- show all running list-objects jobs;\n" +
+	indent1 + "\t- 'show job ls'\t- same as above;\n" +
+	indent1 + "\t- 'show job ls --refresh 10'\t- same as above with periodic _refreshing_ every 10 seconds;\n" +
+	indent1 + "\t- 'show job ls --refresh 10 --count 4'\t- same as above but only for the first four 10-seconds intervals;\n" +
+	indent1 + "\t- 'show job prefetch-listrange'\t- show all running prefetch jobs;\n" +
+	indent1 + "\t- 'show job prefetch'\t- same as above;\n" +
+	indent1 + "\t- 'show job prefetch --refresh 1m'\t- show all running prefetch jobs at 1 minute intervals (until Ctrl-C);\n" +
+	indent1 + "\t- 'show job --all'\t- show absolutely all jobs, running and already finished\n" +
+	indent1 + tabHelpOpt + "."
+
 type (
 	daemonTemplateXactSnaps struct {
 		DaemonID  string
@@ -198,7 +213,7 @@ var (
 
 	showCmdJob = cli.Command{
 		Name:         commandJob,
-		Usage:        "show running and finished jobs ('--all' for all, or " + tabHelpOpt + ")",
+		Usage:        showJobUsage,
 		ArgsUsage:    jobAnyArg,
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,

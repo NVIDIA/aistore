@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
@@ -26,7 +25,7 @@ import (
 type (
 	dstats struct {
 		tid   string
-		stats ios.AllDiskStats
+		stats cos.AllDiskStats
 		tcdf  *fs.Tcdf
 	}
 	dstatsCtx struct {
@@ -52,7 +51,7 @@ func (ctx *dstatsCtx) get() error {
 	}
 
 	// 3. v3.23 and older
-	var stats ios.AllDiskStats
+	var stats cos.AllDiskStats
 	err = jsoniter.Unmarshal(out, &stats)
 	if err != nil {
 		return err

@@ -152,6 +152,47 @@ Use `ais show performance` and its variations in combination with `ais show job`
 
 ## `ais show job`
 
+```console
+$ ais show job --help
+NAME:
+   ais show job - show running and/or finished jobs
+     - 'show job tco-cysbohAGL'              - show a given (multi-object copy/transform) job identified by its unique ID;
+     - 'show job copy-listrange'             - show all running multi-object copies;
+     - 'show job copy-objects'               - same as above (using display name);
+     - 'show job copy-objects --all'         - show both running and already finished (or stopped) multi-object copies;
+     - 'show job list'                       - show all running list-objects jobs;
+     - 'show job ls'                         - same as above;
+     - 'show job ls --refresh 10'            - same as above with periodic _refreshing_ every 10 seconds;
+     - 'show job ls --refresh 10 --count 4'  - same as above but only for the first four 10-seconds intervals;
+     - 'show job prefetch-listrange'         - show all running prefetch jobs;
+     - 'show job prefetch'                   - same as above;
+     - 'show job prefetch --refresh 1m'      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
+     - 'show job --all'                      - show absolutely all jobs, running and already finished
+   press <TAB-TAB> to select, '--help' for more options.
+
+USAGE:
+   ais show job [command options] [NAME] [JOB_ID] [NODE_ID] [BUCKET]
+
+OPTIONS:
+   --refresh value   time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports, e.g.:
+                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --json, -j        json input/output
+   --all             all jobs, including finished and aborted
+   --regex value     regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   --no-headers, -H  display tables without headers
+   --verbose, -v     show extended statistics
+   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --date-time       override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   --progress        show progress bar(s) and progress of execution in real time
+   --log value       filename to log metrics (statistics)
+   --help, -h        show help
+```
+
 The command has no statically defined subcommands. When you type `ais show job <TAB-TAB>`, the resulting set of shell completions will only include job names (aka "kinds") that are **currently running**. Example:
 
 ```console

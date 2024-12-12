@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -670,7 +669,7 @@ func mpathAction(c *cli.Context, action string) error {
 		case apc.ActMountpathAttach:
 			acted = "attached"
 			label := parseStrFlag(c, mountpathLabelFlag)
-			err = api.AttachMountpath(apiBP, si, mountpath, ios.Label(label))
+			err = api.AttachMountpath(apiBP, si, mountpath, cos.MountpathLabel(label))
 		case apc.ActMountpathEnable:
 			acted = "enabled"
 			err = api.EnableMountpath(apiBP, si, mountpath)

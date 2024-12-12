@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
 )
@@ -351,7 +350,7 @@ type (
 	DiskStatsHelper struct {
 		TargetID string
 		DiskName string
-		Stat     ios.DiskStats
+		Stat     cos.DiskStats
 		Tcdf     *fs.Tcdf
 	}
 	SmapHelper struct {
