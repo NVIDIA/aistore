@@ -310,7 +310,7 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 			core.FreeLOM(clone)
 		}
 	}
-	if params.Cksum != nil && cksum != nil {
+	if params.Cksum != nil && cksum != nil && !cksum.IsEmpty() {
 		if !cksum.Equal(params.Cksum) {
 			err = cos.NewErrDataCksum(
 				cksum.Clone(),

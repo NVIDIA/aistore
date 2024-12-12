@@ -622,6 +622,9 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 	}
 	if err == nil {
 		if lom.EqCksum(hdr.ObjAttrs.Cksum) {
+			//
+			// compare with: coi.isNOP, "PUT is a no-op", and reb/recv.go no-op
+			//
 			if cmn.Rom.FastV(4, cos.SmoduleDsort) {
 				nlog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
 					m.ManagerUUID, lom)

@@ -124,8 +124,10 @@ func (ck *CksumHash) Init(ty string) {
 	}
 }
 
+// NOTE [caution]: empty checksums are equal
 func (ck *CksumHash) Equal(to *Cksum) bool { return ck.Cksum.Equal(to) }
-func (ck *CksumHash) Sum() []byte          { return ck.sum }
+
+func (ck *CksumHash) Sum() []byte { return ck.sum }
 
 func (ck *CksumHash) Finalize() {
 	ck.sum = ck.H.Sum(nil)
@@ -146,7 +148,9 @@ func (ck *CksumHashSize) Write(b []byte) (n int, err error) {
 // Cksum //
 ///////////
 
-func (ck *Cksum) IsEmpty() bool { return ck == nil || ck.ty == "" || ck.ty == ChecksumNone }
+func (ck *Cksum) IsEmpty() bool {
+	return ck == nil || ck.ty == "" || ck.ty == ChecksumNone || ck.value == ""
+}
 
 func NewCksum(ty, value string) *Cksum {
 	if err := ValidateCksumType(ty, true /*empty OK*/); err != nil {
@@ -158,9 +162,10 @@ func NewCksum(ty, value string) *Cksum {
 	return &Cksum{ty, value}
 }
 
+// NOTE [caution]: empty checksums are also equal (compare with lom.EqCksum and friends)
 func (ck *Cksum) Equal(to *Cksum) bool {
 	if ck.IsEmpty() || to.IsEmpty() {
-		return false
+		return ck.IsEmpty() == to.IsEmpty()
 	}
 	return ck.ty == to.ty && ck.value == to.value
 }

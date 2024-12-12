@@ -12,6 +12,7 @@ type (
 		Version(special ...bool) string
 		VersionPtr() *string
 		Checksum() *Cksum
+		EqCksum(cksum *Cksum) bool
 		AtimeUnix() int64
 		GetCustomMD() StrKVs
 		GetCustomKey(key string) (val string, exists bool)
@@ -34,6 +35,7 @@ func (s SimpleOAH) AtimeUnix() int64    { return s.Atime }
 func (SimpleOAH) Version(...bool) string             { return "" }
 func (SimpleOAH) VersionPtr() *string                { return nil }
 func (SimpleOAH) Checksum() *Cksum                   { return nil }
+func (SimpleOAH) EqCksum(*Cksum) bool                { return false }
 func (SimpleOAH) GetCustomMD() StrKVs                { return nil }
 func (SimpleOAH) GetCustomKey(string) (string, bool) { return "", false }
 func (SimpleOAH) SetCustomKey(_, _ string)           {}

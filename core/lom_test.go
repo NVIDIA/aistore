@@ -452,6 +452,24 @@ var _ = Describe("LOM", func() {
 					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "wrong checksum"))
 					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
 				})
+
+				// This may happen when the checksum was set to `none` previously and someone updated the config.
+				// After that, old objects will have old checksum type saved, whereas in the `lom.CksumType()`
+				// the new checksum type will be returned.
+				It("should correctly validate meta checksum after the checksum type has changed", func() {
+					// Using bucket that has checksum type that is *not* `none`.
+					createTestFile(localFQN, testFileSize)
+					lom := NewBasicLom(localFQN)
+					// Set checksum type to `none` to simulate LOM with old checksum type (set to `none`).
+					orig := lom.Bck().Props.Cksum.Type
+					lom.Bck().Props.Cksum.Type = cos.ChecksumNone
+					lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
+
+					Expect(persist(lom)).NotTo(HaveOccurred())
+					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
+
+					lom.Bck().Props.Cksum.Type = orig
+				})
 			})
 
 			// copy-paste of some of ValidateMetaChecksum tests, however if there's no
@@ -515,6 +533,16 @@ var _ = Describe("LOM", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
+				})
+
+				It("should correctly validate content checksum after the checksum type has changed", func() {
+					// Using bucket that has checksum type that is *not* `none`.
+					createTestFile(localFQN, testFileSize)
+					lom := NewBasicLom(localFQN)
+					// Set checksum type to `none` to simulate LOM with old checksum type (set to `none`).
+					lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
+
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 				})
 			})
 

@@ -496,11 +496,9 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 	if err = writeObject(lom, args.Reader, lom.Lsize(true), args.Xact); err != nil {
 		return
 	}
-	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
-		if !lom.EqCksum(args.Cksum) {
-			err = cos.NewErrDataCksum(args.Cksum, lom.Checksum(), lom.Cname())
-			return
-		}
+	if !args.Cksum.IsEmpty() && !lom.EqCksum(args.Cksum) {
+		err = cos.NewErrDataCksum(args.Cksum, lom.Checksum(), lom.Cname())
+		return
 	}
 	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 	ctMeta.Lock(true)

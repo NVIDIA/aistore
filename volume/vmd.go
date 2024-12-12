@@ -111,7 +111,7 @@ func (vmd *VMD) equal(other *VMD) bool {
 	debug.Assert(other.cksum != nil)
 	return vmd.DaemonID == other.DaemonID &&
 		vmd.Version == other.Version &&
-		vmd.cksum.Equal(other.cksum)
+		!vmd.cksum.IsEmpty() && vmd.cksum.Equal(other.cksum)
 }
 
 func (vmd *VMD) String() string {

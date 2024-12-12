@@ -430,6 +430,9 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 			mainBMD = bmd
 			continue
 		}
+		if mainBMD.cksum.IsEmpty() {
+			cos.ExitLogf("BMD is not checksummed (%q): %v", mpath, mainBMD)
+		}
 		if mainBMD.cksum.Equal(bmd.cksum) {
 			continue
 		}

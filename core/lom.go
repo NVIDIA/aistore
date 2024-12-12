@@ -170,9 +170,11 @@ func (lom *LOM) Digest() uint64    { return lom.digest }
 
 func (lom *LOM) SetSize(size int64) { lom.md.Size = size }
 
-func (lom *LOM) Checksum() *cos.Cksum          { return lom.md.Cksum }
-func (lom *LOM) SetCksum(cksum *cos.Cksum)     { lom.md.Cksum = cksum }
-func (lom *LOM) EqCksum(cksum *cos.Cksum) bool { return lom.md.Cksum.Equal(cksum) }
+func (lom *LOM) Checksum() *cos.Cksum      { return lom.md.Cksum }
+func (lom *LOM) SetCksum(cksum *cos.Cksum) { lom.md.Cksum = cksum }
+func (lom *LOM) EqCksum(cksum *cos.Cksum) bool {
+	return !lom.md.Cksum.IsEmpty() && lom.md.Cksum.Equal(cksum)
+}
 
 func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }

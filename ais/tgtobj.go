@@ -180,7 +180,7 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 func (poi *putOI) putObject() (ecode int, err error) {
 	poi.ltime = mono.NanoTime()
 	// PUT is a no-op if the checksums do match
-	if !poi.skipVC && !poi.coldGET && !poi.cksumToUse.IsEmpty() {
+	if !poi.skipVC && !poi.coldGET {
 		if poi.lom.EqCksum(poi.cksumToUse) {
 			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")

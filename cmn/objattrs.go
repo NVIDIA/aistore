@@ -106,6 +106,10 @@ func (oa *ObjAttrs) AtimeUnix() int64        { return oa.Atime }
 func (oa *ObjAttrs) Checksum() *cos.Cksum    { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string) { oa.Cksum = cos.NewCksum(ty, val) }
 
+func (oa *ObjAttrs) EqCksum(cksum *cos.Cksum) bool {
+	return !oa.Cksum.IsEmpty() && oa.Cksum.Equal(cksum)
+}
+
 func (oa *ObjAttrs) Version(_ ...bool) string {
 	if oa.Ver == nil {
 		return ""

@@ -17,7 +17,7 @@ func init() {
 	hk.TestInit()
 }
 
-func TestCluster(t *testing.T) {
+func TestCore(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, t.Name())
 }
