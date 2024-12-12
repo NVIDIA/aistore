@@ -77,7 +77,7 @@ func getHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if !bck.IsHT() {
+	if shouldHeadRemote(c, bck) {
 		if bck.Props, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}

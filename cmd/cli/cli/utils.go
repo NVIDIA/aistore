@@ -507,6 +507,10 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 	return
 }
 
+func shouldHeadRemote(c *cli.Context, bck cmn.Bck) bool {
+	return !bck.IsHT() && !flagIsSet(c, dontHeadRemoteFlag)
+}
+
 // Prints multiple lines of fmtStr to writer w.
 // For line number i, fmtStr is formatted with values of args at index i
 // - if maxLines >= 0 prints at most maxLines

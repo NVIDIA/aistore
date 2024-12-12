@@ -119,6 +119,7 @@ var (
 			unitsFlag,   // raw (bytes), kb, mib, etc.
 			verboseFlag, // client side
 			silentFlag,  // server side
+			dontHeadRemoteFlag,
 		},
 
 		commandPut: append(
@@ -138,6 +139,7 @@ var (
 			putObjDfltCksumFlag,
 			// append
 			appendConcatFlag,
+			dontHeadRemoteFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -149,6 +151,7 @@ var (
 			deleteSrcFlag,
 			targetIDFlag,
 			verboseFlag,
+			dontHeadRemoteFlag,
 		},
 		commandConcat: {
 			recursFlag,
@@ -456,8 +459,10 @@ func concatHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjURI(c, fullObjName, false); err != nil {
 		return
 	}
-	if _, err = headBucket(bck, false /* don't add */); err != nil {
-		return
+	if shouldHeadRemote(c, bck) {
+		if _, err = headBucket(bck, false /* don't add */); err != nil {
+			return
+		}
 	}
 	return concatObject(c, bck, objName, fileNames)
 }
@@ -483,8 +488,10 @@ func promoteHandler(c *cli.Context) (err error) {
 	if bck, objName, err = parseBckObjURI(c, fullObjName, true /*optObjName*/); err != nil {
 		return
 	}
-	if _, err = headBucket(bck, false /* don't add */); err != nil {
-		return
+	if shouldHeadRemote(c, bck) {
+		if _, err = headBucket(bck, false /* don't add */); err != nil {
+			return
+		}
 	}
 	return promote(c, bck, objName, fqn)
 }
