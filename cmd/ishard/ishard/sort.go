@@ -55,7 +55,7 @@ func (is *ISharder) sort(shardNames []string) (string, error) {
 			return "", fmt.Errorf("error uploading order file: %w", err)
 		}
 
-		spec.OrderFileURL = fmt.Sprintf(
+		spec.EKMFileURL = fmt.Sprintf(
 			"%s/%s/%s/%s/%s?%s=%s",
 			is.cfg.URL, apc.Version, apc.Objects, is.cfg.DstBck.Name, orderFileName,
 			apc.QparamProvider, is.cfg.DstBck.Provider,
@@ -96,7 +96,7 @@ func (is *ISharder) waitSort(dsortManagerUUID string, timeout *time.Duration) er
 				m.Creation.Finished
 		}
 		if allAborted {
-			return fmt.Errorf("dsort abort")
+			return errors.New("dsort abort")
 		}
 		if allFinished {
 			return nil
@@ -104,5 +104,5 @@ func (is *ISharder) waitSort(dsortManagerUUID string, timeout *time.Duration) er
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return fmt.Errorf("dsort timeout")
+	return errors.New("dsort timeout")
 }

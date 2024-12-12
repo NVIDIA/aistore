@@ -158,8 +158,8 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		case err := <-errCh:
 			return nil, 0, err
 		default:
+			break
 		}
-
 		recs.Insert(record)
 
 		// Create a new shard and reset once exceeding the configured size
@@ -259,7 +259,6 @@ func (is *ISharder) Start() error {
 		}
 
 		for _, en := range objListPage.Entries {
-
 			if is.cfg.EKMFlag.IsSet {
 				// skip if the object doesn't match any key in EKM
 				if _, err := is.cfg.Ekm.Lookup(en.Name); err != nil {

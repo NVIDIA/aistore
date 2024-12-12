@@ -29,16 +29,17 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
-func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, numRecords, numExtensions int, fileSize int64, sampleKeyPattern config.SampleKeyPattern, randomize, dropout bool) {
+func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, numRecords, numExtensions int,
+	fileSize int64, sampleKeyPattern config.SampleKeyPattern, randomize, dropout bool) { //nolint:unparam // dropout to be implemented
 	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
 	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
 
-	var extensions []string
+	extensions := make([]string, 0, numExtensions)
 	for range numExtensions {
 		extensions = append(extensions, "."+trand.String(3))
 	}
 
-	totalSize, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, fileSize, randomize, dropout)
+	totalSize, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, fileSize, randomize, false)
 	tassert.CheckFatal(t, err)
 
 	isharder, err := ishard.NewISharder(cfg)
@@ -325,7 +326,7 @@ func TestIshardTemplate(t *testing.T) {
 				}
 
 				re := regexp.MustCompile(expectedFormat)
-				tassert.Fatalf(t, re.MatchString(en.Name), fmt.Sprintf("expected %s to match %s", en.Name, expectedFormat))
+				tassert.Fatalf(t, re.MatchString(en.Name), "expected %s to match %s", en.Name, expectedFormat)
 			}
 		})
 	}
@@ -536,7 +537,7 @@ func TestIshardEKM(t *testing.T) {
 	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
 	tools.CreateBucket(t, cfg.URL, dsortedBck, nil, true /*cleanup*/)
 
-	var extensions []string
+	extensions := make([]string, 0, numExtensions)
 	for range numExtensions {
 		extensions = append(extensions, "."+trand.String(3))
 	}

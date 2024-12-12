@@ -5,6 +5,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -115,7 +116,7 @@ type SortFlag struct {
 func (alg *SortFlag) Set(value string) error {
 	parts := strings.Split(value, ":")
 	if len(parts) == 0 {
-		return fmt.Errorf("invalid sort flag format")
+		return errors.New("invalid sort flag format")
 	}
 
 	alg.IsSet = true
@@ -129,7 +130,7 @@ func (alg *SortFlag) Set(value string) error {
 			} else if parts[1] == "dec" {
 				alg.Decreasing = true
 			} else {
-				return fmt.Errorf("invalid alphanumeric sort option, expected 'inc' or 'dec'")
+				return errors.New("invalid alphanumeric sort option, expected 'inc' or 'dec'")
 			}
 		}
 	case "shuffle":
@@ -137,11 +138,11 @@ func (alg *SortFlag) Set(value string) error {
 		if len(parts) > 1 {
 			alg.Seed = parts[1]
 			if _, err := strconv.ParseInt(alg.Seed, 10, 64); err != nil {
-				return fmt.Errorf("invalid shuffle seed, must be a valid integer")
+				return errors.New("invalid shuffle seed, must be a valid integer")
 			}
 		}
 	default:
-		return fmt.Errorf("invalid sorting algorithm, expected 'alpha' or 'shuffle'")
+		return errors.New("invalid sorting algorithm, expected 'alpha' or 'shuffle'")
 	}
 
 	return nil
@@ -234,7 +235,7 @@ func (d *DryRunFlag) Set(value string) error {
 	return nil
 }
 
-func (d *DryRunFlag) IsBoolFlag() bool {
+func (*DryRunFlag) IsBoolFlag() bool {
 	return true
 }
 

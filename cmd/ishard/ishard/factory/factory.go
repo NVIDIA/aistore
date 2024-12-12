@@ -168,7 +168,8 @@ func (sf *ShardFactory) poll() {
 			}
 
 			time.Sleep(backoff)
-			shardList, err := api.ListObjects(sf.baseParams, sf.toBck, &apc.LsoMsg{Prefix: sf.shardIter.Prefix, Flags: apc.LsNameSize}, api.ListArgs{})
+			shardList, err := api.ListObjects(sf.baseParams, sf.toBck,
+				&apc.LsoMsg{Prefix: sf.shardIter.Prefix, Flags: apc.LsNameSize}, api.ListArgs{})
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				continue
@@ -176,7 +177,7 @@ func (sf *ShardFactory) poll() {
 			for _, entry := range shardList.Entries {
 				pool[entry.Name] = struct{}{}
 			}
-			backoff = time.Duration(min(time.Second*10, backoff*2))
+			backoff = min(time.Second*10, backoff*2)
 		}
 	}
 	sf.pollWg.Done()

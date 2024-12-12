@@ -186,6 +186,7 @@ clean: ## Remove all AIS related files and binaries
 
 mod-all: mod-clean mod-tidy
 	@echo "CLI ..." && cd cmd/cli && $(MAKE) mod-tidy
+	@echo "ishard ..." && cd cmd/ishard && $(MAKE) mod-tidy
 
 # cleanup go-mod cache
 mod-clean:
