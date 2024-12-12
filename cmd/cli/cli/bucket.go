@@ -78,8 +78,10 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
 
 // Rename ais bucket
 func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
-	if _, err := headBucket(bckFrom, true /* don't add */); err != nil {
-		return err
+	if !flagIsSet(c, dontHeadRemoteFlag) {
+		if _, err := headBucket(bckFrom, true /* don't add */); err != nil {
+			return err
+		}
 	}
 	xid, err := api.RenameBucket(apiBP, bckFrom, bckTo)
 	if err != nil {

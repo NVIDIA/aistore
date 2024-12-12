@@ -137,6 +137,7 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 			nonverboseFlag,
+			dontHeadRemoteFlag,
 		},
 		commandEvict: append(
 			listRangeProgressWaitFlags,
