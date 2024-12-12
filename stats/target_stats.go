@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 // Naming Convention:
@@ -105,7 +104,7 @@ type (
 	Trunner struct {
 		t    core.Target
 		disk struct {
-			stats   ios.AllDiskStats   // numbers
+			stats   cos.AllDiskStats   // numbers
 			metrics map[string]dmetric // respective names
 		}
 		xln     string
@@ -158,7 +157,7 @@ func (r *Trunner) Init() *atomic.Bool {
 	r.ctracker = make(copyTracker, numTargetStats) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
 
-	r.disk.stats = make(ios.AllDiskStats, 16)
+	r.disk.stats = make(cos.AllDiskStats, 16)
 	r.disk.metrics = make(map[string]dmetric, 16)
 
 	config := cmn.GCO.Get()
@@ -608,7 +607,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	set, clr := r._cap(config, now, verbose)
 
 	if !refreshCap && set != 0 {
-		// refill r.disk (ios.AllDiskStats) prior to logging
+		// refill r.disk (cos.AllDiskStats) prior to logging
 		fs.DiskStats(r.disk.stats, nil /*fs.TcdfExt*/, config, true /*refresh cap*/)
 	}
 

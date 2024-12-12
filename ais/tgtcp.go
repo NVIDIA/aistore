@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
@@ -403,7 +402,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatMountpaths:
 		var (
 			num    = fs.NumAvail()
-			dstats = make(ios.AllDiskStats, num)
+			dstats = make(cos.AllDiskStats, num)
 			config = cmn.GCO.Get()
 		)
 		if num == 0 {
@@ -418,7 +417,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			num     = fs.NumAvail()
 			config  = cmn.GCO.Get()
 		)
-		tcdfExt.AllDiskStats = make(ios.AllDiskStats, num)
+		tcdfExt.AllDiskStats = make(cos.AllDiskStats, num)
 		tcdfExt.Mountpaths = make(map[string]*fs.CDF, num)
 		if num == 0 {
 			nlog.Warningln(t.String(), cmn.ErrNoMountpaths)
@@ -592,7 +591,7 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 
 func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	q := r.URL.Query()
-	label := ios.Label(q.Get(apc.QparamMpathLabel))
+	label := cos.MountpathLabel(q.Get(apc.QparamMpathLabel))
 	addedMi, err := t.fsprg.attachMpath(mpath, label)
 	if err != nil {
 		t.writeErr(w, r, err)

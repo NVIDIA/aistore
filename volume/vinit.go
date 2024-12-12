@@ -131,7 +131,7 @@ func configInitMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices) (
 	)
 	for path, label := range fspaths {
 		var mi *fs.Mountpath
-		if mi, err = fs.NewMountpath(path, ios.Label(label)); err != nil {
+		if mi, err = fs.NewMountpath(path, cos.MountpathLabel(label)); err != nil {
 			goto rerr
 		}
 		if err = mi.AddEnabled(tid, avail, config, blockDevs); err != nil {

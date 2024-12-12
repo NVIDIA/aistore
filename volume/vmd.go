@@ -16,20 +16,19 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 const vmdCopies = 3
 
 type (
 	fsMpathMD struct {
-		Ext     any       `json:"ext,omitempty"` // reserved for within-metaversion extensions
-		Path    string    `json:"mountpath"`
-		Label   ios.Label `json:"mountpath_label"`
-		Fs      string    `json:"fs"`
-		FsType  string    `json:"fs_type"`
-		FsID    cos.FsID  `json:"fs_id"`
-		Enabled bool      `json:"enabled"`
+		Ext     any                `json:"ext,omitempty"` // reserved for within-metaversion extensions
+		Path    string             `json:"mountpath"`
+		Label   cos.MountpathLabel `json:"mountpath_label"`
+		Fs      string             `json:"fs"`
+		FsType  string             `json:"fs_type"`
+		FsID    cos.FsID           `json:"fs_id"`
+		Enabled bool               `json:"enabled"`
 	}
 
 	// VMD is AIS target's volume metadata structure

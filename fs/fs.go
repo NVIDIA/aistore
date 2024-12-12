@@ -57,12 +57,12 @@ type (
 	Mountpath struct {
 		LomCaches  cos.MultiHashMap // LOM caches
 		info       string
-		Path       string    // clean path
-		Label      ios.Label // (disk sharing; storage class; user-defined grouping)
-		cos.FS               // underlying filesystem
-		Disks      []string  // owned disks (ios.FsDisks map => slice)
-		flags      uint64    // bit flags (set/get atomic)
-		PathDigest uint64    // (HRW logic)
+		Path       string             // clean path
+		Label      cos.MountpathLabel // (disk sharing; storage class; user-defined grouping)
+		cos.FS                        // underlying filesystem
+		Disks      []string           // owned disks (ios.FsDisks map => slice)
+		flags      uint64             // bit flags (set/get atomic)
+		PathDigest uint64             // (HRW logic)
 		capacity   Capacity
 	}
 	MPI map[string]*Mountpath
@@ -107,7 +107,7 @@ var mfs *MFS // singleton (target only)
 // Mountpath //
 ///////////////
 
-func NewMountpath(mpath string, label ios.Label) (*Mountpath, error) {
+func NewMountpath(mpath string, label cos.MountpathLabel) (*Mountpath, error) {
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
@@ -649,7 +649,7 @@ func cloneMPI() (availableCopy, disabledCopy MPI) {
 
 // used only in tests (compare with AddMpath below)
 func Add(mpath, tid string) (mi *Mountpath, err error) {
-	mi, err = NewMountpath(mpath, ios.TestLabel)
+	mi, err = NewMountpath(mpath, cos.TestMpathLabel)
 	if err != nil {
 		return
 	}
@@ -661,7 +661,7 @@ func Add(mpath, tid string) (mi *Mountpath, err error) {
 }
 
 // (via attach-mpath)
-func AddMpath(tid, mpath string, label ios.Label, cb func()) (mi *Mountpath, err error) {
+func AddMpath(tid, mpath string, label cos.MountpathLabel, cb func()) (mi *Mountpath, err error) {
 	mi, err = NewMountpath(mpath, label)
 	if err != nil {
 		return
@@ -1154,7 +1154,7 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 }
 
 // via (`apc.WhatDiskStats`, target_stats)
-func DiskStats(allds ios.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCap bool) {
+func DiskStats(allds cos.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCap bool) {
 	// iops and bw
 	mfs.ios.DiskStats(allds)
 
@@ -1165,7 +1165,7 @@ func DiskStats(allds ios.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCa
 		debug.Assert(false)
 	}
 
-	// ios.AllDiskStats <= alert suffixex, if any
+	// cos.AllDiskStats <= alert suffixex, if any
 	avail := GetAvail()
 	for _, mi := range avail {
 		var a string // alert suffix

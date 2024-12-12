@@ -82,7 +82,7 @@ func _dump(blockDevs BlockDevices) {
 // fs2disks retrieves the underlying disk or disks; it may return multiple disks
 // but only if the filesystem is RAID; it is called upon adding/enabling mountpath.
 // NOTE: blockDevs here are not nil only at startup - see fs.New()
-func fs2disks(mpath, fs string, label Label, blockDevs BlockDevices, num int, testingEnv bool) (disks FsDisks, err error) {
+func fs2disks(mpath, fs string, label cos.MountpathLabel, blockDevs BlockDevices, num int, testingEnv bool) (disks FsDisks, err error) {
 	if blockDevs == nil {
 		blockDevs, err = _lsblk("", nil /*parent*/)
 		if err != nil && !testingEnv {
@@ -263,7 +263,7 @@ func _readAny[T any](path string) (value T, err error) {
 	}
 }
 
-func findDevs(blockDevs BlockDevices, trimmedFS string, label Label, disks FsDisks) {
+func findDevs(blockDevs BlockDevices, trimmedFS string, label cos.MountpathLabel, disks FsDisks) {
 	for _, bd := range blockDevs {
 		// by dev name
 		if bd.name == trimmedFS {

@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 // available mountpaths: disk name suffix
@@ -38,9 +37,9 @@ type (
 	}
 	// Capacity, Disks, Filesystem (CDF)
 	CDF struct {
-		Label ios.Label `json:"mountpath_label"`
-		FS    cos.FS    `json:"fs"`
-		Disks []string  `json:"disks"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
+		Label cos.MountpathLabel `json:"mountpath_label"`
+		FS    cos.FS             `json:"fs"`
+		Disks []string           `json:"disks"` // owned or shared disks (ios.FsDisks map => slice); "name[.faulted | degraded]"
 		Capacity
 	}
 	// Target (cumulative) CDF
@@ -54,7 +53,7 @@ type (
 		PctMin     int32           `json:"pct_min"`            // min used (%)
 	}
 	TcdfExt struct {
-		ios.AllDiskStats
+		cos.AllDiskStats
 		Tcdf
 	}
 )

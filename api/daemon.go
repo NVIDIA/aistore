@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 type GetLogInput struct {
@@ -41,7 +40,7 @@ func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err
 	return mpl, err
 }
 
-func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ...ios.Label) error {
+func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ...cos.MountpathLabel) error {
 	var q url.Values
 	if len(label) > 0 {
 		if lb := string(label[0]); lb != "" {

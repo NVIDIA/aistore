@@ -30,10 +30,10 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath, fs string, label Label, config *cmn.Config, blockDevs BlockDevices) (FsDisks, error)
+		AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevices) (FsDisks, error)
 		RescanDisks(mpath, fs string, disks []string) RescanDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
-		DiskStats(m AllDiskStats)
+		DiskStats(m cos.AllDiskStats)
 	}
 
 	MpathUtil sync.Map
@@ -151,7 +151,7 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fs string, label Label, config *cmn.Config, blockDevs BlockDevices) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevices) (fsdisks FsDisks, err error) {
 	var (
 		warn       string
 		testingEnv = config.TestingEnv()
@@ -178,7 +178,7 @@ func (ios *ios) AddMpath(mpath, fs string, label Label, config *cmn.Config, bloc
 	return fsdisks, err
 }
 
-func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
+func (ios *ios) _add(mpath string, label cos.MountpathLabel, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
 	if dd, ok := ios.mpath2disks[mpath]; ok {
 		return "", fmt.Errorf("duplicate mountpath %s (disks %s, %s)", mpath, dd._str(), fsdisks._str())
 	}
@@ -189,9 +189,9 @@ func (ios *ios) _add(mpath string, label Label, fsdisks FsDisks, fspaths cos.Str
 			if label.IsNil() {
 				return "", fmt.Errorf("disk %s is shared between mountpaths %s and %s", disk, mpath, mp)
 			}
-			var otherLabel Label
+			var otherLabel cos.MountpathLabel
 			if o, ok := fspaths[mp]; ok {
-				otherLabel = Label(o)
+				otherLabel = cos.MountpathLabel(o)
 			}
 			warn = fmt.Sprintf("Warning: disk %s is shared between %s%s and %s%s",
 				disk, mpath, label.ToLog(), mp, otherLabel.ToLog())
@@ -247,7 +247,7 @@ func (ios *ios) RescanDisks(mpath, fs string, disks []string) (out RescanDisksRe
 	debug.Assert(len(disks) > 0)
 
 	var err error
-	out.FsDisks, err = fs2disks(mpath, fs, Label(""), nil, len(disks), false /*no-disks is ok*/)
+	out.FsDisks, err = fs2disks(mpath, fs, cos.MountpathLabel(""), nil, len(disks), false /*no-disks is ok*/)
 	if err != nil {
 		out.Fatal = err
 		return out
@@ -346,10 +346,10 @@ func (ios *ios) GetMpathUtil(mpath string) int64 {
 	return ios.GetAllMpathUtils().Get(mpath)
 }
 
-func (ios *ios) DiskStats(m AllDiskStats) {
+func (ios *ios) DiskStats(m cos.AllDiskStats) {
 	cache := ios.refresh()
 	for disk := range cache.ioms {
-		m[disk] = DiskStats{
+		m[disk] = cos.DiskStats{
 			RBps: cache.rbps[disk],
 			Ravg: cache.ravg[disk],
 			WBps: cache.wbps[disk],
