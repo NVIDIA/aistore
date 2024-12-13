@@ -949,7 +949,7 @@ func (c *BackendConf) Validate() (err error) {
 func (c *BackendConf) setProvider(provider string) {
 	var ns Ns
 	switch provider {
-	case apc.AWS, apc.Azure, apc.GCP, apc.HT:
+	case apc.AWS, apc.Azure, apc.GCP, apc.OCI, apc.HT:
 		ns = NsGlobal
 	default:
 		debug.Assert(false, "unknown backend provider "+provider)

@@ -32,8 +32,8 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
-	ociCommon "github.com/oracle/oci-go-sdk/v65/common"
-	ociObjectstorage "github.com/oracle/oci-go-sdk/v65/objectstorage"
+	ocicmn "github.com/oracle/oci-go-sdk/v65/common"
+	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
 )
 
 const (
@@ -62,130 +62,101 @@ const (
 
 type ocibp struct {
 	t                           core.TargetPut
-	configurationProvider       ociCommon.ConfigurationProvider
+	configurationProvider       ocicmn.ConfigurationProvider
 	compartmentOCID             string
-	maxPageSize                 uint64
-	maxDownloadSegmentSize      uint64
-	multiPartDownloadThreshold  uint64
-	multiPartDownloadMaxThreads uint64
-	maxUploadSegmentSize        uint64
-	multiPartUploadThreshold    uint64
-	multiPartUploadMaxThreads   uint64
-	client                      ociObjectstorage.ObjectStorageClient
+	maxPageSize                 int64
+	maxDownloadSegmentSize      int64
+	multiPartDownloadThreshold  int64
+	multiPartDownloadMaxThreads int64
+	maxUploadSegmentSize        int64
+	multiPartUploadThreshold    int64
+	multiPartUploadMaxThreads   int64
+	client                      ocios.ObjectStorageClient
 	namespace                   string
 	base
 }
 
 func NewOCI(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
-	var (
-		err                  error
-		getNamespaceRequest  ociObjectstorage.GetNamespaceRequest
-		getNamespaceResponse ociObjectstorage.GetNamespaceResponse
-	)
-
 	bp := &ocibp{
 		t:    t,
 		base: base{provider: apc.AWS},
 	}
-
-	// [TODO] See alternatively oci-go-sdk/common/configuration.go's ConfigurationProviderFromFile()
-
-	bp.configurationProvider = ociCommon.NewRawConfigurationProvider(
+	bp.configurationProvider = ocicmn.NewRawConfigurationProvider(
 		os.Getenv(env.OCI.TenancyOCID),
 		os.Getenv(env.OCI.UserOCID),
 		os.Getenv(env.OCI.Region),
 		os.Getenv(env.OCI.Fingerprint),
 		os.Getenv(env.OCI.PrivateKey),
-		nil)
-
+		nil,
+	)
 	bp.compartmentOCID = os.Getenv(env.OCI.CompartmentOCID)
 
-	bp.maxPageSize, err = fetchFromEnvOrDefault(env.OCI.MaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault)
-	if err != nil {
+	if err := bp.set(env.OCI.MaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
 		return nil, err
 	}
-	bp.maxDownloadSegmentSize, err = fetchFromEnvOrDefault(env.OCI.MaxDownloadSegmentSize, maxDownloadSegmentSizeMin, maxDownloadSegmentSizeMax, maxDownloadSegmentSizeDefault)
-	if err != nil {
+	if err := bp.set(env.OCI.MaxDownloadSegmentSize, maxDownloadSegmentSizeMin, maxDownloadSegmentSizeMax,
+		maxDownloadSegmentSizeDefault, &bp.maxDownloadSegmentSize); err != nil {
 		return nil, err
 	}
-	bp.multiPartDownloadThreshold, err = fetchFromEnvOrDefault(env.OCI.MultiPartDownloadThreshold, multiPartDownloadThresholdMin, multiPartDownloadThresholdMax, multiPartDownloadThresholdDefault)
-	if err != nil {
+	if err := bp.set(env.OCI.MultiPartDownloadThreshold, multiPartDownloadThresholdMin, multiPartDownloadThresholdMax,
+		multiPartDownloadThresholdDefault, &bp.multiPartDownloadThreshold); err != nil {
 		return nil, err
 	}
-	bp.multiPartDownloadMaxThreads, err = fetchFromEnvOrDefault(env.OCI.MultiPartDownloadMaxThreads, multiPartDownloadMaxThreadsMin, multiPartDownloadMaxThreadsMax, multiPartDownloadMaxThreadsDefault)
-	if err != nil {
+	if err := bp.set(env.OCI.MultiPartDownloadMaxThreads, multiPartDownloadMaxThreadsMin, multiPartDownloadMaxThreadsMax,
+		multiPartDownloadMaxThreadsDefault, &bp.multiPartDownloadMaxThreads); err != nil {
 		return nil, err
 	}
-	bp.maxUploadSegmentSize, err = fetchFromEnvOrDefault(env.OCI.MaxUploadSegmentSize, maxUploadSegmentSizeMin, maxUploadSegmentSizeMax, maxUploadSegmentSizeDefault)
-	if err != nil {
+	if err := bp.set(env.OCI.MaxUploadSegmentSize, maxUploadSegmentSizeMin, maxUploadSegmentSizeMax,
+		maxUploadSegmentSizeDefault, &bp.maxUploadSegmentSize); err != nil {
 		return nil, err
 	}
-	bp.multiPartUploadThreshold, err = fetchFromEnvOrDefault(env.OCI.MultiPartUploadThreshold, multiPartUploadThresholdMin, multiPartUploadThresholdMax, multiPartUploadThresholdDefault)
-	if err != nil {
+	if err := bp.set(env.OCI.MultiPartUploadThreshold, multiPartUploadThresholdMin, multiPartUploadThresholdMax,
+		multiPartUploadThresholdDefault, &bp.multiPartUploadThreshold); err != nil {
 		return nil, err
 	}
-	bp.multiPartUploadMaxThreads, err = fetchFromEnvOrDefault(env.OCI.MultiPartUploadMaxThreads, multiPartUploadMaxThreadsMin, multiPartUploadMaxThreadsMax, multiPartUploadMaxThreadsDefault)
-	if err != nil {
-		return nil, err
-	}
-
-	bp.client, err = ociObjectstorage.NewObjectStorageClientWithConfigurationProvider(bp.configurationProvider)
-	if err != nil {
+	if err := bp.set(env.OCI.MultiPartUploadMaxThreads, multiPartUploadMaxThreadsMin, multiPartUploadMaxThreadsMax,
+		multiPartUploadMaxThreadsDefault, &bp.multiPartUploadMaxThreads); err != nil {
 		return nil, err
 	}
 
-	getNamespaceRequest = ociObjectstorage.GetNamespaceRequest{}
-
-	getNamespaceResponse, err = bp.client.GetNamespace(context.Background(), getNamespaceRequest)
+	client, err := ocios.NewObjectStorageClientWithConfigurationProvider(bp.configurationProvider)
 	if err != nil {
 		return nil, err
 	}
-
-	bp.namespace = *getNamespaceResponse.Value
+	bp.client = client
+	resp, err := bp.client.GetNamespace(context.Background(), ocios.GetNamespaceRequest{})
+	if err != nil {
+		return nil, err
+	}
+	bp.namespace = *resp.Value
 
 	bp.base.init(t.Snode(), tstats)
 
 	return bp, nil
 }
 
-func fetchFromEnvOrDefault(envName string, envMin, envMax, envDefault uint64) (val uint64, err error) {
-	var (
-		envValueAsInt64  int64
-		envValueAsString string
-	)
-
-	envValueAsString = os.Getenv(envName)
-	if envValueAsString == "" {
-		val = envDefault
-		err = nil
-		return
+func (*ocibp) set(envName string, envMin, envMax, envDefault int64, out *int64) error {
+	s := os.Getenv(envName)
+	if s == "" {
+		*out = envDefault
+		return nil
 	}
-
-	envValueAsInt64, err = cos.ParseSize(envValueAsString, "")
-	if err != nil {
-		err = fmt.Errorf("envValue (\"%s\") not parse-able (err: %v)", envValueAsString, err)
-		return
+	val, err := cos.ParseSize(s, "")
+	switch {
+	case err != nil:
+		return fmt.Errorf("env '%s=%s' not parse-able: %v", envName, s, err)
+	case val < 0:
+		return fmt.Errorf("env '%s=%s' cannot be negative", envName, s)
+	case val < envMin:
+		return fmt.Errorf("env '%s=%s' cannot be less than %d", envName, s, envMin)
+	case val > envMax:
+		return fmt.Errorf("env '%s=%s' cannot be greater than %d", envName, s, envMax)
 	}
-	if envValueAsInt64 < 0 {
-		err = fmt.Errorf("envValue (\"%s\") must not be negative", envValueAsString)
-		return
-	}
-
-	val = uint64(envValueAsInt64)
-
-	if val < envMin {
-		err = fmt.Errorf("envValue (%v) < envMin (%v)", val, envMin)
-		return
-	}
-	if val > envMax {
-		err = fmt.Errorf("envValue (%v) > envMax (%v)", val, envMax)
-		return
-	}
-
-	return
+	*out = val
+	return nil
 }
 
-func ociRawRequestStatusToAISError(rawResponse *http.Response) (ecode int) {
+func ociStatus(rawResponse *http.Response) (ecode int) {
 	if rawResponse == nil {
 		ecode = http.StatusInternalServerError
 	} else {
@@ -198,13 +169,13 @@ func ociRawRequestStatusToAISError(rawResponse *http.Response) (ecode int) {
 
 func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
-		delimiter           = string("/")
-		fields              string
-		limitAsInt          int
-		listObjectsRequest  ociObjectstorage.ListObjectsRequest
-		listObjectsResponse ociObjectstorage.ListObjectsResponse
-		lsoEnt              *cmn.LsoEnt
-		objectSummary       ociObjectstorage.ObjectSummary
+		delimiter     = string("/")
+		fields        string
+		limitAsInt    int
+		req           ocios.ListObjectsRequest
+		resp          ocios.ListObjectsResponse
+		lsoEnt        *cmn.LsoEnt
+		objectSummary ocios.ObjectSummary
 	)
 
 	if (msg.PageSize == 0) || (int(bp.maxPageSize) < int(msg.PageSize)) {
@@ -223,37 +194,37 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 
 	fields = "name,size"
 
-	listObjectsRequest = ociObjectstorage.ListObjectsRequest{
+	req = ocios.ListObjectsRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &bck.Name,
 		Limit:         &limitAsInt,
 		Fields:        &fields,
 	}
 	if msg.Prefix != "" {
-		listObjectsRequest.Prefix = &msg.Prefix
+		req.Prefix = &msg.Prefix
 	}
 	if msg.ContinuationToken != "" {
-		listObjectsRequest.Start = &msg.ContinuationToken
+		req.Start = &msg.ContinuationToken
 	}
 	if msg.IsFlagSet(apc.LsNoRecursion) {
 		// [TODO] Need to handle case where I need to enumerate directories (while not "decending")
-		listObjectsRequest.Delimiter = &delimiter
+		req.Delimiter = &delimiter
 	}
 
-	listObjectsResponse, err = bp.client.ListObjects(context.Background(), listObjectsRequest)
+	resp, err = bp.client.ListObjects(context.Background(), req)
 	if err != nil {
-		ecode = ociRawRequestStatusToAISError(listObjectsResponse.RawResponse)
+		ecode = ociStatus(resp.RawResponse)
 		return
 	}
 
-	if listObjectsResponse.NextStartWith == nil {
+	if resp.NextStartWith == nil {
 		lst.ContinuationToken = ""
 	} else {
-		lst.ContinuationToken = *listObjectsResponse.NextStartWith
+		lst.ContinuationToken = *resp.NextStartWith
 	}
 
-	lst.Entries = make(cmn.LsoEntries, 0, len(listObjectsResponse.Objects))
-	for _, objectSummary = range listObjectsResponse.Objects {
+	lst.Entries = make(cmn.LsoEntries, 0, len(resp.Objects))
+	for _, objectSummary = range resp.Objects {
 		lsoEnt = &cmn.LsoEnt{}
 		lsoEnt.Name = *objectSummary.Name
 		if objectSummary.Size != nil {
@@ -265,86 +236,65 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 	return
 }
 
-func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
-	var (
-		idx                 int
-		item                ociObjectstorage.BucketSummary
-		listBucketsRequest  ociObjectstorage.ListBucketsRequest
-		listBucketsResponse ociObjectstorage.ListBucketsResponse
-	)
-
-	listBucketsRequest = ociObjectstorage.ListBucketsRequest{
+func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
+	req := ocios.ListBucketsRequest{
 		NamespaceName: &bp.namespace,
 		CompartmentId: &bp.compartmentOCID,
 	}
-
-	listBucketsResponse, err = bp.client.ListBuckets(context.Background(), listBucketsRequest)
+	resp, err := bp.client.ListBuckets(context.Background(), req)
 	if err != nil {
-		ecode = ociRawRequestStatusToAISError(listBucketsResponse.RawResponse)
-		return
+		return bcks, ociStatus(resp.RawResponse), err
 	}
 
-	bcks = make(cmn.Bcks, len(listBucketsResponse.Items))
-
-	for idx, item = range listBucketsResponse.Items {
+	bcks = make(cmn.Bcks, len(resp.Items))
+	for idx, item := range resp.Items {
 		bcks[idx] = cmn.Bck{
 			Name:     *item.Name,
 			Provider: apc.OCI,
 		}
 	}
-
-	return
+	return bcks, 0, nil
 }
 
-func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
-	var (
-		putObjectRequest  ociObjectstorage.PutObjectRequest
-		putObjectResponse ociObjectstorage.PutObjectResponse
-	)
-
-	// [TODO] Need to implement multi-threaded PUT when "length" exceeds bp.multiPartUploadThreshold
-
-	putObjectRequest = ociObjectstorage.PutObjectRequest{
+// [TODO] Need to implement multi-threaded PUT when "length" exceeds bp.multiPartUploadThreshold
+func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+	req := ocios.PutObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &lom.Bck().Name,
 		ObjectName:    &lom.ObjName,
 		PutObjectBody: r,
 	}
-
-	putObjectResponse, err = bp.client.PutObject(context.Background(), putObjectRequest)
+	resp, err := bp.client.PutObject(context.Background(), req)
 	if err != nil {
-		ecode = ociRawRequestStatusToAISError(putObjectResponse.RawResponse)
-		return
+		return ociStatus(resp.RawResponse), err
 	}
 
 	lom.SetCustomKey(apc.HdrBackendProvider, apc.OCI)
-	if putObjectResponse.ETag != nil {
-		lom.SetCustomKey(cmn.ETag, *putObjectResponse.ETag)
+	if resp.ETag != nil {
+		lom.SetCustomKey(cmn.ETag, *resp.ETag)
 	}
-	if putObjectResponse.OpcContentMd5 != nil {
-		lom.SetCustomKey(cmn.MD5ObjMD, *putObjectResponse.OpcContentMd5)
+	if resp.OpcContentMd5 != nil {
+		lom.SetCustomKey(cmn.MD5ObjMD, *resp.OpcContentMd5)
 	}
 
-	cos.Close(r)
-
-	return
+	// cos.Close(r) TODO -- FIXME: revisit
+	return 0, nil
 }
 
 func (bp *ocibp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	var (
-		deleteObjectRequest  ociObjectstorage.DeleteObjectRequest
-		deleteObjectResponse ociObjectstorage.DeleteObjectResponse
+		req  ocios.DeleteObjectRequest
+		resp ocios.DeleteObjectResponse
 	)
-
-	deleteObjectRequest = ociObjectstorage.DeleteObjectRequest{
+	req = ocios.DeleteObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &lom.Bck().Name,
 		ObjectName:    &lom.ObjName,
 	}
 
-	deleteObjectResponse, err = bp.client.DeleteObject(context.Background(), deleteObjectRequest)
+	resp, err = bp.client.DeleteObject(context.Background(), req)
 	if err != nil {
-		ecode = ociRawRequestStatusToAISError(deleteObjectResponse.RawResponse)
+		ecode = ociStatus(resp.RawResponse)
 		return
 	}
 
@@ -353,18 +303,18 @@ func (bp *ocibp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 
 func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
 	var (
-		headBucketRequest  ociObjectstorage.HeadBucketRequest
-		headBucketResponse ociObjectstorage.HeadBucketResponse
+		req  ocios.HeadBucketRequest
+		resp ocios.HeadBucketResponse
 	)
 
-	headBucketRequest = ociObjectstorage.HeadBucketRequest{
+	req = ocios.HeadBucketRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &bck.Name,
 	}
 
-	headBucketResponse, err = bp.client.HeadBucket(ctx, headBucketRequest)
+	resp, err = bp.client.HeadBucket(ctx, req)
 	if err != nil {
-		ecode = ociRawRequestStatusToAISError(headBucketResponse.RawResponse)
+		ecode = ociStatus(resp.RawResponse)
 		return
 	}
 
@@ -377,93 +327,78 @@ func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.St
 
 func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error) {
 	var (
-		headObjectRequest  ociObjectstorage.HeadObjectRequest
-		headObjectResponse ociObjectstorage.HeadObjectResponse
+		req  ocios.HeadObjectRequest
+		resp ocios.HeadObjectResponse
 	)
-
-	headObjectRequest = ociObjectstorage.HeadObjectRequest{
+	req = ocios.HeadObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &lom.Bck().Name,
 		ObjectName:    &lom.ObjName,
 	}
 
-	headObjectResponse, err = bp.client.HeadObject(ctx, headObjectRequest)
+	resp, err = bp.client.HeadObject(ctx, req)
 	if err != nil {
-		ecode = ociRawRequestStatusToAISError(headObjectResponse.RawResponse)
+		ecode = ociStatus(resp.RawResponse)
 		return
 	}
 
 	objAttrs = &cmn.ObjAttrs{
 		CustomMD: make(cos.StrKVs, 3),
-		Size:     headObjectResponse.RawResponse.ContentLength,
+		Size:     resp.RawResponse.ContentLength,
 	}
 	objAttrs.CustomMD[apc.HdrBackendProvider] = apc.OCI
-	if headObjectResponse.ETag != nil {
-		objAttrs.CustomMD[cmn.ETag] = *headObjectResponse.ETag
+	if resp.ETag != nil {
+		objAttrs.CustomMD[cmn.ETag] = *resp.ETag
 	}
-	if headObjectResponse.ContentMd5 != nil {
-		objAttrs.CustomMD[cmn.MD5ObjMD] = *headObjectResponse.ContentMd5
+	if resp.ContentMd5 != nil {
+		objAttrs.CustomMD[cmn.MD5ObjMD] = *resp.ContentMd5
 	}
 
 	return
 }
 
-func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
-	var (
-		putParams *core.PutParams
-		res       core.GetReaderResult
-	)
-
-	res = bp.GetObjReader(ctx, lom, 0, 0)
+func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
+	res := bp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
-		ecode = res.ErrCode
-		err = res.Err
-		return
+		return res.ErrCode, res.Err
 	}
 
-	putParams = allocPutParams(res, owt)
-	err = bp.t.PutObject(lom, putParams)
+	putParams := allocPutParams(res, owt)
+	err := bp.t.PutObject(lom, putParams)
 	core.FreePutParams(putParams)
 
-	return
+	return 0, err
 }
 
+// [TODO] Need to implement multi-threaded GET when "length" exceeds bp.multiPartDownloadThreshold
 func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
-		err                 error
-		getObjectRequest    ociObjectstorage.GetObjectRequest
-		getObjectResponse   ociObjectstorage.GetObjectResponse
-		matchingETag        string
-		matchingETagDesired bool
-		rangeHeader         string
+		rangeHeader string
 	)
-
-	// [TODO] Need to implement multi-threaded GET when "length" exceeds bp.multiPartDownloadThreshold
-
-	matchingETag, matchingETagDesired = lom.GetCustomKey(cmn.ETag)
-
-	getObjectRequest = ociObjectstorage.GetObjectRequest{
+	req := ocios.GetObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &lom.Bck().Name,
 		ObjectName:    &lom.ObjName,
 	}
 	if length > 0 {
 		rangeHeader = cmn.MakeRangeHdr(offset, length)
-		getObjectRequest.Range = &rangeHeader
-	}
-	if matchingETagDesired && (matchingETag != "") {
-		getObjectRequest.IfMatch = &matchingETag
+		req.Range = &rangeHeader
 	}
 
-	getObjectResponse, err = bp.client.GetObject(ctx, getObjectRequest)
+	// TODO -- FIXME: revisit
+	matchingETag, matchingETagDesired := lom.GetCustomKey(cmn.ETag)
+	if matchingETagDesired && (matchingETag != "") {
+		req.IfMatch = &matchingETag
+	}
+
+	resp, err := bp.client.GetObject(ctx, req)
 	if err != nil {
 		res.Err = err
-		res.ErrCode = ociRawRequestStatusToAISError(getObjectResponse.RawResponse)
+		res.ErrCode = ociStatus(resp.RawResponse)
 		return
 	}
 
-	res.R = getObjectResponse.Content
-	res.Size = *getObjectResponse.ContentLength
-
-	return
+	res.R = resp.Content
+	res.Size = *resp.ContentLength
+	return res
 }
