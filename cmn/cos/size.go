@@ -96,13 +96,12 @@ func ParseSize(size, units string) (int64, error) {
 		s      = strings.ToUpper(strings.TrimSpace(size))
 		suffix = _suffix(s)
 	)
-	if suffix == "KIB" || suffix == "MIB" || suffix == "GIB" || suffix == "TIB" ||
-		suffix == "KI" || suffix == "MI" || suffix == "GI" || suffix == "TI" {
+	if strings.IndexByte(suffix, 'I') > 0 { // IEC
 		u = UnitsIEC
 		if units != "" && units != UnitsIEC {
 			return 0, fmt.Errorf("ParseSize %q error: %q vs %q units", size, u, units)
 		}
-	} else if suffix != "" && suffix != "B" {
+	} else if suffix != "" && suffix != "B" { // SI
 		u = UnitsSI
 		if units != "" {
 			if units == UnitsRaw {

@@ -249,7 +249,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 			ecUsed: bmd.IsECUsed(),
 		}
 	)
-	if rargs.bck != nil {
+	if rargs.bck != nil && !rargs.bck.IsEmpty() {
 		rargs.logHdr += "::" + rargs.bck.Cname(rargs.prefix)
 	}
 	if !_pingall(rargs) {
