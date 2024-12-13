@@ -94,8 +94,9 @@ For command line options and usage examples, please refer to:
 ## Validate in-cluster content for misplaced objects and missing copies
 
 ```console
+$ ais scrub --help
 NAME:
-   ais storage validate - check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
+   ais scrub - (alias for "storage validate") check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
    e.g.:
      * ais storage validate                 - validate all in-cluster buckets;
      * ais scrub                            - same as above;
@@ -106,7 +107,7 @@ NAME:
      * ais scrub gs://abc --prefix images/  - same as above.
 
 USAGE:
-   ais storage validate [command options] [BUCKET[/PREFIX]] or [PROVIDER]
+   ais scrub [command options] [BUCKET[/PREFIX]] or [PROVIDER]
 
 OPTIONS:
    --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
@@ -116,12 +117,20 @@ OPTIONS:
    --prefix value         for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
                           '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
                           a/b that have names (relative to this directory) starting with the letter c
+   --page-size value      maximum number of object names per page; when the flag is omitted or 0 (zero)
+                          the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged' (default: 0)
    --limit value          maximum number of object names to list (0 - unlimited; see also '--max-pages')
                           e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
    --no-headers, -H       display tables without headers
    --max-pages value      maximum number of pages to display (see also '--page-size' and '--limit')
                           e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
-   --non-recursive, --nr  list objects without including nested virtual subdirectories
+   --non-recursive, --nr  non-recursive operation, e.g.:
+                          'ais ls gs://bucket/prefix --nr'  -  list objects and/or virtual subdirectories with names starting with the specified prefix;
+                          'ais ls gs://bucket/prefix/ --nr' -  list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
+                          'ais prefetch s3://bck/abcd --nr' -  prefetch a single named object (see 'ais prefetch --help' for details);
+                          'ais rmo gs://bucket/prefix --nr' -  remove a single object with the specified name (see 'ais rmo --help' for details)
+   --small-size value     count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)
+   --large-size value     count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)
    --help, -h             show help
 ```
 

@@ -32,18 +32,23 @@ type (
 		qbck   cmn.QueryBcks
 		pref   string
 		tmpl   string
+		// sizing
+		small int64
+		large int64
 		// timing
 		ival time.Duration
 		last atomic.Int64
 	}
+	// fields exported => teb/template
 	scrubOne struct {
-		bck    cmn.Bck
-		listed uint64
-		stats  struct {
-			misplaced uint64
-			missingcp uint64
-			zerosz    uint64
-			largesz   uint64
+		parent *scrubCtx
+		Bck    cmn.Bck
+		Listed uint64
+		Stats  struct {
+			Misplaced uint64
+			MissingCp uint64
+			SmallSz   uint64
+			LargeSz   uint64
 		}
 	}
 )
@@ -72,9 +77,9 @@ func scrubHandler(c *cli.Context) (err error) {
 	}
 
 	ctx.last.Store(mono.NanoTime()) // pace interim results
-	ctx.tmpl = teb.BucketSummaryValidateTmpl
+	ctx.tmpl = teb.ScrubTmpl
 	if flagIsSet(ctx.c, noHeaderFlag) {
-		ctx.tmpl = teb.BucketSummaryValidateBody
+		ctx.tmpl = teb.ScrubBody
 	}
 
 	ctx.ival = listObjectsWaitTime
@@ -82,6 +87,29 @@ func scrubHandler(c *cli.Context) (err error) {
 		ctx.ival = parseDurationFlag(c, refreshFlag)
 	}
 	ctx.ival = max(ctx.ival, 5*time.Second)
+
+	if flagIsSet(c, smallSizeFlag) {
+		ctx.small, err = parseSizeFlag(c, smallSizeFlag)
+		if err != nil {
+			return err
+		}
+	}
+	if ctx.small < 0 {
+		return fmt.Errorf("%s (%s) cannot be negative", qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
+	}
+
+	ctx.large = 5 * cos.GiB
+	if flagIsSet(c, largeSizeFlag) {
+		ctx.large, err = parseSizeFlag(c, largeSizeFlag)
+		if err != nil {
+			return err
+		}
+	}
+	if ctx.large < ctx.small {
+		return fmt.Errorf("%s (%s) cannot be smaller than %s (%s)",
+			qflprn(largeSizeFlag), cos.ToSizeIEC(ctx.large, 0),
+			qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
+	}
 
 	// TODO -- FIXME: support async execution
 	if ctx.qbck.IsBucket() {
@@ -95,34 +123,34 @@ func scrubHandler(c *cli.Context) (err error) {
 //////////////
 
 func (scr *scrubOne) upd(en *cmn.LsoEnt, bprops *cmn.Bprops) {
-	scr.listed++
+	scr.Listed++
 	if !en.IsStatusOK() {
-		scr.stats.misplaced++
+		scr.Stats.Misplaced++
 		return
 	}
 	if bprops.Mirror.Enabled && en.Copies < int16(bprops.Mirror.Copies) {
-		scr.stats.missingcp++
+		scr.Stats.MissingCp++
 	}
-	if en.Size == 0 {
-		scr.stats.zerosz++
-	} else if en.Size >= 5*cos.GB {
-		scr.stats.largesz++
+	if en.Size <= scr.parent.small {
+		scr.Stats.SmallSz++
+	} else if en.Size >= scr.parent.large {
+		scr.Stats.LargeSz++
 	}
 }
 
 func (scr *scrubOne) toSB(sb *strings.Builder, total int) {
-	sb.WriteString(scr.bck.Cname(""))
+	sb.WriteString(scr.Bck.Cname(""))
 	sb.WriteString(": scrubbed ")
 	sb.WriteString(cos.FormatBigNum(total))
 	sb.WriteString(" names")
 
 	var scr0 scrubOne
-	if scr.stats == scr0.stats {
+	if scr.Stats == scr0.Stats {
 		return
 	}
 
 	sb.WriteByte(' ')
-	s := fmt.Sprintf("%+v", scr.stats)
+	s := fmt.Sprintf("%+v", scr.Stats)
 	sb.WriteString(s)
 }
 
@@ -184,7 +212,7 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 	bck.Props = bprops
 	var (
 		lsargs api.ListArgs
-		scr    = &scrubOne{bck: bck}
+		scr    = &scrubOne{parent: ctx, Bck: bck}
 		lsmsg  = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
 	)
 	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)

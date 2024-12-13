@@ -227,11 +227,11 @@ const (
 		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
-	BucketSummaryValidateHdr  = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\t ZERO SIZE\t 5+GB\n"
-	BucketSummaryValidateTmpl = BucketSummaryValidateHdr + BucketSummaryValidateBody
-	BucketSummaryValidateBody = "{{range $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{$v.ObjectCnt}}\t {{$v.Misplaced}}\t {{$v.MissingCopies}}\t {{$v.ZeroSize}}\t {{$v.FiveGBplus}}\n" +
+	scrubHdr  = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\t SMALL\t LARGE\n"
+	ScrubBody = "{{range $v := . }}" +
+		"{{FormatBckName $v.Bck}}\t {{$v.Listed}}\t {{$v.Stats.Misplaced}}\t {{$v.Stats.MissingCp}}\t {{$v.Stats.SmallSz}}\t {{$v.Stats.LargeSz}}\n" +
 		"{{end}}"
+	ScrubTmpl = scrubHdr + ScrubBody
 
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t

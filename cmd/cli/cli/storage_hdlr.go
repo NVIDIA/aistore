@@ -39,7 +39,7 @@ type bsummCtx struct {
 	res     cmn.AllBsummResults
 }
 
-var validateUsage = validateSummaryFlag.Usage + "\n" +
+var scrubUsage = "check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
 	indent1 + "\t* ais scrub \t- same as above;\n" +
@@ -170,6 +170,8 @@ var (
 			noHeaderFlag,
 			maxPagesFlag,
 			noRecursFlag,
+			smallSizeFlag,
+			largeSizeFlag,
 		),
 	}
 
@@ -192,6 +194,14 @@ var (
 		Action:       summaryStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
+	scrubCmd = cli.Command{
+		Name:         cmdScrub,
+		Usage:        scrubUsage,
+		ArgsUsage:    lsAnyCommandArgument,
+		Flags:        storageFlags[cmdScrub],
+		Action:       scrubHandler,
+		BashComplete: bucketCompletions(bcmplop{}),
+	}
 	showCmdMpath = cli.Command{
 		Name:         cmdMountpath,
 		Usage:        "show target mountpaths",
@@ -207,14 +217,7 @@ var (
 		Subcommands: []cli.Command{
 			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
 			showCmdStgSummary,
-			{
-				Name:         cmdScrub,
-				Usage:        validateUsage,
-				ArgsUsage:    lsAnyCommandArgument,
-				Flags:        storageFlags[cmdScrub],
-				Action:       scrubHandler,
-				BashComplete: bucketCompletions(bcmplop{}),
-			},
+			scrubCmd,
 			mpathCmd,
 			showCmdDisk,
 			cleanupCmd,

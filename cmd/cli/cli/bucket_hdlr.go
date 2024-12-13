@@ -194,8 +194,6 @@ var (
 		},
 	}
 
-	bckSummaryFlags = append(storageSummFlags, validateSummaryFlag)
-
 	// commands
 	bucketsObjectsCmdList = cli.Command{
 		Name:         commandList,
@@ -203,15 +201,6 @@ var (
 		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
 		Action:       listAnyHandler,
-		BashComplete: bucketCompletions(bcmplop{}),
-	}
-
-	bucketCmdSummary = cli.Command{
-		Name:         cmdSummary,
-		Usage:        "generate and display bucket summary",
-		ArgsUsage:    optionalBucketArgument,
-		Flags:        bckSummaryFlags,
-		Action:       summaryBucketHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
@@ -263,7 +252,8 @@ var (
 		Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
 		Subcommands: []cli.Command{
 			bucketsObjectsCmdList,
-			bucketCmdSummary,
+			showCmdStgSummary,
+			scrubCmd,
 			bucketCmdLRU,
 			bucketObjCmdEvict,
 			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
@@ -330,13 +320,6 @@ func createBucketHandler(c *cli.Context) (err error) {
 		}
 	}
 	return nil
-}
-
-func summaryBucketHandler(c *cli.Context) error {
-	if flagIsSet(c, validateSummaryFlag) {
-		return scrubHandler(c)
-	}
-	return summaryStorageHandler(c)
 }
 
 func mvBucketHandler(c *cli.Context) error {

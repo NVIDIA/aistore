@@ -208,8 +208,7 @@ const (
 )
 
 const (
-	timeUnits    = `ns, us (or µs), ms, s (default), m, h`
-	sizeUnitsIEC = `(IEC units, e.g.: b or B, KB or KiB, MiB or mb, g or GB or GiB, etc.)`
+	timeUnits = `ns, us (or µs), ms, s (default), m, h`
 )
 
 const nodeLogFlushName = "log.flush_time"
@@ -505,7 +504,17 @@ var (
 			indent1 + "\t(tip: check 'ais config cluster lru.dont_evict_time' as well)",
 	}
 
+	// TODO: rm smaller than
 	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "remove zero size objects " + advancedUsageOnly}
+
+	smallSizeFlag = cli.StringFlag{
+		Name:  "small-size",
+		Usage: "count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)",
+	}
+	largeSizeFlag = cli.StringFlag{
+		Name:  "large-size",
+		Usage: "count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)",
+	}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
@@ -556,10 +565,6 @@ var (
 	}
 
 	// bucket summary
-	validateSummaryFlag = cli.BoolFlag{
-		Name:  "validate",
-		Usage: "check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more",
-	}
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",
 		Usage: "show object numbers, bucket sizes, and used capacity;\n" +
