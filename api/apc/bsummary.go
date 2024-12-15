@@ -4,6 +4,8 @@
  */
 package apc
 
+import "strings"
+
 type (
 	// to generate bucket summary (or summaries)
 	BsummCtrlMsg struct {
@@ -35,3 +37,19 @@ type (
 		IsBckPresent bool   `json:"is_present"` // in BMD
 	}
 )
+
+func (msg *BsummCtrlMsg) Str(cname string) string {
+	var sb strings.Builder
+	sb.Grow(64)
+	sb.WriteString(cname)
+	if msg.ObjCached {
+		sb.WriteString(", cached")
+	}
+	if msg.BckPresent {
+		sb.WriteString(", bck-present")
+	}
+	if msg.DontAddRemote {
+		sb.WriteString(", don't-add")
+	}
+	return sb.String()
+}

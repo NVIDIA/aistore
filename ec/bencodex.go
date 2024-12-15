@@ -98,6 +98,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 ///////////////////
 
 func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode, err error) {
+	var ctlmsg string
 	r = &XactBckEncode{
 		bck:             bck,
 		wg:              &sync.WaitGroup{},
@@ -105,9 +106,10 @@ func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *Xact
 		checkAndRecover: checkAndRecover,
 	}
 	if checkAndRecover {
+		ctlmsg = "recover"
 		r.probFilter = prob.NewDefaultFilter()
 	}
-	r.InitBase(uuid, apc.ActECEncode, bck)
+	r.InitBase(uuid, apc.ActECEncode, ctlmsg, bck)
 
 	if err = bck.Init(core.T.Bowner()); err != nil {
 		return nil, err

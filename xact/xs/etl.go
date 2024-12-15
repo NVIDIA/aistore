@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -39,7 +40,7 @@ func (*etlFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 
 func (p *etlFactory) Start() error {
 	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
-	p.xctn = newETL(p.Args.UUID, p.Kind())
+	p.xctn = newETL(p)
 	return nil
 }
 
@@ -52,9 +53,13 @@ func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 // (tests only)
 
-func newETL(id, kind string) (xctn *xactETL) {
+func newETL(p *etlFactory) (xctn *xactETL) {
+	var (
+		s      = p.Args.Custom.(fmt.Stringer)
+		ctlmsg = s.String()
+	)
 	xctn = &xactETL{}
-	xctn.InitBase(id, kind, nil)
+	xctn.InitBase(p.Args.UUID, p.Kind(), ctlmsg, nil)
 	return
 }
 

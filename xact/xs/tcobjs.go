@@ -89,7 +89,7 @@ func (p *tcoFactory) Start() error {
 		r.owt = cmn.OwtTransform
 	}
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, xact.IdleDefault)
+	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {

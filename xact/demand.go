@@ -56,7 +56,7 @@ func (r *DemandBase) IsIdle() bool {
 	return last != 0 && mono.Since(last) >= max(cmn.Rom.MaxKeepalive(), 2*time.Second)
 }
 
-func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duration) {
+func (r *DemandBase) Init(uuid, kind, ctlmsg string, bck *meta.Bck, idleDur time.Duration) {
 	r.hkName = kind + "/" + uuid
 	if idleDur > 0 {
 		r.idle.d.Store(int64(idleDur))
@@ -64,7 +64,7 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duratio
 		r.idle.d.Store(int64(IdleDefault))
 	}
 	r.idle.ticks.Init()
-	r.InitBase(uuid, kind, bck)
+	r.InitBase(uuid, kind, ctlmsg, bck)
 
 	r.idle.last.Store(mono.NanoTime())
 	r.hkReg.Store(true)

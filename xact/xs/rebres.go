@@ -95,7 +95,9 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 
 func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	xreb = &Rebalance{}
-	xreb.InitBase(p.Args.UUID, p.Kind(), nil)
+	ctlmsg, ok := p.Args.Custom.(string)
+	debug.Assert(ok)
+	xreb.InitBase(p.Args.UUID, p.Kind(), ctlmsg, nil)
 
 	id, err := xact.S2RebID(p.Args.UUID)
 	if err != nil {
@@ -154,7 +156,7 @@ func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return 
 
 func NewResilver(id, kind string) (xres *Resilver) {
 	xres = &Resilver{}
-	xres.InitBase(id, kind, nil)
+	xres.InitBase(id, kind, "" /*ctlmsg*/, nil)
 	return
 }
 

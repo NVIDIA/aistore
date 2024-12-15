@@ -344,7 +344,7 @@ func newTargetLRUMock() *mock.TargetMock {
 
 func newIniLRU() *space.IniLRU {
 	xlru := &space.XactLRU{}
-	xlru.InitBase(cos.GenUUID(), apc.ActLRU, nil)
+	xlru.InitBase(cos.GenUUID(), apc.ActLRU, "" /*ctlmsg*/, nil)
 	return &space.IniLRU{
 		Xaction:             xlru,
 		Config:              cmn.GCO.Get(),
@@ -356,7 +356,7 @@ func newIniLRU() *space.IniLRU {
 
 func newInitStoreCln() *space.IniCln {
 	xcln := &space.XactCln{}
-	xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, nil)
+	xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, "" /*ctlmsg*/, nil)
 	return &space.IniCln{
 		Xaction: xcln,
 		Config:  cmn.GCO.Get(),

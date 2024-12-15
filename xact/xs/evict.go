@@ -60,7 +60,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 	if err = ed.lrit.init(ed, msg, bck, lrpWorkersDflt); err != nil {
 		return nil, err
 	}
-	ed.InitBase(xargs.UUID, kind, bck)
+	ed.InitBase(xargs.UUID, kind, msg.Str(ed.lrp == lrpPrefix), bck)
 	return ed, nil
 }
 

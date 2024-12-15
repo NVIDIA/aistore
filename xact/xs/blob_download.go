@@ -176,7 +176,7 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *blobFactory) Start() error {
 	// reuse the same args-carrying structure and keep filling-in
 	r := p.pre
-	r.InitBase(p.Args.UUID, p.Kind(), r.args.Lom.Bck())
+	r.InitBase(p.Args.UUID, p.Kind(), r.args.Lom.Cname(), r.args.Lom.Bck())
 
 	// 2nd (just in time) tune-up
 	var (

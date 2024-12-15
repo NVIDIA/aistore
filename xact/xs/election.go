@@ -37,7 +37,7 @@ func (*eleFactory) New(xreg.Args, *meta.Bck) xreg.Renewable { return &eleFactory
 
 func (p *eleFactory) Start() error {
 	p.xctn = &Election{}
-	p.xctn.InitBase(cos.GenUUID(), apc.ActElection, nil)
+	p.xctn.InitBase(cos.GenUUID(), apc.ActElection, "", nil)
 	return nil
 }
 

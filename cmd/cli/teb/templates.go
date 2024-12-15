@@ -116,11 +116,11 @@ const (
 	// all other xactions
 	//
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
-	XactNoHdrBucketTmpl = "{{range $daemon := . }}" + xactBucketBodyAll + "{{end}}"
+	XactNoHdrBucketTmpl = "{{range $nodeSnaps := . }}" + xactBucketBodyAll + "{{end}}"
 
 	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	xactBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactBucketBodyOne + "{{end}}"
-	xactBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
+	xactBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactBucketBodyOne + "{{end}}"
+	xactBucketBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
 		"{{FormatBckName $xctn.Bck}}\t " +
@@ -132,11 +132,11 @@ const (
 
 	// same as above except for: src-bck, dst-bck columns
 	XactFromToTmpl      = xactFromToHdr + XactNoHdrFromToTmpl
-	XactNoHdrFromToTmpl = "{{range $daemon := . }}" + xactFromToBodyAll + "{{end}}"
+	XactNoHdrFromToTmpl = "{{range $nodeSnaps := . }}" + xactFromToBodyAll + "{{end}}"
 
 	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	xactFromToBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactFromToBodyOne + "{{end}}"
-	xactFromToBodyOne = "{{ $daemon.DaemonID }}\t " +
+	xactFromToBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactFromToBodyOne + "{{end}}"
+	xactFromToBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
 		"{{FormatBckName $xctn.SrcBck}}\t " +

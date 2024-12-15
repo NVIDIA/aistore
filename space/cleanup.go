@@ -33,15 +33,15 @@ import (
 // stats counters "cleanup.store.n" & "cleanup.store.size" (not to confuse with generic ""loc-objs", "in-objs", etc.)
 
 type (
+	XactCln struct {
+		xact.Base
+	}
 	IniCln struct {
 		StatsT  stats.Tracker
 		Config  *cmn.Config
 		Xaction *XactCln
 		WG      *sync.WaitGroup
 		Args    *xact.ArgsMsg
-	}
-	XactCln struct {
-		xact.Base
 	}
 )
 
@@ -110,7 +110,8 @@ func (*clnFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 
 func (p *clnFactory) Start() error {
 	p.xctn = &XactCln{}
-	p.xctn.InitBase(p.UUID(), apc.ActStoreCleanup, nil)
+	ctlmsg := p.Args.Custom.(string)
+	p.xctn.InitBase(p.UUID(), apc.ActStoreCleanup, ctlmsg, nil)
 	return nil
 }
 

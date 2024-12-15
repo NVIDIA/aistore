@@ -113,7 +113,7 @@ func (p *lsoFactory) Start() error {
 
 	// idle timeout vs delayed next-page request
 	// see also: resetIdle()
-	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
+	r.DemandBase.Init(p.UUID(), apc.ActList, p.msg.Str(p.Bck.Cname(p.msg.Prefix)) /*ctlmsg*/, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
 	// NOTE: is set by the first message, never changes
 	r.walk.wor = r.msg.WantOnlyRemoteProps()

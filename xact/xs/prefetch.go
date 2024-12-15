@@ -93,7 +93,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	if err != nil {
 		return nil, err
 	}
-	r.InitBase(xargs.UUID, kind, bck)
+	r.InitBase(xargs.UUID, kind, msg.Str(r.lrp == lrpPrefix), bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
 	if r.msg.BlobThreshold > 0 {

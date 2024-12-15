@@ -206,6 +206,45 @@ func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	return s
 }
 
+func (lsmsg *LsoMsg) Str(cname string) string {
+	var sb strings.Builder
+	sb.Grow(80)
+
+	sb.WriteString(cname)
+	if lsmsg.Props != "" {
+		sb.WriteString(", props:")
+		sb.WriteString(lsmsg.Props)
+	}
+	if lsmsg.Flags == 0 {
+		return sb.String()
+	}
+
+	sb.WriteString(", flags:")
+	if lsmsg.IsFlagSet(LsObjCached) {
+		sb.WriteString("cached,")
+	}
+	if lsmsg.IsFlagSet(LsMissing) {
+		sb.WriteString("missing,")
+	}
+	if lsmsg.IsFlagSet(LsArchDir) {
+		sb.WriteString("arch,")
+	}
+	if lsmsg.IsFlagSet(LsBckPresent) {
+		sb.WriteString("bck-present,")
+	}
+	if lsmsg.IsFlagSet(LsDontAddRemote) {
+		sb.WriteString("skip-lookup,")
+	}
+	if lsmsg.IsFlagSet(LsNoRecursion) {
+		sb.WriteString("no-recurs,")
+	}
+	if lsmsg.IsFlagSet(LsVerChanged) {
+		sb.WriteString("version-changed,")
+	}
+	s := sb.String()
+	return s[:len(s)-1]
+}
+
 // LsoMsg flags enum: LsObjCached, ...
 func (lsmsg *LsoMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
 func (lsmsg *LsoMsg) ClearFlag(flag uint64)       { lsmsg.Flags &= ^flag }

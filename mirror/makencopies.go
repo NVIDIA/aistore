@@ -84,12 +84,12 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 		Throttle: true,
 	}
 	mpopts.Bck.Copy(p.Bck.Bucket())
-	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, p.Bck, mpopts, cmn.GCO.Get())
+	s := fmt.Sprintf("%s-copies-%d", r.p.args.Tag, r.p.args.Copies)
+	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, s /*ctlmsg*/, p.Bck, mpopts, cmn.GCO.Get())
 
 	// name
-	s := fmt.Sprintf("-%s-copies-%d", r.p.args.Tag, r.p.args.Copies)
-	r._nam = r.Base.Name() + s
-	r._str = r.Base.String() + s
+	r._nam = r.Base.Name() + "-" + s
+	r._str = r.Base.String() + "-" + s
 	return r
 }
 

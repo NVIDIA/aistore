@@ -33,11 +33,12 @@ type (
 			err  ratomic.Pointer[error]
 			done atomic.Bool
 		}
-		id    string
-		kind  string
-		_nam  string
-		err   cos.Errs
-		stats struct {
+		id     string
+		kind   string
+		_nam   string
+		ctlmsg string
+		err    cos.Errs
+		stats  struct {
 			objs     atomic.Int64 // locally processed
 			bytes    atomic.Int64
 			outobjs  atomic.Int64 // transmit
@@ -69,10 +70,13 @@ func GoRunW(xctn core.Xact) {
 // Base - partially implements `core.Xact` interface
 //////////////
 
-func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
+func (xctn *Base) InitBase(id, kind, ctlmsg string, bck *meta.Bck) {
 	debug.Assert(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.Assert(IsValidKind(kind), kind)
+
 	xctn.id, xctn.kind = id, kind
+	xctn.ctlmsg = ctlmsg
+
 	xctn.abort.ch = make(chan error, 1)
 	if bck != nil {
 		xctn.bck = *bck
@@ -382,6 +386,7 @@ func (xctn *Base) InObjsAdd(cnt int, size int64) {
 func (xctn *Base) ToSnap(snap *core.Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
+	snap.CtlMsg = xctn.ctlmsg
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
 	if err := xctn.AbortErr(); err != nil {

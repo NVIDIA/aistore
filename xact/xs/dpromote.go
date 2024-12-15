@@ -55,8 +55,11 @@ func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *proFactory) Start() error {
-	xctn := &XactDirPromote{p: p}
-	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, p.Bck, &mpather.JgroupOpts{}, cmn.GCO.Get())
+	var (
+		xctn   = &XactDirPromote{p: p}
+		ctlmsg = p.args.String()
+	)
+	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, ctlmsg, p.Bck, &mpather.JgroupOpts{}, cmn.GCO.Get())
 	p.xctn = xctn
 	return nil
 }

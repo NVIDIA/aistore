@@ -175,7 +175,8 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 		Throttle: true, // always trottling
 	}
 	mpopts.Bck.Copy(p.args.BckFrom.Bucket())
-	r.BckJog.Init(p.UUID(), p.kind, p.args.BckTo, mpopts, config)
+
+	r.BckJog.Init(p.UUID(), p.kind, r.nam /*ctlmsg*/, p.args.BckTo, mpopts, config)
 
 	if p.args.Msg.Sync {
 		debug.Assert(p.args.Msg.Prepend == "", p.args.Msg.Prepend) // validated (cli, P)

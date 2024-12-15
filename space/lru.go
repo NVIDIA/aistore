@@ -120,7 +120,8 @@ func (*lruFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 
 func (p *lruFactory) Start() error {
 	p.xctn = &XactLRU{}
-	p.xctn.InitBase(p.UUID(), apc.ActLRU, nil)
+	ctlmsg := p.Args.Custom.(string)
+	p.xctn.InitBase(p.UUID(), apc.ActLRU, ctlmsg, nil)
 	return nil
 }
 

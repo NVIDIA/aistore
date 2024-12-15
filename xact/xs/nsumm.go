@@ -140,11 +140,11 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		}
 	}
 
-	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, opts, cmn.GCO.Get())
+	ctlmsg := p.msg.Str(p.Bck.Cname(p.msg.Prefix))
+	r.BckJog.Init(p.UUID(), p.Kind(), ctlmsg, p.Bck, opts, cmn.GCO.Get())
 
-	s := fmt.Sprintf("-msg-%+v", r.p.msg)
-	r._nam = r.Base.Name() + s
-	r._str = r.Base.String() + s
+	r._nam = r.Base.Name() + "-" + ctlmsg
+	r._str = r.Base.String() + "-" + ctlmsg
 	return r, nil
 }
 

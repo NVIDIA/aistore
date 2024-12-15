@@ -69,7 +69,7 @@ func newXactLLC(uuid string, bck *meta.Bck) (r *xactLLC) {
 		DoLoad:   mpather.Load,
 	}
 	mpopts.Bck.Copy(bck.Bucket())
-	r.BckJog.Init(uuid, apc.ActLoadLomCache, bck, mpopts, cmn.GCO.Get())
+	r.BckJog.Init(uuid, apc.ActLoadLomCache, "" /*ctlmsg*/, bck, mpopts, cmn.GCO.Get())
 	return
 }
 

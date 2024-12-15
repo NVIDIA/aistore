@@ -97,7 +97,7 @@ func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *meta.Bck) (x *b
 
 	debug.Assert(xact.IsValidRebID(rebID), rebID)
 	x = &bckRename{bckFrom: bckFrom, bckTo: bckTo, rebID: rebID}
-	x.InitBase(uuid, kind, bck)
+	x.InitBase(uuid, kind, "via "+rebID /*ctlmsg*/, bck)
 	return
 }
 

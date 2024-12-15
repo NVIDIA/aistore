@@ -57,7 +57,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	wg.Add(num)
 	for range num {
 		go func() {
-			xactCh <- xreg.RenewLRU(cos.GenUUID())
+			xactCh <- xreg.RenewLRU(cos.GenUUID(), "")
 			wg.Done()
 		}()
 	}
@@ -135,7 +135,7 @@ func TestXactionAbortAll(t *testing.T) {
 	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
-	rnsLRU := xreg.RenewLRU(cos.GenUUID())
+	rnsLRU := xreg.RenewLRU(cos.GenUUID(), "")
 	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
 	rnsRen := xreg.RenewBckRename(bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rnsRen.Entry.Get()
@@ -166,7 +166,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
-	rnsLRU := xreg.RenewLRU(cos.GenUUID())
+	rnsLRU := xreg.RenewLRU(cos.GenUUID(), "")
 	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
 	rnsRen := xreg.RenewBckRename(bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rnsRen.Entry.Get()
@@ -197,7 +197,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 	xreg.RegBckXact(&xs.TestBmvFactory{})
 	cos.InitShortID(0)
 
-	rnsLRU := xreg.RenewLRU(cos.GenUUID())
+	rnsLRU := xreg.RenewLRU(cos.GenUUID(), "")
 	tassert.Errorf(t, !rnsLRU.IsRunning(), "new LRU must be created")
 	rns := xreg.RenewBckRename(bckFrom, bckTo, cos.GenUUID(), 123, "phase")
 	xactBck := rns.Entry.Get()

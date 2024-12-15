@@ -95,7 +95,7 @@ func (p *putFactory) Start() error {
 		// is Ok (compare with x-archive, x-tco)
 		beid = cos.GenUUID()
 	}
-	r.DemandBase.Init(beid, p.Kind(), bck, xact.IdleDefault)
+	r.DemandBase.Init(beid, p.Kind(), "" /*ctlmsg*/, bck, xact.IdleDefault)
 
 	// joggers
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{

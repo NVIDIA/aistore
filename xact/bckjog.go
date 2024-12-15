@@ -16,8 +16,8 @@ type BckJog struct {
 	Base
 }
 
-func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts, config *cmn.Config) {
-	r.InitBase(id, kind, bck)
+func (r *BckJog) Init(id, kind, ctlmsg string, bck *meta.Bck, opts *mpather.JgroupOpts, config *cmn.Config) {
+	r.InitBase(id, kind, ctlmsg, bck)
 	r.joggers = mpather.NewJoggerGroup(opts, config, nil)
 	r.Config = config
 }

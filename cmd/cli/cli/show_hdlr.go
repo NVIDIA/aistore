@@ -44,7 +44,7 @@ const showJobUsage = "show running and/or finished jobs\n" +
 	indent1 + tabHelpOpt + "."
 
 type (
-	daemonTemplateXactSnaps struct {
+	nodeSnaps struct {
 		DaemonID  string
 		XactSnaps []*core.Snap
 	}
@@ -491,7 +491,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 	// second, filteredXs => dts templates
 	var (
 		fromToBck, haveBck bool
-		dts                = make([]daemonTemplateXactSnaps, 0, len(filteredXs))
+		dts                = make([]nodeSnaps, 0, len(filteredXs))
 	)
 	for tid, snaps := range filteredXs {
 		if len(snaps) == 0 {
@@ -506,7 +506,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		} else if !snaps[0].Bck.IsEmpty() {
 			haveBck = true
 		}
-		dts = append(dts, daemonTemplateXactSnaps{DaemonID: tid, XactSnaps: snaps})
+		dts = append(dts, nodeSnaps{DaemonID: tid, XactSnaps: snaps})
 	}
 	sort.Slice(dts, func(i, j int) bool {
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name

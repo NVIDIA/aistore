@@ -17,8 +17,8 @@ func RegNonBckXact(entry Renewable) {
 	dreg.nonbckXacts[entry.Kind()] = entry // no locking: all reg-s are done at init time
 }
 
-func RenewRebalance(id int64) RenewRes {
-	e := dreg.nonbckXacts[apc.ActRebalance].New(Args{UUID: xact.RebID2S(id)}, nil)
+func RenewRebalance(id int64, ctlmsg string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActRebalance].New(Args{UUID: xact.RebID2S(id), Custom: ctlmsg}, nil)
 	return dreg.renew(e, nil)
 }
 
@@ -34,13 +34,13 @@ func RenewElection() RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewLRU(id string) RenewRes {
-	e := dreg.nonbckXacts[apc.ActLRU].New(Args{UUID: id}, nil)
+func RenewLRU(id, ctlmsg string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActLRU].New(Args{UUID: id, Custom: ctlmsg}, nil)
 	return dreg.renew(e, nil)
 }
 
-func RenewStoreCleanup(id string) RenewRes {
-	e := dreg.nonbckXacts[apc.ActStoreCleanup].New(Args{UUID: id}, nil)
+func RenewStoreCleanup(id, ctlmsg string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActStoreCleanup].New(Args{UUID: id, Custom: ctlmsg}, nil)
 	return dreg.renew(e, nil)
 }
 

@@ -4,6 +4,14 @@
  */
 package apc
 
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
+
 // (common for all multi-object operations)
 type (
 	// List of object names _or_ a template specifying { optional Prefix, zero or more Ranges }
@@ -20,6 +28,17 @@ type (
 func (lrm *ListRange) IsList() bool      { return len(lrm.ObjNames) > 0 }
 func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 
+func (lrm *ListRange) Str(isPrefix bool) string {
+	switch {
+	case isPrefix:
+		return "prefix: " + lrm.Template
+	case lrm.IsList():
+		return fmt.Sprintf("list: %v", lrm.ObjNames)
+	default:
+		return "template: " + lrm.Template
+	}
+}
+
 // prefetch
 type PrefetchMsg struct {
 	ListRange
@@ -27,6 +46,21 @@ type PrefetchMsg struct {
 	NumWorkers      int   `json:"num-workers"`    // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
 	ContinueOnError bool  `json:"coer"`           // ignore non-critical errors, keep going
 	LatestVer       bool  `json:"latest-ver"`     // when true & in-cluster: check with remote whether (deleted | version-changed)
+}
+
+func (msg *PrefetchMsg) Str(isPrefix bool) string {
+	var sb strings.Builder
+	sb.Grow(80)
+	sb.WriteString(msg.ListRange.Str(isPrefix))
+	if msg.BlobThreshold > 0 {
+		sb.WriteString(", blob-threshold: ")
+		sb.WriteString(cos.ToSizeIEC(msg.BlobThreshold, 0))
+	}
+	if msg.NumWorkers > 0 {
+		sb.WriteString(", workers: ")
+		sb.WriteString(strconv.Itoa(msg.NumWorkers))
+	}
+	return sb.String()
 }
 
 // ArchiveMsg contains the parameters (all except the destination bucket)

@@ -117,7 +117,7 @@ func (p *archFactory) Start() (err error) {
 	avail := fs.GetAvail()
 	r.joggers.m = make(map[string]*jogger, len(avail))
 	p.xctn = r
-	r.DemandBase.Init(p.UUID() /*== p.Args.UUID above*/, p.kind, p.Bck /*from*/, xact.IdleDefault)
+	r.DemandBase.Init(p.UUID(), p.kind, "" /*ctlmsg*/, p.Bck /*from*/, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
 	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, cmn.OwtPut, 0 /*pdu*/); err != nil {
 		return err

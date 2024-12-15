@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -92,11 +93,17 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 }
 
 func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
-	regToIC := id == ""
+	var (
+		ctlmsg  string
+		regToIC = id == ""
+	)
 	if regToIC {
 		id = cos.GenUUID()
 	}
-	rns := xreg.RenewLRU(id)
+	if len(bcks) > 0 {
+		ctlmsg = fmt.Sprintf("%v", bcks)
+	}
+	rns := xreg.RenewLRU(id, ctlmsg)
 	if rns.Err != nil || rns.IsRunning() {
 		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
 		if wg != nil {
@@ -129,11 +136,17 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 }
 
 func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.CapStatus {
-	regToIC := xargs.ID != ""
+	var (
+		ctlmsg  string
+		regToIC = xargs.ID != ""
+	)
 	if !regToIC {
 		xargs.ID = cos.GenUUID()
 	}
-	rns := xreg.RenewStoreCleanup(xargs.ID)
+	if len(xargs.Buckets) > 0 {
+		ctlmsg = fmt.Sprintf("%v", xargs.Buckets)
+	}
+	rns := xreg.RenewStoreCleanup(xargs.ID, ctlmsg)
 	if rns.Err != nil || rns.IsRunning() {
 		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
 		if wg != nil {
