@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,7 +118,7 @@ func (p *archFactory) Start() (err error) {
 	avail := fs.GetAvail()
 	r.joggers.m = make(map[string]*jogger, len(avail))
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.kind, "" /*ctlmsg*/, p.Bck /*from*/, xact.IdleDefault) // TODO ctlmsg: arch, tco
+	r.DemandBase.Init(p.UUID(), p.kind, "" /*ctlmsg later via Do()*/, p.Bck /*from*/, xact.IdleDefault)
 
 	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, cmn.OwtPut, 0 /*pdu*/); err != nil {
 		return err
@@ -257,6 +258,30 @@ func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 		r.DecPending()
 		r.cleanup()
 		return
+	}
+
+	// dynamic ctlmsg // TODO: ref
+	{
+		var sb strings.Builder
+		sb.Grow(80)
+		sb.WriteString(r.Bck().Cname(""))
+		if r.bckTo != nil && !r.bckTo.IsEmpty() {
+			sb.WriteString("=>")
+			sb.WriteString(r.bckTo.Cname(""))
+		}
+		sb.WriteByte(' ')
+		msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
+		if msg.BaseNameOnly {
+			sb.WriteString(", basename-only")
+		}
+		if msg.InclSrcBname {
+			sb.WriteString(", incl-src-basename")
+		}
+		if msg.AppendIfExists {
+			sb.WriteString(", append-iff")
+		}
+
+		r.Base.SetCtlMsg(sb.String())
 	}
 
 	if r.IsAborted() {
@@ -485,6 +510,7 @@ func (j *jogger) run() {
 			if err != nil {
 				wi.r.AddErr(err)
 			}
+
 			lrit.wait()
 			if core.T.SID() == wi.tsi.ID() {
 				go wi.r.finalize(wi) // async finalize this shard

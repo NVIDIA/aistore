@@ -4,22 +4,10 @@
  */
 package teb
 
-import (
-	"fmt"
-	"strings"
-	"text/template"
+//
+// static templates (compare with daeclu and other users/usages of teb/table)
+//
 
-	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
-	"github.com/urfave/cli"
-)
-
-// output templates
 const (
 	// Smap
 	smapHdr = "NODE\t TYPE\t PUBLIC URL" +
@@ -113,12 +101,13 @@ const (
 	TransformListTmpl      = transformListHdr + TransformListNoHdrTmpl
 
 	//
-	// all other xactions
+	// BEGIN: xactions as `nodeSnaps` ------------------------------------------------------------------------------
 	//
+
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
 	XactNoHdrBucketTmpl = "{{range $nodeSnaps := . }}" + xactBucketBodyAll + "{{end}}"
 
-	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\t RUN-OPTIONS\n"
 	xactBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactBucketBodyOne + "{{end}}"
 	xactBucketBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -128,13 +117,32 @@ const (
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactState $xctn}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\t " +
+		"{{FormatCtlMsg $xctn.CtlMsg}}\n"
+
+	// same as above except for: no bucket column
+
+	XactNoBucketTmpl      = xactNoBucketHdr + XactNoHdrNoBucketTmpl
+	XactNoHdrNoBucketTmpl = "{{range $nodeSnaps := . }}" + xactNoBucketBodyAll + "{{end}}"
+
+	xactNoBucketHdr     = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\t RUN-OPTIONS\n"
+	xactNoBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactNoBucketBodyOne + "{{end}}"
+	xactNoBucketBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
+		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
+		"{{$xctn.Kind}}\t " +
+		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
+		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
+		"{{FormatStart $xctn.StartTime}}\t " +
+		"{{FormatEnd $xctn.EndTime}}\t " +
+		"{{FormatXactRunFinAbrt $xctn}}\t " +
+		"{{FormatCtlMsg $xctn.CtlMsg}}\n"
 
 	// same as above except for: src-bck, dst-bck columns
+
 	XactFromToTmpl      = xactFromToHdr + XactNoHdrFromToTmpl
 	XactNoHdrFromToTmpl = "{{range $nodeSnaps := . }}" + xactFromToBodyAll + "{{end}}"
 
-	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
+	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\t RUN-OPTIONS\n"
 	xactFromToBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactFromToBodyOne + "{{end}}"
 	xactFromToBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -145,29 +153,17 @@ const (
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactState $xctn}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\t " +
+		"{{FormatCtlMsg $xctn.CtlMsg}}\n"
 
-	// same as above for: no bucket column
-	XactNoBucketTmpl      = xactNoBucketHdr + XactNoHdrNoBucketTmpl
-	XactNoHdrNoBucketTmpl = "{{range $daemon := . }}" + xactNoBucketBodyAll + "{{end}}"
-
-	xactNoBucketHdr     = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	xactNoBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactNoBucketBodyOne + "{{end}}"
-	xactNoBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
-		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
-		"{{$xctn.Kind}}\t " +
-		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
-		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
-		"{{FormatStart $xctn.StartTime}}\t " +
-		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactState $xctn}}\n"
+	// EC: get, put
 
 	XactECGetTmpl      = xactECGetStatsHdr + XactECGetNoHdrTmpl
 	XactECGetNoHdrTmpl = "{{range $daemon := . }}" + xactECGetBody + "{{end}}"
 
 	xactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t STATE\n"
-	xactECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECGetStatsBody + "{{end}}"
-	xactECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
+	xactECGetBody      = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactECGetStatsBody + "{{end}}"
+	xactECGetStatsBody = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{FormatBckName $xctn.Bck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -180,14 +176,14 @@ const (
 
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactState $xctn}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\n"
 
 	XactECPutTmpl      = xactECPutStatsHdr + XactECPutNoHdrTmpl
-	XactECPutNoHdrTmpl = "{{range $daemon := . }}" + xactECPutBody + "{{end}}"
+	XactECPutNoHdrTmpl = "{{range $nodeSnaps := . }}" + xactECPutBody + "{{end}}"
 
 	xactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t STATE\n"
-	xactECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECPutStatsBody + "{{end}}"
-	xactECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
+	xactECPutBody      = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactECPutStatsBody + "{{end}}"
+	xactECPutStatsBody = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{FormatBckName $xctn.Bck}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -201,7 +197,11 @@ const (
 
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactState $xctn}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\n"
+
+	//
+	// END: xactions as `nodeSnaps` ------------------------------------------------------------------------------
+	//
 
 	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t SIZE (apparent, objects, remote)\t USAGE(%)\n"
 	ListBucketsSummBody = "{{range $k, $v := . }}" +
@@ -341,204 +341,3 @@ See '--help' and docs/cli for details.`
 		"{{end}}{{end}}" +
 		"{{end}}{{end}}"
 )
-
-type (
-	// Used to return specific fields/objects for marshaling (MarshalIdent).
-	forMarshaler interface {
-		forMarshal() any
-	}
-	DiskStatsHelper struct {
-		TargetID string
-		DiskName string
-		Stat     cos.DiskStats
-		Tcdf     *fs.Tcdf
-	}
-	SmapHelper struct {
-		Smap         *meta.Smap
-		ExtendedURLs bool
-	}
-	StatsAndStatusHelper struct {
-		Pmap StstMap
-		Tmap StstMap
-	}
-	StatusHelper struct {
-		Smap      *meta.Smap
-		CluConfig *cmn.ClusterConfig
-		Status    StatsAndStatusHelper
-		Capacity  string
-		Version   string // when all equal
-		BuildTime string // ditto
-		NumDisks  int
-	}
-	ListBucketsHelper struct {
-		XactID string
-		Bck    cmn.Bck
-		Props  *cmn.Bprops
-		Info   *cmn.BsummResult
-	}
-)
-
-var (
-	// for extensions and override, see also:
-	// - FuncMapUnits
-	// - HelpTemplateFuncMap
-	// - `altMap template.FuncMap` below
-	funcMap = template.FuncMap{
-		// formatting
-		"FormatBytesSig":      func(size int64, digits int) string { return FmtSize(size, cos.UnitsIEC, digits) },
-		"FormatBytesSig2":     fmtSize2,
-		"FormatBytesUns":      func(size uint64, digits int) string { return FmtSize(int64(size), cos.UnitsIEC, digits) },
-		"FormatMAM":           func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, cos.UnitsIEC, 2)) },
-		"FormatMilli":         func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },
-		"FormatDuration":      FormatDuration,
-		"FormatStart":         FmtTime,
-		"FormatEnd":           FmtTime,
-		"FormatDsortStatus":   dsortJobInfoStatus,
-		"FormatLsObjStatus":   fmtLsObjStatus,
-		"FormatLsObjIsCached": fmtLsObjIsCached,
-		"FormatObjCustom":     fmtObjCustom,
-		"FormatDaemonID":      fmtDaemonID,
-		"FormatSmap":          fmtSmap,
-		"FormatCluSoft":       fmtCluSoft,
-		"FormatRebalance":     fmtRebalance,
-		"FormatProxiesSumm":   fmtProxiesSumm,
-		"FormatTargetsSumm":   fmtTargetsSumm,
-		"FormatCapPctMAM":     fmtCapPctMAM,
-		"FormatCDFDisks":      fmtCDFDisks,
-		"FormatFloat":         func(f float64) string { return fmt.Sprintf("%.2f", f) },
-		"FormatBool":          FmtBool,
-		"FormatBckName":       fmtBckName,
-		"FormatACL":           fmtACL,
-		"FormatNameDirArch":   fmtNameDirArch,
-		"FormatXactState":     FmtXactStatus,
-		//  misc. helpers
-		"IsUnsetTime":   isUnsetTime,
-		"IsEqS":         func(a, b string) bool { return a == b },
-		"IsFalse":       func(v bool) bool { return !v },
-		"JoinList":      fmtStringList,
-		"JoinListNL":    func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
-		"ExtECGetStats": extECGetStats,
-		"ExtECPutStats": extECPutStats,
-		// StatsAndStatusHelper:
-		// select specific field and make a slice, and then a string out of it
-		"OnlineStatus": func(h StatsAndStatusHelper) string { return toString(h.onlineStatus()) },
-		"Deployments":  func(h StatsAndStatusHelper) string { return toString(h.deployments()) },
-		"Versions":     func(h StatsAndStatusHelper) string { return toString(h.versions()) },
-		"BuildTimes":   func(h StatsAndStatusHelper) string { return toString(h.buildTimes()) },
-	}
-
-	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
-		"{{ $alias.Name }}\t{{ $alias.Value }}\n" +
-		"{{end}}"
-
-	HelpTemplateFuncMap = template.FuncMap{
-		"FlagName": func(f cli.Flag) string { return strings.SplitN(f.GetName(), ",", 2)[0] },
-		"Mod":      func(a, mod int) int { return a % mod },
-	}
-)
-
-////////////////
-// SmapHelper //
-////////////////
-
-var _ forMarshaler = SmapHelper{}
-
-func (sth SmapHelper) forMarshal() any {
-	return sth.Smap
-}
-
-//
-// stats.NodeStatus
-//
-
-func calcCap(ds *stats.NodeStatus) (total uint64) {
-	for _, cdf := range ds.Tcdf.Mountpaths {
-		total += cdf.Capacity.Avail
-		// TODO: a simplifying local-playground assumption and shortcut - won't work with loop devices, etc.
-		// (ref: 152408)
-		if ds.DeploymentType == apc.DeploymentDev {
-			break
-		}
-	}
-	return total
-}
-
-////////////////////////
-// StatsAndStatusHelper //
-////////////////////////
-
-// for all stats.NodeStatus structs: select specific field and append to the returned slice
-// (using the corresponding jtags here for no particular reason)
-func (h *StatsAndStatusHelper) onlineStatus() []string { return h.toSlice("status") }
-func (h *StatsAndStatusHelper) deployments() []string  { return h.toSlice("deployment") }
-func (h *StatsAndStatusHelper) versions() []string     { return h.toSlice("ais_version") }
-func (h *StatsAndStatusHelper) buildTimes() []string   { return h.toSlice("build_time") }
-func (h *StatsAndStatusHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
-func (h *StatsAndStatusHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
-
-// internal helper for the methods above
-func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
-	if jtag == "status" {
-		counts := make(map[string]int, 2)
-		for _, m := range []StstMap{h.Pmap, h.Tmap} {
-			for _, s := range m {
-				status := s.Status
-				if status == "" {
-					status = UnknownStatusVal
-				}
-				if _, ok := counts[status]; !ok {
-					counts[status] = 0
-				}
-				counts[status]++
-			}
-		}
-		res := make([]string, 0, len(counts))
-		for status, count := range counts {
-			res = append(res, fmt.Sprintf("%d %s", count, status))
-		}
-		return res
-	}
-
-	// all other tags
-	set := cos.NewStrSet()
-	for _, m := range []StstMap{h.Pmap, h.Tmap} {
-		for _, s := range m {
-			switch jtag {
-			case "deployment":
-				if s.DeploymentType != "" { // (node offline)
-					set.Add(s.DeploymentType)
-				}
-			case "ais_version":
-				if s.Version != "" { // ditto
-					set.Add(s.Version)
-				}
-			case "build_time":
-				if s.BuildTime != "" { // ditto
-					set.Add(s.BuildTime)
-				}
-			case "k8s_pod_name":
-				set.Add(s.K8sPodName)
-			case "rebalance_snap":
-				if s.RebSnap != nil {
-					set.Add(fmtRebStatus(s.RebSnap))
-				}
-			default:
-				debug.Assert(false, jtag)
-			}
-		}
-	}
-	res := set.ToSlice()
-	if len(res) == 0 {
-		res = []string{UnknownStatusVal}
-	}
-	return res
-}
-
-func (m StstMap) allStateFlagsOK() bool {
-	for _, ds := range m {
-		if !ds.Cluster.Flags.IsOK() {
-			return false
-		}
-	}
-	return true
-}

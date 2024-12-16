@@ -28,14 +28,26 @@ type (
 func (lrm *ListRange) IsList() bool      { return len(lrm.ObjNames) > 0 }
 func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 
-func (lrm *ListRange) Str(isPrefix bool) string {
+func (lrm *ListRange) Str(sb *strings.Builder, isPrefix bool) {
 	switch {
 	case isPrefix:
-		return "prefix: " + lrm.Template
+		if cos.MatchAll(lrm.Template) {
+			return
+		}
+		sb.WriteString("prefix: ")
+		sb.WriteString(lrm.Template)
 	case lrm.IsList():
-		return fmt.Sprintf("list: %v", lrm.ObjNames)
+		// TODO: ref
+		if l := len(lrm.ObjNames); l > 3 {
+			s := fmt.Sprintf("list(%d names): [%s, ...]", l, lrm.ObjNames[0])
+			sb.WriteString(s)
+		} else {
+			s := fmt.Sprintf("list: %v", lrm.ObjNames)
+			sb.WriteString(s)
+		}
 	default:
-		return "template: " + lrm.Template
+		sb.WriteString("template: ")
+		sb.WriteString(lrm.Template)
 	}
 }
 
@@ -51,7 +63,7 @@ type PrefetchMsg struct {
 func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	var sb strings.Builder
 	sb.Grow(80)
-	sb.WriteString(msg.ListRange.Str(isPrefix))
+	msg.ListRange.Str(&sb, isPrefix)
 	if msg.BlobThreshold > 0 {
 		sb.WriteString(", blob-threshold: ")
 		sb.WriteString(cos.ToSizeIEC(msg.BlobThreshold, 0))
@@ -59,6 +71,9 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	if msg.NumWorkers > 0 {
 		sb.WriteString(", workers: ")
 		sb.WriteString(strconv.Itoa(msg.NumWorkers))
+	}
+	if msg.LatestVer {
+		sb.WriteString(", latest")
 	}
 	return sb.String()
 }

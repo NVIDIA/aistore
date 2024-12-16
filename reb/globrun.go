@@ -372,7 +372,7 @@ func _pingall(rargs *rebArgs) bool {
 
 func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams bool) bool {
 	var ctlmsg string
-	if rargs.bck != nil {
+	if rargs.bck != nil && !rargs.bck.IsEmpty() {
 		ctlmsg = rargs.bck.Cname(rargs.prefix)
 	}
 	rns := xreg.RenewRebalance(rargs.id, ctlmsg)

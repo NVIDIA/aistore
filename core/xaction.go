@@ -91,7 +91,7 @@ type (
 		DstBck    cmn.Bck   `json:"dst-bck"`
 		ID        string    `json:"id"`
 		Kind      string    `json:"kind"`
-		CtlMsg    string    `json:"ctlmsg,omitempty"` // added v3.26
+		CtlMsg    string    `json:"ctlmsg,omitempty"` // initiating control msg (added v3.26)
 
 		// extended error info
 		AbortErr string `json:"abort-err"`

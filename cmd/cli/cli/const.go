@@ -411,14 +411,14 @@ var (
 			indent4 + "\t'--prefix \"\"' - get entire bucket (all objects)",
 	}
 	verbObjPrefixFlag = cli.StringFlag{
-		Name: "prefix",
+		Name: listObjPrefixFlag.Name,
 		Usage: "select virtual directories or objects that have names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c'\t- matches names 'a/b/c/d', 'a/b/cdef', and similar;\n" +
 			indent4 + "\t'--prefix a/b/c/'\t- only matches objects from the virtual directory a/b/c/",
 	}
 
 	bsummPrefixFlag = cli.StringFlag{
-		Name: "prefix",
+		Name: listObjPrefixFlag.Name,
 		Usage: "for each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have names (relative to this directory) starting with the letter c",
@@ -471,11 +471,10 @@ var (
 	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 
 	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose output"}
+	verboseJobFlag = cli.BoolFlag{Name: verboseFlag.Name, Usage: "show extended statistics"}
+
 	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose (quiet) output, minimized reporting, fewer warnings"}
-	verboseJobFlag = cli.BoolFlag{
-		Name:  verboseFlag.Name,
-		Usage: "show extended statistics",
-	}
+
 	silentFlag = cli.BoolFlag{
 		Name:  "silent",
 		Usage: "server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)",
@@ -701,14 +700,14 @@ var (
 	}
 
 	// waiting
-	waitPodReadyTimeoutFlag = DurationFlag{
-		Name: "timeout",
-		Usage: "ais target waiting time for POD to become ready;\n" +
-			indent4 + "\tvalid time units: " + timeUnits,
-	}
 	waitJobXactFinishedFlag = DurationFlag{
 		Name: "timeout",
 		Usage: "maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
+	}
+	waitPodReadyTimeoutFlag = DurationFlag{
+		Name: waitJobXactFinishedFlag.Name,
+		Usage: "ais target waiting time for POD to become ready;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitFlag = cli.BoolFlag{
@@ -778,7 +777,7 @@ var (
 		Usage: "list only in-cluster objects - only those objects from a remote bucket that are present (\"cached\")",
 	}
 	getObjCachedFlag = cli.BoolFlag{
-		Name:  "cached",
+		Name:  listObjCachedFlag.Name,
 		Usage: "get only in-cluster objects - only those objects from a remote bucket that are present (\"cached\")",
 	}
 	// when '--all' is used for/by another flag
@@ -968,14 +967,16 @@ var (
 		Name:  "include-src-bck",
 		Usage: "prefix the names of archived files with the source bucket name",
 	}
+
 	archSrcDirNameFlag = cli.BoolFlag{
 		Name:  "include-src-dir",
 		Usage: "prefix the names of archived files with the (root) source directory",
 	}
 	putSrcDirNameFlag = cli.BoolFlag{
-		Name:  "include-src-dir",
+		Name:  archSrcDirNameFlag.Name,
 		Usage: "prefix destination object names with the source directory",
 	}
+
 	// 'ais archive put': conditional APPEND
 	archAppendOrPutFlag = cli.BoolFlag{
 		Name: "append-or-put",

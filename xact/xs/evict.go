@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -60,7 +61,12 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 	if err = ed.lrit.init(ed, msg, bck, lrpWorkersDflt); err != nil {
 		return nil, err
 	}
-	ed.InitBase(xargs.UUID, kind, msg.Str(ed.lrp == lrpPrefix), bck)
+
+	var sb strings.Builder
+	sb.Grow(80)
+	msg.Str(&sb, ed.lrp == lrpPrefix)
+	ed.InitBase(xargs.UUID, kind, sb.String() /*ctlmsg*/, bck)
+
 	return ed, nil
 }
 

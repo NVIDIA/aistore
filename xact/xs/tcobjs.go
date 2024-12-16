@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,7 +90,7 @@ func (p *tcoFactory) Start() error {
 		r.owt = cmn.OwtTransform
 	}
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
+	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
@@ -137,8 +138,10 @@ func (r *XactTCObjs) Snap() (snap *core.Snap) {
 func (r *XactTCObjs) Begin(msg *cmn.TCOMsg) {
 	wi := &tcowi{r: r, msg: msg}
 	r.pending.mtx.Lock()
+
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
+
 	r.pending.mtx.Unlock()
 }
 
@@ -189,6 +192,17 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			if wg != nil {
 				wg.Wait()
 			}
+
+			// dynamic ctlmsg
+			{
+				var sb strings.Builder
+				sb.Grow(160)
+				msg.CopyBckMsg.Str(&sb, r.args.BckFrom.Cname(msg.Prefix), r.args.BckTo.Cname(msg.Prepend))
+				sb.WriteByte(' ')
+				msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
+				r.Base.SetCtlMsg(sb.String())
+			}
+
 			lrit.wait()
 
 			if r.IsAborted() || err != nil {

@@ -8,6 +8,7 @@ package xs
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,39 +158,48 @@ func (r *XactTCB) TxnAbort(err error) {
 func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap) (r *XactTCB) {
 	r = &XactTCB{p: p}
 
-	s1, s2 := r._str(), r.p.args.BckFrom.String()
-	r.nam = r.Base.Name() + " <= " + s2 + s1
-	r.str = r.Base.String() + " <= " + s2 + s1
-
-	var parallel int
+	var (
+		args     = p.args
+		msg      = args.Msg
+		parallel int
+	)
 	if p.kind == apc.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.do,
-		Prefix:   p.args.Msg.Prefix,
+		Prefix:   msg.Prefix,
 		Slab:     slab,
 		Parallel: parallel,
 		DoLoad:   mpather.Load,
 		Throttle: true, // always trottling
 	}
-	mpopts.Bck.Copy(p.args.BckFrom.Bucket())
+	mpopts.Bck.Copy(args.BckFrom.Bucket())
 
-	r.BckJog.Init(p.UUID(), p.kind, r.nam /*ctlmsg*/, p.args.BckTo, mpopts, config)
+	{
+		var sb strings.Builder // ctlmsg
+		sb.Grow(64)
+		msg.Str(&sb, args.BckFrom.Cname(msg.Prefix), args.BckTo.Cname(msg.Prepend))
+		r.BckJog.Init(p.UUID(), p.kind, sb.String() /*ctlmsg*/, args.BckTo, mpopts, config)
 
-	if p.args.Msg.Sync {
-		debug.Assert(p.args.Msg.Prepend == "", p.args.Msg.Prepend) // validated (cli, P)
+		r.nam = r.Base.Name() + ": " + sb.String()
+		r.str = r.Base.String() + "<=" + args.BckFrom.Cname(msg.Prefix)
+	}
+
+	if msg.Sync {
+		debug.Assert(msg.Prepend == "", msg.Prepend) // validated (cli, P)
 		{
 			r.prune.parent = r
 			r.prune.smap = smap
-			r.prune.bckFrom = p.args.BckFrom
-			r.prune.bckTo = p.args.BckTo
-			r.prune.prefix = p.args.Msg.Prefix
+			r.prune.bckFrom = args.BckFrom
+			r.prune.bckTo = args.BckTo
+			r.prune.prefix = msg.Prefix
 		}
 		r.prune.init(config)
 	}
-	return
+
+	return r
 }
 
 func (r *XactTCB) WaitRunning() { r.wg.Wait() }
@@ -351,23 +361,6 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 }
 
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.p.args }
-
-func (r *XactTCB) _str() (s string) {
-	msg := &r.p.args.Msg.CopyBckMsg
-	if msg.Prefix != "" {
-		s = ", prefix " + r.p.args.Msg.Prefix
-	}
-	if msg.Prepend != "" {
-		s = ", prepend " + r.p.args.Msg.Prepend
-	}
-	if msg.LatestVer {
-		s = ", latest-ver"
-	}
-	if msg.Sync {
-		s = ", synchronize"
-	}
-	return s
-}
 
 func (r *XactTCB) String() string { return r.str }
 func (r *XactTCB) Name() string   { return r.nam }

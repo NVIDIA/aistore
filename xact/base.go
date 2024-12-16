@@ -36,7 +36,7 @@ type (
 		id     string
 		kind   string
 		_nam   string
-		ctlmsg string
+		ctlmsg string // via InitBase, SetCtlMsg
 		err    cos.Errs
 		stats  struct {
 			objs     atomic.Int64 // locally processed
@@ -411,7 +411,11 @@ func (xctn *Base) ToStats(stats *core.Stats) {
 	stats.InBytes = xctn.InBytes()
 }
 
+func (xctn *Base) SetCtlMsg(s string) { xctn.ctlmsg = s } // see InitBase
+
+//
 // RebID helpers
+//
 
 func RebID2S(id int64) string          { return "g" + strconv.FormatInt(id, 10) }
 func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }

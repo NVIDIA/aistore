@@ -201,6 +201,6 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap, units string, date
 		st.snap.ID, st.tid,
 		st.snap.Stats.InObjs, teb.FmtSize(st.snap.Stats.InBytes, units, 2),
 		st.snap.Stats.OutObjs, teb.FmtSize(st.snap.Stats.OutBytes, units, 2),
-		startTime, endTime, teb.FmtXactStatus(st.snap),
+		startTime, endTime, teb.FmtXactRunFinAbrt(st.snap),
 	)
 }
