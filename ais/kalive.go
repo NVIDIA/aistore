@@ -274,13 +274,15 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 
 			// direct call first
 			started := mono.NanoTime()
-			if _, _, err := pkr.p.reqHealth(si, config.Timeout.CplaneOperation.D(), nil, smap, false /*retry pub-addr*/); err == nil {
+			_, status, err := pkr.p.reqHealth(si, config.Timeout.CplaneOperation.D(), nil, smap, false /*retry pub-addr*/)
+			if err == nil {
 				now := mono.NanoTime()
 				pkr.statsT.Add(stats.KeepAliveLatency, now-started)
 				pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
 				continue
 			}
 			// otherwise, go keepalive with retries
+			nlog.Warningln(pkr.p.String(), "failed to fast-kalive", si.StringEx(), "err: [", err, status, "]")
 
 			pkr.statsT.IncErr(stats.ErrKaliveCount)
 			wg.Add(1)
@@ -307,7 +309,7 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 	return
 }
 
-// "slow-ping"
+// "slow-kalive"
 func (pkr *palive) goping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Config) {
 	if len(pkr.stoppedCh) > 0 {
 		wg.Done()
@@ -325,19 +327,23 @@ func (pkr *palive) goping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Co
 
 func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (ok, stopped bool) {
 	var (
-		tout    = config.Timeout.CplaneOperation.D()
-		started = mono.NanoTime()
+		tout         = config.Timeout.CplaneOperation.D()
+		started      = mono.NanoTime()
+		pname, sname = pkr.p.String(), si.StringEx()
 	)
 	_, status, err := pkr.p.reqHealth(si, tout, nil, smap, true /*retry via pub-addr, if different*/)
 	if err == nil {
 		now := mono.NanoTime()
 		pkr.statsT.Add(stats.KeepAliveLatency, now-started)
 		pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
+		if cmn.Rom.FastV(5, cos.SmoduleKalive) {
+			nlog.Infoln(pname, "slow-kalive", sname, "OK after the first attempt")
+		}
 		return true, false
 	}
 
 	tout = config.Timeout.MaxKeepalive.D()
-	nlog.Warningln("failed to slow-ping", si.StringEx(), "- retrying [", err, status, tout, smap.StringEx(), "]")
+	nlog.Warningln(pname, "failed to slow-kalive", sname, "- retrying [", err, status, tout, smap.StringEx(), "]")
 	pkr.statsT.IncErr(stats.ErrKaliveCount)
 
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
@@ -439,7 +445,7 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration
 
 			if i >= kaNumRetries {
 				debug.Assert(i == kaNumRetries)
-				nlog.Errorln("slow-ping failure after", i, "attempts - removing", si.StringEx(),
+				nlog.Errorln("slow-kalive failure after", i, "attempts - removing", si.StringEx(),
 					"from", smap.StringEx())
 				return false, false
 			}
@@ -579,12 +585,8 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 
 	k.statsT.IncErr(stats.ErrKaliveCount)
 
-	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
-	if status != 0 {
-		nlog.Warningln(sname, "=>", pname, "keepalive failed: [", err, status, "]")
-	} else {
-		nlog.Warningln(sname, "=>", pname, "keepalive failed:", err)
-	}
+	debug.Assert(cpid == pid && cpid != si.ID())
+	nlog.Warningln(sname, "=>", pname, "failure - retrying: [", fast, tout, err, status, "]")
 
 	//
 	// retry
@@ -610,11 +612,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 				now := mono.NanoTime()
 				k.statsT.Add(stats.KeepAliveLatency, now-started)
 				k.hb.HeardFrom(pid, now) // effectively, yes
-				if i == 1 {
-					nlog.Infoln(sname, "=>", pname, "OK after 1 attempt")
-				} else {
-					nlog.Infoln(sname, "=>", pname, "OK after", i, "attempts")
-				}
+				nlog.Infoln(sname, "=>", pname, "OK after", i, "attempt"+cos.Plural(i), "tout", tout)
 				return
 			}
 			// repeat up to `kaNumRetries` times with max-keepalive timeout

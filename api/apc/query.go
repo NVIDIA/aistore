@@ -174,9 +174,11 @@ const (
 
 // health
 const (
-	QparamHealthReadiness = "readiness" // to be used by external watchdogs (e.g. K8s)
-	QparamAskPrimary      = "apr"       // true: the caller is directing health request to primary
-	QparamPrimaryReadyReb = "prr"       // true: check whether primary is ready to start rebalancing cluster
+	QparamHealthReadiness = "readiness" // used by external watchdogs (K8s)
+	QparamHealthReady     = QparamHealthReadiness + "=true"
+
+	QparamAskPrimary      = "apr" // true: the caller is directing health request to primary
+	QparamPrimaryReadyReb = "prr" // true: check whether primary is ready to start rebalancing cluster
 )
 
 // Internal query params.

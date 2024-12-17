@@ -33,6 +33,7 @@ const (
 	SmoduleDload
 	SmoduleETL
 	SmoduleS3
+	SmoduleKalive
 
 	// NOTE: the last
 	_smoduleLast
@@ -45,6 +46,7 @@ var Smodules = [...]string{
 	"transport", "ais", "memsys", "cluster", "fs", "reb", "ec", "stats",
 	"ios", "xs", "backend", "space", "mirror", "dsort", "downloader", "etl",
 	"s3",
+	"kalive",
 }
 
 type LogLevel string

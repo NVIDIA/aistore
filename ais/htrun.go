@@ -1417,20 +1417,25 @@ func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap
 	b, status, err := res.bytes, res.status, res.err
 	freeCR(res)
 
-	if err != nil && retry {
-		// [NOTE] retrying when:
-		// - about to remove node 'si' from the cluster map, or
-		// - about to elect a new primary;
-		// not checking `IsErrDNSLookup` and similar - ie., not trying to narrow down
-		// (compare w/ slow-keepalive)
-		if si.PubNet.Hostname != si.ControlNet.Hostname {
-			cargs.req.Base = si.URL(cmn.NetPublic)
-			nlog.Warningln("retrying via pub addr:", cargs.req.Base)
-			res = h.call(cargs, smap)
-			b, status, err = res.bytes, res.status, res.err
-			freeCR(res)
-			if err != nil {
-				nlog.Warningln(h.si.String(), "=>", si.StringEx(), "failed req-health retry:", err)
+	if err != nil {
+		ni, no := h.si.String(), si.StringEx()
+		if cmn.Rom.FastV(5, cos.SmoduleKalive) {
+			nlog.Warningln(ni, "failed req-health:", no, "tout", tout, "err: [", err, status, "]")
+		}
+		if retry {
+			// - retrying when about to remove node 'si' from the cluster map, or
+			// - about to elect a new primary;
+			// - not checking `IsErrDNSLookup` and similar
+			// - ie., not trying to narrow down (compare w/ slow-keepalive)
+			if si.PubNet.Hostname != si.ControlNet.Hostname {
+				u := si.URL(cmn.NetPublic)
+				cargs.req.Base = u
+				res = h.call(cargs, smap)
+				b, status, err = res.bytes, res.status, res.err
+				freeCR(res)
+				if err != nil {
+					nlog.Warningln(ni, "failed req-health retry:", no, "via pub", u, "tout", tout, "err: [", err, status, "]")
+				}
 			}
 		}
 	}
@@ -2204,23 +2209,19 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 
 // via /health handler
 func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
-	callerID := r.Header.Get(apc.HdrCallerID)
-	caller := r.Header.Get(apc.HdrCallerName)
-
-	// external call
+	var (
+		callerID = r.Header.Get(apc.HdrCallerID)
+		caller   = r.Header.Get(apc.HdrCallerName)
+	)
+	// external WD
+	// TODO: check receiving on PubNet
+	// NOTE: always ready for K8s
 	if callerID == "" && caller == "" {
-		// TODO: check receiving on PubNet
-		readiness := cos.IsParseBool(r.URL.Query().Get(apc.QparamHealthReadiness))
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-			nlog.Infoln(h.String(), "external health-ping from:", r.RemoteAddr, "readiness:", readiness)
+		if cmn.Rom.FastV(5, cos.SmoduleKalive) {
+			readiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
+			nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, readiness, "[", r.URL.RawQuery, "]")
 		}
-		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
-		// see also:
-		// * https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
-		if !readiness && !h.ClusterStarted() {
-			w.WriteHeader(http.StatusServiceUnavailable)
-		}
-		// NOTE: for "readiness" always return true (otherwise, true if cluster-started)
+		w.WriteHeader(http.StatusOK)
 		return true
 	}
 
@@ -2232,7 +2233,7 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 		h.writeErr(w, r, err)
 		responded = true
 	}
-	return
+	return responded
 }
 
 //
