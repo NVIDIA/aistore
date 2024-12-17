@@ -53,6 +53,9 @@ func IsAzureURL(u *url.URL) bool {
 	return strings.Contains(u.Host, azBlobURL)
 }
 
+// [TODO]
+// func IsOCIURL(u *url.URL) bool {}
+
 // WARNING: `ReparseQuery` might affect non-tensorflow clients using S3-compatible API
 // with AIStore. To be used with caution.
 func ReparseQuery(r *http.Request) {

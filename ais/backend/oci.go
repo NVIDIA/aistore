@@ -11,8 +11,9 @@ package backend
 //   2) Validate ListObjects() should only return Name & Size in all cases (or improve)
 //   3) Handle non-descending ListObjects() case (including listing of "virtual" directories)
 //   4) Multi-Segment-Upload utilization (for fast/large object PUTs)... if practical
-//   6) Multi-Segment-Download utilization (for fast/large object GETs)... if practical
-//   5) Add support for object versioning
+//   5) Multi-Segment-Download utilization (for fast/large object GETs)... if practical
+//   6) Add support for object versioning
+//   7) Resolve test:long:oci CI Pipeline failure in TestMultiProxy
 
 import (
 	"context"
@@ -20,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -165,68 +167,110 @@ func ociStatus(rawResponse *http.Response) (ecode int) {
 
 func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
-		cloudBck      = bck.RemoteBck()
-		delimiter     = string("/")
-		fields        string
-		limitAsInt    int
-		lsoEnt        *cmn.LsoEnt
-		objectSummary ocios.ObjectSummary
+		cloudBck          = bck.RemoteBck()
+		continuationToken string
+		customKVs         cos.StrKVs
+		delimiter         = string("/")
+		fields            string
+		h                 = cmn.BackendHelpers.OCI
+		limitAsInt        int
+		lsoEnt            *cmn.LsoEnt
+		req               = ocios.ListObjectsRequest{
+			NamespaceName: &bp.namespace,
+			BucketName:    &cloudBck.Name,
+			Limit:         &limitAsInt,
+			Fields:        &fields,
+		}
+		resp ocios.ListObjectsResponse
 	)
 
-	if (msg.PageSize == 0) || (int(bp.maxPageSize) < int(msg.PageSize)) {
-		limitAsInt = int(bp.maxPageSize)
-	} else {
-		if msg.PageSize < maxPageSizeMin {
-			ecode = http.StatusInternalServerError
-			err = fmt.Errorf("msg.PageSize (%v) must be at least maxPageSizeMin (%v)", msg.PageSize, maxPageSizeMin)
-			return
-		}
-		limitAsInt = int(msg.PageSize)
-	}
-
-	// [TODO] Assume that we always want Name and Size
-	//        Testing msg.IsFlagSet(apc.LsNameOnly) and msg.IsFlagSet(apc.LsNameSize) don't seem properly set
-
-	fields = "name,size"
-
-	req := ocios.ListObjectsRequest{
-		NamespaceName: &bp.namespace,
-		BucketName:    &cloudBck.Name,
-		Limit:         &limitAsInt,
-		Fields:        &fields,
-	}
 	if msg.Prefix != "" {
 		req.Prefix = &msg.Prefix
-	}
-	if msg.ContinuationToken != "" {
-		req.Start = &msg.ContinuationToken
 	}
 	if msg.IsFlagSet(apc.LsNoRecursion) {
 		// [TODO] Need to handle case where I need to enumerate directories (while not "decending")
 		req.Delimiter = &delimiter
 	}
 
-	resp, err := bp.client.ListObjects(context.Background(), req)
-	if err != nil {
-		ecode = ociStatus(resp.RawResponse)
-		return
+	// Set limitAsInt as counting down cap on number of lst.Entries we will attempt to fill
+	if (msg.PageSize == 0) || (int(bp.maxPageSize) < int(msg.PageSize)) {
+		limitAsInt = int(bp.maxPageSize)
+	} else {
+		if msg.PageSize < maxPageSizeMin {
+			ecode = http.StatusInternalServerError
+			err = fmt.Errorf("msg.PageSize (%d) must be at least maxPageSizeMin (%d)", msg.PageSize, maxPageSizeMin)
+			return
+		}
+		limitAsInt = int(msg.PageSize)
 	}
 
-	if resp.NextStartWith == nil {
-		lst.ContinuationToken = ""
-	} else {
-		lst.ContinuationToken = *resp.NextStartWith
-	}
+	// Initialize internal continuationToken to msg.ContinuationToken but adjusted during loop below
+	continuationToken = msg.ContinuationToken
+
+	// [TODO] Assume that we always want Name and Size
+	//        Testing msg.IsFlagSet(apc.LsNameOnly) and msg.IsFlagSet(apc.LsNameSize) don't seem properly set
+	fields = "name,size,md5,etag,timeModified"
 
 	lst.Entries = make(cmn.LsoEntries, 0, len(resp.Objects))
-	for _, objectSummary = range resp.Objects {
-		lsoEnt = &cmn.LsoEnt{}
-		lsoEnt.Name = *objectSummary.Name
-		if objectSummary.Size != nil {
-			lsoEnt.Size = *objectSummary.Size
+	customKVs = make(cos.StrKVs, 3)
+
+	// Look until end of list and/or limitAsInt has decremented to zero (based on len(lst.Entries))
+
+	for limitAsInt > 0 {
+		if continuationToken == "" {
+			req.Start = nil
+		} else {
+			req.Start = &continuationToken
 		}
-		lst.Entries = append(lst.Entries, lsoEnt)
+
+		resp, err = bp.client.ListObjects(context.Background(), req)
+		if err != nil {
+			ecode = ociStatus(resp.RawResponse)
+			return
+		}
+
+		if len(resp.Objects) > limitAsInt {
+			resp.Objects = resp.Objects[:limitAsInt]
+		}
+		limitAsInt -= len(resp.Objects)
+
+		for _, en := range resp.Objects {
+			lsoEnt = &cmn.LsoEnt{}
+			lsoEnt.Name = *en.Name
+			if en.Size != nil {
+				lsoEnt.Size = *en.Size
+			}
+			if v, ok := h.EncodeETag(en.Etag); ok {
+				// [TODO] Validate whether lsoEnt.Checksum should be .Etag (aws) or .Md5 (gcp)
+				// lsoEnt.Checksum = v
+				customKVs[cmn.ETag] = v
+			}
+			if v, ok := h.EncodeCksum(en.Md5); ok {
+				// [TODO] Validate whether lsoEnt.Checksum should be .Etag (aws) or .Md5 (gcp)
+				lsoEnt.Checksum = v
+				customKVs[cmn.MD5ObjMD] = v
+			}
+			if en.TimeModified != nil {
+				customKVs[cmn.LastModified] = en.TimeModified.Time.Format(time.RFC3339)
+			}
+			if len(customKVs) > 0 {
+				lsoEnt.Custom = cmn.CustomMD2S(customKVs)
+				delete(customKVs, cmn.ETag)
+				delete(customKVs, cmn.MD5ObjMD)
+				delete(customKVs, cmn.LastModified)
+			}
+			lst.Entries = append(lst.Entries, lsoEnt)
+		}
+
+		if (resp.NextStartWith == nil) || (*resp.NextStartWith == "") {
+			continuationToken = ""
+			break
+		}
+
+		continuationToken = *resp.NextStartWith
 	}
+
+	lst.ContinuationToken = continuationToken
 
 	return
 }
@@ -253,6 +297,7 @@ func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error
 
 // [TODO] Need to implement multi-threaded PUT when "length" exceeds bp.mpuThreshold
 func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+	h := cmn.BackendHelpers.OCI
 	cloudBck := lom.Bck().RemoteBck()
 	req := ocios.PutObjectRequest{
 		NamespaceName: &bp.namespace,
@@ -268,11 +313,11 @@ func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, e
 	}
 
 	lom.SetCustomKey(apc.HdrBackendProvider, apc.OCI)
-	if resp.ETag != nil {
-		lom.SetCustomKey(cmn.ETag, *resp.ETag)
+	if v, ok := h.EncodeETag(resp.ETag); ok {
+		lom.SetCustomKey(cmn.ETag, v)
 	}
-	if resp.OpcContentMd5 != nil {
-		lom.SetCustomKey(cmn.MD5ObjMD, *resp.OpcContentMd5)
+	if v, ok := h.EncodeCksum(resp.OpcContentMd5); ok {
+		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 
 	return 0, nil
@@ -316,6 +361,7 @@ func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.St
 }
 
 func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error) {
+	h := cmn.BackendHelpers.OCI
 	cloudBck := lom.Bck().RemoteBck()
 	req := ocios.HeadObjectRequest{
 		NamespaceName: &bp.namespace,
@@ -333,12 +379,12 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (o
 		CustomMD: make(cos.StrKVs, 3),
 		Size:     resp.RawResponse.ContentLength,
 	}
-	objAttrs.CustomMD[apc.HdrBackendProvider] = apc.OCI
-	if resp.ETag != nil {
-		objAttrs.CustomMD[cmn.ETag] = *resp.ETag
+	objAttrs.CustomMD[cmn.SourceObjMD] = apc.OCI
+	if v, ok := h.EncodeETag(resp.ETag); ok {
+		objAttrs.CustomMD[cmn.ETag] = v
 	}
-	if resp.ContentMd5 != nil {
-		objAttrs.CustomMD[cmn.MD5ObjMD] = *resp.ContentMd5
+	if v, ok := h.EncodeCksum(resp.ContentMd5); ok {
+		objAttrs.CustomMD[cmn.MD5ObjMD] = v
 	}
 
 	return
@@ -363,8 +409,10 @@ func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http
 func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		cloudBck    = lom.Bck().RemoteBck()
+		h           = cmn.BackendHelpers.OCI
 		rangeHeader string
 	)
+
 	req := ocios.GetObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &cloudBck.Name,
@@ -380,6 +428,17 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 		res.Err = err
 		res.ErrCode = ociStatus(resp.RawResponse)
 		return
+	}
+
+	if length == 0 {
+		lom.ObjAttrs().Size = *resp.ContentLength
+		lom.SetCustomKey(cmn.SourceObjMD, apc.OCI)
+		if v, ok := h.EncodeETag(resp.ETag); ok {
+			lom.SetCustomKey(cmn.ETag, v)
+		}
+		if v, ok := h.EncodeCksum(resp.ContentMd5); ok {
+			lom.SetCustomKey(cmn.MD5ObjMD, v)
+		}
 	}
 
 	res.R = resp.Content

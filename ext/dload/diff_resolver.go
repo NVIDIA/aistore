@@ -84,6 +84,7 @@ func (dr *DiffResolver) Start() {
 	dst, dstOk := <-dr.dstCh
 	for {
 		if !srcOk && !dstOk {
+			// Both src & dst streams exhausted
 			dr.resultCh <- DiffResolverResult{
 				Action: DiffResolverEOF,
 			}
@@ -92,12 +93,14 @@ func (dr *DiffResolver) Start() {
 
 		switch {
 		case !srcOk || (dstOk && src.ObjName > dst.ObjName):
+			// Either extra item at dst or dst item missing from sorted src stream
 			dr.resultCh <- DiffResolverResult{
 				Action: DiffResolverRecv,
 				Dst:    dst,
 			}
 			dst, dstOk = <-dr.dstCh
 		case !dstOk || (srcOk && src.ObjName < dst.ObjName):
+			// Either extra item at src or item missing from sorted dst stream
 			remote, err := dr.ctx.IsObjFromRemote(src)
 			if err != nil {
 				dr.resultCh <- DiffResolverResult{
@@ -121,7 +124,8 @@ func (dr *DiffResolver) Start() {
 				}
 			}
 			src, srcOk = <-dr.srcCh
-		default: /* s.ObjName == d.ObjName */
+		default:
+			// src.ObjName == dst.ObjName
 			equal, err := dr.ctx.CompareObjects(src, dst)
 			if err != nil {
 				dr.resultCh <- DiffResolverResult{

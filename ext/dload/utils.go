@@ -208,6 +208,7 @@ func attrsFromLink(link string, resp *http.Response, oah cos.OAH) (size int64) {
 		if v, ok := h.EncodeCksum(resp.Header.Get(cos.AzCksumHeader)); ok {
 			oah.SetCustomKey(cmn.MD5ObjMD, v)
 		}
+		// [TODO] Add case, if necessary, for OCI here
 	default:
 		oah.SetCustomKey(cmn.SourceObjMD, cmn.WebObjMD)
 	}

@@ -1018,7 +1018,7 @@ func parseSource(rawURL string) (source dlSource, err error) {
 				prefix: strings.TrimPrefix(fullPath, "/"),
 			},
 		}, nil
-	case apc.OCIScheme:
+	case apc.OCIScheme, apc.OCI:
 		cloudSource = dlSourceBackend{
 			bck:    cmn.Bck{Name: host, Provider: apc.OCI},
 			prefix: strings.TrimPrefix(fullPath, "/"),

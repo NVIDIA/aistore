@@ -41,6 +41,7 @@ var BackendHelpers = struct {
 	Amazon backendFuncs
 	Azure  backendFuncs
 	Google backendFuncs
+	OCI    backendFuncs
 	HTTP   backendFuncs
 }{
 	Amazon: backendFuncs{
@@ -140,6 +141,35 @@ var BackendHelpers = struct {
 				// See: https://cloud.google.com/storage/docs/xml-api/reference-headers#xgooghash.
 				b := []byte{byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
 				return base64.StdEncoding.EncodeToString(b), true
+			default:
+				debug.FailTypeCast(v)
+				return "", false
+			}
+		},
+	},
+	OCI: backendFuncs{
+		EncodeVersion: func(_ any) (string, bool) {
+			return "", false
+		},
+		EncodeETag: func(v any) (string, bool) {
+			switch x := v.(type) {
+			case *string:
+				if x == nil || *x == "" {
+					return "", false
+				}
+				return UnquoteCEV(*x), true
+			default:
+				debug.FailTypeCast(v)
+				return "", false
+			}
+		},
+		EncodeCksum: func(v any) (string, bool) {
+			switch x := v.(type) {
+			case *string:
+				if x == nil || *x == "" {
+					return "", false
+				}
+				return UnquoteCEV(*x), true
 			default:
 				debug.FailTypeCast(v)
 				return "", false
