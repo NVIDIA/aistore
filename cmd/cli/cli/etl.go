@@ -320,7 +320,7 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 	}
 	if caption {
 		onlyActive := !flagIsSet(c, allJobsFlag)
-		jobCptn(c, commandETL, onlyActive, "", false)
+		jobCptn(c, commandETL, "" /*xid*/, "" /*ctlmsg*/, onlyActive, false)
 	}
 
 	hideHeader := flagIsSet(c, noHeaderFlag)

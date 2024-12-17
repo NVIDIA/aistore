@@ -94,7 +94,7 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 
 	// confirm
 	if flagIsSet(c, dryRunFlag) {
-		actionCptn(c, dryRunHeader()+" ", cptn)
+		actionCptn(c, dryRunHeader(), cptn)
 	} else if !flagIsSet(c, yesFlag) {
 		if ok := confirm(c, cptn+"?"); !ok {
 			fmt.Fprintln(c.App.Writer, "Operation canceled")

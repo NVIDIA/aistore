@@ -141,8 +141,7 @@ func _warnThruLatIters(c *cli.Context) {
 func perfCptn(c *cli.Context, tab string) {
 	stamp := cos.FormatNowStamp()
 	repeat := 40 - len(stamp) - len(tab)
-	s := " " + strings.Repeat("-", repeat) + " " + stamp
-	actionCptn(c, tab, s)
+	actionCptn(c, tab, strings.Repeat("-", repeat), stamp)
 }
 
 // show non-zero counters _and_ sizes (unless `allColumnsFlag`)

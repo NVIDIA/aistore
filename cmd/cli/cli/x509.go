@@ -68,7 +68,7 @@ func showCertHandler(c *cli.Context) error {
 	}
 
 	if node != nil {
-		actionCptn(c, "TLS certificate from: ", sname)
+		actionCptn(c, "TLS certificate from:", sname)
 	}
 
 	var nvs nvpairList

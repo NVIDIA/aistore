@@ -936,11 +936,15 @@ func actionX(c *cli.Context, xargs *xact.ArgsMsg, s string) {
 	actionDone(c, msg)
 }
 
-func actionCptn(c *cli.Context, prefix, msg string) {
+func actionCptn(c *cli.Context, prefix string, msgs ...any) {
 	if prefix == "" {
-		fmt.Fprintln(c.App.Writer, fcyan(msg))
+		msgs[0] = fcyan(msgs[0])
+		fmt.Fprintln(c.App.Writer, msgs...)
 	} else {
-		fmt.Fprintln(c.App.Writer, fcyan(prefix)+msg)
+		out := make([]any, len(msgs)+1)
+		out[0] = fcyan(prefix)
+		copy(out[1:], msgs)
+		fmt.Fprintln(c.App.Writer, out...)
 	}
 }
 

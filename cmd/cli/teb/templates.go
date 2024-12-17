@@ -107,7 +107,7 @@ const (
 	XactBucketTmpl      = xactBucketHdr + XactNoHdrBucketTmpl
 	XactNoHdrBucketTmpl = "{{range $nodeSnaps := . }}" + xactBucketBodyAll + "{{end}}"
 
-	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\t RUN-OPTIONS\n"
+	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
 	xactBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactBucketBodyOne + "{{end}}"
 	xactBucketBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -117,15 +117,14 @@ const (
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactRunFinAbrt $xctn}}\t " +
-		"{{FormatCtlMsg $xctn.CtlMsg}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\n"
 
 	// same as above except for: no bucket column
 
 	XactNoBucketTmpl      = xactNoBucketHdr + XactNoHdrNoBucketTmpl
 	XactNoHdrNoBucketTmpl = "{{range $nodeSnaps := . }}" + xactNoBucketBodyAll + "{{end}}"
 
-	xactNoBucketHdr     = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\t RUN-OPTIONS\n"
+	xactNoBucketHdr     = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\n"
 	xactNoBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactNoBucketBodyOne + "{{end}}"
 	xactNoBucketBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -134,15 +133,14 @@ const (
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactRunFinAbrt $xctn}}\t " +
-		"{{FormatCtlMsg $xctn.CtlMsg}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\n"
 
 	// same as above except for: src-bck, dst-bck columns
 
 	XactFromToTmpl      = xactFromToHdr + XactNoHdrFromToTmpl
 	XactNoHdrFromToTmpl = "{{range $nodeSnaps := . }}" + xactFromToBodyAll + "{{end}}"
 
-	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\t RUN-OPTIONS\n"
+	xactFromToHdr     = "NODE\t ID\t KIND\t SRC BUCKET\t DST BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
 	xactFromToBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactFromToBodyOne + "{{end}}"
 	xactFromToBodyOne = "{{ $nodeSnaps.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -153,8 +151,7 @@ const (
 		"{{if (eq $xctn.Stats.Bytes 0) }}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}\t " +
 		"{{FormatStart $xctn.StartTime}}\t " +
 		"{{FormatEnd $xctn.EndTime}}\t " +
-		"{{FormatXactRunFinAbrt $xctn}}\t " +
-		"{{FormatCtlMsg $xctn.CtlMsg}}\n"
+		"{{FormatXactRunFinAbrt $xctn}}\n"
 
 	// EC: get, put
 

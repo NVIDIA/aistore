@@ -71,12 +71,12 @@ func (msg *TCBMsg) ToName(name string) string {
 
 func (msg *CopyBckMsg) Str(sb *strings.Builder, fromCname, toCname string) {
 	sb.WriteString(fromCname)
-	sb.WriteString(" => ")
+	sb.WriteString("=>")
 	sb.WriteString(toCname)
 	if msg.LatestVer {
-		sb.WriteString(" --latest")
+		sb.WriteString(", latest")
 	}
 	if msg.Sync {
-		sb.WriteString(" --sync")
+		sb.WriteString(", sync")
 	}
 }

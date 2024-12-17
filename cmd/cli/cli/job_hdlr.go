@@ -272,8 +272,6 @@ var (
 	}
 )
 
-func jobName(xname, xid string) string { return xname + "[" + xid + "]" }
-
 func appendJobSub(jobcmd *cli.Command) {
 	debug.Assert(jobcmd.Subcommands[0].Name == commandStart)
 

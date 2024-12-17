@@ -179,6 +179,16 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			// run
 			var wg *sync.WaitGroup
 			if err = lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt); err == nil {
+				// dynamic ctlmsg
+				{
+					var sb strings.Builder
+					sb.Grow(160)
+					msg.CopyBckMsg.Str(&sb, r.args.BckFrom.Cname(msg.Prefix), r.args.BckTo.Cname(msg.Prepend))
+					sb.WriteByte(' ')
+					msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
+					r.Base.SetCtlMsg(sb.String())
+				}
+				// run
 				if msg.Sync && lrit.lrp != lrpList {
 					wg = &sync.WaitGroup{}
 					wg.Add(1)
@@ -191,16 +201,6 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			}
 			if wg != nil {
 				wg.Wait()
-			}
-
-			// dynamic ctlmsg
-			{
-				var sb strings.Builder
-				sb.Grow(160)
-				msg.CopyBckMsg.Str(&sb, r.args.BckFrom.Cname(msg.Prefix), r.args.BckTo.Cname(msg.Prepend))
-				sb.WriteByte(' ')
-				msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
-				r.Base.SetCtlMsg(sb.String())
 			}
 
 			lrit.wait()

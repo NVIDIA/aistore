@@ -24,12 +24,12 @@ type PromoteArgs struct {
 func (msg *PromoteArgs) String() string {
 	var sb strings.Builder
 	sb.Grow(160)
-	sb.WriteString("src: ")
+	sb.WriteString("src:")
 	sb.WriteString(msg.SrcFQN)
-	sb.WriteString(", dst: ")
+	sb.WriteString(", dst:")
 	sb.WriteString(msg.ObjName)
 	if msg.DaemonID != "" {
-		sb.WriteString(", node: ")
+		sb.WriteString(", node:")
 		sb.WriteString(msg.DaemonID)
 	}
 	if msg.Recursive {

@@ -34,19 +34,19 @@ func (lrm *ListRange) Str(sb *strings.Builder, isPrefix bool) {
 		if cos.MatchAll(lrm.Template) {
 			return
 		}
-		sb.WriteString("prefix: ")
+		sb.WriteString("prefix:")
 		sb.WriteString(lrm.Template)
 	case lrm.IsList():
 		// TODO: ref
 		if l := len(lrm.ObjNames); l > 3 {
-			s := fmt.Sprintf("list(%d names): [%s, ...]", l, lrm.ObjNames[0])
+			s := fmt.Sprintf("list(%d names):[%s, ...]", l, lrm.ObjNames[0])
 			sb.WriteString(s)
 		} else {
-			s := fmt.Sprintf("list: %v", lrm.ObjNames)
+			s := fmt.Sprintf("list:%v", lrm.ObjNames)
 			sb.WriteString(s)
 		}
 	default:
-		sb.WriteString("template: ")
+		sb.WriteString("template:")
 		sb.WriteString(lrm.Template)
 	}
 }

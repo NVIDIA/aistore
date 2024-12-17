@@ -294,31 +294,34 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 	return ll, err
 }
 
-func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget bool) {
+func _jname(xname, xid string) string { return xname + "[" + xid + "]" }
+
+func jobCptn(c *cli.Context, name, xid, ctlmsg string, onlyActive, byTarget bool) {
 	var (
 		s, tip string
 	)
 	if !flagIsSet(c, verboseJobFlag) {
-		// xactions that have extended stats
-		var extended bool
-		if _, dtor, err := xact.GetDescriptor(name); err == nil {
-			extended = dtor.ExtendedStats
-		}
-		if extended {
-			tip = fmt.Sprintf(" (tip: use %s to include extended stats)", qflprn(verboseJobFlag))
+		if _, dtor, err := xact.GetDescriptor(name); err == nil && dtor.ExtendedStats {
+			tip = fmt.Sprintf("(tip: use %s to include extended stats)", qflprn(verboseJobFlag))
 		}
 	}
 	if xid != "" {
-		actionCptn(c, jobName(name, xid), tip)
+		jname := _jname(name, xid)
+		if ctlmsg != "" {
+			actionCptn(c, jname, "(run options:", fcyan(ctlmsg)+")", tip)
+		} else {
+			actionCptn(c, jname, tip)
+		}
 		return
 	}
+
 	if byTarget {
-		s = " by target"
+		s = "by target"
 	}
 	if onlyActive {
-		actionCptn(c, name, " jobs"+s+tip)
+		actionCptn(c, name, "jobs", s, tip)
 	} else {
-		actionCptn(c, name, " jobs"+s+" including finished"+tip)
+		actionCptn(c, name, "jobs", s, "including finished", tip)
 	}
 }
 
@@ -379,7 +382,7 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 			return l, V(err)
 		}
 		if caption {
-			jobCptn(c, cmdDsort, onlyActive, id, false)
+			jobCptn(c, cmdDsort, id, "" /*ctlmsg*/, onlyActive, false)
 		}
 		return l, dsortJobsList(c, list, usejs)
 	}
@@ -490,6 +493,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	// second, filteredXs => dts templates
 	var (
+		ctlmsg             string
 		fromToBck, haveBck bool
 		dts                = make([]nodeSnaps, 0, len(filteredXs))
 	)
@@ -506,6 +510,18 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		} else if !snaps[0].Bck.IsEmpty() {
 			haveBck = true
 		}
+
+		// a.k.a "run options"
+		// try to show more but not too much
+		switch {
+		case ctlmsg == "":
+			ctlmsg = snaps[0].CtlMsg
+		case ctlmsg != snaps[0].CtlMsg && len(ctlmsg)+len(snaps[0].CtlMsg) < 60:
+			ctlmsg += "; " + snaps[0].CtlMsg
+		case !strings.HasSuffix(ctlmsg, "..."):
+			ctlmsg += "; ..."
+		}
+
 		dts = append(dts, nodeSnaps{DaemonID: tid, XactSnaps: snaps})
 	}
 	sort.Slice(dts, func(i, j int) bool {
@@ -514,7 +530,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	_, xname := xact.GetKindName(xargs.Kind)
 	if caption {
-		jobCptn(c, xname, xargs.OnlyRunning, xargs.ID, xargs.DaemonID != "")
+		jobCptn(c, xname, xargs.ID, ctlmsg, xargs.OnlyRunning, xargs.DaemonID != "")
 	}
 
 	l := len(dts)
@@ -577,7 +593,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 			err     error
 		)
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
-		actionCptn(c, meta.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
+		actionCptn(c, meta.Tname(di.DaemonID)+":", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
 
 		if hideHeader {
 			err = teb.Print(props, teb.PropValTmplNoHdr, teb.Jopts(usejs))
@@ -626,7 +642,7 @@ func showSmapHandler(c *cli.Context) error {
 	if node != nil {
 		var out any
 		sid = node.ID()
-		actionCptn(c, "Cluster map from: ", sname)
+		actionCptn(c, "Cluster map from:", sname)
 		out, err = api.GetNodeMeta(apiBP, sid, apc.WhatSmap)
 		if err == nil {
 			smap = out.(*meta.Smap)
@@ -655,7 +671,7 @@ func showBMDHandler(c *cli.Context) error {
 	if node != nil {
 		var out any
 		sid = node.ID()
-		actionCptn(c, "BMD from: ", sname)
+		actionCptn(c, "BMD from:", sname)
 		out, err = api.GetNodeMeta(apiBP, sid, apc.WhatBMD)
 		if err == nil {
 			bmd = out.(*meta.BMD)
@@ -844,12 +860,12 @@ func showNodeConfig(c *cli.Context) error {
 			return nil
 		default: // cfgScopeAll
 			if section == "" {
-				actionCptn(c, sname, " local config:")
+				actionCptn(c, sname, "local config:")
 				if err := teb.Print(&config.LocalConfig, "", opts); err != nil {
 					return err
 				}
 				fmt.Fprintln(c.App.Writer)
-				actionCptn(c, sname, " inherited config:")
+				actionCptn(c, sname, "inherited config:")
 				actionWarn(c, warn)
 				return teb.Print(&config.ClusterConfig, "", opts)
 			}
@@ -956,7 +972,7 @@ For details and usage examples, see: docs/cli/config.md`
 				continue
 			}
 			fmt.Fprintln(c.App.Writer)
-			actionCptn(c, ra.Alias+"["+ra.UUID+"]", " cluster map:")
+			actionCptn(c, ra.Alias+"["+ra.UUID+"]", "cluster map:")
 			err := smapFromNode(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
 			if err != nil {
 				actionWarn(c, err.Error())
