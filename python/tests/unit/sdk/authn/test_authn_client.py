@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -9,7 +9,7 @@ from urllib3 import Retry
 
 from aistore.sdk.authn import AuthNClient
 from aistore.sdk.authn.types import TokenMsg, LoginMsg
-from aistore.sdk.authn.utils import raise_authn_error
+from aistore.sdk.authn.utils import parse_authn_error
 
 from tests.utils import cases
 
@@ -29,7 +29,7 @@ class TestAuthNClient(unittest.TestCase):
             session_manager=mock_sm.return_value,
             timeout=None,
             token=None,
-            error_handler=raise_authn_error,
+            error_handler=parse_authn_error,
         )
 
     @cases(
@@ -64,7 +64,7 @@ class TestAuthNClient(unittest.TestCase):
             session_manager=mock_sm.return_value,
             timeout=timeout,
             token=token,
-            error_handler=raise_authn_error,
+            error_handler=parse_authn_error,
         )
 
     @patch("aistore.sdk.request_client.RequestClient.request_deserialize")

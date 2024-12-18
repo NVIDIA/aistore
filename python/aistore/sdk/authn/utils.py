@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from pydantic.v1 import parse_raw_as
+import requests
 
-from aistore.sdk.utils import HttpError
+from aistore.sdk.utils import parse_http_error_or_raise
 from aistore.sdk.authn.errors import (
     AuthNError,
     ErrClusterNotFound,
@@ -17,12 +17,12 @@ from aistore.sdk.authn.errors import (
 )
 
 
-def raise_authn_error(text: str):
+def parse_authn_error(resp: requests.Response) -> AuthNError:
     """
-    Raises an AuthN-specific error based on the API response text.
+    Parse raw text into an appropriate AuthNError object.
 
     Args:
-        text (str): The raw text of the API response containing error details.
+        resp (requests.Response): The response from the AuthN cluster.
 
     Raises:
         AuthNError: If the error doesn't match any specific conditions.
@@ -34,22 +34,26 @@ def raise_authn_error(text: str):
         ErrClusterAlreadyRegistered: If the error message indicates the cluster is already registered.
         ErrUserInvalidCredentials: If the error message indicates invalid user credentials.
     """
-    err = parse_raw_as(HttpError, text)
-    if 400 <= err.status <= 500:
-        if "does not exist" in err.message:
-            if "cluster" in err.message:
-                raise ErrClusterNotFound(err.status, err.message)
-            if "role" in err.message:
-                raise ErrRoleNotFound(err.status, err.message)
-            if "user" in err.message:
-                raise ErrUserNotFound(err.status, err.message)
-        elif "already exists" in err.message:
-            if "role" in err.message:
-                raise ErrRoleAlreadyExists(err.status, err.message)
-            if "user" in err.message:
-                raise ErrUserAlreadyExists(err.status, err.message)
-        elif "already registered" in err.message:
-            raise ErrClusterAlreadyRegistered(err.status, err.message)
-        elif "invalid credentials" in err.message:
-            raise ErrUserInvalidCredentials(err.status, err.message)
-    raise AuthNError(err.status, err.message)
+    exc_class = AuthNError
+    err = parse_http_error_or_raise(resp, exc_class)
+    status, message = err.status, err.message
+
+    if status == 401:
+        if "invalid credentials" in message:
+            exc_class = ErrUserInvalidCredentials
+    if status == 404:
+        if "cluster " in message:
+            exc_class = ErrClusterNotFound
+        if "role " in message:
+            exc_class = ErrRoleNotFound
+        if "user " in message:
+            exc_class = ErrUserNotFound
+    if status == 409:
+        if "cluster " in message:
+            exc_class = ErrClusterAlreadyRegistered
+        if "role " in message:
+            exc_class = ErrRoleAlreadyExists
+        if "user " in message:
+            exc_class = ErrUserAlreadyExists
+
+    return exc_class(status, message)

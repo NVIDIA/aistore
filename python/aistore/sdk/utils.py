@@ -1,19 +1,19 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import logging
+import re
 from pathlib import Path
-from typing import Callable, Iterator, Tuple, Type, TypeVar
+from typing import Callable, Iterator, Optional, Tuple, Type, TypeVar
 from urllib.parse import urlparse
 
 import braceexpand
 import humanize
+import requests
 
 from msgspec import msgpack
-import requests
 from pydantic.v1 import BaseModel, parse_raw_as
-from requests import Response
 
 from aistore.sdk.const import (
     UTF_ENCODING,
@@ -26,8 +26,12 @@ from aistore.sdk.errors import (
     ErrBckNotFound,
     ErrRemoteBckNotFound,
     ErrBckAlreadyExists,
+    ErrObjNotFound,
+    ErrETLNotFound,
     ErrETLAlreadyExists,
+    InvalidBckProvider,
 )
+from aistore.sdk.provider import Provider
 
 T = TypeVar("T")
 
@@ -46,56 +50,113 @@ class HttpError(BaseModel):
     node: str = ""
 
 
-def raise_ais_error(text: str) -> None:
+def decode_response_text(resp: requests.Response) -> str:
     """
-    Raise an AIS error based on the response text.
+    Convert the response body to a decoded string if it is bytes. Otherwise, return as is.
 
     Args:
-        text (str): The raw text of the API response containing error details.
+        resp (requests.Response): The response object.
+
+    Returns:
+        str: The decoded response text (UTF-8 or ISO-8859-1).
+    """
+    error_text = resp.text
+    if isinstance(error_text, bytes):
+        try:
+            error_text = error_text.decode(UTF_ENCODING)
+        except UnicodeDecodeError:
+            error_text = error_text.decode("iso-8859-1")
+    return error_text
+
+
+def parse_http_error_or_raise(
+    resp: requests.Response, exc_class: Type[Exception]
+) -> HttpError:
+    """
+    Parse the response body as a HttpError object or raise a custom exception on failure.
+
+    Args:
+        resp (requests.Response): The response to parse.
+        exc_class (Type[Exception]): The exception class to raise if parsing fails.
+
+    Returns:
+        HttpError: The parsed HttpError model.
 
     Raises:
+        exc_class: If the response text cannot be parsed into HttpError.
+    """
+    error_text = decode_response_text(resp)
+    try:
+        return parse_raw_as(HttpError, error_text)
+    except Exception as exc:
+        raise exc_class(resp.status_code, error_text) from exc
+
+
+def parse_ais_error(resp: requests.Response) -> AISError:
+    """
+    Parse raw text into an appropriate AISError object.
+
+    Args:
+        resp (requests.Response): The response from the AIS cluster.
+
+    Returns:
         AISError: If the error doesn't match any specific conditions.
         ErrBckNotFound: If the error message indicates a missing bucket.
         ErrRemoteBckNotFound: If the error message indicates a missing remote bucket.
+        ErrObjNotFound: If the error message indicates a missing object.
         ErrBckAlreadyExists: If the error message indicates a bucket already exists.
         ErrETLAlreadyExists: If the error message indicates an ETL already exists
+        ErrETLNotFound: If the error message indicates a missing ETL.
     """
-    err = parse_raw_as(HttpError, text)
-    if 400 <= err.status < 500:
-        if "does not exist" in err.message:
-            if "cloud bucket" in err.message or "remote bucket" in err.message:
-                raise ErrRemoteBckNotFound(err.status, err.message)
-            if "bucket" in err.message:
-                raise ErrBckNotFound(err.status, err.message)
-        elif "already exists" in err.message:
-            if "bucket" in err.message:
-                raise ErrBckAlreadyExists(err.status, err.message)
-            if "etl" in err.message:
-                raise ErrETLAlreadyExists(err.status, err.message)
+    exc_class = AISError
+    err = parse_http_error_or_raise(resp, exc_class)
+    status, message = err.status, err.message
+    prov, bck, obj = _extract_and_parse_url(message) or (None, None, None)
+    if prov:
+        try:
+            prov = Provider.parse(prov)
+        except InvalidBckProvider:
+            prov = None
 
-    raise AISError(err.status, err.message)
+    if status == 404:
+        if "etl job" in message:
+            exc_class = ErrETLNotFound
+        elif prov:
+            if obj:
+                exc_class = ErrObjNotFound
+            elif prov.is_remote() or "@" in bck:
+                exc_class = ErrRemoteBckNotFound
+            else:
+                exc_class = ErrBckNotFound
+    elif status == 409:
+        if "etl job" in message:
+            exc_class = ErrETLAlreadyExists
+        elif prov and not obj:
+            exc_class = ErrBckAlreadyExists
+
+    return exc_class(status, message)
 
 
 # pylint: disable=unused-variable
 def handle_errors(
-    resp: requests.Response, raise_error_fn: Callable[[str], None] = raise_ais_error
+    resp: requests.Response,
+    parse_error: Callable[[requests.Response], Exception],
 ) -> None:
     """
     Error handling for requests made to the AIS Client
 
     Args:
         resp: requests.Response = Response received from the request
-        raise_error_fn: Function that processes error text and raises appropriate exceptions.
+        parse_error_fn: Function that processes error text and returns appropriate exceptions.
     """
-    error_text = resp.text
-    if isinstance(resp.text, bytes):
-        try:
-            error_text = error_text.decode(UTF_ENCODING)
-        except UnicodeDecodeError:
-            error_text = error_text.decode("iso-8859-1")
-    if error_text != "":
-        raise_error_fn(error_text)
-    resp.raise_for_status()
+    try:
+        # Will raise HTTPError if status code is 4xx or 5xx
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as http_err:
+        raise parse_error(resp) from http_err
+
+    # Final status code (post-redirection) wasn't 4xx/5xx. Could be 1xx or 3xx.
+    raise parse_error(resp)
 
 
 def probing_frequency(dur: int) -> float:
@@ -194,7 +255,7 @@ def expand_braces(template: str) -> Iterator[str]:
 
 def decode_response(
     res_model: Type[T],
-    resp: Response,
+    resp: requests.Response,
 ) -> T:
     """
     Parse response content from the cluster into a Python class,
@@ -225,6 +286,14 @@ def parse_url(url: str) -> Tuple[str, str, str]:
     return parsed_url.scheme, parsed_url.netloc, path
 
 
+def _extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, str]]:
+    url_pattern = r"[a-z0-9]+://[A-Za-z0-9@._/-]+"
+    match = re.search(url_pattern, msg)
+    if match:
+        return parse_url(match.group())
+    return None
+
+
 def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
     """
     Create or retrieve a logger with the specified configuration.
@@ -239,8 +308,7 @@ def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
     logger = logging.getLogger(name)
     if not logger.hasHandlers():
         handler = logging.StreamHandler()
-        formatter = logging.Formatter(log_format)
-        handler.setFormatter(formatter)
+        handler.setFormatter(logging.Formatter(log_format))
         logger.addHandler(handler)
     logger.propagate = False
     return logger

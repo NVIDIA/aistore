@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+#
+
 from __future__ import annotations
 
 from enum import Enum
@@ -20,6 +24,12 @@ class Provider(Enum):
     GOOGLE = "gcp"
     HTTP = "ht"
     OCI = "oci"
+
+    def is_remote(self) -> bool:
+        """
+        Check if the provider is remote (cloud or HTTP).
+        """
+        return self != Provider.AIS
 
     @staticmethod
     def parse(provider: Union[Provider, str]) -> Provider:

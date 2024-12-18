@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations
@@ -898,14 +898,14 @@ class Bucket(AISSource):
         """
         Verify the bucket provider is AIS
         """
-        if self.provider is not Provider.AIS:
+        if self.provider.is_remote():
             raise InvalidBckProvider(self.provider)
 
     def verify_cloud_bucket(self):
         """
         Verify the bucket provider is a cloud provider
         """
-        if self.provider is Provider.AIS:
+        if not self.provider.is_remote():
             raise InvalidBckProvider(self.provider)
 
     def get_path(self) -> str:

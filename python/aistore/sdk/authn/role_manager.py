@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from typing import List
 
@@ -184,10 +184,7 @@ class RoleManager:
                 "Permissions must be provided when cluster alias or bucket name is specified."
             )
 
-        try:
-            role_info = self.get(role_name=name)
-        except ErrRoleNotFound as error:
-            raise ValueError(f"Role {name} does not exist") from error
+        role_info = self.get(role_name=name)
 
         if desc:
             role_info.desc = desc

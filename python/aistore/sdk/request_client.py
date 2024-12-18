@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from urllib.parse import urljoin, urlencode
 from typing import Callable, TypeVar, Type, Any, Dict, Optional, Tuple, Union
@@ -17,7 +17,7 @@ from aistore.sdk.const import (
     STATUS_REDIRECT_TMP,
 )
 from aistore.sdk.session_manager import SessionManager
-from aistore.sdk.utils import raise_ais_error, handle_errors, decode_response
+from aistore.sdk.utils import parse_ais_error, handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
 
 T = TypeVar("T")
@@ -35,7 +35,7 @@ class RequestClient:
             or None to disable timeout.
         token (str, optional): Authorization token.
         error_handler (Callable[[str], None], optional): Error handler for managing response errors. Defaults to
-            raise_ais_error.
+            parse_ais_error.
     """
 
     # pylint: disable=too-many-arguments
@@ -45,7 +45,7 @@ class RequestClient:
         session_manager: SessionManager,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
-        error_handler: Callable[[str], None] = raise_ais_error,
+        error_handler: Callable[[str], Exception] = parse_ais_error,
     ):
         self._base_url = urljoin(endpoint, "v1")
         self._session_manager = session_manager

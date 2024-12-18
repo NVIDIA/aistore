@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 
@@ -39,6 +39,13 @@ class ErrBckNotFound(AISError):
 
 
 # pylint: disable=unused-variable
+class ErrObjNotFound(AISError):
+    """
+    Raised when an object is expected and not found
+    """
+
+
+# pylint: disable=unused-variable
 class ErrBckAlreadyExists(AISError):
     """
     Raised when a bucket is created but already exists in AIS
@@ -49,6 +56,13 @@ class ErrBckAlreadyExists(AISError):
 class ErrETLAlreadyExists(AISError):
     """
     Raised when an ETL is created but already exists in AIS
+    """
+
+
+# pylint: disable=unused-variable
+class ErrETLNotFound(AISError):
+    """
+    Raised when an ETL is expected but not found
     """
 
 
