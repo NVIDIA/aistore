@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
-	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
 
@@ -64,7 +63,8 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
-		cmdStart: {},
+		cmdStart:      {},
+		commandRemove: {},
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
@@ -94,6 +94,14 @@ var (
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        etlSubFlags[cmdStart],
+	}
+	removeCmdETL = cli.Command{
+		Name:         commandRemove,
+		Usage:        "remove ETL",
+		ArgsUsage:    etlNameArgument,
+		Action:       etlRemoveHandler,
+		BashComplete: etlIDCompletions,
+		Flags:        etlSubFlags[commandRemove],
 	}
 	initCmdETL = cli.Command{
 		Name:  cmdInit,
@@ -145,6 +153,7 @@ var (
 			logsCmdETL,
 			startCmdETL,
 			stopCmdETL,
+			removeCmdETL,
 			objCmdETL,
 			bckCmdETL,
 		},
@@ -441,12 +450,21 @@ func etlStartHandler(c *cli.Context) (err error) {
 	}
 	etlName := c.Args()[0]
 	if err := api.ETLStart(apiBP, etlName); err != nil {
-		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL[%s] not found", etlName)
-		}
 		return V(err)
 	}
 	fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", etlName)
+	return nil
+}
+
+func etlRemoveHandler(c *cli.Context) (err error) {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	etlName := c.Args()[0]
+	if err := api.ETLDelete(apiBP, etlName); err != nil {
+		return V(err)
+	}
+	fmt.Fprintf(c.App.Writer, "ETL[%s] successfully deleted\n", etlName)
 	return nil
 }
 
