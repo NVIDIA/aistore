@@ -32,8 +32,7 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 
 	var (
 		load     = sys.MaxLoad()
-		ncpu     = sys.NumCPU()
-		highLoad = sys.HighLoadWM(ncpu)
+		highLoad = sys.HighLoadWM()
 	)
 	if !force {
 		// too busy and not too "pressured"

@@ -35,8 +35,7 @@ func ThrottlePct() (int, int64, float64) {
 	var (
 		load     = sys.MaxLoad()
 		util     = GetMaxUtil()
-		ncpu     = sys.NumCPU()
-		highLoad = sys.HighLoadWM(ncpu)
+		highLoad = sys.HighLoadWM()
 	)
 	if load >= float64(highLoad) {
 		return 100, util, load

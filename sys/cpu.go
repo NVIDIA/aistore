@@ -13,7 +13,7 @@ import (
 )
 
 // used with MaxLoad()
-// floating point; compare with HighLoadWM() below
+// floating point; HighLoad < HighLoadWM() < ExtremeLoad
 const (
 	ExtremeLoad = 92
 	HighLoad    = 82
@@ -61,7 +61,10 @@ func GoEnvMaxprocs() {
 
 // "high-load watermark", to maybe throttle when MaxLoad() is above
 // see also (ExtremeLoad, HighLoad) defaults
-func HighLoadWM(ncpu int) int { return max(ncpu-ncpu>>3, 1) }
+func HighLoadWM() int {
+	ncpu := NumCPU()
+	return max(ncpu-ncpu>>3, 1)
+}
 
 // return max(1 minute, 5 minute) load average
 func MaxLoad() (load float64) {
