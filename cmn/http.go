@@ -94,13 +94,15 @@ func MakeRangeHdr(start, length int64) string {
 const maxItems = 1000
 
 func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter bool) ([]string, error) {
+	// path.Clean(string) reduced to this:
+	for path != "" && path[0] == '/' {
+		path = path[1:]
+	}
+
 	var (
 		split []string
 		l     = len(itemsPresent)
 	)
-	if path != "" && path[0] == '/' {
-		path = path[1:] // remove leading slash
-	}
 	if splitAfter {
 		split = strings.SplitN(path, "/", maxItems)
 	} else {

@@ -3038,8 +3038,14 @@ func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// by default, s3 is serviced at `/s3`
-	// with `/` root reserved for vanilla http locations via ht:// mechanism
 	if !cmn.Rom.Features().IsSet(feat.S3APIviaRoot) {
+		config := cmn.GCO.Get()
+		if config.Backend.Get(apc.HT) == nil {
+			p.writeErrURL(w, r)
+			return
+		}
+
+		// `/` root reserved for vanilla http locations via ht:// mechanism
 		p.htHandler(w, r)
 		return
 	}
