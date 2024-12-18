@@ -385,7 +385,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		setLongRunParams(c, lfooter)
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units, AvgSize: avgSize}
-		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
+		table, num, err := ctx.MakeTab(tstatusMap)
 		if err != nil {
 			return err
 		}
@@ -452,7 +452,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
 			Totals: totals, TotalsHdr: totalsHdr, AvgSize: avgSize, Idle: idle}
-		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
+		table, _, err := ctx.MakeTab(mapBegin)
 		if err != nil {
 			return err
 		}

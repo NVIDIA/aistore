@@ -28,7 +28,8 @@ type PerfTabCtx struct {
 	Idle      bool // currently idle
 }
 
-func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero metrics OR bad status*/, error) {
+// return numNZ (non-zero) metrics OR bad status
+func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 	var (
 		numNZ int        // num non-zero metrics
 		numTs int        // num active targets in `st`

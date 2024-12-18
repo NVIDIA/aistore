@@ -50,7 +50,7 @@ type (
 	StatusHelper struct {
 		Smap      *meta.Smap
 		CluConfig *cmn.ClusterConfig
-		Status    StatsAndStatusHelper
+		Stst      StatsAndStatusHelper
 		Capacity  string
 		Version   string // when all equal
 		BuildTime string // ditto
