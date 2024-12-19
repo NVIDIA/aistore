@@ -1052,6 +1052,9 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 	case apc.ActXactStop:
 		p.xstop(w, r, msg)
 
+	case apc.ActReloadBackendCreds:
+		p.reloadCreds(w, r, msg)
+
 	// internal
 	case apc.ActBumpMetasync:
 		p.msyncForceAll(w, r, msg)
@@ -1365,6 +1368,30 @@ func (p *proxy) _checkMaint(xargs *xact.ArgsMsg) error {
 		}
 	}
 	return nil
+}
+
+func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
+	args.to = core.AllNodes
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+
+	tag := "backend creds"
+	if msg.Name != "" {
+		tag = msg.Name + " " + tag
+	}
+	for _, res := range results {
+		if res.err == nil {
+			continue
+		}
+		err := res.errorf("node %s failed to reload %s (%q)", res.si, tag, msg)
+		p.writeErr(w, r, err)
+		freeBcastRes(results)
+		return
+	}
+	freeBcastRes(results)
+	nlog.Infoln("reloaded", tag)
 }
 
 func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {

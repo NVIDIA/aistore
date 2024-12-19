@@ -707,12 +707,14 @@ func flattenBackends(backends []string) (flat nvpairList) {
 	for _, b := range backends {
 		nv := nvpair{Name: b}
 		switch b {
-		case "aws":
+		case apc.AWS:
 			nv.Value = "Amazon S3"
-		case "gcp":
+		case apc.GCP:
 			nv.Value = "Google Cloud Storage"
-		case "azure":
+		case apc.Azure:
 			nv.Value = "Azure Blob Storage"
+		case apc.OCI:
+			nv.Value = "Oracle Cloud Infrastructure (OCI) Object Storage"
 		}
 		flat = append(flat, nv)
 	}

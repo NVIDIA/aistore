@@ -64,6 +64,8 @@ const (
 
 	ActRotateLogs = "rotate-logs"
 
+	ActReloadBackendCreds = "reload-creds"
+
 	ActShutdownCluster = "shutdown" // see also: ActShutdownNode
 
 	// multi-object (via `ListRange`)

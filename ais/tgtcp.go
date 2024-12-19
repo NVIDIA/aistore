@@ -181,6 +181,8 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
+	case apc.ActReloadBackendCreds:
+		nlog.Errorln(">>>>", t.String(), msg.String()) // DEBUG
 
 	case apc.ActStartMaintenance:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {

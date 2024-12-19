@@ -111,6 +111,8 @@ const (
 	cmdDetach     = "detach"
 	cmdResetStats = "reset-stats"
 
+	cmdReloadCreds = "reload-backend-creds"
+
 	cmdDownloadLogs = "download-logs"
 	cmdViewLogs     = "view-logs" // etl
 

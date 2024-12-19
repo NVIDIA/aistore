@@ -423,6 +423,13 @@ func (opts *bcmplop) buckets(c *cli.Context) {
 	printNotUsedBuckets(c, buckets, opts.separator, opts.multiple)
 }
 
+func suggestProvider(*cli.Context) {
+	fmt.Println(fcyan(scopeAll))
+	for p := range apc.Providers {
+		fmt.Println(p)
+	}
+}
+
 func (opts *bcmplop) remoteBuckets(c *cli.Context) {
 	var (
 		buckets []cmn.Bck

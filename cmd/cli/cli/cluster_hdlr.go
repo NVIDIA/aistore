@@ -220,6 +220,13 @@ var (
 				Action:       resetStatsHandler,
 				BashComplete: suggestAllNodes,
 			},
+			{
+				Name:         cmdReloadCreds,
+				Usage:        "reload (updated) backend credentials",
+				ArgsUsage:    "[PROVIDER]",
+				Action:       reloadCredsHandler,
+				BashComplete: suggestProvider,
+			},
 		},
 	}
 )
@@ -663,6 +670,14 @@ func resetStatsHandler(c *cli.Context) error {
 	msg := fmt.Sprintf("Cluster %s successfully reset", tag)
 	actionDone(c, msg)
 	return nil
+}
+
+func reloadCredsHandler(c *cli.Context) error {
+	p := c.Args().Get(0)
+	if p == scopeAll {
+		p = ""
+	}
+	return api.ReloadBackendCreds(apiBP, p)
 }
 
 func downloadAllLogs(c *cli.Context) error {
