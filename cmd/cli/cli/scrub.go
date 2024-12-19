@@ -36,12 +36,24 @@ import (
 // - pretty print
 
 type (
+	_log struct {
+		fh  *os.File
+		tag string
+		fn  string
+		cnt int
+		mu  sync.Mutex
+	}
+	// fields exported => teb/template
+	scrubOne teb.ScrubOne
+)
+
+type (
 	scrubCtx struct {
 		c      *cli.Context
 		scrubs []*scrubOne
 		qbck   cmn.QueryBcks
 		pref   string
-		tmpl   string
+		units  string
 		// sizing
 		small int64
 		large int64
@@ -56,25 +68,6 @@ type (
 			large     _log
 		}
 		_many bool
-	}
-	_log struct {
-		fh  *os.File
-		tag string
-		fn  string
-		cnt int
-		mu  sync.Mutex
-	}
-	// fields exported => teb/template
-	scrubOne struct {
-		parent *scrubCtx
-		Bck    cmn.Bck
-		Listed uint64
-		Stats  struct {
-			Misplaced uint64
-			MissingCp uint64
-			SmallSz   uint64
-			LargeSz   uint64
-		}
 	}
 )
 
@@ -102,10 +95,6 @@ func scrubHandler(c *cli.Context) (err error) {
 	}
 
 	ctx.last.Store(mono.NanoTime()) // pace interim results
-	ctx.tmpl = teb.ScrubTmpl
-	if flagIsSet(ctx.c, noHeaderFlag) {
-		ctx.tmpl = teb.ScrubBody
-	}
 
 	ctx.ival = listObjectsWaitTime
 	if flagIsSet(c, refreshFlag) {
@@ -137,6 +126,11 @@ func scrubHandler(c *cli.Context) (err error) {
 	}
 
 	if err := ctx.createLogs(); err != nil {
+		return err
+	}
+
+	ctx.units, err = parseUnitsFlag(ctx.c, unitsFlag)
+	if err != nil {
 		return err
 	}
 
@@ -218,7 +212,19 @@ func (ctx *scrubCtx) many() error {
 	}
 	wg.Wait()
 
-	return teb.Print(ctx.scrubs, ctx.tmpl)
+	return ctx.prnt()
+}
+
+// print and be done
+func (ctx *scrubCtx) prnt() error {
+	out := make([]*teb.ScrubOne, len(ctx.scrubs))
+	for i, scr := range ctx.scrubs {
+		out[i] = (*teb.ScrubOne)(scr)
+	}
+	all := teb.ScrubHelper{All: out}
+	tab := all.MakeTab(ctx.units)
+
+	return teb.Print(out, tab.Template(flagIsSet(ctx.c, noHeaderFlag)))
 }
 
 func (ctx *scrubCtx) gols(bck cmn.Bck, wg cos.WG, mu *sync.Mutex) {
@@ -239,7 +245,9 @@ func (ctx *scrubCtx) one() error {
 	if err != nil {
 		return err
 	}
-	return teb.Print([]*scrubOne{scr}, ctx.tmpl)
+
+	ctx.scrubs = []*scrubOne{scr}
+	return ctx.prnt()
 }
 
 func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
@@ -250,7 +258,7 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 	bck.Props = bprops
 	var (
 		lsargs api.ListArgs
-		scr    = &scrubOne{parent: ctx, Bck: bck}
+		scr    = &scrubOne{Bck: bck, Prefix: ctx.pref}
 		lsmsg  = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
 	)
 	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
@@ -279,7 +287,7 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 				continue
 			}
 			debug.Assert(en.IsPresent(), bck.Cname(en.Name), " must be present") // (LsObjCached)
-			scr.upd(en, bprops)
+			scr.upd(ctx, en, bprops)
 		}
 
 		if lsmsg.ContinuationToken == "" {
@@ -337,33 +345,33 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 // scrubOne //
 //////////////
 
-func (scr *scrubOne) upd(en *cmn.LsoEnt, bprops *cmn.Bprops) {
+func (scr *scrubOne) upd(parent *scrubCtx, en *cmn.LsoEnt, bprops *cmn.Bprops) {
 	scr.Listed++
 	if !en.IsStatusOK() {
 		scr.Stats.Misplaced++
-		scr.log(&scr.parent.log.misplaced, scr.Bck.Cname(en.Name))
+		scr.log(&parent.log.misplaced, scr.Bck.Cname(en.Name), parent._many)
 		return
 	}
 	if bprops.Mirror.Enabled && en.Copies < int16(bprops.Mirror.Copies) {
 		scr.Stats.MissingCp++
-		scr.log(&scr.parent.log.missing, scr.Bck.Cname(en.Name))
+		scr.log(&parent.log.missing, scr.Bck.Cname(en.Name), parent._many)
 	}
-	if en.Size <= scr.parent.small {
+	if en.Size <= parent.small {
 		scr.Stats.SmallSz++
-		scr.log(&scr.parent.log.small, scr.Bck.Cname(en.Name))
-	} else if en.Size >= scr.parent.large {
+		scr.log(&parent.log.small, scr.Bck.Cname(en.Name), parent._many)
+	} else if en.Size >= parent.large {
 		scr.Stats.LargeSz++
-		scr.log(&scr.parent.log.large, scr.Bck.Cname(en.Name))
+		scr.log(&parent.log.large, scr.Bck.Cname(en.Name), parent._many)
 	}
 }
 
-func (scr *scrubOne) log(to *_log, s string) {
-	if scr.parent._many {
+func (*scrubOne) log(to *_log, s string, lock bool) {
+	if lock {
 		to.mu.Lock()
 	}
 	fmt.Fprintln(to.fh, s)
 	to.cnt++
-	if scr.parent._many {
+	if lock {
 		to.mu.Unlock()
 	}
 }

@@ -224,12 +224,6 @@ const (
 		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
 		"{{end}}"
 
-	scrubHdr  = "BUCKET\t OBJECTS\t MISPLACED\t MISSING COPIES\t SMALL\t LARGE\n"
-	ScrubBody = "{{range $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{$v.Listed}}\t {{$v.Stats.Misplaced}}\t {{$v.Stats.MissingCp}}\t {{$v.Stats.SmallSz}}\t {{$v.Stats.LargeSz}}\n" +
-		"{{end}}"
-	ScrubTmpl = scrubHdr + ScrubBody
-
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t
 	MultiPutTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +

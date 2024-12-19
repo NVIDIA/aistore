@@ -73,7 +73,7 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 
 	// 2. exclude zero columns unless requested specific match or (--all)
 	if c.Regex == nil {
-		cols = _zerout(cols, st)
+		cols = st._zerout(cols)
 	}
 
 	// 3. sort (remaining) columns and shift `err-*` columns to the right
@@ -91,7 +91,7 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 	})
 
 	// 4. add STATUS column unless all nodes are online (`NodeOnline`)
-	cols = _addStatus(cols, st)
+	cols = st._addStatus(cols)
 
 	// 5. add regex-specified (ie, user-requested) metrics that are missing
 	// ------ api.GetStatsAndStatus() does not return zero counters -------
@@ -214,7 +214,7 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 //
 
 // remove all-zeros columns
-func _zerout(cols []*header, st StstMap) []*header {
+func (st StstMap) _zerout(cols []*header) []*header {
 	for i := 0; i < len(cols); i++ {
 		var found bool
 		h := cols[i]
@@ -240,7 +240,7 @@ func _zerout(cols []*header, st StstMap) []*header {
 }
 
 // (aternatively, could always add, conditionally hide)
-func _addStatus(cols []*header, st StstMap) []*header {
+func (st StstMap) _addStatus(cols []*header) []*header {
 	for _, ds := range st {
 		if ds.Status != NodeOnline {
 			cols = append(cols, &header{name: colStatus, hide: false})
