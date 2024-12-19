@@ -219,7 +219,7 @@ func (b *etlBootstrapper) waitPodReady() error {
 }
 
 func (b *etlBootstrapper) setupXaction(xid string) {
-	rns := xreg.RenewETL(b.msg, xid)
+	rns := xreg.RenewETL(&b.msg, xid)
 	debug.AssertNoErr(rns.Err)
 	debug.Assert(!rns.IsRunning())
 	b.xctn = rns.Entry.Get()

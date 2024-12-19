@@ -153,7 +153,7 @@ func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
 func (c *baseComm) Stop() { c.boot.xctn.Finish() }
 
-func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	if err := c.boot.xctn.AbortErr(); err != nil {
 		return nil, err
 	}
@@ -181,15 +181,12 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 	}
 
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
-		R:      resp.Body,
-		Size:   resp.ContentLength,
-		ReadCb: func(n int, _ error) { c.boot.xctn.InObjsAdd(0, int64(n)) },
+		R:    resp.Body,
+		Size: resp.ContentLength,
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			c.boot.xctn.InObjsAdd(1, 0)
-			c.boot.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
 	}), nil
 }
@@ -293,15 +290,12 @@ finish:
 		return nil, ecode, err
 	}
 	args := cos.ReaderArgs{
-		R:      resp.Body,
-		Size:   resp.ContentLength,
-		ReadCb: func(n int, _ error) { pc.boot.xctn.InObjsAdd(0, int64(n)) },
+		R:    resp.Body,
+		Size: resp.ContentLength,
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			pc.boot.xctn.InObjsAdd(1, 0)
-			pc.boot.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
 	}
 	return cos.NewReaderWithArgs(args), 0, nil
@@ -345,12 +339,9 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err := rc.boot.xctn.AbortErr(); err != nil {
 		return err
 	}
-	size, err := lomLoad(lom)
+	err := lomLoad(lom)
 	if err != nil {
 		return err
-	}
-	if size > 0 {
-		rc.boot.xctn.OutObjsAdd(1, size)
 	}
 	http.Redirect(w, r, rc.redirectURL(lom), http.StatusTemporaryRedirect)
 
@@ -373,13 +364,13 @@ func (rc *redirectComm) redirectURL(lom *core.LOM) string {
 
 func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	clone := *lom
-	size, errV := lomLoad(&clone)
+	errV := lomLoad(&clone)
 	if errV != nil {
 		return nil, errV
 	}
 
 	etlURL := rc.redirectURL(&clone)
-	r, err := rc.getWithTimeout(etlURL, size, timeout)
+	r, err := rc.getWithTimeout(etlURL, timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err)
@@ -392,12 +383,9 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (
 //////////////////
 
 func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM) error {
-	size, err := lomLoad(lom)
+	err := lomLoad(lom)
 	if err != nil {
 		return err
-	}
-	if size > 0 {
-		rp.boot.xctn.OutObjsAdd(1, size)
 	}
 	path := transformerPath(lom)
 
@@ -410,12 +398,12 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 
 func (rp *revProxyComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	clone := *lom
-	size, errV := lomLoad(&clone)
+	errV := lomLoad(&clone)
 	if errV != nil {
 		return nil, errV
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, err := rp.getWithTimeout(etlURL, size, timeout)
+	r, err := rp.getWithTimeout(etlURL, timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, clone.Cname(), err)
@@ -459,13 +447,11 @@ func transformerPath(lom *core.LOM) string {
 	return "/" + url.PathEscape(lom.Uname())
 }
 
-func lomLoad(lom *core.LOM) (size int64, err error) {
+func lomLoad(lom *core.LOM) (err error) {
 	if err = lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
 		if cos.IsNotExist(err, 0) && lom.Bucket().IsRemote() {
 			err = nil // NOTE: size == 0
 		}
-	} else {
-		size = lom.Lsize()
 	}
-	return size, err
+	return err
 }

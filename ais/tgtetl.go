@@ -151,11 +151,7 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 }
 
 func (t *target) getETL(w http.ResponseWriter, r *http.Request, etlName string, lom *core.LOM) {
-	var (
-		comm etl.Communicator
-		err  error
-	)
-	comm, err = etl.GetCommunicator(etlName)
+	comm, err := etl.GetCommunicator(etlName)
 	if err != nil {
 		if cos.IsErrNotFound(err) {
 			smap := t.owner.smap.Get()
@@ -167,13 +163,18 @@ func (t *target) getETL(w http.ResponseWriter, r *http.Request, etlName string, 
 		t.writeErr(w, r, err)
 		return
 	}
+
 	if err := comm.InlineTransform(w, r, lom); err != nil {
 		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: etlName, PodName: comm.PodName(), SvcName: comm.SvcName()},
 			err.Error())
 		xetl := comm.Xact()
 		xetl.AddErr(errV)
 		t.writeErr(w, r, errV)
+		return
 	}
+
+	xetl := comm.Xact()
+	xetl.ObjsAdd(1, lom.Lsize())
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {

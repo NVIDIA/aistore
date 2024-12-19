@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -14,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -25,6 +25,7 @@ type (
 	}
 	xactETL struct {
 		xact.Base
+		msg *etl.InitSpecMsg
 	}
 )
 
@@ -53,14 +54,12 @@ func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 // (tests only)
 
-func newETL(p *etlFactory) (xctn *xactETL) {
-	var (
-		s      = p.Args.Custom.(fmt.Stringer)
-		ctlmsg = s.String()
-	)
-	xctn = &xactETL{}
-	xctn.InitBase(p.Args.UUID, p.Kind(), ctlmsg, nil)
-	return
+func newETL(p *etlFactory) *xactETL {
+	msg, ok := p.Args.Custom.(*etl.InitSpecMsg)
+	debug.Assert(ok)
+	xctn := &xactETL{msg: msg}
+	xctn.InitBase(p.Args.UUID, p.Kind(), msg.String(), nil)
+	return xctn
 }
 
 func (*xactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
