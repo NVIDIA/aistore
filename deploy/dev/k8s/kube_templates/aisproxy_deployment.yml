@@ -31,6 +31,10 @@ spec:
         valueFrom:
           fieldRef:
             fieldPath: spec.nodeName
+      - name: MY_POD
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
       - name: AIS_NODE_ROLE
         value: "proxy"
     volumeMounts:
