@@ -1,12 +1,13 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/sys"
 )
@@ -88,10 +89,14 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) (pressure int) {
 	return
 }
 
-func (r *MMSA) pressure2S(p int) (sp string) {
-	sp = "pressure '" + memPressureText[p] + "'"
+func (r *MMSA) pressure2S(sb *strings.Builder, mem *sys.MemStat) {
+	sb.WriteString("pressure '")
+	p := r.Pressure(mem)
+	sb.WriteString(memPressureText[p])
+	sb.WriteString("'")
 	if crit := r.swap.crit.Load(); crit > 0 {
-		sp += ", swapping(" + strconv.Itoa(int(crit)) + ")"
+		sb.WriteString(", swapping(")
+		sb.WriteString(strconv.Itoa(int(crit)))
+		sb.WriteByte(')')
 	}
-	return sp
 }

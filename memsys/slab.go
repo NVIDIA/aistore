@@ -7,7 +7,6 @@ package memsys
 
 import (
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -24,6 +23,7 @@ type Slab struct {
 	put       [][]byte
 	bufSize   int64
 	pos       int
+	idx       int
 	muget     sync.Mutex
 	muput     sync.Mutex
 }
@@ -154,17 +154,5 @@ func (s *Slab) cleanup() (freed int64) {
 	return
 }
 
-func (s *Slab) ringIdx() int { return int(s.bufSize/s.m.slabIncStep) - 1 }
-func (s *Slab) hitsInc()     { s.m.slabStats.hits[s.ringIdx()].Inc() }
-
-func (s *Slab) idleDur(statsSnapshot *Stats) (d time.Duration) {
-	idx := s.ringIdx()
-	d = statsSnapshot.Idle[idx]
-	if d == 0 {
-		return
-	}
-	if statsSnapshot.Hits[idx] != s.m.slabStats.hits[idx].Load() {
-		d = 0
-	}
-	return
-}
+func (s *Slab) ringIdx() int { return s.idx }
+func (s *Slab) hitsInc()     { s.m.hits[s.ringIdx()].Inc() }

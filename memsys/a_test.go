@@ -16,7 +16,6 @@ package memsys_test
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -74,7 +73,7 @@ func Test_Sleep(*testing.T) {
 	go printMaxRingLen(mem, c)
 	for range 7 {
 		time.Sleep(duration / 8)
-		mem.FreeSpec(memsys.FreeSpec{IdleDuration: 1, MinSize: cos.MiB})
+		mem.FreeSpec(memsys.FreeSpec{MinSize: cos.MiB})
 	}
 	wg.Wait()
 	close(c)
@@ -88,7 +87,6 @@ func Test_NoSleep(*testing.T) {
 
 	mem := &memsys.MMSA{Name: "bmem", TimeIval: time.Second * 20, MinPctTotal: 5}
 	mem.Init(0)
-	go printStats(mem)
 
 	wg := &sync.WaitGroup{}
 	random := cos.NowRand()
@@ -102,7 +100,7 @@ func Test_NoSleep(*testing.T) {
 	go printMaxRingLen(mem, c)
 	for range 7 {
 		time.Sleep(duration / 8)
-		mem.FreeSpec(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cos.MiB * 10})
+		mem.FreeSpec(memsys.FreeSpec{ToOS: true, MinSize: cos.MiB * 10})
 	}
 	wg.Wait()
 	close(c)
@@ -152,22 +150,5 @@ func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *
 	}
 	if id%100 == 0 && verbose {
 		tlog.Logf("%4d: done\n", id)
-	}
-}
-
-func printStats(mem *memsys.MMSA) {
-	for {
-		time.Sleep(mem.TimeIval)
-		stats := mem.GetStats()
-		for i := range memsys.NumPageSlabs {
-			slab, err := mem.GetSlab(int64(i+1) * memsys.PageSize)
-			cos.AssertNoErr(err)
-			x := ""
-			idle := stats.Idle[i]
-			if idle > 0 {
-				x = fmt.Sprintf(", idle=%v", idle)
-			}
-			fmt.Printf("%s: hits %d%s\n", slab.Tag(), stats.Hits[i], x)
-		}
 	}
 }

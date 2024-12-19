@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -123,10 +124,6 @@ const countThreshold = 16 // exceeding this scatter-gather count warrants select
 const swappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
 
 type (
-	Stats struct {
-		Hits [NumStats]uint64
-		Idle [NumStats]time.Duration
-	}
 	MMSA struct {
 		// public
 		MinFree     uint64        // memory that must be available at all times
@@ -135,40 +132,29 @@ type (
 		MinPctFree  int           // ditto, as % of free at init time
 		Name        string
 		// private
-		info          string
-		sibling       *MMSA
-		lowWM         uint64
-		rings         []*Slab
-		sorted        []*Slab
-		slabStats     *slabStats // private counters and idle timestamp
-		statsSnapshot *Stats     // pre-allocated limited "snapshot" of slabStats
-		slabIncStep   int64
-		maxSlabSize   int64
-		defBufSize    int64
-		mem           sys.MemStat
-		numSlabs      int
+		info        string
+		sibling     *MMSA
+		rings       []*Slab
+		hits        [NumStats]atomic.Uint64
+		idleTs      [NumStats]atomic.Int64
+		idleDur     [NumStats]time.Duration
+		lowWM       uint64
+		slabIncStep int64
+		maxSlabSize int64
+		defBufSize  int64
+		mem         sys.MemStat
+		numSlabs    int
 		// atomic state
 		toGC     atomic.Int64 // accumulates over time and triggers GC upon reaching spec-ed limit
 		optDepth atomic.Int64 // ring "depth", i.e., num free bufs we trend to (see grow())
 		swap     struct {
 			size atomic.Uint64 // actual swap size
-			crit atomic.Int32  // tracks increasing swap size up to swappingMax const
+			crit atomic.Int32  // tracks increasing swap size up to `swappingMax`
 		}
 	}
 	FreeSpec struct {
-		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
-		MinSize      int64         // minimum freed size that'd warrant calling GC (default = sizetoGC)
-		Totally      bool          // true: free all slabs regardless of their idle-ness and size
-		ToOS         bool          // GC and then return the memory to the operating system
-	}
-	//
-	// private
-	//
-	slabStats struct {
-		hits   [NumStats]atomic.Uint64
-		prev   [NumStats]uint64
-		hinc   [NumStats]uint64
-		idleTs [NumStats]atomic.Int64
+		MinSize int64 // minimum freed size that'd warrant calling GC (default = sizetoGC)
+		ToOS    bool  // GC and then return the memory to the operating system
 	}
 )
 
@@ -187,11 +173,24 @@ func (r *MMSA) String() string {
 }
 
 func (r *MMSA) Str(mem *sys.MemStat) string {
-	sp := r.pressure2S(r.Pressure(mem))
 	if r.info == "" {
 		r.info = "(min-free " + cos.ToSizeIEC(int64(r.MinFree), 0) + ", low-wm " + cos.ToSizeIEC(int64(r.lowWM), 0)
 	}
-	return r.Name + "[(" + mem.String() + "), " + sp + ", " + r.info + "]"
+
+	var (
+		sb strings.Builder
+	)
+	sb.Grow(80)
+	sb.WriteString(r.Name)
+	sb.WriteString("[(")
+	mem.Str(&sb)
+	sb.WriteString("), ")
+	r.pressure2S(&sb, mem)
+	sb.WriteString(", ")
+	sb.WriteString(r.info)
+	sb.WriteString("]")
+
+	return sb.String()
 }
 
 // allocate SGL

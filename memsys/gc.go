@@ -13,10 +13,7 @@ import (
 )
 
 func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
-	var (
-		togc  = r.toGC.Load()
-		force bool
-	)
+	var force bool
 	if len(forces) > 0 {
 		force = forces[0]
 	}
@@ -24,8 +21,7 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 		force = true
 	}
 	if !force && p <= PressureLow {
-		togc := r.toGC.Load()
-		if togc < mingc {
+		if togc := r.toGC.Load(); togc < mingc {
 			return // too little to bother
 		}
 	}
@@ -50,6 +46,6 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 	if started := oom.FreeToOS(force); !started {
 		return
 	}
-	nlog.Warningln(r.String(), "free mem to OS [", r.pressure2S(p), force, cos.ToSizeIEC(togc, 1), load, "]")
-	r.toGC.Store(0)
+	togc := r.toGC.Swap(0)
+	nlog.Warningln(r.String(), "free mem to OS(pressure,force,togc,load) [", p, force, cos.ToSizeIEC(togc, 1), load, "]")
 }

@@ -196,22 +196,19 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 	if !r.isPage() {
 		r.maxSlabSize, r.numSlabs = MaxSmallSlabSize, NumSmallSlabs
 	}
-	r.slabStats = &slabStats{}
-	r.statsSnapshot = &Stats{}
 	r.rings = make([]*Slab, r.numSlabs)
-	r.sorted = make([]*Slab, r.numSlabs)
 	for i := range r.numSlabs {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,
 			tag:     r.Name + "." + cos.ToSizeIEC(bufSize, 0),
 			bufSize: bufSize,
+			idx:     i,
 			get:     make([][]byte, 0, optDepth),
 			put:     make([][]byte, 0, optDepth),
 		}
 		slab.pMinDepth = &r.optDepth
 		r.rings[i] = slab
-		r.sorted[i] = slab
 	}
 	return
 }

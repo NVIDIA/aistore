@@ -362,7 +362,6 @@ func (recm *RecordManager) Cleanup() {
 
 	// NOTE: may call oom.FreeToOS
 	core.T.PageMM().FreeSpec(memsys.FreeSpec{
-		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system
 	})
