@@ -114,14 +114,14 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 		}
 	}
 
-	if err := t._initBuiltTagged(tstats, config); err != nil {
+	if err := t.initBuiltTagged(tstats, config); err != nil {
 		cos.ExitLog(err)
 	}
 }
 
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
-func (t *target) _initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) error {
+func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) error {
 	var enabled, disabled, notlinked []string
 
 	for provider := range apc.Providers {

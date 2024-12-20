@@ -75,6 +75,8 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
 		base: base{provider: apc.AWS},
 	}
 	bp.base.init(t.Snode(), tstats)
+	// reset clients map to recreate and reload credentials
+	clients.Clear()
 	return bp, nil
 }
 
@@ -729,15 +731,12 @@ func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 // static helpers
 //
 
-// newClient creates new S3 client on a per-region basis or, more precisely,
-// per (region, endpoint) pair - and note that s3 endpoint is per-bucket configurable.
-// If the client already exists newClient simply returns it.
+// s3client creates or loads an existing S3 client for each triplet of profile/region/endpoint.
+// Note that each property is configurable per-bucket.
 // From S3 SDK:
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
-
 // TODO: use config.Net.HTTP.IdleConnTimeout and friends (https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/custom-http)
-
 func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	var (
 		endpoint = s3Endpoint

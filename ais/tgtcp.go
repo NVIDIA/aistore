@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -182,8 +183,10 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
 	case apc.ActReloadBackendCreds:
-		nlog.Errorln(">>>>", t.String(), msg.String()) // DEBUG
-
+		debug.Assert(msg.Name == "", "reloading specific provider not yet supported")
+		if err := t.initBuiltTagged(t.statsT.(*stats.Trunner), cmn.GCO.Get()); err != nil {
+			t.writeErr(w, r, err)
+		}
 	case apc.ActStartMaintenance:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
