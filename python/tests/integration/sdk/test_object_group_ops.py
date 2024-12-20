@@ -29,7 +29,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
         self.suffix = SUFFIX_NAME
-        self.obj_extension = self.suffix[-3]
+        self.obj_extension = self.suffix[-3:]
         # Use a slightly larger file size to allow for blob threshold (must be > 1MiB)
         self.file_size = MEDIUM_FILE_SIZE
         self.obj_names = self._create_objects(
