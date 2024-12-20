@@ -28,5 +28,6 @@ type (
 		Name       string
 		NameSuffix string // forces immediate send when non-empty
 		Value      int64
+		VarLabs    []string // (Prometheus)
 	}
 )

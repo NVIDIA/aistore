@@ -1675,9 +1675,11 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		p.writeErr(w, r, err)
 		return
 	}
+
+	vlabs := []string{bck.Cname("")} // stats.DfltVarLabs
 	p.statsT.AddMany(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+		cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
 	)
 
 	var ok bool

@@ -269,7 +269,7 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 	help = extra.Help
 
 	fullqn := prometheus.BuildFQName("ais" /*namespace*/, snode.Type() /*subsystem*/, metricName)
-	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, constLabels)
+	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, extra.VarLabs, constLabels)
 }
 
 func (*runner) IsPrometheus() bool { return true }

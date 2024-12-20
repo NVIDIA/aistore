@@ -1285,7 +1285,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	// stats
 	switch {
 	case err == nil:
-		t.statsT.Inc(stats.DeleteCount)
+		t.statsT.Inc(stats.DeleteCount) // TODO -- FIXME: varlabs part two
 	case cos.IsNotExist(err, code) || cmn.IsErrObjNought(err):
 		if !evict {
 			t.statsT.IncErr(stats.ErrDeleteCount) // TODO: count GET/PUT/DELETE remote errors on a per-backend...

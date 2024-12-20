@@ -163,74 +163,88 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	// basic counters
 	r.reg(snode, GetCount, KindCounter,
 		&Extra{
-			Help: "total number of executed GET(object) requests",
+			Help:    "total number of executed GET(object) requests",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, PutCount, KindCounter,
 		&Extra{
-			Help: "total number of executed PUT(object) requests",
+			Help:    "total number of executed PUT(object) requests",
+			VarLabs: PutVarLabs,
 		},
 	)
 	r.reg(snode, HeadCount, KindCounter,
 		&Extra{
-			Help: "total number of executed HEAD(object) requests", // NOTE: currently, we only count remote ("cold") HEAD
+			Help:    "total number of executed HEAD(object) requests", // NOTE: currently, we only count remote ("cold") HEAD
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, AppendCount, KindCounter,
 		&Extra{
-			Help: "total number of executed APPEND(object) requests",
+			Help:    "total number of executed APPEND(object) requests",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, DeleteCount, KindCounter,
 		&Extra{
-			Help: "total number of executed DELETE(object) requests",
+			Help:    "total number of executed DELETE(object) requests",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, RenameCount, KindCounter,
 		&Extra{
-			Help: "total number of executed rename(object) requests",
+			Help:    "total number of executed rename(object) requests",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ListCount, KindCounter,
 		&Extra{
-			Help: "total number of executed list-objects requests",
+			Help:    "total number of executed list-objects requests",
+			VarLabs: DfltVarLabs,
 		},
 	)
 
 	// basic error counters, respectively
 	r.reg(snode, ErrGetCount, KindCounter,
 		&Extra{
-			Help: "total number of GET(object) errors",
+			Help:    "total number of GET(object) errors",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ErrPutCount, KindCounter,
 		&Extra{
-			Help: "total number of PUT(object) errors",
+			Help:    "total number of PUT(object) errors",
+			VarLabs: PutVarLabs,
 		},
 	)
 	r.reg(snode, ErrHeadCount, KindCounter,
 		&Extra{
-			Help: "total number of HEAD(object) errors", // ditto (HeadCount above)
+			Help:    "total number of HEAD(object) errors", // ditto (HeadCount above)
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ErrAppendCount, KindCounter,
 		&Extra{
-			Help: "total number of APPEND(object) errors",
+			Help:    "total number of APPEND(object) errors",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ErrDeleteCount, KindCounter,
 		&Extra{
-			Help: "total number of DELETE(object) errors",
+			Help:    "total number of DELETE(object) errors",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ErrRenameCount, KindCounter,
 		&Extra{
-			Help: "total number of rename(object) errors",
+			Help:    "total number of rename(object) errors",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ErrListCount, KindCounter,
 		&Extra{
-			Help: "total number of list-objects errors",
+			Help:    "total number of list-objects errors",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ErrKaliveCount, KindCounter,
@@ -259,17 +273,20 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	// basic latencies
 	r.reg(snode, GetLatency, KindLatency,
 		&Extra{
-			Help: "GET: average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "GET: average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, GetLatencyTotal, KindTotal,
 		&Extra{
-			Help: "GET: total cumulative time (nanoseconds)",
+			Help:    "GET: total cumulative time (nanoseconds)",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, ListLatency, KindLatency,
 		&Extra{
-			Help: "list-objects: average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "list-objects: average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: DfltVarLabs,
 		},
 	)
 	r.reg(snode, KeepAliveLatency, KindLatency,
@@ -290,7 +307,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, NodeAlerts, KindGauge,
 		&Extra{
 			Help: "bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; " +
-				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details", // TODO: must have a readme
+				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details",
 		},
 	)
 }

@@ -208,17 +208,18 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	w.Header().Set(cos.S3CksumHeader, md5) // s3cmd checks this one
 
 	delta := mono.SinceNano(startTime)
+	vlabs := []string{bck.Cname(""), "", ""} // stats.PutVarLabs
 	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.PutSize, Value: size},
-		cos.NamedVal64{Name: stats.PutLatency, Value: delta},
-		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
+		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta, VarLabs: vlabs},
 	)
 	if remotePutLatency > 0 {
 		backendBck := t.Backend(bck)
 		t.statsT.AddMany(
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency, VarLabs: vlabs},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
 		)
 	}
 }
@@ -532,9 +533,11 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 	cos.Close(fh)
 	slab.Free(buf)
+
+	vlabs := []string{bck.Cname("")} // stats.DfltVarLabs
 	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.GetCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetSize, Value: size},
-		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: mono.SinceNano(startTime)},
+		cos.NamedVal64{Name: stats.GetCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetSize, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: mono.SinceNano(startTime), VarLabs: vlabs},
 	)
 }

@@ -241,22 +241,26 @@ func (poi *putOI) stats() {
 		bck   = poi.lom.Bck()
 		size  = poi.lom.Lsize()
 		delta = mono.SinceNano(poi.ltime)
+		vlabs = []string{bck.Cname(""), "", ""} // stats.PutVarLabs
 	)
+	if poi.xctn != nil {
+		vlabs[1], vlabs[2] = poi.xctn.Kind(), poi.xctn.ID()
+	}
 	poi.t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.PutCount, Value: 1},
-		cos.NamedVal64{Name: stats.PutSize, Value: size},
-		cos.NamedVal64{Name: stats.PutThroughput, Value: size},
-		cos.NamedVal64{Name: stats.PutLatency, Value: delta},
-		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
+		cos.NamedVal64{Name: stats.PutCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutThroughput, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta, VarLabs: vlabs},
 	)
 	if poi.rltime > 0 {
 		debug.Assert(bck.IsRemote())
 		backend := poi.t.Backend(bck)
 		poi.t.statsT.AddMany(
-			cos.NamedVal64{Name: backend.MetricName(stats.PutCount), Value: 1},
-			cos.NamedVal64{Name: backend.MetricName(stats.PutLatencyTotal), Value: poi.rltime},
-			cos.NamedVal64{Name: backend.MetricName(stats.PutE2ELatencyTotal), Value: delta},
-			cos.NamedVal64{Name: backend.MetricName(stats.PutSize), Value: size},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutCount), Value: 1, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutLatencyTotal), Value: poi.rltime, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
 		)
 	}
 }
@@ -1185,18 +1189,19 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 }
 
 func (goi *getOI) stats(written int64) {
+	vlabs := []string{goi.lom.Bck().Cname("")} // stats.DfltVarLabs
 	delta := mono.SinceNano(goi.ltime)
 	goi.t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.GetCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetSize, Value: written},
-		cos.NamedVal64{Name: stats.GetThroughput, Value: written}, // vis-à-vis user (as written m.b. range)
-		cos.NamedVal64{Name: stats.GetLatency, Value: delta},      // see also: per-backend *LatencyTotal below
-		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: delta}, // ditto
+		cos.NamedVal64{Name: stats.GetCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetSize, Value: written, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetThroughput, Value: written, VarLabs: vlabs}, // vis-à-vis user (as written m.b. range)
+		cos.NamedVal64{Name: stats.GetLatency, Value: delta, VarLabs: vlabs},      // see also: per-backend *LatencyTotal below
+		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: delta, VarLabs: vlabs}, // ditto
 	)
 	if goi.verchanged {
 		goi.t.statsT.AddMany(
-			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1},
-			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.Lsize()},
+			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1, VarLabs: vlabs},
+			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.Lsize(), VarLabs: vlabs},
 		)
 	}
 
@@ -1204,15 +1209,15 @@ func (goi *getOI) stats(written int64) {
 		bck := goi.lom.Bck()
 		backend := goi.t.Backend(bck)
 		goi.t.statsT.AddMany(
-			cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1},
-			cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta},
-			cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime},
-			cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written, VarLabs: vlabs},
 		)
 		if goi.verchanged {
 			goi.t.statsT.AddMany(
-				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeCount), Value: 1},
-				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize()},
+				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeCount), Value: 1, VarLabs: vlabs},
+				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize(), VarLabs: vlabs},
 			)
 		}
 	}
@@ -1330,9 +1335,10 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 
 	// stats (TODO: add `stats.FlushCount` for symmetry)
 	lat := time.Now().UnixNano() - a.started
+	vlabs := []string{a.lom.Bck().Cname("")} // stats.DfltVarLabs
 	a.t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
-		cos.NamedVal64{Name: stats.AppendLatency, Value: lat},
+		cos.NamedVal64{Name: stats.AppendCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.AppendLatency, Value: lat, VarLabs: vlabs},
 	)
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infoln("APPEND", a.lom.String(), time.Duration(lat))

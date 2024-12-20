@@ -184,15 +184,16 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	}
 
 	// 4. stats
-	t.coldstats(backend, lom.Lsize(), now)
+	t.coldstats(backend, lom, now)
 	return 0, nil
 }
 
-func (t *target) coldstats(backend core.Backend, size, started int64) {
+func (t *target) coldstats(backend core.Backend, lom *core.LOM, started int64) {
+	vlabs := []string{lom.Bck().Cname("")} // stats.DfltVarLabs
 	t.statsT.AddMany(
-		cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(started)},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: size},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(started), VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: vlabs},
 	)
 }
 
@@ -207,14 +208,15 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 	var (
 		backend = t.Backend(lom.Bck())
 		now     = mono.NanoTime()
+		vlabs   = []string{lom.Bck().Cname("")} // stats.DfltVarLabs
 	)
 	oa, ecode, err = backend.HeadObj(context.Background(), lom, origReq)
 	if err != nil {
-		t.statsT.IncErr(stats.ErrHeadCount)
+		t.statsT.IncErr(stats.ErrHeadCount) // TODO -- FIXME: vlabs part two
 	} else {
 		t.statsT.AddMany(
-			cos.NamedVal64{Name: backend.MetricName(stats.HeadCount), Value: 1},
-			cos.NamedVal64{Name: backend.MetricName(stats.HeadLatencyTotal), Value: mono.SinceNano(now)},
+			cos.NamedVal64{Name: backend.MetricName(stats.HeadCount), Value: 1, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.HeadLatencyTotal), Value: mono.SinceNano(now), VarLabs: vlabs},
 		)
 	}
 	return oa, ecode, err

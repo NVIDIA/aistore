@@ -29,6 +29,18 @@ const (
 	KindThroughput = "bw" // e.g. GetThroughput
 )
 
+// variable labels (names)
+const (
+	VarlabBucket   = "bucket"
+	VarlabXactKind = "xkind"
+	VarlabXactID   = "xid"
+)
+
+var (
+	DfltVarLabs = []string{VarlabBucket}
+	PutVarLabs  = []string{VarlabBucket, VarlabXactKind, VarlabXactID}
+)
+
 type (
 	Tracker interface {
 		cos.StatsUpdater
@@ -110,9 +122,10 @@ type (
 
 type (
 	Extra struct {
-		Labels  cos.StrKVs
+		Labels  cos.StrKVs // static or (same) constant
 		StrName string
 		Help    string
+		VarLabs []string // variable labels: {VarlabBucket, ...}
 	}
 )
 

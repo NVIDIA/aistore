@@ -413,9 +413,10 @@ func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg,
 		if err != nil {
 			return lst, err
 		}
+		vlabs := []string{bck.Cname("")} // stats.DfltVarLabs
 		p.statsT.AddMany(
-			cos.NamedVal64{Name: stats.ListCount, Value: 1},
-			cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+			cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
+			cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
 		)
 		if pageNum == 1 {
 			lst = page
