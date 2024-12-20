@@ -1373,7 +1373,7 @@ func (p *proxy) _checkMaint(xargs *xact.ArgsMsg) error {
 func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
-	args.to = core.AllNodes
+	args.to = core.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 
