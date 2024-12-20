@@ -126,19 +126,31 @@ func ParseNsUname(s string) (n Ns) {
 }
 
 func (n Ns) String() (res string) {
+	var sb strings.Builder
+	if n.IsGlobal() {
+		return
+	}
+	sb.Grow(n.Len() + 1)
+	n._str(&sb)
+	return sb.String()
+}
+
+func (n Ns) _str(sb *strings.Builder) {
 	if n.IsGlobal() {
 		return
 	}
 	if n.IsAnyRemote() {
-		return string(apc.NsUUIDPrefix)
+		sb.WriteByte(apc.NsUUIDPrefix)
+		return
 	}
 	if n.UUID != "" {
-		res += string(apc.NsUUIDPrefix) + n.UUID
+		sb.WriteByte(apc.NsUUIDPrefix)
+		sb.WriteString(n.UUID)
 	}
 	if n.Name != "" {
-		res += string(apc.NsNamePrefix) + n.Name
+		sb.WriteByte(apc.NsNamePrefix)
+		sb.WriteString(n.Name)
 	}
-	return
 }
 
 func (n Ns) Len() int {
@@ -205,18 +217,28 @@ func (b *Bck) Equal(other *Bck) bool {
 }
 
 func (b Bck) String() (s string) {
+	var sb strings.Builder
 	if b.Ns.IsGlobal() {
 		if b.Provider == "" {
 			return b.Name
 		}
-		s = apc.ToScheme(b.Provider) + apc.BckProviderSeparator + b.Name
+		sb.Grow(len(b.Name) + 8)
+		sb.WriteString(apc.ToScheme(b.Provider))
+		sb.WriteString(apc.BckProviderSeparator)
+		sb.WriteString(b.Name)
 	} else {
-		s = apc.ToScheme(b.Provider) + apc.BckProviderSeparator + b.Ns.String() + "/" + b.Name
+		sb.Grow(len(b.Name) + b.Ns.Len() + 12)
+		sb.WriteString(apc.ToScheme(b.Provider))
+		sb.WriteString(apc.BckProviderSeparator)
+		b.Ns._str(&sb)
+		sb.WriteByte('/')
+		sb.WriteString(b.Name)
 	}
 	if back := b.Backend(); back != nil {
-		s += "->" + back.String()
+		sb.WriteString("->")
+		sb.WriteString(back.String())
 	}
-	return s
+	return sb.String()
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)
@@ -285,16 +307,25 @@ func (b *Bck) ValidateName() error {
 
 // canonical name, with or without object
 func (b *Bck) Cname(objname string) (s string) {
-	sch := apc.ToScheme(b.Provider)
+	var sb strings.Builder
+	sb.Grow(len(b.Name) + len(objname) + b.Ns.Len() + 16)
+
+	sb.WriteString(apc.ToScheme(b.Provider))
+	sb.WriteString(apc.BckProviderSeparator)
+
 	if b.Ns.IsGlobal() {
-		s = sch + apc.BckProviderSeparator + b.Name
+		sb.WriteString(b.Name)
 	} else {
-		s = fmt.Sprintf("%s%s%s/%s", sch, apc.BckProviderSeparator, b.Ns, b.Name)
+		b.Ns._str(&sb)
+		sb.WriteByte('/')
+		sb.WriteString(b.Name)
 	}
 	if objname == "" {
-		return
+		return sb.String()
 	}
-	return s + cos.PathSeparator + objname
+	sb.WriteByte(filepath.Separator)
+	sb.WriteString(objname)
+	return sb.String()
 }
 
 func (b *Bck) IsEmpty() bool {
@@ -461,7 +492,14 @@ func (qbck QueryBcks) String() string {
 		if qbck.Ns.IsGlobal() {
 			return apc.ToScheme(p) + apc.BckProviderSeparator
 		}
-		return fmt.Sprintf("%s%s%s", apc.ToScheme(p), apc.BckProviderSeparator, qbck.Ns)
+		var (
+			sb strings.Builder
+		)
+		sb.Grow(qbck.Ns.Len() + 8)
+		sb.WriteString(apc.ToScheme(p))
+		sb.WriteString(apc.BckProviderSeparator)
+		qbck.Ns._str(&sb)
+		return sb.String()
 	}
 	b := Bck(qbck)
 	return b.String()
