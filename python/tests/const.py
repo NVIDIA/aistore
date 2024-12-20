@@ -31,4 +31,4 @@ TEST_TIMEOUT_LONG = 120
 
 # Names
 PREFIX_NAME = "prefix-"
-SUFFIX_NAME = "-suffix"
+SUFFIX_NAME = "-suffix.ext"

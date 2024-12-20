@@ -197,6 +197,7 @@ class TestObjectGroup(unittest.TestCase):
         prepend_val = "new_prefix-"
         self.expected_value["coer"] = True
         self.expected_value["prepend"] = prepend_val
+        self.expected_value["ext"] = {"wav": "flac"}
         self.expected_value["request_timeout"] = timeout
         self.expected_value["dry_run"] = True
         self.expected_value["force"] = True
@@ -208,6 +209,7 @@ class TestObjectGroup(unittest.TestCase):
             self.expected_value,
             to_bck=self.dest_bucket,
             prepend=prepend_val,
+            ext={"wav": "flac"},
             etl_name=ETL_NAME,
             timeout=timeout,
             dry_run=True,

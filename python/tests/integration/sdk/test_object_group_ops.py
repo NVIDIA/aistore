@@ -29,6 +29,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
         self.suffix = SUFFIX_NAME
+        self.obj_extension = self.suffix[-3]
         # Use a slightly larger file size to allow for blob threshold (must be > 1MiB)
         self.file_size = MEDIUM_FILE_SIZE
         self.obj_names = self._create_objects(
@@ -347,6 +348,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         to_bck = self._create_bucket()
         new_prefix = PREFIX_NAME
+        new_ext = "new-ext"
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
         self.assertEqual(
             OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))
@@ -356,6 +358,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
             "to_bck": to_bck,
             "etl_name": md5_etl.name,
             "prepend": new_prefix,
+            "ext": {self.obj_extension: new_ext},
         }
         if num_workers is not None:
             transform_kwargs["num_workers"] = num_workers
@@ -371,7 +374,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
             for name in self.obj_names
         ]
         to_obj_values = [
-            to_bck.object(new_prefix + name).get_reader().read_all()
+            to_bck.object(self._new_name(name, new_prefix, new_ext))
+            .get_reader()
+            .read_all()
             for name in self.obj_names
         ]
         self.assertEqual(to_obj_values, from_obj_hashes)
@@ -390,3 +395,6 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self._check_all_objects_cached(
             len(obj_group.list_names()), expected_cached=False
         )
+
+    def _new_name(self, s, prefix, ext):
+        return prefix + s.rstrip(self.obj_extension) + ext

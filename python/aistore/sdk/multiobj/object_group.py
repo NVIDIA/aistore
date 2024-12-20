@@ -2,7 +2,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
 #
 import logging
-from typing import List, Iterable
+from typing import Dict, List, Iterable
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
@@ -282,13 +282,14 @@ class ObjectGroup(AISSource):
             value=value,
         ).text
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments, too-many-locals
     def transform(
         self,
         to_bck: "Bucket",
         etl_name: str,
         timeout: str = DEFAULT_ETL_TIMEOUT,
         prepend: str = "",
+        ext: Dict[str, str] = None,
         continue_on_error: bool = False,
         dry_run: bool = False,
         force: bool = False,
@@ -304,6 +305,8 @@ class ObjectGroup(AISSource):
             etl_name (str): Name of existing ETL to apply
             timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
             prepend (str, optional): Value to prepend to the name of resulting transformed objects
+            ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
+                (i.e. {"jpg": "txt"})
             continue_on_error (bool, optional): Whether to continue if there is an error transforming a single object
             dry_run (bool, optional): Skip performing the transform and just log the intended actions
             force (bool, optional): Force this job to run over others in case it conflicts
@@ -340,7 +343,7 @@ class ObjectGroup(AISSource):
         transform_msg = TransformBckMsg(etl_name=etl_name, timeout=timeout)
         value = TCMultiObj(
             to_bck=to_bck.as_model(),
-            tc_msg=TCBckMsg(transform_msg=transform_msg, copy_msg=copy_msg),
+            tc_msg=TCBckMsg(ext=ext, transform_msg=transform_msg, copy_msg=copy_msg),
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
             num_workers=num_workers,

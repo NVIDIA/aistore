@@ -6,7 +6,7 @@ import random
 
 from tests.integration import AWS_BUCKET
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
-from tests.const import STRESS_TEST_OBJECT_COUNT, TEST_TIMEOUT
+from tests.const import STRESS_TEST_OBJECT_COUNT, TEST_TIMEOUT, SUFFIX_NAME
 
 
 class TestBucketOpsStress(RemoteEnabledTest):
@@ -21,7 +21,7 @@ class TestBucketOpsStress(RemoteEnabledTest):
     )
     def test_stress_copy_objects_sync_flag(self):
         num_obj = STRESS_TEST_OBJECT_COUNT
-        obj_names = self._create_objects(num_obj=num_obj, suffix="-suffix")
+        obj_names = self._create_objects(num_obj=num_obj, suffix=SUFFIX_NAME)
         to_bck = self._create_bucket()
 
         obj_group = self.bucket.objects(obj_names=obj_names)
