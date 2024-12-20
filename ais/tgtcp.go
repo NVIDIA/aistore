@@ -183,10 +183,34 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
 	case apc.ActReloadBackendCreds:
-		debug.Assert(msg.Name == "", "reloading specific provider not yet supported")
-		if err := t.initBuiltTagged(t.statsT.(*stats.Trunner), cmn.GCO.Get()); err != nil {
-			t.writeErr(w, r, err)
+		var (
+			tstats   = t.statsT.(*stats.Trunner)
+			provider = msg.Name
+		)
+		if provider == "" { // all
+			if err := t.initBuiltTagged(t.statsT.(*stats.Trunner), cmn.GCO.Get()); err != nil {
+				t.writeErr(w, r, err)
+			}
+			return
 		}
+
+		// one
+		var add core.Backend
+		switch provider {
+		case apc.AWS:
+			add, err = backend.NewAWS(t, tstats)
+		case apc.GCP:
+			add, err = backend.NewGCP(t, tstats)
+		case apc.Azure:
+			add, err = backend.NewAzure(t, tstats)
+		case apc.OCI:
+			add, err = backend.NewOCI(t, tstats)
+		}
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		t.backend[provider] = add
 	case apc.ActStartMaintenance:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return

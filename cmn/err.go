@@ -739,6 +739,14 @@ func (e *ErrMissingBackend) Error() string {
 	return apc.DisplayProvider(e.Provider) + " backend is missing in the cluster configuration"
 }
 
+func IsErrInitMissingBackend(err error) bool {
+	_, ok := err.(*ErrInitBackend)
+	if !ok {
+		_, ok = err.(*ErrMissingBackend)
+	}
+	return ok
+}
+
 // ErrETL
 
 func NewErrETL(ctx *ETLErrCtx, msg string) *ErrETL {

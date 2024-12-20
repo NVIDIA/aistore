@@ -1053,6 +1053,19 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 		p.xstop(w, r, msg)
 
 	case apc.ActReloadBackendCreds:
+		if msg.Name != "" {
+			normp := apc.NormalizeProvider(msg.Name)
+			if !apc.IsCloudProvider(normp) {
+				p.writeErrf(w, r, "cannot reload %q creds: not a Cloud provider", msg.Name)
+				return
+			}
+			config := cmn.GCO.Get()
+			if config.Backend.Get(normp) == nil {
+				p.writeErr(w, r, &cmn.ErrMissingBackend{Provider: msg.Name})
+				return
+			}
+			msg.Name = normp
+		}
 		p.reloadCreds(w, r, msg)
 
 	// internal

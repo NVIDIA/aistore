@@ -154,6 +154,10 @@ func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) erro
 		case err == nil && !configured:
 			disabled = append(disabled, provider)
 		case err != nil && configured:
+			if !cmn.IsErrInitMissingBackend(err) {
+				// as is
+				return fmt.Errorf("%s: failed to initialize [%s] backend, err: %v", t, provider, err)
+			}
 			notlinked = append(notlinked, provider)
 		case err != nil && !configured:
 			_, ok := err.(*cmn.ErrInitBackend) // error type to indicate a _mock_ backend
