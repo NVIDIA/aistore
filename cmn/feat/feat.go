@@ -38,7 +38,9 @@ const (
 	StreamingColdGET          // write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 	S3ReverseProxy            // intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
 	S3UsePathStyle            // use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
-	DontDeleteWhenRebalancing // when objects get rebalanced to their proper destinations, keep the sources - do not delete
+	DontDeleteWhenRebalancing // when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
+	DontSetControlPlaneToS    // intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
+	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
 )
 
 var Cluster = [...]string{
@@ -49,15 +51,18 @@ var Cluster = [...]string{
 	"Fsync-PUT",
 	"LZ4-Block-1MB",
 	"LZ4-Frame-Checksum",
-	"Dont-Allow-Passing-FQN-to-ETL",
+	"Do-not-Allow-Passing-FQN-to-ETL",
 	"Ignore-LimitedCoexistence-Conflicts",
 	"S3-Presigned-Request",
-	"Dont-Optimize-Listing-Virtual-Dirs",
+	"Do-not-Optimize-Listing-Virtual-Dirs",
 	"Disable-Cold-GET",
 	"Streaming-Cold-GET",
 	"S3-Reverse-Proxy",
 	"S3-Use-Path-Style", // https://aws.amazon.com/blogs/aws/amazon-s3-path-deprecation-plan-the-rest-of-the-story
-	"Dont-Delete-When-Rebalancing",
+	"Do-not-Delete-When-Rebalancing",
+	"Do-not-Set-Control-Plane-ToS",
+	"Trust-Crypto-Safe-Checksums",
+
 	// "none" ====================
 }
 
@@ -68,6 +73,7 @@ var Bucket = [...]string{
 	"Disable-Cold-GET",
 	"Streaming-Cold-GET",
 	"S3-Use-Path-Style", // https://aws.amazon.com/blogs/aws/amazon-s3-path-deprecation-plan-the-rest-of-the-story
+
 	// "none" ====================
 }
 

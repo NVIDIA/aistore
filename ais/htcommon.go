@@ -172,6 +172,7 @@ type (
 		muxers        httpMuxers
 		sndRcvBufSize int
 		sync.Mutex
+		lowLatencyToS bool
 	}
 
 	nlogWriter struct{}
@@ -493,50 +494,44 @@ func (*nlogWriter) Write(p []byte) (int, error) {
 // Override muxer ServeHTTP to support proxying HTTPS requests. Clients
 // initiate all HTTPS requests with CONNECT method instead of GET/PUT etc.
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// plain
 	if r.Method != http.MethodConnect {
 		server.muxers.ServeHTTP(w, r)
 		return
 	}
 
-	// TODO: add support for caching HTTPS requests
-	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
+	// HTTPS
+	destConn, err := net.DialTimeout("tcp", r.Host, cmn.DfltDialupTimeout)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 
-	// Second, hijack the connection. A kind of man-in-the-middle attack
-	// From this point on, this function is responsible for HTTP connection
+	// hijack the connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		cmn.WriteErr(w, r, errors.New("response writer does not support hijacking"),
-			http.StatusInternalServerError)
+		cmn.WriteErr(w, r, errors.New("response writer does not support hijacking"), http.StatusInternalServerError)
 		return
 	}
 
-	// First, send that everything is OK. Trying to write a header after
-	// hijacking generates a warning and nothing works
 	w.WriteHeader(http.StatusOK)
 
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
-		// NOTE: cannot send error because we have already written a header.
 		nlog.Errorln(err)
 		return
 	}
 
-	// Third, start transparently sending data between source and destination
-	// by creating a tunnel between them
-	transfer := func(destination io.WriteCloser, source io.ReadCloser) {
-		io.Copy(destination, source)
-		source.Close()
-		destination.Close()
-	}
+	// send/receive both ways (bi-directional tunnel)
+	// (one of those close() calls will fail, the one that loses the race)
+	go _copy(destConn, clientConn)
+	go _copy(clientConn, destConn)
+}
 
-	// NOTE: it looks like double closing both connections.
-	// Need to check how the tunnel works
-	go transfer(destConn, clientConn)
-	go transfer(clientConn, destConn)
+func _copy(destination io.WriteCloser, source io.ReadCloser) {
+	io.Copy(destination, source)
+	source.Close()
+	destination.Close()
 }
 
 func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config) (err error) {
@@ -555,9 +550,12 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
 		server.s.ReadHeaderTimeout = timeout
 	}
-	if server.sndRcvBufSize > 0 && !config.Net.HTTP.UseHTTPS {
-		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
+
+	// set sock options on the server side; NOTE https exclusion
+	if (server.sndRcvBufSize > 0 || server.lowLatencyToS) && !config.Net.HTTP.UseHTTPS {
+		server.s.ConnState = server.connStateListener
 	}
+
 	server.s.TLSConfig = tlsConf
 	server.Unlock()
 retry:
@@ -611,10 +609,14 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 		return
 	}
 	tcpconn, ok := c.(*net.TCPConn)
-	cos.Assert(ok)
-	rawconn, _ := tcpconn.SyscallConn()
-	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize}
-	rawconn.Control(args.ConnControl(rawconn))
+	debug.Assert(ok)
+	rawconn, err := tcpconn.SyscallConn()
+	if err != nil {
+		nlog.Errorln("FATAL tcpconn.SyscallConn err:", err) // (unlikely)
+		return
+	}
+	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize, LowLatencyToS: server.lowLatencyToS}
+	args.ServerControl(rawconn)
 }
 
 func (server *netServer) shutdown(config *cmn.Config) {
@@ -625,7 +627,7 @@ func (server *netServer) shutdown(config *cmn.Config) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout.MaxHostBusy.D())
 	if err := server.s.Shutdown(ctx); err != nil {
-		nlog.Infoln("http server shutdown err:", err)
+		nlog.Warningln("http server shutdown err:", err)
 	}
 	cancel()
 }

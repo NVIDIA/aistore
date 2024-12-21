@@ -19,7 +19,29 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-const DialupTimeoutDftl = 30 * time.Second
+const (
+	DfltDialupTimeout = 10 * time.Second
+	DfltKeepaliveTCP  = 30 * time.Second
+)
+
+// [NOTE]
+// net/http.DefaultTransport has the following defaults:
+//
+// - MaxIdleConns:          100,
+// - MaxIdleConnsPerHost :  2 (via DefaultMaxIdleConnsPerHost)
+// - IdleConnTimeout:       90 * time.Second,
+// - WriteBufferSize:       4KB
+// - ReadBufferSize:        4KB
+//
+// Following are the defaults we use instead:
+const (
+	DefaultMaxIdleConns        = 0               // unlimited (in re: `http.errTooManyIdle`)
+	DefaultMaxIdleConnsPerHost = 32              // (http.errTooManyIdleHost)
+	DefaultIdleConnTimeout     = 6 * time.Second // (Go default is 90s)
+	DefaultWriteBufferSize     = 64 * cos.KiB
+	DefaultReadBufferSize      = 64 * cos.KiB
+	DefaultSndRcvBufferSize    = 128 * cos.KiB
+)
 
 type (
 	// assorted http(s) client options
@@ -33,6 +55,7 @@ type (
 		WriteBufferSize  int
 		ReadBufferSize   int
 		UseHTTPProxyEnv  bool
+		LowLatencyToS    bool
 	}
 	TLSArgs struct {
 		ClientCA    string
@@ -47,17 +70,17 @@ type (
 func NewTransport(cargs TransportArgs) *http.Transport {
 	var (
 		defaultTransport = http.DefaultTransport.(*http.Transport)
-		dialTimeout      = cos.NonZero(cargs.DialTimeout, DialupTimeoutDftl)
+		dialTimeout      = cos.NonZero(cargs.DialTimeout, DfltDialupTimeout)
 	)
 
 	dialer := &net.Dialer{
 		Timeout:   dialTimeout,
-		KeepAlive: 30 * time.Second,
+		KeepAlive: DfltKeepaliveTCP,
 	}
-	// setsockopt when non-zero, otherwise use TCP defaults
-	if cargs.SndRcvBufSize > 0 {
-		dialer.Control = cargs.setSockOpt
-	}
+
+	// NOTE: setsockopt when (SndRcvBufSize > 0 and/or LowLatencyToS)
+	dialer.Control = cargs.clientControl()
+
 	transport := &http.Transport{
 		DialContext:           dialer.DialContext,
 		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,

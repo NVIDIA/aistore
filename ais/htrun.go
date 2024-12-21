@@ -279,7 +279,7 @@ func (h *htrun) init(config *cmn.Config) {
 	if h.si.IsProxy() {
 		tcpbuf = 0
 	} else if tcpbuf == 0 {
-		tcpbuf = cmn.DefaultSendRecvBufferSize // ditto: targets use AIS default when not configured
+		tcpbuf = cmn.DefaultSndRcvBufferSize // ditto: targets use AIS default when not configured
 	}
 
 	// PubNet enable tracing when configuration is set.
@@ -290,7 +290,7 @@ func (h *htrun) init(config *cmn.Config) {
 		// TODO: for now tracing is always disabled for intra-cluster traffic.
 		// Allow enabling through config.
 		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
+		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0, lowLatencyToS: true}
 	}
 	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
 	if config.HostNet.UseIntraData {

@@ -30,7 +30,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | --- | ------- |
 | `Enforce-IntraCluster-Access` | when enabled, aistore targets will make sure _not_ to execute direct (ie., not redirected) API calls |
 | `S3-API-via-Root` | handle S3 requests via `aistore-hostname/` (whereby the default: `aistore-hostname/s3`) |
-| `Dont-Allow-Passing-FQN-to-ETL` |  do not allow passing fully-qualified name of a locally stored object to (local) ETL containers |
+| `Do-not-Allow-Passing-FQN-to-ETL` |  do not allow passing fully-qualified name of a locally stored object to (local) ETL containers |
 | `Fsync-PUT(*)` | PUT and cold-GET: commit (or sync) the object payload to stable storage |
 | `Ignore-LimitedCoexistence-Conflicts` | run in presence of "limited coexistence" type conflicts |
 | `Skip-Loading-VersionChecksum-MD(*)` | skip loading existing object's metadata, Version and Checksum (VC) in particular |
@@ -38,10 +38,13 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `LZ4-Frame-Checksum` | checksum lz4 frames |
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `S3-Presigned-Request(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
-| `Dont-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
+| `Do-not-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
 | `Disable-Cold-GET` | do not perform cold GET request when using remote bucket |
 | `S3-Reverse-Proxy` | use reverse proxy calls instead of HTTP-redirect for S3 API |
 | `S3-Use-Path-Style` | use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY |
+| `Do-not-Delete-When-Rebalancing` | when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources |
+| `Do-not-Set-Control-Plane-ToS` | intra-cluster control plane: do not set IPv4 ToS field (to low-latency) |
+| `Trust-Crypto-Safe-Checksums` | when checking whether objects are identical trust only cryptographically secure checksums |
 
 ## Global features
 
@@ -50,8 +53,8 @@ $ ais config cluster features <TAB-TAB>
 
 Enforce-IntraCluster-Access           Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
 Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         S3-Presigned-Request
-Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Dont-Optimize-Listing-Virtual-Dirs
-S3-API-via-Root                       Dont-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
+Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Do-not-Optimize-Listing-Virtual-Dirs
+S3-API-via-Root                       Do-not-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
 S3-Reverse-Proxy                      none
 ```
 

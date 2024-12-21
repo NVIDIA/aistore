@@ -9,31 +9,12 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"time"
-
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
 	NetPublic       = "PUBLIC"
 	NetIntraControl = "INTRA-CONTROL"
 	NetIntraData    = "INTRA-DATA"
-)
-
-// http.DefaultTransport has the following defaults:
-// - MaxIdleConns:          100,
-// - MaxIdleConnsPerHost :  2 (via DefaultMaxIdleConnsPerHost)
-// - IdleConnTimeout:       90 * time.Second,
-// - WriteBufferSize:       4KB
-// - ReadBufferSize:        4KB
-// Following are the constants we use by default:
-const (
-	DefaultMaxIdleConns        = 0               // unlimited (in re: `http.errTooManyIdle`)
-	DefaultMaxIdleConnsPerHost = 32              // (http.errTooManyIdleHost)
-	DefaultIdleConnTimeout     = 6 * time.Second // Go default is 90s
-	DefaultWriteBufferSize     = 64 * cos.KiB
-	DefaultReadBufferSize      = 64 * cos.KiB
-	DefaultSendRecvBufferSize  = 128 * cos.KiB
 )
 
 var KnownNetworks = [...]string{NetPublic, NetIntraControl, NetIntraData}

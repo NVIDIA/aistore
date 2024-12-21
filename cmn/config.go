@@ -1739,6 +1739,8 @@ const (
 	EcStreamsEver = -time.Second
 	EcStreamsDflt = 10 * time.Minute
 	EcStreamsMini = 5 * time.Minute
+
+	// and a few more hardcoded below
 )
 
 func (c *TimeoutConf) Validate() error {

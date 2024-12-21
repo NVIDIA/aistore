@@ -29,7 +29,7 @@ func whichClient() string { return "fasthttp" }
 
 // overriding fasthttp default `const DefaultDialTimeout = 3 * time.Second`
 func dialTimeout(addr string) (net.Conn, error) {
-	return fasthttp.DialTimeout(addr, cmn.DialupTimeoutDftl)
+	return fasthttp.DialTimeout(addr, cmn.DfltDialupTimeout)
 }
 
 // intra-cluster networking: fasthttp client
