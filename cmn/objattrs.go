@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 )
 
 // LOM custom metadata stored under `lomCustomMD`.
@@ -280,19 +281,28 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	}
 
 	// checksum check
-	if a, b := rem.Checksum(), oa.Cksum; !a.IsEmpty() && !b.IsEmpty() && a.Ty() == b.Ty() {
-		if !a.Equal(b) {
-			return fmt.Errorf("%s checksum %s != %s remote", a.Ty(), b, a)
+	if a, b := rem.Checksum(), oa.Cksum; a != nil && b != nil {
+		cksumType := a.Ty()
+		if !a.IsEmpty() && !b.IsEmpty() && cksumType == b.Ty() {
+			if !a.Equal(b) {
+				return fmt.Errorf("%s checksum %s != %s remote", cksumType, b, a)
+			}
+			cksumVal = a.Val()
+
+			// [NOTE]
+			// unless overridden via feature flag
+			// trust two checksums, namely md5 and xxhash, that are _not_ cryptographically secure
+
+			switch {
+			case Rom.Features().IsSet(feat.TrustCryptoSafeChecksums):
+				sameCksum = (cksumType == cos.ChecksumSHA256 || cksumType == cos.ChecksumSHA512)
+			default:
+				debug.Assert(cksumType != cos.ChecksumNone)
+				sameCksum = cksumType != cos.ChecksumCRC32C
+			}
+
+			count++
 		}
-		cksumVal = a.Val()
-		//
-		// NOTE: including xxhash in trusted checksums
-		//
-		switch a.Ty() {
-		case cos.ChecksumXXHash, cos.ChecksumSHA256, cos.ChecksumSHA512:
-			sameCksum = true
-		}
-		count++
 	}
 
 	// custom MD: ETag check (ignoring enclosing quotes)

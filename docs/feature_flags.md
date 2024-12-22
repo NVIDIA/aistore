@@ -51,11 +51,11 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 ```console
 $ ais config cluster features <TAB-TAB>
 
-Enforce-IntraCluster-Access           Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
-Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         S3-Presigned-Request
-Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Do-not-Optimize-Listing-Virtual-Dirs
-S3-API-via-Root                       Do-not-Allow-Passing-FQN-to-ETL         Disable-Cold-GET
-S3-Reverse-Proxy                      none
+Enforce-IntraCluster-Access            LZ4-Block-1MB                          Do-not-Optimize-Listing-Virtual-Dirs   Do-not-Delete-When-Rebalancing
+Skip-Loading-VersionChecksum-MD        LZ4-Frame-Checksum                     Disable-Cold-GET                       Do-not-Set-Control-Plane-ToS
+Do-not-Auto-Detect-FileShare           Do-not-Allow-Passing-FQN-to-ETL        Streaming-Cold-GET                     none
+S3-API-via-Root                        Ignore-LimitedCoexistence-Conflicts    S3-Reverse-Proxy
+Fsync-PUT                              S3-Presigned-Request                   S3-Use-Path-Style
 ```
 
 For example:

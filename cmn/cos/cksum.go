@@ -20,11 +20,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// NOTE: not supporting SHA-3 family is its current golang.org/x/crypto/sha3 source
-//       doesn't implement BinaryMarshaler & BinaryUnmarshaler interfaces
-//       (see also https://golang.org/pkg/encoding)
+// [NOTE]
+// - currently, we have only two crypto-secure types: sha256 and sha512
+// - see related object comparison logic in cmn/objattrs
 
-// checksums
+// [TODO]
+// revisit and maybe add SHA-3 family (see golang.org/x/crypto/sha3 for: `BinaryMarshaler`)
+
+// supported checksums
 const (
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
