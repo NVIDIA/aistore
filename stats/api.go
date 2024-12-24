@@ -6,6 +6,7 @@
 package stats
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -61,7 +62,7 @@ type (
 
 		StartedUp() bool
 
-		IsPrometheus() bool
+		PromHandler() http.Handler
 
 		Inc(metric string)
 		IncWith(metric string, vlabs map[string]string)

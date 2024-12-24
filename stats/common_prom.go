@@ -9,6 +9,7 @@ package stats
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	ratomic "sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type (
@@ -45,9 +47,17 @@ var (
 	_ json.Unmarshaler = (*coreStats)(nil)
 )
 
-var staticLabs = prometheus.Labels{ConstlabNode: ""}
+var (
+	promRegistry *prometheus.Registry
+)
+var (
+	staticLabs = prometheus.Labels{ConstlabNode: ""}
+)
 
-func initLabel(snode *meta.Snode) {
+func initProm(snode *meta.Snode) {
+	// devoid of _default_ metrics go_gc*, go_mem*, and such
+	promRegistry = prometheus.NewRegistry()
+
 	staticLabs[ConstlabNode] = strings.ReplaceAll(snode.ID(), ".", "_")
 }
 
@@ -216,11 +226,11 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 		if len(extra.VarLabs) > 0 {
 			metric := prometheus.NewCounterVec(opts, extra.VarLabs)
 			v.prom = counterVec{metric}
-			prometheus.MustRegister(metric)
+			promRegistry.MustRegister(metric)
 		} else {
 			metric := prometheus.NewCounter(opts)
 			v.prom = counter{metric}
-			prometheus.MustRegister(metric)
+			promRegistry.MustRegister(metric)
 		}
 	case KindLatency, KindThroughput:
 		// these two _kinds_ or, more generally, metrics computed over fixed ('periodic.stats_time') interval
@@ -230,16 +240,19 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 		if len(extra.VarLabs) > 0 {
 			metric := prometheus.NewGaugeVec(opts, extra.VarLabs)
 			v.prom = gaugeVec{metric}
-			prometheus.MustRegister(metric)
+			promRegistry.MustRegister(metric)
 		} else {
 			metric := prometheus.NewGauge(opts)
 			v.prom = gauge{metric}
-			prometheus.MustRegister(metric)
+			promRegistry.MustRegister(metric)
 		}
 	}
 
 	r.core.Tracker[name] = v
 }
 
-func (*runner) IsPrometheus() bool { return true }
-func (*runner) closeStatsD()       {} // build tag "statsd" stub
+func (*runner) PromHandler() http.Handler {
+	return promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{})
+}
+
+func (*runner) closeStatsD() {} // build tag "statsd" stub

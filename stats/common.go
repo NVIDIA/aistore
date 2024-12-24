@@ -158,8 +158,7 @@ func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra
 
 // common (target, proxy) metrics
 func (r *runner) regCommon(snode *meta.Snode) {
-	// prometheus only
-	initLabel(snode)
+	initProm(snode)
 
 	// basic counters
 	r.reg(snode, GetCount, KindCounter,

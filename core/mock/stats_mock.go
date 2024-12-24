@@ -5,6 +5,8 @@
 package mock
 
 import (
+	"net/http"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -37,4 +39,4 @@ func (*StatsTracker) GetMetricNames() cos.StrKVs                                
 func (*StatsTracker) GetStats() *stats.Node                                     { return nil }
 func (*StatsTracker) GetStatsV322() *stats.NodeV322                             { return nil }
 func (*StatsTracker) ResetStats(bool)                                           {}
-func (*StatsTracker) IsPrometheus() bool                                        { return false }
+func (*StatsTracker) PromHandler() http.Handler                                 { return nil }

@@ -201,26 +201,25 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		goto rerr
 	}
 
-	// resp. header & stats
-	if !poi.t2t {
-		// NOTE: counting only user PUTs; ignoring EC and copies, on the one hand, and
-		// same-checksum-skip-writing, on the other
-		if poi.owt == cmn.OwtPut && poi.restful {
-			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
-			poi.stats()
-			// RESTful PUT response header
-			if poi.resphdr != nil {
-				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr, 0 /*skip setting content-length*/)
-			}
+	// NOTE stats: counting xactions and user PUTs; not counting (cold-GET -> PUT)
+	if poi.xctn != nil {
+		poi.stats()
+		if poi.owt == cmn.OwtPromote {
+			poi.xctn.InObjsAdd(1, poi.lom.Lsize())
 		}
-	} else if poi.xctn != nil && poi.owt == cmn.OwtPromote {
-		// xaction in-objs counters, promote first
-		poi.xctn.InObjsAdd(1, poi.lom.Lsize())
+	} else if !poi.t2t && poi.owt == cmn.OwtPut && poi.restful {
+		// user PUT
+		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
+		poi.stats()
+		// response header
+		if poi.resphdr != nil {
+			cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr, 0 /*skip setting content-length*/)
+		}
 	}
+
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(poi.loghdr())
 	}
-
 	return 0, nil
 rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
@@ -1591,6 +1590,8 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
 			return 0, err
 		}
 	}
+
+	// TODO: add a metric to count and size local copying
 	dst2, err := lom.Copy2FQN(dst.FQN, coi.Buf)
 	if err == nil {
 		size = lom.Lsize()

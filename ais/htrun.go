@@ -41,7 +41,6 @@ import (
 	"github.com/NVIDIA/aistore/tracing"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -257,8 +256,8 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 		}
 	}
 	// common Prometheus
-	if h.statsT.IsPrometheus() {
-		nh := networkHandler{r: "/" + apc.Metrics, h: promhttp.Handler().ServeHTTP}
+	if handler := h.statsT.PromHandler(); handler != nil {
+		nh := networkHandler{r: "/" + apc.Metrics, h: handler.ServeHTTP}
 		path := nh.r // absolute
 		handlePub(path, nh.h)
 	}

@@ -10,6 +10,7 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	ratomic "sync/atomic"
@@ -54,7 +55,7 @@ var (
 )
 
 // empty stab (Prometheus only)
-func initLabel(*meta.Snode) {}
+func initProm(*meta.Snode) {}
 
 ///////////////
 // coreStats //
@@ -312,8 +313,10 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, _ *Extra) {
 	r.core.Tracker[name] = v
 }
 
-func (*runner) IsPrometheus() bool { return false }
-func (r *runner) closeStatsD()     { r.core.statsdC.Close() }
+// empty stub (prometheus only)
+func (*runner) PromHandler() http.Handler { return nil }
+
+func (r *runner) closeStatsD() { r.core.statsdC.Close() }
 
 // convert bytes to meGabytes with a fixed rounding precision = 2 digits
 // - KindThroughput and KindComputedThroughput only
