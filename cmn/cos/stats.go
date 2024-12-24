@@ -22,11 +22,11 @@ type (
 		ClrFlag(name string, clr NodeStateFlags)
 		SetClrFlag(name string, set, clr NodeStateFlags)
 		Get(name string) int64
-		AddMany(namedVal64 ...NamedVal64)
+		AddWith(namedVal64 ...NamedVal64)
 	}
 	NamedVal64 struct {
-		Name       string
-		NameSuffix string // forces immediate send when non-empty
-		Value      int64
+		Name    string
+		Value   int64
+		VarLabs map[string]string // (Prometheus only)
 	}
 )

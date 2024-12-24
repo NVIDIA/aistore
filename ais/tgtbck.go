@@ -85,7 +85,6 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 				}
 			}
 			if err != nil {
-				t.statsT.IncErr(stats.ErrListCount)
 				t.writeErr(w, r, err)
 				return
 			}
@@ -104,13 +103,15 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			return
 		}
 		if ok := t.listObjects(w, r, bck, lsmsg); !ok {
-			t.statsT.IncErr(stats.ErrListCount)
+			t.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 			return
 		}
+
 		delta := mono.SinceNano(begin)
-		t.statsT.AddMany(
-			cos.NamedVal64{Name: stats.ListCount, Value: 1},
-			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
+		vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+		t.statsT.AddWith(
+			cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
+			cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: vlabs},
 		)
 	case apc.ActSummaryBck:
 		var bucket, phase string // txn

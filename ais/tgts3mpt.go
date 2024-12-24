@@ -208,17 +208,18 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	w.Header().Set(cos.S3CksumHeader, md5) // s3cmd checks this one
 
 	delta := mono.SinceNano(startTime)
-	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.PutSize, Value: size},
-		cos.NamedVal64{Name: stats.PutLatency, Value: delta},
-		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta},
+	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: "", stats.VarlabXactID: ""}
+	t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta, VarLabs: vlabs},
 	)
 	if remotePutLatency > 0 {
 		backendBck := t.Backend(bck)
-		t.statsT.AddMany(
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta},
+		t.statsT.AddWith(
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency, VarLabs: vlabs},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
 		)
 	}
 }
@@ -383,9 +384,10 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	sgl.Free()
 
 	// stats
-	t.statsT.Inc(stats.PutCount)
+	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: "", stats.VarlabXactID: ""}
+	t.statsT.IncWith(stats.PutCount, vlabs)
 	if remote {
-		t.statsT.Inc(t.Backend(bck).MetricName(stats.PutCount))
+		t.statsT.IncWith(t.Backend(bck).MetricName(stats.PutCount), vlabs)
 	}
 }
 
@@ -532,9 +534,11 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 	cos.Close(fh)
 	slab.Free(buf)
-	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.GetCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetSize, Value: size},
-		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: mono.SinceNano(startTime)},
+
+	vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+	t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.GetCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetSize, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: mono.SinceNano(startTime), VarLabs: vlabs},
 	)
 }

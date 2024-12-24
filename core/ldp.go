@@ -153,7 +153,8 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 		if errDel != nil {
 			ecode, err = 0, errDel
 		} else {
-			g.tstats.Inc(RemoteDeletedDelCount)
+			vlabs := map[string]string{"bucket": lom.Bck().Cname("")} // TODO -- FIXME: cannot import stats
+			g.tstats.AddWith(cos.NamedVal64{Name: RemoteDeletedDelCount, Value: 1, VarLabs: vlabs})
 		}
 		debug.Assert(err != nil)
 		return CRMD{ErrCode: ecode, Err: err}

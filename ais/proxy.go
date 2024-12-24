@@ -680,7 +680,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	}
 	lsmsg.Prefix = cos.TrimPrefix(lsmsg.Prefix)
 	if err := cmn.ValidatePrefix("bad list-objects request", lsmsg.Prefix); err != nil {
-		p.statsT.IncErr(stats.ErrListCount)
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
 	}
@@ -698,7 +698,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	// do
 	bck, errN := bckArgs.initAndTry()
 	if errN != nil {
-		p.statsT.IncErr(stats.ErrListCount)
 		return
 	}
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
@@ -733,11 +732,11 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	objName := apireq.items[1]
 	apiReqFree(apireq)
 	if err != nil {
-		p.statsT.IncErr(stats.ErrGetCount)
 		return
 	}
+
 	if err := cmn.ValidOname(objName); err != nil {
-		p.statsT.IncErr(stats.ErrGetCount)
+		p.statsT.IncBck(stats.ErrGetCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
 	}
@@ -748,7 +747,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	smap := p.owner.smap.get()
 	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
-		p.statsT.IncErr(stats.ErrGetCount)
+		p.statsT.IncBck(stats.ErrGetCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
 	}
@@ -760,7 +759,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
 	// 4. stats
-	p.statsT.Inc(stats.GetCount)
+	p.statsT.IncBck(stats.GetCount, bck.Bucket())
 }
 
 // PUT /v1/objects/bucket-name/object-name
@@ -771,6 +770,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		errcnt = stats.ErrPutCount
 		scnt   = stats.PutCount
 		perms  = apc.AcePUT
+		vlabs  = map[string]string{stats.VarlabBucket: "", stats.VarlabXactKind: "", stats.VarlabXactID: ""}
 	)
 	// 1. request
 	if err := p.parseReq(w, r, apireq); err != nil {
@@ -782,6 +782,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		perms = apc.AceAPPEND
 		errcnt = stats.ErrAppendCount
 		scnt = stats.AppendCount
+		vlabs = map[string]string{stats.VarlabBucket: ""}
 		if apireq.dpq.apnd.hdl != "" {
 			items, err := preParse(apireq.dpq.apnd.hdl) // apc.QparamAppendHandle
 			if err != nil {
@@ -805,9 +806,9 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	bck, err := bckArgs.initAndTry()
 	freeBctx(bckArgs)
 	if err != nil {
-		p.statsT.IncErr(errcnt)
 		return
 	}
+	vlabs[stats.VarlabBucket] = bck.Cname("")
 
 	// 3. redirect
 	var (
@@ -818,20 +819,20 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		netPub  = cmn.NetPublic
 	)
 	if err := cmn.ValidOname(objName); err != nil {
-		p.statsT.IncErr(errcnt)
+		p.statsT.IncWith(errcnt, vlabs)
 		p.writeErr(w, r, err)
 		return
 	}
 	if nodeID == "" {
 		tsi, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 		if err != nil {
-			p.statsT.IncErr(errcnt)
+			p.statsT.IncWith(errcnt, vlabs)
 			p.writeErr(w, r, err)
 			return
 		}
 	} else {
 		if tsi = smap.GetTarget(nodeID); tsi == nil {
-			p.statsT.IncErr(errcnt)
+			p.statsT.IncWith(errcnt, vlabs)
 			err = &errNodeNotFound{p.si, smap, verb + " failure:", nodeID}
 			p.writeErr(w, r, err)
 			return
@@ -851,7 +852,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	// 4. stats
-	p.statsT.Inc(scnt)
+	p.statsT.IncWith(scnt, vlabs)
 }
 
 // DELETE /v1/objects/bucket-name/object-name
@@ -869,14 +870,14 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := cmn.ValidOname(objName); err != nil {
-		p.statsT.IncErr(stats.ErrDeleteCount)
+		p.statsT.IncBck(stats.ErrDeleteCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
 	}
 	smap := p.owner.smap.get()
 	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
-		p.statsT.IncErr(stats.ErrDeleteCount)
+		p.statsT.IncBck(stats.ErrDeleteCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
 	}
@@ -886,7 +887,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	p.statsT.Inc(stats.DeleteCount)
+	p.statsT.IncBck(stats.DeleteCount, bck.Bucket())
 }
 
 // DELETE { action } /v1/buckets
@@ -1643,7 +1644,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	// LsVerChanged a.k.a. '--check-versions' limitations
 	if lsmsg.IsFlagSet(apc.LsVerChanged) {
 		if err := _checkVerChanged(bck, lsmsg); err != nil {
-			p.statsT.IncErr(stats.ErrListCount)
+			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1671,13 +1672,15 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	beg := mono.NanoTime()
 	lst, err := p.lsPage(bck, amsg, lsmsg, r.Header, p.owner.smap.get())
 	if err != nil {
-		p.statsT.IncErr(stats.ErrListCount)
+		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 		p.writeErr(w, r, err)
 		return
 	}
-	p.statsT.AddMany(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
+
+	vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+	p.statsT.AddWith(
+		cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
 	)
 
 	var ok bool
@@ -1846,18 +1849,18 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 	switch msg.Action {
 	case apc.ActRenameObject:
 		if err := p.checkAccess(w, r, bck, apc.AceObjMOVE); err != nil {
-			p.statsT.IncErr(stats.ErrRenameCount)
+			p.statsT.IncBck(stats.ErrRenameCount, bck.Bucket())
 			return
 		}
 		if err := _checkObjMv(bck, msg, apireq); err != nil {
-			p.statsT.IncErr(stats.ErrRenameCount)
+			p.statsT.IncBck(stats.ErrRenameCount, bck.Bucket())
 			p.writeErr(w, r, err)
 		}
 		p.redirectAction(w, r, bck, apireq.items[1], msg)
-		p.statsT.Inc(stats.RenameCount)
+		p.statsT.IncBck(stats.RenameCount, bck.Bucket())
 	case apc.ActPromote:
 		if err := p.checkAccess(w, r, bck, apc.AcePromote); err != nil {
-			p.statsT.IncErr(stats.ErrRenameCount)
+			p.statsT.IncBck(stats.ErrRenameCount, bck.Bucket())
 			return
 		}
 		// ActionMsg.Name is the source

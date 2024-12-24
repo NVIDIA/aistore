@@ -284,7 +284,7 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 			// otherwise, go keepalive with retries
 			nlog.Warningln(pkr.p.String(), "failed to fast-kalive", si.StringEx(), "err: [", err, status, "]")
 
-			pkr.statsT.IncErr(stats.ErrKaliveCount)
+			pkr.statsT.Inc(stats.ErrKaliveCount)
 			wg.Add(1)
 			go pkr.goping(si, wg, smap, config)
 		}
@@ -344,7 +344,7 @@ func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (
 
 	tout = config.Timeout.MaxKeepalive.D()
 	nlog.Warningln(pname, "failed to slow-kalive", sname, "- retrying [", err, status, tout, smap.StringEx(), "]")
-	pkr.statsT.IncErr(stats.ErrKaliveCount)
+	pkr.statsT.Inc(stats.ErrKaliveCount)
 
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
 	ok, stopped = pkr.retry(si, ticker, tout, config.Keepalive.NumRetries)
@@ -440,7 +440,7 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration
 				return true, false
 			}
 
-			pkr.statsT.IncErr(stats.ErrKaliveCount)
+			pkr.statsT.Inc(stats.ErrKaliveCount)
 			i++
 
 			if i >= kaNumRetries {
@@ -583,7 +583,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 		return
 	}
 
-	k.statsT.IncErr(stats.ErrKaliveCount)
+	k.statsT.Inc(stats.ErrKaliveCount)
 
 	debug.Assert(cpid == pid && cpid != si.ID())
 	nlog.Warningln(sname, "=>", pname, "failure - retrying: [", fast, tout, err, status, "]")

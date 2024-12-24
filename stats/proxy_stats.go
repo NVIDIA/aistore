@@ -63,9 +63,7 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	s := r.core
 	s.updateUptime(uptime)
-	s.promLock()
 	idle := s.copyT(r.ctracker)
-	s.promUnlock()
 
 	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 

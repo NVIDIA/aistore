@@ -65,8 +65,7 @@ redirect_from:
 | `put.bps` | `put_mbps` | bandwidth | PUT: average throughput (MB/s) over the last periodic.stats_time interval | default |
 | `get.size` | `get_bytes` | size | GET: total cumulative size (bytes) | default |
 | `put.size` | `put_bytes` | size | PUT: total cumulative size (bytes) | default |
-| `err.cksum.n` | `err_cksum_count` | counter | number of executed GET(object) requests | default |
-| `err.cksum.size` | `err_cksum_bytes` | size | number of executed GET(object) requests | default |
+| `err.cksum.n` | `err_cksum_count` | counter | PUT: number of checksum errors | default |
 | `err.fshc.n` | `err_fshc_count` | counter | number of times filesystem health checker (FSHC) was triggered by an I/O error or errors | default |
 | `err.io.get.n` | `err_io_get_count` | counter | GET: number of I/O errors _not_ including remote backend and network errors | default |
 | `err.io.put.n` | `err_io_put_count` | counter | PUT: number of I/O errors _not_ including remote backend and network errors | default |
@@ -76,7 +75,7 @@ redirect_from:
 | `stream.in.n` | `stream_in_count` | counter | intra-cluster streaming communications: number of received objects | default |
 | `stream.in.size` | `stream_in_bytes` | size | intra-cluster streaming communications: total cumulative size (bytes) of all received objects | default |
 | `dl.size` | `dl_bytes` | size | total downloaded size (bytes) | default |
-| `dl.ns` | `dl_ms` | latency | total time it took to execute dowload requests (milliseconds) | default |
+| `dl.ns.total` | `dl_ns_total` | total | total downloading time (nanoseconds) | default |
 | `dsort.creation.req.n` | `dsort_creation_req_count` | counter | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
 | `dsort.creation.resp.n` | `dsort_creation_resp_count` | counter | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
 | `dsort.creation.resp.ns` | `dsort_creation_resp_ms` | latency | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |

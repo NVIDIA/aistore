@@ -1051,7 +1051,7 @@ func (h *htrun) logerr(tag string, v any, err error) {
 	} else {
 		nlog.Errorln(msg)
 	}
-	h.statsT.IncErr(stats.ErrHTTPWriteCount)
+	h.statsT.Inc(stats.ErrHTTPWriteCount)
 }
 
 func _parseNCopies(value any) (copies int64, err error) {

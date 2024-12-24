@@ -196,7 +196,7 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 	}
 	if ecode != http.StatusNotFound {
 		// user GET and PUT requests: making a _silent_ exception for assorted error codes
-		// (counting them via stats.IncErr though)
+		// (counting them via stats.Inc though)
 		if bctx.perms == apc.AceGET || bctx.perms == apc.AcePUT {
 			if ecode == http.StatusUnauthorized || ecode == http.StatusForbidden {
 				bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)

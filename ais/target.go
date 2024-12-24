@@ -772,12 +772,19 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// do
 	if ecode, err := goi.getObject(); err != nil {
-		t.statsT.IncErr(stats.ErrGetCount)
+		vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
 		if goi.isIOErr {
-			t.statsT.IncErr(stats.IOErrGetCount)
+			t.statsT.AddWith(
+				cos.NamedVal64{Name: stats.ErrGetCount, Value: 1, VarLabs: vlabs},
+				cos.NamedVal64{Name: stats.IOErrGetCount, Value: 1, VarLabs: vlabs},
+			)
 			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 				nlog.Warningln("io-error [", err, "]", goi.lom.String())
 			}
+		} else {
+			t.statsT.AddWith(
+				cos.NamedVal64{Name: stats.ErrGetCount, Value: 1, VarLabs: vlabs},
+			)
 		}
 
 		// handle right here, return nil
@@ -887,7 +894,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
-		t.statsT.IncErr(stats.ErrAppendCount)
+		vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+		t.statsT.AddWith(
+			cos.NamedVal64{Name: stats.ErrAppendCount, Value: 1, VarLabs: vlabs},
+		)
 	default:
 		poi := allocPOI()
 		{
@@ -974,11 +984,14 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			break
 		}
 		if err = t.objMv(lom, msg); err == nil {
-			t.statsT.Inc(stats.RenameCount)
+			t.statsT.IncBck(stats.RenameCount, lom.Bucket())
 			core.FreeLOM(lom)
 			lom = nil
 		} else {
-			t.statsT.IncErr(stats.ErrRenameCount)
+			vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+			t.statsT.AddWith(
+				cos.NamedVal64{Name: stats.ErrRenameCount, Value: 1, VarLabs: vlabs},
+			)
 		}
 	case apc.ActBlobDl:
 		// TODO: add stats.GetBlobCount and *ErrCount
@@ -1287,19 +1300,30 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	}
 
 	// stats
+	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
 	switch {
 	case err == nil:
-		t.statsT.Inc(stats.DeleteCount)
+		t.statsT.AddWith(
+			cos.NamedVal64{Name: stats.DeleteCount, Value: 1, VarLabs: vlabs},
+		)
 	case cos.IsNotExist(err, code) || cmn.IsErrObjNought(err):
 		if !evict {
-			t.statsT.IncErr(stats.ErrDeleteCount) // TODO: count GET/PUT/DELETE remote errors on a per-backend...
+			t.statsT.AddWith(
+				cos.NamedVal64{Name: stats.ErrDeleteCount, Value: 1, VarLabs: vlabs},
+			)
 		}
 	default:
 		// not to confuse with `stats.RemoteDeletedDelCount` that counts against
 		// QparamLatestVer, 'versioning.validate_warm_get' and friends
-		t.statsT.IncErr(stats.ErrDeleteCount)
 		if !isback {
-			t.statsT.IncErr(stats.IOErrDeleteCount)
+			t.statsT.AddWith(
+				cos.NamedVal64{Name: stats.ErrDeleteCount, Value: 1, VarLabs: vlabs},
+				cos.NamedVal64{Name: stats.IOErrDeleteCount, Value: 1, VarLabs: vlabs},
+			)
+		} else {
+			t.statsT.AddWith(
+				cos.NamedVal64{Name: stats.ErrDeleteCount, Value: 1, VarLabs: vlabs},
+			)
 		}
 	}
 	return code, err
@@ -1351,10 +1375,8 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 			debug.Assert(aisErr == nil) // expecting lom.RemoveObj() to return nil when IsNotExist
 		} else if evict {
 			debug.Assert(lom.Bck().IsRemote())
-			t.statsT.AddMany(
-				cos.NamedVal64{Name: stats.LruEvictCount, Value: 1},
-				cos.NamedVal64{Name: stats.LruEvictSize, Value: size},
-			)
+			t.statsT.Inc(stats.LruEvictCount)
+			t.statsT.Add(stats.LruEvictSize, size)
 		}
 	}
 	if backendErr != nil {

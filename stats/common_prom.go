@@ -10,36 +10,28 @@ package stats
 import (
 	"encoding/json"
 	"strings"
-	"sync"
 	ratomic "sync/atomic"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type (
-	promDesc map[string]*prometheus.Desc
-
-	// Stats are tracked via a map of stats names (key) and statsValue (values).
 	statsValue struct {
+		prom       iadd
 		kind       string // enum { KindCounter, ..., KindSpecial }
 		Value      int64  `json:"v,string"`
 		numSamples int64  // (average latency over stats_time)
 		cumulative int64  // REST API
 	}
-
 	coreStats struct {
 		Tracker   map[string]*statsValue
-		promDesc  promDesc
 		sgl       *memsys.SGL
 		statsTime time.Duration
-		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
 	}
 )
 
@@ -53,61 +45,13 @@ var (
 	_ json.Unmarshaler = (*coreStats)(nil)
 )
 
-func (s *coreStats) init(size int) {
-	s.Tracker = make(map[string]*statsValue, size)
-	s.promDesc = make(promDesc, size)
+var staticLabs = prometheus.Labels{ConstlabNode: ""}
 
-	s.sgl = memsys.PageMM().NewSGL(memsys.DefaultBufSize)
+func initLabel(snode *meta.Snode) {
+	staticLabs[ConstlabNode] = strings.ReplaceAll(snode.ID(), ".", "_")
 }
 
-var dfltLabels = prometheus.Labels{"node_id": ""}
-
-func initDfltlabel(snode *meta.Snode) {
-	dfltLabels["node_id"] = strings.ReplaceAll(snode.ID(), ".", "_")
-}
-
-// init Prometheus (not StatsD)
-func (*coreStats) initStatsdOrProm(_ *meta.Snode, parent *runner) {
-	nlog.Infoln("Using Prometheus")
-	prometheus.MustRegister(parent) // as prometheus.Collector
-}
-
-// vs Collect()
-func (s *coreStats) promRLock()   { s.cmu.RLock() }
-func (s *coreStats) promRUnlock() { s.cmu.RUnlock() }
-func (s *coreStats) promLock()    { s.cmu.Lock() }
-func (s *coreStats) promUnlock()  { s.cmu.Unlock() }
-
-func (s *coreStats) updateUptime(d time.Duration) {
-	v := s.Tracker[Uptime]
-	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
-}
-
-func (s *coreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
-func (s *coreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
-
-func (s *coreStats) get(name string) (val int64) {
-	v := s.Tracker[name]
-	val = ratomic.LoadInt64(&v.Value)
-	return
-}
-
-func (s *coreStats) update(nv cos.NamedVal64) {
-	v, ok := s.Tracker[nv.Name]
-	debug.Assertf(ok, "invalid metric name %q", nv.Name)
-	switch v.kind {
-	case KindLatency:
-		ratomic.AddInt64(&v.numSamples, 1)
-		fallthrough
-	case KindThroughput:
-		ratomic.AddInt64(&v.Value, nv.Value)
-		ratomic.AddInt64(&v.cumulative, nv.Value)
-	case KindCounter, KindSize, KindTotal:
-		ratomic.AddInt64(&v.Value, nv.Value)
-	default:
-		debug.Assert(false, v.kind)
-	}
-}
+func (*coreStats) initStarted(*meta.Snode) { nlog.Infoln("Using Prometheus") }
 
 // usage: log resulting `copyValue` numbers:
 func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
@@ -223,29 +167,22 @@ func (s *coreStats) reset(errorsOnly bool) {
 // runner //
 ////////////
 
-// interface guard
-var (
-	_ prometheus.Collector = (*runner)(nil)
-)
-
 func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
-	v := &statsValue{kind: kind}
-	r.core.Tracker[name] = v
-
 	var (
-		metricName  string
-		help        string
-		constLabels = dfltLabels
+		metricName string
+		help       string
+		constLabs  = staticLabs
 	)
-	debug.Assert(extra != nil)
-	debug.Assert(extra.Help != "")
+
+	// static labels
 	if len(extra.Labels) > 0 {
-		constLabels = prometheus.Labels(extra.Labels)
-		constLabels["node_id"] = dfltLabels["node_id"]
+		constLabs = prometheus.Labels(extra.Labels)
+		constLabs[ConstlabNode] = staticLabs[ConstlabNode]
 	}
+
+	// metric name
 	if extra.StrName == "" {
-		// when not explicitly specified: generate prometheus name
-		// from an internal name (compare with common_statsd reg() impl.)
+		// when not explicitly specified: generate prometheus metric name
 		switch kind {
 		case KindCounter:
 			debug.Assert(strings.HasSuffix(name, ".n"), name)
@@ -266,73 +203,43 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 	} else {
 		metricName = extra.StrName
 	}
+
+	// help
 	help = extra.Help
 
-	fullqn := prometheus.BuildFQName("ais" /*namespace*/, snode.Type() /*subsystem*/, metricName)
-	r.core.promDesc[name] = prometheus.NewDesc(fullqn, help, nil /*variableLabels*/, constLabels)
+	// construct prometheus metric
+	v := &statsValue{kind: kind}
+
+	switch kind {
+	case KindCounter, KindTotal, KindSize:
+		opts := prometheus.CounterOpts{Namespace: "ais", Subsystem: snode.Type(), Name: metricName, Help: help, ConstLabels: constLabs}
+		if len(extra.VarLabs) > 0 {
+			metric := prometheus.NewCounterVec(opts, extra.VarLabs)
+			v.prom = counterVec{metric}
+			prometheus.MustRegister(metric)
+		} else {
+			metric := prometheus.NewCounter(opts)
+			v.prom = counter{metric}
+			prometheus.MustRegister(metric)
+		}
+	case KindLatency, KindThroughput:
+		// these two _kinds_ or, more generally, metrics computed over fixed ('periodic.stats_time') interval
+		// are now completely hidden from prometheus (v3.26)
+	default:
+		opts := prometheus.GaugeOpts{Namespace: "ais", Subsystem: snode.Type(), Name: metricName, Help: help, ConstLabels: constLabs}
+		if len(extra.VarLabs) > 0 {
+			metric := prometheus.NewGaugeVec(opts, extra.VarLabs)
+			v.prom = gaugeVec{metric}
+			prometheus.MustRegister(metric)
+		} else {
+			metric := prometheus.NewGauge(opts)
+			v.prom = gauge{metric}
+			prometheus.MustRegister(metric)
+		}
+	}
+
+	r.core.Tracker[name] = v
 }
 
 func (*runner) IsPrometheus() bool { return true }
-
-func (r *runner) Describe(ch chan<- *prometheus.Desc) {
-	for _, desc := range r.core.promDesc {
-		ch <- desc
-	}
-}
-
-func (r *runner) Collect(ch chan<- prometheus.Metric) {
-	debug.Assert(r.StartedUp()) // via initStatsdOrProm()
-
-	r.core.promRLock()
-	for name, v := range r.core.Tracker {
-		var (
-			val int64
-			fv  float64
-		)
-		copyV, okc := r.ctracker[name]
-		if !okc {
-			continue
-		}
-		// NOTE: skipping metrics that have not (yet) been updated
-		// (and some of them may never be)
-		if val = copyV.Value; val == 0 {
-			continue
-		}
-		fv = float64(val)
-		// 1. convert units
-		switch v.kind {
-		case KindCounter, KindTotal:
-			// do nothing
-		case KindSize:
-			fv = float64(val)
-		case KindLatency:
-			millis := cos.DivRound(val, int64(time.Millisecond))
-			fv = float64(millis)
-		case KindThroughput:
-			fv = roundMBs(val)
-		default:
-			if name == Uptime {
-				seconds := cos.DivRound(val, int64(time.Second))
-				fv = float64(seconds)
-			}
-		}
-		// 2. convert kind
-		promMetricType := prometheus.GaugeValue
-		if v.kind == KindCounter || v.kind == KindSize || v.kind == KindTotal {
-			promMetricType = prometheus.CounterValue
-		}
-		// 3. publish
-		desc, ok := r.core.promDesc[name]
-		debug.Assert(ok, name)
-		m, err := prometheus.NewConstMetric(desc, promMetricType, fv)
-		debug.AssertNoErr(err)
-		ch <- m
-	}
-	r.core.promRUnlock()
-}
-
-func (r *runner) Stop(err error) {
-	nlog.Infof("Stopping %s, err: %v", r.Name(), err)
-	r.stopCh <- struct{}{}
-	close(r.stopCh)
-}
+func (*runner) closeStatsD()       {} // build tag "statsd" stub

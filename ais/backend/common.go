@@ -46,6 +46,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "GET: total number of executed remote requests (cold GETs)",
 			StrName: "remote_get_count",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -55,6 +56,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster",
 			StrName: "remote_get_ns_total",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -65,6 +67,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 				"includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response",
 			StrName: "remote_e2e_get_ns_total",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -73,7 +76,9 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 		&stats.Extra{
 			Help:    "GET: total cumulative size (bytes) of all cold-GET transactions",
 			StrName: "remote_get_bytes_total",
-			Labels:  labels},
+			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
+		},
 	)
 
 	// PUT
@@ -89,6 +94,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "PUT: total number of executed remote requests to a given backend",
 			StrName: "remote_put_count",
 			Labels:  labels,
+			VarLabs: stats.BckXactVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -98,6 +104,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster",
 			StrName: "remote_put_ns_total",
 			Labels:  labels,
+			VarLabs: stats.BckXactVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -107,7 +114,9 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			StrName: "remote_e2e_put_ns_total",
 			Help: "PUT: total end-to-end time (nanoseconds) servicing remote requests; " +
 				"includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object",
-			Labels: labels},
+			Labels:  labels,
+			VarLabs: stats.BckXactVarlabs,
+		},
 	)
 	tr.RegExtMetric(snode,
 		b.metrics[stats.PutSize],
@@ -116,6 +125,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "PUT: total cumulative size (bytes) of all PUTs to a given remote backend",
 			StrName: "remote_e2e_put_bytes_total",
 			Labels:  labels,
+			VarLabs: stats.BckXactVarlabs,
 		},
 	)
 
@@ -130,6 +140,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "HEAD: total number of executed remote requests to a given backend",
 			StrName: "remote_head_count",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -139,6 +150,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "HEAD: total cumulative time (nanoseconds) to execute remote requests",
 			StrName: "remote_head_ns_total",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 
@@ -153,6 +165,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "number of out-of-band updates (by a 3rd party performing remote PUTs outside this cluster)",
 			StrName: "remote_ver_change_count",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 	tr.RegExtMetric(snode,
@@ -162,6 +175,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker) {
 			Help:    "total cumulative size of objects that were updated out-of-band",
 			StrName: "remote_ver_change_bytes_total",
 			Labels:  labels,
+			VarLabs: stats.BckVarlabs,
 		},
 	)
 }

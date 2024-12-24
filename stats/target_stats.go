@@ -46,8 +46,7 @@ const (
 	VerChangeSize  = "ver.change.size"
 
 	// errors
-	ErrCksumCount = errPrefix + "cksum.n"
-	ErrCksumSize  = errPrefix + "cksum.size"
+	ErrPutCksumCount = errPrefix + "put.cksum.n"
 
 	ErrFSHCCount = errPrefix + "fshc.n"
 
@@ -59,11 +58,11 @@ const (
 	// KindLatency
 	PutLatency         = "put.ns"
 	PutLatencyTotal    = "put.ns.total"
-	PutE2ELatencyTotal = "e2e.put.ns.total" // e2e write-through PUT latency
+	PutE2ELatencyTotal = "e2e.put.ns.total" // end to end (e2e) write-through PUT latency
 	AppendLatency      = "append.ns"
 	GetRedirLatency    = "get.redir.ns"
 	PutRedirLatency    = "put.redir.ns"
-	DownloadLatency    = "dl.ns"
+	DloadLatencyTotal  = "dl.ns.total"
 	HeadLatency        = "head.ns"
 	HeadLatencyTotal   = "head.ns.total"
 
@@ -76,7 +75,7 @@ const (
 	DsortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
 
 	// Downloader
-	DownloadSize = "dl.size"
+	DloadSize = "dl.size"
 
 	// KindThroughput
 	GetThroughput = "get.bps" // bytes per second
@@ -269,43 +268,51 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	// out-of-band (x 3)
 	r.reg(snode, VerChangeCount, KindCounter,
 		&Extra{
-			Help: "number of out-of-band updates (by a 3rd party performing remote PUTs from outside this cluster)",
+			Help:    "number of out-of-band updates (by a 3rd party performing remote PUTs from outside this cluster)",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, VerChangeSize, KindSize,
 		&Extra{
-			Help: "total cumulative size (bytes) of objects that were updated out-of-band across all backends combined",
+			Help:    "total cumulative size (bytes) of objects that were updated out-of-band across all backends combined",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, RemoteDeletedDelCount, KindCounter,
 		&Extra{
-			Help: "number of out-of-band deletes (by a 3rd party remote DELETE(object) from outside this cluster)",
+			Help:    "number of out-of-band deletes (by a 3rd party remote DELETE(object) from outside this cluster)",
+			VarLabs: BckVarlabs,
 		},
 	)
 
 	r.reg(snode, PutLatency, KindLatency,
 		&Extra{
-			Help: "PUT: average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "PUT: average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 	r.reg(snode, PutLatencyTotal, KindTotal,
 		&Extra{
-			Help: "PUT: total cumulative time (nanoseconds)",
+			Help:    "PUT: total cumulative time (nanoseconds)",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 	r.reg(snode, HeadLatency, KindLatency,
 		&Extra{
-			Help: "HEAD: average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "HEAD: average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, HeadLatencyTotal, KindTotal,
 		&Extra{
-			Help: "HEAD: total cumulative time (nanoseconds)",
+			Help:    "HEAD: total cumulative time (nanoseconds)",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, AppendLatency, KindLatency,
 		&Extra{
-			Help: "APPEND(object): average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "APPEND(object): average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, GetRedirLatency, KindLatency,
@@ -322,56 +329,60 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	// bps
 	r.reg(snode, GetThroughput, KindThroughput,
 		&Extra{
-			Help: "GET: average throughput (MB/s) over the last periodic.stats_time interval",
+			Help:    "GET: average throughput (MB/s) over the last periodic.stats_time interval",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, PutThroughput, KindThroughput,
 		&Extra{
-			Help: "PUT: average throughput (MB/s) over the last periodic.stats_time interval",
+			Help:    "PUT: average throughput (MB/s) over the last periodic.stats_time interval",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 
 	r.reg(snode, GetSize, KindSize,
 		&Extra{
-			Help: "GET: total cumulative size (bytes)",
+			Help:    "GET: total cumulative size (bytes)",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, PutSize, KindSize,
 		&Extra{
-			Help: "PUT: total cumulative size (bytes)",
+			Help:    "PUT: total cumulative size (bytes)",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 
 	// errors
-	r.reg(snode, ErrCksumCount, KindCounter,
+	r.reg(snode, ErrPutCksumCount, KindCounter,
 		&Extra{
-			Help: "number of executed GET(object) requests",
-		},
-	)
-	r.reg(snode, ErrCksumSize, KindSize,
-		&Extra{
-			Help: "number of executed GET(object) requests",
+			Help:    "PUT: number of checksum errors",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 	r.reg(snode, ErrFSHCCount, KindCounter,
 		&Extra{
-			Help: "number of times filesystem health checker (FSHC) was triggered by an I/O error or errors",
+			Help:    "number of times filesystem health checker (FSHC) was triggered by an I/O error or errors",
+			VarLabs: MpathVarlabs,
 		},
 	)
 
 	r.reg(snode, IOErrGetCount, KindCounter,
 		&Extra{
-			Help: "GET: number of I/O errors _not_ including remote backend and network errors",
+			Help:    "GET: number of I/O errors _not_ including remote backend and network errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, IOErrPutCount, KindCounter,
 		&Extra{
-			Help: "PUT: number of I/O errors _not_ including remote backend and network errors",
+			Help:    "PUT: number of I/O errors _not_ including remote backend and network errors",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 	r.reg(snode, IOErrDeleteCount, KindCounter,
 		&Extra{
-			Help: "DELETE(object): number of I/O errors _not_ including remote backend and network errors",
+			Help:    "DELETE(object): number of I/O errors _not_ including remote backend and network errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 
@@ -404,14 +415,16 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	)
 
 	// download
-	r.reg(snode, DownloadSize, KindSize,
+	r.reg(snode, DloadSize, KindSize,
 		&Extra{
-			Help: "total downloaded size (bytes)",
+			Help:    "total downloaded size (bytes)",
+			VarLabs: BckVarlabs,
 		},
 	)
-	r.reg(snode, DownloadLatency, KindLatency,
+	r.reg(snode, DloadLatencyTotal, KindTotal,
 		&Extra{
-			Help: "total time it took to execute dowload requests (milliseconds)",
+			Help:    "total downloading time (nanoseconds)",
+			VarLabs: BckVarlabs,
 		},
 	)
 
@@ -584,9 +597,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 2 copy stats, reset latencies, send via StatsD if configured
 	s.updateUptime(uptime)
-	s.promLock()
 	idle := s.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
-	s.promUnlock()
 
 	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if (!idle && now >= r.next) || verbose {

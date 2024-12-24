@@ -96,11 +96,13 @@ func (task *singleTask) download(lom *core.LOM) {
 
 	g.store.incFinished(task.jobID())
 
-	g.tstats.AddMany(
-		cos.NamedVal64{Name: stats.DownloadSize, Value: task.currentSize.Load()},
-		cos.NamedVal64{Name: stats.DownloadLatency, Value: int64(task.ended.Load().Sub(task.started.Load()))},
+	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+	lsize := task.currentSize.Load()
+	g.tstats.AddWith(
+		cos.NamedVal64{Name: stats.DloadSize, Value: lsize, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.DloadLatencyTotal, Value: int64(task.ended.Load().Sub(task.started.Load())), VarLabs: vlabs},
 	)
-	task.xdl.ObjsAdd(1, task.currentSize.Load())
+	task.xdl.ObjsAdd(1, lsize)
 }
 
 func (task *singleTask) _dlocal(lom *core.LOM, timeout time.Duration) (bool /*err is fatal*/, error) {
@@ -249,7 +251,7 @@ func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
-	g.tstats.IncErr(stats.ErrDownloadCount)
+	g.tstats.Inc(stats.ErrDownloadCount)
 	g.store.persistError(task.jobID(), task.obj.objName, statusMsg)
 	g.store.incErrorCnt(task.jobID())
 }

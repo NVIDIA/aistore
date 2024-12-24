@@ -383,10 +383,8 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	} else {
 		// stats
 		delta := mono.Since(beforeRecv)
-		g.tstats.AddMany(
-			cos.NamedVal64{Name: stats.DsortCreationRespCount, Value: 1},
-			cos.NamedVal64{Name: stats.DsortCreationRespLatency, Value: int64(delta)},
-		)
+		g.tstats.Inc(stats.DsortCreationRespCount)
+		g.tstats.Add(stats.DsortCreationRespLatency, int64(delta))
 	}
 
 	// If we timed out or were stopped but failed to pull the

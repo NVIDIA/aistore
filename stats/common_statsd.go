@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	jsoniter "github.com/json-iterator/go"
 )
 
 type (
@@ -55,7 +54,7 @@ var (
 )
 
 // empty stab (Prometheus only)
-func initDfltlabel(*meta.Snode) {}
+func initLabel(*meta.Snode) {}
 
 ///////////////
 // coreStats //
@@ -67,21 +66,10 @@ var (
 	_ json.Unmarshaler = (*coreStats)(nil)
 )
 
-func (s *coreStats) init(size int) {
-	s.Tracker = make(map[string]*statsValue, size)
-
-	s.sgl = memsys.PageMM().NewSGL(memsys.DefaultBufSize)
-}
-
 // NOTE: nil StatsD client means that we provide metrics to Prometheus (see below)
 func (s *coreStats) statsdDisabled() bool { return s.statsdC == nil }
 
-// empty stabs
-func (*coreStats) promLock()   {}
-func (*coreStats) promUnlock() {}
-
-// init StatsD (not Prometheus)
-func (s *coreStats) initStatsdOrProm(snode *meta.Snode, _ *runner) {
+func (s *coreStats) initStarted(snode *meta.Snode) {
 	var (
 		port  = 8125  // StatsD default port, see https://github.com/etsy/stats
 		probe = false // test-probe StatsD server at init time
@@ -111,42 +99,29 @@ func (s *coreStats) initStatsdOrProm(snode *meta.Snode, _ *runner) {
 	s.statsdC = statsD
 }
 
-func (s *coreStats) updateUptime(d time.Duration) {
-	v := s.Tracker[Uptime]
-	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
-}
+// compare w/ prometheus
+func (s *coreStats) addWith(nv cos.NamedVal64) { s.add(nv.Name, nv.Value) }
 
-func (s *coreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
-func (s *coreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
-
-func (s *coreStats) get(name string) (val int64) {
-	v := s.Tracker[name]
-	val = ratomic.LoadInt64(&v.Value)
-	return
-}
-
-func (s *coreStats) update(nv cos.NamedVal64) {
-	v, ok := s.Tracker[nv.Name]
-	debug.Assertf(ok, "invalid metric name %q", nv.Name)
+func (s *coreStats) add(name string, val int64) {
+	v, ok := s.Tracker[name]
+	debug.Assertf(ok, "invalid metric name %q", name)
 	switch v.kind {
 	case KindLatency:
 		ratomic.AddInt64(&v.numSamples, 1)
 		fallthrough
 	case KindThroughput:
-		ratomic.AddInt64(&v.Value, nv.Value)
-		ratomic.AddInt64(&v.cumulative, nv.Value)
+		ratomic.AddInt64(&v.Value, val)
+		ratomic.AddInt64(&v.cumulative, val)
 	case KindCounter, KindSize, KindTotal:
-		ratomic.AddInt64(&v.Value, nv.Value)
-		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
-		// - suffix is an arbitrary string that can be defined at runtime;
-		// - e.g. usage: per-mountpath error counters.
-		if !s.statsdDisabled() && nv.NameSuffix != "" {
-			s.statsdC.Send(v.label.comm+"."+nv.NameSuffix,
-				1, metric{Type: statsd.Counter, Name: "count", Value: nv.Value})
-		}
+		ratomic.AddInt64(&v.Value, val)
 	default:
 		debug.Assert(false, v.kind)
 	}
+}
+
+func (s *coreStats) updateUptime(d time.Duration) {
+	v := s.Tracker[Uptime]
+	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
 }
 
 // usage: log and StatsD Tx
@@ -338,10 +313,15 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, _ *Extra) {
 }
 
 func (*runner) IsPrometheus() bool { return false }
+func (r *runner) closeStatsD()     { r.core.statsdC.Close() }
 
-func (r *runner) Stop(err error) {
-	nlog.Infof("Stopping %s, err: %v", r.Name(), err)
-	r.stopCh <- struct{}{}
-	r.core.statsdC.Close()
-	close(r.stopCh)
+// convert bytes to meGabytes with a fixed rounding precision = 2 digits
+// - KindThroughput and KindComputedThroughput only
+// - MB, not MiB
+// - math.Ceil wouldn't produce two decimals
+func roundMBs(val int64) (mbs float64) {
+	mbs = float64(val) / 1000 / 10
+	num := int(mbs + 0.5)
+	mbs = float64(num) / 100
+	return
 }

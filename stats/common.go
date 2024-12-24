@@ -32,6 +32,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// All error counters must have "err_" prefix (see `errPrefix`)
+
 // Linkage:
 // - this source is common for both Prometheus (common_prom.go) and StatsD (common_statsd.go)
 // - one of the two pairs (common, common_prom) OR (common, common_statsd) gets compiled with
@@ -78,7 +80,7 @@ const (
 	ListCount   = "lst.n" // list-objects
 
 	// error counters
-	// see also: `IncErr`, `regCommon`, `ioErrNames`
+	// see also: `Inc`, `regCommon`, `ioErrNames`
 	ErrGetCount    = errPrefix + GetCount
 	ErrPutCount    = errPrefix + PutCount
 	ErrHeadCount   = errPrefix + HeadCount
@@ -93,13 +95,12 @@ const (
 	// (for even more errors, see target_stats)
 	ErrHTTPWriteCount = errPrefix + "http.write.n"
 	ErrDownloadCount  = errPrefix + "dl.n"
-	ErrPutMirrorCount = errPrefix + "put.mirror.n"
 
 	// KindLatency
 	// latency stats have numSamples used to compute average latency
 	GetLatency         = "get.ns"
 	GetLatencyTotal    = "get.ns.total"
-	GetE2ELatencyTotal = "e2e.get.ns.total" // // e2e cold-GET latency
+	GetE2ELatencyTotal = "e2e.get.ns.total" // end to end (e2e) cold-GET latency
 	ListLatency        = "lst.ns"
 	KeepAliveLatency   = "kalive.ns"
 
@@ -158,79 +159,93 @@ func (r *runner) RegExtMetric(snode *meta.Snode, name, kind string, extra *Extra
 // common (target, proxy) metrics
 func (r *runner) regCommon(snode *meta.Snode) {
 	// prometheus only
-	initDfltlabel(snode)
+	initLabel(snode)
 
 	// basic counters
 	r.reg(snode, GetCount, KindCounter,
 		&Extra{
-			Help: "total number of executed GET(object) requests",
+			Help:    "total number of executed GET(object) requests",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, PutCount, KindCounter,
 		&Extra{
-			Help: "total number of executed PUT(object) requests",
+			Help:    "total number of executed PUT(object) requests",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 	r.reg(snode, HeadCount, KindCounter,
 		&Extra{
-			Help: "total number of executed HEAD(object) requests", // NOTE: currently, we only count remote ("cold") HEAD
+			Help:    "total number of executed HEAD(object) requests", // NOTE: currently, we only count remote ("cold") HEAD
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, AppendCount, KindCounter,
 		&Extra{
-			Help: "total number of executed APPEND(object) requests",
+			Help:    "total number of executed APPEND(object) requests",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, DeleteCount, KindCounter,
 		&Extra{
-			Help: "total number of executed DELETE(object) requests",
+			Help:    "total number of executed DELETE(object) requests",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, RenameCount, KindCounter,
 		&Extra{
-			Help: "total number of executed rename(object) requests",
+			Help:    "total number of executed rename(object) requests",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ListCount, KindCounter,
 		&Extra{
-			Help: "total number of executed list-objects requests",
+			Help:    "total number of executed list-objects requests",
+			VarLabs: BckVarlabs,
 		},
 	)
 
 	// basic error counters, respectively
 	r.reg(snode, ErrGetCount, KindCounter,
 		&Extra{
-			Help: "total number of GET(object) errors",
+			Help:    "total number of GET(object) errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ErrPutCount, KindCounter,
 		&Extra{
-			Help: "total number of PUT(object) errors",
+			Help:    "total number of PUT(object) errors",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 	r.reg(snode, ErrHeadCount, KindCounter,
 		&Extra{
-			Help: "total number of HEAD(object) errors", // ditto (HeadCount above)
+			Help:    "total number of HEAD(object) errors", // ditto (HeadCount above)
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ErrAppendCount, KindCounter,
 		&Extra{
-			Help: "total number of APPEND(object) errors",
+			Help:    "total number of APPEND(object) errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ErrDeleteCount, KindCounter,
 		&Extra{
-			Help: "total number of DELETE(object) errors",
+			Help:    "total number of DELETE(object) errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ErrRenameCount, KindCounter,
 		&Extra{
-			Help: "total number of rename(object) errors",
+			Help:    "total number of rename(object) errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ErrListCount, KindCounter,
 		&Extra{
-			Help: "total number of list-objects errors",
+			Help:    "total number of list-objects errors",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ErrKaliveCount, KindCounter,
@@ -250,26 +265,24 @@ func (r *runner) regCommon(snode *meta.Snode) {
 			Help: "downloader: number of download errors",
 		},
 	)
-	r.reg(snode, ErrPutMirrorCount, KindCounter,
-		&Extra{
-			Help: "number of n-way mirroring errors",
-		},
-	)
 
 	// basic latencies
 	r.reg(snode, GetLatency, KindLatency,
 		&Extra{
-			Help: "GET: average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "GET: average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, GetLatencyTotal, KindTotal,
 		&Extra{
-			Help: "GET: total cumulative time (nanoseconds)",
+			Help:    "GET: total cumulative time (nanoseconds)",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, ListLatency, KindLatency,
 		&Extra{
-			Help: "list-objects: average time (milliseconds) over the last periodic.stats_time interval",
+			Help:    "list-objects: average time (milliseconds) over the last periodic.stats_time interval",
+			VarLabs: BckVarlabs,
 		},
 	)
 	r.reg(snode, KeepAliveLatency, KindLatency,
@@ -290,7 +303,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, NodeAlerts, KindGauge,
 		&Extra{
 			Help: "bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; " +
-				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details", // TODO: must have a readme
+				"see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details",
 		},
 	)
 }
@@ -299,24 +312,24 @@ func (r *runner) regCommon(snode *meta.Snode) {
 // as cos.StatsUpdater
 //
 
-func (r *runner) Add(name string, val int64) {
-	r.core.update(cos.NamedVal64{Name: name, Value: val})
-}
+func (r *runner) Inc(name string)            { r.core.add(name, 1) }
+func (r *runner) Add(name string, val int64) { r.core.add(name, val) }
 
-func (r *runner) Inc(name string) {
-	r.core.update(cos.NamedVal64{Name: name, Value: 1})
-}
-
-// same as above (readability)
-func (r *runner) IncErr(metric string) {
-	debug.Assert(strings.HasPrefix(metric, errPrefix), metric)
-	r.core.update(cos.NamedVal64{Name: metric, Value: 1})
-}
-
-func (r *runner) AddMany(nvs ...cos.NamedVal64) {
+// (prometheus with variable labels)
+func (r *runner) AddWith(nvs ...cos.NamedVal64) {
 	for _, nv := range nvs {
-		r.core.update(nv)
+		r.core.addWith(nv)
 	}
+}
+
+// (ditto; for convenience)
+func (r *runner) IncWith(name string, vlabs map[string]string) {
+	r.AddWith(cos.NamedVal64{Name: name, Value: 1, VarLabs: vlabs})
+}
+
+// (ditto)
+func (r *runner) IncBck(name string, bck *cmn.Bck) {
+	r.AddWith(cos.NamedVal64{Name: name, Value: 1, VarLabs: map[string]string{VarlabBucket: bck.Cname("")}})
 }
 
 func (r *runner) SetFlag(name string, set cos.NodeStateFlags) {
@@ -422,8 +435,8 @@ waitStartup:
 	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
 
-	// one or the other, depending on the build tag
-	r.core.initStatsdOrProm(r.node.Snode(), r)
+	// one StatsD or Prometheus (depending on the build tag)
+	r.core.initStarted(r.node.Snode())
 
 	var (
 		lastNgr           int64
@@ -611,6 +624,32 @@ func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
 		nlog.Warningln("High number of goroutines:", ngr)
 	}
 	return lastNgr
+}
+
+func (r *runner) Stop(err error) {
+	nlog.Infoln("Stopping", r.Name(), "err:", err)
+	r.stopCh <- struct{}{}
+	close(r.stopCh)
+
+	r.closeStatsD()
+}
+
+///////////////
+// coreStats //
+///////////////
+
+func (s *coreStats) init(size int) {
+	s.Tracker = make(map[string]*statsValue, size)
+
+	s.sgl = memsys.PageMM().NewSGL(memsys.DefaultBufSize)
+}
+
+func (s *coreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
+func (s *coreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
+
+func (s *coreStats) get(name string) int64 {
+	v := s.Tracker[name]
+	return ratomic.LoadInt64(&v.Value)
 }
 
 ////////////////
@@ -814,15 +853,4 @@ func ignore(s string) bool {
 		}
 	}
 	return false
-}
-
-// convert bytes to meGabytes with a fixed rounding precision = 2 digits
-// - KindThroughput and KindComputedThroughput only
-// - MB, not MiB
-// - math.Ceil wouldn't produce two decimals
-func roundMBs(val int64) (mbs float64) {
-	mbs = float64(val) / 1000 / 10
-	num := int(mbs + 0.5)
-	mbs = float64(num) / 100
-	return
 }

@@ -64,7 +64,7 @@ var _ cos.StatsUpdater = (*dummyStatsTracker)(nil)
 func (*dummyStatsTracker) Add(string, int64)                                         {}
 func (*dummyStatsTracker) Inc(string)                                                {}
 func (*dummyStatsTracker) Get(string) int64                                          { return 0 }
-func (*dummyStatsTracker) AddMany(...cos.NamedVal64)                                 {}
+func (*dummyStatsTracker) AddWith(...cos.NamedVal64)                                 {}
 func (*dummyStatsTracker) ClrFlag(string, cos.NodeStateFlags)                        {}
 func (*dummyStatsTracker) SetFlag(string, cos.NodeStateFlags)                        {}
 func (*dummyStatsTracker) SetClrFlag(string, cos.NodeStateFlags, cos.NodeStateFlags) {}

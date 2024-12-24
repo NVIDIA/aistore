@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -17,16 +18,41 @@ import (
 
 // enum: `statsValue` kinds
 const (
-	// lockless
-	KindCounter            = "counter"
-	KindTotal              = "total"
-	KindSize               = "size"
-	KindGauge              = "gauge"
-	KindSpecial            = "special"
+	// prometheus and statsd counters
+	// error counters must have "err_" prefix (see `errPrefix`)
+
+	KindCounter = "counter"
+	KindTotal   = "total"
+	KindSize    = "size"
+
+	// prometheus and statsd gauges
+
+	KindSpecial = "special" // uptime
+
+	KindGauge              = "gauge"  // disk I/O
 	KindComputedThroughput = "compbw" // disk read/write throughput
-	// compound (+ semantics)
-	KindLatency    = "latency"
-	KindThroughput = "bw" // e.g. GetThroughput
+
+	KindLatency    = "latency" // computed internally over 'periodic.stats_time'
+	KindThroughput = "bw"      // ditto
+)
+
+// static labels
+const (
+	ConstlabNode = "node_id"
+)
+
+// variable labels
+const (
+	VarlabBucket    = "bucket"
+	VarlabXactKind  = "xkind"
+	VarlabXactID    = "xid"
+	VarlabMountpath = "mountpath"
+)
+
+var (
+	BckVarlabs     = []string{VarlabBucket}
+	BckXactVarlabs = []string{VarlabBucket, VarlabXactKind, VarlabXactID}
+	MpathVarlabs   = []string{VarlabMountpath}
 )
 
 type (
@@ -37,7 +63,9 @@ type (
 
 		IsPrometheus() bool
 
-		IncErr(metric string)
+		Inc(metric string)
+		IncWith(metric string, vlabs map[string]string)
+		IncBck(name string, bck *cmn.Bck)
 
 		GetStats() *Node
 		GetStatsV322() *NodeV322 // [backward compatibility]
@@ -110,9 +138,10 @@ type (
 
 type (
 	Extra struct {
-		Labels  cos.StrKVs
+		Labels  cos.StrKVs // static or (same) constant
 		StrName string
 		Help    string
+		VarLabs []string // variable labels: {VarlabBucket, ...}
 	}
 )
 
