@@ -98,7 +98,7 @@ func asEndpoint() string {
 	}
 }
 
-func NewAzure(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
+func NewAzure(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	blurl := asEndpoint()
 
 	// NOTE: NewSharedKeyCredential requires account name and its primary or secondary key
@@ -112,7 +112,10 @@ func NewAzure(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
 		u:     blurl,
 		base:  base{provider: apc.Azure},
 	}
-	bp.base.init(t.Snode(), tstats)
+	if startingUp {
+		// register metrics only once
+		bp.base.init(t.Snode(), tstats)
+	}
 	return bp, nil
 }
 

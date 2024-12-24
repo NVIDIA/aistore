@@ -66,7 +66,7 @@ var _ core.Backend = (*s3bp)(nil)
 
 // environment variables => static defaults that can still be overridden via bck.Props.Extra.AWS
 // in addition to these two (below), default bucket region = env.AwsDefaultRegion()
-func NewAWS(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
+func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	s3Endpoint = os.Getenv(env.AWS.Endpoint)
 	awsProfile = os.Getenv(env.AWS.Profile)
 	bp := &s3bp{
@@ -74,9 +74,13 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker) (core.Backend, error) {
 		mm:   t.PageMM(),
 		base: base{provider: apc.AWS},
 	}
-	bp.base.init(t.Snode(), tstats)
-	// reset clients map to recreate and reload credentials
-	clients.Clear()
+	if startingUp {
+		// register metrics only once
+		bp.base.init(t.Snode(), tstats)
+	} else {
+		// reset clients map to recreate and reload credentials
+		clients.Clear()
+	}
 	return bp, nil
 }
 

@@ -13,6 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewGCP(_ core.TargetPut, _ stats.Tracker) (core.Backend, error) {
+func NewGCP(core.TargetPut, stats.Tracker, bool) (core.Backend, error) {
 	return nil, &cmn.ErrInitBackend{Provider: apc.GCP}
 }

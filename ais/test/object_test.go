@@ -922,13 +922,13 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 	var mockBackend core.Backend
 	switch m.bck.Provider {
 	case apc.AWS:
-		mockBackend, _ = backend.NewAWS(tMock, mock.NewStatsTracker())
+		mockBackend, _ = backend.NewAWS(tMock, mock.NewStatsTracker(), false /*starting up*/)
 	case apc.GCP:
-		mockBackend, _ = backend.NewGCP(tMock, mock.NewStatsTracker())
+		mockBackend, _ = backend.NewGCP(tMock, mock.NewStatsTracker(), false /*starting up*/)
 	case apc.Azure:
-		mockBackend, _ = backend.NewAzure(tMock, mock.NewStatsTracker())
+		mockBackend, _ = backend.NewAzure(tMock, mock.NewStatsTracker(), false /*starting up*/)
 	case apc.OCI:
-		mockBackend, _ = backend.NewOCI(tMock, mock.NewStatsTracker())
+		mockBackend, _ = backend.NewOCI(tMock, mock.NewStatsTracker(), false /*starting up*/)
 	default:
 		t.Fatalf("unexpected backend provider %q", m.bck.Provider)
 	}

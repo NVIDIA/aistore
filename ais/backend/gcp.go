@@ -63,7 +63,7 @@ var (
 	_ core.Backend = (*gsbp)(nil)
 )
 
-func NewGCP(t core.TargetPut, tstats stats.Tracker) (_ core.Backend, err error) {
+func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (_ core.Backend, err error) {
 	var (
 		projectID     string
 		credProjectID = readCredFile()
@@ -89,8 +89,10 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker) (_ core.Backend, err error) 
 		projectID: projectID,
 		base:      base{provider: apc.GCP},
 	}
-	bp.base.init(t.Snode(), tstats)
-
+	if startingUp {
+		// register metrics only once
+		bp.base.init(t.Snode(), tstats)
+	}
 	gctx = context.Background()
 	gcpClient, err = bp.createClient(gctx)
 

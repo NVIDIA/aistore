@@ -13,6 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewOCI(core.TargetPut, stats.Tracker) (core.Backend, error) {
+func NewOCI(core.TargetPut, stats.Tracker, bool) (core.Backend, error) {
 	return nil, &cmn.ErrInitBackend{Provider: apc.GCP}
 }

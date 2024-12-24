@@ -13,6 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewAzure(_ core.TargetPut, _ stats.Tracker) (core.Backend, error) {
+func NewAzure(core.TargetPut, stats.Tracker, bool) (core.Backend, error) {
 	return nil, &cmn.ErrInitBackend{Provider: apc.Azure}
 }

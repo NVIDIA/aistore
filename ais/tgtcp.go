@@ -188,7 +188,7 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 			provider = msg.Name
 		)
 		if provider == "" { // all
-			if err := t.initBuiltTagged(t.statsT.(*stats.Trunner), cmn.GCO.Get()); err != nil {
+			if err := t.initBuiltTagged(t.statsT.(*stats.Trunner), cmn.GCO.Get(), false); err != nil {
 				t.writeErr(w, r, err)
 			}
 			return
@@ -198,13 +198,13 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 		var add core.Backend
 		switch provider {
 		case apc.AWS:
-			add, err = backend.NewAWS(t, tstats)
+			add, err = backend.NewAWS(t, tstats, false /*starting up*/)
 		case apc.GCP:
-			add, err = backend.NewGCP(t, tstats)
+			add, err = backend.NewGCP(t, tstats, false)
 		case apc.Azure:
-			add, err = backend.NewAzure(t, tstats)
+			add, err = backend.NewAzure(t, tstats, false)
 		case apc.OCI:
-			add, err = backend.NewOCI(t, tstats)
+			add, err = backend.NewOCI(t, tstats, false)
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -301,13 +301,13 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 		var err error
 		switch provider {
 		case apc.AWS:
-			bp, err = backend.NewAWS(t, t.statsT)
+			bp, err = backend.NewAWS(t, t.statsT, false /*starting up*/)
 		case apc.GCP:
-			bp, err = backend.NewGCP(t, t.statsT)
+			bp, err = backend.NewGCP(t, t.statsT, false /*starting up*/)
 		case apc.Azure:
-			bp, err = backend.NewAzure(t, t.statsT)
+			bp, err = backend.NewAzure(t, t.statsT, false /*starting up*/)
 		case apc.OCI:
-			bp, err = backend.NewOCI(t, t.statsT)
+			bp, err = backend.NewOCI(t, t.statsT, false /*starting up*/)
 		}
 		if err != nil {
 			debug.AssertNoErr(err) // (unlikely)

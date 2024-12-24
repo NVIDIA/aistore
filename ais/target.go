@@ -114,14 +114,14 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 		}
 	}
 
-	if err := t.initBuiltTagged(tstats, config); err != nil {
+	if err := t.initBuiltTagged(tstats, config, true /*starting up*/); err != nil {
 		cos.ExitLog(err)
 	}
 }
 
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
-func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) error {
+func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config, startingUp bool) error {
 	var enabled, disabled, notlinked []string
 
 	for provider := range apc.Providers {
@@ -131,13 +131,13 @@ func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config) erro
 		)
 		switch provider {
 		case apc.AWS:
-			add, err = backend.NewAWS(t, tstats)
+			add, err = backend.NewAWS(t, tstats, startingUp)
 		case apc.GCP:
-			add, err = backend.NewGCP(t, tstats)
+			add, err = backend.NewGCP(t, tstats, startingUp)
 		case apc.Azure:
-			add, err = backend.NewAzure(t, tstats)
+			add, err = backend.NewAzure(t, tstats, startingUp)
 		case apc.OCI:
-			add, err = backend.NewOCI(t, tstats)
+			add, err = backend.NewOCI(t, tstats, startingUp)
 		case apc.HT:
 			add, err = backend.NewHT(t, config, tstats)
 		case apc.AIS:
