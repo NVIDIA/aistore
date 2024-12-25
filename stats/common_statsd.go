@@ -8,7 +8,6 @@
 package stats
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -60,12 +59,6 @@ func initProm(*meta.Snode) {}
 ///////////////
 // coreStats //
 ///////////////
-
-// interface guard
-var (
-	_ json.Marshaler   = (*coreStats)(nil)
-	_ json.Unmarshaler = (*coreStats)(nil)
-)
 
 // NOTE: nil StatsD client means that we provide metrics to Prometheus (see below)
 func (s *coreStats) statsdDisabled() bool { return s.statsdC == nil }

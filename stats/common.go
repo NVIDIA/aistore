@@ -643,30 +643,10 @@ func (s *coreStats) init(size int) {
 	s.sgl = memsys.PageMM().NewSGL(memsys.DefaultBufSize)
 }
 
-func (s *coreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
-func (s *coreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
-
 func (s *coreStats) get(name string) int64 {
 	v := s.Tracker[name]
 	return ratomic.LoadInt64(&v.Value)
 }
-
-////////////////
-// statsValue //
-////////////////
-
-// interface guard
-var (
-	_ json.Marshaler   = (*statsValue)(nil)
-	_ json.Unmarshaler = (*statsValue)(nil)
-)
-
-func (v *statsValue) MarshalJSON() ([]byte, error) {
-	s := strconv.FormatInt(ratomic.LoadInt64(&v.Value), 10)
-	return cos.UnsafeB(s), nil
-}
-
-func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &v.Value) }
 
 ///////////////
 // copyValue //

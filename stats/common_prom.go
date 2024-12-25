@@ -8,7 +8,6 @@
 package stats
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	ratomic "sync/atomic"
@@ -40,12 +39,6 @@ type (
 ///////////////
 // coreStats //
 ///////////////
-
-// interface guard
-var (
-	_ json.Marshaler   = (*coreStats)(nil)
-	_ json.Unmarshaler = (*coreStats)(nil)
-)
 
 var (
 	promRegistry *prometheus.Registry
