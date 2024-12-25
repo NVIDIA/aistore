@@ -1217,7 +1217,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
 			err = t.attachDetachRemAis(newConfig, msg)
 		} else {
-			t.backend[apc.AIS] = backend.NewAIS(t, t.statsT)
+			t.backend[apc.AIS] = backend.NewAIS(t, t.statsT, false)
 		}
 	}
 	return

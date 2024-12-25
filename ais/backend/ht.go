@@ -34,13 +34,13 @@ type (
 // interface guard
 var _ core.Backend = (*htbp)(nil)
 
-func NewHT(t core.TargetPut, config *cmn.Config, tstats stats.Tracker) (core.Backend, error) {
+func NewHT(t core.TargetPut, config *cmn.Config, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	bp := &htbp{
 		t:    t,
 		base: base{provider: apc.HT},
 	}
 	bp.cliH, bp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
-	bp.init(t.Snode(), tstats)
+	bp.init(t.Snode(), tstats, startingUp)
 	return bp, nil
 }
 

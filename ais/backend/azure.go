@@ -112,10 +112,9 @@ func NewAzure(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Bac
 		u:     blurl,
 		base:  base{provider: apc.Azure},
 	}
-	if startingUp {
-		// register metrics only once
-		bp.base.init(t.Snode(), tstats)
-	}
+	// register metrics
+	bp.base.init(t.Snode(), tstats, startingUp)
+
 	return bp, nil
 }
 

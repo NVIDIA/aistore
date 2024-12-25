@@ -103,7 +103,7 @@ func (*target) interruptedRestarted() (i, r bool) {
 
 func (t *target) initBackends(tstats *stats.Trunner) {
 	config := cmn.GCO.Get()
-	aisbp := backend.NewAIS(t, tstats)
+	aisbp := backend.NewAIS(t, tstats, true)
 	t.backend[apc.AIS] = aisbp // always present
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
@@ -139,7 +139,7 @@ func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config, star
 		case apc.OCI:
 			add, err = backend.NewOCI(t, tstats, startingUp)
 		case apc.HT:
-			add, err = backend.NewHT(t, config, tstats)
+			add, err = backend.NewHT(t, config, tstats, startingUp)
 		case apc.AIS:
 			continue
 		default:

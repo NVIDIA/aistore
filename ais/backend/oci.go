@@ -74,6 +74,9 @@ type ocibp struct {
 	base
 }
 
+// interface guard
+var _ core.Backend = (*ocibp)(nil)
+
 func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	bp := &ocibp{
 		t:    t,
@@ -128,10 +131,8 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 	}
 	bp.namespace = *resp.Value
 
-	if startingUp {
-		// register metrics only once
-		bp.base.init(t.Snode(), tstats)
-	}
+	// register metrics
+	bp.base.init(t.Snode(), tstats, startingUp)
 
 	return bp, nil
 }

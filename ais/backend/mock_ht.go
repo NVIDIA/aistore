@@ -13,6 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewHT(core.TargetPut, *cmn.Config, stats.Tracker) (core.Backend, error) {
+func NewHT(core.TargetPut, *cmn.Config, stats.Tracker, bool) (core.Backend, error) {
 	return nil, &cmn.ErrInitBackend{Provider: apc.HT}
 }

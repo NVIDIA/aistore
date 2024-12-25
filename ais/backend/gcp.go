@@ -89,10 +89,9 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (_ core.Bac
 		projectID: projectID,
 		base:      base{provider: apc.GCP},
 	}
-	if startingUp {
-		// register metrics only once
-		bp.base.init(t.Snode(), tstats)
-	}
+	// register metrics
+	bp.base.init(t.Snode(), tstats, startingUp)
+
 	gctx = context.Background()
 	gcpClient, err = bp.createClient(gctx)
 

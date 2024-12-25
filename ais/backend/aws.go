@@ -74,13 +74,10 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 		mm:   t.PageMM(),
 		base: base{provider: apc.AWS},
 	}
-	if startingUp {
-		// register metrics only once
-		bp.base.init(t.Snode(), tstats)
-	} else {
-		// reset clients map to recreate and reload credentials
-		clients.Clear()
-	}
+	// register metrics
+	bp.base.init(t.Snode(), tstats, startingUp)
+	// reset clients map
+	clients.Clear()
 	return bp, nil
 }
 

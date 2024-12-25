@@ -64,7 +64,7 @@ var (
 	preg, treg *regexp.Regexp
 )
 
-func NewAIS(t core.TargetPut, tstats stats.Tracker) *AISbp {
+func NewAIS(t core.TargetPut, tstats stats.Tracker, startingUp bool) *AISbp {
 	suff := regexp.QuoteMeta(meta.SnameSuffix)
 	preg = regexp.MustCompile(regexp.QuoteMeta(meta.PnamePrefix) + `\S*` + suff + ": ")
 	treg = regexp.MustCompile(regexp.QuoteMeta(meta.TnamePrefix) + `\S*` + suff + ": ")
@@ -74,7 +74,7 @@ func NewAIS(t core.TargetPut, tstats stats.Tracker) *AISbp {
 		alias:  make(cos.StrKVs),
 		base:   base{provider: apc.AIS},
 	}
-	bp.base.init(t.Snode(), tstats)
+	bp.base.init(t.Snode(), tstats, startingUp)
 	return bp
 }
 

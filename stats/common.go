@@ -596,7 +596,7 @@ func (r *runner) ResetStats(errorsOnly bool) {
 }
 
 func (r *runner) GetMetricNames() cos.StrKVs {
-	out := make(cos.StrKVs, 32)
+	out := make(cos.StrKVs, 48)
 	for name, v := range r.core.Tracker {
 		out[name] = v.kind
 	}
