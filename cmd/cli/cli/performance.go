@@ -171,11 +171,13 @@ func showCountersHandler(c *cli.Context) error {
 	return showPerfTab(c, selected, nil, cmdShowCounters, nil, false)
 }
 
+// TODO -- FIXME: revisit computing over totals (compare with latency)
 func showThroughputHandler(c *cli.Context) error {
 	var (
 		totals       = make(map[string]int64, 4) // throughput metrics ("columns") to tally up
 		regexStr     = parseStrFlag(c, regexColsFlag)
 		metrics, err = getMetricNames(c)
+		verbose      = flagIsSet(c, verboseFlag)
 	)
 	if err != nil {
 		return err
@@ -190,7 +192,7 @@ func showThroughputHandler(c *cli.Context) error {
 			selected[name] = kind
 			continue
 		}
-		if !flagIsSet(c, verboseFlag) && regexStr == "" {
+		if !verbose && regexStr == "" {
 			if cos.StringInSlice(name, verboseCounters[:]) {
 				continue
 			}
@@ -207,8 +209,7 @@ func showThroughputHandler(c *cli.Context) error {
 			selected[name] = kind
 		case stats.IsErrMetric(name):
 			// 3. errors (compare with latency selection below)
-			if strings.Contains(name, "get") || strings.Contains(name, "put") ||
-				strings.Contains(name, "read") || strings.Contains(name, "write") {
+			if strings.Contains(name, "get") || strings.Contains(name, "put") {
 				selected[name] = kind
 			}
 		}
@@ -255,6 +256,7 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 const miLatencyCntChange = 4
 
 func showLatencyHandler(c *cli.Context) error {
+	verbose := flagIsSet(c, verboseFlag)
 	metrics, err := getMetricNames(c)
 	if err != nil {
 		return err
@@ -271,14 +273,33 @@ func showLatencyHandler(c *cli.Context) error {
 			selected[name] = kind
 			continue
 		}
-		// skipping; computing over GetLatencyTotal instead
-		if name == stats.GetLatency {
+		// skipping internal/computed latency; computing here over GetLatencyTotal instead
+		if kind == stats.KindLatency {
 			continue
 		}
-		// plus io-errors (compare with throughput selection)
-		if kind != stats.KindLatency && kind != stats.KindTotal && !stats.IsIOErrMetric(name) {
+
+		// - always show io-errors
+		// - other errors only if (get|put) and verbose
+		// - otherwise, skip anything other than the two relevant kinds
+		if stats.IsIOErrMetric(name) {
+			selected[name] = kind
 			continue
 		}
+		if stats.IsErrMetric(name) {
+			if !verbose {
+				continue
+			}
+			if !strings.Contains(name, "get") && !strings.Contains(name, "put") {
+				continue
+			}
+			selected[name] = kind
+			continue
+		}
+		if kind != stats.KindTotal {
+			continue
+		}
+
+		// respective counter
 		ncounter := stats.LatencyToCounter(name)
 		if ncounter == "" {
 			continue

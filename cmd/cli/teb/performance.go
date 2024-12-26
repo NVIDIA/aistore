@@ -111,21 +111,11 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 		cols, printedColumns = _filter(cols, printedColumns, c.Regex)
 	}
 
-	// 8. color the last (and only) column name (TODO: workaround for broken indentation)
-	last := len(cols) - 1
-	if stats.IsErrMetric(cols[last].name) {
-		var ne int
-		for i := range cols {
-			if stats.IsErrMetric(cols[i].name) {
-				ne++
-			}
-		}
-		if ne == 1 {
-			printedColumns[last].name = fred("\t%s", printedColumns[last].name)
-		}
-	}
-
-	var eorErrIndication string
+	// 8. (not) coloring err columns (TODO: indentation)
+	var (
+		last             = len(cols) - 1
+		eorErrIndication string
+	)
 	if !c.NoColor {
 		eorErrIndication = " " + fred(errIndication)
 	}
