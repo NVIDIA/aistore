@@ -23,7 +23,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"level":     "${AIS_LOG_LEVEL:-3}",
 		"max_size":  "4mb",
 		"max_total": "128mb",
-		"flush_time": "40s",
+		"flush_time": "60s",
 		"stats_time": "60s"
 	},
 	"periodic": {

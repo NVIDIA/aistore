@@ -69,7 +69,7 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	if (!idle && now >= r.next) || verbose {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
-		r.ctracker.write(s.sgl, r.sorted, false /*target*/, idle)
+		r.write(s.sgl, false /*target*/, idle)
 		if l := s.sgl.Len(); l > 3 { // skip '{}'
 			line := string(s.sgl.Bytes())
 			debug.Assert(l < s.sgl.Slab().Size(), l, " vs slab ", s.sgl.Slab().Size())

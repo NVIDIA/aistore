@@ -33,8 +33,8 @@ const (
 	KindGauge              = "gauge"  // disk I/O
 	KindComputedThroughput = "compbw" // disk read/write throughput
 
-	KindLatency    = "latency" // computed internally over 'periodic.stats_time'
-	KindThroughput = "bw"      // ditto
+	KindLatency    = "latency" // computed internally over 'periodic.stats_time' (milliseconds)
+	KindThroughput = "bw"      // ditto (MB/s)
 )
 
 // static labels
@@ -158,9 +158,9 @@ func IsIOErrMetric(name string) bool {
 func LatencyToCounter(latency string) string {
 	// 1. basics first
 	switch latency {
-	case GetLatency, GetRedirLatency:
+	case GetLatency, GetRedirLatency, GetLatencyTotal:
 		return GetCount
-	case PutLatency, PutRedirLatency:
+	case PutLatency, PutRedirLatency, PutLatencyTotal:
 		return PutCount
 	case HeadLatency:
 		return HeadCount

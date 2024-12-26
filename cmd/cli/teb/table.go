@@ -38,7 +38,7 @@ func (t *Table) addRow(row row) {
 }
 
 func (t *Table) Template(hideHeader bool) string {
-	sb := strings.Builder{}
+	var sb strings.Builder
 	if !hideHeader {
 		headers := make([]string, 0, len(t.headers))
 		for _, header := range t.headers {

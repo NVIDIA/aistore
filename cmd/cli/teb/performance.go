@@ -16,6 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+// to indicate end-of-row error
+const errIndication = "<<<"
+
 type PerfTabCtx struct {
 	Smap      *meta.Smap
 	Sid       string           // single target, unless ""
@@ -26,6 +29,7 @@ type PerfTabCtx struct {
 	TotalsHdr string
 	AvgSize   bool // compute average size on the fly (and show it), e.g.: `get.size/get.n`
 	Idle      bool // currently idle
+	NoColor   bool
 }
 
 // return numNZ (non-zero) metrics OR bad status
@@ -107,11 +111,23 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 		cols, printedColumns = _filter(cols, printedColumns, c.Regex)
 	}
 
-	// 8. apply color
-	for i := range cols {
-		if stats.IsErrMetric(cols[i].name) {
-			printedColumns[i].name = fred("\t%s", printedColumns[i].name)
+	// 8. color the last (and only) column name (TODO: workaround for broken indentation)
+	last := len(cols) - 1
+	if stats.IsErrMetric(cols[last].name) {
+		var ne int
+		for i := range cols {
+			if stats.IsErrMetric(cols[i].name) {
+				ne++
+			}
 		}
+		if ne == 1 {
+			printedColumns[last].name = fred("\t%s", printedColumns[last].name)
+		}
+	}
+
+	var eorErrIndication string
+	if !c.NoColor {
+		eorErrIndication = " " + fred(errIndication)
 	}
 
 	// 9. sort targets by IDs
@@ -129,9 +145,15 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 		if ds.Status == NodeOnline {
 			numTs++
 		}
-		row := make([]string, 0, len(cols))
+
+		// add row
+		var (
+			row      = make([]string, 0, len(cols))
+			haveErrs bool
+		)
 		row = append(row, fmtDaemonID(tid, c.Smap, ds.Status))
-		for _, h := range cols[1:] {
+		for i := 1; i < len(cols); i++ {
+			h := cols[i]
 			if h.name == colStatus {
 				row = append(row, ds.Status)
 				continue
@@ -145,11 +167,15 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 			v, ok := ds.Tracker[h.name]
 			if !ok {
 				// t[tid] doesn't have this metric (likely, zero value)
-				row = append(row, unknownVal)
+				if haveErrs && i == last {
+					row = append(row, unknownVal+eorErrIndication)
+				} else {
+					row = append(row, unknownVal)
+				}
 				continue
 			}
 
-			// format value
+			// format value (TODO: show zero latency and throughput as '-')
 			kind, ok := c.Metrics[h.name]
 			debug.Assert(ok, h.name)
 			printedValue := FmtStatValue(h.name, kind, v.Value, c.Units)
@@ -160,14 +186,19 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 
 			// add some color
 			if stats.IsErrMetric(h.name) {
-				printedValue = fred("\t%s", printedValue)
+				haveErrs = v.Value != 0
 			} else if kind == stats.KindSize && c.AvgSize {
 				if v, ok := _compAvgSize(ds, h.name, v.Value, n2n); ok {
 					printedValue += "  " + FmtStatValue("", kind, v, c.Units)
 				}
 			}
+
+			if haveErrs && i == last {
+				printedValue += eorErrIndication // <<<
+			}
 			row = append(row, printedValue)
 		}
+
 		table.addRow(row)
 	}
 

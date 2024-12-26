@@ -21,8 +21,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-// TODO: target only - won't show put/get etc. counters and error counters (e.g. keep-alive) from proxies' perspective
-
 type (
 	perfcb func(c *cli.Context,
 		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
@@ -39,6 +37,9 @@ var verboseCounters = [...]string{
 	cos.StreamsOutObjSize,
 	cos.StreamsInObjCount,
 	cos.StreamsInObjSize,
+
+	// NOTE: including (not to confuse with `stats.IOErrGetCount`)
+	stats.ErrGetCount,
 }
 
 var (
@@ -173,6 +174,7 @@ func showCountersHandler(c *cli.Context) error {
 func showThroughputHandler(c *cli.Context) error {
 	var (
 		totals       = make(map[string]int64, 4) // throughput metrics ("columns") to tally up
+		regexStr     = parseStrFlag(c, regexColsFlag)
 		metrics, err = getMetricNames(c)
 	)
 	if err != nil {
@@ -188,6 +190,11 @@ func showThroughputHandler(c *cli.Context) error {
 			selected[name] = kind
 			continue
 		}
+		if !flagIsSet(c, verboseFlag) && regexStr == "" {
+			if cos.StringInSlice(name, verboseCounters[:]) {
+				continue
+			}
+		}
 
 		switch {
 		case kind == stats.KindThroughput:
@@ -199,7 +206,7 @@ func showThroughputHandler(c *cli.Context) error {
 		case strings.HasSuffix(name, "."+stats.PutCount) || strings.HasSuffix(name, "."+stats.PutSize):
 			selected[name] = kind
 		case stats.IsErrMetric(name):
-			// 3. errors
+			// 3. errors (compare with latency selection below)
 			if strings.Contains(name, "get") || strings.Contains(name, "put") ||
 				strings.Contains(name, "read") || strings.Contains(name, "write") {
 				selected[name] = kind
@@ -244,11 +251,9 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 	return
 }
 
-// TODO -- FIXME: transition to using totals (ais/backend/common.go)
+// otherwise, skip computing (TODO: add comdline option)
+const miLatencyCntChange = 4
 
-// NOTE: two built-in assumptions: one cosmetic, another major
-// - ".ns" => ".n" correspondence is the cosmetic one
-// - the naive way to recompute latency using the total elapsed, not the actual, time to execute so many requests...
 func showLatencyHandler(c *cli.Context) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
@@ -266,7 +271,12 @@ func showLatencyHandler(c *cli.Context) error {
 			selected[name] = kind
 			continue
 		}
-		if kind != stats.KindLatency && kind != stats.KindTotal {
+		// skipping; computing over GetLatencyTotal instead
+		if name == stats.GetLatency {
+			continue
+		}
+		// plus io-errors (compare with throughput selection)
+		if kind != stats.KindLatency && kind != stats.KindTotal && !stats.IsIOErrMetric(name) {
 			continue
 		}
 		ncounter := stats.LatencyToCounter(name)
@@ -274,6 +284,7 @@ func showLatencyHandler(c *cli.Context) error {
 			continue
 		}
 		selected[name] = kind
+		// show counter itself as well (todo: maybe only when verbose)
 		selected[ncounter] = stats.KindCounter
 	}
 
@@ -306,11 +317,13 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 			}
 			if cntBegin, ok1 := begin.Tracker[ncounter]; ok1 {
 				if cntEnd, ok2 := end.Tracker[ncounter]; ok2 && cntEnd.Value > cntBegin.Value {
-					// (cumulative-end-time - cumulative-begin-time) / num-requests
-					v.Value = (vend.Value - v.Value) / (cntEnd.Value - cntBegin.Value)
-					begin.Tracker[name] = v
-					num++
-					continue
+					if cntEnd.Value-cntBegin.Value >= miLatencyCntChange {
+						// (cumulative-end-time - cumulative-begin-time) / num-requests
+						v.Value = (vend.Value - v.Value) / (cntEnd.Value - cntBegin.Value)
+						begin.Tracker[name] = v
+						num++
+						continue
+					}
 				}
 			}
 			// no changes, nothing to show
@@ -384,7 +397,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 		setLongRunParams(c, lfooter)
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units, AvgSize: avgSize}
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units, AvgSize: avgSize, NoColor: cfg.NoColor}
 		table, num, err := ctx.MakeTab(tstatusMap)
 		if err != nil {
 			return err
@@ -451,7 +464,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
-			Totals: totals, TotalsHdr: totalsHdr, AvgSize: avgSize, Idle: idle}
+			Totals: totals, TotalsHdr: totalsHdr, AvgSize: avgSize, Idle: idle, NoColor: cfg.NoColor}
 		table, _, err := ctx.MakeTab(mapBegin)
 		if err != nil {
 			return err
@@ -499,7 +512,7 @@ func showMpathCapHandler(c *cli.Context) error {
 		return err
 	}
 
-	ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Regex: regex, Units: units}
+	ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Regex: regex, Units: units, NoColor: cfg.NoColor}
 	table := teb.NewMpathCapTab(tstatusMap, &ctx, showMpaths)
 
 	out := table.Template(hideHeader)

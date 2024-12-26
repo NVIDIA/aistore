@@ -162,7 +162,6 @@ func (c Client) write(bytes []byte, l int) {
 	}
 }
 
-// TODO: MTU size limitation
 func (c Client) AppMetric(m Metric, sgl *memsys.SGL) {
 	var (
 		t, prefix string
