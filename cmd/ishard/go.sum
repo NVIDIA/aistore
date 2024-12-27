@@ -1,6 +1,6 @@
 code.cloudfoundry.org/bytefmt v0.0.0-20190710193110-1eb035ffe2b6/go.mod h1:wN/zk7mhREp/oviagqUXY3EwuHhWyOvAdsn5Y4CzOrc=
-github.com/NVIDIA/aistore v1.3.26-0.20241226184445-e6814a27d17d h1:hhv9YZyWW0QCgxv82OBgq3+nFBn+YS8ztkmg1zC7Re4=
-github.com/NVIDIA/aistore v1.3.26-0.20241226184445-e6814a27d17d/go.mod h1:mjhY9OGIZULaC79+iRfzEUvUZw7aIWklJ8um321QVpw=
+github.com/NVIDIA/aistore v1.3.26-0.20241227170746-a8374ce007e7 h1:jGRwxa4K3EzU6afl8vzJtX+XHO7xPJvQV2o1d5/RxAA=
+github.com/NVIDIA/aistore v1.3.26-0.20241227170746-a8374ce007e7/go.mod h1:mjhY9OGIZULaC79+iRfzEUvUZw7aIWklJ8um321QVpw=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/VividCortex/ewma v1.1.1 h1:MnEK4VOv6n0RSY4vtRe3h11qjxL3+t0B8yOL8iMXdcM=

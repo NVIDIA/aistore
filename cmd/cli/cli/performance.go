@@ -154,13 +154,14 @@ func showCountersHandler(c *cli.Context) error {
 	var (
 		selected = make(cos.StrKVs, len(metrics))
 		regexStr = parseStrFlag(c, regexColsFlag)
+		verbose  = flagIsSet(c, verboseFlag)
 	)
 	for name, kind := range metrics {
 		if metrics[name] == stats.KindCounter || metrics[name] == stats.KindSize {
 			//
 			// skip assorted internal counters and sizes, unless verbose or regex
 			//
-			if !flagIsSet(c, verboseFlag) && regexStr == "" {
+			if !verbose && regexStr == "" {
 				if cos.StringInSlice(name, verboseCounters[:]) {
 					continue
 				}
@@ -171,12 +172,11 @@ func showCountersHandler(c *cli.Context) error {
 	return showPerfTab(c, selected, nil, cmdShowCounters, nil, false)
 }
 
-// TODO -- FIXME: support regex, verbose
 func showThroughputHandler(c *cli.Context) error {
 	var (
 		totals       = make(map[string]int64, 4) // throughput metrics ("columns") to tally up
-		metrics, err = getMetricNames(c)
 		verbose      = flagIsSet(c, verboseFlag)
+		metrics, err = getMetricNames(c)
 	)
 	if err != nil {
 		return err
@@ -184,7 +184,11 @@ func showThroughputHandler(c *cli.Context) error {
 
 	_warnThruLatIters(c)
 
+	// - select metrics to include in the 'ais performance throughput' table
+	// - add a few as well to show locally computed throughput
+	// - for naming conventions, see stats/common
 	selected := make(cos.StrKVs, len(metrics))
+
 	for name, kind := range metrics {
 		// - always show io-errors
 		// - other errors only if (get|put) and verbose
@@ -204,13 +208,14 @@ func showThroughputHandler(c *cli.Context) error {
 			continue
 		}
 
+		// - take (get, put) counters and the corespoinding (total) sizes
+		// - compute via _throughput() callback
 		switch kind {
 		case stats.KindCounter:
 			if name == stats.GetCount || name == stats.PutCount ||
 				strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.PutCount) {
 				selected[name] = kind
 			}
-			continue
 		case stats.KindSize:
 			if name == stats.GetSize || name == stats.PutSize ||
 				strings.HasSuffix(name, "."+stats.GetSize) || strings.HasSuffix(name, "."+stats.PutSize) {
@@ -220,7 +225,6 @@ func showThroughputHandler(c *cli.Context) error {
 					selected[bpsName] = stats.KindThroughput
 				}
 			}
-			continue
 		}
 	}
 	// `true` to show average get/put sizes
@@ -285,6 +289,7 @@ func showLatencyHandler(c *cli.Context) error {
 
 	// statically filter metrics (names):
 	// take sizes and latencies that _map_ to their respective counters
+	// for naming conventions, see stats/common
 
 	selected := make(cos.StrKVs, len(metrics))
 	for name, kind := range metrics {
