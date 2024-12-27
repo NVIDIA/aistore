@@ -32,7 +32,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// All error counters must have "err_" prefix (see `errPrefix`)
+// Naming conventions:
+// ========================================================
+// "*.n"    - KindCounter
+// "*.ns"   - KindLatency, KindTotal (nanoseconds)
+// "*.size" - KindSize (bytes)
+// "*.bps"  - KindThroughput, KindComputedThroughput
+//
+// all error counters must have "err_" prefix (see `errPrefix`)
 
 // Linkage:
 // - this source is common for both Prometheus (common_prom.go) and StatsD (common_statsd.go)

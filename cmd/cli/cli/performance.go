@@ -171,11 +171,10 @@ func showCountersHandler(c *cli.Context) error {
 	return showPerfTab(c, selected, nil, cmdShowCounters, nil, false)
 }
 
-// TODO -- FIXME: revisit computing over totals (compare with latency)
+// TODO -- FIXME: support regex, verbose
 func showThroughputHandler(c *cli.Context) error {
 	var (
 		totals       = make(map[string]int64, 4) // throughput metrics ("columns") to tally up
-		regexStr     = parseStrFlag(c, regexColsFlag)
 		metrics, err = getMetricNames(c)
 		verbose      = flagIsSet(c, verboseFlag)
 	)
@@ -187,31 +186,41 @@ func showThroughputHandler(c *cli.Context) error {
 
 	selected := make(cos.StrKVs, len(metrics))
 	for name, kind := range metrics {
-		switch name {
-		case stats.GetSize, stats.GetCount, stats.PutSize, stats.PutCount:
+		// - always show io-errors
+		// - other errors only if (get|put) and verbose
+		// - otherwise, skip anything other than the two relevant kinds
+		if stats.IsIOErrMetric(name) {
 			selected[name] = kind
 			continue
 		}
-		if !verbose && regexStr == "" {
-			if cos.StringInSlice(name, verboseCounters[:]) {
+		if stats.IsErrMetric(name) {
+			if !verbose {
 				continue
 			}
+			if !strings.Contains(name, "get") && !strings.Contains(name, "put") {
+				continue
+			}
+			selected[name] = kind
+			continue
 		}
 
-		switch {
-		case kind == stats.KindThroughput:
-			// 1. all throughput
-			selected[name] = kind
-			totals[name] = 0
-		case strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.GetSize):
-			selected[name] = kind
-		case strings.HasSuffix(name, "."+stats.PutCount) || strings.HasSuffix(name, "."+stats.PutSize):
-			selected[name] = kind
-		case stats.IsErrMetric(name):
-			// 3. errors (compare with latency selection below)
-			if strings.Contains(name, "get") || strings.Contains(name, "put") {
+		switch kind {
+		case stats.KindCounter:
+			if name == stats.GetCount || name == stats.PutCount ||
+				strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.PutCount) {
 				selected[name] = kind
 			}
+			continue
+		case stats.KindSize:
+			if name == stats.GetSize || name == stats.PutSize ||
+				strings.HasSuffix(name, "."+stats.GetSize) || strings.HasSuffix(name, "."+stats.PutSize) {
+				selected[name] = kind
+
+				if bpsName := stats.SizeToThroughput(name, stats.KindSize); bpsName != "" {
+					selected[bpsName] = stats.KindThroughput
+				}
+			}
+			continue
 		}
 	}
 	// `true` to show average get/put sizes
@@ -232,10 +241,16 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 			continue
 		}
 		for name, v := range begin.Tracker {
-			if kind, ok := metrics[name]; !ok || kind != stats.KindThroughput {
+			kind, ok := metrics[name]
+			if !ok || kind != stats.KindSize {
+				continue
+			}
+			bpsName := stats.SizeToThroughput(name, stats.KindSize)
+			if bpsName == "" {
 				continue
 			}
 			vend := end.Tracker[name]
+
 			if vend.Value <= v.Value {
 				// no changes, nothing to show
 				v.Value = 0
@@ -243,13 +258,17 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 				continue
 			}
 
+			//
+			// given this (KindSize) metric change and elapsed time, add computed throughput:
+			//
 			v.Value = (vend.Value - v.Value) / seconds
-			begin.Tracker[name] = v
+			begin.Tracker[bpsName] = v
 			num++
 		}
 	}
+
 	idle = num == 0
-	return
+	return idle
 }
 
 // otherwise, skip computing (TODO: add comdline option)

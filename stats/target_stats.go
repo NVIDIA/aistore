@@ -22,13 +22,15 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-// Naming Convention:
+// Naming conventions:
+// ========================================================
+// "*.n"    - KindCounter
+// "*.ns"   - KindLatency, KindTotal (nanoseconds)
+// "*.size" - KindSize (bytes)
+// "*.bps"  - KindThroughput, KindComputedThroughput
 //
-//	-> "*.n" - counter
-//	-> "*.ns" - latency (nanoseconds)
-//	-> "*.size" - size (bytes)
-//	-> "*.bps" - throughput (in byte/s)
-//	-> "*.id" - ID
+// all error counters must have "err_" prefix (see `errPrefix`)
+
 const (
 	// KindCounter & KindSize - always incremented
 

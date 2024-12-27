@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -154,10 +155,15 @@ func IsIOErrMetric(name string) bool {
 	return strings.HasPrefix(name, ioErrPrefix) // e.g., "err.io.get.n" (see ioErrNames)
 }
 
+//
+// name translations, to recompute latency and throughput over client-controlled intervals
+// see "Naming conventions"
+//
+
 // compare with base.init() at ais/backend/common
-func LatencyToCounter(latency string) string {
+func LatencyToCounter(latName string) string {
 	// 1. basics first
-	switch latency {
+	switch latName {
 	case GetLatency, GetRedirLatency, GetLatencyTotal:
 		return GetCount
 	case PutLatency, PutRedirLatency, PutLatencyTotal:
@@ -170,17 +176,17 @@ func LatencyToCounter(latency string) string {
 		return AppendCount
 	}
 	// 2. filter out
-	if !strings.Contains(latency, "get.") && !strings.Contains(latency, "put.") {
+	if !strings.Contains(latName, "get.") && !strings.Contains(latName, "put.") {
 		return ""
 	}
 	// backend first
-	if strings.HasSuffix(latency, ".ns.total") {
+	if strings.HasSuffix(latName, ".ns.total") {
 		for prefix := range apc.Providers {
 			if prefix == apc.AIS {
 				prefix = apc.RemAIS
 			}
-			if strings.HasPrefix(latency, prefix) {
-				if strings.Contains(latency, ".get.") {
+			if strings.HasPrefix(latName, prefix) {
+				if strings.Contains(latName, ".get.") {
 					return prefix + "." + GetCount
 				}
 				return prefix + "." + PutCount
@@ -188,4 +194,15 @@ func LatencyToCounter(latency string) string {
 		}
 	}
 	return ""
+}
+
+func SizeToThroughput(name, kind string) string {
+	if kind != KindSize {
+		return ""
+	}
+	if !strings.HasSuffix(name, ".size") { // see "Naming conventions"
+		debug.Assert(false, name)
+		return ""
+	}
+	return strings.TrimSuffix(name, ".size") + ".bps"
 }
