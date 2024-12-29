@@ -43,8 +43,8 @@ var scrubUsage = "check in-cluster content for misplaced objects, objects that h
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
 	indent1 + "\t* ais scrub \t- same as above;\n" +
-	indent1 + "\t* ais storage validate ais \t- validate (a.k.a. scrub) all ais buckets;\n" +
-	indent1 + "\t* ais scrub s3 \t- all s3 buckets present in the cluster;\n" +
+	indent1 + "\t* ais storage validate ais \t- validate (a.k.a. scrub) all ais:// buckets;\n" +
+	indent1 + "\t* ais scrub s3 \t- ditto, all s3:// buckets;\n" +
 	indent1 + "\t* ais scrub s3 --refresh 10\t- same as above while refreshing runtime counter(s) every 10s;\n" +
 	indent1 + "\t* ais scrub gs://abc/images/\t- validate part of the gcp bucket under 'images/`;\n" +
 	indent1 + "\t* ais scrub gs://abc --prefix images/\t- same as above."

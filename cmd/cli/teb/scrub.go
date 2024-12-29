@@ -17,6 +17,8 @@ const (
 	colMissing   = "MISSING COPIES"
 	colSmall     = "SMALL"
 	colLarge     = "LARGE"
+	colVchanged  = "VERSION-CHANGED"
+	colVremoved  = "VERSION-REMOVED"
 )
 
 type (
@@ -29,6 +31,8 @@ type (
 			MissingCp uint64
 			SmallSz   uint64
 			LargeSz   uint64
+			Vchanged  uint64
+			Vremoved  uint64
 		}
 	}
 	ScrubHelper struct {
@@ -62,6 +66,8 @@ func (h *ScrubHelper) MakeTab(units string) *Table {
 			{name: colMissing},
 			{name: colSmall},
 			{name: colLarge},
+			{name: colVchanged},
+			{name: colVremoved},
 		}
 		table = newTable(cols...)
 	)
@@ -70,6 +76,8 @@ func (h *ScrubHelper) MakeTab(units string) *Table {
 
 	h.hideMisplaced(cols, colMisplaced)
 	h.hideMissing(cols, colMissing)
+	h.hideVchanged(cols, colVchanged)
+	h.hideVremoved(cols, colVremoved)
 
 	for _, scr := range h.All {
 		row := []string{
@@ -79,6 +87,8 @@ func (h *ScrubHelper) MakeTab(units string) *Table {
 			strconv.FormatUint(scr.Stats.MissingCp, 10),
 			strconv.FormatUint(scr.Stats.SmallSz, 10),
 			strconv.FormatUint(scr.Stats.LargeSz, 10),
+			strconv.FormatUint(scr.Stats.Vchanged, 10),
+			strconv.FormatUint(scr.Stats.Vremoved, 10),
 		}
 		table.addRow(row)
 	}
@@ -87,7 +97,7 @@ func (h *ScrubHelper) MakeTab(units string) *Table {
 }
 
 //
-// remove/hide a few named all-zero columns
+// remove/hide a few named all-zero columns // TODO -- FIXME: copy-paste
 //
 
 func (h *ScrubHelper) hideMisplaced(cols []*header, col string) {
@@ -102,6 +112,24 @@ func (h *ScrubHelper) hideMisplaced(cols []*header, col string) {
 func (h *ScrubHelper) hideMissing(cols []*header, col string) {
 	for _, scr := range h.All {
 		if scr.Stats.MissingCp != 0 {
+			return
+		}
+	}
+	h._hideCol(cols, col)
+}
+
+func (h *ScrubHelper) hideVchanged(cols []*header, col string) {
+	for _, scr := range h.All {
+		if scr.Stats.Vchanged != 0 {
+			return
+		}
+	}
+	h._hideCol(cols, col)
+}
+
+func (h *ScrubHelper) hideVremoved(cols []*header, col string) {
+	for _, scr := range h.All {
+		if scr.Stats.Vremoved != 0 {
 			return
 		}
 	}

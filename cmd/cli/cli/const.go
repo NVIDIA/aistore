@@ -665,19 +665,29 @@ var (
 	// sync
 	latestVerFlag = cli.BoolFlag{
 		Name: "latest",
-		Usage: "check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version\n" +
-			indent1 + "\tfrom the associated remote bucket:\n" +
-			indent1 + "\t- provides operation-level control over object versioning (and version synchronization)\n" +
-			indent1 + "\t  without requiring to change bucket configuration\n" +
-			indent1 + "\t- the latter can be done using 'ais bucket props set BUCKET versioning'\n" +
-			indent1 + "\t- see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'",
+		Usage: "check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version\n" +
+			indent1 + "\tfrom the associated remote bucket;\n" +
+			indent1 + "\tthe option provides operation-level control over object versioning (and version synchronization)\n" +
+			indent1 + "\twithout requiring to change the corresponding bucket configuration: 'versioning.validate_warm_get';\n" +
+			indent1 + "\tsee also:\n" +
+			indent1 + "\t\t- 'ais show bucket BUCKET versioning'\n" +
+			indent1 + "\t\t- 'ais bucket props set BUCKET versioning'\n" +
+			indent1 + "\t\t- 'ais ls --check-versions'\n" +
+			indent1 + "\tsupported commands include:\n" +
+			indent1 + "\t\t- 'ais cp', 'ais prefetch', 'ais get'",
 	}
 	syncFlag = cli.BoolFlag{
 		Name: "sync",
-		Usage: "synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source;\n" +
-			indent1 + "\tthe option is a stronger variant of the '--latest' (option) - in addition it entails\n" +
-			indent1 + "\tremoving of the objects that no longer exist remotely\n" +
-			indent1 + "\t(see also: 'ais show bucket versioning' and the corresponding documentation)",
+		Usage: "fully synchronize in-cluster content of a given remote bucket with its (Cloud or remote AIS) source;\n" +
+			indent1 + "\tthe option is, effectively, a stronger variant of the '--latest' (option):\n" +
+			indent1 + "\tin addition to bringing existing in-cluster objects in-sync with their respective out-of-band updates (if any)\n" +
+			indent1 + "\tit also entails removing in-cluster objects that are no longer present remotely;\n" +
+			indent1 + "\tlike '--latest', this option provides operation-level control over synchronization\n" +
+			indent1 + "\twithout requiring to change the corresponding bucket configuration: 'versioning.synchronize';\n" +
+			indent1 + "\tsee also:\n" +
+			indent1 + "\t\t- 'ais show bucket BUCKET versioning'\n" +
+			indent1 + "\t\t- 'ais bucket props set BUCKET versioning'\n" +
+			indent1 + "\t\t- 'ais ls --check-versions'",
 	}
 
 	// gen-shards

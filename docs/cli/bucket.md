@@ -686,16 +686,28 @@ OPTIONS:
    --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                         valid time units: ns, us (or µs), ms, s (default), m, h
-   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
-                        from the associated remote bucket:
-                        - provides operation-level control over object versioning (and version synchronization)
-                          without requiring to change bucket configuration
-                        - the latter can be done using 'ais bucket props set BUCKET versioning'
-                        - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
-   --sync               synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source;
-                        the option is a stronger variant of the '--latest' (option) - in addition it entails
-                        removing of the objects that no longer exist remotely
-                        (see also: 'ais show bucket versioning' and the corresponding documentation)
+
+   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+                        from the associated remote bucket;
+                        the option provides operation-level control over object versioning (and version synchronization)
+                        without requiring to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                        see also:
+                          - 'ais show bucket BUCKET versioning'
+                          - 'ais bucket props set BUCKET versioning'
+                          - 'ais ls --check-versions'
+                        supported commands include:
+                          - 'ais cp', 'ais prefetch', 'ais get'
+   --sync               fully synchronize in-cluster content of a given remote bucket with its (Cloud or remote AIS) source;
+                        the option is, effectively, a stronger variant of the '--latest' (option):
+                        in addition to bringing existing in-cluster objects in-sync with their respective out-of-band updates (if any)
+                        it also entails removing in-cluster objects that are no longer present remotely;
+                        like '--latest', this option provides operation-level control over synchronization
+                        without requiring to change the corresponding bucket configuration: 'versioning.synchronize';
+                        see also:
+                          - 'ais show bucket BUCKET versioning'
+                          - 'ais bucket props set BUCKET versioning'
+                          - 'ais ls --check-versions'
+
    --non-verbose, --nv  non-verbose (quiet) output, minimized reporting, fewer warnings
    --help, -h           show help
 ```

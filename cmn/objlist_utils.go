@@ -367,7 +367,8 @@ func S2CustomMD(md cos.StrKVs, custom, version string) {
 			debug.Assert(false, custom)
 			return
 		}
-		md[name] = custom[i : i+k]
+
+		md[name] = custom[i+1 : i+k]
 		i += k + 1
 	}
 	if md[VersionObjMD] == "" && version != "" {

@@ -96,12 +96,18 @@ OPTIONS:
    --yes, -y            assume 'yes' to all questions
    --check-cached       check whether a given named object is present in cluster
                         (applies only to buckets with remote backend)
-   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
-                        from the associated remote bucket:
-                        - provides operation-level control over object versioning (and version synchronization)
-                          without requiring to change bucket configuration
-                        - the latter can be done using 'ais bucket props set BUCKET versioning'
-                        - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
+
+   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+                        from the associated remote bucket;
+                        the option provides operation-level control over object versioning (and version synchronization)
+                        without requiring to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                        see also:
+                          - 'ais show bucket BUCKET versioning'
+                          - 'ais bucket props set BUCKET versioning'
+                          - 'ais ls --check-versions'
+                        supported commands include:
+                          - 'ais cp', 'ais prefetch', 'ais get'
+
    --refresh value      interval for continuous monitoring;
                         valid time units: ns, us (or µs), ms, s (default), m, h
    --progress           show progress bar(s) and progress of execution in real time
@@ -1648,15 +1654,22 @@ OPTIONS:
    --refresh value         time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                            valid time units: ns, us (or µs), ms, s (default), m, h
    --dry-run               preview the results without really running the action
+
    --prefix value          select objects that have names starting with the specified prefix, e.g.:
                            '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
                            '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
-   --latest                check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
-                           from the associated remote bucket:
-                           - provides operation-level control over object versioning (and version synchronization)
-                             without requiring to change bucket configuration
-                           - the latter can be done using 'ais bucket props set BUCKET versioning'
-                           - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
+
+   --latest                check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+                           from the associated remote bucket;
+                           the option provides operation-level control over object versioning (and version synchronization)
+                           without requiring to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                           see also:
+                             - 'ais show bucket BUCKET versioning'
+                             - 'ais bucket props set BUCKET versioning'
+                             - 'ais ls --check-versions'
+                           supported commands include:
+                             - 'ais cp', 'ais prefetch', 'ais get'
+
    --blob-threshold value  utilize built-in blob-downloader for remote objects greater than the specified (threshold) size
                            in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
    --num-workers value     number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;

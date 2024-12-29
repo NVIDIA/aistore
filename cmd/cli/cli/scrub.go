@@ -66,6 +66,8 @@ type (
 			missing   _log
 			small     _log
 			large     _log
+			vchanged  _log
+			vremoved  _log
 		}
 		_many bool
 	}
@@ -149,11 +151,14 @@ func scrubHandler(c *cli.Context) (err error) {
 //////////////
 
 func (ctx *scrubCtx) createLogs() error {
-	ctx.log.misplaced.tag, ctx.log.missing.tag, ctx.log.small.tag, ctx.log.large.tag =
-		"misplaced", "missing", "small", "large"
-
-	for _, log := range []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large} {
-		if err := ctx._create(log); err != nil {
+	var (
+		logs = []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large, &ctx.log.vchanged, &ctx.log.vremoved}
+		tags = []string{"misplaced", "missing", "small", "large", "version-changed", "version-removed"}
+	)
+	debug.Assert(len(logs) == len(tags))
+	for i := range logs {
+		logs[i].tag = tags[i]
+		if err := ctx._create(logs[i]); err != nil {
 			return err
 		}
 	}
@@ -161,8 +166,11 @@ func (ctx *scrubCtx) createLogs() error {
 }
 
 func (ctx *scrubCtx) closeLogs(c *cli.Context) {
-	var titled bool
-	for _, log := range []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large} {
+	var (
+		logs   = []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large, &ctx.log.vchanged, &ctx.log.vremoved}
+		titled bool
+	)
+	for _, log := range logs {
 		cos.Close(log.fh)
 		if log.cnt == 0 {
 			cos.RemoveFile(log.fn)
@@ -259,9 +267,12 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 	var (
 		lsargs api.ListArgs
 		scr    = &scrubOne{Bck: bck, Prefix: ctx.pref}
-		lsmsg  = &apc.LsoMsg{Prefix: ctx.pref, Flags: apc.LsObjCached | apc.LsMissing}
+		lsmsg  = &apc.LsoMsg{
+			Prefix: ctx.pref,
+			Flags:  apc.LsObjCached | apc.LsMissing | apc.LsVerChanged,
+		}
 	)
-	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
+	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCustom)
 
 	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)
 	if err != nil {
@@ -350,18 +361,28 @@ func (scr *scrubOne) upd(parent *scrubCtx, en *cmn.LsoEnt, bprops *cmn.Bprops) {
 	if !en.IsStatusOK() {
 		scr.Stats.Misplaced++
 		scr.log(&parent.log.misplaced, scr.Bck.Cname(en.Name), parent._many)
-		return
+		return // no further checking
 	}
+
 	if bprops.Mirror.Enabled && en.Copies < int16(bprops.Mirror.Copies) {
 		scr.Stats.MissingCp++
 		scr.log(&parent.log.missing, scr.Bck.Cname(en.Name), parent._many)
 	}
+
 	if en.Size <= parent.small {
 		scr.Stats.SmallSz++
 		scr.log(&parent.log.small, scr.Bck.Cname(en.Name), parent._many)
 	} else if en.Size >= parent.large {
 		scr.Stats.LargeSz++
 		scr.log(&parent.log.large, scr.Bck.Cname(en.Name), parent._many)
+	}
+
+	if en.IsVerChanged() {
+		scr.Stats.Vchanged++
+		scr.log(&parent.log.vchanged, scr.Bck.Cname(en.Name), parent._many)
+	} else if en.IsVerRemoved() {
+		scr.Stats.Vremoved++
+		scr.log(&parent.log.vremoved, scr.Bck.Cname(en.Name), parent._many)
 	}
 }
 
