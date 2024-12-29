@@ -120,7 +120,8 @@ In other words, global rebalance handles scaling (up and down) of the entire AIS
 
 * A [mountpath](overview.md#terminology) is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS utilizes to store user data and AIS metadata. A mountpath can be disabled and (re)enabled, automatically or administratively, at any point during runtime. In a given cluster, a total number of mountpaths would normally compute as a direct product of `(number of storage targets) x (number of disks in each target)`.
 
-As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](/health/fshc.md).
+As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md).
+
 Irrespectively of the original cause, mountpath-level events activate resilver that in many ways performs the same set of steps as the rebalance.
 The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
 

@@ -270,6 +270,9 @@ else
    sleep 0.1
 fi
 
+##
+## TODO: could be in fact HTTPS, not HTTP. Difficult to find out without introducing delay and checking the logs.
+##
 if command -v pgrep &> /dev/null; then
    run_count=$(pgrep -a aisnode | grep -c "${NEXT_TIER}")
    if [[ "${run_count}" -eq $((TARGET_CNT + PROXY_CNT)) ]]; then

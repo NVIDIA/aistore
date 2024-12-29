@@ -357,7 +357,7 @@ As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its 
 ## Other Services
 
 The (quickly growing) list of services includes (but is not limited to):
-* [health monitoring and recovery](/health/fshc.md)
+* [health monitoring and recovery](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md)
 * [range read](http_api.md)
 * [dry-run (to measure raw network and disk performance)](performance.md#performance-testing)
 * performance and capacity monitoring with full observability via StatsD/Grafana

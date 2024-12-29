@@ -32,6 +32,7 @@ const (
 
 	//
 	// Cluster
+	// TODO: consider showing `err.io.get.n` counters - generally, all metrics that are stats.IsIOErrMetric()
 	//
 	indent1 = "   "
 

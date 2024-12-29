@@ -1,6 +1,9 @@
 Filesystem Health Checker (FSHC)
 ---------------------------------
 
+**Note Dec 2024**: some of the following content **may be outdated** and/or **incomplete**. For the most recent updates, please check:
+- [Changelog](https://github.com/NVIDIA/aistore/tree/main/docs/changelog)
+
 ## Overview
 
 FSHC monitors and manages filesystems used by AIStore. Every time AIStore triggers an IO error, FSHC checks health of the corresponding filesystem. Checking includes testing the filesystem availability, reading existing data, and creating temporary files. A filesystem that does not pass the test is automatically disabled and excluded from all next AIStore operations. Once a disabled filesystem is repaired, it can be marked as available for AIStore again.

@@ -18,6 +18,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// TODO: cluster summary to show "err.io.get.n" counters - generally, all metrics that are stats.IsIOErrMetric()
+
 func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, cfg *cmn.ClusterConfig, sid string) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)

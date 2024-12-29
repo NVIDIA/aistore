@@ -58,6 +58,19 @@ func (v throughput) addWith(parent *statsValue, nv cos.NamedVal64) {
 // prometheus ---------------------------------
 //
 
+// [TODO]
+// Prometheus counters are slow: https://github.com/prometheus/client_golang/blob/main/prometheus/counter.go
+// Some sort of overloading with subsequent delayed update (and with a fair share of addition done internally) is difficult
+// since most of our counters are also utilizing variable labels: bucket names, and such.
+// The following, maybe:
+// func (v counter) add(parent *statsValue, val int64) {
+// 	nv := ratomic.AddInt64(&parent.Value, val)
+// 	if it-is-time {
+// 		v.Add(float64(nv - pv)) // where `pv` would be the previous updated value, etc.
+// 	}
+// }
+// But unlikely. Prometheus own support for integer counters would be much more preferable.
+
 func (v counter) add(parent *statsValue, val int64) {
 	ratomic.AddInt64(&parent.Value, val)
 	v.Add(float64(val))
