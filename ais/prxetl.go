@@ -119,7 +119,7 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	// must be new
 	etlMD := p.owner.etl.get()
 	if etlMD.get(initMsg.Name()) != nil {
-		p.writeErrf(w, r, "%s: etl[%s] already exists", p, initMsg.Name())
+		p.writeErrStatusf(w, r, http.StatusConflict, "%s: etl job %s already exists", p, initMsg.Name())
 		return
 	}
 
