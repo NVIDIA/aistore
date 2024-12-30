@@ -205,7 +205,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	if err != nil {
 		ctx := fmt.Sprintf("health(%s) failure: %v(%d)", tname, err, code)
 		err = cmn.NewErrAborted(xreb.Name(), ctx, err)
-		reb.abortAndBroadcast(err)
+		reb.abortAll(err)
 		return
 	}
 
@@ -213,7 +213,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, rargs.logHdr, "reb status from "+tname, cos.BHead(body), err)
-		reb.abortAndBroadcast(err)
+		reb.abortAll(err)
 		return
 	}
 	//
@@ -222,7 +222,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	otherXid := xact.RebID2S(status.RebID)
 	if status.RebID > reb.rebID.Load() {
 		err := cmn.NewErrAborted(xreb.Name(), rargs.logHdr, errors.New(tname+" runs newer "+otherXid))
-		reb.abortAndBroadcast(err)
+		reb.abortAll(err)
 		return
 	}
 	if xreb.IsAborted() {
@@ -237,7 +237,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		nlog.Warningf("%s: %s[%s, v%d] %s older rebalance - keep waiting", rargs.logHdr, tname, otherXid, status.RebVersion, what)
 		return
 	}
-	// other target aborted same ID (do not call `reb.abortAndBroadcast` - no need)
+	// other target aborted same ID (do not call `reb.abortAll` - no need)
 	if status.RebID == reb.RebID() && status.Aborted {
 		err := cmn.NewErrAborted(xreb.Name(), rargs.logHdr, fmt.Errorf("status 'aborted' from %s", tname))
 		xreb.Abort(err)

@@ -98,12 +98,12 @@ func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode,
 	var (
 		lom    *core.LOM
 		fqn    = ct.FQN()
-		action = uint32(rebActRebCT)
+		action = uint32(ecActRebCT)
 	)
 	debug.Assert(meta != nil)
 	if len(workFQN) != 0 {
 		fqn = workFQN[0]
-		action = rebActMoveCT
+		action = ecActMoveCT
 	}
 	// TODO: unify acquiring a reader for LOM and CT
 	if ct.ContentType() == fs.ObjectType {
@@ -241,7 +241,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 
 // Check if this target has a metadata for the received CT
 func detectLocalCT(req *stageNtfn, ct *core.CT) (*ec.Metadata, error) {
-	if req.action == rebActMoveCT {
+	if req.action == ecActMoveCT {
 		// internal CT move after slice conflict - save always
 		return nil, nil
 	}
@@ -265,7 +265,7 @@ func detectLocalCT(req *stageNtfn, ct *core.CT) (*ec.Metadata, error) {
 // - the caller saves received CT to local drives, and then sends workfile
 func (reb *Reb) renameLocalCT(req *stageNtfn, ct *core.CT, md *ec.Metadata) (
 	workFQN string, moveTo *meta.Snode, err error) {
-	if md == nil || req.action == rebActMoveCT {
+	if md == nil || req.action == ecActMoveCT {
 		return
 	}
 	if md.SliceID == 0 || md.SliceID == req.md.SliceID || req.md.Generation != md.Generation {

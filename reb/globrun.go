@@ -37,8 +37,7 @@ import (
 )
 
 const (
-	trname    = "reb"
-	trnamePsh = "pshreb" // broadcast stage notifications
+	trname = "reb"
 )
 
 // rebalance stage enum
@@ -62,7 +61,6 @@ type (
 		smap      ratomic.Pointer[meta.Smap] // next smap (new that'll become current after rebalance)
 		xreb      ratomic.Pointer[xs.Rebalance]
 		dm        *bundle.DataMover
-		pushes    *bundle.Streams // broadcast notifications
 		filterGFN *prob.Filter
 		ecClient  *http.Client
 		stages    *nodeStages
@@ -144,7 +142,7 @@ func New(config *cmn.Config) *Reb {
 		reb.ecClient = cmn.NewClient(cargs)
 	}
 	dmExtra := bundle.Extra{
-		RecvAck:     reb.recvAck,
+		RecvAck:     reb.recvAckNtfn,
 		Config:      config,
 		Compression: config.Rebalance.Compression,
 		Multiplier:  config.Rebalance.SbundleMult,
@@ -152,24 +150,6 @@ func New(config *cmn.Config) *Reb {
 	reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, dmExtra) // (compare with dm.Renew below)
 
 	return reb
-}
-
-func (reb *Reb) regRecv() error {
-	if err := reb.dm.RegRecv(); err != nil {
-		return err
-	}
-	if err := transport.Handle(trnamePsh, reb.recvStageNtfn /*RecvObj*/); err != nil {
-		reb.dm.UnregRecv()
-		debug.AssertNoErr(err)
-		return err
-	}
-	return nil
-}
-
-func (reb *Reb) unregRecv() {
-	reb.dm.UnregRecv()
-	err := transport.Unhandle(trnamePsh)
-	debug.AssertNoErr(err)
 }
 
 func (reb *Reb) _preempt(logHdr, oxid string) error {
@@ -258,14 +238,14 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 	if reb.rebID.Load() == extArgs.NID {
 		return
 	}
-	if err := reb.regRecv(); err != nil {
+	if err := reb.dm.RegRecv(); err != nil {
 		if !_preempt2(logHdr, extArgs.NID) {
 			nlog.Errorln(logHdr, "failed to preempt #2:", err)
 			return
 		}
 		// sleep and retry just once
 		time.Sleep(rargs.config.Timeout.MaxKeepalive.D())
-		if err = reb.regRecv(); err != nil {
+		if err = reb.dm.RegRecv(); err != nil {
 			nlog.Errorln(logHdr, err)
 			return
 		}
@@ -275,14 +255,14 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 		haveStreams = false
 	}
 	if !reb.initRenew(rargs, extArgs.Notif, haveStreams) {
-		reb.unregRecv()
+		reb.dm.UnregRecv()
 		return
 	}
 	if !haveStreams {
 		// cleanup and leave
 		nlog.Infof("%s: nothing to do: %s, %s", logHdr, smap.StringEx(), bmd.StringEx())
 		reb.stages.stage.Store(rebStageDone)
-		reb.unregRecv()
+		reb.dm.UnregRecv()
 		fs.RemoveMarker(fname.RebalanceMarker, extArgs.Tstats)
 		fs.RemoveMarker(fname.NodeRestartedPrev, extArgs.Tstats)
 		rargs.xreb.Finish()
@@ -412,7 +392,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams boo
 	// 3. init streams and data structures
 	if haveStreams {
 		dmExtra := bundle.Extra{
-			RecvAck:     reb.recvAck,
+			RecvAck:     reb.recvAckNtfn,
 			Config:      rargs.config,
 			Compression: rargs.config.Rebalance.Compression,
 			Multiplier:  rargs.config.Rebalance.SbundleMult,
@@ -461,20 +441,12 @@ func (reb *Reb) beginStreams(rargs *rebArgs) {
 
 	reb.dm.SetXact(rargs.xreb)
 	reb.dm.Open()
-	pushArgs := bundle.Args{
-		Net:        reb.dm.NetC(),
-		Trname:     trnamePsh,
-		Multiplier: rargs.config.Rebalance.SbundleMult,
-		Extra:      &transport.Extra{Xact: rargs.xreb, Config: rargs.config},
-	}
-	reb.pushes = bundle.New(transport.NewIntraDataClient(), pushArgs)
 }
 
 func (reb *Reb) endStreams(err error) {
 	swapped := reb.stages.stage.CAS(rebStageFin, rebStageFinStreams)
 	debug.Assert(swapped)
 	reb.dm.Close(err)
-	reb.pushes.Close(err == nil)
 }
 
 // when at least one bucket has EC enabled
@@ -729,7 +701,7 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 	reb.stages.stage.Store(rebStageDone)
 	reb.stages.cleanup()
 
-	reb.unregRecv()
+	reb.dm.UnregRecv()
 	xreb.Finish()
 	switch {
 	case ret != core.QuiAborted && ret != core.QuiTimeout && cnt == 0:

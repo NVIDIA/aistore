@@ -5,23 +5,23 @@
 package reb
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ec"
 )
 
 // Rebalance message types (for ACK or sending files)
 const (
-	rebMsgRegular   = iota // regular rebalance: acknowledge/Object
-	rebMsgEC               // EC rebalance: acknowledge/CT/Namespace
-	rebMsgStageNtfn        // stage notification (of target transitioning to the next stage)
+	rebMsgRegular = iota // regular rebalance: acknowledge/Object
+	rebMsgEC             // EC rebalance: acknowledge/CT/Namespace
+	rebMsgNtfn           // stage transition notification (via DM's ack stream) _or_ EC md update (via data stream)
 )
+
 const rebMsgKindSize = 1
+
 const (
-	rebActRebCT    = iota // a CT moved to a correct target (regular rebalance)
-	rebActMoveCT          // a CT moved from a target after slice conflict (a target received a CT and it had another CT)
-	rebActUpdateMD        // a new MD to update existing local one
+	ecActRebCT    = iota // a CT moved to a correct target (regular rebalance)
+	ecActMoveCT          // a CT moved from a target after slice conflict (a target received a CT and it had another CT)
+	ecActUpdateMD        // a new MD to update existing local one
 )
 
 type (
@@ -35,13 +35,16 @@ type (
 		sliceID  uint16
 	}
 
-	// stage notification struct - a target sends it when it enters `stage`
+	// usage:
+	// - changeStage(), abortAll()
+	// and separately
+	// - with EC data, via sendFromDisk => recvECData
 	stageNtfn struct {
 		md       *ec.Metadata
 		daemonID string // sender's ID
 		rebID    int64  // sender's rebalance ID
 		stage    uint32 // stage the sender has just reached
-		action   uint32 // see rebAct* constants
+		action   uint32 // see ecAct* constants
 	}
 )
 
@@ -68,7 +71,7 @@ func (rack *regularAck) Pack(packer *cos.BytePack) {
 	packer.WriteString(rack.daemonID)
 }
 
-func (rack *regularAck) NewPack() []byte { // TODO: consider adding as another cos.Packer interface
+func (rack *regularAck) NewPack() []byte {
 	l := rebMsgKindSize + rack.PackedSize()
 	packer := cos.NewPacker(nil, l)
 	packer.WriteByte(rebMsgRegular)
@@ -76,7 +79,7 @@ func (rack *regularAck) NewPack() []byte { // TODO: consider adding as another c
 	return packer.Bytes()
 }
 
-// rebID + length of DaemonID + Daemon
+// rebID + len(DaemonID) + DaemonID
 func (rack *regularAck) PackedSize() int {
 	return cos.SizeofI64 + cos.SizeofLen + len(rack.daemonID)
 }
@@ -164,25 +167,4 @@ func (ntfn *stageNtfn) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	}
 	ntfn.md = ec.NewMetadata()
 	return unpacker.ReadAny(ntfn.md)
-}
-
-func (*Reb) encodeStageNtfn(ntfn *stageNtfn) []byte {
-	return ntfn.NewPack(rebMsgStageNtfn)
-}
-
-func (*Reb) decodeStageNtfn(buf []byte) (*stageNtfn, error) {
-	var (
-		ntfn     = &stageNtfn{}
-		unpacker = cos.NewUnpacker(buf)
-		act, err = unpacker.ReadByte()
-	)
-	if err != nil {
-		return nil, err
-	}
-	// at the moment, there is only one kind of stage notifications (see above)
-	if act != rebMsgStageNtfn {
-		return nil, fmt.Errorf("expected %d (stage notification), got %d", rebMsgStageNtfn, act)
-	}
-	err = unpacker.ReadAny(ntfn)
-	return ntfn, err
 }

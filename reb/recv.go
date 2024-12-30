@@ -22,9 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-// TODO: currently, cannot return errors from the receive handlers, here and elsewhere
-//       (see `_regRecv` for "static lifecycle")
-
 func (reb *Reb) _recvErr(err error) error {
 	if err == nil {
 		return nil
@@ -62,7 +59,7 @@ func (reb *Reb) recvObj(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 	return reb._recvErr(err)
 }
 
-func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
+func (reb *Reb) recvAckNtfn(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 	if err != nil {
 		nlog.Errorln(err)
 		return err
@@ -71,70 +68,64 @@ func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
-	switch {
-	case err != nil:
-		err := fmt.Errorf("g[%d]: failed to read ACK message type: %v", reb.RebID(), err)
-		return reb._recvErr(err)
-	case act == rebMsgEC:
-		err := reb.recvECAck(hdr, unpacker)
-		return reb._recvErr(err)
-	case act == rebMsgRegular:
-		err := reb.recvRegularAck(hdr, unpacker)
-		return reb._recvErr(err)
-	default:
-		err := fmt.Errorf("g[%d]: invalid ACK message type '%d' (expecting '%d')", reb.RebID(), act, rebMsgRegular)
+	if err != nil {
+		err := fmt.Errorf("g[%d]: failed to unpack control (ack, ntfn) message type: %v", reb.RebID(), err)
 		return reb._recvErr(err)
 	}
+
+	switch act {
+	case rebMsgEC:
+		err = reb.recvECAck(hdr, unpacker)
+	case rebMsgRegular:
+		err = reb.recvRegularAck(hdr, unpacker)
+	case rebMsgNtfn:
+		var ntfn stageNtfn
+		err = unpacker.ReadAny(&ntfn)
+		if err == nil {
+			reb._handleNtfn(&ntfn)
+		}
+	default:
+		err = fmt.Errorf("g[%d]: invalid ACK message type '%d' (expecting '%d')", reb.RebID(), act, rebMsgRegular)
+	}
+
+	return reb._recvErr(err)
 }
 
-func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) error {
-	if errRx != nil {
-		nlog.Errorf("%s g[%d]: stage err %v", core.T, reb.RebID(), errRx)
-		return errRx
-	}
-	ntfn, err := reb.decodeStageNtfn(hdr.Opaque)
-	if err != nil {
-		return reb._recvErr(err)
-	}
-
-	reb.lastrx.Store(mono.NanoTime())
-
+func (reb *Reb) _handleNtfn(ntfn *stageNtfn) {
 	var (
-		rebID      = reb.RebID()
-		rsmap      = reb.smap.Load()
-		otherStage = stages[ntfn.stage]
-		xreb       = reb.xctn()
+		rebID = reb.RebID()
+		rsmap = reb.smap.Load()
+		xreb  = reb.xctn()
 	)
 	if xreb == nil {
 		if reb.stages.stage.Load() != rebStageInactive {
 			nlog.Errorln(reb.logHdr(rebID, rsmap), "nil rebalancing xaction")
 		}
-		return nil
+		return
 	}
 	if xreb.IsAborted() {
-		return nil
+		return
 	}
 
-	// TODO: see "static lifecycle" comment above
+	reb.lastrx.Store(mono.NanoTime())
 
-	// eq
-	if rebID == ntfn.rebID {
+	switch {
+	case rebID == ntfn.rebID: // same stage
 		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
 		if ntfn.stage == rebStageAbort {
+			otherStage := stages[ntfn.stage]
+			loghdr := reb.logHdr(rebID, rsmap)
 			err := fmt.Errorf("abort stage notification from %s(%s)", meta.Tname(ntfn.daemonID), otherStage)
-			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, rsmap), err))
+			xreb.Abort(cmn.NewErrAborted(xreb.Name(), loghdr, err))
 		}
-		return nil
+	case rebID > ntfn.rebID: // other's old
+		loghdr := reb.logHdr(rebID, rsmap)
+		nlog.Warningln(loghdr, reb.warnID(ntfn.rebID, ntfn.daemonID))
+	default: // other's newer
+		loghdr := reb.logHdr(rebID, rsmap)
+		err := fmt.Errorf("%s: %s", loghdr, reb.warnID(ntfn.rebID, ntfn.daemonID))
+		xreb.Abort(err)
 	}
-	// other's old
-	if rebID > ntfn.rebID {
-		nlog.Warningln(reb.logHdr(rebID, rsmap), "stage notification from",
-			meta.Tname(ntfn.daemonID), "at stage", otherStage+":", reb.warnID(ntfn.rebID, ntfn.daemonID))
-		return nil
-	}
-
-	xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, rsmap), err))
-	return nil
 }
 
 //
@@ -373,7 +364,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		}
 	}
 	// Broadcast updated MD
-	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
+	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: ecActUpdateMD}
 	nodes := req.md.RemoteTargets()
 
 	err = nil // keep the first errSend (TODO: count failures)
@@ -410,7 +401,7 @@ func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, read
 			core.T, req.rebID, reb.rebID.Load(), hdr.Cname(), hdr.SID)
 		return nil
 	}
-	if req.action == rebActUpdateMD {
+	if req.action == ecActUpdateMD {
 		err := receiveMD(req, hdr)
 		if err != nil {
 			nlog.Errorf("Warning: %s g[%d]: failed to receive EC MD from t[%s] for %s: [%v]", core.T, req.rebID, hdr.SID, hdr.Cname(), err)

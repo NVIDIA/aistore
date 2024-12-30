@@ -24,7 +24,7 @@ import (
 func (reb *Reb) RebID() int64           { return reb.rebID.Load() }
 func (reb *Reb) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
-// (limited usage; compare with `abortAndBroadcast` below)
+// (limited usage; compare with `abortAll` below)
 func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 	if xreb := reb.xctn(); xreb != nil {
 		// double-check
@@ -107,24 +107,23 @@ func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
 // - update internal stage
 // - send notification to all other targets that this one is in a new stage
 func (reb *Reb) changeStage(newStage uint32) {
-	// first, set own stage
+	// set our own stage
 	reb.stages.stage.Store(newStage)
+
+	// notify all
 	var (
-		req = stageNtfn{
-			daemonID: core.T.SID(), stage: newStage, rebID: reb.RebID(),
-		}
-		hdr = transport.ObjHdr{}
+		ntfn = &stageNtfn{daemonID: core.T.SID(), stage: newStage, rebID: reb.RebID()}
+		hdr  = transport.ObjHdr{}
 	)
-	hdr.Opaque = reb.encodeStageNtfn(&req)
-	// second, notify all
-	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		nlog.Warningln("failed to push new-stage notif: [", req.rebID, stages[newStage], err, "]")
+	hdr.Opaque = ntfn.NewPack(rebMsgNtfn)
+
+	if err := reb.dm.Notif(&hdr); err != nil {
+		nlog.Warningln("failed to bcast new-stage notif: [", ntfn.rebID, stages[newStage], err, "]")
 	}
 }
 
 // Aborts global rebalance and notifies all other targets.
-// (compare with `Abort` above)
-func (reb *Reb) abortAndBroadcast(err error) {
+func (reb *Reb) abortAll(err error) {
 	xreb := reb.xctn()
 	if xreb == nil || !xreb.Abort(err) {
 		return
@@ -132,16 +131,13 @@ func (reb *Reb) abortAndBroadcast(err error) {
 	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
 
 	var (
-		req = stageNtfn{
-			daemonID: core.T.SID(),
-			rebID:    reb.RebID(),
-			stage:    rebStageAbort,
-		}
-		hdr = transport.ObjHdr{}
+		ntfn = &stageNtfn{daemonID: core.T.SID(), rebID: reb.RebID(), stage: rebStageAbort}
+		hdr  = transport.ObjHdr{}
 	)
-	hdr.Opaque = reb.encodeStageNtfn(&req)
-	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		nlog.Errorln("failed to broadcast abort notif: [", req.rebID, err, "]")
+	hdr.Opaque = ntfn.NewPack(rebMsgNtfn)
+
+	if err := reb.dm.Notif(&hdr); err != nil {
+		nlog.Errorln("failed to bcast abort notif: [", ntfn.rebID, err, "]")
 	}
 }
 

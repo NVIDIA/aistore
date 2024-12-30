@@ -22,21 +22,16 @@ import (
 )
 
 type (
+	bp struct {
+		client  transport.Client
+		recv    transport.RecvObj
+		streams *Streams
+		trname  string
+		net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
+	}
 	DataMover struct {
-		data struct {
-			client  transport.Client
-			recv    transport.RecvObj
-			streams *Streams
-			trname  string
-			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
-		}
-		ack struct {
-			client  transport.Client
-			recv    transport.RecvObj
-			streams *Streams
-			trname  string
-			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
-		}
+		data        bp // data
+		ack         bp // ACKs and control
 		xctn        core.Xact
 		config      *cmn.Config
 		compression string // enum { apc.CompressNever, ... }
@@ -51,7 +46,7 @@ type (
 		sizePDU    int32
 		maxHdrSize int32
 	}
-	// additional (and optional) params for new data mover
+	// additional (and optional) params for new data mover instance
 	Extra struct {
 		RecvAck     transport.RecvObj
 		Config      *cmn.Config
@@ -162,11 +157,11 @@ func (dm *DataMover) UnregRecv() {
 		dm.Quiesce(timeout)
 	}
 	if err := transport.Unhandle(dm.data.trname); err != nil {
-		nlog.Errorln("FATAL:", err, "[", dm.String(), "]")
+		nlog.ErrorDepth(1, "FATAL:", err, "[", dm.data.trname, dm.String(), "]")
 	}
 	if dm.useACKs() {
 		if err := transport.Unhandle(dm.ack.trname); err != nil {
-			nlog.Errorln("FATAL:", err, "[", dm.String(), "]")
+			nlog.ErrorDepth(1, "FATAL:", err, "[", dm.ack.trname, dm.String(), "]")
 		}
 	}
 }
@@ -276,6 +271,10 @@ func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.
 
 func (dm *DataMover) ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
 	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr, Callback: cb}, nil, tsi)
+}
+
+func (dm *DataMover) Notif(hdr *transport.ObjHdr) error {
+	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr}, nil)
 }
 
 func (dm *DataMover) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
