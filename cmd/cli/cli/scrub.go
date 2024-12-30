@@ -69,7 +69,9 @@ type (
 			vchanged  _log
 			vremoved  _log
 		}
-		_many bool
+		logs       []*_log // all of the above
+		_many      bool
+		haveRemote atomic.Bool
 	}
 )
 
@@ -121,8 +123,8 @@ func scrubHandler(c *cli.Context) (err error) {
 			return err
 		}
 	}
-	if ctx.large < ctx.small {
-		return fmt.Errorf("%s (%s) cannot be smaller than %s (%s)",
+	if ctx.large <= ctx.small {
+		return fmt.Errorf("%s (%s) must be greater than %s (%s)",
 			qflprn(largeSizeFlag), cos.ToSizeIEC(ctx.large, 0),
 			qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
 	}
@@ -151,26 +153,28 @@ func scrubHandler(c *cli.Context) (err error) {
 //////////////
 
 func (ctx *scrubCtx) createLogs() error {
-	var (
-		logs = []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large, &ctx.log.vchanged, &ctx.log.vremoved}
-		tags = []string{"misplaced", "missing", "small", "large", "version-changed", "version-removed"}
-	)
-	debug.Assert(len(logs) == len(tags))
-	for i := range logs {
-		logs[i].tag = tags[i]
-		if err := ctx._create(logs[i]); err != nil {
+	ctx.logs = []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large,
+		&ctx.log.vchanged, &ctx.log.vremoved}
+	tags := []string{"misplaced", "missing", "small", "large",
+		"version-changed", "version-removed"}
+
+	for i := range ctx.logs {
+		if err := ctx._create(ctx.logs[i]); err != nil {
+			// cleanup
+			for j := range i - 1 {
+				cos.Close(ctx.logs[j].fh)
+				cos.RemoveFile(ctx.logs[j].fn)
+			}
 			return err
 		}
+		ctx.logs[i].tag = tags[i]
 	}
 	return nil
 }
 
 func (ctx *scrubCtx) closeLogs(c *cli.Context) {
-	var (
-		logs   = []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large, &ctx.log.vchanged, &ctx.log.vremoved}
-		titled bool
-	)
-	for _, log := range logs {
+	var titled bool
+	for _, log := range ctx.logs {
 		cos.Close(log.fh)
 		if log.cnt == 0 {
 			cos.RemoveFile(log.fn)
@@ -230,7 +234,7 @@ func (ctx *scrubCtx) prnt() error {
 		out[i] = (*teb.ScrubOne)(scr)
 	}
 	all := teb.ScrubHelper{All: out}
-	tab := all.MakeTab(ctx.units)
+	tab := all.MakeTab(ctx.units, ctx.haveRemote.Load())
 
 	return teb.Print(out, tab.Template(flagIsSet(ctx.c, noHeaderFlag)))
 }
@@ -269,10 +273,17 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 		scr    = &scrubOne{Bck: bck, Prefix: ctx.pref}
 		lsmsg  = &apc.LsoMsg{
 			Prefix: ctx.pref,
-			Flags:  apc.LsObjCached | apc.LsMissing | apc.LsVerChanged,
+			Flags:  apc.LsMissing,
 		}
 	)
-	lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCustom)
+	bck.Props = bprops
+	if bck.IsRemote() {
+		lsmsg.Flags |= apc.LsObjCached | apc.LsVerChanged
+		lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCustom)
+		ctx.haveRemote.Store(true)
+	} else {
+		lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
+	}
 
 	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)
 	if err != nil {
@@ -357,31 +368,37 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 //////////////
 
 func (scr *scrubOne) upd(parent *scrubCtx, en *cmn.LsoEnt, bprops *cmn.Bprops) {
-	scr.Listed++
+	scr.Listed.Cnt++
+	scr.Listed.Siz += en.Size
 	if !en.IsStatusOK() {
-		scr.Stats.Misplaced++
+		scr.Stats.Misplaced.Cnt++
+		scr.Stats.Misplaced.Siz += en.Size
 		scr.log(&parent.log.misplaced, scr.Bck.Cname(en.Name), parent._many)
 		return // no further checking
 	}
 
 	if bprops.Mirror.Enabled && en.Copies < int16(bprops.Mirror.Copies) {
-		scr.Stats.MissingCp++
+		scr.Stats.MissingCp.Cnt++
 		scr.log(&parent.log.missing, scr.Bck.Cname(en.Name), parent._many)
 	}
 
 	if en.Size <= parent.small {
-		scr.Stats.SmallSz++
+		scr.Stats.SmallSz.Cnt++
+		scr.Stats.SmallSz.Siz += en.Size
 		scr.log(&parent.log.small, scr.Bck.Cname(en.Name), parent._many)
 	} else if en.Size >= parent.large {
-		scr.Stats.LargeSz++
+		scr.Stats.LargeSz.Cnt++
+		scr.Stats.LargeSz.Siz += en.Size
 		scr.log(&parent.log.large, scr.Bck.Cname(en.Name), parent._many)
 	}
 
 	if en.IsVerChanged() {
-		scr.Stats.Vchanged++
+		scr.Stats.Vchanged.Cnt++
+		scr.Stats.Vchanged.Siz += en.Size
 		scr.log(&parent.log.vchanged, scr.Bck.Cname(en.Name), parent._many)
 	} else if en.IsVerRemoved() {
-		scr.Stats.Vremoved++
+		scr.Stats.Vremoved.Cnt++
+		scr.Stats.Vremoved.Siz += en.Size
 		scr.log(&parent.log.vremoved, scr.Bck.Cname(en.Name), parent._many)
 	}
 }

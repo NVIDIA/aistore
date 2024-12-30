@@ -14,7 +14,7 @@ const (
 	colBucket    = "BUCKET" // + [/PREFIX]
 	colObjects   = "OBJECTS"
 	colMisplaced = "MISPLACED"
-	colMissing   = "MISSING COPIES"
+	colMissing   = "MISSING-COPIES"
 	colSmall     = "SMALL"
 	colLarge     = "LARGE"
 	colVchanged  = "VERSION-CHANGED"
@@ -22,17 +22,21 @@ const (
 )
 
 type (
+	CntSiz struct {
+		Cnt int64
+		Siz int64
+	}
 	ScrubOne struct {
 		Bck    cmn.Bck
 		Prefix string
-		Listed uint64
+		Listed CntSiz
 		Stats  struct {
-			Misplaced uint64
-			MissingCp uint64
-			SmallSz   uint64
-			LargeSz   uint64
-			Vchanged  uint64
-			Vremoved  uint64
+			Misplaced CntSiz
+			MissingCp CntSiz
+			SmallSz   CntSiz
+			LargeSz   CntSiz
+			Vchanged  CntSiz
+			Vremoved  CntSiz
 		}
 	}
 	ScrubHelper struct {
@@ -57,7 +61,7 @@ func (h *ScrubHelper) colFirst() string {
 	}
 }
 
-func (h *ScrubHelper) MakeTab(units string) *Table {
+func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 	var (
 		cols = []*header{
 			{name: h.colFirst()},
@@ -72,23 +76,24 @@ func (h *ScrubHelper) MakeTab(units string) *Table {
 		table = newTable(cols...)
 	)
 
-	_ = units // TODO -- FIXME: add total size; use units
+	// hide assorted columns
+	h.hideMissingCp(cols, colMissing)
+	if !haveRemote {
+		h._hideCol(cols, colVchanged)
+		h._hideCol(cols, colVremoved)
+	}
 
-	h.hideMisplaced(cols, colMisplaced)
-	h.hideMissing(cols, colMissing)
-	h.hideVchanged(cols, colVchanged)
-	h.hideVremoved(cols, colVremoved)
-
+	// make tab
 	for _, scr := range h.All {
 		row := []string{
 			scr.Bck.Cname(scr.Prefix),
-			strconv.FormatUint(scr.Listed, 10),
-			strconv.FormatUint(scr.Stats.Misplaced, 10),
-			strconv.FormatUint(scr.Stats.MissingCp, 10),
-			strconv.FormatUint(scr.Stats.SmallSz, 10),
-			strconv.FormatUint(scr.Stats.LargeSz, 10),
-			strconv.FormatUint(scr.Stats.Vchanged, 10),
-			strconv.FormatUint(scr.Stats.Vremoved, 10),
+			scr.fmtListed(units),
+			scr.fmtMisplaced(units),
+			scr.fmtMissingCp(),
+			scr.fmtSmallSz(units),
+			scr.fmtLargeSz(units),
+			scr.fmtVchanged(units),
+			scr.fmtVremoved(units),
 		}
 		table.addRow(row)
 	}
@@ -96,40 +101,9 @@ func (h *ScrubHelper) MakeTab(units string) *Table {
 	return table
 }
 
-//
-// remove/hide a few named all-zero columns // TODO -- FIXME: copy-paste
-//
-
-func (h *ScrubHelper) hideMisplaced(cols []*header, col string) {
+func (h *ScrubHelper) hideMissingCp(cols []*header, col string) {
 	for _, scr := range h.All {
-		if scr.Stats.Misplaced != 0 {
-			return
-		}
-	}
-	h._hideCol(cols, col)
-}
-
-func (h *ScrubHelper) hideMissing(cols []*header, col string) {
-	for _, scr := range h.All {
-		if scr.Stats.MissingCp != 0 {
-			return
-		}
-	}
-	h._hideCol(cols, col)
-}
-
-func (h *ScrubHelper) hideVchanged(cols []*header, col string) {
-	for _, scr := range h.All {
-		if scr.Stats.Vchanged != 0 {
-			return
-		}
-	}
-	h._hideCol(cols, col)
-}
-
-func (h *ScrubHelper) hideVremoved(cols []*header, col string) {
-	for _, scr := range h.All {
-		if scr.Stats.Vremoved != 0 {
+		if scr.Stats.MissingCp.Cnt != 0 {
 			return
 		}
 	}
@@ -142,4 +116,60 @@ func (*ScrubHelper) _hideCol(cols []*header, name string) {
 			col.hide = true
 		}
 	}
+}
+
+//
+// TODO -- FIXME: reduce code
+//
+
+const zeroCnt = "-"
+
+func (v *CntSiz) fmt(units string) string {
+	return strconv.FormatInt(v.Cnt, 10) + " (" + FmtSize(v.Siz, units, 1) + ")"
+}
+
+func (scr *ScrubOne) fmtListed(units string) string {
+	return scr.Listed.fmt(units)
+}
+
+func (scr *ScrubOne) fmtMisplaced(units string) string {
+	if scr.Stats.Misplaced.Cnt == 0 {
+		return zeroCnt
+	}
+	return scr.Stats.Misplaced.fmt(units)
+}
+
+func (scr *ScrubOne) fmtMissingCp() string {
+	if scr.Stats.MissingCp.Cnt == 0 {
+		return zeroCnt
+	}
+	return strconv.FormatInt(scr.Stats.MissingCp.Cnt, 10)
+}
+
+func (scr *ScrubOne) fmtSmallSz(units string) string {
+	if scr.Stats.SmallSz.Cnt == 0 {
+		return zeroCnt
+	}
+	return scr.Stats.SmallSz.fmt(units)
+}
+
+func (scr *ScrubOne) fmtLargeSz(units string) string {
+	if scr.Stats.LargeSz.Cnt == 0 {
+		return zeroCnt
+	}
+	return scr.Stats.LargeSz.fmt(units)
+}
+
+func (scr *ScrubOne) fmtVchanged(units string) string {
+	if scr.Stats.Vchanged.Cnt == 0 {
+		return zeroCnt
+	}
+	return scr.Stats.Vchanged.fmt(units)
+}
+
+func (scr *ScrubOne) fmtVremoved(units string) string {
+	if scr.Stats.Vremoved.Cnt == 0 {
+		return zeroCnt
+	}
+	return scr.Stats.Vremoved.fmt(units)
 }
