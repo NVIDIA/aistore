@@ -66,8 +66,7 @@ pytorch = ["torch", "torchdata", "webdataset==0.2.86"]
 botocore = ["wrapt"]
 
 [project.urls]
-"Homepage" = "https://aiatscale.org"
-"Download" = "https://github.com/NVIDIA/aistore/tags"
-"Documentation" = "https://aiatscale.org/docs/"
-"Release notes" = "https://github.com/NVIDIA/aistore/releases/"
-"Source" = "https://github.com/NVIDIA/aistore/"
+"Homepage" = "https://aistore.nvidia.com"
+"Documentation" = "https://aistore.nvidia.com/docs/python-sdk"
+"Changelog" = "https://github.com/NVIDIA/aistore/blob/main/python/CHANGELOG.md"
+"Source" = "https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk"

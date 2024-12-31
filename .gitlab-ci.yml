@@ -185,6 +185,24 @@ test:short:
     - FLAGS="--duration=10s" make test-aisloader
     - make test-tracing-unit
 
+test:short:python-changelog-check:
+  <<: *test_short_def
+  only:
+    refs:
+      - merge_requests
+    changes:
+      - python/aistore/sdk/**/*
+      - python/aistore/version.py
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-python-changelog-check.*/
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - CHANGED_FILES=$(git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"...HEAD)
+    - echo "Changed files are:"
+    - echo "$CHANGED_FILES"
+    - echo "$CHANGED_FILES" | grep -qx 'python/CHANGELOG.md' || exit 1
+
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:python:
   <<: *test_short_def
