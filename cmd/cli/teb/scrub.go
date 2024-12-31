@@ -8,17 +8,35 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const (
 	colBucket    = "BUCKET" // + [/PREFIX]
 	colObjects   = "OBJECTS"
 	colMisplaced = "MISPLACED"
-	colMissing   = "MISSING-COPIES"
-	colSmall     = "SMALL"
-	colLarge     = "LARGE"
+	colMissingCp = "MISSING-COPIES"
+	colSmallSz   = "SMALL"
+	colLargeSz   = "LARGE"
 	colVchanged  = "VERSION-CHANGED"
 	colVremoved  = "VERSION-REMOVED"
+)
+
+const (
+	ScrObjects = iota
+	ScrMisplaced
+	ScrMissingCp
+	ScrSmallSz
+	ScrLargeSz
+	ScrVchanged
+	ScrVremoved
+
+	ScrNumStats // NOTE: must be last
+)
+
+var (
+	ScrCols = [...]string{colObjects, colMisplaced, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
+	ScrNums = [...]int64{0, 0, 0, 0, 0, 0, 0}
 )
 
 type (
@@ -29,15 +47,7 @@ type (
 	ScrubOne struct {
 		Bck    cmn.Bck
 		Prefix string
-		Listed CntSiz
-		Stats  struct {
-			Misplaced CntSiz
-			MissingCp CntSiz
-			SmallSz   CntSiz
-			LargeSz   CntSiz
-			Vchanged  CntSiz
-			Vremoved  CntSiz
-		}
+		Stats  [ScrNumStats]CntSiz
 	}
 	ScrubHelper struct {
 		All []*ScrubOne
@@ -62,22 +72,19 @@ func (h *ScrubHelper) colFirst() string {
 }
 
 func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
-	var (
-		cols = []*header{
-			{name: h.colFirst()},
-			{name: colObjects},
-			{name: colMisplaced},
-			{name: colMissing},
-			{name: colSmall},
-			{name: colLarge},
-			{name: colVchanged},
-			{name: colVremoved},
-		}
-		table = newTable(cols...)
-	)
+	debug.Assert(len(ScrCols) == len(ScrNums))
+	debug.Assert(len(ScrCols) == ScrNumStats)
+
+	cols := make([]*header, 1, len(ScrCols)+1)
+	cols[0] = &header{name: h.colFirst()}
+	for _, col := range ScrCols {
+		cols = append(cols, &header{name: col})
+	}
+
+	table := newTable(cols...)
 
 	// hide assorted columns
-	h.hideMissingCp(cols, colMissing)
+	h.hideMissingCp(cols, colMissingCp)
 	if !haveRemote {
 		h._hideCol(cols, colVchanged)
 		h._hideCol(cols, colVremoved)
@@ -85,15 +92,11 @@ func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 
 	// make tab
 	for _, scr := range h.All {
-		row := []string{
-			scr.Bck.Cname(scr.Prefix),
-			scr.fmtListed(units),
-			scr.fmtMisplaced(units),
-			scr.fmtMissingCp(),
-			scr.fmtSmallSz(units),
-			scr.fmtLargeSz(units),
-			scr.fmtVchanged(units),
-			scr.fmtVremoved(units),
+		row := make([]string, 1, len(ScrCols)+1)
+		row[0] = scr.Bck.Cname(scr.Prefix)
+
+		for _, v := range scr.Stats {
+			row = append(row, scr.fmtVal(v, units))
 		}
 		table.addRow(row)
 	}
@@ -103,7 +106,7 @@ func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 
 func (h *ScrubHelper) hideMissingCp(cols []*header, col string) {
 	for _, scr := range h.All {
-		if scr.Stats.MissingCp.Cnt != 0 {
+		if scr.Stats[ScrMissingCp].Cnt != 0 {
 			return
 		}
 	}
@@ -118,58 +121,12 @@ func (*ScrubHelper) _hideCol(cols []*header, name string) {
 	}
 }
 
-//
-// TODO -- FIXME: reduce code
-//
-
+// format values
 const zeroCnt = "-"
 
-func (v *CntSiz) fmt(units string) string {
+func (*ScrubOne) fmtVal(v CntSiz, units string) string {
+	if v.Cnt == 0 {
+		return zeroCnt
+	}
 	return strconv.FormatInt(v.Cnt, 10) + " (" + FmtSize(v.Siz, units, 1) + ")"
-}
-
-func (scr *ScrubOne) fmtListed(units string) string {
-	return scr.Listed.fmt(units)
-}
-
-func (scr *ScrubOne) fmtMisplaced(units string) string {
-	if scr.Stats.Misplaced.Cnt == 0 {
-		return zeroCnt
-	}
-	return scr.Stats.Misplaced.fmt(units)
-}
-
-func (scr *ScrubOne) fmtMissingCp() string {
-	if scr.Stats.MissingCp.Cnt == 0 {
-		return zeroCnt
-	}
-	return strconv.FormatInt(scr.Stats.MissingCp.Cnt, 10)
-}
-
-func (scr *ScrubOne) fmtSmallSz(units string) string {
-	if scr.Stats.SmallSz.Cnt == 0 {
-		return zeroCnt
-	}
-	return scr.Stats.SmallSz.fmt(units)
-}
-
-func (scr *ScrubOne) fmtLargeSz(units string) string {
-	if scr.Stats.LargeSz.Cnt == 0 {
-		return zeroCnt
-	}
-	return scr.Stats.LargeSz.fmt(units)
-}
-
-func (scr *ScrubOne) fmtVchanged(units string) string {
-	if scr.Stats.Vchanged.Cnt == 0 {
-		return zeroCnt
-	}
-	return scr.Stats.Vchanged.fmt(units)
-}
-
-func (scr *ScrubOne) fmtVremoved(units string) string {
-	if scr.Stats.Vremoved.Cnt == 0 {
-		return zeroCnt
-	}
-	return scr.Stats.Vremoved.fmt(units)
 }

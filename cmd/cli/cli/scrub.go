@@ -60,16 +60,8 @@ type (
 		// timing
 		ival time.Duration
 		last atomic.Int64
-		// detailed log
-		log struct {
-			misplaced _log
-			missing   _log
-			small     _log
-			large     _log
-			vchanged  _log
-			vremoved  _log
-		}
-		logs       []*_log // all of the above
+		// detailed logs
+		logs       [teb.ScrNumStats]_log
 		_many      bool
 		haveRemote atomic.Bool
 	}
@@ -153,13 +145,11 @@ func scrubHandler(c *cli.Context) (err error) {
 //////////////
 
 func (ctx *scrubCtx) createLogs() error {
-	ctx.logs = []*_log{&ctx.log.misplaced, &ctx.log.missing, &ctx.log.small, &ctx.log.large,
-		&ctx.log.vchanged, &ctx.log.vremoved}
-	tags := []string{"misplaced", "missing", "small", "large",
-		"version-changed", "version-removed"}
-
-	for i := range ctx.logs {
-		if err := ctx._create(ctx.logs[i]); err != nil {
+	pid := os.Getpid()
+	for i := 1; i < len(ctx.logs); i++ { // skipping listed objects
+		log := &ctx.logs[i]
+		log.tag = strings.ToLower(teb.ScrCols[i])
+		if err := ctx._create(log, pid); err != nil {
 			// cleanup
 			for j := range i - 1 {
 				cos.Close(ctx.logs[j].fh)
@@ -167,14 +157,21 @@ func (ctx *scrubCtx) createLogs() error {
 			}
 			return err
 		}
-		ctx.logs[i].tag = tags[i]
 	}
 	return nil
 }
 
+func (*scrubCtx) _create(log *_log, pid int) (err error) {
+	fn := fmt.Sprintf(".ais-scrub-%s.%d.log", log.tag, pid)
+	log.fn = filepath.Join(os.TempDir(), fn)
+	log.fh, err = cos.CreateFile(log.fn)
+	return err
+}
+
 func (ctx *scrubCtx) closeLogs(c *cli.Context) {
 	var titled bool
-	for _, log := range ctx.logs {
+	for i := 1; i < len(ctx.logs); i++ { // skipping listed objects
+		log := &ctx.logs[i]
 		cos.Close(log.fh)
 		if log.cnt == 0 {
 			cos.RemoveFile(log.fn)
@@ -189,13 +186,6 @@ func (ctx *scrubCtx) closeLogs(c *cli.Context) {
 		}
 		fmt.Fprintf(c.App.Writer, "* %s objects: %s (%d record%s)\n", log.tag, log.fn, log.cnt, cos.Plural(log.cnt))
 	}
-}
-
-func (*scrubCtx) _create(log *_log) (err error) {
-	fn := fmt.Sprintf(".ais-scrub-%s.%d.log", log.tag, os.Getpid())
-	log.fn = filepath.Join(os.TempDir(), fn)
-	log.fh, err = cos.CreateFile(log.fn)
-	return err
 }
 
 func (ctx *scrubCtx) many() error {
@@ -368,38 +358,39 @@ func (ctx *scrubCtx) ls(bck cmn.Bck) (*scrubOne, error) {
 //////////////
 
 func (scr *scrubOne) upd(parent *scrubCtx, en *cmn.LsoEnt, bprops *cmn.Bprops) {
-	scr.Listed.Cnt++
-	scr.Listed.Siz += en.Size
+	scr.Stats[teb.ScrObjects].Cnt++
+	scr.Stats[teb.ScrObjects].Siz += en.Size
+
 	if !en.IsStatusOK() {
-		scr.Stats.Misplaced.Cnt++
-		scr.Stats.Misplaced.Siz += en.Size
-		scr.log(&parent.log.misplaced, scr.Bck.Cname(en.Name), parent._many)
+		scr.Stats[teb.ScrMisplaced].Cnt++
+		scr.Stats[teb.ScrMisplaced].Siz += en.Size
+		scr.log(&parent.logs[teb.ScrMisplaced], scr.Bck.Cname(en.Name), parent._many)
 		return // no further checking
 	}
 
 	if bprops.Mirror.Enabled && en.Copies < int16(bprops.Mirror.Copies) {
-		scr.Stats.MissingCp.Cnt++
-		scr.log(&parent.log.missing, scr.Bck.Cname(en.Name), parent._many)
+		scr.Stats[teb.ScrMissingCp].Cnt++
+		scr.log(&parent.logs[teb.ScrMissingCp], scr.Bck.Cname(en.Name), parent._many)
 	}
 
 	if en.Size <= parent.small {
-		scr.Stats.SmallSz.Cnt++
-		scr.Stats.SmallSz.Siz += en.Size
-		scr.log(&parent.log.small, scr.Bck.Cname(en.Name), parent._many)
+		scr.Stats[teb.ScrSmallSz].Cnt++
+		scr.Stats[teb.ScrSmallSz].Siz += en.Size
+		scr.log(&parent.logs[teb.ScrSmallSz], scr.Bck.Cname(en.Name), parent._many)
 	} else if en.Size >= parent.large {
-		scr.Stats.LargeSz.Cnt++
-		scr.Stats.LargeSz.Siz += en.Size
-		scr.log(&parent.log.large, scr.Bck.Cname(en.Name), parent._many)
+		scr.Stats[teb.ScrLargeSz].Cnt++
+		scr.Stats[teb.ScrLargeSz].Siz += en.Size
+		scr.log(&parent.logs[teb.ScrLargeSz], scr.Bck.Cname(en.Name), parent._many)
 	}
 
 	if en.IsVerChanged() {
-		scr.Stats.Vchanged.Cnt++
-		scr.Stats.Vchanged.Siz += en.Size
-		scr.log(&parent.log.vchanged, scr.Bck.Cname(en.Name), parent._many)
+		scr.Stats[teb.ScrVchanged].Cnt++
+		scr.Stats[teb.ScrVchanged].Siz += en.Size
+		scr.log(&parent.logs[teb.ScrVchanged], scr.Bck.Cname(en.Name), parent._many)
 	} else if en.IsVerRemoved() {
-		scr.Stats.Vremoved.Cnt++
-		scr.Stats.Vremoved.Siz += en.Size
-		scr.log(&parent.log.vremoved, scr.Bck.Cname(en.Name), parent._many)
+		scr.Stats[teb.ScrVremoved].Cnt++
+		scr.Stats[teb.ScrVremoved].Siz += en.Size
+		scr.log(&parent.logs[teb.ScrVremoved], scr.Bck.Cname(en.Name), parent._many)
 	}
 }
 
