@@ -187,20 +187,27 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 }
 
 func SetS3Headers(hdr http.Header, lom *core.LOM) {
+	// ETag
 	if etag := hdr.Get(cos.HdrETag); etag != "" {
+		// ETag is a quoted string:
+		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 		debug.AssertFunc(func() bool {
-			// Ensure that `etag` is a quoted string.
 			return etag[0] == '"' && etag[len(etag)-1] == '"'
 		})
 	} else {
 		if v, exists := lom.GetCustomKey(cmn.ETag); exists {
 			hdr.Set(cos.HdrETag, v)
 		} else if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
+			debug.Assert(cksum.Val()[0] != '"', cksum.Val())
+			// NOTE: could this object be multipart?
 			hdr.Set(cos.HdrETag, `"`+cksum.Value()+`"`)
 		}
 	}
+
+	// s3 version
 	if hdr.Get(cos.S3VersionHeader) == "" {
 		if v, exists := lom.GetCustomKey(cmn.VersionObjMD); exists {
+			// NOTE: could this `cmn.VersionObjMD` value be the result of original GET from gs:// bucket, for instance?
 			hdr.Set(cos.S3VersionHeader, v)
 		}
 	}

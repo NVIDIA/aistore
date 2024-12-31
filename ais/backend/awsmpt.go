@@ -113,7 +113,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 	return etag, ecode, err
 }
 
-func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (version string, etag string,
+func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (version, etag string,
 	ecode int, _ error) {
 	h := cmn.BackendHelpers.Amazon
 
