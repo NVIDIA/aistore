@@ -250,7 +250,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 		units, errU  = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
-		return err
+		return errU
 	}
 
 	if discardOutput(outFile) {

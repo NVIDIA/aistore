@@ -26,6 +26,7 @@ linters:
     - ineffassign
     - intrange
     - misspell
+    - nilnesserr
     - nolintlint
     - perfsprint
     - prealloc
@@ -33,7 +34,6 @@ linters:
     - reassign
     - revive
     - staticcheck
-    - testifylint
     - testpackage
     - typecheck
     - unconvert

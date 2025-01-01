@@ -93,8 +93,8 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 	if flagIsSet(c, progressFlag) || flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 		// check connectivity (since '--progress' steals STDOUT with multi-object producing
 		// scary looking errors when there's no cluster)
-		if _, err = api.GetClusterMap(apiBP); err != nil {
-			return
+		if _, err := api.GetClusterMap(apiBP); err != nil {
+			return err
 		}
 	}
 	switch {
@@ -148,24 +148,27 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 				err = fmt.Errorf("missing destination object name (in %s) - required when writing directly from standard input",
 					c.Command.ArgsUsage)
 			}
-			return
+			return err
 		}
 		// file or files
 		if a.src.abspath, err = absPath(a.src.arg); err != nil {
-			return
+			return err
 		}
+
+		// best-effort parsing: (inline range) | (local file or directrory)
+
 		// inline "range" w/ no flag, e.g.: "/tmp/www/test{0..2}{0..2}.txt" ais://nnn/www
-		pt, errV := cos.ParseBashTemplate(a.src.abspath)
-		if errV == nil {
+		pt, e1 := cos.ParseBashTemplate(a.src.abspath)
+		if e1 == nil {
 			a.pt = &pt
-			return
+			return nil
 		}
 		// local file or dir?
-		finfo, errV := os.Stat(a.src.abspath)
-		if errV != nil {
+		finfo, e2 := os.Stat(a.src.abspath)
+		if e2 != nil {
 			// must be a csv list of files embedded with the first arg
 			a.src.fdnames = splitCsv(a.src.arg)
-			return
+			return nil
 		}
 
 		a.src.finfo = finfo
@@ -175,12 +178,13 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 				// PUT [convention]: use `basename` as the destination object name, unless specified
 				a.dst.oname = filepath.Base(a.src.abspath)
 			}
-			return
+			return nil
 		}
+
 		// finally: a local (or rather, client-accessible) directory
 		a.src.isdir = true
 		a.src.recurs = flagIsSet(c, recursFlag)
-		return
+		return nil
 	}
 
 	if err := errTailArgsContainFlag(c.Args()[2:]); err != nil {
