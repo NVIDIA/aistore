@@ -68,11 +68,13 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	if args.CloudBck || args.RequiredCloudProvider != "" {
 		tassert.Fatalf(tb, !args.Bck.IsEmpty(), "bucket is missing in the args")
 		cname := args.Bck.Cname("")
-		if !args.Bck.IsCloud() {
+
+		switch {
+		case !args.Bck.IsCloud():
 			tb.Skipf("%s requires cloud bucket (have %s)", tb.Name(), cname)
-		} else if args.RequiredCloudProvider != "" && args.RequiredCloudProvider != args.Bck.Provider {
+		case args.RequiredCloudProvider != "" && args.RequiredCloudProvider != args.Bck.Provider:
 			tb.Skipf("%s requires cloud bucket with %s provider (have %s)", tb.Name(), args.RequiredCloudProvider, cname)
-		} else {
+		default:
 			proxyURL := GetPrimaryURL()
 			exists, err := BucketExists(tb, proxyURL, args.Bck)
 			tassert.CheckFatal(tb, err)

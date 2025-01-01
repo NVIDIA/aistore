@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that control running jobs in the cluster.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -481,18 +481,21 @@ func startDownloadHandler(c *cli.Context) error {
 
 	// Heuristics to determine the download type.
 	var dlType dload.Type
-	if objectsListPath != "" {
+	switch {
+	case objectsListPath != "":
 		dlType = dload.TypeMulti
-	} else if strings.Contains(source.link, "{") && strings.Contains(source.link, "}") {
+	case strings.Contains(source.link, "{") && strings.Contains(source.link, "}"):
 		dlType = dload.TypeRange
-	} else if source.backend.bck.IsEmpty() {
+	case source.backend.bck.IsEmpty():
 		dlType = dload.TypeSingle
-	} else {
+	default:
 		backends, err := api.GetConfiguredBackends(apiBP)
 		if err != nil {
 			return err
 		}
-		if cos.StringInSlice(source.backend.bck.Provider, backends) {
+
+		switch {
+		case cos.StringInSlice(source.backend.bck.Provider, backends):
 			dlType = dload.TypeBackend
 
 			p, err := api.HeadBucket(apiBP, basePayload.Bck, false /* don't add */)
@@ -505,12 +508,12 @@ func startDownloadHandler(c *cli.Context) error {
 				actionWarn(c, warn)
 				dlType = dload.TypeSingle
 			}
-		} else if source.backend.prefix == "" {
+		case source.backend.prefix == "":
 			return fmt.Errorf(
 				"cluster is not configured with %q provider: cannot download remote bucket",
 				source.backend.bck.Provider,
 			)
-		} else {
+		default:
 			if source.link == "" {
 				return fmt.Errorf(
 					"cluster is not configured with %q provider: cannot download bucket's objects",
@@ -644,16 +647,18 @@ func bgDownload(c *cli.Context, id string) (err error) {
 		}
 	}
 
-	if resp.ErrorCnt != 0 {
+	switch {
+	case resp.ErrorCnt != 0:
 		msg := toShowMsg(c, id, "For details", true)
 		warn := fmt.Sprintf("%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
 		actionWarn(c, warn)
-	} else if resp.FinishedTime.UnixNano() != 0 {
+	case resp.FinishedTime.UnixNano() != 0:
 		actionDownloaded(c, resp.FinishedCnt)
-	} else {
+	default:
 		msg := toMonitorMsg(c, id, flprn(progressFlag)+"'")
 		actionDone(c, msg)
 	}
+
 	return err
 }
 

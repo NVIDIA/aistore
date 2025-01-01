@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -300,13 +300,15 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		tassert.CheckFatal(m.t, err)
 
 		var objName string
-		if override {
+		switch {
+		case override:
 			objName = m.objNames[i]
-		} else if m.ordered {
+		case m.ordered:
 			objName = fmt.Sprintf("%s%d", m.prefix, i)
-		} else {
+		default:
 			objName = fmt.Sprintf("%s%s-%d", m.prefix, trand.String(8), i)
 		}
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -302,16 +302,17 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	}
 
 	// NOTE: three different defaults; compare w/ `listObjects()`
-	if len(propsFlag) == 0 {
+	switch {
+	case len(propsFlag) == 0:
 		selectedProps = apc.GetPropsMinimal
 		if bck.IsAIS() {
 			selectedProps = apc.GetPropsDefaultAIS
 		} else if bck.IsCloud() {
 			selectedProps = apc.GetPropsDefaultCloud
 		}
-	} else if cos.StringInSlice("all", propsFlag) {
+	case cos.StringInSlice("all", propsFlag):
 		selectedProps = apc.GetPropsAll
-	} else {
+	default:
 		selectedProps = propsFlag
 	}
 

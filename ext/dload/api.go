@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -253,13 +253,15 @@ func (d JobInfos) Len() int {
 
 func (d JobInfos) Less(i, j int) bool {
 	di, dj := d[i], d[j]
-	if di.JobRunning() && dj.JobFinished() {
+	switch {
+	case di.JobRunning() && dj.JobFinished():
 		return true
-	} else if di.JobFinished() && dj.JobRunning() {
+	case di.JobFinished() && dj.JobRunning():
 		return false
-	} else if di.JobFinished() && dj.JobFinished() {
+	case di.JobFinished() && dj.JobFinished():
 		return di.FinishedTime.Before(dj.FinishedTime)
 	}
+
 	return di.StartedTime.Before(dj.StartedTime)
 }
 
@@ -333,15 +335,17 @@ func (b *SingleObj) Validate() error {
 ///////////////
 
 func (b *AdminBody) Validate(requireID bool) error {
-	if b.ID != "" && b.Regex != "" {
+	switch {
+	case b.ID != "" && b.Regex != "":
 		return fmt.Errorf("regex %q and job ID %q cannot be defined together (choose one or the other)", b.Regex, b.ID)
-	} else if b.Regex != "" {
+	case b.Regex != "":
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err
 		}
-	} else if b.ID == "" && requireID {
+	case b.ID == "" && requireID:
 		return errors.New("UUID not specified")
 	}
+
 	return nil
 }
 

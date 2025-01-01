@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -102,7 +102,8 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		)
 
 		// Parse comment if present.
-		if strings.Contains(scmd, " //") {
+		switch {
+		case strings.Contains(scmd, " //"):
 			var comment string
 			tmp := strings.Split(scmd, " //")
 			scmd, comment = tmp[0], tmp[1]
@@ -124,7 +125,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 					}
 				}
 			}
-		} else if strings.HasPrefix(scmd, "// RUN") {
+		case strings.HasPrefix(scmd, "// RUN"):
 			comment := strings.TrimSpace(strings.TrimPrefix(scmd, "// RUN"))
 
 			switch comment {
@@ -157,7 +158,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
 			}
-		} else if strings.HasPrefix(scmd, "// SKIP") {
+		case strings.HasPrefix(scmd, "// SKIP"):
 			message := strings.TrimSpace(strings.TrimPrefix(scmd, "// SKIP"))
 			message = strings.Trim(message, `"`)
 			ginkgo.Skip(message)

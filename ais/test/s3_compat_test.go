@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -126,13 +126,14 @@ func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Fl
 }
 
 func loadCredentials(t *testing.T) (f func(*config.LoadOptions) error) {
-	if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
+	switch {
+	case os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "":
 		f = config.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), ""),
 		)
-	} else if os.Getenv("AWS_PROFILE") != "" {
+	case os.Getenv("AWS_PROFILE") != "":
 		f = config.WithSharedConfigProfile(os.Getenv("AWS_PROFILE"))
-	} else {
+	default:
 		t.Skip("Failed to load credentials, none of AWS_PROFILE, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY are set")
 		f = func(*config.LoadOptions) error { return nil }
 	}

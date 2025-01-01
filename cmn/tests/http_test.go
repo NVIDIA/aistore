@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tests_test
 
@@ -72,13 +72,15 @@ func TestMatchRESTItems(t *testing.T) {
 
 	for _, test := range tests {
 		apiItems, err := cmn.ParseURL(test.path, test.items, test.itemsAfter, test.splitAfter)
-		if err != nil && !test.expectedErr {
+		switch {
+		case err != nil && !test.expectedErr:
 			t.Fatalf("test: %s, err: %v", test.name, err)
-		} else if err == nil && test.expectedErr {
+		case err == nil && test.expectedErr:
 			t.Fatalf("test: %s, expected error", test.name)
-		} else if err != nil && test.expectedErr {
+		case err != nil && test.expectedErr:
 			continue
 		}
+
 		if !reflect.DeepEqual(apiItems, test.expectedItems) {
 			t.Fatalf("test: %s, items are not equal (got: %v, expected: %v)", test.name, apiItems, test.expectedItems)
 		}

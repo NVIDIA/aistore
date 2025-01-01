@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -882,17 +882,19 @@ func TestListObjectsStartAfter(t *testing.T) {
 
 		msg := &apc.LsoMsg{PageSize: 10, StartAfter: middleObjName}
 		lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
-		if bck.IsAIS() {
+
+		switch {
+		case bck.IsAIS():
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
 				t, len(lst.Entries) == m.num/2,
 				"unexpected number of entries (got: %d, expected: %d)",
 				len(lst.Entries), m.num/2,
 			)
-		} else if err != nil {
+		case err != nil:
 			herr := cmn.Err2HTTPErr(err)
 			tlog.Logf("Error is expected here, got %q\n", herr)
-		} else {
+		default:
 			tassert.Errorf(t, false, "expected an error, got nil")
 		}
 	})
@@ -2428,12 +2430,13 @@ func TestCopyBucket(t *testing.T) {
 				}
 			}
 
-			if bckTest.IsAIS() {
+			switch {
+			case bckTest.IsAIS():
 				srcm.puts()
 
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, api.ListArgs{})
 				tassert.CheckFatal(t, err)
-			} else if bckTest.IsRemote() {
+			case bckTest.IsRemote():
 				srcm.remotePuts(false /*evict*/)
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, api.ListArgs{})
 				tassert.CheckFatal(t, err)
@@ -2447,8 +2450,8 @@ func TestCopyBucket(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 				defer srcm.del()
-			} else {
-				panic(bckTest)
+			default:
+				t.Fatal("invalid provider", bckTest.String())
 			}
 
 			xactIDs := make([]string, 0, len(dstms))
@@ -3202,60 +3205,59 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
-	{
-		if mirrored {
-			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
-				Cksum: &cmn.CksumConfToSet{
-					Type:            apc.Ptr(cksumType),
-					ValidateWarmGet: apc.Ptr(true),
-				},
-				Mirror: &cmn.MirrorConfToSet{
-					Enabled: apc.Ptr(true),
-					Copies:  apc.Ptr[int64](copyCnt),
-				},
-			})
-			tassert.CheckFatal(t, err)
-		} else if eced {
-			if m.smap.CountActiveTs() < parityCnt+1 {
-				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
-			}
-			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
-				Cksum: &cmn.CksumConfToSet{
-					Type:            apc.Ptr(cksumType),
-					ValidateWarmGet: apc.Ptr(true),
-				},
-				EC: &cmn.ECConfToSet{
-					Enabled:      apc.Ptr(true),
-					ObjSizeLimit: apc.Ptr[int64](cos.GiB), // only slices
-					DataSlices:   apc.Ptr(1),
-					ParitySlices: apc.Ptr(parityCnt),
-				},
-			})
-			tassert.CheckFatal(t, err)
-		} else {
-			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
-				Cksum: &cmn.CksumConfToSet{
-					Type:            apc.Ptr(cksumType),
-					ValidateWarmGet: apc.Ptr(true),
-				},
-			})
-			tassert.CheckFatal(t, err)
-		}
-
-		p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
+	switch {
+	case mirrored:
+		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+			Cksum: &cmn.CksumConfToSet{
+				Type:            apc.Ptr(cksumType),
+				ValidateWarmGet: apc.Ptr(true),
+			},
+			Mirror: &cmn.MirrorConfToSet{
+				Enabled: apc.Ptr(true),
+				Copies:  apc.Ptr[int64](copyCnt),
+			},
+		})
 		tassert.CheckFatal(t, err)
-		if p.Cksum.Type != cksumType {
-			t.Fatalf("failed to set checksum: %q != %q", p.Cksum.Type, cksumType)
+	case eced:
+		if m.smap.CountActiveTs() < parityCnt+1 {
+			t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 		}
-		if !p.Cksum.ValidateWarmGet {
-			t.Fatal("failed to set checksum: validate_warm_get not enabled")
-		}
-		if mirrored && !p.Mirror.Enabled {
-			t.Fatal("failed to mirroring")
-		}
-		if eced && !p.EC.Enabled {
-			t.Fatal("failed to enable erasure coding")
-		}
+		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+			Cksum: &cmn.CksumConfToSet{
+				Type:            apc.Ptr(cksumType),
+				ValidateWarmGet: apc.Ptr(true),
+			},
+			EC: &cmn.ECConfToSet{
+				Enabled:      apc.Ptr(true),
+				ObjSizeLimit: apc.Ptr[int64](cos.GiB), // only slices
+				DataSlices:   apc.Ptr(1),
+				ParitySlices: apc.Ptr(parityCnt),
+			},
+		})
+		tassert.CheckFatal(t, err)
+	default:
+		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+			Cksum: &cmn.CksumConfToSet{
+				Type:            apc.Ptr(cksumType),
+				ValidateWarmGet: apc.Ptr(true),
+			},
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
+	tassert.CheckFatal(t, err)
+	if p.Cksum.Type != cksumType {
+		t.Fatalf("failed to set checksum: %q != %q", p.Cksum.Type, cksumType)
+	}
+	if !p.Cksum.ValidateWarmGet {
+		t.Fatal("failed to set checksum: validate_warm_get not enabled")
+	}
+	if mirrored && !p.Mirror.Enabled {
+		t.Fatal("failed to mirroring")
+	}
+	if eced && !p.EC.Enabled {
+		t.Fatal("failed to enable erasure coding")
 	}
 
 	m.puts()
@@ -3408,10 +3410,11 @@ func TestBucketListAndSummary(t *testing.T) {
 			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(1)
 
-			if m.bck.IsAIS() {
+			switch {
+			case m.bck.IsAIS():
 				tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 				m.puts()
-			} else if m.bck.IsRemote() {
+			case m.bck.IsRemote():
 				m.bck = cliBck
 				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 				tlog.Logf("remote %s\n", m.bck.Cname(""))
@@ -3426,8 +3429,8 @@ func TestBucketListAndSummary(t *testing.T) {
 					m.remotePrefetch(cacheSize)
 					expectedFiles = cacheSize
 				}
-			} else {
-				t.Fatal(test.provider)
+			default:
+				t.Fatal("invalid provider", test.provider)
 			}
 
 			tlog.Logln("checking objects...")

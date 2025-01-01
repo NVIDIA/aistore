@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -40,13 +40,15 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		showProgress = flagIsSet(c, progressFlag)
 	)
 	// 1. list or template
-	if listObjs != "" {
+	switch {
+	case listObjs != "":
 		lrMsg.ObjNames = splitCsv(listObjs)
 		numObjs = int64(len(lrMsg.ObjNames))
-	} else if tmplObjs == "" {
-		// motivation: copy the entire bucket via x-tco rather than x-tcb
-		// (compare with copying or transforming not "cached" data from remote buckets, etc.)
-	} else {
+	case tmplObjs == "":
+		// motivation:
+		// - copy the entire bucket via x-tco rather than x-tcb
+		// - compare with copying or transforming not "cached" data from remote buckets
+	default:
 		pt, err := cos.NewParsedTemplate(tmplObjs)
 		if err != nil && err != cos.ErrEmptyTemplate { // NOTE same as above: empty => entire bucket
 			return err

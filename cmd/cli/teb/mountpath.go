@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -136,11 +136,12 @@ func mpathRow(c *PerfTabCtx, cols []*header, mpath string, cdf *fs.CDF, row []st
 		row = append(row, FmtSize(int64(cdf.Avail), c.Units, 2))
 	}
 	if _idx(cols, colDisk) >= 0 {
-		if len(cdf.Disks) > 1 {
+		switch {
+		case len(cdf.Disks) > 1:
 			row = append(row, fmt.Sprintf("%v", cdf.Disks))
-		} else if len(cdf.Disks) == 1 {
+		case len(cdf.Disks) == 1:
 			row = append(row, cdf.Disks[0])
-		} else {
+		default:
 			row = append(row, unknownVal)
 		}
 	}

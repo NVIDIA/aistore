@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -164,14 +164,16 @@ func InitLocalCluster() {
 		return
 	}
 	fmt.Printf("Error: %s\n\n", strings.TrimSuffix(err.Error(), "\n"))
-	if strings.Contains(err.Error(), "token") {
+
+	switch {
+	case strings.Contains(err.Error(), "token"):
 		fmt.Printf("Hint: make sure to provide access token via %s environment or the default config location\n",
 			env.AuthN.TokenFile)
-	} else if strings.Contains(err.Error(), "unreachable") {
+	case strings.Contains(err.Error(), "unreachable"):
 		fmt.Printf("Hint: make sure that cluster is running and/or specify its endpoint via %s environment\n",
 			env.AIS.Endpoint)
-	} else {
-		fmt.Printf("Hint: check api/env/*.go environment and, in particular %q\n", env.AIS.Endpoint)
+	default:
+		fmt.Printf("Hint: check api/env/*.go environment and, in particular %s=%s\n", env.AIS.Endpoint, os.Getenv(env.AIS.Endpoint))
 		if len(envVars) > 0 {
 			fmt.Println("Docker Environment:")
 			for k, v := range envVars {
@@ -179,6 +181,7 @@ func InitLocalCluster() {
 			}
 		}
 	}
+
 	os.Exit(1)
 }
 

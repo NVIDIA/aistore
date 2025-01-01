@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 
 // AIS loader (aisloader) is a tool to measure storage performance. It's a load
@@ -299,13 +299,14 @@ func Start(version, buildtime string) (err error) {
 	}
 
 	// list objects, or maybe not
-	if created {
+	switch {
+	case created:
 		if runParams.putPct < 100 {
 			return errors.New("new bucket, expecting 100% PUT")
 		}
 		bucketObjsNames = &namegetter.RandomNameGetter{}
 		bucketObjsNames.Init([]string{}, rnd)
-	} else if !runParams.getConfig && !runParams.skipList {
+	case !runParams.getConfig && !runParams.skipList:
 		if err := listObjects(); err != nil {
 			return err
 		}
@@ -319,7 +320,7 @@ func Start(version, buildtime string) (err error) {
 		}
 
 		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigNum(objsLen), cos.Plural(objsLen))
-	} else {
+	default:
 		bucketObjsNames = &namegetter.RandomNameGetter{}
 		bucketObjsNames.Init([]string{}, rnd)
 	}

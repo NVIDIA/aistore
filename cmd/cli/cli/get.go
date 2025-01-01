@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -253,16 +253,18 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 		return errU
 	}
 
-	if discardOutput(outFile) {
+	switch {
+	case discardOutput(outFile):
 		discard = " (and discard)"
-	} else if outFile == fileStdIO {
+	case outFile == fileStdIO:
 		out = " to standard output"
-	} else {
+	default:
 		out = outFile
 		if out != "" {
 			out = cos.TrimLastB(out, filepath.Separator)
 		}
 	}
+
 	if flagIsSet(c, lengthFlag) {
 		verb = "Read range"
 	}
@@ -485,12 +487,13 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 	}
 
 	var getArgs api.GetArgs
-	if outFile == fileStdIO {
+	switch {
+	case outFile == fileStdIO:
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		quiet = true
-	} else if discardOutput(outFile) {
+	case discardOutput(outFile):
 		getArgs = api.GetArgs{Writer: io.Discard, Header: hdr}
-	} else {
+	default:
 		var file *os.File
 		if file, err = os.Create(outFile); err != nil {
 			return err

@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that control running jobs in the cluster.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -469,11 +469,10 @@ func etlRemoveHandler(c *cli.Context) (err error) {
 }
 
 func etlObjectHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
+	switch c.NArg() {
+	case 0, 1:
 		return missingArgumentsError(c, c.Command.ArgsUsage)
-	} else if c.NArg() == 1 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	} else if c.NArg() == 2 {
+	case 2:
 		return missingArgumentsError(c, "OUTPUT")
 	}
 
@@ -488,11 +487,12 @@ func etlObjectHandler(c *cli.Context) error {
 	}
 
 	var w io.Writer
-	if outputDest == "-" {
+	switch {
+	case outputDest == "-":
 		w = os.Stdout
-	} else if discardOutput(outputDest) {
+	case discardOutput(outputDest):
 		w = io.Discard
-	} else {
+	default:
 		f, err := os.Create(outputDest)
 		if err != nil {
 			return err

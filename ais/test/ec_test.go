@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -179,12 +179,13 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
 
-		if ct.ContentType() == fs.ECMetaType {
+		switch {
+		case ct.ContentType() == fs.ECMetaType:
 			metaCnt++
 			tassert.Errorf(t, md.size <= 4*cos.KiB, "Metafile %q size is too big: %d", k, md.size)
-		} else if ct.ContentType() == fs.ECSliceType {
+		case ct.ContentType() == fs.ECSliceType:
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
-		} else {
+		default:
 			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
 			tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 			tassert.Errorf(t, ct.ObjectName() == objPath, "invalid object name %s, expected: %s", ct.ObjectName(), objPath)
@@ -356,10 +357,12 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 			for k, md := range foundParts {
 				ct, err := core.NewCTFromFQN(k, nil)
 				tassert.CheckFatal(t, err)
-				if ct.ContentType() == fs.ECMetaType {
+
+				switch {
+				case ct.ContentType() == fs.ECMetaType:
 					metaCnt++
 					tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
-				} else if ct.ContentType() == fs.ECSliceType {
+				case ct.ContentType() == fs.ECSliceType:
 					sliceCnt++
 					if md.size != sliceSize && doEC {
 						t.Errorf("Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
@@ -367,7 +370,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 					if md.size != objSize && !doEC {
 						t.Errorf("Copy %q size mismatch: %d, expected %d", k, md.size, objSize)
 					}
-				} else {
+				default:
 					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
 					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, apc.AIS)
 					tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)

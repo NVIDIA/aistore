@@ -94,10 +94,9 @@ linters-settings:
       - performance
       - style
     disabled-checks:
-      - ifElseChain ## TODO: enable
       - unnamedResult
   gosec:
-    excludes: ## integer overflow; week rand
+    excludes: ## integer overflow; weak rand
       - G115
       - G402
       - G404

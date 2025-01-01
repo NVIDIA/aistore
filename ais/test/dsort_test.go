@@ -1,7 +1,7 @@
 //nolint:dupl // copy-paste benign and can wait
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -307,16 +307,18 @@ func (df *dsortFramework) createInputShards() {
 			} else {
 				tarName = path + df.inputExt
 			}
-			if df.alg.Kind == dsort.Content {
+
+			switch {
+			case df.alg.Kind == dsort.Content:
 				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys)
-			} else if df.recordNames != nil {
+			case df.recordNames != nil:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, true, df.recordExts, df.recordNames)
-			} else if df.inputExt == archive.ExtTar {
+			case df.inputExt == archive.ExtTar:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, false, df.recordExts, nil)
-			} else {
+			default:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, false, nil, nil)
 			}

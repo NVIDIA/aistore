@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -606,11 +606,12 @@ func TestObjProps(t *testing.T) {
 }
 
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg) *cmn.LsoRes {
-	if msg == nil {
+	switch {
+	case msg == nil:
 		tlog.Logf("LIST %s []\n", bck)
-	} else if msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "" {
+	case msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "":
 		tlog.Logf("LIST %s [cached: %t]\n", bck, msg.IsFlagSet(apc.LsObjCached))
-	} else {
+	default:
 		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
 			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsObjCached), msg.ContinuationToken)
 	}

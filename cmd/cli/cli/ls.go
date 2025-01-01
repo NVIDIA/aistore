@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -329,7 +329,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 
 	// add _implied_ props into control lsmsg
-	if flagIsSet(c, nameOnlyFlag) {
+	switch {
+	case flagIsSet(c, nameOnlyFlag):
 		if flagIsSet(c, verChangedFlag) {
 			return fmt.Errorf(errFmtExclusive, qflprn(verChangedFlag), qflprn(nameOnlyFlag))
 		}
@@ -339,18 +340,19 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		}
 		msg.SetFlag(apc.LsNameOnly)
 		msg.Props = apc.GetPropsName
-	} else if len(props) == 0 {
-		if flagIsSet(c, dontAddRemoteFlag) {
+	case len(props) == 0:
+		switch {
+		case flagIsSet(c, dontAddRemoteFlag):
 			msg.AddProps(apc.GetPropsName)
 			msg.AddProps(apc.GetPropsSize)
 			msg.SetFlag(apc.LsNameSize)
-		} else if catOnly {
+		case catOnly:
 			msg.SetFlag(apc.LsNameOnly)
 			msg.Props = apc.GetPropsName
-		} else {
+		default:
 			msg.AddProps(apc.GetPropsMinimal...)
 		}
-	} else {
+	default:
 		if cos.StringInSlice(allPropsFlag.GetName(), props) {
 			msg.AddProps(apc.GetPropsAll...)
 		} else {
@@ -358,6 +360,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			msg.AddProps(props...)
 		}
 	}
+
 	if flagIsSet(c, allObjsOrBcksFlag) {
 		// Show status. Object name can then be displayed multiple times
 		// (due to mirroring, EC). The status helps to tell an object from its replica(s).
