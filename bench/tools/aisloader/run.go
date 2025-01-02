@@ -319,7 +319,7 @@ func Start(version, buildtime string) (err error) {
 			return errors.New("no objects with prefix '" + runParams.subDir + "' in the bucket, cannot run 100% read benchmark")
 		}
 
-		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigNum(objsLen), cos.Plural(objsLen))
+		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigInt(objsLen), cos.Plural(objsLen))
 	default:
 		bucketObjsNames = &namegetter.RandomNameGetter{}
 		bucketObjsNames.Init([]string{}, rnd)

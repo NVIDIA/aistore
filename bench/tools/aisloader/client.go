@@ -432,7 +432,7 @@ func listObjCallback(ctx *api.LsoCounter) {
 	if ctx.Count() < 0 {
 		return
 	}
-	fmt.Printf("\rListing %s objects", cos.FormatBigNum(ctx.Count()))
+	fmt.Printf("\rListing %s objects", cos.FormatBigInt(ctx.Count()))
 	if ctx.IsFinished() {
 		fmt.Println()
 	}
@@ -539,7 +539,7 @@ func s3ListObjects() ([]string, error) {
 		}
 		now := mono.NanoTime()
 		if time.Duration(now-prev) >= longListTime {
-			fmt.Printf("\rListing %s objects", cos.FormatBigNum(len(names)))
+			fmt.Printf("\rListing %s objects", cos.FormatBigInt(len(names)))
 			prev = now
 			eol = true
 		}

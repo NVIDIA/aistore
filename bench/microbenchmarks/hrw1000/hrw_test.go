@@ -1,6 +1,6 @@
 // Package hrw1000_test contains the corresponding micro-benchmarks.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package hrw1000_test
 
@@ -50,7 +50,7 @@ func ini() {
 }
 
 func (t *test) name() string {
-	return fmt.Sprintf("cluster[%s]-bucket[%s]-uname[%d]", cos.FormatBigNum(t.nodes), cos.FormatBigNum(numObjs), lenUname)
+	return fmt.Sprintf("cluster[%s]-bucket[%s]-uname[%d]", cos.FormatBigInt(t.nodes), cos.FormatBigInt(numObjs), lenUname)
 }
 
 func (t *test) run(b *testing.B) {
