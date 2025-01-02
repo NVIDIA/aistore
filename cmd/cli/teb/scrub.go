@@ -44,13 +44,13 @@ type (
 		Cnt int64
 		Siz int64
 	}
-	ScrubOne struct {
+	ScrBp struct {
 		Bck    cmn.Bck
 		Prefix string
 		Stats  [ScrNumStats]CntSiz
 	}
 	ScrubHelper struct {
-		All []*ScrubOne
+		All []*ScrBp
 	}
 )
 
@@ -124,7 +124,7 @@ func (*ScrubHelper) _hideCol(cols []*header, name string) {
 // format values
 const zeroCnt = "-"
 
-func (*ScrubOne) fmtVal(v CntSiz, units string) string {
+func (*ScrBp) fmtVal(v CntSiz, units string) string {
 	if v.Cnt == 0 {
 		return zeroCnt
 	}
