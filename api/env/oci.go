@@ -7,8 +7,14 @@ package env
 // To populate OCI_PRIVATE_KEY with the contents of a PrivateKey .PEM file:
 //
 //   export OCI_PRIVATE_KEY=$(cat ~/.oci/prikey.pem)
+//
+// To support the OCI CLI's RC File, we would need to add:
+//
+//   const OCIRCFilePath = "OCI_CLI_RC_FILE" //  defaults to ~/.oci/oci_cli_rc
 
 const (
+	OCIConfigFilePath              = "OCI_CLI_CONFIG_FILE" // defaults to ~/.oci/config
+	OCIProfile                     = "OCI_CLI_PROFILE"     // defaults to DEFAULT
 	OCITenancyOCID                 = "OCI_TENANCY_OCID"
 	OCICompartmentOCID             = "OCI_COMPARTMENT_OCID"
 	OCIUserOCID                    = "OCI_USER_OCID"

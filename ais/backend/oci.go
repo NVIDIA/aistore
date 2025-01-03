@@ -7,20 +7,25 @@
 package backend
 
 // Outstanding [TODO] items:
-//   1) Need to parse OCI's ~/.oci/config file for non-ENV defaults (for req'd settings)
 //   2) Validate ListObjects() should only return Name & Size in all cases (or improve)
 //   3) Handle non-descending ListObjects() case (including listing of "virtual" directories)
 //   4) Multi-Segment-Upload utilization (for fast/large object PUTs)... if practical
 //   5) Multi-Segment-Download utilization (for fast/large object GETs)... if practical
 //   6) Add support for object versioning
 //   7) Resolve test:long:oci CI Pipeline failure in TestMultiProxy
+//   8) Support "bucket props" that also avoids ENV OCI_COMPARTMENT_OCID
+//   9) Define our own "rcFile" equivalent if desired (preferably in something like JSON)
+//   10) Add in support for OCI SDK's rcFile if desired (perhaps in lieu of 9)
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -35,6 +40,9 @@ import (
 )
 
 const (
+	compartmentOCIDDefault   = ""            // This will trigger a failure on ListBuckets() calls
+	configFilePathDefault    = ".oci/config" // relative to ${HOME}
+	profileDefault           = "DEFAULT"
 	maxPageSizeMin           = 1
 	maxPageSizeMax           = 1000
 	maxPageSizeDefault       = maxPageSizeMax
@@ -82,41 +90,11 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 		t:    t,
 		base: base{provider: apc.OCI},
 	}
-	bp.configurationProvider = ocicmn.NewRawConfigurationProvider(
-		os.Getenv(env.OCITenancyOCID),
-		os.Getenv(env.OCIUserOCID),
-		os.Getenv(env.OCIRegion),
-		os.Getenv(env.OCIFingerprint),
-		os.Getenv(env.OCIPrivateKey),
-		nil,
-	)
-	bp.compartmentOCID = os.Getenv(env.OCICompartmentOCID)
 
-	if err := bp.set(env.OCIMaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
+	if err := bp.fetchCliConfig(); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCIMaxDownloadSegmentSize, mpdSegmentMaxSizeMin, mpdSegmentMaxSizeMax,
-		mpdSegmentMaxSizeDefault, &bp.mpdSegmentMaxSize); err != nil {
-		return nil, err
-	}
-	if err := bp.set(env.OCIMultiPartDownloadThreshold, mpdThresholdMin, mpdThresholdMax,
-		mpdThresholdDefault, &bp.mpdThreshold); err != nil {
-		return nil, err
-	}
-	if err := bp.set(env.OCIMultiPartDownloadMaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax,
-		mpdMaxThreadsDefault, &bp.mpdMaxThreads); err != nil {
-		return nil, err
-	}
-	if err := bp.set(env.OCIMaxUploadSegmentSize, mpuSegmentMaxSizeMin, mpuSegmentMaxSizeMax,
-		mpuSegmentMaxSizeDefault, &bp.mpuSegmentMaxSize); err != nil {
-		return nil, err
-	}
-	if err := bp.set(env.OCIMultiPartUploadThreshold, mpuThresholdMin, mpuThresholdMax,
-		mpuThresholdDefault, &bp.mpuThreshold); err != nil {
-		return nil, err
-	}
-	if err := bp.set(env.OCIMultiPartUploadMaxThreads, mpuMaxThreadsMin, mpuMaxThreadsMax,
-		mpuMaxThreadsDefault, &bp.mpuMaxThreads); err != nil {
+	if err := bp.fetchTuningENVs(); err != nil {
 		return nil, err
 	}
 
@@ -131,10 +109,140 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 	}
 	bp.namespace = *resp.Value
 
-	// register metrics
 	bp.base.init(t.Snode(), tstats, startingUp)
 
 	return bp, nil
+}
+
+// fetchCliConfig populates bp with configurationProvider and compartmentOCID fetched
+// from ENVs while defaulting to their corresponding key values from the configFile
+// (selected via the optional OCI_CLI_CONFIG_FILE ENV or default ~/.oci/config).
+//
+// OCI's CLI also supports configuration of a default Profile and a CompartmentOCID
+// in an rcFile, but we will not support that here. The Profile may already be selected
+// via the OCI_CLI_PROFILE ENV. The CompartmentOCID more properly should derive from
+// specific Bucket Props.
+//
+// Should the need arise to support OCI's CLI rcFile (optionally selected via an
+// OCI_CLI_RC_FILE ENV that defaults to ~/.oci/oci_cli_rc), it (like the configFile)
+// is in so-called INI file format. A default for the Profile is found at
+// [OCI_CLI_SETTINGS]default_profile. That Profile (defaults to "DEFAULT") would still
+// be overidden by the presence of a (non-empty) OCI_CLI_PROFILE ENV. The selected
+// or defaulted Profile would then define a section in the rcFile (as it does in the
+// configFile) with a key named "compartment-id". That value of that key would be used
+// if the OCI_COMPARTMENT_OCID ENV is not set or empty. Parsing the rcFile is apparently
+// not currently supported by the OCI SDK. As such, a tool like gopkg.in/ini.v1 may be
+// used.
+func (bp *ocibp) fetchCliConfig() (err error) {
+	var (
+		configFileProvider ocicmn.ConfigurationProvider
+		fingerprint        string
+		privateKey         string
+		profile            string
+		region             string
+		tenancyOCID        string
+		userOCID           string
+	)
+
+	if profile = os.Getenv(env.OCIProfile); profile == "" {
+		profile = profileDefault
+	}
+
+	bp.compartmentOCID = os.Getenv(env.OCICompartmentOCID)
+
+	if configFilePath := os.Getenv(env.OCIConfigFilePath); configFilePath == "" {
+		configFileProvider, err = ocicmn.ConfigurationProviderFromFileWithProfile(
+			filepath.Join(os.Getenv("HOME"), configFilePathDefault), profile, "")
+		if err != nil {
+			return
+		}
+	} else {
+		configFileProvider, err = ocicmn.ConfigurationProviderFromFileWithProfile(
+			configFilePath, profile, "")
+		if err != nil {
+			return
+		}
+	}
+
+	if tenancyOCID = os.Getenv(env.OCITenancyOCID); tenancyOCID == "" {
+		valueFromConfigFile, err := configFileProvider.TenancyOCID()
+		if err == nil {
+			tenancyOCID = valueFromConfigFile
+		}
+	}
+	if userOCID = os.Getenv(env.OCIUserOCID); userOCID == "" {
+		valueFromConfigFile, err := configFileProvider.UserOCID()
+		if err == nil {
+			userOCID = valueFromConfigFile
+		}
+	}
+	if region = os.Getenv(env.OCIRegion); region == "" {
+		valueFromConfigFile, err := configFileProvider.Region()
+		if err == nil {
+			region = valueFromConfigFile
+		}
+	}
+	if fingerprint = os.Getenv(env.OCIFingerprint); fingerprint == "" {
+		valueFromConfigFile, err := configFileProvider.KeyFingerprint()
+		if err == nil {
+			fingerprint = valueFromConfigFile
+		}
+	}
+	if privateKey = os.Getenv(env.OCIPrivateKey); privateKey == "" {
+		valueFromConfigFile, err := configFileProvider.PrivateRSAKey()
+		if err == nil {
+			priKeyBytes := x509.MarshalPKCS1PrivateKey(valueFromConfigFile)
+			priKeyPEM := pem.EncodeToMemory(
+				&pem.Block{
+					Type:  "RSA_PRIVATE_KEY",
+					Bytes: priKeyBytes,
+				})
+			privateKey = string(priKeyPEM)
+		}
+	}
+
+	bp.configurationProvider = ocicmn.NewRawConfigurationProvider(
+		tenancyOCID,
+		userOCID,
+		region,
+		fingerprint,
+		privateKey,
+		nil,
+	)
+
+	return nil
+}
+
+func (bp *ocibp) fetchTuningENVs() (err error) {
+	if err = bp.set(env.OCIMaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
+		return
+	}
+	if err = bp.set(env.OCIMaxDownloadSegmentSize, mpdSegmentMaxSizeMin, mpdSegmentMaxSizeMax,
+		mpdSegmentMaxSizeDefault, &bp.mpdSegmentMaxSize); err != nil {
+		return
+	}
+	if err = bp.set(env.OCIMultiPartDownloadThreshold, mpdThresholdMin, mpdThresholdMax,
+		mpdThresholdDefault, &bp.mpdThreshold); err != nil {
+		return
+	}
+	if err = bp.set(env.OCIMultiPartDownloadMaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax,
+		mpdMaxThreadsDefault, &bp.mpdMaxThreads); err != nil {
+		return
+	}
+	if err = bp.set(env.OCIMaxUploadSegmentSize, mpuSegmentMaxSizeMin, mpuSegmentMaxSizeMax,
+		mpuSegmentMaxSizeDefault, &bp.mpuSegmentMaxSize); err != nil {
+		return
+	}
+	if err = bp.set(env.OCIMultiPartUploadThreshold, mpuThresholdMin, mpuThresholdMax,
+		mpuThresholdDefault, &bp.mpuThreshold); err != nil {
+		return
+	}
+	if err = bp.set(env.OCIMultiPartUploadMaxThreads, mpuMaxThreadsMin, mpuMaxThreadsMax,
+		mpuMaxThreadsDefault, &bp.mpuMaxThreads); err != nil {
+		return
+	}
+
+	return nil
 }
 
 func (*ocibp) set(envName string, envMin, envMax, envDefault int64, out *int64) error {
