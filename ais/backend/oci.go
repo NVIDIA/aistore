@@ -80,7 +80,7 @@ var _ core.Backend = (*ocibp)(nil)
 func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	bp := &ocibp{
 		t:    t,
-		base: base{provider: apc.AWS},
+		base: base{provider: apc.OCI},
 	}
 	bp.configurationProvider = ocicmn.NewRawConfigurationProvider(
 		os.Getenv(env.OCI.TenancyOCID),
