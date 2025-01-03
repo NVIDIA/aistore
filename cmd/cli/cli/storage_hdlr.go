@@ -516,7 +516,7 @@ func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
 		}
 		if res.Bck.IsAIS() {
 			debug.Assert(res.ObjCount.Remote == 0 && res.ObjCount.Present != 0)
-			s += fmt.Sprintf("(%s, size=%s)", cos.FormatBigNum(int(res.ObjCount.Present)),
+			s += fmt.Sprintf("(%s, size=%s)", cos.FormatBigI64(int64(res.ObjCount.Present)),
 				teb.FmtSize(int64(res.TotalSize.PresentObjs), ctx.units, 2))
 			goto emit
 		}
@@ -526,13 +526,13 @@ func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
 			s += "[cluster: none"
 		} else {
 			s += fmt.Sprintf("[cluster: (%s, size=%s)",
-				cos.FormatBigNum(int(res.ObjCount.Present)), teb.FmtSize(int64(res.TotalSize.PresentObjs), ctx.units, 2))
+				cos.FormatBigI64(int64(res.ObjCount.Present)), teb.FmtSize(int64(res.TotalSize.PresentObjs), ctx.units, 2))
 		}
 		if res.ObjCount.Remote == 0 {
 			s += "]"
 		} else {
 			s += fmt.Sprintf(", remote: (%s, size=%s)]",
-				cos.FormatBigNum(int(res.ObjCount.Remote)), teb.FmtSize(int64(res.TotalSize.RemoteObjs), ctx.units, 2))
+				cos.FormatBigI64(int64(res.ObjCount.Remote)), teb.FmtSize(int64(res.TotalSize.RemoteObjs), ctx.units, 2))
 		}
 		s += ", " + teb.FmtDuration(elapsed, ctx.units)
 

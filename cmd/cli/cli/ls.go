@@ -567,7 +567,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 			return nil
 		}
 		elapsed := teb.FormatDuration(mono.Since(now))
-		fmt.Fprintln(c.App.Writer, listedText, cos.FormatBigNum(len(matched)), "names in", elapsed)
+		fmt.Fprintln(c.App.Writer, listedText, cos.FormatBigInt(len(matched)), "names in", elapsed)
 		return nil
 	}
 
@@ -579,7 +579,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	}
 
 	if !hideFooter && len(matched) > 10 {
-		fmt.Fprintln(c.App.Writer, fblue(listedText), cos.FormatBigNum(len(matched)), "names")
+		fmt.Fprintln(c.App.Writer, fblue(listedText), cos.FormatBigInt(len(matched)), "names")
 	}
 	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
 		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))
@@ -707,7 +707,7 @@ func (u *_listed) cb(lsoCounter *api.LsoCounter) {
 		u.done = true
 		if !flagIsSet(u.c, noFooterFlag) {
 			elapsed := teb.FormatDuration(lsoCounter.Elapsed())
-			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigNum(lsoCounter.Count()), elapsed)
+			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigInt(lsoCounter.Count()), elapsed)
 			u.cptn = true
 			briefPause(1)
 		}
@@ -720,7 +720,7 @@ func (u *_listed) cb(lsoCounter *api.LsoCounter) {
 	sb.Grow(128)
 	sb.WriteString(listedText)
 	sb.WriteByte(' ')
-	sb.WriteString(cos.FormatBigNum(lsoCounter.Count()))
+	sb.WriteString(cos.FormatBigInt(lsoCounter.Count()))
 	sb.WriteString(" names")
 	l := sb.Len()
 	if u.l == 0 {

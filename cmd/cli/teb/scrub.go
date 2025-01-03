@@ -14,6 +14,7 @@ import (
 const (
 	colBucket    = "BUCKET" // + [/PREFIX]
 	colObjects   = "OBJECTS"
+	colNotIn     = "NOT-CACHED" // "not in-cluster"
 	colMisplaced = "MISPLACED"
 	colMissingCp = "MISSING-COPIES"
 	colSmallSz   = "SMALL"
@@ -24,6 +25,7 @@ const (
 
 const (
 	ScrObjects = iota
+	ScrNotIn
 	ScrMisplaced
 	ScrMissingCp
 	ScrSmallSz
@@ -31,12 +33,12 @@ const (
 	ScrVchanged
 	ScrVremoved
 
-	ScrNumStats // NOTE: must be last
+	ScrNumStats // NOTE: must be the last
 )
 
 var (
-	ScrCols = [...]string{colObjects, colMisplaced, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
-	ScrNums = [...]int64{0, 0, 0, 0, 0, 0, 0}
+	ScrCols = [...]string{colObjects, colNotIn, colMisplaced, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
+	ScrNums = [...]int64{0, 0, 0, 0, 0, 0, 0, 0}
 )
 
 type (
@@ -86,6 +88,7 @@ func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 	// hide assorted columns
 	h.hideMissingCp(cols, colMissingCp)
 	if !haveRemote {
+		h._hideCol(cols, colNotIn)
 		h._hideCol(cols, colVchanged)
 		h._hideCol(cols, colVremoved)
 	}
@@ -104,6 +107,7 @@ func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 	return table
 }
 
+// missing-copies: hide when all-zeros
 func (h *ScrubHelper) hideMissingCp(cols []*header, col string) {
 	for _, scr := range h.All {
 		if scr.Stats[ScrMissingCp].Cnt != 0 {

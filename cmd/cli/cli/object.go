@@ -428,7 +428,7 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 				if vrbs {
 					fmt.Fprintf(c.App.Writer, "deleted %s\n", bck.Cname(objName))
 				} else if n > 1 && n%period == 0 {
-					fmt.Fprintf(c.App.Writer, "\r%s", cos.FormatBigNum(int(n)))
+					fmt.Fprintf(c.App.Writer, "\r%s", cos.FormatBigI64(n))
 					ratomic.AddInt64(&progress, 1)
 				}
 			}
@@ -444,7 +444,7 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	cnt := int(cnt64)
 	if cnt == l {
 		debug.Assert(errCnt64 == 0)
-		msg := fmt.Sprintf("Deleted %s object%s from %s\n", cos.FormatBigNum(cnt), cos.Plural(cnt), bck.Cname(""))
+		msg := fmt.Sprintf("Deleted %s object%s from %s\n", cos.FormatBigI64(cnt64), cos.Plural(cnt), bck.Cname(""))
 		actionDone(c, msg)
 		return nil
 	}

@@ -28,12 +28,14 @@ import (
 )
 
 // [TODO]
-// - when waiting for a long time, show log filenames (to tail -f)
-// - async execution, with --wait option
+// - `progress` usability (when waiting > refresh-time)
+// - micro-opt strings.Builder, here and elsewhere
 // - add options:
-//   --mountpath-misplaced
+//   --cached
+//   --locally-misplaced
 //   --checksum
 //   --fix (***)
+// - async execution, with --wait option
 // - speed-up `ls` via multiple workers (***)
 // - reuse strings.Builder buf, here and elsewhere
 
@@ -133,9 +135,9 @@ func scrubHandler(c *cli.Context) (err error) {
 	}
 
 	if ctx.qbck.IsBucket() {
-		err = waitForFunc(ctx.one, ctx.ival)
+		err = ctx.one()
 	} else {
-		err = waitForFunc(ctx.many, ctx.ival)
+		err = ctx.many()
 	}
 
 	ctx.closeLogs(c)
@@ -271,9 +273,9 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 	)
 	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsAtime, apc.GetPropsLocation, apc.GetPropsCustom}
 	if bck.IsRemote() {
-		lsmsg.Flags |= apc.LsObjCached | apc.LsVerChanged
+		lsmsg.Flags |= apc.LsVerChanged
 		lsmsg.AddProps(propNames...)
-		ctx.haveRemote.Store(true) // incl. version-changed etc. columns
+		ctx.haveRemote.Store(true) // columns version-changed etc.
 	} else {
 		lsmsg.AddProps(propNames[:len(propNames)-1]...) // minus apc.GetPropsCustom
 	}
@@ -287,10 +289,10 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 
 	var (
 		pgcnt  int
-		listed int
-		yelped bool
+		listed int64
+		yes    bool
 	)
-	// main loop: pages
+	// main loop (pages)
 	for {
 		lst, err := api.ListObjectsPage(apiBP, bck, lsmsg, lsargs)
 		if err != nil {
@@ -301,10 +303,8 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 			if en.IsDir() || cos.IsLastB(en.Name, filepath.Separator) {
 				continue
 			}
-			debug.Assert(en.IsPresent(), bck.Cname(en.Name), " must be present") // (LsObjCached)
-			scr.upd(ctx, en, &bck)
+			scr.upd(ctx, en)
 		}
-
 		if lsmsg.ContinuationToken == "" {
 			break
 		}
@@ -312,89 +312,93 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		if maxPages > 0 && pgcnt >= int(maxPages) {
 			break
 		}
-		listed += len(lst.Entries)
-		if limit > 0 && listed >= int(limit) {
+		listed += int64(len(lst.Entries))
+		if limit > 0 && listed >= limit {
 			break
 		}
 
-		//
-		// show interim results
-		//
-		const maxline = 128
-		var (
-			sb   strings.Builder
-			now  = mono.NanoTime()
-			last = ctx.last.Load()
-		)
-		if !yelped {
-			if time.Duration(now-last) < ctx.ival+2*time.Second {
-				continue
-			}
-		} else {
-			if time.Duration(now-last) < ctx.ival {
-				continue
-			}
-		}
-		if ctx.last.CAS(last, now) {
-			sb.Grow(maxline)
-			scr.toSB(&sb, listed)
-			l := sb.Len()
-			if len(ctx.scrubs) > 1 {
-				// in an attempt to fit multiple gols() updaters
-				for range maxline - l {
-					sb.WriteByte(' ')
-				}
-			}
-			fmt.Fprintf(ctx.c.App.Writer, "\r%s", sb.String())
-			yelped = true
-		}
-	}
-	if yelped {
-		fmt.Fprintln(ctx.c.App.Writer)
+		ctx.progress(scr, listed, &yes)
 	}
 
+	if yes {
+		fmt.Fprintln(ctx.c.App.Writer)
+	}
 	return scr, nil
+}
+
+func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
+	const maxline = 128
+	var (
+		now  = mono.NanoTime()
+		last = ctx.last.Load()
+	)
+	if time.Duration(now-last) < ctx.ival {
+		return
+	}
+	if !ctx.last.CAS(last, now) {
+		return
+	}
+
+	var sb strings.Builder
+	sb.Grow(maxline)
+	scr.toSB(&sb, listed)
+	l := sb.Len()
+	if len(ctx.scrubs) > 1 {
+		// in an attempt to fit multiple gols() updaters
+		for range maxline - l {
+			sb.WriteByte(' ')
+		}
+	}
+	fmt.Fprintf(ctx.c.App.Writer, "\r%s", sb.String())
+	*yes = true
 }
 
 //////////////
 // scrBp //
 //////////////
 
-func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt, bck *cmn.Bck) {
+func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 	scr.Stats[teb.ScrObjects].Cnt++
 	scr.Stats[teb.ScrObjects].Siz += en.Size
 
+	if !en.IsPresent() {
+		scr.Stats[teb.ScrNotIn].Cnt++
+		scr.Stats[teb.ScrNotIn].Siz += en.Size
+		scr.log(parent, en, teb.ScrNotIn)
+		// no further checking
+		return
+	}
 	if !en.IsStatusOK() {
 		scr.Stats[teb.ScrMisplaced].Cnt++
 		scr.Stats[teb.ScrMisplaced].Siz += en.Size
-		scr.log(parent, en, bck, teb.ScrMisplaced)
+		scr.log(parent, en, teb.ScrMisplaced)
 		// no further checking
 		return
 	}
 
-	if bck.Props.Mirror.Enabled && en.Copies < int16(bck.Props.Mirror.Copies) {
+	if scr.Bck.Props.Mirror.Enabled && en.Copies < int16(scr.Bck.Props.Mirror.Copies) {
 		scr.Stats[teb.ScrMissingCp].Cnt++
-		scr.log(parent, en, bck, teb.ScrMissingCp)
+		scr.log(parent, en, teb.ScrMissingCp)
 	}
 
 	if en.Size <= parent.small {
 		scr.Stats[teb.ScrSmallSz].Cnt++
 		scr.Stats[teb.ScrSmallSz].Siz += en.Size
-		scr.log(parent, en, bck, teb.ScrSmallSz)
+		scr.log(parent, en, teb.ScrSmallSz)
 	} else if en.Size >= parent.large {
 		scr.Stats[teb.ScrLargeSz].Cnt++
 		scr.Stats[teb.ScrLargeSz].Siz += en.Size
-		scr.log(parent, en, bck, teb.ScrLargeSz)
+		scr.log(parent, en, teb.ScrLargeSz)
 	}
 
 	if en.IsVerChanged() {
 		scr.Stats[teb.ScrVchanged].Cnt++
 		scr.Stats[teb.ScrVchanged].Siz += en.Size
-		scr.log(parent, en, bck, teb.ScrVchanged)
+		scr.log(parent, en, teb.ScrVchanged)
 	} else if en.IsVerRemoved() {
 		scr.Stats[teb.ScrVremoved].Cnt++
 		scr.Stats[teb.ScrVremoved].Siz += en.Size
-		scr.log(parent, en, bck, teb.ScrVremoved)
+		scr.log(parent, en, teb.ScrVremoved)
 	}
 }
 
@@ -403,7 +407,7 @@ const (
 	delim    = `","`
 )
 
-func (*scrBp) log(parent *scrCtx, en *cmn.LsoEnt, bck *cmn.Bck, i int) {
+func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	log := &parent.logs[i]
 	if parent._many {
 		log.mu.Lock()
@@ -416,7 +420,7 @@ func (*scrBp) log(parent *scrCtx, en *cmn.LsoEnt, bck *cmn.Bck, i int) {
 	var sb strings.Builder
 	sb.Grow(256)
 	sb.WriteByte('"')
-	sb.WriteString(bck.Cname(en.Name))
+	sb.WriteString(scr.Bck.Cname(en.Name))
 	sb.WriteString(delim)
 	sb.WriteString(strconv.FormatInt(en.Size, 10))
 	sb.WriteString(delim)
@@ -431,10 +435,10 @@ func (*scrBp) log(parent *scrCtx, en *cmn.LsoEnt, bck *cmn.Bck, i int) {
 	}
 }
 
-func (scr *scrBp) toSB(sb *strings.Builder, total int) {
-	sb.WriteString(scr.Bck.Cname(""))
+func (scr *scrBp) toSB(sb *strings.Builder, listed int64) {
+	sb.WriteString(scr.Bck.Cname(scr.Prefix))
 	sb.WriteString(": scrubbed ")
-	sb.WriteString(cos.FormatBigNum(total))
+	sb.WriteString(cos.FormatBigI64(listed))
 	sb.WriteString(" names")
 
 	var scr0 scrBp

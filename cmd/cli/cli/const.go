@@ -195,6 +195,32 @@ const (
 	cmdAliasReset = cmdResetBprops
 )
 
+// time constants
+const (
+	// e.g. xquery --all; see also xact/api
+	longClientTimeout = 60 * time.Second
+
+	// list-objects progress; list-objects with --summary
+	listObjectsWaitTime = 8 * time.Second
+
+	// default '--refresh' durations and counts
+	refreshRateDefault = 5 * time.Second
+	refreshRateMinDur  = time.Second
+	countDefault       = 1
+	countUnlimited     = -1
+
+	logFlushTime = 10 * time.Second // as the name implies
+
+	//  progress bar: when stats stop moving (increasing)
+	timeoutNoChange = 10 * time.Second
+
+	// download started
+	dloadStartedTime = refreshRateDefault
+
+	// job wait: start printing "."(s)
+	wasFast = refreshRateDefault
+)
+
 //
 // more constants (misc)
 //
