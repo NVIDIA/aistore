@@ -270,6 +270,7 @@ func extractLOM() (err error) {
 	if err != nil {
 		return
 	}
+
 	lmi := lomInfo{Attrs: lom.ObjAttrs()}
 	if lom.HasCopies() {
 		lmi.Copies = make([]string, 0, lom.NumCopies())

@@ -1,7 +1,7 @@
 //nolint:dupl // copy-paste benign and can wait
 // Package core_test provides tests for cluster package
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core_test
 
@@ -301,7 +301,7 @@ var _ = Describe("LOM", func() {
 				lom := &core.LOM{}
 				err := lom.InitFQN(localFQN, nil)
 				Expect(err).NotTo(HaveOccurred())
-				lom.AcquireAtimefs()
+				lom.TestAtime()
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())
@@ -316,7 +316,7 @@ var _ = Describe("LOM", func() {
 				lom := &core.LOM{}
 				err := lom.InitFQN(localFQN, nil)
 				Expect(err).NotTo(HaveOccurred())
-				lom.AcquireAtimefs()
+				lom.TestAtime()
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
 				Expect(err).NotTo(HaveOccurred())

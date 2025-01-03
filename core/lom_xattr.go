@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -91,8 +91,8 @@ const prefLen = 10 // 10B prefix [ version = 1 | checksum-type | 64-bit xxhash ]
 
 const getxattr = "getxattr" // syscall
 
-// used in tests
-func (lom *LOM) AcquireAtimefs() error {
+// usage: unit tests only
+func (lom *LOM) TestAtime() error {
 	_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (lom *LOM) AcquireAtimefs() error {
 	return nil
 }
 
-// NOTE: used in tests, ignores `dirty`
+// NOTE usage: tests and `xmeta` only; ignores `dirty`
 func (lom *LOM) LoadMetaFromFS() error {
 	_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
@@ -113,6 +113,10 @@ func (lom *LOM) LoadMetaFromFS() error {
 	}
 	lom.md.Atime = atimefs
 	lom.md.atimefs = uint64(atimefs)
+
+	uname := lom.bck.MakeUname(lom.ObjName)
+	lom.md.uname = cos.UnsafeSptr(uname)
+
 	return nil
 }
 
