@@ -12,6 +12,8 @@ import (
 // - reusable, single-threaded, best-effort, and once-allocated
 // motivation:
 // - to optimally replace `strings.Builder` when applicable
+// TODO:
+// - use elsewhere (currently, scrub only)
 
 type Builder struct {
 	buf []byte

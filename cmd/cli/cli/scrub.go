@@ -29,7 +29,6 @@ import (
 
 // [TODO]
 // - `progress` usability (when waiting > refresh-time)
-// - micro-opt strings.Builder, here and elsewhere
 // - add options:
 //   --cached
 //   --locally-misplaced
@@ -37,7 +36,6 @@ import (
 //   --fix (***)
 // - async execution, with --wait option
 // - speed-up `ls` via multiple workers (***)
-// - reuse strings.Builder buf, here and elsewhere
 
 type (
 	_log struct {
@@ -408,6 +406,9 @@ const (
 )
 
 func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
+	const (
+		maxline = 256
+	)
 	log := &parent.logs[i]
 	if parent._many {
 		log.mu.Lock()
@@ -417,10 +418,12 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 		fmt.Fprintln(log.fh, strings.Repeat("=", len(logTitle)))
 	}
 
-	var sb strings.Builder
-	sb.Grow(256)
+	sb := &scr.Line
+	sb.Reset(maxline)
 	sb.WriteByte('"')
-	sb.WriteString(scr.Bck.Cname(en.Name))
+
+	scr.cname(en.Name)
+
 	sb.WriteString(delim)
 	sb.WriteString(strconv.FormatInt(en.Size, 10))
 	sb.WriteString(delim)
@@ -430,8 +433,31 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	sb.WriteByte('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
+
 	if parent._many {
 		log.mu.Unlock()
+	}
+}
+
+// NOTE: bck.Cname() copy-paste tradeoff
+func (scr *scrBp) cname(objname string) {
+	var (
+		sb = &scr.Line
+		b  = &scr.Bck
+	)
+	sb.WriteString(apc.ToScheme(b.Provider))
+	sb.WriteString(apc.BckProviderSeparator)
+
+	if b.Ns.IsGlobal() {
+		sb.WriteString(b.Name)
+	} else {
+		sb.WriteString(b.Ns.String())
+		sb.WriteByte('/')
+		sb.WriteString(b.Name)
+	}
+	if objname != "" {
+		sb.WriteByte(filepath.Separator)
+		sb.WriteString(objname)
 	}
 }
 

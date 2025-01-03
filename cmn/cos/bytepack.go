@@ -195,7 +195,7 @@ func (br *ByteUnpack) ReadString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return UnsafeS(bytes), nil
+	return string(bytes), nil // NOTE: dsort (cannot unsafe)
 }
 
 func (br *ByteUnpack) ReadAny(st Unpacker) error {
