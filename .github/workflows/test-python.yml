@@ -15,13 +15,13 @@ jobs:
         python-version: ['3.8','3.9','3.10','3.11']
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install Go
         uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Checkout code
-        uses: actions/checkout@v4
 
       - name: Remove unnecessary directories to free up space
         run: |
