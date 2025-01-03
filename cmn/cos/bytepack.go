@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -195,7 +195,7 @@ func (br *ByteUnpack) ReadString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(bytes), nil
+	return UnsafeS(bytes), nil
 }
 
 func (br *ByteUnpack) ReadAny(st Unpacker) error {
