@@ -3,12 +3,13 @@ import pkg_resources
 
 from pyaisloader.benchmark import PutGetMixedBenchmark, ListBenchmark
 from pyaisloader.pytorch_benchmark import AISDatasetBenchmark, AISIterDatasetBenchmark
-from pyaisloader.const import PROVIDERS
 from pyaisloader.client_config import client
 
 from pyaisloader.utils.parse_utils import parse_size, parse_time
 from pyaisloader.utils.print_utils import bold
 from pyaisloader.utils.etl_utils import init_etl, cleanup_etls
+
+from aistore.sdk.provider import Provider
 
 
 VERSION = pkg_resources.require("pyaisloader")[0].version
@@ -307,7 +308,7 @@ def main():
 
     # Instantiate bucket and etl objects for the benchmark
     provider, bck_name = args.bucket.split("://")
-    bucket = client.bucket(bck_name, provider=PROVIDERS[provider])
+    bucket = client.bucket(bck_name, provider=Provider.parse(provider))
     etl = init_etl(client=client, spec_type=args.etl)
 
     benchmark_type = args.type.lower()

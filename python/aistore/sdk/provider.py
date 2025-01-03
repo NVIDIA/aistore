@@ -19,6 +19,7 @@ class Provider(Enum):
     AZURE = "azure"
     GOOGLE = "gcp"
     HTTP = "ht"
+    OCI = "oci"
 
     @staticmethod
     def parse(provider: Union[Provider, str]) -> Provider:
