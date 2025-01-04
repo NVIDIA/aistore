@@ -83,39 +83,39 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 		base: base{provider: apc.OCI},
 	}
 	bp.configurationProvider = ocicmn.NewRawConfigurationProvider(
-		os.Getenv(env.OCI.TenancyOCID),
-		os.Getenv(env.OCI.UserOCID),
-		os.Getenv(env.OCI.Region),
-		os.Getenv(env.OCI.Fingerprint),
-		os.Getenv(env.OCI.PrivateKey),
+		os.Getenv(env.OCITenancyOCID),
+		os.Getenv(env.OCIUserOCID),
+		os.Getenv(env.OCIRegion),
+		os.Getenv(env.OCIFingerprint),
+		os.Getenv(env.OCIPrivateKey),
 		nil,
 	)
-	bp.compartmentOCID = os.Getenv(env.OCI.CompartmentOCID)
+	bp.compartmentOCID = os.Getenv(env.OCICompartmentOCID)
 
-	if err := bp.set(env.OCI.MaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
+	if err := bp.set(env.OCIMaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCI.MaxDownloadSegmentSize, mpdSegmentMaxSizeMin, mpdSegmentMaxSizeMax,
+	if err := bp.set(env.OCIMaxDownloadSegmentSize, mpdSegmentMaxSizeMin, mpdSegmentMaxSizeMax,
 		mpdSegmentMaxSizeDefault, &bp.mpdSegmentMaxSize); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCI.MultiPartDownloadThreshold, mpdThresholdMin, mpdThresholdMax,
+	if err := bp.set(env.OCIMultiPartDownloadThreshold, mpdThresholdMin, mpdThresholdMax,
 		mpdThresholdDefault, &bp.mpdThreshold); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCI.MultiPartDownloadMaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax,
+	if err := bp.set(env.OCIMultiPartDownloadMaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax,
 		mpdMaxThreadsDefault, &bp.mpdMaxThreads); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCI.MaxUploadSegmentSize, mpuSegmentMaxSizeMin, mpuSegmentMaxSizeMax,
+	if err := bp.set(env.OCIMaxUploadSegmentSize, mpuSegmentMaxSizeMin, mpuSegmentMaxSizeMax,
 		mpuSegmentMaxSizeDefault, &bp.mpuSegmentMaxSize); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCI.MultiPartUploadThreshold, mpuThresholdMin, mpuThresholdMax,
+	if err := bp.set(env.OCIMultiPartUploadThreshold, mpuThresholdMin, mpuThresholdMax,
 		mpuThresholdDefault, &bp.mpuThreshold); err != nil {
 		return nil, err
 	}
-	if err := bp.set(env.OCI.MultiPartUploadMaxThreads, mpuMaxThreadsMin, mpuMaxThreadsMax,
+	if err := bp.set(env.OCIMultiPartUploadMaxThreads, mpuMaxThreadsMin, mpuMaxThreadsMax,
 		mpuMaxThreadsDefault, &bp.mpuMaxThreads); err != nil {
 		return nil, err
 	}

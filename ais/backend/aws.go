@@ -67,8 +67,8 @@ var _ core.Backend = (*s3bp)(nil)
 // environment variables => static defaults that can still be overridden via bck.Props.Extra.AWS
 // in addition to these two (below), default bucket region = env.AwsDefaultRegion()
 func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
-	s3Endpoint = os.Getenv(env.AWS.Endpoint)
-	awsProfile = os.Getenv(env.AWS.Profile)
+	s3Endpoint = os.Getenv(env.AWSEndpoint)
+	awsProfile = os.Getenv(env.AWSProfile)
 	bp := &s3bp{
 		t:    t,
 		mm:   t.PageMM(),

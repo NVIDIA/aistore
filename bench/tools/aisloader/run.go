@@ -644,7 +644,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 func _init(p *params) (err error) {
 	// '--s3endpoint' takes precedence
 	if s3Endpoint == "" {
-		if ep := os.Getenv(env.AWS.Endpoint); ep != "" {
+		if ep := os.Getenv(env.AWSEndpoint); ep != "" {
 			s3Endpoint = ep
 		}
 	}

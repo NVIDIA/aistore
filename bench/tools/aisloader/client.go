@@ -469,7 +469,7 @@ func listObjectNames(p *params) ([]string, error) {
 func initS3Svc() error {
 	// '--s3profile' takes precedence
 	if s3Profile == "" {
-		if profile := os.Getenv(env.AWS.Profile); profile != "" {
+		if profile := os.Getenv(env.AWSProfile); profile != "" {
 			s3Profile = profile
 		}
 	}

@@ -1,6 +1,6 @@
 // Package config provides types and functions to configure ishard executable.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package config
 
@@ -125,11 +125,12 @@ func (alg *SortFlag) Set(value string) error {
 	case "alpha", "alphanumeric":
 		alg.Kind = "alphanumeric"
 		if len(parts) > 1 {
-			if parts[1] == "inc" {
+			switch {
+			case parts[1] == "inc":
 				alg.Decreasing = false
-			} else if parts[1] == "dec" {
+			case parts[1] == "dec":
 				alg.Decreasing = true
-			} else {
+			default:
 				return errors.New("invalid alphanumeric sort option, expected 'inc' or 'dec'")
 			}
 		}
