@@ -28,7 +28,7 @@ import (
 )
 
 // [TODO]
-// - `progress` usability (when waiting > refresh-time)
+// - "misplaced-node" versus "misplaced-mp" vs "leftover copy"
 // - add options:
 //   --cached
 //   --locally-misplaced
@@ -64,8 +64,9 @@ type (
 		last atomic.Int64
 		// detailed logs
 		logs       [teb.ScrNumStats]_log
-		_many      bool
+		progLine   cos.Builder
 		haveRemote atomic.Bool
+		_many      bool
 	}
 )
 
@@ -75,6 +76,10 @@ func scrubHandler(c *cli.Context) (err error) {
 		uri = preparseBckObjURI(c.Args().Get(0))
 	)
 	ctx.qbck, ctx.pref, err = parseQueryBckURI(uri)
+	if err != nil {
+		return err
+	}
+	ctx.units, err = parseUnitsFlag(ctx.c, unitsFlag)
 	if err != nil {
 		return err
 	}
@@ -92,14 +97,16 @@ func scrubHandler(c *cli.Context) (err error) {
 		ctx.pref = prefix
 	}
 
-	ctx.last.Store(mono.NanoTime()) // pace interim results
-
-	ctx.ival = listObjectsWaitTime
+	// setup progress updates
+	ctx.last.Store(mono.NanoTime())
+	ctx.ival = max(listObjectsWaitTime, refreshRateDefault)
 	if flagIsSet(c, refreshFlag) {
-		ctx.ival = parseDurationFlag(c, refreshFlag)
+		// (compare w/ _refreshRate())
+		refreshRate := parseDurationFlag(c, refreshFlag)
+		ctx.ival = max(refreshRate, refreshRateDefault)
 	}
-	ctx.ival = max(ctx.ival, 5*time.Second)
 
+	// validate small/large
 	if flagIsSet(c, smallSizeFlag) {
 		ctx.small, err = parseSizeFlag(c, smallSizeFlag)
 		if err != nil {
@@ -123,12 +130,8 @@ func scrubHandler(c *cli.Context) (err error) {
 			qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
 	}
 
+	// create logs
 	if err := ctx.createLogs(); err != nil {
-		return err
-	}
-
-	ctx.units, err = parseUnitsFlag(ctx.c, unitsFlag)
-	if err != nil {
 		return err
 	}
 
@@ -269,6 +272,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 			Flags:  apc.LsMissing,
 		}
 	)
+	scr.Cname = bck.Cname("")
 	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsAtime, apc.GetPropsLocation, apc.GetPropsCustom}
 	if bck.IsRemote() {
 		lsmsg.Flags |= apc.LsVerChanged
@@ -325,7 +329,6 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 }
 
 func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
-	const maxline = 128
 	var (
 		now  = mono.NanoTime()
 		last = ctx.last.Load()
@@ -337,16 +340,41 @@ func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
 		return
 	}
 
-	var sb strings.Builder
-	sb.Grow(maxline)
-	scr.toSB(&sb, listed)
-	l := sb.Len()
-	if len(ctx.scrubs) > 1 {
-		// in an attempt to fit multiple gols() updaters
-		for range maxline - l {
-			sb.WriteByte(' ')
+	sb := &ctx.progLine
+	sb.Reset(160)
+
+	sb.WriteString(scr.Cname)
+	if scr.Prefix != "" {
+		sb.WriteByte(filepath.Separator)
+		sb.WriteString(scr.Prefix)
+	}
+	sb.WriteString(": scrubbed ")
+	sb.WriteString(cos.FormatBigI64(listed))
+	sb.WriteString(" names")
+
+	var found bool
+	for i := 1; i < len(scr.Stats); i++ { // skipping listed objects (same as elsewhere)
+		if cnt := scr.Stats[i].Cnt; cnt != 0 {
+			if !found {
+				sb.WriteByte(' ')
+				sb.WriteByte('{')
+				found = true
+			} else {
+				sb.WriteByte(' ')
+			}
+			sb.WriteString(strings.ToLower(teb.ScrCols[i]))
+			sb.WriteByte(':')
+			sb.WriteString(strconv.FormatInt(cnt, 10))
 		}
 	}
+	if found {
+		sb.WriteByte('}')
+	}
+
+	for range min(sb.Cap()-sb.Len(), 8) {
+		sb.WriteByte(' ')
+	}
+
 	fmt.Fprintf(ctx.c.App.Writer, "\r%s", sb.String())
 	*yes = true
 }
@@ -366,7 +394,7 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 		// no further checking
 		return
 	}
-	if !en.IsStatusOK() {
+	if en.Status() == apc.LocMisplacedNode {
 		scr.Stats[teb.ScrMisplaced].Cnt++
 		scr.Stats[teb.ScrMisplaced].Siz += en.Size
 		scr.log(parent, en, teb.ScrMisplaced)
@@ -439,40 +467,9 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	}
 }
 
-// NOTE: bck.Cname() copy-paste tradeoff
 func (scr *scrBp) cname(objname string) {
-	var (
-		sb = &scr.Line
-		b  = &scr.Bck
-	)
-	sb.WriteString(apc.ToScheme(b.Provider))
-	sb.WriteString(apc.BckProviderSeparator)
-
-	if b.Ns.IsGlobal() {
-		sb.WriteString(b.Name)
-	} else {
-		sb.WriteString(b.Ns.String())
-		sb.WriteByte('/')
-		sb.WriteString(b.Name)
-	}
-	if objname != "" {
-		sb.WriteByte(filepath.Separator)
-		sb.WriteString(objname)
-	}
-}
-
-func (scr *scrBp) toSB(sb *strings.Builder, listed int64) {
-	sb.WriteString(scr.Bck.Cname(scr.Prefix))
-	sb.WriteString(": scrubbed ")
-	sb.WriteString(cos.FormatBigI64(listed))
-	sb.WriteString(" names")
-
-	var scr0 scrBp
-	if scr.Stats == scr0.Stats {
-		return
-	}
-
-	sb.WriteByte(' ')
-	s := fmt.Sprintf("%+v", scr.Stats)
-	sb.WriteString(s)
+	sb := &scr.Line
+	sb.WriteString(scr.Cname)
+	sb.WriteByte(filepath.Separator)
+	sb.WriteString(objname)
 }

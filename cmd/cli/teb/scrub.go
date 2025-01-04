@@ -51,7 +51,9 @@ type (
 		Bck    cmn.Bck
 		Prefix string
 		Stats  [ScrNumStats]CntSiz
-		Line   cos.Builder
+		// work
+		Line  cos.Builder
+		Cname string
 	}
 	ScrubHelper struct {
 		All []*ScrBp

@@ -598,7 +598,11 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 	flt = &lstFilter{}
 	if !flagIsSet(c, allObjsOrBcksFlag) {
-		// filter objects that are "not OK" (e.g., misplaced)
+		// filter objects that are (any of the below):
+		// - apc.LocMisplacedNode
+		// - apc.LocMisplacedMountpath
+		// - apc.LocIsCopy
+		// - apc.LocIsCopyMissingObj
 		flt._add(func(obj *cmn.LsoEnt) bool { return obj.IsStatusOK() })
 	}
 	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
