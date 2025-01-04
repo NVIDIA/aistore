@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -60,18 +60,18 @@ func main() {
 		configDir = confDirFlag.Value.String()
 	}
 	if configDir == "" {
-		configDir = os.Getenv(env.AuthN.ConfDir)
+		configDir = os.Getenv(env.AisAuthConfDir)
 	}
 	if configDir == "" {
 		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
-			svcName, confDirFlag.Name, env.AuthN.ConfDir)
+			svcName, confDirFlag.Name, env.AisAuthConfDir)
 	}
 	configPath = filepath.Join(configDir, fname.AuthNConfig)
 	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
 	Conf.Init()
-	if val := os.Getenv(env.AuthN.SecretKey); val != "" {
+	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
 		Conf.SetSecret(&val)
 	}
 	if err := updateLogOptions(); err != nil {
@@ -106,7 +106,7 @@ func main() {
 }
 
 func updateLogOptions() error {
-	logDir := cos.GetEnvOrDefault(env.AuthN.LogDir, Conf.Log.Dir)
+	logDir := cos.GetEnvOrDefault(env.AisAuthLogDir, Conf.Log.Dir)
 	if err := cos.CreateDir(logDir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", logDir, err)
 	}

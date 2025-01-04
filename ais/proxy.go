@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -99,7 +99,7 @@ func (p *proxy) init(config *cmn.Config) {
 
 	cos.InitShortID(p.si.Digest())
 
-	if network, err := _parseCIDR(env.AIS.LocalRedirectCIDR, ""); err != nil {
+	if network, err := _parseCIDR(env.AisLocalRedirectCIDR, ""); err != nil {
 		cos.ExitLog(err) // FATAL
 	} else {
 		p.si.LocalNet = network

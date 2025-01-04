@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -49,7 +49,7 @@ func newAuthManager(config *cmn.Config) *authManager {
 		tkList:        make(tkList),
 		revokedTokens: make(map[string]bool), // TODO: preallocate
 		version:       1,
-		secret:        cos.Right(config.Auth.Secret, os.Getenv(env.AuthN.SecretKey)), // environment override
+		secret:        cos.Right(config.Auth.Secret, os.Getenv(env.AisAuthSecretKey)), // environment override
 	}
 }
 

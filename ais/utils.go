@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -208,11 +208,11 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 
 	// NOTE:
 	// - try using environment to eliminate ambiguity
-	// - env.AIS.PubIPv4CIDR ("AIS_PUBLIC_IP_CIDR") takes precedence
+	// - env.AisPubIPv4CIDR ("AIS_PUBLIC_IP_CIDR") takes precedence
 	var (
 		selected     = -1
 		parsed       net.IP
-		network, err = _parseCIDR(env.AIS.LocalRedirectCIDR, env.AIS.PubIPv4CIDR)
+		network, err = _parseCIDR(env.AisLocalRedirectCIDR, env.AisPubIPv4CIDR)
 	)
 	if err != nil {
 		return nil, err

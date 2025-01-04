@@ -899,11 +899,11 @@ func _init(p *params) (err error) {
 		aisEndpoint := "http://" + ip + ":" + port
 
 		// see also: tlsArgs
-		envEndpoint = os.Getenv(env.AIS.Endpoint)
+		envEndpoint = os.Getenv(env.AisEndpoint)
 		if envEndpoint != "" {
 			if ip != "" && ip != defaultClusterIP && ip != defaultClusterIPv4 {
 				return fmt.Errorf("'%s=%s' environment and '--ip=%s' command-line are mutually exclusive",
-					env.AIS.Endpoint, envEndpoint, ip)
+					env.AisEndpoint, envEndpoint, ip)
 			}
 			aisEndpoint = envEndpoint
 		}

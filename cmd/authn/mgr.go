@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -501,8 +501,8 @@ func initializeDB(driver kvdb.Driver) error {
 	}
 
 	// environment override
-	userName := cos.Right(adminUserID, os.Getenv(env.AuthN.AdminUsername))
-	password := cos.Right(adminUserPass, os.Getenv(env.AuthN.AdminPassword))
+	userName := cos.Right(adminUserID, os.Getenv(env.AisAuthAdminUsername))
+	password := cos.Right(adminUserPass, os.Getenv(env.AisAuthAdminPassword))
 
 	// Create the admin user
 	su := &authn.User{

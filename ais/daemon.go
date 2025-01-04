@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -203,7 +203,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	xreg.Init()
 
 	// primary 'host[:port]' endpoint or URL from the environment
-	if daemon.EP = os.Getenv(env.AIS.PrimaryEP); daemon.EP != "" {
+	if daemon.EP = os.Getenv(env.AisPrimaryEP); daemon.EP != "" {
 		scheme := "http"
 		if config.Net.HTTP.UseHTTPS {
 			scheme = "https"
@@ -211,11 +211,11 @@ func initDaemon(version, buildTime string) cos.Runner {
 		if strings.Contains(daemon.EP, "://") {
 			u, err := url.Parse(daemon.EP)
 			if err != nil {
-				cos.ExitLogf("invalid environment %s=%s: %v", env.AIS.PrimaryEP, daemon.EP, err)
+				cos.ExitLogf("invalid environment %s=%s: %v", env.AisPrimaryEP, daemon.EP, err)
 			}
 			if u.Path != "" && u.Path != "/" {
 				cos.ExitLogf("invalid environment %s=%s (not expecting path %q)",
-					env.AIS.PrimaryEP, daemon.EP, u.Path)
+					env.AisPrimaryEP, daemon.EP, u.Path)
 			}
 			// reassemble and compare
 			ustr := scheme + "://" + u.Hostname()

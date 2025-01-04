@@ -1,6 +1,6 @@
 // Package s3_integration provides tests of compatibility with AWS S3
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package s3_test
 
@@ -34,7 +34,7 @@ var _ = Describe("E2E AWS Compatibility Tests", func() {
 		params string
 	)
 
-	if value := os.Getenv(env.AIS.UseHTTPS); cos.IsParseBool(value) {
+	if value := os.Getenv(env.AisUseHTTPS); cos.IsParseBool(value) {
 		host = "https://localhost:8080/s3"
 		params = "--no-check-certificate"
 	} else {

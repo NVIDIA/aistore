@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -20,7 +20,7 @@ import (
 func LoadToken(tokenFile string) (string /*token value*/, error) {
 	// token value directly from environment
 	if tokenFile == "" {
-		if tokenEnv := os.Getenv(env.AuthN.Token); tokenEnv != "" {
+		if tokenEnv := os.Getenv(env.AisAuthToken); tokenEnv != "" {
 			return tokenEnv, nil
 		}
 	}
@@ -29,7 +29,7 @@ func LoadToken(tokenFile string) (string /*token value*/, error) {
 
 	// token filename from environment
 	if tokenFile == "" {
-		tokenFile = os.Getenv(env.AuthN.TokenFile)
+		tokenFile = os.Getenv(env.AisAuthTokenFile)
 	}
 
 	// or, default token filename

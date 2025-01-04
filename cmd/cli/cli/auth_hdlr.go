@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that create entities in the cluster.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -219,13 +219,13 @@ var (
 func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		if authParams.Client == nil {
-			return errors.New(env.AuthN.URL + " is not set")
+			return errors.New(env.AisAuthURL + " is not set")
 		}
 		err := f(c)
 		if err != nil {
 			if msg, unreachable := isUnreachableError(err); unreachable {
 				err = fmt.Errorf(authnUnreachable, authParams.URL+" (detailed error: "+msg+")",
-					env.AuthN.URL)
+					env.AisAuthURL)
 			}
 		}
 		return err
@@ -242,7 +242,7 @@ func readMasked(c *cli.Context, prompt string) string {
 }
 
 func cliAuthnURL(cfg *config.Config) string {
-	return cos.Right(cfg.Auth.URL, os.Getenv(env.AuthN.URL))
+	return cos.Right(cfg.Auth.URL, os.Getenv(env.AisAuthURL))
 }
 
 func lookupClusterID(cluID string) (string, error) {
@@ -767,7 +767,7 @@ func setAuthConfigHandler(c *cli.Context) (err error) {
 func getTokenFilePath(c *cli.Context) (string, error) {
 	tokenFilePath := parseStrFlag(c, tokenFileFlag)
 	if tokenFilePath == "" {
-		tokenFilePath = os.Getenv(env.AuthN.TokenFile)
+		tokenFilePath = os.Getenv(env.AisAuthTokenFile)
 	}
 	if tokenFilePath == "" {
 		tokenFilePath = filepath.Join(config.ConfigDir, fname.Token)

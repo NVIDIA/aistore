@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -55,7 +55,7 @@ func (h *hserv) Run() error {
 	)
 
 	// Retrieve and set the port
-	portStr = os.Getenv(env.AuthN.Port)
+	portStr = os.Getenv(env.AisAuthPort)
 	if portStr == "" {
 		portStr = fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
 	} else {
@@ -74,12 +74,12 @@ func (h *hserv) Run() error {
 	}
 
 	// Retrieve and set HTTPS configuration with environment variables taking precedence
-	useHTTPS, err = cos.IsParseEnvBoolOrDefault(env.AuthN.UseHTTPS, Conf.Net.HTTP.UseHTTPS)
+	useHTTPS, err = cos.IsParseEnvBoolOrDefault(env.AisAuthUseHTTPS, Conf.Net.HTTP.UseHTTPS)
 	if err != nil {
-		nlog.Errorf("Failed to parse %s: %v. Defaulting to false", env.AuthN.UseHTTPS, err)
+		nlog.Errorf("Failed to parse %s: %v. Defaulting to false", env.AisAuthUseHTTPS, err)
 	}
-	serverCert = cos.GetEnvOrDefault(env.AuthN.ServerCrt, Conf.Net.HTTP.Certificate)
-	serverKey = cos.GetEnvOrDefault(env.AuthN.ServerKey, Conf.Net.HTTP.Key)
+	serverCert = cos.GetEnvOrDefault(env.AisAuthServerCrt, Conf.Net.HTTP.Certificate)
+	serverKey = cos.GetEnvOrDefault(env.AisAuthServerKey, Conf.Net.HTTP.Key)
 
 	// Start the appropriate server based on the configuration
 	if useHTTPS {

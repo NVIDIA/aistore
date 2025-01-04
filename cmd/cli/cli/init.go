@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -30,11 +30,11 @@ func Init(args []string) (err error) {
 	k8sDetected = detectK8s()
 
 	// auth
-	token := os.Getenv(env.AuthN.Token)
-	tokenFile := os.Getenv(env.AuthN.TokenFile)
+	token := os.Getenv(env.AisAuthToken)
+	tokenFile := os.Getenv(env.AisAuthTokenFile)
 
 	if token != "" && tokenFile != "" {
-		fmt.Fprintf(os.Stderr, "Warning: both `%s` and `%s` are set, using `%s`\n", env.AuthN.Token, env.AuthN.TokenFile, env.AuthN.Token)
+		fmt.Fprintf(os.Stderr, "Warning: both `%s` and `%s` are set, using `%s`\n", env.AisAuthToken, env.AisAuthTokenFile, env.AisAuthToken)
 	}
 
 	loggedUserToken, _ = authn.LoadToken("") // No error handling as token might not be needed
@@ -99,7 +99,7 @@ func Init(args []string) (err error) {
 // 3. Docker default; if not present:
 // 4. Default as cfg.Cluster.DefaultAISHost
 func _clusterURL(cfg *config.Config) string {
-	if envURL := os.Getenv(env.AIS.Endpoint); envURL != "" {
+	if envURL := os.Getenv(env.AisEndpoint); envURL != "" {
 		return envURL
 	}
 	if cfg.Cluster.URL != "" {

@@ -440,7 +440,7 @@ func startNode(cmd *RestoreCmd, asPrimary bool) (int, error) {
 	if asPrimary {
 		// Sets the environment variable to start as primary
 		environ := os.Environ()
-		environ = append(environ, env.AIS.PrimaryEP+"="+cmd.Node.PubNet.URL)
+		environ = append(environ, env.AisPrimaryEP+"="+cmd.Node.PubNet.URL)
 		ncmd.Env = environ
 	}
 	if err := ncmd.Start(); err != nil {

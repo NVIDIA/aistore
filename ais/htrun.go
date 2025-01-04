@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -1158,7 +1158,7 @@ func (h *htrun) statsAndStatus() (ds *stats.NodeStatus) {
 		DeploymentType: deploymentType(),
 		Version:        daemon.version,
 		BuildTime:      daemon.buildTime,
-		K8sPodName:     os.Getenv(env.AIS.K8sPod),
+		K8sPodName:     os.Getenv(env.AisK8sPod),
 		Status:         h._status(smap),
 	}
 	return ds
@@ -1176,7 +1176,7 @@ func (h *htrun) statsAndStatusV322() (ds *stats.NodeStatusV322) {
 		DeploymentType: deploymentType(),
 		Version:        daemon.version,
 		BuildTime:      daemon.buildTime,
-		K8sPodName:     os.Getenv(env.AIS.K8sPod),
+		K8sPodName:     os.Getenv(env.AisK8sPod),
 		Status:         h._status(smap),
 	}
 	return ds

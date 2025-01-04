@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -78,7 +78,7 @@ func (p *proxy) bootstrap() {
 		case prim.isSmap:
 			nlog.Infof("%s: assuming primary role _for now_ %+v", p, prim)
 		case prim.isEP && isSelf != "":
-			nlog.Infof("%s: assuming primary role (and note that env %s=%s is redundant)", p, env.AIS.PrimaryEP, daemon.EP)
+			nlog.Infof("%s: assuming primary role (and note that env %s=%s is redundant)", p, env.AisPrimaryEP, daemon.EP)
 		default:
 			nlog.Infof("%s: assuming primary role as per: %+v", p, prim)
 		}

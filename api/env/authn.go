@@ -1,44 +1,27 @@
 // Package env contains environment variables
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package env
 
-// authn environment variables
+// AuthN environment names
 // see also: docs/environment-vars.md
 
-var (
-	AuthN = struct {
-		Enabled       string
-		URL           string
-		TokenFile     string
-		Token         string
-		ConfDir       string
-		LogDir        string
-		LogLevel      string
-		Port          string
-		TTL           string
-		UseHTTPS      string
-		ServerCrt     string
-		ServerKey     string
-		AdminPassword string
-		AdminUsername string
-		SecretKey     string
-	}{
-		Enabled:       "AIS_AUTHN_ENABLED",
-		URL:           "AIS_AUTHN_URL",
-		TokenFile:     "AIS_AUTHN_TOKEN_FILE", // fully qualified
-		Token:         "AIS_AUTHN_TOKEN",      // Only the JWT token itself (excluding the file and JSON)
-		ConfDir:       "AIS_AUTHN_CONF_DIR",   // contains AuthN config and tokens DB
-		LogDir:        "AIS_AUTHN_LOG_DIR",
-		LogLevel:      "AIS_AUTHN_LOG_LEVEL",
-		Port:          "AIS_AUTHN_PORT",
-		TTL:           "AIS_AUTHN_TTL",
-		UseHTTPS:      "AIS_AUTHN_USE_HTTPS",
-		ServerCrt:     "AIS_SERVER_CRT",
-		ServerKey:     "AIS_SERVER_KEY",
-		SecretKey:     "AIS_AUTHN_SECRET_KEY",
-		AdminUsername: "AIS_AUTHN_SU_NAME",
-		AdminPassword: "AIS_AUTHN_SU_PASS",
-	}
+//nolint:gosec // false positive G101
+const (
+	AisAuthEnabled       = "AIS_AUTHN_ENABLED"
+	AisAuthURL           = "AIS_AUTHN_URL"
+	AisAuthTokenFile     = "AIS_AUTHN_TOKEN_FILE" // fully qualified
+	AisAuthToken         = "AIS_AUTHN_TOKEN"      // Only the JWT token itself (excluding the file and JSON)
+	AisAuthConfDir       = "AIS_AUTHN_CONF_DIR"   // contains AuthN config and tokens DB
+	AisAuthLogDir        = "AIS_AUTHN_LOG_DIR"
+	AisAuthLogLevel      = "AIS_AUTHN_LOG_LEVEL"
+	AisAuthPort          = "AIS_AUTHN_PORT"
+	AisAuthTTL           = "AIS_AUTHN_TTL"
+	AisAuthUseHTTPS      = "AIS_AUTHN_USE_HTTPS"
+	AisAuthServerCrt     = "AIS_SERVER_CRT"
+	AisAuthServerKey     = "AIS_SERVER_KEY"
+	AisAuthSecretKey     = "AIS_AUTHN_SECRET_KEY"
+	AisAuthAdminUsername = "AIS_AUTHN_SU_NAME"
+	AisAuthAdminPassword = "AIS_AUTHN_SU_PASS"
 )

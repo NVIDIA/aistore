@@ -52,17 +52,17 @@ func waitForCluster() (primaryURL string, err error) {
 	var (
 		proxyCnt, targetCnt, retry int
 	)
-	pc := os.Getenv(env.AIS.NumProxy)
-	tc := os.Getenv(env.AIS.NumTarget)
+	pc := os.Getenv(env.AisNumProxy)
+	tc := os.Getenv(env.AisNumTarget)
 	if pc != "" || tc != "" {
 		proxyCnt, err = strconv.Atoi(pc)
 		if err != nil {
-			err = fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumProxy, err)
+			err = fmt.Errorf("error EnvVars: %s. err: %v", env.AisNumProxy, err)
 			return
 		}
 		targetCnt, err = strconv.Atoi(tc)
 		if err != nil {
-			err = fmt.Errorf("error EnvVars: %s. err: %v", env.AIS.NumTarget, err)
+			err = fmt.Errorf("error EnvVars: %s. err: %v", env.AisNumTarget, err)
 			return
 		}
 	}

@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -173,18 +173,18 @@ func NewClientTLS(cargs TransportArgs, sargs TLSArgs, intra bool) *http.Client {
 // EnvToTLS usage is limited to aisloader and tools
 // NOTE that embedded intra-cluster clients utilize a similar method: `HTTPConf.ToTLS`
 func EnvToTLS(sargs *TLSArgs) {
-	if s := os.Getenv(env.AIS.Certificate); s != "" {
+	if s := os.Getenv(env.AisClientCert); s != "" {
 		sargs.Certificate = s
 	}
-	if s := os.Getenv(env.AIS.CertKey); s != "" {
+	if s := os.Getenv(env.AisClientCertKey); s != "" {
 		sargs.Key = s
 	}
-	if s := os.Getenv(env.AIS.ClientCA); s != "" {
+	if s := os.Getenv(env.AisClientCA); s != "" {
 		// XXX This should be RootCA for clients
 		// https://pkg.go.dev/crypto/tls
 		sargs.ClientCA = s
 	}
-	if s := os.Getenv(env.AIS.SkipVerifyCrt); s != "" {
+	if s := os.Getenv(env.AisSkipVerifyCrt); s != "" {
 		sargs.SkipVerify = cos.IsParseBool(s)
 	}
 }

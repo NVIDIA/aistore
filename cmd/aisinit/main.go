@@ -123,11 +123,11 @@ func main() {
 	err = json.Unmarshal(confBytes, &localConf)
 	failOnError(err)
 
-	namespace := getRequiredEnv(env.AIS.K8sNamespace)
-	serviceName := getRequiredEnv(env.AIS.K8sServiceName)
-	podName := getRequiredEnv(env.AIS.K8sPod)
-	clusterDomain := getOrDefaultEnv(env.AIS.K8sClusterDomain, defaultClusterDomain)
-	publicHostName := getOrDefaultEnv(env.AIS.K8sPublicHostname, "")
+	namespace := getRequiredEnv(env.AisK8sNamespace)
+	serviceName := getRequiredEnv(env.AisK8sServiceName)
+	podName := getRequiredEnv(env.AisK8sPod)
+	clusterDomain := getOrDefaultEnv(env.AisK8sClusterDomain, defaultClusterDomain)
+	publicHostName := getOrDefaultEnv(env.AisK8sPublicHostname, "")
 	podDNS := fmt.Sprintf("%s.%s.%s.svc.%s", podName, serviceName, namespace, clusterDomain)
 
 	localConf.HostNet.HostnameIntraControl = podDNS
@@ -135,14 +135,14 @@ func main() {
 	localConf.HostNet.Hostname = publicHostName
 
 	if role == aisapc.Target {
-		useHostNetwork, err := cos.ParseBool(getOrDefaultEnv(env.AIS.K8sHostNetwork, "false"))
+		useHostNetwork, err := cos.ParseBool(getOrDefaultEnv(env.AisK8sHostNetwork, "false"))
 		failOnError(err)
 		if useHostNetwork {
 			localConf.HostNet.HostnameIntraData = ""
 			localConf.HostNet.Hostname = ""
 		}
 
-		useExternalLB, err := cos.ParseBool(getOrDefaultEnv(env.AIS.K8sEnableExternalAccess, "false"))
+		useExternalLB, err := cos.ParseBool(getOrDefaultEnv(env.AisK8sEnableExternalAccess, "false"))
 		failOnError(err)
 		if useExternalLB {
 			localConf.HostNet.Hostname = fetchExternalIP(podName, namespace)

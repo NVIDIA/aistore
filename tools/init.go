@@ -92,13 +92,13 @@ var (
 
 // NOTE:
 // With no access to cluster configuration the tests
-// currently simply detect protocol type by the env.AIS.Endpoint (proxy's) URL.
+// currently simply detect protocol type by the env.AisEndpoint (proxy's) URL.
 // Certificate check and other TLS is always disabled.
 
 func init() {
 	gctx.Log = tlog.Logf
 
-	if cos.IsHTTPS(os.Getenv(env.AIS.Endpoint)) {
+	if cos.IsHTTPS(os.Getenv(env.AisEndpoint)) {
 		// fill-in from env
 		cmn.EnvToTLS(&tlsArgs)
 		gctx.Client = cmn.NewClientTLS(transportArgs, tlsArgs, false /*intra-cluster*/)
@@ -151,7 +151,7 @@ func InitLocalCluster() {
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
 	// Many of the other packages do not accept the 'url' flag
-	if cliAISURL := os.Getenv(env.AIS.Endpoint); cliAISURL != "" {
+	if cliAISURL := os.Getenv(env.AisEndpoint); cliAISURL != "" {
 		if !strings.HasPrefix(cliAISURL, "http") {
 			cliAISURL = "http://" + cliAISURL
 		}
@@ -168,12 +168,12 @@ func InitLocalCluster() {
 	switch {
 	case strings.Contains(err.Error(), "token"):
 		fmt.Printf("Hint: make sure to provide access token via %s environment or the default config location\n",
-			env.AuthN.TokenFile)
+			env.AisAuthTokenFile)
 	case strings.Contains(err.Error(), "unreachable"):
 		fmt.Printf("Hint: make sure that cluster is running and/or specify its endpoint via %s environment\n",
-			env.AIS.Endpoint)
+			env.AisEndpoint)
 	default:
-		fmt.Printf("Hint: check api/env/*.go environment and, in particular %s=%s\n", env.AIS.Endpoint, os.Getenv(env.AIS.Endpoint))
+		fmt.Printf("Hint: check api/env/*.go environment and, in particular %s=%s\n", env.AisEndpoint, os.Getenv(env.AisEndpoint))
 		if len(envVars) > 0 {
 			fmt.Println("Docker Environment:")
 			for k, v := range envVars {

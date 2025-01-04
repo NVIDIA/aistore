@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains error handlers and utilities.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -362,7 +362,7 @@ func formatErr(err error) error {
 		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
 		errmsg += fmt.Sprintf("Make sure that environment '%s' has the address of any AIS gateway (proxy).\n"+
 			"For defaults, see CLI config at %s or run `ais show config cli`.",
-			env.AIS.Endpoint, config.Path())
+			env.AisEndpoint, config.Path())
 		return redErr(errors.New(errmsg))
 	}
 	switch err := err.(type) {

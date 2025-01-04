@@ -67,7 +67,7 @@ func newResource(conf *cmn.TracingConf, snode *meta.Snode, version string) *reso
 		semconv.ServiceNameKey.String(serviceName),
 		attribute.String("version", version),
 		attribute.String("daemonID", snode.DaeID),
-		attribute.String("pod", os.Getenv(env.AIS.K8sPod)),
+		attribute.String("pod", os.Getenv(env.AisK8sPod)),
 	}
 	for k, v := range conf.ExtraAttributes {
 		attrs = append(attrs, attribute.String(k, v))

@@ -1,6 +1,6 @@
 // Package k8s: initialization, client, and misc. helpers
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package k8s
 
@@ -45,8 +45,8 @@ func Init() {
 
 	var (
 		pod      *v1.Pod
-		podName  = os.Getenv(env.AIS.K8sPod)
-		nodeName = os.Getenv(env.AIS.K8sNode)
+		podName  = os.Getenv(env.AisK8sPod)
+		nodeName = os.Getenv(env.AisK8sNode)
 	)
 	if podName != "" {
 		debug.Func(func() {
@@ -63,7 +63,7 @@ func Init() {
 			// If the Pod is not set but the Node is, we should continue checking.
 			goto checkNode
 		}
-		nlog.Infof("Env %q and %q are not set => %s", env.AIS.K8sNode, env.AIS.K8sPod, nonK8s)
+		nlog.Infof("Env %q and %q are not set => %s", env.AisK8sNode, env.AisK8sPod, nonK8s)
 		return
 	}
 

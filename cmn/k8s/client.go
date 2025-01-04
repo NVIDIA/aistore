@@ -1,6 +1,6 @@
 // Package k8s: initialization, client, and misc. helpers
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
  */
 package k8s
 
@@ -73,7 +73,7 @@ func _initClient() {
 //   - https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
 func _namespace() (namespace string) {
 	// production
-	if namespace = os.Getenv(env.AIS.K8sNamespace); namespace != "" {
+	if namespace = os.Getenv(env.AisK8sNamespace); namespace != "" {
 		debug.Func(func() {
 			ns := os.Getenv(defaultNamespaceEnv)
 			debug.Assertf(ns == "" || ns == namespace, "%q vs %q", ns, namespace)
