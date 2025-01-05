@@ -1,18 +1,24 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
 import (
+	"math"
+
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core/meta"
 )
 
 const (
+	AisBID = uint64(1 << 63)
+
 	bitshift = 52
-	flagsBID = uint64(0xfff<<bitshift) & ^meta.AisBID
+	flagmask = math.MaxUint64 >> bitshift       // 0xfff
+	flagsBID = (flagmask << bitshift) & ^AisBID // 0x7ff0000000000000
 )
+
+type lomBID uint64
 
 // lomBID is a 64-bit field in the LOM - specifically, `lmeta` structure.
 // As the name implies, lomBID is a union of two values:
@@ -26,22 +32,31 @@ const (
 // * next 11 bits: bit flags
 // * remaining (64 - 12) = bitshift bits contain the bucket's serial number.
 
-type lomBID meta.BID
+func NewBID(serial uint64, isAis bool) uint64 {
+	// not adding runtime check given the time reasonably
+	// required to create (1 << 52) buckets
+	debug.Assert(serial&(flagmask<<bitshift) == 0)
+
+	if isAis {
+		return serial | AisBID
+	}
+	return serial
+}
 
 func (lid lomBID) bid() uint64   { return uint64(lid) & ^flagsBID }
 func (lid lomBID) flags() uint16 { return uint16((uint64(lid) & flagsBID) >> bitshift) }
 
 func (lid lomBID) setbid(bid uint64) lomBID {
-	debug.Assert(bid&flagsBID == 0)
+	debug.Assert(bid&flagsBID == 0, bid)
 	return lomBID((uint64(lid) & flagsBID) | bid)
 }
 
 func (lid lomBID) setflags(fl uint16) lomBID {
-	debug.Assert(fl <= 0x7ff)
+	debug.Assert(fl <= uint16(flagsBID>>bitshift), fl)
 	return lomBID(uint64(lid) | (uint64(fl) << bitshift))
 }
 
 func (lid lomBID) clrflags(fl uint16) lomBID {
-	debug.Assert(fl <= 0x7ff)
+	debug.Assert(fl <= uint16(flagsBID>>bitshift))
 	return lomBID(uint64(lid) & ^(uint64(fl) << bitshift))
 }

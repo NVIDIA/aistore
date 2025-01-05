@@ -124,7 +124,7 @@ func Example_headers() {
 				break
 			}
 
-			tlog.Logf("Bck:%s ObjName:%s SID:%s Opaque:%v ObjAttrs:{%s} (%d)\n",
+			fmt.Printf("Bck:%s ObjName:%s SID:%s Opaque:%v ObjAttrs:{%s} (%d)\n",
 				hdr.Bck.String(), hdr.ObjName, hdr.SID, hdr.Opaque, hdr.ObjAttrs.String(), hlen)
 			off += hlen + int(hdr.ObjAttrs.Size)
 		}
@@ -203,7 +203,7 @@ func Example_obj() {
 		if int64(len(object)) != hdr.ObjAttrs.Size {
 			panic(fmt.Sprintf("size %d != %d", len(object), hdr.ObjAttrs.Size))
 		}
-		tlog.Logf("%s...\n", string(object[:16]))
+		fmt.Printf("%s...\n", string(object[:16]))
 		return nil
 	}
 	ts := httptest.NewServer(objmux)
@@ -260,7 +260,7 @@ func printNetworkStats() {
 	for trname, eps := range netstats {
 		for uid, stats := range eps { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
-			tlog.Logf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
+			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
 				trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
 		}
 	}
@@ -272,18 +272,18 @@ func compareNetworkStats(netstats1 map[string]transport.RxStats) {
 		eps1, ok := netstats1[trname]
 		for uid, stats2 := range eps2 { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
-			tlog.Logf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
+			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
 				stats2.Offset.Load(), stats2.Num.Load())
 			if ok {
 				stats1, ok := eps1[sessID]
 				if ok {
-					tlog.Logf("send$ %s[%d]: offset=%d, num=%d\n",
+					fmt.Printf("send$ %s[%d]: offset=%d, num=%d\n",
 						trname, sessID, stats1.Offset.Load(), stats1.Num.Load())
 				} else {
-					tlog.Logf("send$ %s[%d]: -- not present --\n", trname, sessID)
+					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
 				}
 			} else {
-				tlog.Logf("send$ %s[%d]: -- not present --\n", trname, sessID)
+				fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
 			}
 		}
 	}
@@ -518,7 +518,7 @@ func TestCompressedOne(t *testing.T) {
 
 	slab.Free(buf)
 
-	tlog.Logf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
+	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
 		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio())
 
 	printNetworkStats()
@@ -559,7 +559,7 @@ func TestDryRun(t *testing.T) {
 			size += hdr.ObjAttrs.Size
 			if size-prevsize >= cos.GiB*100 {
 				prevsize = size
-				tlog.Logf("[dry]: %d GiB\n", size/cos.GiB)
+				fmt.Printf("[dry]: %d GiB\n", size/cos.GiB)
 			}
 		}
 	}
@@ -703,7 +703,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	if netstats == nil {
 		reason, termErr := stream.TermInfo()
 		tassert.Errorf(t, reason != "", "expecting reason for termination")
-		tlog.Logf("send$ %s[%d]: offset=%d, num=%d(%d), term(%q, %v)\n",
+		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), term(%q, %v)\n",
 			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, reason, termErr)
 	} else {
 		lock.Lock()
