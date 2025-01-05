@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -175,11 +175,11 @@ func TestRemoteBucketObject(t *testing.T) {
 
 			if !test.exists {
 				if err == nil {
-					t.Errorf("expected error when doing %s on non existing %q bucket", test.ty, bck)
+					t.Errorf("expected error when doing %s on non existing %q bucket", test.ty, bck.String())
 				}
 			} else if err != nil {
 				t.Errorf("expected no error when executing %s on existing %q bucket(err = %v)",
-					test.ty, bck, err)
+					test.ty, bck.String(), err)
 			}
 		})
 	}
@@ -232,7 +232,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 		}
 	}
 	tassert.Errorf(t, matchCount == 2, "objects %s and %s should be present in %s",
-		httpObjectName, httpAnotherObjectName, hbo.Bck)
+		httpObjectName, httpAnotherObjectName, hbo.Bck.String())
 }
 
 func TestAppendObject(t *testing.T) {
@@ -514,7 +514,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	bucketPropsRemote := &cmn.BpropsToSet{}
 
 	// Put
-	tlog.Logf("PUT %s => %s\n", fileName, bckLocal)
+	tlog.Logf("PUT %s => %s\n", fileName, bckLocal.String())
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
@@ -527,7 +527,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("PUT %s => %s\n", fileName, bckRemote)
+	tlog.Logf("PUT %s => %s\n", fileName, bckRemote.String())
 	putArgs = api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,

@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -83,9 +83,9 @@ func BucketsContain(bcks cmn.Bcks, qbck cmn.QueryBcks) bool {
 func BucketExists(tb testing.TB, proxyURL string, bck cmn.Bck) (bool, error) {
 	if bck.IsQuery() {
 		if tb == nil {
-			return false, fmt.Errorf("expecting a named bucket, got %q", bck)
+			return false, fmt.Errorf("expecting a named bucket, got %q", bck.String())
 		}
-		tassert.CheckFatal(tb, fmt.Errorf("expecting a named bucket, got %q", bck))
+		tassert.CheckFatal(tb, fmt.Errorf("expecting a named bucket, got %q", bck.String()))
 	}
 	bp := api.BaseParams{Client: gctx.Client, URL: proxyURL, Token: LoggedUserToken}
 	_, err := api.HeadBucket(bp, bck, true /*dontAddRemote*/)

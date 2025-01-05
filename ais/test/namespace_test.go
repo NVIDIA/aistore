@@ -267,8 +267,8 @@ func TestNamespace(t *testing.T) {
 					)
 				}
 			}
-			tassert.Errorf(t, bck1Found, "%s not found in %v summ", m1.bck, summaries)
-			tassert.Errorf(t, bck2Found, "%s not found in %v summ", m2.bck, summaries)
+			tassert.Errorf(t, bck1Found, "%s not found in %v summ", m1.bck.String(), summaries)
+			tassert.Errorf(t, bck2Found, "%s not found in %v summ", m2.bck.String(), summaries)
 			m1.gets(nil, false)
 			m2.gets(nil, false)
 

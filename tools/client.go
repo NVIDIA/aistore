@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -75,7 +75,7 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 		defer wg.Done()
 	}
 	if !silent {
-		fmt.Printf("DEL: %s\n", object)
+		tlog.Logf("DEL: %s\n", object)
 	}
 	bp := BaseAPIParams(proxyURL)
 	err := api.DeleteObject(bp, bck, object)
@@ -107,7 +107,7 @@ func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, er
 		return
 	}
 	if errCh == nil {
-		fmt.Printf("Failed to PUT %s: %v (nil error channel)\n", bck.Cname(objName), err)
+		tlog.Logf("Failed to PUT %s: %v (nil error channel)\n", bck.Cname(objName), err)
 	} else {
 		errCh <- err
 	}
@@ -149,7 +149,7 @@ func GetPrimaryURL() string {
 	if err == nil {
 		return primary.URL(cmn.NetPublic)
 	}
-	fmt.Printf("Warning: GetPrimaryProxy [%v] - retrying once...\n", err)
+	tlog.Logf("Warning: GetPrimaryProxy [%v] - retrying once...\n", err)
 	if currSmap == nil {
 		time.Sleep(time.Second)
 		primary, err = GetPrimaryProxy(proxyURLReadOnly)
@@ -162,7 +162,7 @@ func GetPrimaryURL() string {
 		}
 	}
 	if err != nil {
-		fmt.Printf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
+		tlog.Logf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
 		return proxyURLReadOnly
 	}
 	return primary.URL(cmn.NetPublic)
@@ -419,7 +419,7 @@ func GetObjectAtime(t *testing.T, bp api.BaseParams, bck cmn.Bck, object, timeFo
 		}
 	}
 
-	tassert.Fatalf(t, false, "Cannot find %s in bucket %s", object, bck)
+	tassert.Fatalf(t, false, "Cannot find %s in bucket %s", object, bck.String())
 	return time.Time{}, ""
 }
 
@@ -472,7 +472,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, lst []string) {
 	bp := BaseAPIParams(proxyURL)
 	xid, err := api.EvictMultiObj(bp, bck, lst, "" /*template*/)
 	if err != nil {
-		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
+		t.Errorf("Evict bucket %s failed: %v", bck.String(), err)
 	}
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: EvictPrefetchTimeout}

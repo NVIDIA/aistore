@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tarch"
 	"github.com/NVIDIA/aistore/tools/tassert"
-	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
@@ -45,7 +44,7 @@ func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, 
 	isharder, err := ishard.NewISharder(cfg)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 
 	err = isharder.Start()
 	tassert.CheckFatal(t, err)
@@ -258,7 +257,7 @@ func TestIshardPrefix(t *testing.T) {
 	isharder, err := ishard.NewISharder(cfg)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 
 	err = isharder.Start()
 	tassert.CheckFatal(t, err)
@@ -435,7 +434,7 @@ func TestIshardMissingExtension(t *testing.T) {
 		isharder, err := ishard.NewISharder(cfg)
 		tassert.CheckFatal(t, err)
 
-		tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 
 		err = isharder.Start() // error is expected to occur since `dropout` is set, ishard should abort
 		if err == nil || !strings.HasPrefix(err.Error(), "missing extension: ") {
@@ -466,7 +465,7 @@ func TestIshardMissingExtension(t *testing.T) {
 		isharder, err := ishard.NewISharder(cfg)
 		tassert.CheckFatal(t, err)
 
-		tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 
 		err = isharder.Start()
 		tassert.CheckFatal(t, err)
@@ -544,7 +543,7 @@ func TestIshardEKM(t *testing.T) {
 	_, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, int64(fileSize), false, false)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("building and configuring EKM as JSON string")
+	fmt.Printf("building and configuring EKM as JSON string")
 	var builder strings.Builder
 	builder.WriteString("{")
 	for i, letter := range "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" {
@@ -556,7 +555,7 @@ func TestIshardEKM(t *testing.T) {
 	builder.WriteString("\n}")
 	cfg.EKMFlag.Set(builder.String())
 
-	tlog.Logf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
 	isharder, err := ishard.NewISharder(cfg)
 	tassert.CheckFatal(t, err)
 
@@ -819,7 +818,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 		}
 	}
 
-	tlog.Logf("generated %d records in %s bucket\n", numRecords, bucket)
+	fmt.Printf("generated %d records in %s bucket\n", numRecords, bucket)
 	return totalSize, nil
 }
 
@@ -849,7 +848,7 @@ func checkOutputShards(t *testing.T, baseParams api.BaseParams, bucket cmn.Bck, 
 	if !dropout {
 		tassert.Fatalf(t, totalFileNum == expectedNumFiles, "The total number of files in output shards (%d) doesn't match to the initially generated amount (%d)", totalFileNum, expectedNumFiles)
 	}
-	tlog.Logf("finished ishard, archived %d files with total size %s\n", expectedNumFiles, cos.ToSizeIEC(totalSize, 2))
+	fmt.Printf("finished ishard, archived %d files with total size %s\n", expectedNumFiles, cos.ToSizeIEC(totalSize, 2))
 }
 
 func getShardContents(baseParams api.BaseParams, bucket cmn.Bck) (map[string][]string, error) {

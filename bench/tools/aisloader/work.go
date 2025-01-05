@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -380,5 +380,5 @@ func (wo *workOrder) String() string {
 	}
 
 	return fmt.Sprintf("WO: %s/%s, start:%s end:%s, size: %d, type: %s%s",
-		wo.bck, wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
+		wo.bck.String(), wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
 }

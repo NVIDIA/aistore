@@ -386,7 +386,7 @@ func (b *SingleBody) Describe() string {
 }
 
 func (b *SingleBody) String() string {
-	return fmt.Sprintf("Link: %q, Bucket: %q, ObjName: %q.", b.Link, b.Bck, b.ObjName)
+	return fmt.Sprintf("Link: %q, Bucket: %q, ObjName: %q.", b.Link, b.Bck.String(), b.ObjName)
 }
 
 ///////////////
@@ -407,11 +407,11 @@ func (b *RangeBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
-	return fmt.Sprintf("%s -> %s", b.Template, b.Bck)
+	return fmt.Sprintf("%s -> %s", b.Template, b.Bck.String())
 }
 
 func (b *RangeBody) String() string {
-	return fmt.Sprintf("bucket: %q, template: %q", b.Bck, b.Template)
+	return fmt.Sprintf("bucket: %q, template: %q", b.Bck.String(), b.Template)
 }
 
 ///////////////
@@ -463,11 +463,11 @@ func (b *MultiBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
-	return fmt.Sprintf("multi-download -> %s", b.Bck)
+	return "multi-download -> " + b.Bck.Cname("")
 }
 
 func (b *MultiBody) String() string {
-	return fmt.Sprintf("bucket: %q", b.Bck)
+	return fmt.Sprintf("bucket: %q", b.Bck.String())
 }
 
 /////////////////
@@ -480,5 +480,5 @@ func (b *BackendBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
-	return fmt.Sprintf("remote bucket prefetch -> %s", b.Bck)
+	return "remote bucket prefetch -> " + b.Bck.Cname("")
 }

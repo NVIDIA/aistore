@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -1117,7 +1117,7 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	tools.WaitForResilvering(t, baseParams, target)
 
-	tlog.Logf("waiting for bucket %s to show up on all targets\n", m.bck)
+	tlog.Logf("waiting for bucket %s to show up on all targets\n", m.bck.String())
 	err = checkTargetBMDsFor(m.proxyURL, m.bck)
 	tassert.CheckFatal(t, err)
 
@@ -1185,7 +1185,7 @@ func TestForwardCP(t *testing.T) {
 	})
 
 	tools.CreateBucket(t, nextProxyURL, m.bck, nil, true /*cleanup*/)
-	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
+	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck.String(), nextProxyID)
 
 	// Step 3.
 	m.puts()
@@ -1209,7 +1209,7 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 5. destroy ais bucket via original primary which is not primary at this point
 	tools.DestroyBucket(t, origURL, m.bck)
-	tlog.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bck, origID, origURL)
+	tlog.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bck.String(), origID, origURL)
 }
 
 func TestAtimeRebalance(t *testing.T) {

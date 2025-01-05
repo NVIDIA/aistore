@@ -40,7 +40,7 @@ func setBucket() (bck cmn.Bck, err error) {
 	} else if err := bck.Validate(); err != nil {
 		return bck, fmt.Errorf("failed to validate 'BUCKET' env variable, err: %v", err)
 	}
-	tlog.Logf("Using bucket %s\n", bck)
+	tlog.Logf("Using bucket %s\n", bck.String())
 	return bck, nil
 }
 

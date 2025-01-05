@@ -304,7 +304,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 				// in both cases, BMD cannot be fully trusted, and so we ignore that fact
 				// that the directory exists
 				// (scenario: decommission without proper cleanup, followed by rejoin)
-				nlog.Errorf("Warning: %s bdir %s exists but local BMD is not the latest", bck, dir)
+				nlog.Errorf("Warning: %s bdir %s exists but local BMD is not the latest", bck.String(), dir)
 				num++
 				continue
 			}
@@ -1036,7 +1036,7 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 
 		dir := mi.makeDelPathBck(bck)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
-			nlog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)
+			nlog.Errorf("%s %q: failed to rm dir %q: %v", op, bck.String(), dir, errMv)
 			mfs.hc.FSHC(errMv, mi, "")
 		} else {
 			n++

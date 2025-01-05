@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -232,7 +232,7 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 		return
 	}
 	if objName == "" {
-		err = fmt.Errorf("object name is missing (bucket=%s, uname=%q)", b, uname)
+		err = fmt.Errorf("object name is missing (bucket=%s, uname=%q)", b.String(), uname)
 		return
 	}
 	bck = meta.CloneBck(&b)

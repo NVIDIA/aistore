@@ -335,7 +335,7 @@ func Start(version, buildtime string) (err error) {
 		if !runParams.bck.IsAIS() {
 			v = "emptied"
 		}
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be %s upon termination!\n", runParams.bck, v)
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be %s upon termination!\n", runParams.bck.String(), v)
 		time.Sleep(time.Second)
 	}
 
@@ -993,11 +993,11 @@ func setupBucket(runParams *params, created *bool) error {
 		}
 		if objName != "" {
 			return fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
-				runParams.bck, bck, objName)
+				runParams.bck.String(), bck.String(), objName)
 		}
 		if runParams.bck.Provider != apc.AIS /*cmdline default*/ && runParams.bck.Provider != bck.Provider {
 			return fmt.Errorf("redundant and different bucket provider: %q vs %q in %s",
-				runParams.bck.Provider, bck.Provider, bck)
+				runParams.bck.Provider, bck.Provider, bck.String())
 		}
 		runParams.bck = bck
 	}
@@ -1006,7 +1006,7 @@ func setupBucket(runParams *params, created *bool) error {
 
 	if isDirectS3() {
 		if apc.ToScheme(runParams.bck.Provider) != apc.S3Scheme {
-			return fmt.Errorf("option --s3endpoint requires s3 bucket (have %s)", runParams.bck)
+			return fmt.Errorf("option --s3endpoint requires s3 bucket (have %s)", runParams.bck.String())
 		}
 		if runParams.cached {
 			return errors.New(cachedText + "cannot be used together with --s3endpoint (direct S3 access)")
@@ -1034,11 +1034,11 @@ func setupBucket(runParams *params, created *bool) error {
 	}
 	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltPresent)
 	if err != nil {
-		return fmt.Errorf("%s not found: %v", runParams.bck, err)
+		return fmt.Errorf("%s not found: %v", runParams.bck.String(), err)
 	}
 	if !exists {
 		if err := api.CreateBucket(runParams.bp, runParams.bck, nil); err != nil {
-			return fmt.Errorf("failed to create %s: %v", runParams.bck, err)
+			return fmt.Errorf("failed to create %s: %v", runParams.bck.String(), err)
 		}
 		*created = true
 	}
@@ -1049,7 +1049,7 @@ func setupBucket(runParams *params, created *bool) error {
 	// update bucket props if bPropsStr is set
 	oldProps, err := api.HeadBucket(runParams.bp, runParams.bck, true /* don't add */)
 	if err != nil {
-		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bck, err)
+		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bck.String(), err)
 	}
 	change := false
 	if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
@@ -1071,7 +1071,7 @@ func setupBucket(runParams *params, created *bool) error {
 	}
 	if change {
 		if _, err = api.SetBucketProps(runParams.bp, runParams.bck, &propsToUpdate); err != nil {
-			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bck, err)
+			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bck.String(), err)
 		}
 	}
 	return nil

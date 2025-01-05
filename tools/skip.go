@@ -62,7 +62,7 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 		tassert.Fatalf(tb, !args.Bck.IsEmpty(), "bucket is missing in the args")
 		proxyURL := GetPrimaryURL()
 		if !isRemoteAndPresentBucket(tb, proxyURL, args.Bck) {
-			tb.Skipf("%s requires a remote in-cluster bucket (have %s)", tb.Name(), args.Bck)
+			tb.Skipf("%s requires a remote in-cluster bucket (have %s)", tb.Name(), args.Bck.String())
 		}
 	}
 	if args.CloudBck || args.RequiredCloudProvider != "" {

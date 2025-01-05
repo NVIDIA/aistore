@@ -211,7 +211,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 		ecode := http.StatusInternalServerError
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
 			// TODO: return http.StatusNoContent
-			nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
+			nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck.String(), msg.Action)
 			return
 		}
 		s3.WriteErr(w, r, err, ecode)

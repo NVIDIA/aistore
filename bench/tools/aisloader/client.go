@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -326,10 +326,10 @@ func s3getDiscard(bck cmn.Bck, objName string) (int64, error) {
 	obj.Body.Close()
 
 	if err != nil {
-		return n, fmt.Errorf("failed to GET %s/%s and discard it (%d, %d): %v", bck, objName, n, size, err)
+		return n, fmt.Errorf("failed to GET %s and discard it (%d, %d): %v", bck.Cname(objName), n, size, err)
 	}
 	if n != size {
-		err = fmt.Errorf("failed to GET %s/%s: wrong size (%d, %d)", bck, objName, n, size)
+		err = fmt.Errorf("failed to GET %s: wrong size (%d, %d)", bck.Cname(objName), n, size)
 	}
 	return size, err
 }

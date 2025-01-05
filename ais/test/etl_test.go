@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -441,7 +441,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		if bcktest.srcRemote {
 			m.remotePuts(false) // (deleteRemoteBckObjs above)
 			if bcktest.evictRemoteSrc {
-				tlog.Logf("evicting %s\n", m.bck)
+				tlog.Logf("evicting %s\n", m.bck.String())
 				//
 				// evict all _cached_ data from the "local" cluster
 				// keep the src bucket in the "local" BMD though
@@ -533,7 +533,7 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 		if bckTo.IsRemote() {
 			err = api.EvictRemoteBucket(bp, bckTo, false /*keep md*/)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("[cleanup] %s evicted\n", bckTo)
+			tlog.Logf("[cleanup] %s evicted\n", bckTo.String())
 		} else {
 			tools.DestroyBucket(t, bp.URL, bckTo)
 		}

@@ -185,7 +185,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 
 	tlog.Logf("Listing objects...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
-	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck)
+	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck.String())
 
 	var (
 		version string
@@ -256,7 +256,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 
 	tlog.Logf("Listing objects...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
-	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck)
+	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck.String())
 
 	var (
 		version  string
@@ -374,7 +374,7 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 	msg.AddProps(apc.GetPropsVersion, apc.GetPropsAtime, apc.GetPropsStatus)
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	if reslist == nil {
-		t.Fatalf("Unexpected error: no objects in the bucket %s", bck)
+		t.Fatalf("Unexpected error: no objects in the bucket %s", bck.String())
 		return
 	}
 
@@ -502,7 +502,7 @@ func TestObjProps(t *testing.T) {
 				}
 				tassert.Errorf(
 					t, err != nil,
-					"Cloud bucket %s is %s - expecting set-props to fail", m.bck, s)
+					"Cloud bucket %s is %s - expecting set-props to fail", m.bck.String(), s)
 			} else {
 				tassert.CheckFatal(t, err)
 			}
@@ -608,15 +608,15 @@ func TestObjProps(t *testing.T) {
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg) *cmn.LsoRes {
 	switch {
 	case msg == nil:
-		tlog.Logf("LIST %s []\n", bck)
+		tlog.Logf("LIST %s []\n", bck.String())
 	case msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "":
-		tlog.Logf("LIST %s [cached: %t]\n", bck, msg.IsFlagSet(apc.LsObjCached))
+		tlog.Logf("LIST %s [cached: %t]\n", bck.String(), msg.IsFlagSet(apc.LsObjCached))
 	default:
 		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
-			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsObjCached), msg.ContinuationToken)
+			bck.String(), msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsObjCached), msg.ContinuationToken)
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
-	tassert.Fatalf(t, err == nil, "%s: list-objects failed: %v", bck, err)
+	tassert.Fatalf(t, err == nil, "%s: list-objects failed: %v", bck.String(), err)
 	return resList
 }

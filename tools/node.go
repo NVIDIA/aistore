@@ -414,7 +414,7 @@ func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, c
 
 func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	if docker.IsRunning() {
-		tlog.Logf("Restarting %s container %s\n", tag, cmd)
+		tlog.Logf("Restarting %s container [%s %s]\n", tag, cmd.Node.ID(), cmd.Cmd)
 		return docker.Restart(cmd.Node.ID())
 	}
 
@@ -805,15 +805,15 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 		if err == nil && newSmap.Version > ver {
 			ignore.Add(sid)
 			if newSmap.Version > smap.Version {
-				gctx.Log("Updating %s to %s from %s\n", smap, newSmap.StringEx(), sname)
+				tlog.Logf("Updating %s to %s from %s\n", smap, newSmap.StringEx(), sname)
 				cos.CopyStruct(smap, newSmap)
 			}
 			if newSmap.Version > ver+1 {
 				// reset
 				if ver <= 0 {
-					gctx.Log("Received %s from %s\n", newSmap.StringEx(), sname)
+					tlog.Logf("Received %s from %s\n", newSmap.StringEx(), sname)
 				} else {
-					gctx.Log("Received newer %s from %s, updated wait-for condition (%d => %d)\n",
+					tlog.Logf("Received newer %s from %s, updated wait-for condition (%d => %d)\n",
 						newSmap.StringEx(), sname, ver, newSmap.Version)
 				}
 				ver = newSmap.Version - 1
@@ -827,10 +827,10 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 		}
 		if newSmap != nil {
 			if snode := newSmap.GetNode(sid); snode != nil {
-				gctx.Log("Waiting for %s(%s) to sync Smap > v%d\n", snode.StringEx(), newSmap, ver)
+				tlog.Logf("Waiting for %s(%s) to sync Smap > v%d\n", snode.StringEx(), newSmap, ver)
 			} else {
-				gctx.Log("Waiting for %s(%s) to sync Smap > v%d\n", sname, newSmap, ver)
-				gctx.Log("(Warning: %s hasn't joined yet - not present)\n", sname)
+				tlog.Logf("Waiting for %s(%s) to sync Smap > v%d\n", sname, newSmap, ver)
+				tlog.Logf("(Warning: %s hasn't joined yet - not present)\n", sname)
 			}
 		}
 		prevSid = sid

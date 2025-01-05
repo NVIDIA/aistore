@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
@@ -124,7 +124,8 @@ func Example_headers() {
 				break
 			}
 
-			fmt.Printf("Bck:%s ObjName:%s SID:%s Opaque:%v ObjAttrs:{%s} (%d)\n", hdr.Bck, hdr.ObjName, hdr.SID, hdr.Opaque, hdr.ObjAttrs.String(), hlen)
+			tlog.Logf("Bck:%s ObjName:%s SID:%s Opaque:%v ObjAttrs:{%s} (%d)\n",
+				hdr.Bck.String(), hdr.ObjName, hdr.SID, hdr.Opaque, hdr.ObjAttrs.String(), hlen)
 			off += hlen + int(hdr.ObjAttrs.Size)
 		}
 	}
@@ -202,7 +203,7 @@ func Example_obj() {
 		if int64(len(object)) != hdr.ObjAttrs.Size {
 			panic(fmt.Sprintf("size %d != %d", len(object), hdr.ObjAttrs.Size))
 		}
-		fmt.Printf("%s...\n", string(object[:16]))
+		tlog.Logf("%s...\n", string(object[:16]))
 		return nil
 	}
 	ts := httptest.NewServer(objmux)
@@ -259,7 +260,7 @@ func printNetworkStats() {
 	for trname, eps := range netstats {
 		for uid, stats := range eps { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
-			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
+			tlog.Logf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
 				trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
 		}
 	}
@@ -271,18 +272,18 @@ func compareNetworkStats(netstats1 map[string]transport.RxStats) {
 		eps1, ok := netstats1[trname]
 		for uid, stats2 := range eps2 { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
-			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
+			tlog.Logf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
 				stats2.Offset.Load(), stats2.Num.Load())
 			if ok {
 				stats1, ok := eps1[sessID]
 				if ok {
-					fmt.Printf("send$ %s[%d]: offset=%d, num=%d\n",
+					tlog.Logf("send$ %s[%d]: offset=%d, num=%d\n",
 						trname, sessID, stats1.Offset.Load(), stats1.Num.Load())
 				} else {
-					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
+					tlog.Logf("send$ %s[%d]: -- not present --\n", trname, sessID)
 				}
 			} else {
-				fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
+				tlog.Logf("send$ %s[%d]: -- not present --\n", trname, sessID)
 			}
 		}
 	}
@@ -517,7 +518,7 @@ func TestCompressedOne(t *testing.T) {
 
 	slab.Free(buf)
 
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
+	tlog.Logf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
 		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio())
 
 	printNetworkStats()
@@ -565,7 +566,7 @@ func TestDryRun(t *testing.T) {
 	stream.Fin()
 	stats := stream.GetStats()
 
-	fmt.Printf("[dry]: offset=%d, num=%d(%d)\n", stats.Offset.Load(), stats.Num.Load(), num)
+	tlog.Logf("[dry]: offset=%d, num=%d(%d)\n", stats.Offset.Load(), stats.Num.Load(), num)
 }
 
 func TestCompletionCount(t *testing.T) {
@@ -702,7 +703,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	if netstats == nil {
 		reason, termErr := stream.TermInfo()
 		tassert.Errorf(t, reason != "", "expecting reason for termination")
-		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), term(%q, %v)\n",
+		tlog.Logf("send$ %s[%d]: offset=%d, num=%d(%d), term(%q, %v)\n",
 			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, reason, termErr)
 	} else {
 		lock.Lock()

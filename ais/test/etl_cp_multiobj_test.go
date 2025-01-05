@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -73,7 +73,7 @@ func TestETLMultiObj(t *testing.T) {
 
 		if bcktest.srcRemote {
 			if bcktest.evictRemoteSrc {
-				tlog.Logf("evicting %s\n", m.bck)
+				tlog.Logf("evicting %s\n", m.bck.String())
 				//
 				// evict all _cached_ data from the "local" cluster
 				// keep the src bucket in the "local" BMD though
@@ -83,7 +83,7 @@ func TestETLMultiObj(t *testing.T) {
 			}
 		}
 
-		tlog.Logf("PUT %d objects (size %d) => %s/test/a-*\n", objCnt, objSize, m.bck)
+		tlog.Logf("PUT %d objects (size %d) => %s/test/a-*\n", objCnt, objSize, m.bck.String())
 		for i := range objCnt {
 			r, _ := readers.NewRand(objSize, cksumType)
 			_, err := api.PutObject(&api.PutArgs{

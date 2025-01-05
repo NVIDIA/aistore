@@ -1,13 +1,12 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
 import (
 	cryptorand "crypto/rand"
-	"fmt"
 	"io"
 	"net/http/httptest"
 	"strconv"
@@ -218,16 +217,16 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 
 	if nvs["compression"] != apc.CompressNever {
 		for id, tstat := range stats {
-			fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
+			tlog.Logf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
 				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.CompressionRatio())
 		}
 	} else {
 		for id, tstat := range stats {
-			fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d)\n",
+			tlog.Logf("send$ %s/%s: offset=%d, num=%d(%d)\n",
 				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num)
 		}
 	}
-	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
+	tlog.Logf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 }
 
 func addTarget(smap *meta.Smap, ts *httptest.Server, i int) {

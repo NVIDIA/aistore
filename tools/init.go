@@ -54,7 +54,6 @@ const (
 
 type g struct {
 	Client *http.Client
-	Log    func(format string, a ...any)
 }
 
 var (
@@ -96,8 +95,6 @@ var (
 // Certificate check and other TLS is always disabled.
 
 func init() {
-	gctx.Log = tlog.Logf
-
 	if cos.IsHTTPS(os.Getenv(env.AisEndpoint)) {
 		// fill-in from env
 		cmn.EnvToTLS(&tlsArgs)
@@ -163,21 +160,21 @@ func InitLocalCluster() {
 		initRemAis() // remote AIS that optionally may be run locally as well and used for testing
 		return
 	}
-	fmt.Printf("Error: %s\n\n", strings.TrimSuffix(err.Error(), "\n"))
+	tlog.Logf("Error: %s\n\n", strings.TrimSuffix(err.Error(), "\n"))
 
 	switch {
 	case strings.Contains(err.Error(), "token"):
-		fmt.Printf("Hint: make sure to provide access token via %s environment or the default config location\n",
+		tlog.Logf("Hint: make sure to provide access token via %s environment or the default config location\n",
 			env.AisAuthTokenFile)
 	case strings.Contains(err.Error(), "unreachable"):
-		fmt.Printf("Hint: make sure that cluster is running and/or specify its endpoint via %s environment\n",
+		tlog.Logf("Hint: make sure that cluster is running and/or specify its endpoint via %s environment\n",
 			env.AisEndpoint)
 	default:
-		fmt.Printf("Hint: check api/env/*.go environment and, in particular %s=%s\n", env.AisEndpoint, os.Getenv(env.AisEndpoint))
+		tlog.Logf("Hint: check api/env/*.go environment and, in particular %s=%s\n", env.AisEndpoint, os.Getenv(env.AisEndpoint))
 		if len(envVars) > 0 {
 			fmt.Println("Docker Environment:")
 			for k, v := range envVars {
-				fmt.Printf("\t%s:\t%s\n", k, v)
+				tlog.Logf("\t%s:\t%s\n", k, v)
 			}
 		}
 	}

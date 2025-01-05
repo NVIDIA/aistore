@@ -324,7 +324,7 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
 				const act = "delete non-existing"
 				if err = fs.DestroyBucket(act, &bck, 0 /*unknown BID*/); err == nil {
-					nlog.Infof("%s: %s %s", j, act, bck)
+					nlog.Infof("%s: %s %s", j, act, bck.String())
 				} else {
 					j.ini.Xaction.AddErr(err)
 					nlog.Errorf("%s %s: %v - skipping", j, act, err)
@@ -332,7 +332,7 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 			} else {
 				// TODO: config option to scrub `fs.AllMpathBcks` buckets
 				j.ini.Xaction.AddErr(err)
-				nlog.Errorf("%s: %v - skipping %s", j, err, bck)
+				nlog.Errorf("%s: %v - skipping %s", j, err, bck.String())
 			}
 			continue
 		}

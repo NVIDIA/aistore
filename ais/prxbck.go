@@ -281,7 +281,7 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 		if err = bctx.p.access(bctx.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
 			return bck, aceErrToCode(err), err
 		}
-		nlog.Warningf("%s: %q doesn't exist, proceeding to create", bctx.p, bctx.bck)
+		nlog.Warningf("%s: %q doesn't exist, proceeding to create", bctx.p, bctx.bck.String())
 		goto creadd
 	}
 	action = apc.ActAddRemoteBck // only if requested via bctx
@@ -388,8 +388,8 @@ retry:
 			return
 		}
 		// NOTE: assuming OK
-		nlog.Warningf("Proceeding to add remote bucket %s to the BMD after getting err: %v(%d)", bck, err, code)
-		nlog.Warningf("Using all cluster defaults for %s property values", bck)
+		nlog.Warningf("Proceeding to add remote bucket %s to the BMD after getting err: %v(%d)", bck.String(), err, code)
+		nlog.Warningf("Using all cluster defaults for %s property values", bck.String())
 		hdr = make(http.Header, 2)
 		hdr.Set(apc.HdrBackendProvider, bck.Provider)
 		hdr.Set(apc.HdrBucketVerEnabled, "false")
@@ -398,7 +398,7 @@ retry:
 	}
 	// NOTE: retrying once (via random target)
 	if err != nil && !retried && cos.IsErrClientURLTimeout(err) {
-		nlog.Warningf("%s: HEAD(%s) timeout %q - retrying...", bctx.p, bck, errors.Unwrap(err))
+		nlog.Warningf("%s: HEAD(%s) timeout %q - retrying...", bctx.p, bck.String(), errors.Unwrap(err))
 		retried = true
 		goto retry
 	}

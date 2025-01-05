@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -203,18 +203,17 @@ func (bp *Bprops) Validate(targetCnt int) error {
 	debug.Assert(apc.IsProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
 		if bp.Provider != apc.AIS {
-			return fmt.Errorf("invalid provider %q: only ais:// buckets can have remote backend (%q)",
-				bp.Provider, bp.BackendBck)
+			return fmt.Errorf("invalid provider %q: only ais:// buckets can have remote backend (%q)", bp.Provider, bp.BackendBck.String())
 		}
 		if bp.BackendBck.Provider == "" {
 			// (compare with `ErrEmptyProvider`)
-			return fmt.Errorf("backend bucket %q: provider is empty", bp.BackendBck)
+			return fmt.Errorf("backend bucket %q: provider is empty", bp.BackendBck.String())
 		}
 		if bp.BackendBck.Name == "" {
-			return fmt.Errorf("backend bucket %q: name is empty", bp.BackendBck)
+			return fmt.Errorf("backend bucket %q: name is empty", bp.BackendBck.String())
 		}
 		if !bp.BackendBck.IsRemote() {
-			return fmt.Errorf("backend bucket %q must be remote", bp.BackendBck)
+			return fmt.Errorf("backend bucket %q must be remote", bp.BackendBck.String())
 		}
 	}
 

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -889,7 +889,7 @@ func newBckFromQuname(query url.Values, required bool) (*meta.Bck, error) {
 	}
 	bck, objName := cmn.ParseUname(uname)
 	if objName != "" {
-		return nil, fmt.Errorf("bucket %s: unexpected non-empty object name %q", bck, objName)
+		return nil, fmt.Errorf("bucket %s: not expecting object name (got %q)", bck.String(), objName)
 	}
 	if err := bck.Validate(); err != nil {
 		return nil, err

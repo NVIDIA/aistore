@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -177,7 +177,7 @@ func (s *Stats) String() string {
 
 	lines := make([]string, 0, 8)
 	lines = append(lines,
-		fmt.Sprintf("EC stats for bucket %s", s.Bck),
+		"EC stats for bucket "+s.Bck.String(),
 		fmt.Sprintf("Queue avg len: %.4f, avg wait time: %v", s.QueueLen, s.WaitTime),
 		fmt.Sprintf("Avg object processing time: %v", s.ObjTime),
 	)

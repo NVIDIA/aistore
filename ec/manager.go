@@ -197,7 +197,7 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(core.T.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
-			nlog.Errorf("failed to init bucket %s: %v", bck, err)
+			nlog.Errorf("failed to init bucket %s: %v", bck.String(), err)
 			return err
 		}
 	}

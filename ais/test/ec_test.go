@@ -172,7 +172,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	bck cmn.Bck, objPath string, objSize, sliceSize int64, totalCnt int) {
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %s/%s: %d, found: %d\n%+v",
-		bck, objPath, totalCnt, len(sliceList), sliceList)
+		bck.String(), objPath, totalCnt, len(sliceList), sliceList)
 
 	var metaCnt int
 	for k, md := range sliceList {
@@ -433,7 +433,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 		szTotal += sz
 	}
 	if szLen != 0 {
-		t.Logf("Average size of the bucket %s: %s\n", bck, cos.ToSizeIEC(szTotal/int64(szLen), 1))
+		t.Logf("Average size of the bucket %s: %s\n", bck.String(), cos.ToSizeIEC(szTotal/int64(szLen), 1))
 	}
 }
 
@@ -1208,14 +1208,14 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	tlog.Logf("Disabling EC for the bucket %s\n", bck)
+	tlog.Logf("Disabling EC for the bucket %s\n", bck.String())
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(false)},
 	})
 	tassert.CheckError(t, err)
 
 	time.Sleep(15 * time.Millisecond)
-	tlog.Logf("Enabling EC for the bucket %s\n", bck)
+	tlog.Logf("Enabling EC for the bucket %s\n", bck.String())
 	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 	})
@@ -1672,7 +1672,7 @@ func TestECDestroyBucket(t *testing.T) {
 					wg.Done()
 				}()
 
-				tlog.Logf("Destroying bucket %s\n", bck)
+				tlog.Logf("Destroying bucket %s\n", bck.String())
 				tools.DestroyBucket(t, proxyURL, bck)
 			}()
 		}
@@ -2237,7 +2237,7 @@ func TestECBucketEncode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Object count: %d\n", len(lst.Entries))
 	if len(lst.Entries) != m.num {
-		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck, len(lst.Entries), m.num)
+		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck.String(), len(lst.Entries), m.num)
 	}
 
 	tlog.Logf("Enabling EC\n")
@@ -2252,7 +2252,7 @@ func TestECBucketEncode(t *testing.T) {
 	_, err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Wait for EC %s\n", m.bck)
+	tlog.Logf("Wait for EC %s\n", m.bck.String())
 	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
@@ -2261,7 +2261,7 @@ func TestECBucketEncode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) != m.num {
-		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck, m.num, len(lst.Entries))
+		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck.String(), m.num, len(lst.Entries))
 	}
 	tlog.Logf("Object counts after EC finishes: %d (%d)\n", len(lst.Entries), (parityCnt+1)*m.num)
 	//
@@ -2366,7 +2366,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	resRegOld, err := api.ListObjects(baseParams, bckReg, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
-		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
+		len(resECOld.Entries), bckEC.String(), len(resRegOld.Entries), bckReg.String())
 
 	tlog.Logf("Take %s out of maintenance mode ...\n", tgtLost.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
@@ -2379,11 +2379,11 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after rebalance\n",
-		len(resECNew.Entries), bckEC)
+		len(resECNew.Entries), bckEC.String())
 	resRegNew, err := api.ListObjects(baseParams, bckReg, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after rebalance\n",
-		len(resRegNew.Entries), bckReg)
+		len(resRegNew.Entries), bckReg.String())
 
 	tlog.Logln("Test object readability after rebalance")
 	for _, obj := range resECOld.Entries {
@@ -2482,7 +2482,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	msg := &apc.LsoMsg{Props: apc.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck)
+	tlog.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck.String())
 	if len(resEC.Entries) != o.objCount {
 		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(resEC.Entries))
 	}
@@ -2601,7 +2601,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	msg := &apc.LsoMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC)
+	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC.String())
 
 	tlog.Logf("Take %s out of maintenance mode ...\n", tgtLost.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
@@ -2662,7 +2662,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after rebalance\n",
-		len(resECNew.Entries), bckEC)
+		len(resECNew.Entries), bckEC.String())
 	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Errorf("The number of objects before and after rebalance mismatches")
 	}
@@ -2677,7 +2677,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after reading\n",
-		len(resECNew.Entries), bckEC)
+		len(resECNew.Entries), bckEC.String())
 	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Errorf("Incorrect number of objects: %d (expected %d)",
 			len(resECNew.Entries), len(resECOld.Entries))

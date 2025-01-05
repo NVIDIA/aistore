@@ -594,7 +594,7 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 	tassert.CheckFatal(df.m.t, err)
 
 	if len(list.Entries) == 0 {
-		df.m.t.Errorf("number of objects in bucket %q is 0", bck)
+		df.m.t.Errorf("number of objects in the bucket %q is 0 (zero)", bck.String())
 	}
 	for _, obj := range list.Entries {
 		var (
@@ -797,7 +797,7 @@ func TestDsortNonExistingBuckets(t *testing.T) {
 
 			tlog.Logln(startingDS)
 			spec := df.gen()
-			tlog.Logf("dsort %s(-) => %s\n", m.bck, df.outputBck)
+			tlog.Logf("dsort %s(-) => %s\n", m.bck.String(), df.outputBck.String())
 			if _, err := api.StartDsort(df.baseParams, &spec); err == nil {
 				t.Error("expected dsort to fail when input bucket doesn't exist")
 			}
@@ -806,7 +806,7 @@ func TestDsortNonExistingBuckets(t *testing.T) {
 			tools.DestroyBucket(t, m.proxyURL, df.outputBck)
 			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
-			tlog.Logf("dsort %s => %s(-)\n", m.bck, df.outputBck)
+			tlog.Logf("dsort %s => %s(-)\n", m.bck.String(), df.outputBck.String())
 			if _, err := api.StartDsort(df.baseParams, &spec); err != nil {
 				t.Errorf("expected dsort to create output bucket on the fly, got: %v", err)
 			}

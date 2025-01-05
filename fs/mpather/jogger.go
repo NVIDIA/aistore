@@ -1,6 +1,6 @@
 // Package mpather provides per-mountpath concepts.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package mpather
 
@@ -195,6 +195,12 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 	j.stopCh.Init()
 	return
 }
+
+////////////
+// jogger //
+////////////
+
+func (j *jogger) String() string { return fmt.Sprintf("jogger [%s/%s]", j.mi, j.opts.Bck.String()) }
 
 func (j *jogger) run() (err error) {
 	if err = j.mi.CheckFS(); err != nil {
@@ -449,5 +455,4 @@ func (j *jogger) throttle() {
 	}
 }
 
-func (j *jogger) abort()         { j.stopCh.Close() }
-func (j *jogger) String() string { return fmt.Sprintf("jogger [%s/%s]", j.mi, j.opts.Bck) }
+func (j *jogger) abort() { j.stopCh.Close() }

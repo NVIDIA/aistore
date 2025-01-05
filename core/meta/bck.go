@@ -1,6 +1,6 @@
 // Package meta: cluster-level metadata
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package meta
 
@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -79,21 +81,23 @@ func (b *Bck) AddUnameToQuery(q url.Values, uparam string) url.Values {
 }
 
 func (b *Bck) String() string {
-	var (
-		s   string
-		bid uint64
-		bck = (*cmn.Bck)(b)
+	if b.Props == nil {
+		return b.Bucket().String()
+	}
+
+	// [NOTE]
+	// add BID
+	// for the mask to clear "ais" bit and/or other high bits reserved for LOM flags, see core/lombid
+	const (
+		aisBID = uint64(1 << 63)
 	)
-	if bck.Props != nil {
-		bid = b.Props.BID
-	}
-	if bid == 0 {
-		return bck.String()
-	}
-	if backend := bck.Backend(); backend != nil {
-		s = ", backend=" + backend.String()
-	}
-	return fmt.Sprintf("%s(%#x%s)", bck, BID(bid).serial(), s)
+	var sb strings.Builder
+	sb.Grow(96)
+	b.Bucket().Str(&sb)
+	sb.WriteString("(0x")
+	sb.WriteString(strconv.FormatUint((b.Props.BID &^ aisBID), 16))
+	sb.WriteByte(')')
+	return sb.String()
 }
 
 func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {

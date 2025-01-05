@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -216,29 +216,33 @@ func (b *Bck) Equal(other *Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }
 
-func (b Bck) String() (s string) {
+func (b *Bck) String() string {
 	var sb strings.Builder
+	sb.Grow(96)
+	b.Str(&sb)
+	return sb.String()
+}
+
+func (b *Bck) Str(sb *strings.Builder) {
 	if b.Ns.IsGlobal() {
 		if b.Provider == "" {
-			return b.Name
+			sb.WriteString(b.Name)
+			return
 		}
-		sb.Grow(len(b.Name) + 8)
 		sb.WriteString(apc.ToScheme(b.Provider))
 		sb.WriteString(apc.BckProviderSeparator)
 		sb.WriteString(b.Name)
 	} else {
-		sb.Grow(len(b.Name) + b.Ns.Len() + 12)
 		sb.WriteString(apc.ToScheme(b.Provider))
 		sb.WriteString(apc.BckProviderSeparator)
-		b.Ns._str(&sb)
+		b.Ns._str(sb)
 		sb.WriteByte('/')
 		sb.WriteString(b.Name)
 	}
 	if back := b.Backend(); back != nil {
 		sb.WriteString("->")
-		sb.WriteString(back.String())
+		back.Str(sb)
 	}
-	return sb.String()
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)

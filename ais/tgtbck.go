@@ -522,7 +522,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 			}
 			return
 		}
-		nlog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
+		nlog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck.String(), err, code)
 		bucketProps = make(cos.StrKVs)
 		bucketProps[apc.HdrBackendProvider] = apireq.bck.Provider
 		bucketProps[apc.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
@@ -531,7 +531,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		if k == apc.HdrBucketVerEnabled && apireq.bck.Props != nil {
 			if curr := strconv.FormatBool(apireq.bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
-				nlog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck, v, curr)
+				nlog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck.String(), v, curr)
 			}
 		}
 		hdr.Set(k, v)

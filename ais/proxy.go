@@ -961,7 +961,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 		if err := p.destroyBucket(msg, bck); err != nil {
 			if cmn.IsErrBckNotFound(err) {
 				// TODO: return http.StatusNoContent
-				nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
+				nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck.String(), msg.Action)
 			} else {
 				p.writeErr(w, r, err)
 			}
@@ -1317,7 +1317,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		if err := p.checkAccess(w, r, nil, apc.AceMoveBucket); err != nil {
 			return
 		}
-		nlog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
+		nlog.Infof("%s bucket %s => %s", msg.Action, bckFrom.String(), bckTo.String())
 		if xid, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
 			return

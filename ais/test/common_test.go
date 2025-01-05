@@ -182,7 +182,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
 	)
-	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
+	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck.String())
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	lst, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Props: apc.GetPropsLocation}, api.ListArgs{})
 	tassert.CheckFatal(t, err)
@@ -193,7 +193,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	}
 	if len(targetObjectCount) != m.originalTargetCount {
 		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",
-			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bck)
+			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bck.String())
 	}
 	for targetURL, objCount := range targetObjectCount {
 		if objCount < requiredCount {
@@ -225,7 +225,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		if k = m.prefix; k != "" {
 			k = "/" + k + "*"
 		}
-		tlog.Logf("PUT %d objects%s => %s%s\n", m.num, s, m.bck, k)
+		tlog.Logf("PUT %d objects%s => %s%s\n", m.num, s, m.bck.String(), k)
 	}
 	m.objNames, m.numPutErrs, err = tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,
@@ -290,7 +290,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		wg         = cos.NewLimitedWaitGroup(20, 0)
 	)
 	if !m.silent {
-		tlog.Logf("remote PUT %d objects (size %s) => %s\n", objCnt, cos.ToSizeIEC(int64(m.fileSize), 0), m.bck)
+		tlog.Logf("remote PUT %d objects (size %s) => %s\n", objCnt, cos.ToSizeIEC(int64(m.fileSize), 0), m.bck.String())
 	}
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
@@ -320,7 +320,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
-	tlog.Logf("remote bucket %s: %d cached objects\n", m.bck, m.num)
+	tlog.Logf("remote bucket %s: %d cached objects\n", m.bck.String(), m.num)
 
 	if evict {
 		m.evict()
@@ -339,7 +339,7 @@ func (m *ioContext) evict() {
 		m.t.Fatalf("list_objects err: %d != %d", len(lst.Entries), m.num)
 	}
 
-	tlog.Logf("evicting remote bucket %s...\n", m.bck)
+	tlog.Logf("evicting remote bucket %s...\n", m.bck.String())
 	err = api.EvictRemoteBucket(baseParams, m.bck, false)
 	tassert.CheckFatal(m.t, err)
 }
@@ -548,9 +548,9 @@ func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {
 	)
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
-			tlog.Logf("GET %d objects from %s\n", m.num, m.bck)
+			tlog.Logf("GET %d objects from %s\n", m.num, m.bck.String())
 		} else {
-			tlog.Logf("GET %d objects %d times from %s\n", m.num, m.numGetsEachFile, m.bck)
+			tlog.Logf("GET %d objects %d times from %s\n", m.num, m.numGetsEachFile, m.bck.String())
 		}
 	}
 	wg := cos.NewLimitedWaitGroup(20, 0)
@@ -840,7 +840,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 			} else {
 				test.skipArgs.Bck = test.backendBck
 				if !test.backendBck.IsCloud() {
-					t.Skipf("backend bucket must be a Cloud bucket (have %q)", test.backendBck)
+					t.Skipf("backend bucket must be a Cloud bucket (have %q)", test.backendBck.String())
 				}
 			}
 			tools.CheckSkip(t, &test.skipArgs)

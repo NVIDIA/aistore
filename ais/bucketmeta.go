@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -135,7 +135,7 @@ func (m *bucketMD) add(bck *meta.Bck, p *cmn.Bprops) bool {
 		m.Version = 1 // on-the-fly (e.g. via PUT remote) w/ brand-new cluster
 	}
 	p.SetProvider(bck.Provider)
-	p.BID = meta.NewBID(m.Version, bck.IsAIS())
+	p.BID = core.NewBID(uint64(m.Version), bck.IsAIS())
 	p.Created = time.Now().UnixNano()
 	bck.Props = p
 

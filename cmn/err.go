@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -347,7 +347,7 @@ func NewErrBckAlreadyExists(bck *Bck) *ErrBucketAlreadyExists {
 }
 
 func (e *ErrBucketAlreadyExists) Error() string {
-	return fmt.Sprintf("bucket %q already exists", e.bck)
+	return fmt.Sprintf("bucket %q already exists", e.bck.String())
 }
 
 func IsErrBucketAlreadyExists(err error) bool {
@@ -368,7 +368,7 @@ func (e *ErrRemoteBckNotFound) Error() string {
 		np := apc.NormalizeProvider(e.bck.Provider)
 		return fmt.Sprintf("%s bucket %q does not exist%s", np, e.bck.Cname(""), e.ctx)
 	}
-	return fmt.Sprintf("remote bucket %q does not exist%s", e.bck, e.ctx)
+	return fmt.Sprintf("remote bucket %q does not exist%s", e.bck.String(), e.ctx)
 }
 
 func IsErrRemoteBckNotFound(err error) bool {
@@ -384,7 +384,7 @@ func NewErrBckNotFound(bck *Bck) *ErrBckNotFound {
 }
 
 func (e *ErrBckNotFound) Error() string {
-	return fmt.Sprintf("bucket %q does not exist", e.bck)
+	return fmt.Sprintf("bucket %q does not exist", e.bck.String())
 }
 
 func IsErrBckNotFound(err error) bool {
@@ -399,7 +399,7 @@ func NewErrRemoteBckOffline(bck *Bck) *ErrRemoteBucketOffline {
 }
 
 func (e *ErrRemoteBucketOffline) Error() string {
-	return fmt.Sprintf("bucket %q is currently unreachable", e.bck)
+	return fmt.Sprintf("bucket %q is currently unreachable", e.bck.String())
 }
 
 func isErrRemoteBucketOffline(err error) bool {
@@ -412,7 +412,7 @@ func isErrRemoteBucketOffline(err error) bool {
 func (e *ErrInvalidBackendProvider) Error() string {
 	if e.bck.Name != "" {
 		return fmt.Sprintf("invalid backend provider %q for bucket %s: must be one of [%s]",
-			e.bck.Provider, e.bck, apc.AllProviders)
+			e.bck.Provider, e.bck.String(), apc.AllProviders)
 	}
 	return fmt.Sprintf("invalid backend provider %q: must be one of [%s]", e.bck.Provider, apc.AllProviders)
 }

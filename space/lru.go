@@ -260,7 +260,7 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 		var size int64
 		j.bck = bck
 		if j.allowDelObj, err = j.allow(); err != nil {
-			nlog.Errorf("%s: %v - skipping %s (Hint: run 'ais storage cleanup' to cleanup)", j, err, bck)
+			nlog.Errorf("%s: %v - skipping %s (Hint: run 'ais storage cleanup' to cleanup)", j, err, bck.String())
 			err = nil
 			continue
 		}

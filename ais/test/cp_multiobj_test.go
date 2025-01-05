@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -172,7 +172,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			m.puts()
 
 			if m.bck.IsRemote() && test.evictRemoteSrc {
-				tlog.Logf("evicting %s\n", m.bck)
+				tlog.Logf("evicting %s\n", m.bck.String())
 				//
 				// evict all _cached_ data from the "local" cluster
 				// keep the src bucket in the "local" BMD though
@@ -181,7 +181,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 				tassert.CheckFatal(t, err)
 			}
 
-			tlog.Logf("%s: %s => %s %d objects\n", t.Name(), m.bck, bckTo, numToCopy)
+			tlog.Logf("%s: %s => %s %d objects\n", t.Name(), m.bck.String(), bckTo.String(), numToCopy)
 			var erv atomic.Value
 			if test.list {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
@@ -257,7 +257,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", bckTo, m.prefix, len(objList.Entries))
+			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", bckTo.String(), m.prefix, len(objList.Entries))
 		})
 	}
 }
