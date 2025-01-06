@@ -168,12 +168,20 @@ func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
 	// See related: `headObjS3`
 
 	oi = &ObjInfo{Key: entry.Name, Size: entry.Size, LastModified: entry.Atime}
-	if oi.LastModified == "" && entry.Custom != "" {
-		oi.LastModified = cmn.S2CustomVal(entry.Custom, cmn.LastModified)
+
+	if entry.Custom != "" {
+		md := make(cos.StrKVs, 4)
+		cmn.S2CustomMD(md, entry.Custom, "")
+		if oi.LastModified == "" {
+			oi.LastModified = md[cmn.LastModified]
+		}
+		oi.ETag = md[cmn.ETag]
 	}
+
 	if oi.LastModified == "" && lsmsg.TimeFormat != "" {
 		oi.LastModified = cos.FormatNanoTime(0, lsmsg.TimeFormat) // 1970-01-01 epoch
 	}
+
 	return oi
 }
 
