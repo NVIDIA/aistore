@@ -818,7 +818,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 		}
 	}
 
-	fmt.Printf("generated %d records in %s bucket\n", numRecords, bucket)
+	fmt.Printf("generated %d records in %s bucket\n", numRecords, bucket.String())
 	return totalSize, nil
 }
 

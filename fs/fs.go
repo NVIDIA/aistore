@@ -151,6 +151,7 @@ func (mi *Mountpath) String() string {
 	if mi.info == "" {
 		switch len(mi.Disks) {
 		case 0:
+			// where `fs=` is a block device (or its partition) formatted with a given filesystem (e.g., xfs)
 			mi.info = fmt.Sprintf("mp[%s, fs=%s%s]", mi.Path, mi.Fs, s)
 		case 1:
 			mi.info = fmt.Sprintf("mp[%s, %s%s]", mi.Path, mi.Disks[0], s)
