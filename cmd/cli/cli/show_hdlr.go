@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains implementation of the top-level `show` command.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -717,7 +717,7 @@ func showBMDHandler(c *cli.Context) error {
 					}
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					provider, ns, bucket, props.BackendBck, copies, ec,
+					provider, ns, bucket, props.BackendBck.String(), copies, ec,
 					cos.FormatNanoTime(props.Created, ""))
 			}
 		}

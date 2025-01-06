@@ -91,7 +91,7 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 		p.writeErrStatusf(w, r, http.StatusInternalServerError, "failed to receive download request: %v", err)
 		return
 	}
-	_, dlBase, ok := p.validateDownload(w, r, body)
+	dlb, dlBase, ok := p.validateDownload(w, r, body)
 	if !ok {
 		return
 	}
@@ -116,8 +116,8 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 	// download _job_ vs download xaction, see abortReq() in ais/prxnotif
 	smap := p.owner.smap.get()
 	nl := dload.NewDownloadNL(
-		jobID,           // jobID != xid
-		apc.ActDownload, // xaction kind is always this
+		jobID,            // jobID != xid
+		string(dlb.Type), // instead of apc.ActDownload xaction kind
 		&smap.Smap,
 		progressInterval,
 	)

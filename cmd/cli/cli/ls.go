@@ -277,11 +277,11 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	if flagIsSet(c, verChangedFlag) {
 		if bck.IsAIS() {
-			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(verChangedFlag), bck)
+			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(verChangedFlag), bck.String())
 		}
 		if !bck.HasVersioningMD() {
 			return fmt.Errorf("flag %s only applies to remote backends that maintain at least some form of versioning information (have: %s)",
-				qflprn(verChangedFlag), bck)
+				qflprn(verChangedFlag), bck.String())
 		}
 		msg.SetFlag(apc.LsVerChanged)
 	}

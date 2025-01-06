@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -289,7 +289,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 
 	if bckDst, objDst, err := parseBckObjURI(c, newObj, false); err == nil && bckDst.Name != "" {
 		if !bckDst.Equal(&bck) {
-			return incorrectUsageMsg(c, "moving an object to another bucket(%s) is not supported", bckDst)
+			return incorrectUsageMsg(c, "moving an object to another bucket (%s) is not supported", bckDst.Cname(""))
 		}
 		if oldObj == "" {
 			return missingArgumentsError(c, "no object specified in %q", newObj)

@@ -92,7 +92,7 @@ func (b *Bck) String() string {
 		aisBID = uint64(1 << 63)
 	)
 	var sb strings.Builder
-	sb.Grow(96)
+	sb.Grow(64)
 	b.Bucket().Str(&sb)
 	sb.WriteString("(0x")
 	sb.WriteString(strconv.FormatUint((b.Props.BID &^ aisBID), 16))

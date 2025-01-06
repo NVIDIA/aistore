@@ -943,7 +943,7 @@ func ValidateRemoteBck(act string, bck *Bck) (err *ErrNotRemoteBck) {
 }
 
 func (e *ErrNotRemoteBck) Error() string {
-	return fmt.Sprintf("%s: expecting remote bucket (have %s)", e.act, e.bck)
+	return fmt.Sprintf("%s: expecting remote bucket (have %s)", e.act, e.bck.String())
 }
 
 // ErrXactTgtInMaint

@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -321,7 +321,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 				nlog.Errorln(err)
 			}
 		} else if err := cos.CreateDir(dir); err != nil {
-			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
+			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck.String(), dir, err)
 		}
 		num++
 	}
@@ -1029,7 +1029,7 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 					now = time.Now()
 				}
 				if mtime.After(now) || now.Sub(mtime) < bidUnknownTTL {
-					return fmt.Errorf("%s %q: unknown BID with %q age below ttl (%v)", op, bck, bdir, mtime)
+					return fmt.Errorf("%s %q: unknown BID with %q age below ttl (%v)", op, bck.String(), bdir, mtime)
 				}
 			}
 		}
@@ -1043,7 +1043,7 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 		}
 	}
 	if n < count {
-		err = fmt.Errorf("%s %q: failed to destroy %d out of %d dirs", op, bck, count-n, count)
+		err = fmt.Errorf("%s %q: failed to destroy %d out of %d dirs", op, bck.String(), count-n, count)
 	}
 	return
 }

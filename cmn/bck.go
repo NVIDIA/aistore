@@ -218,7 +218,7 @@ func (b *Bck) Equal(other *Bck) bool {
 
 func (b *Bck) String() string {
 	var sb strings.Builder
-	sb.Grow(96)
+	sb.Grow(64)
 	b.Str(&sb)
 	return sb.String()
 }

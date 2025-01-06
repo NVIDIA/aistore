@@ -146,7 +146,7 @@ func (c *lstcx) do() (string, error) {
 	}
 
 	nlog.Infoln("'ls --all' to execute [" + c.amsg.Action + " -> " + c.altmsg.Action + "]")
-	s := fmt.Sprintf("%s[%s] %s => %s", c.altmsg.Action, c.xid, c.bckFrom, c.bckTo)
+	s := fmt.Sprintf("%s[%s] %s => %s", c.altmsg.Action, c.xid, c.bckFrom.String(), c.bckTo.String())
 
 	// 6. more pages, if any
 	if lst.ContinuationToken != "" {

@@ -662,7 +662,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 
 	// (IV) list objects (NOTE -- TODO: currently, always forwarding)
 	if !qbck.IsBucket() {
-		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck)
+		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck.String())
 		return
 	}
 	if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
@@ -1297,15 +1297,15 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		if !bckFrom.IsAIS() && bckFrom.Backend() == nil {
-			p.writeErrf(w, r, "can only rename AIS ('ais://') bucket (%q is not)", bckFrom)
+			p.writeErrf(w, r, "can only rename AIS ('ais://') bucket (%q is not)", bckFrom.Cname(""))
 			return
 		}
 		if bckTo.IsRemote() {
-			p.writeErrf(w, r, "can only rename to AIS ('ais://') bucket (%q is remote)", bckTo)
+			p.writeErrf(w, r, "can only rename to AIS ('ais://') bucket (%q is remote)", bckTo.Cname(""))
 			return
 		}
 		if bckFrom.Equal(bckTo, false, false) {
-			p.writeErrf(w, r, "cannot rename bucket %q to itself (%q)", bckFrom, bckTo)
+			p.writeErrf(w, r, "cannot rename bucket %q to itself (%q)", bckFrom.Cname(""), bckTo.Cname(""))
 			return
 		}
 		bckFrom.Provider, bckTo.Provider = apc.AIS, apc.AIS
@@ -1358,7 +1358,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		tcbmsg.Prefix = cos.TrimPrefix(tcbmsg.Prefix)
 		if bckFrom.Equal(bckTo, true, true) {
 			if !bckFrom.IsRemote() {
-				p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bckFrom)
+				p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bckFrom.Cname(""))
 				return
 			}
 			nlog.Infoln("proceeding to copy remote", bckFrom.String())
@@ -1432,7 +1432,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			nlog.Warningf("multi-object operation %q within the same bucket %q", msg.Action, bck)
 		}
 		if bckTo.IsHT() {
-			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
+			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo.Cname(""))
 			return
 		}
 		if !eq {
@@ -1604,14 +1604,14 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		bck.Props = nprops
 		if backend := bck.Backend(); backend != nil {
 			if err := backend.Validate(); err != nil {
-				p.writeErrf(w, r, "cannot create %s: invalid backend %s, err: %v", bck, backend, err)
+				p.writeErrf(w, r, "cannot create %s: invalid backend %s, err: %v", bck.Cname(""), backend.Cname(""), err)
 				return
 			}
 			// Initialize backend bucket.
 			if err := backend.InitNoBackend(p.owner.bmd); err != nil {
 				if !cmn.IsErrRemoteBckNotFound(err) {
 					p.writeErrf(w, r, "cannot create %s: failing to initialize backend %s, err: %v",
-						bck, backend, err)
+						bck.Cname(""), backend.Cname(""), err)
 					return
 				}
 				args := bctx{p: p, w: w, r: r, bck: backend, msg: msg, query: query}
@@ -1912,11 +1912,11 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 	if bck.IsRemote() {
-		err := fmt.Errorf("invalid action %q: not supported for remote buckets (%s)", msg.Action, bck)
+		err := fmt.Errorf("invalid action %q: not supported for remote buckets (%s)", msg.Action, bck.String())
 		return cmn.NewErrUnsuppErr(err)
 	}
 	if bck.Props.EC.Enabled {
-		err := fmt.Errorf("invalid action %q: not supported for erasure-coded buckets (%s)", msg.Action, bck)
+		err := fmt.Errorf("invalid action %q: not supported for erasure-coded buckets (%s)", msg.Action, bck.String())
 		return cmn.NewErrUnsuppErr(err)
 	}
 	objName, objNameTo := apireq.items[1], msg.Name
@@ -3009,11 +3009,11 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				if _, err = p.owner.bmd.modify(ctx); err != nil {
 					debug.AssertNoErr(err)
-					err = fmt.Errorf(warnfmt+": %w", p, "failed to ", bckTo, bck, err)
+					err = fmt.Errorf(warnfmt+": %w", p, "failed to ", bckTo.String(), bck.String(), err)
 					p.writeErr(w, r, err)
 					return
 				}
-				nlog.Warningf(warnfmt, p, "", bckTo, bck)
+				nlog.Warningf(warnfmt, p, "", bckTo.String(), bck.String())
 			}
 		}
 		dsort.PstartHandler(w, r, parsc)

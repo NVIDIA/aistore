@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -78,7 +78,7 @@ func (p *putFactory) Start() error {
 
 	bck, mirror := lom.Bck(), lom.MirrorConf()
 	if !mirror.Enabled {
-		return fmt.Errorf("%s: mirroring disabled, nothing to do", bck)
+		return fmt.Errorf("%s: mirroring disabled, nothing to do", bck.String())
 	}
 	if err = fs.ValidateNCopies(core.T.String(), int(mirror.Copies)); err != nil {
 		nlog.Errorln(err)

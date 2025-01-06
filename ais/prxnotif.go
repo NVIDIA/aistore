@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -329,8 +329,8 @@ func (n *notifs) done(nl nl.Listener) {
 }
 
 func abortReq(nl nl.Listener) cmn.HreqArgs {
-	if nl.Kind() == apc.ActDownload {
-		// HACK:
+	if _, ok := nl.(*dload.NotifDownloadListerner); ok {
+		// HACK
 		// - download _job_ vs download xaction - see dload.NewDownloadNL()
 		// - downloader implements abort via http.MethodDelete and uses different messaging
 		return dload.AbortReq(nl.UUID() /*job ID*/)

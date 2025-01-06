@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -89,11 +89,11 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 	if empty {
 		if bckFrom.IsRemote() && !allIncludingRemote {
 			hint := "(tip: use option %s to " + text1 + " remote objects from the backend store)\n"
-			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom, qflprn(copyAllObjsFlag))
+			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom.String(), qflprn(copyAllObjsFlag))
 			actionNote(c, note)
 			return nil
 		}
-		note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom)
+		note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom.String())
 		actionNote(c, note)
 		return nil
 	}
@@ -109,7 +109,7 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 			return err
 		}
 		warn := fmt.Sprintf("destination %s doesn't exist and will be created with configuration copied from the source (%s))",
-			bckTo, bckFrom)
+			bckTo.String(), bckFrom.String())
 		actionWarn(c, warn)
 	}
 
@@ -121,7 +121,7 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 	if oltp.objName == "" && oltp.list == "" && oltp.tmpl == "" {
 		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
 		if bckFrom.Equal(&bckTo) && !bckFrom.IsRemote() {
-			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
+			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo.Cname(""))
 		}
 		if dryRun {
 			// TODO: show object names with destinations, make the output consistent with etl dry-run
@@ -308,7 +308,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	}
 
 	_, xname := xact.GetKindName(apc.ActETLBck)
-	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom, bckTo)
+	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom.String(), bckTo.String())
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		fmt.Fprintln(c.App.Writer, text)
 		return nil

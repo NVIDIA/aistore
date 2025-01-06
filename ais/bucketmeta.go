@@ -157,7 +157,7 @@ func (m *bucketMD) set(bck *meta.Bck, p *cmn.Bprops) {
 	debug.Assert(apc.IsProvider(bck.Provider))
 	prevProps, present := m.Get(bck)
 	if !present {
-		debug.Assertf(false, "%s: not present", bck)
+		debug.Assertf(false, "%s: not present", bck.String())
 	}
 	debug.Assert(prevProps.BID != 0)
 
@@ -513,7 +513,7 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.Bprops) {
 	case args.bck.IsAIS():
 		debug.Assert(args.hdr == nil)
 	case args.bck.Backend() != nil:
-		debug.Assertf(args.hdr == nil, "%s, hdr=%+v", args.bck, args.hdr)
+		debug.Assertf(args.hdr == nil, "%s, hdr=%+v", args.bck.String(), args.hdr)
 	case args.bck.IsRemote():
 		debug.Assert(args.hdr != nil)
 		props.Versioning.Enabled = false

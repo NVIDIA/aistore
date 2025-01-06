@@ -132,7 +132,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 	}
 	xargs := xact.ArgsMsg{ID: xid, Kind: xkind, Timeout: timeout}
 	if err = waitXact(&xargs); err != nil {
-		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, text, bckFrom, bckTo)
+		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, text, bckFrom.String(), bckTo.String())
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
 	}
@@ -251,7 +251,7 @@ func _rmOne(c *cli.Context, shift int) error {
 	case oltp.objName == "": // 2. all objects
 		if flagIsSet(c, rmrfFlag) {
 			if !flagIsSet(c, yesFlag) {
-				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!", bck)
+				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!", bck.String())
 				if ok := confirm(c, "Proceed?", warn); !ok {
 					return nil
 				}

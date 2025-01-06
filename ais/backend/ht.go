@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -99,7 +99,7 @@ func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string,
 	origURL, ok := ctx.Value(cos.CtxOriginalURL).(string)
 	if !ok || origURL == "" {
 		if bck.Props == nil {
-			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck)
+			return "", fmt.Errorf("failed to HEAD (%s): original_url is empty", bck.String())
 		}
 		origURL = bck.Props.Extra.HTTP.OrigURLBck
 		debug.Assert(origURL != "")

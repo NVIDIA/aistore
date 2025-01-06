@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -496,12 +496,12 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 		case herr.Message != "":
 			err = errors.New(herr.Message)
 		default:
-			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, herr.Message)
+			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck.String(), herr.Message)
 		}
 	} else {
 		msg := strings.ToLower(err.Error())
 		if !strings.HasPrefix(msg, "head \"http") && !strings.HasPrefix(msg, "head http") {
-			err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
+			err = fmt.Errorf("failed to HEAD bucket %q: %v", bck.String(), err)
 		}
 	}
 	return
@@ -662,7 +662,7 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 
 func ensureRemoteProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
-		return fmt.Errorf("invalid bucket %q: missing backend provider", bck)
+		return fmt.Errorf("invalid bucket %q: missing backend provider", bck.String())
 	}
 	if bck.IsRemote() {
 		return nil
@@ -678,7 +678,7 @@ func ensureRemoteProvider(bck cmn.Bck) error {
 			return nil // yes it is
 		}
 	}
-	return fmt.Errorf("invalid bucket %q: expecting remote backend", bck)
+	return fmt.Errorf("invalid bucket %q: expecting remote backend", bck.String())
 }
 
 func parseURLtoBck(strURL string) (bck cmn.Bck) {

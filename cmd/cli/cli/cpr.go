@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -59,7 +59,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.C
 	// 2. got bucket summary(ies)
 	summaries := ctx.res
 	for _, res := range summaries {
-		debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck, bckFrom)
+		debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck.String(), bckFrom.String())
 		cpr.totals.size += int64(res.TotalSize.PresentObjs + res.TotalSize.RemoteObjs)
 		cpr.totals.objs += int64(res.ObjCount.Present + res.ObjCount.Remote)
 	}

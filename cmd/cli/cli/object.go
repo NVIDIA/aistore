@@ -452,7 +452,7 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	debug.Assert(errCnt64 > 0)
 	firstErr := <-errCh
 	warn := fmt.Sprintf("failed to delete %d object%s from %s: (%d deleted, %d error%s)\n", l-cnt, cos.Plural(l-cnt),
-		bck, cnt, errCnt64, cos.Plural(int(errCnt64)))
+		bck.String(), cnt, errCnt64, cos.Plural(int(errCnt64)))
 	actionWarn(c, warn)
 	return firstErr
 }

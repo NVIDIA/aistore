@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -226,7 +226,7 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 			return
 		}
 	default:
-		debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck, err, ecode)
+		debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck.String(), err, ecode)
 		bctx.p.writeErr(bctx.w, bctx.r, err, ecode)
 		return
 	}

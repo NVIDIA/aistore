@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -130,7 +130,8 @@ func parseQueryBckURI(uri string) (cmn.QueryBcks, string, error) {
 	}
 	bck, prefix, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{IsQuery: true})
 	if prefix != "" && bck.IsQuery() {
-		return cmn.QueryBcks(bck), prefix, fmt.Errorf("bucket query (%q) with embedded prefix (%q) is not supported", bck, prefix)
+		return cmn.QueryBcks(bck), prefix,
+			fmt.Errorf("bucket query (%q) with embedded prefix (%q) is not supported", bck.String(), prefix)
 	}
 	return cmn.QueryBcks(bck), prefix, err
 }

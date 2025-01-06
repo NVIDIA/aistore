@@ -504,7 +504,7 @@ func startDownloadHandler(c *cli.Context) error {
 			}
 			if !p.BackendBck.Equal(&source.backend.bck) {
 				warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
-					basePayload.Bck, source.backend.bck)
+					basePayload.Bck.String(), source.backend.bck.String())
 				actionWarn(c, warn)
 				dlType = dload.TypeSingle
 			}

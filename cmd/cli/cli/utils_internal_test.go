@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -216,7 +216,7 @@ func TestParseDestValidURIs(t *testing.T) {
 		}
 
 		if bucket != test.bucket {
-			t.Errorf("parseSource(%s) expected bucket: %s, got: %s", test.url, test.bucket, bucket)
+			t.Errorf("parseSource(%s) expected bucket: %s, got: %s", test.url, test.bucket.String(), bucket.String())
 		}
 		if pathSuffix != test.objName {
 			t.Errorf("parseSource(%s) expected bucket: %s, got: %s", test.url, test.objName, pathSuffix)
@@ -351,7 +351,8 @@ func TestParseBckURI(t *testing.T) {
 	for _, test := range positiveTests {
 		bck, err := parseBckURI(&cli.Context{}, test.uri, true /*require provider*/)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
-		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)",
+			test.uri, test.bck.String(), bck.String())
 	}
 
 	negativeTests := []struct {
@@ -373,7 +374,7 @@ func TestParseBckURI(t *testing.T) {
 	}
 	for _, test := range negativeTests {
 		bck, err := parseBckURI(&cli.Context{}, test.uri, true /*require provider*/)
-		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q)", test.uri, bck)
+		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q)", test.uri, bck.String())
 	}
 }
 
@@ -427,7 +428,8 @@ func TestParseBckObjectURI(t *testing.T) {
 	for _, test := range positiveTests {
 		bck, objName, err := parseBckObjURI(&cli.Context{}, test.uri, test.optObjName)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
-		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
+		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)",
+			test.uri, test.bck.String(), bck.String())
 		tassert.Errorf(t, test.objName == objName, "failed on %s object names are not equal (expected: %q, got: %q)", test.uri, test.objName, objName)
 	}
 
@@ -458,6 +460,6 @@ func TestParseBckObjectURI(t *testing.T) {
 	}
 	for _, test := range negativeTests {
 		bck, objName, err := parseBckObjURI(&cli.Context{}, test.uri, test.optObjName)
-		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q, obj_name: %q)", test.uri, bck, objName)
+		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q, obj_name: %q)", test.uri, bck.String(), objName)
 	}
 }

@@ -1,6 +1,6 @@
 // Package xs_test contains xs unit test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs_test
 
@@ -175,7 +175,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 	xreg.AbortAll(errors.New("test-abort-g"), xact.ScopeG, xact.ScopeGB)
 
 	tassert.Errorf(t, rnsLRU.Entry.Get().IsAborted(), "AbortAllGlobal: expected global xaction to be aborted")
-	tassert.Errorf(t, !xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck)
+	tassert.Errorf(t, !xactBck.IsAborted(), "AbortAllGlobal: expected bucket xaction to be running: %s", xactBck.String())
 }
 
 func TestXactionAbortBuckets(t *testing.T) {

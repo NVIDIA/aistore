@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -26,7 +26,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadR
 	if err = api.CreateBucket(apiBP, bck, props, dontHeadRemote); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
 			if herr.Status == http.StatusConflict {
-				desc := fmt.Sprintf("Bucket %q already exists", bck)
+				desc := fmt.Sprintf("Bucket %q already exists", bck.String())
 				if flagIsSet(c, ignoreErrorFlag) {
 					fmt.Fprintln(c.App.Writer, desc)
 					return nil
@@ -36,9 +36,9 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadR
 			if cliConfVerbose() {
 				herr.Message = herr.StringEx()
 			}
-			return fmt.Errorf("failed to create %q: %w", bck, herr)
+			return fmt.Errorf("failed to create %q: %w", bck.String(), herr)
 		}
-		return fmt.Errorf("failed to create %q: %v", bck, err)
+		return fmt.Errorf("failed to create %q: %v", bck.String(), err)
 	}
 	// NOTE: see docs/bucket.md#default-bucket-properties
 	fmt.Fprintf(c.App.Writer, "%q created\n", bck.Cname(""))
@@ -52,7 +52,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
 		empty, errEmp := isBucketEmpty(bck, true /*cached*/)
 		if errEmp == nil && !empty {
 			if !flagIsSet(c, yesFlag) {
-				if ok := confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck)); !ok {
+				if ok := confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck.String())); !ok {
 					continue
 				}
 			}
@@ -88,7 +88,7 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 		return V(err)
 	}
 	_, xname := xact.GetKindName(apc.ActMoveBck)
-	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom, bckTo)
+	text := fmt.Sprintf("%s %s => %s", xact.Cname(xname, xid), bckFrom.String(), bckTo.String())
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		if flagIsSet(c, nonverboseFlag) {
 			fmt.Fprintln(c.App.Writer, xid)
@@ -106,7 +106,7 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: timeout}
 	if err := waitXact(&xargs); err != nil {
-		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "rename", bckFrom, bckTo)
+		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "rename", bckFrom.String(), bckTo.String())
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
@@ -127,7 +127,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) error {
 		// check presence unless remais (in re: bck/@alias/name vs bck/@uuid/name)
 		if !bck.IsRemoteAIS() {
 			if _, present := bmd.Get((*meta.Bck)(&bck)); !present {
-				return fmt.Errorf("%s does not exist - nothing to do", bck)
+				return fmt.Errorf("%s does not exist - nothing to do", bck.String())
 			}
 		}
 		return _evictBck(c, bck)

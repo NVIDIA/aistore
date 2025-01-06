@@ -44,7 +44,7 @@ func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, 
 	isharder, err := ishard.NewISharder(cfg)
 	tassert.CheckFatal(t, err)
 
-	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
 
 	err = isharder.Start()
 	tassert.CheckFatal(t, err)
@@ -257,7 +257,7 @@ func TestIshardPrefix(t *testing.T) {
 	isharder, err := ishard.NewISharder(cfg)
 	tassert.CheckFatal(t, err)
 
-	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
 
 	err = isharder.Start()
 	tassert.CheckFatal(t, err)
@@ -434,7 +434,7 @@ func TestIshardMissingExtension(t *testing.T) {
 		isharder, err := ishard.NewISharder(cfg)
 		tassert.CheckFatal(t, err)
 
-		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
 
 		err = isharder.Start() // error is expected to occur since `dropout` is set, ishard should abort
 		if err == nil || !strings.HasPrefix(err.Error(), "missing extension: ") {
@@ -465,7 +465,7 @@ func TestIshardMissingExtension(t *testing.T) {
 		isharder, err := ishard.NewISharder(cfg)
 		tassert.CheckFatal(t, err)
 
-		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
 
 		err = isharder.Start()
 		tassert.CheckFatal(t, err)
@@ -555,7 +555,7 @@ func TestIshardEKM(t *testing.T) {
 	builder.WriteString("\n}")
 	cfg.EKMFlag.Set(builder.String())
 
-	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck, cfg.DstBck)
+	fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
 	isharder, err := ishard.NewISharder(cfg)
 	tassert.CheckFatal(t, err)
 

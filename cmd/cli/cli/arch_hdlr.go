@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS objects.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -241,7 +241,7 @@ func archMultiObjHandler(c *cli.Context) error {
 		if msg.ListRange.IsList() {
 			what = strings.Join(msg.ListRange.ObjNames, ", ")
 		}
-		fmt.Fprintf(c.App.Writer, "archive %s/{%s} as %q\n", a.rsrc.bck, what, a.dest())
+		fmt.Fprintf(c.App.Writer, "archive %s/{%s} as %q\n", a.rsrc.bck.String(), what, a.dest())
 		return nil
 	}
 	if !flagIsSet(c, dontHeadSrcDstBucketsFlag) {

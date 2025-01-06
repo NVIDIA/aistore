@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS buckets.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -329,7 +329,7 @@ func mvBucketHandler(c *cli.Context) error {
 		return err
 	}
 	if bckFrom.Equal(&bckTo) {
-		return incorrectUsageMsg(c, errFmtSameBucket, commandRename, bckTo)
+		return incorrectUsageMsg(c, errFmtSameBucket, commandRename, bckTo.Cname(""))
 	}
 	return mvBucket(c, bckFrom, bckTo)
 }
