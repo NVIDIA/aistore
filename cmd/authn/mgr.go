@@ -67,7 +67,10 @@ func (m *mgr) addUser(info *authn.User) error {
 	if info.ID == "" || info.Password == "" {
 		return errInvalidCredentials
 	}
-
+	// Validate user ID
+	if !cos.IsAlphaNice(info.ID) {
+		return fmt.Errorf("user ID %q is invalid: %s", info.ID, cos.OnlyNice)
+	}
 	_, err := m.db.GetString(usersCollection, info.ID)
 	if err == nil {
 		return fmt.Errorf("user %q already registered", info.ID)
@@ -137,6 +140,10 @@ func (m *mgr) userList() (map[string]*authn.User, error) {
 func (m *mgr) addRole(info *authn.Role) error {
 	if info.Name == "" {
 		return errors.New("role name is undefined")
+	}
+	// Validate role name
+	if !cos.IsAlphaNice(info.Name) {
+		return fmt.Errorf("role name %q is invalid: %s", info.Name, cos.OnlyNice)
 	}
 	if info.IsAdmin {
 		return fmt.Errorf("only built-in roles can have %q permissions", adminUserID)
@@ -285,7 +292,10 @@ func (m *mgr) addCluster(clu *authn.CluACL) error {
 	if clu.ID == "" {
 		return errors.New("cluster UUID is undefined")
 	}
-
+	// Validate cluster alias
+	if !cos.IsAlphaNice(clu.Alias) {
+		return fmt.Errorf("cluster alias %q is invalid: %s", clu.Alias, cos.OnlyNice)
+	}
 	cid := m.cluLookup(clu.ID, clu.Alias)
 	if cid != "" {
 		return fmt.Errorf("cluster %s[%s] already registered", clu.ID, cid)
@@ -314,6 +324,10 @@ func (m *mgr) updateCluster(cluID string, info *authn.CluACL) error {
 		return err
 	}
 	if info.Alias != "" {
+		// Validate cluster alias if user is changing it
+		if !cos.IsAlphaNice(info.Alias) {
+			return fmt.Errorf("cluster alias %q is invalid: %s", info.Alias, cos.OnlyNice)
+		}
 		cid := m.cluLookup("", info.Alias)
 		if cid != "" && cid != clu.ID {
 			return fmt.Errorf("alias %q is used for cluster %q", info.Alias, cid)
