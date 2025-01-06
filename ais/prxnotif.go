@@ -330,8 +330,9 @@ func (n *notifs) done(nl nl.Listener) {
 
 func abortReq(nl nl.Listener) cmn.HreqArgs {
 	if nl.Kind() == apc.ActDownload {
-		// downloader implements abort via http.MethodDelete
-		// and different messaging
+		// HACK:
+		// - download _job_ vs download xaction - see dload.NewDownloadNL()
+		// - downloader implements abort via http.MethodDelete and uses different messaging
 		return dload.AbortReq(nl.UUID() /*job ID*/)
 	}
 	msg := apc.ActMsg{
