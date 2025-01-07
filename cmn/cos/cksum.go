@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -89,6 +89,14 @@ var NoneCksum = NewCksum(ChecksumNone, "")
 ///////////////
 // CksumHash //
 ///////////////
+
+// convenience method (compare with xxhash.Checksum64S)
+func ChecksumB2S(in []byte, ty string) string {
+	cksum := NewCksumHash(ty)
+	cksum.H.Write(in)
+	cksum.Finalize()
+	return cksum.Val()
+}
 
 func NewCksumHash(ty string) (ck *CksumHash) {
 	ck = &CksumHash{}

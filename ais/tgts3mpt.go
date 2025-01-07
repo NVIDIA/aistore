@@ -342,11 +342,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	if etag == "" {
 		debug.Assert(!remote)
 		debug.Assert(concatMD5 != "")
-		resMD5 := cos.NewCksumHash(cos.ChecksumMD5)
-		_, err = resMD5.H.Write([]byte(concatMD5))
-		debug.AssertNoErr(err)
-		resMD5.Finalize()
-		etag = `"` + resMD5.Value() + cmn.AwsMultipartDelim + strconv.Itoa(len(partList.Parts)) + `"`
+
+		resMD5Val := cos.ChecksumB2S(cos.UnsafeB(concatMD5), cos.ChecksumMD5)
+		etag = `"` + resMD5Val + cmn.AwsMultipartDelim + strconv.Itoa(len(partList.Parts)) + `"`
 	}
 
 	// .5 finalize

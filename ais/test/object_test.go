@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -1605,9 +1604,8 @@ func TestPutObjectWithChecksum(t *testing.T) {
 			continue
 		}
 		fileName := basefileName + cksumType
-		hasher := cos.NewCksumHash(cksumType)
-		hasher.H.Write(objData)
-		cksumValue := hex.EncodeToString(hasher.H.Sum(nil))
+		cksumValue := cos.ChecksumB2S(objData, cksumType)
+
 		putArgs.Cksum = cos.NewCksum(cksumType, badCksumVal)
 		putArgs.ObjName = fileName
 

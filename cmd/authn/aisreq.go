@@ -28,20 +28,17 @@ const (
 func (m *mgr) validateSecret(clu *authn.CluACL) (err error) {
 	const tag = "validate-secret"
 	var (
-		secret = Conf.Secret()
-		cksum  = cos.NewCksumHash(cos.ChecksumSHA256)
+		secret   = Conf.Secret()
+		cksumVal = cos.ChecksumB2S(cos.UnsafeB(secret), cos.ChecksumSHA256)
+		body     = cos.MustMarshal(&authn.ServerConf{Secret: cksumVal})
 	)
-	cksum.H.Write([]byte(secret))
-	cksum.Finalize()
-
-	body := cos.MustMarshal(&authn.ServerConf{Secret: cksum.Val()})
 	for _, u := range clu.URLs {
 		if err = m.call(http.MethodPost, u, apc.Tokens, body, tag); err == nil {
 			return
 		}
 		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
 	}
-	return
+	return err
 }
 
 // update list of revoked token on all clusters

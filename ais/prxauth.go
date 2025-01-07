@@ -183,15 +183,14 @@ func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathTokens.L, 0, false); err != nil {
 		return
 	}
-	cksum := cos.NewCksumHash(cos.ChecksumSHA256)
-	cksum.H.Write([]byte(p.authn.secret))
-	cksum.Finalize()
 
 	cluConf := &authn.ServerConf{}
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
-	if cksum.Val() != cluConf.Secret {
+
+	cksumVal := cos.ChecksumB2S(cos.UnsafeB(p.authn.secret), cos.ChecksumSHA256)
+	if cksumVal != cluConf.Secret {
 		p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cos.SHead(cluConf.Secret))
 	}
 }
