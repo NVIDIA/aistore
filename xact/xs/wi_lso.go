@@ -108,6 +108,22 @@ func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
 	case res.Eq:
 		debug.AssertNoErr(res.Err)
 	case cos.IsNotExist(res.Err, res.ErrCode):
+		if lom.IsFntl() {
+			orig := lom.OrigFntl()
+			if orig != nil {
+				saved := lom.PushFntl(orig)
+				res = lom.CheckRemoteMD(false, false, nil)
+				lom.PopFntl(saved)
+				if res.Eq {
+					e.Name = orig[1]
+					break
+				}
+				if !cos.IsNotExist(res.Err, res.ErrCode) {
+					e.SetVerChanged()
+					break
+				}
+			}
+		}
 		e.SetVerRemoved()
 	default:
 		e.SetVerChanged()

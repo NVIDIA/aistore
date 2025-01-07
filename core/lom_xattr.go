@@ -23,6 +23,11 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const (
+	MetaverLOM   = 1 // LOM
+	MetaverChunk = 2 // LOM chunk // TODO: niy
+)
+
 // On-disk metadata layout - changing any of this must be done with respect
 // to backward compatibility (and with caution).
 //
@@ -40,7 +45,7 @@ import (
 //   on the version of the layout.
 
 // the one and only currently supported checksum type == xxhash;
-// adding more checksums will likely require a new cmn.MetaverLOM version
+// adding more checksums will likely require a new MetaverLOM version
 const mdCksumTyXXHash = 1
 
 // on-disk xattr names
@@ -307,7 +312,7 @@ func (md *lmeta) unpack(buf []byte) error {
 	if len(buf) < prefLen {
 		return fmt.Errorf("%s: too short (%d)", badLmeta, len(buf))
 	}
-	if buf[0] != cmn.MetaverLOM {
+	if buf[0] != MetaverLOM {
 		return fmt.Errorf("%s: unknown version %d", badLmeta, buf[0])
 	}
 	if buf[1] != mdCksumTyXXHash {
@@ -390,7 +395,11 @@ func (md *lmeta) unpack(buf []byte) error {
 			entries := strings.Split(val, customSepa)
 			custom := make(cos.StrKVs, len(entries)/2)
 			for i := 0; i < len(entries); i += 2 {
-				custom[entries[i]] = entries[i+1]
+				key := entries[i]
+				custom[key] = entries[i+1]
+				if key == cmn.OrigFntl {
+					md.lid = md.lid.setlmfl(lmflFntl)
+				}
 			}
 			md.SetCustomMD(custom)
 		default:
@@ -441,7 +450,7 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	}
 
 	// checksum, prepend, and return
-	buf[0] = cmn.MetaverLOM
+	buf[0] = MetaverLOM
 	buf[1] = mdCksumTyXXHash
 	mdCksumValue := xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
 	binary.BigEndian.PutUint64(buf[2:], mdCksumValue)

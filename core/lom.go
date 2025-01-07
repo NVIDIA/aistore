@@ -53,7 +53,7 @@ type (
 		uname  *string
 		cmn.ObjAttrs
 		atimefs uint64 // (high bit `lomDirtyMask` | int64: atime)
-		lid     lomBID
+		lid     lomBID // (for bitwise structure, see lombid.go)
 	}
 	LOM struct {
 		mi      *fs.Mountpath
@@ -428,9 +428,10 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		return err
 	}
 	if lom.bid() == 0 {
-		// copies, etc.
+		// NOTE: always zero - not storing it with MetaverLOM = 1
 		lom.setbid(lom.Bprops().BID)
 	}
+
 	if err := lom._checkBucket(bmd); err != nil {
 		return err
 	}
@@ -475,7 +476,7 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	// either a) handled or b) benign from the caller's perspective
 	if _, err = lom.lmfs(true); err == nil {
 		if lom.bid() == 0 {
-			// copies, etc.
+			// ditto (MetaverLOM = 1)
 			lom.setbid(lom.Bprops().BID)
 		}
 		err = lom._checkBucket(bmd)
@@ -559,16 +560,37 @@ func (lom *LOM) FromFS() error {
 	size, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			if cos.IsPathErr(err) && strings.Contains(err.Error(), "not a directory") {
-				// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
-				err := fmt.Errorf("%w (path error)", err)
-				return err
+			switch {
+			// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
+			case strings.Contains(err.Error(), "not a directory") && cos.IsPathErr(err):
+				return fmt.Errorf("%w (object in the path?)", err)
+			case cos.IsFntl(err):
+				lom.md.lid = lomBID(lom.Bprops().BID)
+				lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+
+				// temp substitute to check existence
+				short := lom.ShortenFntl()
+				saved := lom.PushFntl(short)
+				size, atimefs, _, err = lom.Fstat(true)
+				lom.PopFntl(saved)
+
+				if err == nil {
+					goto exist
+				}
+				debug.Assert(!cos.IsFntl(err))
+				if os.IsNotExist(err) {
+					return err
+				}
+				lom.md.lid = lom.md.lid.clrlmfl(lmflFntl)
+				fallthrough
+			default:
+				err = os.NewSyscallError("stat", err)
+				T.FSHC(err, lom.Mountpath(), lom.FQN)
 			}
-			err = os.NewSyscallError("stat", err)
-			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		}
 		return err
 	}
+exist:
 	if _, err = lom.lmfs(true); err != nil {
 		// retry once
 		if cmn.IsErrLmetaNotFound(err) {
@@ -637,4 +659,47 @@ func (lom *LOM) DowngradeLock() {
 func (lom *LOM) Unlock(exclusive bool) {
 	nlc := lom.getLocker()
 	nlc.Unlock(lom.Uname(), exclusive)
+}
+
+//
+// file name too long (0x24) ----------------------------
+//
+
+const (
+	prefixFntl = ".%"
+)
+
+func (lom *LOM) IsFntl() bool { return lom.md.lid.haslmfl(lmflFntl) }
+
+func (lom *LOM) ShortenFntl() []string {
+	noname := prefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256)
+	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, noname)
+
+	debug.Assert(len(nfqn) < 4096, "PATH_MAX /usr/include/limits.h", len(nfqn))
+	return []string{nfqn, noname}
+}
+
+func (lom *LOM) OrigFntl() []string {
+	debug.Assert(lom.IsFntl())
+	ofqn, ok := lom.GetCustomKey(cmn.OrigFntl)
+	if !ok {
+		debug.Assert(false)
+		return nil
+	}
+	var parsed fs.ParsedFQN
+	if err := parsed.Init(ofqn); err != nil {
+		debug.Assert(false)
+		return nil
+	}
+	return []string{ofqn, parsed.ObjName}
+}
+
+func (lom *LOM) PushFntl(temp []string) (saved []string) {
+	saved = []string{lom.FQN, lom.ObjName}
+	lom.FQN, lom.ObjName = temp[0], temp[1]
+	return saved
+}
+
+func (lom *LOM) PopFntl(saved []string) {
+	lom.FQN, lom.ObjName = saved[0], saved[1]
 }

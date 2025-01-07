@@ -62,6 +62,17 @@ func (t *target) Backend(bck *meta.Bck) core.Backend {
 func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
+
+	// TODO -- FIXME: should it stay "short" in memory?
+	if lom.IsFntl() {
+		var (
+			short = lom.ShortenFntl()
+			saved = lom.PushFntl(short)
+		)
+		lom.SetCustomKey(cmn.OrigFntl, saved[0])
+		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
+	}
+
 	poi := allocPOI()
 	{
 		poi.t = t

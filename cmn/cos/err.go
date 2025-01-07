@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	ratomic "sync/atomic"
 	"syscall"
@@ -156,10 +157,18 @@ func IsErrSyscallTimeout(err error) bool {
 }
 
 func IsPathErr(err error) (ok bool) {
-	if pathErr := (*iofs.PathError)(nil); errors.As(err, &pathErr) {
+	pathErr := (*iofs.PathError)(nil)
+	if errors.As(err, &pathErr) {
 		ok = true
 	}
-	return
+	return ok
+}
+
+// "file name too long" errno 0x24 (36); either one of the two possible reasons:
+// - len(pathname) > PATH_MAX = 4096
+// - len(basename) > 255
+func IsFntl(err error) bool {
+	return strings.Contains(err.Error(), "too long") && errors.Is(err, syscall.ENAMETOOLONG)
 }
 
 // likely out of socket descriptors

@@ -38,6 +38,9 @@ const (
 
 	// additional backend
 	LastModified = "LastModified"
+
+	// as the name implies
+	OrigFntl = "orig_fntl"
 )
 
 // object properties
