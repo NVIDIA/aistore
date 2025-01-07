@@ -1,7 +1,7 @@
 // Package xs contains most of the supported eXtended actions (xactions) with some
 // exceptions that include certain storage services (mirror, EC) and extensions (downloader, lru).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -90,7 +90,18 @@ func (wi *walkInfo) match(objName string) bool {
 // new entry to be added to the listed page (note: slow path)
 func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEnt) {
 	e = &cmn.LsoEnt{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
-	if wi.msg.IsFlagSet(apc.LsVerChanged) {
+
+	if lom.IsFntl() {
+		orig := lom.OrigFntl()
+		if orig != nil {
+			saved := lom.PushFntl(orig)
+			if wi.msg.IsFlagSet(apc.LsVerChanged) {
+				checkRemoteMD(lom, e)
+			}
+			lom.PopFntl(saved)
+			e.Name = orig[1]
+		}
+	} else if wi.msg.IsFlagSet(apc.LsVerChanged) {
 		checkRemoteMD(lom, e)
 	}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
@@ -108,22 +119,6 @@ func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
 	case res.Eq:
 		debug.AssertNoErr(res.Err)
 	case cos.IsNotExist(res.Err, res.ErrCode):
-		if lom.IsFntl() {
-			orig := lom.OrigFntl()
-			if orig != nil {
-				saved := lom.PushFntl(orig)
-				res = lom.CheckRemoteMD(false, false, nil)
-				lom.PopFntl(saved)
-				if res.Eq {
-					e.Name = orig[1]
-					break
-				}
-				if !cos.IsNotExist(res.Err, res.ErrCode) {
-					e.SetVerChanged()
-					break
-				}
-			}
-		}
 		e.SetVerRemoved()
 	default:
 		e.SetVerChanged()

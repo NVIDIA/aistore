@@ -178,8 +178,19 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 }
 
 func (poi *putOI) putObject() (ecode int, err error) {
+	if lom := poi.lom; lom.IsFntl() {
+		// override wfqn and shorten (!) lom, both
+		var (
+			short = lom.ShortenFntl()
+			saved = lom.PushFntl(short)
+		)
+		lom.SetCustomKey(cmn.OrigFntl, saved[0])
+		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, "fntl-0x24")
+	}
+
 	poi.ltime = mono.NanoTime()
-	// PUT is a no-op if the checksums do match
+
+	// if checksums match PUT is a no-op
 	if !poi.skipVC && !poi.coldGET {
 		if poi.lom.EqCksum(poi.cksumToUse) {
 			if cmn.Rom.FastV(4, cos.SmoduleAIS) {

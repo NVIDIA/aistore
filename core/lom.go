@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -428,7 +428,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		return err
 	}
 	if lom.bid() == 0 {
-		// NOTE: always zero - not storing it with MetaverLOM = 1
+		// NOTE: always zero (MetaverLOM = 1: not storing the BID part of the lom.md.lid)
 		lom.setbid(lom.Bprops().BID)
 	}
 
@@ -442,7 +442,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	return nil
 }
 
-func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
+func (lom *LOM) _checkBucket(bmd *meta.BMD) error {
 	bck := &lom.bck
 	bprops, present := bmd.Get(bck)
 	if !present {
@@ -451,12 +451,10 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
 		}
 		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
-	// TODO -- FIXME: lom.bid() is 52 bits, bprops.BID is not
-	// (see core/meta/bid.go)
 	if lom.bid() != bprops.BID {
-		err = cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
+		return cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
 	}
-	return err
+	return nil
 }
 
 // usage: fast (and unsafe) loading object metadata except atime - no locks

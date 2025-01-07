@@ -270,13 +270,13 @@ const (
 	cusdlm = ' ' // k1:v1 k2:v2
 )
 
-// set by the backend.PutObj()
-// see also: DelStdCustom()
 var (
 	stdCustomProps = [...]string{SourceObjMD, ETag, LastModified, CRC32CObjMD, MD5ObjMD, VersionObjMD}
 )
 
-// (compare w/ CustomProps2S below)
+// [NOTE]
+// - usage: LOM custom metadata => LsoEnt custom property
+// - `OrigFntl` always excepted (and possibly other TBD internal keys)
 func CustomMD2S(md cos.StrKVs) string {
 	var (
 		sb   strings.Builder
@@ -303,6 +303,9 @@ func CustomMD2S(md cos.StrKVs) string {
 	if l > 0 {
 		// add remaining (non-standard) attr-s in an arbitrary sorting order
 		for k, v := range md {
+			if k == OrigFntl {
+				continue
+			}
 			if cos.StringInSlice(k, stdCustomProps[:]) {
 				continue
 			}
