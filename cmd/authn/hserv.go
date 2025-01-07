@@ -221,8 +221,9 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if Conf.Verbose() {
 		nlog.Infof("PUT user %q", userID)
 	}
-	if err := h.mgr.updateUser(userID, updateReq); err != nil {
-		cmn.WriteErr(w, r, err)
+	if code, err := h.mgr.updateUser(userID, updateReq); err != nil {
+		err := cmn.NewErrFailedTo(h.mgr, "update user", userID, err, code)
+		cmn.WriteErr(w, r, err, code)
 	}
 }
 
@@ -235,8 +236,9 @@ func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		return
 	}
-	if err := h.mgr.addUser(info); err != nil {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
+	if code, err := h.mgr.addUser(info); err != nil {
+		err := cmn.NewErrFailedTo(h.mgr, "add user", info.ID, err, code)
+		cmn.WriteErr(w, r, err, code)
 		return
 	}
 	if Conf.Verbose() {
@@ -382,8 +384,9 @@ func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
-	if err := h.mgr.addCluster(cluConf); err != nil {
-		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+	if code, err := h.mgr.addCluster(cluConf); err != nil {
+		err := cmn.NewErrFailedTo(h.mgr, "add cluster", cluConf.ID, err, code)
+		cmn.WriteErr(w, r, err, code)
 	}
 }
 
@@ -400,8 +403,9 @@ func (h *hserv) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cluID := apiItems[0]
-	if err := h.mgr.updateCluster(cluID, cluConf); err != nil {
-		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+	if code, err := h.mgr.updateCluster(cluID, cluConf); err != nil {
+		err := cmn.NewErrFailedTo(h.mgr, "update cluster", cluID, err, code)
+		cmn.WriteErr(w, r, err, code)
 	}
 }
 
@@ -538,8 +542,9 @@ func (h *hserv) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, info); err != nil {
 		return
 	}
-	if err := h.mgr.addRole(info); err != nil {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add role: %v", err), http.StatusInternalServerError)
+	if code, err := h.mgr.addRole(info); err != nil {
+		err := cmn.NewErrFailedTo(h.mgr, "add role", info.Name, err, code)
+		cmn.WriteErr(w, r, err, code)
 	}
 }
 
@@ -562,11 +567,8 @@ func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	if Conf.Verbose() {
 		nlog.Infof("PUT role %q\n", role)
 	}
-	if err := h.mgr.updateRole(role, updateReq); err != nil {
-		if cos.IsErrNotFound(err) {
-			cmn.WriteErr(w, r, err, http.StatusNotFound)
-		} else {
-			cmn.WriteErr(w, r, err)
-		}
+	if code, err := h.mgr.updateRole(role, updateReq); err != nil {
+		err := cmn.NewErrFailedTo(h.mgr, "update role", role, err, code)
+		cmn.WriteErr(w, r, err, code)
 	}
 }

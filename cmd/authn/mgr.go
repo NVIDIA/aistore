@@ -63,20 +63,25 @@ func (*mgr) String() string { return svcName }
 
 // Registers a new user. It is info from a user, so the password
 // is not encrypted and a few fields are not filled(e.g, Access).
-func (m *mgr) addUser(info *authn.User) error {
+func (m *mgr) addUser(info *authn.User) (int, error) {
 	if info.ID == "" || info.Password == "" {
-		return errInvalidCredentials
+		return http.StatusBadRequest, errInvalidCredentials
 	}
 	// Validate user ID
 	if !cos.IsAlphaNice(info.ID) {
-		return fmt.Errorf("user ID %q is invalid: %s", info.ID, cos.OnlyNice)
+		err := fmt.Errorf("user ID %q is invalid: %s", info.ID, cos.OnlyNice)
+		return http.StatusBadRequest, err
 	}
 	_, err := m.db.GetString(usersCollection, info.ID)
 	if err == nil {
-		return fmt.Errorf("user %q already registered", info.ID)
+		err := fmt.Errorf("user %q already registered", info.ID)
+		return http.StatusConflict, err
 	}
 	info.Password = encryptPassword(info.Password)
-	return m.db.Set(usersCollection, info.ID, info)
+	if err := m.db.Set(usersCollection, info.ID, info); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return 0, nil
 }
 
 // Deletes an existing user
@@ -89,14 +94,16 @@ func (m *mgr) delUser(userID string) error {
 
 // Updates an existing user. The function invalidates user tokens after
 // successful update.
-func (m *mgr) updateUser(userID string, updateReq *authn.User) error {
+func (m *mgr) updateUser(userID string, updateReq *authn.User) (int, error) {
 	uInfo := &authn.User{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		return cos.NewErrNotFound(m, "user "+userID)
+		err := cos.NewErrNotFound(m, "user "+userID)
+		return http.StatusNotFound, err
 	}
 	if userID == adminUserID && len(updateReq.Roles) != 0 {
-		return errors.New("cannot change administrator's role")
+		err := errors.New("cannot change administrator's role")
+		return http.StatusUnauthorized, err
 	}
 
 	if updateReq.Password != "" {
@@ -105,7 +112,10 @@ func (m *mgr) updateUser(userID string, updateReq *authn.User) error {
 	if len(updateReq.Roles) != 0 {
 		uInfo.Roles = updateReq.Roles
 	}
-	return m.db.Set(usersCollection, userID, uInfo)
+	if err := m.db.Set(usersCollection, userID, uInfo); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return 0, nil
 }
 
 func (m *mgr) lookupUser(userID string) (*authn.User, error) {
@@ -137,23 +147,29 @@ func (m *mgr) userList() (map[string]*authn.User, error) {
 //
 
 // Registers a new role
-func (m *mgr) addRole(info *authn.Role) error {
+func (m *mgr) addRole(info *authn.Role) (int, error) {
 	if info.Name == "" {
-		return errors.New("role name is undefined")
+		return http.StatusBadRequest, errors.New("role name is undefined")
 	}
 	// Validate role name
 	if !cos.IsAlphaNice(info.Name) {
-		return fmt.Errorf("role name %q is invalid: %s", info.Name, cos.OnlyNice)
+		err := fmt.Errorf("role name %q is invalid: %s", info.Name, cos.OnlyNice)
+		return http.StatusBadRequest, err
 	}
 	if info.IsAdmin {
-		return fmt.Errorf("only built-in roles can have %q permissions", adminUserID)
+		err := fmt.Errorf("only built-in roles can have %q permissions", adminUserID)
+		return http.StatusBadRequest, err
 	}
 
 	_, err := m.db.GetString(rolesCollection, info.Name)
 	if err == nil {
-		return fmt.Errorf("role %q already exists", info.Name)
+		err := fmt.Errorf("role %q already exists", info.Name)
+		return http.StatusConflict, err
 	}
-	return m.db.Set(rolesCollection, info.Name, info)
+	if err := m.db.Set(rolesCollection, info.Name, info); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return 0, nil
 }
 
 // Deletes an existing role
@@ -165,14 +181,16 @@ func (m *mgr) delRole(role string) error {
 }
 
 // Updates an existing role
-func (m *mgr) updateRole(role string, updateReq *authn.Role) error {
+func (m *mgr) updateRole(role string, updateReq *authn.Role) (int, error) {
 	if role == authn.AdminRole {
-		return fmt.Errorf("cannot modify built-in %q role", authn.AdminRole)
+		err := fmt.Errorf("cannot modify built-in %q role", authn.AdminRole)
+		return http.StatusForbidden, err
 	}
 	rInfo := &authn.Role{}
 	err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
-		return cos.NewErrNotFound(m, "role "+role)
+		err := cos.NewErrNotFound(m, "role "+role)
+		return http.StatusNotFound, err
 	}
 
 	if updateReq.Description != "" {
@@ -181,7 +199,11 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) error {
 	rInfo.ClusterACLs = mergeClusterACLs(rInfo.ClusterACLs, updateReq.ClusterACLs, "")
 	rInfo.BucketACLs = mergeBckACLs(rInfo.BucketACLs, updateReq.BucketACLs, "")
 
-	return m.db.Set(rolesCollection, role, rInfo)
+	if err := m.db.Set(rolesCollection, role, rInfo); err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	return 0, nil
 }
 
 func (m *mgr) lookupRole(roleID string) (*authn.Role, error) {
@@ -288,49 +310,55 @@ func (m *mgr) getCluster(cluID string) (*authn.CluACL, error) {
 }
 
 // Registers a new cluster
-func (m *mgr) addCluster(clu *authn.CluACL) error {
+func (m *mgr) addCluster(clu *authn.CluACL) (int, error) {
 	if clu.ID == "" {
-		return errors.New("cluster UUID is undefined")
+		err := errors.New("cluster UUID is undefined")
+		return http.StatusBadRequest, err
 	}
 	// Validate cluster alias
 	if !cos.IsAlphaNice(clu.Alias) {
-		return fmt.Errorf("cluster alias %q is invalid: %s", clu.Alias, cos.OnlyNice)
+		err := fmt.Errorf("cluster alias %q is invalid: %s", clu.Alias, cos.OnlyNice)
+		return http.StatusBadRequest, err
 	}
 	cid := m.cluLookup(clu.ID, clu.Alias)
 	if cid != "" {
-		return fmt.Errorf("cluster %s[%s] already registered", clu.ID, cid)
+		err := fmt.Errorf("cluster %s[%s] already registered", clu.ID, cid)
+		return http.StatusConflict, err
 	}
 
 	// secret handshake
 	if err := m.validateSecret(clu); err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 
 	if err := m.db.Set(clustersCollection, clu.ID, clu); err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 	m.createRolesForCluster(clu)
 
 	go m.syncTokenList(clu)
-	return nil
+	return 0, nil
 }
 
-func (m *mgr) updateCluster(cluID string, info *authn.CluACL) error {
+func (m *mgr) updateCluster(cluID string, info *authn.CluACL) (int, error) {
 	if info.ID == "" {
-		return errors.New("cluster ID is undefined")
+		err := errors.New("cluster ID is undefined")
+		return http.StatusBadRequest, err
 	}
 	clu := &authn.CluACL{}
 	if err := m.db.Get(clustersCollection, cluID, clu); err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 	if info.Alias != "" {
 		// Validate cluster alias if user is changing it
 		if !cos.IsAlphaNice(info.Alias) {
-			return fmt.Errorf("cluster alias %q is invalid: %s", info.Alias, cos.OnlyNice)
+			err := fmt.Errorf("cluster alias %q is invalid: %s", info.Alias, cos.OnlyNice)
+			return http.StatusBadRequest, err
 		}
 		cid := m.cluLookup("", info.Alias)
 		if cid != "" && cid != clu.ID {
-			return fmt.Errorf("alias %q is used for cluster %q", info.Alias, cid)
+			err := fmt.Errorf("alias %q is used for cluster %q", info.Alias, cid)
+			return http.StatusConflict, err
 		}
 		clu.Alias = info.Alias
 	}
@@ -340,10 +368,13 @@ func (m *mgr) updateCluster(cluID string, info *authn.CluACL) error {
 
 	// secret handshake
 	if err := m.validateSecret(clu); err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 
-	return m.db.Set(clustersCollection, cluID, clu)
+	if err := m.db.Set(clustersCollection, cluID, clu); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return 0, nil
 }
 
 // Unregister an existing cluster

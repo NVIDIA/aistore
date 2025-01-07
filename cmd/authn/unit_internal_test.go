@@ -43,7 +43,7 @@ func init() {
 func createUsers(mgr *mgr, t *testing.T) {
 	for idx := range users {
 		user := &authn.User{ID: users[idx], Password: passs[idx], Roles: []*authn.Role{guestRole}}
-		err := mgr.addUser(user)
+		_, err := mgr.addUser(user)
 		if err != nil {
 			t.Errorf("Failed to create user %s: %v", users[idx], err)
 		}
@@ -73,7 +73,7 @@ func deleteUsers(mgr *mgr, skipNotExist bool, t *testing.T) {
 
 func testInvalidUser(mgr *mgr, t *testing.T) {
 	user := &authn.User{ID: users[0], Password: passs[1], Roles: []*authn.Role{guestRole}}
-	err := mgr.addUser(user)
+	_, err := mgr.addUser(user)
 	if err == nil {
 		t.Errorf("User with the existing name %s was created", users[0])
 	}
@@ -91,7 +91,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 		userpass = "newpass"
 	)
 	user := &authn.User{ID: username, Password: userpass, Roles: []*authn.Role{guestRole}}
-	err := mgr.addUser(user)
+	_, err := mgr.addUser(user)
 	if err != nil {
 		t.Errorf("Failed to create user %s: %v", username, err)
 	}
