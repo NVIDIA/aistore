@@ -7,8 +7,6 @@
 package backend
 
 // Outstanding [TODO] items:
-//   2) Validate ListObjects() should only return Name & Size in all cases (or improve)
-//   3) Handle non-descending ListObjects() case (including listing of "virtual" directories)
 //   4) Multi-Segment-Upload utilization (for fast/large object PUTs)... if practical
 //   5) Multi-Segment-Download utilization (for fast/large object GETs)... if practical
 //   6) Add support for object versioning
@@ -32,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
@@ -279,15 +278,17 @@ func ociStatus(rawResponse *http.Response) (ecode int) {
 
 func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	var (
-		cloudBck          = bck.RemoteBck()
-		continuationToken string
-		customKVs         cos.StrKVs
-		delimiter         = string("/")
-		fields            string
-		h                 = cmn.BackendHelpers.OCI
-		limitAsInt        int
-		lsoEnt            *cmn.LsoEnt
-		req               = ocios.ListObjectsRequest{
+		cloudBck            = bck.RemoteBck()
+		continuationToken   string
+		customKVs           cos.StrKVs
+		delimiter           = string("/")
+		fields              string
+		fieldsIncludesOther bool
+		fieldsIncludesSize  bool
+		h                   = cmn.BackendHelpers.OCI
+		limitAsInt          int
+		noDirsFlag          = msg.IsFlagSet(apc.LsNoDirs)
+		req                 = ocios.ListObjectsRequest{
 			NamespaceName: &bp.namespace,
 			BucketName:    &cloudBck.Name,
 			Limit:         &limitAsInt,
@@ -300,8 +301,20 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 		req.Prefix = &msg.Prefix
 	}
 	if msg.IsFlagSet(apc.LsNoRecursion) {
-		// [TODO] Need to handle case where I need to enumerate directories (while not "decending")
 		req.Delimiter = &delimiter
+	}
+
+	switch {
+	case msg.IsFlagSet(apc.LsNameOnly):
+		fields = "name"
+	case msg.IsFlagSet(apc.LsNameSize):
+		fields = "name,size"
+		fieldsIncludesSize = true
+	default:
+		fields = "name,size,md5,etag,timeModified"
+		fieldsIncludesSize = true
+		fieldsIncludesOther = true
+		customKVs = make(cos.StrKVs, 3)
 	}
 
 	// Set limitAsInt as counting down cap on number of lst.Entries we will attempt to fill
@@ -319,14 +332,9 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 	// Initialize internal continuationToken to msg.ContinuationToken but adjusted during loop below
 	continuationToken = msg.ContinuationToken
 
-	// [TODO] Assume that we always want Name and Size
-	//        Testing msg.IsFlagSet(apc.LsNameOnly) and msg.IsFlagSet(apc.LsNameSize) don't seem properly set
-	fields = "name,size,md5,etag,timeModified"
+	lst.Entries = make(cmn.LsoEntries, 0, limitAsInt)
 
-	lst.Entries = make(cmn.LsoEntries, 0, len(resp.Objects))
-	customKVs = make(cos.StrKVs, 3)
-
-	// Look until end of list and/or limitAsInt has decremented to zero (based on len(lst.Entries))
+	// Loop until end of list and/or limitAsInt has decremented to zero (based on len(lst.Entries))
 
 	for limitAsInt > 0 {
 		if continuationToken == "" {
@@ -341,37 +349,62 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 			return
 		}
 
-		if len(resp.Objects) > limitAsInt {
-			resp.Objects = resp.Objects[:limitAsInt]
+		// Note that we are trusting OCI to return a list of objects and, if present
+		// (in the non-recursing delimiter case), "virtual" directories so as to not
+		// exceed the total number requested. We can't simply truncate the list(s)
+		// returned lest we our next continuationToken will skip some entries.
+
+		if noDirsFlag {
+			if len(resp.Objects) > limitAsInt {
+				nlog.Warningf("OCI ListBuckets() returned %d objects (greater than the %d requested)\n", len(resp.Objects), limitAsInt)
+				limitAsInt = 0
+			} else {
+				limitAsInt -= len(resp.Objects)
+			}
+		} else {
+			if (len(resp.Objects) + len(resp.Prefixes)) > limitAsInt {
+				nlog.Warningf("OCI ListBuckets() returned %d objects and %d prefixes (greater than the %d requested)\n", len(resp.Objects), len(resp.Prefixes), limitAsInt)
+				limitAsInt = 0
+			} else {
+				limitAsInt -= len(resp.Objects) + len(resp.Prefixes)
+			}
 		}
-		limitAsInt -= len(resp.Objects)
 
 		for _, en := range resp.Objects {
-			lsoEnt = &cmn.LsoEnt{}
+			lsoEnt := &cmn.LsoEnt{}
 			lsoEnt.Name = *en.Name
-			if en.Size != nil {
+			if fieldsIncludesSize && (en.Size != nil) {
 				lsoEnt.Size = *en.Size
 			}
-			if v, ok := h.EncodeETag(en.Etag); ok {
-				// [TODO] Validate whether lsoEnt.Checksum should be .Etag (aws) or .Md5 (gcp)
-				// lsoEnt.Checksum = v
-				customKVs[cmn.ETag] = v
-			}
-			if v, ok := h.EncodeCksum(en.Md5); ok {
-				// [TODO] Validate whether lsoEnt.Checksum should be .Etag (aws) or .Md5 (gcp)
-				lsoEnt.Checksum = v
-				customKVs[cmn.MD5ObjMD] = v
-			}
-			if en.TimeModified != nil {
-				customKVs[cmn.LastModified] = en.TimeModified.Time.Format(time.RFC3339)
-			}
-			if len(customKVs) > 0 {
-				lsoEnt.Custom = cmn.CustomMD2S(customKVs)
-				delete(customKVs, cmn.ETag)
-				delete(customKVs, cmn.MD5ObjMD)
-				delete(customKVs, cmn.LastModified)
+			if fieldsIncludesOther {
+				if v, ok := h.EncodeETag(en.Etag); ok {
+					// [TODO] Validate whether lsoEnt.Checksum should be .Etag (aws) or .Md5 (gcp)
+					// lsoEnt.Checksum = v
+					customKVs[cmn.ETag] = v
+				}
+				if v, ok := h.EncodeCksum(en.Md5); ok {
+					// [TODO] Validate whether lsoEnt.Checksum should be .Etag (aws) or .Md5 (gcp)
+					lsoEnt.Checksum = v
+					customKVs[cmn.MD5ObjMD] = v
+				}
+				if en.TimeModified != nil {
+					customKVs[cmn.LastModified] = en.TimeModified.Time.Format(time.RFC3339)
+				}
+				if len(customKVs) > 0 {
+					lsoEnt.Custom = cmn.CustomMD2S(customKVs)
+					clear(customKVs)
+				}
 			}
 			lst.Entries = append(lst.Entries, lsoEnt)
+		}
+
+		if !noDirsFlag {
+			for _, en := range resp.Prefixes {
+				lsoEnt := &cmn.LsoEnt{}
+				lsoEnt.Name = en
+				lsoEnt.Flags = apc.EntryIsDir
+				lst.Entries = append(lst.Entries, lsoEnt)
+			}
 		}
 
 		if (resp.NextStartWith == nil) || (*resp.NextStartWith == "") {
