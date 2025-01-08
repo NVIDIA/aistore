@@ -263,7 +263,7 @@ func (args *PutArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open(
 func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	req, err := reqArgs.Req()
 	if err != nil {
-		return nil, newErrCreateHTTPRequest(err)
+		return nil, cmn.NewErrCreateHreq(err)
 	}
 	// Go http doesn't automatically set this for files, so to handle redirect we do it here.
 	req.GetBody = args.getBody
@@ -273,7 +273,7 @@ func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 		if ckVal == "" {
 			_, ckhash, err := cos.CopyAndChecksum(io.Discard, args.Reader, nil, args.Cksum.Ty())
 			if err != nil {
-				return nil, newErrCreateHTTPRequest(err)
+				return nil, cmn.NewErrCreateHreq(err)
 			}
 			ckVal = hex.EncodeToString(ckhash.Sum())
 		}
@@ -492,7 +492,7 @@ func (args *AppendArgs) getBody() (io.ReadCloser, error) { return args.Reader.Op
 func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	req, err := reqArgs.Req()
 	if err != nil {
-		return nil, newErrCreateHTTPRequest(err)
+		return nil, cmn.NewErrCreateHreq(err)
 	}
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
 	// If it wasn't set, we would need to deal with the redirect manually.

@@ -69,10 +69,6 @@ type (
 	}
 )
 
-func newErrCreateHTTPRequest(err error) error {
-	return fmt.Errorf("failed to create http request: %w", err)
-}
-
 // HTTPStatus returns HTTP status or (-1) for non-HTTP error.
 func HTTPStatus(err error) int {
 	if err == nil {

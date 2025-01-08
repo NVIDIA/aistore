@@ -241,6 +241,9 @@ type (
 		ranges []string // RFC 7233
 		size   int64    // [0, size)
 	}
+	ErrCreateHreq struct {
+		err error // original
+	}
 )
 
 var (
@@ -976,6 +979,18 @@ func IsErrRangeNotSatisfiable(err error) bool {
 	_, ok := err.(*ErrRangeNotSatisfiable)
 	return ok
 }
+
+// ErrCreateHreq
+
+func NewErrCreateHreq(err error) *ErrCreateHreq {
+	return &ErrCreateHreq{err}
+}
+
+func (e *ErrCreateHreq) Error() string {
+	return fmt.Sprintf("%v (cannot create http request)", e.err)
+}
+
+func (e *ErrCreateHreq) Unwrap() (err error) { return e.err }
 
 //
 // more is-error helpers
