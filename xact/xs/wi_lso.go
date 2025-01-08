@@ -134,7 +134,7 @@ func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEnt, err
 	lom := core.AllocLOM("")
 	entry, err = wi._cb(lom, fqn)
 	core.FreeLOM(lom)
-	return
+	return entry, err
 }
 
 func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
@@ -162,7 +162,7 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	}
 
 	// shortcut #1: name-only optimizes-out loading md (NOTE: won't show misplaced and copies)
-	if wi.msg.IsFlagSet(apc.LsNameOnly) {
+	if wi.msg.IsFlagSet(apc.LsNameOnly) && !lom.HasFntlPrefix() {
 		if !isOK(status) {
 			return nil, nil
 		}
@@ -184,6 +184,10 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	}
 
 	if !wi.msg.IsFlagSet(apc.LsMissing) {
+		if lom.IsFntl() {
+			status = apc.LocOK // NOTE: fntl never misplaced
+			return wi.ls(lom, status), nil
+		}
 		return nil, nil
 	}
 	if local {

@@ -1,6 +1,6 @@
 // Package config provides types and functions to configure AIS CLI.
 /*
- * Copyright (c) 2018=2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package config
 

@@ -474,7 +474,7 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	// either a) handled or b) benign from the caller's perspective
 	if _, err = lom.lmfs(true); err == nil {
 		if lom.bid() == 0 {
-			// ditto (MetaverLOM = 1)
+			// ditto MetaverLOM = 1
 			lom.setbid(lom.Bprops().BID)
 		}
 		err = lom._checkBucket(bmd)
@@ -562,7 +562,7 @@ func (lom *LOM) FromFS() error {
 			// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
 			case strings.Contains(err.Error(), "not a directory") && cos.IsPathErr(err):
 				return fmt.Errorf("%w (object in the path?)", err)
-			case cos.IsFntl(err):
+			case cos.IsErrFntl(err):
 				lom.md.lid = lomBID(lom.Bprops().BID)
 				lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
 
@@ -570,12 +570,12 @@ func (lom *LOM) FromFS() error {
 				short := lom.ShortenFntl()
 				saved := lom.PushFntl(short)
 				size, atimefs, _, err = lom.Fstat(true)
-				lom.PopFntl(saved)
-
 				if err == nil {
 					goto exist
 				}
-				debug.Assert(!cos.IsFntl(err))
+
+				lom.PopFntl(saved)
+				debug.Assert(!cos.IsErrFntl(err))
 				if os.IsNotExist(err) {
 					return err
 				}
@@ -664,10 +664,16 @@ func (lom *LOM) Unlock(exclusive bool) {
 //
 
 const (
-	prefixFntl = ".%"
+	prefixFntl = ".x"
 )
 
-func (lom *LOM) IsFntl() bool { return lom.md.lid.haslmfl(lmflFntl) }
+func (lom *LOM) IsFntl() bool {
+	return lom.md.lid.haslmfl(lmflFntl)
+}
+
+func (lom *LOM) HasFntlPrefix() bool {
+	return strings.HasPrefix(lom.ObjName, prefixFntl)
+}
 
 func (lom *LOM) ShortenFntl() []string {
 	noname := prefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256)
@@ -695,9 +701,11 @@ func (lom *LOM) OrigFntl() []string {
 func (lom *LOM) PushFntl(temp []string) (saved []string) {
 	saved = []string{lom.FQN, lom.ObjName}
 	lom.FQN, lom.ObjName = temp[0], temp[1]
+	lom.HrwFQN = &lom.FQN
 	return saved
 }
 
 func (lom *LOM) PopFntl(saved []string) {
 	lom.FQN, lom.ObjName = saved[0], saved[1]
+	lom.HrwFQN = &lom.FQN
 }

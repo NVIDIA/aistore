@@ -167,7 +167,7 @@ func IsPathErr(err error) (ok bool) {
 // "file name too long" errno 0x24 (36); either one of the two possible reasons:
 // - len(pathname) > PATH_MAX = 4096
 // - len(basename) > 255
-func IsFntl(err error) bool {
+func IsErrFntl(err error) bool {
 	return strings.Contains(err.Error(), "too long") && errors.Is(err, syscall.ENAMETOOLONG)
 }
 

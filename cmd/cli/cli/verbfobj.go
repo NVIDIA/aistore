@@ -452,6 +452,11 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 			}
 			break
 		}
+
+		if e, ok := err.(*cmn.ErrCreateHreq); ok {
+			return e
+		}
+
 		e := stripErr(err)
 		if i < iters-1 {
 			s := fmt.Sprintf("[#%d] %s: %v - retrying...", i+1, path, e)

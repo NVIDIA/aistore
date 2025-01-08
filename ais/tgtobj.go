@@ -179,7 +179,7 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 
 func (poi *putOI) putObject() (ecode int, err error) {
 	if lom := poi.lom; lom.IsFntl() {
-		// override wfqn and shorten (!) lom, both
+		// fixup fntl
 		var (
 			short = lom.ShortenFntl()
 			saved = lom.PushFntl(short)
@@ -1021,8 +1021,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
 	// open
-	// TODO -- FIXME: use lom.Open() instead of os.Open(); TestECChecksum
-	lmfh, err = os.Open(fqn)
+	lmfh, err = goi.lom.OpenFile()
 	if err != nil {
 		if os.IsNotExist(err) {
 			// NOTE: retry only once and only when ec-enabled - see goi.restoreFromAny()

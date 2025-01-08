@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	rdebug "runtime/debug"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -36,15 +38,35 @@ func (e *errBdir) Error() string {
 // open
 //
 
+// open read-only, return os.File
+func (lom *LOM) OpenFile() (fh *os.File, _ error) {
+	reader, err := lom.Open()
+	if err != nil {
+		return nil, err
+	}
+	fh = reader.(*os.File)
+	return fh, nil
+}
+
+// same as above but return reader
 func (lom *LOM) Open() (fh cos.LomReader, err error) {
 	fh, err = os.Open(lom.FQN)
-	if err == nil || !os.IsNotExist(err) {
-		return fh, err
+	switch {
+	case err == nil:
+		return fh, nil
+	case os.IsNotExist(err):
+		if e := lom._checkBdir(); e != nil {
+			err = e
+		}
+		return nil, err
+	default:
+		// DEBUG
+		if cos.IsErrFntl(err) {
+			nlog.Errorln(">>>", err)
+			rdebug.PrintStack()
+		}
+		return nil, err
 	}
-	if e := lom._checkBdir(); e != nil {
-		return nil, e
-	}
-	return nil, err
 }
 
 //
@@ -58,7 +80,7 @@ func (lom *LOM) Create() (cos.LomWriter, error) {
 
 func (lom *LOM) CreateWork(wfqn string) (cos.LomWriter, error) { return lom._cf(wfqn) } // -> lom
 func (lom *LOM) CreatePart(wfqn string) (*os.File, error)      { return lom._cf(wfqn) } // TODO: differentiate
-func (lom *LOM) CreateSlice(wfqn string) (*os.File, error)     { return lom._cf(wfqn) } // TODO: ditto
+func (lom *LOM) CreateSlice(wfqn string) (*os.File, error)     { return lom._cf(wfqn) } // --/--
 
 func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	fh, err = os.OpenFile(fqn, _openFlags, cos.PermRWR)
@@ -66,7 +88,26 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		return fh, nil
 	}
 	if !os.IsNotExist(err) {
-		// TODO: cos.CheckMvToVirtDir(err, fqn)
+		if cos.IsErrFntl(err) {
+			// - when creating LOM: fixup fntl in place
+			// - otherwise, return fntl error (with an implied requirement that caller must handle it)
+			if fqn != lom.FQN {
+				return nil, err
+			}
+			var (
+				short = lom.ShortenFntl()
+				saved = lom.PushFntl(short)
+			)
+			fh, err = os.OpenFile(short[0], _openFlags, cos.PermRWR)
+			if err == nil {
+				lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+				lom.SetCustomKey(cmn.OrigFntl, saved[0])
+			} else {
+				debug.Assert(!cos.IsErrFntl(err))
+				lom.PopFntl(saved)
+			}
+			return fh, err
+		}
 		T.FSHC(err, lom.Mountpath(), "")
 		return nil, err
 	}
