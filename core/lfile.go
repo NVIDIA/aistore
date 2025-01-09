@@ -188,12 +188,28 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		return &errBdir{cname: lom.Cname(), err: err}
 	}
 	err := lom.RenameToMain(wfqn)
-	if err == nil {
+	switch {
+	case err == nil:
 		return nil
-	}
-	if cos.IsErrMv(err) {
+	case cos.IsErrMv(err):
 		return err
+	case cos.IsErrFntl(err):
+		// - when finalizing LOM: fixup fntl in place
+		var (
+			short = lom.ShortenFntl()
+			saved = lom.PushFntl(short)
+		)
+		err = lom.RenameToMain(wfqn)
+		if err == nil {
+			lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+			lom.SetCustomKey(cmn.OrigFntl, saved[0])
+		} else {
+			debug.Assert(!cos.IsErrFntl(err))
+			lom.PopFntl(saved)
+		}
+		return err
+	default:
+		T.FSHC(err, lom.Mountpath(), wfqn)
+		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 	}
-	T.FSHC(err, lom.Mountpath(), wfqn)
-	return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 }

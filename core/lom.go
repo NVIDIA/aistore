@@ -563,6 +563,7 @@ func (lom *LOM) FromFS() error {
 	switch {
 	case os.IsNotExist(err):
 		return err
+
 	case strings.Contains(err.Error(), "not a directory") && cos.IsPathErr(err):
 		// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
 		return fmt.Errorf("%w (object in the path?)", err)
@@ -665,20 +666,17 @@ func (lom *LOM) Unlock(exclusive bool) {
 // file name too long (0x24) ----------------------------
 //
 
-const (
-	prefixFntl = ".x"
-)
-
 func (lom *LOM) IsFntl() bool {
 	return lom.md.lid.haslmfl(lmflFntl)
 }
 
 func (lom *LOM) HasFntlPrefix() bool {
-	return strings.HasPrefix(lom.ObjName, prefixFntl)
+	return strings.HasPrefix(lom.ObjName, fs.PrefixFntl)
 }
 
 func (lom *LOM) ShortenFntl() []string {
-	noname := prefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256)
+	// (compare with fs/content Gen())
+	noname := fs.PrefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256)
 	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, noname)
 
 	debug.Assert(len(nfqn) < 4096, "PATH_MAX /usr/include/limits.h", len(nfqn))
