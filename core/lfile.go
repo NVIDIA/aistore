@@ -87,27 +87,28 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	if err == nil {
 		return fh, nil
 	}
-	if !os.IsNotExist(err) {
-		if cos.IsErrFntl(err) {
-			// - when creating LOM: fixup fntl in place
-			// - otherwise, return fntl error (with an implied requirement that caller must handle it)
-			if fqn != lom.FQN {
-				return nil, err
-			}
-			var (
-				short = lom.ShortenFntl()
-				saved = lom.PushFntl(short)
-			)
-			fh, err = os.OpenFile(short[0], _openFlags, cos.PermRWR)
-			if err == nil {
-				lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
-				lom.SetCustomKey(cmn.OrigFntl, saved[0])
-			} else {
-				debug.Assert(!cos.IsErrFntl(err))
-				lom.PopFntl(saved)
-			}
-			return fh, err
+
+	switch {
+	case cos.IsErrFntl(err):
+		// - when creating LOM: fixup fntl in place
+		// - otherwise, return fntl error (with an implied requirement that caller must handle it)
+		if fqn != lom.FQN {
+			return nil, err
 		}
+		var (
+			short = lom.ShortenFntl()
+			saved = lom.PushFntl(short)
+		)
+		fh, err = os.OpenFile(short[0], _openFlags, cos.PermRWR)
+		if err == nil {
+			lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+			lom.SetCustomKey(cmn.OrigFntl, saved[0])
+		} else {
+			debug.Assert(!cos.IsErrFntl(err))
+			lom.PopFntl(saved)
+		}
+		return fh, err
+	case !os.IsNotExist(err):
 		T.FSHC(err, lom.Mountpath(), "")
 		return nil, err
 	}
