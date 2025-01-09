@@ -137,11 +137,10 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 		// it as if the object doesn't really exist.
 		err = cmn.NewErrRemoteMetadataMismatch(e)
 		ecode = http.StatusNotFound
-	}
-
-	if ecode == http.StatusNotFound {
+	} else if ecode == http.StatusNotFound {
 		err = cos.NewErrNotFound(T, lom.Cname())
 	}
+
 	if !locked {
 		// return info (neq and, possibly, not-found), and be done
 		return CRMD{ErrCode: ecode, Err: err}
