@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -35,8 +34,14 @@ type (
 		cnt  int64
 		mu   sync.Mutex
 	}
-	ErrMvToVirtDir struct {
-		dst string
+
+	// background:
+	// - normally, keeping objects under their original names
+	// - FNTL excepted (see core/lom)
+	ErrMv struct {
+		// - type 1: mv readme aaa/bbb, where destination aaa/bbb[/ccc/...] is a virtual directory
+		// - type 2 (a.k.a. ENOTDIR): mv readme aaa/bbb/ccc, where destination aaa/bbb is (or contains) a file
+		ty int
 	}
 )
 
@@ -171,6 +176,10 @@ func IsErrFntl(err error) bool {
 	return strings.Contains(err.Error(), "too long") && errors.Is(err, syscall.ENAMETOOLONG)
 }
 
+func IsErrNotDir(err error) bool {
+	return strings.Contains(err.Error(), "directory") && errors.Is(err, syscall.ENOTDIR)
+}
+
 // likely out of socket descriptors
 func IsErrConnectionNotAvail(err error) (yes bool) {
 	return errors.Is(err, syscall.EADDRNOTAVAIL)
@@ -236,33 +245,25 @@ func IsErrClientURLTimeout(err error) bool {
 	return uerr != nil && uerr.Timeout()
 }
 
-//
-// ErrMvToVirtDir
-// NOTE [design tradeoff] keeping objects under (e.g.) their respective sha256, etc.
-//
-
-func CheckMvToVirtDir(err error, dst string) error {
-	if IsErrMvToVirtDir(err) {
-		return err
-	}
+func checkMvErr(err error, dst string) error {
 	if finfo, errN := os.Stat(dst); errN == nil && finfo.IsDir() {
-		return &ErrMvToVirtDir{dst}
+		return &ErrMv{1}
+	}
+	if IsErrNotDir(err) {
+		return &ErrMv{2}
 	}
 	return err
 }
 
-func IsErrMvToVirtDir(err error) bool {
-	_, ok := err.(*ErrMvToVirtDir)
+func IsErrMv(err error) bool {
+	_, ok := err.(*ErrMv)
 	return ok
 }
 
-func (e *ErrMvToVirtDir) Error() string {
-	var (
-		b = filepath.Base(e.dst)
-		d string
-	)
-	if l, lb := len(e.dst), len(b); lb > 1 && l > lb+8 {
-		d = filepath.Base(e.dst[0 : l-lb])
+func (e *ErrMv) Error() string {
+	if e.ty == 2 {
+		// with underlying `ENOTDIR`
+		return "destination contains an object in its path"
 	}
-	return fmt.Sprintf("destination '../%s/%s' exists and is a virtual directory", d, b)
+	return "destination exists and is a virtual directory"
 }

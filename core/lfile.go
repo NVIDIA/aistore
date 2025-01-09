@@ -191,7 +191,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	if err == nil {
 		return nil
 	}
-	if cos.IsErrMvToVirtDir(err) {
+	if cos.IsErrMv(err) {
 		return err
 	}
 	T.FSHC(err, lom.Mountpath(), wfqn)

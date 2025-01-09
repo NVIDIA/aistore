@@ -236,7 +236,7 @@ rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
 		vlabs := poi._vlabs()
 		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF &&
-			!cos.IsRetriableConnErr(err) && !cos.IsErrMvToVirtDir(err) {
+			!cos.IsRetriableConnErr(err) && !cos.IsErrMv(err) {
 			poi.t.statsT.AddWith(
 				cos.NamedVal64{Name: stats.ErrPutCount, Value: 1, VarLabs: vlabs},
 				cos.NamedVal64{Name: stats.IOErrPutCount, Value: 1, VarLabs: vlabs},

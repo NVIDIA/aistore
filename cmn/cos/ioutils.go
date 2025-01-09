@@ -96,7 +96,7 @@ func Rename(src, dst string) error {
 		return nil
 	}
 	if !os.IsNotExist(err) {
-		return CheckMvToVirtDir(err, dst)
+		return checkMvErr(err, dst)
 	}
 
 	// slow path
@@ -107,7 +107,7 @@ func Rename(src, dst string) error {
 	if err == nil {
 		return nil
 	}
-	return CheckMvToVirtDir(err, dst)
+	return checkMvErr(err, dst)
 }
 
 // RemoveFile removes path; returns nil upon success or if the path does not exist.

@@ -38,7 +38,7 @@ var ioErrs = [...]error{
 func IsIOError(err error) bool {
 	debug.Assert(err != nil)
 
-	if IsErrMvToVirtDir(err) {
+	if IsErrMv(err) {
 		return false
 	}
 
