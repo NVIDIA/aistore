@@ -1,6 +1,6 @@
 // Package ct provides additional dsort-specific content types
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ct
 
@@ -23,9 +23,6 @@ var _ fs.ContentResolver = (*DsortFile)(nil)
 
 type DsortFile struct{}
 
-func (*DsortFile) PermToEvict() bool                  { return false }
-func (*DsortFile) PermToMove() bool                   { return false }
-func (*DsortFile) PermToProcess() bool                { return false }
 func (*DsortFile) GenUniqueFQN(base, _ string) string { return base }
 
 func (*DsortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {

@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -262,11 +262,6 @@ func (mgr *Manager) EncodeObject(lom *core.LOM, cb onFin) error {
 	if err := cs.Err(); err != nil {
 		return err
 	}
-	spec, _ := fs.CSM.FileSpec(lom.FQN)
-	if spec != nil && !spec.PermToProcess() {
-		return errSkipped
-	}
-
 	req := allocateReq(ActSplit, lom.LIF())
 	req.IsCopy = IsECCopy(lom.Lsize(), &lom.Bprops().EC)
 	if cb != nil {
