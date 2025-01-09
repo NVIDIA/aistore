@@ -5,6 +5,7 @@
 package mock
 
 import (
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -29,51 +30,54 @@ func (*DBDriver) makePath(collection, key string) string {
 	return collection + kvdb.CollectionSepa + key
 }
 
-func (bd *DBDriver) Set(collection, key string, object any) error {
+func (bd *DBDriver) Set(collection, key string, object any) (int, error) {
 	b := cos.MustMarshal(object)
 	return bd.SetString(collection, key, string(b))
 }
 
-func (bd *DBDriver) Get(collection, key string, object any) error {
-	s, err := bd.GetString(collection, key)
+func (bd *DBDriver) Get(collection, key string, object any) (int, error) {
+	s, code, err := bd.GetString(collection, key)
 	if err != nil {
-		return err
+		return code, err
 	}
-	return jsoniter.Unmarshal([]byte(s), object)
+	if err = jsoniter.Unmarshal([]byte(s), object); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusOK, nil
 }
 
-func (bd *DBDriver) SetString(collection, key, data string) error {
+func (bd *DBDriver) SetString(collection, key, data string) (int, error) {
 	bd.mtx.Lock()
 	defer bd.mtx.Unlock()
 	name := bd.makePath(collection, key)
 	bd.values[name] = data
-	return nil
+	return http.StatusOK, nil
 }
 
-func (bd *DBDriver) GetString(collection, key string) (string, error) {
+func (bd *DBDriver) GetString(collection, key string) (string, int, error) {
 	bd.mtx.RLock()
 	defer bd.mtx.RUnlock()
 	name := bd.makePath(collection, key)
 	value, ok := bd.values[name]
 	if !ok {
-		return "", cos.NewErrNotFound(nil, collection+" \""+key+"\"")
+		return "", http.StatusNotFound, cos.NewErrNotFound(nil, collection+" \""+key+"\"")
 	}
-	return value, nil
+	return value, http.StatusOK, nil
 }
 
-func (bd *DBDriver) Delete(collection, key string) error {
+func (bd *DBDriver) Delete(collection, key string) (int, error) {
 	bd.mtx.Lock()
 	defer bd.mtx.Unlock()
 	name := bd.makePath(collection, key)
 	_, ok := bd.values[name]
 	if !ok {
-		return cos.NewErrNotFound(nil, collection+" \""+key+"\"")
+		return http.StatusNotFound, cos.NewErrNotFound(nil, collection+" \""+key+"\"")
 	}
 	delete(bd.values, name)
-	return nil
+	return http.StatusOK, nil
 }
 
-func (bd *DBDriver) List(collection, pattern string) ([]string, error) {
+func (bd *DBDriver) List(collection, pattern string) ([]string, int, error) {
 	var (
 		keys   = make([]string, 0)
 		filter string
@@ -90,23 +94,23 @@ func (bd *DBDriver) List(collection, pattern string) ([]string, error) {
 		}
 	}
 	sort.Strings(keys)
-	return keys, nil
+	return keys, http.StatusOK, nil
 }
 
-func (bd *DBDriver) DeleteCollection(collection string) error {
-	keys, err := bd.List(collection, "")
+func (bd *DBDriver) DeleteCollection(collection string) (int, error) {
+	keys, code, err := bd.List(collection, "")
 	bd.mtx.Lock()
 	defer bd.mtx.Unlock()
 	if err != nil || len(keys) == 0 {
-		return err
+		return code, err
 	}
 	for _, k := range keys {
 		delete(bd.values, k)
 	}
-	return nil
+	return http.StatusOK, nil
 }
 
-func (bd *DBDriver) GetAll(collection, pattern string) (map[string]string, error) {
+func (bd *DBDriver) GetAll(collection, pattern string) (map[string]string, int, error) {
 	var (
 		values = make(map[string]string)
 		filter string
@@ -122,5 +126,5 @@ func (bd *DBDriver) GetAll(collection, pattern string) (map[string]string, error
 			}
 		}
 	}
-	return values, nil
+	return values, http.StatusOK, nil
 }

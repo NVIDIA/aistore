@@ -30,24 +30,24 @@ type (
 		// A driver should sync data with local drives on close
 		Close() error
 		// Write an object to database. Object is marshaled as JSON
-		Set(collection, key string, object any) error
+		Set(collection, key string, object any) (int, error)
 		// Read an object from database.
-		Get(collection, key string, object any) error
+		Get(collection, key string, object any) (int, error)
 		// Write an already marshaled object or simple string
-		SetString(collection, key, data string) error
+		SetString(collection, key, data string) (int, error)
 		// Read a string or an object as JSON from database
-		GetString(collection, key string) (string, error)
+		GetString(collection, key string) (string, int, error)
 		// Delete a single object
-		Delete(collection, key string) error
+		Delete(collection, key string) (int, error)
 		// Delete a collection. It iterates over all subkeys of key
 		// `collection` and removes them one by one.
-		DeleteCollection(collection string) error
+		DeleteCollection(collection string) (int, error)
 		// Return subkeys of a collection(`key` is empty string) or a key.
 		// Pattern is an arbitrary string and may contain '*' and '?' wildcards.
 		// If a pattern does not include wildcards, the pattern is uses as a prefix.
-		List(collection, pattern string) ([]string, error)
+		List(collection, pattern string) ([]string, int, error)
 		// Return subkeys with their values: map[key]value
-		GetAll(collection, pattern string) (map[string]string, error)
+		GetAll(collection, pattern string) (map[string]string, int, error)
 	}
 )
 

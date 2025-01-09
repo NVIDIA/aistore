@@ -26,6 +26,10 @@ type (
 		where fmt.Stringer
 		what  string
 	}
+	ErrAlreadyExists struct {
+		where fmt.Stringer
+		what  string
+	}
 	ErrSignal struct {
 		signal syscall.Signal
 	}
@@ -74,6 +78,20 @@ func (e *ErrNotFound) Error() string {
 func IsErrNotFound(err error) bool {
 	_, ok := err.(*ErrNotFound)
 	return ok
+}
+
+// ErrAlreadyExists
+
+func NewErrAlreadyExists(where fmt.Stringer, what string) *ErrAlreadyExists {
+	return &ErrAlreadyExists{where: where, what: what}
+}
+
+func (e *ErrAlreadyExists) Error() string {
+	s := e.what + " already exists"
+	if e.where == nil {
+		return s
+	}
+	return e.where.String() + ": " + s
 }
 
 //

@@ -86,9 +86,9 @@ func main() {
 	if err != nil {
 		cos.ExitLogf("Failed to init local database: %v", err)
 	}
-	mgr, err := newMgr(driver)
+	mgr, code, err := newMgr(driver)
 	if err != nil {
-		cos.ExitLogf("Failed to init manager: %v", err)
+		cos.ExitLogf("Failed to init manager: %v(%d)", err, code)
 	}
 
 	nlog.Infof("Version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)

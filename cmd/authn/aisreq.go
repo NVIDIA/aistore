@@ -51,9 +51,9 @@ func (m *mgr) broadcastRevoked(token string) {
 // broadcast the request to all clusters. If a cluster has a few URLS,
 // it sends to the first working one. Clusters are processed in parallel.
 func (m *mgr) broadcast(method, path string, body []byte, tag string) {
-	clus, err := m.clus()
+	clus, code, err := m.clus()
 	if err != nil {
-		nlog.Errorf("Failed to read cluster list: %v", err)
+		nlog.Errorf("Failed to read cluster list: %v (%d)", err, code)
 		return
 	}
 	wg := &sync.WaitGroup{}
@@ -78,9 +78,9 @@ func (m *mgr) broadcast(method, path string, body []byte, tag string) {
 // Send valid and non-expired revoked token list to a cluster.
 func (m *mgr) syncTokenList(clu *authn.CluACL) {
 	const tag = "sync-tokens"
-	tokenList, err := m.generateRevokedTokenList()
+	tokenList, code, err := m.generateRevokedTokenList()
 	if err != nil {
-		nlog.Errorf("failed to sync token list with %q(%q): %v", clu.ID, clu.Alias, err)
+		nlog.Errorf("failed to sync token list with %q(%q): %v (%d)", clu.ID, clu.Alias, err, code)
 		return
 	}
 	if len(tokenList) == 0 {

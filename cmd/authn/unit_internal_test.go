@@ -49,7 +49,7 @@ func createUsers(mgr *mgr, t *testing.T) {
 		}
 	}
 
-	srvUsers, err := mgr.userList()
+	srvUsers, _, err := mgr.userList()
 	tassert.CheckFatal(t, err)
 	expectedUsersCount := len(users) + 1 // including the admin user
 	if len(srvUsers) != expectedUsersCount {
@@ -64,7 +64,7 @@ func createUsers(mgr *mgr, t *testing.T) {
 
 func deleteUsers(mgr *mgr, skipNotExist bool, t *testing.T) {
 	for _, username := range users {
-		err := mgr.delUser(username)
+		_, err := mgr.delUser(username)
 		if err != nil && (!cos.IsErrNotFound(err) || !skipNotExist) {
 			t.Errorf("Failed to delete user %s: %v", username, err)
 		}
@@ -79,7 +79,7 @@ func testInvalidUser(mgr *mgr, t *testing.T) {
 	}
 
 	nonexisting := "someuser"
-	err = mgr.delUser(nonexisting)
+	_, err = mgr.delUser(nonexisting)
 	if err == nil {
 		t.Errorf("Non-existing user %s was deleted", nonexisting)
 	}
@@ -95,7 +95,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create user %s: %v", username, err)
 	}
-	srvUsers, err := mgr.userList()
+	srvUsers, _, err := mgr.userList()
 	tassert.CheckFatal(t, err)
 	expectedUsersCount := len(users) + 2 // including the admin user and the new user
 	if len(srvUsers) != expectedUsersCount {
@@ -107,28 +107,28 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 		Alias: "cluster-test",
 		URLs:  []string{"http://localhost:8080"},
 	}
-	if err := mgr.db.Set(clustersCollection, clu.ID, clu); err != nil {
+	if _, err := mgr.db.Set(clustersCollection, clu.ID, clu); err != nil {
 		t.Error(err)
 	}
 	defer mgr.delCluster(clu.ID)
 
 	loginMsg := &authn.LoginMsg{}
-	token, err := mgr.issueToken(username, userpass, loginMsg)
+	token, _, err := mgr.issueToken(username, userpass, loginMsg)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", username, err)
 	}
 
-	err = mgr.delUser(username)
+	_, err = mgr.delUser(username)
 	if err != nil {
 		t.Errorf("Failed to delete user %s: %v", username, err)
 	}
-	srvUsers, err = mgr.userList()
+	srvUsers, _, err = mgr.userList()
 	tassert.CheckFatal(t, err)
 	expectedUsersCount = len(users) + 1 // including the admin user
 	if len(srvUsers) != expectedUsersCount {
 		t.Errorf("Expected %d users but found %d", expectedUsersCount, len(srvUsers))
 	}
-	token, err = mgr.issueToken(username, userpass, loginMsg)
+	token, _, err = mgr.issueToken(username, userpass, loginMsg)
 	if err == nil {
 		t.Errorf("Token issued for deleted user %s: %v", username, token)
 	} else if err != errInvalidCredentials {
@@ -139,7 +139,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
-	mgr, err := newMgr(driver)
+	mgr, _, err := newMgr(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -158,7 +158,7 @@ func TestToken(t *testing.T) {
 	)
 
 	driver := mock.NewDBDriver()
-	mgr, err := newMgr(driver)
+	mgr, _, err := newMgr(driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
@@ -168,7 +168,7 @@ func TestToken(t *testing.T) {
 		Alias: "cluster-test",
 		URLs:  []string{"http://localhost:8080"},
 	}
-	if err := mgr.db.Set(clustersCollection, clu.ID, clu); err != nil {
+	if _, err := mgr.db.Set(clustersCollection, clu.ID, clu); err != nil {
 		t.Error(err)
 	}
 	defer mgr.delCluster(clu.ID)
@@ -176,7 +176,7 @@ func TestToken(t *testing.T) {
 	// correct user creds
 	shortExpiration := 2 * time.Second
 	loginMsg := &authn.LoginMsg{ExpiresIn: &shortExpiration}
-	token, err = mgr.issueToken(users[1], passs[1], loginMsg)
+	token, _, err = mgr.issueToken(users[1], passs[1], loginMsg)
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
@@ -190,7 +190,7 @@ func TestToken(t *testing.T) {
 
 	// incorrect user creds
 	loginMsg = &authn.LoginMsg{}
-	tokenInval, err := mgr.issueToken(users[1], passs[0], loginMsg)
+	tokenInval, _, err := mgr.issueToken(users[1], passs[0], loginMsg)
 	if tokenInval != "" || err == nil {
 		t.Errorf("Some token generated for incorrect user creds: %v", tokenInval)
 	}

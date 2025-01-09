@@ -5,6 +5,7 @@
 package kvdb
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -45,15 +46,22 @@ func NewBuntDB(path string) (*BuntDriver, error) {
 	return &BuntDriver{driver: driver}, nil
 }
 
-func buntToCommonErr(err error, collection, key string) error {
-	if err == buntdb.ErrNotFound {
-		what := collection
-		if key != "" {
-			what += " \"" + key + "\""
-		}
-		return cos.NewErrNotFound(nil, what)
+func buntToCommonErr(err error, collection, key string) (int, error) {
+	if err == nil {
+		return http.StatusOK, nil
 	}
-	return err
+	what := collection
+	if key != "" {
+		what += " \"" + key + "\""
+	}
+	switch err { // TODO: more buntdb errors
+	case buntdb.ErrNotFound:
+		return http.StatusNotFound, cos.NewErrNotFound(nil, what)
+	case buntdb.ErrIndexExists:
+		return http.StatusConflict, cos.NewErrAlreadyExists(nil, what)
+	default:
+		return http.StatusInternalServerError, err
+	}
 }
 
 // Create "unique" key from collection and key, so there was no trouble when
@@ -71,21 +79,23 @@ func (bd *BuntDriver) Close() error {
 	return bd.driver.Close()
 }
 
-func (bd *BuntDriver) Set(collection, key string, object any) error {
+func (bd *BuntDriver) Set(collection, key string, object any) (int, error) {
 	b := cos.MustMarshal(object)
-	err := bd.SetString(collection, key, string(b))
-	return buntToCommonErr(err, collection, key)
+	return bd.SetString(collection, key, string(b))
 }
 
-func (bd *BuntDriver) Get(collection, key string, object any) error {
-	s, err := bd.GetString(collection, key)
+func (bd *BuntDriver) Get(collection, key string, object any) (int, error) {
+	s, code, err := bd.GetString(collection, key)
 	if err != nil {
-		return buntToCommonErr(err, collection, key)
+		return code, err
 	}
-	return jsoniter.Unmarshal([]byte(s), object)
+	if err = jsoniter.Unmarshal([]byte(s), object); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusOK, nil
 }
 
-func (bd *BuntDriver) SetString(collection, key, data string) error {
+func (bd *BuntDriver) SetString(collection, key, data string) (int, error) {
 	name := makePath(collection, key)
 	err := bd.driver.Update(func(tx *buntdb.Tx) error {
 		_, _, err := tx.Set(name, data, nil)
@@ -94,7 +104,7 @@ func (bd *BuntDriver) SetString(collection, key, data string) error {
 	return buntToCommonErr(err, collection, key)
 }
 
-func (bd *BuntDriver) GetString(collection, key string) (string, error) {
+func (bd *BuntDriver) GetString(collection, key string) (string, int, error) {
 	var value string
 	name := makePath(collection, key)
 	err := bd.driver.View(func(tx *buntdb.Tx) error {
@@ -102,10 +112,11 @@ func (bd *BuntDriver) GetString(collection, key string) (string, error) {
 		value, err = tx.Get(name)
 		return err
 	})
-	return value, buntToCommonErr(err, collection, key)
+	code, err := buntToCommonErr(err, collection, key)
+	return value, code, err
 }
 
-func (bd *BuntDriver) Delete(collection, key string) error {
+func (bd *BuntDriver) Delete(collection, key string) (int, error) {
 	name := makePath(collection, key)
 	err := bd.driver.Update(func(tx *buntdb.Tx) error {
 		_, err := tx.Delete(name)
@@ -114,7 +125,7 @@ func (bd *BuntDriver) Delete(collection, key string) error {
 	return buntToCommonErr(err, collection, key)
 }
 
-func (bd *BuntDriver) List(collection, pattern string) ([]string, error) {
+func (bd *BuntDriver) List(collection, pattern string) ([]string, int, error) {
 	var (
 		keys   = make([]string, 0)
 		filter string
@@ -133,15 +144,16 @@ func (bd *BuntDriver) List(collection, pattern string) ([]string, error) {
 		})
 		return nil
 	})
-	return keys, buntToCommonErr(err, collection, "")
+	code, err := buntToCommonErr(err, collection, "")
+	return keys, code, err
 }
 
-func (bd *BuntDriver) DeleteCollection(collection string) error {
-	keys, err := bd.List(collection, "")
+func (bd *BuntDriver) DeleteCollection(collection string) (int, error) {
+	keys, code, err := bd.List(collection, "")
 	if err != nil || len(keys) == 0 {
-		return err
+		return code, err
 	}
-	return bd.driver.Update(func(tx *buntdb.Tx) error {
+	err = bd.driver.Update(func(tx *buntdb.Tx) error {
 		for _, k := range keys {
 			_, err := tx.Delete(k)
 			if err != nil && err != buntdb.ErrNotFound {
@@ -150,9 +162,10 @@ func (bd *BuntDriver) DeleteCollection(collection string) error {
 		}
 		return nil
 	})
+	return buntToCommonErr(err, collection, "")
 }
 
-func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, error) {
+func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, int, error) {
 	var (
 		values = make(map[string]string)
 		filter string
@@ -171,5 +184,6 @@ func (bd *BuntDriver) GetAll(collection, pattern string) (map[string]string, err
 		})
 		return nil
 	})
-	return values, buntToCommonErr(err, collection, "")
+	code, err := buntToCommonErr(err, collection, "")
+	return values, code, err
 }
