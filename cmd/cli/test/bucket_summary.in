@@ -4,8 +4,8 @@ ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
 ais bucket summary ais://$BUCKET_1
 ais bucket summary aiss://$BUCKET_1 // FAIL "invalid backend provider "aiss""
 
-ais archive gen-shards "ais://$BUCKET_1/tmp/shard-{0..149}.tar" --fcount 1 --fsize 1KB --num-workers 1 --cleanup // IGNORE
-ais archive gen-shards "ais://$BUCKET_2/tmp/shard-{0..19}.tar" --fcount 10 --fsize 1KB --num-workers 1 --cleanup // IGNORE
+ais archive gen-shards "ais://$BUCKET_1/tmp/shard-{0..149}.tar" --fcount 1 --fsize 1KB --tform GNU --num-workers 1 --cleanup // IGNORE
+ais archive gen-shards "ais://$BUCKET_2/tmp/shard-{0..19}.tar" --fcount 10 --fsize 1KB --tform GNU --num-workers 1 --cleanup // IGNORE
 ais bucket summary ais://$BUCKET_1
 sleep 1
 ais bucket summary ais://$BUCKET_2

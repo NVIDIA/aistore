@@ -745,6 +745,12 @@ var (
 			indent4 + "\t--fext '.mp3,.json,.cls' (or, same: \".mp3,  .json,  .cls\")",
 	}
 
+	dfltTform = "Unknown"
+	tformFlag = cli.StringFlag{
+		Name:  "tform",
+		Usage: "TAR file format selection (one of \"" + dfltTform + "\", \"USTAR\", \"PAX\", or \"GNU\")",
+	}
+
 	// dsort
 	dsortLogFlag  = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
 	dsortSpecFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "Path to JSON or YAML job specification"}

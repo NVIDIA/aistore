@@ -1,0 +1,7 @@
+s3cmd mb s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"
+s3cmd ls --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" | grep "$BUCKET"
+s3cmd ls s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"
+s3cmd mb s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" //FAIL ERROR: Bucket '$BUCKET' already exists \n ERROR: S3 error: 409 (BucketAlreadyExists): bucket "ais://$BUCKET" already exists
+s3cmd info s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"
+s3cmd rb s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"
+s3cmd rb s3://$BUCKET --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" //FAIL ERROR: S3 error: 404 (NoSuchBucket): bucket "$BUCKET" does not exist

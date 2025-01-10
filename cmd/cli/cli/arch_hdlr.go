@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"archive/tar"
 	"context"
 	cryptorand "crypto/rand"
 	"encoding/hex"
@@ -108,6 +109,7 @@ var (
 			fsizeFlag,
 			fcountFlag,
 			fextsFlag,
+			tformFlag,
 		},
 	}
 
@@ -500,6 +502,23 @@ func genShardsHandler(c *cli.Context) error {
 		}
 	}
 
+	format := tar.FormatUnknown
+	if flagIsSet(c, tformFlag) {
+		formatAsString := parseStrFlag(c, tformFlag)
+		switch formatAsString {
+		case "Unknown":
+			// Leave fmtat at default
+		case "USTAR":
+			format = tar.FormatUSTAR
+		case "PAX":
+			format = tar.FormatPAX
+		case "GNU":
+			format = tar.FormatGNU
+		default:
+			return fmt.Errorf("%s value, if specified, must be one of \"%s\", \"USTAR\", \"PAX\", or \"GNU\"", tformFlag.Name, dfltTform)
+		}
+	}
+
 	mm, err := memsys.NewMMSA("cli-gen-shards", true /*silent*/)
 	if err != nil {
 		debug.AssertNoErr(err) // unlikely
@@ -554,7 +573,7 @@ loop:
 				sgl := mm.NewSGL(fileSize * int64(fileCnt))
 				defer sgl.Free()
 
-				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, int(fileSize), fileExts); err != nil {
+				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, int(fileSize), fileExts, format); err != nil {
 					return err
 				}
 				putArgs := api.PutArgs{
@@ -578,12 +597,12 @@ loop:
 	return nil
 }
 
-func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string) (err error) {
+func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string, format tar.Format) (err error) {
 	var (
 		prefix = make([]byte, 10)
 		width  = len(strconv.Itoa(fileCnt))
 		oah    = cos.SimpleOAH{Size: int64(fileSize), Atime: time.Now().UnixNano()}
-		opts   = archive.Opts{CB: archive.SetTarHeader, Serialize: false}
+		opts   = archive.Opts{CB: archive.SetTarHeader, TarFormat: format, Serialize: false}
 		writer = archive.NewWriter(shardExt, w, nil /*cksum*/, &opts)
 	)
 	for idx := start; idx < end && err == nil; idx++ {
