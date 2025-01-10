@@ -24,7 +24,7 @@ jobs:
           bundle exec jekyll build
 
       - name: Install Netlify CLI
-        run: npm install netlify-cli --save-dev
+        run: npm install -g netlify-cli --save-dev
 
       - name: Deploy site on Netlify
         env:
