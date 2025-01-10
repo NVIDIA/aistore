@@ -108,7 +108,16 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 		if err != nil {
 			return nil, err
 		}
-		pool = x509.NewCertPool()
+
+		// from https://github.com/golang/go/blob/master/src/crypto/x509/cert_pool.go:
+		// "On Unix systems other than macOS the environment variables SSL_CERT_FILE and
+		// SSL_CERT_DIR can be used to override the system default locations for the SSL
+		// certificate file and SSL certificate files directory, respectively. The
+		// latter can be a colon-separated list."
+		pool, err = x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("client tls: failed to load system cert pool, err: %w", err)
+		}
 		if ok := pool.AppendCertsFromPEM(cert); !ok {
 			return nil, fmt.Errorf("client tls: failed to append CA certs from PEM: %q", sargs.ClientCA)
 		}
