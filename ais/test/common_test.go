@@ -68,6 +68,7 @@ type ioContext struct {
 	originalProxyCount  int
 	num                 int
 	numGetsEachFile     int
+	nameLen             int
 	getErrIsFatal       bool
 	silent              bool
 	fixedSize           bool
@@ -232,6 +233,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		Bck:       m.bck,
 		ObjPath:   m.prefix,
 		ObjCnt:    m.num,
+		ObjNameLn: m.nameLen,
 		ObjSize:   m.fileSize,
 		FixedSize: m.fixedSize,
 		CksumType: p.Cksum.Type,

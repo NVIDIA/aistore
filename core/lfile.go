@@ -8,13 +8,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	rdebug "runtime/debug"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -48,7 +46,7 @@ func (lom *LOM) OpenFile() (fh *os.File, _ error) {
 	return fh, nil
 }
 
-// same as above but return reader
+// same as above but return a reader
 func (lom *LOM) Open() (fh cos.LomReader, err error) {
 	fh, err = os.Open(lom.FQN)
 	switch {
@@ -59,12 +57,10 @@ func (lom *LOM) Open() (fh cos.LomReader, err error) {
 			err = e
 		}
 		return nil, err
+
+	// case cos.IsErrFntl(err)
+
 	default:
-		// DEBUG
-		if cos.IsErrFntl(err) {
-			nlog.Errorln(">>>", err)
-			rdebug.PrintStack()
-		}
 		return nil, err
 	}
 }
@@ -149,6 +145,7 @@ func (*LOM) AppendWork(wfqn string) (fh cos.LomWriter, err error) {
 
 func (lom *LOM) RemoveMain() error {
 	return cos.RemoveFile(lom.FQN)
+	// if err != nil && cos.IsErrFntl(err)
 }
 
 func (lom *LOM) RemoveObj(force ...bool) (err error) {

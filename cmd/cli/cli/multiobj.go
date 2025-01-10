@@ -232,9 +232,11 @@ func _rmOne(c *cli.Context, shift int) error {
 		return err
 	}
 	if shouldHeadRemote(c, bck) {
-		if _, err := headBucket(bck, false /* don't add */); err != nil {
+		bprops, err := headBucket(bck, false /* don't add */)
+		if err != nil {
 			return err
 		}
+		bck.Props = bprops
 	}
 	// [NOTE]
 	// - passing empty bck _not_ to interpret embedded objName as prefix
@@ -262,7 +264,7 @@ func _rmOne(c *cli.Context, shift int) error {
 			qflprn(listFlag), qflprn(templateFlag), qflprn(rmrfFlag))
 	default: // 3. one obj
 		err := api.DeleteObject(apiBP, bck, oltp.objName)
-		if err == nil && oltp.notFound {
+		if err == nil && bck.IsCloud() && oltp.notFound {
 			// [NOTE]
 			// - certain backends return OK when specified object does not exist (see aws.go)
 			// - compensate here

@@ -266,6 +266,10 @@ func dopOLTP(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (oltp oltp, err 
 	case flagIsSet(c, noRecursFlag):
 		oltp.objName = objNameOrTmpl
 
+	case len(objNameOrTmpl) > 255:
+		// not running lsObjVsPref when "prefix-or-objname" is that long
+		oltp.objName = objNameOrTmpl
+
 	default:
 		// [NOTE] additional list-objects call to disambiguate: differentiate embedded prefix from object name
 		dop, err := lsObjVsPref(bck, objNameOrTmpl)

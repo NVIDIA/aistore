@@ -417,6 +417,9 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	// fast path
 	if lmd != nil {
 		lom.md = *lmd
+		if lom.IsFntl() {
+			lom.fixupFntl()
+		}
 		return lom._checkBucket(bmd)
 	}
 
@@ -427,15 +430,15 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	if err := lom.FromFS(); err != nil {
 		return err
 	}
-	if lom.bid() == 0 {
-		// NOTE: always zero (MetaverLOM = 1: not storing the BID part of the lom.md.lid)
-		lom.setbid(lom.Bprops().BID)
-	}
+
+	// MetaverLOM = 1: always zero (not storing lom.md.lid)
+	debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
+	lom.setbid(lom.Bprops().BID)
 
 	if err := lom._checkBucket(bmd); err != nil {
 		return err
 	}
-	if cacheit && lcache != nil {
+	if cacheit {
 		md := lom.md
 		lcache.Store(lom.digest, &md)
 	}
@@ -467,16 +470,18 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	// fast path
 	if lmd != nil {
 		lom.md = *lmd
+		if lom.IsFntl() {
+			lom.fixupFntl()
+		}
 		return lom._checkBucket(bmd)
 	}
 
 	// read and decode xattr; NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
 	// either a) handled or b) benign from the caller's perspective
 	if _, err = lom.lmfs(true); err == nil {
-		if lom.bid() == 0 {
-			// ditto MetaverLOM = 1
-			lom.setbid(lom.Bprops().BID)
-		}
+		// MetaverLOM = 1: always zero (not storing lom.md.lid)
+		debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
+		lom.setbid(lom.Bprops().BID)
 		err = lom._checkBucket(bmd)
 	}
 	return err
@@ -674,13 +679,24 @@ func (lom *LOM) HasFntlPrefix() bool {
 	return strings.HasPrefix(lom.ObjName, fs.PrefixFntl)
 }
 
+// (compare with fs/content Gen())
 func (lom *LOM) ShortenFntl() []string {
-	// (compare with fs/content Gen())
+	debug.Assert(fs.FnameTooLong(lom.ObjName), lom.FQN)
+
 	noname := fs.PrefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256)
 	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, noname)
 
 	debug.Assert(len(nfqn) < 4096, "PATH_MAX /usr/include/limits.h", len(nfqn))
 	return []string{nfqn, noname}
+}
+
+func (lom *LOM) fixupFntl() {
+	if !fs.FnameTooLong(lom.ObjName) {
+		return
+	}
+	lom.ObjName = fs.PrefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256) // noname
+	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)                  // nfqn
+	lom.HrwFQN = &lom.FQN
 }
 
 func (lom *LOM) OrigFntl() []string {
@@ -698,9 +714,9 @@ func (lom *LOM) OrigFntl() []string {
 	return []string{ofqn, parsed.ObjName}
 }
 
-func (lom *LOM) PushFntl(temp []string) (saved []string) {
+func (lom *LOM) PushFntl(short []string) (saved []string) {
 	saved = []string{lom.FQN, lom.ObjName}
-	lom.FQN, lom.ObjName = temp[0], temp[1]
+	lom.FQN, lom.ObjName = short[0], short[1]
 	lom.HrwFQN = &lom.FQN
 	return saved
 }

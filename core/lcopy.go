@@ -239,16 +239,9 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
 				}
 			}
 		}
-	} else if cos.IsErrFntl(errExists) {
-		// fixup fntl
-		short := lom.ShortenFntl()
-		saved := lom.PushFntl(short)
-		defer lom.PopFntl(saved)
-		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
 	}
 
-	// copy
+	// do
 	_, _, err = cos.CopyFile(lom.FQN, workFQN, buf, cos.ChecksumNone) // TODO: checksumming
 	if err != nil {
 		return
