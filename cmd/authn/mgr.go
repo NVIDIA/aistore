@@ -370,16 +370,16 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 		cluACLs []*authn.CluACL
 		bckACLs []*authn.BckACL
 	)
-	code, err = m.db.Get(usersCollection, uid, uInfo)
+	_, err = m.db.Get(usersCollection, uid, uInfo)
 	if err != nil {
 		nlog.Errorln(err)
-		return "", code, errInvalidCredentials
+		return "", http.StatusUnauthorized, errInvalidCredentials
 	}
 
 	debug.Assert(uid == uInfo.ID, uid, " vs ", uInfo.ID)
 
 	if !isSamePassword(pwd, uInfo.Password) {
-		return "", http.StatusBadRequest, errInvalidCredentials
+		return "", http.StatusUnauthorized, errInvalidCredentials
 	}
 
 	// update ACLs with roles' ones
