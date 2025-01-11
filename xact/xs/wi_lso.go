@@ -162,7 +162,7 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	}
 
 	// shortcut #1: name-only optimizes-out loading md (NOTE: won't show misplaced and copies)
-	if wi.msg.IsFlagSet(apc.LsNameOnly) && !lom.HasFntlPrefix() {
+	if wi.msg.IsFlagSet(apc.LsNameOnly) && !fs.HasPrefixFntl(lom.ObjName) {
 		if !isOK(status) {
 			return nil, nil
 		}

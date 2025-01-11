@@ -675,15 +675,11 @@ func (lom *LOM) IsFntl() bool {
 	return lom.md.lid.haslmfl(lmflFntl)
 }
 
-func (lom *LOM) HasFntlPrefix() bool {
-	return strings.HasPrefix(lom.ObjName, fs.PrefixFntl)
-}
-
 // (compare with fs/content Gen())
 func (lom *LOM) ShortenFntl() []string {
-	debug.Assert(fs.FnameTooLong(lom.ObjName), lom.FQN)
+	debug.Assert(fs.IsFntl(lom.ObjName), lom.FQN)
 
-	noname := fs.PrefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256)
+	noname := fs.ShortenFntl(lom.FQN)
 	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, noname)
 
 	debug.Assert(len(nfqn) < 4096, "PATH_MAX /usr/include/limits.h", len(nfqn))
@@ -691,11 +687,11 @@ func (lom *LOM) ShortenFntl() []string {
 }
 
 func (lom *LOM) fixupFntl() {
-	if !fs.FnameTooLong(lom.ObjName) {
+	if !fs.IsFntl(lom.ObjName) {
 		return
 	}
-	lom.ObjName = fs.PrefixFntl + cos.ChecksumB2S(cos.UnsafeB(lom.FQN), cos.ChecksumSHA256) // noname
-	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)                  // nfqn
+	lom.ObjName = fs.ShortenFntl(lom.FQN)                                  // noname
+	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName) // nfqn
 	lom.HrwFQN = &lom.FQN
 }
 

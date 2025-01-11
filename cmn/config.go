@@ -1535,7 +1535,7 @@ func (c *FSPConf) MarshalJSON() ([]byte, error) {
 
 func (c *FSPConf) Validate(contextConfig *Config) error {
 	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{apc.Proxy, apc.Target}),
-		"unexpected role: %q", contextConfig.role)
+		"unexpected node type: %q", contextConfig.role)
 
 	// Don't validate in testing environment.
 	if contextConfig.TestingEnv() || contextConfig.role != apc.Target {
@@ -1637,6 +1637,11 @@ func (c *TestFSPConf) ValidateMpath(p string) (err error) {
 }
 
 // common mountpath validation (NOTE: calls filepath.Clean() every time)
+
+const (
+	maxLenMountpath = 255
+)
+
 func ValidateMpath(mpath string) (string, error) {
 	cleanMpath := filepath.Clean(mpath)
 
@@ -1645,6 +1650,9 @@ func ValidateMpath(mpath string) (string, error) {
 	}
 	if cleanMpath == cos.PathSeparator {
 		return "", NewErrInvalidaMountpath(mpath, "root directory is not a valid mountpath")
+	}
+	if len(cleanMpath) > maxLenMountpath {
+		return "", NewErrInvalidaMountpath(mpath, "mountpath length cannot exceed "+strconv.Itoa(maxLenMountpath))
 	}
 	return cleanMpath, nil
 }

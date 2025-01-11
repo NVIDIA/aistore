@@ -40,15 +40,6 @@ const (
 	ECMetaType   = "mt"
 )
 
-// file name too long (0x24)
-// see FnameTooLong below
-const (
-	PrefixFntl = ".x"
-
-	maxLenBasename = 255
-	maxLenPath     = 4000 // ref: PATH_MAX = 4096 in /usr/include/limits.h
-)
-
 type (
 	ContentResolver interface {
 		// Generates unique base name for original one. This function may add
@@ -123,15 +114,6 @@ func (f *contentSpecMgr) _reg(contentType string, spec ContentResolver) error {
 	return nil
 }
 
-func FnameTooLong(objName string) bool {
-	if l := len(objName); l > maxLenBasename {
-		if l > maxLenPath || len(filepath.Base(objName)) > maxLenBasename {
-			return true
-		}
-	}
-	return false
-}
-
 // Gen returns a new FQN generated from given parts.
 func (f *contentSpecMgr) Gen(parts PartsFQN, contentType, prefix string) (fqn string) {
 	var (
@@ -143,9 +125,9 @@ func (f *contentSpecMgr) Gen(parts PartsFQN, contentType, prefix string) (fqn st
 	// override caller-provided  `objName` to prevent "file name too long" errno 0x24
 	// - full pathname should be fine as (validated) bucket name <= 64
 	// - see related: core/lom and "fixup fntl"
-	if FnameTooLong(objName) {
-		nlog.Warningln("file name too long (0x24):", objName)
-		objName = PrefixFntl + cos.ChecksumB2S(cos.UnsafeB(objName), cos.ChecksumSHA256)
+	if IsFntl(objName) {
+		nlog.Warningln("fntl:", objName)
+		objName = ShortenFntl(objName)
 	}
 
 	return parts.Mountpath().MakePathFQN(parts.Bucket(), contentType, objName)
