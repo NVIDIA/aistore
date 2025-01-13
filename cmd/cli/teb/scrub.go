@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -12,22 +12,26 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// naming-wise, see also: fmtLsObjStatus (cmd/cli/teb/lso.go)
+
 const (
-	colBucket    = "BUCKET" // + [/PREFIX]
-	colObjects   = "OBJECTS"
-	colNotIn     = "NOT-CACHED" // "not in-cluster"
-	colMisplaced = "MISPLACED"
-	colMissingCp = "MISSING-COPIES"
-	colSmallSz   = "SMALL"
-	colLargeSz   = "LARGE"
-	colVchanged  = "VERSION-CHANGED"
-	colVremoved  = "VERSION-REMOVED"
+	colBucket        = "BUCKET"         // + [/PREFIX]
+	colObjects       = "OBJECTS"        // num listed
+	colNotIn         = "NOT-CACHED"     // "not present", "not cached", not in-cluster
+	colMisplacedNode = "MISPLACED-NODE" // cluster-wise
+	colMisplacedMp   = "MISPLACED-DISK" // local misplacement
+	colMissingCp     = "MISSING-CP"
+	colSmallSz       = "SMALL"
+	colLargeSz       = "LARGE"
+	colVchanged      = "VERSION-CHANGED"
+	colVremoved      = "VERSION-REMOVED"
 )
 
 const (
 	ScrObjects = iota
 	ScrNotIn
-	ScrMisplaced
+	ScrMisplacedNode
+	ScrMisplacedMp
 	ScrMissingCp
 	ScrSmallSz
 	ScrLargeSz
@@ -38,8 +42,8 @@ const (
 )
 
 var (
-	ScrCols = [...]string{colObjects, colNotIn, colMisplaced, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
-	ScrNums = [...]int64{0, 0, 0, 0, 0, 0, 0, 0}
+	ScrCols = [...]string{colObjects, colNotIn, colMisplacedNode, colMisplacedMp, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
+	ScrNums = [...]int64{0, 0, 0, 0, 0, 0, 0, 0, 0}
 )
 
 type (
@@ -111,7 +115,7 @@ func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 	return table
 }
 
-// missing-copies: hide when all-zeros
+// missing-cp: hide when all-zeros
 func (h *ScrubHelper) hideMissingCp(cols []*header, col string) {
 	for _, scr := range h.All {
 		if scr.Stats[ScrMissingCp].Cnt != 0 {

@@ -157,23 +157,28 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	if !local {
 		status = apc.LocMisplacedNode
 	} else if !lom.IsHRW() {
-		// preliminary
+		// preliminary - IsCopy below
 		status = apc.LocMisplacedMountpath
 	}
 
-	// shortcut #1: name-only optimizes-out loading md (NOTE: won't show misplaced and copies)
+	// [shortcut]: name-only optimizes-out loading md (NOTE: won't show misplaced and copies)
 	if wi.msg.IsFlagSet(apc.LsNameOnly) && !fs.HasPrefixFntl(lom.ObjName) {
 		if !isOK(status) {
 			return nil, nil
 		}
 		return wi.ls(lom, status), nil
 	}
+
 	// load
 	if err := lom.Load(isOK(status) /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsErrObjNought(err) || !isOK(status) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if lom.IsFntl() {
+		// FIXME: revisit
+		status = apc.LocOK
 	}
 	if local && lom.IsCopy() {
 		// still may change below
@@ -184,24 +189,25 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	}
 
 	if !wi.msg.IsFlagSet(apc.LsMissing) {
-		if lom.IsFntl() {
-			status = apc.LocOK // NOTE: fntl never misplaced
-			return wi.ls(lom, status), nil
-		}
 		return nil, nil
 	}
-	if local {
-		// check hrw mountpath location
-		hlom := &core.LOM{}
-		if err := hlom.InitFQN(*lom.HrwFQN, lom.Bucket()); err != nil {
+
+	// for every copy: check hrw mountpath location ("main replica")
+	if local && status == apc.LocIsCopy {
+		var (
+			hlom   = core.AllocLOM("")
+			hrwFQN = *lom.HrwFQN
+		)
+		debug.Assert(hrwFQN != lom.FQN)
+		if err := hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
+			core.FreeLOM(hlom)
 			return nil, err
 		}
 		if err := hlom.Load(true /*cache it*/, false /*locked*/); err != nil {
-			mirror := lom.MirrorConf()
-			if mirror.Enabled && mirror.Copies > 1 {
-				status = apc.LocIsCopyMissingObj
-			}
+			status = apc.LocIsCopyMissingObj
 		}
+		core.FreeLOM(hlom)
 	}
+
 	return wi.ls(lom, status), nil
 }

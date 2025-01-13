@@ -96,7 +96,7 @@ const (
 	LocMisplacedNode
 	LocMisplacedMountpath
 	LocIsCopy
-	LocIsCopyMissingObj
+	LocIsCopyMissingObj // missing "main replica"
 
 	// LsoEntry Flags
 	EntryIsCached   = 1 << (EntryStatusBits + 1)

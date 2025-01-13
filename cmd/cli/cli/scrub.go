@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -21,14 +21,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
 )
 
 // [TODO]
-// - "misplaced-node" versus "misplaced-mp" vs "leftover copy"
 // - add options:
 //   --cached
 //   --locally-misplaced
@@ -65,8 +63,8 @@ type (
 		// detailed logs
 		logs       [teb.ScrNumStats]_log
 		progLine   cos.Builder
+		numBcks    int
 		haveRemote atomic.Bool
-		_many      bool
 	}
 )
 
@@ -130,15 +128,20 @@ func scrubHandler(c *cli.Context) (err error) {
 			qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
 	}
 
+	bcks, errN := ctx.lsBcks()
+	if errN != nil {
+		return V(err)
+	}
+
 	// create logs
 	if err := ctx.createLogs(); err != nil {
 		return err
 	}
 
-	if ctx.qbck.IsBucket() {
-		err = ctx.one()
+	if ctx.numBcks > 1 {
+		err = ctx.many(bcks)
 	} else {
-		err = ctx.many()
+		err = ctx.one()
 	}
 
 	ctx.closeLogs(c)
@@ -193,25 +196,28 @@ func (ctx *scrCtx) closeLogs(c *cli.Context) {
 	}
 }
 
-func (ctx *scrCtx) many() error {
-	bcks, err := api.ListBuckets(apiBP, ctx.qbck, apc.FltPresent)
+func (ctx *scrCtx) lsBcks() (bcks cmn.Bcks, err error) {
+	if ctx.qbck.IsBucket() {
+		ctx.numBcks = 1
+		return
+	}
+	bcks, err = api.ListBuckets(apiBP, ctx.qbck, apc.FltPresent)
 	if err != nil {
-		return V(err)
+		return
 	}
-	num := len(bcks)
-	if num == 1 {
+	ctx.numBcks = len(bcks)
+	if ctx.numBcks == 1 {
 		ctx.qbck = cmn.QueryBcks(bcks[0])
-		return ctx.one()
 	}
-	debug.Assert(num > 1)
+	return
+}
 
-	// many
-	ctx._many = true
+func (ctx *scrCtx) many(bcks cmn.Bcks) error {
 	var (
-		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), num)
+		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), ctx.numBcks)
 		mu = &sync.Mutex{}
 	)
-	ctx.scrubs = make([]*scrBp, 0, num)
+	ctx.scrubs = make([]*scrBp, 0, ctx.numBcks)
 	for i := range bcks {
 		bck := bcks[i]
 		wg.Add(1)
@@ -273,7 +279,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		}
 	)
 	scr.Cname = bck.Cname("")
-	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsAtime, apc.GetPropsLocation, apc.GetPropsCustom}
+	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsAtime, apc.GetPropsCopies, apc.GetPropsLocation, apc.GetPropsCustom}
 	if bck.IsRemote() {
 		lsmsg.Flags |= apc.LsVerChanged
 		lsmsg.AddProps(propNames...)
@@ -395,11 +401,18 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 		return
 	}
 	if en.Status() == apc.LocMisplacedNode {
-		scr.Stats[teb.ScrMisplaced].Cnt++
-		scr.Stats[teb.ScrMisplaced].Siz += en.Size
-		scr.log(parent, en, teb.ScrMisplaced)
+		scr.Stats[teb.ScrMisplacedNode].Cnt++
+		scr.Stats[teb.ScrMisplacedNode].Siz += en.Size
+		scr.log(parent, en, teb.ScrMisplacedNode)
 		// no further checking
 		return
+	}
+
+	// or-ing rest conditions (x num-copies)
+	if en.Status() == apc.LocMisplacedMountpath {
+		scr.Stats[teb.ScrMisplacedMp].Cnt++
+		scr.Stats[teb.ScrMisplacedMp].Siz += en.Size
+		scr.log(parent, en, teb.ScrMisplacedMp)
 	}
 
 	if scr.Bck.Props.Mirror.Enabled && en.Copies < int16(scr.Bck.Props.Mirror.Copies) {
@@ -434,11 +447,8 @@ const (
 )
 
 func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
-	const (
-		maxline = 256
-	)
 	log := &parent.logs[i]
-	if parent._many {
+	if parent.numBcks > 1 {
 		log.mu.Lock()
 	}
 	if log.cnt == 0 {
@@ -446,6 +456,17 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 		fmt.Fprintln(log.fh, strings.Repeat("=", len(logTitle)))
 	}
 
+	scr._dolog(log, en)
+
+	if parent.numBcks > 1 {
+		log.mu.Unlock()
+	}
+}
+
+func (scr *scrBp) _dolog(log *_log, en *cmn.LsoEnt) {
+	const (
+		maxline = 256
+	)
 	sb := &scr.Line
 	sb.Reset(maxline)
 	sb.WriteByte('"')
@@ -461,10 +482,6 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	sb.WriteByte('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
-
-	if parent._many {
-		log.mu.Unlock()
-	}
 }
 
 func (scr *scrBp) cname(objname string) {
