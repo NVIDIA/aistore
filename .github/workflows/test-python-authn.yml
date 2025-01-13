@@ -44,7 +44,7 @@ jobs:
           AIS_SPACE_LOWWM=90 AIS_SPACE_HIGHWM=96 AIS_SPACE_OOS=99 scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 3
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
