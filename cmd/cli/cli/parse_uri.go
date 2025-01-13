@@ -59,7 +59,7 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 }
 
 func parseBckURI(c *cli.Context, uri string, errorOnly bool) (cmn.Bck, error) {
-	const validNames = ": ais://mmm, s3://nnn or aws://nnn, gs://ppp or gcp://ppp"
+	const validNames = ": ais://mmm, s3://nnn or aws://nnn, gs://ppp, gcp://ppp, oc://ppp or oci://ppp"
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return bck, nil

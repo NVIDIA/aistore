@@ -86,6 +86,21 @@ func MakeRangeHdr(start, length int64) string {
 	return fmt.Sprintf("%s%d-%d", cos.HdrRangeValPrefix, start, start+length-1)
 }
 
+// Ref: https://www.rfc-editor.org/rfc/rfc7233#section-4.2
+func ParseRangeHdr(contentRange string) (start, length, objectSize int64, err error) {
+	var (
+		end int64
+		n   int
+	)
+	n, err = fmt.Sscanf(contentRange, "bytes %d-%d/%d", &start, &end, &objectSize)
+	if n != 3 {
+		err = fmt.Errorf("contentRange (\"%s\") malformed", contentRange)
+		return
+	}
+	length = end + 1 - start
+	return
+}
+
 // ParseURL splits URL path at "/" and matches resulting items against the specified, if any.
 // - splitAfter == true:  strings.Split() the entire path;
 // - splitAfter == false: strings.SplitN(len(itemsPresent)+itemsAfter)

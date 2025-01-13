@@ -312,12 +312,12 @@ test:short:azure:
     - make test-short
 
 test:short:oci:
-  <<: *test_short_skip_scheduled_def
+  <<: *test_short_def
   variables:
     BUCKET: "oc://ais-ci"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci
-    - make test-short
+    - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci
+    - . ais/test/oci/mp_tuning.env && make test-short
 
 test:long:
   <<: *test_long_skip_scheduled_def
@@ -356,8 +356,8 @@ test:long:oci:
   variables:
     BUCKET: "oc://ais-ci"
   script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --ht
-    - make test-long
+    - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --ht
+    - . ais/test/oci/mp_tuning.env && make test-long
 
 test:long:aisloader:
   stage: test-long

@@ -28,4 +28,5 @@ const (
 	OCIMaxUploadSegmentSize        = "OCI_MAX_UPLOAD_SEGMENT_SIZE"
 	OCIMultiPartUploadThreshold    = "OCI_MULTI_PART_UPLOAD_THRESHOLD"
 	OCIMultiPartUploadMaxThreads   = "OCI_MULTI_PART_UPLOAD_MAX_THREADS"
+	OCIMultiPartThreadPoolSize     = "OCI_MULTI_PART_THREAD_POOL_SIZE"
 )
