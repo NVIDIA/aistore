@@ -29,10 +29,11 @@ type (
 		Num  int32  // part number (*)
 	}
 	mpt struct {
-		ctime   time.Time // InitUpload time
-		bckName string
-		objName string
-		parts   []*MptPart // by part number
+		ctime    time.Time // InitUpload time
+		bckName  string
+		objName  string
+		parts    []*MptPart // by part number
+		metadata map[string]string
 	}
 	uploads map[string]*mpt // by upload ID
 )
@@ -43,16 +44,17 @@ var (
 )
 
 // Start miltipart upload
-func InitUpload(id, bckName, objName string) {
+func InitUpload(id, bckName, objName string, metadata map[string]string) {
 	mu.Lock()
 	if ups == nil {
 		ups = make(uploads, 8)
 	}
 	ups[id] = &mpt{
-		bckName: bckName,
-		objName: objName,
-		parts:   make([]*MptPart, 0, iniCapParts),
-		ctime:   time.Now(),
+		bckName:  bckName,
+		objName:  objName,
+		parts:    make([]*MptPart, 0, iniCapParts),
+		ctime:    time.Now(),
+		metadata: metadata,
 	}
 	mu.Unlock()
 }
@@ -120,6 +122,16 @@ func ObjSize(id string) (size int64, err error) {
 	}
 	mu.RUnlock()
 	return
+}
+
+func GetUploadMetadata(id string) (metadata map[string]string) {
+	mu.RLock()
+	defer mu.RUnlock()
+	mpt, ok := ups[id]
+	if !ok {
+		return nil
+	}
+	return mpt.metadata
 }
 
 // remove all temp files and delete from the map

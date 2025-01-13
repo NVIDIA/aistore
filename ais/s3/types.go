@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -217,6 +218,11 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 		if v, exists := lom.GetCustomKey(cmn.VersionObjMD); exists {
 			// NOTE: could this `cmn.VersionObjMD` value be the result of original GET from gs:// bucket, for instance?
 			hdr.Set(cos.S3VersionHeader, v)
+		}
+	}
+	for k, v := range lom.GetCustomMD() {
+		if strings.HasPrefix(k, HeaderMetaPrefix) {
+			hdr.Set(k, v)
 		}
 	}
 }

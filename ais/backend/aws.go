@@ -618,6 +618,9 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 		md5 = cos.NewCksum(cos.ChecksumMD5, v)
 		lom.SetCustomKey(cmn.MD5ObjMD, v)
 	}
+	for k, v := range h.EncodeMetadata(obj.Metadata) {
+		lom.SetCustomKey(k, v)
+	}
 	mtime := *(obj.LastModified)
 	lom.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	return
@@ -662,6 +665,11 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 
 	md[cos.S3MetadataChecksumType] = cksumType
 	md[cos.S3MetadataChecksumVal] = cksumValue
+	if oreq != nil {
+		for k, v := range cmn.BackendHelpers.Amazon.DecodeMetadata(oreq.Header) {
+			md[k] = v
+		}
+	}
 
 	uploader = s3manager.NewUploader(svc)
 	uploadOutput, err = uploader.Upload(context.Background(), &s3.PutObjectInput{
@@ -677,7 +685,7 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 	}
 
 exit:
-	// compare with setCustomS3() above
+	// compare with _getCustom() above
 	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 		lom.SetVersion(v)
@@ -687,6 +695,13 @@ exit:
 	}
 	if v, ok := h.EncodeCksum(uploadOutput.ETag); ok {
 		lom.SetCustomKey(cmn.MD5ObjMD, v)
+	}
+	if oreq != nil {
+		for header := range oreq.Header {
+			if strings.HasPrefix(header, aiss3.HeaderMetaPrefix) {
+				lom.SetCustomKey(header, oreq.Header.Get(header))
+			}
+		}
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln(tag, lom.String())

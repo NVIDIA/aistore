@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -388,5 +389,102 @@ func TestS3ETag(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		tassert.Errorf(t, *multipartOutput.ETag == *headOutput.ETag, "ETag for PUT does not match (local: %v != remote: %v)", *multipartOutput.ETag, *headOutput.ETag)
+	})
+}
+
+// export AWS_PROFILE=default; export AIS_ENDPOINT="http://localhost:8080"; export BUCKET="aws://..."; go test -v -run="TestS3ObjMetadata" -count=1 ./ais/test/.
+func TestS3ObjMetadata(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, Bck: cliBck, RequiredCloudProvider: apc.AWS})
+
+	var (
+		bck     = cliBck
+		objName = "object.txt"
+		objSize = 50 * cos.KiB
+	)
+
+	_, err := api.HeadBucket(baseParams, bck, false)
+	tassert.CheckFatal(t, err)
+
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		loadCredentials(t),
+	)
+	tassert.CheckFatal(t, err)
+	s3Client := s3.NewFromConfig(cfg)
+
+	metadata := map[string]string{
+		"User": "guest",
+		"name": "test",
+	}
+
+	t.Run("PutObject", func(t *testing.T) {
+		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		tassert.CheckFatal(t, err)
+		header := make(http.Header)
+		for k, v := range metadata {
+			header.Set(aiss3.HeaderMetaPrefix+k, v)
+		}
+		_, err = api.PutObject(&api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			ObjName:    objName,
+			Reader:     reader,
+			Header:     header,
+		})
+		tassert.CheckFatal(t, err)
+
+		output, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+			Bucket: aws.String(bck.Name),
+			Key:    aws.String(objName),
+		})
+		tassert.CheckFatal(t, err)
+
+		for k, v := range metadata {
+			tassert.Errorf(t, output.Metadata[strings.ToLower(k)] == v, `Metadata does not match (key: %q, local: %q != remote: %q)`, k, v, output.Metadata[k])
+		}
+	})
+
+	t.Run("PutObjectMultipart", func(t *testing.T) {
+		const (
+			objSize  = 20 * cos.MiB
+			partSize = 5 * cos.MiB
+		)
+
+		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		tassert.CheckFatal(t, err)
+		cfg.HTTPClient = newS3Client(true /*pathStyle*/)
+		aisClient := s3.NewFromConfig(cfg)
+		uploader := s3manager.NewUploader(aisClient, func(uploader *s3manager.Uploader) {
+			uploader.PartSize = partSize
+			uploader.ClientOptions = []func(*s3.Options){
+				func(opts *s3.Options) {
+					opts.BaseEndpoint = aws.String(proxyURL)
+				},
+			}
+		}, func(uploader *s3manager.Uploader) {
+			uploader.ClientOptions = append(uploader.ClientOptions, func(options *s3.Options) {
+				options.APIOptions = append(options.APIOptions, func(stack *middleware.Stack) error {
+					return stack.Finalize.Add(&addGetBodyMiddleware{}, middleware.After)
+				})
+			})
+		})
+		_, err = uploader.Upload(context.Background(), &s3.PutObjectInput{
+			Bucket:        aws.String(bck.Name),
+			Key:           aws.String(objName),
+			Body:          reader,
+			ContentLength: aws.Int64(objSize),
+			Metadata:      metadata,
+		})
+		tassert.CheckFatal(t, err)
+
+		headOutput, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+			Bucket: aws.String(bck.Name),
+			Key:    aws.String(objName),
+		})
+		tassert.CheckFatal(t, err)
+
+		for k, v := range metadata {
+			tassert.Errorf(t, headOutput.Metadata[strings.ToLower(k)] == v, `Metadata does not match (key: %q, local: %q != remote: %q)`, k, v, headOutput.Metadata[k])
+		}
 	})
 }

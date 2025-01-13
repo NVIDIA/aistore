@@ -48,12 +48,18 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 		}
 	}
 
+	var metadata map[string]string
+	if oreq != nil {
+		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(oreq.Header)
+	}
+
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		sessConf = sessConf{bck: cloudBck}
 		input    = s3.CreateMultipartUploadInput{
-			Bucket: aws.String(cloudBck.Name),
-			Key:    aws.String(lom.ObjName),
+			Bucket:   aws.String(cloudBck.Name),
+			Key:      aws.String(lom.ObjName),
+			Metadata: metadata,
 		}
 	)
 	svc, errN := sessConf.s3client("[start_mpt]")

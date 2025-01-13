@@ -92,6 +92,8 @@ type (
 		// - we massively write a new content into a bucket, and/or
 		// - we simply don't care.
 		SkipVC bool
+
+		Header http.Header
 	}
 )
 
@@ -301,6 +303,7 @@ func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 		reqArgs.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
 		reqArgs.Query = query
 		reqArgs.BodyR = args.Reader
+		reqArgs.Header = args.Header
 	}
 	resp, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)

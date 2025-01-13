@@ -4,6 +4,8 @@
  */
 package s3
 
+import "github.com/NVIDIA/aistore/cmn"
+
 const (
 	// AWS URL params
 	QparamVersioning        = "versioning"
@@ -30,7 +32,11 @@ const (
 	QparamSignature   = "Signature"
 	QparamXID         = "x-id"
 
-	HeaderPrefix      = "X-Amz-"
+	HeaderPrefix = "X-Amz-"
+
+	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html#UserMetadata
+	HeaderMetaPrefix = cmn.AwsHeaderMetaPrefix
+
 	HeaderCredentials = "X-Amz-Credential" //nolint:gosec // This is just a header name definition...
 
 	versioningEnabled  = "Enabled"

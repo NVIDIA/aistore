@@ -56,6 +56,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 	var (
 		objName  = s3.ObjName(items)
 		lom      = &core.LOM{ObjName: objName}
+		metadata map[string]string
 		uploadID string
 		ecode    int
 	)
@@ -65,6 +66,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if bck.IsRemoteS3() {
+		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
 		uploadID, ecode, err = backend.StartMpt(lom, r, q)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)
@@ -74,7 +76,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		uploadID = cos.GenUUID()
 	}
 
-	s3.InitUpload(uploadID, bck.Name, objName)
+	s3.InitUpload(uploadID, bck.Name, objName, metadata)
 	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
 
 	sgl := t.gmm.NewSGL(0)
@@ -353,6 +355,10 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
 		if version != "" {
 			lom.SetCustomKey(cmn.VersionObjMD, version)
+		}
+		metadata := s3.GetUploadMetadata(uploadID)
+		for k, v := range cmn.BackendHelpers.Amazon.EncodeMetadata(metadata) {
+			lom.SetCustomKey(k, v)
 		}
 	}
 	lom.SetCustomKey(cmn.ETag, etag)

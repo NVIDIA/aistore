@@ -1,13 +1,14 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -15,15 +16,24 @@ import (
 )
 
 type backendFuncs struct {
-	EncodeVersion func(v any) (version string, isSet bool)
-	EncodeETag    func(v any) (etag string, isSet bool)
-	EncodeCksum   func(v any) (cksumValue string, isSet bool)
+	EncodeVersion  func(v any) (version string, isSet bool)
+	EncodeETag     func(v any) (etag string, isSet bool)
+	EncodeCksum    func(v any) (cksumValue string, isSet bool)
+	EncodeMetadata func(metadata map[string]string) (header map[string]string)
+
+	DecodeMetadata func(header http.Header) (metadata map[string]string)
 }
 
 // from https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
 // "The ETag may or may not be an MD5 digest of the object data. Whether or
 // not it is depends on how the object was created and how it is encrypted..."
 const AwsMultipartDelim = "-"
+
+// Due to import cycle we need to define "x-amz-meta" header here
+// See also:
+// - ais/s3/const.go
+// - https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html#UserMetadata
+const AwsHeaderMetaPrefix = "X-Amz-Meta-"
 
 func isS3MultipartEtag(etag string) bool {
 	return strings.Contains(etag, AwsMultipartDelim)
@@ -103,6 +113,31 @@ var BackendHelpers = struct {
 				debug.FailTypeCast(v)
 				return "", false
 			}
+		},
+		EncodeMetadata: func(metadata map[string]string) (header map[string]string) {
+			if len(metadata) == 0 {
+				return
+			}
+			header = make(map[string]string, len(metadata))
+			for k, v := range metadata {
+				key := http.CanonicalHeaderKey(AwsHeaderMetaPrefix + k)
+				header[key] = v
+			}
+			return
+		},
+
+		DecodeMetadata: func(header http.Header) (metadata map[string]string) {
+			for headerKey := range header {
+				if strings.HasPrefix(headerKey, AwsHeaderMetaPrefix) {
+					if metadata == nil {
+						metadata = make(map[string]string)
+					}
+					key := strings.TrimPrefix(headerKey, AwsHeaderMetaPrefix)
+					value := header.Get(headerKey)
+					metadata[key] = value
+				}
+			}
+			return
 		},
 	},
 	Google: backendFuncs{
