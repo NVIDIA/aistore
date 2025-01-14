@@ -47,7 +47,7 @@ For developers and data scientists, there's also:
 * [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch) for interoperability with AWS SDK for Python (aka [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) client
   - and other [Botocore](https://github.com/boto/botocore) derivatives.
 
-For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
+For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
 
 Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
 
@@ -57,7 +57,9 @@ Finally, [getting started](/docs/getting_started.md) with AIS takes only a few m
 
 AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](deploy/README.md).
 
-Since prerequisites boil down to, essentially, having Linux with a disk the deployment options range from [all-in-one container](/docs/videos.md#minimal-all-in-one-standalone-docker) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. But practical use cases require, of course, further consideration and may include:
+Since the prerequisites essentially boil down to having Linux with a disk the deployment options range from [all-in-one container](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. Practical use cases require, of course, further consideration.
+
+Some of the most popular deployment options include:
 
 | Option | Objective |
 | --- | ---|

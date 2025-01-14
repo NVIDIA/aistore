@@ -49,5 +49,6 @@ This setup replaces the `Authorization` header with the correct token before the
 
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aistore.nvidia.com/docs)
+* [Blog](https://aistore.nvidia.com/blog)
 * [AIStore pip package](https://pypi.org/project/aistore/)
-* [Videos and demos](https://github.com/NVIDIA/aistore/blob/main/docs/videos.md)
+* [KubeCon 2024 presentation](https://www.youtube.com/watch?v=N-d9cbROndg)

@@ -145,4 +145,5 @@ For more information on SDK usage, refer to the [SDK reference documentation](ht
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aistore.nvidia.com/docs)
 * [AIStore pip package](https://pypi.org/project/aistore/)
-* [Videos and demos](https://github.com/NVIDIA/aistore/blob/main/docs/videos.md)
+* [Blog](https://aistore.nvidia.com/blog)
+* [KubeCon 2024 presentation](https://www.youtube.com/watch?v=N-d9cbROndg)
