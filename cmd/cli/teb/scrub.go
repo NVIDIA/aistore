@@ -43,7 +43,7 @@ const (
 
 var (
 	ScrCols = [...]string{colObjects, colNotIn, colMisplacedNode, colMisplacedMp, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
-	ScrNums = [...]int64{0, 0, 0, 0, 0, 0, 0, 0, 0}
+	ScrNums = [ScrNumStats]int64{}
 )
 
 type (
@@ -83,7 +83,6 @@ func (h *ScrubHelper) colFirst() string {
 
 func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 	debug.Assert(len(ScrCols) == len(ScrNums))
-	debug.Assert(len(ScrCols) == ScrNumStats)
 
 	cols := make([]*header, 1, len(ScrCols)+1)
 	cols[0] = &header{name: h.colFirst()}

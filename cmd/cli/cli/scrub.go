@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
@@ -64,6 +65,7 @@ type (
 		logs       [teb.ScrNumStats]_log
 		progLine   cos.Builder
 		numBcks    int
+		pid        int
 		haveRemote atomic.Bool
 	}
 )
@@ -133,10 +135,7 @@ func scrubHandler(c *cli.Context) (err error) {
 		return V(err)
 	}
 
-	// create logs
-	if err := ctx.createLogs(); err != nil {
-		return err
-	}
+	ctx.pid = os.Getpid()
 
 	if ctx.numBcks > 1 {
 		err = ctx.many(bcks)
@@ -152,39 +151,15 @@ func scrubHandler(c *cli.Context) (err error) {
 // scrCtx //
 //////////////
 
-func (ctx *scrCtx) createLogs() error {
-	pid := os.Getpid()
-	for i := 1; i < len(ctx.logs); i++ { // skipping listed objects
-		log := &ctx.logs[i]
-		log.tag = strings.ToLower(teb.ScrCols[i])
-		if err := ctx._create(log, pid); err != nil {
-			// cleanup
-			for j := range i - 1 {
-				cos.Close(ctx.logs[j].fh)
-				cos.RemoveFile(ctx.logs[j].fn)
-			}
-			return err
-		}
-	}
-	return nil
-}
-
-func (*scrCtx) _create(log *_log, pid int) (err error) {
-	fn := fmt.Sprintf(".ais-scrub-%s.%d.log", log.tag, pid)
-	log.fn = filepath.Join(os.TempDir(), fn)
-	log.fh, err = cos.CreateFile(log.fn)
-	return err
-}
-
 func (ctx *scrCtx) closeLogs(c *cli.Context) {
 	var titled bool
 	for i := 1; i < len(ctx.logs); i++ { // skipping listed objects
 		log := &ctx.logs[i]
-		cos.Close(log.fh)
-		if log.cnt == 0 {
-			cos.RemoveFile(log.fn)
+		if log.fh == nil {
 			continue
 		}
+		debug.Assert(log.cnt > 0, log.fn)
+		cos.Close(log.fh)
 		if !titled {
 			const title = "Detailed Logs"
 			fmt.Fprintln(c.App.Writer)
@@ -442,16 +417,30 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 }
 
 const (
+	logFname = ".ais-scrub-%s.%x.log"
 	logTitle = "Name,Size,Atime,Location"
-	delim    = `","`
+	logDelim = `","`
 )
+
+// NOTE: exit upon (unlikely) failure
+func (*scrBp) _create(log *_log, pid int) {
+	fn := fmt.Sprintf(logFname, log.tag, pid)
+	log.fn = filepath.Join(os.TempDir(), fn)
+	fh, err := cos.CreateFile(log.fn)
+	if err != nil {
+		exitln("failed to create scrub log:", err)
+	}
+	log.fh = fh
+}
 
 func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	log := &parent.logs[i]
 	if parent.numBcks > 1 {
 		log.mu.Lock()
 	}
-	if log.cnt == 0 {
+	if log.fh == nil {
+		log.tag = strings.ToLower(teb.ScrCols[i])
+		scr._create(log, parent.pid)
 		fmt.Fprintln(log.fh, logTitle)
 		fmt.Fprintln(log.fh, strings.Repeat("=", len(logTitle)))
 	}
@@ -473,11 +462,11 @@ func (scr *scrBp) _dolog(log *_log, en *cmn.LsoEnt) {
 
 	scr.cname(en.Name)
 
-	sb.WriteString(delim)
+	sb.WriteString(logDelim)
 	sb.WriteString(strconv.FormatInt(en.Size, 10))
-	sb.WriteString(delim)
+	sb.WriteString(logDelim)
 	sb.WriteString(en.Atime)
-	sb.WriteString(delim)
+	sb.WriteString(logDelim)
 	sb.WriteString(en.Location)
 	sb.WriteByte('"')
 	fmt.Fprintln(log.fh, sb.String())
