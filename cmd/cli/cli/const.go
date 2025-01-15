@@ -393,26 +393,26 @@ var (
 	//
 	// scope 'all'
 	//
-	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties including custom (user-defined)"}
-	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
-	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
-	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
-	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
+	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "include all object properties: name, size, atime, location, copies, custom (user-defined), and more"}
+	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "include all jobs: running, finished, and aborted"}
+	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "include all running jobs"}
+	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "include all finished jobs"}
+	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use with extreme caution!)"}
 	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "download all logs"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
 		Usage: "depending on the context, list:\n" +
-			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster\n" +
+			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are not in-cluster\n" +
 			indent4 + "\t- all objects in a given accessible (visible) bucket, including remote objects and misplaced copies",
 	}
 	copyAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\") in cluster",
+		Usage: "copy all objects from a remote bucket including those that are not present (not cached) in cluster",
 	}
 	etlAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "transform all objects from a remote bucket including those that are not present (not \"cached\") in cluster",
+		Usage: "transform all objects from a remote bucket including those that are not present (not cached) in cluster",
 	}
 
 	// obj props
@@ -427,20 +427,20 @@ var (
 	// prefix (to match)
 	listObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
-		Usage: "list objects that have names starting with the specified prefix, e.g.:\n" +
+		Usage: "list objects with names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory\n" +
 			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter 'c'",
 	}
 	getObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
-		Usage: "get objects that start with the specified prefix, e.g.:\n" +
+		Usage: "get objects with names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have their names (relative to this directory) starting with 'c';\n" +
 			indent4 + "\t'--prefix \"\"' - get entire bucket (all objects)",
 	}
 	verbObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
-		Usage: "select virtual directories or objects that have names starting with the specified prefix, e.g.:\n" +
+		Usage: "select virtual directories or objects with names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c'\t- matches names 'a/b/c/d', 'a/b/cdef', and similar;\n" +
 			indent4 + "\t'--prefix a/b/c/'\t- only matches objects from the virtual directory a/b/c/",
 	}
@@ -448,7 +448,7 @@ var (
 	bsummPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
 		Usage: "for each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
-			indent4 + "\t'--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
+			indent4 + "\t'--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have names (relative to this directory) starting with the letter c",
 	}
 
@@ -480,7 +480,7 @@ var (
 	}
 	regexColsFlag = cli.StringFlag{
 		Name: regexFlag.Name,
-		Usage: "regular expression select table columns (case-insensitive), e.g.:\n" +
+		Usage: "regular expression to select table columns (case-insensitive), e.g.:\n" +
 			indent4 + "\t --regex \"put|err\" - show PUT (count), PUT (total size), and all supported error counters;\n" +
 			indent4 + "\t --regex \"[a-z]\" - show all supported metrics, including those that have zero values across all nodes;\n" +
 			indent4 + "\t --regex \"(AWS-GET$|VERSION-CHANGE$)\" - show the number object version changes (updates) and cold GETs from AWS\n" +
@@ -546,7 +546,7 @@ var (
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
 		Name: "units",
-		Usage: "show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:\n" +
+		Usage: "show statistics and/or parse command-line specified sizes using one of the following units of measurement:\n" +
 			indent4 + "\tiec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
 			indent4 + "\tsi  - SI (metric) format, e.g.: KB, MB, GB\n" +
 			indent4 + "\traw - do not convert to (or from) human-readable format",
@@ -600,7 +600,7 @@ var (
 
 	showUnmatchedFlag = cli.BoolFlag{
 		Name:  "show-unmatched",
-		Usage: "list also objects that were _not_ matched by regex and/or template (range)",
+		Usage: "list also objects that were not matched by regex and/or template (range)",
 	}
 	verChangedFlag = cli.BoolFlag{
 		Name: "check-versions",
@@ -674,14 +674,14 @@ var (
 
 	limitConnectionsFlag = cli.IntFlag{
 		Name:  "max-conns",
-		Usage: "max number of connections each target can make concurrently (up to num mountpaths)",
+		Usage: "maximum number of connections each target can make concurrently (up to num mountpaths)",
 	}
 	limitBytesPerHourFlag = cli.StringFlag{
 		Name: "limit-bph",
 		Usage: "maximum download speed, or more exactly: maximum download size per target (node) per hour, e.g.:\n" +
 			indent4 + "\t'--limit-bph 1GiB' (or same: '--limit-bph 1073741824');\n" +
 			indent4 + "\tthe value is parsed in accordance with the '--units' (see '--units' for details);\n" +
-			indent4 + "\tomitting the flag or (same) specifying '--limit-bph 0' means that download won't be throttled",
+			indent4 + "\tomitting the flag or specifying '--limit-bph 0' means that download won't be throttled",
 	}
 	objectsListFlag = cli.StringFlag{
 		Name:  "object-list,from",
@@ -694,7 +694,7 @@ var (
 		Usage: "check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version\n" +
 			indent1 + "\tfrom the associated remote bucket;\n" +
 			indent1 + "\tthe option provides operation-level control over object versioning (and version synchronization)\n" +
-			indent1 + "\twithout requiring to change the corresponding bucket configuration: 'versioning.validate_warm_get';\n" +
+			indent1 + "\twithout the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';\n" +
 			indent1 + "\tsee also:\n" +
 			indent1 + "\t\t- 'ais show bucket BUCKET versioning'\n" +
 			indent1 + "\t\t- 'ais bucket props set BUCKET versioning'\n" +
