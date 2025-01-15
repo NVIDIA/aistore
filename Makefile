@@ -129,6 +129,11 @@ cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
 	@./$(BUILD_DIR)/cli/autocomplete/install.sh
 
+ishard: ## Build ishard CLI binary
+	@echo "Building ishard..."
+	@cd $(BUILD_DIR)/ishard && go build -o $(BUILD_DEST)/ishard *.go
+	@echo "done."
+
 authn: build-authn         ## Build AuthN
 aisloader: build-aisloader ## Build aisloader
 xmeta: build-xmeta         ## Build xmeta
@@ -268,6 +273,7 @@ lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
+	@$(MAKE) -C $(BUILD_DIR)/ishard lint
 
 install-python-deps:
 	@pip3 install -r ./python/aistore/common_requirements

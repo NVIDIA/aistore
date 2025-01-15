@@ -1,6 +1,6 @@
 // Package factory provides functions to create shards and track their creation progress
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package factory
 
@@ -56,7 +56,9 @@ func NewShardFactory(baseParams api.BaseParams, fromBck, toBck cmn.Bck, ext, sha
 		ext:           ext,
 		OutShardNames: make([]string, 0),
 
-		// block when number of creating shards reaches to archive xacts's workCh size. otherwise xact commit may timeout. see xact/xs/archive.go
+		// TODO: The channel size is limited to manage concurrent xaction begin-phase requests,
+		// preventing potential blocks and timeouts during subsequent commit-phase requests.
+		// Refer to `maxNumInParallel` in `xact/xs/streaming.go` and `xact/xs/archive.go` for details.
 		pollCh:    make(chan *shard.Shard, 512),
 		dryRunCfg: dryRun,
 	}

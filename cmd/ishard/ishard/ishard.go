@@ -1,14 +1,12 @@
 // Package ishard provides utility for shard the initial dataset
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ishard
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -19,85 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 )
-
-/////////////
-// dirNode //
-/////////////
-
-// Represents the hierarchical structure of virtual directories within a bucket
-type dirNode struct {
-	children map[string]*dirNode
-	records  *shard.Records
-}
-
-func newDirNode() *dirNode {
-	return &dirNode{
-		children: make(map[string]*dirNode),
-		records:  shard.NewRecords(16),
-	}
-}
-
-func (n *dirNode) insert(keyPath, fullPath string, size int64) {
-	parts := strings.Split(keyPath, "/")
-	current := n
-
-	for i, part := range parts {
-		if _, exists := current.children[part]; !exists {
-			if i == len(parts)-1 {
-				ext := filepath.Ext(fullPath)
-				base := strings.TrimSuffix(keyPath, ext)
-				current.records.Insert(&shard.Record{
-					Key:  base,
-					Name: base,
-					Objects: []*shard.RecordObj{{
-						ContentPath:  fullPath,
-						StoreType:    shard.SGLStoreType,
-						Offset:       0,
-						MetadataSize: 0,
-						Size:         size,
-						Extension:    ext,
-					}},
-				})
-			} else {
-				current.children[part] = newDirNode()
-			}
-		}
-		current = current.children[part]
-	}
-}
-
-// apply performs a preorder traversal through the tree starting from the node `n`,
-// applying the given reaction `act` to the Records of each node. The traversal stops if an error occurs.
-func (n *dirNode) apply(act *config.MissingExtManager, recursive bool) error {
-	if n == nil {
-		return nil
-	}
-
-	newRecs, err := act.React(n.records)
-	if err != nil {
-		return err
-	}
-	if newRecs != nil {
-		n.records.Drain()
-		n.records = newRecs
-	}
-
-	if !recursive {
-		return nil
-	}
-
-	for _, child := range n.children {
-		if err := child.apply(act, recursive); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-//////////////
-// ISharder //
-//////////////
 
 // ISharder executes an initial sharding job with given configuration
 type ISharder struct {
@@ -220,27 +139,23 @@ func (is *ISharder) incAndCheck(size int64) (accumulatedSize int64) {
 }
 
 // NewISharder instantiates an ISharder with the configuration if provided;
-// otherwise, it loads from CLI or uses the default config.
-func NewISharder(cfgArg *config.Config) (is *ISharder, err error) {
-	is = &ISharder{}
-
-	// Use provided config if given
-	if cfgArg != nil {
-		is.cfg = cfgArg
-	} else {
-		is.cfg, err = config.Load()
+// otherwise, it loads config from CLI parameters.
+func NewISharder(cfg *config.Config) (is *ISharder, err error) {
+	if cfg == nil {
+		cfg, err = config.LoadFromCLI()
 		if err != nil {
-			defaultCfg := config.DefaultConfig
-			is.cfg = &defaultCfg
+			return nil, err
 		}
 	}
 
-	is.baseParams = api.BaseParams{URL: is.cfg.URL}
+	is = &ISharder{cfg: cfg}
+
+	is.baseParams = api.BaseParams{URL: cfg.URL}
 	is.baseParams.Client = cmn.NewClient(cmn.TransportArgs{UseHTTPProxyEnv: true})
 
-	is.sampleKeyRegex = regexp.MustCompile(is.cfg.SampleKeyPattern.Regex)
+	is.sampleKeyRegex, err = regexp.Compile(cfg.SampleKeyPattern.Regex)
 
-	return is, err
+	return
 }
 
 func (is *ISharder) Start() error {

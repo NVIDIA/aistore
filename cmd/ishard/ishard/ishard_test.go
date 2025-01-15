@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,7 +30,7 @@ import (
 )
 
 func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, numRecords, numExtensions int,
-	fileSize int64, sampleKeyPattern config.SampleKeyPattern, randomize, dropout bool) { //nolint:unparam // dropout to be implemented
+	fileSize int64, sampleKeyPattern config.SampleKeyPattern, randomize bool) {
 	tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
 	tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
 
@@ -49,7 +50,7 @@ func runIshardTest(t *testing.T, cfg *config.Config, baseParams api.BaseParams, 
 	err = isharder.Start()
 	tassert.CheckFatal(t, err)
 
-	checkOutputShards(t, baseParams, cfg.DstBck, numRecords*numExtensions, totalSize, sampleKeyPattern, dropout)
+	checkOutputShards(t, baseParams, cfg.DstBck, numRecords*numExtensions, totalSize, sampleKeyPattern, false)
 }
 
 func TestIshardNoRecordsSplit(t *testing.T) {
@@ -96,7 +97,7 @@ func TestIshardNoRecordsSplit(t *testing.T) {
 				tc.numRecords /= 10
 			}
 
-			runIshardTest(t, cfg, baseParams, tc.numRecords, tc.numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
+			runIshardTest(t, cfg, baseParams, tc.numRecords, tc.numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/)
 		})
 	}
 }
@@ -158,7 +159,7 @@ func TestIshardShardSize(t *testing.T) {
 				tc.numRecords /= 10
 			}
 
-			runIshardTest(t, cfg, baseParams, tc.numRecords, numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
+			runIshardTest(t, cfg, baseParams, tc.numRecords, numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/)
 
 			lsmsg := &apc.LsoMsg{}
 			lsmsg.SetFlag(apc.LsNameSize)
@@ -306,7 +307,7 @@ func TestIshardTemplate(t *testing.T) {
 				numExtensions = 3
 			)
 
-			runIshardTest(t, cfg, baseParams, tc.numRecords, numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
+			runIshardTest(t, cfg, baseParams, tc.numRecords, numExtensions, tc.fileSize, config.BaseFileNamePattern, false /*randomize*/)
 
 			tarballs, err := api.ListObjects(baseParams, cfg.DstBck, &apc.LsoMsg{}, api.ListArgs{})
 			tassert.CheckFatal(t, err)
@@ -381,7 +382,7 @@ func TestIshardSampleKeyPattern(t *testing.T) {
 				fileSize      = 32 * cos.KiB
 			)
 
-			runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), tc.pattern, true /*randomize*/, false /*dropout*/)
+			runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), tc.pattern, true /*randomize*/)
 		})
 	}
 }
@@ -437,7 +438,7 @@ func TestIshardMissingExtension(t *testing.T) {
 		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
 
 		err = isharder.Start() // error is expected to occur since `dropout` is set, ishard should abort
-		if err == nil || !strings.HasPrefix(err.Error(), "missing extension: ") {
+		if err == nil || !strings.HasPrefix(err.Error(), config.ErrorPrefix) {
 			tassert.Fatalf(t, false, "expected error with 'missing extension:', but got: %v", err)
 		}
 	})
@@ -498,9 +499,56 @@ func TestIshardMissingExtension(t *testing.T) {
 		}
 		tassert.CheckFatal(t, err)
 	})
+
+	t.Run("TestIshardMissingExtension/action=warn", func(t *testing.T) {
+		cfg.SrcBck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+		cfg.DstBck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+		tools.CreateBucket(t, cfg.URL, cfg.SrcBck, nil, true /*cleanup*/)
+		tools.CreateBucket(t, cfg.URL, cfg.DstBck, nil, true /*cleanup*/)
+
+		expectedExts := []string{".jpeg", ".cls", ".json"}
+		var err error
+		cfg.MExtMgr, err = config.NewMissingExtManager("warn", expectedExts)
+		tassert.CheckFatal(t, err)
+
+		_, err = generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", expectedExts, int64(fileSize), true /*randomize*/, true /*dropout*/)
+		tassert.CheckFatal(t, err)
+
+		isharder, err := ishard.NewISharder(cfg)
+		tassert.CheckFatal(t, err)
+
+		fmt.Printf("starting ishard, from %s to %s\n", cfg.SrcBck.String(), cfg.DstBck.String())
+
+		// Capture stdout output to verify warning messages
+		r, w, _ := os.Pipe()
+		stdout := os.Stdout
+		defer func() { os.Stdout = stdout }() // Restore original stdout at the end
+		os.Stdout = w
+
+		err = isharder.Start()
+		w.Close()
+
+		var outputBuffer bytes.Buffer
+		_, _ = outputBuffer.ReadFrom(r)
+		output := outputBuffer.String()
+
+		if !strings.HasPrefix(output, config.WarningPrefix) {
+			t.Errorf("Expected warning message not found in output: %s", output)
+		}
+
+		tassert.CheckFatal(t, err)
+	})
 }
 
 func TestIshardEKM(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
 	var (
 		cfg = &config.Config{
 			SrcBck: cmn.Bck{
@@ -617,7 +665,7 @@ func TestIshardParallel(t *testing.T) {
 		wg.Add(1)
 		go func(cfg config.Config, baseParams api.BaseParams) {
 			defer wg.Done()
-			runIshardTest(t, &cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
+			runIshardTest(t, &cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/)
 		}(*cfg, baseParams)
 	}
 	wg.Wait()
@@ -658,7 +706,7 @@ func TestIshardChain(t *testing.T) {
 			fileSize      = 32 * cos.KiB
 		)
 
-		runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
+		runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/)
 	}
 }
 
@@ -693,7 +741,7 @@ func TestIshardLargeBucket(t *testing.T) {
 		fileSize      = 32 * cos.KiB
 	)
 
-	runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/, false /*dropout*/)
+	runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.BaseFileNamePattern, false /*randomize*/)
 }
 
 func TestIshardLargeFiles(t *testing.T) {
@@ -727,7 +775,7 @@ func TestIshardLargeFiles(t *testing.T) {
 		fileSize      = 2 * cos.GiB
 	)
 
-	runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.FullNamePattern, false /*randomize*/, false /*dropout*/)
+	runIshardTest(t, cfg, baseParams, numRecords, numExtensions, int64(fileSize), config.FullNamePattern, false /*randomize*/)
 }
 
 // Helper function to generate a nested directory structure
@@ -743,6 +791,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 
 	// Queue to hold objects temporarily to random insertion
 	randomizeQueue := make([]string, 0)
+	dropOnce := dropout
 
 	basePath := randomFilePath()
 	for range numRecords {
@@ -774,6 +823,12 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 
 		baseName := trand.String(5)
 		for _, ext := range extensions {
+			// Ensure to drop an extension at least once
+			if dropOnce {
+				dropOnce = false
+				continue
+			}
+
 			// Randomly skip an extension if dropout is set
 			if dropout && rand.IntN(10) == 0 {
 				continue
