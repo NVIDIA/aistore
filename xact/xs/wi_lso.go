@@ -88,53 +88,66 @@ func (wi *walkInfo) match(objName string) bool {
 }
 
 // new entry to be added to the listed page (note: slow path)
-func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEnt) {
-	e = &cmn.LsoEnt{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
+func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
+	en = &cmn.LsoEnt{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 
 	if lom.IsFntl() {
 		orig := lom.OrigFntl()
 		if orig != nil {
 			saved := lom.PushFntl(orig)
 			if wi.msg.IsFlagSet(apc.LsVerChanged) {
-				checkRemoteMD(lom, e)
+				checkRemoteMD(lom, en)
 			}
 			lom.PopFntl(saved)
-			e.Name = orig[1]
+			en.Name = orig[1]
 		}
 	} else if wi.msg.IsFlagSet(apc.LsVerChanged) {
-		checkRemoteMD(lom, e)
+		// may set en.custom and en.version
+		checkRemoteMD(lom, en)
 	}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
 	}
-	wi.setWanted(e, lom)
+
+	// fill out even more of `en`
+	wi.setWanted(en, lom)
+
 	wi.lomVisitedCb(lom)
 	return
 }
 
 // NOTE: slow path if lom.Bck is remote
-func checkRemoteMD(lom *core.LOM, e *cmn.LsoEnt) {
+func checkRemoteMD(lom *core.LOM, en *cmn.LsoEnt) {
 	res := lom.CheckRemoteMD(false /*locked*/, false /*sync*/, nil /*origReq*/)
+
 	switch {
 	case res.Eq:
 		debug.AssertNoErr(res.Err)
 	case cos.IsNotExist(res.Err, res.ErrCode):
-		e.SetVerRemoved()
+		en.SetFlag(apc.EntryVerRemoved)
+	case res.Err == nil:
+		en.SetFlag(apc.EntryVerChanged)
+
+		// expecting custom and version set
+		debug.Assert(len(res.ObjAttrs.CustomMD) > 0)
+		en.Custom = cmn.CustomMD2S(res.ObjAttrs.CustomMD)
+		debug.Assert(res.ObjAttrs.Ver != nil)
+		en.Version = *res.ObjAttrs.Ver
 	default:
-		e.SetVerChanged()
+		en.SetFlag(apc.EntryHeadFail)
 	}
 }
 
 // Performs a number of syscalls to load object metadata.
-func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEnt, err error) {
+func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (en *cmn.LsoEnt, err error) {
 	if de.IsDir() {
 		return
 	}
 
 	lom := core.AllocLOM("")
-	entry, err = wi._cb(lom, fqn)
+	en, err = wi._cb(lom, fqn)
 	core.FreeLOM(lom)
-	return entry, err
+	return en, err
 }
 
 func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {

@@ -254,7 +254,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		}
 	)
 	scr.Cname = bck.Cname("")
-	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsAtime, apc.GetPropsCopies, apc.GetPropsLocation, apc.GetPropsCustom}
+	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsLocation, apc.GetPropsCustom}
 	if bck.IsRemote() {
 		lsmsg.Flags |= apc.LsVerChanged
 		lsmsg.AddProps(propNames...)

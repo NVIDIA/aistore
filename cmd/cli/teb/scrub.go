@@ -23,8 +23,8 @@ const (
 	colMissingCp     = "MISSING-CP"
 	colSmallSz       = "SMALL"
 	colLargeSz       = "LARGE"
-	colVchanged      = "VERSION-CHANGED"
-	colVremoved      = "VERSION-REMOVED"
+	colVchanged      = "VER-CHANGED"
+	colVremoved      = "VER-REMOVED"
 )
 
 const (

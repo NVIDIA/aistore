@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -143,7 +143,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 
 	if !locked {
 		// return info (neq and, possibly, not-found), and be done
-		return CRMD{ErrCode: ecode, Err: err}
+		return CRMD{ObjAttrs: oa, ErrCode: ecode, Err: err}
 	}
 
 	// rm remotely-deleted
@@ -160,7 +160,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 	}
 
 	lom.Uncache()
-	return CRMD{ErrCode: ecode, Err: err}
+	return CRMD{ObjAttrs: oa, ErrCode: ecode, Err: err}
 }
 
 // NOTE: Sync is false (ie., not deleting)

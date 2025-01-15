@@ -253,8 +253,11 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 // b) the same remote "source" and at least one matching checksum, or c) two matching checksums.
 // (See also note below.)
 //
-// Note that mismatch in any given checksum type immediately renders inequality and return
-// from the function.
+// Note that ETag, checksum, or version mismatch leads to immediate return with error
+// specifying the exact cause.
+//
+// Note version comparison may fail even when the objects are identical, content-wise:
+// same size, ETag, and checksums may still "co-exist" with different versions.
 //
 // TODO: count == 1 with matching checksum being xxhash - must be configurable :NOTE
 func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {

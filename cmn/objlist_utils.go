@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -67,11 +67,8 @@ func appSorted(entries LsoEntries, ne *LsoEnt) LsoEntries {
 func (be *LsoEnt) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
 func (be *LsoEnt) SetPresent()     { be.Flags |= apc.EntryIsCached }
 
-// see also: "latest-ver", QparamLatestVer, et al.
-func (be *LsoEnt) SetVerChanged()     { be.Flags |= apc.EntryVerChanged }
-func (be *LsoEnt) IsVerChanged() bool { return be.Flags&apc.EntryVerChanged != 0 }
-func (be *LsoEnt) SetVerRemoved()     { be.Flags |= apc.EntryVerRemoved }
-func (be *LsoEnt) IsVerRemoved() bool { return be.Flags&apc.EntryVerRemoved != 0 }
+func (be *LsoEnt) SetFlag(fl uint16)           { be.Flags |= fl }
+func (be *LsoEnt) IsAnyFlagSet(fl uint16) bool { return be.Flags&fl != 0 }
 
 func (be *LsoEnt) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEnt) Status() uint16     { return be.Flags & apc.EntryStatusMask }

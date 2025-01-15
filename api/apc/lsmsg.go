@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -91,7 +91,7 @@ const (
 )
 
 const (
-	// Status
+	// location _status_
 	LocOK = iota
 	LocMisplacedNode
 	LocMisplacedMountpath
@@ -105,6 +105,8 @@ const (
 	EntryIsArchive  = 1 << (EntryStatusBits + 4)
 	EntryVerChanged = 1 << (EntryStatusBits + 5) // see also: QparamLatestVer, et al.
 	EntryVerRemoved = 1 << (EntryStatusBits + 6) // ditto
+	// added v3.26
+	EntryHeadFail = 1 << (EntryStatusBits + 7)
 )
 
 // ObjEntry.Flags field

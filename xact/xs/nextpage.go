@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -112,19 +112,19 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 
 func (npg *npgCtx) populate(lst *cmn.LsoRes) error {
 	post := npg.wi.lomVisitedCb
-	for _, obj := range lst.Entries {
-		if obj.IsDir() {
+	for _, en := range lst.Entries {
+		if en.IsDir() {
 			// collecting virtual dir-s when apc.LsNoRecursion is on - skipping here
 			continue
 		}
-		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(obj.Name))
+		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(en.Name))
 		if err != nil {
 			return err
 		}
 		if si.ID() != core.T.SID() {
 			continue
 		}
-		lom := core.AllocLOM(obj.Name)
+		lom := core.AllocLOM(en.Name)
 		if err := lom.InitBck(npg.bck.Bucket()); err != nil {
 			core.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
@@ -137,8 +137,8 @@ func (npg *npgCtx) populate(lst *cmn.LsoRes) error {
 			continue
 		}
 
-		npg.wi.setWanted(obj, lom)
-		obj.SetPresent()
+		npg.wi.setWanted(en, lom)
+		en.SetPresent()
 
 		if post != nil {
 			post(lom)
