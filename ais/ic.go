@@ -429,7 +429,7 @@ func (ic *ic) syncICBundle() error {
 			Query:  url.Values{apc.QparamWhat: []string{apc.WhatICBundle}},
 		}
 		cargs.timeout = cmn.Rom.CplaneOperation()
-		cargs.cresv = cresIC{} // -> icBundle
+		cargs.cresv = cresjGeneric[icBundle]{}
 	}
 	res := ic.p.call(cargs, smap)
 	freeCargs(cargs)

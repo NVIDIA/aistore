@@ -100,7 +100,7 @@ func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.
 	qbck.AddToQuery(q)
 	q.Set(apc.QparamSilent, "true")
 	args.req.Query = q
-	args.cresv = cresBsumm{} // -> cmn.AllBsummResults
+	args.cresv = cresjGeneric[cmn.AllBsummResults]{}
 
 	results := p.bcastGroup(args)
 	freeBcArgs(args)

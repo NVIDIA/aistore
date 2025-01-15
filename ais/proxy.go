@@ -2344,7 +2344,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	}
 	args.timeout = apc.LongTimeout
 	args.smap = smap
-	args.cresv = cresLso{} // -> cmn.LsoRes
+	args.cresv = cresmGeneric[cmn.LsoRes]{}
 
 	// Combine the results.
 	results = p.bcastGroup(args)
@@ -2442,7 +2442,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 			cargs.si = tsi
 			cargs.req = args.req
 			cargs.timeout = timeout
-			cargs.cresv = cresLso{} // -> cmn.LsoRes
+			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
 		}
 		// duplicate via query to have target ignoring an (early) failure to initialize bucket
 		if lsmsg.IsFlagSet(apc.LsDontHeadRemote) {
@@ -2458,7 +2458,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 	} else {
 		args.timeout = timeout
 		args.smap = smap
-		args.cresv = cresLso{} // -> cmn.LsoRes
+		args.cresv = cresmGeneric[cmn.LsoRes]{}
 		results = p.bcastGroup(args)
 	}
 
@@ -2898,7 +2898,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSmap}},
 		}
 		cargs.timeout = apc.DefaultTimeout
-		cargs.cresv = cresSM{} // -> smapX
+		cargs.cresv = cresjGeneric[smapX]{} // -> smapX
 	}
 	res := p.call(cargs, p.owner.smap.get())
 	if res.err != nil {
@@ -3284,7 +3284,7 @@ func (p *proxy) _getSI(osi *meta.Snode) (si *meta.Snode, err error) {
 			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSnode}},
 		}
 		cargs.timeout = cmn.Rom.CplaneOperation()
-		cargs.cresv = cresND{} // -> meta.Snode
+		cargs.cresv = cresjGeneric[meta.Snode]{}
 	}
 	res := p.call(cargs, p.owner.smap.get())
 	if res.err != nil {

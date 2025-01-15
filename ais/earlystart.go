@@ -730,7 +730,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 	}
 	args.nodes = append(args.nodes, pmap)
 
-	args.cresv = cresCM{} // -> cluMeta
+	args.cresv = cresjGeneric[cluMeta]{}
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	done = true

@@ -250,7 +250,7 @@ func (p *proxy) getRemAisVec(refresh bool) (*meta.RemAisVec, error) {
 			Query:  q,
 		}
 		cargs.timeout = cmn.Rom.MaxKeepalive()
-		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
+		cargs.cresv = cresjGeneric[meta.RemAisVec]{}
 	}
 	var (
 		v   *meta.RemAisVec

@@ -31,7 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -344,9 +343,19 @@ func freeCargs(a *callArgs) {
 	cargsPool.Put(a)
 }
 
-///////////////////////
-// call result pools //
-///////////////////////
+////////////////
+// call result: generics and pools
+////////////////
+
+type (
+	cresjGeneric[T any] struct{}
+	cresmGeneric[T any] struct{}
+)
+
+func (cresjGeneric[T]) newV() any                              { return new(T) }
+func (c cresjGeneric[T]) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
+func (cresmGeneric[T]) newV() any                              { return new(T) }
+func (c cresmGeneric[T]) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
 var (
 	resultsPool sync.Pool
@@ -384,40 +393,6 @@ func freeBcastRes(results sliceResults) {
 	resultsPool.Put(&results)
 }
 
-//
-// all `cresv` implementations
-// and common read-body methods w/ optional value-unmarshaling
-//
-
-type (
-	cresCM struct{} // -> cluMeta; selectively and alternatively, via `recvCluMetaBytes`
-	cresSM struct{} // -> smapX
-	cresND struct{} // -> meta.Snode
-	cresBA struct{} // -> cmn.BackendInfoAIS
-	cresEI struct{} // -> etl.InfoList
-	cresEL struct{} // -> etl.Logs
-	cresEM struct{} // -> etl.CPUMemUsed
-	cresIC struct{} // -> icBundle
-	cresBM struct{} // -> bucketMD
-
-	cresLso   struct{} // -> cmn.LsoRes
-	cresBsumm struct{} // -> cmn.AllBsummResults
-)
-
-var (
-	_ cresv = cresCM{}
-	_ cresv = cresLso{}
-	_ cresv = cresSM{}
-	_ cresv = cresND{}
-	_ cresv = cresBA{}
-	_ cresv = cresEI{}
-	_ cresv = cresEL{}
-	_ cresv = cresEM{}
-	_ cresv = cresIC{}
-	_ cresv = cresBM{}
-	_ cresv = cresBsumm{}
-)
-
 func (res *callResult) read(body io.Reader, size int64) {
 	res.bytes, res.err = cos.ReadAllN(body, size)
 }
@@ -433,39 +408,6 @@ func (res *callResult) mread(body io.Reader) {
 	res.err = vv.DecodeMsg(msgp.NewReaderBuf(body, buf))
 	slab.Free(buf)
 }
-
-func (cresCM) newV() any                              { return &cluMeta{} }
-func (c cresCM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresLso) newV() any                              { return &cmn.LsoRes{} }
-func (c cresLso) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
-
-func (cresSM) newV() any                              { return &smapX{} }
-func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresND) newV() any                              { return &meta.Snode{} }
-func (c cresND) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresBA) newV() any                              { return &meta.RemAisVec{} }
-func (c cresBA) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresEI) newV() any                              { return &etl.InfoList{} }
-func (c cresEI) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresEL) newV() any                              { return &etl.Logs{} }
-func (c cresEL) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresEM) newV() any                              { return &etl.CPUMemUsed{} }
-func (c cresEM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresIC) newV() any                              { return &icBundle{} }
-func (c cresIC) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresBM) newV() any                              { return &bucketMD{} }
-func (c cresBM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
-
-func (cresBsumm) newV() any                              { return &cmn.AllBsummResults{} }
-func (c cresBsumm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////
 // nlogWriter //

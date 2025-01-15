@@ -288,7 +288,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.S}
 	args.timeout = apc.DefaultTimeout
-	args.cresv = cresEI{} // -> etl.InfoList
+	args.cresv = cresjGeneric[etl.InfoList]{}
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 
@@ -342,7 +342,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 			cargs.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.Join(etlName, apc.ETLLogs)}
 			cargs.si = si
 			cargs.timeout = apc.DefaultTimeout
-			cargs.cresv = cresEL{} // -> etl.Logs
+			cargs.cresv = cresjGeneric[etl.Logs]{}
 		}
 		results[0] = p.call(cargs, smap)
 		freeCargs(cargs)
@@ -351,7 +351,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 		args = allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 		args.timeout = apc.DefaultTimeout
-		args.cresv = cresEL{} // -> etl.Logs
+		args.cresv = cresjGeneric[etl.Logs]{}
 		results = p.bcastGroup(args)
 		freeBcArgs(args)
 	}
@@ -404,7 +404,7 @@ func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: r.URL.Path}
 	args.timeout = apc.DefaultTimeout
-	args.cresv = cresEM{} // -> etl.CPUMemByTarget
+	args.cresv = cresjGeneric[etl.CPUMemUsed]{}
 	results = p.bcastGroup(args)
 	defer freeBcastRes(results)
 	freeBcArgs(args)

@@ -271,7 +271,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 		cargs.si = npsi
 		cargs.timeout = cmn.Rom.MaxKeepalive()
 		cargs.req = cmn.HreqArgs{Path: apc.URLPathDae.S, Query: url.Values{apc.QparamWhat: []string{apc.WhatSmapVote}}}
-		cargs.cresv = cresCM{} // -> cluMeta
+		cargs.cresv = cresjGeneric[cluMeta]{}
 	}
 	res := p.call(cargs, nsmap /* -> header */)
 	eri := res.unwrap()

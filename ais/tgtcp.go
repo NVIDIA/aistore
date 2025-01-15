@@ -1048,7 +1048,7 @@ func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
 		cargs.si = psi
 		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: q}
 		cargs.timeout = timeout
-		cargs.cresv = cresBM{}
+		cargs.cresv = cresjGeneric[bucketMD]{}
 	}
 	res := t.call(cargs, smap)
 	if res.err != nil {
