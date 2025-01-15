@@ -405,11 +405,11 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 		scr.log(parent, en, teb.ScrLargeSz)
 	}
 
-	if en.IsVerChanged() {
+	if en.IsAnyFlagSet(apc.EntryVerChanged) {
 		scr.Stats[teb.ScrVchanged].Cnt++
 		scr.Stats[teb.ScrVchanged].Siz += en.Size
 		scr.log(parent, en, teb.ScrVchanged)
-	} else if en.IsVerRemoved() {
+	} else if en.IsAnyFlagSet(apc.EntryVerRemoved) {
 		scr.Stats[teb.ScrVremoved].Cnt++
 		scr.Stats[teb.ScrVremoved].Siz += en.Size
 		scr.log(parent, en, teb.ScrVremoved)

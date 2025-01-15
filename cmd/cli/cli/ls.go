@@ -543,8 +543,8 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	propsList := splitCsv(props)
 	if isRemote && !addStatusCol {
 		if addCachedCol && !cos.StringInSlice(apc.GetPropsStatus, propsList) {
-			for _, e := range entries {
-				if e.IsVerChanged() {
+			for _, en := range entries {
+				if en.IsAnyFlagSet(apc.EntryVerChanged | apc.EntryVerRemoved) {
 					addStatusCol = true
 					break
 				}

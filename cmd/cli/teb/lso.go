@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -80,17 +80,19 @@ func LsoTemplate(propsList []string, hideHeader, addCachedCol, addStatusCol bool
 // formatting
 //
 
-func fmtLsObjStatus(e *cmn.LsoEnt) string {
-	switch e.Status() {
+func fmtLsObjStatus(en *cmn.LsoEnt) string {
+	switch en.Status() {
 	case apc.LocOK:
-		if !e.IsPresent() {
+		if !en.IsPresent() {
 			return UnknownStatusVal
 		}
 		switch {
-		case e.IsVerChanged():
+		case en.IsAnyFlagSet(apc.EntryVerChanged):
 			return fcyan("version-changed")
-		case e.IsVerRemoved():
-			return fred("deleted")
+		case en.IsAnyFlagSet(apc.EntryVerRemoved):
+			return fblue("deleted") // as in note: deleted
+		case en.IsAnyFlagSet(apc.EntryHeadFail):
+			return fred("remote-error")
 		default:
 			return "ok"
 		}
@@ -103,14 +105,14 @@ func fmtLsObjStatus(e *cmn.LsoEnt) string {
 	case apc.LocIsCopyMissingObj:
 		return "replica(object-is-missing)"
 	default:
-		debug.Assertf(false, "%#v", e)
+		debug.Assertf(false, "%#v", en)
 		return "invalid"
 	}
 }
 
-func fmtLsObjIsCached(e *cmn.LsoEnt) string {
-	if e.IsDir() {
+func fmtLsObjIsCached(en *cmn.LsoEnt) string {
+	if en.IsDir() {
 		return ""
 	}
-	return FmtBool(e.IsPresent())
+	return FmtBool(en.IsPresent())
 }
