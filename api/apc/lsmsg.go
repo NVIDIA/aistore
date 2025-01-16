@@ -56,8 +56,8 @@ const (
 	// * `QparamDontAddRemote` (this package)
 	LsDontAddRemote
 
-	// cache list-objects results and use this cache to speed-up
-	UseListObjsCache
+	// Deprecated
+	_useListObjsCache //nolint:unused // Kept for backward compatibility.
 
 	// For remote buckets - list only remote props (aka `wantOnlyRemote`). When false,
 	// the default that's being used is: `WantOnlyRemoteProps` - see below.

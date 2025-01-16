@@ -50,7 +50,6 @@ const (
 	ActStoreCleanup = "cleanup-store"
 
 	ActEvictRemoteBck = "evict-remote-bck" // evict remote bucket's data
-	ActInvalListCache = "inval-listobj-cache"
 	ActList           = "list"
 	ActLoadLomCache   = "load-lom-cache"
 	ActNewPrimary     = "new-primary"

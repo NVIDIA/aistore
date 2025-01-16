@@ -931,11 +931,8 @@ func TestListObjectsProps(t *testing.T) {
 			}
 			tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
 		}
-		checkProps := func(useCache bool, props []string, f func(en *cmn.LsoEnt)) {
+		checkProps := func(props []string, f func(en *cmn.LsoEnt)) {
 			msg := &apc.LsoMsg{PageSize: 100}
-			if useCache {
-				msg.SetFlag(apc.UseListObjsCache)
-			}
 			msg.AddProps(props...)
 			lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
@@ -949,74 +946,72 @@ func TestListObjectsProps(t *testing.T) {
 			}
 		}
 
-		for _, useCache := range []bool{false, true} {
-			tlog.Logf("[cache=%t] trying empty (minimal) subset of props...\n", useCache)
-			checkProps(useCache, []string{}, func(en *cmn.LsoEnt) {
-				tassert.Errorf(t, en.Name != "", "name is not set")
-				tassert.Errorf(t, en.Size != 0, "size is not set")
+		tlog.Logf("trying empty (minimal) subset of props...\n")
+		checkProps([]string{}, func(en *cmn.LsoEnt) {
+			tassert.Errorf(t, en.Name != "", "name is not set")
+			tassert.Errorf(t, en.Size != 0, "size is not set")
 
-				tassert.Errorf(t, en.Atime == "", "atime is set")
-				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
-				tassert.Errorf(t, en.Copies == 0, "copies is set")
-			})
+			tassert.Errorf(t, en.Atime == "", "atime is set")
+			tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+			tassert.Errorf(t, en.Copies == 0, "copies is set")
+		})
 
-			tlog.Logf("[cache=%t] trying ais-default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefaultAIS, func(en *cmn.LsoEnt) {
-				tassert.Errorf(t, en.Size != 0, "size is not set")
+		tlog.Logf("trying ais-default subset of props...\n")
+		checkProps(apc.GetPropsDefaultAIS, func(en *cmn.LsoEnt) {
+			tassert.Errorf(t, en.Size != 0, "size is not set")
+			tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+			tassert.Errorf(t, en.Atime != "", "atime is not set")
+
+			tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+			tassert.Errorf(t, en.Copies == 0, "copies is set")
+		})
+
+		tlog.Logf("trying cloud-default subset of props...\n")
+		checkProps(apc.GetPropsDefaultCloud, func(en *cmn.LsoEnt) {
+			tassert.Errorf(t, en.Size != 0, "size is not set")
+			tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+			if bck.IsAIS() || remoteVersioning {
+				tassert.Errorf(t, en.Version != "", "version is not set")
+			}
+			tassert.Errorf(t, !m.bck.IsCloud() || en.Custom != "", "custom is not set")
+
+			tassert.Errorf(t, en.Atime == "", "atime is set")
+			tassert.Errorf(t, en.Copies == 0, "copies is set")
+		})
+
+		tlog.Logf("trying specific subset of props...\n")
+		checkProps(
+			[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, en.Atime != "", "atime is not set")
-
-				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
-				tassert.Errorf(t, en.Copies == 0, "copies is set")
-			})
-
-			tlog.Logf("[cache=%t] trying cloud-default subset of props...\n", useCache)
-			checkProps(useCache, apc.GetPropsDefaultCloud, func(en *cmn.LsoEnt) {
-				tassert.Errorf(t, en.Size != 0, "size is not set")
-				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
-				if bck.IsAIS() || remoteVersioning {
-					tassert.Errorf(t, en.Version != "", "version is not set")
-				}
-				tassert.Errorf(t, !m.bck.IsCloud() || en.Custom != "", "custom is not set")
-
-				tassert.Errorf(t, en.Atime == "", "atime is set")
-				tassert.Errorf(t, en.Copies == 0, "copies is set")
-			})
-
-			tlog.Logf("[cache=%t] trying specific subset of props...\n", useCache)
-			checkProps(useCache,
-				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEnt) {
-					tassert.Errorf(t, en.Checksum != "", "checksum is not set")
-					if bck.IsAIS() || remoteVersioning {
-						tassert.Error(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
-					}
-					tassert.Error(t, en.Copies > 0, "copies is not set")
-
-					tassert.Error(t, en.Atime == "", "atime is set")
-					tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
-				})
-
-			tlog.Logf("[cache=%t] trying small subset of props...\n", useCache)
-			checkProps(useCache, []string{apc.GetPropsSize}, func(en *cmn.LsoEnt) {
-				tassert.Errorf(t, en.Size != 0, "size is not set")
-
-				tassert.Errorf(t, en.Atime == "", "atime is set")
-				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
-				tassert.Errorf(t, en.Copies == 0, "copies is set")
-			})
-
-			tlog.Logf("[cache=%t] trying all props...\n", useCache)
-			checkProps(useCache, apc.GetPropsAll, func(en *cmn.LsoEnt) {
-				tassert.Errorf(t, en.Size != 0, "size is not set")
 				if bck.IsAIS() || remoteVersioning {
 					tassert.Error(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
 				}
-				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
-				tassert.Errorf(t, en.Atime != "", "atime is not set")
-				tassert.Errorf(t, en.Location != "", "target location is not set [%#v]", en)
-				tassert.Errorf(t, en.Copies != 0, "copies is not set")
+				tassert.Error(t, en.Copies > 0, "copies is not set")
+
+				tassert.Error(t, en.Atime == "", "atime is set")
+				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
 			})
-		}
+
+		tlog.Logf("trying small subset of props...\n")
+		checkProps([]string{apc.GetPropsSize}, func(en *cmn.LsoEnt) {
+			tassert.Errorf(t, en.Size != 0, "size is not set")
+
+			tassert.Errorf(t, en.Atime == "", "atime is set")
+			tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
+			tassert.Errorf(t, en.Copies == 0, "copies is set")
+		})
+
+		tlog.Logf("trying all props...\n")
+		checkProps(apc.GetPropsAll, func(en *cmn.LsoEnt) {
+			tassert.Errorf(t, en.Size != 0, "size is not set")
+			if bck.IsAIS() || remoteVersioning {
+				tassert.Error(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
+			}
+			tassert.Errorf(t, en.Checksum != "", "checksum is not set")
+			tassert.Errorf(t, en.Atime != "", "atime is not set")
+			tassert.Errorf(t, en.Location != "", "target location is not set [%#v]", en)
+			tassert.Errorf(t, en.Copies != 0, "copies is not set")
+		})
 	})
 }
 
@@ -1248,7 +1243,6 @@ func TestListObjects(t *testing.T) {
 				// Confirm PUTs by listing objects.
 				msg := &apc.LsoMsg{PageSize: test.pageSize}
 				msg.AddProps(apc.GetPropsChecksum, apc.GetPropsAtime, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
-				tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck))
 				lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 
@@ -1324,8 +1318,6 @@ func TestListObjects(t *testing.T) {
 					return true
 				})
 			}
-
-			tassert.CheckError(t, api.ListObjectsInvalidateCache(baseParams, bck))
 		})
 	}
 }
@@ -1486,36 +1478,24 @@ func TestListObjectsCache(t *testing.T) {
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 	m.puts()
 
-	for _, useCache := range []bool{true, false} {
-		t.Run(fmt.Sprintf("cache=%t", useCache), func(t *testing.T) {
-			// Do it N times - first: fill the cache; next calls: use it.
-			for iter := range totalIters {
-				var (
-					started = time.Now()
-					msg     = &apc.LsoMsg{PageSize: rand.Int64N(20) + 4}
-				)
-				if useCache {
-					msg.SetFlag(apc.UseListObjsCache)
-				}
-				lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
-				tassert.CheckFatal(t, err)
+	// Do it N times - first: fill the cache; next calls: use it.
+	for iter := range totalIters {
+		var (
+			started = time.Now()
+			msg     = &apc.LsoMsg{PageSize: rand.Int64N(20) + 4}
+		)
+		lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
+		tassert.CheckFatal(t, err)
 
-				tlog.Logf(
-					"[iter: %d] cache: %5t, page_size: %d, time: %s\n",
-					iter, useCache, msg.PageSize, time.Since(started),
-				)
+		tlog.Logf(
+			"[iter: %d] page_size: %d, time: %s\n",
+			iter, msg.PageSize, time.Since(started),
+		)
 
-				tassert.Errorf(
-					t, len(lst.Entries) == m.num,
-					"unexpected number of entries (got: %d, expected: %d)", len(lst.Entries), m.num,
-				)
-			}
-
-			if useCache {
-				err := api.ListObjectsInvalidateCache(baseParams, m.bck)
-				tassert.CheckError(t, err)
-			}
-		})
+		tassert.Errorf(
+			t, len(lst.Entries) == m.num,
+			"unexpected number of entries (got: %d, expected: %d)", len(lst.Entries), m.num,
+		)
 	}
 }
 

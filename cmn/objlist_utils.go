@@ -125,7 +125,7 @@ func (be *LsoEnt) CopyWithProps(propsSet cos.StrSet) (ne *LsoEnt) {
 
 func SortLso(entries LsoEntries) { sort.Slice(entries, entries.cmp) }
 
-func DedupLso(entries LsoEntries, maxSize int, noDirs bool) []*LsoEnt {
+func dedupLso(entries LsoEntries, maxSize int, noDirs bool) []*LsoEnt {
 	var j int
 	for _, en := range entries {
 		if j > 0 && entries[j-1].Name == en.Name {
@@ -157,7 +157,7 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 	token := resList.ContinuationToken
 	if len(lists) == 1 {
 		SortLso(resList.Entries)
-		resList.Entries = DedupLso(resList.Entries, maxSize, noDirs)
+		resList.Entries = dedupLso(resList.Entries, maxSize, noDirs)
 		resList.ContinuationToken = token
 		return resList
 	}
@@ -210,6 +210,56 @@ func MergeLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) *LsoRes {
 
 	clear(tmp)
 	return resList
+}
+
+// ConcatLso takes a slice of object lists and concatenates them: all lists
+// are appended to the first one.
+// If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
+// or negative maxSize means returning all objects.
+func ConcatLso(lists []*LsoRes, lsmsg *apc.LsoMsg, maxSize int) (objs *LsoRes) {
+	objs = &LsoRes{
+		UUID: lsmsg.UUID,
+	}
+
+	if len(lists) == 0 {
+		return objs
+	}
+
+	entryCount := 0
+	for _, l := range lists {
+		objs.Flags |= l.Flags
+		entryCount += len(l.Entries)
+	}
+	if entryCount == 0 {
+		return objs
+	}
+
+	objs.Entries = make(LsoEntries, 0, entryCount)
+	for _, l := range lists {
+		objs.Entries = append(objs.Entries, l.Entries...)
+		clear(l.Entries)
+	}
+
+	// For corner case: we have objects with replicas on page threshold
+	// we have to sort taking status into account. Otherwise wrong
+	// one(Status=moved) may get into the response
+	SortLso(objs.Entries)
+
+	// Remove duplicates
+	// when recursion is disabled (i.e., lsmsg.IsFlagSet(apc.LsNoRecursion))
+	// the (`cmn.LsoRes`) result _may_ include duplicated names of the virtual subdirectories
+	// - that's why:
+	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
+		objs.Entries = dedupLso(objs.Entries, maxSize, false /*no-dirs*/)
+	}
+
+	if maxSize > 0 && len(objs.Entries) >= maxSize {
+		objs.Entries = objs.Entries[:maxSize]
+		clear(objs.Entries[maxSize:])
+		objs.ContinuationToken = objs.Entries[len(objs.Entries)-1].Name
+	}
+
+	return
 }
 
 // Returns true if the continuation token >= object's name (in other words, the object is

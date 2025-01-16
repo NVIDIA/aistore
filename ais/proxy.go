@@ -58,7 +58,6 @@ type (
 		authn      *authManager
 		metasyncer *metasyncer
 		ic         ic
-		qm         lsobjMem
 		rproxy     reverseProxy
 		notifs     notifs
 		lstca      lstca
@@ -200,7 +199,6 @@ func (p *proxy) Run() error {
 
 	p.notifs.init(p)
 	p.ic.init(p)
-	p.qm.init()
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -1474,9 +1472,6 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-	case apc.ActInvalListCache:
-		p.qm.c.invalidate(bck.Bucket())
-		return
 	case apc.ActMakeNCopies:
 		if xid, err = p.makeNCopies(msg, bck); err != nil {
 			p.writeErr(w, r, err)
@@ -2299,40 +2294,13 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	var (
 		actMsgExt *actMsgExt
 		args      *bcastArgs
-		entries   cmn.LsoEntries
 		results   sliceResults
 		smap      = p.owner.smap.get()
-		cacheID   = cacheReqID{bck: bck.Bucket(), prefix: lsmsg.Prefix}
-		token     = lsmsg.ContinuationToken
-		props     = lsmsg.PropsSet()
-		hasEnough bool
-		flags     uint32
 	)
 	if lsmsg.PageSize == 0 {
 		lsmsg.PageSize = apc.MaxPageSizeAIS
 	}
 	pageSize := lsmsg.PageSize
-
-	// TODO: Before checking cache and buffer we should check if there is another
-	// request in-flight that asks for the same page - if true wait for the cache
-	// to get populated.
-
-	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
-		entries, hasEnough = p.qm.c.get(cacheID, token, pageSize)
-		if hasEnough {
-			goto end
-		}
-	}
-	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
-	if hasEnough {
-		// We have enough in the buffer to fulfill the request.
-		goto endWithCache
-	}
-
-	// User requested some page but we don't have enough (but we may have part
-	// of the full page). Therefore, we must ask targets for page starting from
-	// what we have locally, so we don't re-request the objects.
-	lsmsg.ContinuationToken = p.qm.b.last(lsmsg.UUID, token)
 
 	actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
 	args = allocBcArgs()
@@ -2349,6 +2317,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	// Combine the results.
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
+	lsoResList := make([]*cmn.LsoRes, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			if res.details == "" || res.details == dfltDetail {
@@ -2359,46 +2328,13 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 			return nil, err
 		}
 		lst := res.v.(*cmn.LsoRes)
-		flags |= lst.Flags
-		p.qm.b.set(lsmsg.UUID, res.si.ID(), lst.Entries, pageSize)
+		if len(lst.Entries) > 0 {
+			lsoResList = append(lsoResList, lst)
+		}
 	}
 	freeBcastRes(results)
-	entries, hasEnough = p.qm.b.get(lsmsg.UUID, token, pageSize)
-	debug.Assert(hasEnough)
 
-endWithCache:
-	if lsmsg.IsFlagSet(apc.UseListObjsCache) {
-		p.qm.c.set(cacheID, token, entries, pageSize)
-	}
-end:
-	if lsmsg.IsFlagSet(apc.UseListObjsCache) && !props.All(apc.GetPropsAll...) {
-		// Since cache keeps entries with whole subset props we must create copy
-		// of the entries with smaller subset of props (if we would change the
-		// props of the `entries` it would also affect entries inside cache).
-		propsEntries := make(cmn.LsoEntries, len(entries))
-		for idx := range entries {
-			propsEntries[idx] = entries[idx].CopyWithProps(props)
-		}
-		entries = propsEntries
-	}
-
-	allEntries = &cmn.LsoRes{
-		UUID:    lsmsg.UUID,
-		Entries: entries,
-		Flags:   flags,
-	}
-	if len(entries) >= int(pageSize) {
-		allEntries.ContinuationToken = entries[len(entries)-1].Name
-	}
-
-	// when recursion is disabled (i.e., lsmsg.IsFlagSet(apc.LsNoRecursion))
-	// the (`cmn.LsoRes`) result _may_ include duplicated names of the virtual subdirectories
-	// - that's why:
-	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
-		allEntries.Entries = cmn.DedupLso(allEntries.Entries, len(entries), false /*no-dirs*/)
-	}
-
-	return allEntries, nil
+	return cmn.ConcatLso(lsoResList, lsmsg, int(pageSize)), nil
 }
 
 func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,

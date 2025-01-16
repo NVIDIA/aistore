@@ -21,13 +21,12 @@ import (
 type testConfig struct {
 	objectCnt int
 	pageSize  int
-	useCache  bool
 }
 
 func (tc testConfig) name() string {
 	return fmt.Sprintf(
-		"objs:%d/use_cache:%t/page_size:%d",
-		tc.objectCnt, tc.useCache, tc.pageSize,
+		"objs:%d/page_size:%d",
+		tc.objectCnt, tc.pageSize,
 	)
 }
 
@@ -60,18 +59,12 @@ func BenchmarkListObject(b *testing.B) {
 	tools.CheckSkip(b, &tools.SkipTestArgs{Long: true})
 	u := "http://127.0.0.1:8080"
 	tests := []testConfig{
-		{objectCnt: 1_000, pageSize: 10, useCache: false},
-		{objectCnt: 1_000, pageSize: 10, useCache: true},
-
-		{objectCnt: 10_000, pageSize: 100, useCache: false},
-		{objectCnt: 10_000, pageSize: 100, useCache: true},
-
-		{objectCnt: 10_000, pageSize: 10_000, useCache: false},
-		{objectCnt: 10_000, pageSize: 10_000, useCache: true},
-
+		{objectCnt: 1_000, pageSize: 10},
+		{objectCnt: 10_000, pageSize: 100},
+		{objectCnt: 10_000, pageSize: 10_000},
 		// Hardcore cases, use only when needed.
-		// {objectCnt: 100_000, pageSize: 10_000, useCache: true},
-		// {objectCnt: 1_000_000, pageSize: 10_000, useCache: true},
+		// {objectCnt: 100_000, pageSize: 10_000},
+		// {objectCnt: 1_000_000, pageSize: 10_000},
 	}
 	for _, test := range tests {
 		b.Run(test.name(), func(b *testing.B) {
@@ -83,9 +76,6 @@ func BenchmarkListObject(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				msg := &apc.LsoMsg{PageSize: int64(test.pageSize)}
-				if test.useCache {
-					msg.SetFlag(apc.UseListObjsCache)
-				}
 				objs, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 				tassert.CheckFatal(b, err)
 				tassert.Errorf(

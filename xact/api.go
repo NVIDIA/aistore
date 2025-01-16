@@ -262,8 +262,7 @@ var Table = map[string]Descriptor{
 	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true},
 
 	// cache management, internal usage
-	apc.ActLoadLomCache:   {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},
-	apc.ActInvalListCache: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false},
+	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},
 }
 
 func GetDescriptor(kindOrName string) (string, Descriptor, error) {

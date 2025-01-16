@@ -240,26 +240,6 @@ func ListObjectsPage(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArg
 	return page, nil
 }
 
-// TODO: obsolete this function after introducing mechanism to detect remote bucket changes.
-func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
-	var (
-		path = apc.URLPathBuckets.Join(bck.Name)
-		q    = url.Values{}
-	)
-	bp.Method = http.MethodPost
-	reqParams := AllocRp()
-	{
-		reqParams.Query = bck.AddToQuery(q)
-		reqParams.BaseParams = bp
-		reqParams.Path = path
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActInvalListCache})
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-	}
-	err := reqParams.DoRequest()
-	FreeRp(reqParams)
-	return err
-}
-
 ////////////////
 // LsoCounter //
 ////////////////
