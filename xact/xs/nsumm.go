@@ -352,9 +352,9 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
 	lsmsg.SetFlag(apc.LsNameSize | apc.LsNoDirs)
 	for !r.IsAborted() {
-		npg := newNpgCtx(bck, lsmsg, noopCb, nil) // TODO -- FIXME: inventory offset
+		npg := newNpgCtx(bck, lsmsg, noopCb, nil) // TODO: inventory offset
 		nentries := allocLsoEntries()
-		lst, err := npg.nextPageR(nentries, false /*load LOMs to include status and local MD*/)
+		lst, err := npg.nextPageR(nentries)
 		if err != nil {
 			r.AddErr(err)
 			return

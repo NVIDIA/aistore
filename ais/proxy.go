@@ -2300,7 +2300,6 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	if lsmsg.PageSize == 0 {
 		lsmsg.PageSize = apc.MaxPageSizeAIS
 	}
-	pageSize := lsmsg.PageSize
 
 	actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
 	args = allocBcArgs()
@@ -2317,7 +2316,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	// Combine the results.
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
-	lsoResList := make([]*cmn.LsoRes, 0, len(results))
+	lists := make([]*cmn.LsoRes, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
 			if res.details == "" || res.details == dfltDetail {
@@ -2329,12 +2328,14 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 		}
 		lst := res.v.(*cmn.LsoRes)
 		if len(lst.Entries) > 0 {
-			lsoResList = append(lsoResList, lst)
+			lists = append(lists, lst)
 		}
 	}
 	freeBcastRes(results)
 
-	return cmn.ConcatLso(lsoResList, lsmsg, int(pageSize)), nil
+	page := concatLso(lists, lsmsg)
+	finLsoA(page, lsmsg)
+	return page, nil
 }
 
 func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,
@@ -2400,8 +2401,10 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 
 	freeBcArgs(args)
 
-	// Combine the results.
-	resLists := make([]*cmn.LsoRes, 0, len(results))
+	var (
+		lists     = make([]*cmn.LsoRes, 0, len(results))
+		nextToken string
+	)
 	for _, res := range results {
 		if res.err != nil {
 			if res.details == "" || res.details == dfltDetail {
@@ -2411,11 +2414,16 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap 
 			freeBcastRes(results)
 			return nil, err
 		}
-		resLists = append(resLists, res.v.(*cmn.LsoRes))
+		lst := res.v.(*cmn.LsoRes)
+		debug.Assert(nextToken == "" || nextToken == lst.ContinuationToken)
+		nextToken = lst.ContinuationToken
+		lists = append(lists, lst)
 	}
 	freeBcastRes(results)
 
-	return cmn.MergeLso(resLists, lsmsg, 0), nil
+	page := concatLso(lists, lsmsg)
+	page.ContinuationToken = nextToken
+	return page, nil
 }
 
 // http-redirect(with-json-message)
@@ -3393,4 +3401,71 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	req.Header.Set(apc.HdrCallerID, p.SID())
 	req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
+}
+
+//
+// list-objects helpers
+//
+
+func concatLso(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) (objs *cmn.LsoRes) {
+	objs = &cmn.LsoRes{
+		UUID: lsmsg.UUID,
+	}
+	if len(lists) == 0 {
+		return objs
+	}
+
+	var entryCount int
+	for _, l := range lists {
+		objs.Flags |= l.Flags
+		entryCount += len(l.Entries)
+	}
+	if entryCount == 0 {
+		return objs
+	}
+	objs.Entries = make(cmn.LsoEntries, 0, entryCount)
+	for _, l := range lists {
+		objs.Entries = append(objs.Entries, l.Entries...)
+		clear(l.Entries)
+	}
+
+	// For corner case: we have objects with replicas on page threshold
+	// we have to sort taking status into account. Otherwise wrong
+	// one(Status=moved) may get into the response
+	cmn.SortLso(objs.Entries)
+	return objs
+}
+
+func finLsoA(objs *cmn.LsoRes, lsmsg *apc.LsoMsg) {
+	maxSize := int(lsmsg.PageSize)
+	// when recursion is disabled (apc.LsNoRecursion)
+	// the result _may_ include duplicated names of the virtual subdirectories
+	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
+		objs.Entries = dedupLso(objs.Entries, maxSize, false /*no-dirs*/)
+	}
+	if len(objs.Entries) >= maxSize {
+		objs.Entries = objs.Entries[:maxSize]
+		clear(objs.Entries[maxSize:])
+		objs.ContinuationToken = objs.Entries[len(objs.Entries)-1].Name
+	}
+}
+
+func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
+	var j int
+	for _, en := range entries {
+		if j > 0 && entries[j-1].Name == en.Name {
+			continue
+		}
+
+		debug.Assert(!(noDirs && en.IsDir())) // expecting backends for filter out accordingly
+
+		entries[j] = en
+		j++
+
+		if maxSize > 0 && j == maxSize {
+			break
+		}
+	}
+	clear(entries[j:])
+	return entries[:j]
 }

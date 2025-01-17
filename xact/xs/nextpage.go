@@ -84,7 +84,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (lst *cmn.LsoRes, err error) {
+func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst = &cmn.LsoRes{Entries: nentries}
 	if npg.ctx != nil {
@@ -101,17 +101,20 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (l
 		freeLsoEntries(nentries)
 		return nil, err
 	}
+
 	debug.Assert(lst.UUID == "" || lst.UUID == npg.wi.msg.UUID)
 	lst.UUID = npg.wi.msg.UUID
-
-	if inclStatusLocalMD {
-		err = npg.populate(lst)
-	}
 	return lst, err
 }
 
-func (npg *npgCtx) populate(lst *cmn.LsoRes) error {
-	post := npg.wi.lomVisitedCb
+// - filter entries to keep only mine
+// - add or set local metadata
+// - see also: cmn.ConcatLso
+func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
+	var (
+		post = npg.wi.lomVisitedCb
+		i    int
+	)
 	for _, en := range lst.Entries {
 		if en.IsDir() {
 			// collecting virtual dir-s when apc.LsNoRecursion is on - skipping here
@@ -124,17 +127,17 @@ func (npg *npgCtx) populate(lst *cmn.LsoRes) error {
 		if si.ID() != core.T.SID() {
 			continue
 		}
+
 		lom := core.AllocLOM(en.Name)
 		if err := lom.InitBck(npg.bck.Bucket()); err != nil {
-			core.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
+				core.FreeLOM(lom)
 				return err
 			}
-			continue
+			goto keep
 		}
 		if err := lom.Load(true /* cache it*/, false /*locked*/); err != nil {
-			core.FreeLOM(lom)
-			continue
+			goto keep
 		}
 
 		npg.wi.setWanted(en, lom)
@@ -143,7 +146,13 @@ func (npg *npgCtx) populate(lst *cmn.LsoRes) error {
 		if post != nil {
 			post(lom)
 		}
+
+	keep:
 		core.FreeLOM(lom)
+		lst.Entries[i] = en
+		i++
 	}
+
+	lst.Entries = lst.Entries[:i]
 	return nil
 }

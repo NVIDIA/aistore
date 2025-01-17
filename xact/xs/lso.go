@@ -397,12 +397,16 @@ func (r *LsoXact) nextPageR() (err error) {
 	// TODO -- FIXME: not counting/sizing (locally) present objects that are missing (deleted?) remotely
 	if r.walk.this {
 		nentries := allocLsoEntries()
-		page, err = npg.nextPageR(nentries, !r.walk.dontPopulate)
+		page, err = npg.nextPageR(nentries)
 		if !r.walk.wor && !r.IsAborted() {
 			if err == nil {
 				// bcast page
 				err = r.bcast(page)
-			} else {
+			}
+			if err == nil && !r.walk.dontPopulate {
+				err = npg.filterAddLmeta(page)
+			}
+			if err != nil {
 				r.sendTerm(r.msg.UUID, nil, err)
 			}
 		}
@@ -417,7 +421,7 @@ func (r *LsoXact) nextPageR() (err error) {
 				err = rsp.Err
 			default:
 				page = rsp.Lst
-				err = npg.populate(page)
+				err = npg.filterAddLmeta(page)
 			}
 		case <-r.stopCh.Listen():
 			err = ErrGone
