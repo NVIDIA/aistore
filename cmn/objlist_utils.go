@@ -28,29 +28,28 @@ func (entries LsoEntries) cmp(i, j int) bool {
 // LsoEnt //
 ////////////
 
-// The terms "cached" and "present" are interchangeable:
-// "object is cached" and "is present" is actually the same thing
+// flags:
+// - see above "LsoEntry Flags" enum
+// - keeping IsPresent for client convenience, with Set/IsAnyFlag covering for the rest
+// - terms "cached", "present" and "in-cluster" - are interchangeable
 func (be *LsoEnt) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
-func (be *LsoEnt) SetPresent()     { be.Flags |= apc.EntryIsCached }
 
 func (be *LsoEnt) SetFlag(fl uint16)           { be.Flags |= fl }
 func (be *LsoEnt) IsAnyFlagSet(fl uint16) bool { return be.Flags&fl != 0 }
 
-func (be *LsoEnt) IsStatusOK() bool   { return be.Status() == 0 }
-func (be *LsoEnt) Status() uint16     { return be.Flags & apc.EntryStatusMask }
-func (be *LsoEnt) IsDir() bool        { return be.Flags&apc.EntryIsDir != 0 }
-func (be *LsoEnt) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
-func (be *LsoEnt) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 }
-func (be *LsoEnt) String() string     { return "{" + be.Name + "}" }
+// location _status_
+func (be *LsoEnt) IsStatusOK() bool { return be.Status() == 0 }
+func (be *LsoEnt) Status() uint16   { return be.Flags & apc.EntryStatusMask }
 
+// sorting
 func (be *LsoEnt) less(oe *LsoEnt) bool {
-	if be.IsDir() {
-		if oe.IsDir() {
+	if be.IsAnyFlagSet(apc.EntryIsDir) {
+		if oe.IsAnyFlagSet(apc.EntryIsDir) {
 			return be.Name < oe.Name
 		}
 		return true
 	}
-	if oe.IsDir() {
+	if oe.IsAnyFlagSet(apc.EntryIsDir) {
 		return false
 	}
 	if be.Name == oe.Name {

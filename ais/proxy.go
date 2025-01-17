@@ -3457,7 +3457,7 @@ func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
 			continue
 		}
 
-		debug.Assert(!(noDirs && en.IsDir())) // expecting backends for filter out accordingly
+		debug.Assert(!(noDirs && en.IsAnyFlagSet(apc.EntryIsDir))) // expecting backends for filter out accordingly
 
 		entries[j] = en
 		j++

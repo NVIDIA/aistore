@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -295,7 +295,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 			if !be.IsStatusOK() {
 				continue
 			}
-			if be.IsDir() { // NOTE: always skip virtual dirs (apc.EntryIsDir)
+			if be.IsAnyFlagSet(apc.EntryIsDir) { // always skip virtual dirs
 				continue
 			}
 			if r.done() {

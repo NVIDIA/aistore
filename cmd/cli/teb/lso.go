@@ -111,7 +111,7 @@ func fmtLsObjStatus(en *cmn.LsoEnt) string {
 }
 
 func fmtLsObjIsCached(en *cmn.LsoEnt) string {
-	if en.IsDir() {
+	if en.IsAnyFlagSet(apc.EntryIsDir) {
 		return ""
 	}
 	return FmtBool(en.IsPresent())

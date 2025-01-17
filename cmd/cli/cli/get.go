@@ -312,7 +312,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 			continue
 		}
 
-		if en.IsInsideArch() {
+		if en.IsAnyFlagSet(apc.EntryInArch) {
 			if origPrefix != msg.Prefix {
 				if !strings.HasPrefix(en.Name, origPrefix) {
 					// skip
@@ -324,7 +324,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 				}
 			}
 			for _, shardEntry := range lst.Entries {
-				if shardEntry.IsListedArch() && strings.HasPrefix(en.Name, shardEntry.Name+"/") {
+				if shardEntry.IsAnyFlagSet(apc.EntryIsArchive) && strings.HasPrefix(en.Name, shardEntry.Name+"/") {
 					shardName = shardEntry.Name
 					break
 				}

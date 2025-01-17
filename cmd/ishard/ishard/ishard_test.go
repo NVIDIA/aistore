@@ -172,7 +172,7 @@ func TestIshardShardSize(t *testing.T) {
 
 				for _, en := range lst.Entries {
 					// Only counts objects inside archive
-					if !en.IsInsideArch() {
+					if !en.IsAnyFlagSet(apc.EntryInArch) {
 						continue
 					}
 					ext := filepath.Ext(en.Name)

@@ -127,11 +127,11 @@ func (c *lstcx) do() (string, error) {
 	c.tcomsg.ToBck = c.bckTo.Clone()
 	lr, cnt := &c.tcomsg.ListRange, len(lst.Entries)
 	lr.ObjNames = make([]string, 0, cnt)
-	for _, e := range lst.Entries {
-		if e.IsDir() { // NOTE: always skip virtual dir (apc.EntryIsDir)
+	for _, en := range lst.Entries {
+		if en.IsAnyFlagSet(apc.EntryIsDir) { // always skip virtual dirs
 			continue
 		}
-		lr.ObjNames = append(lr.ObjNames, e.Name)
+		lr.ObjNames = append(lr.ObjNames, en.Name)
 	}
 
 	// 5. multi-obj action: transform/copy 1st page
@@ -191,11 +191,11 @@ func (c *lstcx) _page() (int, error) {
 	lr := &c.tcomsg.ListRange
 	clear(lr.ObjNames)
 	lr.ObjNames = lr.ObjNames[:0]
-	for _, e := range lst.Entries {
-		if e.IsDir() { // NOTE: always skip virtual dir (apc.EntryIsDir)
+	for _, en := range lst.Entries {
+		if en.IsAnyFlagSet(apc.EntryIsDir) { // always skip virtual dirs
 			continue
 		}
-		lr.ObjNames = append(lr.ObjNames, e.Name)
+		lr.ObjNames = append(lr.ObjNames, en.Name)
 	}
 	c.altmsg.Name = c.xid
 	c.altmsg.Value = &c.tcomsg

@@ -116,7 +116,7 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		i    int
 	)
 	for _, en := range lst.Entries {
-		if en.IsDir() {
+		if en.IsAnyFlagSet(apc.EntryIsDir) {
 			// collecting virtual dir-s when apc.LsNoRecursion is on - skipping here
 			continue
 		}
@@ -141,7 +141,7 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		}
 
 		npg.wi.setWanted(en, lom)
-		en.SetPresent()
+		en.SetFlag(apc.EntryIsCached) // formerly, SetPresent
 
 		if post != nil {
 			post(lom)

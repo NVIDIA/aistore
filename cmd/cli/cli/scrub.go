@@ -283,7 +283,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		}
 		// one page
 		for _, en := range lst.Entries {
-			if en.IsDir() || cos.IsLastB(en.Name, filepath.Separator) {
+			if en.IsAnyFlagSet(apc.EntryIsDir) || cos.IsLastB(en.Name, filepath.Separator) {
 				continue
 			}
 			scr.upd(ctx, en)

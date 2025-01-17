@@ -3,7 +3,7 @@ ais ls ais://$BUCKET_1
 ais ls ais://$BUCKET_1/
 ais ls ais://$BUCKET_1
 ais ls ais://$BUCKET_1 --props=name,size,version
-ais ls ais://$BUCKET_1 --props=name,name,size,size,version
+ais ls ais://$BUCKET_1 --props=name,size,version
 ais ls ais://$BUCKET_1 --props=all
 ais ls ais://$BUCKET_1/
 

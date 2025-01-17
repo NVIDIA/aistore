@@ -419,7 +419,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				mime    = "application/x-" + test.ext[1:]
 			)
 			for _, en := range lst.Entries {
-				if !en.IsInsideArch() {
+				if !en.IsAnyFlagSet(apc.EntryInArch) {
 					objName = en.Name
 					continue
 				}

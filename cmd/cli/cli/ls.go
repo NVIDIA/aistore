@@ -272,7 +272,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		addCachedCol bool
 	)
 	if bck.IsRemote() {
-		addCachedCol = true
+		addCachedCol = true           // preliminary; may change below
 		msg.SetFlag(apc.LsBckPresent) // default
 	}
 	if flagIsSet(c, verChangedFlag) {
@@ -292,7 +292,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			briefPause(1)
 		}
 		msg.SetFlag(apc.LsObjCached)
-		addCachedCol = false // redundant
+		// addCachedCol: correction #1
+		addCachedCol = false
 	}
 
 	// NOTE: `--all` combines two separate meanings:
@@ -326,6 +327,17 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	if propsStr != "" {
 		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
 		props = splitCsv(propsStr) // split apc.LsPropsSepa
+
+		for i := range props {
+			for j := range props {
+				if i == j {
+					continue
+				}
+				if props[i] == props[j] {
+					return fmt.Errorf("'%s %s' contains duplication: %q", flprn(objPropsFlag), propsStr, props[i])
+				}
+			}
+		}
 	}
 
 	// add _implied_ props into control lsmsg
@@ -352,6 +364,13 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		default:
 			msg.AddProps(apc.GetPropsMinimal...)
 		}
+	case propsStr == apc.GetPropsName:
+		msg.SetFlag(apc.LsNameOnly)
+		msg.Props = apc.GetPropsName
+	case len(props) == 2 &&
+		((props[0] == apc.GetPropsName || props[1] == apc.GetPropsName) && (props[0] == apc.GetPropsSize || props[1] == apc.GetPropsSize)):
+		msg.SetFlag(apc.LsNameSize)
+		msg.AddProps([]string{apc.GetPropsName, apc.GetPropsSize}...)
 	default:
 		if cos.StringInSlice(allPropsFlag.GetName(), props) {
 			msg.AddProps(apc.GetPropsAll...)
@@ -361,9 +380,14 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		}
 	}
 
-	if flagIsSet(c, allObjsOrBcksFlag) {
-		// Show status. Object name can then be displayed multiple times
-		// (due to mirroring, EC). The status helps to tell an object from its replica(s).
+	// addCachedCol: correction #2
+	if addCachedCol && (msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize)) {
+		addCachedCol = false
+	}
+
+	// when props are _not_ explicitly specified
+	// but (somewhat ambiguous) flag `--all` is
+	if len(props) == 0 && flagIsSet(c, allObjsOrBcksFlag) {
 		msg.AddProps(apc.GetPropsStatus)
 	}
 	propsStr = msg.Props // show these and _only_ these props
