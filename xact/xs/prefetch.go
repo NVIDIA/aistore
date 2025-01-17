@@ -259,30 +259,27 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 	var (
 		xblob *XactBlobDl
 		msg   = nmsg.ToNotifMsg(aborted)
+		n     int32
 	)
 	pebl.mu.Lock()
-	n := pebl.num()
-outer:
-	for range n {
-		debug.Assert(len(pebl.pending) == int(n), len(pebl.pending), " vs ", n)
-		for i, xctn := range pebl.pending {
-			if xctn.ID() == msg.UUID {
-				var ok bool
-				xblob, ok = xctn.(*XactBlobDl)
-				debug.Assert(ok)
-			} else if !xctn.Finished() {
-				continue
-			}
-
-			// shift left
-			l := len(pebl.pending)
-			copy(pebl.pending[i:], pebl.pending[i+1:])
-			pebl.pending = pebl.pending[:l-1]
-			n = pebl.n.Dec()
-			continue outer
+	for _, xctn := range pebl.pending {
+		// this one is "done" - remove from pending
+		if xctn.ID() == msg.UUID {
+			var ok bool
+			xblob, ok = xctn.(*XactBlobDl)
+			debug.Assert(ok)
+			continue
 		}
-		break
+		// finished - remove as well
+		if xctn.Finished() {
+			continue
+		}
+		// keep
+		pebl.pending[n] = xctn
+		n++
 	}
+	pebl.pending = pebl.pending[:n]
+	pebl.n.Store(n)
 	pebl.mu.Unlock()
 
 	if xblob == nil {
@@ -296,8 +293,8 @@ outer:
 		nlog.Warningln(xname, "::", xblob.String(), "[", msg.String(), err, "]")
 	default:
 		if xblob.Size() >= cos.GiB/2 || cmn.Rom.FastV(4, cos.SmoduleXs) {
-			if n := int(pebl.num()); n > 0 {
-				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(n), ")")
+			if n > 0 {
+				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(int(n)), ")")
 			} else {
 				nlog.Infoln(xname, "::", xblob.String())
 			}
