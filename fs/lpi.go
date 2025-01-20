@@ -71,7 +71,7 @@ func (lpi *LocalPageIt) do(msg lpiMsg, out lpiPage) error {
 		lpi.msg = msg
 		lpi.current, lpi.next = lpi.next, ""
 	}
-	debug.Assert(strings.HasPrefix(lpi.current, lpi.root))
+	debug.Assert(strings.HasPrefix(lpi.current, lpi.root), lpi.current, " vs ", lpi.root)
 
 	if lpi.msg.eop != allPages {
 		if lpi.current > lpi.msg.eop {

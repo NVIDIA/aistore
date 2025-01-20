@@ -61,18 +61,25 @@ while (( "$#" )); do
 done
 
 # create/confirm root dir
+create_dir=true
 if [ -d "$root_dir" ]; then
-    read -p "Directory $root_dir already exists. Remove it? (y/n): " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Removing existing directory: $root_dir"
-        rm -rf "$root_dir"
-    else
-        echo "Exiting without making changes."
-        exit 1
+    create_dir=false
+    if [ ! -z "$(ls -A "$root_dir")" ]; then
+        read -p "Directory $root_dir already exists. Remove it? (y/n): " confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            echo "Removing existing directory: $root_dir"
+            rm -rf "$root_dir"
+            create_dir=true
+        else
+            echo "Exiting without making changes."
+            exit 1
+        fi
     fi
 fi
-echo "Creating root directory: $root_dir"
-mkdir -p "$root_dir" || { echo "Failed to create root directory."; exit 1; }
+if [[ "$create_dir" == "true" ]]; then
+    echo "Creating root directory: $root_dir"
+    mkdir -p "$root_dir" || { echo "Failed to create root directory."; exit 1; }
+fi
 
 dir_count=0
 
@@ -147,4 +154,5 @@ done
 echo "Done."
 dir_count=$((dir_count + 1)) ## including root
 echo "Total directories created: $dir_count"
-echo "Total files created: $((dir_count * num_files))"
+file_count=$(find "$root_dir" -type f | wc -l)
+echo "Total files created: $file_count"

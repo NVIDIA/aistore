@@ -7,6 +7,7 @@ package fs
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"strconv"
@@ -16,52 +17,58 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
+const (
+	lpiTestPrefix   = "Total files created: "
+	lpiTestScript   = "../ais/test/scripts/gen_nested_dirs.sh"
+	lpiTestPageSize = 10
+	lpiTestVerbose  = false
+)
+
 func TestLocalPageIt(t *testing.T) {
-	const (
-		rootPrefix     = "Creating root directory: "
-		numFilesPrefix = "Total files created: "
+	// 1. create temp root
+	root, err := os.MkdirTemp("", "ais-lpi-")
+	tassert.CheckFatal(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(root)
+		}
+	}()
 
-		pageSize = 10
-	)
-	var (
-		num  int64
-		root string
-	)
-
-	// run the script and parse results
-	cmd := exec.Command("../ais/test/scripts/gen_nested_dirs.sh") // TODO -- FIXME: will change
+	// 2. generate
+	cmd := exec.Command(lpiTestScript, "--root_dir", root)
 	out, err := cmd.CombinedOutput()
 	tassert.CheckFatal(t, err)
-	lines := strings.Split(string(out), "\n")
+
+	var (
+		lines = strings.Split(string(out), "\n")
+		num   int64
+	)
 	for _, ln := range lines {
-		i := strings.Index(ln, rootPrefix)
+		i := strings.Index(ln, lpiTestPrefix)
 		if i >= 0 {
-			root = ln[i+len(rootPrefix):]
-			continue
-		}
-		i = strings.Index(ln, numFilesPrefix)
-		if i >= 0 {
-			s := ln[i+len(numFilesPrefix):]
+			s := ln[i+len(lpiTestPrefix):]
 			num, err = strconv.ParseInt(s, 10, 64)
 			tassert.CheckFatal(t, err)
 		}
 	}
-	tassert.Fatalf(t, root != "" && num > 0, "failed to parse script output (root %q, num %d)", root, num)
-	tassert.Fatalf(t, strings.HasPrefix(root, "/tmp/"), "expecting root under /tmp, got %q", root)
+	tassert.Fatalf(t, num > 0, "failed to parse script output (num %d)", num)
 
-	t.Log("root:", root, len(root), "num:", num) // TODO -- FIXME: make use of `num`
-	defer os.RemoveAll(root)
-
-	// paginate
-	eops := make([]string, 0, 20)
-	t.Run("page-size", func(t *testing.T) { eops = lpiPageSize(t, root, eops, pageSize) })
-	t.Run("end-of-page", func(t *testing.T) { lpiEndOfPage(t, root, eops) })
+	// 3, 4. randomize page size and paginate
+	var (
+		total = int(num)
+		eops  = make([]string, 0, 20)
+		size  = rand.IntN(lpiTestPageSize<<1) + lpiTestPageSize>>1
+		sz    = strconv.Itoa(size)
+	)
+	t.Run("page-size/"+sz, func(t *testing.T) { eops = lpiPageSize(t, root, eops, lpiTestPageSize, total) })
+	t.Run("end-of-page/"+sz, func(t *testing.T) { lpiEndOfPage(t, root, eops, total) })
 }
 
-func lpiPageSize(t *testing.T, root string, eops []string, pageSize int) []string {
+func lpiPageSize(t *testing.T, root string, eops []string, lpiTestPageSize, total int) []string {
 	var (
 		page = make(lpiPage, 100)
-		msg  = lpiMsg{size: pageSize}
+		msg  = lpiMsg{size: lpiTestPageSize}
+		num  int
 	)
 	lpi, err := newLocalPageIt(root)
 	tassert.CheckFatal(t, err)
@@ -70,39 +77,50 @@ func lpiPageSize(t *testing.T, root string, eops []string, pageSize int) []strin
 		if err := lpi.do(msg, page); err != nil {
 			t.Fatal(err)
 		}
-		for path := range page {
-			fmt.Println(path)
+		num += len(page)
+		if lpiTestVerbose {
+			for name := range page {
+				fmt.Println(name)
+			}
+			fmt.Println()
+			fmt.Println(strings.Repeat("---", 10))
+			fmt.Println()
 		}
-		fmt.Println()
-		fmt.Println(strings.Repeat("---", 10))
-		fmt.Println()
 		if lpi.next == "" {
 			eops = append(eops, allPages)
 			break
 		}
 		eops = append(eops, lpi.next)
 	}
+	tassert.Errorf(t, num == total, "(num) %d != %d (total)", num, total)
 	return eops
 }
 
-func lpiEndOfPage(t *testing.T, root string, eops []string) {
+func lpiEndOfPage(t *testing.T, root string, eops []string, total int) {
 	page := make(lpiPage, 100)
 	lpi, err := newLocalPageIt(root)
 	tassert.CheckFatal(t, err)
 
-	var previous string
+	var (
+		previous string
+		num      int
+	)
 	for _, eop := range eops {
 		msg := lpiMsg{eop: eop}
 		if err := lpi.do(msg, page); err != nil {
-			t.Fatal(err) // TODO -- FIXME: num listed entries divisible by page size
+			t.Fatal(err) // TODO: check vs divisibility by page size
 		}
-		fmt.Printf("Range (%q - %q]:\n\n", previous, eop)
-		for path := range page {
-			fmt.Println(path)
+		num += len(page)
+		if lpiTestVerbose {
+			fmt.Printf("Range (%q - %q]:\n\n", previous, eop)
+			for name := range page {
+				fmt.Println(name)
+			}
+			fmt.Println()
+			fmt.Println(strings.Repeat("---", 10))
+			fmt.Println()
 		}
-		fmt.Println()
-		fmt.Println(strings.Repeat("---", 10))
-		fmt.Println()
 		previous = eop
 	}
+	tassert.Errorf(t, num == total, "(num) %d != %d (total)", num, total)
 }
