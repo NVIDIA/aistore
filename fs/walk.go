@@ -79,8 +79,9 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 	return godirwalk.Halt
 }
 
-// godirwalk is used by default. If you want to switch to standard filepath.Walk do:
-// 1. Rewrite `callback` to:
+// godirwalk is used by default. To switch to standard filepath.Walk:
+// 1. Rewrite `callback` as follows:
+//
 //   func (opts *WalkOpts) callback(fqn string, de os.FileInfo, err error) error {
 //     if err != nil {
 //        if err := cmn.PathWalkErr(err); err != nil {
@@ -90,9 +91,12 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 //     }
 //     return opts.callback(fqn, de)
 //   }
+//
 // 2. Replace `Walk` body with one-liner:
 //   return filepath.Walk(fqn, opts.callback)
+//
 // No more changes required.
+//
 // NOTE: for standard filepath.Walk option 'Sorted' is ignored
 
 // interface guard
