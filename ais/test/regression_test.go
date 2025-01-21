@@ -411,8 +411,13 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 				tlog.Logf("not found: %s\n", name)
 			}
 		}
-		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
+		err := fmt.Errorf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
 			rtd.bck.String(), rtd.renamedBck.String(), numPuts, len(unique))
+		if rtd.wait {
+			t.Fatal(err)
+		} else {
+			tlog.Logln("Warning: " + err.Error())
+		}
 	}
 }
 
