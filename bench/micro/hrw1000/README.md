@@ -2,7 +2,7 @@
 $ go test -bench=. -benchtime=10s
 goos: linux
 goarch: amd64
-pkg: github.com/NVIDIA/aistore/bench/microbenchmarks/hrw1000
+pkg: github.com/NVIDIA/aistore/bench/micro/hrw1000
 cpu: 11th Gen Intel(R) Core(TM) i7-11850H @ 2.50GHz
 
 BenchmarkHRW/cluster[10]-bucket[4,000,000]-uname[80]-16                 554728353               19.12 ns/op
@@ -18,7 +18,7 @@ and one more time, for consistency:
 $ go test -bench=. -benchtime=10s
 goos: linux
 goarch: amd64
-pkg: github.com/NVIDIA/aistore/bench/microbenchmarks/hrw1000
+pkg: github.com/NVIDIA/aistore/bench/micro/hrw1000
 cpu: 11th Gen Intel(R) Core(TM) i7-11850H @ 2.50GHz
 BenchmarkHRW/cluster[10]-bucket[4,000,000]-uname[80]-16                 613542771               18.86 ns/op
 BenchmarkHRW/cluster[100]-bucket[4,000,000]-uname[80]-16                82590082               140.1 ns/op

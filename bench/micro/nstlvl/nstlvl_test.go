@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/bench/microbenchmarks/nstlvl"
+	"github.com/NVIDIA/aistore/bench/micro/nstlvl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
