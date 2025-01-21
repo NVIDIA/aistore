@@ -1,9 +1,9 @@
-// Package fs provides mountpath and FQN abstractions and methods eop resolve/map stored content
+// Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  */
 
-package fs
+package fs_test
 
 import (
 	"fmt"
@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/fs/lpi"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -66,15 +67,15 @@ func TestLocalPageIt(t *testing.T) {
 
 func lpiPageSize(t *testing.T, root string, eops []string, lpiTestPageSize, total int) []string {
 	var (
-		page = make(lpiPage, 100)
-		msg  = lpiMsg{size: lpiTestPageSize}
+		page = make(lpi.Page, 100)
+		msg  = lpi.Msg{Size: lpiTestPageSize}
 		num  int
 	)
-	lpi, err := newLocalPageIt(root)
+	it, err := lpi.New(root)
 	tassert.CheckFatal(t, err)
 
 	for {
-		if err := lpi.do(msg, page); err != nil {
+		if err := it.Next(msg, page); err != nil {
 			t.Fatal(err)
 		}
 		num += len(page)
@@ -86,28 +87,28 @@ func lpiPageSize(t *testing.T, root string, eops []string, lpiTestPageSize, tota
 			fmt.Println(strings.Repeat("---", 10))
 			fmt.Println()
 		}
-		if lpi.next == "" {
-			eops = append(eops, allPages)
+		if it.Pos() == "" {
+			eops = append(eops, lpi.AllPages)
 			break
 		}
-		eops = append(eops, lpi.next)
+		eops = append(eops, it.Pos())
 	}
 	tassert.Errorf(t, num == total, "(num) %d != %d (total)", num, total)
 	return eops
 }
 
 func lpiEndOfPage(t *testing.T, root string, eops []string, total int) {
-	page := make(lpiPage, 100)
-	lpi, err := newLocalPageIt(root)
-	tassert.CheckFatal(t, err)
-
 	var (
 		previous string
 		num      int
+		page     = make(lpi.Page, 100)
+		it, err  = lpi.New(root)
 	)
+	tassert.CheckFatal(t, err)
+
 	for _, eop := range eops {
-		msg := lpiMsg{eop: eop}
-		if err := lpi.do(msg, page); err != nil {
+		msg := lpi.Msg{EOP: eop}
+		if err := it.Next(msg, page); err != nil {
 			t.Fatal(err) // TODO: check vs divisibility by page size
 		}
 		num += len(page)

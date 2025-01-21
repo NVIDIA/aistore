@@ -1,8 +1,8 @@
-// Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
+// Package lpi: local page iterator
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  */
-package fs
+package lpi
 
 import (
 	"errors"
@@ -18,25 +18,30 @@ import (
 )
 
 const (
-	allPages = ""
+	// to fill `Page` with the entire remaining content,
+	// with no limits that may otherwise be imposed by
+	// page size (`Msg.Size`) and/or end-of-page (`Msg.EOP`)
+	AllPages = ""
 )
 
 type (
-	lpiPage map[string]struct{}
+	Page map[string]struct{}
 
-	lpiMsg struct {
-		eop  string
-		size int
+	Msg struct {
+		EOP  string // until end-of-page marker
+		Size int    // so-many entries
 	}
 
-	LocalPageIt struct {
-		page lpiPage
+	// local page iterator (LPI)
+	// NOTE: it is caller's responsibility to serialize access _or_ take locks.
+	Iter struct {
+		page Page
 		root string
 
 		// runtime
 		current string
 		next    string
-		msg     lpiMsg
+		msg     Msg
 		lr      int
 	}
 )
@@ -45,7 +50,7 @@ var (
 	errStop = errors.New("stop")
 )
 
-func newLocalPageIt(root string) (*LocalPageIt, error) {
+func New(root string) (*Iter, error) {
 	finfo, err := os.Stat(root)
 	if err != nil {
 		return nil, fmt.Errorf("root fstat: %v", err)
@@ -54,7 +59,7 @@ func newLocalPageIt(root string) (*LocalPageIt, error) {
 		return nil, fmt.Errorf("root is not a directory: %s", root)
 	}
 
-	lpi := &LocalPageIt{root: root}
+	lpi := &Iter{root: root}
 	{
 		lpi.next = lpi.root
 		lpi.lr = len(lpi.root)
@@ -64,7 +69,9 @@ func newLocalPageIt(root string) (*LocalPageIt, error) {
 	return lpi, nil
 }
 
-func (lpi *LocalPageIt) do(msg lpiMsg, out lpiPage) error {
+func (lpi *Iter) Pos() string { return lpi.next }
+
+func (lpi *Iter) Next(msg Msg, out Page) error {
 	{
 		clear(out)
 		lpi.page = out
@@ -73,11 +80,11 @@ func (lpi *LocalPageIt) do(msg lpiMsg, out lpiPage) error {
 	}
 	debug.Assert(strings.HasPrefix(lpi.current, lpi.root), lpi.current, " vs ", lpi.root)
 
-	if lpi.msg.eop != allPages {
-		if lpi.current > lpi.msg.eop {
-			return fmt.Errorf("expected (end-of-page) %q > %q (current)", lpi.msg.eop, lpi.current)
+	if lpi.msg.EOP != AllPages {
+		if lpi.current > lpi.msg.EOP {
+			return fmt.Errorf("expected (end-of-page) %q > %q (current)", lpi.msg.EOP, lpi.current)
 		}
-		if _, err := os.Stat(lpi.msg.eop); err != nil {
+		if _, err := os.Stat(lpi.msg.EOP); err != nil {
 			return fmt.Errorf("end-of-page fstat: %v", err)
 		}
 	}
@@ -95,7 +102,7 @@ func (lpi *LocalPageIt) do(msg lpiMsg, out lpiPage) error {
 	return nil
 }
 
-func (lpi *LocalPageIt) Callback(pathname string, de *godirwalk.Dirent) (err error) {
+func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 	switch {
 	case de.IsDir():
 		// skip or SkipDir
@@ -116,8 +123,8 @@ func (lpi *LocalPageIt) Callback(pathname string, de *godirwalk.Dirent) (err err
 		}
 	case pathname < lpi.current:
 		// skip
-	case pathname >= lpi.current && (pathname <= lpi.msg.eop || lpi.msg.eop == allPages):
-		if lpi.msg.size != 0 && len(lpi.page) >= lpi.msg.size {
+	case pathname >= lpi.current && (pathname <= lpi.msg.EOP || lpi.msg.EOP == AllPages):
+		if lpi.msg.Size != 0 && len(lpi.page) >= lpi.msg.Size {
 			lpi.next = pathname
 			err = errStop
 			break
@@ -132,7 +139,7 @@ func (lpi *LocalPageIt) Callback(pathname string, de *godirwalk.Dirent) (err err
 		lpi.page[rel] = struct{}{}
 	default:
 		// next
-		debug.Assert(pathname > lpi.msg.eop && lpi.msg.eop != allPages)
+		debug.Assert(pathname > lpi.msg.EOP && lpi.msg.EOP != AllPages)
 		lpi.next = pathname
 		err = errStop
 	}
@@ -140,7 +147,7 @@ func (lpi *LocalPageIt) Callback(pathname string, de *godirwalk.Dirent) (err err
 	return err
 }
 
-func (*LocalPageIt) ErrorCallback(pathname string, err error) godirwalk.ErrorAction {
+func (*Iter) ErrorCallback(pathname string, err error) godirwalk.ErrorAction {
 	if err != errStop {
 		nlog.Warningf("Error accessing %s: %v", pathname, err)
 	}
