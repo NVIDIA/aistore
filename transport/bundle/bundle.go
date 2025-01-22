@@ -106,7 +106,7 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 	sb._lid()
 	nlog.Infoln("open", sb.lid)
 
-	// register this stream-bundle as Smap listener
+	// for auto-resync, register this stream-bundle as Smap listener
 	if !sb.manualResync {
 		listeners := core.T.Sowner().Listeners()
 		listeners.Reg(sb)
@@ -306,7 +306,7 @@ func (sb *Streams) Abort() {
 }
 
 func (sb *Streams) apply(action int) {
-	cos.Assert(action == closeFin || action == closeStop)
+	debug.Assert(action == closeFin || action == closeStop)
 	var (
 		streams = sb.get()
 		wg      = &sync.WaitGroup{}

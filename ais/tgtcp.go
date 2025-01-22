@@ -929,7 +929,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 			NID:    newRMD.Version,
 		}
 	)
-	if msg.UUID != nxid {
+	if msg.UUID != nxid && msg.UUID != "" {
 		nlog.Warningln(tag, msg.UUID, "vs", nxid)
 	}
 

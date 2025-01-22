@@ -153,6 +153,9 @@ func New(config *cmn.Config) *Reb {
 }
 
 func (reb *Reb) _preempt(logHdr, oxid string) error {
+	const (
+		retries = 10 // TODO: config
+	)
 	oxreb, err := xreg.GetXact(oxid)
 	if err != nil {
 		return err
@@ -161,15 +164,18 @@ func (reb *Reb) _preempt(logHdr, oxid string) error {
 		oxreb.Abort(cmn.ErrXactRenewAbort)
 		nlog.Warningln(logHdr, "[", cmn.ErrXactRenewAbort, oxreb.String(), "]", reb.dm.String())
 	}
-	for i := range 10 { // TODO: config
+	for i := range retries {
 		if reb.dm.IsFree() {
-			break
+			return nil
 		}
 		time.Sleep(time.Second)
 		if i > 2 && i&1 == 1 {
 			nlog.Warningln(logHdr, "preempt: polling for", reb.dm.String())
 		}
 	}
+	// force
+	reb.dm.Abort()
+	reb.dm.UnregRecv()
 	return nil
 }
 
@@ -400,7 +406,12 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams boo
 		if dm := reb.dm.Renew(trname, reb.recvObj, cmn.OwtRebalance, dmExtra); dm != nil {
 			reb.dm = dm
 		}
-		reb.beginStreams(rargs)
+		if err := reb.beginStreams(rargs); err != nil {
+			rargs.xreb.Abort(err)
+			reb.mu.Unlock()
+			nlog.Errorln(err)
+			return false
+		}
 	}
 
 	if reb.awaiting.targets == nil {
@@ -419,7 +430,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams boo
 		if fatalErr != nil {
 			err = fatalErr
 		}
-		reb.endStreams(err)
+		reb.endStreams(err, rargs.logHdr)
 		rargs.xreb.Abort(err)
 		reb.mu.Unlock()
 		nlog.Errorln("FATAL:", fatalErr, "WRITE:", writeErr)
@@ -436,16 +447,20 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams boo
 	return true
 }
 
-func (reb *Reb) beginStreams(rargs *rebArgs) {
-	debug.Assert(reb.stages.stage.Load() == rebStageInit)
+func (reb *Reb) beginStreams(rargs *rebArgs) error {
+	if reb.stages.stage.Load() != rebStageInit {
+		return fmt.Errorf("%s: cannot begin at stage %d", rargs.logHdr, reb.stages.stage.Load())
+	}
 
 	reb.dm.SetXact(rargs.xreb)
 	reb.dm.Open()
+	return nil
 }
 
-func (reb *Reb) endStreams(err error) {
-	swapped := reb.stages.stage.CAS(rebStageFin, rebStageFinStreams)
-	debug.Assert(swapped)
+func (reb *Reb) endStreams(err error, loghdr string) {
+	if !reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
+		nlog.Warningln(loghdr, "stage", reb.stages.stage.Load())
+	}
 	reb.dm.Close(err)
 }
 
@@ -689,7 +704,7 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
 	}
 
-	reb.endStreams(err)
+	reb.endStreams(err, rargs.logHdr)
 	reb.filterGFN.Reset()
 
 	xreb.ToStats(&stats)

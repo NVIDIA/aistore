@@ -89,7 +89,7 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		nlog.Errorln("FATAL:", prev.Args.UUID, ep)
 		return xreg.WprAbort, ep
 	}
-	debug.Assert(ip < ic)
+	debug.Assert(ip <= ic, "curr ", p.Args.UUID, "> prev ", prev.Args.UUID)
 	return xreg.WprAbort, nil
 }
 

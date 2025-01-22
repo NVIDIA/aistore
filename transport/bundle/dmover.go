@@ -246,19 +246,11 @@ func (dm *DataMover) Close(err error) {
 		err = dm.xctn.AbortErr()
 	}
 	// nil: close gracefully via `fin`, otherwise abort
-	if err == nil {
-		dm.data.streams.Close(true)
-		if dm.useACKs() {
-			dm.ack.streams.Close(true)
-		}
-		nlog.Infoln(dm.String(), "closed")
-	} else {
-		dm.data.streams.Close(false)
-		if dm.useACKs() {
-			dm.ack.streams.Close(false)
-		}
-		nlog.Infoln(dm.String(), "aborted:", err)
+	dm.data.streams.Close(err == nil)
+	if dm.useACKs() {
+		dm.ack.streams.Close(err == nil)
 	}
+	nlog.Infoln(dm.String(), err)
 }
 
 func (dm *DataMover) Abort() {
@@ -266,6 +258,8 @@ func (dm *DataMover) Abort() {
 	if dm.useACKs() {
 		dm.ack.streams.Abort()
 	}
+	dm.stage.opened.Store(false)
+	nlog.Warningln("dm.abort", dm.String())
 }
 
 func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) (err error) {
