@@ -46,7 +46,7 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 		switch name {
 		case apc.GetPropsName:
 		case apc.GetPropsStatus:
-		case apc.GetPropsCached: // via obj.SetPresent()
+		case apc.GetPropsCached: // (apc.EntryIsCached)
 
 		case apc.GetPropsSize:
 			if en.Size > 0 && lom.Lsize() != en.Size {

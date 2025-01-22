@@ -37,7 +37,7 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInv
 		ctx: ctx,
 	}
 	if msg.IsFlagSet(apc.LsVerChanged) {
-		npg.wi.custom = make(cos.StrKVs)
+		npg.wi.custom = make(cos.StrKVs) // TODO -- FIXME: move to parent x-lso; clear and reuse here
 	}
 	return
 }
@@ -112,6 +112,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err erro
 // - see also: cmn.ConcatLso
 func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 	var (
+		bck  = npg.bck.Bucket()
 		post = npg.wi.lomVisitedCb
 		i    int
 	)
@@ -129,7 +130,7 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		}
 
 		lom := core.AllocLOM(en.Name)
-		if err := lom.InitBck(npg.bck.Bucket()); err != nil {
+		if err := lom.InitBck(bck); err != nil {
 			if cmn.IsErrBucketNought(err) {
 				core.FreeLOM(lom)
 				return err

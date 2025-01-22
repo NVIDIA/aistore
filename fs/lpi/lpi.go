@@ -70,6 +70,7 @@ func New(root string) (*Iter, error) {
 }
 
 func (lpi *Iter) Pos() string { return lpi.next }
+func (lpi *Iter) Clear()      { clear(lpi.page) }
 
 func (lpi *Iter) Next(msg Msg, out Page) error {
 	{

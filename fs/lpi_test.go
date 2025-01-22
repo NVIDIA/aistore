@@ -25,7 +25,7 @@ const (
 	lpiTestVerbose  = false
 )
 
-func TestLocalPageIt(t *testing.T) {
+func TestLocalPageIterator(t *testing.T) {
 	// 1. create temp root
 	root, err := os.MkdirTemp("", "ais-lpi-")
 	tassert.CheckFatal(t, err)

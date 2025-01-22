@@ -281,6 +281,13 @@ func (mi *Mountpath) MakePathCT(bck *cmn.Bck, contentType string) string {
 	return cos.UnsafeS(buf)
 }
 
+func (mi *Mountpath) MakePathPrefix(bck *cmn.Bck, contentType, prefix string) string {
+	if prefix == "" {
+		return mi.MakePathCT(bck, contentType)
+	}
+	return mi.MakePathFQN(bck, contentType, prefix)
+}
+
 func (mi *Mountpath) MakePathFQN(bck *cmn.Bck, contentType, objName string) string {
 	debug.Assert(contentType != "")
 	debug.Assert(objName != "")

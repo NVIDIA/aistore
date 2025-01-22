@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/lpi"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -63,6 +64,7 @@ type (
 		streamingX
 		lensgl int64
 		ctx    *core.LsoInvCtx
+		lpis   lpi.Lpis
 	}
 	LsoRsp struct {
 		Err    error
@@ -115,7 +117,7 @@ func (p *lsoFactory) Start() error {
 	// see also: resetIdle()
 	r.DemandBase.Init(p.UUID(), apc.ActList, p.msg.Str(p.Bck.Cname(p.msg.Prefix)) /*ctlmsg*/, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
-	// NOTE: is set by the first message, never changes
+	// is set by the first message, never changes
 	r.walk.wor = r.msg.WantOnlyRemoteProps()
 	r.walk.this = r.msg.SID == core.T.SID()
 
@@ -128,18 +130,23 @@ func (p *lsoFactory) Start() error {
 		if !r.walk.wor {
 			nt := core.T.Sowner().Get().CountActiveTs()
 			if nt > 1 {
-				// NOTE streams
+				// streams
 				if err := p.beginStreams(r); err != nil {
 					return err
 				}
 			}
 		}
-		// NOTE alternative flow _this_ target will execute:
+		// alternative flow _this_ target will execute:
 		// - nextpage =>
 		// -     backend.GetBucketInv() =>
 		// -        while { backend.ListObjectsInv }
 		if cos.IsParseBool(p.hdr.Get(apc.HdrInventory)) && r.walk.this {
 			r.ctx = &core.LsoInvCtx{Name: p.hdr.Get(apc.HdrInvName), ID: p.hdr.Get(apc.HdrInvID)}
+		}
+
+		// engage local page iterator (lpi)
+		if r.msg.IsFlagSet(apc.LsVerChanged) {
+			r.lpis.Init(r.Bck().Bucket(), r.msg.Prefix)
 		}
 	}
 
@@ -339,6 +346,11 @@ func (r *LsoXact) doPage() *LsoRsp {
 			}
 		}
 		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
+
+		if r.msg.IsFlagSet(apc.LsVerChanged) {
+			r.lpis.Do(r.lastPage, page, r.Name())
+		}
+
 		return &LsoRsp{Lst: page, Status: http.StatusOK}
 	}
 
@@ -394,7 +406,6 @@ func (r *LsoXact) nextPageR() (err error) {
 	}
 	r.wiCnt.Inc()
 
-	// TODO -- FIXME: not counting/sizing (locally) present objects that are missing (deleted?) remotely
 	if r.walk.this {
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
