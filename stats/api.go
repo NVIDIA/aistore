@@ -157,7 +157,7 @@ func IsIOErrMetric(name string) bool {
 
 //
 // name translations, to recompute latency and throughput over client-controlled intervals
-// see "Naming conventions"
+// see stats/common for "Naming conventions"
 //
 
 // compare with base.init() at ais/backend/common
@@ -196,13 +196,26 @@ func LatencyToCounter(latName string) string {
 	return ""
 }
 
+// TODO -- FIXME: remove
 func SizeToThroughput(name, kind string) string {
 	if kind != KindSize {
 		return ""
 	}
-	if !strings.HasSuffix(name, ".size") { // see "Naming conventions"
+	if !strings.HasSuffix(name, ".size") { // see stats/common for "Naming conventions"
 		debug.Assert(false, name)
 		return ""
 	}
 	return strings.TrimSuffix(name, ".size") + ".bps"
+}
+
+func SizeToThroughputCount(name, kind string) (string, string) {
+	if kind != KindSize {
+		return "", ""
+	}
+	if !strings.HasSuffix(name, ".size") { // see stats/common for "Naming conventions"
+		debug.Assert(false, name)
+		return "", ""
+	}
+	root := strings.TrimSuffix(name, ".size")
+	return root + ".bps", root + ".n"
 }

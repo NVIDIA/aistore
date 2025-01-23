@@ -67,7 +67,7 @@ const (
 	lshiftGorHigh  = 8                // max expressed as left shift of the num CPUs
 )
 
-// [naming convention] error counter prefixes
+// Naming conventions: error counters' prefixes
 const (
 	errPrefix   = "err."    // all error metric names (see `IsErrMetric` below)
 	ioErrPrefix = "err.io." // excluding connection-reset-by-peer and similar (see ioErrNames)

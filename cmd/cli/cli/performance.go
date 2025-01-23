@@ -169,12 +169,12 @@ func showCountersHandler(c *cli.Context) error {
 			selected[name] = kind
 		}
 	}
-	return showPerfTab(c, selected, nil, cmdShowCounters, nil, false)
+	return showPerfTab(c, selected, nil, cmdShowCounters, nil /*totals*/, false)
 }
 
 func showThroughputHandler(c *cli.Context) error {
 	var (
-		totals       = make(map[string]int64, 4) // throughput metrics ("columns") to tally up
+		totals       = make(map[string]int64, 12) // throughput metrics ("columns") to tally up
 		verbose      = flagIsSet(c, verboseFlag)
 		metrics, err = getMetricNames(c)
 	)
@@ -223,12 +223,18 @@ func showThroughputHandler(c *cli.Context) error {
 
 				if bpsName := stats.SizeToThroughput(name, stats.KindSize); bpsName != "" {
 					selected[bpsName] = stats.KindThroughput
+					totals[bpsName] = 0
 				}
 			}
 		}
 	}
 	// `true` to show average get/put sizes
 	return showPerfTab(c, selected, _throughput /*cb*/, cmdShowThroughput, totals, true)
+}
+
+// TODO -- FIXME: move
+func _sizeToCount(name string) string {
+	return strings.TrimSuffix(name, ".size") + ".n"
 }
 
 // update mapBegin <= (size/s)
@@ -253,18 +259,24 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 			if bpsName == "" {
 				continue
 			}
-			vend := end.Tracker[name]
 
-			if vend.Value <= v.Value {
-				// no changes, nothing to show
+			// - check (begin, end) counters
+			// - zero-out resulting throughput when no change
+			var (
+				cntName       = _sizeToCount(name)
+				cntBegin, okb = begin.Tracker[cntName]
+				cntEnd, oke   = end.Tracker[cntName]
+			)
+			if okb && oke && cntBegin.Value >= cntEnd.Value {
 				v.Value = 0
-				begin.Tracker[name] = v
+				begin.Tracker[bpsName] = v
 				continue
 			}
 
 			//
 			// given this (KindSize) metric change and elapsed time, add computed throughput:
 			//
+			vend := end.Tracker[name]
 			v.Value = (vend.Value - v.Value) / seconds
 			begin.Tracker[bpsName] = v
 			num++
@@ -334,7 +346,7 @@ func showLatencyHandler(c *cli.Context) error {
 	}
 
 	// `true` to show (and put request latency numbers in perspective)
-	return showPerfTab(c, selected, _latency, cmdShowLatency, nil, true)
+	return showPerfTab(c, selected, _latency, cmdShowLatency, nil /*totals*/, true)
 }
 
 // update mapBegin <= (elapsed/num-samples)
@@ -499,12 +511,12 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		totalsHdr := teb.ClusterTotal
 		if totals != nil {
 			for _, begin := range mapBegin {
+				_ = begin.DeploymentType
 				for name, v := range begin.Tracker {
 					if _, ok := totals[name]; ok {
-						totals[name] += v.Value
+						totals[name] += v.Value // (each target separately reporting; compare ref 152408)
 					}
 				}
-				// TODO: avoid summing up with oneself - check Tcdf mountpaths
 			}
 		}
 
