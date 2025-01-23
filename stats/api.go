@@ -196,18 +196,6 @@ func LatencyToCounter(latName string) string {
 	return ""
 }
 
-// TODO -- FIXME: remove
-func SizeToThroughput(name, kind string) string {
-	if kind != KindSize {
-		return ""
-	}
-	if !strings.HasSuffix(name, ".size") { // see stats/common for "Naming conventions"
-		debug.Assert(false, name)
-		return ""
-	}
-	return strings.TrimSuffix(name, ".size") + ".bps"
-}
-
 func SizeToThroughputCount(name, kind string) (string, string) {
 	if kind != KindSize {
 		return "", ""

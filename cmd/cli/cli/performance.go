@@ -232,11 +232,6 @@ func showThroughputHandler(c *cli.Context) error {
 	return showPerfTab(c, selected, _throughput /*cb*/, cmdShowThroughput, totals, true)
 }
 
-// TODO -- FIXME: move
-func _sizeToCount(name string) string {
-	return strings.TrimSuffix(name, ".size") + ".n"
-}
-
 // update mapBegin <= (size/s)
 func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) (idle bool) {
 	var (
@@ -255,7 +250,7 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 			if !ok || kind != stats.KindSize {
 				continue
 			}
-			bpsName := stats.SizeToThroughput(name, stats.KindSize)
+			bpsName, cntName := stats.SizeToThroughputCount(name, stats.KindSize)
 			if bpsName == "" {
 				continue
 			}
@@ -263,11 +258,11 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 			// - check (begin, end) counters
 			// - zero-out resulting throughput when no change
 			var (
-				cntName       = _sizeToCount(name)
 				cntBegin, okb = begin.Tracker[cntName]
 				cntEnd, oke   = end.Tracker[cntName]
 			)
 			if okb && oke && cntBegin.Value >= cntEnd.Value {
+				debug.Assert(cntBegin.Value == cntEnd.Value, cntName, ": ", cntBegin.Value, " vs ", cntEnd.Value)
 				v.Value = 0
 				begin.Tracker[bpsName] = v
 				continue
