@@ -86,8 +86,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		return nil, err
 	}
 
-	// TODO -- FIXME: ref duplicated and slightly changed `listRemote` line; flag set vs listRemote
-	listRemote := p.Bck.IsCloud() && !p.msg.ObjCached
+	listRemote := lsoIsRemote(p.Bck, p.msg.ObjCached)
 	if listRemote {
 		var (
 			smap = core.T.Sowner().Get()

@@ -89,6 +89,13 @@ var (
 	_ xreg.Renewable = (*lsoFactory)(nil)
 )
 
+// common helper
+func lsoIsRemote(bck *meta.Bck, cachedOnly bool) bool { return !cachedOnly && bck.IsRemote() }
+
+////////////////
+// lsoFactory //
+////////////////
+
 func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.LsoArgs)
 	p := &lsoFactory{
@@ -125,7 +132,7 @@ func (p *lsoFactory) Start() error {
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
-	if r.listRemote() {
+	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
 		// begin streams
 		if !r.walk.wor {
 			nt := core.T.Sowner().Get().CountActiveTs()
@@ -182,7 +189,7 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 func (r *LsoXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
-	if !r.listRemote() {
+	if !lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
 		r.initWalk()
 	}
 loop:
@@ -218,7 +225,7 @@ loop:
 
 func (r *LsoXact) stop() {
 	r.stopCh.Close()
-	if r.listRemote() {
+	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
 		if r.DemandBase.Finished() {
 			// must be aborted
 			if !r.walk.wor {
@@ -310,8 +317,6 @@ func (r *LsoXact) Abort(err error) (ok bool) {
 	return
 }
 
-func (r *LsoXact) listRemote() bool { return r.p.Bck.IsRemote() && !r.msg.IsFlagSet(apc.LsObjCached) }
-
 // Start `fs.WalkBck`, so that by the time we read the next page `r.pageCh` is already populated.
 func (r *LsoXact) initWalk() {
 	r.walk.pageCh = make(chan *cmn.LsoEnt, pageChSize)
@@ -336,7 +341,7 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 }
 
 func (r *LsoXact) doPage() *LsoRsp {
-	if r.listRemote() {
+	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
 		if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
 			// can't extract the next-to-list object name from the remotely generated
 			// continuation token, keeping and returning the entire last page
@@ -377,7 +382,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 // sum of obj sizes - for all visited objects
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *LsoXact) findToken(token string) int {
-	if r.listRemote() && r.token == token {
+	if r.token == token && lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
 		return 0
 	}
 	return sort.Search(len(r.lastPage), func(i int) bool { // TODO: revisit
@@ -676,7 +681,7 @@ func (r *LsoXact) Snap() (snap *core.Snap) {
 //
 
 func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-	debug.Assert(r.listRemote())
+	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)))
 
 	if hdr.Opcode == opcodeAbrt {
 		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
