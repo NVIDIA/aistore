@@ -34,7 +34,7 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
 		lpis.bck = bck
 	}
 	for _, mi := range avail {
-		it, err := New(mi.MakePathPrefix(bck, fs.ObjectType, prefix))
+		it, err := New(mi.MakePathCT(bck, fs.ObjectType) /*root*/, prefix)
 		debug.AssertNoErr(err)
 		milpi := milpi{
 			page: make(Page),
@@ -45,8 +45,7 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
 	}
 }
 
-// TODO: consider jogger-per-mountpath
-
+// TODO: consider jogger-per-mountpath approach
 func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string) {
 	var (
 		lastName string
@@ -64,7 +63,7 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string) {
 			continue
 		}
 		if lastName != "" {
-			eop = milpi.mi.MakePathPrefix(lpis.bck, fs.ObjectType, lastName)
+			eop = milpi.mi.MakePathFQN(lpis.bck, fs.ObjectType, lastName)
 		}
 
 		// next local page "until"
@@ -76,20 +75,20 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string) {
 		}
 	}
 
-	// 2. last page as a map
+	// 2. last page as a (mem-pooled) map
 	lastPageMap := allocPage()
 	for _, en := range lastPage {
-		lastPageMap[en.Name] = struct{}{}
+		lastPageMap[en.Name] = 0
 	}
 
 	// 3. find and add 'remotely-deleted'
 	for _, milpi := range lpis.a {
-		for lname := range milpi.page {
+		for lname, size := range milpi.page {
 			if _, ok := lastPageMap[lname]; ok {
 				delete(milpi.page, lname)
 				continue
 			}
-			en := &cmn.LsoEnt{Name: lname}
+			en := &cmn.LsoEnt{Name: lname, Size: size}
 			en.SetFlag(apc.EntryVerRemoved | apc.EntryIsCached)
 			outPage.Entries = append(outPage.Entries, en)
 		}

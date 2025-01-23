@@ -71,7 +71,7 @@ func lpiPageSize(t *testing.T, root string, eops []string, lpiTestPageSize, tota
 		msg  = lpi.Msg{Size: lpiTestPageSize}
 		num  int
 	)
-	it, err := lpi.New(root)
+	it, err := lpi.New(root, "" /*prefix*/) // TODO: add test
 	tassert.CheckFatal(t, err)
 
 	for {
@@ -102,7 +102,7 @@ func lpiEndOfPage(t *testing.T, root string, eops []string, total int) {
 		previous string
 		num      int
 		page     = make(lpi.Page, 100)
-		it, err  = lpi.New(root)
+		it, err  = lpi.New(root, "" /*prefix*/) // TODO: add test
 	)
 	tassert.CheckFatal(t, err)
 

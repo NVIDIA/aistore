@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -25,7 +26,7 @@ const (
 )
 
 type (
-	Page map[string]struct{}
+	Page map[string]int64 // [name => size] TODO: [name => lom] for props
 
 	Msg struct {
 		EOP  string // until end-of-page marker
@@ -35,14 +36,16 @@ type (
 	// local page iterator (LPI)
 	// NOTE: it is caller's responsibility to serialize access _or_ take locks.
 	Iter struct {
-		page Page
-		root string
+		page   Page
+		root   string
+		prefix string
 
 		// runtime
 		current string
 		next    string
 		msg     Msg
 		lr      int
+		lp      int
 	}
 )
 
@@ -50,7 +53,7 @@ var (
 	errStop = errors.New("stop")
 )
 
-func New(root string) (*Iter, error) {
+func New(root, prefix string) (*Iter, error) {
 	finfo, err := os.Stat(root)
 	if err != nil {
 		return nil, fmt.Errorf("root fstat: %v", err)
@@ -59,10 +62,11 @@ func New(root string) (*Iter, error) {
 		return nil, fmt.Errorf("root is not a directory: %s", root)
 	}
 
-	lpi := &Iter{root: root}
+	lpi := &Iter{root: root, prefix: prefix}
 	{
 		lpi.next = lpi.root
 		lpi.lr = len(lpi.root)
+		lpi.lp = len(lpi.prefix)
 	}
 	debug.Assert(lpi.lr > 1 && !cos.IsLastB(lpi.root, filepath.Separator), lpi.root)
 
@@ -85,19 +89,16 @@ func (lpi *Iter) Next(msg Msg, out Page) error {
 		if lpi.current > lpi.msg.EOP {
 			return fmt.Errorf("expected (end-of-page) %q > %q (current)", lpi.msg.EOP, lpi.current)
 		}
-		if _, err := os.Stat(lpi.msg.EOP); err != nil {
-			return fmt.Errorf("end-of-page fstat: %v", err)
-		}
 	}
 
-	// do page
+	// next page
 	err := godirwalk.Walk(lpi.root, &godirwalk.Options{
 		Unsorted:      false,
 		Callback:      lpi.Callback,
 		ErrorCallback: lpi.ErrorCallback,
 	})
 	if err != nil && err != errStop {
-		return fmt.Errorf("error during walk: %v", err)
+		return fmt.Errorf("error gowalk-ing: %v", err)
 	}
 
 	return nil
@@ -125,19 +126,32 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 	case pathname < lpi.current:
 		// skip
 	case pathname >= lpi.current && (pathname <= lpi.msg.EOP || lpi.msg.EOP == AllPages):
+		// reached page size
 		if lpi.msg.Size != 0 && len(lpi.page) >= lpi.msg.Size {
 			lpi.next = pathname
 			err = errStop
 			break
 		}
-		// add
-		rel := pathname[lpi.lr+1:]
 
-		debug.AssertFunc(func() bool {
-			_, ok := lpi.page[rel]
-			return !ok
-		})
-		lpi.page[rel] = struct{}{}
+		rel := pathname[lpi.lr+1:]
+		debug.AssertFunc(func() bool { _, ok := lpi.page[rel]; return !ok })
+
+		if lpi.lp > 0 && len(rel) >= lpi.lp {
+			if s := rel[0:lpi.lp]; s != lpi.prefix { // TODO: refine
+				// skip
+				if s > lpi.prefix {
+					return filepath.SkipDir
+				}
+				break
+			}
+		}
+
+		// add
+		if finfo, e := os.Stat(pathname); e == nil { // TODO: lom.Load() instead
+			lpi.page[rel] = finfo.Size()
+		} else if cmn.Rom.FastV(4, cos.SmoduleXs) {
+			nlog.Warningln(e)
+		}
 	default:
 		// next
 		debug.Assert(pathname > lpi.msg.EOP && lpi.msg.EOP != AllPages)
@@ -150,7 +164,7 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 
 func (*Iter) ErrorCallback(pathname string, err error) godirwalk.ErrorAction {
 	if err != errStop {
-		nlog.Warningf("Error accessing %s: %v", pathname, err)
+		nlog.Warningln("Error accessing", pathname, err)
 	}
 	return godirwalk.Halt
 }
