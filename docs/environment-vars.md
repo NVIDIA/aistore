@@ -262,7 +262,7 @@ As far as, specifically, StatsD alternative, additional environment includes:
 
 | name | comment |
 | ---- | ------- |
-| `AIS_STATSD_PORT` | use it to override the default `8125` (see https://github.com/etsy/stats) |
+| `AIS_STATSD_PORT` | use it to override the default `8125` (see https://github.com/etsy/statsd) |
 | `AIS_STATSD_PROBE` | a startup option that, when true, tells an ais node to _probe_ whether StatsD server exists (and responds); if the probe fails, the node will disable its StatsD functionality completely - i.e., will not be sending any metrics to the StatsD port (above) |
 
 ## Package: memsys

@@ -202,14 +202,14 @@ Eviction of a cloud storage bucket destroys any instance of the cloud storage bu
 
 ## PyTorch
 
-PyTorch provides built-in [tools](https://github.com/pytorch/data/tree/main/torchdata/datapipes/iter/load#aistore-io-datapipe) for AIStore integration, allowing machine learning developers to easily use AIStore as a viable storage system option with PyTorch. In fact, the dataloading classes [`AISFileLister`](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLister.html#aisfilelister) and [`AISFileLoader`](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLoader.html#torchdata.datapipes.iter.AISFileLoader) found in [`aisio.py`](https://github.com/pytorch/data/blob/main/torchdata/datapipes/iter/load/aisio.py) provided by PyTorch make use of several of the client-side APIs referenced in this article.
+PyTorch provides built-in [tools](https://github.com/NVIDIA/aistore/blob/main/python/aistore/pytorch/aisio.py) for AIStore integration, allowing machine learning developers to easily use AIStore as a viable storage system option with PyTorch. In fact, the dataloading classes [`AISFileLister`](https://pytorch.org/data/0.8/generated/torchdata.datapipes.iter.AISFileLister.html) and [`AISFileLoader`](https://pytorch.org/data/0.8/generated/torchdata.datapipes.iter.AISFileLoader.html) found in [`aisio.py`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/pytorch/aisio.py) provided by PyTorch make use of several of the client-side APIs referenced in this article.
 
 For more information on dataloading from AIStore with PyTorch, please refer to this [article](https://aiatscale.org/blog/2022/07/12/aisio-pytorch).
 
 
 ## More Examples & Resources
 
-For more examples, please refer to additional documentation [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) and try out the [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk-tutorial.ipynb).
+For more examples, please refer to additional documentation [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) and try out the [SDK tutorial (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-basics.ipynb).
 
 For information on specific API usage, please refer to the [API reference](https://aistore.nvidia.com/docs/python-sdk).
 

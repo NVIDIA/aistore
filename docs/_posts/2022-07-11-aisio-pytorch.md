@@ -11,9 +11,9 @@ categories: aistore pytorch sdk python
 Listing and loading data from AIS buckets (buckets that are not 3rd
 party backend-based) and remote cloud buckets (3rd party backend-based
 cloud buckets) using
-[AISFileLister](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLister.html#aisfilelister)
+[AISFileLister](https://pytorch.org/data/0.8/generated/torchdata.datapipes.iter.AISFileLister.html)
 and
-[AISFileLoader](https://pytorch.org/data/main/generated/torchdata.datapipes.iter.AISFileLoader.html#torchdata.datapipes.iter.AISFileLoader).
+[AISFileLoader](https://pytorch.org/data/0.8/generated/torchdata.datapipes.iter.AISFileLoader.html).
 
 [AIStore](https://github.com/NVIDIA/aistore) (AIS for short) fully supports
 Amazon S3, Google Cloud, and Microsoft Azure backends, providing a

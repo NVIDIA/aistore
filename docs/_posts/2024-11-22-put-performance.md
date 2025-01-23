@@ -18,7 +18,7 @@ First, we ran a series of benchmarks to determine AIS performance given a simple
 Our AIStore cluster is a production-level 16-node cluster running in OCI (Oracle Cloud Infrastructure) managed Kubernetes.
 We've selected the [E5 DenseIO nodes](https://docs.oracle.com/iaas/Content/Compute/References/computeshapes.htm#bm-dense), each with 12 5.8 TiB NVME drives and 100 Gb networking. 
 
-For the benchmark client we used a single instance of the same node shape (E5 DenseIO) running our [AISLoader client]((https://github.com/NVIDIA/aistore/blob/main/docs/aisloader.md)) -- a simple multi-threaded HTTP-based workload generator. 
+For the benchmark client we used a single instance of the same node shape (E5 DenseIO) running our [AISLoader client](https://github.com/NVIDIA/aistore/blob/main/docs/aisloader.md) -- a simple multi-threaded HTTP-based workload generator. 
 For this test we ran the client with 10 worker threads in order to keep the test small and avoid any external factors. 
 With larger numbers of client threads, we could run into rate limits imposed by AWS S3 (3,500 PUTs per prefix at time of writing) or throughput limits of our outbound network. 
 

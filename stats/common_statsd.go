@@ -3,7 +3,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -65,7 +65,7 @@ func (s *coreStats) statsdDisabled() bool { return s.statsdC == nil }
 
 func (s *coreStats) initStarted(snode *meta.Snode) {
 	var (
-		port  = 8125  // StatsD default port, see https://github.com/etsy/stats
+		port  = 8125  // StatsD default port, see https://github.com/etsy/statsd
 		probe = false // test-probe StatsD server at init time
 	)
 	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
