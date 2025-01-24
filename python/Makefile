@@ -1,6 +1,7 @@
 
 SHELL := /bin/bash
 PYTHON = python3
+GO = go
 PYTEST = $(PYTHON) -m pytest
 PIP = pip3
 SDK_DOCFILE := ../docs/python_sdk.md
@@ -39,6 +40,10 @@ botocore_deps:
 s3_test_deps:
 	$(PIP) install --upgrade -r tests/s3compat/requirements --quiet
 
+.PHONY: python_unit_tests_scenario_gen
+python_unit_tests_scenario_gen:
+	@ $(GO) run tests/unit/sdk/hrw/scenario_gen.go
+
 .PHONY: python_tests
 python_tests: common_deps dev_deps botocore_deps python_sdk_tests python_etl_tests python_botocore_tests
 
@@ -51,7 +56,7 @@ python_sdk_integration_tests: common_deps
 	$(PYTEST) -v tests/integration/sdk -m "not etl and not authn"
 
 .PHONY: python_sdk_unit_tests
-python_sdk_unit_tests: common_deps
+python_sdk_unit_tests: common_deps python_unit_tests_scenario_gen
 	$(PYTEST) -v tests/unit/sdk
 
 .PHONY: python_etl_tests
