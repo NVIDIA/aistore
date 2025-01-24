@@ -6,12 +6,11 @@ package integration_test
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"hash"
-	"math/rand/v2"
+	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -22,281 +21,341 @@ import (
 )
 
 const (
-	tempObjPrefix         = "TestMPObj-"
-	tempDirPrefix         = "TestMPDir-"
-	nonMPBasenamePrefix   = "nonMP-"
-	smallMPBasenamePrefix = "smallMP-"
-	bigMPBasenamePrefix   = "bigMP-"
-	srcFileSuffix         = "srcFile"
-	objectSuffix          = "object"
-	dstFileSuffix         = "dstFile"
-	randomDevFilePath     = "/dev/urandom"
-	writeFilePerm         = 0o600
+	testBackendMPFileNameSuffixLen   = 16
+	testBackendMPFileContentBlockLen = 4 * cos.KiB
+	testBackendMPObjectNameFormat    = "TestMPObj-%02X"
+	testBackendMPRandomDevFilePath   = "/dev/urandom"
 )
+
+type testBackendMPGlobalsStruct struct {
+	sync.WaitGroup
+	sync.Mutex
+	bck        cmn.Bck
+	baseParams api.BaseParams
+	workChan   chan int64
+	errs       string
+}
+
+type testBackendMPFileStruct struct {
+	sync.Mutex
+	size    int
+	name    string
+	content []byte // len(.content) == testBackendMPFileContentBlockLen, repeated for entire .size
+	pos     int
+}
+
+func testBackendMPFileNew(size int) (f *testBackendMPFileStruct, err error) {
+	var (
+		byteSlicePos          int
+		n                     int
+		nameSuffixAsByteSlice []byte
+		randomDevFile         *os.File
+	)
+
+	if randomDevFile, err = os.Open(testBackendMPRandomDevFilePath); err != nil {
+		err = fmt.Errorf("os.Open(testBackendMPRandomDevFilePath) failed: %v", err)
+		return
+	}
+
+	nameSuffixAsByteSlice = make([]byte, testBackendMPFileNameSuffixLen)
+	byteSlicePos = 0
+	for byteSlicePos < testBackendMPFileNameSuffixLen {
+		if n, err = randomDevFile.Read(nameSuffixAsByteSlice[byteSlicePos:]); err != nil {
+			err = fmt.Errorf("randomDevFile.Read(nameSuffixAsByteSlice[byteSlicePos:]) failed: %v", err)
+			return
+		}
+		byteSlicePos += n
+	}
+
+	f = &testBackendMPFileStruct{
+		size:    size,
+		name:    fmt.Sprintf(testBackendMPObjectNameFormat, nameSuffixAsByteSlice),
+		content: make([]byte, testBackendMPFileContentBlockLen),
+	}
+
+	byteSlicePos = 0
+	for byteSlicePos < testBackendMPFileContentBlockLen {
+		if n, err = randomDevFile.Read(f.content[byteSlicePos:]); err != nil {
+			err = fmt.Errorf("randomDevFile.Read(f.content[byteSlicePos:]) failed: %v", err)
+			return
+		}
+		byteSlicePos += n
+	}
+
+	if err = randomDevFile.Close(); err != nil {
+		err = fmt.Errorf("randomDevFile.Close() failed: %v", err)
+		return
+	}
+
+	return
+}
+
+func (f *testBackendMPFileStruct) String() string {
+	return f.name
+}
+
+func (f *testBackendMPFileStruct) Open() (cos.ReadOpenCloser, error) {
+	f.Lock()
+	defer f.Unlock()
+
+	// Treat a (re)open as a file.Seek(offset=0,whence=os.SEEK_SET)
+	f.pos = 0
+
+	return f, nil
+}
+
+func (f *testBackendMPFileStruct) Read(p []byte) (n int, err error) {
+	f.Lock()
+	defer f.Unlock()
+
+	n = f.size - f.pos
+	if n == 0 {
+		err = io.EOF
+		return
+	}
+	if n > len(p) {
+		n = len(p)
+	}
+
+	pPos := copy(p, f.content[(f.pos%testBackendMPFileContentBlockLen):])
+
+	for pPos < n {
+		cnt := copy(p[pPos:], f.content)
+		pPos += cnt
+	}
+
+	f.pos += n
+
+	return
+}
+
+func (f *testBackendMPFileStruct) Write(p []byte) (n int, err error) {
+	var (
+		cLim int
+		cPos int
+		pLim int
+		pPos int
+	)
+
+	f.Lock()
+	defer f.Unlock()
+
+	n = f.size - f.pos
+	switch {
+	case len(p) < n:
+		n = len(p)
+	case len(p) == n:
+		// n is perfect
+	case len(p) > n:
+		err = errors.New("attempt to write beyond EOF")
+		return
+	}
+
+	cPos = f.pos % testBackendMPFileContentBlockLen
+
+	for pPos < n {
+		if (n - pPos) >= (testBackendMPFileContentBlockLen - cPos) {
+			cLim = testBackendMPFileContentBlockLen
+		} else {
+			cLim = cPos + (n - pPos)
+		}
+		pLim = pPos + (cLim - cPos)
+		if !bytes.Equal(p[pPos:pLim], f.content[cPos:cLim]) {
+			err = errors.New("attempt to write mismatched data")
+			return
+		}
+
+		cPos = 0 // Only changes cPos in 1st loop iteration... but here for clarity
+		pPos = pLim
+	}
+
+	f.pos += n
+
+	return
+}
+
+func (f *testBackendMPFileStruct) Close() error {
+	f.Lock()
+	defer f.Unlock()
+
+	f.pos = 0
+
+	return nil
+}
 
 func TestBackendMP(t *testing.T) {
 	var (
-		err               error
-		bucket            = os.Getenv("BUCKET")
-		bck               cmn.Bck
-		proxyURL          = tools.RandomProxyURL(t)
-		baseParams        = tools.BaseAPIParams(proxyURL)
-		nonMPFileSize     int64
-		smallMPFileSize   int64
-		bigMPFileSize     int64
-		nonMPSrcHashSum   []byte
-		smallMPSrcHashSum []byte
-		bigMPSrcHashSum   []byte
-		nonMPDstHashSum   []byte
-		smallMPDstHashSum []byte
-		bigMPDstHashSum   []byte
-		tempDirPath       string
-		randomDevFile     *os.File
+		globals         *testBackendMPGlobalsStruct
+		err             error
+		bucket          = os.Getenv("BUCKET")
+		nonMPFileSize   int64
+		smallMPFileSize int64
+		bigMPFileSize   int64
+		totalFiles      int64
+		parallelFiles   int64
+		lastFileSize    int64
 	)
 
 	if bucket == "" {
 		t.Skipf("BUCKET ENV missing... skipping...")
 	}
-	if bck, _, err = cmn.ParseBckObjectURI(bucket, cmn.ParseURIOpts{}); err != nil {
+
+	globals = &testBackendMPGlobalsStruct{}
+
+	if globals.bck, _, err = cmn.ParseBckObjectURI(bucket, cmn.ParseURIOpts{}); err != nil {
 		t.Fatalf("cmn.ParseBckObjectURI(bucket, cmn.ParseURIOpts{}) failed: %v", err)
 	}
-	if bck.Provider != apc.OCI {
-		t.Skipf("BUCKET .Provider (\"%s\") skipped", bck.Provider)
+	if globals.bck.Provider != apc.OCI {
+		t.Skipf("BUCKET .Provider (\"%s\") skipped", globals.bck.Provider)
 	}
 
-	if nonMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_NON_MP"), ""); err != nil {
+	globals.baseParams = tools.BaseAPIParams(tools.RandomProxyURL(t))
+
+	nonMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_NON_MP"), "")
+	if (err != nil) || (nonMPFileSize <= 0) {
 		t.Skipf("OCI_TEST_FILE_SIZE_NON_MP ENV missing or invalid... skipping...")
 	}
-	if smallMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_SMALL_MP"), ""); err != nil {
+	smallMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_SMALL_MP"), "")
+	if (err != nil) || (smallMPFileSize <= 0) {
 		t.Skipf("OCI_TEST_FILE_SIZE_SMALL_MP ENV missing or invalid... skipping...")
 	}
-	if bigMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_BIG_MP"), ""); err != nil {
+	bigMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_BIG_MP"), "")
+	if (err != nil) || (bigMPFileSize <= 0) {
 		t.Skipf("OCI_TEST_FILE_SIZE_BIG_MP ENV missing or invalid... skipping...")
 	}
 
-	tempDirPath, err = os.MkdirTemp("", tempDirPrefix)
-	if err != nil {
-		t.Fatalf("os.MkdirTemp(\"\", tempDirPrefix) failed: %v", err)
+	totalFiles, err = cos.ParseSize(os.Getenv("OCI_TEST_FILES_TOTAL"), "")
+	if (err != nil) || (totalFiles <= 0) {
+		t.Skipf("OCI_TEST_FILES_TOTAL ENV missing or invalid... skipping...")
 	}
-	defer os.RemoveAll(tempDirPath)
-
-	if randomDevFile, err = os.Open(randomDevFilePath); err != nil {
-		t.Fatalf("os.Open(randomDevFilePath) failed: %v", err)
-	}
-
-	if nonMPSrcHashSum, err = testMPGenerateSrcFile(
-		randomDevFile,
-		nonMPFileSize,
-		tempDirPath+"/"+nonMPBasenamePrefix+srcFileSuffix); err != nil {
-		t.Fatal(err)
-	}
-	if smallMPSrcHashSum, err = testMPGenerateSrcFile(
-		randomDevFile,
-		smallMPFileSize,
-		tempDirPath+"/"+smallMPBasenamePrefix+srcFileSuffix); err != nil {
-		t.Fatal(err)
-	}
-	if bigMPSrcHashSum, err = testMPGenerateSrcFile(
-		randomDevFile,
-		bigMPFileSize,
-		tempDirPath+"/"+bigMPBasenamePrefix+srcFileSuffix); err != nil {
-		t.Fatal(err)
+	parallelFiles, err = cos.ParseSize(os.Getenv("OCI_TEST_FILES_PARALLEL"), "")
+	if (err != nil) || (parallelFiles <= 0) {
+		t.Skipf("OCI_TEST_FILES_PARALLEL ENV missing or invalid... skipping...")
 	}
 
-	if err = randomDevFile.Close(); err != nil {
-		t.Fatalf("randomDevFile.Close() failed: %v", err)
+	// Start off just running one worker for each size in parallel
+
+	globals.workChan = make(chan int64, 3)
+
+	globals.Add(1)
+	go testMPUploadDownloadCleanupDispatcher(globals)
+
+	globals.workChan <- nonMPFileSize
+	globals.workChan <- smallMPFileSize
+	globals.workChan <- bigMPFileSize
+
+	close(globals.workChan)
+
+	globals.Wait()
+
+	if globals.errs != "" {
+		t.Fatal(errors.New(globals.errs))
 	}
 
-	if err = testMPUploadDownloadCleanup(
-		bck,
-		baseParams,
-		tempDirPath+"/"+nonMPBasenamePrefix+srcFileSuffix,
-		tempDirPath+"/"+nonMPBasenamePrefix+dstFileSuffix); err != nil {
-		t.Fatalf("%v [fileSize==%d]", err, nonMPFileSize)
-	}
-	if err = testMPUploadDownloadCleanup(
-		bck,
-		baseParams,
-		tempDirPath+"/"+smallMPBasenamePrefix+srcFileSuffix,
-		tempDirPath+"/"+smallMPBasenamePrefix+dstFileSuffix); err != nil {
-		t.Fatalf("%v [fileSize==%d]", err, smallMPFileSize)
-	}
-	if err = testMPUploadDownloadCleanup(
-		bck,
-		baseParams,
-		tempDirPath+"/"+bigMPBasenamePrefix+srcFileSuffix,
-		tempDirPath+"/"+bigMPBasenamePrefix+dstFileSuffix); err != nil {
-		t.Fatalf("%v [fileSize==%d]", err, bigMPFileSize)
-	}
+	// Now perform the specified total # of workers with the specified parallelism
 
-	if nonMPDstHashSum, err = testMPHashDstFile(
-		tempDirPath + "/" + nonMPBasenamePrefix + dstFileSuffix); err != nil {
-		t.Fatalf("%v [fileSize==%d]", err, nonMPFileSize)
-	}
-	if !bytes.Equal(nonMPSrcHashSum, nonMPDstHashSum) {
-		t.Fatalf("bytes.Equal(nonMPSrcHashSum, nonMPDstHashSum) returned false")
-	}
-	if smallMPDstHashSum, err = testMPHashDstFile(
-		tempDirPath + "/" + smallMPBasenamePrefix + dstFileSuffix); err != nil {
-		t.Fatalf("%v [fileSize==%d]", err, smallMPFileSize)
-	}
-	if !bytes.Equal(smallMPSrcHashSum, smallMPDstHashSum) {
-		t.Fatalf("bytes.Equal(smallMPSrcHashSum, smallMPDstHashSum) returned false")
-	}
-	if bigMPDstHashSum, err = testMPHashDstFile(
-		tempDirPath + "/" + bigMPBasenamePrefix + dstFileSuffix); err != nil {
-		t.Fatalf("%v [fileSize==%d]", err, bigMPFileSize)
-	}
-	if !bytes.Equal(bigMPSrcHashSum, bigMPDstHashSum) {
-		t.Fatalf("bytes.Equal(bigMPSrcHashSum, bigMPDstHashSum) returned false")
-	}
-}
+	globals.workChan = make(chan int64, parallelFiles)
 
-func testMPGenerateSrcFile(randomDevFile *os.File, fileSize int64, filePath string) (hashSum []byte, err error) {
-	var (
-		buf  []byte
-		hash hash.Hash
-		n    int
-	)
+	globals.Add(1)
+	go testMPUploadDownloadCleanupDispatcher(globals)
 
-	buf = make([]byte, fileSize)
+	lastFileSize = bigMPFileSize
 
-	n, err = randomDevFile.Read(buf)
-	if err != nil {
-		err = fmt.Errorf("randomDevFile.Read(buf[len(%d)]) failed: %v", len(buf), err)
-		return
-	}
-	if n != len(buf) {
-		err = fmt.Errorf("randomDevFile.Read(buf[len(%d)]) returned unexpected byte count: %d", len(buf), n)
-		return
-	}
-
-	hash = sha256.New()
-	hash.Write(buf)
-	hashSum = hash.Sum(nil)
-
-	if err = os.WriteFile(filePath, buf, writeFilePerm); err != nil {
-		err = fmt.Errorf("os.WriteFile(filePath, buf[len(%d)], writeFilePerm) failed: %v", len(buf), err)
-		return
-	}
-
-	return
-}
-
-type testMPReaderStruct struct {
-	filePath      string
-	currentlyOpen bool
-	file          *os.File
-}
-
-func (r *testMPReaderStruct) Open() (cos.ReadOpenCloser, error) {
-	if r.currentlyOpen {
-		// Ignore duplicate opens
-		return r, nil
-	}
-
-	file, err := os.Open(r.filePath)
-	if err == nil {
-		r.currentlyOpen = true
-		r.file = file
-	}
-
-	return r, err
-}
-
-func (r *testMPReaderStruct) Read(p []byte) (n int, err error) {
-	if !r.currentlyOpen {
-		return 0, errors.New("testMPReaderStruct not currently open")
-	}
-
-	return r.file.Read(p)
-}
-
-func (r *testMPReaderStruct) Close() error {
-	if r.currentlyOpen {
-		if err := r.file.Close(); err != nil {
-			return err
+	for range totalFiles {
+		switch lastFileSize {
+		case nonMPFileSize:
+			lastFileSize = smallMPFileSize
+		case smallMPFileSize:
+			lastFileSize = bigMPFileSize
+		case bigMPFileSize:
+			lastFileSize = nonMPFileSize
 		}
-		r.currentlyOpen = false
+		globals.workChan <- lastFileSize
 	}
 
-	// No error if we reach here (ignoring duplicate close's)
-	return nil
+	close(globals.workChan)
+
+	globals.Wait()
+
+	if globals.errs != "" {
+		t.Fatal(errors.New(globals.errs))
+	}
 }
 
-type testMPWriterStruct struct {
-	filePath string
-	file     *os.File
-}
-
-func (w *testMPWriterStruct) Write(p []byte) (n int, err error) {
-	return w.file.Write(p)
-}
-
-func testMPUploadDownloadCleanup(bck cmn.Bck, baseParams api.BaseParams, srcFilePath, dstFilePath string) (err error) {
+func testMPUploadDownloadCleanupDispatcher(globals *testBackendMPGlobalsStruct) {
 	var (
-		randomObjectName = fmt.Sprintf("%s%d", tempObjPrefix, rand.Int64())
-		reader           = &testMPReaderStruct{filePath: srcFilePath}
-		writer           = &testMPWriterStruct{filePath: dstFilePath}
+		size int64
 	)
 
-	if _, err = reader.Open(); err != nil {
-		err = fmt.Errorf("reader.Open() failed: %v", err)
+	for size = range globals.workChan {
+		globals.Add(1)
+		go testMPUploadDownloadCleanup(globals, size)
+	}
+
+	globals.Done()
+}
+
+func testMPUploadDownloadCleanup(globals *testBackendMPGlobalsStruct, size int64) {
+	var (
+		err               error
+		testBackendMPFile *testBackendMPFileStruct
+	)
+
+	defer globals.Done()
+
+	defer func() {
+		if err != nil {
+			globals.Lock()
+			if globals.errs == "" {
+				globals.errs = "Worker errors:"
+			}
+			globals.errs += "\n" + err.Error()
+			globals.Unlock()
+		}
+	}()
+
+	if testBackendMPFile, err = testBackendMPFileNew(int(size)); err != nil {
+		err = fmt.Errorf("testBackendMPFileNew() failed: %v", err)
 		return
 	}
 
+	defer func() {
+		// Always clean-up... only updating returned err on api.DeleteObject() failure if err was nil
+		deferErr := api.DeleteObject(globals.baseParams, globals.bck, testBackendMPFile.String())
+		if (err == nil) && (deferErr != nil) {
+			err = fmt.Errorf("api.DeleteObject(globals.baseParams, globals.bck, randomObjectName) failed: %v", deferErr)
+		}
+	}()
+
+	if _, err = testBackendMPFile.Open(); err != nil {
+		err = fmt.Errorf("testBackendMPFile.Open() [PUT] failed: %v", err)
+		return
+	}
 	if _, err = api.PutObject(&api.PutArgs{
-		BaseParams: baseParams,
-		Bck:        bck,
-		ObjName:    randomObjectName,
-		Reader:     reader,
+		BaseParams: globals.baseParams,
+		Bck:        globals.bck,
+		ObjName:    testBackendMPFile.String(),
+		Reader:     testBackendMPFile,
 	}); err != nil {
 		err = fmt.Errorf("api.PutObject() failed: %v", err)
 		return
 	}
-
-	if err = reader.Close(); err != nil {
-		err = fmt.Errorf("reader.Close() failed: %v", err)
+	if err = testBackendMPFile.Close(); err != nil {
+		err = fmt.Errorf("reader.Close() [PUT] failed: %v", err)
 		return
 	}
 
-	if writer.file, err = os.Create(writer.filePath); err != nil {
-		err = fmt.Errorf("os.Create(writer.filePath) failed: %v", err)
+	if _, err = testBackendMPFile.Open(); err != nil {
+		err = fmt.Errorf("testBackendMPFile.Open() [GET] failed: %v", err)
 		return
 	}
-	if _, err = api.GetObject(baseParams, bck, randomObjectName, &api.GetArgs{
-		Writer: writer,
+	if _, err = api.GetObject(globals.baseParams, globals.bck, testBackendMPFile.String(), &api.GetArgs{
+		Writer: testBackendMPFile,
 	}); err != nil {
-		err = fmt.Errorf("api.GetObject(,,,) failed: %v", err)
+		err = fmt.Errorf("api.GetObject() failed: %v", err)
 		return
 	}
-	if err = writer.file.Close(); err != nil {
-		err = fmt.Errorf("writer.file.Close() failed: %v", err)
-		return
+	if err = testBackendMPFile.Close(); err != nil {
+		err = fmt.Errorf("reader.Close() [GET] failed: %v", err)
 	}
-
-	if err = api.DeleteObject(baseParams, bck, randomObjectName); err != nil {
-		err = fmt.Errorf("api.DeleteObject(baseParams, bck, randomObjectName) failed: %v", err)
-		return
-	}
-
-	return
-}
-
-func testMPHashDstFile(filePath string) (hashSum []byte, err error) {
-	var (
-		buf  []byte
-		hash hash.Hash
-	)
-
-	if buf, err = os.ReadFile(filePath); err != nil {
-		err = fmt.Errorf("os.ReadFile(filePath) failed: %v", err)
-		return
-	}
-
-	hash = sha256.New()
-	hash.Write(buf)
-	hashSum = hash.Sum(nil)
-
-	return
 }

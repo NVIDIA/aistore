@@ -312,7 +312,7 @@ test:short:azure:
     - make test-short
 
 test:short:oci:
-  <<: *test_short_def
+  <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "oc://ais-ci"
   script:

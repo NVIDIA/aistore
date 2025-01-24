@@ -245,7 +245,7 @@ func (mpuChild *ociMPUChildStruct) Run() {
 	if err == nil {
 		mpuChild.eTag = *resp.ETag
 	} else {
-		err = fmt.Errorf("[%d] %s", mpuChild.partNum, resp.RawResponse.Status)
+		err = fmt.Errorf("[%d] %s", mpuChild.partNum, err)
 		mpuChild.mpu.err = append(mpuChild.mpu.err, err)
 		mpuChild.mpu.abortInProgress = true
 	}
