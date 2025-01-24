@@ -52,7 +52,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
 		empty, errEmp := isBucketEmpty(bck, true /*cached*/)
 		if errEmp == nil && !empty {
 			if !flagIsSet(c, yesFlag) {
-				if ok := confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck.String())); !ok {
+				if !confirm(c, fmt.Sprintf("Proceed to destroy %s?", bck.String())) {
 					continue
 				}
 			}

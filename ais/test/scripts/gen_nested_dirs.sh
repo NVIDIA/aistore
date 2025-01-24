@@ -12,6 +12,9 @@
 #   --num_files N      Number of files to create in the root and each nested directory (default: 100)
 #   --len_fname N      Length of randomly generated filenames (default: 5)
 #   --help, -h         Display this help message
+#
+# See related:
+#   - ais/test/scripts/del_nested_files.sh
 # =============================================================================
 
 # Defaults

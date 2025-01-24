@@ -36,9 +36,10 @@ type (
 	// local page iterator (LPI)
 	// NOTE: it is caller's responsibility to serialize access _or_ take locks.
 	Iter struct {
-		page   Page
-		root   string
-		prefix string
+		page     Page
+		root     string
+		prefix   string
+		rootpref string
 
 		// runtime
 		current string
@@ -54,6 +55,8 @@ var (
 )
 
 func New(root, prefix string) (*Iter, error) {
+	// validate root
+	debug.Assert(!cos.IsLastB(root, filepath.Separator), root)
 	finfo, err := os.Stat(root)
 	if err != nil {
 		return nil, fmt.Errorf("root fstat: %v", err)
@@ -62,14 +65,16 @@ func New(root, prefix string) (*Iter, error) {
 		return nil, fmt.Errorf("root is not a directory: %s", root)
 	}
 
+	// construct
 	lpi := &Iter{root: root, prefix: prefix}
 	{
-		lpi.next = lpi.root
-		lpi.lr = len(lpi.root)
-		lpi.lp = len(lpi.prefix)
+		lpi.next = root
+		lpi.lr = len(root)
+		if lpi.lp = len(prefix); lpi.lp > 0 {
+			lpi.rootpref = filepath.Join(root, prefix)
+		}
 	}
-	debug.Assert(lpi.lr > 1 && !cos.IsLastB(lpi.root, filepath.Separator), lpi.root)
-
+	debug.Assert(lpi.lr > 1, lpi.root)
 	return lpi, nil
 }
 
@@ -109,24 +114,26 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 	case de.IsDir():
 		// skip or SkipDir
 		debug.Assert(!cos.IsLastB(pathname, filepath.Separator), pathname)
-		if pathname != lpi.root {
-			// TODO: assert instead
-			if len(pathname) < lpi.lr+1 {
-				return filepath.SkipDir
-			}
-			if pathname[:lpi.lr] != lpi.root || pathname[lpi.lr] != filepath.Separator {
-				return filepath.SkipDir
-			}
-
-			// fast
-			if l := len(pathname); l < len(lpi.current) && pathname < lpi.current[:l] {
-				return filepath.SkipDir
-			}
+		if pathname == lpi.root {
+			break
+		}
+		l := len(pathname)
+		// expecting root's sub
+		if l < lpi.lr+1 || pathname[:lpi.lr] != lpi.root || pathname[lpi.lr] != filepath.Separator {
+			debug.Assert(false, lpi.root, " vs ", pathname)
+			return filepath.SkipDir
+		}
+		// fast
+		if l < len(lpi.current) && pathname < lpi.current[:l] {
+			return filepath.SkipDir
+		}
+		if lpi.rootpref != "" && !cmn.DirHasOrIsPrefix(pathname, lpi.rootpref) {
+			return filepath.SkipDir
 		}
 	case pathname < lpi.current:
 		// skip
 	case pathname >= lpi.current && (pathname <= lpi.msg.EOP || lpi.msg.EOP == AllPages):
-		// reached page size
+		// page size limit
 		if lpi.msg.Size != 0 && len(lpi.page) >= lpi.msg.Size {
 			lpi.next = pathname
 			err = errStop
@@ -136,9 +143,11 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 		rel := pathname[lpi.lr+1:]
 		debug.AssertFunc(func() bool { _, ok := lpi.page[rel]; return !ok })
 
+		// - must contain prefix
+		// - skip or SkipDir
+		// - refine; see also `ObjHasPrefix`
 		if lpi.lp > 0 && len(rel) >= lpi.lp {
-			if s := rel[0:lpi.lp]; s != lpi.prefix { // TODO: refine
-				// skip
+			if s := rel[0:lpi.lp]; s != lpi.prefix {
 				if s > lpi.prefix {
 					return filepath.SkipDir
 				}
@@ -147,7 +156,8 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 		}
 
 		// add
-		if finfo, e := os.Stat(pathname); e == nil { // TODO: lom.Load() instead
+		// TODO: lom.Load() instead
+		if finfo, e := os.Stat(pathname); e == nil {
 			lpi.page[rel] = finfo.Size()
 		} else if cmn.Rom.FastV(4, cos.SmoduleXs) {
 			nlog.Warningln(e)

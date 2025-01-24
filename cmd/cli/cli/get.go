@@ -274,7 +274,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 
 	if flagIsSet(c, yesFlag) && (l > 1 || quiet) {
 		fmt.Fprintln(c.App.Writer, cptn)
-	} else if ok := confirm(c, cptn); !ok {
+	} else if !confirm(c, cptn) {
 		return nil
 	}
 	// context to get in parallel
@@ -446,7 +446,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 				// TODO: strictly speaking: fstat again and confirm if exists
 			} else if finfo.Mode().IsRegular() && !flagIsSet(c, yesFlag) { // `/dev/null` is fine
 				warn := fmt.Sprintf("overwrite existing %q", outFile)
-				if ok := confirm(c, warn); !ok {
+				if !confirm(c, warn) {
 					return nil
 				}
 			}

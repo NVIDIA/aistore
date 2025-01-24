@@ -3,8 +3,7 @@
 ## Prerequisites: #################################################################################
 # - aistore cluster
 # - remote aistore cluster (referred to as "remais")
-# - optionally, remais bucket (if doesn't exist
-#   the bucket will be created and removed upon exit)
+# - optionally, remais bucket (if it doesn't exist, the bucket will be created and removed upon exit)
 # - ais (CLI)
 #
 ## Example:

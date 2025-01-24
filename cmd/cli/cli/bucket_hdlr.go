@@ -507,15 +507,6 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.Bprops) {
 	}
 }
 
-type lsbCtx struct {
-	regexStr        string
-	regex           *regexp.Regexp
-	prefix          string
-	fltPresence     int
-	countRemoteObjs bool
-	all             bool
-}
-
 func listAnyHandler(c *cli.Context) error {
 	var (
 		opts = cmn.ParseURIOpts{IsQuery: true}
@@ -578,6 +569,9 @@ proceed:
 					return err
 				}
 				lsb.prefix = objName
+				if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
+					lsb.countRemote(c)
+				}
 				_ = listBckTable(c, cmn.QueryBcks(bck), cmn.Bcks{bck}, lsb)
 				return nil
 			}
@@ -590,20 +584,7 @@ proceed:
 			return err
 		}
 		if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
-			lsb.countRemoteObjs = true
-			const (
-				warn = "counting and sizing remote objects may take considerable time\n"
-				tip1 = "(tip: run 'ais storage summary' or use '--regex' to refine the selection)\n"
-				tip2 = "(tip: use '--refresh DURATION' to show progress, '--help' for details)\n"
-			)
-			switch {
-			case !flagIsSet(c, refreshFlag):
-				actionWarn(c, warn+tip2)
-			case lsb.regex == nil:
-				actionWarn(c, warn+tip1)
-			default:
-				actionWarn(c, warn)
-			}
+			lsb.countRemote(c)
 		}
 		if bck.Name != "" {
 			_ = listBckTable(c, cmn.QueryBcks(bck), cmn.Bcks{bck}, lsb)
@@ -625,6 +606,19 @@ proceed:
 	}
 }
 
+////////////
+// lsbCtx //
+////////////
+
+type lsbCtx struct {
+	regexStr        string
+	regex           *regexp.Regexp
+	prefix          string
+	fltPresence     int
+	countRemoteObjs bool
+	all             bool
+}
+
 func _newLsbCtx(c *cli.Context) (lsb lsbCtx, _ error) {
 	if lsb.regexStr = parseStrFlag(c, regexLsAnyFlag); lsb.regexStr != "" {
 		regex, err := regexp.Compile(lsb.regexStr)
@@ -639,4 +633,21 @@ func _newLsbCtx(c *cli.Context) (lsb lsbCtx, _ error) {
 		lsb.fltPresence = apc.FltExists
 	}
 	return lsb, nil
+}
+
+func (lsb *lsbCtx) countRemote(c *cli.Context) {
+	lsb.countRemoteObjs = true
+	const (
+		warn = "counting and sizing remote objects may take considerable time\n"
+		tip1 = "(tip: run 'ais storage summary' or use '--regex' to refine the selection)\n"
+		tip2 = "(tip: use '--refresh DURATION' to show progress, '--help' for details)\n"
+	)
+	switch {
+	case !flagIsSet(c, refreshFlag):
+		actionWarn(c, warn+tip2)
+	case lsb.regex == nil:
+		actionWarn(c, warn+tip1)
+	default:
+		actionWarn(c, warn)
+	}
 }

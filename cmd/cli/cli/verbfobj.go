@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles object operations.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -76,7 +76,14 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		return errU
 	}
 	if totalSize == 0 {
-		return fmt.Errorf("total size of all files is zero (%s, %v)", wop.verb(), fobjs)
+		err := fmt.Errorf("%s: total size of all files is zero", wop.verb())
+		if !flagIsSet(c, yesFlag) {
+			if !confirm(c, err.Error()+" - proceed anyway?") {
+				return err
+			}
+		} else {
+			actionWarn(c, err.Error())
+		}
 	}
 
 	if err := teb.Print(extSizes, tmpl, opts); err != nil {
@@ -96,7 +103,7 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 	if flagIsSet(c, dryRunFlag) {
 		actionCptn(c, dryRunHeader(), cptn)
 	} else if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, cptn+"?"); !ok {
+		if !confirm(c, cptn+"?") {
 			fmt.Fprintln(c.App.Writer, "Operation canceled")
 			return nil
 		}

@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -269,7 +269,7 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 		warn := fmt.Sprintf("shutting down cluster (UUID=%s, primary=[%s, %s])",
 			smap.UUID, smap.Primary.ID(), smap.Primary.PubNet.URL)
 		actionWarn(c, warn)
-		if ok := confirm(c, "Proceed?"); !ok {
+		if !confirm(c, "Proceed?") {
 			return nil
 		}
 		// on the off-chance anything changed during 'confirm' interaction
@@ -302,7 +302,7 @@ func clusterDecommissionHandler(c *cli.Context) error {
 		warn := fmt.Sprintf("about to permanently decommission cluster (UUID=%s, primary=[%s, %s]).",
 			smap.UUID, smap.Primary.ID(), smap.Primary.PubNet.URL)
 		actionWarn(c, warn)
-		if ok := confirm(c, "The operation cannot be undone. Proceed?"); !ok {
+		if !confirm(c, "The operation cannot be undone. Proceed?") {
 			return nil
 		}
 		curSmap = nil
@@ -445,7 +445,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	case cmdStartMaint:
 		if !flagIsSet(c, yesFlag) {
 			warn := fmt.Sprintf("about to put %s in maintenance mode", sname)
-			if ok := confirm(c, "Proceed?", warn); !ok {
+			if !confirm(c, "Proceed?", warn) {
 				return nil
 			}
 		}
@@ -453,7 +453,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	case cmdStopMaint:
 		if !flagIsSet(c, yesFlag) {
 			prompt := fmt.Sprintf("Take %s out of maintenance mode", sname)
-			if ok := confirm(c, prompt); !ok {
+			if !confirm(c, prompt) {
 				return nil
 			}
 		}
@@ -461,7 +461,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	case cmdNodeDecommission:
 		if !flagIsSet(c, yesFlag) {
 			warn := "about to permanently decommission " + sname + ". The operation cannot be undone!"
-			if ok := confirm(c, "Proceed?", warn); !ok {
+			if !confirm(c, "Proceed?", warn) {
 				return nil
 			}
 		}
@@ -469,7 +469,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	case cmdShutdown:
 		if !flagIsSet(c, yesFlag) {
 			prompt := "Shut down " + sname
-			if ok := confirm(c, prompt); !ok {
+			if !confirm(c, prompt) {
 				return nil
 			}
 		}

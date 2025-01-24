@@ -340,7 +340,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		if !flagIsSet(c, yesFlag) {
 			warn := fmt.Sprintf("no trailing filepath separator in: '%s=%s'", qflprn(archpathFlag), a.archpath)
 			actionWarn(c, warn)
-			if ok := confirm(c, "Proceed anyway?"); !ok {
+			if !confirm(c, "Proceed anyway?") {
 				return
 			}
 		}

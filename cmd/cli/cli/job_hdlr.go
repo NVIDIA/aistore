@@ -702,7 +702,7 @@ func startLRUHandler(c *cli.Context) error {
 	if flagIsSet(c, forceFlag) {
 		warn := fmt.Sprintf("LRU eviction with %s option will evict buckets _ignoring_ their respective `lru.enabled` properties.",
 			qflprn(forceFlag))
-		if ok := confirm(c, "Would you like to continue?", warn); !ok {
+		if !confirm(c, "Would you like to continue?", warn) {
 			return nil
 		}
 	}
@@ -793,7 +793,7 @@ func stopJobHandler(c *cli.Context) error {
 	if xactID == "" && name != "" {
 		if name != commandRebalance && !flagIsSet(c, yesFlag) && !flagIsSet(c, allRunningJobsFlag) {
 			prompt := fmt.Sprintf("Stop all '%s' jobs?", name)
-			if ok := confirm(c, prompt); !ok {
+			if !confirm(c, prompt) {
 				return nil
 			}
 		}
