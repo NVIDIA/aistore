@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # =============================================================================
-# Script: gen_nested_dirs.sh
+# Script: gen-nested-dirs.sh
 # Description: Generates a nested directory structure with randomly named zero-size files.
-# Usage: ./gen_nested_dirs.sh [OPTIONS]
+# Usage: ./gen-nested-dirs.sh [OPTIONS]
 #
 # Options:
 #   --root_dir  DIR    Root directory for test environment (default: /tmp/ais-<PID>-test)
@@ -14,7 +14,7 @@
 #   --help, -h         Display this help message
 #
 # See related:
-#   - ais/test/scripts/del_nested_files.sh
+#   - ais/test/scripts/remais-del-list-deleted.sh
 # =============================================================================
 
 # Defaults

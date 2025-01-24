@@ -1,15 +1,17 @@
 // Package integration_test.
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
 import (
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -119,7 +121,7 @@ func TestPrefetchLatestRemaisUsingScript(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
-func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
+func TestCopySyncRemaisUsingScript(t *testing.T) {
 	bck := cliBck
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		Bck:                   bck,
@@ -144,7 +146,7 @@ func TestCopySyncWithOutOfBandUsingRemaisScript(t *testing.T) {
 // instead, using aisore S3 API with a temp `ais://` bucket, and with two additional workarounds:
 // 1. MD5
 // 2. "apc.S3Scheme+apc.BckProviderSeparator+bck.Name" (below)
-func TestMultipartUploadLargeFilesScript(t *testing.T) {
+func TestMultipartUploadUsingScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		Long: true,
 	})
@@ -179,7 +181,7 @@ func TestMultipartUploadLargeFilesScript(t *testing.T) {
 }
 
 // remais-blob-download.sh
-func TestRemaisBlobDownloadScript(t *testing.T) {
+func TestRemaisBlobDownloadUsingScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		RequiresRemoteCluster: true,
 		Long:                  true,
@@ -209,7 +211,7 @@ func TestRemaisBlobDownloadScript(t *testing.T) {
 }
 
 // get-archregx-wdskey.sh
-func TestGetArchregxWdskeyScript(t *testing.T) {
+func TestGetArchregxWdskeyUsingScript(t *testing.T) {
 	cmd := exec.Command("./scripts/get-archregx-wdskey.sh")
 
 	out, err := cmd.CombinedOutput()
@@ -217,4 +219,93 @@ func TestGetArchregxWdskeyScript(t *testing.T) {
 		tlog.Logln(string(out))
 	}
 	tassert.CheckFatal(t, err)
+}
+
+// runs 2 scripts to generate test subtree and then delete random bunch
+// see related unit: fs/lpi_test
+// TODO -- FIXME: assert (scnt == lcnt) once it passes a few times
+func TestRemaisDeleteUsingScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		RequiresRemoteCluster: true,
+		Long:                  true,
+	})
+
+	const (
+		lpiGenScript = "./scripts/gen-nested-dirs.sh"
+		lpiGenPrefix = "Total files created: "
+
+		remaisScript = "./scripts/remais-del-list-deleted.sh"
+	)
+	// 1. create temp root
+	root, err := os.MkdirTemp("", "ais-lpi-")
+	tassert.CheckFatal(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(root)
+		}
+	}()
+
+	//
+	// 2. script #1: generate
+	//
+	cmd := exec.Command(lpiGenScript, "--root_dir", root)
+	out, err := cmd.CombinedOutput()
+	tassert.CheckFatal(t, err)
+
+	var (
+		lines = strings.Split(string(out), "\n")
+		num   int64
+	)
+	for _, ln := range lines {
+		i := strings.Index(ln, lpiGenPrefix)
+		if i >= 0 {
+			s := ln[i+len(lpiGenPrefix):]
+			num, err = strconv.ParseInt(s, 10, 64)
+			tassert.CheckFatal(t, err)
+		}
+	}
+	tassert.Fatalf(t, num > 0, "failed to parse script output (num %d)", num)
+
+	//
+	// 3. script #2: put generated subtree => remais and perform random out-of-band delete
+	//
+	bck := cmn.Bck{
+		Name:     trand.String(10),
+		Ns:       cmn.Ns{UUID: tools.RemoteCluster.Alias},
+		Provider: apc.AIS,
+	}
+	tools.CreateBucket(t, proxyURL, bck, nil, false /*cleanup*/)
+	name := bck.Cname("")
+	tlog.Logln("bucket " + name)
+
+	cmd = exec.Command(remaisScript, "--root_dir", root, "--bucket", name)
+	out, err = cmd.CombinedOutput()
+	// tlog.Logln(string(out))
+	tassert.CheckFatal(t, err)
+
+	lines = strings.Split(string(out), "\n")
+	var scnt int
+	for _, ln := range lines {
+		if strings.HasPrefix(ln, "deleted:") {
+			scnt++
+		}
+	}
+	tlog.Logf("## out-of-band deleted objects:\t%d\n", scnt)
+
+	// 4. ls --check-versions
+	lsmsg := &apc.LsoMsg{}
+	lsmsg.AddProps([]string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsVersion, apc.GetPropsCopies,
+		apc.GetPropsLocation, apc.GetPropsCustom}...)
+	lsmsg.SetFlag(apc.LsVerChanged)
+	lst, err := api.ListObjects(baseParams, bck, lsmsg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+
+	var lcnt int
+	for _, en := range lst.Entries {
+		if en.IsAnyFlagSet(apc.EntryVerRemoved) {
+			// fmt.Println("\tdeleted:", en.Name)
+			lcnt++
+		}
+	}
+	tlog.Logf("## list-objects version removed:\t%d\n", lcnt)
 }

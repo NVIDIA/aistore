@@ -18,9 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
+// compare w/ namesake integration in ais/test/scripted_cli_test.go
+
 const (
 	lpiTestPrefix   = "Total files created: "
-	lpiTestScript   = "../ais/test/scripts/gen_nested_dirs.sh"
+	lpiTestScript   = "../ais/test/scripts/gen-nested-dirs.sh"
 	lpiTestPageSize = 10
 	lpiTestVerbose  = false
 )
