@@ -50,7 +50,7 @@ type (
 		stopCh    cos.StopCh       // to stop xaction
 		token     string           // continuation token -> last responded page
 		nextToken string           // next continuation token -> next pages
-		lastPage  cmn.LsoEntries   // last page (contents)
+		page      cmn.LsoEntries   // current page (contents)
 		walk      struct {
 			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
 			stopCh       *cos.StopCh      // to abort bucket walk
@@ -60,6 +60,7 @@ type (
 			wor          bool             // wantOnlyRemote
 			dontPopulate bool             // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
 			this         bool             // r.msg.SID == core.T.SID(): true when this target does remote paging
+			last         bool             // last remote page
 		}
 		streamingX
 		lensgl int64
@@ -117,7 +118,7 @@ func (p *lsoFactory) Start() error {
 		respCh:     make(chan *LsoRsp),     // ditto: one caller-requested page at a time
 	}
 
-	r.lastPage = allocLsoEntries()
+	r.page = allocLsoEntries()
 	r.stopCh.Init()
 
 	// idle timeout vs delayed next-page request
@@ -258,9 +259,9 @@ func (r *LsoXact) stop() {
 		r.Finish()
 	}
 
-	if r.lastPage != nil {
-		freeLsoEntries(r.lastPage)
-		r.lastPage = nil
+	if r.page != nil {
+		freeLsoEntries(r.page)
+		r.page = nil
 	}
 	if r.ctx != nil {
 		if r.ctx.Lom != nil {
@@ -350,10 +351,10 @@ func (r *LsoXact) doPage() *LsoRsp {
 				return &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 			}
 		}
-		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.lastPage, ContinuationToken: r.nextToken}
+		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
 
 		if r.msg.IsFlagSet(apc.LsVerChanged) {
-			r.lpis.Do(r.lastPage, page, r.Name())
+			r.lpis.Do(r.page, page, r.Name(), r.walk.last)
 		}
 
 		return &LsoRsp{Lst: page, Status: http.StatusOK}
@@ -365,7 +366,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 	var (
 		cnt  = r.msg.PageSize
 		idx  = r.findToken(r.msg.ContinuationToken)
-		lst  = r.lastPage[idx:]
+		lst  = r.page[idx:]
 		page *cmn.LsoRes
 	)
 	debug.Assert(int64(len(lst)) >= cnt || r.walk.done)
@@ -385,8 +386,8 @@ func (r *LsoXact) findToken(token string) int {
 	if r.token == token && lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
 		return 0
 	}
-	return sort.Search(len(r.lastPage), func(i int) bool { // TODO: revisit
-		return !cmn.TokenGreaterEQ(token, r.lastPage[i].Name)
+	return sort.Search(len(r.page), func(i int) bool { // TODO: revisit
+		return !cmn.TokenGreaterEQ(token, r.page[i].Name)
 	})
 }
 
@@ -395,7 +396,7 @@ func (r *LsoXact) havePage(token string, cnt int64) bool {
 		return true
 	}
 	idx := r.findToken(token)
-	return idx+int(cnt) < len(r.lastPage)
+	return idx+int(cnt) < len(r.page)
 }
 
 func (r *LsoXact) nextPageR() (err error) {
@@ -414,6 +415,8 @@ func (r *LsoXact) nextPageR() (err error) {
 	if r.walk.this {
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
+		r.walk.last = page.ContinuationToken == ""
+
 		if !r.walk.wor && !r.IsAborted() {
 			if err == nil {
 				// bcast page
@@ -438,6 +441,7 @@ func (r *LsoXact) nextPageR() (err error) {
 			default:
 				page = rsp.Lst
 				err = npg.filterAddLmeta(page)
+				r.walk.last = page.ContinuationToken == ""
 			}
 		case <-r.stopCh.Listen():
 			err = ErrGone
@@ -455,8 +459,8 @@ ex:
 		r.walk.done = true
 		r.resetIdle()
 	}
-	freeLsoEntries(r.lastPage)
-	r.lastPage = page.Entries
+	freeLsoEntries(r.page)
+	r.page = page.Entries
 	r.nextToken = page.ContinuationToken
 	return
 }
@@ -508,9 +512,9 @@ func (r *LsoXact) sentCb(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err er
 	sgl.Free()
 }
 
-func (r *LsoXact) gcLastPage(from, to int) {
+func (r *LsoXact) _clrPage(from, to int) {
 	for i := from; i < to; i++ {
-		r.lastPage[i] = nil
+		r.page[i] = nil
 	}
 }
 
@@ -520,8 +524,8 @@ func (r *LsoXact) nextPageA() {
 		r.walk.stopCh.Close()
 		r.walk.wg.Wait()
 		r.initWalk()
-		r.gcLastPage(0, len(r.lastPage))
-		r.lastPage = r.lastPage[:0]
+		r._clrPage(0, len(r.page))
+		r.page = r.page[:0]
 	} else {
 		if r.walk.done {
 			return
@@ -545,14 +549,14 @@ func (r *LsoXact) nextPageA() {
 			continue
 		}
 		cnt++
-		r.lastPage = append(r.lastPage, obj)
+		r.page = append(r.page, obj)
 	}
 }
 
 // Removes entries that were already sent to clients.
 // Is used only for AIS buckets and (cached == true) requests.
 func (r *LsoXact) shiftLastPage(token string) {
-	if token == "" || len(r.lastPage) == 0 {
+	if token == "" || len(r.page) == 0 {
 		return
 	}
 	j := r.findToken(token)
@@ -560,19 +564,19 @@ func (r *LsoXact) shiftLastPage(token string) {
 	if j == 0 {
 		return
 	}
-	l := len(r.lastPage)
+	l := len(r.page)
 
 	// (all sent)
 	if j == l {
-		r.gcLastPage(0, l)
-		r.lastPage = r.lastPage[:0]
+		r._clrPage(0, l)
+		r.page = r.page[:0]
 		return
 	}
 
 	// otherwise, shift the not-yet-transmitted entries and fix the slice
-	copy(r.lastPage[0:], r.lastPage[j:])
-	r.gcLastPage(l-j, l)
-	r.lastPage = r.lastPage[:l-j]
+	copy(r.page[0:], r.page[j:])
+	r._clrPage(l-j, l)
+	r.page = r.page[:l-j]
 }
 
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {

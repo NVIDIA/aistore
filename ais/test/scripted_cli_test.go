@@ -327,9 +327,9 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 			lcnt++
 		}
 	}
-	tlog.Logf("## list-objects version-removed:\t%d\n", lcnt)
 	if scnt != lcnt {
 		err := fmt.Errorf("deleted out-of-band (%d) != (%d) list-objects version-removed", scnt, lcnt)
-		tlog.Logf("Warning: %v\n", err) // TODO -- FIXME: t.Error(err)
+		tassert.CheckFatal(t, err)
 	}
+	tlog.Logf("## list-objects version-removed:\t%d\n", lcnt)
 }

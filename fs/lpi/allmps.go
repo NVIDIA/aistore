@@ -46,13 +46,13 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
 }
 
 // TODO: consider jogger-per-mountpath approach
-func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string) {
+func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, last bool) {
 	var (
 		lastName string
 		eop      = AllPages
 		num      = len(lastPage) // num entries
 	)
-	if num > 0 {
+	if num > 0 && !last {
 		lastName = lastPage[num-1].Name
 	}
 	// 1. all mountpaths: next page
