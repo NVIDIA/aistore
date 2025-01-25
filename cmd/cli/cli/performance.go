@@ -221,7 +221,7 @@ func showThroughputHandler(c *cli.Context) error {
 				strings.HasSuffix(name, "."+stats.GetSize) || strings.HasSuffix(name, "."+stats.PutSize) {
 				selected[name] = kind
 
-				if bpsName := stats.SizeToThroughput(name, stats.KindSize); bpsName != "" {
+				if bpsName, _ := stats.SizeToThroughputCount(name, stats.KindSize); bpsName != "" {
 					selected[bpsName] = stats.KindThroughput
 					totals[bpsName] = 0
 				}
