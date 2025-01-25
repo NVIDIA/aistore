@@ -501,8 +501,9 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 				tlog.Logf("%v\n", status)
 				break
 			}
-			herr := cmn.Err2HTTPErr(err)
-			tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
+			if herr := cmn.Err2HTTPErr(err); herr != nil {
+				tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
+			}
 			time.Sleep(time.Second)
 		}
 	}

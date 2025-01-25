@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -605,7 +605,7 @@ func Promote(bp BaseParams, bck cmn.Bck, args *apc.PromoteArgs) (xid string, err
 // DoWithRetry executes `http-client.Do` and retries *retriable connection errors*,
 // such as "broken pipe" and "connection refused".
 // This function always closes the `reqArgs.BodR`, even in case of error.
-// Usage: PUT and simlar requests that transfer payload from the user side.
+// Usage: PUT and similar requests that transfer payload from the user side.
 // NOTE: always closes request body reader (reqArgs.BodyR) - explicitly or via Do()
 // TODO: refactor
 

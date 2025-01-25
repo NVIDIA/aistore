@@ -5,8 +5,10 @@
 package integration_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -223,14 +225,13 @@ func TestGetArchregxWdskeyUsingScript(t *testing.T) {
 
 // runs 2 scripts to generate test subtree and then delete random bunch
 // see related unit: fs/lpi_test
-// TODO -- FIXME: assert (scnt == lcnt) once it passes a few times
 func TestRemaisDeleteUsingScript(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{
 		RequiresRemoteCluster: true,
-		Long:                  true,
 	})
 
 	const (
+		verbose      = false // NOTE: enable to trace
 		lpiGenScript = "./scripts/gen-nested-dirs.sh"
 		lpiGenPrefix = "Total files created: "
 
@@ -240,9 +241,7 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 	root, err := os.MkdirTemp("", "ais-lpi-")
 	tassert.CheckFatal(t, err)
 	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(root)
-		}
+		os.RemoveAll(root)
 	}()
 
 	//
@@ -278,19 +277,40 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 	name := bck.Cname("")
 	tlog.Logln("bucket " + name)
 
+	defer func() {
+		if !t.Failed() || !verbose {
+			api.DestroyBucket(baseParams, bck)
+		}
+	}()
+
 	cmd = exec.Command(remaisScript, "--root_dir", root, "--bucket", name)
 	out, err = cmd.CombinedOutput()
-	// tlog.Logln(string(out))
 	tassert.CheckFatal(t, err)
 
 	lines = strings.Split(string(out), "\n")
-	var scnt int
+	var (
+		scnt   int
+		sorted = make(sort.StringSlice, 0, 100)
+		prefix = "deleted: " + apc.AIS + apc.BckProviderSeparator + bck.Name + "/" // TODO: nit
+	)
 	for _, ln := range lines {
-		if strings.HasPrefix(ln, "deleted:") {
+		if strings.HasPrefix(ln, prefix) {
 			scnt++
+			sorted = append(sorted, ln[len(prefix):])
 		}
 	}
-	tlog.Logf("## out-of-band deleted objects:\t%d\n", scnt)
+	tlog.Logf("## objects deleted out-of-band:\t%d\n", scnt)
+
+	defer func() {
+		if t.Failed() && verbose {
+			fmt.Println("\t ============")
+			sort.Sort(sorted)
+			for _, ln := range sorted {
+				fmt.Println("\t", ln)
+			}
+			fmt.Println("\t ============")
+		}
+	}()
 
 	// 4. ls --check-versions
 	lsmsg := &apc.LsoMsg{}
@@ -307,5 +327,9 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 			lcnt++
 		}
 	}
-	tlog.Logf("## list-objects version removed:\t%d\n", lcnt)
+	tlog.Logf("## list-objects version-removed:\t%d\n", lcnt)
+	if scnt != lcnt {
+		err := fmt.Errorf("deleted out-of-band (%d) != (%d) list-objects version-removed", scnt, lcnt)
+		tlog.Logf("Warning: %v\n", err) // TODO -- FIXME: t.Error(err)
+	}
 }

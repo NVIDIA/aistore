@@ -38,9 +38,7 @@ if [ ! -d "$root_dir" ]; then
     exit 1
 fi
 
-## must be @remais
-[[ "$bucket" == *//@* ]] || { echo "Error: expecting remote ais bucket, got ${bucket}"; exit 1; }
-
+## count generated files
 all_files=( $(find "$root_dir" -type f) )
 total_files=${#all_files[@]}
 
@@ -49,11 +47,15 @@ rendpoint=$(ais show remote-cluster -H | awk '{print $2}')
 [[ ! -z "$rendpoint" ]] || { echo "Error: no remote ais clusters"; exit 1; }
 uuid=$(ais show remote-cluster -H | awk '{print $1}')
 
+## 1. remote bucket
+##
+## must be @remais
+[[ "$bucket" == *//@* ]] || { echo "Error: expecting remote ais bucket, got ${bucket}"; exit 1; }
+
 ## actual bucket inside remais:
 rbucket="ais://$(basename ${bucket})"
 
 echo "Note: remote ais bucket $bucket is, in fact, ais://@${uuid}/$(basename ${bucket})"
-echo
 
 ## check remote bucket; create if doesn't exist
 exists=true
@@ -73,33 +75,32 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 ## 2.put generated subtree => remais
+##
 AIS_ENDPOINT=$rendpoint ais put $root_dir $rbucket --yes --recursive
 ais prefetch $bucket --wait
 
-ais ls $bucket --cached --summary || exit $?
-AIS_ENDPOINT=$rendpoint ais ls $rbucket --summary || exit $?
-
 ## 3. delete out-of-band
-num_files_to_delete=$((total_files / 10))
-deleted_files=()
-for ((i=0; i<num_files_to_delete; i++)); do
-    random_index=$((RANDOM % total_files))
-    file_to_delete=${all_files[$random_index]}
+##
+num_to_del=$((total_files / 10))
+deleted_objs=()
+for ((i=0; i<num_to_del; i++)); do
+    idx=$((RANDOM % total_files))
+    file_to_delete=${all_files[$idx]}
 
     relative_path="${file_to_delete#$root_dir/}"
-    deleted_obj="$rbucket/$relative_path"
+    obj_to_delete="$rbucket/$relative_path"
 
-    AIS_ENDPOINT=$rendpoint ais rmo $deleted_obj 1> /dev/null || exit $?
+    AIS_ENDPOINT=$rendpoint ais rmo $obj_to_delete 1> /dev/null || exit $?
 
-    deleted_objs+=("$deleted_obj")
+    deleted_objs+=("$obj_to_delete")
 
     # remove deleted file from array
-    all_files=("${all_files[@]:0:$random_index}" "${all_files[@]:$((random_index + 1))}")
+    all_files=("${all_files[@]:0:$idx}" "${all_files[@]:$((idx + 1))}")
     total_files=${#all_files[@]}
 done
 
-# Return the deleted pathnames
-# echo "Deleted objects:"
-for file in "${deleted_objs[@]}"; do
-    echo "deleted: $file"
+# 4. return deleted objects
+##
+for obj in "${deleted_objs[@]}"; do
+    echo "deleted: $obj"
 done
