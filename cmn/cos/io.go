@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -38,6 +38,11 @@ type (
 	ReadOpenCloser interface {
 		io.ReadCloser
 		Open() (ReadOpenCloser, error)
+	}
+	ROCS interface {
+		ReadOpenCloser
+		io.Seeker
+		OpenDup() (ROCS, error)
 	}
 	ReadSizer interface {
 		io.Reader
@@ -79,16 +84,6 @@ type (
 	deferRCS struct {
 		ReadCloseSizer
 		cb func()
-	}
-	CallbackROC struct {
-		roc          ReadOpenCloser
-		readCallback func(int, error)
-		// Number of bytes we've already read, counting from last `Open`.
-		readBytes int
-		// Since we could possibly reopen a reader we must keep track of the
-		// bytes we already reported to `readCallback` so there is no duplications.
-		// This value is preserved across all the `Open`'s.
-		reportedBytes int
 	}
 	ReaderArgs struct {
 		R       io.Reader
@@ -163,14 +158,16 @@ type (
 
 // interface guard
 var (
-	_ io.Reader      = (*nopReader)(nil)
-	_ ReadOpenCloser = (*FileHandle)(nil)
-	_ ReadOpenCloser = (*CallbackROC)(nil)
-	_ ReadSizer      = (*sizedReader)(nil)
+	_ io.Reader = (*nopReader)(nil)
+
+	_ ROCS = (*FileHandle)(nil)
+	_ ROCS = (*ByteHandle)(nil)
+
+	_ ReadSizer = (*sizedReader)(nil)
+
 	_ ReadOpenCloser = (*SectionHandle)(nil)
 	_ ReadOpenCloser = (*FileSectionHandle)(nil)
 	_ ReadOpenCloser = (*nopOpener)(nil)
-	_ ReadOpenCloser = (*ByteHandle)(nil)
 )
 
 ///////////////
@@ -202,6 +199,7 @@ func (r *nopReader) Read(b []byte) (int, error) {
 func NewByteHandle(bt []byte) *ByteHandle           { return &ByteHandle{bytes.NewReader(bt), bt} }
 func (*ByteHandle) Close() error                    { return nil }
 func (b *ByteHandle) Open() (ReadOpenCloser, error) { return NewByteHandle(b.b), nil }
+func (b *ByteHandle) OpenDup() (ROCS, error)        { return NewByteHandle(b.b), nil }
 
 ///////////////
 // nopOpener //
@@ -222,9 +220,8 @@ func NewFileHandle(fqn string) (*FileHandle, error) {
 	return &FileHandle{file, fqn}, nil
 }
 
-func (f *FileHandle) Open() (ReadOpenCloser, error) {
-	return NewFileHandle(f.fqn)
-}
+func (f *FileHandle) Open() (ReadOpenCloser, error) { return NewFileHandle(f.fqn) }
+func (f *FileHandle) OpenDup() (ROCS, error)        { return NewFileHandle(f.fqn) }
 
 ////////////
 // Sized* //
@@ -249,45 +246,6 @@ func (r *deferRCS) Close() (err error) {
 	r.cb()
 	return
 }
-
-/////////////////
-// CallbackROC //
-/////////////////
-
-func NewCallbackReadOpenCloser(r ReadOpenCloser, readCb func(int, error), reportedBytes ...int) *CallbackROC {
-	var rb int
-	if len(reportedBytes) > 0 {
-		rb = reportedBytes[0]
-	}
-	return &CallbackROC{
-		roc:           r,
-		readCallback:  readCb,
-		readBytes:     0,
-		reportedBytes: rb,
-	}
-}
-
-func (r *CallbackROC) Read(p []byte) (n int, err error) {
-	n, err = r.roc.Read(p)
-	debug.Assert(r.readBytes < math.MaxInt-n)
-	r.readBytes += n
-	if r.readBytes > r.reportedBytes {
-		diff := r.readBytes - r.reportedBytes
-		r.readCallback(diff, err)
-		r.reportedBytes += diff
-	}
-	return n, err
-}
-
-func (r *CallbackROC) Open() (ReadOpenCloser, error) {
-	rc, err := r.roc.Open()
-	if err != nil {
-		return rc, err
-	}
-	return NewCallbackReadOpenCloser(rc, r.readCallback, r.reportedBytes), nil
-}
-
-func (r *CallbackROC) Close() error { return r.roc.Close() }
 
 ////////////////////
 // ReaderWithArgs //

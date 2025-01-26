@@ -332,7 +332,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 	var (
 		err         error
 		skipVC      = flagIsSet(c, skipVerCksumFlag)
-		countReader = cos.NewCallbackReadOpenCloser(fh, updateBar /*progress callback*/)
+		countReader = newRocCb(fh, updateBar /*progress callback*/, 0)
 		iters       = 1
 		isTout      bool
 	)
@@ -354,12 +354,12 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 				fmt.Fprintln(c.App.ErrWriter, s)
 				briefPause(1)
 
-				ffh, errO := fh.Open()
+				ffh, errO := fh.OpenDup()
 				if errO != nil {
 					fmt.Fprintf(c.App.ErrWriter, "failed to reopen %s: %v\n", fobj.path, errO)
 					break
 				}
-				countReader = cos.NewCallbackReadOpenCloser(ffh, updateBar /*progress callback*/)
+				countReader = newRocCb(ffh, updateBar /*progress callback*/, 0)
 				isTout = isTimeout(e)
 			}
 		}
@@ -436,8 +436,9 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		// setup progress bar
 		args := barArgs{barType: sizeArg, barText: objName, total: finfo.Size()}
 		progress, bars = simpleBar(args)
+
 		cb := func(n int, _ error) { bars[0].IncrBy(n) }
-		reader = cos.NewCallbackReadOpenCloser(fh, cb)
+		reader = newRocCb(fh, cb, 0)
 	}
 
 	putArgs := api.PutArgs{
@@ -513,10 +514,13 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 		if n == 0 {
 			break
 		}
-		reader = cos.NewByteHandle(b.Bytes())
+
+		fh := cos.NewByteHandle(b.Bytes())
+		reader = fh
 		if flagIsSet(c, progressFlag) {
 			actualChunkOffset := atomic.NewInt64(0)
-			reader = cos.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
+
+			readCb := func(n int, _ error) {
 				if n == 0 {
 					return
 				}
@@ -529,7 +533,9 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 					return
 				}
 				pi.printProgress(int64(n))
-			})
+			}
+
+			reader = newRocCb(fh, readCb, 0)
 		}
 		if i == 0 {
 			// overwrite, if exists

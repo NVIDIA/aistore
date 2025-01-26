@@ -79,14 +79,14 @@ func appendDefaultDecorators(options []mpb.BarOption) []mpb.BarOption {
 // progIndicator  -- TODO: reimplement via simpleBar()
 ///////////////////
 
+func newProgIndicator(objName string) *progIndicator {
+	return &progIndicator{objName, atomic.NewInt64(0)}
+}
+
 func (*progIndicator) start() { fmt.Print("\033[s") }
 func (*progIndicator) stop()  { fmt.Println("") }
 
 func (pi *progIndicator) printProgress(incr int64) {
 	fmt.Print("\033[u\033[K")
 	fmt.Printf("Uploaded %s: %s", pi.objName, cos.ToSizeIEC(pi.sizeTransferred.Add(incr), 2))
-}
-
-func newProgIndicator(objName string) *progIndicator {
-	return &progIndicator{objName, atomic.NewInt64(0)}
 }

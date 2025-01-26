@@ -403,8 +403,9 @@ func a2aRegular(c *cli.Context, a *archput) error {
 			args = barArgs{barType: sizeArg, barText: a.dst.oname, total: fi.Size()}
 		)
 		progress, bars = simpleBar(args)
+
 		cb := func(n int, _ error) { bars[0].IncrBy(n) }
-		reader = cos.NewCallbackReadOpenCloser(fh, cb)
+		reader = newRocCb(fh, cb, 0)
 	}
 	putArgs := api.PutArgs{
 		BaseParams: apiBP,
