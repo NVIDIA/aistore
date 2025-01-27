@@ -70,6 +70,21 @@ type (
 	}
 )
 
+var (
+	scrubFlags = append(
+		longRunFlags,
+		bsummPrefixFlag,
+		pageSizeFlag,
+		objLimitFlag,
+		noHeaderFlag,
+		maxPagesFlag,
+		noRecursFlag,
+		smallSizeFlag,
+		largeSizeFlag,
+		scrubObjCachedFlag,
+	)
+)
+
 func scrubHandler(c *cli.Context) (err error) {
 	var (
 		ctx = scrCtx{c: c}
@@ -261,6 +276,13 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		ctx.haveRemote.Store(true) // columns version-changed etc.
 	} else {
 		lsmsg.AddProps(propNames[:len(propNames)-1]...) // minus apc.GetPropsCustom
+	}
+
+	// note: this flag (always) defines the way we traverse content:
+	// - (remote) => (in-cluster) when not specified
+	// - (in-cluster) otherwise
+	if flagIsSet(ctx.c, scrubObjCachedFlag) {
+		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
 	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)

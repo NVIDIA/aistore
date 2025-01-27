@@ -316,7 +316,7 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 	lsmsg := &apc.LsoMsg{}
 	lsmsg.AddProps([]string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsVersion, apc.GetPropsCopies,
 		apc.GetPropsLocation, apc.GetPropsCustom}...)
-	lsmsg.SetFlag(apc.LsVerChanged)
+	lsmsg.SetFlag(apc.LsDiff)
 	lst, err := api.ListObjects(baseParams, bck, lsmsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 

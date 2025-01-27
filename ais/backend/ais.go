@@ -446,7 +446,7 @@ func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRe
 	}
 	remoteMsg := msg.Clone()
 	remoteMsg.PageSize = calcPageSize(remoteMsg.PageSize, remoteBck.MaxPageSize())
-	remoteMsg.ClearFlag(apc.LsVerChanged | apc.LsObjCached)
+	remoteMsg.ClearFlag(apc.LsDiff | apc.LsObjCached)
 
 	// TODO:
 	// Currently, not encoding xaction (aka request) `UUID` from the remote cluster

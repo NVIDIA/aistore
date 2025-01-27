@@ -37,7 +37,7 @@ func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 
 func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 	var (
-		checkVchanged = wi.msg.IsFlagSet(apc.LsVerChanged)
+		checkVchanged = wi.msg.IsFlagSet(apc.LsDiff)
 	)
 	for name, fl := range allmap {
 		if !wi.wanted.IsSet(fl) {

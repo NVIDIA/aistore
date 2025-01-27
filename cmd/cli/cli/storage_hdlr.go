@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -162,17 +162,6 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		cmdScrub: append(
-			longRunFlags,
-			bsummPrefixFlag,
-			pageSizeFlag,
-			objLimitFlag,
-			noHeaderFlag,
-			maxPagesFlag,
-			noRecursFlag,
-			smallSizeFlag,
-			largeSizeFlag,
-		),
 	}
 
 	//
@@ -198,7 +187,7 @@ var (
 		Name:         cmdScrub,
 		Usage:        scrubUsage,
 		ArgsUsage:    lsAnyCommandArgument,
-		Flags:        storageFlags[cmdScrub],
+		Flags:        scrubFlags,
 		Action:       scrubHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}

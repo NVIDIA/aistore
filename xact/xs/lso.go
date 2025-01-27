@@ -153,7 +153,7 @@ func (p *lsoFactory) Start() error {
 		}
 
 		// engage local page iterator (lpi)
-		if r.msg.IsFlagSet(apc.LsVerChanged) {
+		if r.msg.IsFlagSet(apc.LsDiff) {
 			r.lpis.Init(r.Bck().Bucket(), r.msg.Prefix)
 		}
 	}
@@ -353,7 +353,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 		}
 		page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
 
-		if r.msg.IsFlagSet(apc.LsVerChanged) {
+		if r.msg.IsFlagSet(apc.LsDiff) {
 			r.lpis.Do(r.page, page, r.Name(), r.walk.last)
 		}
 

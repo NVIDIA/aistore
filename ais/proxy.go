@@ -1637,7 +1637,7 @@ func crerrStatus(err error) (ecode int) {
 // one page => msgpack rsp
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) {
 	// LsVerChanged a.k.a. '--check-versions' limitations
-	if lsmsg.IsFlagSet(apc.LsVerChanged) {
+	if lsmsg.IsFlagSet(apc.LsDiff) {
 		if err := _checkVerChanged(bck, lsmsg); err != nil {
 			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
 			p.writeErr(w, r, err)

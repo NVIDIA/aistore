@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -351,7 +351,7 @@ const (
 	cloudProviderArg = "CLOUD_PROVIDER"
 
 	// 'ais ls'
-	lsAnyCommandArgument = bucketEmbeddedPrefixArg + " or [PROVIDER]"
+	lsAnyCommandArgument = bucketEmbeddedPrefixArg + " [PROVIDER]"
 
 	// Auth
 	userLoginArgument = "USER_NAME"
@@ -478,13 +478,17 @@ var (
 			indent4 + "\tais ls --regex \"(m|n)\"\t- match buckets such as ais://nnn, s3://mmm, etc.;\n" +
 			indent4 + "\tais ls ais://nnn --regex \"^A\"\t- match object names starting with letter A",
 	}
+
+	// TODO: `--select` (to select columns) would sound more conventional
+
 	regexColsFlag = cli.StringFlag{
 		Name: regexFlag.Name,
 		Usage: "regular expression to select table columns (case-insensitive), e.g.:\n" +
 			indent4 + "\t --regex \"put|err\" - show PUT (count), PUT (total size), and all supported error counters;\n" +
+			indent4 + "\t --regex \"Put|ERR\" - same as above;\n" +
 			indent4 + "\t --regex \"[a-z]\" - show all supported metrics, including those that have zero values across all nodes;\n" +
 			indent4 + "\t --regex \"(AWS-GET$|VERSION-CHANGE$)\" - show the number object version changes (updates) and cold GETs from AWS\n" +
-			indent4 + "\t --regex \"(GCP-GET$|VERSION-CHANGE$)\" - same as above for GCP ('gs://')",
+			indent4 + "\t --regex \"(gcp-get$|version-change$)\" - same as above for Google Cloud ('gs://')",
 	}
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
@@ -514,6 +518,8 @@ var (
 		Name:  "ignore-error",
 		Usage: "ignore \"soft\" failures such as \"bucket already exists\", etc.",
 	}
+
+	// TODO: ditto `--select` (to select object props)
 
 	bucketPropsFlag = cli.StringFlag{
 		Name: "props",
@@ -568,8 +574,11 @@ var (
 	//
 	objLimitFlag = cli.IntFlag{
 		Name: "limit",
-		Usage: "maximum number of object names to list (0 - unlimited; see also '--max-pages')\n" +
-			indent4 + "\te.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom",
+		Usage: "the maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),\n" +
+			indent4 + "\te.g.:\n" +
+			indent4 + "\t- 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'\t- list no more than 1234 objects\n" +
+			indent4 + "\t- 'ais get gs://abc /dev/null --prefix dir --limit 1234'\t- get --/--\n" +
+			indent4 + "\t- 'ais scrub gs://abc/dir --limit 1234'\t- scrub --/--",
 	}
 	pageSizeFlag = cli.IntFlag{
 		Name: "page-size",
@@ -602,11 +611,15 @@ var (
 		Name:  "show-unmatched",
 		Usage: "list also objects that were not matched by regex and/or template (range)",
 	}
-	verChangedFlag = cli.BoolFlag{
-		Name: "check-versions",
-		Usage: "check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions\n" +
-			indent4 + "\t- applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag)\n" +
-			indent4 + "\t- see related: 'ais get --latest', 'ais cp --sync', 'ais prefetch --latest'",
+	diffFlag = cli.BoolFlag{
+		Name: "diff",
+		Usage: "perform a bidirectional diff between in-cluster and remote content, which further entails:\n" +
+			indent4 + "\t- detecting remote version changes (a.k.a. out-of-band updates), and\n" +
+			indent4 + "\t- remotely deleted objects (out-of-band deletions (*));\n" +
+			indent4 + "\t  the option requires remote backends supporting some form of versioning (e.g., object version, checksum, and/or ETag);\n" +
+			indent4 + "\tsee related:\n" +
+			indent4 + "\t     (*) options: --cached; --latest\n" +
+			indent4 + "\t     commands:    'ais get --latest'; 'ais cp --sync'; 'ais prefetch --latest'",
 	}
 
 	useInventoryFlag = cli.BoolFlag{
@@ -810,14 +823,21 @@ var (
 		Usage: "check whether a given named object is present in cluster\n" +
 			indent1 + "\t(applies only to buckets with remote backend)",
 	}
+
+	_onlyin           = "only in-cluster objects - only those objects from the respective remote bucket that are present (\"cached\")"
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "list only in-cluster objects - only those objects from a remote bucket that are present (\"cached\")",
+		Usage: "list " + _onlyin,
 	}
 	getObjCachedFlag = cli.BoolFlag{
 		Name:  listObjCachedFlag.Name,
-		Usage: "get only in-cluster objects - only those objects from a remote bucket that are present (\"cached\")",
+		Usage: "get " + _onlyin,
 	}
+	scrubObjCachedFlag = cli.BoolFlag{
+		Name:  listObjCachedFlag.Name,
+		Usage: "visit " + _onlyin,
+	}
+
 	// when '--all' is used for/by another flag
 	objNotCachedPropsFlag = cli.BoolFlag{
 		Name:  "not-cached",
@@ -859,10 +879,10 @@ var (
 	noRecursFlag = cli.BoolFlag{
 		Name: "non-recursive,nr",
 		Usage: "non-recursive operation, e.g.:\n" +
-			"\t'ais ls gs://bucket/prefix --nr'  -\tlist objects and/or virtual subdirectories with names starting with the specified prefix;\n" +
-			"\t'ais ls gs://bucket/prefix/ --nr' -\tlist contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;\n" +
-			"\t'ais prefetch s3://bck/abcd --nr' -\tprefetch a single named object (see 'ais prefetch --help' for details);\n" +
-			"\t'ais rmo gs://bucket/prefix --nr' -\tremove a single object with the specified name (see 'ais rmo --help' for details)",
+			"\t- 'ais ls gs://bucket/prefix --nr'\t- list objects and/or virtual subdirectories with names starting with the specified prefix;\n" +
+			"\t- 'ais ls gs://bucket/prefix/ --nr'\t- list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;\n" +
+			"\t- 'ais prefetch s3://bck/abcd --nr'\t- prefetch a single named object (see 'ais prefetch --help' for details);\n" +
+			"\t- 'ais rmo gs://bucket/prefix --nr'\t- remove a single object with the specified name (see 'ais rmo --help' for details)",
 	}
 	noDirsFlag = cli.BoolFlag{Name: "no-dirs", Usage: "do not return virtual subdirectories (applies to remote buckets only)"}
 

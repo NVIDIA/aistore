@@ -36,7 +36,7 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInv
 		},
 		ctx: ctx,
 	}
-	if msg.IsFlagSet(apc.LsVerChanged) {
+	if msg.IsFlagSet(apc.LsDiff) {
 		npg.wi.custom = make(cos.StrKVs) // TODO -- FIXME: move to parent x-lso; clear and reuse here
 	}
 	return

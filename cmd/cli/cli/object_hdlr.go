@@ -110,7 +110,7 @@ var (
 			useInventoryFlag,
 			invNameFlag,
 			invIDFlag,
-			// multi-object options (passed to list-objects)
+			// multi-object options (note: passed to list-objects)
 			getObjPrefixFlag,
 			getObjCachedFlag,
 			listArchFlag,

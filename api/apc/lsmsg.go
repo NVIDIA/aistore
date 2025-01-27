@@ -70,11 +70,13 @@ const (
 	// See related feature flag: feat.DontOptimizeVirtualDir
 	LsNoRecursion
 
-	// For remote metadata-capable buckets (ie., bck.HasVersioningMD() == true):
-	// - check whether remote version exists,
-	// and if it does:
-	// - check whether remote version differs from its in-cluster copy
-	LsVerChanged
+	// Bidirectional (remote <-> in-cluster) diff requires remote metadata-capable (`HasVersioningMD`) buckets;
+	// it entails:
+	// - checking whether remote version exists,
+	//   and if it does,
+	// - checking whether it differs from its in-cluster copy.
+	// See related `cmn.LsoEnt` flags: `EntryVerChanged` and `EntryVerRemoved`, respectively.
+	LsDiff
 
 	// Do not return virtual subdirectories - do not include them as `cmn.LsoEnt` entries
 	LsNoDirs
@@ -240,8 +242,8 @@ func (lsmsg *LsoMsg) Str(cname string) string {
 	if lsmsg.IsFlagSet(LsNoRecursion) {
 		sb.WriteString("no-recurs,")
 	}
-	if lsmsg.IsFlagSet(LsVerChanged) {
-		sb.WriteString("version-changed,")
+	if lsmsg.IsFlagSet(LsDiff) {
+		sb.WriteString("diff,")
 	}
 	s := sb.String()
 	return s[:len(s)-1]

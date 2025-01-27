@@ -52,7 +52,7 @@ func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 			wi.markerDir = ""
 		}
 	}
-	if msg.IsFlagSet(apc.LsVerChanged) {
+	if msg.IsFlagSet(apc.LsDiff) {
 		wi.custom = make(cos.StrKVs)
 	}
 	return
@@ -95,13 +95,13 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
 		orig := lom.OrigFntl()
 		if orig != nil {
 			saved := lom.PushFntl(orig)
-			if wi.msg.IsFlagSet(apc.LsVerChanged) {
+			if wi.msg.IsFlagSet(apc.LsDiff) {
 				checkRemoteMD(lom, en)
 			}
 			lom.PopFntl(saved)
 			en.Name = orig[1]
 		}
-	} else if wi.msg.IsFlagSet(apc.LsVerChanged) {
+	} else if wi.msg.IsFlagSet(apc.LsDiff) {
 		// may set en.custom and en.version
 		checkRemoteMD(lom, en)
 	}

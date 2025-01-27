@@ -275,19 +275,19 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		addCachedCol = true           // preliminary; may change below
 		msg.SetFlag(apc.LsBckPresent) // default
 	}
-	if flagIsSet(c, verChangedFlag) {
+	if flagIsSet(c, diffFlag) {
 		if bck.IsAIS() {
-			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(verChangedFlag), bck.String())
+			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(diffFlag), bck.String())
 		}
 		if !bck.HasVersioningMD() {
 			return fmt.Errorf("flag %s only applies to remote backends that maintain at least some form of versioning information (have: %s)",
-				qflprn(verChangedFlag), bck.String())
+				qflprn(diffFlag), bck.String())
 		}
 		msg.SetFlag(apc.LsVerChanged)
 	}
 
 	if flagIsSet(c, listObjCachedFlag) {
-		if flagIsSet(c, verChangedFlag) {
+		if flagIsSet(c, diffFlag) {
 			actionWarn(c, "checking remote versions may take some time...\n")
 			briefPause(1)
 		}
@@ -343,8 +343,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	// add _implied_ props into control lsmsg
 	switch {
 	case flagIsSet(c, nameOnlyFlag):
-		if flagIsSet(c, verChangedFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(verChangedFlag), qflprn(nameOnlyFlag))
+		if flagIsSet(c, diffFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(diffFlag), qflprn(nameOnlyFlag))
 		}
 		if len(props) > 2 {
 			warn := fmt.Sprintf("flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
@@ -392,7 +392,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	propsStr = msg.Props // show these and _only_ these props
 	// finally:
-	if flagIsSet(c, verChangedFlag) {
+	if flagIsSet(c, diffFlag) {
 		if !msg.WantProp(apc.GetPropsCustom) {
 			msg.AddProps(apc.GetPropsCustom)
 		}
@@ -508,6 +508,10 @@ func lsoErr(msg *apc.LsoMsg, err error) error {
 	return V(err)
 }
 
+// usage:
+// - list-objects
+// - get multiple (`getMultiObj`)
+// - scrub
 func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err error) {
 	maxPages = int64(parseIntFlag(c, maxPagesFlag))
 	b := meta.CloneBck(&bck)
