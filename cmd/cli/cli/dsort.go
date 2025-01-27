@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with objects in the cluster
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -98,7 +98,7 @@ var dsortStartCmd = cli.Command{
 		indent1 + "Tip: use '--verbose' to print the spec (with all its parameters including applied defaults)\n" +
 		indent1 + "See also: docs/dsort.md, docs/cli/dsort.md, and ais/test/scripts/dsort*",
 	ArgsUsage: dsortSpecArgument,
-	Flags:     startSpecialFlags[cmdDsort],
+	Flags:     sortFlags(startSpecialFlags[cmdDsort]),
 	Action:    startDsortHandler,
 }
 

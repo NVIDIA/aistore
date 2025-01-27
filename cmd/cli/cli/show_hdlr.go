@@ -115,7 +115,7 @@ var (
 
 	showCmd = cli.Command{
 		Name:  commandShow,
-		Usage: "show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself",
+		Usage: "Show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself",
 		Subcommands: []cli.Command{
 			makeAlias(authCmdShow, "", true, commandAuth), // alias for `ais auth show`
 			showCmdObject,
@@ -136,7 +136,7 @@ var (
 		Name:      commandStorage,
 		Usage:     "Show storage usage and utilization, disks and mountpaths",
 		ArgsUsage: optionalTargetIDArgument,
-		Flags:     storageFlags[commandStorage],
+		Flags:     sortFlags(storageFlags[commandStorage]),
 		Action:    showStorageHandler,
 		Subcommands: []cli.Command{
 			showCmdDisk,
@@ -149,7 +149,7 @@ var (
 		Name:         cmdObject,
 		Usage:        "Show object properties",
 		ArgsUsage:    objectArgument,
-		Flags:        showCmdsFlags[cmdObject],
+		Flags:        sortFlags(showCmdsFlags[cmdObject]),
 		Action:       showObjectHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
@@ -157,7 +157,7 @@ var (
 		Name:         cmdCluster,
 		Usage:        "Main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)",
 		ArgsUsage:    showClusterArgument,
-		Flags:        showCmdsFlags[cmdCluster],
+		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
 		Action:       showClusterHandler,
 		BashComplete: showClusterCompletions, // NOTE: level 0 hardcoded
 		Subcommands: []cli.Command{
@@ -165,7 +165,7 @@ var (
 				Name:         cmdSmap,
 				Usage:        "Show cluster map (Smap)",
 				ArgsUsage:    optionalNodeIDArgument,
-				Flags:        showCmdsFlags[cmdSmap],
+				Flags:        sortFlags(showCmdsFlags[cmdSmap]),
 				Action:       showSmapHandler,
 				BashComplete: suggestAllNodes,
 			},
@@ -173,7 +173,7 @@ var (
 				Name:         cmdBMD,
 				Usage:        "Show bucket metadata (BMD)",
 				ArgsUsage:    optionalNodeIDArgument,
-				Flags:        showCmdsFlags[cmdBMD],
+				Flags:        sortFlags(showCmdsFlags[cmdBMD]),
 				Action:       showBMDHandler,
 				BashComplete: suggestAllNodes,
 			},
@@ -181,7 +181,7 @@ var (
 				Name:      cmdConfig,
 				Usage:     "Show cluster and node configuration",
 				ArgsUsage: showClusterConfigArgument,
-				Flags:     showCmdsFlags[cmdConfig],
+				Flags:     sortFlags(showCmdsFlags[cmdConfig]),
 				Action:    showClusterConfigHandler,
 			},
 			makeAlias(showCmdPeformance, cliName+" "+commandShow+" "+commandPerf, false /*silent*/, cmdShowStats),
@@ -191,7 +191,7 @@ var (
 		Name:         cmdBucket,
 		Usage:        "Show bucket properties",
 		ArgsUsage:    bucketAndPropsArgument,
-		Flags:        showCmdsFlags[cmdBucket],
+		Flags:        sortFlags(showCmdsFlags[cmdBucket]),
 		Action:       showBckPropsHandler,
 		BashComplete: bucketAndPropsCompletions, // bucketCompletions(),
 	}
@@ -199,7 +199,7 @@ var (
 		Name:         cmdConfig,
 		Usage:        "Show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
 		ArgsUsage:    showConfigArgument,
-		Flags:        showCmdsFlags[cmdConfig],
+		Flags:        sortFlags(showCmdsFlags[cmdConfig]),
 		Action:       showAnyConfigHandler,
 		BashComplete: showConfigCompletions,
 	}
@@ -207,7 +207,7 @@ var (
 		Name:      cmdShowRemoteAIS,
 		Usage:     "Show attached AIS clusters",
 		ArgsUsage: "",
-		Flags:     showCmdsFlags[cmdShowRemoteAIS],
+		Flags:     sortFlags(showCmdsFlags[cmdShowRemoteAIS]),
 		Action:    showRemoteAISHandler,
 	}
 
@@ -215,7 +215,7 @@ var (
 		Name:         commandJob,
 		Usage:        showJobUsage,
 		ArgsUsage:    jobAnyArg,
-		Flags:        showCmdsFlags[commandJob],
+		Flags:        sortFlags(showCmdsFlags[commandJob]),
 		Action:       showJobsHandler,
 		BashComplete: runningJobCompletions,
 	}

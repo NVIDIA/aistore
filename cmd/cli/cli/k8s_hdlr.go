@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS buckets.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -20,18 +20,18 @@ var (
 
 	k8sCmd = cli.Command{
 		Name:  cmdK8s,
-		Usage: "show kubernetes pods and services",
+		Usage: "Show Kubernetes pods and services",
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdK8sSvc,
-				Usage:  "show kubernetes services",
-				Flags:  k8sCmdsFlags[cmdK8sSvc],
+				Usage:  "Show Kubernetes services",
+				Flags:  sortFlags(k8sCmdsFlags[cmdK8sSvc]),
 				Action: k8sShowSvcHandler,
 			},
 			{
 				Name:      cmdK8sCluster,
-				Usage:     "show AIS cluster",
-				Flags:     k8sCmdsFlags[cmdK8sCluster],
+				Usage:     "Show AIS cluster",
+				Flags:     sortFlags(k8sCmdsFlags[cmdK8sCluster]),
 				ArgsUsage: optionalNodeIDArgument,
 				Action:    k8sShowClusterHandler,
 				BashComplete: func(c *cli.Context) {

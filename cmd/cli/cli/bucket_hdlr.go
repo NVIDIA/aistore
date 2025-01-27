@@ -200,7 +200,7 @@ var (
 		Name:         commandList,
 		Usage:        listAnyUsage,
 		ArgsUsage:    lsAnyCommandArgument,
-		Flags:        bucketCmdsFlags[commandList],
+		Flags:        sortFlags(bucketCmdsFlags[commandList]),
 		Action:       listAnyHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -209,7 +209,7 @@ var (
 		Name:         cmdLRU,
 		Usage:        "Show bucket's LRU configuration; enable or disable LRU eviction",
 		ArgsUsage:    optionalBucketArgument,
-		Flags:        bucketCmdsFlags[cmdLRU],
+		Flags:        sortFlags(bucketCmdsFlags[cmdLRU]),
 		Action:       lruBucketHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -217,7 +217,7 @@ var (
 		Name:         commandEvict,
 		Usage:        evictUsage,
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
-		Flags:        bucketCmdsFlags[commandEvict],
+		Flags:        sortFlags(bucketCmdsFlags[commandEvict]),
 		Action:       evictHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
@@ -225,7 +225,7 @@ var (
 		Name:         commandCopy,
 		Usage:        copyBucketUsage,
 		ArgsUsage:    bucketObjectSrcArgument + " " + bucketDstArgument,
-		Flags:        bucketCmdsFlags[commandCopy],
+		Flags:        sortFlags(bucketCmdsFlags[commandCopy]),
 		Action:       copyBucketHandler,
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 	}
@@ -233,7 +233,7 @@ var (
 		Name:         commandRename,
 		Usage:        "Rename (move) ais bucket",
 		ArgsUsage:    bucketArgument + " " + bucketNewArgument,
-		Flags:        bucketCmdsFlags[commandRename],
+		Flags:        sortFlags(bucketCmdsFlags[commandRename]),
 		Action:       mvBucketHandler,
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 	}
@@ -241,7 +241,7 @@ var (
 		Name:      cmdSetBprops,
 		Usage:     setBpropsUsage,
 		ArgsUsage: bucketPropsArgument,
-		Flags:     bucketCmdsFlags[cmdSetBprops],
+		Flags:     sortFlags(bucketCmdsFlags[cmdSetBprops]),
 		Action:    setPropsHandler,
 		BashComplete: bucketCompletions(
 			bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
@@ -262,7 +262,7 @@ var (
 				Name:      commandCreate,
 				Usage:     "Create ais buckets",
 				ArgsUsage: bucketsArgument,
-				Flags:     bucketCmdsFlags[commandCreate],
+				Flags:     sortFlags(bucketCmdsFlags[commandCreate]),
 				Action:    createBucketHandler,
 			},
 			bucketCmdCopy,
@@ -271,7 +271,7 @@ var (
 				Name:      commandRemove,
 				Usage:     "Remove ais buckets",
 				ArgsUsage: bucketsArgument,
-				Flags:     bucketCmdsFlags[commandRemove],
+				Flags:     sortFlags(bucketCmdsFlags[commandRemove]),
 				Action:    removeBucketHandler,
 				BashComplete: bucketCompletions(bcmplop{
 					multiple: true, provider: apc.AIS,
@@ -287,7 +287,7 @@ var (
 						Name:      cmdResetBprops,
 						Usage:     "Reset bucket properties",
 						ArgsUsage: bucketPropsArgument,
-						Flags:     bucketCmdsFlags[cmdResetBprops],
+						Flags:     sortFlags(bucketCmdsFlags[cmdResetBprops]),
 						Action:    resetPropsHandler,
 						BashComplete: bucketCompletions(
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},

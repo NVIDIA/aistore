@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file provides commands that remove various entities from the cluster.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -68,7 +68,7 @@ func initSearch(app *cli.App) {
 			Usage:        searchUsage,
 			ArgsUsage:    searchArgument,
 			Action:       searchCmdHdlr,
-			Flags:        searchCmdFlags,
+			Flags:        sortFlags(searchCmdFlags),
 			BashComplete: searchBashCmplt,
 		},
 	}

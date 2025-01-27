@@ -85,7 +85,7 @@ var (
 		ArgsUsage:    etlNameListArgument,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubFlags[cmdStop],
+		Flags:        sortFlags(etlSubFlags[cmdStop]),
 	}
 	startCmdETL = cli.Command{
 		Name:         cmdStart,
@@ -93,7 +93,7 @@ var (
 		ArgsUsage:    etlNameArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubFlags[cmdStart],
+		Flags:        sortFlags(etlSubFlags[cmdStart]),
 	}
 	removeCmdETL = cli.Command{
 		Name:         commandRemove,
@@ -101,7 +101,7 @@ var (
 		ArgsUsage:    etlNameArgument,
 		Action:       etlRemoveHandler,
 		BashComplete: etlIDCompletions,
-		Flags:        etlSubFlags[commandRemove],
+		Flags:        sortFlags(etlSubFlags[commandRemove]),
 	}
 	initCmdETL = cli.Command{
 		Name:  cmdInit,
@@ -110,13 +110,13 @@ var (
 			{
 				Name:   cmdSpec,
 				Usage:  "Start ETL job with YAML Pod specification",
-				Flags:  etlSubFlags[cmdSpec],
+				Flags:  sortFlags(etlSubFlags[cmdSpec]),
 				Action: etlInitSpecHandler,
 			},
 			{
 				Name:   cmdCode,
 				Usage:  "Start ETL job using the specified transforming function or script",
-				Flags:  etlSubFlags[cmdCode],
+				Flags:  sortFlags(etlSubFlags[cmdCode]),
 				Action: etlInitCodeHandler,
 			},
 		},
@@ -133,7 +133,7 @@ var (
 		Usage:        "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix')",
 		ArgsUsage:    etlNameArgument + " " + bucketObjectSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
-		Flags:        etlSubFlags[cmdBucket],
+		Flags:        sortFlags(etlSubFlags[cmdBucket]),
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 	}
 	logsCmdETL = cli.Command{

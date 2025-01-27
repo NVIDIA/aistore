@@ -172,7 +172,7 @@ var (
 		Name:         commandGet,
 		Usage:        objGetUsage,
 		ArgsUsage:    getObjectArgument,
-		Flags:        objectCmdsFlags[commandGet],
+		Flags:        sortFlags(objectCmdsFlags[commandGet]),
 		Action:       getHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
@@ -181,7 +181,7 @@ var (
 		Name:         commandPut,
 		Usage:        objPutUsage,
 		ArgsUsage:    putObjectArgument,
-		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
+		Flags:        sortFlags(append(objectCmdsFlags[commandPut], putObjCksumFlags...)),
 		Action:       putHandler,
 		BashComplete: putPromApndCompletions,
 	}
@@ -189,7 +189,7 @@ var (
 		Name:         commandPromote,
 		Usage:        objPromoteUsage,
 		ArgsUsage:    promoteObjectArgument,
-		Flags:        objectCmdsFlags[commandPromote],
+		Flags:        sortFlags(objectCmdsFlags[commandPromote]),
 		Action:       promoteHandler,
 		BashComplete: putPromApndCompletions,
 	}
@@ -197,7 +197,7 @@ var (
 		Name:      commandConcat,
 		Usage:     concatUsage,
 		ArgsUsage: concatObjectArgument,
-		Flags:     objectCmdsFlags[commandConcat],
+		Flags:     sortFlags(objectCmdsFlags[commandConcat]),
 		Action:    concatHandler,
 	}
 
@@ -205,7 +205,7 @@ var (
 		Name:      commandSetCustom,
 		Usage:     "Set object's custom properties",
 		ArgsUsage: setCustomArgument,
-		Flags:     objectCmdsFlags[commandSetCustom],
+		Flags:     sortFlags(objectCmdsFlags[commandSetCustom]),
 		Action:    setCustomPropsHandler,
 	}
 
@@ -213,7 +213,7 @@ var (
 		Name:         commandPrefetch,
 		Usage:        prefetchUsage,
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
-		Flags:        startSpecialFlags[commandPrefetch],
+		Flags:        sortFlags(startSpecialFlags[commandPrefetch]),
 		Action:       startPrefetchHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
@@ -222,7 +222,7 @@ var (
 		Name:         commandRemove,
 		Usage:        objRmUsage,
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
-		Flags:        objectCmdsFlags[commandRemove],
+		Flags:        sortFlags(objectCmdsFlags[commandRemove]),
 		Action:       rmHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 	}
@@ -246,7 +246,7 @@ var (
 				Name:         commandRename,
 				Usage:        "Move (rename) object",
 				ArgsUsage:    renameObjectArgument,
-				Flags:        objectCmdsFlags[commandRename],
+				Flags:        sortFlags(objectCmdsFlags[commandRename]),
 				Action:       mvObjectHandler,
 				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 			},
@@ -254,7 +254,7 @@ var (
 				Name:         commandCat,
 				Usage:        "Print object's content to STDOUT (same as Linux shell 'cat')",
 				ArgsUsage:    objectArgument,
-				Flags:        objectCmdsFlags[commandCat],
+				Flags:        sortFlags(objectCmdsFlags[commandCat]),
 				Action:       catHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},

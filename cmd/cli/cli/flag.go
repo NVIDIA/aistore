@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -224,4 +225,9 @@ loop:
 		out = append(out, flag)
 	}
 	return
+}
+
+func sortFlags(fls []cli.Flag) []cli.Flag {
+	sort.Slice(fls, func(i, j int) bool { return fls[i].GetName() < fls[j].GetName() })
+	return fls
 }

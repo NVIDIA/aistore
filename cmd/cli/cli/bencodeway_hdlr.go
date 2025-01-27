@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles specific bucket actions.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -44,7 +44,7 @@ var (
 			Name:         commandMirror,
 			Usage:        mirrorUsage,
 			ArgsUsage:    bucketArgument,
-			Flags:        storageSvcCmdsFlags[commandMirror],
+			Flags:        sortFlags(storageSvcCmdsFlags[commandMirror]),
 			Action:       setCopiesHandler,
 			BashComplete: bucketCompletions(bcmplop{}),
 		},
@@ -52,7 +52,7 @@ var (
 			Name:         commandECEncode,
 			Usage:        bencodeUsage,
 			ArgsUsage:    bucketArgument,
-			Flags:        storageSvcCmdsFlags[commandECEncode],
+			Flags:        sortFlags(storageSvcCmdsFlags[commandECEncode]),
 			Action:       ecEncodeHandler,
 			BashComplete: bucketCompletions(bcmplop{}),
 		},

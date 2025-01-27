@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -25,7 +25,7 @@ import (
 const clusterCompletion = "cluster"
 
 // (compare with getCluLogUsage)
-const getLogUsage = "download the current log or entire log history from: a) selected node, or b) entire cluster,\n" +
+const getLogUsage = "Download the current log or entire log history from: a) selected node, or b) entire cluster,\n" +
 	indent1 + "\t e.g.:\n" +
 	indent1 + "\t - 'ais log get NODE_ID /tmp'\t- download the specified node's current log and save it in the specified directory;\n" +
 	indent1 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10'\t- download the node's current log _as_ /tmp/out\n" +
@@ -53,10 +53,10 @@ var (
 	// 'show log' and 'log show'
 	showCmdLog = cli.Command{
 		Name: cmdLog,
-		Usage: fmt.Sprintf("for a given node: show its current log (use %s to update, %s for details)",
+		Usage: fmt.Sprintf("For a given node: show its current log (use %s to update, %s for details)",
 			qflprn(refreshFlag), qflprn(cli.HelpFlag)),
 		ArgsUsage:    showLogArgument,
-		Flags:        nodeLogFlags[commandShow],
+		Flags:        sortFlags(nodeLogFlags[commandShow]),
 		Action:       showNodeLogHandler,
 		BashComplete: suggestAllNodes,
 	}
@@ -64,7 +64,7 @@ var (
 		Name:      commandGet,
 		Usage:     getLogUsage,
 		ArgsUsage: getLogArgument,
-		Flags:     nodeLogFlags[commandGet],
+		Flags:     sortFlags(nodeLogFlags[commandGet]),
 		Action:    getLogHandler,
 		BashComplete: func(c *cli.Context) {
 			fmt.Println(clusterCompletion)
@@ -75,7 +75,7 @@ var (
 	// top-level
 	logCmd = cli.Command{
 		Name:  commandLog,
-		Usage: "view ais node's log in real time; download the current log; download all logs (history)",
+		Usage: "View ais node's log in real time; download the current log; download all logs (history)",
 		Subcommands: []cli.Command{
 			makeAlias(showCmdLog, "", true, commandShow),
 			getCmdLog,

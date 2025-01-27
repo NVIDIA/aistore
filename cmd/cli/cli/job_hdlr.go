@@ -137,14 +137,14 @@ var (
 		Name:      commandRebalance,
 		Usage:     "Rebalance ais cluster",
 		ArgsUsage: bucketEmbeddedPrefixArg,
-		Flags:     startSpecialFlags[commandRebalance],
+		Flags:     sortFlags(startSpecialFlags[commandRebalance]),
 		Action:    startRebHandler,
 	}
 	jobStartResilver = cli.Command{
 		Name:         commandResilver,
 		Usage:        resilverUsage,
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        startCommonFlags,
+		Flags:        sortFlags(startCommonFlags),
 		Action:       startResilverHandler,
 		BashComplete: suggestTargets,
 	}
@@ -153,7 +153,7 @@ var (
 		Name:         commandPrefetch,
 		Usage:        prefetchUsage,
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
-		Flags:        startSpecialFlags[commandPrefetch],
+		Flags:        sortFlags(startSpecialFlags[commandPrefetch]),
 		Action:       startPrefetchHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
@@ -161,7 +161,7 @@ var (
 		Name:         cmdBlobDownload,
 		Usage:        blobDownloadUsage,
 		ArgsUsage:    objectArgument,
-		Flags:        startSpecialFlags[cmdBlobDownload],
+		Flags:        sortFlags(startSpecialFlags[cmdBlobDownload]),
 		Action:       blobDownloadHandler,
 		BashComplete: remoteBucketCompletions(bcmplop{multiple: true}),
 	}
@@ -176,14 +176,14 @@ var (
 				Name:      cmdDownload,
 				Usage:     "Download files and objects from remote sources",
 				ArgsUsage: startDownloadArgument,
-				Flags:     startSpecialFlags[cmdDownload],
+				Flags:     sortFlags(startSpecialFlags[cmdDownload]),
 				Action:    startDownloadHandler,
 			},
 			dsortStartCmd,
 			{
 				Name:         cmdLRU,
 				Usage:        "Run LRU eviction",
-				Flags:        startSpecialFlags[cmdLRU],
+				Flags:        sortFlags(startSpecialFlags[cmdLRU]),
 				Action:       startLRUHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
@@ -219,7 +219,7 @@ var (
 		Name:         commandStop,
 		Usage:        stopUsage,
 		ArgsUsage:    jobAnyArg,
-		Flags:        stopCmdsFlags,
+		Flags:        sortFlags(stopCmdsFlags),
 		Action:       stopJobHandler,
 		BashComplete: runningJobCompletions,
 	}
@@ -236,7 +236,7 @@ var (
 		Name:         commandWait,
 		Usage:        "wait for a specific batch job to complete (" + tabHelpOpt + ")",
 		ArgsUsage:    jobAnyArg,
-		Flags:        waitCmdsFlags,
+		Flags:        sortFlags(waitCmdsFlags),
 		Action:       waitJobHandler,
 		BashComplete: runningJobCompletions,
 	}
@@ -256,7 +256,7 @@ var (
 				Name:         cmdDownload,
 				Usage:        "remove finished download job(s)",
 				ArgsUsage:    optionalJobIDArgument,
-				Flags:        removeCmdsFlags,
+				Flags:        sortFlags(removeCmdsFlags),
 				Action:       removeDownloadHandler,
 				BashComplete: downloadIDFinishedCompletions,
 			},
@@ -264,7 +264,7 @@ var (
 				Name:         cmdDsort,
 				Usage:        "remove finished dsort job(s)",
 				ArgsUsage:    optionalJobIDArgument,
-				Flags:        removeCmdsFlags,
+				Flags:        sortFlags(removeCmdsFlags),
 				Action:       removeDsortHandler,
 				BashComplete: dsortIDFinishedCompletions,
 			},
@@ -310,7 +310,7 @@ outer:
 		cmd := cli.Command{
 			Name:   xname,
 			Usage:  "start " + xname,
-			Flags:  startCommonFlags,
+			Flags:  sortFlags(startCommonFlags),
 			Action: startXactionHandler,
 		}
 		if xact.IsSameScope(xname, xact.ScopeB) { // with a single arg: bucket

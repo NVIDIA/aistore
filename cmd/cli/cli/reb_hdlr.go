@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -38,7 +38,7 @@ var (
 		Name:      cmdRebalance,
 		Usage:     "show rebalance status and stats",
 		ArgsUsage: jobShowRebalanceArgument,
-		Flags:     showRebFlags,
+		Flags:     sortFlags(showRebFlags),
 		Action:    showRebalanceHandler,
 	}
 )

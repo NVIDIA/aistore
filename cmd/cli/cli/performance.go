@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file contains util functions and types.
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -43,7 +43,7 @@ var verboseCounters = [...]string{
 }
 
 var (
-	showPerfFlags = append(
+	showPerfFlags = sortFlags(append(
 		longRunFlags,
 		noHeaderFlag,
 		regexColsFlag,
@@ -51,7 +51,7 @@ var (
 		averageSizeFlag,
 		nonverboseFlag,
 		verboseFlag,
-	)
+	))
 
 	// `show performance` command
 	showCmdPeformance = cli.Command{

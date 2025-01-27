@@ -116,7 +116,7 @@ var (
 		Name:         commandBucket,
 		Usage:        archBucketUsage,
 		ArgsUsage:    bucketObjectSrcArgument + " " + dstShardArgument,
-		Flags:        archCmdsFlags[commandBucket],
+		Flags:        sortFlags(archCmdsFlags[commandBucket]),
 		Action:       archMultiObjHandler,
 		BashComplete: putPromApndCompletions,
 	}
@@ -126,7 +126,7 @@ var (
 		Name:         commandPut,
 		Usage:        archPutUsage,
 		ArgsUsage:    putApndArchArgument,
-		Flags:        archCmdsFlags[commandPut],
+		Flags:        sortFlags(archCmdsFlags[commandPut]),
 		Action:       putApndArchHandler,
 		BashComplete: putPromApndCompletions,
 	}
@@ -136,17 +136,17 @@ var (
 		Name:         objectCmdGet.Name,
 		Usage:        archGetUsage,
 		ArgsUsage:    getShardArgument,
-		Flags:        rmFlags(objectCmdGet.Flags, headObjPresentFlag, lengthFlag, offsetFlag),
+		Flags:        sortFlags(rmFlags(objectCmdGet.Flags, headObjPresentFlag, lengthFlag, offsetFlag)),
 		Action:       getArchHandler,
 		BashComplete: objectCmdGet.BashComplete,
 	}
 
-	// archive ls
+	// archive ls (NOTE: listArchFlag is implied)
 	archLsCmd = cli.Command{
 		Name:         cmdList,
 		Usage:        "List archived content (supported formats: " + archFormats + ")",
 		ArgsUsage:    optionalShardArgument,
-		Flags:        rmFlags(bucketCmdsFlags[commandList], listArchFlag), // is implied
+		Flags:        sortFlags(rmFlags(bucketCmdsFlags[commandList], listArchFlag)),
 		Action:       listArchHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -156,7 +156,7 @@ var (
 		Name:      cmdGenShards,
 		Usage:     genShardsUsage,
 		ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
-		Flags:     archCmdsFlags[cmdGenShards],
+		Flags:     sortFlags(archCmdsFlags[cmdGenShards]),
 		Action:    genShardsHandler,
 	}
 

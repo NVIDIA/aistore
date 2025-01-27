@@ -69,7 +69,7 @@ var (
 				Name:         cmdMpathAttach,
 				Usage:        "Attach mountpath to a given target node",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags[cmdMpathAttach],
+				Flags:        sortFlags(mpathCmdsFlags[cmdMpathAttach]),
 				Action:       mpathAttachHandler,
 				BashComplete: suggestTargets,
 			},
@@ -84,7 +84,7 @@ var (
 				Name:         cmdMpathDetach,
 				Usage:        "Detach mountpath from a target node (disable and remove it from the target's volume)",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags["default"],
+				Flags:        sortFlags(mpathCmdsFlags["default"]),
 				Action:       mpathDetachHandler,
 				BashComplete: suggestMpathDetach,
 			},
@@ -92,7 +92,7 @@ var (
 				Name:         cmdMpathDisable,
 				Usage:        "Disable mountpath (deactivate but keep in a target's volume for possible future activation)",
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags["default"],
+				Flags:        sortFlags(mpathCmdsFlags["default"]),
 				Action:       mpathDisableHandler,
 				BashComplete: suggestMpathActive,
 			},
@@ -104,7 +104,7 @@ var (
 				Usage: "Re-resolve (mountpath, filesystem) to its underlying disk(s) and revalidate the disks\n" +
 					indent1 + "\t" + advancedUsageOnly,
 				ArgsUsage:    nodeMountpathPairArgument,
-				Flags:        mpathCmdsFlags["default"],
+				Flags:        sortFlags(mpathCmdsFlags["default"]),
 				Action:       mpathRescanHandler,
 				BashComplete: suggestMpathActive,
 			},
@@ -130,7 +130,7 @@ var (
 		Name:         cmdStgCleanup,
 		Usage:        "Remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
 		ArgsUsage:    lsAnyCommandArgument,
-		Flags:        cleanupFlags,
+		Flags:        sortFlags(cleanupFlags),
 		Action:       cleanupStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -169,17 +169,17 @@ var (
 	//
 	showCmdDisk = cli.Command{
 		Name:         cmdShowDisk,
-		Usage:        "show disk utilization and read/write statistics",
+		Usage:        "Show disk utilization and read/write statistics",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        storageFlags[cmdShowDisk],
+		Flags:        sortFlags(storageFlags[cmdShowDisk]),
 		Action:       showDisksHandler,
 		BashComplete: suggestTargets,
 	}
 	showCmdStgSummary = cli.Command{
 		Name:         cmdSummary,
-		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
+		Usage:        "Show bucket sizes and %% of used capacity on a per-bucket basis",
 		ArgsUsage:    lsAnyCommandArgument,
-		Flags:        storageSummFlags,
+		Flags:        sortFlags(storageSummFlags),
 		Action:       summaryStorageHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -187,22 +187,22 @@ var (
 		Name:         cmdScrub,
 		Usage:        scrubUsage,
 		ArgsUsage:    lsAnyCommandArgument,
-		Flags:        scrubFlags,
+		Flags:        sortFlags(scrubFlags),
 		Action:       scrubHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	showCmdMpath = cli.Command{
 		Name:         cmdMountpath,
-		Usage:        "show target mountpaths",
+		Usage:        "Show target mountpaths",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        storageFlags[cmdMountpath],
+		Flags:        sortFlags(storageFlags[cmdMountpath]),
 		Action:       showMpathHandler,
 		BashComplete: suggestTargets,
 	}
 
 	storageCmd = cli.Command{
 		Name:  commandStorage,
-		Usage: "monitor and manage clustered storage",
+		Usage: "Monitor and manage clustered storage",
 		Subcommands: []cli.Command{
 			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
 			showCmdStgSummary,
