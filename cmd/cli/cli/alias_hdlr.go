@@ -43,28 +43,28 @@ func lastAliasedWord(c *cli.Context) string {
 func (a *acli) getAliasCmd() cli.Command {
 	aliasCmd := cli.Command{
 		Name:   commandAlias,
-		Usage:  "manage top-level aliases",
+		Usage:  "Manage top-level aliases",
 		Action: showAliasHandler,
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdAliasShow,
-				Usage:  "display list of aliases",
+				Usage:  "Display list of aliases",
 				Action: showAliasHandler,
 			},
 			{
 				Name:      cmdAliasRm,
-				Usage:     "remove existing alias",
+				Usage:     "Remove existing alias",
 				ArgsUsage: aliasCmdArgument,
 				Action:    rmAliasHandler,
 			},
 			{
 				Name:   cmdAliasReset,
-				Usage:  "reset aliases to default",
+				Usage:  "Reset aliases to default",
 				Action: resetAliasHandler,
 			},
 			{
 				Name:      cmdAliasSet,
-				Usage:     "add new or update existing alias",
+				Usage:     "Add new or update existing alias",
 				ArgsUsage: aliasSetCmdArgument,
 				Action:    a.setAliasHandler,
 			},

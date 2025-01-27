@@ -20,20 +20,20 @@ var (
 	showTLS = cli.Command{
 		Name:         commandTLS,
 		ArgsUsage:    optionalNodeIDArgument,
-		Usage:        "show TLS certificate's version, issuer's common name, from/to validity bounds",
+		Usage:        "Show TLS certificate's version, issuer's common name, from/to validity bounds",
 		Action:       showCertHandler,
 		BashComplete: suggestAllNodes,
 	}
 	loadTLS = cli.Command{
 		Name:         cmdLoadTLS,
-		Usage:        "load TLS certificate",
+		Usage:        "Load TLS certificate",
 		ArgsUsage:    optionalNodeIDArgument,
 		Action:       loadCertHandler,
 		BashComplete: suggestAllNodes,
 	}
 	validateTLS = cli.Command{
 		Name:      cmdValidateTLS,
-		Usage:     "check that all TLS certficates are identical",
+		Usage:     "Check that all TLS certficates are identical",
 		ArgsUsage: optionalNodeIDArgument,
 		Action:    validateCertHandler,
 	}
@@ -41,7 +41,7 @@ var (
 	// top-level
 	tlsCmd = cli.Command{
 		Name:  commandTLS,
-		Usage: "load or reload (an updated) TLS certificate; display information about currently deployed certificates",
+		Usage: "Load or reload (an updated) TLS certificate; display information about currently deployed certificates",
 		Subcommands: []cli.Command{
 			makeAlias(showTLS, "", true, commandShow),
 			loadTLS,

@@ -1,7 +1,7 @@
 // Package tok provides AuthN token (structure and methods)
 // for validation by AIS gateways
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tok
 

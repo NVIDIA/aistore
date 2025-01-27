@@ -31,7 +31,7 @@ Usage examples:
 `
 
 // ais cp
-const copyBucketUsage = "copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),\n" +
+const copyBucketUsage = "Copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),\n" +
 	indent1 + "\te.g.:\n" +
 	indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy Cloud bucket that may _not_ be present in cluster (and create destination if doesn't exist);\n" +
@@ -51,7 +51,7 @@ const copyBucketUsage = "copy entire bucket or selected objects (to select, use 
 	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above."
 
 // ais ls
-var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
+var listAnyUsage = "List buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
 	indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
@@ -80,7 +80,7 @@ var listAnyUsage = "list buckets, objects in buckets, and files in " + archExts 
 	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to the cluster's BMD."
 
 // ais bucket ... props
-const setBpropsUsage = "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
+const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
 	indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
@@ -91,7 +91,7 @@ const setBpropsUsage = "update bucket properties; the command accepts both JSON-
 	indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'"
 
 // ais evict
-const evictUsage = "evict one remote bucket, multiple remote buckets, or\n" +
+const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
 	indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
 	indent1 + "\t- 'evict gs:'\t- evict all GCP buckets from the cluster;\n" +
@@ -207,7 +207,7 @@ var (
 
 	bucketCmdLRU = cli.Command{
 		Name:         cmdLRU,
-		Usage:        "show bucket's LRU configuration; enable or disable LRU eviction",
+		Usage:        "Show bucket's LRU configuration; enable or disable LRU eviction",
 		ArgsUsage:    optionalBucketArgument,
 		Flags:        bucketCmdsFlags[cmdLRU],
 		Action:       lruBucketHandler,
@@ -231,7 +231,7 @@ var (
 	}
 	bucketCmdRename = cli.Command{
 		Name:         commandRename,
-		Usage:        "rename/move ais bucket",
+		Usage:        "Rename (move) ais bucket",
 		ArgsUsage:    bucketArgument + " " + bucketNewArgument,
 		Flags:        bucketCmdsFlags[commandRename],
 		Action:       mvBucketHandler,
@@ -250,7 +250,7 @@ var (
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
-		Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
+		Usage: "Create and destroy buckets, list bucket's content, show existing buckets and their properties",
 		Subcommands: []cli.Command{
 			bucketsObjectsCmdList,
 			showCmdStgSummary,
@@ -260,7 +260,7 @@ var (
 			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandCreate,
-				Usage:     "create ais buckets",
+				Usage:     "Create ais buckets",
 				ArgsUsage: bucketsArgument,
 				Flags:     bucketCmdsFlags[commandCreate],
 				Action:    createBucketHandler,
@@ -269,7 +269,7 @@ var (
 			bucketCmdRename,
 			{
 				Name:      commandRemove,
-				Usage:     "remove ais buckets",
+				Usage:     "Remove ais buckets",
 				ArgsUsage: bucketsArgument,
 				Flags:     bucketCmdsFlags[commandRemove],
 				Action:    removeBucketHandler,
@@ -279,13 +279,13 @@ var (
 			},
 			{
 				Name:   cmdProps,
-				Usage:  "show, update or reset bucket properties",
+				Usage:  "Show, update or reset bucket properties",
 				Action: showBckPropsHandler,
 				Subcommands: []cli.Command{
 					bucketCmdSetProps,
 					{
 						Name:      cmdResetBprops,
-						Usage:     "reset bucket properties",
+						Usage:     "Reset bucket properties",
 						ArgsUsage: bucketPropsArgument,
 						Flags:     bucketCmdsFlags[cmdResetBprops],
 						Action:    resetPropsHandler,

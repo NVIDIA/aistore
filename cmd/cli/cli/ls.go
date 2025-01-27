@@ -283,7 +283,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			return fmt.Errorf("flag %s only applies to remote backends that maintain at least some form of versioning information (have: %s)",
 				qflprn(diffFlag), bck.String())
 		}
-		msg.SetFlag(apc.LsVerChanged)
+		msg.SetFlag(apc.LsDiff)
 	}
 
 	if flagIsSet(c, listObjCachedFlag) {
@@ -449,7 +449,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 				toPrint = lst.Entries
 			}
 			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, now,
-				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
+				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
 			if err != nil {
 				return err
 			}
@@ -495,7 +495,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		return fmt.Errorf("%s/%s not found", bck.Cname(""), msg.Prefix)
 	}
 	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now,
-		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsVerChanged))
+		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
 }
 
 func lsoErr(msg *apc.LsoMsg, err error) error {

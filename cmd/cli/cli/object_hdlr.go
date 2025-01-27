@@ -22,7 +22,7 @@ import (
 // in this file: operations on objects
 
 // (compare with  archGetUsage)
-const objGetUsage = "get an object, a shard, an archived file, or a range of bytes from all of the above;\n" +
+const objGetUsage = "Get an object, a shard, an archived file, or a range of bytes from all of the above;\n" +
 	indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
 	indent4 + "\tassorted options further include:\n" +
 	indent4 + "\t- '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);\n" +
@@ -57,7 +57,7 @@ const objPromoteUsage = "PROMOTE target-accessible files and directories.\n" +
 	indent1 + "\t- 'promote /tmp/subdir ais://nnn/aaa/'\t - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3\n" +
 	indent1 + "Other supported options follow below."
 
-const objRmUsage = "remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +
+const objRmUsage = "Remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +
 	indent1 + "\t- 'rm ais://nnn --all'\t- remove all objects from the bucket ais://nnn;\n" +
 	indent1 + "\t- 'rm s3://abc' --all\t- remove all objects including those that are not _present_ in the cluster;\n" +
 	indent1 + "\t- 'rm gs://abc --prefix images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
@@ -66,7 +66,7 @@ const objRmUsage = "remove object or selected objects from the specified bucket,
 	indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
-const concatUsage = "append a file, a directory, or multiple files and/or directories\n" +
+const concatUsage = "Append a file, a directory, or multiple files and/or directories\n" +
 	indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
 	indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory."
 
@@ -203,7 +203,7 @@ var (
 
 	objectCmdSetCustom = cli.Command{
 		Name:      commandSetCustom,
-		Usage:     "set object's custom properties",
+		Usage:     "Set object's custom properties",
 		ArgsUsage: setCustomArgument,
 		Flags:     objectCmdsFlags[commandSetCustom],
 		Action:    setCustomPropsHandler,
@@ -229,7 +229,7 @@ var (
 
 	objectCmd = cli.Command{
 		Name:  commandObject,
-		Usage: "put, get, list, rename, remove, and other operations on objects",
+		Usage: "PUT, GET, list, rename, remove, and other operations on objects",
 		Subcommands: []cli.Command{
 			objectCmdGet,
 			bucketsObjectsCmdList,
@@ -244,7 +244,7 @@ var (
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
 				Name:         commandRename,
-				Usage:        "move/rename object",
+				Usage:        "Move (rename) object",
 				ArgsUsage:    renameObjectArgument,
 				Flags:        objectCmdsFlags[commandRename],
 				Action:       mvObjectHandler,
@@ -252,7 +252,7 @@ var (
 			},
 			{
 				Name:         commandCat,
-				Usage:        "cat an object (i.e., print its contents to STDOUT)",
+				Usage:        "Print object's content to STDOUT (same as Linux shell 'cat')",
 				ArgsUsage:    objectArgument,
 				Flags:        objectCmdsFlags[commandCat],
 				Action:       catHandler,

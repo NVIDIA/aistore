@@ -1,6 +1,6 @@
 // Package core_test provides tests for cluster package
 /*
-* Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core_test
 

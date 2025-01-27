@@ -68,12 +68,12 @@ var (
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
-		Usage:  "show ETL(s)",
+		Usage:  "Show ETL(s)",
 		Action: etlListHandler,
 		Subcommands: []cli.Command{
 			{
 				Name:      cmdDetails,
-				Usage:     "show ETL details",
+				Usage:     "Show ETL details",
 				ArgsUsage: etlNameArgument,
 				Action:    etlShowDetailsHandler,
 			},
@@ -81,7 +81,7 @@ var (
 	}
 	stopCmdETL = cli.Command{
 		Name:         cmdStop,
-		Usage:        "stop ETL",
+		Usage:        "Stop ETL",
 		ArgsUsage:    etlNameListArgument,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
@@ -89,7 +89,7 @@ var (
 	}
 	startCmdETL = cli.Command{
 		Name:         cmdStart,
-		Usage:        "start ETL",
+		Usage:        "Start ETL",
 		ArgsUsage:    etlNameArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
@@ -97,7 +97,7 @@ var (
 	}
 	removeCmdETL = cli.Command{
 		Name:         commandRemove,
-		Usage:        "remove ETL",
+		Usage:        "Remove ETL",
 		ArgsUsage:    etlNameArgument,
 		Action:       etlRemoveHandler,
 		BashComplete: etlIDCompletions,
@@ -105,17 +105,17 @@ var (
 	}
 	initCmdETL = cli.Command{
 		Name:  cmdInit,
-		Usage: "start ETL job: 'spec' job (requires pod yaml specification) or 'code' job (with transforming function or script in a local file)",
+		Usage: "Start ETL job: 'spec' job (requires pod yaml specification) or 'code' job (with transforming function or script in a local file)",
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdSpec,
-				Usage:  "start ETL job with YAML Pod specification",
+				Usage:  "Start ETL job with YAML Pod specification",
 				Flags:  etlSubFlags[cmdSpec],
 				Action: etlInitSpecHandler,
 			},
 			{
 				Name:   cmdCode,
-				Usage:  "start ETL job using the specified transforming function or script",
+				Usage:  "Start ETL job using the specified transforming function or script",
 				Flags:  etlSubFlags[cmdCode],
 				Action: etlInitCodeHandler,
 			},
@@ -123,14 +123,14 @@ var (
 	}
 	objCmdETL = cli.Command{
 		Name:         cmdObject,
-		Usage:        "transform object",
+		Usage:        "Transform object",
 		ArgsUsage:    etlNameArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
 		BashComplete: etlIDCompletions,
 	}
 	bckCmdETL = cli.Command{
 		Name:         cmdBucket,
-		Usage:        "transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix')",
+		Usage:        "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix')",
 		ArgsUsage:    etlNameArgument + " " + bucketObjectSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[cmdBucket],
@@ -138,7 +138,7 @@ var (
 	}
 	logsCmdETL = cli.Command{
 		Name:         cmdViewLogs,
-		Usage:        "view ETL logs",
+		Usage:        "View ETL logs",
 		ArgsUsage:    etlNameArgument + " " + optionalTargetIDArgument,
 		Action:       etlLogsHandler,
 		BashComplete: etlIDCompletions,
@@ -146,7 +146,7 @@ var (
 	// subcommands
 	etlCmd = cli.Command{
 		Name:  commandETL,
-		Usage: "execute custom transformations on objects",
+		Usage: "Execute custom transformations on objects",
 		Subcommands: []cli.Command{
 			initCmdETL,
 			showCmdETL,

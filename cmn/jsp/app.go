@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 

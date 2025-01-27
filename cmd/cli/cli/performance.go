@@ -70,7 +70,7 @@ var (
 	}
 	showCounters = cli.Command{
 		Name: cmdShowCounters,
-		Usage: "show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:\n" +
+		Usage: "Show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:\n" +
 			indent2 + "\t- numbers of list-objects requests;\n" +
 			indent2 + "\t- (GET, PUT, etc.) cumulative and average sizes;\n" +
 			indent2 + "\t- associated error counters, if any, and more.",
@@ -81,7 +81,7 @@ var (
 	}
 	showThroughput = cli.Command{
 		Name:         cmdShowThroughput,
-		Usage:        "show GET and PUT throughput, associated (cumulative, average) sizes and counters",
+		Usage:        "Show GET and PUT throughput, associated (cumulative, average) sizes and counters",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showThroughputHandler,
@@ -89,7 +89,7 @@ var (
 	}
 	showLatency = cli.Command{
 		Name:         cmdShowLatency,
-		Usage:        "show GET, PUT, and APPEND latencies and average sizes",
+		Usage:        "Show GET, PUT, and APPEND latencies and average sizes",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showLatencyHandler,
@@ -97,7 +97,7 @@ var (
 	}
 	showCmdMpathCapacity = cli.Command{
 		Name:         cmdCapacity,
-		Usage:        "show target mountpaths, disks, and used/available capacity",
+		Usage:        "Show target mountpaths, disks, and used/available capacity",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        append(showPerfFlags, mountpathFlag),
 		Action:       showMpathCapHandler,

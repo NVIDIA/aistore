@@ -30,14 +30,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const archBucketUsage = "archive selected or matching objects from " + bucketObjectSrcArgument + " as\n" +
+const archBucketUsage = "Archive selected or matching objects from " + bucketObjectSrcArgument + " as\n" +
 	indent1 + archExts + "-formatted object (a.k.a. shard),\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t- 'archive bucket ais://src ais://dst/a.tar.lz4 --template \"shard-{001..997}\"'\n" +
 	indent1 + "\t- 'archive bucket \"ais://src/shard-{001..997}\" ais://dst/a.tar.lz4'\t- same as above (notice double quotes)\n" +
 	indent1 + "\t- 'archive bucket \"ais://src/shard-{998..999}\" ais://dst/a.tar.lz4 --append-or-put'\t- append (ie., archive) 2 more objects"
 
-const archPutUsage = "archive a file, a directory, or multiple files and/or directories as\n" +
+const archPutUsage = "Archive a file, a directory, or multiple files and/or directories as\n" +
 	indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
 	indent1 + "\tBoth APPEND (to an existing shard) and PUT (a new version of the shard) are supported.\n" +
 	indent1 + "\tExamples:\n" +
@@ -52,7 +52,7 @@ const archPutUsage = "archive a file, a directory, or multiple files and/or dire
 	indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details)."
 
 // (compare with  objGetUsage)
-const archGetUsage = "get a shard and extract its content; get an archived file;\n" +
+const archGetUsage = "Get a shard and extract its content; get an archived file;\n" +
 	indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
 	indent4 + "\tassorted options further include:\n" +
 	indent4 + "\t- '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);\n" +
@@ -68,7 +68,7 @@ const archGetUsage = "get a shard and extract its content; get an archived file;
 	indent4 + "\t- ais://abc/trunk-0123.tar 222.tar --archregx=file45 --archmode=wdskey - return 222.tar with all file45.* files --/--\n" +
 	indent4 + "\t- ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--"
 
-const genShardsUsage = "generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
+const genShardsUsage = "Generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
 	indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
 	indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
 	indent4 + "\t(notice quotation marks in both cases)"
@@ -144,7 +144,7 @@ var (
 	// archive ls
 	archLsCmd = cli.Command{
 		Name:         cmdList,
-		Usage:        "list archived content (supported formats: " + archFormats + ")",
+		Usage:        "List archived content (supported formats: " + archFormats + ")",
 		ArgsUsage:    optionalShardArgument,
 		Flags:        rmFlags(bucketCmdsFlags[commandList], listArchFlag), // is implied
 		Action:       listArchHandler,
@@ -163,7 +163,7 @@ var (
 	// main `ais archive`
 	archCmd = cli.Command{
 		Name:   commandArch,
-		Usage:  "archive multiple objects from a given bucket; archive local files and directories; list archived content",
+		Usage:  "Archive multiple objects from a given bucket; archive local files and directories; list archived content",
 		Action: archUsageHandler,
 		Subcommands: []cli.Command{
 			archBucketCmd,

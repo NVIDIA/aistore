@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -76,7 +76,7 @@ var (
 			makeAlias(showCmdConfig, "", true, commandShow), // alias for `ais show`
 			{
 				Name:         cmdCluster,
-				Usage:        "configure AIS cluster",
+				Usage:        "Configure AIS cluster",
 				ArgsUsage:    keyValuePairsArgument,
 				Flags:        configCmdsFlags[cmdCluster],
 				Action:       setCluConfigHandler,
@@ -84,7 +84,7 @@ var (
 			},
 			{
 				Name:         cmdNode,
-				Usage:        "configure AIS node",
+				Usage:        "Configure AIS node",
 				ArgsUsage:    nodeConfigArgument,
 				Flags:        configCmdsFlags[cmdNode],
 				Action:       setNodeConfigHandler,
@@ -92,7 +92,7 @@ var (
 			},
 			{
 				Name:         cmdReset,
-				Usage:        "reset (cluster | node | CLI) configuration to system defaults",
+				Usage:        "Reset (cluster | node | CLI) configuration to system defaults",
 				ArgsUsage:    optionalNodeIDArgument,
 				Action:       resetConfigHandler,
 				BashComplete: showConfigCompletions, // `cli  cluster  p[...]   t[...]`
@@ -106,19 +106,19 @@ var (
 	// cli
 	clicfgCmd = cli.Command{
 		Name:   cmdCLI,
-		Usage:  "display and change AIS CLI configuration",
+		Usage:  "Display and change AIS CLI configuration",
 		Action: showCfgCLI,
 		Flags:  clicfgCmdFlags[cmdCLIShow],
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdCLIShow,
-				Usage:  "display CLI configuration",
+				Usage:  "Display CLI configuration",
 				Flags:  clicfgCmdFlags[cmdCLIShow],
 				Action: showCfgCLI,
 			},
 			{
 				Name:         cmdCLISet,
-				Usage:        "change CLI configuration",
+				Usage:        "Update CLI configuration",
 				ArgsUsage:    keyValuePairsArgument,
 				Flags:        clicfgCmdFlags[cmdCLISet],
 				Action:       setCfgCLI,
@@ -126,7 +126,7 @@ var (
 			},
 			{
 				Name:   cmdCLIReset,
-				Usage:  "reset CLI configurations to system defaults",
+				Usage:  "Reset CLI configurations to system defaults",
 				Action: resetCfgCLI,
 			},
 		},

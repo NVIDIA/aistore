@@ -28,7 +28,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const showJobUsage = "show running and/or finished jobs\n" +
+const showJobUsage = "Show running and/or finished jobs\n" +
 	indent1 + "\t- 'show job tco-cysbohAGL'\t- show a given (multi-object copy/transform) job identified by its unique ID;\n" +
 	indent1 + "\t- 'show job copy-listrange'\t- show all running multi-object copies;\n" +
 	indent1 + "\t- 'show job copy-objects'\t- same as above (using display name);\n" +
@@ -134,7 +134,7 @@ var (
 
 	showCmdStorage = cli.Command{
 		Name:      commandStorage,
-		Usage:     "show storage usage and utilization, disks and mountpaths",
+		Usage:     "Show storage usage and utilization, disks and mountpaths",
 		ArgsUsage: optionalTargetIDArgument,
 		Flags:     storageFlags[commandStorage],
 		Action:    showStorageHandler,
@@ -147,7 +147,7 @@ var (
 	}
 	showCmdObject = cli.Command{
 		Name:         cmdObject,
-		Usage:        "show object properties",
+		Usage:        "Show object properties",
 		ArgsUsage:    objectArgument,
 		Flags:        showCmdsFlags[cmdObject],
 		Action:       showObjectHandler,
@@ -155,7 +155,7 @@ var (
 	}
 	showCmdCluster = cli.Command{
 		Name:         cmdCluster,
-		Usage:        "main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)",
+		Usage:        "Main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)",
 		ArgsUsage:    showClusterArgument,
 		Flags:        showCmdsFlags[cmdCluster],
 		Action:       showClusterHandler,
@@ -163,7 +163,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         cmdSmap,
-				Usage:        "show cluster map (Smap)",
+				Usage:        "Show cluster map (Smap)",
 				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        showCmdsFlags[cmdSmap],
 				Action:       showSmapHandler,
@@ -171,7 +171,7 @@ var (
 			},
 			{
 				Name:         cmdBMD,
-				Usage:        "show bucket metadata (BMD)",
+				Usage:        "Show bucket metadata (BMD)",
 				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        showCmdsFlags[cmdBMD],
 				Action:       showBMDHandler,
@@ -179,7 +179,7 @@ var (
 			},
 			{
 				Name:      cmdConfig,
-				Usage:     "show cluster and node configuration",
+				Usage:     "Show cluster and node configuration",
 				ArgsUsage: showClusterConfigArgument,
 				Flags:     showCmdsFlags[cmdConfig],
 				Action:    showClusterConfigHandler,
@@ -189,7 +189,7 @@ var (
 	}
 	showCmdBucket = cli.Command{
 		Name:         cmdBucket,
-		Usage:        "show bucket properties",
+		Usage:        "Show bucket properties",
 		ArgsUsage:    bucketAndPropsArgument,
 		Flags:        showCmdsFlags[cmdBucket],
 		Action:       showBckPropsHandler,
@@ -197,7 +197,7 @@ var (
 	}
 	showCmdConfig = cli.Command{
 		Name:         cmdConfig,
-		Usage:        "show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
+		Usage:        "Show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[cmdConfig],
 		Action:       showAnyConfigHandler,
@@ -205,7 +205,7 @@ var (
 	}
 	showCmdRemoteAIS = cli.Command{
 		Name:      cmdShowRemoteAIS,
-		Usage:     "show attached AIS clusters",
+		Usage:     "Show attached AIS clusters",
 		ArgsUsage: "",
 		Flags:     showCmdsFlags[cmdShowRemoteAIS],
 		Action:    showRemoteAISHandler,

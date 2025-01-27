@@ -39,7 +39,7 @@ type bsummCtx struct {
 	res     cmn.AllBsummResults
 }
 
-var scrubUsage = "check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more\n" +
+var scrubUsage = "Check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
 	indent1 + "\t* ais scrub \t- same as above;\n" +
@@ -61,13 +61,13 @@ var (
 
 	mpathCmd = cli.Command{
 		Name:   cmdMountpath,
-		Usage:  "show and attach/detach target mountpaths",
+		Usage:  "Show and attach/detach target mountpaths",
 		Action: showMpathHandler,
 		Subcommands: []cli.Command{
 			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
 			{
 				Name:         cmdMpathAttach,
-				Usage:        "attach mountpath to a given target node",
+				Usage:        "Attach mountpath to a given target node",
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathAttach],
 				Action:       mpathAttachHandler,
@@ -75,14 +75,14 @@ var (
 			},
 			{
 				Name:         cmdMpathEnable,
-				Usage:        "(re)enable target's mountpath",
+				Usage:        "(Re)enable target's mountpath",
 				ArgsUsage:    nodeMountpathPairArgument,
 				Action:       mpathEnableHandler,
 				BashComplete: suggestMpathEnable,
 			},
 			{
 				Name:         cmdMpathDetach,
-				Usage:        "detach mountpath from a target node (disable and remove it from the target's volume)",
+				Usage:        "Detach mountpath from a target node (disable and remove it from the target's volume)",
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags["default"],
 				Action:       mpathDetachHandler,
@@ -90,7 +90,7 @@ var (
 			},
 			{
 				Name:         cmdMpathDisable,
-				Usage:        "disable mountpath (deactivate but keep in a target's volume for possible future activation)",
+				Usage:        "Disable mountpath (deactivate but keep in a target's volume for possible future activation)",
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags["default"],
 				Action:       mpathDisableHandler,
@@ -101,7 +101,7 @@ var (
 			//
 			{
 				Name: cmdMpathRescanDisks,
-				Usage: "re-resolve (mountpath, filesystem) to its underlying disk(s) and revalidate the disks\n" +
+				Usage: "Re-resolve (mountpath, filesystem) to its underlying disk(s) and revalidate the disks\n" +
 					indent1 + "\t" + advancedUsageOnly,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags["default"],
@@ -110,7 +110,7 @@ var (
 			},
 			{
 				Name:         cmdMpathFshc,
-				Usage:        "run filesystem health checker (FSHC) to test selected mountpath for read and write errors",
+				Usage:        "Run filesystem health checker (FSHC) to test selected mountpath for read and write errors",
 				ArgsUsage:    nodeMountpathPairArgument,
 				Action:       mpathFshcHandler,
 				BashComplete: suggestMpathActive,
@@ -128,7 +128,7 @@ var (
 	}
 	cleanupCmd = cli.Command{
 		Name:         cmdStgCleanup,
-		Usage:        "remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
+		Usage:        "Remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
 		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        cleanupFlags,
 		Action:       cleanupStorageHandler,

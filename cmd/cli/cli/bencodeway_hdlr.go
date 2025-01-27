@@ -14,12 +14,12 @@ import (
 	"github.com/urfave/cli"
 )
 
-const mirrorUsage = "configure (or unconfigure) bucket as n-way mirror, and run the corresponding batch job, e.g.:\n" +
+const mirrorUsage = "Configure (or unconfigure) bucket as n-way mirror, and run the corresponding batch job, e.g.:\n" +
 	indent1 + "\t- 'ais start mirror ais://m --copies 3'\t- configure ais://m as a 3-way mirror;\n" +
 	indent1 + "\t- 'ais start mirror ais://m --copies 1'\t- configure ais://m for no redundancy (no extra copies).\n" +
 	indent1 + "(see also: 'ais start ec-encode')"
 
-const bencodeUsage = "erasure code entire bucket, e.g.:\n" +
+const bencodeUsage = "Erasure code entire bucket, e.g.:\n" +
 	indent1 + "\t- 'ais start ec-encode ais://nnn -d 8 -p 2'\t- erasure-code ais://nnn for 8 data and 2 parity slices;\n" +
 	indent1 + "\t- 'ais start ec-encode ais://nnn --data-slices 8 --parity-slices 2'\t- same as above;\n" +
 	indent1 + "\t- 'ais start ec-encode ais://nnn --recover'\t- check and make sure that every ais://nnn object is properly erasure-coded.\n" +

@@ -57,17 +57,17 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	authCmdShow = cli.Command{
 		Name:  cmdAuthShow,
-		Usage: "show entity in authn",
+		Usage: "Show entity in authn",
 		Subcommands: []cli.Command{
 			{
 				Name:      cmdAuthCluster,
-				Usage:     "show AIS clusters managed by this AuthN instance",
+				Usage:     "Show AIS clusters managed by this AuthN instance",
 				ArgsUsage: showAuthClusterArgument,
 				Action:    wrapAuthN(showAuthClusterHandler),
 			},
 			{
 				Name:         cmdAuthRole,
-				Usage:        "show existing AuthN roles",
+				Usage:        "Show existing AuthN roles",
 				ArgsUsage:    showAuthRoleArgument,
 				Flags:        authFlags[flagsAuthRoleShow],
 				Action:       wrapAuthN(showAuthRoleHandler),
@@ -75,14 +75,14 @@ var (
 			},
 			{
 				Name:      cmdAuthUser,
-				Usage:     "show user list and details",
+				Usage:     "Show user list and details",
 				Flags:     authFlags[flagsAuthUserShow],
 				ArgsUsage: showAuthUserListArgument,
 				Action:    wrapAuthN(showAuthUserHandler),
 			},
 			{
 				Name:   cmdAuthConfig,
-				Usage:  "show AuthN server configuration",
+				Usage:  "Show AuthN server configuration",
 				Flags:  authFlags[flagsAuthConfShow],
 				Action: wrapAuthN(showAuthConfigHandler),
 			},
@@ -91,18 +91,18 @@ var (
 
 	authCmd = cli.Command{
 		Name:  commandAuth,
-		Usage: "add/remove/show users, manage user roles, manage access to AIS clusters",
+		Usage: "Add/remove/show users, manage user roles, manage access to AIS clusters",
 		Subcommands: []cli.Command{
 			// show
 			authCmdShow,
 			// add
 			{
 				Name:  cmdAuthAdd,
-				Usage: "add AuthN entity: user, role, AIS cluster",
+				Usage: "Add AuthN entity: user, role, AIS cluster",
 				Subcommands: []cli.Command{
 					{
 						Name:         cmdAuthUser,
-						Usage:        "add a new user",
+						Usage:        "Add a new user",
 						ArgsUsage:    addAuthUserArgument,
 						Flags:        authFlags[cmdAuthUser],
 						Action:       wrapAuthN(addAuthUserHandler),
@@ -110,13 +110,13 @@ var (
 					},
 					{
 						Name:      cmdAuthCluster,
-						Usage:     "add AIS cluster (to authenticate access to buckets and to the cluster)",
+						Usage:     "Add AIS cluster (to authenticate access to buckets and to the cluster)",
 						ArgsUsage: addAuthClusterArgument,
 						Action:    wrapAuthN(addAuthClusterHandler),
 					},
 					{
 						Name:         cmdAuthRole,
-						Usage:        "create a new role",
+						Usage:        "Create a new role",
 						ArgsUsage:    addSetAuthRoleArgument,
 						Flags:        authFlags[flagsAuthRoleAddSet],
 						Action:       wrapAuthN(addAuthRoleHandler),
@@ -127,32 +127,32 @@ var (
 			// rm
 			{
 				Name:  cmdAuthRemove,
-				Usage: "remove an entity from AuthN",
+				Usage: "Remove an entity from AuthN",
 				Subcommands: []cli.Command{
 					{
 						Name:         cmdAuthUser,
-						Usage:        "remove an existing user",
+						Usage:        "Remove an existing user",
 						ArgsUsage:    deleteAuthUserArgument,
 						Action:       wrapAuthN(deleteUserHandler),
 						BashComplete: oneUserCompletions,
 					},
 					{
 						Name:         cmdAuthCluster,
-						Usage:        "remove AIS cluster",
+						Usage:        "Remove AIS cluster",
 						ArgsUsage:    deleteAuthClusterArgument,
 						Action:       wrapAuthN(deleteAuthClusterHandler),
 						BashComplete: oneClusterCompletions,
 					},
 					{
 						Name:         cmdAuthRole,
-						Usage:        "remove an existing role",
+						Usage:        "Remove an existing role",
 						ArgsUsage:    deleteAuthRoleArgument,
 						Action:       wrapAuthN(deleteRoleHandler),
 						BashComplete: oneRoleCompletions,
 					},
 					{
 						Name:      cmdAuthToken,
-						Usage:     "revoke AuthN token",
+						Usage:     "Revoke AuthN token",
 						Flags:     authFlags[flagsAuthRevokeToken],
 						ArgsUsage: deleteAuthTokenArgument,
 						Action:    wrapAuthN(revokeTokenHandler),
@@ -162,24 +162,24 @@ var (
 			// set
 			{
 				Name:  cmdAuthSet,
-				Usage: "update AuthN configuration and its entities: users, roles, and AIS clusters",
+				Usage: "Update AuthN configuration and its entities: users, roles, and AIS clusters",
 				Subcommands: []cli.Command{
 					{
 						Name:         cmdAuthConfig,
-						Usage:        "update AuthN server configuration",
+						Usage:        "Update AuthN server configuration",
 						Action:       wrapAuthN(setAuthConfigHandler),
 						BashComplete: suggestUpdatableAuthNConfig,
 					},
 					{
 						Name:         cmdAuthCluster,
-						Usage:        "update AIS cluster configuration (the cluster must be previously added to AuthN)",
+						Usage:        "Update AIS cluster configuration (the cluster must be previously added to AuthN)",
 						ArgsUsage:    addAuthClusterArgument,
 						Action:       wrapAuthN(updateAuthClusterHandler),
 						BashComplete: oneClusterCompletions,
 					},
 					{
 						Name:         cmdAuthUser,
-						Usage:        "update an existing user",
+						Usage:        "Update an existing user",
 						ArgsUsage:    addAuthUserArgument,
 						Flags:        authFlags[cmdAuthUser],
 						Action:       wrapAuthN(updateAuthUserHandler),
@@ -187,7 +187,7 @@ var (
 					},
 					{
 						Name:         cmdAuthRole,
-						Usage:        "update an existing role for all users that have it",
+						Usage:        "Update an existing role for all users that have it",
 						ArgsUsage:    addSetAuthRoleArgument,
 						Flags:        authFlags[flagsAuthRoleAddSet],
 						Action:       wrapAuthN(updateAuthRoleHandler),
@@ -198,14 +198,14 @@ var (
 			// login, logout
 			{
 				Name:      cmdAuthLogin,
-				Usage:     "log in with existing user ID and password",
+				Usage:     "Log in with existing user ID and password",
 				Flags:     authFlags[flagsAuthUserLogin],
 				ArgsUsage: userLoginArgument,
 				Action:    wrapAuthN(loginUserHandler),
 			},
 			{
 				Name:   cmdAuthLogout,
-				Usage:  "log out",
+				Usage:  "Log out",
 				Flags:  authFlags[flagsAuthUserLogout],
 				Action: wrapAuthN(logoutUserHandler),
 			},

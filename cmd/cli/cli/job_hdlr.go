@@ -26,7 +26,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const prefetchUsage = "prefetch one remote bucket, multiple remote buckets, or\n" +
+const prefetchUsage = "Prefetch one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
 	indent1 + "\t- 'prefetch gs://abc'\t- prefetch entire bucket (all gs://abc objects that are _not_ in-cluster);\n" +
 	indent1 + "\t- 'prefetch gs://abc --num-workers 32'\t- same as above with 32 concurrent (prefetching) workers;\n" +
@@ -38,16 +38,16 @@ const prefetchUsage = "prefetch one remote bucket, multiple remote buckets, or\n
 	indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
-const blobDownloadUsage = "run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
+const blobDownloadUsage = "Run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
 	indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
 	indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- run 4 concurrent readers to download 2 (listed) blobs\n" +
 	indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor."
 
-const resilverUsage = "resilver user data on a given target (or all targets in the cluster); entails:\n" +
+const resilverUsage = "Resilver user data on a given target (or all targets in the cluster); entails:\n" +
 	indent1 + "\t- fix data redundancy with respect to bucket configuration;\n" +
 	indent1 + "\t- remove migrated objects and old/obsolete workfiles."
 
-const stopUsage = "terminate a single batch job or multiple jobs, e.g.:\n" +
+const stopUsage = "Terminate a single batch job or multiple jobs, e.g.:\n" +
 	indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given (multi-object copy/transform) job identified by its unique ID;\n" +
 	indent1 + "\t- 'stop copy-listrange'\t- terminate all multi-object copies;\n" +
 	indent1 + "\t- 'stop copy-objects'\t- same as above (using display name);\n" +
@@ -63,7 +63,7 @@ const stopUsage = "terminate a single batch job or multiple jobs, e.g.:\n" +
 var (
 	jobCmd = cli.Command{
 		Name:        commandJob,
-		Usage:       "monitor, query, start/stop and manage jobs and eXtended actions (xactions)",
+		Usage:       "Monitor, query, start/stop and manage jobs and eXtended actions (xactions)",
 		Subcommands: jobSub,
 	}
 	// NOTE: `appendJobSub` (below) expects jobSub[0] to be the `jobStartSub`
@@ -135,7 +135,7 @@ var (
 
 	jobStartRebalance = cli.Command{
 		Name:      commandRebalance,
-		Usage:     "rebalance ais cluster",
+		Usage:     "Rebalance ais cluster",
 		ArgsUsage: bucketEmbeddedPrefixArg,
 		Flags:     startSpecialFlags[commandRebalance],
 		Action:    startRebHandler,
@@ -168,13 +168,13 @@ var (
 
 	jobStartSub = cli.Command{
 		Name:  commandStart,
-		Usage: "run batch job",
+		Usage: "Run batch job",
 		Subcommands: []cli.Command{
 			prefetchStartCmd,
 			blobDownloadCmd,
 			{
 				Name:      cmdDownload,
-				Usage:     "download files and objects from remote sources",
+				Usage:     "Download files and objects from remote sources",
 				ArgsUsage: startDownloadArgument,
 				Flags:     startSpecialFlags[cmdDownload],
 				Action:    startDownloadHandler,
@@ -182,14 +182,14 @@ var (
 			dsortStartCmd,
 			{
 				Name:         cmdLRU,
-				Usage:        "run LRU eviction",
+				Usage:        "Run LRU eviction",
 				Flags:        startSpecialFlags[cmdLRU],
 				Action:       startLRUHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
 				Name:  commandETL,
-				Usage: "start ETL",
+				Usage: "Start ETL",
 				Subcommands: []cli.Command{
 					initCmdETL,
 					objCmdETL,

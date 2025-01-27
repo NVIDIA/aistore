@@ -107,7 +107,7 @@ var (
 // `ais help [COMMAND]`
 var helpCommand = cli.Command{
 	Name:      "help",
-	Usage:     "show a list of commands; show help for a given command",
+	Usage:     "Show a list of commands; show help for a given command",
 	ArgsUsage: "[COMMAND]",
 	Action:    helpCmdHandler,
 	BashComplete: func(c *cli.Context) {

@@ -271,7 +271,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 	scr.Cname = bck.Cname("")
 	propNames := []string{apc.GetPropsName, apc.GetPropsSize, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsLocation, apc.GetPropsCustom}
 	if bck.IsRemote() {
-		lsmsg.Flags |= apc.LsVerChanged
+		lsmsg.Flags |= apc.LsDiff
 		lsmsg.AddProps(propNames...)
 		ctx.haveRemote.Store(true) // columns version-changed etc.
 	} else {

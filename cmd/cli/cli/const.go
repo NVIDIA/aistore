@@ -270,7 +270,7 @@ const (
 	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
 
 	// Perf
-	showPerfArgument = "show performance counters, throughput, latency, disks, used/available capacities (" + tabtab + " specific view)"
+	showPerfArgument = "Show performance counters, throughput, latency, disks, used/available capacities (" + tabtab + " specific view)"
 
 	// ETL
 	etlNameArgument     = "ETL_NAME"
@@ -393,32 +393,32 @@ var (
 	//
 	// scope 'all'
 	//
-	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "include all object properties: name, size, atime, location, copies, custom (user-defined), and more"}
-	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "include all jobs: running, finished, and aborted"}
-	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "include all running jobs"}
-	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "include all finished jobs"}
-	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use with extreme caution!)"}
-	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "download all logs"}
+	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "Include all object properties: name, size, atime, location, copies, custom (user-defined), and more"}
+	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "Include all jobs: running, finished, and aborted"}
+	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "Include all running jobs"}
+	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "Include all finished jobs"}
+	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "Remove all objects (use with extreme caution!)"}
+	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "Download all logs"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
-		Usage: "depending on the context, list:\n" +
+		Usage: "Depending on the context, list:\n" +
 			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are not in-cluster\n" +
 			indent4 + "\t- all objects in a given accessible (visible) bucket, including remote objects and misplaced copies",
 	}
 	copyAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "copy all objects from a remote bucket including those that are not present (not cached) in cluster",
+		Usage: "Copy all objects from a remote bucket including those that are not present (not cached) in cluster",
 	}
 	etlAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "transform all objects from a remote bucket including those that are not present (not cached) in cluster",
+		Usage: "Transform all objects from a remote bucket including those that are not present (not cached) in cluster",
 	}
 
 	// obj props
 	objPropsFlag = cli.StringFlag{
 		Name: "props",
-		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.:\n" +
+		Usage: "Comma-separated list of object properties including name, size, version, copies, and more; e.g.:\n" +
 			indent4 + "\t--props all\n" +
 			indent4 + "\t--props name,size,cached\n" +
 			indent4 + "\t--props \"ec, copies, custom, location\"",
@@ -427,27 +427,27 @@ var (
 	// prefix (to match)
 	listObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
-		Usage: "list objects with names starting with the specified prefix, e.g.:\n" +
+		Usage: "List objects with names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory\n" +
 			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter 'c'",
 	}
 	getObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
-		Usage: "get objects with names starting with the specified prefix, e.g.:\n" +
+		Usage: "Get objects with names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have their names (relative to this directory) starting with 'c';\n" +
 			indent4 + "\t'--prefix \"\"' - get entire bucket (all objects)",
 	}
 	verbObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
-		Usage: "select virtual directories or objects with names starting with the specified prefix, e.g.:\n" +
+		Usage: "Select virtual directories or objects with names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c'\t- matches names 'a/b/c/d', 'a/b/cdef', and similar;\n" +
 			indent4 + "\t'--prefix a/b/c/'\t- only matches objects from the virtual directory a/b/c/",
 	}
 
 	bsummPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
-		Usage: "for each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
+		Usage: "For each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have names (relative to this directory) starting with the letter c",
 	}
@@ -457,12 +457,12 @@ var (
 	//
 	refreshFlag = DurationFlag{
 		Name: "refresh",
-		Usage: "time interval for continuous monitoring; can be also used to update progress bar (at a given interval);\n" +
+		Usage: "Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	countFlag = cli.IntFlag{
 		Name: "count",
-		Usage: "used together with " + qflprn(refreshFlag) + " to limit the number of generated reports, e.g.:\n" +
+		Usage: "Used together with " + qflprn(refreshFlag) + " to limit the number of generated reports, e.g.:\n" +
 			indent4 + "\t '--refresh 10 --count 5' - run 5 times with 10s interval",
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
@@ -470,11 +470,11 @@ var (
 	//
 	// regex and friends
 	//
-	regexFlag = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
+	regexFlag = cli.StringFlag{Name: "regex", Usage: "Regular expression to match and select items in question"}
 
 	regexLsAnyFlag = cli.StringFlag{
 		Name: regexFlag.Name,
-		Usage: "regular expression; use it to match either bucket names or objects in a given bucket, e.g.:\n" +
+		Usage: "Regular expression; use it to match either bucket names or objects in a given bucket, e.g.:\n" +
 			indent4 + "\tais ls --regex \"(m|n)\"\t- match buckets such as ais://nnn, s3://mmm, etc.;\n" +
 			indent4 + "\tais ls ais://nnn --regex \"^A\"\t- match object names starting with letter A",
 	}
@@ -483,7 +483,7 @@ var (
 
 	regexColsFlag = cli.StringFlag{
 		Name: regexFlag.Name,
-		Usage: "regular expression to select table columns (case-insensitive), e.g.:\n" +
+		Usage: "Regular expression to select table columns (case-insensitive), e.g.:\n" +
 			indent4 + "\t --regex \"put|err\" - show PUT (count), PUT (total size), and all supported error counters;\n" +
 			indent4 + "\t --regex \"Put|ERR\" - same as above;\n" +
 			indent4 + "\t --regex \"[a-z]\" - show all supported metrics, including those that have zero values across all nodes;\n" +
@@ -492,67 +492,67 @@ var (
 	}
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
-		Usage: "regular expression to select jobs by name, kind, or description, e.g.: --regex \"ec|mirror|elect\"",
+		Usage: "Regular expression to select jobs by name, kind, or description, e.g.: --regex \"ec|mirror|elect\"",
 	}
 
-	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
-	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
-	noFooterFlag = cli.BoolFlag{Name: "no-footers,F", Usage: "display tables without footers"}
+	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "JSON input/output"}
+	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "Display tables without headers"}
+	noFooterFlag = cli.BoolFlag{Name: "no-footers,F", Usage: "Display tables without footers"}
 
-	progressFlag = cli.BoolFlag{Name: "progress", Usage: "show progress bar(s) and progress of execution in real time"}
-	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
+	progressFlag = cli.BoolFlag{Name: "progress", Usage: "Show progress bar(s) and progress of execution in real time"}
+	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "Preview the results without really running the action"}
 
-	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose output"}
-	verboseJobFlag = cli.BoolFlag{Name: verboseFlag.Name, Usage: "show extended statistics"}
+	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "Verbose output"}
+	verboseJobFlag = cli.BoolFlag{Name: verboseFlag.Name, Usage: "Show extended statistics"}
 
-	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose (quiet) output, minimized reporting, fewer warnings"}
+	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "Non-verbose (quiet) output, minimized reporting, fewer warnings"}
 
 	silentFlag = cli.BoolFlag{
 		Name:  "silent",
-		Usage: "server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)",
+		Usage: "Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)",
 	}
 
-	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
+	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "Show average GET, PUT, etc. request size"}
 
 	ignoreErrorFlag = cli.BoolFlag{
 		Name:  "ignore-error",
-		Usage: "ignore \"soft\" failures such as \"bucket already exists\", etc.",
+		Usage: "Ignore \"soft\" failures such as \"bucket already exists\", etc.",
 	}
 
 	// TODO: ditto `--select` (to select object props)
 
 	bucketPropsFlag = cli.StringFlag{
 		Name: "props",
-		Usage: "create bucket with the specified (non-default) properties, e.g.:\n" +
+		Usage: "Create bucket with the specified (non-default) properties, e.g.:\n" +
 			indent1 + "\t* ais create ais://mmm --props=\"versioning.validate_warm_get=false versioning.synchronize=true\"\n" +
 			indent1 + "\t* ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'\n" +
 			indent1 + "\t(tip: use '--props' to override properties that a new bucket inherits from cluster config at creation time;\n" +
 			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",
 	}
 
-	forceFlag    = cli.BoolFlag{Name: "force,f", Usage: "force execution of the command " + advancedUsageOnly}
+	forceFlag    = cli.BoolFlag{Name: "force,f", Usage: "Force execution of the command " + advancedUsageOnly}
 	forceClnFlag = cli.BoolFlag{
 		Name: forceFlag.Name,
-		Usage: "disregard interrupted rebalance and possibly other conditions preventing full cleanup\n" +
+		Usage: "Disregard interrupted rebalance and possibly other conditions preventing full cleanup\n" +
 			indent1 + "\t(tip: check 'ais config cluster lru.dont_evict_time' as well)",
 	}
 
 	// TODO: rm smaller than
-	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "remove zero size objects " + advancedUsageOnly}
+	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "Remove zero size objects " + advancedUsageOnly}
 
 	smallSizeFlag = cli.StringFlag{
 		Name:  "small-size",
-		Usage: "count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)",
+		Usage: "Count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)",
 	}
 	largeSizeFlag = cli.StringFlag{
 		Name:  "large-size",
-		Usage: "count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)",
+		Usage: "Count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)",
 	}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
 		Name: "units",
-		Usage: "show statistics and/or parse command-line specified sizes using one of the following units of measurement:\n" +
+		Usage: "Show statistics and/or parse command-line specified sizes using one of the following units of measurement:\n" +
 			indent4 + "\tiec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
 			indent4 + "\tsi  - SI (metric) format, e.g.: KB, MB, GB\n" +
 			indent4 + "\traw - do not convert to (or from) human-readable format",
@@ -560,13 +560,13 @@ var (
 
 	dateTimeFlag = cli.BoolFlag{
 		Name:  "date-time",
-		Usage: "override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well",
+		Usage: "Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well",
 	}
 
 	// list-objects
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
-		Usage: "list bucket's content alphabetically starting with the first name _after_ the specified",
+		Usage: "List bucket's content alphabetically starting with the first name _after_ the specified",
 	}
 
 	//
@@ -574,7 +574,7 @@ var (
 	//
 	objLimitFlag = cli.IntFlag{
 		Name: "limit",
-		Usage: "the maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),\n" +
+		Usage: "The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),\n" +
 			indent4 + "\te.g.:\n" +
 			indent4 + "\t- 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'\t- list no more than 1234 objects\n" +
 			indent4 + "\t- 'ais get gs://abc /dev/null --prefix dir --limit 1234'\t- get --/--\n" +
@@ -582,38 +582,38 @@ var (
 	}
 	pageSizeFlag = cli.IntFlag{
 		Name: "page-size",
-		Usage: "maximum number of object names per page; when the flag is omitted or 0 (zero)\n" +
+		Usage: "Maximum number of object names per page; when the flag is omitted or 0 (zero)\n" +
 			indent4 + "\tthe maximum is defined by the corresponding backend; see also '--max-pages' and '--paged'",
 	}
 	maxPagesFlag = cli.IntFlag{
 		Name: "max-pages",
-		Usage: "maximum number of pages to display (see also '--page-size' and '--limit')\n" +
+		Usage: "Maximum number of pages to display (see also '--page-size' and '--limit')\n" +
 			indent4 + "\te.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7",
 	}
 	pagedFlag = cli.BoolFlag{
 		Name: "paged",
-		Usage: "list objects page by page - one page at a time (see also '--page-size' and '--limit')\n" +
+		Usage: "List objects page by page - one page at a time (see also '--page-size' and '--limit')\n" +
 			indent4 + "\tnote: recommended for use with very large buckets",
 	}
 	countAndTimeFlag = cli.BoolFlag{
 		Name:  "count-only",
-		Usage: "print only the resulting number of listed objects and elapsed time",
+		Usage: "Print only the resulting number of listed objects and elapsed time",
 	}
 
 	// bucket summary
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",
-		Usage: "show object numbers, bucket sizes, and used capacity;\n" +
+		Usage: "Show object numbers, bucket sizes, and used capacity;\n" +
 			indent4 + "\tnote: applies only to buckets and objects that are _present_ in the cluster",
 	}
 
 	showUnmatchedFlag = cli.BoolFlag{
 		Name:  "show-unmatched",
-		Usage: "list also objects that were not matched by regex and/or template (range)",
+		Usage: "List also objects that were not matched by regex and/or template (range)",
 	}
 	diffFlag = cli.BoolFlag{
 		Name: "diff",
-		Usage: "perform a bidirectional diff between in-cluster and remote content, which further entails:\n" +
+		Usage: "Perform a bidirectional diff between in-cluster and remote content, which further entails:\n" +
 			indent4 + "\t- detecting remote version changes (a.k.a. out-of-band updates), and\n" +
 			indent4 + "\t- remotely deleted objects (out-of-band deletions (*));\n" +
 			indent4 + "\t  the option requires remote backends supporting some form of versioning (e.g., object version, checksum, and/or ETag);\n" +
@@ -624,7 +624,7 @@ var (
 
 	useInventoryFlag = cli.BoolFlag{
 		Name: "inventory",
-		Usage: "list objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance\n" +
+		Usage: "List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance\n" +
 			indent4 + "\tboost when used with very large s3 buckets; e.g. usage:\n" +
 			indent4 + "\t  1) 'ais ls s3://abc --inventory'\n" +
 			indent4 + "\t  2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'\n" +
@@ -632,41 +632,41 @@ var (
 	}
 	invNameFlag = cli.StringFlag{
 		Name:  "inv-name", // compare w/ HdrInvName
-		Usage: "bucket inventory name (optional; system default name is '.inventory')",
+		Usage: "Bucket inventory name (optional; system default name is '.inventory')",
 	}
 	invIDFlag = cli.StringFlag{
 		Name:  "inv-id", // cpmpare w/ HdrInvID
-		Usage: "bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
+		Usage: "Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
 
-	keepMDFlag = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
+	keepMDFlag = cli.BoolFlag{Name: "keep-md", Usage: "Keep bucket metadata"}
 
-	copiesFlag = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
+	copiesFlag = cli.IntFlag{Name: "copies", Usage: "Number of object replicas", Value: 1, Required: true}
 
-	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,d", Value: 2, Usage: "number of data slices"}
-	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,p", Value: 2, Usage: "number of parity slices"}
+	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,d", Value: 2, Usage: "Number of data slices"}
+	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,p", Value: 2, Usage: "Number of parity slices"}
 
 	checkAndRecoverFlag = cli.BoolFlag{
 		Name:  "recover",
-		Usage: "check and make sure that each and every object is properly erasure coded",
+		Usage: "Check and make sure that each and every object is properly erasure coded",
 	}
 
-	compactPropFlag = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
+	compactPropFlag = cli.BoolFlag{Name: "compact,c", Usage: "Display properties grouped in human-readable mode"}
 
 	nameOnlyFlag = cli.BoolFlag{
 		Name:  "name-only",
-		Usage: "faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)",
+		Usage: "Faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)",
 	}
 
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{
 		Name: "severity",
-		Usage: "log severity is either 'i' or 'info' (default, can be omitted), or 'error', whereby error logs contain\n" +
+		Usage: "Log severity is either 'i' or 'info' (default, can be omitted), or 'error', whereby error logs contain\n" +
 			indent4 + "\tonly errors and warnings, e.g.: '--severity info', '--severity error', '--severity e'",
 	}
 	logFlushFlag = DurationFlag{
 		Name:  "log-flush",
-		Usage: "can be used in combination with " + qflprn(refreshFlag) + " to override configured '" + nodeLogFlushName + "'",
+		Usage: "Can be used in combination with " + qflprn(refreshFlag) + " to override configured '" + nodeLogFlushName + "'",
 		Value: logFlushTime,
 	}
 
@@ -675,36 +675,36 @@ var (
 
 	dloadTimeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
 		Name: "download-timeout",
-		Usage: "server-side time limit for downloading a single file from remote source;\n" +
+		Usage: "Server-side time limit for downloading a single file from remote source;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	dloadProgressFlag = cli.StringFlag{ // TODO ditto
 		Name: "progress-interval",
-		Usage: "download progress interval for continuous monitoring;\n" +
+		Usage: "Download progress interval for continuous monitoring;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 		Value: dload.DownloadProgressInterval.String(),
 	}
 
 	limitConnectionsFlag = cli.IntFlag{
 		Name:  "max-conns",
-		Usage: "maximum number of connections each target can make concurrently (up to num mountpaths)",
+		Usage: "Maximum number of connections each target can make concurrently (up to num mountpaths)",
 	}
 	limitBytesPerHourFlag = cli.StringFlag{
 		Name: "limit-bph",
-		Usage: "maximum download speed, or more exactly: maximum download size per target (node) per hour, e.g.:\n" +
+		Usage: "Maximum download speed, or more exactly: maximum download size per target (node) per hour, e.g.:\n" +
 			indent4 + "\t'--limit-bph 1GiB' (or same: '--limit-bph 1073741824');\n" +
 			indent4 + "\tthe value is parsed in accordance with the '--units' (see '--units' for details);\n" +
 			indent4 + "\tomitting the flag or specifying '--limit-bph 0' means that download won't be throttled",
 	}
 	objectsListFlag = cli.StringFlag{
 		Name:  "object-list,from",
-		Usage: "path to file containing JSON array of object names to download",
+		Usage: "Path to file containing JSON array of object names to download",
 	}
 
 	// sync
 	latestVerFlag = cli.BoolFlag{
 		Name: "latest",
-		Usage: "check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version\n" +
+		Usage: "Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version\n" +
 			indent1 + "\tfrom the associated remote bucket;\n" +
 			indent1 + "\tthe option provides operation-level control over object versioning (and version synchronization)\n" +
 			indent1 + "\twithout the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';\n" +
@@ -717,7 +717,7 @@ var (
 	}
 	syncFlag = cli.BoolFlag{
 		Name: "sync",
-		Usage: "fully synchronize in-cluster content of a given remote bucket with its (Cloud or remote AIS) source;\n" +
+		Usage: "Fully synchronize in-cluster content of a given remote bucket with its (Cloud or remote AIS) source;\n" +
 			indent1 + "\tthe option is, effectively, a stronger variant of the '--latest' (option):\n" +
 			indent1 + "\tin addition to bringing existing in-cluster objects in-sync with their respective out-of-band updates (if any)\n" +
 			indent1 + "\tit also entails removing in-cluster objects that are no longer present remotely;\n" +
@@ -730,51 +730,51 @@ var (
 	}
 
 	// gen-shards
-	fsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
-	fcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files in a shard"}
+	fsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "Size of the files in a shard"}
+	fcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "Number of files in a shard"}
 
 	dfltFext  = ".test"
 	fextsFlag = cli.StringFlag{
 		Name: "fext",
-		Usage: "comma-separated list of file extensions (default \"" + dfltFext + "\"), e.g.:\n" +
+		Usage: "Comma-separated list of file extensions (default \"" + dfltFext + "\"), e.g.:\n" +
 			indent4 + "\t--fext .mp3\n" +
 			indent4 + "\t--fext '.mp3,.json,.cls' (or, same: \".mp3,  .json,  .cls\")",
 	}
 
 	// dsort
-	dsortLogFlag  = cli.StringFlag{Name: "log", Usage: "filename to log metrics (statistics)"}
-	dsortSpecFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to JSON or YAML job specification"}
+	dsortLogFlag  = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
+	dsortSpecFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "Path to JSON or YAML job specification"}
 
 	cleanupFlag = cli.BoolFlag{
 		Name:  "cleanup",
-		Usage: "remove old bucket and create it again (warning: removes the entire content of the old bucket)",
+		Usage: "Remove old bucket and create it again (warning: removes the entire content of the old bucket)",
 	}
 
 	// waiting
 	waitJobXactFinishedFlag = DurationFlag{
 		Name: "timeout",
-		Usage: "maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;\n" +
+		Usage: "Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitPodReadyTimeoutFlag = DurationFlag{
 		Name: waitJobXactFinishedFlag.Name,
-		Usage: "ais target waiting time for POD to become ready;\n" +
+		Usage: "AIS target waiting time for POD to become ready;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitFlag = cli.BoolFlag{
 		Name:  "wait",
-		Usage: "wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)",
+		Usage: "Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)",
 	}
 	dontWaitFlag = cli.BoolFlag{
 		Name: "dont-wait",
-		Usage: "when _summarizing_ buckets do not wait for the respective job to finish -\n" +
+		Usage: "When _summarizing_ buckets do not wait for the respective job to finish -\n" +
 			indent4 + "\tuse the job's UUID to query the results interactively",
 	}
 
 	// multi-object / multi-file
 	listFlag = cli.StringFlag{
 		Name: "list",
-		Usage: "comma-separated list of object or file names, e.g.:\n" +
+		Usage: "Comma-separated list of object or file names, e.g.:\n" +
 			indent4 + "\t--list 'o1,o2,o3'\n" +
 			indent4 + "\t--list \"abc/1.tar, abc/1.cls, abc/1.jpeg\"\n" +
 			indent4 + "\tor, when listing files and/or directories:\n" +
@@ -782,7 +782,7 @@ var (
 	}
 	templateFlag = cli.StringFlag{
 		Name: "template",
-		Usage: "template to match object or file names; may contain prefix (that could be empty) with zero or more ranges\n" +
+		Usage: "Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges\n" +
 			"\t(with optional steps and gaps), e.g.:\n" +
 			indent4 + "\t--template \"\" # (an empty or '*' template matches eveything)\n" +
 			indent4 + "\t--template 'dir/subdir/'\n" +
@@ -805,10 +805,10 @@ var (
 	// read range (aka range read)
 	offsetFlag = cli.StringFlag{
 		Name:  "offset",
-		Usage: "object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)"}
+		Usage: "Object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)"}
 	lengthFlag = cli.StringFlag{
 		Name:  "length",
-		Usage: "object read length; default formatting: IEC (use '--units' to override)",
+		Usage: "Object read length; default formatting: IEC (use '--units' to override)",
 	}
 
 	// NOTE:
@@ -820,44 +820,44 @@ var (
 	// See also: apc.Flt* enum.
 	headObjPresentFlag = cli.BoolFlag{
 		Name: "check-cached",
-		Usage: "check whether a given named object is present in cluster\n" +
+		Usage: "Check whether a given named object is present in cluster\n" +
 			indent1 + "\t(applies only to buckets with remote backend)",
 	}
 
 	_onlyin           = "only in-cluster objects - only those objects from the respective remote bucket that are present (\"cached\")"
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "list " + _onlyin,
+		Usage: "List " + _onlyin,
 	}
 	getObjCachedFlag = cli.BoolFlag{
 		Name:  listObjCachedFlag.Name,
-		Usage: "get " + _onlyin,
+		Usage: "Get " + _onlyin,
 	}
 	scrubObjCachedFlag = cli.BoolFlag{
 		Name:  listObjCachedFlag.Name,
-		Usage: "visit " + _onlyin,
+		Usage: "Visit " + _onlyin,
 	}
 
 	// when '--all' is used for/by another flag
 	objNotCachedPropsFlag = cli.BoolFlag{
 		Name:  "not-cached",
-		Usage: "show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
+		Usage: "Show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
 	}
 
 	dontHeadSrcDstBucketsFlag = cli.BoolFlag{
 		Name:  "skip-lookup",
-		Usage: "skip checking source and destination buckets' existence (trading off extra lookup for performance)\n",
+		Usage: "Skip checking source and destination buckets' existence (trading off extra lookup for performance)\n",
 	}
 	dontHeadRemoteFlag = cli.BoolFlag{
 		Name: "skip-lookup",
-		Usage: "do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:\n" +
+		Usage: "Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:\n" +
 			indent4 + "\t 1) adding remote bucket to aistore without first checking the bucket's accessibility\n" +
 			indent4 + "\t    (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)\n" +
 			indent4 + "\t 2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed",
 	}
 	dontAddRemoteFlag = cli.BoolFlag{
 		Name: "dont-add",
-		Usage: "list remote bucket without adding it to cluster's metadata - e.g.:\n" +
+		Usage: "List remote bucket without adding it to cluster's metadata - e.g.:\n" +
 			indent1 + "\t  - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);\n" +
 			indent1 + "\t  - then, if we ask aistore to list remote buckets: `ais ls s3://abc --all'\n" +
 			indent1 + "\t    the bucket will be added (in effect, it'll be created);\n" +
@@ -865,146 +865,147 @@ var (
 	}
 	addRemoteFlag = cli.BoolFlag{
 		Name: "add",
-		Usage: "add remote bucket to cluster's metadata\n" +
+		Usage: "Add remote bucket to cluster's metadata\n" +
 			indent1 + "\t  - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);\n" +
 			indent1 + "\t  - most of the time, there's no need to worry about it as aistore handles presence/non-presence\n" +
 			indent1 + "\t    transparently behind the scenes;\n" +
 			indent1 + "\t  - but if you do want to (explicltly) add the bucket, you could also use '--add' option",
 	}
 
-	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "enable"}
-	disableFlag = cli.BoolFlag{Name: "disable", Usage: "disable"}
-	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
+	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "Enable"}
+	disableFlag = cli.BoolFlag{Name: "disable", Usage: "Disable"}
+	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "Recursive operation"}
 
 	noRecursFlag = cli.BoolFlag{
 		Name: "non-recursive,nr",
-		Usage: "non-recursive operation, e.g.:\n" +
+		Usage: "Non-recursive operation, e.g.:\n" +
 			"\t- 'ais ls gs://bucket/prefix --nr'\t- list objects and/or virtual subdirectories with names starting with the specified prefix;\n" +
 			"\t- 'ais ls gs://bucket/prefix/ --nr'\t- list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;\n" +
 			"\t- 'ais prefetch s3://bck/abcd --nr'\t- prefetch a single named object (see 'ais prefetch --help' for details);\n" +
 			"\t- 'ais rmo gs://bucket/prefix --nr'\t- remove a single object with the specified name (see 'ais rmo --help' for details)",
 	}
-	noDirsFlag = cli.BoolFlag{Name: "no-dirs", Usage: "do not return virtual subdirectories (applies to remote buckets only)"}
+	noDirsFlag = cli.BoolFlag{Name: "no-dirs", Usage: "Do not return virtual subdirectories (applies to remote buckets only)"}
 
-	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
-	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
-	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "ais target designated to carry out the entire operation"}
+	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "Overwrite destination, if exists"}
+	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "Delete successfully promoted source"}
+	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "AIS target designated to carry out the entire operation"}
 
 	notFshareFlag = cli.BoolFlag{
 		Name: "not-file-share",
-		Usage: "each target must act autonomously skipping file-share auto-detection and promoting the entire source " +
+		Usage: "Each target must act autonomously skipping file-share auto-detection and promoting the entire source " +
 			"(as seen from the target)",
 	}
 
-	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' to all questions"}
+	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "Assume 'yes' to all questions"}
 
 	// usage: STDIN, blob
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
+		Usage: "Chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
 	}
 
 	blobThresholdFlag = cli.StringFlag{
 		Name: "blob-threshold",
-		Usage: "utilize built-in blob-downloader for remote objects greater than the specified (threshold) size\n" +
+		Usage: "Utilize built-in blob-downloader for remote objects greater than the specified (threshold) size\n" +
 			indent1 + "\tin IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
 	}
 
 	blobDownloadFlag = cli.BoolFlag{
 		Name:  apc.ActBlobDl,
-		Usage: "utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects",
+		Usage: "Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects",
 	}
 
 	// num-workers
 	numBlobWorkersFlag = cli.IntFlag{
 		Name:  "num-workers",
-		Usage: "number of concurrent blob-downloading workers (readers); system default when omitted or zero",
+		Usage: "Number of concurrent blob-downloading workers (readers); system default when omitted or zero",
 	}
 
 	noWorkers = indent4 + "\tuse (-1) to indicate single-threaded serial execution (ie., no workers);\n"
 
 	numListRangeWorkersFlag = cli.IntFlag{
 		Name: numBlobWorkersFlag.Name,
-		Usage: "number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;\n" +
+		Usage: "Number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;\n" +
 			noWorkers +
 			indent4 + "\tany positive value will be adjusted _not_ to exceed the number of target CPUs",
 	}
 	numGenShardWorkersFlag = cli.IntFlag{
 		Name:  numBlobWorkersFlag.Name,
 		Value: 10,
-		Usage: "limits the number of shards created concurrently",
+		Usage: "Limits the number of shards created concurrently",
 	}
 	numPutWorkersFlag = cli.IntFlag{
 		Name:  numBlobWorkersFlag.Name,
 		Value: 10,
-		Usage: "number of concurrent client-side workers (to execute PUT or append requests);\n" +
+		Usage: "Number of concurrent client-side workers (to execute PUT or append requests);\n" +
 			noWorkers +
 			indent4 + "\tany positive value will be adjusted _not_ to exceed twice the number of client CPUs",
 	}
 
 	// validate
-	cksumFlag = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
+	cksumFlag = cli.BoolFlag{Name: "checksum", Usage: "Validate checksum"}
 
 	// ais put
 	putObjCksumText     = indent4 + "\tand provide it as part of the PUT request for subsequent validation on the server side"
 	putObjCksumFlags    = initPutObjCksumFlags()
 	putObjDfltCksumFlag = cli.BoolFlag{
 		Name: "compute-checksum",
-		Usage: "[end-to-end protection] compute client-side checksum configured for the destination bucket\n" +
-			putObjCksumText,
+		Usage: "Compute client-side checksum - one of the supported checksum types that is currently configured for the destination bucket -\n" +
+			putObjCksumText + "\n" +
+			indent4 + "\t(see also: \"end-to-end protection\")",
 	}
 	putRetriesFlag = cli.IntFlag{
 		Name:  "retries",
 		Value: 1,
-		Usage: "when failing to PUT retry the operation up to so many times (with increasing timeout if timed out)",
+		Usage: "When failing to PUT retry the operation up to so many times (with increasing timeout if timed out)",
 	}
 
 	appendConcatFlag = cli.BoolFlag{
 		Name:  "append",
-		Usage: "concatenate files: append a file or multiple files as a new _or_ to an existing object",
+		Usage: "Concatenate files: append a file or multiple files as a new _or_ to an existing object",
 	}
 
 	skipVerCksumFlag = cli.BoolFlag{
 		Name:  "skip-vc",
-		Usage: "skip loading object metadata (and the associated checksum & version related processing)",
+		Usage: "Skip loading object metadata (and the associated checksum & version related processing)",
 	}
 
 	// auth
-	descRoleFlag      = cli.StringFlag{Name: "description,desc", Usage: "role description"}
-	clusterRoleFlag   = cli.StringFlag{Name: "cluster", Usage: "associate role with the specified AIS cluster"}
-	clusterTokenFlag  = cli.StringFlag{Name: "cluster", Usage: "issue token for the cluster"}
-	bucketRoleFlag    = cli.StringFlag{Name: "bucket", Usage: "associate a role with the specified bucket"}
+	descRoleFlag      = cli.StringFlag{Name: "description,desc", Usage: "Role description"}
+	clusterRoleFlag   = cli.StringFlag{Name: "cluster", Usage: "Associate role with the specified AIS cluster"}
+	clusterTokenFlag  = cli.StringFlag{Name: "cluster", Usage: "Issue token for the cluster"}
+	bucketRoleFlag    = cli.StringFlag{Name: "bucket", Usage: "Associate a role with the specified bucket"}
 	clusterFilterFlag = cli.StringFlag{
 		Name:  "cluster",
-		Usage: "comma-separated list of AIS cluster IDs (type ',' for an empty cluster ID)",
+		Usage: "Comma-separated list of AIS cluster IDs (type ',' for an empty cluster ID)",
 	}
 
 	// archive
-	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
+	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "List archived content (see docs/archive.md for details)"}
 
 	archpathFlag = cli.StringFlag{ // for apc.QparamArchpath; PUT/append => shard
 		Name:  "archpath",
-		Usage: "filename in an object (\"shard\") formatted as: " + archFormats,
+		Usage: "Filename in an object (\"shard\") formatted as: " + archFormats,
 	}
 	archpathGetFlag = cli.StringFlag{ // for apc.QparamArchpath; GET from shard
 		Name: archpathFlag.Name,
-		Usage: "extract the specified file from an object (\"shard\") formatted as: " + archFormats + ";\n" +
+		Usage: "Extract the specified file from an object (\"shard\") formatted as: " + archFormats + ";\n" +
 			indent4 + "\tsee also: '--archregx'",
 	}
 	archmimeFlag = cli.StringFlag{ // for apc.QparamArchmime
 		Name: "archmime",
-		Usage: "expected format (mime type) of an object (\"shard\") formatted as: " + archFormats + ";\n" +
+		Usage: "Expected format (mime type) of an object (\"shard\") formatted as: " + archFormats + ";\n" +
 			indent4 + "\tespecially usable for shards with non-standard extensions\n",
 	}
 	archregxFlag = cli.StringFlag{ // for apc.QparamArchregx
 		Name: "archregx",
-		Usage: "specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression\n" +
+		Usage: "Specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression\n" +
 			indent4 + "\tto select possibly multiple matching archived files from a given shard;\n" +
 			indent4 + "\tis used in combination with '--archmode' (\"matching mode\") option",
 	}
 	archmodeFlag = cli.StringFlag{ // for apc.QparamArchmode
 		Name: "archmode",
-		Usage: "enumerated \"matching mode\" that tells aistore how to handle '--archregx', one of:\n" +
+		Usage: "Enumerated \"matching mode\" that tells aistore how to handle '--archregx', one of:\n" +
 			indent4 + "\t  * regexp - general purpose regular expression;\n" +
 			indent4 + "\t  * prefix - matching filename starts with;\n" +
 			indent4 + "\t  * suffix - matching filename ends with;\n" +
@@ -1018,47 +1019,47 @@ var (
 	// client side
 	extractFlag = cli.BoolFlag{
 		Name:  "extract,x",
-		Usage: "extract all files from archive(s)",
+		Usage: "Extract all files from archive(s)",
 	}
 
 	inclSrcBucketNameFlag = cli.BoolFlag{
 		Name:  "include-src-bck",
-		Usage: "prefix the names of archived files with the source bucket name",
+		Usage: "Prefix the names of archived files with the source bucket name",
 	}
 
 	archSrcDirNameFlag = cli.BoolFlag{
 		Name:  "include-src-dir",
-		Usage: "prefix the names of archived files with the (root) source directory",
+		Usage: "Prefix the names of archived files with the (root) source directory",
 	}
 	putSrcDirNameFlag = cli.BoolFlag{
 		Name:  archSrcDirNameFlag.Name,
-		Usage: "prefix destination object names with the source directory",
+		Usage: "Prefix destination object names with the source directory",
 	}
 
 	// 'ais archive put': conditional APPEND
 	archAppendOrPutFlag = cli.BoolFlag{
 		Name: "append-or-put",
-		Usage: "append to an existing destination object (\"archive\", \"shard\") iff exists; otherwise PUT a new archive (shard);\n" +
+		Usage: "Append to an existing destination object (\"archive\", \"shard\") iff exists; otherwise PUT a new archive (shard);\n" +
 			indent4 + "\tnote that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted",
 	}
 	// 'ais archive put': unconditional APPEND: destination must exist
 	archAppendOnlyFlag = cli.BoolFlag{
 		Name:  "append",
-		Usage: "add newly archived content to the destination object (\"archive\", \"shard\") that must exist",
+		Usage: "Add newly archived content to the destination object (\"archive\", \"shard\") that must exist",
 	}
 
 	continueOnErrorFlag = cli.BoolFlag{
 		Name:  "cont-on-err",
-		Usage: "keep running archiving xaction (job) in presence of errors in a any given multi-object transaction",
+		Usage: "Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction",
 	}
 	// end archive
 
 	// AuthN
-	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}
-	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
+	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "Path to file"}
+	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "User password"}
 	expireFlag    = DurationFlag{
 		Name: "expire,e",
-		Usage: "token expiration time, '0' - for never-expiring token;\n" +
+		Usage: "Token expiration time, '0' - for never-expiring token;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 		Value: 24 * time.Hour,
 	}
@@ -1066,11 +1067,11 @@ var (
 	// Copy Bucket
 	copyDryRunFlag = cli.BoolFlag{
 		Name:  "dry-run",
-		Usage: "show total size of new objects without really creating them",
+		Usage: "Show total size of new objects without really creating them",
 	}
 	copyPrependFlag = cli.StringFlag{
 		Name: "prepend",
-		Usage: "prefix to prepend to every object name during operation (copy or transform), e.g.:\n" +
+		Usage: "Prefix to prepend to every object name during operation (copy or transform), e.g.:\n" +
 			indent4 + "\t--prepend=abc\t- prefix all object names with \"abc\"\n" +
 			indent4 + "\t--prepend=abc/\t- use \"abc\" as a virtual directory (note trailing filepath separator)\n" +
 			indent4 + "\t\t- during 'copy', this flag applies to copied objects\n" +
@@ -1078,7 +1079,7 @@ var (
 	}
 
 	// ETL
-	etlExtFlag  = cli.StringFlag{Name: "ext", Usage: "mapping from old to new extensions of transformed objects' names"}
+	etlExtFlag  = cli.StringFlag{Name: "ext", Usage: "Mapping from old to new extensions of transformed objects' names"}
 	etlNameFlag = cli.StringFlag{
 		Name:     "name",
 		Usage:    "unique ETL name (leaving this field empty will have unique ID auto-generated)",
@@ -1086,26 +1087,26 @@ var (
 	}
 	etlBucketRequestTimeout = DurationFlag{
 		Name: "etl-timeout",
-		Usage: "server-side timeout transforming a single object;\n" +
+		Usage: "Server-side timeout transforming a single object;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	fromFileFlag = cli.StringFlag{
 		Name:     "from-file",
-		Usage:    "absolute path to the file with the spec/code for ETL",
+		Usage:    "Absolute path to the file with the spec/code for ETL",
 		Required: true,
 	}
 	depsFileFlag = cli.StringFlag{
 		Name:  "deps-file",
-		Usage: "absolute path to the file with dependencies that must be installed before running the code",
+		Usage: "Absolute path to the file with dependencies that must be installed before running the code",
 	}
 	runtimeFlag = cli.StringFlag{
 		Name:     "runtime",
-		Usage:    "environment used to run the provided code (currently supported: python3.8v2, python3.10v2, python3.11v2)",
+		Usage:    "Python version used to run the provided code (currently supported: python3.8v2, python3.10v2, python3.11v2)",
 		Required: true,
 	}
 	commTypeFlag = cli.StringFlag{
 		Name: "comm-type",
-		Usage: "enumerated communication type used between aistore cluster and ETL containers that run custom transformations:\n" +
+		Usage: "Enumerated communication type used between aistore cluster and ETL containers that run custom transformations:\n" +
 			indent4 + "\t - 'hpush' or 'hpush://' - ETL container provides HTTP PUT handler that'll be invoked upon every request to transform\n" +
 			indent4 + "\t -  '' - same as 'hpush://' (default, can be omitted)\n" +
 			indent4 + "\t - 'hpull' or 'hpull://' - same, but ETL container is expected to provide HTTP GET endpoint\n" +
@@ -1118,7 +1119,7 @@ var (
 	funcTransformFlag = cli.StringFlag{
 		Name:  "transform",
 		Value: "transform", // NOTE: default name of the transform() function
-		Usage: "receives and _transforms_ the payload",
+		Usage: "Receives and _transforms_ the payload",
 	}
 	argTypeFlag = cli.StringFlag{
 		Name: "arg-type",
@@ -1131,19 +1132,19 @@ var (
 	// Node
 	roleFlag = cli.StringFlag{
 		Name: "role", Required: true,
-		Usage: "role of this AIS daemon: proxy or target",
+		Usage: "Role of this AIS daemon: proxy or target",
 	}
 	nonElectableFlag = cli.BoolFlag{
 		Name:  "non-electable",
-		Usage: "this proxy must not be elected as primary " + advancedUsageOnly,
+		Usage: "This proxy must not be elected as primary " + advancedUsageOnly,
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
-		Usage: "do _not_ run global rebalance after putting node in maintenance " + advancedUsageOnly,
+		Usage: "Do _not_ run global rebalance after putting node in maintenance " + advancedUsageOnly,
 	}
 	mountpathLabelFlag = cli.StringFlag{
 		Name: "label",
-		Usage: "an optional _mountpath label_ to facilitate extended functionality and context, including:\n" +
+		Usage: "An optional _mountpath label_ to facilitate extended functionality and context, including:\n" +
 			indent2 + "1. device sharing (or non-sharing) between multiple mountpaths;\n" +
 			indent2 + "2. associated storage class (one of the enumerated ones, as in: \"different storage media for different datasets\");\n" +
 			indent2 + "3. parallelism multiplier - a number of goroutines to concurrently read, write, and/or traverse the mountpath in question\n" +
@@ -1154,55 +1155,55 @@ var (
 	}
 	noResilverFlag = cli.BoolFlag{
 		Name:  "no-resilver",
-		Usage: "do _not_ resilver data off of the mountpaths that are being disabled or detached",
+		Usage: "Do _not_ resilver data off of the mountpaths that are being disabled or detached",
 	}
 	noShutdownFlag = cli.BoolFlag{
 		Name:  "no-shutdown",
-		Usage: "do not shutdown node upon decommissioning it from the cluster",
+		Usage: "Do not shutdown node upon decommissioning it from the cluster",
 	}
 	rmUserDataFlag = cli.BoolFlag{
 		Name:  "rm-user-data",
-		Usage: "remove all user data when decommissioning node from the cluster",
+		Usage: "Remove all user data when decommissioning node from the cluster",
 	}
 	keepInitialConfigFlag = cli.BoolFlag{
 		Name: "keep-initial-config",
-		Usage: "keep the original plain-text configuration the node was deployed with\n" +
+		Usage: "Keep the original plain-text configuration the node was deployed with\n" +
 			indent4 + "\t(the option can be used to restart aisnode from scratch)",
 	}
 
 	transientFlag = cli.BoolFlag{
 		Name:  "transient",
-		Usage: "update config in memory without storing the change(s) on disk",
+		Usage: "Update config in memory without storing the change(s) on disk",
 	}
 
 	setNewCustomMDFlag = cli.BoolFlag{
 		Name:  "set-new-custom",
-		Usage: "remove existing custom keys (if any) and store new custom metadata",
+		Usage: "Remove existing custom keys (if any) and store new custom metadata",
 	}
 
 	cliConfigPathFlag = cli.BoolFlag{
 		Name:  "path",
-		Usage: "display path to the AIS CLI configuration",
+		Usage: "Display path to the AIS CLI configuration",
 	}
 
 	errorsOnlyFlag = cli.BoolFlag{
 		Name:  "errors-only",
-		Usage: "reset only error counters",
+		Usage: "Reset only error counters",
 	}
 
 	diskSummaryFlag = cli.BoolFlag{
 		Name:  "summary",
-		Usage: "tally up target disks to show per-target read/write summary stats and average utilizations",
+		Usage: "Tally up target disks to show per-target read/write summary stats and average utilizations",
 	}
 	mountpathFlag = cli.BoolFlag{
 		Name:  "mountpath",
-		Usage: "show target mountpaths with underlying disks and used/available capacities",
+		Usage: "Show target mountpaths with underlying disks and used/available capacities",
 	}
 
 	// LRU
 	lruBucketsFlag = cli.StringFlag{
 		Name: "buckets",
-		Usage: "comma-separated list of bucket names, e.g.:\n" +
+		Usage: "Comma-separated list of bucket names, e.g.:\n" +
 			indent1 + "\t\t\t--buckets 'ais://b1,ais://b2,ais://b3'\n" +
 			indent1 + "\t\t\t--buckets \"gs://b1, s3://b2\"",
 	}

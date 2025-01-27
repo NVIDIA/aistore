@@ -26,12 +26,12 @@ const (
 )
 
 // (compare with getLogUsage)
-const getCluLogsUsage = "download log archives from all clustered nodes (one TAR.GZ per node), e.g.:\n" +
+const getCluLogsUsage = "Download log archives from all clustered nodes (one TAR.GZ per node), e.g.:\n" +
 	indent4 + "\t - 'download-logs /tmp/www' - save log archives to /tmp/www directory\n" +
 	indent4 + "\t - 'download-logs --severity w' - errors and warnings to /tmp directory\n" +
 	indent4 + "\t   (see related: 'ais log show', 'ais log get')"
 
-const shutdownUsage = "shutdown a node, gracefully or immediately;\n" +
+const shutdownUsage = "Shutdown a node, gracefully or immediately;\n" +
 	indent4 + "\tnote: upon shutdown the node won't be decommissioned - it'll remain in the cluster map\n" +
 	indent4 + "\tand can be manually restarted to rejoin the cluster at any later time;\n" +
 	indent4 + "\tsee also: 'ais advanced " + cmdRmSmap + "'"
@@ -97,26 +97,26 @@ var (
 	}
 	stopRebalance = cli.Command{
 		Name:   commandStop,
-		Usage:  "stop rebalancing ais cluster",
+		Usage:  "Stop rebalancing ais cluster",
 		Flags:  clusterCmdsFlags[commandStop],
 		Action: stopRebHandler,
 	}
 
 	clusterCmd = cli.Command{
 		Name:  commandCluster,
-		Usage: "monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
+		Usage: "Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
 		Subcommands: []cli.Command{
 			makeAlias(showCmdCluster, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      cmdCluAttach,
-				Usage:     "attach remote ais cluster",
+				Usage:     "Attach remote ais cluster",
 				ArgsUsage: attachRemoteAISArgument,
 				Flags:     clusterCmdsFlags[cmdAttach],
 				Action:    attachRemoteAISHandler,
 			},
 			{
 				Name:         cmdCluDetach,
-				Usage:        "detach remote ais cluster",
+				Usage:        "Detach remote ais cluster",
 				ArgsUsage:    detachRemoteAISArgument,
 				Flags:        clusterCmdsFlags[cmdDetach],
 				Action:       detachRemoteAISHandler,
@@ -124,13 +124,13 @@ var (
 			},
 			{
 				Name:  cmdRebalance,
-				Usage: "administratively start and stop global rebalance; show global rebalance",
+				Usage: "Administratively start and stop global rebalance; show global rebalance",
 				Subcommands: []cli.Command{
 					startRebalance,
 					stopRebalance,
 					{
 						Name:         commandShow,
-						Usage:        "show global rebalance",
+						Usage:        "Show global rebalance",
 						Flags:        clusterCmdsFlags[commandShow],
 						BashComplete: rebalanceCompletions,
 						Action:       showClusterRebalanceHandler,
@@ -139,7 +139,7 @@ var (
 			},
 			{
 				Name:         cmdPrimary,
-				Usage:        "select a new primary proxy/gateway",
+				Usage:        "Select a new primary proxy/gateway",
 				ArgsUsage:    nodeIDArgument + " [URL]",
 				Flags:        clusterCmdsFlags[cmdPrimary],
 				Action:       setPrimaryHandler,
@@ -156,31 +156,31 @@ var (
 			// cluster level (compare with the below)
 			{
 				Name:   cmdShutdown,
-				Usage:  "shut down entire cluster",
+				Usage:  "Shut down entire cluster",
 				Flags:  clusterCmdsFlags[cmdShutdown],
 				Action: clusterShutdownHandler,
 			},
 			{
 				Name:   cmdClusterDecommission,
-				Usage:  "decommission entire cluster",
+				Usage:  "Decommission entire cluster",
 				Flags:  clusterCmdsFlags[cmdClusterDecommission],
 				Action: clusterDecommissionHandler,
 			},
 			// node level
 			{
 				Name:  cmdMembership,
-				Usage: "manage cluster membership (add/remove nodes, temporarily or permanently)",
+				Usage: "Manage cluster membership (add/remove nodes, temporarily or permanently)",
 				Subcommands: []cli.Command{
 					{
 						Name:      cmdJoin,
-						Usage:     "add a node to the cluster",
+						Usage:     "Add a node to the cluster",
 						ArgsUsage: joinNodeArgument,
 						Flags:     clusterCmdsFlags[cmdJoin],
 						Action:    joinNodeHandler,
 					},
 					{
 						Name:         cmdStartMaint,
-						Usage:        "put node in maintenance mode, temporarily suspend its operation",
+						Usage:        "Put node in maintenance mode, temporarily suspend its operation",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdStartMaint],
 						Action:       nodeMaintShutDecommHandler,
@@ -188,7 +188,7 @@ var (
 					},
 					{
 						Name:         cmdStopMaint,
-						Usage:        "take node out of maintenance mode - activate",
+						Usage:        "Take node out of maintenance mode - activate",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdStopMaint],
 						Action:       nodeMaintShutDecommHandler,
@@ -196,7 +196,7 @@ var (
 					},
 					{
 						Name:         cmdNodeDecommission,
-						Usage:        "safely and permanently remove node from the cluster",
+						Usage:        "Safely and permanently remove node from the cluster",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdNodeDecommission+".node"],
 						Action:       nodeMaintShutDecommHandler,
@@ -214,7 +214,7 @@ var (
 			},
 			{
 				Name:         cmdResetStats,
-				Usage:        "reset cluster or node stats (all cumulative metrics or only errors)",
+				Usage:        "Reset cluster or node stats (all cumulative metrics or only errors)",
 				ArgsUsage:    optionalNodeIDArgument,
 				Flags:        clusterCmdsFlags[cmdResetStats],
 				Action:       resetStatsHandler,
@@ -222,7 +222,7 @@ var (
 			},
 			{
 				Name:         cmdReloadCreds,
-				Usage:        "reload (updated) backend credentials",
+				Usage:        "Reload (updated) backend credentials",
 				ArgsUsage:    "[PROVIDER]",
 				Action:       reloadCredsHandler,
 				BashComplete: suggestProvider,

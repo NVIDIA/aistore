@@ -18,26 +18,26 @@ import (
 var (
 	advancedCmd = cli.Command{
 		Name:  commandAdvanced,
-		Usage: "special commands intended for development and advanced usage",
+		Usage: "Special commands intended for development and advanced usage",
 		Subcommands: []cli.Command{
 			jobStartResilver,
 			{
 				Name:         cmdPreload,
-				Usage:        "preload object metadata into in-memory cache",
+				Usage:        "Preload object metadata into in-memory cache",
 				ArgsUsage:    bucketArgument,
 				Action:       loadLomCacheHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
 				Name:         cmdRmSmap,
-				Usage:        "immediately remove node from cluster map (beware: potential data loss!)",
+				Usage:        "Immediately remove node from cluster map (beware: potential data loss!)",
 				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
 				BashComplete: suggestAllNodes,
 			},
 			{
 				Name:   cmdRandNode,
-				Usage:  "print random node ID (by default, ID of a randomly selected target)",
+				Usage:  "Print random node ID (by default, ID of a randomly selected target)",
 				Action: randNode,
 				BashComplete: func(c *cli.Context) {
 					if c.NArg() == 0 {
@@ -47,27 +47,27 @@ var (
 			},
 			{
 				Name:         cmdRandMountpath,
-				Usage:        "print a random mountpath from a given target",
+				Usage:        "Print a random mountpath from a given target",
 				Action:       randMountpath,
 				BashComplete: suggestTargets,
 			},
 			{
 				Name:         cmdRotateLogs,
-				Usage:        "rotate aistore logs",
+				Usage:        "Rotate aistore logs",
 				ArgsUsage:    optionalNodeIDArgument,
 				Action:       rotateLogs,
 				BashComplete: suggestAllNodes,
 			},
 			{
 				Name:         cmdBackendEnable,
-				Usage:        "(re)enable cloud backend (see also: 'ais config cluster backend')",
+				Usage:        "(Re)enable cloud backend (see also: 'ais config cluster backend')",
 				ArgsUsage:    cloudProviderArg,
 				Action:       backendEnableHandler,
 				BashComplete: suggestCloudProvider,
 			},
 			{
 				Name:         cmdBackendDisable,
-				Usage:        "disable cloud backend (see also: 'ais config cluster backend')",
+				Usage:        "Disable cloud backend (see also: 'ais config cluster backend')",
 				ArgsUsage:    cloudProviderArg,
 				Action:       backendDisableHandler,
 				BashComplete: suggestCloudProvider,
