@@ -256,14 +256,14 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		name, _ = xid2Name(xid)
 	}
 	if name != "" || xid != "" {
-		return _showJobs(c, name, xid, daemonID, bck, xid == "" /*caption*/)
+		return _showJobs(c, name, xid, daemonID, bck, true /*caption*/)
 	}
 
 	// special (best-effort)
 	if xid != "" {
 		switch name {
 		case cmdDownload:
-			return _showJobs(c, cmdDownload, xid, daemonID, bck, false)
+			return _showJobs(c, cmdDownload, xid, daemonID, bck, false /*caption, here and elsewhere*/)
 		case cmdDsort:
 			return _showJobs(c, cmdDsort, xid, daemonID, bck, false)
 		case commandETL:
@@ -513,12 +513,19 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 		// a.k.a "run options"
 		// try to show more but not too much
+		nmsg := snaps[0].CtlMsg
 		switch {
+		case nmsg == "":
+			// do nothing
 		case ctlmsg == "":
-			ctlmsg = snaps[0].CtlMsg
-		case ctlmsg != snaps[0].CtlMsg && len(ctlmsg)+len(snaps[0].CtlMsg) < 60:
-			ctlmsg += "; " + snaps[0].CtlMsg
-		case !strings.HasSuffix(ctlmsg, "..."):
+			ctlmsg = nmsg
+		case strings.HasSuffix(ctlmsg, "..."):
+			// do nothing
+		case strings.Contains(ctlmsg, nmsg):
+			// do nothing
+		case len(ctlmsg)+len(nmsg) < 60:
+			ctlmsg += "; " + nmsg
+		default:
 			ctlmsg += "; ..."
 		}
 
