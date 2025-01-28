@@ -304,7 +304,7 @@ OPTIONS:
                           - all buckets, including accessible (visible) remote buckets that are not in-cluster
                           - all objects in a given accessible (visible) bucket, including remote objects and misplaced copies
    --archive              List archived content (see docs/archive.md for details)
-   --cached               List only in-cluster objects - only those objects from the respective remote bucket that are present ("cached")
+   --cached               Only list in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
    --count-only           Print only the resulting number of listed objects and elapsed time
    --diff                 Perform a bidirectional diff between in-cluster and remote content, which further entails:
                           - detecting remote version changes (a.k.a. out-of-band updates), and

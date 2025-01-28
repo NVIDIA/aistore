@@ -15,23 +15,23 @@ import (
 // naming-wise, see also: fmtLsObjStatus (cmd/cli/teb/lso.go)
 
 const (
-	colBucket        = "BUCKET"         // + [/PREFIX]
-	colObjects       = "OBJECTS"        // num listed
-	colNotIn         = "NOT-CACHED"     // "not present", "not cached", not in-cluster
-	colMisplacedNode = "MISPLACED-NODE" // cluster-wise
-	colMisplacedMp   = "MISPLACED-DISK" // local misplacement
-	colMissingCp     = "MISSING-CP"
-	colSmallSz       = "SMALL"
-	colLargeSz       = "LARGE"
-	colVchanged      = "VER-CHANGED"
-	colVremoved      = "VER-REMOVED"
+	colBucket         = "BUCKET"               // + [/PREFIX]
+	colObjects        = "OBJECTS"              // num listed
+	colNotIn          = "NOT-CACHED"           // "not present", "not cached", not in-cluster
+	colMisplacedNode  = "MISPLACED(cluster)"   // cluster-wise
+	colMisplacedMpath = "MISPLACED(mountpath)" // local misplacement
+	colMissingCp      = "MISSING-COPIES"
+	colSmallSz        = "SMALL"
+	colLargeSz        = "LARGE"
+	colVchanged       = "VER-CHANGED"
+	colVremoved       = "DELETED"
 )
 
 const (
 	ScrObjects = iota
 	ScrNotIn
 	ScrMisplacedNode
-	ScrMisplacedMp
+	ScrMisplacedMpath
 	ScrMissingCp
 	ScrSmallSz
 	ScrLargeSz
@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	ScrCols = [...]string{colObjects, colNotIn, colMisplacedNode, colMisplacedMp, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
+	ScrCols = [...]string{colObjects, colNotIn, colMisplacedNode, colMisplacedMpath, colMissingCp, colSmallSz, colLargeSz, colVchanged, colVremoved}
 	ScrNums = [ScrNumStats]int64{}
 )
 
@@ -81,7 +81,7 @@ func (h *ScrubHelper) colFirst() string {
 	}
 }
 
-func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
+func (h *ScrubHelper) MakeTab(units string, haveRemote, allColumns bool) *Table {
 	debug.Assert(len(ScrCols) == len(ScrNums))
 
 	cols := make([]*header, 1, len(ScrCols)+1)
@@ -93,7 +93,11 @@ func (h *ScrubHelper) MakeTab(units string, haveRemote bool) *Table {
 	table := newTable(cols...)
 
 	// hide assorted columns
-	h.hideMissingCp(cols, colMissingCp)
+	if !allColumns {
+		h.hideMissingCp(cols, colMisplacedNode)
+		h.hideMissingCp(cols, colMisplacedMpath)
+		h.hideMissingCp(cols, colMissingCp)
+	}
 	if !haveRemote {
 		h._hideCol(cols, colNotIn)
 		h._hideCol(cols, colVchanged)

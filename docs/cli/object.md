@@ -108,7 +108,7 @@ OPTIONS:
                         to select possibly multiple matching archived files from a given shard;
                         is used in combination with '--archmode' ("matching mode") option
    --blob-download      Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
-   --cached             Get only in-cluster objects - only those objects from the respective remote bucket that are present ("cached")
+   --cached             Only get in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
    --check-cached       Check whether a given named object is present in cluster
                         (applies only to buckets with remote backend)
    --checksum           Validate checksum

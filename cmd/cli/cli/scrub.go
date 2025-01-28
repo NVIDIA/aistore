@@ -28,13 +28,11 @@ import (
 )
 
 // [TODO]
-// - add options:
-//   --cached
-//   --locally-misplaced
-//   --checksum
-//   --fix (***)
-// - async execution, with --wait option
-// - speed-up `ls` via multiple workers (***)
+// - '--checksum' option (slow)
+// - '--fix' option (***)
+// - multiple buckets vs one-log-per-scrub-metric - a problem
+// - async execution with '--wait' option
+// - speed-up `ls` via multiple workers
 
 type (
 	_log struct {
@@ -82,6 +80,7 @@ var (
 		smallSizeFlag,
 		largeSizeFlag,
 		scrubObjCachedFlag,
+		allColumnsFlag,
 	)
 )
 
@@ -182,7 +181,7 @@ func (ctx *scrCtx) closeLogs(c *cli.Context) {
 			fmt.Fprintln(c.App.Writer, strings.Repeat("-", len(title)))
 			titled = true
 		}
-		fmt.Fprintf(c.App.Writer, "* %s objects: %s (%d record%s)\n", log.tag, log.fn, log.cnt, cos.Plural(log.cnt))
+		fmt.Fprintf(c.App.Writer, "* %s objects: \t%s (%d record%s)\n", log.tag, log.fn, log.cnt, cos.Plural(log.cnt))
 	}
 }
 
@@ -225,7 +224,7 @@ func (ctx *scrCtx) prnt() error {
 		out[i] = (*teb.ScrBp)(scr)
 	}
 	all := teb.ScrubHelper{All: out}
-	tab := all.MakeTab(ctx.units, ctx.haveRemote.Load())
+	tab := all.MakeTab(ctx.units, ctx.haveRemote.Load(), flagIsSet(ctx.c, allColumnsFlag))
 
 	return teb.Print(out, tab.Template(flagIsSet(ctx.c, noHeaderFlag)))
 }
@@ -407,9 +406,9 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 
 	// or-ing rest conditions (x num-copies)
 	if en.Status() == apc.LocMisplacedMountpath {
-		scr.Stats[teb.ScrMisplacedMp].Cnt++
-		scr.Stats[teb.ScrMisplacedMp].Siz += en.Size
-		scr.log(parent, en, teb.ScrMisplacedMp)
+		scr.Stats[teb.ScrMisplacedMpath].Cnt++
+		scr.Stats[teb.ScrMisplacedMpath].Siz += en.Size
+		scr.log(parent, en, teb.ScrMisplacedMpath)
 	}
 
 	if scr.Bck.Props.Mirror.Enabled && en.Copies < int16(scr.Bck.Props.Mirror.Copies) {

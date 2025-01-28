@@ -479,7 +479,7 @@ var (
 			indent4 + "\tais ls ais://nnn --regex \"^A\"\t- match object names starting with letter A",
 	}
 
-	// TODO: `--select` (to select columns) would sound more conventional
+	// TODO: `--select` (to select columns) would sound more conventional/idiomatic
 
 	regexColsFlag = cli.StringFlag{
 		Name: regexFlag.Name,
@@ -490,6 +490,11 @@ var (
 			indent4 + "\t --regex \"(AWS-GET$|VERSION-CHANGE$)\" - show the number object version changes (updates) and cold GETs from AWS\n" +
 			indent4 + "\t --regex \"(gcp-get$|version-change$)\" - same as above for Google Cloud ('gs://')",
 	}
+	allColumnsFlag = cli.BoolFlag{
+		Name:  "all-columns",
+		Usage: "Show all columns, including those with only zero values",
+	}
+
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
 		Usage: "Regular expression to select jobs by name, kind, or description, e.g.: --regex \"ec|mirror|elect\"",
@@ -582,7 +587,7 @@ var (
 	}
 	pageSizeFlag = cli.IntFlag{
 		Name: "page-size",
-		Usage: "Maximum number of object names per page; when the flag is omitted or 0 (zero)\n" +
+		Usage: "Maximum number of object names per page; when the flag is omitted or 0\n" +
 			indent4 + "\tthe maximum is defined by the corresponding backend; see also '--max-pages' and '--paged'",
 	}
 	maxPagesFlag = cli.IntFlag{
@@ -824,18 +829,18 @@ var (
 			indent1 + "\t(applies only to buckets with remote backend)",
 	}
 
-	_onlyin           = "only in-cluster objects - only those objects from the respective remote bucket that are present (\"cached\")"
+	_onlyin           = "in-cluster objects, i.e., objects from the respective remote bucket that are present (\"cached\") in the cluster"
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "List " + _onlyin,
+		Usage: "Only list " + _onlyin,
 	}
 	getObjCachedFlag = cli.BoolFlag{
 		Name:  listObjCachedFlag.Name,
-		Usage: "Get " + _onlyin,
+		Usage: "Only get " + _onlyin,
 	}
 	scrubObjCachedFlag = cli.BoolFlag{
 		Name:  listObjCachedFlag.Name,
-		Usage: "Visit " + _onlyin,
+		Usage: "Only visit " + _onlyin,
 	}
 
 	// when '--all' is used for/by another flag

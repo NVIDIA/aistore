@@ -95,79 +95,90 @@ For command line options and usage examples, please refer to:
 
 ```console
 $ ais scrub --help
+
 NAME:
-   ais scrub - (alias for "storage validate") check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
+   ais scrub - (alias for "storage validate") Check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
    e.g.:
      * ais storage validate                 - validate all in-cluster buckets;
      * ais scrub                            - same as above;
-     * ais storage validate ais             - validate (a.k.a. scrub) all ais buckets;
-     * ais scrub s3                         - all s3 buckets present in the cluster;
+     * ais storage validate ais             - validate (a.k.a. scrub) all ais:// buckets;
+     * ais scrub s3                         - ditto, all s3:// buckets;
      * ais scrub s3 --refresh 10            - same as above while refreshing runtime counter(s) every 10s;
      * ais scrub gs://abc/images/           - validate part of the gcp bucket under 'images/`;
      * ais scrub gs://abc --prefix images/  - same as above.
 
 USAGE:
-   ais scrub [command options] [BUCKET[/PREFIX]] or [PROVIDER]
+   ais scrub [command options] [BUCKET[/PREFIX]] [PROVIDER]
 
 OPTIONS:
-   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                          valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value          used together with '--refresh' to limit the number of generated reports, e.g.:
+   --all-columns          Show all columns, including those with only zero values
+   --cached               Only visit in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
+   --count value          Used together with '--refresh' to limit the number of generated reports, e.g.:
                            '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
-   --prefix value         for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
-                          '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
-                          a/b that have names (relative to this directory) starting with the letter c
-   --page-size value      maximum number of object names per page; when the flag is omitted or 0 (zero)
-                          the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged' (default: 0)
-   --limit value          maximum number of object names to list (0 - unlimited; see also '--max-pages')
-                          e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
-   --no-headers, -H       display tables without headers
-   --max-pages value      maximum number of pages to display (see also '--page-size' and '--limit')
+   --large-size value     Count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)
+   --limit value          The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+                          e.g.:
+                          - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+                          - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+                          - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
+   --max-pages value      Maximum number of pages to display (see also '--page-size' and '--limit')
                           e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
-   --non-recursive, --nr  non-recursive operation, e.g.:
-                          'ais ls gs://bucket/prefix --nr'  -  list objects and/or virtual subdirectories with names starting with the specified prefix;
-                          'ais ls gs://bucket/prefix/ --nr' -  list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
-                          'ais prefetch s3://bck/abcd --nr' -  prefetch a single named object (see 'ais prefetch --help' for details);
-                          'ais rmo gs://bucket/prefix --nr' -  remove a single object with the specified name (see 'ais rmo --help' for details)
-   --small-size value     count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)
-   --large-size value     count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)
-   --help, -h             show help
+   --no-headers, -H       Display tables without headers
+   --non-recursive, --nr  Non-recursive operation, e.g.:
+                          - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                          - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
+                          - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
+                          - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
+   --page-size value      Maximum number of object names per page; when the flag is omitted or 0
+                          the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged' (default: 0)
+   --prefix value         For each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                          '--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory
+                          a/b that have names (relative to this directory) starting with the letter c
+   --refresh value        Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --small-size value     Count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)
+   --help, -h             Show help
 ```
 
 Checks all objects of the bucket `BUCKET` and show number of misplaced objects, number of objects that have insufficient number of copies, etc.
 
 If optional arguments are omitted, show information about all in-cluster buckets.
 
-### Example: validate a given (prefix-defined) portion of s3 bucket
+### Example: validate a given prefix-defined portion of an  s3 bucket
 
 ```console
-$ ais storage validate s3://abc/birds
+$ ais scrub s3://data/my-prefix --large-size 500k
 
-Please wait, the operation may take some time...
+BUCKET/PREFIX        OBJECTS         NOT-CACHED      SMALL   LARGE           VER-CHANGED     DELETED
+s3://data/my-prefix  1637 (1.6GiB)   1465 (1.4GiB)   -       172 (172.0MiB)  1 (1.0MiB)      1 (1.0MiB)
 
-BUCKET          OBJECTS     MISPLACED   MISSING COPIES  ZERO SIZE  5+GB
-s3://abc        84603       0           0               0          329
+Detailed Logs
+-------------
+* not-cached objects:   /tmp/.ais-scrub-not-cached.204f71.log (1465 records)
+* large objects:        /tmp/.ais-scrub-large.204f71.log (172 records)
+* ver-changed objects:  /tmp/.ais-scrub-ver-changed.204f71.log (1 record)
+* deleted objects:      /tmp/.ais-scrub-deleted.204f71.log (1 record)
 ```
 
-### Example: same as above
+### Example: same as above but show all columns
+
+In other words, include relevant metrics that have only zero values.
 
 ```console
-$ ais storage validate s3://abc --prefix birds
+$ ais scrub s3://data/my-prefix --large-size 500k --all-columns
+
+BUCKET/PREFIX        OBJECTS         NOT-CACHED      MISPLACED(cluster)  MISPLACED(mountpath) MISSING-COPIES  SMALL  LARGE          VER-CHANGED   DELETED
+s3://data/my-prefix  1637 (1.6GiB)   1465 (1.4GiB)   -                   -                    -               -      172 (172.0MiB) 1 (1.0MiB)    1 (1.0MiB)
+
+Detailed Logs
+-------------
+* not-cached objects:   /tmp/.ais-scrub-not-cached.204f8c.log (1465 records)
+* large objects:        /tmp/.ais-scrub-large.204f8c.log (172 records)
+* ver-changed objects:  /tmp/.ais-scrub-ver-changed.204f8c.log (1 record)
+* deleted objects:      /tmp/.ais-scrub-deleted.204f8c.log (1 record)
 ```
 
-### Example: validate all `ais://` buckets
-
-```console
-$ ais storage validate ais
-
-BUCKET          OBJECTS     MISPLACED   MISSING COPIES  ZERO SIZE  5+GB
-ais://aa        12345       0           0               0          678
-ais://bb        67890       0           0               0          901
-...
-...
-```
-
-
+Note that 172 (records) = 1637 - 1465.
 
 ## Mountpath (and disk) management
 
