@@ -36,14 +36,17 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 
 For easy usage, management, and monitoring, there's also:
 * **Integrated easy-to-use [CLI](/docs/cli.md)**, with top-level commands including:
+
+
 ```console
 $ ais <TAB-TAB>
 
-bucket           job              storage          remote-cluster   download         create           wait
-object           auth             archive          alias            get              evict            cp
-cluster          show             log              rmo              dsort            stop             ls
-config           help             tls              space-cleanup    put              scrub            prefetch
-etl              advanced         performance      blob-download    rmb              start            search
+advanced         cluster         etl          ls               rmb              stop
+alias            config          evict        object           rmo              storage
+archive          cp              get          performance      scrub            tls
+auth             create          help         prefetch         show             wait
+blob-download    download        job          put              space-cleanup    search
+bucket           dsort           log          remote-cluster   start
 ```
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
