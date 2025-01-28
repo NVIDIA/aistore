@@ -115,11 +115,11 @@ The recommended and, actually, fastest way to get started with CLI is to type `a
 ```console
 $ ais <TAB-TAB>
 
-bucket           job              storage          remote-cluster   prefetch         evict            create
-object           auth             archive          alias            put              rmo              dsort
-cluster          show             log              ls               start            wait             search
-config           help             tls              stop             get              blob-download
-etl              advanced         performance      download         rmb              cp
+bucket           job              storage          remote-cluster   download         create           wait
+object           auth             archive          alias            get              evict            cp
+cluster          show             log              rmo              dsort            stop             ls
+config           help             tls              space-cleanup    put              scrub            prefetch
+etl              advanced         performance      blob-download    rmb              start            search
 ```
 
 These are the current set of top-level commands. Each command has its own extended help (the `--help` option) and, usually, multiple sub-commands
