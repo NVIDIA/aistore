@@ -43,7 +43,7 @@ func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {
 		if tsi.InMaintOrDecomm() { // always skipping targets 'in maintenance mode'
 			continue
 		}
-		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		cs := xoshiro256.Hash(tsi.digest() ^ digest)
 		if cs >= maxH {
 			maxH = cs
 			si = tsi
@@ -59,7 +59,7 @@ func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {
 func (smap *Smap) HrwHash2Tall(digest uint64) (si *Snode, err error) {
 	var maxH uint64
 	for _, tsi := range smap.Tmap {
-		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		cs := xoshiro256.Hash(tsi.digest() ^ digest)
 		if cs >= maxH {
 			maxH = cs
 			si = tsi
@@ -83,7 +83,7 @@ func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
 		if psi.InMaintOrDecomm() {
 			continue
 		}
-		if d := psi.Digest(); d >= maxH {
+		if d := psi.digest(); d >= maxH {
 			maxH = d
 			pi = psi
 		}
@@ -103,7 +103,7 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 		if psi.InMaintOrDecomm() || !psi.IsIC() {
 			continue
 		}
-		cs := xoshiro256.Hash(psi.Digest() ^ digest)
+		cs := xoshiro256.Hash(psi.digest() ^ digest)
 		if cs >= maxH {
 			maxH = cs
 			pi = psi
@@ -126,8 +126,7 @@ func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
 		if tsi.InMaintOrDecomm() {
 			continue
 		}
-		// Assumes that sinfo.idDigest is initialized
-		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		cs := xoshiro256.Hash(tsi.digest() ^ digest)
 		if cs >= maxH {
 			maxH = cs
 			si = tsi
@@ -166,7 +165,7 @@ func (smap *Smap) HrwTargetList(uname *string, count int) (sis Nodes, err error)
 	hlist := newHrwList(count)
 
 	for _, tsi := range smap.Tmap {
-		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		cs := xoshiro256.Hash(tsi.digest() ^ digest)
 		if tsi.InMaintOrDecomm() {
 			continue
 		}

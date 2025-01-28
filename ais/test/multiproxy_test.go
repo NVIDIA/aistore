@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -32,7 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -1018,13 +1016,11 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *meta.Smap, directURL, toI
 	return
 }
 
-func chooseNextProxy(smap *meta.Smap) (proxyid, proxyURL string, err error) {
-	pid, err := hrwProxyTest(smap, smap.Primary.ID())
-	pi := smap.Pmap[pid]
+func chooseNextProxy(smap *meta.Smap) (string, string, error) {
+	pi, err := smap.HrwProxy(smap.Primary.ID())
 	if err != nil {
-		return
+		return "", "", err
 	}
-
 	return pi.ID(), pi.URL(cmn.NetPublic), nil
 }
 
@@ -1064,47 +1060,6 @@ func primarySetToRand(t *testing.T) *meta.Smap {
 	psi, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 	return setPrimaryTo(t, proxyURL, smap, "", psi.ID())
-}
-
-// This is duplicated in the tests because the `idDigest` of `daemonInfo` is not
-// exported. As a result of this, ais.HrwProxy will not return the correct
-// proxy since the `idDigest` will be initialized to 0. To avoid this, we
-// compute the checksum directly in this method.
-func hrwProxyTest(smap *meta.Smap, idToSkip string) (pi string, err error) {
-	if smap.CountActivePs() == 0 {
-		err = errors.New("AIStore cluster map is empty: no proxies")
-		return
-	}
-	var (
-		maxH    uint64
-		skipped int
-	)
-	for id, snode := range smap.Pmap {
-		if id == idToSkip {
-			skipped++
-			continue
-		}
-		if smap.NonElectable(snode) {
-			skipped++
-			continue
-		}
-
-		if smap.InMaintOrDecomm(snode) {
-			skipped++
-			continue
-		}
-
-		cs := xxhash.Checksum64S(cos.UnsafeB(snode.ID()), cos.MLCG32)
-		if cs > maxH {
-			maxH = cs
-			pi = id
-		}
-	}
-	if pi == "" {
-		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d",
-			smap.CountActivePs(), skipped)
-	}
-	return
 }
 
 func networkFailureTarget(t *testing.T) {

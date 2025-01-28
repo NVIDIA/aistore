@@ -215,7 +215,8 @@ func (t *target) init(config *cmn.Config) {
 	}
 	t.si.Init(tid, apc.Target)
 
-	cos.InitShortID(t.si.Digest())
+	debug.Assert(t.si.IDDigest != 0)
+	cos.InitShortID(t.si.IDDigest)
 
 	memsys.Init(t.SID(), t.SID(), config)
 

@@ -96,7 +96,8 @@ func (p *proxy) init(config *cmn.Config) {
 
 	memsys.Init(p.SID(), p.SID(), config)
 
-	cos.InitShortID(p.si.Digest())
+	debug.Assert(p.si.IDDigest != 0)
+	cos.InitShortID(p.si.IDDigest)
 
 	if network, err := _parseCIDR(env.AisLocalRedirectCIDR, ""); err != nil {
 		cos.ExitLog(err) // FATAL

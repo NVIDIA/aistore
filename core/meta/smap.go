@@ -78,7 +78,7 @@ type (
 		name       string
 		PubExtra   []NetInfo    `json:"pub_extra,omitempty"`
 		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
-		idDigest   uint64
+		IDDigest   uint64       `json:"id_digest"`
 	}
 
 	Nodes   []*Snode          // slice of Snodes
@@ -109,11 +109,11 @@ func (d *Snode) Init(id, daeType string) {
 	d.setDigest()
 }
 
-func (d *Snode) Digest() uint64 { return d.idDigest }
+func (d *Snode) digest() uint64 { return d.IDDigest }
 
 func (d *Snode) setDigest() {
-	if d.idDigest == 0 {
-		d.idDigest = xxhash.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
+	if d.IDDigest == 0 {
+		d.IDDigest = xxhash.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
 	}
 }
 
