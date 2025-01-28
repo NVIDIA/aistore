@@ -45,35 +45,28 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
 	}
 }
 
-// TODO: consider jogger-per-mountpath approach
 func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, last bool) {
+	const (
+		limitNumGor = 2 // TODO: calibrate
+	)
 	var (
 		lastName string
-		eop      = AllPages
 		num      = len(lastPage) // num entries
+		wg       = cos.NewLimitedWaitGroup(limitNumGor, len(lpis.a))
 	)
 	if num > 0 && !last {
 		lastName = lastPage[num-1].Name
 	}
+
 	// 1. all mountpaths: next page
 	for _, milpi := range lpis.a {
-		if milpi.it.Pos() == "" {
-			// iterated to the end, exhausted local content
-			milpi.it.Clear()
-			continue
-		}
-		if lastName != "" {
-			eop = milpi.mi.MakePathFQN(lpis.bck, fs.ObjectType, lastName)
-		}
-
-		// next local page "until"
-		lpiMsg := Msg{EOP: eop}
-		if err := milpi.it.Next(lpiMsg, milpi.page); err != nil {
-			if cmn.Rom.FastV(4, cos.SmoduleXs) {
-				nlog.Warningln(tag, err)
-			}
-		}
+		wg.Add(1)
+		go func(bck *cmn.Bck, lastName, tag string) {
+			milpi.run(bck, lastName, tag)
+			wg.Done()
+		}(lpis.bck, lastName, tag)
 	}
+	wg.Wait()
 
 	// 2. last page as a (mem-pooled) map
 	lastPageMap := allocPage()
@@ -94,4 +87,28 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, l
 		}
 	}
 	freePage(lastPageMap)
+}
+
+///////////
+// milpi //
+///////////
+
+func (milpi *milpi) run(bck *cmn.Bck, lastName, tag string) {
+	eop := AllPages
+	if milpi.it.Pos() == "" {
+		// iterated to the end, exhausted local content
+		milpi.it.Clear()
+		return
+	}
+	if lastName != "" {
+		eop = milpi.mi.MakePathFQN(bck, fs.ObjectType, lastName)
+	}
+
+	// next local page "until"
+	lpiMsg := Msg{EOP: eop}
+	if err := milpi.it.Next(lpiMsg, milpi.page); err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleXs) {
+			nlog.Warningln(tag, err)
+		}
+	}
 }

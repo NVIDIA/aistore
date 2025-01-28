@@ -280,7 +280,7 @@ func (m *ioContext) remoteRefill() {
 	}
 
 	leftToFill := m.num - len(lst.Entries)
-	tassert.Errorf(m.t, leftToFill > 0, "leftToFill %d", leftToFill)
+	tassert.Fatalf(m.t, leftToFill > 0, "leftToFill %d", leftToFill)
 
 	m._remoteFill(leftToFill, false /*evict*/, false /*override*/)
 }

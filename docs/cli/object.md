@@ -78,7 +78,7 @@ Here's in detail:
 $ ais get --help
 
 NAME:
-   ais get - (alias for "object get") get an object, a shard, an archived file, or a range of bytes from all of the above;
+   ais get - (alias for "object get") Get an object, a shard, an archived file, or a range of bytes from all of the above;
               write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
               assorted options further include:
               - '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);
@@ -90,68 +90,74 @@ USAGE:
    ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
 
 OPTIONS:
-   --offset value       object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
-   --length value       object read length; default formatting: IEC (use '--units' to override)
-   --checksum           validate checksum
-   --yes, -y            assume 'yes' to all questions
-   --check-cached       check whether a given named object is present in cluster
+   --archive            List archived content (see docs/archive.md for details)
+   --archmime value     Expected format (mime type) of an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                        especially usable for shards with non-standard extensions
+   --archmode value     Enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
+                          * regexp - general purpose regular expression;
+                          * prefix - matching filename starts with;
+                          * suffix - matching filename ends with;
+                          * substr - matching filename contains;
+                          * wdskey - WebDataset key
+                        example:
+                          given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
+                          and wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)
+   --archpath value     Extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                        see also: '--archregx'
+   --archregx value     Specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression
+                        to select possibly multiple matching archived files from a given shard;
+                        is used in combination with '--archmode' ("matching mode") option
+   --blob-download      Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
+   --cached             Get only in-cluster objects - only those objects from the respective remote bucket that are present ("cached")
+   --check-cached       Check whether a given named object is present in cluster
                         (applies only to buckets with remote backend)
-
-   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+   --checksum           Validate checksum
+   --chunk-size value   Chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   --extract, -x        Extract all files from archive(s)
+   --inv-id value       Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
+   --inv-name value     Bucket inventory name (optional; system default name is '.inventory')
+   --inventory          List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+                        boost when used with very large s3 buckets; e.g. usage:
+                          1) 'ais ls s3://abc --inventory'
+                          2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
+                        (see also: docs/s3inventory.md)
+   --latest             Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
                         from the associated remote bucket;
                         the option provides operation-level control over object versioning (and version synchronization)
-                        without requiring to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                        without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
                         see also:
                           - 'ais show bucket BUCKET versioning'
                           - 'ais bucket props set BUCKET versioning'
                           - 'ais ls --check-versions'
                         supported commands include:
                           - 'ais cp', 'ais prefetch', 'ais get'
-
-   --refresh value      interval for continuous monitoring;
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress           show progress bar(s) and progress of execution in real time
-   --blob-download      utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
-   --chunk-size value   chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
-   --num-workers value  number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
-   --archpath value     extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
-                        see also: '--archregx'
-   --archmime value     expected format (mime type) of an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
-                        especially usable for shards with non-standard extensions
-   --archregx value     prefix, suffix, WebDataset key, or general-purpose regular expression to select possibly multiple matching archived files;
-                        use '--archmode' to specify the "matching mode" (that can be prefix, suffix, WebDataset key, or regex)
-   --archmode value     enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
-                          * regexp - general purpose regular expression;
-                          * prefix - matching filename starts with;
-                          * suffix - matching filename ends with;
-                          * substr - matching filename contains;
-                          * wdskey - WebDataset key, e.g.:
-                        example:
-                          given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
-                          and wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)
-   --extract, -x        extract all files from archive(s)
-   --inventory          list objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
-                        boost when used with very large s3 buckets; e.g. usage:
-                          1) 'ais ls s3://abc --inventory'
-                          2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
-                        (see also: docs/s3inventory.md)
-   --inv-name value     bucket inventory name (optional; system default name is '.inventory')
-   --inv-id value       bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
-   --prefix value       get objects that start with the specified prefix, e.g.:
+   --length value       Object read length; default formatting: IEC (use '--units' to override)
+   --limit value        The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+                        e.g.:
+                        - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+                        - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+                        - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
+   --num-workers value  Number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
+   --offset value       Object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
+   --prefix value       Get objects with names starting with the specified prefix, e.g.:
                         '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
                         a/b that have their names (relative to this directory) starting with 'c';
                         '--prefix ""' - get entire bucket (all objects)
-   --cached             get only in-cluster objects - only those objects from a remote bucket that are present ("cached")
-   --archive            list archived content (see docs/archive.md for details)
-   --limit value        maximum number of object names to display (0 - unlimited; see also '--max-pages')
-                        e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
-   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+   --progress           Show progress bar(s) and progress of execution in real time
+   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --silent             Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
+   --skip-lookup        Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                         1) adding remote bucket to aistore without first checking the bucket's accessibility
+                            (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                         2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                         iec - IEC format, e.g.: KiB, MiB, GiB (default)
                         si  - SI (metric) format, e.g.: KB, MB, GB
                         raw - do not convert to (or from) human-readable format
-   --verbose, -v        verbose output
-   --silent             server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
-   --help, -h           show help
+   --verbose, -v        Verbose output
+   --yes, -y            Assume 'yes' to all questions
+   --help, -h           Show help
 ```
 
 ## Save object to local file
@@ -479,8 +485,9 @@ When writing from `STDIN`, type Ctrl-D to terminate the input.
 
 ```console
 $ ais put --help
+
 NAME:
-   ais put - (alias for "object put") PUT or APPEND one file, one directory, or multiple files and/or directories.
+   ais put - (alias for "object put") PUT or append one file, one directory, or multiple files and/or directories.
    Use optional shell filename PATTERN (wildcard) to match/select multiple sources.
    Destination naming is consistent with 'ais object promote' command, whereby the optional OBJECT_NAME_or_PREFIX
    becomes either a name, a prefix, or a virtual destination directory (if it ends with a forward '/').
@@ -490,63 +497,69 @@ NAME:
      - '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;
      - '--progress': progress bar, to show running counts and sizes of uploaded files;
      - Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;
+     - '--append' to append (concatenate) files, e.g.: 'ais put docs ais://nnn/all-docs --append';
      - '--dry-run': see the results without making any changes.
      Notes:
-     - to write or append to (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects ("shards"), use 'ais archive'
+     - to write or add files to (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects ("shards"), use 'ais archive'
 
 USAGE:
    ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX]
 
 OPTIONS:
-   --list value        comma-separated list of object or file names, e.g.:
-                       --list 'o1,o2,o3'
-                       --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-                       or, when listing files and/or directories:
-                       --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
-   --template value    template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
-                       (with optional steps and gaps), e.g.:
-                       --template "" # (an empty or '*' template matches eveything)
-                       --template 'dir/subdir/'
-                       --template 'shard-{1000..9999}.tar'
-                       --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                       and similarly, when specifying files and directories:
-                       --template '/home/dir/subdir/'
-                       --template "/abc/prefix-{0010..9999..2}-suffix"
-   --wait              wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --timeout value     maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
-                       valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress          show progress bar(s) and progress of execution in real time
-   --refresh value     interval for continuous monitoring;
-                       valid time units: ns, us (or µs), ms, s (default), m, h
-   --chunk-size value  chunk size in IEC or SI units, or "raw" bytes (e.g.: 1MiB or 1048576; see '--units')
-   --num-workers value number of concurrent client-side workers (to execute PUT or append requests);
-                       use (-1) to indicate single-threaded serial execution (ie., no workers);
-                       any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
-
-   --dry-run           preview the results without really running the action
-   --recursive, -r     recursive operation
-   --include-src-dir   prefix destination object names with the source directory
-   --verbose, -v       verbose output
-   --yes, -y           assume 'yes' to all questions
-   --cont-on-err       keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
-   --units value       show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                       iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                       si  - SI (metric) format, e.g.: KB, MB, GB
-                       raw - do not convert to (or from) human-readable format
-   --skip-vc           skip loading object metadata (and the associated checksum & version related processing)
-   --compute-checksum  [end-to-end protection] compute client-side checksum configured for the destination bucket
-                       and provide it as part of the PUT request for subsequent validation on the server side
-   --crc32c value      compute client-side crc32c checksum
-                       and provide it as part of the PUT request for subsequent validation on the server side
-   --md5 value         compute client-side md5 checksum
-                       and provide it as part of the PUT request for subsequent validation on the server side
-   --sha256 value      compute client-side sha256 checksum
-                       and provide it as part of the PUT request for subsequent validation on the server side
-   --sha512 value      compute client-side sha512 checksum
-                       and provide it as part of the PUT request for subsequent validation on the server side
-   --xxhash value      compute client-side xxhash checksum
-                       and provide it as part of the PUT request for subsequent validation on the server side
-
+   --append             Concatenate files: append a file or multiple files as a new _or_ to an existing object
+   --chunk-size value   Chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   --compute-checksum   Compute client-side checksum - one of the supported checksum types that is currently configured for the destination bucket -
+                        and provide it as part of the PUT request for subsequent validation on the server side
+                        (see also: "end-to-end protection")
+   --cont-on-err        Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --crc32c value       compute client-side crc32c checksum
+                        and provide it as part of the PUT request for subsequent validation on the server side
+   --dry-run            Preview the results without really running the action
+   --include-src-dir    Prefix destination object names with the source directory
+   --list value         Comma-separated list of object or file names, e.g.:
+                        --list 'o1,o2,o3'
+                        --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                        or, when listing files and/or directories:
+                        --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --md5 value          compute client-side md5 checksum
+                        and provide it as part of the PUT request for subsequent validation on the server side
+   --num-workers value  Number of concurrent client-side workers (to execute PUT or append requests);
+                        use (-1) to indicate single-threaded serial execution (ie., no workers);
+                        any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
+   --progress           Show progress bar(s) and progress of execution in real time
+   --recursive, -r      Recursive operation
+   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --retries value      When failing to PUT retry the operation up to so many times (with increasing timeout if timed out) (default: 1)
+   --sha256 value       compute client-side sha256 checksum
+                        and provide it as part of the PUT request for subsequent validation on the server side
+   --sha512 value       compute client-side sha512 checksum
+                        and provide it as part of the PUT request for subsequent validation on the server side
+   --skip-lookup        Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                         1) adding remote bucket to aistore without first checking the bucket's accessibility
+                            (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                         2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --skip-vc            Skip loading object metadata (and the associated checksum & version related processing)
+   --template value     Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                        (with optional steps and gaps), e.g.:
+                        --template "" # (an empty or '*' template matches eveything)
+                        --template 'dir/subdir/'
+                        --template 'shard-{1000..9999}.tar'
+                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                        and similarly, when specifying files and directories:
+                        --template '/home/dir/subdir/'
+                        --template "/abc/prefix-{0010..9999..2}-suffix"
+   --timeout value      Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                        si  - SI (metric) format, e.g.: KB, MB, GB
+   --verbose, -v        Verbose output
+   --wait               Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --xxhash value       compute client-side xxhash checksum
+                        and provide it as part of the PUT request for subsequent validation on the server side
+   --yes, -y            Assume 'yes' to all questions
+   --help, -h           Show help
 ```
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.

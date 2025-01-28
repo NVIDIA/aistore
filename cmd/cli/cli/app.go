@@ -274,7 +274,13 @@ func (a *acli) init(version string, emptyCmdline bool) {
 	app.Version = version
 	app.EnableBashCompletion = true
 	app.HideHelp = true
+
+	cli.HelpFlag = &cli.BoolFlag{
+		Name:  "help, h",
+		Usage: "Show help",
+	}
 	app.Flags = []cli.Flag{cli.HelpFlag}
+
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = onUsageErrorHandler
 	app.Metadata = map[string]any{metadata: a.longRun}
@@ -284,6 +290,7 @@ func (a *acli) init(version string, emptyCmdline bool) {
 	if !cfg.NoMore {
 		cli.HelpPrinter = paginate
 	}
+
 	cli.AppHelpTemplate = appHelpTemplate
 	a.setupCommands(emptyCmdline)
 }
