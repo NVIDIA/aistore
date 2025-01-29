@@ -1,6 +1,6 @@
 module github.com/NVIDIA/aistore/cmd/ishard
 
-go 1.23.4
+go 1.23.5
 
 require (
 	github.com/NVIDIA/aistore v1.3.26-0.20250128235746-99690b65185a
