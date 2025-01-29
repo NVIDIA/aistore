@@ -549,8 +549,8 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	slab.Free(buf)
 
 	vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+	t.statsT.IncWith(stats.GetCount, vlabs)
 	t.statsT.AddWith(
-		cos.NamedVal64{Name: stats.GetCount, Value: 1, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.GetSize, Value: size, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: mono.SinceNano(startTime), VarLabs: vlabs},
 	)

@@ -109,8 +109,8 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 
 		delta := mono.SinceNano(begin)
 		vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+		t.statsT.IncWith(stats.ListCount, vlabs)
 		t.statsT.AddWith(
-			cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
 			cos.NamedVal64{Name: stats.ListLatency, Value: delta, VarLabs: vlabs},
 		)
 	case apc.ActSummaryBck:

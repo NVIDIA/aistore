@@ -23,6 +23,7 @@ type (
 		SetClrFlag(name string, set, clr NodeStateFlags)
 		Get(name string) int64
 		AddWith(namedVal64 ...NamedVal64)
+		IncWith(name string, VarLabs map[string]string)
 	}
 	NamedVal64 struct {
 		Name    string

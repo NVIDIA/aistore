@@ -415,8 +415,8 @@ func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg,
 		}
 
 		vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+		p.statsT.IncWith(stats.ListCount, vlabs)
 		p.statsT.AddWith(
-			cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
 			cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
 		)
 		if pageNum == 1 {

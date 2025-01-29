@@ -775,17 +775,13 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if ecode, err := goi.getObject(); err != nil {
 		vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
 		if goi.isIOErr {
-			t.statsT.AddWith(
-				cos.NamedVal64{Name: stats.ErrGetCount, Value: 1, VarLabs: vlabs},
-				cos.NamedVal64{Name: stats.IOErrGetCount, Value: 1, VarLabs: vlabs},
-			)
+			t.statsT.IncWith(stats.ErrGetCount, vlabs)
+			t.statsT.IncWith(stats.IOErrGetCount, vlabs)
 			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 				nlog.Warningln("io-error [", err, "]", goi.lom.String())
 			}
 		} else {
-			t.statsT.AddWith(
-				cos.NamedVal64{Name: stats.ErrGetCount, Value: 1, VarLabs: vlabs},
-			)
+			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 		}
 
 		// handle right here, return nil
@@ -896,9 +892,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			return
 		}
 		vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
-		t.statsT.AddWith(
-			cos.NamedVal64{Name: stats.ErrAppendCount, Value: 1, VarLabs: vlabs},
-		)
+		t.statsT.IncWith(stats.ErrAppendCount, vlabs)
 	default:
 		poi := allocPOI()
 		{
@@ -990,9 +984,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			lom = nil
 		} else {
 			vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
-			t.statsT.AddWith(
-				cos.NamedVal64{Name: stats.ErrRenameCount, Value: 1, VarLabs: vlabs},
-			)
+			t.statsT.IncWith(stats.ErrRenameCount, vlabs)
 		}
 	case apc.ActBlobDl:
 		// TODO: add stats.GetBlobCount and *ErrCount
@@ -1304,27 +1296,17 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
 	switch {
 	case err == nil:
-		t.statsT.AddWith(
-			cos.NamedVal64{Name: stats.DeleteCount, Value: 1, VarLabs: vlabs},
-		)
+		t.statsT.IncWith(stats.DeleteCount, vlabs)
 	case cos.IsNotExist(err, code) || cmn.IsErrObjNought(err):
 		if !evict {
-			t.statsT.AddWith(
-				cos.NamedVal64{Name: stats.ErrDeleteCount, Value: 1, VarLabs: vlabs},
-			)
+			t.statsT.IncWith(stats.ErrDeleteCount, vlabs)
 		}
 	default:
 		// not to confuse with `stats.RemoteDeletedDelCount` that counts against
 		// QparamLatestVer, 'versioning.validate_warm_get' and friends
+		t.statsT.IncWith(stats.ErrDeleteCount, vlabs)
 		if !isback {
-			t.statsT.AddWith(
-				cos.NamedVal64{Name: stats.ErrDeleteCount, Value: 1, VarLabs: vlabs},
-				cos.NamedVal64{Name: stats.IOErrDeleteCount, Value: 1, VarLabs: vlabs},
-			)
-		} else {
-			t.statsT.AddWith(
-				cos.NamedVal64{Name: stats.ErrDeleteCount, Value: 1, VarLabs: vlabs},
-			)
+			t.statsT.IncWith(stats.IOErrDeleteCount, vlabs)
 		}
 	}
 	return code, err

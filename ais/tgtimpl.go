@@ -191,8 +191,8 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 
 func (t *target) coldstats(backend core.Backend, lom *core.LOM, started int64) {
 	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+	t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
 	t.statsT.AddWith(
-		cos.NamedVal64{Name: backend.MetricName(stats.GetCount), Value: 1, VarLabs: vlabs},
 		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(started), VarLabs: vlabs},
 		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: vlabs},
 	)
@@ -215,8 +215,8 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 	if err != nil {
 		t.statsT.IncWith(stats.ErrHeadCount, vlabs)
 	} else {
+		t.statsT.IncWith(backend.MetricName(stats.HeadCount), vlabs)
 		t.statsT.AddWith(
-			cos.NamedVal64{Name: backend.MetricName(stats.HeadCount), Value: 1, VarLabs: vlabs},
 			cos.NamedVal64{Name: backend.MetricName(stats.HeadLatencyTotal), Value: mono.SinceNano(now), VarLabs: vlabs},
 		)
 	}

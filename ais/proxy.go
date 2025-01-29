@@ -1674,8 +1674,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 
 	vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+	p.statsT.IncWith(stats.ListCount, vlabs)
 	p.statsT.AddWith(
-		cos.NamedVal64{Name: stats.ListCount, Value: 1, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
 	)
 

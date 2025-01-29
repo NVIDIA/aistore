@@ -318,7 +318,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 // as cos.StatsUpdater
 //
 
-func (r *runner) Inc(name string)            { r.core.add(name, 1) }
+func (r *runner) Inc(name string)            { r.core.inc(name) }
 func (r *runner) Add(name string, val int64) { r.core.add(name, val) }
 
 // (prometheus with variable labels)
@@ -330,12 +330,12 @@ func (r *runner) AddWith(nvs ...cos.NamedVal64) {
 
 // (ditto; for convenience)
 func (r *runner) IncWith(name string, vlabs map[string]string) {
-	r.AddWith(cos.NamedVal64{Name: name, Value: 1, VarLabs: vlabs})
+	r.core.incWith(cos.NamedVal64{Name: name, Value: 1, VarLabs: vlabs})
 }
 
 // (ditto)
 func (r *runner) IncBck(name string, bck *cmn.Bck) {
-	r.AddWith(cos.NamedVal64{Name: name, Value: 1, VarLabs: map[string]string{VarlabBucket: bck.Cname("")}})
+	r.IncWith(name, map[string]string{VarlabBucket: bck.Cname("")})
 }
 
 func (r *runner) SetFlag(name string, set cos.NodeStateFlags) {
