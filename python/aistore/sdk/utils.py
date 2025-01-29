@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import braceexpand
 import humanize
 import requests
+import xxhash
 
 from msgspec import msgpack
 from pydantic.v1 import BaseModel, parse_raw_as
@@ -20,6 +21,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_TYPE,
     MSGPACK_CONTENT_TYPE,
     DEFAULT_LOG_FORMAT,
+    XX_HASH_SEED,
 )
 from aistore.sdk.errors import (
     AISError,
@@ -34,6 +36,13 @@ from aistore.sdk.errors import (
 from aistore.sdk.provider import Provider
 
 T = TypeVar("T")
+MASK = 0xFFFFFFFFFFFFFFFF  # 64-bit mask
+# fmt: off
+GOLDEN_RATIO = 0x9e3779b97f4a7c15
+CONST1 = 0xbf58476d1ce4e5b9
+CONST2 = 0x94d049bb133111eb
+# fmt: on
+ROTATION_BITS = 7
 
 
 class HttpError(BaseModel):
@@ -312,3 +321,31 @@ def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
         logger.addHandler(handler)
     logger.propagate = False
     return logger
+
+
+# Translated from:
+# http://xoshiro.di.unimi.it/xoshiro256starstar.c
+# Scrambled Linear Pseudorandom Number Generators
+# David Blackman, Sebastiano Vigna
+# https://arxiv.org/abs/1805.01407
+# http://www.pcg-random.org/posts/a-quick-look-at-xoshiro256.html
+def xoshiro256_hash(seed: int) -> int:
+    """
+    Xoshiro256-inspired hash function with 64-bit overflow behavior.
+    """
+    z = (seed + GOLDEN_RATIO) & MASK
+    z = (z ^ (z >> 30)) * CONST1 & MASK
+    z = (z ^ (z >> 27)) * CONST2 & MASK
+    z = (z ^ (z >> 31)) + GOLDEN_RATIO & MASK
+    z = (z ^ (z >> 30)) * CONST1 & MASK
+    z = (z ^ (z >> 27)) * CONST2 & MASK
+    z = (z ^ (z >> 31)) * 5 & MASK
+    rotated = ((z << ROTATION_BITS) | (z >> (64 - ROTATION_BITS))) & MASK
+    return (rotated * 9) & MASK
+
+
+def get_digest(name: str) -> int:
+    """
+    Get the xxhash digest of a given string.
+    """
+    return xxhash.xxh64(seed=XX_HASH_SEED, input=name.encode("utf-8")).intdigest()

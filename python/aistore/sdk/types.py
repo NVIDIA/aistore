@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ from aistore.sdk.const import (
     AIS_LOCATION,
     AIS_MIRROR_COPIES,
 )
+from aistore.sdk.utils import get_digest, xoshiro256_hash
+from aistore.sdk.errors import AISError
 
 
 # pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring,too-many-lines
@@ -58,6 +60,10 @@ class Snode(BaseModel):
     intra_control_net: NetInfo = None
     intra_data_net: NetInfo = None
     flags: int = 0
+    id_digest: int = 0
+
+    def in_maint_or_decomm(self) -> bool:
+        return (self.flags & (1 << 2 | 1 << 3)) != 0
 
 
 class Smap(BaseModel):
@@ -71,6 +77,40 @@ class Smap(BaseModel):
     version: int = 0
     uuid: str = ""
     creation_time: str = ""
+
+    def get_target_for_object(self, uname: str) -> Snode:
+        """
+        Determine the target node responsible for an object based on its bucket path and name.
+
+        Args:
+            uname (str): Fully qualified (namespaced) object name (e.g., f"{bck.get_path()}{obj.name}").
+
+        Returns:
+            Snode: The assigned target node.
+
+        Raises:
+            AISError: If no suitable target node is found.
+        """
+        digest = get_digest(uname)
+
+        selected_node, max_hash = None, -1
+
+        for tsi in self.tmap.values():
+            if tsi.in_maint_or_decomm():
+                continue  # Skip nodes in maintenance or decommissioned mode
+
+            # Compute hash using Xoshiro256
+            cs = xoshiro256_hash(tsi.id_digest ^ digest)
+
+            if cs > max_hash:
+                max_hash, selected_node = cs, tsi
+
+        if selected_node is None:
+            raise AISError(
+                500, f"No available targets in the map. Total nodes: {len(self.tmap)}"
+            )
+
+        return selected_node
 
 
 class BucketEntry(msgspec.Struct):

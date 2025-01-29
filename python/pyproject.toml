@@ -47,6 +47,7 @@ dependencies = [
     "humanize>=4.6.0",
     "braceexpand>=0.1.7",
     "msgspec>=0.15.1",
+    "xxhash>=3.5.0",
 ]
 
 keywords = [

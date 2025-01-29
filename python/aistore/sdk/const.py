@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 # Standard Header Keys
@@ -171,3 +171,6 @@ DEFAULT_LOG_FORMAT = "%(asctime)s %(levelname)s: %(message)s"
 
 # Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 BYTE_RANGE_PREFIX_LENGTH = 6
+
+# Custom seed (MLCG32)
+XX_HASH_SEED = 1103515245

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
 import random
 import unittest
@@ -15,6 +15,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     UTF_ENCODING,
 )
+from aistore import Client
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
 
@@ -397,3 +398,41 @@ class TestObjectOps(RemoteEnabledTest):
             fetched_obj = self.client.get_object_from_url(url)
             fetched_content = fetched_obj.get_reader().read_all()
             self.assertEqual(content, fetched_content)
+
+    @unittest.skipIf(
+        len(Client(CLUSTER_ENDPOINT).cluster().get_info().tmap) < 2,
+        "Test requires more than one target",
+    )
+    def test_get_object_direct(self):
+        """
+        Test fetching objects directly from the target node.
+        """
+        self.bucket = self._create_bucket()
+        total_objects = 20
+        obj_names = self._create_objects(num_obj=total_objects)
+
+        for obj_name in obj_names:
+            # Get object data directly from the target
+            obj_from_direct = (
+                self.bucket.object(obj_name).get_reader(direct=True).read_all()
+            )
+            self.assertIsNotNone(
+                obj_from_direct, f"Direct fetch failed for object: {obj_name}"
+            )
+
+            # Get object data via proxy
+            obj_from_non_direct = self.bucket.object(obj_name).get_reader().read_all()
+            self.assertIsNotNone(
+                obj_from_non_direct, f"Proxy fetch failed for object: {obj_name}"
+            )
+
+            # Verify direct and proxy data match
+            self.assertEqual(
+                obj_from_direct,
+                obj_from_non_direct,
+                f"Data mismatch for object: {obj_name}",
+            )
+
+            self.assertGreater(
+                len(obj_from_direct), 0, f"Object data is empty for object: {obj_name}"
+            )

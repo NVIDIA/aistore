@@ -10,7 +10,7 @@ from msgspec import msgpack
 from requests import Response
 
 from aistore.sdk.authn.utils import parse_authn_error
-from aistore.sdk.const import MSGPACK_CONTENT_TYPE, HEADER_CONTENT_TYPE
+from aistore.sdk.const import MSGPACK_CONTENT_TYPE, HEADER_CONTENT_TYPE, XX_HASH_SEED
 from aistore.sdk.errors import (
     AISError,
     ErrRemoteBckNotFound,
@@ -30,6 +30,8 @@ from aistore.sdk.utils import (
     read_file_bytes,
     validate_directory,
     validate_file,
+    xoshiro256_hash,
+    get_digest,
 )
 from aistore.sdk.authn.errors import (
     AuthNError,
@@ -208,3 +210,26 @@ class TestUtils(unittest.TestCase):
         res = decode_response(dict, mock_response)
 
         self.assertEqual(unpacked_content, res)
+
+    @cases(
+        (123456789, 5288836854215336256),
+        (0, 1905207664160064169),
+        (2**64 - 1, 10227601306713020730),
+    )
+    def test_xoshiro256_hash(self, test_case):
+        seed, expected_result = test_case
+        result = xoshiro256_hash(seed)
+        self.assertIsInstance(result, int)
+        self.assertGreaterEqual(result, 0)
+        self.assertLess(result, 2**64)  # Ensure 64-bit overflow behavior
+        self.assertEqual(expected_result, result)
+
+    @patch("aistore.sdk.utils.xxhash.xxh64")
+    def test_get_digest(self, mock_xxhash):
+        mock_xxhash.return_value.intdigest.return_value = 987654321
+        name = "test_object"
+        result = get_digest(name)
+        mock_xxhash.assert_called_once_with(
+            seed=XX_HASH_SEED, input=name.encode("utf-8")
+        )
+        self.assertEqual(result, 987654321)

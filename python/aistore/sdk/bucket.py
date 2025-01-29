@@ -832,7 +832,7 @@ class Bucket(AISSource):
         Returns:
             The object created.
         """
-        details = BucketDetails(self.name, self.provider, self.qparam)
+        details = BucketDetails(self.name, self.provider, self.qparam, self.get_path())
         return Object(
             client=self.client, bck_details=details, name=obj_name, props=props
         )

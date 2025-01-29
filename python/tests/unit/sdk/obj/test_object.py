@@ -60,7 +60,7 @@ class TestObject(unittest.TestCase):
         self.mock_client = Mock()
         self.bck_qparams = {"propkey": "propval"}
         self.bucket_details = BucketDetails(
-            BCK_NAME, AIS_BCK_PROVIDER, self.bck_qparams
+            BCK_NAME, "ais", self.bck_qparams, f"ais/@#/{BCK_NAME}/"
         )
         self.mock_writer = Mock()
         self.expected_params = self.bck_qparams
@@ -68,7 +68,7 @@ class TestObject(unittest.TestCase):
 
     def test_properties(self):
         self.assertEqual(BCK_NAME, self.object.bucket_name)
-        self.assertEqual(AIS_BCK_PROVIDER, self.object.bucket_provider)
+        self.assertEqual("ais", self.object.bucket_provider)
         self.assertEqual(self.bck_qparams, self.object.query_params)
         self.assertEqual(OBJ_NAME, self.object.name)
         self.assertIsNone(self.object.props)
@@ -128,6 +128,11 @@ class TestObject(unittest.TestCase):
         archive_config = ArchiveConfig(regex=regex, mode=mode)
         self.get_exec_assert(archive_config=archive_config)
 
+    def test_get_direct(self):
+        self.get_exec_assert(
+            direct=True, expected_uname=f"{self.bucket_details.path}{OBJ_NAME}"
+        )
+
     @patch("aistore.sdk.obj.object.ObjectReader")
     @patch("aistore.sdk.obj.object.ObjectClient")
     def get_exec_assert(self, mock_obj_client, mock_obj_reader, **kwargs):
@@ -138,6 +143,7 @@ class TestObject(unittest.TestCase):
         expected_headers = kwargs.pop("expected_headers", {})
         expected_byte_range_tuple = kwargs.pop("expected_byte_range_tuple", None)
         expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
+        expected_uname = kwargs.pop("expected_uname", None)
 
         res = self.object.get_reader(**kwargs)
 
@@ -149,6 +155,7 @@ class TestObject(unittest.TestCase):
             params=self.expected_params,
             headers=expected_headers,
             byte_range=expected_byte_range_tuple,
+            uname=expected_uname,
         )
 
         mock_obj_reader.assert_called_with(

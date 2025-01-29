@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import warnings
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from io import BufferedWriter
 from pathlib import Path
 from typing import Dict
-
+import os
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 
@@ -55,6 +55,7 @@ class BucketDetails:
     name: str
     provider: Provider
     qparams: Dict[str, str]
+    path: str
 
 
 class Object:
@@ -129,7 +130,7 @@ class Object:
         self._props = ObjectProps(headers)
         return headers
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-locals
     def get_reader(
         self,
         archive_config: ArchiveConfig = None,
@@ -139,6 +140,7 @@ class Object:
         writer: BufferedWriter = None,
         latest: bool = False,
         byte_range: str = None,
+        direct: bool = False,
     ) -> ObjectReader:
         """
         Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
@@ -153,6 +155,8 @@ class Object:
             latest (bool, optional): GET the latest object version from the associated remote bucket
             byte_range (str, optional): Byte range in RFC 7233 format for single-range requests (e.g., "bytes=0-499",
                 "bytes=500-", "bytes=-500"). See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
+            direct (bool, optional): If True, the object content is read directly from the target node,
+                bypassing the proxy
 
         Returns:
             An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
@@ -197,13 +201,13 @@ class Object:
                 int(byte_range_l) if byte_range_l else None,
                 int(byte_range_r) if byte_range_r else None,
             )
-
         obj_client = ObjectClient(
             request_client=self._client,
             path=self._object_path,
             params=params,
             headers=headers,
             byte_range=byte_range_tuple,
+            uname=os.path.join(self._bck_details.path, self.name) if direct else None,
         )
 
         obj_reader = ObjectReader(

@@ -15,10 +15,15 @@ from aistore.sdk.const import (
     HEADER_LOCATION,
     STATUS_REDIRECT_PERM,
     STATUS_REDIRECT_TMP,
+    URL_PATH_DAEMON,
+    WHAT_SMAP,
+    QPARAM_WHAT,
+    HTTP_METHOD_GET,
 )
 from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.utils import parse_ais_error, handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
+from aistore.sdk.types import Smap
 
 T = TypeVar("T")
 
@@ -52,6 +57,8 @@ class RequestClient:
         self._token = token
         self._timeout = timeout
         self._error_handler = error_handler
+        # smap is used to calculate the target node for a given object
+        self._smap = None
 
     @property
     def base_url(self):
@@ -100,6 +107,42 @@ class RequestClient:
             token (str): Token for authorization.
         """
         self._token = token
+
+    def get_smap(self, force_update: bool = False) -> "Smap":
+        """Return the smap."""
+        if not self._smap or force_update:
+            self._smap = self.request_deserialize(
+                HTTP_METHOD_GET,
+                path=URL_PATH_DAEMON,
+                res_model=Smap,
+                params={QPARAM_WHAT: WHAT_SMAP},
+            )
+        return self._smap
+
+    def clone(self, base_url: Optional[str] = None) -> "RequestClient":
+        """
+        Create a copy of the current RequestClient instance with an optional new base URL.
+
+        Args:
+            base_url (Optional[str]): New base URL for the cloned client. Defaults to the existing base URL.
+
+        Returns:
+            RequestClient: A new instance with the same settings but an optional different base URL.
+        """
+
+        # Default to the existing base URL if none is provided
+        base_url = base_url or self._base_url
+
+        # Ensure the base URL ends with "/v1"
+        base_url = base_url if base_url.endswith("/v1") else urljoin(base_url, "v1")
+
+        return RequestClient(
+            endpoint=base_url,
+            session_manager=self._session_manager,
+            timeout=self._timeout,
+            token=self._token,
+            error_handler=self._error_handler,
+        )
 
     def request_deserialize(
         self, method: str, path: str, res_model: Type[T], **kwargs

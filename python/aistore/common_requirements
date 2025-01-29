@@ -11,3 +11,4 @@ PyYAML==6.0.2
 requests==2.32.3
 typing_extensions==4.12.2
 webdataset==0.2.100
+xxhash==3.5.0
