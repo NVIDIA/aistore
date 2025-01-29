@@ -33,6 +33,7 @@ ls           promote      concat       evict        mv           cat
 - [Out of band updates](/docs/out_of_band.md)
 - [PUT object](#put-object)
   - [Object names](#object-names)
+  - [Put with client-side checksumming](#put-with-client-side-checksumming)
   - [Put single file](#put-single-file)
   - [Put single file with checksum](#put-single-file-with-checksum)
   - [Put single file with implicitly defined name](#put-single-file-with-implicitly-defined-name)
@@ -596,6 +597,80 @@ All **examples** below put into an empty bucket and the source directory structu
 ```
 
 The current user HOME directory is `/home/user`.
+
+## Put with client-side checksumming
+
+> **Motivation**: There's always a motivation to perform faster. One way to achieve this is by avoiding redundant writes of user data. A write operation can effectively become a no-op if the identical data already exists in the cluster. The conventional method to establish such identity is through content checksumming.
+
+In short, here's a CLI write-optimizing trick that utilizes client-side checksumming.
+
+### First PUT:
+
+```console
+$ time ais put /tmp/www s3://ais-aa --yes --compute-checksum --recursive
+
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 27      562.90MiB
+.go              1       123B
+.prev            1       7.62MiB
+.txt             2       10.87KiB
+TOTAL            31      570.53MiB
+Uploaded 4(12%) objects, 9.6MiB (1%).
+Uploaded 8(25%) objects, 55.3MiB (9%).
+Uploaded 13(41%) objects, 105.8MiB (18%).
+Uploaded 23(74%) objects, 315.7MiB (55%).
+Uploaded 29(93%) objects, 449.3MiB (78%).
+Uploaded 31(100%) objects, 570.5MiB (100%).
+
+PUT 31 files (one directory, recursively) => s3://ais-aa
+
+real    0m44.895s  <<<<<<<<<<<<<<<<<<<<<< 45s
+user    0m0.097s
+sys     0m0.355s
+```
+
+### Second PUT with no changes at the source:
+
+```console
+$ time ais put /tmp/www s3://ais-aa --yes --compute-checksum --recursive
+
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 27      562.90MiB
+.go              1       123B
+.prev            1       7.62MiB
+.txt             2       10.87KiB
+TOTAL            31      570.53MiB
+
+PUT 31 files (one directory, recursively) => s3://ais-aa
+
+real    0m0.136s   <<<<<<<<<<<<<<<<<<<<<<<<<<<< (PUT took no time)
+user    0m0.107s
+sys     0m0.509s
+```
+
+### Adding one file to the source:
+
+```console
+$ time ais put /tmp/www s3://ais-aa --yes --compute-checksum --recursive
+
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 28      563.17MiB
+.go              1       123B
+.prev            1       7.62MiB
+.txt             2       10.87KiB
+TOTAL            32      570.80MiB
+
+PUT 32 files (one directory, recursively) => s3://ais-aa
+
+real    0m1.029s   <<<<<<<<<<<<<<<<<< 1s
+user    0m0.121s
+sys     0m0.588s
+```
+
+> **Note:** Ideally, the checksum is provided with PUT API calls. The CLI takes it one step further: if client-side checksumming is requested but the checksum is empty, the CLI computes it automatically. The corresponding overhead must be taken into account when analyzing resulting performance.
 
 ## Put single file
 

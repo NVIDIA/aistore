@@ -31,12 +31,13 @@ For ease of use, management, and monitoring, there's also:
 ```console
 $ ais <TAB-TAB>
 
-advanced         cluster         etl          ls               rmb              stop
-alias            config          evict        object           rmo              storage
-archive          cp              get          performance      scrub            tls
-auth             create          help         prefetch         show             wait
-blob-download    download        job          put              space-cleanup    search
-bucket           dsort           log          remote-cluster   start
+advanced         config           get              prefetch         show
+alias            cp               help             put              space-cleanup
+archive          create           job              remote-cluster   start
+auth             download         log              rmb              stop
+blob-download    dsort            ls               rmo              storage
+bucket           etl              object           scrub            tls
+cluster          evict            performance      search           wait
 ```
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.

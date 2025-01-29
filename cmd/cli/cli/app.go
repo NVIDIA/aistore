@@ -332,13 +332,13 @@ func (a *acli) setupCommands(emptyCmdline bool) {
 
 	app.Commands = append(app.Commands, a.initAliases()...)
 
-	// alphabetically
+	setupCommandHelp(app.Commands)
+	a.enableSearch()
+
+	// finally, alphabetically
 	sort.Slice(app.Commands, func(i, j int) bool {
 		return app.Commands[i].Name < app.Commands[j].Name
 	})
-
-	setupCommandHelp(app.Commands)
-	a.enableSearch()
 }
 
 func (a *acli) enableSearch() {
