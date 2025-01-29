@@ -3,13 +3,13 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS for short) is a built-from-scratch, lightweight storage stack tailored for AI apps. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
+AIStore (AIS for short) is a lightweight, built-from-scratch storage stack tailored for AI applications. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
 
 AIS [consistently shows balanced I/O distribution and linear scalability](https://aistore.nvidia.com/blog/2024/02/16/multihome-bench) across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the initial design was also driven by the ideas to [offload](https://aistore.nvidia.com/blog/2023/06/09/aisio-transforms-with-webdataset-pt-3) custom dataset transformations (often referred to as [ETL](https://aistore.nvidia.com/blog/2021/10/21/ais-etl-1)). And finally, since AIS is a software system that aggregates Linux machines to provide storage for user data, there's the requirement number one: reliability and data protection.
 
 ## Features
 
-* ✅ **Deploys anywhere**. AIS can be deployed anywhere, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use Docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers. There are [no limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - the system will run on any Linux machine, virtual or physical.
+* ✅ **Deploys anywhere**. AIS can be deployed anywhere, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use Docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers. There are [no deployment limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - AIS runs on any Linux machine, whether virtual or physical.
 * ✅ **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
 * ✅ **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
 * ✅ **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, and Microsoft Azure.
@@ -17,13 +17,13 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 * ✅ **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
 * ✅ **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
 * ✅ **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch).
-* ✅ **Read-after-write consistency**. Reading and writing (along with other control and data plane operations) can be performed via any AIS gateway, whether random, selected, or load-balanced. Once the first replica of an object is written and _finalized_ subsequent reads are guaranteed to view the same content. Additional copies and/or EC slices, if configured, are added asynchronously (via `put-copies` and `ec-put` jobs, respectively).
+* ✅ **Read-after-write consistency**. Reading and writing (along with other control and data plane operations) can be performed via any AIS gateway, whether random, selected, or load-balanced. Once the first replica of an object is written and _finalized_, subsequent reads are guaranteed to view the same content. Additional copies and/or EC slices, if configured, are added asynchronously (via `put-copies` and `ec-put` jobs, respectively).
 * ✅ **Write-through**. In presence of any [remote backend](/docs/providers.md), AIS executes remote write (e.g., using vendor's SDK) as part of the [transaction](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#read-after-write-consistency) that places and _finalizes_ the first replica.
 * ✅ **Small file datasets.** To serialize small files and facilitate batch processing, AIS supports TAR, TAR.GZ (or TGZ), ZIP, and TAR.LZ4 formatted objects (often called _shards_). Resharding (for optimal sorting and sizing), listing contained files (samples), appending to existing shards, and generating new ones from existing objects and/or client-side files - is also fully supported.
 * ✅ **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator).
 * ✅ **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.
 * ✅ **Distributed shuffle** extension for massively parallel resharding of very large datasets.
-* ✅ **Batch jobs**. APIs and CLI to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
+* ✅ **Batch jobs**. APIs and CLI tools to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
 
 For ease of use, management, and monitoring, there's also:
 * **Integrated easy-to-use [CLI](/docs/cli.md)**, with top-level commands including:

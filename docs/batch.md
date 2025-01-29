@@ -26,10 +26,16 @@ In CLI, there's `ais job` command and its subcommands (`<TAB-TAB>` completions):
 $ ais job
 start   stop    wait    rm      show
 
-$ ais job start
-prefetch           download           lru                rebalance          resilver           ec-encode          copy-bck
-blob-download      dsort              etl                cleanup            mirror             warm-up-metadata   move-bck
+$ ais start
+prefetch           lru                cleanup            copy-bck
+blob-download      etl                mirror             move-bck
+download           rebalance          ec-encode
+dsort              resilver           warm-up-metadata
 ```
+
+> Note that `ais start` is an [alias](/docs/cli/alias.md) for the `ais job start` command - both (versions) can be used interchangeably.
+
+**Not all supported jobs are _startable_**.
 
 Not all supported jobs can be started via `ais start` or by the corresponding Go or Python API call. Example, the job to copy or (ETL) transform datasets has its own dedicated API (both Python and Go) and CLI.
 
