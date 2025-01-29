@@ -20,7 +20,7 @@ def print_sep():
     print("\n" + "=" * 101 + "\n")
 
 
-def print_in_progress(msg, icon="\U0001F552"):
+def print_in_progress(msg, icon="\U0001f552"):
     print(
         "\n"
         + Back.LIGHTBLACK_EX

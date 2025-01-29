@@ -136,7 +136,7 @@ class Benchmark:
 
     def clean_up(self, new=True):
         if new:
-            print_in_progress("Cleaning up", "\U0001F9F9")
+            print_in_progress("Cleaning up", "\U0001f9f9")
 
         if not self.bck_created and not self.objs_created:
             print_caution("Nothing to delete! Skipping clean-up...")

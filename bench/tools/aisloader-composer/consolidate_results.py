@@ -1,5 +1,5 @@
 """
-Python script designed to analyze and amalgamate the data from 
+Python script designed to analyze and amalgamate the data from
 AIS Loader-generated files into a cohesive report
 
 Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.

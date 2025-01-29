@@ -489,13 +489,13 @@ func (r *Trunner) RegDiskMetrics(snode *meta.Snode, disk string) {
 
 	// "disk.<DISK>.<METRIC> (e.g.: "disk.nvme0n1.read.bps")
 	r.reg(snode, name, KindComputedThroughput,
-		&Extra{Help: "read bandwidth (MB/s)", StrName: "disk_read_mbps", Labels: cos.StrKVs{"disk": disk}},
+		&Extra{Help: "read bandwidth (B/s)", StrName: "disk_read_bps", Labels: cos.StrKVs{"disk": disk}},
 	)
 	r.reg(snode, r.nameRavg(disk), KindGauge,
 		&Extra{Help: "average read size (bytes)", StrName: "disk_avg_rsize", Labels: cos.StrKVs{"disk": disk}},
 	)
 	r.reg(snode, r.nameWbps(disk), KindComputedThroughput,
-		&Extra{Help: "write bandwidth (MB/s)", StrName: "disk_write_mbps", Labels: cos.StrKVs{"disk": disk}},
+		&Extra{Help: "write bandwidth (B/s)", StrName: "disk_write_bps", Labels: cos.StrKVs{"disk": disk}},
 	)
 	r.reg(snode, r.nameWavg(disk), KindGauge,
 		&Extra{Help: "average write size (bytes)", StrName: "disk_avg_wsize", Labels: cos.StrKVs{"disk": disk}},

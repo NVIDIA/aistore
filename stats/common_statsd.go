@@ -150,15 +150,13 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			}
 			out[name] = copyValue{throughput}
 			if !s.statsdDisabled() && throughput > 0 {
-				fv := roundMBs(throughput)
-				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: fv}, s.sgl)
+				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: throughput}, s.sgl)
 			}
 		case KindComputedThroughput:
 			if throughput := ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
 				out[name] = copyValue{throughput}
 				if !s.statsdDisabled() {
-					fv := roundMBs(throughput)
-					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: fv}, s.sgl)
+					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stpr, Value: throughput}, s.sgl)
 				}
 			}
 		case KindCounter, KindSize, KindTotal:
@@ -292,7 +290,7 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, _ *Extra) {
 	case KindThroughput, KindComputedThroughput:
 		debug.Assert(strings.HasSuffix(name, ".bps"), name)
 		v.label.comm = strings.TrimSuffix(name, ".bps")
-		v.label.stpr = f("mbps")
+		v.label.stpr = f("bps")
 	default:
 		debug.Assert(kind == KindGauge || kind == KindSpecial)
 		v.label.comm = name
@@ -310,14 +308,3 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, _ *Extra) {
 func (*runner) PromHandler() http.Handler { return nil }
 
 func (r *runner) closeStatsD() { r.core.statsdC.Close() }
-
-// convert bytes to meGabytes with a fixed rounding precision = 2 digits
-// - KindThroughput and KindComputedThroughput only
-// - MB, not MiB
-// - math.Ceil wouldn't produce two decimals
-func roundMBs(val int64) (mbs float64) {
-	mbs = float64(val) / 1000 / 10
-	num := int(mbs + 0.5)
-	mbs = float64(num) / 100
-	return
-}

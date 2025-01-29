@@ -198,7 +198,7 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 			metricName = strings.TrimSuffix(name, ".ns") + "_ms"
 		case KindThroughput, KindComputedThroughput:
 			debug.Assert(strings.HasSuffix(name, ".bps"), name)
-			metricName = strings.TrimSuffix(name, ".bps") + "_mbps"
+			metricName = strings.TrimSuffix(name, ".bps") + "_bps"
 		default:
 			metricName = name
 		}
