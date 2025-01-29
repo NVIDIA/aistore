@@ -9,7 +9,7 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 
 ## Features
 
-* ✅ **Deploys anywhere**. AIStore deploys _immediately_ and _anywhere_, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook, on the one hand, to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers, on the other. There are [no limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - the system will run on any Linux machine, virtual or physical.
+* ✅ **Deploys anywhere**. AIS can be deployed anywhere, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use Docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers. There are [no limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - the system will run on any Linux machine, virtual or physical.
 * ✅ **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
 * ✅ **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
 * ✅ **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, and Microsoft Azure.
@@ -17,7 +17,7 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 * ✅ **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
 * ✅ **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
 * ✅ **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch).
-* ✅ **Read-after-write consistency**. Reading and writing (as well as all other control and data plane operations) can be performed via any (random, selected, or load-balanced) AIS gateway (a.k.a. "proxy"). Once the first replica of an object is written and _finalized_ subsequent reads are guaranteed to view the same content. Additional copies and/or EC slices, if configured, are added asynchronously via `put-copies` and `ec-put` jobs, respectively.
+* ✅ **Read-after-write consistency**. Reading and writing (along with other control and data plane operations) can be performed via any AIS gateway, whether random, selected, or load-balanced. Once the first replica of an object is written and _finalized_ subsequent reads are guaranteed to view the same content. Additional copies and/or EC slices, if configured, are added asynchronously (via `put-copies` and `ec-put` jobs, respectively).
 * ✅ **Write-through**. In presence of any [remote backend](/docs/providers.md), AIS executes remote write (e.g., using vendor's SDK) as part of the [transaction](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#read-after-write-consistency) that places and _finalizes_ the first replica.
 * ✅ **Small file datasets.** To serialize small files and facilitate batch processing, AIS supports TAR, TAR.GZ (or TGZ), ZIP, and TAR.LZ4 formatted objects (often called _shards_). Resharding (for optimal sorting and sizing), listing contained files (samples), appending to existing shards, and generating new ones from existing objects and/or client-side files - is also fully supported.
 * ✅ **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator).
@@ -25,7 +25,7 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 * ✅ **Distributed shuffle** extension for massively parallel resharding of very large datasets.
 * ✅ **Batch jobs**. APIs and CLI to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
 
-For easy usage, management, and monitoring, there's also:
+For ease of use, management, and monitoring, there's also:
 * **Integrated easy-to-use [CLI](/docs/cli.md)**, with top-level commands including:
 
 ```console
@@ -49,7 +49,7 @@ For developers and data scientists, there's also:
 * [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch) for interoperability with AWS SDK for Python (aka [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) client
   - and other [Botocore](https://github.com/boto/botocore) derivatives.
 
-For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
+For the original AIS **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
 
 Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
 
@@ -78,7 +78,7 @@ Further, there's the capability referred to as [global namespace](https://github
 
 ## Existing datasets
 
-AIStore supports multiple ways to populate itself with existing datasets, including (but not limited to):
+AIS supports multiple ways to populate itself with existing datasets, including (but not limited to):
 
 * **on demand**, often during the first epoch;
 * **copy** entire bucket or its selected virtual subdirectories;
@@ -94,7 +94,7 @@ But there's more. In [v3.22](https://github.com/NVIDIA/aistore/releases/tag/v1.3
 
 ## Installing from release binaries
 
-Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](Makefile) from source or installed directly from GitHub:
+Generally, AIS (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](Makefile) from source or installed directly from GitHub:
 
 ```console
 $ ./scripts/install_from_binaries.sh --help
