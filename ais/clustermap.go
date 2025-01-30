@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
@@ -196,6 +197,11 @@ func (m *smapX) _setIC(psi *meta.Snode) (ok bool) {
 // check configured "original" and "discovery" URLs vs IC members' control,
 // or pick IC members to provide alternative ones
 func (m *smapX) configURLsIC(original, discovery string) (orig, disc string) {
+	// Do not modify discovery once set for K8s as we expect it to be the dynamic headless service URL
+	if k8s.IsK8s() && discovery != "" {
+		disc = discovery
+	}
+
 	// extra effort to avoid changing existing URLs if they work
 	for _, psi := range m.Pmap {
 		if !m.IsIC(psi) {
