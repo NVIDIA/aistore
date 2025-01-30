@@ -122,7 +122,6 @@ func (*hk) Stop(error) { HK.stopCh.Close() }
 
 func (hk *hk) Run() (err error) {
 	signal.Notify(hk.sigCh,
-		syscall.SIGHUP,  // kill -SIGHUP
 		syscall.SIGINT,  // kill -SIGINT (Ctrl-C)
 		syscall.SIGTERM, // kill -SIGTERM
 		syscall.SIGQUIT, // kill -SIGQUIT
