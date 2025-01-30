@@ -55,7 +55,7 @@ class ObjectClient:
         )
         self._request_client = new_client
 
-    def _retry_with_new_smap(self, method: str, **kwargs):
+    def _retry_with_new_smap(self, method: str, **kwargs) -> requests.Response:
         """
         Retry the request with the latest `smap` if a 404 error is encountered.
 

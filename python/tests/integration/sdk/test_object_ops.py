@@ -441,3 +441,38 @@ class TestObjectOps(RemoteEnabledTest):
             self.assertGreater(
                 len(obj_from_direct), 0, f"Object data is empty for object: {obj_name}"
             )
+
+    @unittest.skipIf(not has_enough_targets(), "Test requires more than one target")
+    def test_get_object_direct_all_targets(self):
+        """
+        Test retrieving an object directly from all targets in the cluster.
+
+        This test intentionally provides the client with incorrect target URLs to verify whether it can
+        self-correct through retries. It simulates real-world scenarios where the smap changes,
+        and the object may be relocated to a different target. The test ensures that the client can still
+        successfully identify and connect to the correct target using `_retry_with_new_smap`.
+        """
+        self.bucket = self._create_bucket()
+        obj = self._create_object()
+
+        content = b"content for the object"
+        bck_name, obj_name = self.bucket.name, obj.name
+
+        obj.get_writer().put_content(content)
+        expected_content = obj.get_reader(direct=True).read_all()
+        res = obj.get_reader()
+        self.assertEqual(content, res.read_all())
+
+        smap = self.client.cluster().get_info()
+
+        for target in smap.tmap.values():
+            if target.in_maint_or_decomm():
+                continue
+            clnt = Client(target.public_net.direct_url)
+            content = (
+                clnt.bucket(bck_name)
+                .object(obj_name)
+                .get_reader(direct=True)
+                .read_all()
+            )
+            self.assertEqual(content, expected_content)

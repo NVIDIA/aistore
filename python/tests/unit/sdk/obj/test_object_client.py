@@ -6,6 +6,7 @@ import requests
 from aistore.sdk.const import HTTP_METHOD_HEAD, HTTP_METHOD_GET, HEADER_RANGE
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.obj.object_client import ObjectClient
+from aistore.sdk.errors import ErrObjNotFound
 
 from tests.utils import cases
 
@@ -99,3 +100,43 @@ class TestObjectClient(unittest.TestCase):
             HTTP_METHOD_HEAD, path=self.path, params=self.params
         )
         mock_attr.assert_called_with(self.response_headers)
+
+    @patch("aistore.sdk.obj.object_client.ObjectClient._retry_with_new_smap")
+    def test_obj_not_found_retry(self, mock_retry_with_new_smap):
+        """
+        Test that the get method retries with a new smap when ErrObjNotFound is raised and catched.
+        """
+        self.request_client.request.side_effect = ErrObjNotFound(
+            404, "Object not found"
+        )
+        # pylint: disable=protected-access
+        self.object_client._uname = (
+            "test"  # will retry only if ObjectClient._uname is set
+        )
+
+        mock_retry_response = Mock(spec=requests.Response)
+        mock_retry_with_new_smap.return_value = mock_retry_response
+
+        res = self.object_client.get(stream=False)
+
+        mock_retry_with_new_smap.assert_called_once_with(
+            HTTP_METHOD_GET,
+            path=self.path,
+            params=self.params,
+            stream=False,
+            headers=self.headers,
+        )
+
+        self.assertEqual(res, mock_retry_response)
+
+    def test_raises_err_obj_not_found(self):
+        """
+        Test that the get method raises ErrObjNotFound when no uname is provided.
+        """
+        object_client = ObjectClient(self.request_client, self.path, self.params)
+        self.request_client.request.side_effect = ErrObjNotFound(
+            404, "Object not found"
+        )
+
+        with self.assertRaises(ErrObjNotFound):
+            object_client.get(stream=False)
