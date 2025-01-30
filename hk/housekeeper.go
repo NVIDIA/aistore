@@ -1,14 +1,13 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package hk
 
 import (
 	"container/heap"
 	"os"
-	"os/signal"
 	"syscall"
 	"time"
 
@@ -75,7 +74,7 @@ func _init(mustRun bool) {
 	if mustRun {
 		HK.running.Store(false)
 	} else {
-		HK.running.Store(true) // tests only
+		HK.running.Store(true) // mustRun == false: tests only
 	}
 	heap.Init(HK.actions)
 }
@@ -121,11 +120,8 @@ func (hk *hk) terminate() {
 func (*hk) Stop(error) { HK.stopCh.Close() }
 
 func (hk *hk) Run() (err error) {
-	signal.Notify(hk.sigCh,
-		syscall.SIGINT,  // kill -SIGINT (Ctrl-C)
-		syscall.SIGTERM, // kill -SIGTERM
-		syscall.SIGQUIT, // kill -SIGQUIT
-	)
+	hk.setSignal() // SIGINT, et al. - see handleSignal() below
+
 	hk.timer = time.NewTimer(time.Hour)
 	hk.running.Store(true)
 	err = hk._run()
@@ -198,10 +194,9 @@ func (hk *hk) _run() error {
 
 		case s, ok := <-hk.sigCh:
 			if ok {
-				signal.Stop(hk.sigCh)
-				err := cos.NewSignalError(s.(syscall.Signal))
-				hk.Stop(err)
-				return err
+				if err := hk.handleSignal(s.(syscall.Signal)); err != nil {
+					return err
+				}
 			}
 		}
 	}
