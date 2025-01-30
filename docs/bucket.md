@@ -425,7 +425,7 @@ NAME:
      - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
 USAGE:
-   ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+   ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
    --list value         comma-separated list of object or file names, e.g.:

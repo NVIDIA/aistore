@@ -23,7 +23,7 @@ For background and in-depth presentation, please see this [document](/docs/dsort
 
 ## Usage
 
-`ais dsort [command options] [JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET]`
+`ais dsort [JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET]` [command options]
 
 ```console
 $ ais dsort --help
@@ -62,7 +62,7 @@ NAME:
    See also: docs/dsort.md, docs/cli/dsort.md, and ais/test/scripts/dsort*
 
 USAGE:
-   ais dsort [command options] [JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET]
+   ais dsort [JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET] [command options]
 
 OPTIONS:
    --file value, -f value  path to JSON or YAML job specification

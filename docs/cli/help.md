@@ -65,7 +65,7 @@ NAME:
    ais - AIS CLI: command-line management utility for AIStore
 
 USAGE:
-   ais [global options] command [command options] [arguments...]
+   ais [global options] command [arguments...] [command options]
 
 VERSION:
    1.1.950525a50

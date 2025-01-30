@@ -68,7 +68,7 @@ NAME:
    ais job - monitor, query, start/stop and manage jobs and eXtended actions (xactions)
 
 USAGE:
-   ais job command [command options] [arguments...]
+   ais job command [arguments...] [command options]
 
 COMMANDS:
    start  run batch job
@@ -144,7 +144,7 @@ NAME:
    press <TAB-TAB> to select, '--help' for more options.
 
 USAGE:
-   ais stop [command options] [NAME] [JOB_ID] [NODE_ID] [BUCKET]
+   ais stop [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
    --all          all running jobs

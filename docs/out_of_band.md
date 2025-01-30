@@ -86,7 +86,7 @@ Here's the an excerpt from `GET` help (and note `--latest` below):
 $ ais get --help
 
 USAGE:
-   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
+   ais get BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
    --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)

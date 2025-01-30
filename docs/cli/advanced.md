@@ -23,7 +23,7 @@ Commands for special use cases (e.g. scripting) and *advanced* usage scenarios, 
 $ ais advanced --help
 
 USAGE:
-   ais advanced command [command options] [arguments...]
+   ais advanced command [arguments...] [command options]
 
 COMMANDS:
    resilver          resilver user data on a given target (or all targets in the cluster); entails:

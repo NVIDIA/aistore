@@ -22,7 +22,7 @@ NAME:
    ais config - configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)
 
 USAGE:
-   ais config command [command options] [arguments...]
+   ais config command [arguments...] [command options]
 
 COMMANDS:
    show     show CLI, cluster, or node configurations (nodes inherit cluster and have local)
@@ -196,7 +196,7 @@ NAME:
    ais show config - show CLI, cluster, or node configurations (nodes inherit cluster and have local)
 
 USAGE:
-   ais show config [command options] cli | cluster [CONFIG SECTION OR PREFIX] |
+   ais show config cli | cluster [CONFIG SECTION OR PREFIX] | [command options]
       NODE_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]
 
 OPTIONS:

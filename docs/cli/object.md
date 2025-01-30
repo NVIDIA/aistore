@@ -66,7 +66,7 @@ ls           promote      concat       evict        mv           cat
 
 Use `ais object get` or, same, `ais get` to GET data from aistore. In other words, read data from the cluster and, optionally, save it locally.
 
-`ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|-]`
+`ais get BUCKET[/OBJECT_NAME] [OUT_FILE|-]` [command options]
 
 there's
 
@@ -88,7 +88,7 @@ NAME:
               - '-v' to produce verbose output when getting multiple objects.
 
 USAGE:
-   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
+   ais get BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
    --archive            List archived content (see docs/archive.md for details)
@@ -464,7 +464,7 @@ ec          2:2[replicated]
 
 Briefly:
 
-`ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX]`<sup>[1](#ft1)</sup>
+`ais put [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX]`<sup>[1](#ft1)</sup> [command options]
 
 writes a single file, an entire directory (of files), or a typed content directly from STDIN (`-`) - into the specified (destination) bucket.
 
@@ -504,7 +504,7 @@ NAME:
      - to write or add files to (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects ("shards"), use 'ais archive'
 
 USAGE:
-   ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX]
+   ais put [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX] [command options]
 
 OPTIONS:
    --append             Concatenate files: append a file or multiple files as a new _or_ to an existing object
@@ -1279,7 +1279,7 @@ NAME:
    Other supported options follow below.
 
 USAGE:
-   ais object promote [command options] FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME_or_PREFIX]
+   ais object promote FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME_or_PREFIX] [command options]
 
 OPTIONS:
    --recursive, -r      recursive operation
@@ -1422,7 +1422,7 @@ NAME:
      - 'rm "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
 USAGE:
-   ais object rm [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+   ais object rm BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
    --list value           comma-separated list of object or file names, e.g.:
@@ -1532,7 +1532,7 @@ NAME:
      - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
 USAGE:
-   ais object evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+   ais object evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
    --list value           comma-separated list of object or file names, e.g.:
@@ -1655,7 +1655,7 @@ Custom properties are not impacted by object updates (PUTs) -- a new version of 
 
 The command's syntax is similar to the one used to assign [bucket properties](bucket.md#set-bucket-properties):
 
-`ais object set-custom [command options] BUCKET/OBJECT_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`,
+`ais object set-custom BUCKET/OBJECT_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`, [command options]
 
 for example:
 
@@ -1718,7 +1718,7 @@ NAME:
      - 'prefetch "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
 USAGE:
-   ais prefetch [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+   ais prefetch BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
    --list value            comma-separated list of object or file names, e.g.:
@@ -1912,7 +1912,7 @@ To fully synchronize in-cluster content with remote backend, please refer to [ou
 
 ## Evict multiple objects
 
-`ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]`
+`ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]` [command options]
 
 Command `ais evict` is a shorter version of `ais bucket evict`.
 
@@ -1933,7 +1933,7 @@ NAME:
      - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
 USAGE:
-   ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+   ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
    --list value         comma-separated list of object or file names, e.g.:

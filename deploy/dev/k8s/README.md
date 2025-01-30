@@ -318,7 +318,7 @@ NAME:
    ais etl - use ETLs
 
 USAGE:
-   ais etl command [command options] [arguments...]
+   ais etl command [arguments...] [command options]
 
 COMMANDS:
    init    initialize ETL with yaml spec
@@ -337,7 +337,7 @@ NAME:
    ais etl object - transform object with given ETL
 
 USAGE:
-   ais etl object [command options] ETL_NAME BUCKET/OBJECT_NAME OUTPUT
+   ais etl object ETL_NAME BUCKET/OBJECT_NAME OUTPUT [command options]
 
 OPTIONS:
    --help, -h  show help

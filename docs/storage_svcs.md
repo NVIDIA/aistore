@@ -154,7 +154,7 @@ NAME:
    see also: 'ais start mirror'
 
 USAGE:
-   ais start ec-encode [command options] BUCKET
+   ais start ec-encode BUCKET [command options]
 
 OPTIONS:
    --data-slices value, -d value    number of data slices (default: 2)
@@ -300,7 +300,7 @@ NAME:
    see also: 'ais start mirror'
 
 USAGE:
-   ais start ec-encode [command options] BUCKET
+   ais start ec-encode BUCKET [command options]
 
 OPTIONS:
    --data-slices value, -d value    number of data slices (default: 2)

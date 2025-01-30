@@ -54,7 +54,7 @@ NAME:
         - associated error counters, if any.
 
 USAGE:
-   ais show performance counters [command options] [TARGET_ID]
+   ais show performance counters [TARGET_ID] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;
@@ -81,7 +81,7 @@ NAME:
    ais show performance disk - show disk utilization and read/write statistics
 
 USAGE:
-   ais show performance disk [command options] [TARGET_ID]
+   ais show performance disk [TARGET_ID] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;

@@ -94,7 +94,7 @@ NAME:
    ais show performance - show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
 
 USAGE:
-   ais show performance command [command options] [TARGET_ID]
+   ais show performance command [TARGET_ID] [command options]
 
 COMMANDS:
    counters    show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
@@ -171,7 +171,7 @@ NAME:
    press <TAB-TAB> to select, '--help' for more options.
 
 USAGE:
-   ais show job [command options] [NAME] [JOB_ID] [NODE_ID] [BUCKET]
+   ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
    --refresh value   time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
@@ -237,7 +237,7 @@ NAME:
    ais show job - show running and finished jobs ('--all' for all, or press <TAB-TAB> to select, '--help' for options)
 
 USAGE:
-   ais show job [command options] [NAME] [JOB_ID] [NODE_ID] [BUCKET]
+   ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;
@@ -387,7 +387,7 @@ NAME:
    ais show cluster - main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)
 
 USAGE:
-   ais show cluster command [command options] [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]
+   ais show cluster command [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]] [command options]
 
 COMMANDS:
    smap    show cluster map (Smap)
@@ -500,7 +500,7 @@ NAME:
    ais show storage - show storage usage and utilization, disks and mountpaths
 
 USAGE:
-   ais show storage command [command options] [TARGET_ID]
+   ais show storage command [TARGET_ID] [command options]
 
 COMMANDS:
    disk       show disk utilization and read/write statistics

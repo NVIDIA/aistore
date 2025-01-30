@@ -330,8 +330,7 @@ const (
 	getLogArgument  = nodeIDArgument + " [OUT_FILE|OUT_DIR|-]"
 
 	// cluster
-	showClusterArgument = "[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | \n" +
-		"                     [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]"
+	showClusterArgument = "[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]"
 
 	// config
 	showConfigArgument = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +

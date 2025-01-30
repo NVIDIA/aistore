@@ -27,7 +27,7 @@ NAME:
    ais cluster - monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
 
 USAGE:
-   ais cluster command [command options] [arguments...]
+   ais cluster command [arguments...] [command options]
 
 COMMANDS:
    show              show cluster nodes and utilization
@@ -65,7 +65,7 @@ NAME:
    ais cluster add-remove-nodes - manage cluster membership (add/remove nodes, temporarily or permanently)
 
 USAGE:
-   ais cluster add-remove-nodes command [command options] [arguments...]
+   ais cluster add-remove-nodes command [arguments...] [command options]
 
 COMMANDS:
    join               add a node to the cluster
@@ -103,7 +103,7 @@ NAME:
    ais show cluster - main dashboard: cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)
 
 USAGE:
-   ais show cluster command [command options] [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] |
+   ais show cluster command [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [command options]
                        [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]
 
 COMMANDS:
@@ -269,7 +269,7 @@ NAME:
    ais show cluster stats - (alias for "ais show performance") show performance counters, throughput, latency and more (press <TAB-TAB> to select specific view)
 
 USAGE:
-   ais show cluster stats command [command options] [TARGET_ID]
+   ais show cluster stats command [TARGET_ID] [command options]
 
 COMMANDS:
    counters    show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
@@ -310,7 +310,7 @@ NAME:
    ais show storage disk - show disk utilization and read/write statistics
 
 USAGE:
-   ais show storage disk [command options] [TARGET_ID]
+   ais show storage disk [TARGET_ID] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;
@@ -368,7 +368,7 @@ NAME:
    ais cluster add-remove-nodes join - add a node to the cluster
 
 USAGE:
-   ais cluster add-remove-nodes join [command options] IP:PORT
+   ais cluster add-remove-nodes join IP:PORT [command options]
 
 OPTIONS:
    --role value     role of this AIS daemon: proxy or target
@@ -581,7 +581,7 @@ NAME:
    ais cluster reset-stats - reset cluster or node stats (all cumulative metrics or only errors)
 
 USAGE:
-   ais cluster reset-stats [command options] [NODE_ID]
+   ais cluster reset-stats [NODE_ID] [command options]
 
 OPTIONS:
    --errors-only  reset only error counters

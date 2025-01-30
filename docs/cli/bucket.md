@@ -164,7 +164,7 @@ Operation "destroy-bck" is not supported by "aws://bucket_name"
 
 ## List buckets
 
-`ais ls [command options] PROVIDER:[//BUCKET_NAME]`
+`ais ls PROVIDER:[//BUCKET_NAME]` [command options]
 
 **Notice** the optional `[//BUCKET_NAME]`. When there's no bucket, `ais ls` will list **buckets**. Otherwise, it'll list **objects**.
 
@@ -257,7 +257,7 @@ As a rule of thumb, when a (logical) `#namespace` in the bucket's name is omitte
 
 The command:
 
-`ais ls [command options] PROVIDER:[//BUCKET_NAME]`
+`ais ls PROVIDER:[//BUCKET_NAME]` [command options]
 
 can conveniently list buckets (with or without "summarizing" object counts and sizes) and objects.
 
@@ -297,7 +297,7 @@ NAME:
      * ais ls s3 --summary --all --dont-add           - same as above but without adding _non-present_ remote buckets to the cluster's BMD.
 
 USAGE:
-   ais ls [command options] [BUCKET[/PREFIX]] [PROVIDER]
+   ais ls [BUCKET[/PREFIX]] [PROVIDER] [command options]
 
 OPTIONS:
    --all                  Depending on the context, list:
@@ -638,7 +638,7 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 
 ## Copy (list, range, and/or prefix) selected objects or entire (in-cluster or remote) buckets
 
-`ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET`
+`ais cp SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET` [command options]
 
 ```console
 $ ais cp --help
@@ -664,7 +664,7 @@ NAME:
      - 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'                          - same as above.
 
 USAGE:
-   ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET
+   ais cp SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET [command options]
 
 OPTIONS:
    --all                  Copy all objects from a remote bucket including those that are not present (not cached) in cluster
@@ -899,7 +899,7 @@ Notice a certain limitation (that also shows up as the last step #15):
 
 ## Show bucket summary
 
-`ais storage summary [command options] PROVIDER:[//BUCKET_NAME] - show bucket sizes and the respective percentages of used capacity on a per-bucket basis
+`ais storage summary PROVIDER:[//BUCKET_NAME] - show bucket sizes and the respective percentages of used capacity on a per-bucket basis [command options]
 
 `ais bucket summary` - same as above.
 
@@ -910,7 +910,7 @@ NAME:
    ais storage summary - show bucket sizes and %% of used capacity on a per-bucket basis
 
 USAGE:
-   ais storage summary [command options] PROVIDER:[//BUCKET_NAME]
+   ais storage summary PROVIDER:[//BUCKET_NAME] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;
@@ -963,7 +963,7 @@ NAME:
      * ais scrub gs://abc --prefix images/  - same as above.
 
 USAGE:
-   ais storage validate [command options] [BUCKET[/PREFIX]] or [PROVIDER]
+   ais storage validate [BUCKET[/PREFIX]] or [PROVIDER] [command options]
 
 OPTIONS:
    --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);

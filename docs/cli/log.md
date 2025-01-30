@@ -27,7 +27,7 @@ NAME:
                - 'ais log get NODE_ID --all --severity e' - TAR.GZ archive of (only) logged errors and warnings
 
 USAGE:
-   ais log get [command options] NODE_ID [OUT_FILE|OUT_DIR|-]
+   ais log get NODE_ID [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;
@@ -52,7 +52,7 @@ NAME:
    ais log show - for a given node: show its current log (use '--refresh' to update, '--help' for details)
 
 USAGE:
-   ais log show [command options] NODE_ID
+   ais log show NODE_ID [command options]
 
 OPTIONS:
    --refresh value    interval for continuous monitoring;
@@ -79,7 +79,7 @@ NAME:
                  (see related: 'ais log show', 'ais log get')
 
 USAGE:
-   ais cluster download-logs [command options] [OUT_DIR]
+   ais cluster download-logs [OUT_DIR] [command options]
 
 OPTIONS:
    --severity value  log severity is either 'i' or 'info' (default, can be omitted), or 'error', whereby error logs contain

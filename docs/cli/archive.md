@@ -37,7 +37,7 @@ NAME:
               - ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--
 
 USAGE:
-   ais archive get [command options] BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-]
+   ais archive get BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
    --checksum           validate checksum
@@ -126,7 +126,7 @@ NAME:
      - to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details).
 
 USAGE:
-   ais archive put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME
+   ais archive put [-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME [command options]
 
 OPTIONS:
    --list value         comma-separated list of object or file names, e.g.:
@@ -353,7 +353,7 @@ NAME:
    ais archive bucket - archive multiple objects from SRC_BUCKET as (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted shard
 
 USAGE:
-   ais archive bucket [command options] SRC_BUCKET DST_BUCKET/SHARD_NAME
+   ais archive bucket SRC_BUCKET DST_BUCKET/SHARD_NAME [command options]
 
 OPTIONS:
    --template value   template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
@@ -431,7 +431,7 @@ NAME:
    ais archive ls - list archived content (supported formats: .tar, .tgz or .tar.gz, .zip, .tar.lz4)
 
 USAGE:
-   ais archive ls [command options] BUCKET[/SHARD_NAME]
+   ais archive ls BUCKET[/SHARD_NAME] [command options]
 ```
 
 List archived content as a tree with archive ("shard") name as a root and archived files as leaves.
@@ -500,7 +500,7 @@ $ ais get --help
               - '-v' to produce verbose output when getting multiple objects.
 
 USAGE:
-   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
+   ais get BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
    --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)

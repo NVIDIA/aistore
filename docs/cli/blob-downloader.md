@@ -30,7 +30,7 @@ NAME:
    Note: when _not_ using '--progress' option, run 'ais show job' to monitor.
 
 USAGE:
-   ais blob-download [command options] BUCKET/OBJECT_NAME
+   ais blob-download BUCKET/OBJECT_NAME [command options]
 
 OPTIONS:
    --refresh value      interval for continuous monitoring;

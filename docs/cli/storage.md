@@ -22,7 +22,7 @@ NAME:
    ais storage - monitor and manage clustered storage
 
 USAGE:
-   ais storage command [command options] [arguments...]
+   ais storage command [arguments...] [command options]
 
 COMMANDS:
    show       show storage usage and utilization, disks and mountpaths
@@ -61,7 +61,7 @@ NAME:
    ais storage cleanup - remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects
 
 USAGE:
-   ais storage cleanup [command options] PROVIDER:[//BUCKET_NAME]
+   ais storage cleanup PROVIDER:[//BUCKET_NAME] [command options]
 
 OPTIONS:
    --force, -f      disregard interrupted rebalance and possibly other conditions preventing full cleanup
@@ -108,7 +108,7 @@ NAME:
      * ais scrub gs://abc --prefix images/  - same as above.
 
 USAGE:
-   ais scrub [command options] [BUCKET[/PREFIX]] [PROVIDER]
+   ais scrub [BUCKET[/PREFIX]] [PROVIDER] [command options]
 
 OPTIONS:
    --all-columns          Show all columns, including those with only zero values
@@ -230,7 +230,7 @@ NAME:
    ais show storage mountpath - show target mountpaths
 
 USAGE:
-   ais show storage mountpath [command options] [TARGET_ID]
+   ais show storage mountpath [TARGET_ID] [command options]
 
 OPTIONS:
    --refresh value  interval for continuous monitoring;
