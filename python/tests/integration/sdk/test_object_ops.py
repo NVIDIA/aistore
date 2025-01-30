@@ -36,6 +36,14 @@ from tests.utils import (
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
 
 
+def has_enough_targets():
+    """Check if the cluster has at least two targets before running tests."""
+    try:
+        return len(Client(CLUSTER_ENDPOINT).cluster().get_info().tmap) >= 2
+    except Exception:
+        return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)
+
+
 # pylint: disable=unused-variable, too-many-public-methods
 class TestObjectOps(RemoteEnabledTest):
     def setUp(self) -> None:
@@ -399,10 +407,7 @@ class TestObjectOps(RemoteEnabledTest):
             fetched_content = fetched_obj.get_reader().read_all()
             self.assertEqual(content, fetched_content)
 
-    @unittest.skipIf(
-        len(Client(CLUSTER_ENDPOINT).cluster().get_info().tmap) < 2,
-        "Test requires more than one target",
-    )
+    @unittest.skipIf(not has_enough_targets(), "Test requires more than one target")
     def test_get_object_direct(self):
         """
         Test fetching objects directly from the target node.

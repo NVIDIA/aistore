@@ -113,7 +113,7 @@ class ObjectClient:
             resp.raise_for_status()
             return resp
 
-        except ErrObjNotFound as _:
+        except ErrObjNotFound:
             if self._uname:
                 return self._retry_with_new_smap(
                     HTTP_METHOD_GET,
