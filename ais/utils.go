@@ -131,7 +131,7 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 	return addrlist, nil
 }
 
-// HACK, to accommodate non-K8s docker deployments and non-containerized
+// HACK to accommodate non-K8s (docker and non-containerized) deployments
 func excludeLoopbackIP() bool {
 	if _, present := os.LookupEnv("AIS_LOCAL_PLAYGROUND"); present {
 		return false
@@ -218,7 +218,7 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 		return nil, err
 	}
 	if network == nil {
-		goto warn
+		goto warn // ------>
 	}
 	for j := range l {
 		if ip = net.ParseIP(addrList[j].ipv4); ip == nil {
@@ -241,11 +241,29 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 	return parsed, nil
 
 warn:
+	// TODO:
+	// to reduce ambiguity
+	// parse `config.Proxy.PrimaryURL` for network that must further _contain_ IP to select
+	// from multiple `addrList` entries
+
+	tag := "the first"
+	selected = 0
 	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
 		return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
 	}
-	nlog.Warningln("given multiple choice, selecting the first", addrList[0].String())
-	addrList[0].warn()
+	// local playground and multiple choice with no IPs configured: insist on selecting loopback
+	if !ip.IsLoopback() && cmn.Rom.TestingEnv() && l > 1 {
+		for j := 1; j < l; j++ {
+			if ip1 := net.ParseIP(addrList[j].ipv4); ip1 != nil && ip1.IsLoopback() {
+				selected, ip = j, ip1
+				tag = "loopback"
+				break
+			}
+		}
+	}
+	nlog.Warningln("given multiple choice, selecting", tag, addrList[selected].String())
+	addrList[selected].warn()
+
 	return ip, nil
 }
 
