@@ -157,18 +157,25 @@ func (m *InitSpecMsg) String() string {
 	return fmt.Sprintf("init-%s[%s-%s-%s]", Spec, m.IDX, m.CommTypeX, m.ArgTypeX)
 }
 
-// TODO: double-take, unmarshaling-wise. To avoid, include (`Spec`, `Code`) in API calls
 func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 	var msgInf map[string]json.RawMessage
 	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
 		return
 	}
-	if _, ok := msgInf[Code]; ok {
+
+	_, hasCode := msgInf[Code]
+	_, hasSpec := msgInf[Spec]
+
+	if hasCode && hasSpec {
+		return nil, fmt.Errorf("invalid etl.InitMsg: both '%s' and '%s' fields are present", Code, Spec)
+	}
+
+	if hasCode {
 		msg = &InitCodeMsg{}
 		err = jsoniter.Unmarshal(b, msg)
 		return
 	}
-	if _, ok := msgInf[Spec]; ok {
+	if hasSpec {
 		msg = &InitSpecMsg{}
 		err = jsoniter.Unmarshal(b, msg)
 		return
