@@ -2673,6 +2673,18 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
+		if checkReady := r.Header.Get(apc.HdrReadyToJoinClu); checkReady != "" {
+			err := p.pready(smap, true)
+			if err == nil {
+				if cmn.GCO.Get().Rebalance.Enabled && smap.CountTargets() > 1 {
+					err = errors.New(p.String() + ": please disable global rebalance for the duration of the critical (force-join) operation")
+				}
+			}
+			if err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+		}
 		p.writeJSON(w, r, smap, what)
 	default:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
@@ -2832,33 +2844,6 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if err := p.recvCluMetaBytes(apc.ActAdminJoinProxy, body, caller); err != nil {
 		p.writeErr(w, r, err)
 	}
-}
-
-func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
-	cargs := allocCargs()
-	{
-		cargs.req = cmn.HreqArgs{
-			Method: http.MethodGet,
-			Base:   baseURL,
-			Path:   apc.URLPathDae.S,
-			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSmap}},
-		}
-		cargs.timeout = apc.DefaultTimeout
-		cargs.cresv = cresjGeneric[smapX]{} // -> smapX
-	}
-	res := p.call(cargs, p.owner.smap.get())
-	if res.err != nil {
-		err = res.errorf("failed to get Smap from %s", baseURL)
-	} else {
-		smap = res.v.(*smapX)
-		if err = smap.validate(); err != nil {
-			err = fmt.Errorf("%s: invalid %s from %s: %v", p, smap, baseURL, err)
-			smap = nil
-		}
-	}
-	freeCargs(cargs)
-	freeCR(res)
-	return
 }
 
 func (p *proxy) ensureConfigURLs() (config *globalConfig, err error) {

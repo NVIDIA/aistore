@@ -98,7 +98,7 @@ const (
 	AuthenticationTypeBearer = "Bearer"
 )
 
-// Internally used headers
+// Internal (intra-cluster) headers
 const (
 	HdrCallerID        = aisPrefix + "Caller-Id" // Marker of intra-cluster request.
 	HdrT2TPutterID     = aisPrefix + "Putter-Id" // DaemonID of the target that performs intra-cluster PUT
@@ -118,6 +118,9 @@ const (
 
 	// EC
 	HdrActiveEC = aisPrefix + "Ec"
+
+	// (advanced use)
+	HdrReadyToJoinClu = aisPrefix + "Ready-Join-Clu"
 )
 
 const lais = len(aisPrefix)

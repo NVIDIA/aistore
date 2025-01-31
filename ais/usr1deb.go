@@ -8,6 +8,8 @@ package ais
 
 import (
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -18,8 +20,17 @@ import (
 func (t *target) setusr1() { hk.SetUSR1(t.usr1) }
 func (p *proxy) setusr1()  { hk.SetUSR1(p.usr1) }
 
-// When "odd" and "even" nodes cannot coexist together (this code is triggered by
-// `SIGUSR1` simultaneously on all nodes in the cluster).
+// When "odd" and "even" nodes cannot coexist together
+//
+// NOTE:
+// - this code is triggered by `SIGUSR1` simultaneously on all nodes in the cluster;
+// - it executes only locally without any inter-node synchronization;
+// - hence, the sleep at the bottom.
+//
+// TODO:
+// - rm sleep
+// - randomize version bump to create scenarios
+
 func (h *htrun) usr1() bool /*split done*/ {
 	smap := h.owner.smap.get()
 	if smap.CountActivePs() < 2 {
@@ -38,6 +49,7 @@ func (h *htrun) usr1() bool /*split done*/ {
 	)
 	for _, psi := range smap.Pmap {
 		if flags := psi.Flags.Clear(meta.SnodeIC); flags != 0 {
+			nlog.Warningln(h.String(), "skipping", psi.StringEx(), psi.Flags)
 			continue
 		}
 		port, err := strconv.ParseInt(psi.PubNet.Port, 10, 64)
@@ -48,10 +60,12 @@ func (h *htrun) usr1() bool /*split done*/ {
 		}
 	}
 	if npsi == nil {
-		nlog.Errorln(h.String(), "failed to select the second primary candidate that'd have public port with different parity:",
-			smap.StringEx())
+		nlog.Errorln(h.String(), "failed to select the second primary candidate that'd have public port with parity !=",
+			oport, smap.StringEx())
 		return false
 	}
+
+	nlog.Warningln(h.String(), "second primary candidate", npsi.StringEx(), "- proceeding to split "+strings.Repeat("*", 30))
 
 	// 3. split cluster in two
 	var (
@@ -73,11 +87,14 @@ func (h *htrun) usr1() bool /*split done*/ {
 		}
 	}
 
-	clone.Version += 100 // TODO: randomize version bump to create scenarios
+	clone.Version += 100 // note above
 	if myport%2 != oport%2 {
 		debug.Assert(clone.GetNode(npsi.ID()) != nil, clone.StringEx())
 		clone.Primary = npsi
 	}
+
+	time.Sleep(time.Second) // note above
+
 	h.owner.smap.put(clone)
 
 	return true
