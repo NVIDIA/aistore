@@ -49,7 +49,7 @@ var gT *testing.T
 
 func TestEvictCleanup(t *testing.T) {
 	xreg.Init()
-	hk.TestInit()
+	hk.Init(false)
 	cos.InitShortID(0)
 
 	RegisterFailHandler(Fail)

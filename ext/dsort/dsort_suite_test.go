@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	hk.TestInit()
+	hk.Init(false)
 }
 
 func TestDsort(t *testing.T) {

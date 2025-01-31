@@ -17,7 +17,7 @@ import (
 
 func init() {
 	xreg.Init()
-	hk.TestInit()
+	hk.Init(false)
 }
 
 func TestAIS(t *testing.T) {

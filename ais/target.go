@@ -320,6 +320,7 @@ func (t *target) Run() error {
 	}
 	config := cmn.GCO.Get()
 	t.htrun.init(config)
+	t.setusr1()
 
 	tstats := t.statsT.(*stats.Trunner)
 

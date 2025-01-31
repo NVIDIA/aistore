@@ -51,31 +51,20 @@ type (
 	}
 )
 
+// singleton
 var HK *hk
 
 // interface guard
 var _ cos.Runner = (*hk)(nil)
 
-func TestInit() {
-	_init(false)
-}
-
-func Init() {
-	_init(true)
-}
-
-func _init(mustRun bool) {
+func Init(mustRun bool) {
 	HK = &hk{
 		workCh:  make(chan op, workChanCap),
 		sigCh:   make(chan os.Signal, 1),
 		actions: &timedActions{},
 	}
 	HK.stopCh.Init()
-	if mustRun {
-		HK.running.Store(false)
-	} else {
-		HK.running.Store(true) // mustRun == false: tests only
-	}
+	HK.running.Store(!mustRun)
 	heap.Init(HK.actions)
 }
 
@@ -119,14 +108,16 @@ func (hk *hk) terminate() {
 
 func (*hk) Stop(error) { HK.stopCh.Close() }
 
-func (hk *hk) Run() (err error) {
-	hk.setSignal() // SIGINT, et al. - see handleSignal() below
+func (hk *hk) Run() error {
+	hk.setSignal() // SIGINT, et al. (see hk.handleSignal)
 
 	hk.timer = time.NewTimer(time.Hour)
 	hk.running.Store(true)
-	err = hk._run()
+
+	err := hk._run()
+
 	hk.terminate()
-	return
+	return err
 }
 
 func (hk *hk) _run() error {

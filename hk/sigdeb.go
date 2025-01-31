@@ -1,4 +1,4 @@
-//go:build !debug
+//go:build debug
 
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
@@ -18,6 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
+var cbUSR1 func()
+
+func SetUSR1(cb func()) { cbUSR1 = cb }
+
 func (hk *hk) setSignal() {
 	signal.Notify(hk.sigCh,
 		// ignore, log
@@ -26,12 +30,14 @@ func (hk *hk) setSignal() {
 		syscall.SIGINT,  // kill -SIGINT (Ctrl-C)
 		syscall.SIGTERM, // kill -SIGTERM
 		syscall.SIGQUIT, // kill -SIGQUIT
+		// test
+		syscall.SIGUSR1,
 	)
 }
 
-func (hk *hk) handleSignal(s syscall.Signal) error {
-	if s == syscall.SIGHUP {
-		// no-op: show up in the log with some useful info
+func (hk *hk) handleSignal(s syscall.Signal) (err error) {
+	switch s {
+	case syscall.SIGHUP:
 		var (
 			sb  strings.Builder
 			mem sys.MemStat
@@ -41,11 +47,15 @@ func (hk *hk) handleSignal(s syscall.Signal) error {
 		mem.Str(&sb)
 		nfd, erf := numOpenFiles()
 		nlog.Infoln("ngr [", ngr, sys.NumCPU(), "] mem [", sb.String(), erm, "]", "num-fd [", nfd, erf, "]")
-		return nil
+	case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+		signal.Stop(hk.sigCh)
+		err = cos.NewSignalError(s)
+		hk.Stop(err)
+	case syscall.SIGUSR1:
+		cbUSR1()
+	default:
+		cos.ExitLog("unexpected signal:", s)
 	}
 
-	signal.Stop(hk.sigCh)
-	err := cos.NewSignalError(s)
-	hk.Stop(err)
 	return err
 }

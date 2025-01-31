@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	hk.TestInit()
+	hk.Init(false)
 }
 
 func TestCore(t *testing.T) {

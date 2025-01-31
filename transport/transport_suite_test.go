@@ -9,4 +9,4 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-func init() { hk.TestInit() }
+func init() { hk.Init(false) }

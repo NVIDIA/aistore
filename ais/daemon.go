@@ -193,7 +193,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	sys.GoEnvMaxprocs()
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
-	hk.Init()
+	hk.Init(true /*run*/)
 	daemon.rg.add(hk.HK)
 
 	// K8s
