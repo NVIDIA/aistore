@@ -2674,13 +2674,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if checkReady := r.Header.Get(apc.HdrReadyToJoinClu); checkReady != "" {
-			err := p.pready(smap, true)
-			if err == nil {
-				if cmn.GCO.Get().Rebalance.Enabled && smap.CountTargets() > 1 {
-					err = errors.New(p.String() + ": please disable global rebalance for the duration of the critical (force-join) operation")
-				}
-			}
-			if err != nil {
+			if err := p.readyToJoinClu(smap); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
@@ -2689,6 +2683,18 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	default:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	}
+}
+
+func (p *proxy) readyToJoinClu(smap *smapX) error {
+	switch {
+	case !smap.IsPrimary(p.si):
+		return newErrNotPrimary(p.si, smap)
+	case cmn.GCO.Get().Rebalance.Enabled && smap.CountTargets() > 1:
+		return errors.New(p.String() + ": please disable global rebalance for the duration of the critical (force-join) operation")
+	case nlog.Stopping():
+		return p.errStopping()
+	}
+	return p.pready(smap, true)
 }
 
 func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {

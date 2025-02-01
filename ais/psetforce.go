@@ -216,7 +216,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	// 2. the first inter-cluster network call:
 	// get and validate destination Smap, henceforth nsmap
 	nsmap, ern := p._getSmapCheckReady(nurl)
-	if _destinationNotReady(ern) {
+	if ern != nil && _destinationNotReady(ern) {
 		p.writeErr(w, r, ern)
 		return
 	}
@@ -374,6 +374,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	p.metasyncer.becomeNonPrimary()
 	time.Sleep(time.Second)
 
+	// TODO -- FIXME: remove?
 	// 10. finally, ask npsi to bump versions and metasync all (see `msyncForceAll`)
 	const act2 = "\"bump\""
 	nlog.Infoln(act, "(10) npsi to", act2, "metasync")
