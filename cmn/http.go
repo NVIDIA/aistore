@@ -324,20 +324,6 @@ func (u *HreqArgs) Req() (*http.Request, error) {
 	return req, nil
 }
 
-// ReqWithCancel creates request with ability to cancel it.
-func (u *HreqArgs) ReqWithCancel() (*http.Request, context.Context, context.CancelFunc, error) {
-	req, err := u.Req()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	req = req.WithContext(ctx)
-	return req, ctx, cancel, nil
-}
-
 func (u *HreqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
 	req, err := u.Req()
 	if err != nil {

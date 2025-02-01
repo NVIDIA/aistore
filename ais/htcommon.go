@@ -393,6 +393,10 @@ func freeBcastRes(results sliceResults) {
 	resultsPool.Put(&results)
 }
 
+////////////////
+// callResult //
+////////////////
+
 func (res *callResult) read(body io.Reader, size int64) {
 	res.bytes, res.err = cos.ReadAllN(body, size)
 }
@@ -407,6 +411,72 @@ func (res *callResult) mread(body io.Reader) {
 	buf, slab := memsys.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 	res.err = vv.DecodeMsg(msgp.NewReaderBuf(body, buf))
 	slab.Free(buf)
+}
+
+//
+// error helpers for intra-cluster calls
+//
+
+func (res *callResult) unwrap() (err error) {
+	err = errors.Unwrap(res.err)
+	if err == nil {
+		err = res.err
+	}
+	return
+}
+
+func (res *callResult) toErr() error {
+	if res.err == nil {
+		return nil
+	}
+	// is cmn.ErrHTTP
+	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
+		// add status, details
+		if res.status >= http.StatusBadRequest {
+			herr.Status = res.status
+		}
+		if herr.Message == "" {
+			herr.Message = res.details
+		}
+		return herr
+	}
+	// res => cmn.ErrHTTP
+	if res.status >= http.StatusBadRequest {
+		var detail string
+		if res.details != "" {
+			detail = "[" + res.details + "]"
+		}
+		return res.herr(nil, fmt.Sprintf("%v%s", res.err, detail))
+	}
+	if res.details == "" {
+		return res.err
+	}
+	return cmn.NewErrFailedTo(nil, "call "+res.si.StringEx(), res.details, res.err)
+}
+
+func (res *callResult) herr(r *http.Request, msg string) *cmn.ErrHTTP {
+	orig := &cmn.ErrHTTP{}
+	if e := jsoniter.Unmarshal([]byte(msg), orig); e == nil {
+		return orig
+	}
+	nherr := cmn.NewErrHTTP(r, errors.New(msg), res.status)
+	if res.si != nil {
+		nherr.Node = res.si.StringEx()
+	}
+	return nherr
+}
+
+func (res *callResult) errorf(format string, a ...any) error {
+	debug.Assert(res.err != nil)
+	// add formatted
+	msg := fmt.Sprintf(format, a...)
+	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
+		herr.Message = msg + ": " + herr.Message
+		res.err = herr
+	} else {
+		res.err = errors.New(msg + ": " + res.err.Error())
+	}
+	return res.toErr()
 }
 
 ////////////////
