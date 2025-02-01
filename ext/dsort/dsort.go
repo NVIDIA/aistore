@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -874,12 +874,13 @@ func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shar
 		return err
 	})
 	group.Go(func() error {
-		query := m.Pars.InputBck.NewQuery()
+		q := make(url.Values, 1)
+		m.Pars.InputBck.SetQuery(q)
 		reqArgs := &cmn.HreqArgs{
 			Method: http.MethodPost,
 			Base:   si.URL(cmn.NetIntraData),
 			Path:   apc.URLPathdSortShards.Join(m.ManagerUUID),
-			Query:  query,
+			Query:  q,
 			BodyR:  r,
 		}
 		err := m._do(reqArgs, si, "distribute shards")

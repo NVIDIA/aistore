@@ -1,13 +1,12 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"time"
@@ -49,7 +48,7 @@ type (
 // - and delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
 // The API uses http.MethodHead and can be considered an extension of HeadBucket (above)
 func GetBucketInfo(bp BaseParams, bck cmn.Bck, args *BinfoArgs) (string, *cmn.Bprops, *cmn.BsummResult, error) {
-	q := make(url.Values, 4)
+	q := qalloc()
 	q = bck.AddToQuery(q)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(args.FltPresence))
 	if args.DontAddRemote {
@@ -75,6 +74,7 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, args *BinfoArgs) (string, *cmn.Bp
 	}
 	xid, p, info, err := _binfo(reqParams, bck, args)
 	FreeRp(reqParams)
+	qfree(q)
 	return xid, p, info, err
 }
 
@@ -181,14 +181,15 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, 
 	if msg == nil {
 		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
 	}
+	q := qalloc()
 	bp.Method = http.MethodGet
-
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = qbck.NewQuery()
+		qbck.SetQuery(q)
+		reqParams.Query = q
 	}
 	if args.DontWait {
 		debug.Assert(args.Callback == nil)
@@ -196,11 +197,13 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, 
 	} else {
 		xid, err = _bsumm(reqParams, msg, &res, args)
 	}
+
 	if err == nil {
 		sort.Sort(res)
 	}
 	FreeRp(reqParams)
-	return
+	qfree(q)
+	return xid, res, err
 }
 
 // Wait/poll bucket-summary:

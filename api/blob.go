@@ -13,7 +13,10 @@ import (
 )
 
 func BlobDownload(bp BaseParams, bck cmn.Bck, objName string, msg *apc.BlobMsg) (xid string, err error) {
-	actMsg := apc.ActMsg{Action: apc.ActBlobDl, Value: msg, Name: objName}
+	var (
+		actMsg = apc.ActMsg{Action: apc.ActBlobDl, Value: msg, Name: objName}
+		q      = qalloc()
+	)
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -21,9 +24,12 @@ func BlobDownload(bp BaseParams, bck cmn.Bck, objName string, msg *apc.BlobMsg) 
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.NewQuery()
+		bck.SetQuery(q)
+		reqParams.Query = q
 	}
 	_, err = reqParams.doReqStr(&xid)
+
 	FreeRp(reqParams)
+	qfree(q)
 	return xid, err
 }

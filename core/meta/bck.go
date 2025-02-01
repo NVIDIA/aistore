@@ -70,7 +70,12 @@ func (b *Bck) IsRemoteS3() bool {
 	return backend != nil && backend.Provider == apc.AWS
 }
 
-func (b *Bck) NewQuery() url.Values               { return (*cmn.Bck)(b).NewQuery() }
+// TODO: mem-pool
+func (b *Bck) NewQuery() (q url.Values) {
+	q = make(url.Values, 4)
+	(*cmn.Bck)(b).SetQuery(q)
+	return q
+}
 func (b *Bck) AddToQuery(q url.Values) url.Values { return (*cmn.Bck)(b).AddToQuery(q) }
 
 func (b *Bck) Backend() *Bck { backend := (*cmn.Bck)(b).Backend(); return (*Bck)(backend) }

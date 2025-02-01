@@ -229,12 +229,14 @@ func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader 
 
 // PUT with HTTP trace
 func putWithTrace(proxyURL string, bck cmn.Bck, objName string, latencies *httpLatencies, cksum *cos.Cksum, reader cos.ReadOpenCloser) error {
+	q := make(url.Values, 1)
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = proxyURL
 		reqArgs.Path = apc.URLPathObjects.Join(bck.Name, objName)
-		reqArgs.Query = bck.NewQuery()
+		bck.SetQuery(q)
+		reqArgs.Query = q
 		reqArgs.BodyR = reader
 	}
 	putter := tracePutter{

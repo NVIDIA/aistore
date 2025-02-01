@@ -540,7 +540,8 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = apc.URLPathBuckets.S
 		if r.URL.RawQuery == "" {
 			qbck := cmn.QueryBcks{Provider: provider}
-			query := qbck.NewQuery()
+			query := make(url.Values, 1)
+			qbck.SetQuery(query)
 			r.URL.RawQuery = query.Encode()
 		} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
 			r.URL.RawQuery += "&" + apc.QparamProvider + "=" + provider
@@ -571,7 +572,8 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.RawQuery == "" {
-		query := bck.NewQuery()
+		query := make(url.Values, 1)
+		bck.SetQuery(query)
 		r.URL.RawQuery = query.Encode()
 	} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
 		r.URL.RawQuery += "&" + apc.QparamProvider + "=" + bck.Provider

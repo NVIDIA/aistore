@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -22,11 +22,13 @@ func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string /* e.g. blob-d
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
-	q := args.Bck.NewQuery()
+	q := qalloc()
+	args.Bck.SetQuery(q)
 	if args.Force {
 		q.Set(apc.QparamForce, "true")
 	}
 	msg := apc.ActMsg{Action: apc.ActXactStart, Value: args, Name: extra}
+
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -37,13 +39,19 @@ func StartXaction(bp BaseParams, args *xact.ArgsMsg, extra string /* e.g. blob-d
 		reqParams.Query = q
 	}
 	_, err = reqParams.doReqStr(&xid)
+
 	FreeRp(reqParams)
-	return
+	qfree(q)
+	return xid, err
 }
 
 // a.k.a. stop
 func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
-	msg := apc.ActMsg{Action: apc.ActXactStop, Value: args}
+	var (
+		q   = qalloc()
+		msg = apc.ActMsg{Action: apc.ActXactStop, Value: args}
+	)
+
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -51,11 +59,14 @@ func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = args.Bck.NewQuery()
+		args.Bck.SetQuery(q)
+		reqParams.Query = q
 	}
 	err = reqParams.DoRequest()
+
 	FreeRp(reqParams)
-	return
+	qfree(q)
+	return err
 }
 
 //
@@ -66,28 +77,39 @@ func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
 // e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] copy-bck[matRQMRes] put-copies[pOibtHExY]
 // TODO: return idle xactions separately
 func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err error) {
-	msg := xact.QueryMsg{Kind: kindOrName}
+	var (
+		msg       = xact.QueryMsg{Kind: kindOrName}
+		q         = qalloc()
+		reqParams = AllocRp()
+	)
+	q.Set(apc.QparamWhat, apc.WhatAllRunningXacts)
 	bp.Method = http.MethodGet
-	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatAllRunningXacts}}
+		reqParams.Query = q
 	}
+
 	_, err = reqParams.DoReqAny(&out)
+
 	FreeRp(reqParams)
-	return
+	qfree(q)
+	return out, err
 }
 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
 // NOTE: args.Kind can be either xaction kind or name - here and elsewhere
 func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
-	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+	var (
+		msg = xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
+		q   = qalloc()
+	)
 	if args.OnlyRunning {
 		msg.OnlyRunning = apc.Ptr(true)
 	}
+	q.Set(apc.QparamWhat, apc.WhatQueryXactStats)
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -95,11 +117,14 @@ func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, er
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatQueryXactStats}}
+		reqParams.Query = q
 	}
+
 	_, err = reqParams.DoReqAny(&xs)
+
 	FreeRp(reqParams)
-	return
+	qfree(q)
+	return xs, err
 }
 
 // GetOneXactionStatus queries one of the IC (proxy) members for status
@@ -113,14 +138,19 @@ func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, er
 // if exists
 func GetOneXactionStatus(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err error) {
 	status = &nl.Status{}
-	q := url.Values{apc.QparamWhat: []string{apc.WhatOneXactStatus}}
+	q := qalloc()
+	q.Set(apc.QparamWhat, apc.WhatOneXactStatus)
+
 	err = getxst(status, q, bp, args)
-	return
+
+	qfree(q)
+	return status, err
 }
 
 // same as above, except that it returns _all_ matching xactions
 func GetAllXactionStatus(bp BaseParams, args *xact.ArgsMsg) (matching nl.StatusVec, err error) {
-	q := url.Values{apc.QparamWhat: []string{apc.WhatAllXactStatus}}
+	q := qalloc()
+	q.Set(apc.QparamWhat, apc.WhatAllXactStatus)
 	if args.Force {
 		// (force just-in-time)
 		// for each args-selected xaction:
@@ -128,8 +158,11 @@ func GetAllXactionStatus(bp BaseParams, args *xact.ArgsMsg) (matching nl.StatusV
 		// and query those targets directly
 		q.Set(apc.QparamForce, "true")
 	}
+
 	err = getxst(&matching, q, bp, args)
-	return
+
+	qfree(q)
+	return matching, err
 }
 
 func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error) {

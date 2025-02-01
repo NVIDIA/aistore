@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -27,7 +27,8 @@ import (
 // See also: api.PutApndArch
 func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.ArchiveBckMsg) (string, error) {
 	bp.Method = http.MethodPut
-	q := bckFrom.NewQuery()
+	q := qalloc()
+	bckFrom.SetQuery(q)
 	return dolr(bp, bckFrom, apc.ActArchive, msg, q)
 }
 
@@ -36,7 +37,8 @@ func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.ArchiveBckMsg) (st
 
 func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
-	q := bckFrom.NewQuery()
+	q := qalloc()
+	bckFrom.SetQuery(q)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
@@ -45,7 +47,8 @@ func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence .
 
 func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
-	q := bckFrom.NewQuery()
+	q := qalloc()
+	bckFrom.SetQuery(q)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
@@ -54,21 +57,24 @@ func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ..
 
 func DeleteMultiObj(bp BaseParams, bck cmn.Bck, objNames []string, template string) (string, error) {
 	bp.Method = http.MethodDelete
-	q := bck.NewQuery()
+	q := qalloc()
+	bck.SetQuery(q)
 	msg := apc.ListRange{ObjNames: objNames, Template: template}
 	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
 
 func EvictMultiObj(bp BaseParams, bck cmn.Bck, objNames []string, template string) (string, error) {
 	bp.Method = http.MethodDelete
-	q := bck.NewQuery()
+	q := qalloc()
+	bck.SetQuery(q)
 	msg := apc.ListRange{ObjNames: objNames, Template: template}
 	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
 
 func Prefetch(bp BaseParams, bck cmn.Bck, msg apc.PrefetchMsg) (string, error) {
 	bp.Method = http.MethodPost
-	q := bck.NewQuery()
+	q := qalloc()
+	bck.SetQuery(q)
 	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
 }
 
@@ -84,5 +90,6 @@ func dolr(bp BaseParams, bck cmn.Bck, action string, msg any, q url.Values) (xid
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
+	qfree(q)
 	return xid, err
 }

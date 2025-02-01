@@ -176,13 +176,16 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 	var (
 		wresp     *wrappedResp
 		w, q, hdr = args.ret()
+		qall      = qalloc()
 	)
+
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
-		reqParams.Query = bck.NewQuery()
+		bck.SetQuery(qall)
+		reqParams.Query = qall
 		reqParams.Header = hdr
 	}
 	// copy qparams over, if any
@@ -194,7 +197,9 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 		reqParams.Query.Set(k, v)
 	}
 	wresp, err = reqParams.doWriter(w)
+
 	FreeRp(reqParams)
+	qfree(qall)
 	if err == nil {
 		oah.wrespHeader, oah.n = wresp.Header, wresp.n
 	}
@@ -300,23 +305,25 @@ func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 
 func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 	var (
-		resp  *http.Response
-		query = args.Bck.NewQuery()
+		resp *http.Response
+		q    = qalloc()
 	)
+	args.Bck.SetQuery(q)
 	if args.SkipVC {
-		query.Set(apc.QparamSkipVC, "true")
+		q.Set(apc.QparamSkipVC, "true")
 	}
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = args.BaseParams.URL
 		reqArgs.Path = apc.URLPathObjects.Join(args.Bck.Name, args.ObjName)
-		reqArgs.Query = query
+		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 		reqArgs.Header = args.Header
 	}
 	resp, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
+	qfree(q)
 	if err == nil {
 		oah.wrespHeader = resp.Header
 	}
@@ -329,10 +336,9 @@ func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 // - fltPresence:  as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
 // - silent==true: not to log (not-found) error
 
-func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn.ObjectProps, error) {
-	bp.Method = http.MethodHead
-
-	q := bck.NewQuery()
+func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (op *cmn.ObjectProps, err error) {
+	q := qalloc()
+	bck.SetQuery(q)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(args.FltPresence))
 	if args.Silent {
 		q.Set(apc.QparamSilent, "true")
@@ -345,17 +351,25 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn
 	}
 
 	reqParams := AllocRp()
-	defer FreeRp(reqParams)
+	bp.Method = http.MethodHead
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = q
 	}
+	op, err = headobj(reqParams, args.FltPresence == apc.FltPresentNoProps)
+
+	FreeRp(reqParams)
+	qfree(q)
+	return op, err
+}
+
+func headobj(reqParams *ReqParams, noprops bool) (*cmn.ObjectProps, error) {
 	hdr, _, err := reqParams.doReqHdr()
 	if err != nil {
 		return nil, err
 	}
-	if args.FltPresence == apc.FltPresentNoProps {
+	if noprops {
 		return nil, err
 	}
 
@@ -374,10 +388,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn
 		return field.SetValue(v[0], true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
 
-	if err != nil {
-		return nil, err
-	}
-	return op, nil
+	return op, err
 }
 
 // SetObjectCustomProps ================================================================================
@@ -390,10 +401,9 @@ func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (*cmn
 func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, objName string, custom cos.StrKVs, setNew bool) error {
 	var (
 		actMsg = apc.ActMsg{Value: custom}
-		q      url.Values
+		q      = qalloc()
 	)
 	if setNew {
-		q = make(url.Values, 4)
 		q = bck.AddToQuery(q)
 		q.Set(apc.QparamNewCustom, "true")
 	} else {
@@ -410,39 +420,50 @@ func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, objName string, custom cos
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
+	qfree(q)
 	return err
 }
 
 // DELETE(object) ======================================================================================
 
 func DeleteObject(bp BaseParams, bck cmn.Bck, objName string) error {
+	q := qalloc()
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
-		reqParams.Query = bck.NewQuery()
+		bck.SetQuery(q)
+		reqParams.Query = q
 	}
 	err := reqParams.DoRequest()
+
 	FreeRp(reqParams)
+	qfree(q)
 	return err
 }
 
 // Evict(object) ======================================================================================
 
 func EvictObject(bp BaseParams, bck cmn.Bck, objName string) error {
+	var (
+		q      = qalloc()
+		actMsg = apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, objName)}
+	)
 	bp.Method = http.MethodDelete
-	actMsg := apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, objName)}
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.NewQuery()
+		bck.SetQuery(q)
+		reqParams.Query = q
 	}
 	err := reqParams.DoRequest()
+
 	FreeRp(reqParams)
+	qfree(q)
 	return err
 }
 
@@ -468,7 +489,7 @@ func PrefetchObject(bp BaseParams, bck cmn.Bck, objName string) (string, error) 
 // - api.AppendObject
 
 func PutApndArch(args *PutApndArchArgs) (err error) {
-	q := make(url.Values, 4)
+	q := qalloc()
 	q = args.Bck.AddToQuery(q)
 	q.Set(apc.QparamArchpath, args.ArchPath)
 	q.Set(apc.QparamArchmime, args.Mime)
@@ -488,6 +509,7 @@ func PutApndArch(args *PutApndArchArgs) (err error) {
 	putArgs := &args.PutArgs
 	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
+	qfree(q)
 	return
 }
 
@@ -518,7 +540,7 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 }
 
 func AppendObject(args *AppendArgs) (string /*handle*/, error) {
-	q := make(url.Values, 4)
+	q := qalloc()
 	q.Set(apc.QparamAppendType, apc.AppendOp)
 	q.Set(apc.QparamAppendHandle, args.Handle)
 	q = args.Bck.AddToQuery(q)
@@ -533,6 +555,7 @@ func AppendObject(args *AppendArgs) (string /*handle*/, error) {
 	}
 	wresp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) //nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
+	qfree(q)
 	if err != nil {
 		return "", err
 	}
@@ -545,7 +568,7 @@ func AppendObject(args *AppendArgs) (string /*handle*/, error) {
 func FlushObject(args *FlushArgs) error {
 	var (
 		header http.Header
-		q      = make(url.Values, 4)
+		q      = qalloc()
 		method = args.BaseParams.Method
 	)
 	q.Set(apc.QparamAppendType, apc.FlushOp)
@@ -567,6 +590,7 @@ func FlushObject(args *FlushArgs) error {
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
+	qfree(q)
 	args.BaseParams.Method = method
 	return err
 }
@@ -575,6 +599,7 @@ func FlushObject(args *FlushArgs) error {
 // renames object name from `oldName` to `newName`. Works only within a given specified bucket.
 
 func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
+	q := qalloc()
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -582,10 +607,13 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, oldName)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActRenameObject, Name: newName})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.NewQuery()
+		bck.SetQuery(q)
+		reqParams.Query = q
 	}
 	err := reqParams.DoRequest()
+
 	FreeRp(reqParams)
+	qfree(q)
 	return err
 }
 
@@ -593,7 +621,11 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 // promote POSIX files and/or directories to (become) in-cluster objects.
 
 func Promote(bp BaseParams, bck cmn.Bck, args *apc.PromoteArgs) (xid string, err error) {
-	actMsg := apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN, Value: args}
+	var (
+		q      = qalloc()
+		actMsg = apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN, Value: args}
+	)
+
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -601,10 +633,13 @@ func Promote(bp BaseParams, bck cmn.Bck, args *apc.PromoteArgs) (xid string, err
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.NewQuery()
+		bck.SetQuery(q)
+		reqParams.Query = q
 	}
 	_, err = reqParams.doReqStr(&xid)
+
 	FreeRp(reqParams)
+	qfree(q)
 	return xid, err
 }
 

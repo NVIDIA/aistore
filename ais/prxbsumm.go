@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -47,7 +47,8 @@ func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.Query
 }
 
 func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error) {
-	q := qbck.NewQuery()
+	q := make(url.Values, 1)
+	qbck.SetQuery(q)
 
 	msg.UUID = cos.GenUUID()
 	actMsgExt := p.newAmsgActVal(apc.ActSummaryBck, msg)
