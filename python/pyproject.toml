@@ -62,7 +62,7 @@ keywords = [
 ]
 
 [project.optional-dependencies]
-pytorch = ["torch", "torchdata", "webdataset==0.2.86"]
+pytorch = ["torch", "torchdata", "webdataset==0.2.100"]
 botocore = ["wrapt"]
 
 [project.urls]
