@@ -72,10 +72,11 @@ var (
 		Action: etlListHandler,
 		Subcommands: []cli.Command{
 			{
-				Name:      cmdDetails,
-				Usage:     "Show ETL details",
-				ArgsUsage: etlNameArgument,
-				Action:    etlShowDetailsHandler,
+				Name:         cmdDetails,
+				Usage:        "Show ETL details",
+				ArgsUsage:    etlNameArgument,
+				Action:       etlShowDetailsHandler,
+				BashComplete: etlIDCompletions,
 			},
 		},
 	}
@@ -173,7 +174,7 @@ func suggestEtlName(c *cli.Context, shift int) {
 		return
 	}
 	for _, l := range list {
-		fmt.Print(l.Name)
+		fmt.Println(l.Name)
 	}
 }
 
