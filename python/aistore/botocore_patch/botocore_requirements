@@ -2,4 +2,5 @@ boto3
 botocore
 moto==4.0.11
 wrapt==1.14.1
+pytest==7.4.4
 pytest-xdist==3.1.0

@@ -203,18 +203,47 @@ test:short:python-changelog-check:
     - echo "$CHANGED_FILES"
     - echo "$CHANGED_FILES" | grep -qx 'python/CHANGELOG.md' || exit 1
 
+test:short:python-unit:
+  <<: *test_short_def
+  variables:
+    PIP: "uv pip"
+  script:
+    - cd python
+    - |
+      set -e
+      for ver in 3.8 3.9 3.10 3.11 3.12 3.13; do
+        uv venv --python "$ver" .venv
+        source .venv/bin/activate
+        make python_sdk_unit_tests
+        make python_botocore_unit_tests
+        deactivate || true
+        rm -rf .venv
+      done
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
+
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
-test:short:python:
+test:short:python-integration:
   <<: *test_short_def
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
     BUCKET: "aws://ais-ci-python"
+    PIP: "uv pip"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
-    - make python_sdk_tests
-    - make python_botocore_tests
-
+    - |
+      set -e
+      for ver in 3.8 3.9 3.10 3.11 3.12 3.13; do
+        uv venv --python "$ver" .venv
+        source .venv/bin/activate
+        make python_botocore_integration_tests
+        # TODO: For now, only run full SDK integration on 3.13
+        if [ "$ver" = "3.13" ]; then make python_sdk_integration_tests; fi
+        deactivate || true
+        rm -rf .venv
+      done
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
