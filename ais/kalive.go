@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 const (
@@ -255,7 +256,7 @@ func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 		cnt  = smap.Count()
 	)
 	pkr.openCh(cnt)
-	wg := cos.NewLimitedWaitGroup(cmn.MaxParallelism(), cnt) // limit parallelism
+	wg := cos.NewLimitedWaitGroup(sys.MaxParallelism(), cnt) // limit parallelism
 	for _, nm := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range nm {
 			if sid == p.SID() {

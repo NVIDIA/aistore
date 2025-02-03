@@ -515,7 +515,7 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 			break
 		}
 
-		fh := cos.NewByteHandle(b.Bytes())
+		fh := cos.NewByteReader(b.Bytes())
 		reader = fh
 		if flagIsSet(c, progressFlag) {
 			actualChunkOffset := atomic.NewInt64(0)

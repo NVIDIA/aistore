@@ -3396,6 +3396,7 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	req.Header.Set(apc.HdrCallerID, p.SID())
 	req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
+	cmn.HreqFree(req)
 }
 
 //

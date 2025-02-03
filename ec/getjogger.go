@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/klauspost/reedsolomon"
 )
@@ -862,7 +863,7 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 // nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
-		wg     = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 8)
+		wg     = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 8)
 		mtx    = &sync.Mutex{}
 		tmap   = core.T.Sowner().Get().Tmap
 		ctMeta = core.NewCTFromLOM(ctx.lom, fs.ECMetaType)

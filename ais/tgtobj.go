@@ -963,12 +963,13 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 		reqArgs.Query = query
 	}
 	config := cmn.GCO.Get()
-	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
+	req, _, cancel, err := reqArgs.ReqWith(config.Timeout.SendFile.D())
 	if err != nil {
 		debug.AssertNoErr(err)
 		return false
 	}
 	defer cancel()
+	defer cmn.HreqFree(req)
 
 	resp, err := g.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
 	cmn.FreeHra(reqArgs)
@@ -1734,12 +1735,14 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(coi.Config.Timeout.SendFile.D())
+	req, _, cancel, err := reqArgs.ReqWith(coi.Config.Timeout.SendFile.D())
 	if err != nil {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)
 	}
 	defer cancel()
+	defer cmn.HreqFree(req)
+
 	resp, err := g.client.data.Do(req)
 	if err != nil {
 		return cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 // ISharder executes an initial sharding job with given configuration
@@ -37,7 +38,7 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 	var (
 		recs  = shard.NewRecords(16)
 		errCh = make(chan error, 1)
-		wg    = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), 0)
+		wg    = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 0)
 	)
 
 	for name, child := range n.children {

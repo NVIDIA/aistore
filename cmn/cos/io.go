@@ -119,9 +119,9 @@ type (
 		fh  *FileHandle
 		sec *SectionHandle
 	}
-	// ByteHandle is a byte buffer(made from []byte) that implements
+	// ByteReader is a byte buffer(made from []byte) that implements
 	// ReadOpenCloser interface
-	ByteHandle struct {
+	ByteReader struct {
 		*bytes.Reader
 		b []byte
 	}
@@ -161,7 +161,7 @@ var (
 	_ io.Reader = (*nopReader)(nil)
 
 	_ ROCS = (*FileHandle)(nil)
-	_ ROCS = (*ByteHandle)(nil)
+	_ ROCS = (*ByteReader)(nil)
 
 	_ ReadSizer = (*sizedReader)(nil)
 
@@ -193,13 +193,13 @@ func (r *nopReader) Read(b []byte) (int, error) {
 }
 
 ////////////////
-// ByteHandle //
+// ByteReader //
 ////////////////
 
-func NewByteHandle(bt []byte) *ByteHandle           { return &ByteHandle{bytes.NewReader(bt), bt} }
-func (*ByteHandle) Close() error                    { return nil }
-func (b *ByteHandle) Open() (ReadOpenCloser, error) { return NewByteHandle(b.b), nil }
-func (b *ByteHandle) OpenDup() (ROCS, error)        { return NewByteHandle(b.b), nil }
+func NewByteReader(bt []byte) *ByteReader           { return &ByteReader{bytes.NewReader(bt), bt} }
+func (*ByteReader) Close() error                    { return nil }
+func (b *ByteReader) Open() (ReadOpenCloser, error) { return NewByteReader(b.b), nil }
+func (b *ByteReader) OpenDup() (ROCS, error)        { return NewByteReader(b.b), nil }
 
 ///////////////
 // nopOpener //

@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -837,7 +838,7 @@ func (m *Manager) phase3(maxSize int64) error {
 
 	m.recm.Records.Drain()
 
-	wg := cos.NewLimitedWaitGroup(cmn.MaxParallelism(), len(shardsToTarget))
+	wg := cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(shardsToTarget))
 	for si, s := range shardsToTarget {
 		wg.Add(1)
 		go m._dist(si, s, sendOrder[si.ID()], errCh, wg)

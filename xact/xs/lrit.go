@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -131,7 +132,7 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 	if numWorkers == lrpWorkersDflt {
 		numWorkers = l
 	}
-	if a := cmn.MaxParallelism(); a > numWorkers+8 {
+	if a := sys.MaxParallelism(); a > numWorkers+8 {
 		var bump bool
 		a <<= 1
 		switch r.lrp {

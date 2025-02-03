@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -147,13 +148,13 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	if pre.numWorkers == 0 {
 		pre.numWorkers = dfltNumWorkers
 	}
-	if a := cmn.MaxParallelism(); a > pre.numWorkers+4 {
+	if a := sys.MaxParallelism(); a > pre.numWorkers+4 {
 		pre.numWorkers++
 	}
 	if int64(pre.numWorkers)*pre.chunkSize > pre.fullSize {
 		pre.numWorkers = int((pre.fullSize + pre.chunkSize - 1) / pre.chunkSize)
 	}
-	if a := cmn.MaxParallelism(); a < pre.numWorkers {
+	if a := sys.MaxParallelism(); a < pre.numWorkers {
 		pre.numWorkers = a
 	}
 
@@ -207,7 +208,7 @@ func (p *blobFactory) Start() error {
 
 	nr := int64(r.numWorkers)
 	nc := (r.fullSize + r.chunkSize - 1) / r.chunkSize
-	if pressure == memsys.PressureLow && r.numWorkers < cmn.MaxParallelism() {
+	if pressure == memsys.PressureLow && r.numWorkers < sys.MaxParallelism() {
 		if nr < nc && nr*r.chunkSize < maxTotalChunksMem {
 			r.numWorkers++ // add a reader
 		}

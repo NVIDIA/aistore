@@ -38,6 +38,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tracing"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -650,22 +651,16 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	switch args.timeout {
 	case apc.DefaultTimeout:
 		req, res.err = args.req.Req()
-		if res.err != nil {
-			break
-		}
 		client = g.client.control // timeout = config.Client.Timeout ("client.client_timeout")
 	case apc.LongTimeout:
 		req, res.err = args.req.Req()
-		if res.err != nil {
-			break
-		}
 		client = g.client.data // timeout = config.Client.TimeoutLong ("client.client_long_timeout")
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
 			args.timeout = cmn.Rom.CplaneOperation()
 		}
-		req, _, cancel, res.err = args.req.ReqWithTimeout(args.timeout)
+		req, _, cancel, res.err = args.req.ReqWith(args.timeout)
 		if res.err != nil {
 			break
 		}
@@ -686,6 +681,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 			args.req.Method, args.req.URL(), res.err)
 		return res
 	}
+	defer cmn.HreqFree(req)
 
 	// req header
 	if smap.vstr != "" {
@@ -849,7 +845,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), bargs.nodeCount)
+		wg      = cos.NewLimitedWaitGroup(sys.MaxParallelism(), bargs.nodeCount)
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) == 0)
@@ -875,7 +871,7 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), bargs.nodeCount)
+		wg      = cos.NewLimitedWaitGroup(sys.MaxParallelism(), bargs.nodeCount)
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) > 0)
@@ -1480,9 +1476,9 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 		nodemap = smap.Tmap
 	}
 	if c.checkAll {
-		wg = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), len(nodemap))
+		wg = cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(nodemap))
 	} else {
-		count = min(cmn.MaxParallelism(), maxVerConfirmations<<1)
+		count = min(sys.MaxParallelism(), maxVerConfirmations<<1)
 		wg = cos.NewLimitedWaitGroup(count, len(nodemap) /*have*/)
 	}
 	for sid, si := range nodemap {

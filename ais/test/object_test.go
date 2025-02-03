@@ -268,7 +268,7 @@ func TestAppendObject(t *testing.T) {
 					Bck:        bck,
 					Object:     objName,
 					Handle:     handle,
-					Reader:     cos.NewByteHandle([]byte(body)),
+					Reader:     cos.NewByteReader([]byte(body)),
 				}
 				handle, err = api.AppendObject(&args)
 				tassert.CheckFatal(t, err)

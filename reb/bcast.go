@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -45,7 +46,7 @@ type (
 func bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 	var (
 		cnt atomic.Int32
-		wg  = cos.NewLimitedWaitGroup(cmn.MaxParallelism(), len(rargs.smap.Tmap))
+		wg  = cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(rargs.smap.Tmap))
 	)
 	for _, tsi := range rargs.smap.Tmap {
 		if tsi.ID() == core.T.SID() {

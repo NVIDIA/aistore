@@ -6,24 +6,19 @@
 package cmn
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -34,21 +29,6 @@ const (
 )
 
 type (
-	// usage 1: initialize and fill out HTTP request.
-	// usage 2: intra-cluster control-plane (except streams)
-	// usage 3: PUT and APPEND API
-	// BodyR optimizes-out allocations - if non-nil and implements `io.Closer`, will always be closed by `client.Do`
-	HreqArgs struct {
-		BodyR    io.Reader
-		Header   http.Header // request headers
-		Query    url.Values  // query, e.g. ?a=x&b=y&c=z
-		RawQuery string      // raw query
-		Method   string
-		Base     string // base URL, e.g. http://xyz.abc
-		Path     string // path URL, e.g. /x/y/z
-		Body     []byte
-	}
-
 	RetryArgs struct {
 		Call    func() (int, error)
 		IsFatal func(error) bool
@@ -275,70 +255,3 @@ func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {
 	}
 	return timeout, true
 }
-
-//////////////
-// HreqArgs //
-//////////////
-
-var (
-	hraPool sync.Pool
-	hra0    HreqArgs
-)
-
-func AllocHra() (a *HreqArgs) {
-	if v := hraPool.Get(); v != nil {
-		a = v.(*HreqArgs)
-		return
-	}
-	return &HreqArgs{}
-}
-
-func FreeHra(a *HreqArgs) {
-	*a = hra0
-	hraPool.Put(a)
-}
-
-func (u *HreqArgs) URL() string {
-	url := cos.JoinPath(u.Base, u.Path)
-	if u.RawQuery != "" {
-		return url + "?" + u.RawQuery
-	}
-	if rawq := u.Query.Encode(); rawq != "" {
-		return url + "?" + rawq
-	}
-	return url
-}
-
-func (u *HreqArgs) Req() (*http.Request, error) {
-	r := u.BodyR
-	if r == nil && u.Body != nil {
-		r = bytes.NewBuffer(u.Body)
-	}
-	req, err := http.NewRequest(u.Method, u.URL(), r)
-	if err != nil {
-		return nil, err
-	}
-	if u.Header != nil {
-		copyHeaders(u.Header, &req.Header)
-	}
-	return req, nil
-}
-
-func (u *HreqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
-	req, err := u.Req()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if u.Method == http.MethodPost || u.Method == http.MethodPut {
-		req.Header.Set(cos.HdrContentType, cos.ContentJSON)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	req = req.WithContext(ctx)
-	return req, ctx, cancel, nil
-}
-
-//
-// number of intra-cluster broadcasting goroutines
-//
-
-func MaxParallelism() int { return max(sys.NumCPU(), 4) }

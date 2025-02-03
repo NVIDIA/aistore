@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
 )
 
@@ -203,7 +203,7 @@ func parseNumWorkersFlag(c *cli.Context, flag cli.IntFlag) (n int, err error) {
 	if n < 0 {
 		return n, fmt.Errorf("%s cannot be negative", qflprn(flag))
 	}
-	mp := 2 * cmn.MaxParallelism() // NOTE: imposing (hard-coded) limit
+	mp := 2 * sys.MaxParallelism() // NOTE: imposing (hard-coded) limit
 	if n > mp {
 		warn := fmt.Sprintf("%s exceeds allowed maximum (2 * CPU cores) = %d - proceeding with %d workers...",
 			qflprn(flag), mp, mp)

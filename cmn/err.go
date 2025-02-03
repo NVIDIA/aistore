@@ -247,13 +247,6 @@ type (
 )
 
 var (
-	thisNodeName string
-	cleanPathErr func(error)
-)
-
-func InitErrs(a string, b func(error)) { thisNodeName, cleanPathErr = a, b }
-
-var (
 	ErrSkip             = errors.New("skip")
 	ErrStartupTimeout   = errors.New("startup timeout") // related StartupMayTimeout
 	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")

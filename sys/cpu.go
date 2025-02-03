@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -41,6 +41,9 @@ func init() {
 
 func Containerized() bool { return containerized }
 func NumCPU() int         { return contCPUs }
+
+// number of intra-cluster broadcasting goroutines
+func MaxParallelism() int { return max(NumCPU(), 4) }
 
 func GoEnvMaxprocs() {
 	if val, exists := os.LookupEnv("GOMEMLIMIT"); exists {
