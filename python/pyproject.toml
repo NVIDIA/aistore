@@ -41,6 +41,7 @@ dependencies = [
     "requests",
     "packaging",
     "overrides",
+    "python-dateutil",
     "PyYAML",
     "pydantic>=1.10.17",
     "cloudpickle>=2.2.0",

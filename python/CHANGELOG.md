@@ -18,6 +18,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Improvements to Python SDK error handling.
 
+- Replaced `datetime.fromisoformat` usage and custom parsing logic with `dateutil.parser.isoparse` for more consistent and robust ISO timestamp handling in `job.py`.
+
 ## [1.10.1] - 2024-12-20
 
 ### Added

@@ -3,9 +3,11 @@
 #
 
 import itertools
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Dict, Optional
 import time
+
+from dateutil.parser import isoparse
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
@@ -228,23 +230,6 @@ class Job:
         )
         return resp.text
 
-    def _parse_iso_datetime(self, dt_str):
-        # Remove 'Z' timezone designator if present
-        if dt_str.endswith("Z"):
-            dt_str = dt_str[:-1]
-        # Handle fractional seconds (nanoseconds) by truncating to microseconds
-        if "." in dt_str:
-            date_part, frac_part = dt_str.split(".")
-            # Truncate or pad the fractional part to 6 digits (microseconds)
-            frac_part = (frac_part + "000000")[:6]
-            dt_str = f"{date_part}.{frac_part}"
-            dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S.%f")
-        else:
-            dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S")
-
-        # Always return the datetime as UTC-aware
-        return dt.replace(tzinfo=timezone.utc)
-
     def get_within_timeframe(
         self, start_time: datetime, end_time: Optional[datetime] = None
     ) -> List[JobSnapshot]:
@@ -265,12 +250,12 @@ class Job:
         jobs_found = []
         for snapshot in snapshots:
             if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
-                snapshot_start_time = self._parse_iso_datetime(snapshot.start_time)
+                snapshot_start_time = isoparse(snapshot.start_time)
                 if snapshot_start_time >= start_time:
                     if end_time is None:
                         jobs_found.append(snapshot)
                     else:
-                        snapshot_end_time = self._parse_iso_datetime(snapshot.end_time)
+                        snapshot_end_time = isoparse(snapshot.end_time)
                         if snapshot_end_time <= end_time:
                             jobs_found.append(snapshot)
         if not jobs_found:
@@ -303,7 +288,7 @@ class Job:
         if not job_found:
             raise JobInfoNotFound(f"No info found for job {self._job_id}")
 
-        end_time = datetime.fromisoformat(snapshot.end_time.rstrip("Z")).time()
+        end_time = isoparse(snapshot.end_time).time()
         if snapshot.end_time != "0001-01-01T00:00:00Z" and not snapshot.aborted:
             logger.info("Job '%s' finished at time '%s'", self.job_id, end_time)
             return True

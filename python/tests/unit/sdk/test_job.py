@@ -315,8 +315,8 @@ class TestJob(unittest.TestCase):
             JobSnapshot(
                 id="1234",
                 kind="test job",
-                start_time=(start_time.isoformat() + "Z"),
-                end_time=(end_time.isoformat() + "Z"),
+                start_time=(start_time.isoformat()),
+                end_time=(end_time.isoformat()),
                 aborted=False,
                 is_idle=True,
             )
