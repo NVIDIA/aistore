@@ -901,6 +901,8 @@ func (m *Manager) _do(reqArgs *cmn.HreqArgs, tsi *meta.Snode, act string) error 
 		return errV
 	}
 	resp, err := m.client.Do(req) //nolint:bodyclose // cos.Close below
+
+	cmn.HreqFree(req)
 	if err != nil {
 		return err
 	}

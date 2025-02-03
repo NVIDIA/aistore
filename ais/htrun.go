@@ -681,7 +681,6 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 			args.req.Method, args.req.URL(), res.err)
 		return res
 	}
-	defer cmn.HreqFree(req)
 
 	// req header
 	if smap.vstr != "" {
@@ -697,11 +696,13 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	resp, res.err = client.Do(req)
 	if res.err != nil {
 		res.details = dfltDetail // tcp level, e.g.: connection refused
+		cmn.HreqFree(req)
 		return res
 	}
 
 	_doResp(args, req, resp, res)
 	resp.Body.Close()
+	cmn.HreqFree(req)
 
 	if sid != unknownDaemonID {
 		h.keepalive.heardFrom(sid)

@@ -175,7 +175,7 @@ func (t *traceableTransport) set(l *httpLatencies) {
 
 // implements callback of the type `api.NewRequestCB`
 func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
-	req, err := reqArgs.Req()
+	req, err := reqArgs.ReqDeprecated()
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +343,10 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int
 		return 0, err
 	}
 	api.SetAuxHeaders(req, &runParams.bp)
+
 	resp, err := runParams.bp.Client.Do(req)
+
+	cmn.HreqFree(req)
 	if err != nil {
 		return 0, err
 	}
@@ -381,6 +384,8 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *ht
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
 	resp, err := tctx.tracedClient.Do(req)
+
+	cmn.HreqFree(req)
 	if err != nil {
 		return 0, err
 	}

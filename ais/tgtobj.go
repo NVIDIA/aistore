@@ -1735,21 +1735,23 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	req, _, cancel, err := reqArgs.ReqWith(coi.Config.Timeout.SendFile.D())
-	if err != nil {
+	req, _, cancel, errN := reqArgs.ReqWith(coi.Config.Timeout.SendFile.D())
+	if errN != nil {
 		cos.Close(sargs.reader)
-		return fmt.Errorf("unexpected failure to create request, err: %w", err)
+		return fmt.Errorf("unexpected failure to create request, err: %w", errN)
 	}
-	defer cancel()
-	defer cmn.HreqFree(req)
 
 	resp, err := g.client.data.Do(req)
 	if err != nil {
-		return cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
+		err = cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
+	} else {
+		cos.DrainReader(resp.Body)
+		resp.Body.Close()
 	}
-	cos.DrainReader(resp.Body)
-	resp.Body.Close()
-	return nil
+
+	cmn.HreqFree(req)
+	cancel()
+	return err
 }
 
 func (coi *coi) stats(size int64, err error) {

@@ -63,6 +63,8 @@ func call(reqArgs *cmn.HreqArgs) response {
 	}
 
 	resp, err := bcastClient.Do(req) //nolint:bodyclose // Closed inside `cos.Close`.
+
+	cmn.HreqFree(req)
 	if err != nil {
 		return response{err: err, statusCode: http.StatusInternalServerError}
 	}
