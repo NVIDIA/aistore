@@ -10,10 +10,10 @@ updates:
     schedule:
       interval: "monthly"
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/deploy/prod/k8s/aisnode_container/"
     schedule:
       interval: "monthly"
   - package-ecosystem: "pip"
-    directory: "/"
+    directory: "/python/"
     schedule:
       interval: "monthly"
