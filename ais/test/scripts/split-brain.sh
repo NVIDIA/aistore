@@ -74,7 +74,7 @@ for i in $(seq 1 1 $iterations); do
   ais show cluster > $show_cluster_out_1 || exit $?
 
   current_proxies=$(grep -c "^p\[" $show_cluster_out_1)
-  [[ "$current_proxies" -eq "$orig_proxies" ]] || { echo "Error: wrong number of _unified_ proxies: expected $EXPECTED_PROXIES, got $current_proxies"; exit 1; }
+  [[ "$current_proxies" -eq "$orig_proxies" ]] || { echo "Error: wrong number of _unified_ proxies: expected $orig_proxies, got $current_proxies"; exit 1; }
 
   current_targets=$(grep -c "^t\[" $show_cluster_out_1)
   [[ "$current_targets" -eq "$orig_targets" ]] || { echo "Error: wrong number of _unified_ targets: expected $orig_targets, got $current_targets"; exit 1; }
