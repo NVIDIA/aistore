@@ -127,9 +127,7 @@ cluster          evict            performance      search           wait
 These are the current set of top-level commands. Each command has its own extended help (the `--help` option) and, usually, multiple sub-commands
 (which, in turn, have their respective inline helps and subcommands).
 
-The list of top-level commands must give maybe the first idea of the supported functionality and functional grouping.
-
-Following is a brief summary (that's non-exhaustive and slightly outdated):
+The list of top-level commands provides an overview of the supported functionality and functional grouping. The following is a brief (non-exhaustive and possibly slightly outdated) **summary**:
 
 | Command | Use Case |
 |---------|----------|
@@ -138,6 +136,7 @@ Following is a brief summary (that's non-exhaustive and slightly outdated):
 | [`ais alias`](/docs/cli/alias.md) | User-defined command aliases. |
 | [`ais archive`](/docs/cli/archive.md) | Read, write, and list archives (i.e., objects formatted as TAR, TGZ, ZIP, etc.) |
 | [`ais auth`](/docs/cli/auth.md) | Add/remove/show users, manage user roles, manage access to remote clusters. |
+| [`ais blob-download`](/docs/cli/blob-downloader.md) | Download a large object or multiple objects from remote storage. |
 | [`ais bucket`](/docs/cli/bucket.md) | Create/destroy buckets, list bucket's content, show existing buckets and their properties. |
 | [`ais cluster`](/docs/cli/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
 | [`ais config`](/docs/cli/config.md) | Set local/global AIS cluster configurations. |

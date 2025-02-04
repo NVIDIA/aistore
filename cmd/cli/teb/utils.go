@@ -114,7 +114,9 @@ var (
 		"BuildTimes":   func(h StatsAndStatusHelper) string { return toString(h.buildTimes()) },
 	}
 
-	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
+	AliasTemplate = "ALIAS\tCOMMAND\n" +
+		"=====\t=======\n" +
+		"{{range $alias := .}}" +
 		"{{ $alias.Name }}\t{{ $alias.Value }}\n" +
 		"{{end}}"
 

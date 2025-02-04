@@ -22,20 +22,26 @@ Commands for special use cases (e.g. scripting) and *advanced* usage scenarios, 
 ```console
 $ ais advanced --help
 
+NAME:
+   ais advanced - Special commands intended for development and advanced usage
+
 USAGE:
-   ais advanced command [arguments...] [command options]
+   ais advanced command [arguments...]  [command options]
 
 COMMANDS:
-   resilver          resilver user data on a given target (or all targets in the cluster); entails:
+   resilver          Resilver user data on a given target (or all targets in the cluster); entails:
                      - fix data redundancy with respect to bucket configuration;
                      - remove migrated objects and old/obsolete workfiles.
-   preload           preload object metadata into in-memory cache
-   remove-from-smap  immediately remove node from cluster map (beware: potential data loss!)
-   random-node       print random node ID (by default, ID of a randomly selected target)
-   random-mountpath  print a random mountpath from a given target
-   rotate-logs       rotate aistore logs
-   enable-backend    (re)enable cloud backend (see also: 'ais config cluster backend')
-   disable-backend   disable cloud backend (see also: 'ais config cluster backend')
+   preload           Preload object metadata into in-memory cache
+   remove-from-smap  Immediately remove node from cluster map (beware: potential data loss!)
+   random-node       Print random node ID (by default, ID of a randomly selected target)
+   random-mountpath  Print a random mountpath from a given target
+   rotate-logs       Rotate aistore logs
+   enable-backend    (Re)enable cloud backend (see also: 'ais config cluster backend')
+   disable-backend   Disable cloud backend (see also: 'ais config cluster backend')
+
+OPTIONS:
+   --help, -h  Show help
 ```
 
 ## Manual Resilvering

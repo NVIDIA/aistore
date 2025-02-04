@@ -42,6 +42,7 @@ rmb             bucket rm
 - [Start Erasure Coding](#start-erasure-coding)
 - [Show bucket properties](#show-bucket-properties)
 - [Set bucket properties](#set-bucket-properties)
+- [Archive multiple objects](#archive-multiple-objects)
 - [Show and set AWS-specific properties](#show-and-set-aws-specific-properties)
 - [Reset bucket properties to cluster defaults](#reset-bucket-properties-to-cluster-defaults)
 - [Show bucket metadata](#show-bucket-metadata)
@@ -950,36 +951,50 @@ A few additional words must be said about `--validate`. The option is provided t
 > an alternative way to execute _validation_ is to run `ais strorage validate` or (simply) `ais scrub`:
 
 ```console
-$ ais storage validate --help
+$ ais scrub --help
+
 NAME:
-   ais storage validate - check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
+   ais scrub - (alias for "storage validate") Check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more
    e.g.:
      * ais storage validate                 - validate all in-cluster buckets;
      * ais scrub                            - same as above;
-     * ais storage validate ais             - validate (a.k.a. scrub) all ais buckets;
-     * ais scrub s3                         - all s3 buckets present in the cluster;
+     * ais storage validate ais             - validate (a.k.a. scrub) all ais:// buckets;
+     * ais scrub s3                         - ditto, all s3:// buckets;
      * ais scrub s3 --refresh 10            - same as above while refreshing runtime counter(s) every 10s;
      * ais scrub gs://abc/images/           - validate part of the gcp bucket under 'images/`;
      * ais scrub gs://abc --prefix images/  - same as above.
 
 USAGE:
-   ais storage validate [BUCKET[/PREFIX]] or [PROVIDER] [command options]
+   ais scrub [BUCKET[/PREFIX]] [PROVIDER] [command options]
 
 OPTIONS:
-   --refresh value        time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                          valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value          used together with '--refresh' to limit the number of generated reports, e.g.:
+   --all-columns          Show all columns, including those with only zero values
+   --cached               Only visit in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
+   --count value          Used together with '--refresh' to limit the number of generated reports, e.g.:
                            '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
-   --prefix value         for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
-                          '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
-                          a/b that have names (relative to this directory) starting with the letter c
-   --limit value          maximum number of object names to list (0 - unlimited; see also '--max-pages')
-                          e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
-   --no-headers, -H       display tables without headers
-   --max-pages value      maximum number of pages to display (see also '--page-size' and '--limit')
+   --large-size value     Count and report all objects that are larger or equal in size  (e.g.: 4mb, 1MiB, 1048576, 128k; default: 5 GiB)
+   --limit value          The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+                          e.g.:
+                          - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+                          - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+                          - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
+   --max-pages value      Maximum number of pages to display (see also '--page-size' and '--limit')
                           e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
-   --non-recursive, --nr  list objects without including nested virtual subdirectories
-   --help, -h             show help
+   --no-headers, -H       Display tables without headers
+   --non-recursive, --nr  Non-recursive operation, e.g.:
+                          - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                          - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
+                          - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
+                          - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
+   --page-size value      Maximum number of object names per page; when the flag is omitted or 0
+                          the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged' (default: 0)
+   --prefix value         For each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                          '--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory
+                          a/b that have names (relative to this directory) starting with the letter c
+   --refresh value        Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --small-size value     Count and report all objects that are smaller or equal in size (e.g.: 4, 4b, 1k, 128kib; default: 0)
+   --help, -h             Show help
 ```
 
 For details and additional examples, please see:
@@ -1375,6 +1390,57 @@ present		 yes
 provider	 ais
 versioning Enabled | Validate on WarmGET: yes
 ```
+
+## Archive multiple objects
+
+`ais archive bucket` - Archive selected or matching objects from SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] as (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object (a.k.a. shard).
+
+```console
+$ ais archive bucket --help
+
+NAME:
+   ais archive bucket - Archive selected or matching objects from SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] as
+   (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object (a.k.a. shard),
+   e.g.:
+     - 'archive bucket ais://src ais://dst/a.tar.lz4 --template "shard-{001..997}"'
+     - 'archive bucket "ais://src/shard-{001..997}" ais://dst/a.tar.lz4'                  - same as above (notice double quotes)
+     - 'archive bucket "ais://src/shard-{998..999}" ais://dst/a.tar.lz4 --append-or-put'  - append (ie., archive) 2 more objects
+
+USAGE:
+   ais archive bucket SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET/SHARD_NAME [command options]
+
+OPTIONS:
+   --append-or-put    Append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
+                      note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
+   --cont-on-err      Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --dry-run          Preview the results without really running the action
+   --include-src-bck  Prefix the names of archived files with the source bucket name
+   --list value       Comma-separated list of object or file names, e.g.:
+                      --list 'o1,o2,o3'
+                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                      or, when listing files and/or directories:
+                      --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --prefix value     Select virtual directories or objects with names starting with the specified prefix, e.g.:
+                      '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                      '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --skip-lookup      Skip checking source and destination buckets' existence (trading off extra lookup for performance)
+   --template value   Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                      (with optional steps and gaps), e.g.:
+                      --template "" # (an empty or '*' template matches eveything)
+                      --template 'dir/subdir/'
+                      --template 'shard-{1000..9999}.tar'
+                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                      and similarly, when specifying files and directories:
+                      --template '/home/dir/subdir/'
+                      --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait             Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --help, -h         Show help
+```
+
+**See also:**
+
+* [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets) below.
+* [Disambiguating multi-object operation](/docs/cli/object.md#disambiguating-multi-object-operation)
 
 ## Show and set AWS-specific properties
 

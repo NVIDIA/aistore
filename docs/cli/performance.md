@@ -11,7 +11,51 @@ redirect_from:
 
 ```console
 $ ais performance <TAB-TAB>
+
 counters     throughput   latency      capacity     disk
+```
+
+Further, use `--help` to display any of the five performance subcommands, e.g.:
+
+```console
+$ ais performance throughput --help
+
+NAME:
+   ais performance throughput - Show GET and PUT throughput, associated (cumulative, average) sizes and counters
+
+USAGE:
+   ais performance throughput [TARGET_ID] [command options]
+
+OPTIONS:
+   --average-size       Show average GET, PUT, etc. request size
+   --count value        Used together with '--refresh' to limit the number of generated reports, e.g.:
+                         '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --no-headers, -H     Display tables without headers
+   --non-verbose, --nv  Non-verbose (quiet) output, minimized reporting, fewer warnings
+   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --regex value        Regular expression to select table columns (case-insensitive), e.g.:
+                         --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
+                         --regex "Put|ERR" - same as above;
+                         --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
+                         --regex "(AWS-GET$|VERSION-CHANGE$)" - show the number object version changes (updates) and cold GETs from AWS
+                         --regex "(gcp-get$|version-change$)" - same as above for Google Cloud ('gs://')
+   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                        si  - SI (metric) format, e.g.: KB, MB, GB
+                        raw - do not convert to (or from) human-readable format
+   --verbose, -v        Verbose output
+   --help, -h           Show help
+```
+
+> Note that `ais show performance` and its shorter versioni, `ais performance`, can be used interchangeably.
+
+## `ais performance throughput`
+
+Example usage:
+
+```console
+$ ais performance throughput --refresh 30
 ```
 
 ## `ais show performance latency`
@@ -46,9 +90,9 @@ Other notable semantics includes:
 ## `ais show performance counters`
 
 ```console
-$ ais show performance counters --help
+$ ais performance counters --help
 NAME:
-   ais show performance counters - show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
+   ais performance counters - show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
         - numbers of list-objects requests;
         - (GET, PUT, etc.) cumulative and average sizes;
         - associated error counters, if any.
@@ -73,10 +117,10 @@ OPTIONS:
    --average-size    show average GET, PUT, etc. request size
 ```
 
-## `ais show performance disk`
+## `ais performance disk`
 
 ```console
-$ ais show performance disk --help
+$ ais performance disk --help
 NAME:
    ais show performance disk - show disk utilization and read/write statistics
 

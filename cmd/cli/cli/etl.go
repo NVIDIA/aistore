@@ -124,7 +124,7 @@ var (
 	}
 	objCmdETL = cli.Command{
 		Name:         cmdObject,
-		Usage:        "Transform object",
+		Usage:        "Transform an object",
 		ArgsUsage:    etlNameArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
 		BashComplete: etlIDCompletions,

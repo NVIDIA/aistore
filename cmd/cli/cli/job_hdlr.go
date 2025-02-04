@@ -38,7 +38,7 @@ const prefetchUsage = "Prefetch one remote bucket, multiple remote buckets, or\n
 	indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
-const blobDownloadUsage = "Run a job to download large object(s) from remote storage to aistore cluster, e.g.:\n" +
+const blobDownloadUsage = "Download a large object or multiple objects from remote storage, e.g.:\n" +
 	indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
 	indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- run 4 concurrent readers to download 2 (listed) blobs\n" +
 	indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor."

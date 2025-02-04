@@ -19,6 +19,7 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 
 ## Table of Contents
 
+- [Commands](#commands)
 - [Initialize ETL with a specification file](#init-etl-with-spec)
 - [Initialize ETL with code](#init-etl-with-code)
 - [List all ETLs](#list-etls)
@@ -30,6 +31,37 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 - [Transform an entire bucket](#transform-a-bucket-offline-with-the-given-etl)
 
 ---
+
+## Commands
+
+Top-level ETL commands include `init`, `stop`, `show`, and more:
+
+```console
+$ ais etl --help
+NAME:
+   ais etl - Execute custom transformations on objects
+
+USAGE:
+   ais etl command [arguments...]  [command options]
+
+COMMANDS:
+   init       Start ETL job: 'spec' job (requires pod yaml specification) or 'code' job (with transforming function or script in a local file)
+   show       Show ETL(s)
+   view-logs  View ETL logs
+   start      Start ETL
+   stop       Stop ETL
+   rm         Remove ETL
+   object     Transform an object
+   bucket     Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix')
+
+OPTIONS:
+   --help, -h  Show help
+```
+
+Additionally, use `--help` to display any specific command, e.g.:
+
+```console
+```
 
 ## Init ETL with a specification file
 

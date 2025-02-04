@@ -17,10 +17,10 @@ For the most recently updated list of supported archival formats, please refer t
 The corresponding subset of CLI commands starts with `ais archive`, from where you can `<TAB-TAB>` to the actual (reading, writing, etc.) operation.
 
 ```console
-$ ais archive --help
+$ ais archive get --help
 
 NAME:
-   ais archive get - get a shard and extract its content; get an archived file;
+   ais archive get - Get a shard and extract its content; get an archived file;
               write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
               assorted options further include:
               - '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);
@@ -40,28 +40,10 @@ USAGE:
    ais archive get BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
-   --checksum           validate checksum
-   --yes, -y            assume 'yes' to all questions
-   --latest             check in-cluster metadata and, possibly, GET, download, prefetch, or copy the latest object version
-                        from the associated remote bucket:
-                        - provides operation-level control over object versioning (and version synchronization)
-                          without requiring to change bucket configuration
-                        - the latter can be done using 'ais bucket props set BUCKET versioning'
-                        - see also: 'ais ls --check-versions', 'ais cp', 'ais prefetch', 'ais get'
-   --refresh value      time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress           show progress bar(s) and progress of execution in real time
-   --blob-download      utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
-   --chunk-size value   chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
-   --num-workers value  number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
-   --archpath value     extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
-                        see also: '--archregx'
-   --archmime value     expected format (mime type) of an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+   --archive            List archived content (see docs/archive.md for details)
+   --archmime value     Expected format (mime type) of an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
                         especially usable for shards with non-standard extensions
-   --archregx value     string that specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression
-                        to select possibly multiple matching archived files from a given shard;
-                        is used in combination with '--archmode' ("matching mode") option
-   --archmode value     enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
+   --archmode value     Enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
                           * regexp - general purpose regular expression;
                           * prefix - matching filename starts with;
                           * suffix - matching filename ends with;
@@ -70,29 +52,58 @@ OPTIONS:
                         example:
                           given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
                           and wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)
-   --extract, -x        extract all files from archive(s)
-   --inventory          list objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+   --archpath value     Extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                        see also: '--archregx'
+   --archregx value     Specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression
+                        to select possibly multiple matching archived files from a given shard;
+                        is used in combination with '--archmode' ("matching mode") option
+   --blob-download      Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
+   --cached             Only get in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
+   --checksum           Validate checksum
+   --chunk-size value   Chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   --extract, -x        Extract all files from archive(s)
+   --inv-id value       Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
+   --inv-name value     Bucket inventory name (optional; system default name is '.inventory')
+   --inventory          List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
                         boost when used with very large s3 buckets; e.g. usage:
                           1) 'ais ls s3://abc --inventory'
                           2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
                         (see also: docs/s3inventory.md)
-   --inv-name value     bucket inventory name (optional; system default name is '.inventory')
-   --inv-id value       bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
-   --prefix value       get objects that start with the specified prefix, e.g.:
+   --latest             Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+                        from the associated remote bucket;
+                        the option provides operation-level control over object versioning (and version synchronization)
+                        without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                        see also:
+                          - 'ais show bucket BUCKET versioning'
+                          - 'ais bucket props set BUCKET versioning'
+                          - 'ais ls --check-versions'
+                        supported commands include:
+                          - 'ais cp', 'ais prefetch', 'ais get'
+   --limit value        The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+                        e.g.:
+                        - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+                        - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+                        - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
+   --num-workers value  Number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
+   --prefix value       Get objects with names starting with the specified prefix, e.g.:
                         '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
                         a/b that have their names (relative to this directory) starting with 'c';
                         '--prefix ""' - get entire bucket (all objects)
-   --cached             get only in-cluster objects - only those objects from a remote bucket that are present ("cached")
-   --archive            list archived content (see docs/archive.md for details)
-   --limit value        maximum number of object names to display (0 - unlimited; see also '--max-pages')
-                        e.g.: 'ais ls gs://abc --limit 1234 --cached --props size,custom (default: 0)
-   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+   --progress           Show progress bar(s) and progress of execution in real time
+   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --silent             Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
+   --skip-lookup        Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                         1) adding remote bucket to aistore without first checking the bucket's accessibility
+                            (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                         2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                         iec - IEC format, e.g.: KiB, MiB, GiB (default)
                         si  - SI (metric) format, e.g.: KB, MB, GB
                         raw - do not convert to (or from) human-readable format
-   --verbose, -v        verbose output
-   --silent             server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
-   --help, -h           show help
+   --verbose, -v        Verbose output
+   --yes, -y            Assume 'yes' to all questions
+   --help, -h           Show help
 ```
 
 ## Table of Contents
@@ -110,8 +121,9 @@ Archive multiple files.
 
 ```console
 $ ais archive put --help
+
 NAME:
-   ais archive put - archive a file, a directory, or multiple files and/or directories as
+   ais archive put - Archive a file, a directory, or multiple files and/or directories as
      (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object - aka "shard".
      Both APPEND (to an existing shard) and PUT (a new version of the shard) are supported.
      Examples:
@@ -129,12 +141,27 @@ USAGE:
    ais archive put [-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME [command options]
 
 OPTIONS:
-   --list value         comma-separated list of object or file names, e.g.:
+   --append             Add newly archived content to the destination object ("archive", "shard") that must exist
+   --append-or-put      Append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
+                        note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
+   --archpath value     Filename in an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4
+   --cont-on-err        Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --dry-run            Preview the results without really running the action
+   --include-src-dir    Prefix the names of archived files with the (root) source directory
+   --list value         Comma-separated list of object or file names, e.g.:
                         --list 'o1,o2,o3'
                         --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
                         or, when listing files and/or directories:
                         --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
-   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+   --num-workers value  Number of concurrent client-side workers (to execute PUT or append requests);
+                        use (-1) to indicate single-threaded serial execution (ie., no workers);
+                        any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
+   --progress           Show progress bar(s) and progress of execution in real time
+   --recursive, -r      Recursive operation
+   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --skip-vc            Skip loading object metadata (and the associated checksum & version related processing)
+   --template value     Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
                         (with optional steps and gaps), e.g.:
                         --template "" # (an empty or '*' template matches eveything)
                         --template 'dir/subdir/'
@@ -143,32 +170,16 @@ OPTIONS:
                         and similarly, when specifying files and directories:
                         --template '/home/dir/subdir/'
                         --template "/abc/prefix-{0010..9999..2}-suffix"
-   --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+   --timeout value      Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                         valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress           show progress bar(s) and progress of execution in real time
-   --refresh value      time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --append-or-put      append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
-                        note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
-   --append             add newly archived content to the destination object ("archive", "shard") that must exist
-   --archpath value     filename in an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4
-   --num-workers value  number of concurrent client-side workers (to execute PUT or append requests);
-                        use (-1) to indicate single-threaded serial execution (ie., no workers);
-                        any positive value will be adjusted _not_ to exceed twice the number of client CPUs (default: 10)
-
-   --dry-run            preview the results without really running the action
-   --recursive, -r      recursive operation
-   --verbose, -v        verbose output
-   --yes, -y            assume 'yes' to all questions
-   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                         iec - IEC format, e.g.: KiB, MiB, GiB (default)
                         si  - SI (metric) format, e.g.: KB, MB, GB
                         raw - do not convert to (or from) human-readable format
-   --include-src-dir    prefix the names of archived files with the (root) source directory
-   --skip-vc            skip loading object metadata (and the associated checksum & version related processing)
-   --cont-on-err        keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
-   --help, -h           show help
+   --verbose, -v        Verbose output
+   --wait               Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --yes, -y            Assume 'yes' to all questions
+   --help, -h           Show help
 ```
 
 The operation accepts either an explicitly defined *list* or template-defined *range* of file names (to archive).
