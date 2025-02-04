@@ -25,7 +25,7 @@ var testTools = []string{"aws", "s3cmd"}
 func TestE2ES3(t *testing.T) {
 	for _, testTool := range testTools {
 		if _, err := exec.LookPath(testTool); err != nil {
-			t.Fatalf("exec.LookupPath(\"%s\") failed: %v", testTool, err)
+			t.Skipf("...skipping due to exec.LookupPath(\"%s\") failing: %v", testTool, err)
 		}
 	}
 
