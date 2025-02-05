@@ -1,5 +1,5 @@
 The directory contains a variety of technical blogs and write-ups that we publish at:
 
-* https://aiatscale.org/blog
+* https://aistore.nvidia.com/blog
 
-For better viewing experience, use [aiatscale.org](https://aiatscale.org) (website).
+For better viewing experience, use [aistore.nvidia.com](https://aistore.nvidia.com) (website).
