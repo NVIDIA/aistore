@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -29,6 +30,11 @@ const (
 
 // consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
 const CommTypeSeparator = "://"
+
+const (
+	CommTypeAnnotation    = "communication_type"
+	WaitTimeoutAnnotation = "wait_timeout"
+)
 
 const DefaultTimeout = 45 * time.Second
 
@@ -262,10 +268,6 @@ func (m *InitCodeMsg) Validate() error {
 }
 
 func (m *InitSpecMsg) Validate() (err error) {
-	if err := m.InitMsgBase.validate(m.String()); err != nil {
-		return err
-	}
-
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 
 	// Check pod specification constraints.
@@ -303,7 +305,20 @@ func (m *InitSpecMsg) Validate() (err error) {
 	if container.ReadinessProbe.HTTPGet.Port.StrVal != k8s.Default {
 		return cmn.NewErrETLf(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 	}
-	return nil
+
+	if m.CommTypeX == "" {
+		comm, found := pod.ObjectMeta.Annotations[CommTypeAnnotation]
+		if !found {
+			return cmn.NewErrETLf(errCtx, "annotations.communication_type must be provided, or specified in the init message")
+		}
+		m.CommTypeX = comm
+	}
+
+	if !strings.HasSuffix(m.CommTypeX, CommTypeSeparator) {
+		m.CommTypeX += CommTypeSeparator
+	}
+
+	return m.InitMsgBase.validate(m.String())
 }
 
 func ParsePodSpec(errCtx *cmn.ETLErrCtx, spec []byte) (*corev1.Pod, error) {

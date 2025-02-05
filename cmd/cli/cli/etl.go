@@ -219,9 +219,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
 		msg.Spec = spec
 	}
-	if !strings.HasSuffix(msg.CommTypeX, etl.CommTypeSeparator) {
-		msg.CommTypeX += etl.CommTypeSeparator
-	}
+
 	if err = msg.Validate(); err != nil {
 		if e, ok := err.(*cmn.ErrETL); ok {
 			err = errors.New(e.Reason)

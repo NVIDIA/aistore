@@ -28,9 +28,6 @@ import (
 )
 
 const (
-	commTypeAnnotation    = "communication_type"
-	waitTimeoutAnnotation = "wait_timeout"
-
 	Tar2TF        = "tar2tf"
 	Echo          = "transformer-echo"
 	EchoGolang    = "echo-go"
@@ -365,19 +362,19 @@ func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
 }
 
 func podTransformCommType(pod *corev1.Pod) string {
-	if pod.Annotations == nil || pod.Annotations[commTypeAnnotation] == "" {
+	if pod.Annotations == nil || pod.Annotations[etl.CommTypeAnnotation] == "" {
 		// By default assume `Hpush`.
 		return etl.Hpush
 	}
-	return pod.Annotations[commTypeAnnotation]
+	return pod.Annotations[etl.CommTypeAnnotation]
 }
 
 func podTransformTimeout(errCtx *cmn.ETLErrCtx, pod *corev1.Pod) (cos.Duration, error) {
-	if pod.Annotations == nil || pod.Annotations[waitTimeoutAnnotation] == "" {
+	if pod.Annotations == nil || pod.Annotations[etl.WaitTimeoutAnnotation] == "" {
 		return 0, nil
 	}
 
-	v, err := time.ParseDuration(pod.Annotations[waitTimeoutAnnotation])
+	v, err := time.ParseDuration(pod.Annotations[etl.WaitTimeoutAnnotation])
 	if err != nil {
 		return cos.Duration(v), cmn.NewErrETL(errCtx, err.Error()).WithPodName(pod.Name)
 	}
