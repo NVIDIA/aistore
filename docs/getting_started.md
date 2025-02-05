@@ -82,6 +82,7 @@ The rest of this document is structured as follows:
 
 ## Table of Contents
 
+- [Finding Things (Tip)](#finding-things-tip)
 - [Local Playground](#local-playground)
   - [From source](#from-source)
   - [Running Local Playground with emulated disks](#running-local-playground-with-emulated-disks)
@@ -99,6 +100,52 @@ The rest of this document is structured as follows:
   - [A note on conditional linkage](#a-note-on-conditional-linkage)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [Assorted Curl](#assorted-curl)
+
+## Finding Things (Tip)
+
+AIStore has been around for a while; during this _while_ the repository has accumulated quite a bit of information that can be immediately located.
+
+For any keyword or text of any kind, you can easily look up examples and descriptions via a simple `find` or `git grep` command. For instance:
+
+```console
+$ git grep -n out-of-band -- "*.md"
+docs/cli/archive.md:469:        - detecting remote version changes (a.k.a. out-of-band updates), and
+...
+...
+$ git grep out-of-band -- "*.md" | wc -l
+34
+```
+
+Alternatively, use a combination of `find`, `xargs`, and/or `grep` to search through existing texts of any kind, including source comments. For example:
+
+```console
+$ find . -name "*.md" | xargs grep -n "out-of-band"
+```
+
+In addition, there's the user-friendly [CLI](/docs/cli.md). For example, to search for commands related to copy, you could:
+
+```console
+$ ais search copy
+
+ais bucket cp
+ais cp
+ais download
+ais job rm download
+ais job start copy-bck
+ais job start download
+ais job start mirror
+ais object cp
+ais start copy-bck
+ais start download
+ais start mirror
+...
+```
+
+For the CLI, remember to use the `--help` option, which will universally show specific supported options and usage examples. For example:
+
+```console
+$ ais cp --help
+```
 
 ## Local Playground
 
