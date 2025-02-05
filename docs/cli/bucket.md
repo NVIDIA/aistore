@@ -907,30 +907,32 @@ Notice a certain limitation (that also shows up as the last step #15):
 ### Options
 
 ```console
+$ ais storage summary --help
+
 NAME:
-   ais storage summary - show bucket sizes and %% of used capacity on a per-bucket basis
+   ais storage summary - Show bucket sizes and %% of used capacity on a per-bucket basis
 
 USAGE:
-   ais storage summary PROVIDER:[//BUCKET_NAME] [command options]
+   ais storage summary [BUCKET[/PREFIX]] [PROVIDER] [command options]
 
 OPTIONS:
-   --refresh value   interval for continuous monitoring;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value     used together with '--refresh' to limit the number of generated reports, e.g.:
+   --cached          Only list in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
+   --count value     Used together with '--refresh' to limit the number of generated reports, e.g.:
                       '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
-   --prefix value    for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
-                     '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
+   --dont-wait       When _summarizing_ buckets do not wait for the respective job to finish -
+                     use the job's UUID to query the results interactively
+   --no-headers, -H  Display tables without headers
+   --prefix value    For each bucket, select only those objects (names) that start with the specified prefix, e.g.:
+                     '--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory
                      a/b that have names (relative to this directory) starting with the letter c
-   --cached          list only those objects from a remote bucket that are present ("cached")
-   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+   --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --units value     Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
                      si  - SI (metric) format, e.g.: KB, MB, GB
                      raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose output
-   --dont-wait       when _summarizing_ buckets do not wait for the respective job to finish -
-                     use the job's UUID to query the results interactively
-   --no-headers, -H  display tables without headers
-   --help, -h        show help
+   --verbose, -v     Verbose output
+   --help, -h        Show help
 ```
 
 If `BUCKET` is omitted, the command *applies* to all [AIS buckets](/docs/bucket.md#ais-bucket).
@@ -1047,13 +1049,27 @@ Start an extended action to bring a given bucket to a certain redundancy level (
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--copies` | `int` | Number of copies | `1` |
+```console
+$ ais start mirror --help
+
+NAME:
+   ais start mirror - Configure (or unconfigure) bucket as n-way mirror, and run the corresponding batch job, e.g.:
+     - 'ais start mirror ais://m --copies 3'  - configure ais://m as a 3-way mirror;
+     - 'ais start mirror ais://m --copies 1'  - configure ais://m for no redundancy (no extra copies).
+   (see also: 'ais start ec-encode')
+
+USAGE:
+   ais start mirror BUCKET [command options]
+
+OPTIONS:
+   --copies value       Number of object replicas (default: 1)
+   --non-verbose, --nv  Non-verbose (quiet) output, minimized reporting, fewer warnings
+   --help, -h           Show help
+```
 
 ## Start Erasure Coding
 
-`ais ec-encode BUCKET --data-slices <value> --parity-slices <value>`
+`ais start ec-encode BUCKET --data-slices <value> --parity-slices <value>`
 
 Start an extended action that encodes and recovers all objects and slices in a given bucket.
 The action enables erasure coding if it is disabled, and runs the encoding for all objects in the bucket in the background.
@@ -1065,10 +1081,26 @@ Read more about this feature [here](/docs/storage_svcs.md#erasure-coding).
 
 ### Options
 
-| Flag | Type | Description |
-| --- | --- | --- |
-| `--data-slices`, `--data`, `-d` | `int` | Number of data slices |
-| `--parity-slices`, `--parity`, `-p` | `int` | Number of parity slices |
+```console
+$ ais start ec-encode --help
+
+NAME:
+   ais start ec-encode - Erasure code entire bucket, e.g.:
+     - 'ais start ec-encode ais://nnn -d 8 -p 2'                          - erasure-code ais://nnn for 8 data and 2 parity slices;
+     - 'ais start ec-encode ais://nnn --data-slices 8 --parity-slices 2'  - same as above;
+     - 'ais start ec-encode ais://nnn --recover'                          - check and make sure that every ais://nnn object is properly erasure-coded.
+   see also: 'ais start mirror'
+
+USAGE:
+   ais start ec-encode BUCKET [command options]
+
+OPTIONS:
+   --data-slices value, -d value    Number of data slices (default: 2)
+   --non-verbose, --nv              Non-verbose (quiet) output, minimized reporting, fewer warnings
+   --parity-slices value, -p value  Number of parity slices (default: 2)
+   --recover                        Check and make sure that each and every object is properly erasure coded
+   --help, -h                       Show help
+```
 
 All options are required and must be greater than `0`.
 
@@ -1084,7 +1116,7 @@ Overall, the topic called "bucket properties" is rather involved and includes su
 Now, as far as CLI, run the following to list [properties](/docs/bucket.md#properties-and-options) of the specified bucket.
 By default, a certain compact form of bucket props sections is presented.
 
-`ais bucket props show BUCKET [PROP_PREFIX]`
+`ais bucket props show BUCKET [PROP_PREFIX] [command options]`
 
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.
@@ -1093,10 +1125,26 @@ Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioni
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json` | `bool` | Output in JSON format | `false` |
-| `--compact`, `-c` | `bool` | Show list of properties in compact human-readable mode | `false` |
+```console
+$ ais bucket props show --help
+
+NAME:
+   ais bucket props show - Show bucket properties
+
+USAGE:
+   ais bucket props show BUCKET [PROP_PREFIX] [command options]
+
+OPTIONS:
+   --add             Add remote bucket to cluster's metadata
+                       - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);
+                       - most of the time, there's no need to worry about it as aistore handles presence/non-presence
+                         transparently behind the scenes;
+                       - but if you do want to (explicltly) add the bucket, you could also use '--add' option
+   --compact, -c     Display properties grouped in human-readable mode
+   --json, -j        JSON input/output
+   --no-headers, -H  Display tables without headers
+   --help, -h        Show help
+```
 
 ### Examples
 
@@ -1139,9 +1187,31 @@ If JSON_SPECIFICATION is used, **all** properties of the bucket are set based on
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--force` | `bool` | Ignore non-critical errors | `false` |
+```console
+$ ais bucket props set --help
+
+NAME:
+   ais bucket props set - Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:
+     * ais bucket props set ais://nnn backend_bck=s3://mmm
+     * ais bucket props set ais://nnn backend_bck=none
+     * ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true
+     * ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5
+     * ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force
+     References:
+     * for details and many more examples, see docs/cli/bucket.md
+     * to show bucket properties (names and current values), use 'ais bucket show'
+
+USAGE:
+   ais bucket props set BUCKET JSON-formatted-KEY-VALUE | KEY=VALUE [KEY=VALUE...] [command options]
+
+OPTIONS:
+   --force, -f    Force execution of the command (caution: advanced usage only)
+   --skip-lookup  Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                   1) adding remote bucket to aistore without first checking the bucket's accessibility
+                      (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                   2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --help, -h     Show help
+```
 
 When JSON specification is not used, some properties support user-friendly aliases:
 

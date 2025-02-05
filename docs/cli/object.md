@@ -373,11 +373,24 @@ Alias for `ais get BUCKET/OBJECT_NAME -`.
 
 ## Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--offset` | `string` | Read offset, which can end with size suffix (k, MB, GiB, ...) | `""` |
-| `--length` | `string` | Read length, which can end with size suffix (k, MB, GiB, ...) |  `""` |
-| `--checksum` | `bool` | Validate the checksum of the object | `false` |
+```console
+$ ais object cat --help
+
+NAME:
+   ais object cat - Print object's content to STDOUT (same as Linux shell 'cat')
+
+USAGE:
+   ais object cat BUCKET/OBJECT_NAME [command options]
+
+OPTIONS:
+   --archpath value  Extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                     see also: '--archregx'
+   --checksum        Validate checksum
+   --force, -f       Force execution of the command (caution: advanced usage only)
+   --length value    Object read length; default formatting: IEC (use '--units' to override)
+   --offset value    Object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
+   --help, -h        Show help
+```
 
 ## Print content of object
 
@@ -1294,14 +1307,38 @@ OPTIONS:
 
 ## Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--verbose` or `-v` | `bool` | Verbose output | `false` |
-| `--target-id` | `string` | Target ID; if specified, only the file/dir content stored on the corresponding AIS target is promoted | `""` |
-| `--recursive` or `-r` | `bool` | Promote nested directories | `false` |
-| `--overwrite-dst` or `-o` | `bool` | Overwrite destination (object) if exists | `false` |
-| `--delete-src` | `bool` | Delete promoted source | `false` |
-| `--not-file-share` | `bool` | Each target must act autonomously, skipping file-share auto-detection and promoting the entire source (as seen from _the_ target) | `false` |
+```console
+$ ais object promote --help
+
+NAME:
+   ais object promote - PROMOTE target-accessible files and directories.
+   The operation is intended for copying NFS and SMB shares mounted on any/all targets
+   but can be also used to copy local files (again, on any/all targets in the cluster).
+   Copied files and directories become regular stored objects that can be further listed and operated upon.
+   Destination naming is consistent with 'ais put' command, e.g.:
+     - 'promote /tmp/subdir/f1 ais://nnn'        - ais://nnn/f1
+     - 'promote /tmp/subdir/f2 ais://nnn/aaa'    - ais://nnn/aaa
+     - 'promote /tmp/subdir/f3 ais://nnn/aaa/'   - ais://nnn/aaa/f3
+     - 'promote /tmp/subdir ais://nnn'           - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3
+     - 'promote /tmp/subdir ais://nnn/aaa/'      - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3
+   Other supported options follow below.
+
+USAGE:
+   ais object promote FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME_or_PREFIX] [command options]
+
+OPTIONS:
+   --delete-src         Delete successfully promoted source
+   --not-file-share     Each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from the target)
+   --overwrite-dst, -o  Overwrite destination, if exists
+   --recursive, -r      Recursive operation
+   --skip-lookup        Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                         1) adding remote bucket to aistore without first checking the bucket's accessibility
+                            (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                         2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --target-id value    AIS target designated to carry out the entire operation
+   --verbose, -v        Verbose output
+   --help, -h           Show help
+```
 
 ## Destination naming
 
@@ -1641,10 +1678,26 @@ Recursive iteration through directories and wildcards is supported in the same w
 
 ## Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--recursive` or `-r` | `bool` | Enable recursive directory upload |
-| `--progress` | `bool` | Displays progress bar | `false` |
+```console
+$ ais object concat --help
+
+NAME:
+   ais object concat - Append a file, a directory, or multiple files and/or directories
+   as a new BUCKET/OBJECT_NAME if doesn't exists, and to an existing BUCKET/OBJECT_NAME otherwise, e.g.:
+   $ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory.
+
+USAGE:
+   ais object concat FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME [command options]
+
+OPTIONS:
+   --progress       Show progress bar(s) and progress of execution in real time
+   --recursive, -r  Recursive operation
+   --units value    Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                    iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                    si  - SI (metric) format, e.g.: KB, MB, GB
+                    raw - do not convert to (or from) human-readable format
+   --help, -h       Show help
+```
 
 ## Concat two files
 
@@ -1895,16 +1948,68 @@ $ ais prefetch aws://cloudbucket --template "shard-{001..999}.tar"
 
 ## Delete multiple objects
 
-`ais object rm BUCKET/[OBJECT_NAME]...`
+`ais object rm BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]`
 
 Delete an object or list or range of objects from a bucket.
 
+Alias: `ais rmo`.
+
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
-| `--template` | `string` | The object name template with optional range parts | `""` |
+```console
+$ ais object rm --help
+NAME:
+   ais object rm - Remove object or selected objects from the specified bucket, or buckets - e.g.:
+     - 'rm ais://nnn --all'                                   - remove all objects from the bucket ais://nnn;
+     - 'rm s3://abc' --all                                    - remove all objects including those that are not _present_ in the cluster;
+     - 'rm gs://abc --prefix images/'                         - remove all objects from the virtual subdirectory "images";
+     - 'rm gs://abc/images/'                                  - same as above;
+     - 'rm gs://abc --template images/'                       - same as above;
+     - 'rm gs://abc --template "shard-{0000..9999}.tar.lz4"'  - remove the matching range (prefix + brace expansion);
+     - 'rm "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
+
+USAGE:
+   ais object rm BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
+
+OPTIONS:
+   --all                  Remove all objects (use with extreme caution!)
+   --list value           Comma-separated list of object or file names, e.g.:
+                          --list 'o1,o2,o3'
+                          --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                          or, when listing files and/or directories:
+                          --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --non-recursive, --nr  Non-recursive operation, e.g.:
+                          - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                          - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
+                          - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
+                          - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
+   --non-verbose, --nv    Non-verbose (quiet) output, minimized reporting, fewer warnings
+   --prefix value         Select virtual directories or objects with names starting with the specified prefix, e.g.:
+                          '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                          '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --progress             Show progress bar(s) and progress of execution in real time
+   --refresh value        Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --skip-lookup          Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                           1) adding remote bucket to aistore without first checking the bucket's accessibility
+                              (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                           2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --template value       Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                          (with optional steps and gaps), e.g.:
+                          --template "" # (an empty or '*' template matches eveything)
+                          --template 'dir/subdir/'
+                          --template 'shard-{1000..9999}.tar'
+                          --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                          and similarly, when specifying files and directories:
+                          --template '/home/dir/subdir/'
+                          --template "/abc/prefix-{0010..9999..2}-suffix"
+   --timeout value        Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --verbose, -v          Verbose output
+   --wait                 Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --yes, -y              Assume 'yes' to all questions
+   --help, -h             Show help
+```
 
 ### Delete a list of objects
 
@@ -1954,13 +2059,15 @@ Here's inline help, and specifically notice the _multi-object_ options: `--templ
 
 ```concole
 $ ais evict --help
+
 NAME:
-   ais evict - (alias for "bucket evict") evict one remote bucket, multiple remote buckets, or
+   ais evict - (alias for "bucket evict") Evict one remote bucket, multiple remote buckets, or
    selected objects in a given remote bucket or buckets, e.g.:
      - 'evict gs://abc'                                          - evict entire bucket (all gs://abc objects in aistore);
      - 'evict gs:'                                               - evict all GCP buckets from the cluster;
-     - 'evict gs://abc --template images/'                       - evict all objects from the virtual subdirectory "images";
+     - 'evict gs://abc --prefix images/'                         - evict all gs://abc objects from the virtual subdirectory "images";
      - 'evict gs://abc/images/'                                  - same as above;
+     - 'evict gs://abc --template images/'                       - same as above;
      - 'evict gs://abc --template "shard-{0000..9999}.tar.lz4"'  - evict the matching range (prefix + brace expansion);
      - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
@@ -1968,34 +2075,43 @@ USAGE:
    ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
 
 OPTIONS:
-   --list value         comma-separated list of object or file names, e.g.:
-                        --list 'o1,o2,o3'
-                        --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-                        or, when listing files and/or directories:
-                        --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
-   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
-                        (with optional steps and gaps), e.g.:
-                        --template "" # (an empty or '*' template matches eveything)
-                        --template 'dir/subdir/'
-                        --template 'shard-{1000..9999}.tar'
-                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                        and similarly, when specifying files and directories:
-                        --template '/home/dir/subdir/'
-                        --template "/abc/prefix-{0010..9999..2}-suffix"
-   --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress           show progress bar(s) and progress of execution in real time
-   --refresh value      interval for continuous monitoring;
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --keep-md            keep bucket metadata
-   --prefix value       select objects that have names starting with the specified prefix, e.g.:
-                        '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
-                        '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
-   --dry-run            preview the results without really running the action
-   --verbose, -v        verbose output
-   --non-verbose, --nv  non-verbose (quiet) output, minimized reporting
-   --help, -h           show help
+   --dry-run              Preview the results without really running the action
+   --keep-md              Keep bucket metadata
+   --list value           Comma-separated list of object or file names, e.g.:
+                          --list 'o1,o2,o3'
+                          --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                          or, when listing files and/or directories:
+                          --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --non-recursive, --nr  Non-recursive operation, e.g.:
+                          - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                          - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
+                          - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
+                          - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
+   --non-verbose, --nv    Non-verbose (quiet) output, minimized reporting, fewer warnings
+   --prefix value         Select virtual directories or objects with names starting with the specified prefix, e.g.:
+                          '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                          '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --progress             Show progress bar(s) and progress of execution in real time
+   --refresh value        Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --skip-lookup          Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                           1) adding remote bucket to aistore without first checking the bucket's accessibility
+                              (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                           2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --template value       Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                          (with optional steps and gaps), e.g.:
+                          --template "" # (an empty or '*' template matches eveything)
+                          --template 'dir/subdir/'
+                          --template 'shard-{1000..9999}.tar'
+                          --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                          and similarly, when specifying files and directories:
+                          --template '/home/dir/subdir/'
+                          --template "/abc/prefix-{0010..9999..2}-suffix"
+   --timeout value        Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --verbose, -v          Verbose output
+   --wait                 Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --help, -h             Show help
 ```
 
 Note usage examples above. You can always run `--help` option to see the most recently updated inline help.

@@ -387,13 +387,47 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--regex` | `string` | Regex for the description of dSort jobs | `""` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). E.g.:  `--refresh 2s`| ` ` |
-| `--verbose, -v` | `bool` | Show detailed metrics | `false` |
-| `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
-| `--json, -j` | `bool` | Show only json metrics | `false` |
+```console
+$ ais show job dsort --help
+
+NAME:
+   ais show job - Show running and/or finished jobs
+     - 'show job tco-cysbohAGL'              - show a given (multi-object copy/transform) job identified by its unique ID;
+     - 'show job copy-listrange'             - show all running multi-object copies;
+     - 'show job copy-objects'               - same as above (using display name);
+     - 'show job copy-objects --all'         - show both running and already finished (or stopped) multi-object copies;
+     - 'show job list'                       - show all running list-objects jobs;
+     - 'show job ls'                         - same as above;
+     - 'show job ls --refresh 10'            - same as above with periodic _refreshing_ every 10 seconds;
+     - 'show job ls --refresh 10 --count 4'  - same as above but only for the first four 10-seconds intervals;
+     - 'show job prefetch-listrange'         - show all running prefetch jobs;
+     - 'show job prefetch'                   - same as above;
+     - 'show job prefetch --refresh 1m'      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
+     - 'show job --all'                      - show absolutely all jobs, running and already finished
+   press <TAB-TAB> to select, '--help' for more options.
+
+USAGE:
+   ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
+
+OPTIONS:
+   --all             Include all jobs: running, finished, and aborted
+   --count value     Used together with '--refresh' to limit the number of generated reports, e.g.:
+                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --date-time       Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   --json, -j        JSON input/output
+   --log value       Filename to log metrics (statistics)
+   --no-headers, -H  Display tables without headers
+   --progress        Show progress bar(s) and progress of execution in real time
+   --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --regex value     Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   --units value     Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --verbose, -v     Show extended statistics
+   --help, -h        Show help
+```
 
 ### Examples
 
@@ -517,7 +551,20 @@ Wait for the dSort job with given `JOB_ID` to finish.
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | `1s` |
-| `--progress` | `bool` | Displays progress bar | `false` |
+```console
+$ ais wait --help
+
+NAME:
+   ais wait - (alias for "job wait") wait for a specific batch job to complete (press <TAB-TAB> to select, '--help' for more options)
+
+USAGE:
+   ais wait [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
+
+OPTIONS:
+   --progress       Show progress bar(s) and progress of execution in real time
+   --refresh value  Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --timeout value  Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --help, -h       Show help
+```

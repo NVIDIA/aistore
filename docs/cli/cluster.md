@@ -9,12 +9,20 @@ redirect_from:
 
 # `ais cluster` command
 
+The `ais cluster` command is the main tool for monitoring and managing an AIS (AIStore) cluster. It provides functionalities to
+
+* add or remove nodes
+* change the primary gateway
+* join (or merge) two AIS clusters, and
+* perform a variety of administrative operations.
+
 The command has the following subcommands:
 
 ```console
 $ ais cluster <TAB-TAB>
-show               remote-detach      set-primary        decommission       reset-stats
-remote-attach      rebalance          shutdown           add-remove-nodes
+
+show               remote-detach      set-primary        shutdown           add-remove-nodes    reload-backend-creds
+remote-attach      rebalance          download-logs      decommission       reset-stats
 ```
 
 > **Important:** with the single exception of [`add-remove-nodes`](#adding-removing-nodes), all the other the commands listed above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.
@@ -41,9 +49,9 @@ COMMANDS:
    reset-stats       reset cluster or node stats (all cumulative metrics or only errors)
 ```
 
-As always, each subcommand will have its own help and usage examples (the latter possibly spread across multiple documents).
+As always, each subcommand will have its own help and usage examples, the latter possibly spread across multiple documents.
 
-> For any keyword or text of any kind, you can easily look up examples and descriptions (if available) via a simple `find`, for instance:
+> **Note**: for any keyword or text of any kind, you can easily look up examples and descriptions via a simple `find` or `git grep`, for instance:
 
 ```console
 $ find . -type f -name "*.md" | xargs grep "ais.*mountpath"
@@ -84,6 +92,7 @@ COMMANDS:
 - [Show cluster map](#show-cluster-map)
 - [Show cluster stats](#show-cluster-stats)
 - [Show disk stats](#show-disk-stats)
+- [Managing cluster membership](#managing-cluster-membership)
 - [Join a node](#join-a-node)
 - [Remove a node](#remove-a-node)
 - [Remote AIS cluster](#remote-ais-cluster)
@@ -92,6 +101,7 @@ COMMANDS:
   - [Show remote clusters](#show-remote-clusters)
 - [Remove a node](#remove-a-node)
 - [Reset (ie., zero out) stats counters and other metrics](#reset-ie-zero-out-stats-counters-and-other-metrics)
+- [Reload backend credentials](#reload-backend-credentials)
 
 ## Cluster and Node status
 
@@ -164,12 +174,24 @@ $ ais show cluster smap --json
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | Output in JSON format | `false` |
-| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
-| `--no-headers` | `bool` | Display tables without headers | `false` |
+```console
+$ ais show cluster smap --help
+
+NAME:
+   ais show cluster smap - Show cluster map (Smap)
+
+USAGE:
+   ais show cluster smap [NODE_ID] [command options]
+
+OPTIONS:
+   --count value     Used together with '--refresh' to limit the number of generated reports, e.g.:
+                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --json, -j        JSON input/output
+   --no-headers, -H  Display tables without headers
+   --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --help, -h        Show help
+```
 
 ### Examples
 
@@ -217,11 +239,24 @@ The latter will periodically (until Ctrl-C) show cluster map in 5-second interva
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
-| `--json, -j` | `bool` | Output in JSON format | `false` |
+```console
+$ ais show cluster smap --help
+
+NAME:
+   ais show cluster smap - Show cluster map (Smap)
+
+USAGE:
+   ais show cluster smap [NODE_ID] [command options]
+
+OPTIONS:
+   --count value     Used together with '--refresh' to limit the number of generated reports, e.g.:
+                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --json, -j        JSON input/output
+   --no-headers, -H  Display tables without headers
+   --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --help, -h        Show help
+```
 
 ### Examples
 
@@ -262,43 +297,54 @@ The latter is the primary implementation, and the preferred way to investigate c
 
 ```console
 $ ais show cluster stats <TAB-TAB>
-counters     throughput   latency      capacity     disk
 
+counters     throughput   latency      capacity     disk
+```
+
+```console
 $ ais show cluster stats --help
+
 NAME:
-   ais show cluster stats - (alias for "ais show performance") show performance counters, throughput, latency and more (press <TAB-TAB> to select specific view)
+   ais show cluster stats - (alias for "ais show performance") Show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
 
 USAGE:
-   ais show cluster stats command [TARGET_ID] [command options]
+   ais show cluster stats command [TARGET_ID]  [command options]
 
 COMMANDS:
-   counters    show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
+   counters    Show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
                - numbers of list-objects requests;
                - (GET, PUT, etc.) cumulative and average sizes;
-               - associated error counters, if any.
-   throughput  show GET and PUT throughput, associated (cumulative, average) sizes and counters
-   latency     show GET, PUT, and APPEND latencies and average sizes
-   capacity    show target mountpaths, disks, and used/available capacity
-   disk        show disk utilization and read/write statistics
+               - associated error counters, if any, and more.
+   throughput  Show GET and PUT throughput, associated (cumulative, average) sizes and counters
+   latency     Show GET, PUT, and APPEND latencies and average sizes
+   capacity    Show target mountpaths, disks, and used/available capacity
+   disk        Show disk utilization and read/write statistics
 
 OPTIONS:
-   --refresh value   interval for continuous monitoring;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
-   --all             when printing tables, show all columns including those that have only zero values
-   --no-headers, -H  display tables without headers
-   --regex value     regular expression to select table columns (case-insensitive), e.g.: --regex "put|err"
-   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                     si  - SI (metric) format, e.g.: KB, MB, GB
-                     raw - do not convert to (or from) human-readable format
-   --average-size    show average GET, PUT, etc. request size
-   --help, -h        show help
+   --average-size       Show average GET, PUT, etc. request size
+   --count value        Used together with '--refresh' to limit the number of generated reports, e.g.:
+                         '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --no-headers, -H     Display tables without headers
+   --non-verbose, --nv  Non-verbose (quiet) output, minimized reporting, fewer warnings
+   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --regex value        Regular expression to select table columns (case-insensitive), e.g.:
+                         --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
+                         --regex "Put|ERR" - same as above;
+                         --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
+                         --regex "(AWS-GET$|VERSION-CHANGE$)" - show the number object version changes (updates) and cold GETs from AWS
+                         --regex "(gcp-get$|version-change$)" - same as above for Google Cloud ('gs://')
+   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                        si  - SI (metric) format, e.g.: KB, MB, GB
+                        raw - do not convert to (or from) human-readable format
+   --verbose, -v        Verbose output
+   --help, -h           Show help
 ```
 
 See also:
 
-* [ais show performance`](/docs/cli/show.md) 
+* [ais show performance`](/docs/cli/show.md)
 
 ## Show disk stats
 
@@ -330,12 +376,34 @@ When `TARGET_ID` is not given, disk stats for all targets will be shown and aggr
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | Output in JSON format | `false` |
-| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
-| `--no-headers` | `bool` | Display tables without headers | `false` |
+```console
+$ ais show storage disk --help
+
+NAME:
+   ais show storage disk - Show disk utilization and read/write statistics
+
+USAGE:
+   ais show storage disk [TARGET_ID] [command options]
+
+OPTIONS:
+   --count value     Used together with '--refresh' to limit the number of generated reports, e.g.:
+                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
+   --no-headers, -H  Display tables without headers
+   --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --regex value     Regular expression to select table columns (case-insensitive), e.g.:
+                      --regex "put|err" - show PUT (count), PUT (total size), and all supported error counters;
+                      --regex "Put|ERR" - same as above;
+                      --regex "[a-z]" - show all supported metrics, including those that have zero values across all nodes;
+                      --regex "(AWS-GET$|VERSION-CHANGE$)" - show the number object version changes (updates) and cold GETs from AWS
+                      --regex "(gcp-get$|version-change$)" - same as above for Google Cloud ('gs://')
+   --summary         Tally up target disks to show per-target read/write summary stats and average utilizations
+   --units value     Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --help, -h        Show help
+```
 
 ### Examples
 
@@ -358,6 +426,33 @@ Target		Disk	Read		Write		%Util
 948212t8089	sda	1.00KiB/s	4.26MiB/s	96
 490062t8086	sda	1.00KiB/s	4.29MiB/s	96
 164472t8087	sda	1.00KiB/s	4.26MiB/s	96
+```
+
+## Managing cluster membership
+
+The ais cluster add-remove-nodes command supports adding, removing, and maintaining nodes within the cluster. It allows administrators to dynamically adjust the cluster's composition, handle maintenance operations, and ensure availability and correctness during transitions when nodes are added or removed.
+
+```console
+$ ais cluster add-remove-nodes --help
+
+NAME:
+   ais cluster add-remove-nodes - Manage cluster membership (add/remove nodes, temporarily or permanently)
+
+USAGE:
+   ais cluster add-remove-nodes command [arguments...]  [command options]
+
+COMMANDS:
+   join               Add a node to the cluster
+   start-maintenance  Put node in maintenance mode, temporarily suspend its operation
+   stop-maintenance   Take node out of maintenance mode - activate
+   decommission       Safely and permanently remove node from the cluster
+   shutdown           Shutdown a node, gracefully or immediately;
+                      note: upon shutdown the node won't be decommissioned - it'll remain in the cluster map
+                      and can be manually restarted to rejoin the cluster at any later time;
+                      see also: 'ais advanced remove-from-smap'
+
+OPTIONS:
+   --help, -h  Show help
 ```
 
 ## Join a node
@@ -422,9 +517,24 @@ rebalance first. This can be avoided by specifying `--no-rebalance`.
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--no-rebalance` | `bool` | By default, `ais cluster add-remove-nodes maintenance` and `ais cluster add-remove-nodes decommission` triggers a global cluster-wide rebalance. The `--no-rebalance` flag disables automatic rebalance thus providing for the administrative option to rebalance the cluster manually at a later time. BEWARE: advanced usage only! | `false` |
+```console
+$ ais cluster add-remove-nodes decommission --help
+
+NAME:
+   ais cluster add-remove-nodes decommission - Safely and permanently remove node from the cluster
+
+USAGE:
+   ais cluster add-remove-nodes decommission NODE_ID [command options]
+
+OPTIONS:
+   --keep-initial-config  Keep the original plain-text configuration the node was deployed with
+                          (the option can be used to restart aisnode from scratch)
+   --no-rebalance         Do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only)
+   --no-shutdown          Do not shutdown node upon decommissioning it from the cluster
+   --rm-user-data         Remove all user data when decommissioning node from the cluster
+   --yes, -y              Assume 'yes' to all questions
+   --help, -h             Show help
+```
 
 ### Examples
 
@@ -577,6 +687,7 @@ UUID        URL                       Alias     Primary         Smap  Targets  O
 
 ```console
 $ ais cluster reset-stats --help
+
 NAME:
    ais cluster reset-stats - reset cluster or node stats (all cumulative metrics or only errors)
 
@@ -592,5 +703,31 @@ Let's go ahead and reset all error counters:
 
 ```console
 $ ais cluster reset-stats --errors-only
+
 Cluster error metrics successfully reset
+```
+
+## Reload backend credentials
+
+The `ais cluster reload-backend-creds` command provides for adding new or updating existing backend credentials at runtime.
+
+This improvement addresses a common scenario we encountered prior to version 3.26:
+
+* A new potential user requests access to a given AIS cluster.
+* The user already has an S3 bucket (or it could be a GCP, Azure, or OCI bucket).
+* We verify that the cluster has network access to the user's bucket.
+* We need to add the user's credentials to allow AIS nodes to access the bucket.
+
+Before version 3.26, the final step required a cluster restart. But now, with `reload-backend-creds`, you can seamlessly add or update credentials without any downtime.
+
+```console
+$ ais cluster reload-backend-creds --help
+NAME:
+   ais cluster reload-backend-creds - Reload (updated) backend credentials
+
+USAGE:
+   ais cluster reload-backend-creds [PROVIDER] [command options]
+
+OPTIONS:
+   --help, -h  Show help
 ```

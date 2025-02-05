@@ -450,10 +450,98 @@ Filenames are always sorted alphabetically.
 
 ### Options
 
-| Name | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--props` | `string` | Comma-separated properties to return with object names | `"size"`
-| `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
+```console
+$ ais archive ls --help
+
+NAME:
+   ais archive ls - List archived content (supported formats: .tar, .tgz or .tar.gz, .zip, .tar.lz4)
+
+USAGE:
+   ais archive ls BUCKET[/SHARD_NAME] [command options]
+
+OPTIONS:
+   --all                  Depending on the context, list:
+                          - all buckets, including accessible (visible) remote buckets that are not in-cluster
+                          - all objects in a given accessible (visible) bucket, including remote objects and misplaced copies
+   --cached               Only list in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
+   --count-only           Print only the resulting number of listed objects and elapsed time
+   --diff                 Perform a bidirectional diff between in-cluster and remote content, which further entails:
+                          - detecting remote version changes (a.k.a. out-of-band updates), and
+                          - remotely deleted objects (out-of-band deletions (*));
+                            the option requires remote backends supporting some form of versioning (e.g., object version, checksum, and/or ETag);
+                          see related:
+                               (*) options: --cached; --latest
+                               commands:    'ais get --latest'; 'ais cp --sync'; 'ais prefetch --latest'
+   --dont-add             List remote bucket without adding it to cluster's metadata - e.g.:
+                            - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);
+                            - then, if we ask aistore to list remote buckets: `ais ls s3://abc --all'
+                              the bucket will be added (in effect, it'll be created);
+                            - to prevent this from happening, either use this '--dont-add' flag or run 'ais evict' command later
+   --dont-wait            When _summarizing_ buckets do not wait for the respective job to finish -
+                          use the job's UUID to query the results interactively
+   --inv-id value         Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
+   --inv-name value       Bucket inventory name (optional; system default name is '.inventory')
+   --inventory            List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+                          boost when used with very large s3 buckets; e.g. usage:
+                            1) 'ais ls s3://abc --inventory'
+                            2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
+                          (see also: docs/s3inventory.md)
+   --limit value          The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+                          e.g.:
+                          - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+                          - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+                          - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
+   --max-pages value      Maximum number of pages to display (see also '--page-size' and '--limit')
+                          e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7 (default: 0)
+   --name-only            Faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)
+   --no-dirs              Do not return virtual subdirectories (applies to remote buckets only)
+   --no-footers, -F       Display tables without footers
+   --no-headers, -H       Display tables without headers
+   --non-recursive, --nr  Non-recursive operation, e.g.:
+                          - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                          - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
+                          - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
+                          - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
+   --page-size value      Maximum number of object names per page; when the flag is omitted or 0
+                          the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged' (default: 0)
+   --paged                List objects page by page - one page at a time (see also '--page-size' and '--limit')
+                          note: recommended for use with very large buckets
+   --prefix value         List objects with names starting with the specified prefix, e.g.:
+                          '--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory
+                          a/b that have their names (relative to this directory) starting with the letter 'c'
+   --props value          Comma-separated list of object properties including name, size, version, copies, and more; e.g.:
+                          --props all
+                          --props name,size,cached
+                          --props "ec, copies, custom, location"
+   --refresh value        Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                          valid time units: ns, us (or µs), ms, s (default), m, h
+   --regex value          Regular expression; use it to match either bucket names or objects in a given bucket, e.g.:
+                          ais ls --regex "(m|n)"         - match buckets such as ais://nnn, s3://mmm, etc.;
+                          ais ls ais://nnn --regex "^A"  - match object names starting with letter A
+   --show-unmatched       List also objects that were not matched by regex and/or template (range)
+   --silent               Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
+   --skip-lookup          Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                           1) adding remote bucket to aistore without first checking the bucket's accessibility
+                              (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                           2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   --start-after value    List bucket's content alphabetically starting with the first name _after_ the specified
+   --summary              Show object numbers, bucket sizes, and used capacity;
+                          note: applies only to buckets and objects that are _present_ in the cluster
+   --template value       Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                          (with optional steps and gaps), e.g.:
+                          --template "" # (an empty or '*' template matches eveything)
+                          --template 'dir/subdir/'
+                          --template 'shard-{1000..9999}.tar'
+                          --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                          and similarly, when specifying files and directories:
+                          --template '/home/dir/subdir/'
+                          --template "/abc/prefix-{0010..9999..2}-suffix"
+   --units value          Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                          iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                          si  - SI (metric) format, e.g.: KB, MB, GB
+                          raw - do not convert to (or from) human-readable format
+   --help, -h             Show help
+```
 
 ### Examples
 
@@ -726,13 +814,29 @@ The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must 
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--fsize` | `string` | Single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
-| `--fcount` | `int` | Number of files inside single shard | `5` |
-| `--fext` | `string` |  Comma-separated list of file extensions (default ".test"), e.g.: --fext '.mp3,.json,.cls' | `.test` |
-| `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
-| `--num-workers` | `int` | Limits the number of shards created concurrently | `10` |
+```console
+$ ais archive gen-shards --help
+
+NAME:
+   ais archive gen-shards - Generate random (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects ("shards"), e.g.:
+              - gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1
+              - gen-shards "gs://bucket2/shard-{01..20..2}.tgz" - 10 random gzipped tarfiles to Cloud bucket
+              (notice quotation marks in both cases)
+
+USAGE:
+   ais archive gen-shards "BUCKET/TEMPLATE.EXT" [command options]
+
+OPTIONS:
+   --cleanup            Remove old bucket and create it again (warning: removes the entire content of the old bucket)
+   --fcount value       Number of files in a shard (default: 5)
+   --fext value         Comma-separated list of file extensions (default ".test"), e.g.:
+                        --fext .mp3
+                        --fext '.mp3,.json,.cls' (or, same: ".mp3,  .json,  .cls")
+   --fsize value        Size of the files in a shard (default: "1024")
+   --num-workers value  Limits the number of shards created concurrently (default: 10)
+   --tform value        TAR file format selection (one of "Unknown", "USTAR", "PAX", or "GNU")
+   --help, -h           Show help
+```
 
 ### Examples
 

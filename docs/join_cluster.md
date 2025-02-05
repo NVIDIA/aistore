@@ -10,6 +10,9 @@ redirect_from:
 **Note**: for the most recent updates on the topic of cluster membership and node lifecycle, please also check:
 
 * [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)
+* [CLI: `ais cluster` command](/docs/cli/cluster.md)
+
+In particular, CLI `ais cluster add-remove-nodes` suppots adding, removing, and maintainiing nodes within the cluster. It allows administrators to dynamically adjust the cluster's composition, handle maintenance operations, and ensure availability and correctness during transitions when nodes are added or removed.
 
 Also, see related:
 
