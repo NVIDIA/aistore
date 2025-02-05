@@ -351,6 +351,8 @@ $ TAGS="aws gcp" make kill clean deploy <<< $'7\n2'
 
 > Use `AIS_BACKEND_PROVIDERS` environment to select remote backends that include 3 (three) Cloud providers and `ht://` - namely: (`aws`, `gcp`, `azure`, `ht`)
 
+> For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
+
 ### Example: same as above but also build `aisnode` with debug info
 ```console
 $ TAGS="aws gcp debug" make kill clean deploy <<< $'7\n2'
@@ -518,6 +520,8 @@ In summary:
 ### A note on conditional linkage
 
 AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-2024.png).
+
+> For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
 
 > For the most recently updated list, please see [3rd party Backend providers](/docs/providers.md).
 

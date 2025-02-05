@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -56,8 +56,10 @@ const (
 	Finished = "finished"
 	Progress = "progress"
 
-	// dsort, dloader, query
-	Metrics     = "metrics"
+	// Prometheus metrics
+	Metrics = "metrics"
+
+	// dsort, downloader
 	Records     = "records"
 	Shards      = "shards"
 	FinishedAck = "finished_ack"

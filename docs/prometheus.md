@@ -7,7 +7,6 @@ redirect_from:
  - /docs/prometheus.md/
 ---
 
-
 **August 2024 UPDATES**:
 * added [complete reference](/docs/metrics-reference.md) that includes all supported metric names (both internal and visible externally), their respective types, and descriptions:
 * building `aisnode` with StatsD requires the corresponding build tag; build-wise, Prometheus is, effectively, the default.
@@ -19,7 +18,8 @@ redirect_from:
 
 AIStore tracks a growing list of performance counters, utilization percentages, latency and throughput metrics, transmitted and received stats (total bytes and numbers of objects), error counters and more.
 
-Viewership is equally supported via:
+Full observability is supported using a variety of tools that include:
+
 * AIS node logs
 * [CLI](/docs/cli.md), and specifically
 * [`ais show cluster stats`](/docs/cli/cluster.md) command
@@ -36,23 +36,18 @@ This document mostly talks about the "Prometheus" option. Other related document
 
 AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/) that natively supports [Prometheus](https://prometheus.io/) stats collection. There's no special configuration - the only thing required to enable the corresponding integration is letting AIStore know whether to publish its stats via StatsD **or** Prometheus.
 
-The corresponding binary choice between StatsD and Prometheus is a **build-time** switch that is a single build tag: `statsd`.
+> The corresponding binary choice between StatsD and Prometheus is a **build-time** switch that is a single build tag: `statsd`.
 
-> As a side note, the entire assortment of supported build tags is demonstrated by the following `aisnode`-building examples:
+> For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
+
+One immediate (low-level) way to view supported Prometheus metrics in action would be `curl`:
 
 ```console
-# 1) no build tags, no debug
-MODE="" make node
-# 2) no build tags, debug
-MODE="debug" make node
-# 3) cloud backends, no debug
-AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
-# 4) cloud backends, debug, statsd
-## Note: if `statsd` build tag is not specified `aisnode` will get built with Prometheus support.
-## For additional information (including the binary choice between StatsD and Prometheus), please see docs/metrics.md
-TAGS="aws azure gcp statsd debug" make node
-# 5) statsd, debug, nethttp (note that fasthttp is used by default)
-TAGS="nethttp statsd debug" make node
+$ curl http://<aistore-node-ip-or-hostname>:<port>/metrics
+
+## or, possibly:
+
+$ curl https://<aistore-node-ip-or-hostname>:<port>/metrics
 ```
 
 When a starting-up AIS node (gateway or storage target) is built with Prometheus support (ie., **without** build tag `statsd`) it will:
@@ -60,7 +55,7 @@ When a starting-up AIS node (gateway or storage target) is built with Prometheus
 * register all its metric descriptions (names, labels, and helps) with Prometheus, and
 * provide HTTP endpoint `/metrics` for subsequent collection (aka "scraping") by Prometheus.
 
-Here's a few
+Here's a few examples:
 
 ### Simplified Examples
 
@@ -80,53 +75,8 @@ $ curl http://hostname:8081/metrics | grep ais
    # TYPE ais_target_disk_avg_wsize gauge
    ais_target_disk_avg_wsize{disk="nvme0n1",node_id="ClCt8081"} 260130
    # HELP ais_target_disk_read_mbps read bandwidth (MB/s)
-   # TYPE ais_target_disk_read_mbps gauge
-   ais_target_disk_read_mbps{disk="nvme0n1",node_id="ClCt8081"} 14336
-   # HELP ais_target_disk_util disk utilization (%%)
-   # TYPE ais_target_disk_util gauge
-   ais_target_disk_util{disk="nvme0n1",node_id="ClCt8081"} 15
-   # HELP ais_target_disk_write_mbps write bandwidth (MB/s)
-   # TYPE ais_target_disk_write_mbps gauge
-   ais_target_disk_write_mbps{disk="nvme0n1",node_id="ClCt8081"} 4.54291456e+08
-   # HELP ais_target_kalive_ms in-cluster keep-alive (heartbeat): average time (milliseconds) over the last periodic.stats_time interval
-   # TYPE ais_target_kalive_ms gauge
-   ais_target_kalive_ms{node_id="ClCt8081"} 0
-   # HELP ais_target_put_bytes PUT: total cumulative size (bytes)
    # TYPE ais_target_put_bytes counter
-   ais_target_put_bytes{node_id="ClCt8081"} 1.078984704e+10
-   # HELP ais_target_put_count total number of executed PUT(object) requests
-   # TYPE ais_target_put_count counter
-   ais_target_put_count{node_id="ClCt8081"} 1029
-   # HELP ais_target_put_mbps PUT: average throughput (MB/s) over the last periodic.stats_time interval
-   # TYPE ais_target_put_mbps gauge
-   ais_target_put_mbps{node_id="ClCt8081"} 412.09
-   # HELP ais_target_put_ms PUT: average time (milliseconds) over the last periodic.stats_time interval
-   # TYPE ais_target_put_ms gauge
 ...
-...
-   # HELP ais_target_get_mbps GET: average throughput (MB/s) over the last periodic.stats_time interval
-   # TYPE ais_target_get_mbps gauge
-   ais_target_get_mbps{node_id="ClCt8081"} 7189.04
-   # HELP ais_target_get_ms GET: average time (milliseconds) over the last periodic.stats_time interval
-   # TYPE ais_target_get_ms gauge
-   ais_target_get_ms{node_id="ClCt8081"} 7
-   # HELP ais_target_get_ns_total GET: total cumulative time (nanoseconds)
-   # TYPE ais_target_get_ns_total counter
-   ais_target_get_ns_total{node_id="ClCt8081"} 5.0083047525e+10
-   # HELP ais_target_get_redir_ms GET: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval
-   # TYPE ais_target_get_redir_ms gauge
-   ais_target_get_redir_ms{node_id="ClCt8081"} 0
-   # HELP ais_target_lcache_collision_count number of LOM cache collisions (core, internal)
-   # TYPE ais_target_lcache_collision_count counter
-   ais_target_lcache_collision_count{node_id="ClCt8081"} 8511
-   # HELP ais_target_lst_count total number of executed list-objects requests
-   # TYPE ais_target_lst_count counter
-   ais_target_lst_count{node_id="ClCt8081"} 1
-   # HELP ais_target_lst_ms list-objects: average time (milliseconds) over the last periodic.stats_time interval
-   # TYPE ais_target_lst_ms gauge
-   ais_target_lst_ms{node_id="ClCt8081"} 4
-   # HELP ais_target_put_bytes PUT: total cumulative size (bytes)
-   # TYPE ais_target_put_bytes counter
    ais_target_put_bytes{node_id="ClCt8081"} 1.721761792e+10
    # HELP ais_target_put_count total number of executed PUT(object) requests
    # TYPE ais_target_put_count counter
@@ -134,13 +84,11 @@ $ curl http://hostname:8081/metrics | grep ais
    # HELP ais_target_put_ns_total PUT: total cumulative time (nanoseconds)
    # TYPE ais_target_put_ns_total counter
    ais_target_put_ns_total{node_id="ClCt8081"} 9.44367232e+09
-   # HELP ais_target_state_flags bitwise 64-bit value that carries enumerated node-state flags, including warnings and alerts; see https://github.com/NVIDIA/aistore/blob/main/cmn/cos/node_state.go for details
    # TYPE ais_target_state_flags gauge
    ais_target_state_flags{node_id="ClCt8081"} 6
    # HELP ais_target_uptime this node's uptime since its startup (seconds)
    # TYPE ais_target_uptime gauge
    ais_target_uptime{node_id="ClCt8081"} 210
-...
 ...
 ```
 

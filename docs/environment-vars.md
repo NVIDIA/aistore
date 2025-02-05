@@ -235,6 +235,8 @@ In addition and separately, AIStore supports [StatsD](https://github.com/statsd/
 
 The corresponding binary choice between StatsD and Prometheus is a **build-time** switch controlled by a single build tag: **statsd**.
 
+> For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
+
 > As a side note, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
 
 ```console
