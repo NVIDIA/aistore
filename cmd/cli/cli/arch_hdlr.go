@@ -178,6 +178,10 @@ var (
 )
 
 func archUsageHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		cli.ShowCommandHelp(c, c.Command.Name)
+		return nil
+	}
 	{
 		// parse for put/append
 		a := archput{}
