@@ -12,6 +12,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+## [1.11.1] - 2025-02-06
+
+### Changed
+
+- Update project metadata and improve descriptions in `pyproject.toml`.
+
 ## [1.11.0] - 2025-02-06
 
 ### Added
