@@ -10,6 +10,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+### Changed
+
+## [1.11.0] - 2025-02-06
+
+### Added
+
 - Support for OCI (`oci://`) as remote backend.
 
 - Support for reading objects directly from the targets (bypassing proxy and LB) via the `direct=True` parameter in `object.get_reader()`.
