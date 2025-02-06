@@ -18,6 +18,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Update project metadata and improve descriptions in `pyproject.toml`.
 
+- Update supported ETL Python runtime versions, and set the default runtime version to Python 3.13.
+
 ## [1.11.0] - 2025-02-06
 
 ### Added

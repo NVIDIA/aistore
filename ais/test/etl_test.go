@@ -611,9 +611,9 @@ def transform(input_bytes: bytes) -> bytes:
 			chunkSize int64
 			onlyLong  bool
 		}{
-			{etlName: "simple-py38", code: md5, deps: "", runtime: runtime.Py38, onlyLong: false},
-			{etlName: "simple-py38-stream", code: echo, deps: "", runtime: runtime.Py38, onlyLong: false, chunkSize: 64},
-			{etlName: "with-deps-py38", code: numpy, deps: numpyDeps, runtime: runtime.Py38, onlyLong: false},
+			{etlName: "simple-py39", code: md5, deps: "", runtime: runtime.Py39, onlyLong: false},
+			{etlName: "simple-py39-stream", code: echo, deps: "", runtime: runtime.Py39, onlyLong: false, chunkSize: 64},
+			{etlName: "with-deps-py39", code: numpy, deps: numpyDeps, runtime: runtime.Py39, onlyLong: false},
 			{etlName: "simple-py310-io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.HpushStdin, onlyLong: false},
 		}
 	)

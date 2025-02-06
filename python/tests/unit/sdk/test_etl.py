@@ -76,11 +76,13 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_init_code_default_runtime(self):
         version_to_runtime = {
-            (3, 7): "python3.8v2",
-            (3, 1234): "python3.8v2",
-            (3, 8): "python3.8v2",
+            (3, 7): "python3.13v2",
+            (3, 1234): "python3.13v2",
+            (3, 8): "python3.13v2",
             (3, 10): "python3.10v2",
             (3, 11): "python3.11v2",
+            (3, 12): "python3.12v2",
+            (3, 13): "python3.13v2",
         }
         for version, runtime in version_to_runtime.items():
             with patch.object(aistore.sdk.etl.etl.sys, "version_info") as version_info:

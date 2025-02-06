@@ -1111,7 +1111,7 @@ var (
 	}
 	runtimeFlag = cli.StringFlag{
 		Name:     "runtime",
-		Usage:    "Python version used to run the provided code (currently supported: python3.8v2, python3.10v2, python3.11v2)",
+		Usage:    "Python version used to run the provided code (currently supported: python3.9v2, python3.10v2, python3.11v2, python3.12v2, python3.13v2)",
 		Required: true,
 	}
 	commTypeFlag = cli.StringFlag{

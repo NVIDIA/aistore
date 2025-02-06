@@ -240,9 +240,11 @@ Currently, the following runtimes are supported:
 
 | Name | Description |
 | --- | --- |
-| `python3.8v2` | `python:3.8` is used to run the code. |
+| `python3.9v2` | `python:3.9` is used to run the code. |
 | `python3.10v2` | `python:3.10` is used to run the code. |
 | `python3.11v2` | `python:3.11` is used to run the code. |
+| `python3.12v2` | `python:3.12` is used to run the code. |
+| `python3.13v2` | `python:3.13` is used to run the code. |
 
 More *runtimes* will be added in the future, with plans to support the most popular ETL toolchains.
 Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your ETL container and deploy it via [*init spec* request](#init-spec-request).

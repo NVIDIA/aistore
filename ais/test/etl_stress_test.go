@@ -63,7 +63,7 @@ def transform(input_bytes):
 	msg := etl.InitCodeMsg{
 		InitMsgBase: etl.InitMsgBase{IDX: "etl-build-conn-err", Timeout: etlBucketTimeout},
 		Code:        []byte(timeoutFunc),
-		Runtime:     runtime.Py38,
+		Runtime:     runtime.Py39,
 		ChunkSize:   0,
 	}
 	msg.Funcs.Transform = "transform"
@@ -177,11 +177,11 @@ def transform(input_bytes):
 			{name: "spec-echo-golang", ty: etl.Spec, etlSpecName: tetl.EchoGolang},
 
 			{
-				name: "code-echo-py38",
+				name: "code-echo-py313",
 				ty:   etl.Code,
 				etlCodeMsg: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
-					Runtime:   runtime.Py38,
+					Runtime:   runtime.Py313,
 					ChunkSize: 0,
 				},
 			},

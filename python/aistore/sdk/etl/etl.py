@@ -121,8 +121,8 @@ class Etl:
             preimported_modules (list[str]): Modules to import before running the transform function. This can
              be necessary in cases where the modules used both attempt to import each other circularly
             runtime (str): [optional, default= V2 implementation of the current python version if supported, else
-                python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
-                (see ext/etl/runtime/all.go)
+                python3.13v2] Runtime environment of the ETL [choose from: python3.9v2, python3.10v2, python3.11v2,
+                python3.12v2, python3.13v2] (see ext/etl/runtime/all.go)
             communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev,
                 hpush, io)
             timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
