@@ -7,13 +7,14 @@ import warnings
 from dataclasses import dataclass
 from io import BufferedWriter
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 import os
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 
 from aistore.sdk.archive_config import ArchiveConfig
 from aistore.sdk.blob_download_config import BlobDownloadConfig
+from aistore.sdk.etl import ETLConfig
 from aistore.sdk.const import (
     BYTE_RANGE_PREFIX_LENGTH,
     DEFAULT_CHUNK_SIZE,
@@ -23,6 +24,7 @@ from aistore.sdk.const import (
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
     QPARAM_ETL_NAME,
+    QPARAM_ETL_ARGS,
     QPARAM_LATEST,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
@@ -133,67 +135,89 @@ class Object:
     # pylint: disable=too-many-arguments,too-many-locals
     def get_reader(
         self,
-        archive_config: ArchiveConfig = None,
-        blob_download_config: BlobDownloadConfig = None,
+        archive_config: Optional[ArchiveConfig] = None,
+        blob_download_config: Optional[BlobDownloadConfig] = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_name: str = None,
-        writer: BufferedWriter = None,
+        etl: Optional[ETLConfig] = None,
+        writer: Optional[BufferedWriter] = None,
         latest: bool = False,
-        byte_range: str = None,
+        byte_range: Optional[str] = None,
         direct: bool = False,
     ) -> ObjectReader:
         """
-        Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
+        Creates and returns an ObjectReader with access to object contents
+        and optionally writes to a provided writer.
 
         Args:
-            archive_config (ArchiveConfig, optional): Settings for archive extraction
-            blob_download_config (BlobDownloadConfig, optional): Settings for using blob download
-            chunk_size (int, optional): chunk_size to use while reading from stream
-            etl_name (str, optional): Transforms an object based on ETL with etl_name
-            writer (BufferedWriter, optional): User-provided writer for writing content output
-                User is responsible for closing the writer
-            latest (bool, optional): GET the latest object version from the associated remote bucket
-            byte_range (str, optional): Byte range in RFC 7233 format for single-range requests (e.g., "bytes=0-499",
-                "bytes=500-", "bytes=-500"). See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
+            archive_config (Optional[ArchiveConfig]): Settings for archive extraction.
+            blob_download_config (Optional[BlobDownloadConfig]): Settings for using blob download.
+            chunk_size (int, optional): Chunk size to use while reading from stream.
+            etl (Optional[ETLConfig]): Settings for ETL-specific operations (name, args).
+            writer (Optional[BufferedWriter]): User-provided writer for writing content output.
+                The user is responsible for closing the writer.
+            latest (bool, optional): GET the latest object version from the associated remote bucket.
+            byte_range (Optional[str]): Byte range in RFC 7233 format for single-range requests
+                (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
+                See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
             direct (bool, optional): If True, the object content is read directly from the target node,
-                bypassing the proxy
+                bypassing the proxy.
 
         Returns:
-            An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
-            directly.
+            ObjectReader: An iterator for streaming object content.
 
         Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
+            ValueError: If Byte Range is used with Blob Download.
+            requests.RequestException: If an error occurs during the request.
+            requests.ConnectionError: If there is a connection error.
+            requests.ConnectionTimeout: If the connection times out.
+            requests.ReadTimeout: If the read operation times out.
         """
+
         params = self.query_params.copy()
         headers = {}
         byte_range_tuple = None
+
+        # Archive Configuration
         if archive_config:
             if archive_config.mode:
                 params[QPARAM_ARCHMODE] = archive_config.mode.value
-            params[QPARAM_ARCHPATH] = archive_config.archpath
-            params[QPARAM_ARCHREGX] = archive_config.regex
+            params.update(
+                {
+                    QPARAM_ARCHPATH: archive_config.archpath,
+                    QPARAM_ARCHREGX: archive_config.regex,
+                }
+            )
 
+        # Blob Download Configuration
         if blob_download_config:
-            headers[HEADER_OBJECT_BLOB_DOWNLOAD] = "true"
-            headers[HEADER_OBJECT_BLOB_CHUNK_SIZE] = blob_download_config.chunk_size
-            headers[HEADER_OBJECT_BLOB_WORKERS] = blob_download_config.num_workers
-        if etl_name:
-            params[QPARAM_ETL_NAME] = etl_name
+            headers.update(
+                {
+                    HEADER_OBJECT_BLOB_DOWNLOAD: "true",
+                    HEADER_OBJECT_BLOB_CHUNK_SIZE: blob_download_config.chunk_size,
+                    HEADER_OBJECT_BLOB_WORKERS: blob_download_config.num_workers,
+                }
+            )
+
+        # ETL Configuration
+        if etl:
+            params[QPARAM_ETL_NAME] = etl.name
+            if etl.args:
+                params[QPARAM_ETL_ARGS] = etl.args
+
+        # Latest Object Version
         if latest:
             params[QPARAM_LATEST] = "true"
 
+        # Byte Range Validation
         if byte_range and blob_download_config:
-            raise ValueError("Cannot use Byte Range with Blob Download")
+            raise ValueError("Cannot use Byte Range with Blob Download.")
 
         if byte_range:
             # For range formatting, see the spec:
             # https://www.rfc-editor.org/rfc/rfc7233#section-2.1
             headers = {HEADER_RANGE: byte_range}
             # Extract left (range_l) and right (range_r) bounds from the byte range string
+            headers[HEADER_RANGE] = byte_range
             byte_range_l, _, byte_range_r = byte_range[
                 BYTE_RANGE_PREFIX_LENGTH:
             ].partition("-")
@@ -201,6 +225,8 @@ class Object:
                 int(byte_range_l) if byte_range_l else None,
                 int(byte_range_r) if byte_range_r else None,
             )
+
+        # Object Client
         obj_client = ObjectClient(
             request_client=self._client,
             path=self._object_path,
@@ -210,12 +236,11 @@ class Object:
             uname=os.path.join(self._bck_details.path, self.name) if direct else None,
         )
 
-        obj_reader = ObjectReader(
-            object_client=obj_client,
-            chunk_size=chunk_size,
-        )
+        obj_reader = ObjectReader(object_client=obj_client, chunk_size=chunk_size)
+
         if writer:
             writer.writelines(obj_reader)
+
         return obj_reader
 
     # pylint: disable=too-many-arguments
@@ -224,7 +249,7 @@ class Object:
         archive_config: ArchiveConfig = None,
         blob_download_config: BlobDownloadConfig = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_name: str = None,
+        etl: ETLConfig = None,
         writer: BufferedWriter = None,
         latest: bool = False,
         byte_range: str = None,
@@ -235,25 +260,27 @@ class Object:
         Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
 
         Args:
-            archive_config (ArchiveConfig, optional): Settings for archive extraction
-            blob_download_config (BlobDownloadConfig, optional): Settings for using blob download
-            chunk_size (int, optional): chunk_size to use while reading from stream
-            etl_name (str, optional): Transforms an object based on ETL with etl_name
-            writer (BufferedWriter, optional): User-provided writer for writing content output
-                User is responsible for closing the writer
-            latest (bool, optional): GET the latest object version from the associated remote bucket
-            byte_range (str, optional): Specify a specific data segment of the object for transfer, including
-                both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+            archive_config (ArchiveConfig, optional): Settings for archive extraction.
+            blob_download_config (BlobDownloadConfig, optional): Settings for using blob download.
+            chunk_size (int, optional): Chunk size to use while reading from stream.
+            etl (ETLConfig, optional): Settings for ETL-specific operations (name, meta).
+            writer (BufferedWriter, optional): User-provided writer for writing content output.
+                The user is responsible for closing the writer.
+            latest (bool, optional): GET the latest object version from the associated remote bucket.
+            byte_range (str, optional): Byte range in RFC 7233 format for single-range requests
+                (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
+                See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
 
         Returns:
-            An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
-            directly.
+            ObjectReader: An ObjectReader that can be iterated over to stream chunks of object content
+            or used to read all content directly.
 
         Raises:
-            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
-            requests.ConnectionError: Connection error
-            requests.ConnectionTimeout: Timed out connecting to AIStore
-            requests.ReadTimeout: Timed out waiting response from AIStore
+            ValueError: If Byte Range is used with Blob Download.
+            requests.RequestException: If an error occurs during the request.
+            requests.ConnectionError: If there is a connection error.
+            requests.ConnectionTimeout: If the connection times out.
+            requests.ReadTimeout: If the read operation times out.
         """
         warnings.warn(
             "The 'get' method is deprecated and will be removed in a future release. "
@@ -265,7 +292,7 @@ class Object:
             archive_config=archive_config,
             blob_download_config=blob_download_config,
             chunk_size=chunk_size,
-            etl_name=etl_name,
+            etl=etl,
             writer=writer,
             latest=latest,
             byte_range=byte_range,
@@ -281,14 +308,14 @@ class Object:
 
         return f"{self.bucket_provider.value}://{self.bucket_name}/{self._name}"
 
-    def get_url(self, archpath: str = "", etl_name: str = None) -> str:
+    def get_url(self, archpath: str = "", etl: ETLConfig = None) -> str:
         """
         Get the full url to the object including base url and any query parameters
 
         Args:
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file
                 from the archive
-            etl_name (str, optional): Transforms an object based on ETL with etl_name
+            etl (ETLConfig, optional): Settings for ETL-specific operations (name, meta).
 
         Returns:
             Full URL to get object
@@ -297,8 +324,13 @@ class Object:
         params = self.query_params.copy()
         if archpath:
             params[QPARAM_ARCHPATH] = archpath
-        if etl_name:
-            params[QPARAM_ETL_NAME] = etl_name
+
+        # ETL Configuration
+        if etl:
+            params[QPARAM_ETL_NAME] = etl.name
+            if etl.args:
+                params[QPARAM_ETL_ARGS] = etl.args
+
         return self._client.get_full_url(self._object_path, params)
 
     def put_content(self, content: bytes) -> Response:

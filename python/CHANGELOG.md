@@ -9,7 +9,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ## Unreleased
 
 ### Added
-
+- Added Support for ETL Transformation Arguments in GET Requests for Inline Objects
+ 
 ### Changed
 
 ## [1.11.1] - 2025-02-06

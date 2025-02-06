@@ -1,12 +1,14 @@
 """
 Multishard Stream Dataset for AIS.
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
+
+from typing import Iterator, List, Iterable
 
 from aistore.sdk import ArchiveConfig, DataShard, ListObjectFlag
 from aistore.sdk import Bucket
-from typing import Iterator, List, Iterable
+from aistore.sdk.etl import ETLConfig
 from torch.utils.data import IterableDataset
 
 
@@ -59,6 +61,6 @@ class AISMultiShardStream(IterableDataset):
                 if obj.name != path:
                     obj_name = obj.name.replace(f"{path}/", "", 1)
                     yield bucket.object(path).get_reader(
-                        etl_name=etl_name,
+                        etl=ETLConfig(name=etl_name),
                         archive_config=ArchiveConfig(archpath=obj_name),
                     ).read_all()

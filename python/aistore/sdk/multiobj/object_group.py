@@ -1,8 +1,8 @@
 #
-# Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
 #
 import logging
-from typing import Dict, List, Iterable
+from typing import Dict, List, Iterable, Optional
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
@@ -30,6 +30,7 @@ from aistore.sdk.types import (
     PrefetchMsg,
 )
 from aistore.sdk.request_client import RequestClient
+from aistore.sdk.etl import ETLConfig
 
 
 class ObjectGroup(AISSource):
@@ -79,19 +80,22 @@ class ObjectGroup(AISSource):
         """Update the client bound to the bucket used by the ObjectGroup."""
         self.bck.client = client
 
-    def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
+    def list_urls(
+        self, prefix: str = "", etl: Optional[ETLConfig] = None
+    ) -> Iterable[str]:
         """
         Implementation of the abstract method from AISSource that provides an iterator
         of full URLs to every object in this bucket matching the specified prefix
         Args:
             prefix (str, optional): Limit objects selected by a given string prefix
-            etl_name (str, optional): ETL to include in URLs
+            etl (Optional[ETLConfig], optional): An optional ETL configuration. If provided, the URLs
+                will include ETL processing parameters. Defaults to None.
 
         Returns:
             Iterator of all object URLs in the group
         """
         for obj_name in self._obj_collection:
-            yield self.bck.object(obj_name).get_url(etl_name=etl_name)
+            yield self.bck.object(obj_name).get_url(etl=etl)
 
     def list_all_objects_iter(
         self, prefix: str = "", props: str = "name,size"

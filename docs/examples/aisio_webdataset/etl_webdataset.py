@@ -5,6 +5,7 @@ import torchvision
 import webdataset as wds
 from PIL import Image
 from aistore.sdk import Client
+from aistore.sdk.etl import ETLConfig
 from torch.utils.data import IterableDataset
 from torch.utils.data.dataset import T_co
 
@@ -100,7 +101,7 @@ def read_object_tar(shard_data):
 def transform_object_inline():
     single_object = client.bucket(bucket_name).object("samples-00.tar")
     # Get object contents with ETL applied
-    processed_shard = single_object.get_reader(etl_name=etl_name).read_all()
+    processed_shard = single_object.get_reader(etl=ETLConfig(name=etl_name)).read_all()
     read_object_tar(processed_shard)
 
 

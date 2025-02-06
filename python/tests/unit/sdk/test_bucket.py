@@ -9,6 +9,7 @@ from aistore.sdk.obj.object import Object
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.obj.object_iterator import ObjectIterator
 from aistore.sdk import ListObjectFlag
+from aistore.sdk.etl import ETLConfig
 
 from aistore.sdk.const import (
     ACT_COPY_BCK,
@@ -621,9 +622,9 @@ class TestBucket(unittest.TestCase):
         # Should create an object reference and get url for every object returned by listing
         for name in object_names:
             expected_obj_calls.append(call(name))
-            expected_obj_calls.append(call().get_url(etl_name=ETL_NAME))
+            expected_obj_calls.append(call().get_url(etl=ETLConfig(name=ETL_NAME)))
         mock_list_obj.return_value = [BucketEntry(n=name) for name in object_names]
-        list(self.ais_bck.list_urls(prefix=prefix, etl_name=ETL_NAME))
+        list(self.ais_bck.list_urls(prefix=prefix, etl=ETLConfig(name=ETL_NAME)))
         mock_list_obj.assert_called_with(prefix=prefix, props="name")
         mock_object.assert_has_calls(expected_obj_calls)
 

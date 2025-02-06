@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch, call
 
+from tests.const import LARGE_FILE_SIZE, ETL_NAME, PREFIX_NAME
+
 from aistore.sdk import Bucket
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
@@ -17,7 +19,7 @@ from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj
-from tests.const import LARGE_FILE_SIZE, ETL_NAME, PREFIX_NAME
+from aistore.sdk.etl import ETLConfig
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -284,8 +286,8 @@ class TestObjectGroup(unittest.TestCase):
         # Should create an object reference and get url for every object returned by listing
         for name in self.obj_names:
             expected_obj_calls.append(call(name))
-            expected_obj_calls.append(call().get_url(etl_name=ETL_NAME))
-        list(self.object_group.list_urls(etl_name=ETL_NAME))
+            expected_obj_calls.append(call().get_url(etl=ETLConfig(name=ETL_NAME)))
+        list(self.object_group.list_urls(etl=ETLConfig(name=ETL_NAME)))
         self.mock_bck.object.assert_has_calls(expected_obj_calls)
 
     def test_list_all_objects_iter(self):

@@ -13,6 +13,7 @@ from aistore.sdk.const import (
     QPARAM_ARCHREGX,
     QPARAM_ARCHMODE,
     QPARAM_ETL_NAME,
+    QPARAM_ETL_ARGS,
     QPARAM_OBJ_APPEND,
     QPARAM_OBJ_APPEND_HANDLE,
     QPARAM_NEW_CUSTOM,
@@ -39,6 +40,7 @@ from aistore.sdk.obj.object import Object, BucketDetails
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.archive_config import ArchiveMode, ArchiveConfig
+from aistore.sdk.etl import ETLConfig
 from aistore.sdk.obj.object_props import ObjectProps
 from aistore.sdk.types import (
     ActionMsg,
@@ -99,6 +101,7 @@ class TestObject(unittest.TestCase):
         self.expected_params[QPARAM_ARCHREGX] = ""
         self.expected_params[QPARAM_ARCHMODE] = None
         self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
+        self.expected_params[QPARAM_ETL_ARGS] = {"test": "test"}
 
         archive_config = ArchiveConfig(archpath=archpath_param)
 
@@ -111,7 +114,7 @@ class TestObject(unittest.TestCase):
         self.get_exec_assert(
             archive_config=archive_config,
             chunk_size=3,
-            etl_name=ETL_NAME,
+            etl=ETLConfig(ETL_NAME, {"test": "test"}),
             writer=self.mock_writer,
             blob_download_config=blob_config,
             byte_range=byte_range,
@@ -189,7 +192,7 @@ class TestObject(unittest.TestCase):
         self.expected_params[QPARAM_ARCHPATH] = archpath
         self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
 
-        res = self.object.get_url(archpath=archpath, etl_name=ETL_NAME)
+        res = self.object.get_url(archpath=archpath, etl=ETLConfig(ETL_NAME))
 
         self.assertEqual(expected_res, res)
         self.mock_client.get_full_url.assert_called_with(

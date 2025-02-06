@@ -9,13 +9,14 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Dict, List, NewType, Iterable, Union
+from typing import Dict, List, NewType, Iterable, Union, Optional
 import requests
 from requests import structures
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.obj.object_iterator import ObjectIterator
+from aistore.sdk.etl import ETLConfig
 from aistore.sdk.const import (
     ACT_COPY_BCK,
     ACT_CREATE_BCK,
@@ -136,20 +137,23 @@ class Bucket(AISSource):
         """The namespace for this bucket."""
         return self._namespace
 
-    def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
+    def list_urls(
+        self, prefix: str = "", etl: Optional[ETLConfig] = None
+    ) -> Iterable[str]:
         """
-        Implementation of the abstract method from AISSource that provides an iterator
-        of full URLs to every object in this bucket matching the specified prefix
+        Generates full URLs for all objects in the bucket that match the specified prefix.
 
         Args:
-            prefix (str, optional): Limit objects selected by a given string prefix
-            etl_name (str, optional): ETL to include in URLs
+            prefix (str, optional): A string prefix to filter objects. Only objects with names starting
+                with this prefix will be included. Defaults to an empty string (no filtering).
+            etl (Optional[ETLConfig], optional): An optional ETL configuration. If provided, the URLs
+                will include ETL processing parameters. Defaults to None.
 
         Returns:
-            Iterator of full URLs of all objects matching the prefix
+            Iterable[str]: An iterator yielding full URLs of all objects matching the prefix.
         """
         for entry in self.list_objects_iter(prefix=prefix, props="name"):
-            yield self.object(entry.name).get_url(etl_name=etl_name)
+            yield self.object(entry.name).get_url(etl=etl)
 
     def list_all_objects_iter(
         self, prefix: str = "", props: str = "name,size"

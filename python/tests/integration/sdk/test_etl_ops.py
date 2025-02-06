@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 from itertools import cycle
@@ -7,15 +7,16 @@ import unittest
 import hashlib
 import sys
 import time
-
 import pytest
+
+from tests.integration import CLUSTER_ENDPOINT
+from tests.utils import create_and_put_object, random_string
 
 from aistore.sdk import Client, Bucket
 from aistore.sdk.etl.etl_const import ETL_COMM_HPUSH, ETL_COMM_IO
 from aistore.sdk.errors import AISError
 from aistore.sdk.etl.etl_templates import MD5, ECHO
-from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_string
+from aistore.sdk.etl import ETLConfig
 
 ETL_NAME_CODE = "etl-" + random_string(5)
 ETL_NAME_CODE_IO = "etl-" + random_string(5)
@@ -70,7 +71,7 @@ class TestETLOps(unittest.TestCase):
 
         obj = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl_name=code_etl.name)
+            .get_reader(etl=ETLConfig(name=code_etl.name))
             .read_all()
         )
         self.assertEqual(obj, transform(bytes(self.content)))
@@ -90,7 +91,7 @@ class TestETLOps(unittest.TestCase):
 
         obj_io = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl_name=code_io_etl.name)
+            .get_reader(etl=ETLConfig(name=code_io_etl.name))
             .read_all()
         )
         self.assertEqual(obj_io, transform(bytes(self.content)))
@@ -105,7 +106,7 @@ class TestETLOps(unittest.TestCase):
 
         obj = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl_name=spec_etl.name)
+            .get_reader(etl=ETLConfig(name=spec_etl.name))
             .read_all()
         )
         self.assertEqual(obj, transform(bytes(self.content)))
@@ -241,11 +242,13 @@ class TestETLOps(unittest.TestCase):
         for key, value in content.items():
             transformed_obj_hpush = (
                 self.bucket.object(key)
-                .get_reader(etl_name=md5_hpush_etl.name)
+                .get_reader(etl=ETLConfig(name=md5_hpush_etl.name))
                 .read_all()
             )
             transformed_obj_io = (
-                self.bucket.object(key).get_reader(etl_name=md5_io_etl.name).read_all()
+                self.bucket.object(key)
+                .get_reader(etl=ETLConfig(name=md5_io_etl.name))
+                .read_all()
             )
 
             self.assertEqual(transform(bytes(value)), transformed_obj_hpush)
@@ -264,7 +267,7 @@ class TestETLOps(unittest.TestCase):
 
         obj = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl_name=code_stream_etl.name)
+            .get_reader(etl=ETLConfig(code_stream_etl.name))
             .read_all()
         )
         md5 = hashlib.md5()
@@ -286,7 +289,7 @@ class TestETLOps(unittest.TestCase):
         xor_etl.init_code(transform=transform, chunk_size=32)
         transformed_obj = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl_name=xor_etl.name)
+            .get_reader(etl=ETLConfig(xor_etl.name))
             .read_all()
         )
         data, checksum = transformed_obj[:-32], transformed_obj[-32:]
@@ -304,7 +307,7 @@ class TestETLOps(unittest.TestCase):
         )
         res = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl_name=url_etl.name)
+            .get_reader(etl=ETLConfig(name=url_etl.name))
             .read_all()
         )
         result_url = res.decode("utf-8")
@@ -333,7 +336,11 @@ class TestETLOps(unittest.TestCase):
             etl = self.client.etl(f"etl-{random_string(5)}")
             etl.init_code(transform=transform)
 
-            obj = self.bucket.object(obj_name).get_reader(etl_name=etl.name).read_all()
+            obj = (
+                self.bucket.object(obj_name)
+                .get_reader(etl=ETLConfig(etl.name))
+                .read_all()
+            )
             self.assertEqual(obj, transform(bytes(content)))
 
     @pytest.mark.etl

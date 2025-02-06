@@ -1,11 +1,12 @@
 import unittest
 from unittest.mock import Mock
 
-from torch.utils.data import IterDataPipe
+from tests.const import ETL_NAME
 
+from torch.utils.data import IterDataPipe
 from aistore.pytorch.aisio import AISSourceLister
 from aistore.sdk.ais_source import AISSource
-from tests.const import ETL_NAME
+from aistore.sdk.etl import ETLConfig
 
 
 class TestDataPipes(unittest.TestCase):
@@ -20,10 +21,14 @@ class TestDataPipes(unittest.TestCase):
         prefix = "obj-prefix-"
 
         source_lister = AISSourceLister(
-            [ais_source_1, ais_source_2], prefix=prefix, etl_name=ETL_NAME
+            [ais_source_1, ais_source_2], prefix=prefix, etl=ETLConfig(name=ETL_NAME)
         )
 
         self.assertIsInstance(source_lister, IterDataPipe)
         self.assertEqual(expected_res, list(source_lister))
-        ais_source_1.list_urls.assert_called_with(prefix=prefix, etl_name=ETL_NAME)
-        ais_source_2.list_urls.assert_called_with(prefix=prefix, etl_name=ETL_NAME)
+        ais_source_1.list_urls.assert_called_with(
+            prefix=prefix, etl=ETLConfig(name=ETL_NAME)
+        )
+        ais_source_2.list_urls.assert_called_with(
+            prefix=prefix, etl=ETLConfig(name=ETL_NAME)
+        )

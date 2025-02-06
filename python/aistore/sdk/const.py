@@ -44,7 +44,6 @@ HEADER_AUTHORIZATION = "Authorization"
 # URL Params
 # See api/apc/query.go
 QPARAM_WHAT = "what"
-QPARAM_ETL_NAME = "etl_name"
 QPARAM_PROVIDER = "provider"
 QPARAM_BCK_TO = "bck_to"
 QPARAM_FLT_PRESENCE = "presence"
@@ -62,6 +61,9 @@ DSORT_UUID = "uuid"
 QPARAM_UUID = "uuid"
 QPARAM_LATEST = "latest-ver"
 QPARAM_NEW_CUSTOM = "set-new-custom"
+# etl
+QPARAM_ETL_NAME = "etl_name"
+QPARAM_ETL_ARGS = "etl_meta"
 
 # URL Param values
 # See api/apc/query.go
