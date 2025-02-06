@@ -191,6 +191,7 @@ type (
 	ETLErrCtx struct {
 		TID     string
 		ETLName string
+		ETLMeta string
 		PodName string
 		SvcName string
 	}

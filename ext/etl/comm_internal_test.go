@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,11 +43,12 @@ var _ = Describe("CommunicatorTest", func() {
 		targetServer      *httptest.Server
 		proxyServer       *httptest.Server
 
-		dataSize      = int64(cos.MiB * 50)
+		dataSize      = int64(50 * cos.MiB)
 		transformData = make([]byte, dataSize)
 
 		bck        = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
 		objName    = "commObj"
+		etlMeta    = "{\"from_time\":2.43,\"to_time\":3.43}"
 		clusterBck = meta.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
 			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
@@ -85,16 +87,24 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize the HTTP servers.
-		transformerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		transformerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			receivedEtlMeta := r.URL.Query().Get(apc.QparamETLMeta)
+			Expect(receivedEtlMeta).To(Equal(etlMeta))
+
 			_, err := w.Write(transformData)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			err := comm.InlineTransform(w, r, lom)
+			receivedEtlMeta := r.URL.Query().Get(apc.QparamETLMeta)
+			err := comm.InlineTransform(w, r, lom, receivedEtlMeta)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, targetServer.URL, http.StatusMovedPermanently)
+			redirectURL := targetServer.URL + r.URL.Path + "?"
+			if r.URL.RawQuery != "" {
+				redirectURL += r.URL.RawQuery + "&"
+			}
+			http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 		}))
 	})
 
@@ -129,7 +139,9 @@ var _ = Describe("CommunicatorTest", func() {
 			}
 			comm = newCommunicator(nil, boot)
 
-			resp, err := http.Get(proxyServer.URL)
+			q := url.Values{}
+			q.Add(apc.QparamETLMeta, etlMeta)
+			resp, err := http.Get(proxyServer.URL + "?" + q.Encode())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 

@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -46,7 +46,7 @@ type (
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM) error
+		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, metadata string) error
 
 		// OfflineTransform is driven by `OfflineDP` to provide offline transformation, as it were
 		// Implementations include:
@@ -195,14 +195,14 @@ func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.Read
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, metadata string) (r cos.ReadCloseSizer, err error) {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
 		return nil, err
 	}
 
 	var ecode int
 	lom.Lock(false)
-	r, ecode, err = pc.do(lom, timeout)
+	r, ecode, err = pc.do(lom, timeout, metadata)
 	lom.Unlock(false)
 
 	if err != nil && cos.IsNotExist(err, ecode) && lom.Bucket().IsRemote() {
@@ -211,19 +211,20 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration) (r cos.ReadC
 			return nil, err
 		}
 		lom.Lock(false)
-		r, _, err = pc.do(lom, timeout)
+		r, _, err = pc.do(lom, timeout, metadata)
 		lom.Unlock(false)
 	}
 	return
 }
 
-func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, ecode int, err error) {
+func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, metadata string) (_ cos.ReadCloseSizer, ecode int, err error) {
 	var (
 		body   io.ReadCloser
 		cancel func()
 		req    *http.Request
 		resp   *http.Response
 		u      string
+		query  = url.Values{}
 	)
 	if err := pc.boot.xctn.AbortErr(); err != nil {
 		return nil, 0, err
@@ -253,12 +254,16 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSiz
 		debug.Assert(false, "unexpected msg type:", pc.boot.msg.ArgTypeX) // is validated at construction time
 	}
 
+	if metadata != "" {
+		query.Add(apc.QparamETLMeta, metadata)
+	}
+
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodPut, u, body)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, cos.JoinQuery(u, query), body)
 	} else {
-		req, err = http.NewRequest(http.MethodPut, u, body)
+		req, err = http.NewRequest(http.MethodPut, cos.JoinQuery(u, query), body)
 	}
 	if err != nil {
 		cos.Close(body)
@@ -301,8 +306,8 @@ finish:
 	return cos.NewReaderWithArgs(args), 0, nil
 }
 
-func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM) error {
-	r, err := pc.doRequest(lom, 0 /*timeout*/)
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, metadata string) error {
+	r, err := pc.doRequest(lom, 0 /*timeout*/, metadata)
 	if err != nil {
 		return err
 	}
@@ -324,7 +329,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 
 func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	clone := *lom
-	r, err = pc.doRequest(&clone, timeout)
+	r, err = pc.doRequest(&clone, timeout, "")
 	if err == nil && cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, clone.Cname(), err)
 	}
@@ -335,7 +340,7 @@ func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (r co
 // redirectComm: implements Hpull
 //////////////////
 
-func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM) error {
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, metadata string) error {
 	if err := rc.boot.xctn.AbortErr(); err != nil {
 		return err
 	}
@@ -343,7 +348,11 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		return err
 	}
-	http.Redirect(w, r, rc.redirectURL(lom), http.StatusTemporaryRedirect)
+
+	query := url.Values{}
+	query.Add(apc.QparamETLMeta, metadata)
+
+	http.Redirect(w, r, cos.JoinQuery(rc.redirectURL(lom), query), http.StatusTemporaryRedirect)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname())
@@ -382,7 +391,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (
 // revProxyComm: implements Hrev
 //////////////////
 
-func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM) error {
+func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _ string) error {
 	err := lomLoad(lom)
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -30,14 +30,17 @@ type dpq struct {
 	arch struct {
 		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below)
 	}
+	etl struct {
+		name, meta string // QparamETLName, QparamETLMeta
+	}
 
 	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
 	uuid        string // xaction
 	origURL     string // ht://url->
 	owt         string // object write transaction { OwtPut, ... }
 	fltPresence string // QparamFltPresence
-	etlName     string // QparamETLName
-	binfo       string // bucket info, with or without requirement to summarize remote obj-s
+	// etlName     string // QparamETLName
+	binfo string // bucket info, with or without requirement to summarize remote obj-s
 
 	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
 	isGFN         bool // QparamIsGFNRequest
@@ -146,7 +149,9 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 			dpq.binfo = value
 
 		case apc.QparamETLName:
-			dpq.etlName = value
+			dpq.etl.name = value
+		case apc.QparamETLMeta:
+			dpq.etl.meta = value
 		case apc.QparamSilent:
 			dpq.silent = cos.IsParseBool(value)
 		case apc.QparamLatestVer:

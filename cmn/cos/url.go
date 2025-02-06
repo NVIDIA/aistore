@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -96,4 +96,21 @@ func JoinPath(url, path string) string {
 		return url + "/" + path
 	}
 	return url + path
+}
+
+// JoinQuery merges new query parameters into the existing URL.
+func JoinQuery(base string, newQuery url.Values) string {
+	url, valid := ParseURL(base)
+	if !valid || len(newQuery) == 0 {
+		return base
+	}
+
+	query := url.Query()
+	for key, values := range newQuery {
+		for _, value := range values {
+			query.Add(key, value)
+		}
+	}
+	url.RawQuery = query.Encode()
+	return url.String()
 }

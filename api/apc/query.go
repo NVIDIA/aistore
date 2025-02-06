@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -10,9 +10,12 @@ const (
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 
-	QparamUUID    = "uuid"     // xaction
-	QparamJobID   = "jobid"    // job
-	QparamETLName = "etl_name" // etl
+	QparamUUID  = "uuid"  // xaction
+	QparamJobID = "jobid" // job
+
+	// etl
+	QparamETLName = "etl_name"
+	QparamETLMeta = "etl_meta"
 
 	QparamRegex      = "regex"       // dsort: list regex
 	QparamOnlyActive = "only_active" // dsort: list only active
