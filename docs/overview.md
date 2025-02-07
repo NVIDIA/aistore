@@ -401,7 +401,6 @@ For background and further references, see:
 * [Extract, Transform, Load with AIStore](etl.md)
 * [AIS-ETL introduction and a Jupyter notebook walk-through](https://www.youtube.com/watch?v=4PHkqTSE0ls)
 
-
 ## _No limitations_ principle
 
 There are **no** designed-in limitations on the:
@@ -410,5 +409,17 @@ There are **no** designed-in limitations on the:
 * total number of objects and buckets in AIS cluster
 * number of objects in a single AIS bucket
 * numbers of gateways (proxies) and storage targets in AIS cluster
+* object name lengths
 
-Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.
+Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center.
+
+In v3.26, AIStore has removed the basename and pathname limitations.
+
+> On a typical Linux system, you will find that the relevant header(s) define:
+
+```console
+#define NAME_MAX 255
+#define PATH_MAX 4096
+```
+
+AIStore now supports object names of any length.
