@@ -286,7 +286,7 @@ This option won't protect from node failures but it will provide a fairly good p
 
 > It is the performance and the fact that probabilities of disk failures are orders of magnitude greater than node failures makes this "N-way mirror" option attractive, possibly in combination with periodic backups.
 
-Further, you could at some point in time decide to associate a given AIS bucket with a Cloud (backend) bucket, thus making sure that your data is stored in one of the AIS-supported Clouds: Amazon S3, Google Cloud Storage, Azure Blob Storage.
+Further, you could at some point in time decide to associate a given AIS bucket with a Cloud (backend) bucket, thus making sure that your data is stored in one of the AIS-supported Clouds: Amazon S3, Google Cloud Storage, Azure Blob Storage, and/or Oracle (OCI) Object Storage.
 
 Finally, you could erasure code (EC) a given bucket for `D + P` redundancy, where `D` and `P` are, respectively, the numbers of data and parity slices:
 

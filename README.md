@@ -12,7 +12,7 @@ AIS [consistently shows balanced I/O distribution and linear scalability](https:
 * ✅ **Deploys anywhere**. AIS can be deployed anywhere, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use Docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers. There are [no deployment limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - AIS runs on any Linux machine, whether virtual or physical.
 * ✅ **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
 * ✅ **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
-* ✅ **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, and Microsoft Azure.
+* ✅ **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, Microsoft Azure, and Oracle (OCI) Object Storage.
 * ✅ **Network of clusters**. Any AIS cluster can attach any other AIS cluster, thus gaining immediate visibility and fast access to the respective hosted datasets.
 * ✅ **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
 * ✅ **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
@@ -111,7 +111,7 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 * [AIS plugin for PyTorch: usage examples](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
 * [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
 
-Since AIS natively supports [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3, GCS and Azure buckets, and more.
+Since AIS natively supports [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3, GCS, Azure, and OCI buckets, and more.
 
 ## Guides and References
 
