@@ -45,7 +45,7 @@ The rest of this document is structured as follows:
 
 Following is a high-level **block diagram** with an emphasis on supported frontend and backend APIs, and the capability to scale-out horizontally. The picture also tries to make the point that AIS aggregates an arbitrary numbers of storage servers ("targets") with local or locally accessible drives, whereby each drive is formatted with a local filesystem of choice (e.g., xfs or zfs).
 
-![At-a-Glance](images/cluster-block-2024.png)
+![At-a-Glance](images/cluster-block-v3.26.png)
 
 In any aistore cluster, there are **two kinds of nodes**: proxies (a.k.a. gateways) and storage nodes (targets):
 

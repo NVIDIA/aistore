@@ -136,7 +136,7 @@ Node t[kOktEWrTg], Version 3.21.1.69a90d64b, build time 2023-11-07T18:06:19-0500
 
 ## Disable/Enable cloud backend at runtime
 
-AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-2024.png).
+AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-v3.26.png).
 
 > For the most recently updated list, please see [3rd party Backend providers](/docs/providers.md).
 

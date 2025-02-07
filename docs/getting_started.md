@@ -566,7 +566,7 @@ In summary:
 
 ### A note on conditional linkage
 
-AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-2024.png).
+AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure, OCI](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-v3.26.png).
 
 > For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
 
