@@ -413,43 +413,6 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 	return
 }
 
-func parseBpropsFromContext(c *cli.Context) (props *cmn.BpropsToSet, err error) {
-	propArgs := c.Args().Tail()
-
-	if c.Command.Name == commandCreate {
-		inputProps := parseStrFlag(c, bucketPropsFlag)
-		if isJSON(inputProps) {
-			err = jsoniter.Unmarshal([]byte(inputProps), &props)
-			return
-		}
-		propArgs = strings.Split(inputProps, " ")
-	}
-
-	if len(propArgs) == 1 && isJSON(propArgs[0]) {
-		err = jsoniter.Unmarshal([]byte(propArgs[0]), &props)
-		return
-	}
-
-	// For setting bucket props via json attributes
-	if len(propArgs) == 0 {
-		err = missingArgumentsError(c, "property key-value pairs")
-		return
-	}
-
-	// For setting bucket props via key-value list
-	nvs, err := makeBckPropPairs(propArgs)
-	if err != nil {
-		return
-	}
-
-	if err = reformatBackendProps(c, nvs); err != nil {
-		return
-	}
-
-	props, err = cmn.NewBpropsToSet(nvs)
-	return
-}
-
 func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	uris := c.Args()
 	bcks := make([]cmn.Bck, 0, len(uris))
@@ -718,7 +681,7 @@ func flattenBackends(backends []string) (flat nvpairList) {
 		}
 		flat = append(flat, nv)
 	}
-	return
+	return flat
 }
 
 // remove secrets, if any

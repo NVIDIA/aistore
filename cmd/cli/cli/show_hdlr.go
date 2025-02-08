@@ -785,16 +785,27 @@ func showClusterConfig(c *cli.Context, section string) error {
 		flat = flattenBackends(backends)
 	}
 
+	// compare w/ headBckTable using the same generic template for bucket props
 	if flagIsSet(c, noHeaderFlag) {
 		err = teb.Print(flat, teb.PropValTmplNoHdr)
 	} else {
 		err = teb.Print(flat, teb.PropValTmpl)
 	}
-	if err == nil && section == "" {
+	if err != nil {
+		return err
+	}
+	if section == "" {
 		msg := fmt.Sprintf("(Tip: use '[SECTION] %s' to show config section(s), see %s for details)",
 			flprn(jsonFlag), qflprn(cli.HelpFlag))
 		actionDone(c, msg)
+		return nil
 	}
+
+	// feature flags: show all w/ descriptions
+	if section == featureFlagsJname {
+		err = printFeatVerbose(c, cluConfig.Features, false /*bucket scope*/)
+	}
+
 	return err
 }
 

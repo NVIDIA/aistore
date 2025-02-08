@@ -1,6 +1,6 @@
 // Package feat: global runtime-configurable feature flags
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package feat
 
@@ -14,9 +14,9 @@ import (
 type Flags cos.BitFlags
 
 // NOTE:
-// - `Bucket` features(*) are a strict subset of all `Cluster` features, and can be changed
-//    for individual buckets
-// - when making any changes, make sure to update `Cluster` and maybe the `Bucket` enum as well (NOTE)
+// - `Bucket` features are a strict subset of all `Cluster` features, and can be changed for individual buckets;
+// - when making any changes, make sure to update `Cluster` and maybe the `Bucket` enum as well;
+// - finally, check cmd/cli/cli/feat.go where we currently hardcode feature descriptions in the same exact order.
 
 const (
 	PropName = "features"

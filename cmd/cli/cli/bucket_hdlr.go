@@ -17,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -300,10 +302,10 @@ var (
 	}
 )
 
-func createBucketHandler(c *cli.Context) (err error) {
+func createBucketHandler(c *cli.Context) error {
 	var props *cmn.BpropsToSet
 	if flagIsSet(c, bucketPropsFlag) {
-		propSingleBck, err := parseBpropsFromContext(c)
+		propSingleBck, _, err := _parseBprops(c)
 		if err != nil {
 			return err
 		}
@@ -400,24 +402,38 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.Bprops, toggle bool) (err err
 	return updateBckProps(c, bck, p, toggledProps)
 }
 
-func setPropsHandler(c *cli.Context) (err error) {
-	var currProps *cmn.Bprops
-	bck, err := parseBckURI(c, c.Args().Get(0), false)
+func setPropsHandler(c *cli.Context) error {
+	var (
+		currBprops *cmn.Bprops
+		nvs        cos.StrKVs       // user specified
+		newBprops  *cmn.BpropsToSet // API structure to set
+		bck, err   = parseBckURI(c, c.Args().Get(0), false)
+	)
 	if err != nil {
 		return err
 	}
+
 	dontHeadRemote := flagIsSet(c, dontHeadRemoteFlag)
 	if !dontHeadRemote {
-		if currProps, err = headBucket(bck, false /* don't add */); err != nil {
+		if currBprops, err = headBucket(bck, false /* don't add */); err != nil {
 			return err
 		}
 	}
-	newProps, err := parseBpropsFromContext(c)
-
+	newBprops, nvs, err = _parseBprops(c)
 	if err == nil {
-		newProps.Force = flagIsSet(c, forceFlag)
-		return updateBckProps(c, bck, currProps, newProps)
+		newBprops.Force = flagIsSet(c, forceFlag)
+		err = updateBckProps(c, bck, currBprops, newBprops)
+		if err != nil {
+			return err
+		}
+		// feature flags: show all w/ descriptions
+		if _, ok := nvs[featureFlagsJname]; ok && newBprops.Features != nil {
+			err = printFeatVerbose(c, *newBprops.Features, true /*bucket scope*/)
+		}
+		return err
 	}
+
+	// [usability] try to help
 	var (
 		section = c.Args().Get(1)
 		isValid bool
@@ -435,23 +451,23 @@ func setPropsHandler(c *cli.Context) (err error) {
 			return nil
 		}
 	}
+
 	return fmt.Errorf("%v%s", err, examplesBckSetProps)
 }
 
-// TODO: more validation; e.g. `validate_warm_get = true` is only supported for buckets with Cloud and remais backends
-func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.Bprops, updateProps *cmn.BpropsToSet) (err error) {
+func updateBckProps(c *cli.Context, bck cmn.Bck, currBprops *cmn.Bprops, updateProps *cmn.BpropsToSet) error {
 	// apply updated props
-	allNewProps := currProps.Clone()
-	allNewProps.Apply(updateProps)
+	allNewBprops := currBprops.Clone()
+	allNewBprops.Apply(updateProps)
 
 	// check for changes
-	if allNewProps.Equal(currProps) {
+	if allNewBprops.Equal(currBprops) {
 		displayPropsEqMsg(c, bck)
 		return nil
 	}
 
 	// do
-	if _, err = api.SetBucketProps(apiBP, bck, updateProps); err != nil {
+	if _, err := api.SetBucketProps(apiBP, bck, updateProps); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			return herr
 		}
@@ -459,9 +475,74 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.Bprops, updatePr
 			cliName, commandShow, cmdBucket, bck.Cname(""))
 		return newAdditionalInfoError(err, helpMsg)
 	}
-	showDiff(c, currProps, allNewProps)
+
+	_showDiff(c, currBprops, allNewBprops)
+
 	actionDone(c, "\nBucket props successfully updated.")
 	return nil
+}
+
+func _showDiff(c *cli.Context, currBprops, newBprops *cmn.Bprops) {
+	var (
+		newPropList  = bckPropList(newBprops, true)
+		origPropList = bckPropList(currBprops, true)
+	)
+	for _, np := range newPropList {
+		var found bool
+		for _, op := range origPropList {
+			if np.Name != op.Name {
+				continue
+			}
+			found = true
+			if np.Value != op.Value {
+				fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", np.Name, _clearFmt(np.Value), _clearFmt(op.Value))
+			}
+		}
+		if !found && np.Value != "" {
+			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: n/a)\n", np.Name, _clearFmt(np.Value))
+		}
+	}
+
+	// feature flags: show all w/ descriptions
+	if len(newPropList) == 1 && newPropList[0].Name == featureFlagsJname {
+		err := printFeatVerbose(c, newBprops.Features, true /*bucket scope*/)
+		debug.AssertNoErr(err)
+	}
+}
+
+func _parseBprops(c *cli.Context) (props *cmn.BpropsToSet, nvs cos.StrKVs, err error) {
+	propArgs := c.Args().Tail()
+
+	if c.Command.Name == commandCreate {
+		inputProps := parseStrFlag(c, bucketPropsFlag)
+		if isJSON(inputProps) {
+			err = jsoniter.Unmarshal([]byte(inputProps), &props)
+			return
+		}
+		propArgs = strings.Split(inputProps, " ")
+	}
+
+	if len(propArgs) == 1 && isJSON(propArgs[0]) {
+		err = jsoniter.Unmarshal([]byte(propArgs[0]), &props)
+		return
+	}
+
+	if len(propArgs) == 0 {
+		return nil, nil, missingArgumentsError(c, "property key-value pairs")
+	}
+
+	// command line => key/val pairs
+	nvs, err = makeBckPropPairs(propArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = reformatBackendProps(c, nvs); err != nil {
+		return nil, nvs, err
+	}
+
+	// key/val pairs => cmn.BpropsToSet
+	props, err = cmn.NewBpropsToSet(nvs)
+	return props, nvs, err
 }
 
 func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
@@ -483,28 +564,6 @@ func _clearFmt(v string) string {
 	}
 	nv := strings.ReplaceAll(v, "\n", "")
 	return strings.ReplaceAll(nv, "\t", "")
-}
-
-func showDiff(c *cli.Context, currProps, newProps *cmn.Bprops) {
-	var (
-		origKV = bckPropList(currProps, true)
-		newKV  = bckPropList(newProps, true)
-	)
-	for _, np := range newKV {
-		var found bool
-		for _, op := range origKV {
-			if np.Name != op.Name {
-				continue
-			}
-			found = true
-			if np.Value != op.Value {
-				fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", np.Name, _clearFmt(np.Value), _clearFmt(op.Value))
-			}
-		}
-		if !found && np.Value != "" {
-			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: n/a)\n", np.Name, _clearFmt(np.Value))
-		}
-	}
 }
 
 func listAnyHandler(c *cli.Context) error {

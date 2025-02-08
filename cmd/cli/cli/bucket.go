@@ -373,7 +373,9 @@ func showBucketProps(c *cli.Context) (err error) {
 	return headBckTable(c, p, defProps, section)
 }
 
-func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) error {
+// compare w/ showClusterConfig using the same generic template
+// for "flattened" cluster config
+func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) (err error) {
 	var (
 		defList nvpairList
 		colored = !cfg.NoColor
@@ -425,7 +427,17 @@ func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) e
 	}
 
 	if flagIsSet(c, noHeaderFlag) {
-		return teb.Print(propList, teb.PropValTmplNoHdr)
+		err = teb.Print(propList, teb.PropValTmplNoHdr)
+	} else {
+		err = teb.Print(propList, teb.PropValTmpl)
 	}
-	return teb.Print(propList, teb.PropValTmpl)
+	if err != nil {
+		return err
+	}
+
+	// feature flags: show all w/ descriptions
+	if section == featureFlagsJname {
+		err = printFeatVerbose(c, props.Features, true /*bucket scope*/)
+	}
+	return err
 }

@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -61,6 +61,9 @@ const (
 	propValTmplHdr   = "PROPERTY\t VALUE\n"
 	PropValTmpl      = propValTmplHdr + PropValTmplNoHdr
 	PropValTmplNoHdr = "{{range $p := . }}" + "{{$p.Name}}\t {{$p.Value}}\n" + "{{end}}"
+
+	// w/ special arrangement for feature flags
+	FeatDescTmplHdr = "FEATURE\t DESCRIPTION\n"
 
 	//
 	// special xactions & dsort
