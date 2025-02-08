@@ -192,7 +192,7 @@ $ export OCI_MULTI_PART_DOWNLOAD_THRESHOLD="200000"
 $ export OCI_MULTI_PART_UPLOAD_THRESHOLD="200000"
 ```
 
-Restartinfg your local AIStore instance one last time and repeat the GET operation. Here, the
+Restart your local AIStore instance one last time and repeat the GET operation. Here, the
 Multi-Part Download functionality will be enabled.
 
 ```sh
