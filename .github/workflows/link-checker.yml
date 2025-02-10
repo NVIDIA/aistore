@@ -30,6 +30,8 @@ jobs:
           echo "https://github.com/NVIDIA/aistore/security/*" >> .lycheeignore
           echo "http://g/v1/etl/ETL_NAME" >> .lycheeignore
           echo "https://gist.github.com/*" >> .lycheeignore
+          echo "https://www.youtube.com/embed/*" >> .lycheeignore
+          echo "https://github.com/NVIDIA/aistore/commit/*" >> .lycheeignore
 
       - name: Link Checker
         id: lychee
