@@ -103,8 +103,43 @@ const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "\t- 'evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- evict the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'evict \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
 
+// flags
 var (
-	// flags
+	lsCmdFlags = []cli.Flag{
+		allObjsOrBcksFlag,
+		listCachedFlag,
+		listNotCachedFlag,
+		nameOnlyFlag,
+		objPropsFlag,
+		regexLsAnyFlag,
+		templateFlag,
+		listObjPrefixFlag,
+		pageSizeFlag,
+		pagedFlag,
+		objLimitFlag,
+		refreshFlag,
+		showUnmatchedFlag,
+		noHeaderFlag,
+		noFooterFlag,
+		maxPagesFlag,
+		startAfterFlag,
+		bckSummaryFlag,
+		noRecursFlag,
+		noDirsFlag,
+		dontHeadRemoteFlag,
+		dontAddRemoteFlag,
+		listArchFlag,
+		unitsFlag,
+		silentFlag,
+		dontWaitFlag,
+		diffFlag,
+		countAndTimeFlag,
+		// bucket inventory
+		useInventoryFlag,
+		invNameFlag,
+		invIDFlag,
+	}
+
 	bucketCmdsFlags = map[string][]cli.Flag{
 		commandCreate: {
 			ignoreErrorFlag,
@@ -157,52 +192,20 @@ var (
 		},
 		cmdResetBprops: {},
 
-		commandList: {
-			allObjsOrBcksFlag,
-			listObjCachedFlag,
-			nameOnlyFlag,
-			objPropsFlag,
-			regexLsAnyFlag,
-			templateFlag,
-			listObjPrefixFlag,
-			pageSizeFlag,
-			pagedFlag,
-			objLimitFlag,
-			refreshFlag,
-			showUnmatchedFlag,
-			noHeaderFlag,
-			noFooterFlag,
-			maxPagesFlag,
-			startAfterFlag,
-			bckSummaryFlag,
-			noRecursFlag,
-			noDirsFlag,
-			dontHeadRemoteFlag,
-			dontAddRemoteFlag,
-			listArchFlag,
-			unitsFlag,
-			silentFlag,
-			dontWaitFlag,
-			diffFlag,
-			countAndTimeFlag,
-			// bucket inventory
-			useInventoryFlag,
-			invNameFlag,
-			invIDFlag,
-		},
-
 		cmdLRU: {
 			enableFlag,
 			disableFlag,
 		},
 	}
+)
 
-	// commands
+// commands
+var (
 	bucketsObjectsCmdList = cli.Command{
 		Name:         commandList,
 		Usage:        listAnyUsage,
 		ArgsUsage:    lsAnyCommandArgument,
-		Flags:        sortFlags(bucketCmdsFlags[commandList]),
+		Flags:        sortFlags(lsCmdFlags),
 		Action:       listAnyHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}

@@ -133,7 +133,7 @@ func (p *lsoFactory) Start() error {
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
 	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
-	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
+	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
 		// begin streams
 		if !r.walk.wor {
 			nt := core.T.Sowner().Get().CountActiveTs()
@@ -190,7 +190,7 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 func (r *LsoXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
-	if !lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
+	if !lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
 		r.initWalk()
 	}
 loop:
@@ -226,7 +226,7 @@ loop:
 
 func (r *LsoXact) stop() {
 	r.stopCh.Close()
-	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
+	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
 		if r.DemandBase.Finished() {
 			// must be aborted
 			if !r.walk.wor {
@@ -342,7 +342,7 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 }
 
 func (r *LsoXact) doPage() *LsoRsp {
-	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
+	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
 		if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
 			// can't extract the next-to-list object name from the remotely generated
 			// continuation token, keeping and returning the entire last page
@@ -383,7 +383,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 // sum of obj sizes - for all visited objects
 // Returns the index of the first object in the page that follows the continuation `token`
 func (r *LsoXact) findToken(token string) int {
-	if r.token == token && lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)) {
+	if r.token == token && lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
 		return 0
 	}
 	return sort.Search(len(r.page), func(i int) bool { // TODO: revisit
@@ -685,7 +685,7 @@ func (r *LsoXact) Snap() (snap *core.Snap) {
 //
 
 func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsObjCached)))
+	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)))
 
 	if hdr.Opcode == opcodeAbrt {
 		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`

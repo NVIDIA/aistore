@@ -148,7 +148,7 @@ var (
 		Name:         cmdList,
 		Usage:        "List archived content (supported formats: " + archFormats + ")",
 		ArgsUsage:    optionalShardArgument,
-		Flags:        sortFlags(rmFlags(bucketCmdsFlags[commandList], listArchFlag)),
+		Flags:        sortFlags(rmFlags(lsCmdFlags, listArchFlag)),
 		Action:       listArchHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}

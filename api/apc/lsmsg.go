@@ -18,18 +18,24 @@ const (
 
 // LsoMsg flags
 const (
-	// Applies to objects from the buckets with remote backends (e.g., to optimize-out listing remotes)
-	// See related Flt* enum
-	LsObjCached = 1 << iota
+	// only list in-cluster objects, i.e., those from the respective remote bucket that are present (\"cached\")
+	// see also: flt* enum and `LsNotCached` below
+	LsCached = 1 << iota
 
-	LsMissing // include missing main obj (with copy existing)
+	// include missing main obj (with copy existing)
+	LsMissing
 
-	LsDeleted // include obj-s marked for deletion (TODO: not implemented yet)
+	// include obj-s marked for deletion (TODO: not implemented yet)
+	LsDeleted
 
-	LsArchDir // expand archives as directories
+	// expand archives as directories
+	LsArchDir
 
-	LsNameOnly // return only object names and, spearately, statuses
-	LsNameSize // same as above and size (minor speedup)
+	// return only object names and, spearately, statuses
+	LsNameOnly
+
+	// same as above and size (minor speedup)
+	LsNameSize
 
 	// Background: ============================================================
 	// as far as AIS is concerned, adding a (confirmed to exist)
@@ -50,35 +56,35 @@ const (
 	// * `QparamDontHeadRemote` (this package)
 	LsDontHeadRemote
 
-	// To list remote buckets without adding them to aistore
+	// list remote buckets without adding them to aistore
 	// See also:
 	// * cmd/cli/cli/const.go for `dontAddRemoteFlag`
 	// * `QparamDontAddRemote` (this package)
 	LsDontAddRemote
 
-	// Deprecated
-	_useListObjsCache //nolint:unused // Kept for backward compatibility.
+	// strict opposite of the `LsCached`
+	LsNotCached
 
-	// For remote buckets - list only remote props (aka `wantOnlyRemote`). When false,
+	// for remote buckets - list only remote props (aka `wantOnlyRemote`). When false,
 	// the default that's being used is: `WantOnlyRemoteProps` - see below.
 	// When true, the request gets executed in a pass-through fashion whereby a single ais target
 	// simply forwards it to the associated remote backend and delivers the results as is to the
 	// requesting proxy and, subsequently, to client.
 	LsWantOnlyRemoteProps
 
-	// List objects without recursion (POSIX-wise).
-	// See related feature flag: feat.DontOptimizeVirtualDir
+	// list objects without recursion (POSIX-wise).
+	// see related feature flag: feat.DontOptimizeVirtualDir
 	LsNoRecursion
 
-	// Bidirectional (remote <-> in-cluster) diff requires remote metadata-capable (`HasVersioningMD`) buckets;
+	// bidirectional (remote <-> in-cluster) diff requires remote metadata-capable (`HasVersioningMD`) buckets;
 	// it entails:
 	// - checking whether remote version exists,
 	//   and if it does,
 	// - checking whether it differs from its in-cluster copy.
-	// See related `cmn.LsoEnt` flags: `EntryVerChanged` and `EntryVerRemoved`, respectively.
+	// see related `cmn.LsoEnt` flags: `EntryVerChanged` and `EntryVerRemoved`, respectively.
 	LsDiff
 
-	// Do not return virtual subdirectories - do not include them as `cmn.LsoEnt` entries
+	// do not return virtual subdirectories - do not include them as `cmn.LsoEnt` entries
 	LsNoDirs
 )
 
@@ -154,7 +160,7 @@ type LsoMsg struct {
 	StartAfter        string      `json:"start_after,omitempty"` // start listing after (AIS buckets only)
 	ContinuationToken string      `json:"continuation_token"`    // => LsoResult.ContinuationToken => LsoMsg.ContinuationToken
 	SID               string      `json:"target"`                // selected target to solely execute backend.list-objects
-	Flags             uint64      `json:"flags,string"`          // enum {LsObjCached, ...} - "LsoMsg flags" above
+	Flags             uint64      `json:"flags,string"`          // enum {LsCached, ...} - "LsoMsg flags" above
 	PageSize          int64       `json:"pagesize"`              // max entries returned by list objects call
 }
 
@@ -224,7 +230,7 @@ func (lsmsg *LsoMsg) Str(cname string) string {
 	}
 
 	sb.WriteString(", flags:")
-	if lsmsg.IsFlagSet(LsObjCached) {
+	if lsmsg.IsFlagSet(LsCached) {
 		sb.WriteString("cached,")
 	}
 	if lsmsg.IsFlagSet(LsMissing) {
@@ -249,7 +255,7 @@ func (lsmsg *LsoMsg) Str(cname string) string {
 	return s[:len(s)-1]
 }
 
-// LsoMsg flags enum: LsObjCached, ...
+// LsoMsg flags enum: LsCached, ...
 func (lsmsg *LsoMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
 func (lsmsg *LsoMsg) ClearFlag(flag uint64)       { lsmsg.Flags &= ^flag }
 func (lsmsg *LsoMsg) IsFlagSet(flags uint64) bool { return lsmsg.Flags&flags == flags }

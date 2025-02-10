@@ -163,7 +163,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 
 	m.puts()
 
-	listObjectsMsg := &apc.LsoMsg{Props: apc.GetPropsLocation, Flags: apc.LsObjCached}
+	listObjectsMsg := &apc.LsoMsg{Props: apc.GetPropsLocation, Flags: apc.LsCached}
 	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
@@ -778,7 +778,7 @@ func TestPrefetchList(t *testing.T) {
 	}
 
 	msg := &apc.LsoMsg{}
-	msg.SetFlag(apc.LsObjCached)
+	msg.SetFlag(apc.LsCached)
 	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != m.num {
@@ -905,7 +905,7 @@ func TestPrefetchRange(t *testing.T) {
 	}
 
 	msg := &apc.LsoMsg{Prefix: m.prefix}
-	msg.SetFlag(apc.LsObjCached)
+	msg.SetFlag(apc.LsCached)
 	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) < len(files) {

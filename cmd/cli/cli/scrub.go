@@ -281,7 +281,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 	// - (remote) => (in-cluster) when not specified
 	// - (in-cluster) otherwise
 	if flagIsSet(ctx.c, scrubObjCachedFlag) {
-		lsmsg.SetFlag(apc.LsObjCached)
+		lsmsg.SetFlag(apc.LsCached)
 	}
 
 	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)

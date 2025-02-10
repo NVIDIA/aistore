@@ -140,7 +140,7 @@ var (
 	storageSummFlags = append(
 		longRunFlags,
 		bsummPrefixFlag,
-		listObjCachedFlag,
+		listCachedFlag,
 		unitsFlag,
 		verboseFlag,
 		dontWaitFlag,
@@ -386,7 +386,7 @@ func summaryStorageHandler(c *cli.Context) error {
 	}
 
 	bckPresent := true // TODO: currently, only in-cluster buckets
-	ctx, err := newBsummCtxMsg(c, qbck, prefix, flagIsSet(c, listObjCachedFlag), bckPresent)
+	ctx, err := newBsummCtxMsg(c, qbck, prefix, flagIsSet(c, listCachedFlag), bckPresent)
 	if err != nil {
 		return err
 	}

@@ -85,7 +85,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 
 // Returns the next page from the remote bucket's "list-objects" result set.
 func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err error) {
-	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
+	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsCached))
 	lst = &cmn.LsoRes{Entries: nentries}
 	if npg.ctx != nil {
 		if npg.ctx.Lom == nil {
@@ -139,6 +139,10 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		}
 		if err := lom.Load(true /* cache it*/, false /*locked*/); err != nil {
 			goto keep
+		}
+		if npg.wi.msg.IsFlagSet(apc.LsNotCached) {
+			core.FreeLOM(lom)
+			continue
 		}
 
 		npg.wi.setWanted(en, lom)

@@ -610,10 +610,10 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg
 	case msg == nil:
 		tlog.Logf("LIST %s []\n", bck.String())
 	case msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "":
-		tlog.Logf("LIST %s [cached: %t]\n", bck.String(), msg.IsFlagSet(apc.LsObjCached))
+		tlog.Logf("LIST %s [cached: %t]\n", bck.String(), msg.IsFlagSet(apc.LsCached))
 	default:
 		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
-			bck.String(), msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsObjCached), msg.ContinuationToken)
+			bck.String(), msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsCached), msg.ContinuationToken)
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})

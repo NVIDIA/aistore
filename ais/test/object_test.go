@@ -1727,7 +1727,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					)
 					if evict {
 						xid, err = api.EvictMultiObj(baseParams, b, nil /*lst objnames*/, test.rangeStr)
-						msg.Flags = apc.LsObjCached
+						msg.Flags = apc.LsCached
 						kind = apc.ActEvictObjects
 					} else {
 						xid, err = api.DeleteMultiObj(baseParams, b, nil /*lst objnames*/, test.rangeStr)

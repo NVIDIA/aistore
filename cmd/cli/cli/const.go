@@ -834,17 +834,22 @@ var (
 			indent1 + "\t(applies only to buckets with remote backend)",
 	}
 
-	_onlyin           = "in-cluster objects, i.e., objects from the respective remote bucket that are present (\"cached\") in the cluster"
-	listObjCachedFlag = cli.BoolFlag{
+	//
+	// a group of (only cached | only not-cached) flags
+	//
+
+	_onlyin        = "in-cluster objects, i.e., objects from the respective remote bucket that are present (\"cached\") in the cluster"
+	_onlyout       = "not in-cluster objects, i.e., objects from the respective remote bucket that are not present (\"not cached\") in the cluster"
+	listCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "Only list " + _onlyin,
 	}
 	getObjCachedFlag = cli.BoolFlag{
-		Name:  listObjCachedFlag.Name,
+		Name:  listCachedFlag.Name,
 		Usage: "Only get " + _onlyin,
 	}
 	scrubObjCachedFlag = cli.BoolFlag{
-		Name:  listObjCachedFlag.Name,
+		Name:  listCachedFlag.Name,
 		Usage: "Only visit " + _onlyin,
 	}
 
@@ -852,6 +857,10 @@ var (
 	objNotCachedPropsFlag = cli.BoolFlag{
 		Name:  "not-cached",
 		Usage: "Show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
+	}
+	listNotCachedFlag = cli.BoolFlag{
+		Name:  "not-cached",
+		Usage: "Only list " + _onlyout,
 	}
 
 	dontHeadSrcDstBucketsFlag = cli.BoolFlag{

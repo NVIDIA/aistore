@@ -455,7 +455,7 @@ func listObjectNames(p *params) ([]string, error) {
 		msg      = &apc.LsoMsg{Prefix: p.subDir}
 	)
 	if cached {
-		msg.Flags |= apc.LsObjCached // remote bucket: in-cluster objects only
+		msg.Flags |= apc.LsCached // remote bucket: in-cluster objects only
 	}
 	if !listDirs {
 		msg.Flags |= apc.LsNoDirs // aisloader's default (to override, use --list-dirs)

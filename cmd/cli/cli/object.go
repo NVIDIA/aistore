@@ -284,8 +284,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		}
 		if apc.IsFltPresent(hargs.FltPresence) && isRemote {
 			if isList {
-				if flagIsSet(c, listObjCachedFlag) {
-					hint = fmt.Sprintf(" (tip: try 'ais ls' without %s option)", qflprn(listObjCachedFlag))
+				if flagIsSet(c, listCachedFlag) {
+					hint = fmt.Sprintf(" (tip: try 'ais ls' without %s option)", qflprn(listCachedFlag))
 				}
 			} else {
 				hint = fmt.Sprintf(" (tip: try %s option or use 'ais ls' to lookup by prefix)", qflprn(objNotCachedPropsFlag))

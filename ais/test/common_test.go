@@ -603,7 +603,7 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
-	msg := &apc.LsoMsg{Flags: apc.LsObjCached, Prefix: m.prefix}
+	msg := &apc.LsoMsg{Flags: apc.LsCached, Prefix: m.prefix}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsAtime, apc.GetPropsStatus)
 	objectList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)

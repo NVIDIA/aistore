@@ -613,7 +613,7 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 	msg := &apc.LsoMsg{}
 	if cached {
-		msg.SetFlag(apc.LsObjCached)
+		msg.SetFlag(apc.LsCached)
 	}
 	msg.SetFlag(apc.LsNameOnly)
 	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})

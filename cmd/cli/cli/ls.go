@@ -138,7 +138,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		hideFooter = flagIsSet(c, noFooterFlag)
 		maxwait    = listObjectsWaitTime
 
-		objCached  = flagIsSet(c, listObjCachedFlag)
+		objCached  = flagIsSet(c, listCachedFlag)
 		bckPresent = flagIsSet(c, allObjsOrBcksFlag)
 	)
 	debug.Assert(args.Summarize)
@@ -275,6 +275,16 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		addCachedCol = true           // preliminary; may change below
 		msg.SetFlag(apc.LsBckPresent) // default
 	}
+	if listArch {
+		msg.SetFlag(apc.LsArchDir)
+
+		if bck.IsRemote() && !msg.IsFlagSet(apc.LsCached) {
+			const warn = "listing the contents of archives (\"shards\") is currently only supported for in-cluster (\"cached\") objects."
+			actionWarn(c, warn)
+			msg.SetFlag(apc.LsCached)
+		}
+	}
+
 	if flagIsSet(c, diffFlag) {
 		if bck.IsAIS() {
 			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(diffFlag), bck.String())
@@ -283,17 +293,29 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			return fmt.Errorf("flag %s only applies to remote backends that maintain at least some form of versioning information (have: %s)",
 				qflprn(diffFlag), bck.String())
 		}
+		if flagIsSet(c, listNotCachedFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(diffFlag), qflprn(listNotCachedFlag))
+		}
 		msg.SetFlag(apc.LsDiff)
 	}
 
-	if flagIsSet(c, listObjCachedFlag) {
+	if flagIsSet(c, listCachedFlag) {
 		if flagIsSet(c, diffFlag) {
 			actionWarn(c, "checking remote versions may take some time...\n")
 			briefPause(1)
 		}
-		msg.SetFlag(apc.LsObjCached)
+		if flagIsSet(c, listNotCachedFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(listCachedFlag), qflprn(listNotCachedFlag))
+		}
+		msg.SetFlag(apc.LsCached)
 		// addCachedCol: correction #1
 		addCachedCol = false
+	}
+	if flagIsSet(c, listNotCachedFlag) {
+		if bck.IsAIS() {
+			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(listNotCachedFlag), bck.String())
+		}
+		msg.SetFlag(apc.LsNotCached)
 	}
 
 	// NOTE: `--all` combines two separate meanings:
@@ -308,9 +330,6 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	if flagIsSet(c, dontAddRemoteFlag) {
 		msg.SetFlag(apc.LsDontAddRemote)
-	}
-	if listArch {
-		msg.SetFlag(apc.LsArchDir)
 	}
 	if flagIsSet(c, noRecursFlag) {
 		msg.SetFlag(apc.LsNoRecursion)
@@ -758,11 +777,11 @@ func (u *_listed) cb(lsoCounter *api.LsoCounter) {
 	if u.l == 0 {
 		u.l = l + 3
 		// tip
-		if u.msg.IsFlagSet(apc.LsObjCached) {
+		if u.msg.IsFlagSet(apc.LsCached) {
 			tip := fmt.Sprintf("consider using %s to show pages one at a time (tip)", qflprn(pagedFlag))
 			actionNote(u.c, tip)
 		} else if u.bck.IsRemote() {
-			tip := fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listObjCachedFlag), qflprn(pagedFlag))
+			tip := fmt.Sprintf("use %s to speed up and/or %s to show pages", qflprn(listCachedFlag), qflprn(pagedFlag))
 			note := fmt.Sprintf("listing remote objects in %s may take a while\n(Tip: %s)\n", u.bck.Cname(""), tip)
 			actionNote(u.c, note)
 		}

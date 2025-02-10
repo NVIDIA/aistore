@@ -202,7 +202,7 @@ type (
 func lsObjVsPref(bck cmn.Bck, oname string) (dop dop, _ error) {
 	msg := &apc.LsoMsg{Prefix: oname}
 
-	// NOTE: never "cached" (apc.LsObjCached)
+	// NOTE: never "cached" (apc.LsCached)
 	msg.SetFlag(apc.LsNameOnly)
 	msg.SetFlag(apc.LsNoRecursion)
 	lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{Limit: 32})

@@ -1652,7 +1652,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	// default props & flags => user-provided message
 	switch {
 	case lsmsg.Props == "":
-		if lsmsg.IsFlagSet(apc.LsObjCached) {
+		if lsmsg.IsFlagSet(apc.LsCached) {
 			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
 		} else {
 			lsmsg.AddProps(apc.GetPropsMinimal...)
@@ -1664,7 +1664,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		lsmsg.SetFlag(apc.LsNameSize)
 	}
 	if bck.IsHT() || lsmsg.IsFlagSet(apc.LsArchDir) {
-		lsmsg.SetFlag(apc.LsObjCached)
+		lsmsg.SetFlag(apc.LsCached)
 	}
 
 	// do page
@@ -1778,8 +1778,12 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 
 // list-objects flow control helper
 func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta.Snode, listRemote, wantOnlyRemote bool, err error) {
-	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
+	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsCached)
 	if !listRemote {
+		if lsmsg.IsFlagSet(apc.LsNotCached) {
+			err = fmt.Errorf("bucket %s is not remote - cannot list 'not cached' objects (by definition, all respective objects are in-cluster)",
+				bck.Cname(""))
+		}
 		return
 	}
 	if bck.Props.BID == 0 {
@@ -1789,7 +1793,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		debug.Assert(lsmsg.IsFlagSet(apc.LsDontAddRemote))
 		wantOnlyRemote = true
 		if !lsmsg.WantOnlyRemoteProps() {
-			err = fmt.Errorf("cannot list remote not-in-cluster bucket %s for not-only-remote object properties: %q",
+			err = fmt.Errorf("cannot list remote and not in-cluster bucket %s for not-only-remote object properties: %q",
 				bck.Cname(""), lsmsg.Props)
 			return
 		}
