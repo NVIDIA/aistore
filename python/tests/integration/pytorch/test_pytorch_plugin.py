@@ -5,13 +5,9 @@ Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 
 import unittest
 from pathlib import Path
-import torchdata.datapipes.iter as torch_pipes
 from aistore.sdk import Client, Bucket
-from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.sdk.dataset.data_shard import DataShard
 from aistore.pytorch import (
-    AISFileLister,
-    AISFileLoader,
     AISMapDataset,
     AISIterDataset,
     AISMultiShardStream,
@@ -47,44 +43,6 @@ class TestPytorchPlugin(unittest.TestCase):
         """
         self.bck.delete(missing_ok=True)
         cleanup_local(str(self.local_test_files))
-
-    def test_filelister_with_prefix_variations(self):
-        num_objs = 10
-
-        # create 10 objects in the /temp dir
-        for i in range(num_objs):
-            create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=f"temp/obj{ i }"
-            )
-
-        # create 10 objects in the / dir
-        for i in range(num_objs):
-            obj_name = f"obj{ i }"
-            create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=obj_name
-            )
-
-        prefixes = [
-            ["ais://" + self.bck_name],
-            ["ais://" + self.bck_name + "/"],
-            ["ais://" + self.bck_name + "/temp/", "ais://" + self.bck_name + "/obj"],
-        ]
-        for prefix in prefixes:
-            urls = AISFileLister(url=CLUSTER_ENDPOINT, source_datapipe=prefix)
-            ais_loader = AISFileLoader(url=CLUSTER_ENDPOINT, source_datapipe=urls)
-            with self.assertRaises(TypeError):
-                len(urls)
-            self.assertEqual(len(list(urls)), 20)
-            self.assertEqual(sum(1 for _ in ais_loader), 20)
-
-    def test_torch_library(self):
-        # Tests the torch library imports of aistore
-        torch_pipes.AISFileLister(
-            url=CLUSTER_ENDPOINT, source_datapipe=["ais://" + self.bck_name]
-        )
-        torch_pipes.AISFileLoader(
-            url=CLUSTER_ENDPOINT, source_datapipe=["ais://" + self.bck_name]
-        )
 
     def test_ais_dataset(self):
         num_objs = 10

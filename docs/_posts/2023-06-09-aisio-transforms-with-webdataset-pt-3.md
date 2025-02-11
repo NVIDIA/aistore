@@ -15,6 +15,8 @@ The final pipeline will transform, decode, shuffle, and batch samples on demand 
 
 ## Datasets, DataPipes, DataLoaders
 
+> **Note:** The `torchdata.datapipes` module has been [deprecated and removed](https://github.com/pytorch/data?tab=readme-ov-file#torchdata-see-note-below-on-current-status) in recent versions of `torchdata`. Some information in this blog post may be outdated.
+
 First, it's important to understand the difference between each of the PyTorch types:
 
 - [Dataset](https://pytorch.org/docs/stable/data.html#dataset-types) -- Datasets provide access to the data and can either be a map-style or iterable-style. 

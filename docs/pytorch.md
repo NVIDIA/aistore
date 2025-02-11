@@ -7,15 +7,17 @@ redirect_from:
  - /docs/pytorch.md/
 ---
 
-In AIStore, PyTorch integration is a growing set of datasets (both iterable and map-style), samplers, and dataloaders. This readme illustrates taxonomy of the associated abstractions and provides API reference documentation.
+The AIStore PyTorch integration is a growing set of datasets, samplers, and more that allow you to use easily add AIStore support
+to a codebase using PyTorch. This document contains API documentation for the AIStore PyTorch integration.
 
 For usage examples, please see:
-* [AIS plugin for PyTorch](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
-* [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
+* [AIS Plugin for PyTorch](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
+* [Jupyter Notebook Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
 
 ![PyTorch Structure](/docs/images/pytorch_structure.webp)
 * [base\_map\_dataset](#base_map_dataset)
   * [AISBaseMapDataset](#base_map_dataset.AISBaseMapDataset)
+    * [get\_obj\_list](#base_map_dataset.AISBaseMapDataset.get_obj_list)
 * [base\_iter\_dataset](#base_iter_dataset)
   * [AISBaseIterDataset](#base_iter_dataset.AISBaseIterDataset)
     * [\_\_iter\_\_](#base_iter_dataset.AISBaseIterDataset.__iter__)
@@ -28,16 +30,8 @@ For usage examples, please see:
   * [AISShardReader](#shard_reader.AISShardReader)
     * [\_\_len\_\_](#shard_reader.AISShardReader.__len__)
     * [ZeroDict](#shard_reader.AISShardReader.ZeroDict)
-* [worker\_request\_client](#worker_request_client)
-  * [WorkerRequestClient](#worker_request_client.WorkerRequestClient)
-    * [session](#worker_request_client.WorkerRequestClient.session)
 * [multishard\_dataset](#multishard_dataset)
   * [AISMultiShardStream](#multishard_dataset.AISMultiShardStream)
-* [aisio](#aisio)
-  * [AISFileListerIterDataPipe](#aisio.AISFileListerIterDataPipe)
-  * [AISFileLoaderIterDataPipe](#aisio.AISFileLoaderIterDataPipe)
-  * [AISSourceLister](#aisio.AISSourceLister)
-    * [\_\_init\_\_](#aisio.AISSourceLister.__init__)
 
 Base class for AIS Map Style Datasets
 
@@ -61,6 +55,20 @@ override other methods from torch Dataset such as :meth:`__len__` and :meth:`__g
   prefix_map (Dict(AISSource, List[str]), optional): Map of AISSource objects to list of prefixes that only allows
   objects with the specified prefixes to be used from each source
 
+<a id="base_map_dataset.AISBaseMapDataset.get_obj_list"></a>
+
+### get\_obj\_list
+
+```python
+def get_obj_list() -> List[Object]
+```
+
+Getter for internal object data list.
+
+**Returns**:
+
+- `List[Object]` - Object data of the dataset
+
 Base class for AIS Iterable Style Datasets
 
 Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
@@ -70,7 +78,7 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 ## Class: AISBaseIterDataset
 
 ```python
-class AISBaseIterDataset(ABC, IterableDataset)
+class AISBaseIterDataset(ABC, torch_utils.IterableDataset)
 ```
 
 A base class for creating AIS Iterable Datasets. Should not be instantiated directly. Subclasses
@@ -239,43 +247,9 @@ samples.
 NOTE: For our use case, `defaultdict` does not work due to needing
 a `lambda` which cannot be pickled in multithreaded contexts.
 
-Worker Supported Request Client for PyTorch
-
-This client allows PyTorch workers to have separate request sessions per thread
-which is needed in order to use workers in a DataLoader as
-the default implementation of RequestClient and requests is not thread-safe.
-
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
-
-<a id="worker_request_client.WorkerRequestClient"></a>
-
-## Class: WorkerRequestClient
-
-```python
-class WorkerRequestClient(RequestClient)
-```
-
-Extension that supports PyTorch and multiple workers of internal client for
-buckets, objects, jobs, etc. to use for making requests to an AIS cluster.
-
-**Arguments**:
-
-- `client` _RequestClient_ - Existing RequestClient to replace
-
-<a id="worker_request_client.WorkerRequestClient.session"></a>
-
-### session
-
-```python
-@property
-def session()
-```
-
-Returns: Active request session acquired for a specific PyTorch dataloader worker
-
 Multishard Stream Dataset for AIS.
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 
 <a id="multishard_dataset.AISMultiShardStream"></a>
 
@@ -296,119 +270,4 @@ An iterable-style dataset that iterates over multiple shard streams and yields c
 
 - `Iterable` - Iterable over the combined samples, where each sample is a tuple of
   one object bytes from each shard stream
-
-AIS IO Datapipe
-Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
-
-<a id="aisio.AISFileListerIterDataPipe"></a>
-
-## Class: AISFileListerIterDataPipe
-
-```python
-@functional_datapipe("ais_list_files")
-class AISFileListerIterDataPipe(IterDataPipe[str])
-```
-
-Iterable Datapipe that lists files from the AIStore backends with the given URL prefixes.
-(functional name: ``list_files_by_ais``).
-Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://bucket-name/`
-
-**Notes**:
-
-  -   This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc.)
-  -   Input must be a list and direct URLs are not supported.
-  -   length is -1 by default, all calls to len() are invalid as
-  not all items are iterated at the start.
-  -   This internally uses AIStore Python SDK.
-
-**Arguments**:
-
-- `source_datapipe(IterDataPipe[str])` - a DataPipe that contains URLs/URL
-  prefixes to objects on AIS
-- `length(int)` - length of the datapipe
-- `url(str)` - AIStore endpoint
-
-**Example**:
-
-  >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister
-  >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/',
-  >>>        'ais://bucket-name/folder/', ...])
-  >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
-  >>> for url in dp_ais_urls:
-  ...     pass
-  >>> # Functional API
-  >>> dp_ais_urls = ais_prefixes.list_files_by_ais(url='localhost:8080')
-  >>> for url in dp_ais_urls:
-  ...     pass
-
-<a id="aisio.AISFileLoaderIterDataPipe"></a>
-
-**Notes**:
-
-  - `http://localhost:8080` address (above and elsewhere) is used for purely demonstration purposes and must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
-
-## Class: AISFileLoaderIterDataPipe
-
-```python
-@functional_datapipe("ais_load_files")
-class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]])
-```
-
-Iterable DataPipe that loads files from AIStore with the given URLs (functional name: ``load_files_by_ais``).
-Iterates all files in BytesIO format and returns a tuple (url, BytesIO).
-
-**Notes**:
-
-  -   This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
-  -   Input must be a list and direct URLs are not supported.
-  -   This internally uses AIStore Python SDK.
-  -   An `etl_name` can be provided to run an existing ETL on the AIS cluster.
-  See https://github.com/NVIDIA/aistore/blob/main/docs/etl.md for more info on AIStore ETL.
-
-**Arguments**:
-
-- `source_datapipe(IterDataPipe[str])` - a DataPipe that contains URLs/URL prefixes to objects
-- `length(int)` - length of the datapipe
-- `url(str)` - AIStore endpoint
-- `etl_name` _str, optional_ - Optional etl on the AIS cluster to apply to each object
-
-**Example**:
-
-  >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister,AISFileLoader
-  >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/',
-  >>>     'ais://bucket-name/folder/', ...])
-  >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
-  >>> dp_cloud_files = AISFileLoader(url='localhost:8080', source_datapipe=dp_ais_urls)
-  >>> for url, file in dp_cloud_files:
-  ...     pass
-  >>> # Functional API
-  >>> dp_cloud_files = dp_ais_urls.load_files_by_ais(url='localhost:8080')
-  >>> for url, file in dp_cloud_files:
-  ...     pass
-
-<a id="aisio.AISSourceLister"></a>
-
-## Class: AISSourceLister
-
-```python
-@functional_datapipe("ais_list_sources")
-class AISSourceLister(IterDataPipe[str])
-```
-
-<a id="aisio.AISSourceLister.__init__"></a>
-
-### \_\_init\_\_
-
-```python
-def __init__(ais_sources: List[AISSource], prefix="", etl_name=None)
-```
-
-Iterable DataPipe over the full URLs for each of the provided AIS source object types
-
-**Arguments**:
-
-- `ais_sources` _List[AISSource]_ - List of types implementing the AISSource interface: Bucket, ObjectGroup,
-  Object, etc.
-- `prefix` _str, optional_ - Filter results to only include objects with names starting with this prefix
-- `etl_name` _str, optional_ - Pre-existing ETL on AIS to apply to all selected objects on the cluster side
 

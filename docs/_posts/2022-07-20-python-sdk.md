@@ -202,6 +202,8 @@ Eviction of a cloud storage bucket destroys any instance of the cloud storage bu
 
 ## PyTorch
 
+> **Note:** The `torchdata.datapipes` module has been [deprecated and removed](https://github.com/pytorch/data?tab=readme-ov-file#torchdata-see-note-below-on-current-status) in recent versions of `torchdata`. Some information in this section may be outdated.
+
 PyTorch provides built-in [tools](https://github.com/NVIDIA/aistore/blob/main/python/aistore/pytorch/aisio.py) for AIStore integration, allowing machine learning developers to easily use AIStore as a viable storage system option with PyTorch. In fact, the dataloading classes [`AISFileLister`](https://pytorch.org/data/0.8/generated/torchdata.datapipes.iter.AISFileLister.html) and [`AISFileLoader`](https://pytorch.org/data/0.8/generated/torchdata.datapipes.iter.AISFileLoader.html) found in [`aisio.py`](https://github.com/NVIDIA/aistore/blob/main/python/aistore/pytorch/aisio.py) provided by PyTorch make use of several of the client-side APIs referenced in this article.
 
 For more information on dataloading from AIStore with PyTorch, please refer to this [article](https://aiatscale.org/blog/2022/07/12/aisio-pytorch).

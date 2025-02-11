@@ -10,6 +10,7 @@ setup(
     },
     packages=find_packages(include=["pyaisloader", "pyaisloader.*"]),
     install_requires=[
+        "alive_progress>=3.1.5",
         "colorama>=0.4.6",
         "humanfriendly>=10.0",
         "pendulum>=2.1.2",

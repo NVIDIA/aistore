@@ -31,13 +31,14 @@ redirect_from:
  - /docs/pytorch.md/
 ---
 
-The AIStore Pytorch integration is a growing set of datasets, samplers, and datapipes that allow you to use easily add AIStore support
-to a codebase using Pytorch. This document contains API documentation for the AIStore Pytorch integration.
+The AIStore PyTorch integration is a growing set of datasets, samplers, and more that allow you to use easily add AIStore support
+to a codebase using PyTorch. This document contains API documentation for the AIStore PyTorch integration.
 
-> For usage examples, please refer to the [Pytorch README](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md).
-For more in-depth examples, see our [notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/).
+For usage examples, please see:
+* [AIS Plugin for PyTorch](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
+* [Jupyter Notebook Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
 
-![Pytorch Structure](/docs/images/pytorch_structure.webp)
+![PyTorch Structure](/docs/images/pytorch_structure.webp)
 
 EOM
 

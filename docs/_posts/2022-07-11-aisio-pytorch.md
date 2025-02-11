@@ -8,6 +8,9 @@ categories: aistore pytorch sdk python
 
 # PyTorch: Loading Data from AIStore
 
+> **Note:** The `torchdata.datapipes` module has been [deprecated and removed](https://github.com/pytorch/data?tab=readme-ov-file#torchdata-see-note-below-on-current-status) in recent versions of 
+`torchdata`. Some information in this blog post may be outdated.
+
 Listing and loading data from AIS buckets (buckets that are not 3rd
 party backend-based) and remote cloud buckets (3rd party backend-based
 cloud buckets) using

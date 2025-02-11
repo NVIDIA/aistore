@@ -23,6 +23,7 @@ from pyaisloader.utils.parse_utils import format_size, format_time
 from pyaisloader.utils.random_utils import generate_bytes, generate_random_str
 from pyaisloader.utils.stat_utils import combine_results, print_results
 
+from aistore.sdk.etl.etl_config import ETLConfig
 from aistore.sdk.provider import Provider
 
 
@@ -375,7 +376,7 @@ class PutGetMixedBenchmark(Benchmark):
     def __get_benchmark_h(self, stats, objs):  # Done
         op_start = time.time()
         content = self.bucket.object(random.choice(objs).name).get_reader(
-            etl_name=(self.etl.name if self.etl else None)
+            etl=ETLConfig(self.etl.name) if self.etl else None
         )
         size = len(content.read_all())
         op_end = time.time()

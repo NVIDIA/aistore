@@ -124,7 +124,7 @@ generate-pytorch-docs:
 	@ [[ $$(pipx --help) ]] || $(PIP) install pipx; $(PYTHON) -m pipx ensurepath --force
 	@ [[ $$(pydoc-markdown --help) ]] || pipx install --force pydoc-markdown[novella]
 	@ source doc_prefixes.sh && echo "$$TORCH_PREFIX" > $(TORCH_DOCFILE)
-	@ pydoc-markdown -I ./aistore/pytorch -m base_map_dataset -m base_iter_dataset -m map_dataset -m iter_dataset -m shard_reader -m worker_request_client -m multishard_dataset -m aisio '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(TORCH_DOCFILE)
+	@ pydoc-markdown -I ./aistore/pytorch -m base_map_dataset -m base_iter_dataset -m map_dataset -m iter_dataset -m shard_reader -m multishard_dataset '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(TORCH_DOCFILE)
 	@ sed -i -e 's/####/###/g' $(TORCH_DOCFILE)
 
 

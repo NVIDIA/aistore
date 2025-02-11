@@ -4,3 +4,4 @@ pendulum
 tabulate
 torch
 torchdata
+alive_progress

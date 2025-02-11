@@ -127,36 +127,3 @@ for basename, content_dict in shard_reader:
 ```
 
 See the [ShardReader example notebook](../../examples/aisio-pytorch/shard_reader_example.ipynb) for more examples. Since the shard reader is also an iterable dataset, you can also use it with the `torch.utils.data.DataLoader` class for additional features.
-
-## AIS IO Datapipe
-
-### AIS File Lister
-
-Iterable Datapipe that lists files from the AIS backends with the given URL  prefixes. Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://bucket-name/`, `ais://bucket-name/folder`, `ais://bucket-name/folder/`, `ais://bucket-name/prefix`.
-
-**Note:**
-1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
-2) Input *must* be a list and direct URLs are not supported.
-3) `length` is -1 by default, all calls to `len()` are invalid as not all items are iterated at the start.
-4) This internally uses [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/main/python).
-
-### AIS File Loader
-
-Iterable Datapipe that loads files from the AIS backends with the given list of URLs (no prefixes allowed). Iterates all files in BytesIO format and returns a tuple (url, BytesIO).
-**Note:**
-1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
-2) Input *must* be a list and direct URLs are not supported.
-3) This internally uses [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk).
-
-### Example
-```python
-from aistore.pytorch.aisio import AISFileListerIterDataPipe, AISFileLoaderIterDataPipe
-
-prefixes = ['ais://bucket1/train/', 'aws://bucket2/train/']
-
-list_of_files = AISFileListerIterDataPipe(url='http://ais-gateway-url:8080', source_datapipe=prefixes)
-
-files = AISFileLoaderIterDataPipe(url='http://ais-gateway-url:8080', source_datapipe=list_of_files)
-```
-
-For a more in-depth example, see [here](https://github.com/NVIDIA/aistore/blob/main/python/examples/aisio-pytorch/aisio_pytorch_example.ipynb)
