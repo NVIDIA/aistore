@@ -381,7 +381,8 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		if err != nil {
 			return awsErrorToAISError(err, cloudBck, "")
 		}
-		for _, vers := range verResp.Versions {
+		for i := range verResp.Versions {
+			vers := &verResp.Versions[i]
 			if latest := *(vers.IsLatest); !latest {
 				continue
 			}
