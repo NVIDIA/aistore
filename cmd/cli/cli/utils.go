@@ -6,7 +6,6 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -116,17 +115,6 @@ func reorderTailArgs(left string, middle []string, right ...string) string {
 func isWebURL(url string) bool { return cos.IsHT(url) || cos.IsHTTPS(url) }
 
 func jsonMarshalIndent(v any) ([]byte, error) { return jsoniter.MarshalIndent(v, "", "    ") }
-
-func helpMessage(template string, data any) string {
-	var buf bytes.Buffer
-	w := bufio.NewWriter(&buf)
-
-	// Execute the template that generates command usage text
-	cli.HelpPrinterCustom(w, template, data, teb.HelpTemplateFuncMap)
-	_ = w.Flush()
-
-	return buf.String()
-}
 
 func findClosestCommand(cmd string, candidates []cli.Command) (result string, distance int) {
 	var (

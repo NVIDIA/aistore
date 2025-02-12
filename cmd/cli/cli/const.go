@@ -1013,8 +1013,8 @@ var (
 	}
 	archmimeFlag = cli.StringFlag{ // for apc.QparamArchmime
 		Name: "archmime",
-		Usage: "Expected format (mime type) of an object (\"shard\") formatted as: " + archFormats + ";\n" +
-			indent4 + "\tespecially usable for shards with non-standard extensions\n",
+		Usage: "Expected format (mime type) of an object (\"shard\") formatted as " + archFormats + ";\n" +
+			indent4 + "\tespecially usable for shards with non-standard extensions",
 	}
 	archregxFlag = cli.StringFlag{ // for apc.QparamArchregx
 		Name: "archregx",

@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/urfave/cli"
 )
 
 //
@@ -119,11 +118,6 @@ var (
 		"{{range $alias := .}}" +
 		"{{ $alias.Name }}\t{{ $alias.Value }}\n" +
 		"{{end}}"
-
-	HelpTemplateFuncMap = template.FuncMap{
-		"FlagName": func(f cli.Flag) string { return strings.SplitN(f.GetName(), ",", 2)[0] },
-		"Mod":      func(a, mod int) int { return a % mod },
-	}
 )
 
 ////////////////

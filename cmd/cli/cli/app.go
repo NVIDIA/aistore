@@ -8,18 +8,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
@@ -73,63 +70,7 @@ var (
 	fred, fcyan, fblue, fgreen func(a ...any) string
 )
 
-// `ais help [COMMAND]`
-var helpCommand = cli.Command{
-	Name:      "help",
-	Usage:     "Show a list of commands; show help for a given command",
-	ArgsUsage: "[COMMAND]",
-	Action:    helpCmdHandler,
-	BashComplete: func(c *cli.Context) {
-		for _, cmd := range c.App.Commands {
-			fmt.Println(cmd.Name)
-		}
-	},
-}
-
-func paginate(_ io.Writer, templ string, data interface{}) {
-	gmm, err := memsys.NewMMSA("cli-out-buffer", true)
-	if err != nil {
-		exitln("memsys:", err)
-	}
-	sgl := gmm.NewSGL(0)
-
-	r, w, err := os.Pipe()
-	if err != nil {
-		exitln("os.pipe:", err)
-	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		if _, err := io.Copy(sgl, r); err != nil {
-			exitln("write sgl:", err)
-		}
-		r.Close()
-	}()
-
-	cli.HelpPrinterCustom(w, templ, data, nil)
-	w.Close()
-	wg.Wait()
-
-	cmd := exec.Command("more")
-	cmd.Stdin = sgl
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		exitln("cmd more:", err)
-	}
-}
-
 func cliConfVerbose() bool { return cfg.Verbose } // more warnings, errors with backtraces and details
-
-func helpCmdHandler(c *cli.Context) error {
-	args := c.Args()
-	if args.Present() {
-		return cli.ShowCommandHelp(c, args.First())
-	}
-	return cli.ShowAppHelp(c)
-}
 
 // main method
 func Run(version, buildtime string, args []string) error {
@@ -256,14 +197,23 @@ func (a *acli) init(version string, emptyCmdline bool) {
 	app.Writer = a.outWriter
 	app.ErrWriter = a.errWriter
 	app.Description = cliDescr
+
+	// paginate help via `more`
 	if !cfg.NoMore {
-		cli.HelpPrinter = paginate
+		cli.HelpPrinter = helpMorePrinter
 	}
 
-	// custom templates
-	cli.AppHelpTemplate = appHelpTemplate
-	cli.CommandHelpTemplate = commandHelpTemplate
-	cli.SubcommandHelpTemplate = subcommandHelpTemplate
+	// custom templates and help coloring
+	if !cfg.NoColor {
+		cli.AppHelpTemplate = appColoredHelpTemplate
+		cli.CommandHelpTemplate = commandColoredHelpTemplate
+		cli.SubcommandHelpTemplate = subcommandColoredHelpTemplate
+	} else {
+		cli.AppHelpTemplate = appHelpTemplate
+		cli.CommandHelpTemplate = commandHelpTemplate
+		cli.SubcommandHelpTemplate = subcommandHelpTemplate
+		funcColorMap = nil
+	}
 
 	a.setupCommands(emptyCmdline)
 }

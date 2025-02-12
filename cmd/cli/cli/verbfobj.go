@@ -594,7 +594,7 @@ func initPutObjCksumFlags() (flags []cli.Flag) {
 		}
 		flags = append(flags, cli.StringFlag{
 			Name:  cksum,
-			Usage: fmt.Sprintf("compute client-side %s checksum\n"+putObjCksumText, cksum),
+			Usage: fmt.Sprintf("Compute client-side %s checksum\n"+putObjCksumText, cksum),
 		})
 	}
 	return

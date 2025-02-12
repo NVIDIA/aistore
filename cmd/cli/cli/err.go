@@ -51,7 +51,7 @@ type (
 //////////////
 
 func (e *errUsage) Error() string {
-	msg := helpMessage(e.helpTemplate, e.helpData)
+	msg := helpErrMessage(e.helpTemplate, e.helpData)
 
 	// remove "alias for" (simplify)
 	reg := regexp.MustCompile(aliasForRegex)

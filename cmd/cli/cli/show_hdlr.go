@@ -40,8 +40,7 @@ const showJobUsage = "Show running and/or finished jobs\n" +
 	indent1 + "\t- 'show job prefetch-listrange'\t- show all running prefetch jobs;\n" +
 	indent1 + "\t- 'show job prefetch'\t- same as above;\n" +
 	indent1 + "\t- 'show job prefetch --refresh 1m'\t- show all running prefetch jobs at 1 minute intervals (until Ctrl-C);\n" +
-	indent1 + "\t- 'show job --all'\t- show absolutely all jobs, running and already finished\n" +
-	indent1 + tabHelpOpt + "."
+	indent1 + "\t- 'show job --all'\t- show absolutely all jobs, running and finished."
 
 type (
 	nodeSnaps struct {
