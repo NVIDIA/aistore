@@ -209,6 +209,9 @@ loop:
 			r.IncPending()
 			resp := r.doPage()
 			r.DecPending()
+			if r.IsAborted() {
+				break loop
+			}
 			if resp.Err == nil {
 				// report heterogeneous stats (x-list is an exception)
 				r.ObjsAdd(len(resp.Lst.Entries), 0)
@@ -413,22 +416,7 @@ func (r *LsoXact) nextPageR() (err error) {
 	r.wiCnt.Inc()
 
 	if r.walk.this {
-		nentries := allocLsoEntries()
-		page, err = npg.nextPageR(nentries)
-		r.walk.last = page.ContinuationToken == ""
-
-		if !r.walk.wor && !r.IsAborted() {
-			if err == nil {
-				// bcast page
-				err = r.bcast(page)
-			}
-			if err == nil && !r.walk.dontPopulate {
-				err = npg.filterAddLmeta(page)
-			}
-			if err != nil {
-				r.sendTerm(r.msg.UUID, nil, err)
-			}
-		}
+		page, err = r.thisPageR(npg)
 	} else {
 		debug.Assert(!r.msg.WantOnlyRemoteProps() && /*same*/ !r.walk.wor)
 		select {
@@ -463,6 +451,45 @@ ex:
 	r.page = page.Entries
 	r.nextToken = page.ContinuationToken
 	return
+}
+
+func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
+	var (
+		aborted  bool
+		nentries = allocLsoEntries()
+	)
+	page, err = npg.nextPageR(nentries)
+	if err != nil {
+		goto rerr
+	}
+	r.walk.last = page.ContinuationToken == ""
+
+	if r.walk.wor {
+		return page, nil
+	}
+	if aborted = r.IsAborted(); aborted {
+		goto rerr
+	}
+
+	// bcast page
+	if err = r.bcast(page); err != nil {
+		goto rerr
+	}
+	// populate
+	if !r.walk.dontPopulate {
+		if err = npg.filterAddLmeta(page); err != nil {
+			goto rerr
+		}
+	}
+
+	return page, nil
+
+rerr:
+	if aborted && err == nil {
+		err = r.AbortErr()
+	}
+	r.sendTerm(r.msg.UUID, nil, err)
+	return page, err
 }
 
 func (r *LsoXact) bcast(page *cmn.LsoRes) (err error) {
@@ -688,7 +715,9 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)))
 
 	if hdr.Opcode == opcodeAbrt {
-		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
+		// TODO: consider r.Abort(err); today it'll idle for a while
+		// see:  streamingX.sendTerm
+		err = errors.New(hdr.ObjName)
 	}
 	if err != nil && !cos.IsEOF(err) {
 		nlog.Errorln(core.T.String(), r.String(), len(r.remtCh), err)
