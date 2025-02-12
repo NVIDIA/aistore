@@ -73,14 +73,12 @@ ifeq ($(MODE),debug)
 	GCFLAGS = -gcflags="all=-N -l"
 	LDFLAGS = -ldflags "-X 'main.build=$(VERSION)' -X 'main.buildtime=$(BUILD)'"
 	BUILD_TAGS += debug
+	GOFLAGS =
 else
 	# Production mode
 	GCFLAGS =
 	LDFLAGS = -ldflags "-w -s -X 'main.build=$(VERSION)' -X 'main.buildtime=$(BUILD)'"
-endif
-
-ifdef AIS_DEBUG
-	BUILD_TAGS += debug
+	GOFLAGS = -trimpath
 endif
 
 # mono:  utilize go:linkname for monotonic time source
@@ -103,10 +101,10 @@ ifdef WRD
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 ifdef CROSS_COMPILE
-	@$(CROSS_COMPILE) go build -o ./aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+	@$(CROSS_COMPILE) go build -o ./aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@mv ./aisnode $(BUILD_DEST)/.
 else
-	@$(WRD) go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+	@$(WRD) go build -o $(BUILD_DEST)/aisnode $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_SRC)
 endif
 	@echo "done."
 
@@ -114,9 +112,9 @@ cli: ## Build CLI binary. NOTE: 1) a separate go.mod, 2) static linkage with cgo
 	@echo "Building ais (CLI) [build tags:$(BUILD_TAGS)]"
 ifdef CROSS_COMPILE_CLI
 	cd $(BUILD_DIR)/cli && \
-	$(CROSS_COMPILE_CLI) go build -o ./ais -tags="$(BUILD_TAGS)" $(BUILD_FLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
+	$(CROSS_COMPILE_CLI) go build -o ./ais -tags="$(BUILD_TAGS)" $(BUILD_FLAGS) $(GOFLAGS) $(LDFLAGS) *.go && mv ./ais $(BUILD_DEST)/.
 else
-	@cd $(BUILD_DIR)/cli && $(CGO_DISABLE) go build -o $(BUILD_DEST)/ais -tags="$(BUILD_TAGS)" $(BUILD_FLAGS) $(LDFLAGS) *.go
+	@cd $(BUILD_DIR)/cli && $(CGO_DISABLE) go build -o $(BUILD_DEST)/ais -tags="$(BUILD_TAGS)" $(BUILD_FLAGS) $(GOFLAGS) $(LDFLAGS) *.go
 endif
 	@echo "*** To enable autocompletions in your current shell, run:"
 ifeq ($(AISTORE_PATH),$(PWD))
@@ -142,10 +140,10 @@ aisinit: build-aisinit     ## Build aisinit
 build-%:
 	@echo -n "Building $*... "
 ifdef CROSS_COMPILE
-	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 	@mv ./$* $(BUILD_DEST)/.
 else
-	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 endif
 	@echo "done."
 
