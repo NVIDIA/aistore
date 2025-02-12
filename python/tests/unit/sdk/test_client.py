@@ -34,16 +34,18 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         )
 
     @cases(
-        (True, None, None, None, None, "dummy.token"),
-        (False, "ca_cert_location", None, None, None, None),
-        (False, None, "client_cert_location", None, None, None),
-        (False, None, None, 30.0, Retry(total=4), None),
-        (False, None, None, (10, 30.0), Retry(total=5, connect=2), "dummy.token"),
+        (True, None, None, None, None, "dummy.token", 50),
+        (False, "ca_cert_location", None, None, None, None, 10),
+        (False, None, "client_cert_location", None, None, None, None),
+        (False, None, None, 30.0, Retry(total=4), None, 100),
+        (False, None, None, (10, 30.0), Retry(total=5, connect=2), "dummy.token", 10),
     )
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")
     def test_init(self, test_case, mock_request_client, mock_sm):
-        skip_verify, ca_cert, client_cert, timeout, retry, token = test_case
+        skip_verify, ca_cert, client_cert, timeout, retry, token, max_pool_size = (
+            test_case
+        )
         Client(
             self.endpoint,
             skip_verify=skip_verify,
@@ -52,12 +54,14 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             timeout=timeout,
             retry=retry,
             token=token,
+            max_pool_size=max_pool_size,
         )
         mock_sm.assert_called_with(
             retry=retry,
             ca_cert=ca_cert,
             client_cert=client_cert,
             skip_verify=skip_verify,
+            max_pool_size=max_pool_size,
         )
         mock_request_client.assert_called_with(
             endpoint=self.endpoint,

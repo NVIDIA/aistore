@@ -24,22 +24,24 @@ from aistore.sdk.errors import InvalidURLException
 
 class Client:
     """
-    AIStore client for managing buckets, objects, ETL jobs
+    AIStore client for managing buckets, objects, and ETL jobs.
 
     Args:
-        endpoint (str): AIStore endpoint
+        endpoint (str): AIStore endpoint.
         skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
-        ca_cert (str, optional): Path to a CA certificate file for SSL verification. If not provided, the
-            'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
+        ca_cert (str, optional): Path to a CA certificate file for SSL verification. If not provided,
+            the 'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
         client_cert (Union[str, Tuple[str, str], None], optional): Path to a client certificate PEM file
-            or a path pair (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY'
-            environment variables will be used. Defaults to None.
-        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds; a single float
-            for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
+            or a tuple (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY' environment
+            variables will be used. Defaults to None.
+        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds.
+            Can be a single float (e.g., 5.0) for both connect/read timeouts, a tuple (e.g., (3.0, 10.0)),
             or None to disable timeout.
-        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
+        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library. Defaults to None.
         token (str, optional): Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
             will be used. Defaults to None.
+        max_pool_size (int, optional): Maximum number of connections per host in the connection pool.
+            Defaults to 10.
     """
 
     # pylint: disable=too-many-arguments
@@ -52,17 +54,20 @@ class Client:
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         retry: Optional[Retry] = None,
         token: Optional[str] = None,
+        max_pool_size: int = 10,
     ):
         session_manager = SessionManager(
             retry=retry,
             ca_cert=ca_cert,
             client_cert=client_cert,
             skip_verify=skip_verify,
+            max_pool_size=max_pool_size,
         )
 
         # Check for token from arguments or environment variable
         if not token:
-            token = os.environ.get(AIS_AUTHN_TOKEN, None)
+            token = os.environ.get(AIS_AUTHN_TOKEN)
+
         self._request_client = RequestClient(
             endpoint=endpoint,
             session_manager=session_manager,

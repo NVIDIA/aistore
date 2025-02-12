@@ -27,14 +27,18 @@ class SessionManager:
         client_cert (Union[str, Tuple[str, str], None], optional): Path to a client certificate PEM file
             or a path pair (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY' environment
             variables will be used. Defaults to None.
+        max_pool_size (int, optional): Maximum number of connections per host in the connection pool.
+            Defaults to 10.
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         retry: Retry = DEFAULT_RETRY,
         ca_cert: Optional[str] = None,
         skip_verify: bool = False,
         client_cert: Optional[Union[str, Tuple[str, str]]] = None,
+        max_pool_size: int = 10,
     ):
         self._retry = retry
         self._ca_cert = ca_cert
@@ -44,6 +48,7 @@ class SessionManager:
             key = os.getenv(AIS_CLIENT_KEY)
             client_cert = (cert, key) if cert and key else None
         self._client_cert = client_cert
+        self._max_pool_size = max_pool_size
         self._session_pool = {current_process().pid: self._create_session()}
 
     @property
@@ -104,6 +109,13 @@ class SessionManager:
         request_session = Session()
         request_session.cert = self._client_cert
         self._set_session_verification(request_session)
+
+        adapter = HTTPAdapter(
+            max_retries=self._retry,
+            pool_connections=self._max_pool_size,
+            pool_maxsize=self._max_pool_size,
+        )
+
         for protocol in (HTTP, HTTPS):
-            request_session.mount(protocol, HTTPAdapter(max_retries=self._retry))
+            request_session.mount(protocol, adapter)
         return request_session
