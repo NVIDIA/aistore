@@ -26,8 +26,8 @@ type (
 		IncWith(name string, VarLabs map[string]string)
 	}
 	NamedVal64 struct {
+		VarLabs map[string]string
 		Name    string
 		Value   int64
-		VarLabs map[string]string // (Prometheus only)
 	}
 )

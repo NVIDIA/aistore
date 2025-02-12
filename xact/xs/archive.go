@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -40,22 +40,21 @@ type (
 	archFactory struct {
 		streamingF
 	}
-	archwi struct { // archival work item; implements lrwi
-		j       *jogger
-		writer  archive.Writer
-		r       *XactArch
-		msg     *cmn.ArchiveBckMsg
-		tsi     *meta.Snode
-		archlom *core.LOM
-		fqn     string        // workFQN --/--
-		wfh     cos.LomWriter // -> workFQN
-		cksum   cos.CksumHashSize
-		cnt     atomic.Int32 // num archived
-		// tar only
-		appendPos int64 // append to existing
+	// archival work item; implements lrwi
+	archwi struct {
+		wfh       cos.LomWriter // -> workFQN
+		writer    archive.Writer
+		r         *XactArch
+		msg       *cmn.ArchiveBckMsg
+		tsi       *meta.Snode
+		archlom   *core.LOM
+		j         *jogger
+		fqn       string // workFQN --/--
+		cksum     cos.CksumHashSize
+		appendPos int64 // append to existing (tar only)
 		tarFormat tar.Format
-		// finishing
-		refc atomic.Int32
+		cnt       atomic.Int32 // num archived
+		refc      atomic.Int32 // finishing
 	}
 	archtask struct {
 		wi   *archwi
@@ -66,8 +65,10 @@ type (
 		workCh chan *archtask
 		stopCh cos.StopCh
 	}
+)
+
+type (
 	XactArch struct {
-		streamingX
 		bckTo   *meta.Bck
 		joggers struct {
 			wg sync.WaitGroup
@@ -78,6 +79,7 @@ type (
 			m map[string]*archwi
 			sync.RWMutex
 		}
+		streamingX
 	}
 )
 

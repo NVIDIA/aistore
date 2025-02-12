@@ -70,30 +70,23 @@ type (
 )
 
 // PUT(object)
+//   - Cksum is optional; when provided:
+//     if object exists: load the object's metadata, compare checksums - skip writing if equal
+//     otherwise, compare the two checksums upon writing (aka, "end-to-end protection")
+//   - SkipVC:
+//     skip loading existing object's metadata in order to
+//     compare its Checksum and update its existing Version (if exists);
+//     can be used to reduce PUT latency when massively writing new content (or simply don't care)
 type (
 	PutArgs struct {
-		Reader cos.ReadOpenCloser
-
-		// optional; if provided:
-		// - if object exists: load the object's metadata, compare checksums - skip writing if equal
-		// - otherwise, compare the two checksums upon writing (aka, "end-to-end protection")
-		Cksum *cos.Cksum
-
+		Reader     cos.ReadOpenCloser
+		Cksum      *cos.Cksum
+		Header     http.Header
 		BaseParams BaseParams
-
-		Bck     cmn.Bck
-		ObjName string
-
-		Size uint64 // optional
-
-		// Skip loading existing object's metadata in order to
-		// compare its Checksum and update its existing Version (if exists);
-		// can be used to reduce PUT latency when:
-		// - we massively write a new content into a bucket, and/or
-		// - we simply don't care.
-		SkipVC bool
-
-		Header http.Header
+		Bck        cmn.Bck
+		ObjName    string
+		Size       uint64
+		SkipVC     bool
 	}
 )
 
@@ -113,7 +106,7 @@ type (
 	// Archive files and directories
 	PutApndArchArgs struct {
 		ArchPath string // filename _in_ archive
-		Mime     string // user-specified mime type (NOTE: takes precedence if defined)
+		Mime     string // user-specified mime type, takes precedence if defined
 		PutArgs
 		Flags int64 // apc.ArchAppend and apc.ArchAppendIfExist (the former requires destination shard to exist)
 	}

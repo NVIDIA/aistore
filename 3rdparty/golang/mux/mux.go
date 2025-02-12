@@ -58,18 +58,19 @@ import (
 // ServeMux also takes care of sanitizing the URL request path and the Host
 // header, stripping the port number and redirecting any request containing . or
 // .. elements or repeated slashes to an equivalent, cleaner URL.
-type ServeMux struct {
-	mu             sync.RWMutex
-	m              map[string]muxEntry
-	es             []muxEntry // slice of entries sorted from longest to shortest.
-	hosts          bool       // whether any patterns contain hostnames
-	tracingEnabled bool       // enable tracing
-}
-
-type muxEntry struct {
-	h       http.Handler
-	pattern string
-}
+type (
+	muxEntry struct {
+		h       http.Handler
+		pattern string
+	}
+	ServeMux struct {
+		m              map[string]muxEntry
+		es             []muxEntry // entries sorted longest to shortest
+		mu             sync.RWMutex
+		hosts          bool // whether any patterns contain hostnames
+		tracingEnabled bool // as the name implies
+	}
+)
 
 // NewServeMux allocates and returns a new ServeMux.
 func NewServeMux(enableTracing bool) *ServeMux {

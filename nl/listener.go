@@ -1,6 +1,6 @@
 // Package notifications provides interfaces for AIStore notifications
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package nl
 
@@ -177,8 +177,6 @@ func (nlb *ListenerBase) Err() error {
 }
 
 func (nlb *ListenerBase) SetStats(daeID string, stats any) {
-	debug.AssertRWMutexLocked(&nlb.mu)
-
 	_, ok := nlb.Srcs[daeID]
 	debug.Assert(ok)
 	nlb.Stats.Store(daeID, stats)

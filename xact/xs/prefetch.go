@@ -48,8 +48,8 @@ type (
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
 		lrit
+		pebl pebl
 		xact.Base
-		pebl      pebl
 		latestVer bool
 	}
 )

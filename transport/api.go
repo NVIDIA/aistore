@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -49,14 +49,14 @@ const sizeofh = int(unsafe.Sizeof(Obj{}))
 type (
 	// advanced usage: additional stream control
 	Extra struct {
-		Callback     ObjSentCB     // typical usage: to free SGLs, close files, etc.
+		Xact         core.Xact     // usage: sender ID; abort
+		Callback     ObjSentCB     // typical usage: to free SGLs, close files
 		Config       *cmn.Config   // (to optimize-out GCO.Get())
 		Compression  string        // see CompressAlways, etc. enum
-		Xact         core.Xact     // usage: sender ID; abort
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
-		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below maxSizePDU; unknown size _requires_ PDUs
-		MaxHdrSize   int32         // overrides config.Transport.MaxHeaderSize
 		ChanBurst    int           // overrides config.Transport.Burst
+		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be <= `maxSizePDU`; unknown size _requires_ PDUs
+		MaxHdrSize   int32         // overrides config.Transport.MaxHeaderSize
 	}
 
 	// receive-side session stats indexed by session ID (see recv.go for "uid")

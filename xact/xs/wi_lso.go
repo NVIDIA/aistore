@@ -28,9 +28,9 @@ type (
 		smap         *meta.Smap
 		msg          *apc.LsoMsg
 		lomVisitedCb lomVisitedCb
+		custom       cos.StrKVs
 		markerDir    string
 		wanted       cos.BitFlags
-		custom       cos.StrKVs
 	}
 )
 

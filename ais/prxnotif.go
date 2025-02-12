@@ -663,14 +663,12 @@ func (l *listeners) add(nl nl.Listener, locked bool) (exists bool) {
 	if !locked {
 		l.mtx.Unlock()
 	}
-	return
+	return exists
 }
 
 func (l *listeners) del(nl nl.Listener, locked bool) (ok bool) {
 	if !locked {
 		l.mtx.Lock()
-	} else {
-		debug.AssertRWMutexLocked(&l.mtx)
 	}
 	if _, ok = l.m[nl.UUID()]; ok {
 		delete(l.m, nl.UUID())
@@ -680,13 +678,13 @@ func (l *listeners) del(nl nl.Listener, locked bool) (ok bool) {
 	if !locked {
 		l.mtx.Unlock()
 	}
-	return
+	return ok
 }
 
 // PRECONDITION: `l` should be under lock.
 func (l *listeners) exists(uuid string) (ok bool) {
 	_, ok = l.m[uuid]
-	return
+	return ok
 }
 
 // Returns a listener that matches the filter condition.

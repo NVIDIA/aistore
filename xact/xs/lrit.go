@@ -68,17 +68,15 @@ type (
 
 	// common multi-object operation context and list|range|prefix logic
 	lrit struct {
-		parent lrxact
-		msg    *apc.ListRange
-		bck    *meta.Bck
-		pt     *cos.ParsedTemplate
-		prefix string
-		lrp    int // { lrpList, ... } enum
-
-		// running concurrency
-		workCh  chan lrpair
-		workers []*lrworker
-		wg      sync.WaitGroup
+		parent  lrxact
+		msg     *apc.ListRange
+		bck     *meta.Bck
+		pt      *cos.ParsedTemplate
+		workCh  chan lrpair // running concurrency
+		prefix  string
+		workers []*lrworker    // running concurrency
+		wg      sync.WaitGroup // ditto
+		lrp     int            // enum { lrpList, ... }
 	}
 )
 

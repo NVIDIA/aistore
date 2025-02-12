@@ -816,9 +816,8 @@ func stopJobHandler(c *cli.Context) error {
 	case commandRebalance:
 		if xid == "" {
 			return stopRebHandler(c)
-		} else {
-			return stopReb(c, xid)
 		}
+		return stopReb(c, xid)
 	}
 
 	// generic xstop
