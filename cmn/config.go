@@ -28,6 +28,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	confDisabled = "Disabled"
+)
+
 type (
 	Validator interface {
 		Validate() error
@@ -1055,7 +1059,7 @@ func (c *SpaceConf) String() string {
 
 func (c *LRUConf) String() string {
 	if !c.Enabled {
-		return "Disabled"
+		return confDisabled
 	}
 	return fmt.Sprintf("lru.dont_evict_time=%v, lru.capacity_upd_time=%v", c.DontEvictTime, c.CapacityUpdTime)
 }
@@ -1081,7 +1085,7 @@ func (c *CksumConf) ValidateAsProps(...any) (err error) {
 
 func (c *CksumConf) String() string {
 	if c.Type == cos.ChecksumNone {
-		return "Disabled"
+		return confDisabled
 	}
 
 	toValidate := make([]string, 0)
@@ -1116,7 +1120,7 @@ func (c *VersionConf) Validate() error {
 
 func (c *VersionConf) String() string {
 	if !c.Enabled {
-		return "Disabled"
+		return confDisabled
 	}
 
 	text := "Enabled | Validate on WarmGET: "
@@ -1152,7 +1156,7 @@ func (c *MirrorConf) ValidateAsProps(...any) error {
 
 func (c *MirrorConf) String() string {
 	if !c.Enabled {
-		return "Disabled"
+		return confDisabled
 	}
 
 	return fmt.Sprintf("%d copies", c.Copies)
@@ -1215,7 +1219,7 @@ func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
 
 func (c *ECConf) String() string {
 	if !c.Enabled {
-		return "Disabled"
+		return confDisabled
 	}
 	objSizeLimit := c.ObjSizeLimit
 	if objSizeLimit == ObjSizeToAlwaysReplicate {
@@ -1817,7 +1821,7 @@ func (c *RebalanceConf) String() string {
 	if c.Enabled {
 		return "Enabled"
 	}
-	return "Disabled"
+	return confDisabled
 }
 
 func (*ResilverConf) Validate() error { return nil }
@@ -1826,7 +1830,7 @@ func (c *ResilverConf) String() string {
 	if c.Enabled {
 		return "Enabled"
 	}
-	return "Disabled"
+	return confDisabled
 }
 
 ///////////////////

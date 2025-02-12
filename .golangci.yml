@@ -171,8 +171,8 @@ issues:
 run:
   go: '1.23.5'
   tests: true # Enable linting test files.
-  concurrency: 4
-  timeout: 6m
+  concurrency: 8
+  timeout: 8m
 
     # NOTE: these are the default build tags for the linter;
     # use `TAGS=... make lint` to check that the corresponding alternative sources do lint correctly;
