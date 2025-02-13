@@ -9,6 +9,7 @@ import (
 	cryptorand "crypto/rand"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,6 +39,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -117,7 +119,7 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 	return core.NewTFRecordReader(f).ReadAllExamples()
 }
 
-func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform transformFunc, fEq filesEqualFunc) {
+func testETLObject(t *testing.T, etlName string, args any, inPath, outPath string, fTransform transformFunc, fEq filesEqualFunc) {
 	var (
 		inputFilePath          string
 		expectedOutputFilePath string
@@ -161,9 +163,12 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 	tassert.CheckFatal(t, err)
 	defer fho.Close()
 
-	tlog.Logf("GET %s via etl[%s]\n", bck.Cname(objName), etlName)
-	err = api.ETLObject(baseParams, etlName, bck, objName, fho)
+	tlog.Logf("GET %s via etl[%s], args=%v\n", bck.Cname(objName), etlName, args)
+	oah, err := api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, Metadata: args}, bck, objName, fho)
 	tassert.CheckFatal(t, err)
+
+	stat, _ := fho.Stat()
+	tassert.Fatalf(t, stat.Size() == oah.Size(), "expected %d bytes, got %d", oah.Size(), stat.Size())
 
 	tlog.Logln("Compare output")
 	same, err := fEq(outputFileName, expectedOutputFilePath)
@@ -171,7 +176,7 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 	tassert.Errorf(t, same, "file contents after transformation differ")
 }
 
-func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cached bool) {
+func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName, args string, onlyLong, cached bool) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -208,7 +213,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 
 	bf := bytes.NewBuffer(nil)
 	tlog.Logf("Use ETL[%s] to read transformed object\n", etlName)
-	err = api.ETLObject(baseParams, etlName, bck, objName, bf)
+	_, err = api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, TransformArgs: args}, bck, objName, bf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, bf.Len() == cos.KiB, "Expected %d bytes, got %d", cos.KiB, bf.Len())
 }
@@ -263,7 +268,7 @@ func TestETLObject(t *testing.T) {
 			_ = tetl.InitSpec(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.transformer) })
 
-			testETLObject(t, test.transformer, test.inPath, test.outPath, test.transform, test.filesEqual)
+			testETLObject(t, test.transformer, "", test.inPath, test.outPath, test.transform, test.filesEqual)
 		})
 	}
 }
@@ -295,7 +300,7 @@ func TestETLObjectCloud(t *testing.T) {
 
 			for _, conf := range configs {
 				t.Run(fmt.Sprintf("cached=%t", conf.cached), func(t *testing.T) {
-					testETLObjectCloud(t, cliBck, tetl.Echo, conf.onlyLong, conf.cached)
+					testETLObjectCloud(t, cliBck, tetl.Echo, "", conf.onlyLong, conf.cached)
 				})
 			}
 		})
@@ -394,6 +399,48 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	exp, got := reader.Cksum().Val(), string(outObject.Bytes())
 	tassert.Errorf(t, exp == got, "expected transformed object to be md5 checksum %s, got %s", exp,
 		got[:min(len(got), 16)])
+}
+
+func TestETLInlineObjWithArgs(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		proxyURL    = tools.RandomProxyURL(t)
+		baseParams  = tools.BaseAPIParams(proxyURL)
+		transformer = tetl.HashWithMetadata
+
+		tests = []struct {
+			name     string
+			commType string
+			onlyLong bool
+		}{
+			{name: "etl-args-hpush", commType: etl.Hpush},
+			{name: "etl-args-hpull", commType: etl.Hpull},
+			{name: "etl-args-hrev", commType: etl.Hrev},
+		}
+	)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
+			_ = tetl.InitSpec(t, baseParams, transformer, test.commType)
+
+			var seed = rand.Uint64N(1000)
+
+			testETLObject(t, transformer, seed, "", "",
+				func(r io.Reader) io.Reader {
+					// Read the object and calculate the hash using the same hash algorithm as the ETL (same random seed).
+					// The results should match because the hash is calculated in the same way.
+					data, _ := io.ReadAll(r)
+					hash := xxhash.Checksum64S(data, seed)
+					hashHex := fmt.Sprintf("%016x", hash)
+
+					return bytes.NewReader([]byte(hashHex))
+				}, tools.FilesEqual,
+			)
+		})
+	}
 }
 
 func TestETLAnyToAnyBucket(t *testing.T) {
@@ -648,7 +695,7 @@ def transform(input_bytes: bytes) -> bytes:
 				case "etl_object":
 					t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
 
-					testETLObject(t, test.etlName, "", "", func(r io.Reader) io.Reader {
+					testETLObject(t, test.etlName, "", "", "", func(r io.Reader) io.Reader {
 						return r // TODO: Write function to transform input to md5.
 					}, func(_, _ string) (bool, error) {
 						return true, nil // TODO: Write function to compare output from md5.

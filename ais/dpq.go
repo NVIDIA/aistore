@@ -31,7 +31,8 @@ type dpq struct {
 		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below)
 	}
 	etl struct {
-		name, meta string // QparamETLName, QparamETLMeta
+		name, targs string // QparamETLName, QparamETLTransformArgs
+		meta        string // QparamETLMeta (DEPRECATED - Replace with QparamETLTransformArgs soon)
 	}
 
 	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
@@ -39,8 +40,7 @@ type dpq struct {
 	origURL     string // ht://url->
 	owt         string // object write transaction { OwtPut, ... }
 	fltPresence string // QparamFltPresence
-	// etlName     string // QparamETLName
-	binfo string // bucket info, with or without requirement to summarize remote obj-s
+	binfo       string // bucket info, with or without requirement to summarize remote obj-s
 
 	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
 	isGFN         bool // QparamIsGFNRequest
@@ -150,7 +150,9 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 
 		case apc.QparamETLName:
 			dpq.etl.name = value
-		case apc.QparamETLMeta:
+		case apc.QparamETLTransformArgs:
+			dpq.etl.targs = value
+		case apc.QparamETLMeta: // DEPRECATED - Replace with QparamETLTransformArgs soon.
 			dpq.etl.meta = value
 		case apc.QparamSilent:
 			dpq.silent = cos.IsParseBool(value)

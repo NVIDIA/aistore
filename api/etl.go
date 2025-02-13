@@ -17,6 +17,18 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
+type ETLObjArgs struct {
+	// ETLName specifies the running ETL instance to be used in inline transform.
+	ETLName string
+
+	// TransformArgs holds the arguments to be used in ETL inline transform,
+	// which will be sent as `apc.QparamETLArgs` query parameter in the request.
+	TransformArgs any
+
+	// DEPRECATED - Replace with TransformArgs soon.
+	Metadata any
+}
+
 // Initiate custom ETL workload by executing one of the documented `etl.InitMsg`
 // message types.
 // The API call results in deploying multiple ETL containers (K8s pods):
@@ -145,13 +157,25 @@ func etlPostAction(bp BaseParams, etlName, action string) (err error) {
 	return
 }
 
-// TODO: add ETL-specific query param and change the examples/docs (!4455)
-func ETLObject(bp BaseParams, etlName string, bck cmn.Bck, objName string, w io.Writer) (err error) {
-	_, err = GetObject(bp, bck, objName, &GetArgs{
-		Writer: w,
-		Query:  url.Values{apc.QparamETLName: []string{etlName}},
-	})
-	return
+func ETLObject(bp BaseParams, args *ETLObjArgs, bck cmn.Bck, objName string, w io.Writer) (oah ObjAttrs, err error) {
+	query := url.Values{apc.QparamETLName: []string{args.ETLName}}
+	if args.TransformArgs != nil {
+		targs, err := cos.ConvertToString(args.TransformArgs)
+		if err != nil {
+			return oah, err
+		}
+		query.Add(apc.QparamETLTransformArgs, targs)
+	}
+
+	if args.Metadata != nil {
+		meta, err := cos.ConvertToString(args.Metadata)
+		if err != nil {
+			return oah, err
+		}
+		query.Add(apc.QparamETLMeta, meta)
+	}
+
+	return GetObject(bp, bck, objName, &GetArgs{Writer: w, Query: query})
 }
 
 // NOTE: for ETLBucket(), see api/bucket

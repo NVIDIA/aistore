@@ -46,10 +46,10 @@ var _ = Describe("CommunicatorTest", func() {
 		dataSize      = int64(50 * cos.MiB)
 		transformData = make([]byte, dataSize)
 
-		bck        = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
-		objName    = "commObj"
-		etlMeta    = "{\"from_time\":2.43,\"to_time\":3.43}"
-		clusterBck = meta.NewBck(
+		bck              = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
+		objName          = "commObj"
+		etlTransformArgs = "{\"from_time\":2.43,\"to_time\":3.43}"
+		clusterBck       = meta.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
 			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
@@ -88,15 +88,15 @@ var _ = Describe("CommunicatorTest", func() {
 
 		// Initialize the HTTP servers.
 		transformerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			receivedEtlMeta := r.URL.Query().Get(apc.QparamETLMeta)
-			Expect(receivedEtlMeta).To(Equal(etlMeta))
+			receivedEtlTransformArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
+			Expect(receivedEtlTransformArgs).To(Equal(etlTransformArgs))
 
 			_, err := w.Write(transformData)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			receivedEtlMeta := r.URL.Query().Get(apc.QparamETLMeta)
-			err := comm.InlineTransform(w, r, lom, receivedEtlMeta)
+			receivedEtlTransformArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
+			err := comm.InlineTransform(w, r, lom, receivedEtlTransformArgs, "")
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +140,7 @@ var _ = Describe("CommunicatorTest", func() {
 			comm = newCommunicator(nil, boot)
 
 			q := url.Values{}
-			q.Add(apc.QparamETLMeta, etlMeta)
+			q.Add(apc.QparamETLTransformArgs, etlTransformArgs)
 			resp, err := http.Get(proxyServer.URL + "?" + q.Encode())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()

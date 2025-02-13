@@ -14,8 +14,9 @@ const (
 	QparamJobID = "jobid" // job
 
 	// etl
-	QparamETLName = "etl_name"
-	QparamETLMeta = "etl_meta"
+	QparamETLName          = "etl_name"
+	QparamETLMeta          = "etl_meta" // TODO: DEPRECATED - Replace with QparamETLTransformArgs soon.
+	QparamETLTransformArgs = "etl_args"
 
 	QparamRegex      = "regex"       // dsort: list regex
 	QparamOnlyActive = "only_active" // dsort: list only active

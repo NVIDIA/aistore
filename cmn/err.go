@@ -189,11 +189,11 @@ type (
 		ETLErrCtx
 	}
 	ETLErrCtx struct {
-		TID     string
-		ETLName string
-		ETLMeta string
-		PodName string
-		SvcName string
+		TID              string
+		ETLName          string
+		ETLTransformArgs string
+		PodName          string
+		SvcName          string
 	}
 	ErrWarning struct {
 		what string

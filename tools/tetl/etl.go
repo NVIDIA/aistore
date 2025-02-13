@@ -28,12 +28,13 @@ import (
 )
 
 const (
-	Tar2TF        = "tar2tf"
-	Echo          = "transformer-echo"
-	EchoGolang    = "echo-go"
-	MD5           = "transformer-md5"
-	Tar2tfFilters = "tar2tf-filters"
-	tar2tfFilter  = `
+	Tar2TF           = "tar2tf"
+	Echo             = "transformer-echo"
+	EchoGolang       = "echo-go"
+	MD5              = "transformer-md5"
+	HashWithMetadata = "hash-with-metadata"
+	Tar2tfFilters    = "tar2tf-filters"
+	tar2tfFilter     = `
 {
   "conversions": [
     { "type": "Decode", "ext_name": "png"},
@@ -49,11 +50,12 @@ const (
 
 var (
 	links = map[string]string{
-		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
-		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
-		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
-		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
-		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/go_echo/pod.yaml",
+		MD5:              "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
+		HashWithMetadata: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/hash_with_metadata/pod.yaml",
+		Tar2TF:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
+		Tar2tfFilters:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
+		Echo:             "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
+		EchoGolang:       "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/go_echo/pod.yaml",
 	}
 
 	client = &http.Client{}

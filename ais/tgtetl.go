@@ -150,8 +150,13 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 	}
 }
 
-func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, etlName, etlMeta string, lom *core.LOM) {
-	comm, err := etl.GetCommunicator(etlName)
+func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
+	var (
+		name  = dpq.etl.name  // apc.QparamETLName
+		targs = dpq.etl.targs // apc.QparamETLTransformArgs
+		meta  = dpq.etl.meta  // apc.QparamETLMeta, DEPRECATED - Replace with QparamETLTransformArgs soon
+	)
+	comm, err := etl.GetCommunicator(name)
 	if err != nil {
 		if cos.IsErrNotFound(err) {
 			smap := t.owner.smap.Get()
@@ -164,8 +169,8 @@ func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, etlName, etl
 		return
 	}
 
-	if err := comm.InlineTransform(w, r, lom, etlMeta); err != nil {
-		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: etlName, ETLMeta: etlMeta, PodName: comm.PodName(), SvcName: comm.SvcName()},
+	if err := comm.InlineTransform(w, r, lom, targs, meta); err != nil {
+		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: name, ETLTransformArgs: targs, PodName: comm.PodName(), SvcName: comm.SvcName()},
 			err.Error())
 		xetl := comm.Xact()
 		xetl.AddErr(errV)
