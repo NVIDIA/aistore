@@ -63,7 +63,7 @@ QPARAM_LATEST = "latest-ver"
 QPARAM_NEW_CUSTOM = "set-new-custom"
 # etl
 QPARAM_ETL_NAME = "etl_name"
-QPARAM_ETL_ARGS = "etl_meta"
+QPARAM_ETL_ARGS = "etl_args"
 
 # URL Param values
 # See api/apc/query.go

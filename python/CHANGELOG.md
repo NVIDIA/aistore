@@ -12,7 +12,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
-## [1.12.0] - 2025-02-14
+## [1.12.1] - 2025-02-14
+
+### Added
+
+### Changed
+- Update ETL argument constant from 'etl_meta' to 'etl_args'.
+
+## [1.12.0] - 2025-02-13
 
 ### Added
 - Add support for ETL transformation arguments in GET requests for inline objects.
