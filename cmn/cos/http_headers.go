@@ -70,6 +70,7 @@ const (
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
 	S3UnsignedPayload  = "UNSIGNED-PAYLOAD"
 	S3HdrContentSHA256 = "x-amz-content-sha256"
+	S3HdrSignedHeaders = "x-ams-signedheaders"
 
 	S3HdrBckRegion = "x-amz-bucket-region"
 

@@ -109,6 +109,26 @@ func parseCredentialHeader(hdr string) (region string) {
 }
 
 func (pts *PresignedReq) DoHead(client *http.Client) (*PresignedResp, error) {
+	canOptimize := pts.oreq.Method == http.MethodGet
+	canOptimize = canOptimize && pts.oreq.Header.Get(cos.S3HdrContentSHA256) == ""
+	canOptimize = canOptimize && !strings.Contains(pts.oreq.Header.Get(cos.S3HdrSignedHeaders), strings.ToLower(cos.HdrRange))
+	if canOptimize {
+		// Temporarily override `Range` header value.
+		//
+		// This method could be executed in context of GET request in which case we
+		// don't want to retrieve the object but just the metadata. Note that we cannot
+		// simply use HEAD here since the request might not be signed for this method.
+		hdrRangeValue, hdrRangeExists := pts.oreq.Header[cos.HdrRange]
+		pts.oreq.Header.Set(cos.HdrRange, cos.HdrRangeValPrefix+"0-0")
+		defer func() {
+			if hdrRangeExists {
+				pts.oreq.Header[cos.HdrRange] = hdrRangeValue
+			} else {
+				pts.oreq.Header.Del(cos.HdrRange)
+			}
+		}()
+	}
+
 	resp, err := pts.DoReader(client)
 	if err != nil || resp == nil {
 		return resp, err
