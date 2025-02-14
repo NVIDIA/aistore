@@ -389,7 +389,7 @@ class TestETLOps(unittest.TestCase):
             for key, value in content.items():
                 transformed_obj = (
                     src_bck.object(key)
-                    .get_reader(etl_name=f"etl-{src_bck.name}")
+                    .get_reader(etl=ETLConfig(f"etl-{src_bck.name}"))
                     .read_all()
                 )
                 self.assertEqual(transform(bytes(value)), transformed_obj)
