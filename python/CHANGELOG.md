@@ -9,9 +9,18 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ## Unreleased
 
 ### Added
-- Added Support for ETL Transformation Arguments in GET Requests for Inline Objects
- 
+
 ### Changed
+
+## [1.12.0] - 2025-02-14
+
+### Added
+- Add support for ETL transformation arguments in GET requests for inline objects.
+- Introduced `ETLConfig` dataclass to encapsulate ETL-related parameters.
+- Add `max_pool_size` parameter to `Client` and `SessionManager`.
+
+### Changed
+- Update `get_reader` and `get` methods to support ETLConfig, ensuring consistent handling of ETL metadata.
 
 ## [1.11.1] - 2025-02-06
 
