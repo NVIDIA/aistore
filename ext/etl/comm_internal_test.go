@@ -96,7 +96,7 @@ var _ = Describe("CommunicatorTest", func() {
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			receivedEtlTransformArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
-			err := comm.InlineTransform(w, r, lom, receivedEtlTransformArgs, "")
+			err := comm.InlineTransform(w, r, lom, receivedEtlTransformArgs)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

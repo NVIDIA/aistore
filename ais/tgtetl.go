@@ -154,7 +154,6 @@ func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lo
 	var (
 		name  = dpq.etl.name  // apc.QparamETLName
 		targs = dpq.etl.targs // apc.QparamETLTransformArgs
-		meta  = dpq.etl.meta  // apc.QparamETLMeta, DEPRECATED - Replace with QparamETLTransformArgs soon
 	)
 	comm, err := etl.GetCommunicator(name)
 	if err != nil {
@@ -169,7 +168,7 @@ func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lo
 		return
 	}
 
-	if err := comm.InlineTransform(w, r, lom, targs, meta); err != nil {
+	if err := comm.InlineTransform(w, r, lom, targs); err != nil {
 		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: name, ETLTransformArgs: targs, PodName: comm.PodName(), SvcName: comm.SvcName()},
 			err.Error())
 		xetl := comm.Xact()

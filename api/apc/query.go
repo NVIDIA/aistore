@@ -15,7 +15,6 @@ const (
 
 	// etl
 	QparamETLName          = "etl_name"
-	QparamETLMeta          = "etl_meta" // TODO: DEPRECATED - Replace with QparamETLTransformArgs soon.
 	QparamETLTransformArgs = "etl_args"
 
 	QparamRegex      = "regex"       // dsort: list regex

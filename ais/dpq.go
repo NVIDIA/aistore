@@ -32,7 +32,6 @@ type dpq struct {
 	}
 	etl struct {
 		name, targs string // QparamETLName, QparamETLTransformArgs
-		meta        string // QparamETLMeta (DEPRECATED - Replace with QparamETLTransformArgs soon)
 	}
 
 	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
@@ -152,8 +151,6 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 			dpq.etl.name = value
 		case apc.QparamETLTransformArgs:
 			dpq.etl.targs = value
-		case apc.QparamETLMeta: // DEPRECATED - Replace with QparamETLTransformArgs soon.
-			dpq.etl.meta = value
 		case apc.QparamSilent:
 			dpq.silent = cos.IsParseBool(value)
 		case apc.QparamLatestVer:

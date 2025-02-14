@@ -164,7 +164,7 @@ func testETLObject(t *testing.T, etlName string, args any, inPath, outPath strin
 	defer fho.Close()
 
 	tlog.Logf("GET %s via etl[%s], args=%v\n", bck.Cname(objName), etlName, args)
-	oah, err := api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, Metadata: args}, bck, objName, fho)
+	oah, err := api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, TransformArgs: args}, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 
 	stat, _ := fho.Stat()

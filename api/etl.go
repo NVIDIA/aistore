@@ -24,9 +24,6 @@ type ETLObjArgs struct {
 	// TransformArgs holds the arguments to be used in ETL inline transform,
 	// which will be sent as `apc.QparamETLArgs` query parameter in the request.
 	TransformArgs any
-
-	// DEPRECATED - Replace with TransformArgs soon.
-	Metadata any
 }
 
 // Initiate custom ETL workload by executing one of the documented `etl.InitMsg`
@@ -165,14 +162,6 @@ func ETLObject(bp BaseParams, args *ETLObjArgs, bck cmn.Bck, objName string, w i
 			return oah, err
 		}
 		query.Add(apc.QparamETLTransformArgs, targs)
-	}
-
-	if args.Metadata != nil {
-		meta, err := cos.ConvertToString(args.Metadata)
-		if err != nil {
-			return oah, err
-		}
-		query.Add(apc.QparamETLMeta, meta)
 	}
 
 	return GetObject(bp, bck, objName, &GetArgs{Writer: w, Query: query})

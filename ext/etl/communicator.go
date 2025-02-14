@@ -46,7 +46,7 @@ type (
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs, meta string) error
+		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) error
 
 		// OfflineTransform is driven by `OfflineDP` to provide offline transformation, as it were
 		// Implementations include:
@@ -195,14 +195,14 @@ func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.Read
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs, meta string) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string) (r cos.ReadCloseSizer, err error) {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
 		return nil, err
 	}
 
 	var ecode int
 	lom.Lock(false)
-	r, ecode, err = pc.do(lom, timeout, targs, meta)
+	r, ecode, err = pc.do(lom, timeout, targs)
 	lom.Unlock(false)
 
 	if err != nil && cos.IsNotExist(err, ecode) && lom.Bucket().IsRemote() {
@@ -211,13 +211,13 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs, meta 
 			return nil, err
 		}
 		lom.Lock(false)
-		r, _, err = pc.do(lom, timeout, targs, meta)
+		r, _, err = pc.do(lom, timeout, targs)
 		lom.Unlock(false)
 	}
 	return
 }
 
-func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs, meta string) (_ cos.ReadCloseSizer, ecode int, err error) {
+func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs string) (_ cos.ReadCloseSizer, ecode int, err error) {
 	var (
 		body   io.ReadCloser
 		cancel func()
@@ -256,9 +256,6 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs, meta string)
 
 	if targs != "" {
 		query.Add(apc.QparamETLTransformArgs, targs)
-	}
-	if meta != "" {
-		query.Add(apc.QparamETLMeta, meta)
 	}
 
 	if timeout != 0 {
@@ -309,8 +306,8 @@ finish:
 	return cos.NewReaderWithArgs(rargs), 0, nil
 }
 
-func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, targs, meta string) error {
-	r, err := pc.doRequest(lom, 0 /*timeout*/, targs, meta)
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, targs string) error {
+	r, err := pc.doRequest(lom, 0 /*timeout*/, targs)
 	if err != nil {
 		return err
 	}
@@ -332,7 +329,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 
 func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	clone := *lom
-	r, err = pc.doRequest(&clone, timeout, "", "")
+	r, err = pc.doRequest(&clone, timeout, "")
 	if err == nil && cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, clone.Cname(), err)
 	}
@@ -343,7 +340,7 @@ func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (r co
 // redirectComm: implements Hpull
 //////////////////
 
-func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs, meta string) error {
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) error {
 	if err := rc.boot.xctn.AbortErr(); err != nil {
 		return err
 	}
@@ -355,9 +352,6 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	query := url.Values{}
 	if targs != "" {
 		query.Add(apc.QparamETLTransformArgs, targs)
-	}
-	if meta != "" {
-		query.Add(apc.QparamETLMeta, meta)
 	}
 
 	http.Redirect(w, r, cos.JoinQuery(rc.redirectURL(lom), query), http.StatusTemporaryRedirect)
@@ -399,7 +393,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (
 // revProxyComm: implements Hrev
 //////////////////
 
-func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _, _ string) error {
+func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _ string) error {
 	err := lomLoad(lom)
 	if err != nil {
 		return err
