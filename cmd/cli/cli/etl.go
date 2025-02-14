@@ -500,6 +500,6 @@ func etlObjectHandler(c *cli.Context) error {
 		defer f.Close()
 	}
 
-	err := api.ETLObject(apiBP, etlName, bck, objName, w)
+	_, err := api.ETLObject(apiBP, &api.ETLObjArgs{ETLName: etlName}, bck, objName, w)
 	return handleETLHTTPError(err, etlName)
 }
