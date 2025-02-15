@@ -9,10 +9,10 @@ require (
 	github.com/NVIDIA/go-tfdata v0.3.1
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/aws/aws-sdk-go-v2 v1.36.1
-	github.com/aws/aws-sdk-go-v2/config v1.29.6
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.59
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.61
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.76.1
+	github.com/aws/aws-sdk-go-v2/config v1.28.5
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.46
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.39
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.67.1
 	github.com/aws/smithy-go v1.22.2
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/json-iterator/go v1.1.12
