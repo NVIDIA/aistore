@@ -310,7 +310,9 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		params.ContinuationToken = aws.String(msg.ContinuationToken)
 	}
 
-	versioning = bck.Props != nil && bck.Props.Versioning.Enabled && msg.WantProp(apc.GetPropsVersion)
+	if bck.Props != nil && bck.Props.Versioning.Enabled {
+		versioning = msg.WantProp(apc.GetPropsVersion) && bck.Props.Features.IsSet(feat.S3ListObjectVersions)
+	}
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	if versioning {
 		msg.PageSize = min(versionedPageSize, msg.PageSize)

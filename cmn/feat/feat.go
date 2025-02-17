@@ -41,6 +41,7 @@ const (
 	DontDeleteWhenRebalancing // when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
 	DontSetControlPlaneToS    // intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
+	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 )
 
 var Cluster = [...]string{
@@ -62,6 +63,7 @@ var Cluster = [...]string{
 	"Do-not-Delete-When-Rebalancing",
 	"Do-not-Set-Control-Plane-ToS",
 	"Trust-Crypto-Safe-Checksums",
+	"S3-ListObjectVersions",
 
 	// "none" ====================
 }
@@ -73,6 +75,7 @@ var Bucket = [...]string{
 	"Disable-Cold-GET",
 	"Streaming-Cold-GET",
 	"S3-Use-Path-Style", // https://aws.amazon.com/blogs/aws/amazon-s3-path-deprecation-plan-the-rest-of-the-story
+	"S3-ListObjectVersions",
 
 	// "none" ====================
 }
