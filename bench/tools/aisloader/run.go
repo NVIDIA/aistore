@@ -91,6 +91,7 @@ type (
 		statsdPort        int
 		statsShowInterval int
 		putPct            int // % of puts, rest are gets
+		updateExistingPct int // % of updates (GET, PUT over)combo
 		numWorkers        int
 		batchSize         int // batch is used for bootstraping(list) and delete
 		loaderIDHashLen   uint
@@ -546,6 +547,11 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 
 	f.IntVar(&p.numWorkers, "numworkers", 10, "number of goroutine workers operating on AIS in parallel")
 	f.IntVar(&p.putPct, "pctput", 0, "percentage of PUTs in the aisloader-generated workload")
+
+	// see also: opUpdateExisting
+	f.IntVar(&p.updateExistingPct, "pctupdate", 0,
+		"percentage of GET requests that are followed by a PUT \"update\" (i.e., creation of a new version of the object)")
+
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
 		"stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")

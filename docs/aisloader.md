@@ -79,6 +79,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -minsize | `int` | Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1MiB` |
 | -numworkers | `int` | Number of goroutine workers operating on AIS in parallel | `10` |
 | -pctput | `int` | Percentage of PUTs in the aisloader-generated workload | `0` |
+| -pctupdate | `int` | Percentage of GET requests that are followed by a PUT "update" (i.e., creation of a new version of the object) | `0` |
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
 | -port | `int` | Port number for proxy server | `8080` |
 | -provider | `string` | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively | `ais` |
