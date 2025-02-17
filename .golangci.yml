@@ -47,7 +47,7 @@ linters-settings:
     ignore-generated-header: true
     severity: warning
     rules:
-      # name: import-shadowing ## TODO: enable
+      # name: import-shadowing ## (e.g., url)
       # name: unhandled-error
       # name: line-length-limit
       # name: dot-imports
@@ -85,7 +85,7 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment # TODO: enable once in a while (lots of noise though)
-      - shadow # Reports a lot of false-positives and conflicts with other linters.
+      - shadow # (e.g., proxyURL)
   errcheck:
     check-blank: true
     check-type-assertions: false
@@ -113,6 +113,8 @@ linters-settings:
     rules:
       main:
         deny:
+          - pkg: io/ioutil
+            desc: "replaced by io and os packages since Go 1.16: https://tip.golang.org/doc/go1.16#ioutil"
           - pkg: 'math/rand$'
             desc: "`math/rand` package has been deprecated use `math/rand/v2`"
 
@@ -125,44 +127,8 @@ issues:
     - linters: [errcheck]
       text: "Error return value of" # ignores 'error return value of ... is unchecked'
 
-    - linters: [golint]
-      text: "and that stutters; consider calling this"
-
-    - linters: [golint]
-      text: "don't use an underscore in package name"
-
-    - linters: [revive]
-      text: "or a comment on this block"
-
-    - linters: [unused]
-      text: "`noCopy` is unused"
-
-    - linters: [gocritic]
-      text: "importShadow: shadow of imported"
-
-    - linters: [gocritic]
-      text: "builtinShadow: shadowing of predeclared identifier: new"
-
-    - linters: [gocritic, gofmt, goimports]
-      source: "///" # commentFormatting
-
-    - linters: [gocritic, gofmt, goimports]
-      source: "//==" # commentFormatting
-
-    - linters: [staticcheck]
-      text: "SA5011:" # produces a lot of false-positives; hopefully in the future we could enable it!
-
-    - linters: [interfacer]
-      text: "k8s.io/client-go/rest.HTTPClient" # suggests to change `*http.Client` to `rest.HTTPClient`...
-
-    - linters: [staticcheck]
-      text: "SA3000: TestMain should call os.Exit to set exit code" # This is not true for Go1.15 or later.
-
     - linters: [gocritic]
       text: "block doesn't have definitions" # Sometimes blocks are useful for better readability.
-
-    - linters: [golint]
-      source: "embed" # Justification for `import _ "embed"` is not needed.
 
   # Set to 0 to disable limit
   max-same-issues: 0

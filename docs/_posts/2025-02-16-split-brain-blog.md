@@ -74,7 +74,7 @@ Could also be misdiagnosed. Misattributed. Misinterpreted. Totally innocuous aft
 Anything's possible. And if it is possible it will surely happen.
 
 But still, suppose we - eventually — heuristicize our ways to detect the unexpected.
-Suppose, we nail it. Suppose, we have already. What do we do about it?
+Suppose, we nail it. Suppose, we already have. What do we do about it?
 
 Well, again, the aforementioned conventional wisdom comes to the rescue, offering a menu of decisive militaristic actions:
 

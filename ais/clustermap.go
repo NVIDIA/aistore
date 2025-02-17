@@ -32,7 +32,7 @@ const clusterMap = "Smap"
 // NOTE: to access Snode, Smap and related structures, external
 //       packages and HTTP clients must import aistore/cluster (and not ais)
 
-//=====================================================================
+// =====================================================================
 //
 // - smapX is a server-side extension of the meta.Smap
 // - smapX represents AIStore cluster in terms of its member nodes and their properties
@@ -47,7 +47,7 @@ const clusterMap = "Smap"
 // (*) for merges and conflict resolution, check smapX version prior to put()
 //     (version check must be protected by the same critical section)
 //
-//=====================================================================
+// =====================================================================
 
 type (
 	smapX struct {
