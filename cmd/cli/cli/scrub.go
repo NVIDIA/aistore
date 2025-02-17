@@ -59,6 +59,8 @@ type (
 		// timing
 		ival time.Duration
 		last atomic.Int64
+		// total num listed names
+		total atomic.Int64
 		// detailed logs
 		logs       [teb.ScrNumStats]_log
 		progLine   cos.Builder
@@ -75,6 +77,7 @@ var (
 		pageSizeFlag,
 		objLimitFlag,
 		noHeaderFlag,
+		noFooterFlag,
 		maxPagesFlag,
 		noRecursFlag,
 		smallSizeFlag,
@@ -111,8 +114,10 @@ func scrubHandler(c *cli.Context) (err error) {
 		ctx.pref = prefix
 	}
 
+	now := mono.NanoTime()
+
 	// setup progress updates
-	ctx.last.Store(mono.NanoTime())
+	ctx.last.Store(now)
 	ctx.ival = max(listObjectsWaitTime, refreshRateDefault)
 	if flagIsSet(c, refreshFlag) {
 		// (compare w/ _refreshRate())
@@ -158,6 +163,19 @@ func scrubHandler(c *cli.Context) (err error) {
 	}
 
 	ctx.closeLogs(c)
+
+	// elapsed
+	if !flagIsSet(c, noFooterFlag) {
+		elapsed := teb.FormatDuration(mono.Since(now))
+		fmt.Fprintln(c.App.Writer, "---")
+		if ctx.numBcks > 1 {
+			total := cos.FormatBigI64(ctx.total.Load())
+			fmt.Fprintln(c.App.Writer, "Total:", total, "names in", elapsed)
+		} else {
+			fmt.Fprintln(c.App.Writer, "Elapsed:", elapsed)
+		}
+	}
+
 	return err
 }
 
@@ -302,6 +320,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		if err != nil {
 			return nil, err
 		}
+		ctx.total.Add(int64(len(lst.Entries)))
 		// one page
 		for _, en := range lst.Entries {
 			if en.IsAnyFlagSet(apc.EntryIsDir) || cos.IsLastB(en.Name, filepath.Separator) {
