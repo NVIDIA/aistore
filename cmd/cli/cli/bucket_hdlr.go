@@ -598,6 +598,12 @@ func listAnyHandler(c *cli.Context) error {
 	}
 proceed:
 	switch {
+	case objName != "" && flagIsSet(c, diffFlag):
+		// --diff forces default case (see below)
+		prefix := objName
+		listArch := flagIsSet(c, listArchFlag)
+		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
+
 	case objName != "":
 		// (1) list archive, or
 		// (2) show (as in: HEAD) specied object, or

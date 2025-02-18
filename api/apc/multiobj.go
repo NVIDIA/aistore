@@ -60,22 +60,32 @@ type PrefetchMsg struct {
 	LatestVer       bool  `json:"latest-ver"`     // when true & in-cluster: check with remote whether (deleted | version-changed)
 }
 
+// +ctlmsg
 func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	var sb strings.Builder
 	sb.Grow(80)
 	msg.ListRange.Str(&sb, isPrefix)
 	if msg.BlobThreshold > 0 {
-		sb.WriteString(", blob-threshold: ")
+		msg.delim(&sb)
+		sb.WriteString("blob-threshold: ")
 		sb.WriteString(cos.ToSizeIEC(msg.BlobThreshold, 0))
 	}
 	if msg.NumWorkers > 0 {
-		sb.WriteString(", workers: ")
+		msg.delim(&sb)
+		sb.WriteString("workers: ")
 		sb.WriteString(strconv.Itoa(msg.NumWorkers))
 	}
 	if msg.LatestVer {
-		sb.WriteString(", latest")
+		msg.delim(&sb)
+		sb.WriteString("latest")
 	}
 	return sb.String()
+}
+
+func (*PrefetchMsg) delim(sb *strings.Builder) {
+	if sb.Len() > 0 {
+		sb.WriteString(", ")
+	}
 }
 
 // ArchiveMsg contains the parameters (all except the destination bucket)

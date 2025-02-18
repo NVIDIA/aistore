@@ -5,11 +5,14 @@
 package lpi
 
 import (
+	"sync"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -25,7 +28,7 @@ type (
 	}
 )
 
-func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
+func (lpis *Lpis) Init(bck *cmn.Bck, prefix string, smap *meta.Smap) {
 	var (
 		avail = fs.GetAvail()
 	)
@@ -34,7 +37,7 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
 		lpis.bck = bck
 	}
 	for _, mi := range avail {
-		it, err := New(mi.MakePathCT(bck, fs.ObjectType) /*root*/, prefix)
+		it, err := New(mi.MakePathCT(bck, fs.ObjectType) /*root*/, prefix, smap)
 		debug.AssertNoErr(err)
 		milpi := milpi{
 			page: make(Page),
@@ -46,13 +49,10 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string) {
 }
 
 func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, last bool) {
-	const (
-		limitNumGor = 2 // TODO: calibrate
-	)
 	var (
 		lastName string
 		num      = len(lastPage) // num entries
-		wg       = cos.NewLimitedWaitGroup(limitNumGor, len(lpis.a))
+		wg       = &sync.WaitGroup{}
 	)
 	if num > 0 && !last {
 		lastName = lastPage[num-1].Name
@@ -107,7 +107,7 @@ func (milpi *milpi) run(bck *cmn.Bck, lastName, tag string) {
 	// next local page "until"
 	lpiMsg := Msg{EOP: eop}
 	if err := milpi.it.Next(lpiMsg, milpi.page); err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		if cmn.Rom.FastV(4, cos.SmoduleFS) {
 			nlog.Warningln(tag, err)
 		}
 	}

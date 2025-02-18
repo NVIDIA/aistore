@@ -141,6 +141,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		}
 
 		delta = time.Duration(wo.end - wo.startPut)
+		putPending++
 		fallthrough
 	case opPut:
 		if delta <= 0 {

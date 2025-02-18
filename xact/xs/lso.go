@@ -154,7 +154,7 @@ func (p *lsoFactory) Start() error {
 
 		// engage local page iterator (lpi)
 		if r.msg.IsFlagSet(apc.LsDiff) {
-			r.lpis.Init(r.Bck().Bucket(), r.msg.Prefix)
+			r.lpis.Init(r.Bck().Bucket(), r.msg.Prefix, core.T.Sowner().Get())
 		}
 	}
 

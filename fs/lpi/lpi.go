@@ -15,6 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/karrick/godirwalk"
 )
 
@@ -37,6 +39,7 @@ type (
 	// NOTE: it is caller's responsibility to serialize access _or_ take locks.
 	Iter struct {
 		page     Page
+		smap     *meta.Smap
 		root     string
 		prefix   string
 		rootpref string
@@ -54,7 +57,7 @@ var (
 	errStop = errors.New("stop")
 )
 
-func New(root, prefix string) (*Iter, error) {
+func New(root, prefix string, smap *meta.Smap) (*Iter, error) {
 	// validate root
 	debug.Assert(!cos.IsLastB(root, filepath.Separator), root)
 	finfo, err := os.Stat(root)
@@ -66,7 +69,7 @@ func New(root, prefix string) (*Iter, error) {
 	}
 
 	// construct
-	lpi := &Iter{root: root, prefix: prefix}
+	lpi := &Iter{root: root, prefix: prefix, smap: smap}
 	{
 		lpi.next = root
 		lpi.lr = len(root)
@@ -155,13 +158,17 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 			}
 		}
 
-		// add
-		// TODO: lom.Load() instead
-		if finfo, e := os.Stat(pathname); e == nil {
-			lpi.page[rel] = finfo.Size()
-		} else if cmn.Rom.FastV(4, cos.SmoduleXs) {
-			nlog.Warningln(e)
+		// NOTE: unit test only
+		if lpi.smap == nil {
+			if finfo, e := os.Stat(pathname); e == nil {
+				lpi.page[rel] = finfo.Size()
+			}
+			break
 		}
+
+		lom := core.AllocLOM("")
+		err = lpi._cb(pathname, rel, lom)
+		core.FreeLOM(lom)
 	default:
 		// next
 		debug.Assert(pathname > lpi.msg.EOP && lpi.msg.EOP != AllPages)
@@ -170,6 +177,41 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 	}
 
 	return err
+}
+
+// (compare with walkInfo._cb)
+func (lpi *Iter) _cb(fqn, rel string, lom *core.LOM) (err error) {
+	var local bool
+	if err = lom.PreInit(fqn); err != nil {
+		goto rerr
+	}
+	debug.Assert(lom.ObjName == rel, lom.ObjName, " vs ", rel)
+	if lpi.prefix != "" && !cmn.ObjHasPrefix(lom.ObjName, lpi.prefix) {
+		return nil
+	}
+	if err = lom.PostInit(); err != nil {
+		goto rerr
+	}
+	if _, local, err = lom.HrwTarget(lpi.smap); err != nil {
+		return errStop
+	}
+	if !local || !lom.IsHRW() {
+		// skip both
+		return nil
+	}
+	if err = lom.Load(true, false); err != nil {
+		goto rerr
+	}
+
+	// add
+	lpi.page[rel] = lom.Lsize()
+	return nil
+
+rerr:
+	if cmn.Rom.FastV(4, cos.SmoduleFS) {
+		nlog.Warningln(lom.String(), "[", err, "]")
+	}
+	return nil
 }
 
 func (*Iter) ErrorCallback(pathname string, err error) godirwalk.ErrorAction {
