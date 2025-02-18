@@ -200,7 +200,7 @@ Further,
 - AWS SDK v2 sets the default `5MB`
   - see https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/s3/manager
 - AIS default, however, is `128MiB`
-  - at time of this writing but check ais/s3/const for the most recent update
+  - at time of this writing but check ais/s3/const.go for the most recent update
 
 In addition, you can always configure a different value on a per-bucket basis, as follows:
 
