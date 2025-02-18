@@ -34,13 +34,27 @@ import (
 // - async execution with '--wait' option
 // - speed-up `ls` via multiple workers
 
+const (
+	logFname           = ".ais-scrub-%s.%x.log"
+	logTitleDflt       = "Name,Size"
+	logTitleVerChanged = "Name,Size,Custom"
+	logTitleMisplaced  = "Name,Size,Atime,Location"
+	logTitleCopies     = "Name,Size,Copies"
+	logDelim           = `","`
+
+	logMaxLn = 256
+)
+
 type (
-	_log struct {
-		fh  *os.File
-		tag string
-		fn  string
-		cnt int
-		mu  sync.Mutex
+	logcb func(scr *scrBp, en *cmn.LsoEnt)
+	_log  struct {
+		fh    *os.File
+		do    logcb
+		title string
+		tag   string
+		fn    string
+		cnt   int
+		mu    sync.Mutex
 	}
 	// fields exported => teb/template
 	scrBp teb.ScrBp
@@ -156,6 +170,8 @@ func scrubHandler(c *cli.Context) (err error) {
 
 	ctx.pid = os.Getpid()
 
+	ctx.iniLogs()
+
 	if ctx.numBcks > 1 {
 		err = ctx.many(bcks)
 	} else {
@@ -179,9 +195,31 @@ func scrubHandler(c *cli.Context) (err error) {
 	return err
 }
 
-//////////////
+////////////
 // scrCtx //
-//////////////
+////////////
+
+func (ctx *scrCtx) iniLogs() {
+	for i := range ctx.logs {
+		// default
+		log := &ctx.logs[i]
+		log.title = logTitleDflt
+		log.do = log.dflt
+
+		// assorted overrides
+		switch i {
+		case teb.ScrMisplacedNode, teb.ScrMisplacedMpath:
+			log.title = logTitleMisplaced
+			log.do = log.misplaced
+		case teb.ScrVchanged:
+			log.title = logTitleVerChanged
+			log.do = log.vchanged
+		case teb.ScrMissingCp:
+			log.title = logTitleCopies
+			log.do = log.copies
+		}
+	}
+}
 
 func (ctx *scrCtx) closeLogs(c *cli.Context) {
 	var titled bool
@@ -400,9 +438,9 @@ func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
 	*yes = true
 }
 
-//////////////
+///////////
 // scrBp //
-//////////////
+///////////
 
 func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 	scr.Stats[teb.ScrObjects].Cnt++
@@ -456,12 +494,6 @@ func (scr *scrBp) upd(parent *scrCtx, en *cmn.LsoEnt) {
 	}
 }
 
-const (
-	logFname = ".ais-scrub-%s.%x.log"
-	logTitle = "Name,Size,Atime,Location"
-	logDelim = `","`
-)
-
 // NOTE: exit upon (unlikely) failure
 func (*scrBp) _create(log *_log, pid int) {
 	fn := fmt.Sprintf(logFname, log.tag, pid)
@@ -481,23 +513,64 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 	if log.fh == nil {
 		log.tag = strings.ToLower(teb.ScrCols[i])
 		scr._create(log, parent.pid)
-		fmt.Fprintln(log.fh, logTitle)
-		fmt.Fprintln(log.fh, strings.Repeat("=", len(logTitle)))
+		fmt.Fprintln(log.fh, log.title)
+		fmt.Fprintln(log.fh, strings.Repeat("=", len(log.title)))
 	}
 
-	scr._dolog(log, en)
+	log.do(scr, en)
 
 	if parent.numBcks > 1 {
 		log.mu.Unlock()
 	}
 }
 
-func (scr *scrBp) _dolog(log *_log, en *cmn.LsoEnt) {
-	const (
-		maxline = 256
-	)
+func (scr *scrBp) cname(objname string) {
 	sb := &scr.Line
-	sb.Reset(maxline)
+	sb.WriteString(scr.Cname)
+	sb.WriteByte(filepath.Separator)
+	sb.WriteString(objname)
+}
+
+//////////
+// _log //
+//////////
+
+// logTitleDflt = "Name,Size"
+func (log *_log) dflt(scr *scrBp, en *cmn.LsoEnt) {
+	sb := &scr.Line
+	sb.Reset(logMaxLn)
+	sb.WriteByte('"')
+
+	scr.cname(en.Name)
+
+	sb.WriteString(logDelim)
+	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteByte('"')
+	fmt.Fprintln(log.fh, sb.String())
+	log.cnt++
+}
+
+// logTitleVerChanged = "Name,Size,Custom"
+func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
+	sb := &scr.Line
+	sb.Reset(logMaxLn)
+	sb.WriteByte('"')
+
+	scr.cname(en.Name)
+
+	sb.WriteString(logDelim)
+	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteString(logDelim)
+	sb.WriteString(en.Custom)
+	sb.WriteByte('"')
+	fmt.Fprintln(log.fh, sb.String())
+	log.cnt++
+}
+
+// logTitleMisplaced  = "Name,Size,Atime,Location"
+func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
+	sb := &scr.Line
+	sb.Reset(logMaxLn)
 	sb.WriteByte('"')
 
 	scr.cname(en.Name)
@@ -513,9 +586,19 @@ func (scr *scrBp) _dolog(log *_log, en *cmn.LsoEnt) {
 	log.cnt++
 }
 
-func (scr *scrBp) cname(objname string) {
+// logTitleCopies = "Name,Size,Copies"
+func (log *_log) copies(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
-	sb.WriteString(scr.Cname)
-	sb.WriteByte(filepath.Separator)
-	sb.WriteString(objname)
+	sb.Reset(logMaxLn)
+	sb.WriteByte('"')
+
+	scr.cname(en.Name)
+
+	sb.WriteString(logDelim)
+	sb.WriteString(strconv.FormatInt(en.Size, 10))
+	sb.WriteString(logDelim)
+	sb.WriteString(strconv.Itoa(int(en.Copies)))
+	sb.WriteByte('"')
+	fmt.Fprintln(log.fh, sb.String())
+	log.cnt++
 }
