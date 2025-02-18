@@ -9,9 +9,10 @@ from io import BufferedWriter
 from pathlib import Path
 from typing import Dict, Optional
 import os
+from json import dumps as json_dumps
+
 from requests import Response
 from requests.structures import CaseInsensitiveDict
-
 from aistore.sdk.archive_config import ArchiveConfig
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.etl import ETLConfig
@@ -201,8 +202,11 @@ class Object:
         # ETL Configuration
         if etl:
             params[QPARAM_ETL_NAME] = etl.name
-            if etl.args:
-                params[QPARAM_ETL_ARGS] = etl.args
+            params[QPARAM_ETL_ARGS] = (
+                json_dumps(etl.args, separators=(",", ":"))
+                if isinstance(etl.args, dict)
+                else etl.args
+            )
 
         # Latest Object Version
         if latest:

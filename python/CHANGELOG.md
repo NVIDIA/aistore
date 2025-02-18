@@ -12,6 +12,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+## [1.12.2] - 2025-02-18
+
+### Changed
+- Ensure ETL args dictionaries are serialized as strings in query parameters for consistency.
+
 ## [1.12.1] - 2025-02-14
 
 ### Added

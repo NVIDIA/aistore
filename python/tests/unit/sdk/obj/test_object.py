@@ -101,7 +101,7 @@ class TestObject(unittest.TestCase):
         self.expected_params[QPARAM_ARCHREGX] = ""
         self.expected_params[QPARAM_ARCHMODE] = None
         self.expected_params[QPARAM_ETL_NAME] = ETL_NAME
-        self.expected_params[QPARAM_ETL_ARGS] = {"test": "test"}
+        self.expected_params[QPARAM_ETL_ARGS] = '{"key":"value"}'
 
         archive_config = ArchiveConfig(archpath=archpath_param)
 
@@ -114,7 +114,7 @@ class TestObject(unittest.TestCase):
         self.get_exec_assert(
             archive_config=archive_config,
             chunk_size=3,
-            etl=ETLConfig(ETL_NAME, {"test": "test"}),
+            etl=ETLConfig(ETL_NAME, {"key": "value"}),
             writer=self.mock_writer,
             blob_download_config=blob_config,
             byte_range=byte_range,
