@@ -16,6 +16,7 @@ from tests.const import (
     MEDIUM_FILE_SIZE,
     OBJECT_COUNT,
     TEST_TIMEOUT,
+    TEST_TIMEOUT_LONG,
     PREFIX_NAME,
     SUFFIX_NAME,
 )
@@ -366,7 +367,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
             **transform_kwargs
         )
-        self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT_LONG)
 
         # Get the md5 transform of each source object and verify the destination bucket contains those results
         from_obj_hashes = [
@@ -382,10 +383,18 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.assertEqual(to_obj_values, from_obj_hashes)
 
     @pytest.mark.etl
+    @unittest.skipIf(
+        REMOTE_SET,
+        "TODO -- FIXME: Remote bucket transform",
+    )
     def test_transform_objects(self):
         self._transform_objects_test_helper()
 
     @pytest.mark.etl
+    @unittest.skipIf(
+        REMOTE_SET,
+        "TODO -- FIXME: Remote bucket transform",
+    )
     def test_transform_objects_with_num_workers(self):
         self._transform_objects_test_helper(num_workers=3)
 

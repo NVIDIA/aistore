@@ -14,6 +14,7 @@ spec:
   selector:
     app: ais
     type: ais-proxy
+    pod-name: ${POD_NAME}
 ---  
 apiVersion: v1
 kind: Pod
@@ -22,6 +23,7 @@ metadata:
   labels:
     app: ais
     type: ais-proxy
+    pod-name: ${POD_NAME}
 spec:
   containers:
   - name: aisnode

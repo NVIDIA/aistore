@@ -1755,7 +1755,10 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 }
 
 func (coi *coi) stats(size int64, err error) {
-	if err == nil && coi.Xact != nil && size > 0 {
+	if err == nil && coi.Xact != nil {
+		if size == cos.ContentLengthUnknown {
+			size = 0
+		}
 		coi.Xact.ObjsAdd(1, size)
 	}
 }

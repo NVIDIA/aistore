@@ -40,17 +40,16 @@ func TestETLMultiObj(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bcktests   = []struct {
-			srcRemote      bool
-			evictRemoteSrc bool
-			dstRemote      bool
-		}{
-			{false, false, false},
-			{true, false, false},
-			{true, true, false},
-			{false, false, true},
-		}
+		bcktests   = []testBucketConfig{{false, false, false}}
 	)
+
+	if cliBck.IsRemote() {
+		bcktests = append(bcktests,
+			testBucketConfig{true, false, false},
+			testBucketConfig{true, true, false},
+			testBucketConfig{false, false, true},
+		)
+	}
 
 	_ = tetl.InitSpec(t, baseParams, transformer, etlCommType)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
