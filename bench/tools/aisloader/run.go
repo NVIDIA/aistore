@@ -710,6 +710,9 @@ func _init(p *params) (err error) {
 	if p.putPct < 0 || p.putPct > 100 {
 		return fmt.Errorf("invalid option: PUT percent %d", p.putPct)
 	}
+	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
+		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.putPct)
+	}
 
 	if p.skipList {
 		if p.fileList != "" {

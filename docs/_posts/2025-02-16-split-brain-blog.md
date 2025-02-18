@@ -10,11 +10,11 @@ Split-brain is inevitable. The way it approaches varies greatly but there are te
 
 > Next time, you certainly will.
 
-But what? What exactly could you have done differently when keepalives start failing seemingly at random? When one node after another reports that the _primary_ is unreachable, initiating re-election.
+But what? What exactly could've been done differently when keepalives started failing seemingly at random? When one node after another reports that the _primary_ is unreachable, initiating re-election.
 
-In the moment, dealing with it is quite unsettling. You are looking at a jumble of intertwined alerts that keep coming in waves, where seemingly sporadic attempts to elect a new _primary_ get voted out by fragmented majorities.
+In the moment, dealing with it is quite unsettling. Looking at a jumble of intertwined alerts that keep coming in waves, where seemingly sporadic attempts to elect a new _primary_ get voted out by fragmented majorities.
 
-And that's going on for a while. Feels like a very long time but actually it is not. Because split-brain is arriving. In fact, it is already here, with us, and it _will_ reshape the cluster.
+And that's going on for a while. Feels like a long while but actually it is not. Because split-brain is arriving. In fact, it's already here, and it _will_ reshape the cluster.
 
 ![split-brain is inevitable](/assets/split-brain.jpg)
 

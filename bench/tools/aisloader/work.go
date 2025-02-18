@@ -40,8 +40,9 @@ type (
 		objName   string // In the format of 'virtual dir' + "/" + objName
 		size      int64
 		err       error
-		start     time.Time
-		end       time.Time
+		start     int64
+		end       int64
+		startPut  int64 // PUT in `opUpdateExisting`
 		latencies httpLatencies
 		cksumType string
 		sgl       *memsys.SGL
@@ -90,18 +91,7 @@ func postNewWorkOrder() (err error) {
 	return err
 }
 
-func validateWorkOrder(wo *workOrder, delta time.Duration) error {
-	if wo.op == opGet || wo.op == opPut {
-		if delta == 0 {
-			return fmt.Errorf("%s has the same start time as end time", wo)
-		}
-	}
-	return nil
-}
-
 func completeWorkOrder(wo *workOrder, terminating bool) {
-	delta := timeDelta(wo.end, wo.start)
-
 	if wo.err == nil && traceHTTPSig.Load() {
 		var lat *stats.MetricLatsAgg
 		switch wo.op {
@@ -125,13 +115,17 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		}
 	}
 
-	if err := validateWorkOrder(wo, delta); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] %s", err.Error())
-		return
-	}
+	delta := time.Duration(wo.end - wo.start)
 
 	switch wo.op {
-	case opGet, opUpdateExisting:
+	case opUpdateExisting:
+		delta = time.Duration(wo.startPut - wo.start)
+		fallthrough
+	case opGet:
+		if delta <= 0 {
+			fmt.Fprintf(os.Stderr, "[ERROR] %s has the same start time as end time", wo)
+			return
+		}
 		getPending--
 		intervalStats.statsd.Get.AddPending(getPending)
 		if wo.err != nil {
@@ -145,8 +139,14 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		if wo.op == opGet {
 			return
 		}
+
+		delta = time.Duration(wo.end - wo.startPut)
 		fallthrough
 	case opPut:
+		if delta <= 0 {
+			fmt.Fprintf(os.Stderr, "[ERROR] %s has the same start time as end time", wo)
+			return
+		}
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
@@ -164,8 +164,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			return
 		}
 
-		now, l := time.Now(), len(wo2Free)
-		debug.Assert(!wo.end.IsZero())
+		now, l := mono.NanoTime(), len(wo2Free)
 		// free previously executed PUT SGLs
 		for i := 0; i < l; i++ {
 			if terminating {
@@ -174,7 +173,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			w := wo2Free[i]
 			// delaying freeing sgl for `wo2FreeDelay`
 			// (background at https://github.com/golang/go/issues/30597)
-			if now.Sub(w.end) < wo2FreeDelay {
+			if time.Duration(now-w.end) < wo2FreeDelay {
 				break
 			}
 			if w.sgl != nil && !w.sgl.IsNil() {
@@ -286,7 +285,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			return
 		}
 
-		wo.start = time.Now()
+		wo.start = mono.NanoTime()
 
 		switch wo.op {
 		case opPut:
@@ -299,6 +298,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			doGet(wo)
 			if wo.err == nil {
 				numGets.Inc()
+				wo.startPut = mono.NanoTime()
 				doPut(wo)
 			}
 		case opConfig:
@@ -307,7 +307,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			debug.Assert(false, wo.op)
 		}
 
-		wo.end = time.Now()
+		wo.end = mono.NanoTime()
 		results <- wo
 	}
 }
@@ -409,6 +409,6 @@ func (wo *workOrder) String() string {
 		errstr = ", error: " + wo.err.Error()
 	}
 
-	return fmt.Sprintf("WO: %s/%s, start:%s end:%s, size: %d, type: %s%s",
-		wo.bck.String(), wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
+	return fmt.Sprintf("WO: %s/%s, duration %s, size: %d, type: %s%s",
+		wo.bck.String(), wo.objName, time.Duration(wo.end-wo.start), wo.size, opName, errstr)
 }
