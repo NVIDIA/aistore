@@ -79,77 +79,70 @@ const (
 
 type (
 	params struct {
-		seed              int64 // random seed; UnixNano() if omitted
-		putSizeUpperBound int64
-		minSize           int64
-		maxSize           int64
-		readOff           int64 // read offset
-		readLen           int64 // read length
-		loaderCnt         uint64
-		maxputs           uint64
-		putShards         uint64
-		statsdPort        int
-		statsShowInterval int
-		putPct            int // % of puts, rest are gets
-		updateExistingPct int // % of updates (GET, PUT over)combo
-		numWorkers        int
-		batchSize         int // batch is used for bootstraping(list) and delete
-		loaderIDHashLen   uint
-		numEpochs         uint
-
-		duration DurationExt // stop after the run for at least that much
-
-		bp   api.BaseParams
-		smap *meta.Smap
-
-		bck    cmn.Bck
-		bProps cmn.Bprops
-
-		loaderID             string // used with multiple loader instances generating objects in parallel
-		proxyURL             string
-		readerType           string
-		tmpDir               string // used only when usingFile
-		statsOutput          string
-		cksumType            string
-		statsdIP             string
-		bPropsStr            string
+		smap                 *meta.Smap
+		bp                   api.BaseParams
+		bck                  cmn.Bck
 		putSizeUpperBoundStr string // stop after writing that amount of data
-		minSizeStr           string
-		maxSizeStr           string
-		readOffStr           string // read offset
-		readLenStr           string // read length
+		statsdIP             string
 		subDir               string
+		readLenStr           string // read length (and see readLen below)
+		readOffStr           string // read offset (and see readOff below)
+		maxSizeStr           string
+		minSizeStr           string
+		proxyURL             string
+		bPropsStr            string
 		tokenFile            string
+		cksumType            string
+		statsOutput          string
+		tmpDir               string // when usingFile
+		readerType           string
+		loaderID             string // used with multiple loader instances generating objects in parallel
 		fileList             string // local file that contains object names (an alternative to running list-objects)
-
-		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
-		etlSpecPath string // Path to a ETL spec to apply to each object.
-
-		cleanUp BoolExt // cleanup i.e. remove and destroy everything created during bench
-
-		statsdProbe   bool
-		getLoaderID   bool
-		randomObjName bool
-		randomProxy   bool
-		uniqueGETs    bool
-		skipList      bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
-		verifyHash    bool // verify xxhash during get
-		getConfig     bool // when true, execute control plane requests (read cluster configuration)
-		jsonFormat    bool
-		stoppable     bool // when true, terminate by Ctrl-C
-		dryRun        bool // print configuration and parameters that aisloader will use at runtime
-		traceHTTP     bool // trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
-		latest        bool // check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
-		cached        bool // list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")
-		listDirs      bool // do list virtual subdirectories (applies to remote buckets only)
+		etlName              string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
+		etlSpecPath          string // ETL spec pathname to apply to each object.
+		bProps               cmn.Bprops
+		duration             DurationExt // stop after the run for at least that much
+		batchSize            int         // used for: bootstrap(list) and delete
+		numEpochs            uint
+		loaderIDHashLen      uint
+		seed                 int64 // random seed; UnixNano() if omitted
+		numWorkers           int
+		updateExistingPct    int // % of updates (GET, PUT over)combo
+		putPct               int // % of PUTs, rest are GETs
+		statsShowInterval    int
+		statsdPort           int
+		putShards            uint64
+		maxputs              uint64
+		loaderCnt            uint64
+		readLen              int64 // read length
+		readOff              int64 // read offset
+		maxSize              int64
+		minSize              int64
+		putSizeUpperBound    int64
+		cleanUp              BoolExt // cleanup i.e. remove and destroy everything created during bench
+		statsdProbe          bool
+		getLoaderID          bool
+		randomObjName        bool
+		randomProxy          bool
+		uniqueGETs           bool
+		skipList             bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
+		verifyHash           bool // verify xxhash during get
+		getConfig            bool // when true, execute control plane requests (read cluster configuration)
+		jsonFormat           bool
+		stoppable            bool // when true, terminate by Ctrl-C
+		dryRun               bool // print configuration and parameters that aisloader will use at runtime
+		traceHTTP            bool // trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+		latest               bool // check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
+		cached               bool // list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")
+		listDirs             bool // do list virtual subdirectories (applies to remote buckets only)
 	}
 
 	// sts records accumulated puts/gets information.
 	sts struct {
+		statsd    stats.Metrics
 		put       stats.HTTPReq
 		get       stats.HTTPReq
 		getConfig stats.HTTPReq
-		statsd    stats.Metrics
 	}
 
 	jsonStats struct {

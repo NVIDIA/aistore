@@ -34,18 +34,18 @@ const (
 
 type (
 	workOrder struct {
-		op        int
-		proxyURL  string
-		bck       cmn.Bck
-		objName   string // In the format of 'virtual dir' + "/" + objName
-		size      int64
 		err       error
+		sgl       *memsys.SGL
+		bck       cmn.Bck
+		proxyURL  string
+		objName   string // virtual-dir + "/" + objName
+		cksumType string
+		latencies httpLatencies
+		op        int
+		size      int64
 		start     int64
 		end       int64
 		startPut  int64 // PUT in `opUpdateExisting`
-		latencies httpLatencies
-		cksumType string
-		sgl       *memsys.SGL
 	}
 )
 
