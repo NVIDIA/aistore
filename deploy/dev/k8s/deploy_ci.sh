@@ -32,7 +32,6 @@ fi
 
 export TEST_FSPATH_COUNT=${FS_CNT:-4}
 PRIMARY_PORT=8080
-export AIS_BACKEND_PROVIDERS=$PROVIDERS
 INSTANCE=0
 
 if [[ -n $HTTPS ]]; then
@@ -56,10 +55,32 @@ export AIS_LOG_DIR="/tmp/ais/log"
 export AIS_PRIMARY_HOST="ais-proxy-0.default.svc.cluster.local"
 export AIS_PRIMARY_URL="${SCHEME}${AIS_PRIMARY_HOST}:${PRIMARY_PORT}"
 
-if [[ ",$PROVIDERS," == *",gcp,"* ]]; then
+if [[ $AIS_BACKEND_PROVIDERS == *"gcp"* ]]; then
   echo "Creating GCP credentials secret"
   kubectl delete secret gcp-creds || true
-  kubectl create secret generic gcp-creds --from-file=creds.json=$GOOGLE_APPLICATION_CREDENTIALS
+  kubectl create secret generic gcp-creds \
+    --from-file=creds.json=$GOOGLE_APPLICATION_CREDENTIALS
+fi
+
+if [[ $AIS_BACKEND_PROVIDERS == *"aws"* ]]; then
+  echo "Creating AWS credentials secrets"
+  kubectl delete secret aws-credentials || true
+  kubectl create secret generic aws-credentials \
+    --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+    --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+    --from-literal=AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION
+fi
+
+if [[ $AIS_BACKEND_PROVIDERS == *"oci"* ]]; then
+  echo "Creating OCI credentials secret"
+  kubectl delete secret oci-credentials || true
+  kubectl create secret generic oci-credentials \
+    --from-file=OCI_PRIVATE_KEY=$ORACLE_PRIVATE_KEY \
+    --from-literal=OCI_TENANCY_OCID=$OCI_TENANCY_OCID \
+    --from-literal=OCI_USER_OCID=$OCI_USER_OCID \
+    --from-literal=OCI_REGION=$OCI_REGION \
+    --from-literal=OCI_FINGERPRINT=$OCI_FINGERPRINT \
+    --from-literal=OCI_COMPARTMENT_OCID=$OCI_COMPARTMENT_OCID
 fi
 
 # Necessary in case another run with different spec is aborted 

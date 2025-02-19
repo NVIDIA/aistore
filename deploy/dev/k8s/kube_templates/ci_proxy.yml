@@ -52,8 +52,6 @@ spec:
       - name: AIS_NODE_ROLE
         value: "proxy"
     volumeMounts:
-     - name: aws-credentials
-       mountPath: /root/.aws/
      - name: ais-tls-certs
        mountPath: /var/certs
      - name: ais-logs
@@ -86,10 +84,6 @@ spec:
     - name: statsd-config
       configMap:
         name: statsd-config
-    - name: aws-credentials
-      secret:
-        secretName: aws-credentials
-        optional: true
     - name: ais-tls-certs
       secret:
         secretName: ais-tls-certs

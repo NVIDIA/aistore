@@ -14,11 +14,14 @@ variables:
     value: "4"
     description: "Number of mountpaths (disks) in each target."
   CLOUD_BCKS:
-    value: "aws://ais-blossom gs://ais-ci-kube" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
+    value: "aws://ais-blossom gs://ais-ci-kube oc://ais-ci-long" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
     description: "Set of buckets used when running cloud tests."
   GOOGLE_APPLICATION_CREDENTIALS:
     value: "$GCP_JSON_FILE"
-    description: "Gitlab file variable containing credentials for GCP"
+    description: "GitLab file variable containing credentials for GCP"
+  ORACLE_PRIVATE_KEY:
+    value: "$OCI_PRIVATE_KEY_FILE"
+    description: "GitLab file variable containing private key for OCI"
 
 image: $CI_IMAGE
 
@@ -125,8 +128,8 @@ build:linux:
   script:
     - MODE="" make node # Build node without backends in production mode.
     - MODE="debug" make node # Build node without backends in debug mode.
-    - AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node # Build with all Cloud backends (production mode).
-    - AIS_BACKEND_PROVIDERS="aws azure gcp ht" MODE="debug" make node # Build with all backends (debug mode).
+    - AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="" make node # Build with all Cloud backends (production mode).
+    - AIS_BACKEND_PROVIDERS="aws azure gcp oci ht" MODE="debug" make node # Build with all backends (debug mode).
     - MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node # Build with profile.
     - TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
     - TAGS="oteltracing" make node # Build with oteltracing (disabled by default).
@@ -149,7 +152,7 @@ build:k8s:
     - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $CI_REGISTRY
   script:
     - buildah images
-    - buildah build -t $FQ_IMAGE_NAME -f deploy/dev/k8s/Dockerfile --build-arg MODE="debug" --build-arg providers="gcp"
+    - buildah build -t $FQ_IMAGE_NAME -f deploy/dev/k8s/Dockerfile --build-arg MODE="debug" --build-arg providers="gcp aws oci"
     - buildah images
     - buildah push $FQ_IMAGE_NAME
   rules:
@@ -468,7 +471,7 @@ test:long:ishard:
     AIS_ENDPOINT: "http://ais-proxy-0.default.svc.cluster.local:8080"
     FS_CNT: 6
     RE: "TestETL|TestConfig|TestMountpath"
-    PROVIDERS: gcp
+    AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
     - cd deploy/dev/k8s
@@ -638,9 +641,10 @@ test:long:k8s:all:
       when: manual
       allow_failure: true
   variables: 
-    PROVIDERS: "gcp,aws"
+    AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
+    - make aisloader
     - cd deploy/dev/k8s
     - make deploy-ci
     - cd ../../..

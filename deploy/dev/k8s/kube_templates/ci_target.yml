@@ -56,9 +56,52 @@ spec:
         value: "target"
       - name: GOOGLE_APPLICATION_CREDENTIALS
         value: /tmp/gcp/creds.json
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: AWS_ACCESS_KEY_ID
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: AWS_SECRET_ACCESS_KEY
+      - name: AWS_DEFAULT_REGION
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: AWS_DEFAULT_REGION
+      - name: OCI_TENANCY_OCID
+        valueFrom:
+          secretKeyRef:
+            name: oci-credentials
+            key: OCI_TENANCY_OCID
+      - name: OCI_USER_OCID
+        valueFrom:
+          secretKeyRef:
+            name: oci-credentials
+            key: OCI_USER_OCID
+      - name: OCI_REGION
+        valueFrom:
+          secretKeyRef:
+            name: oci-credentials
+            key: OCI_REGION
+      - name: OCI_FINGERPRINT
+        valueFrom:
+          secretKeyRef:
+            name: oci-credentials
+            key: OCI_FINGERPRINT
+      - name: OCI_PRIVATE_KEY
+        valueFrom:
+          secretKeyRef:
+            name: oci-credentials
+            key: OCI_PRIVATE_KEY
+      - name: OCI_COMPARTMENT_OCID
+        valueFrom:
+          secretKeyRef:
+            name: oci-credentials
+            key: OCI_COMPARTMENT_OCID
     volumeMounts:
-     - name: aws-credentials
-       mountPath: /root/.aws/
      - name: ais-logs
        mountPath: ${AIS_LOG_DIR}
      - name: ais-tls-certs
@@ -108,4 +151,8 @@ spec:
     - name: gcp-creds
       secret:
         secretName: gcp-creds
+        optional: true
+    - name: oci-credentials
+      secret:
+        secretName: oci-credentials
         optional: true
