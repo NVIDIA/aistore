@@ -392,3 +392,31 @@ spec:
         path: /tmp/ais
         type: Directory
 """
+
+# Return the XXHASH of the original response
+# https://github.com/NVIDIA/ais-etl/blob/master/transformers/hash_with_args/README.md
+HASH = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-hash-with-metadata
+  annotations:
+    communication_type: "{communication_type}://"
+    wait_timeout: 5m
+spec:
+  containers:
+    - name: server
+      image: aistorage/transformer_hash_with_args:latest
+      imagePullPolicy: Always
+      ports:
+        - name: default
+          containerPort: 80
+      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+      env:
+        - name: SEED_DEFAULT
+          value: "0"
+"""

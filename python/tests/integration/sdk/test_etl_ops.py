@@ -2,21 +2,28 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from itertools import cycle
-import unittest
 import hashlib
 import sys
 import time
-import pytest
+import unittest
+from itertools import cycle
 
-from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_string
+import pytest
+import xxhash
 
 from aistore.sdk import Client, Bucket
-from aistore.sdk.etl.etl_const import ETL_COMM_HPUSH, ETL_COMM_IO
-from aistore.sdk.errors import AISError
-from aistore.sdk.etl.etl_templates import MD5, ECHO
 from aistore.sdk.etl import ETLConfig
+from aistore.sdk.errors import AISError
+from aistore.sdk.etl.etl_templates import MD5, ECHO, HASH
+from aistore.sdk.etl.etl_const import (
+    ETL_COMM_HPUSH,
+    ETL_COMM_IO,
+    ETL_COMM_HPULL,
+    ETL_COMM_HREV,
+)
+
+from tests.integration import CLUSTER_ENDPOINT
+from tests.utils import cases, create_and_put_object, random_string
 
 ETL_NAME_CODE = "etl-" + random_string(5)
 ETL_NAME_CODE_IO = "etl-" + random_string(5)
@@ -393,6 +400,52 @@ class TestETLOps(unittest.TestCase):
                     .read_all()
                 )
                 self.assertEqual(transform(bytes(value)), transformed_obj)
+
+    @pytest.mark.etl
+    @cases(ETL_COMM_HPUSH, ETL_COMM_HPULL, ETL_COMM_HREV)
+    def test_etl_args(self, communication_type):
+        """
+        Test ETL with different communication types: HPUSH, HREV, HPULL.
+        """
+        template = HASH.format(communication_type=communication_type)
+        spec_etl = self.client.etl(ETL_NAME_SPEC)
+        spec_etl.init_spec(template=template)
+
+        # Check if ETL is initialized
+        self.assertEqual(
+            self.current_etl_count + 1, len(self.client.cluster().list_running_etls())
+        )
+
+        # Function to calculate xxhash
+        def calculate_xxhash(data, seed):
+            hasher = xxhash.xxh64(seed=seed)
+            hasher.update(data)
+            return hasher.hexdigest()
+
+        # Default hash (seed = 0)
+        default_hash = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=spec_etl.name))
+            .read_all()
+        )
+        self.assertEqual(
+            default_hash.decode(), calculate_xxhash(bytes(self.content), 0)
+        )
+
+        # Hash with seed = 10000
+        seed = 10000
+        new_hash = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=spec_etl.name, args=seed))
+            .read_all()
+        )
+        self.assertEqual(new_hash.decode(), calculate_xxhash(bytes(self.content), seed))
+
+        # Ensure hashes are different
+        self.assertNotEqual(default_hash, new_hash)
+
+        spec_etl.stop()
+        spec_etl.delete()
 
 
 if __name__ == "__main__":
