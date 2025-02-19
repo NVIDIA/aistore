@@ -15,34 +15,36 @@ import (
 
 const (
 	dfltMinSince = time.Millisecond
+	dfltMaxIval  = 10 * time.Minute
 )
 
 type RateLimiter struct {
 	tokens    float64       // current tokens
 	maxTokens float64       // max tokens
-	interval  float64       // duration in nanoseconds as in: maxTokens per interval
-	minSince  time.Duration // min duration from the last allowed; >= 1ms (above)
-	//
+	tokenIval float64       // duration in nanoseconds as in: maxTokens per tokenIval
+	minSince  time.Duration // min duration since the previous granted; >= 1ms (above)
 	// runtime
-	//
 	lastReq int64
 	lastAdd int64
 	mu      sync.Mutex
 }
 
-func NewRateLimiter(maxTokens int, interval, minSince time.Duration) (*RateLimiter, error) {
-	const tag = "rate-limiter"
-	if interval < dfltMinSince {
-		return nil, fmt.Errorf("%s: invalid interval %s", tag, interval)
+func NewRateLimiter(maxTokens int, tokenIval, minSince time.Duration) (*RateLimiter, error) {
+	const (
+		tag = "rate-limiter"
+	)
+	minSince = NonZero(minSince, dfltMinSince)
+	if tokenIval < minSince || tokenIval > dfltMaxIval {
+		return nil, fmt.Errorf("%s: invalid token interval %v (min=%v, max=%v)", tag, tokenIval, minSince, dfltMaxIval)
 	}
 	if maxTokens <= 0 || maxTokens >= math.MaxInt32 {
-		return nil, fmt.Errorf("%s: invalid max-tokens %d", tag, maxTokens)
+		return nil, fmt.Errorf("%s: invalid number of tokens %d per (token) interval", tag, maxTokens)
 	}
 	rl := &RateLimiter{
 		tokens:    0,
 		maxTokens: float64(maxTokens),
-		interval:  float64(interval),
-		minSince:  max(minSince, dfltMinSince),
+		tokenIval: float64(tokenIval),
+		minSince:  minSince,
 	}
 	return rl, nil
 }
@@ -57,9 +59,9 @@ func (rl *RateLimiter) TryAcquire() bool {
 		return false
 	}
 
-	// refill leaky bucket
+	// replenish
 	elapsed = time.Duration(now - rl.lastAdd)
-	if pct := float64(elapsed) / rl.interval; pct > 0 {
+	if pct := float64(elapsed) / rl.tokenIval; pct > 0 {
 		rl.lastAdd = now
 		if pct >= 1 {
 			rl.tokens = rl.maxTokens

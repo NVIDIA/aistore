@@ -52,6 +52,8 @@ const (
 
 	ErrFSHCCount = errPrefix + "fshc.n"
 
+	ErrDloadCount = errPrefix + "dl.n"
+
 	// IO errors (must have ioErrPrefix)
 	IOErrGetCount    = ioErrPrefix + "get.n"
 	IOErrPutCount    = ioErrPrefix + "put.n"
@@ -366,6 +368,11 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		&Extra{
 			Help:    "number of times filesystem health checker (FSHC) was triggered by an I/O error or errors",
 			VarLabs: MpathVarlabs,
+		},
+	)
+	r.reg(snode, ErrDloadCount, KindCounter,
+		&Extra{
+			Help: "downloader: number of download errors",
 		},
 	)
 

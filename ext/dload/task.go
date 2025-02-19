@@ -251,7 +251,7 @@ func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
-	g.tstats.Inc(stats.ErrDownloadCount)
+	g.tstats.Inc(stats.ErrDloadCount)
 	g.store.persistError(task.jobID(), task.obj.objName, statusMsg)
 	g.store.incErrorCnt(task.jobID())
 }

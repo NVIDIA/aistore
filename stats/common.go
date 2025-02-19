@@ -101,7 +101,6 @@ const (
 	// more errors
 	// (for even more errors, see target_stats)
 	ErrHTTPWriteCount = errPrefix + "http.write.n"
-	ErrDownloadCount  = errPrefix + "dl.n"
 
 	// KindLatency
 	// latency stats have numSamples used to compute average latency
@@ -259,16 +258,9 @@ func (r *runner) regCommon(snode *meta.Snode) {
 			Help: "total number of keep-alive failures",
 		},
 	)
-
-	// even more error counters
 	r.reg(snode, ErrHTTPWriteCount, KindCounter,
 		&Extra{
 			Help: "total number of HTTP write-response errors",
-		},
-	)
-	r.reg(snode, ErrDownloadCount, KindCounter,
-		&Extra{
-			Help: "downloader: number of download errors",
 		},
 	)
 
