@@ -91,6 +91,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [etl](#client.Client.etl)
     * [dsort](#client.Client.dsort)
     * [fetch\_object\_by\_url](#client.Client.fetch_object_by_url)
+    * [get\_object\_from\_url](#client.Client.get_object_from_url)
 * [cluster](#cluster)
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
@@ -162,13 +163,12 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [read\_all](#obj.object_reader.ObjectReader.read_all)
     * [raw](#obj.object_reader.ObjectReader.raw)
     * [as\_file](#obj.object_reader.ObjectReader.as_file)
-    * [iter\_from\_position](#obj.object_reader.ObjectReader.iter_from_position)
     * [\_\_iter\_\_](#obj.object_reader.ObjectReader.__iter__)
 * [obj.obj\_file.object\_file](#obj.obj_file.object_file)
-  * [ObjectFile](#obj.obj_file.object_file.ObjectFile)
-    * [readable](#obj.obj_file.object_file.ObjectFile.readable)
-    * [read](#obj.obj_file.object_file.ObjectFile.read)
-    * [close](#obj.obj_file.object_file.ObjectFile.close)
+  * [ObjectFileReader](#obj.obj_file.object_file.ObjectFileReader)
+    * [readable](#obj.obj_file.object_file.ObjectFileReader.readable)
+    * [read](#obj.obj_file.object_file.ObjectFileReader.read)
+    * [close](#obj.obj_file.object_file.ObjectFileReader.close)
   * [ObjectFileWriter](#obj.obj_file.object_file.ObjectFileWriter)
     * [write](#obj.obj_file.object_file.ObjectFileWriter.write)
     * [flush](#obj.obj_file.object_file.ObjectFileWriter.flush)
@@ -936,21 +936,23 @@ The namespace for this bucket.
 ### list\_urls
 
 ```python
-def list_urls(prefix: str = "", etl_name: str = None) -> Iterable[str]
+def list_urls(prefix: str = "",
+              etl: Optional[ETLConfig] = None) -> Iterable[str]
 ```
 
-Implementation of the abstract method from AISSource that provides an iterator
-of full URLs to every object in this bucket matching the specified prefix
+Generates full URLs for all objects in the bucket that match the specified prefix.
 
 **Arguments**:
 
-- `prefix` _str, optional_ - Limit objects selected by a given string prefix
-- `etl_name` _str, optional_ - ETL to include in URLs
+- `prefix` _str, optional_ - A string prefix to filter objects. Only objects with names starting
+  with this prefix will be included. Defaults to an empty string (no filtering).
+- `etl` _Optional[ETLConfig], optional_ - An optional ETL configuration. If provided, the URLs
+  will include ETL processing parameters. Defaults to None.
   
 
 **Returns**:
 
-  Iterator of full URLs of all objects matching the prefix
+- `Iterable[str]` - An iterator yielding full URLs of all objects matching the prefix.
 
 <a id="bucket.Bucket.list_all_objects_iter"></a>
 
@@ -1572,23 +1574,25 @@ Write a dataset to a bucket in AIS in webdataset format using wds.ShardWriter. L
 class Client()
 ```
 
-AIStore client for managing buckets, objects, ETL jobs
+AIStore client for managing buckets, objects, and ETL jobs.
 
 **Arguments**:
 
-- `endpoint` _str_ - AIStore endpoint
+- `endpoint` _str_ - AIStore endpoint.
 - `skip_verify` _bool, optional_ - If True, skip SSL certificate verification. Defaults to False.
-- `ca_cert` _str, optional_ - Path to a CA certificate file for SSL verification. If not provided, the
-  'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
+- `ca_cert` _str, optional_ - Path to a CA certificate file for SSL verification. If not provided,
+  the 'AIS_CLIENT_CA' environment variable will be used. Defaults to None.
 - `client_cert` _Union[str, Tuple[str, str], None], optional_ - Path to a client certificate PEM file
-  or a path pair (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY'
-  environment variables will be used. Defaults to None.
-- `timeout` _Union[float, Tuple[float, float], None], optional_ - Request timeout in seconds; a single float
-  for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
+  or a tuple (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY' environment
+  variables will be used. Defaults to None.
+- `timeout` _Union[float, Tuple[float, float], None], optional_ - Request timeout in seconds.
+  Can be a single float (e.g., 5.0) for both connect/read timeouts, a tuple (e.g., (3.0, 10.0)),
   or None to disable timeout.
-- `retry` _urllib3.Retry, optional_ - Retry configuration object from the urllib3 library.
+- `retry` _urllib3.Retry, optional_ - Retry configuration object from the urllib3 library. Defaults to None.
 - `token` _str, optional_ - Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
   will be used. Defaults to None.
+- `max_pool_size` _int, optional_ - Maximum number of connections per host in the connection pool.
+  Defaults to 10.
 
 <a id="client.Client.bucket"></a>
 
@@ -1701,7 +1705,11 @@ Does not make any HTTP request, only instantiates a dSort object.
 def fetch_object_by_url(url: str) -> Object
 ```
 
-Retrieve an object based on its URL.
+Deprecated: Use `get_object_from_url` instead.
+
+Creates an Object instance from a URL.
+
+This method does not make any HTTP requests.
 
 **Arguments**:
 
@@ -1710,7 +1718,33 @@ Retrieve an object based on its URL.
 
 **Returns**:
 
-- `Object` - The object retrieved from the specified URL
+- `Object` - The object constructed from the specified URL
+
+<a id="client.Client.get_object_from_url"></a>
+
+### get\_object\_from\_url
+
+```python
+def get_object_from_url(url: str) -> Object
+```
+
+Creates an Object instance from a URL.
+
+This method does not make any HTTP requests.
+
+**Arguments**:
+
+- `url` _str_ - Full URL of the object (e.g., "ais://bucket1/file.txt")
+  
+
+**Returns**:
+
+- `Object` - The object constructed from the specified URL
+  
+
+**Raises**:
+
+- `InvalidURLException` - If the URL is invalid.
 
 <a id="cluster.Cluster"></a>
 
@@ -1777,7 +1811,7 @@ Returns list of buckets in AIStore cluster.
 
 **Arguments**:
 
-- `provider` _str or Provider, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az" or "ht".
+- `provider` _str or Provider, optional_ - Provider of bucket (one of "ais", "aws", "gcp", ...).
   Defaults to "ais". Empty provider returns buckets of all providers.
   
 
@@ -2163,7 +2197,8 @@ Update the client bound to the bucket used by the ObjectGroup.
 ### list\_urls
 
 ```python
-def list_urls(prefix: str = "", etl_name: str = None) -> Iterable[str]
+def list_urls(prefix: str = "",
+              etl: Optional[ETLConfig] = None) -> Iterable[str]
 ```
 
 Implementation of the abstract method from AISSource that provides an iterator
@@ -2172,7 +2207,8 @@ of full URLs to every object in this bucket matching the specified prefix
 **Arguments**:
 
 - `prefix` _str, optional_ - Limit objects selected by a given string prefix
-- `etl_name` _str, optional_ - ETL to include in URLs
+- `etl` _Optional[ETLConfig], optional_ - An optional ETL configuration. If provided, the URLs
+  will include ETL processing parameters. Defaults to None.
   
 
 **Returns**:
@@ -2345,6 +2381,7 @@ def transform(to_bck: "Bucket",
               etl_name: str,
               timeout: str = DEFAULT_ETL_TIMEOUT,
               prepend: str = "",
+              ext: Dict[str, str] = None,
               continue_on_error: bool = False,
               dry_run: bool = False,
               force: bool = False,
@@ -2361,6 +2398,8 @@ Performs ETL operation on a list or range of objects in a bucket, placing the re
 - `etl_name` _str_ - Name of existing ETL to apply
 - `timeout` _str_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
 - `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
+- `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced
+  (i.e. {"jpg": "txt"})
 - `continue_on_error` _bool, optional_ - Whether to continue if there is an error transforming a single object
 - `dry_run` _bool, optional_ - Skip performing the transform and just log the intended actions
 - `force` _bool, optional_ - Force this job to run over others in case it conflicts
@@ -2608,42 +2647,47 @@ Requests object properties and returns headers. Updates props.
 ### get\_reader
 
 ```python
-def get_reader(archive_config: ArchiveConfig = None,
-               blob_download_config: BlobDownloadConfig = None,
+def get_reader(archive_config: Optional[ArchiveConfig] = None,
+               blob_download_config: Optional[BlobDownloadConfig] = None,
                chunk_size: int = DEFAULT_CHUNK_SIZE,
-               etl_name: str = None,
-               writer: BufferedWriter = None,
+               etl: Optional[ETLConfig] = None,
+               writer: Optional[BufferedWriter] = None,
                latest: bool = False,
-               byte_range: str = None) -> ObjectReader
+               byte_range: Optional[str] = None,
+               direct: bool = False) -> ObjectReader
 ```
 
-Creates and returns an ObjectReader with access to object contents and optionally writes to a provided writer.
+Creates and returns an ObjectReader with access to object contents
+and optionally writes to a provided writer.
 
 **Arguments**:
 
-- `archive_config` _ArchiveConfig, optional_ - Settings for archive extraction
-- `blob_download_config` _BlobDownloadConfig, optional_ - Settings for using blob download
-- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
-- `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
-- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output
-  User is responsible for closing the writer
-- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
-- `byte_range` _str, optional_ - Specify a specific data segment of the object for transfer, including
-  both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+- `archive_config` _Optional[ArchiveConfig]_ - Settings for archive extraction.
+- `blob_download_config` _Optional[BlobDownloadConfig]_ - Settings for using blob download.
+- `chunk_size` _int, optional_ - Chunk size to use while reading from stream.
+- `etl` _Optional[ETLConfig]_ - Settings for ETL-specific operations (name, args).
+- `writer` _Optional[BufferedWriter]_ - User-provided writer for writing content output.
+  The user is responsible for closing the writer.
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket.
+- `byte_range` _Optional[str]_ - Byte range in RFC 7233 format for single-range requests
+  (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
+- `See` - https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
+- `direct` _bool, optional_ - If True, the object content is read directly from the target node,
+  bypassing the proxy.
   
 
 **Returns**:
 
-  An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
-  directly.
+- `ObjectReader` - An iterator for streaming object content.
   
 
 **Raises**:
 
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `ValueError` - If Byte Range is used with Blob Download.
+- `requests.RequestException` - If an error occurs during the request.
+- `requests.ConnectionError` - If there is a connection error.
+- `requests.ConnectionTimeout` - If the connection times out.
+- `requests.ReadTimeout` - If the read operation times out.
 
 <a id="obj.object.Object.get"></a>
 
@@ -2653,7 +2697,7 @@ Creates and returns an ObjectReader with access to object contents and optionall
 def get(archive_config: ArchiveConfig = None,
         blob_download_config: BlobDownloadConfig = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_name: str = None,
+        etl: ETLConfig = None,
         writer: BufferedWriter = None,
         latest: bool = False,
         byte_range: str = None) -> ObjectReader
@@ -2665,29 +2709,31 @@ Creates and returns an ObjectReader with access to object contents and optionall
 
 **Arguments**:
 
-- `archive_config` _ArchiveConfig, optional_ - Settings for archive extraction
-- `blob_download_config` _BlobDownloadConfig, optional_ - Settings for using blob download
-- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
-- `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
-- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output
-  User is responsible for closing the writer
-- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
-- `byte_range` _str, optional_ - Specify a specific data segment of the object for transfer, including
-  both the start and end of the range (e.g. "bytes=0-499" to request the first 500 bytes)
+- `archive_config` _ArchiveConfig, optional_ - Settings for archive extraction.
+- `blob_download_config` _BlobDownloadConfig, optional_ - Settings for using blob download.
+- `chunk_size` _int, optional_ - Chunk size to use while reading from stream.
+- `etl` _ETLConfig, optional_ - Settings for ETL-specific operations (name, meta).
+- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output.
+  The user is responsible for closing the writer.
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket.
+- `byte_range` _str, optional_ - Byte range in RFC 7233 format for single-range requests
+  (e.g., "bytes=0-499", "bytes=500-", "bytes=-500").
+- `See` - https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
   
 
 **Returns**:
 
-  An ObjectReader which can be iterated over to stream chunks of object content or used to read all content
-  directly.
+- `ObjectReader` - An ObjectReader that can be iterated over to stream chunks of object content
+  or used to read all content directly.
   
 
 **Raises**:
 
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `ValueError` - If Byte Range is used with Blob Download.
+- `requests.RequestException` - If an error occurs during the request.
+- `requests.ConnectionError` - If there is a connection error.
+- `requests.ConnectionTimeout` - If the connection times out.
+- `requests.ReadTimeout` - If the read operation times out.
 
 <a id="obj.object.Object.get_semantic_url"></a>
 
@@ -2708,7 +2754,7 @@ Get the semantic URL to the object
 ### get\_url
 
 ```python
-def get_url(archpath: str = "", etl_name: str = None) -> str
+def get_url(archpath: str = "", etl: ETLConfig = None) -> str
 ```
 
 Get the full url to the object including base url and any query parameters
@@ -2717,7 +2763,7 @@ Get the full url to the object including base url and any query parameters
 
 - `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file
   from the archive
-- `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
+- `etl` _ETLConfig, optional_ - Settings for ETL-specific operations (name, meta).
   
 
 **Returns**:
@@ -3020,7 +3066,7 @@ def as_file(buffer_size: Optional[int] = None,
             max_resume: Optional[int] = 5) -> BufferedIOBase
 ```
 
-Create a read-only, non-seekable `ObjectFile` instance for streaming object data in chunks.
+Create a read-only, non-seekable `ObjectFileReader` instance for streaming object data in chunks.
 This file-like object primarily implements the `read()` method to retrieve data sequentially,
 with automatic retry/resumption in case of stream interruptions such as `ChunkedEncodingError`.
 
@@ -3041,26 +3087,6 @@ with automatic retry/resumption in case of stream interruptions such as `Chunked
 
 - `ValueError` - If `max_resume` is invalid (must be a non-negative integer).
 
-<a id="obj.object_reader.ObjectReader.iter_from_position"></a>
-
-### iter\_from\_position
-
-```python
-def iter_from_position(start_position: int = 0) -> Iterator[bytes]
-```
-
-Make a request to get a stream from the provided object starting at a specific byte position
-and yield chunks of the stream content.
-
-**Arguments**:
-
-- `start_position` _int, optional_ - The byte position to start reading from. Defaults to 0.
-  
-
-**Returns**:
-
-- `Iterator[bytes]` - An iterator over each chunk of bytes in the object starting from the specific position.
-
 <a id="obj.object_reader.ObjectReader.__iter__"></a>
 
 ### \_\_iter\_\_
@@ -3075,12 +3101,12 @@ Make a request to get a stream from the provided object and yield chunks of the 
 
 - `Iterator[bytes]` - An iterator over each chunk of bytes in the object.
 
-<a id="obj.obj_file.object_file.ObjectFile"></a>
+<a id="obj.obj_file.object_file.ObjectFileReader"></a>
 
-## Class: ObjectFile
+## Class: ObjectFileReader
 
 ```python
-class ObjectFile(BufferedIOBase)
+class ObjectFileReader(BufferedIOBase)
 ```
 
 A sequential read-only file-like object extending `BufferedIOBase` for reading object data, with support for both
@@ -3097,9 +3123,9 @@ retry attempts are made before an error is raised.
 **Arguments**:
 
 - `content_iterator` _ContentIterator_ - An iterator that can fetch object data from AIS in chunks.
-- `max_resume` _int_ - Maximum number of resumes allowed for an ObjectFile instance.
+- `max_resume` _int_ - Maximum number of resumes allowed for an ObjectFileReader instance.
 
-<a id="obj.obj_file.object_file.ObjectFile.readable"></a>
+<a id="obj.obj_file.object_file.ObjectFileReader.readable"></a>
 
 ### readable
 
@@ -3110,7 +3136,7 @@ def readable() -> bool
 
 Return whether the file is readable.
 
-<a id="obj.obj_file.object_file.ObjectFile.read"></a>
+<a id="obj.obj_file.object_file.ObjectFileReader.read"></a>
 
 ### read
 
@@ -3133,12 +3159,12 @@ Read up to 'size' bytes from the object. If size is -1, read until the end of th
 
 **Raises**:
 
-  ObjectFileStreamError if a connection cannot be made.
-  ObjectFileMaxResumeError if the stream is interrupted more than the allowed maximum.
+- `ObjectFileReaderStreamError` - If a connection cannot be made.
+- `ObjectFileReaderMaxResumeError` - If the stream is interrupted more than the allowed maximum.
 - `ValueError` - I/O operation on a closed file.
 - `Exception` - Any other errors while streaming and reading.
 
-<a id="obj.obj_file.object_file.ObjectFile.close"></a>
+<a id="obj.obj_file.object_file.ObjectFileReader.close"></a>
 
 ### close
 
