@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	tcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -32,6 +33,7 @@ type (
 		Service(name string) (*corev1.Service, error)
 		Node(name string) (*corev1.Node, error)
 		Logs(podName string) ([]byte, error)
+		WatchPodEvents(podName string) (watch.Interface, error)
 		Health(podName string) (string, error)
 		CheckMetricsAvailability() error
 	}
@@ -202,6 +204,13 @@ func (c *defaultClient) Logs(podName string) (b []byte, err error) {
 		err = e
 	}
 	return b, err
+}
+
+func (c *defaultClient) WatchPodEvents(podName string) (watch.Interface, error) {
+	return c.pods().Watch(context.Background(), metav1.ListOptions{
+		FieldSelector: "metadata.name=" + podName,
+		Watch:         true,
+	})
 }
 
 func (c *defaultClient) CheckMetricsAvailability() error {

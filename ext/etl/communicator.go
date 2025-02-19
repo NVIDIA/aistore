@@ -64,6 +64,7 @@ type (
 	baseComm struct {
 		listener meta.Slistener
 		boot     *etlBootstrapper
+		pw       *podWatcher
 	}
 	pushComm struct {
 		baseComm
@@ -97,22 +98,22 @@ var (
 // baseComm //
 //////////////
 
-func newCommunicator(listener meta.Slistener, boot *etlBootstrapper) Communicator {
+func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) Communicator {
 	switch boot.msg.CommTypeX {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
-		pc.listener, pc.boot = listener, boot
+		pc.listener, pc.boot, pc.pw = listener, boot, pw
 		if boot.msg.CommTypeX == HpushStdin { // io://
 			pc.command = boot.originalCommand
 		}
 		return pc
 	case Hpull:
 		rc := &redirectComm{}
-		rc.listener, rc.boot = listener, boot
+		rc.listener, rc.boot, rc.pw = listener, boot, pw
 		return rc
 	case Hrev:
 		rp := &revProxyComm{}
-		rp.listener, rp.boot = listener, boot
+		rp.listener, rp.boot, rp.pw = listener, boot, pw
 
 		transformerURL, err := url.Parse(boot.uri)
 		debug.AssertNoErr(err)
@@ -151,7 +152,12 @@ func (c *baseComm) ObjCount() int64 { return c.boot.xctn.Objs() }
 func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
 func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
-func (c *baseComm) Stop() { c.boot.xctn.Finish() }
+func (c *baseComm) Stop() {
+	c.boot.xctn.Finish()
+	if c.pw != nil {
+		c.pw.stop()
+	}
+}
 
 func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	if err := c.boot.xctn.AbortErr(); err != nil {

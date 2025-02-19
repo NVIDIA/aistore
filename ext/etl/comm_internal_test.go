@@ -137,7 +137,7 @@ var _ = Describe("CommunicatorTest", func() {
 				uri:  transformerServer.URL,
 				xctn: xctn,
 			}
-			comm = newCommunicator(nil, boot)
+			comm = newCommunicator(nil, boot, nil)
 
 			q := url.Values{}
 			q.Add(apc.QparamETLTransformArgs, etlTransformArgs)

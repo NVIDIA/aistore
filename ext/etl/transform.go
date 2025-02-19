@@ -147,18 +147,12 @@ func (e *Aborter) ListenSmapChanged() {
 // (common for both `InitCode` and `InitSpec` flows)
 func InitSpec(msg *InitSpecMsg, etlName string, opts StartOpts) error {
 	config := cmn.GCO.Get()
-	errCtx, podName, svcName, err := start(msg, etlName, opts, config)
+	podName, svcName, err := start(msg, etlName, opts, config)
 	if err == nil {
 		if cmn.Rom.FastV(4, cos.SmoduleETL) {
-			nlog.Infof("started etl[%s], msg %s, pod %s", etlName, msg, podName)
+			nlog.Infof("started etl[%s], msg %s, pod %s, svc %s", etlName, msg, podName, svcName)
 		}
 		return nil
-	}
-	// cleanup
-	s := fmt.Sprintf("failed to start etl[%s], msg %s, err %v - cleaning up..", etlName, msg, err)
-	nlog.Warningln(cmn.NewErrETL(errCtx, s))
-	if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
-		nlog.Errorln(errV)
 	}
 	return err
 }
@@ -241,57 +235,73 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 
 // (does the heavy-lifting)
 // Returns:
-// * errCtx - ETL error context
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (errCtx *cmn.ETLErrCtx,
-	podName, svcName string, err error) {
-	debug.Assert(k8s.NodeName != "") // checked above
+func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (podName, svcName string, err error) {
+	var (
+		comm   Communicator
+		pw     *podWatcher
+		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.IDX}
+		boot   = &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env, msg: *msg}
+	)
 
-	errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.IDX}
-	boot := &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env}
-	boot.msg = *msg
+	debug.Assert(k8s.NodeName != "") // checked above
 
 	// Parse spec template and fill Pod object with necessary fields.
 	if err = boot.createPodSpec(); err != nil {
 		return
 	}
-
+	podName = boot.pod.GetName()
 	boot.createServiceSpec()
 
+	// first of all, start the pod watcher
+	pw = newPodWatcher(podName)
+	if err = pw.start(); err != nil {
+		goto cleanup
+	}
+
 	// 1. Cleanup previously started entities, if any.
-	errCleanup := cleanupEntities(errCtx, boot.pod.Name, boot.svc.Name)
-	debug.AssertNoErr(errCleanup)
+	err = cleanupEntities(errCtx, boot.pod.Name, boot.svc.Name)
+	debug.AssertNoErr(err)
 
 	// 2. Creating service.
 	svcName = boot.svc.GetName()
 	if err = boot.createEntity(k8s.Svc); err != nil {
-		return
+		goto cleanup
 	}
 	// 3. Creating pod.
-	podName = boot.pod.GetName()
 	if err = boot.createEntity(k8s.Pod); err != nil {
-		return
+		goto cleanup
 	}
+	// 4. Waiting for pod's readiness
 	if err = boot.waitPodReady(); err != nil {
-		return
+		goto cleanup
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("pod %q is ready, %+v, %s", podName, msg, boot.errCtx)
 	}
 	if err = boot.setupConnection(); err != nil {
-		return
+		goto cleanup
 	}
 
 	boot.setupXaction(xid)
 
 	// finally, add Communicator to the runtime registry
-	comm := newCommunicator(newAborter(msg.IDX), boot)
+	comm = newCommunicator(newAborter(msg.IDX), boot, pw)
 	if err = reg.add(msg.IDX, comm); err != nil {
-		return
+		goto cleanup
 	}
 	core.T.Sowner().Listeners().Reg(comm)
+	return
+
+cleanup:
+	nlog.Warningln(cmn.NewErrETL(errCtx, fmt.Sprintf("failed to start etl[%s], msg %s, err %v - cleaning up..", xid, msg, err)))
+	if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
+		nlog.Errorln(errV)
+	}
+	pw.stop()
+	err = pw.wrapError(err)
 	return
 }
 

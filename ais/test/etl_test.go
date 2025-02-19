@@ -932,3 +932,57 @@ func TestETLList(t *testing.T) {
 	tassert.Fatalf(t, len(list) == 1, "expected exactly one ETL to be listed, got %d (%+v)", len(list), list)
 	tassert.Fatalf(t, list[0].Name == etlName, "expected ETL[%s], got %q", etlName, list[0].Name)
 }
+
+func TestETLPodFailure(t *testing.T) {
+	var (
+		proxyURL           = tools.RandomProxyURL(t)
+		baseParams         = tools.BaseAPIParams(proxyURL)
+		failureTestTimeout = cos.Duration(time.Second * 10) // Should fail quickly, no need to wait too long
+	)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	t.Run("etl_init_spec_invalid", func(t *testing.T) {
+		var (
+			etlName     = tetl.InvalidYaml
+			expectedErr = "could not find expected ':'"
+		)
+		spec, err := tetl.GetTransformYaml(etlName)
+		tassert.CheckFatal(t, err)
+
+		msg := &etl.InitSpecMsg{
+			InitMsgBase: etl.InitMsgBase{
+				IDX:       etlName,
+				CommTypeX: etl.Hpull,
+				Timeout:   failureTestTimeout,
+			},
+			Spec: spec,
+		}
+		tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName)
+		_, err = api.ETLInit(baseParams, msg)
+		tassert.Fatalf(t, strings.Contains(err.Error(), expectedErr), "expect %s, have %s", expectedErr, err.Error())
+	})
+	t.Run("etl_init_spec_failure", func(t *testing.T) {
+		var etlName = tetl.NonExistImage
+		spec, err := tetl.GetTransformYaml(etlName)
+		tassert.CheckFatal(t, err)
+
+		msg := &etl.InitSpecMsg{
+			InitMsgBase: etl.InitMsgBase{
+				IDX:       etlName,
+				CommTypeX: etl.Hpull,
+				Timeout:   failureTestTimeout,
+			},
+			Spec: spec,
+		}
+		tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName)
+
+		// No need to clean up, as the creation should fail and the pod should terminate on its own.
+		_, err = api.ETLInit(baseParams, msg)
+		// Example error message format:
+		// recent pod status: "container: \"server\", reason: \"ErrImagePull\", message: \"Error response from daemon: pull access denied for aistorage/non-exist-image, repository does not exist or may require 'docker login': denied: requested access to the resource is denied\"
+		tassert.Fatalf(t, strings.Contains(err.Error(), "ErrImagePull") || strings.Contains(err.Error(), "ImagePullBackOff"),
+			"expect ErrImagePull, have %s", err.Error())
+	})
+}

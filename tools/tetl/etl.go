@@ -28,6 +28,8 @@ import (
 )
 
 const (
+	NonExistImage = "non-exist-image"
+	InvalidYaml   = "invalid-yaml"
 	Tar2TF        = "tar2tf"
 	Echo          = "transformer-echo"
 	EchoGolang    = "echo-go"
@@ -48,6 +50,44 @@ const (
 `
 )
 
+const (
+	nonExistImageSpec = `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-exist-image
+  annotations:
+    communication_type: ${COMMUNICATION_TYPE:-"\"hpull://\""}
+    wait_timeout: 5m
+spec:
+  containers:
+    - name: server
+      image: aistorage/non-exist-image:latest
+      imagePullPolicy: IfNotPresent
+      ports:
+        - name: default
+          containerPort: 80
+      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+`
+	invalidYamlSpec = `
+apiVersion: v1
+kind: Pod
+metadata
+  name: invalid-syntax
+spec:
+  containers:
+    - name: server
+      image: aistorage/runtime_python:latest
+      ports
+        - name: default
+          containerPort: 80
+`
+)
+
 var (
 	links = map[string]string{
 		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
@@ -56,6 +96,11 @@ var (
 		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
 		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
 		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/go_echo/pod.yaml",
+	}
+
+	invalidSpecs = map[string]string{
+		NonExistImage: nonExistImageSpec,
+		InvalidYaml:   invalidYamlSpec,
 	}
 
 	client = &http.Client{}
@@ -69,6 +114,9 @@ func validateETLName(name string) error {
 }
 
 func GetTransformYaml(etlName string) ([]byte, error) {
+	if spec, ok := invalidSpecs[etlName]; ok {
+		return []byte(spec), nil
+	}
 	if err := validateETLName(etlName); err != nil {
 		return nil, err
 	}

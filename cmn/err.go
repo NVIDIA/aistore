@@ -759,7 +759,7 @@ func NewErrETLf(ctx *ETLErrCtx, format string, a ...any) *ErrETL {
 }
 
 func (e *ErrETL) Error() string {
-	s := make([]string, 0, 3)
+	s := make([]string, 0, 4)
 	if e.TID != "" {
 		s = append(s, fmt.Sprintf("t[%s]", e.TID))
 	}
