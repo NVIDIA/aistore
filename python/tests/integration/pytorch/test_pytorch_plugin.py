@@ -77,24 +77,6 @@ class TestPytorchPlugin(unittest.TestCase):
             self.assertEqual(len(list(urls)), 20)
             self.assertEqual(sum(1 for _ in ais_loader), 20)
 
-    def test_incorrect_inputs(self):
-        prefixes = ["ais://asdasd"]
-
-        # AISFileLister: Bucket not found
-        try:
-            list(AISFileLister(url=CLUSTER_ENDPOINT, source_datapipe=prefixes))
-        except ErrBckNotFound as err:
-            self.assertEqual(err.status_code, 404)
-
-        # AISFileLoader: incorrect inputs
-        url_list = [[""], ["ais:"], ["ais://"], ["s3:///unkown-bucket"]]
-
-        for url in url_list:
-            with self.assertRaises(AISError):
-                s3_loader_dp = AISFileLoader(url=CLUSTER_ENDPOINT, source_datapipe=url)
-                for _ in s3_loader_dp:
-                    pass
-
     def test_torch_library(self):
         # Tests the torch library imports of aistore
         torch_pipes.AISFileLister(

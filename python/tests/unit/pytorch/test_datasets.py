@@ -18,7 +18,7 @@ from io import BytesIO
 class TestAISDataset(unittest.TestCase):
     def setUp(self) -> None:
         mock_obj = Mock()
-        mock_obj.get.return_value.read_all.return_value = b"mock data"
+        mock_obj.get_reader.return_value.read_all.return_value = b"mock data"
         self.mock_objects = [
             mock_obj,
             mock_obj,
@@ -118,7 +118,7 @@ class TestAISDataset(unittest.TestCase):
         mock_shard.name = "test_shard.tar"
 
         mock_get = Mock()
-        mock_shard.get.return_value = mock_get
+        mock_shard.get_reader.return_value = mock_get
 
         mock_get.read_all.return_value = tar_buffer.getvalue()
 

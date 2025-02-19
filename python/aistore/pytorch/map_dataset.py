@@ -7,6 +7,7 @@ Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 from typing import List, Union, Dict
 
 from aistore.sdk import AISSource
+from aistore.sdk.etl.etl_config import ETLConfig
 from aistore.pytorch.base_map_dataset import AISBaseMapDataset
 
 
@@ -40,7 +41,7 @@ class AISMapDataset(AISBaseMapDataset):
     def __getitem__(self, index: int):
         try:
             obj = self._obj_list[index]
-            content = obj.get_reader(etl_name=self._etl_name).read_all()
+            content = obj.get_reader(etl=ETLConfig(self._etl_name)).read_all()
             return obj.name, content
         except IndexError:
             raise IndexError(

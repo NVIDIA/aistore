@@ -18,7 +18,7 @@ class TestAISSampler(unittest.TestCase):
         mock_obj = Mock(Object)
 
         self.data = b"\0" * 1000  # 1kb
-        mock_obj.get.return_value.read_all.return_value = self.data
+        mock_obj.get_reader.return_value.read_all.return_value = self.data
         mock_obj.props.size = len(self.data)
         mock_obj.name = "test_obj"
 
@@ -104,7 +104,7 @@ class TestAISSampler(unittest.TestCase):
         # add odd one odd one out 6kb object
         mock_obj = Mock(Object)
         large_data = b"\0" * 6000  # 6kb
-        mock_obj.get.return_value.read_all.return_value = large_data
+        mock_obj.get_reader.return_value.read_all.return_value = large_data
         mock_obj.props.size = len(large_data)
         mock_obj.name = "test_obj"
 
