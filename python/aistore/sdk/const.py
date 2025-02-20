@@ -72,7 +72,6 @@ WHAT_ONE_XACT_STATUS = "status"
 WHAT_ALL_XACT_STATUS = "status_all"
 WHAT_ALL_RUNNING_STATUS = "running_all"
 WHAT_QUERY_XACT_STATS = "qryxstats"
-WHAT_NODE_STATS_AND_STATUS_V322 = "status"
 WHAT_NODE_STATS_AND_STATUS = "node_status"
 
 # URL paths
