@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -409,11 +409,6 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.Tracker = daeStats.Tracker
 		ds.Tcdf = daeStats.Tcdf
 		t.writeJSON(w, r, ds, httpdaeWhat)
-	case apc.WhatNodeStatsV322: // [backward compatibility] v3.22 and prior
-		ds := t.statsAndStatusV322()
-		daeStats := t.statsT.GetStatsV322()
-		ds.Tracker = daeStats.Tracker
-		t.writeJSON(w, r, ds, httpdaeWhat)
 	case apc.WhatNodeStatsAndStatus:
 		ds := t.statsAndStatus()
 		ds.RebSnap = _rebSnap()
@@ -421,13 +416,6 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ds.Tracker = daeStats.Tracker
 		ds.Tcdf = daeStats.Tcdf
 		t.fillNsti(&ds.Cluster)
-		t.writeJSON(w, r, ds, httpdaeWhat)
-	case apc.WhatNodeStatsAndStatusV322: // [ditto]
-		ds := t.statsAndStatusV322()
-		ds.RebSnap = _rebSnap()
-		daeStats := t.statsT.GetStatsV322()
-		ds.Tracker = daeStats.Tracker
-		ds.Tcdf = daeStats.Tcdf
 		t.writeJSON(w, r, ds, httpdaeWhat)
 
 	case apc.WhatMountpaths:

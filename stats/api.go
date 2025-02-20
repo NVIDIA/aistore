@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -70,7 +70,6 @@ type (
 		IncBck(name string, bck *cmn.Bck)
 
 		GetStats() *Node
-		GetStatsV322() *NodeV322 // [backward compatibility]
 
 		ResetStats(errorsOnly bool)
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
@@ -114,27 +113,6 @@ type (
 		SmapVersion int64          `json:"smap_version,string"`
 		Reserved3   int64          `json:"reserved3,omitempty"`
 		Reserved4   int64          `json:"reserved4,omitempty"`
-	}
-)
-
-// [backward compatibility]: includes v3.22 cdf* structures
-type (
-	NodeV322 struct {
-		Snode   *meta.Snode      `json:"snode"`
-		Tracker copyTracker      `json:"tracker"`
-		Tcdf    fs.TargetCDFv322 `json:"capacity"`
-	}
-	NodeStatusV322 struct {
-		RebSnap *core.Snap `json:"rebalance_snap,omitempty"`
-		// assorted props
-		Status         string `json:"status"`
-		DeploymentType string `json:"deployment"`
-		Version        string `json:"ais_version"`  // major.minor.build
-		BuildTime      string `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
-		K8sPodName     string `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
-		NodeV322
-		MemCPUInfo  apc.MemCPUInfo `json:"sys_info"`
-		SmapVersion int64          `json:"smap_version,string"`
 	}
 )
 

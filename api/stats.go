@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -89,12 +89,6 @@ func GetDaemonStats(bp BaseParams, node *meta.Snode) (ds *stats.Node, err error)
 func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatus, err error) {
 	ds = &stats.NodeStatus{}
 	err = anyStats(bp, node.ID(), apc.WhatNodeStatsAndStatus, ds)
-	return ds, err
-}
-
-func GetStatsAndStatusV322(bp BaseParams, node *meta.Snode) (ds *stats.NodeStatusV322, err error) {
-	ds = &stats.NodeStatusV322{}
-	err = anyStats(bp, node.ID(), apc.WhatNodeStatsAndStatusV322, ds)
 	return ds, err
 }
 

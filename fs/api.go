@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -55,22 +55,6 @@ type (
 	TcdfExt struct {
 		cos.AllDiskStats
 		Tcdf
-	}
-)
-
-// [backward compatibility]: v3.22 cdf* structures
-type (
-	CDFv322 struct {
-		FS    string   `json:"fs"`
-		Disks []string `json:"disks"`
-		Capacity
-	}
-	TargetCDFv322 struct {
-		Mountpaths map[string]*CDFv322
-		CsErr      string `json:"cs_err"`
-		PctMax     int32  `json:"pct_max"`
-		PctAvg     int32  `json:"pct_avg"`
-		PctMin     int32  `json:"pct_min"`
 	}
 )
 

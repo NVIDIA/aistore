@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -75,7 +75,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.xquery(w, r, what, query)
 	case apc.WhatAllRunningXacts:
 		p.xgetRunning(w, r, what, query)
-	case apc.WhatNodeStats, apc.WhatNodeStatsV322:
+	case apc.WhatNodeStats:
 		p.qcluStats(w, r, what, query)
 	case apc.WhatSysInfo:
 		p.qcluSysinfo(w, r, what, query)

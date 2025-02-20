@@ -230,10 +230,8 @@ const (
 	WhatBackends = "backends"
 
 	// stats and status
-	WhatNodeStatsV322          = "stats"       // [ backward compatibility ]
-	WhatNodeStatsAndStatusV322 = "status"      // [ ditto ]
-	WhatNodeStats              = "node_stats"  // redundant
-	WhatNodeStatsAndStatus     = "node_status" // current
+	WhatNodeStats          = "node_stats"  // redundant
+	WhatNodeStatsAndStatus = "node_status" // current
 
 	WhatDiskRWUtilCap = "disk" // read/write stats, disk utilization, capacity
 

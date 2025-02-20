@@ -256,7 +256,7 @@ $ ais show config CCDpt8088 --json | tail -20
         "port_intra_control": "51082",
         "port_intra_data": "51083"
     },
-    "fspaths": {"/ais/mp1": "","/ais/mp2": "","/ais/mp3":{},"/ais/mp4": ""},
+    "fspaths": {"/ais/mp1": "","/ais/mp2": "","/ais/mp3": "","/ais/mp4": ""},
     "test_fspaths": {
         "root": "/tmp/ais",
         "count": 0,
@@ -339,7 +339,7 @@ Further, `test_fspaths` section (see below) corresponds to a **single local file
 
 ![Configuration: local filesystems](images/ais-config-2-commented.png)
 
-In production, we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
+In production, we use an alternative configuration called `fspaths`: the section of the [config](/deploy/dev/local/aisnode_config.sh) that includes a number of local directories, whereby each directory is based on a _different_ local filesystem solely utilizing one or more _non_ shared disks.
 
 For `fspath` and `mountpath` terminology and details, please see section [Managing Mountpaths](#managing-mountpaths) in this document.
 

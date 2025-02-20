@@ -1,6 +1,6 @@
 // Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -37,6 +37,5 @@ func (*StatsTracker) AddWith(...cos.NamedVal64)                                 
 func (*StatsTracker) RegExtMetric(*meta.Snode, string, string, *stats.Extra)    {}
 func (*StatsTracker) GetMetricNames() cos.StrKVs                                { return nil }
 func (*StatsTracker) GetStats() *stats.Node                                     { return nil }
-func (*StatsTracker) GetStatsV322() *stats.NodeV322                             { return nil }
 func (*StatsTracker) ResetStats(bool)                                           {}
 func (*StatsTracker) PromHandler() http.Handler                                 { return nil }

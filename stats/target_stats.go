@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -518,29 +518,6 @@ func (r *Trunner) GetStats() (ds *Node) {
 	fs.InitCDF(&ds.Tcdf)
 	fs.CapRefresh(cmn.GCO.Get(), &ds.Tcdf)
 	return ds
-}
-
-// [backward compatibility] v3.22 and prior
-func (r *Trunner) GetStatsV322() (out *NodeV322) {
-	ds := r.GetStats()
-
-	out = &NodeV322{}
-	out.Snode = ds.Snode
-	out.Tracker = ds.Tracker
-	out.Tcdf.PctMax = ds.Tcdf.PctMax
-	out.Tcdf.PctAvg = ds.Tcdf.PctAvg
-	out.Tcdf.PctMin = ds.Tcdf.PctMin
-	out.Tcdf.CsErr = ds.Tcdf.CsErr
-	out.Tcdf.Mountpaths = make(map[string]*fs.CDFv322, len(ds.Tcdf.Mountpaths))
-	for mpath := range ds.Tcdf.Mountpaths {
-		cdf := &fs.CDFv322{
-			Capacity: ds.Tcdf.Mountpaths[mpath].Capacity,
-			Disks:    ds.Tcdf.Mountpaths[mpath].Disks,
-			FS:       ds.Tcdf.Mountpaths[mpath].FS.String(),
-		}
-		out.Tcdf.Mountpaths[mpath] = cdf
-	}
-	return out
 }
 
 func (r *Trunner) numIOErrs() (n int64) {

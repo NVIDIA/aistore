@@ -1116,17 +1116,8 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		statsNode := h.statsT.GetStats()
 		statsNode.Snode = h.si
 		body = statsNode
-	case apc.WhatNodeStatsV322:
-		statsNode := h.statsT.GetStatsV322()
-		statsNode.Snode = h.si
-		body = statsNode
 	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()
-	case apc.WhatNodeStatsAndStatusV322:
-		ds := h.statsAndStatusV322()
-		daeStats := h.statsT.GetStatsV322()
-		ds.Tracker = daeStats.Tracker
-		body = ds
 	case apc.WhatCertificate: // (see also: daeLoadX509, cluLoadX509)
 		body = certloader.Props()
 	default:
@@ -1144,24 +1135,6 @@ func (h *htrun) statsAndStatus() (ds *stats.NodeStatus) {
 		},
 		Cluster: cos.NodeStateInfo{
 			Flags: cos.NodeStateFlags(h.statsT.Get(cos.NodeAlerts)),
-		},
-		SmapVersion:    smap.Version,
-		MemCPUInfo:     apc.GetMemCPU(),
-		DeploymentType: deploymentType(),
-		Version:        daemon.version,
-		BuildTime:      daemon.buildTime,
-		K8sPodName:     os.Getenv(env.AisK8sPod),
-		Status:         h._status(smap),
-	}
-	return ds
-}
-
-// [backward compatibility] v3.22 and prior
-func (h *htrun) statsAndStatusV322() (ds *stats.NodeStatusV322) {
-	smap := h.owner.smap.get()
-	ds = &stats.NodeStatusV322{
-		NodeV322: stats.NodeV322{
-			Snode: h.si,
 		},
 		SmapVersion:    smap.Version,
 		MemCPUInfo:     apc.GetMemCPU(),
