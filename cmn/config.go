@@ -80,10 +80,6 @@ type (
 	FSPConf struct {
 		Paths cos.StrKVs `json:"paths,omitempty" list:"readonly"`
 	}
-	// [backward compatibility]: v3.22 and prior
-	FSPConfV322 struct {
-		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
-	}
 
 	TestFSPConf struct {
 		Root     string `json:"root"`
@@ -551,8 +547,6 @@ type (
 		IOErrTime     *cos.Duration `json:"io_err_time,omitempty"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
-	// [backward compatibility] TODO: remove (ref v324)
-	FSHCConfRC3 FSHCConf
 
 	AuthConf struct {
 		Secret  string `json:"secret"`
@@ -737,9 +731,6 @@ var (
 	_ json.Unmarshaler = (*BackendConf)(nil)
 	_ json.Marshaler   = (*FSPConf)(nil)
 	_ json.Unmarshaler = (*FSPConf)(nil)
-
-	// [backward compatibility] TODO: remove (ref v324)
-	_ json.Unmarshaler = (*FSHCConf)(nil)
 )
 
 /////////////////////////////////////////////
@@ -1343,25 +1334,6 @@ const (
 	IOErrsLimit   = 10
 )
 
-// [backward compatibility] TODO: remove (ref v324)
-func (c *FSHCConf) UnmarshalJSON(data []byte) (err error) {
-	rc3 := &FSHCConfRC3{}
-	if err = jsoniter.Unmarshal(data, rc3); err == nil {
-		*c = *(*FSHCConf)(rc3)
-		return nil
-	}
-
-	c.TestFileCount = 4
-	c.HardErrs = 2
-	c.IOErrs = IOErrsLimit
-	c.IOErrTime = cos.Duration(IOErrTimeDflt)
-	c.Enabled = true
-
-	cos.Errorln("Warning: setting fshc to all defaults")
-
-	return nil
-}
-
 func (c *FSHCConf) Validate() error {
 	if c.TestFileCount < 4 {
 		return fmt.Errorf("invalid fshc.test_files %d (expecting >= %d)", c.TestFileCount, 4)
@@ -1370,13 +1342,10 @@ func (c *FSHCConf) Validate() error {
 		return fmt.Errorf("invalid fshc.error_limit %d (expecting >= %d)", c.HardErrs, 2)
 	}
 
-	// [backward compatibility] when both "soft" knobs are missing
 	if c.IOErrs == 0 && c.IOErrTime == 0 {
 		c.IOErrs = IOErrsLimit
 		c.IOErrTime = cos.Duration(IOErrTimeDflt)
 	}
-
-	// [backward compatibility] TODO: remove (ref v324)
 	if c.IOErrs == 0 {
 		c.IOErrs = IOErrsLimit
 	}
@@ -1508,29 +1477,9 @@ func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 // FSPConf //
 /////////////
 
-var AllowSharedDisksAndNoDisks bool // NOTE: deprecated; keeping it strictly for backward compatibility
-
 func (c *FSPConf) UnmarshalJSON(data []byte) error {
-	m := cos.NewStrKVs(10)
-	err := jsoniter.Unmarshal(data, &m)
-	if err == nil {
-		c.Paths = m
-		return nil
-	}
-	// [backward compatibility] try loading from the prev. meta-version
-	var v322 FSPConfV322
-	v322.Paths = make(cos.StrSet, 10)
-	if err = jsoniter.Unmarshal(data, &v322.Paths); err != nil {
-		return err
-	}
-
-	for fspath := range v322.Paths {
-		m[fspath] = ""
-	}
-	c.Paths = m
-
-	cos.Errorln("Warning: load fspaths from V3 (older) config:", c.Paths)
-	return nil
+	c.Paths = cos.NewStrKVs(10)
+	return jsoniter.Unmarshal(data, &c.Paths)
 }
 
 func (c *FSPConf) MarshalJSON() ([]byte, error) {
@@ -1585,15 +1534,6 @@ func IsNestedMpath(a string, la int, b string) (err error) {
 		}
 	}
 	return
-}
-
-/////////////////
-// FSPConfV322 //
-/////////////////
-
-// [backward compatibility]: used to generate fspath config for older ais versions
-func (c *FSPConfV322) MarshalJSON() ([]byte, error) {
-	return cos.MustMarshal(c.Paths), nil
 }
 
 /////////////////

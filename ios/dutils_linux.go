@@ -111,7 +111,7 @@ func fs2disks(mpath, fs string, label cos.MountpathLabel, blockDevs BlockDevices
 	case len(disks) > 0:
 		s := disks._str()
 		nlog.Infoln("["+fs+label.ToLog()+"]:", s)
-	case testingEnv || cmn.AllowSharedDisksAndNoDisks:
+	case testingEnv:
 		// anything goes
 	case label.IsNil():
 		// empty label implies _resolvable_ underlying disk or disks

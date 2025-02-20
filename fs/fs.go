@@ -395,7 +395,7 @@ func (mi *Mountpath) _validate(avail MPI, config *cmn.Config) error {
 	}
 	otherMpath, ok := mfs.fsIDs[mi.FsID]
 	if ok {
-		if config.TestingEnv() || cmn.AllowSharedDisksAndNoDisks {
+		if config.TestingEnv() {
 			return nil
 		}
 		if !mi.Label.IsNil() {

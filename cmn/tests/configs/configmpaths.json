@@ -10,9 +10,9 @@
         "port_intra_data": "10080"
     },
     "fspaths": {
-        "/tmp/ais/1": {},
-        "/tmp/ais/2": {},
-        "/tmp/ais/3": {}
+        "/tmp/ais/1": "",
+        "/tmp/ais/2": "",
+        "/tmp/ais/3": ""
     },
     "test_fspaths": {
         "root":     "/tmp/ais",
