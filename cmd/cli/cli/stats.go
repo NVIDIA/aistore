@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
@@ -232,52 +231,8 @@ func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
 	mu.Unlock()
 }
 
-// NOTE: [backward compatibility] v3.22
 func _status(node *meta.Snode) (ds *stats.NodeStatus, err error) {
-	ds, err = api.GetStatsAndStatus(apiBP, node)
-	if err == nil || !strings.Contains(err.Error(), "what=node_status") {
-		return ds, err
-	}
-	var v *stats.NodeStatusV322
-	if v, err = api.GetStatsAndStatusV322(apiBP, node); err != nil {
-		return nil, err
-	}
-	ds = &stats.NodeStatus{
-		RebSnap:        v.RebSnap,
-		Status:         v.Status,
-		DeploymentType: v.DeploymentType,
-		Version:        v.Version,
-		BuildTime:      v.BuildTime,
-		K8sPodName:     v.K8sPodName,
-		MemCPUInfo:     v.MemCPUInfo,
-		SmapVersion:    v.SmapVersion,
-	}
-	ds.Node.Snode = v.NodeV322.Snode
-	ds.Node.Tracker = v.NodeV322.Tracker
-	ds.Node.Tcdf.PctMax = v.NodeV322.Tcdf.PctMax
-	ds.Node.Tcdf.PctAvg = v.NodeV322.Tcdf.PctAvg
-	ds.Node.Tcdf.PctMin = v.NodeV322.Tcdf.PctMin
-	ds.Node.Tcdf.CsErr = v.NodeV322.Tcdf.CsErr
-	ds.Node.Tcdf.Mountpaths = make(map[string]*fs.CDF, len(v.NodeV322.Tcdf.Mountpaths))
-
-	var used, avail uint64
-	for mpath, cdfv322 := range v.NodeV322.Tcdf.Mountpaths {
-		cdf := &fs.CDF{}
-		cdf.Capacity = cdfv322.Capacity
-		used += cdf.Capacity.Used
-		avail += cdf.Capacity.Avail
-		cdf.Disks = cdfv322.Disks
-		if i := strings.Index(cdfv322.FS, "("); i > 0 {
-			if j := strings.Index(cdfv322.FS, ")"); j > i {
-				cdf.FS.Fs = cdfv322.FS[:i]
-				cdf.FS.FsType = cdfv322.FS[i+1 : j]
-			}
-		}
-		ds.Node.Tcdf.Mountpaths[mpath] = cdf
-	}
-	ds.Node.Tcdf.TotalUsed = used
-	ds.Node.Tcdf.TotalAvail = avail
-	return ds, nil
+	return api.GetStatsAndStatus(apiBP, node)
 }
 
 //
