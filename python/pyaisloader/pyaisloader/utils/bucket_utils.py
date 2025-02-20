@@ -1,4 +1,4 @@
-from requests.exceptions import HTTPError
+from aistore.sdk.errors import AISError
 
 from pyaisloader.utils.print_utils import (
     print_caution,
@@ -12,7 +12,7 @@ def bucket_exists(bucket):
     try:
         bucket.head()
         return True
-    except HTTPError:
+    except AISError:
         return False
 
 
