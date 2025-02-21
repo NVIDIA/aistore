@@ -17,8 +17,6 @@ const (
 	dfltMinBtwn = 10 * time.Millisecond
 	dfltMinIval = time.Second
 	dfltMaxIval = 10 * time.Minute
-	// adaptive
-	dfltRetries = 5
 )
 
 const (
@@ -91,6 +89,7 @@ func (rl *RateLim) TryAcquire() (ok bool) {
 	return ok
 }
 
+// is called under lock
 func (rl *RateLim) acquire() bool {
 	now := mono.NanoTime()
 	elapsed := time.Duration(now - rl.tsb.granted)
@@ -127,7 +126,7 @@ func NewAdaptRateLim(maxTokens, retries int, tokenIval time.Duration) (*AdaptRat
 	}
 	arl := &AdaptRateLim{
 		origTokens: maxTokens,
-		retries:    NonZero(retries, dfltRetries),
+		retries:    retries,
 	}
 	return arl, arl.RateLim.init(arltag, maxTokens, tokenIval)
 }
@@ -191,7 +190,7 @@ func (arl *AdaptRateLim) recompute() {
 			arl.maxTokens = min(arl.maxTokens+delta, float64(arl.origTokens))
 		}
 	case erate > erateHigh:
-		arl.maxTokens = min(arl.maxTokens-delta*4, 1)
+		arl.maxTokens = max(arl.maxTokens-delta*4, 1)
 	case erate > erateMedium:
 		arl.maxTokens = max(arl.maxTokens-delta*2, 1)
 	case erate > erateLow:
@@ -209,4 +208,16 @@ func (arl *AdaptRateLim) recompute() {
 	// reset counters for the next interval, keep previous error count
 	arl.stats.perr, arl.stats.nerr = arl.stats.nerr, 0
 	arl.stats.n = 0
+}
+
+func (arl *AdaptRateLim) Get() (tokens float64, minBtwn time.Duration) {
+	arl.mu.Lock()
+	tokens, minBtwn = arl.maxTokens, arl.minBtwn
+	arl.mu.Unlock()
+	return tokens, minBtwn
+}
+
+func (arl *AdaptRateLim) String() string {
+	return fmt.Sprintf("%s[tokens=(%d,%f),retries=%d,minBtwn=%v]", arltag,
+		arl.origTokens, arl.maxTokens, arl.retries, arl.minBtwn)
 }
