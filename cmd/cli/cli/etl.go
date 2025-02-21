@@ -47,6 +47,9 @@ var (
 		cmdStop: {
 			allRunningJobsFlag,
 		},
+		cmdObject: {
+			etlTransformArgsFlag,
+		},
 		cmdBucket: {
 			etlAllObjsFlag,
 			continueOnErrorFlag,
@@ -127,6 +130,7 @@ var (
 		Usage:        "Transform an object",
 		ArgsUsage:    etlNameArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
+		Flags:        sortFlags(etlSubFlags[cmdObject]),
 		BashComplete: etlIDCompletions,
 	}
 	bckCmdETL = cli.Command{
@@ -485,6 +489,11 @@ func etlObjectHandler(c *cli.Context) error {
 		return errV
 	}
 
+	etlArgs := &api.ETLObjArgs{ETLName: etlName}
+	if transformArgs := parseStrFlag(c, etlTransformArgsFlag); transformArgs != "" {
+		etlArgs.TransformArgs = transformArgs
+	}
+
 	var w io.Writer
 	switch {
 	case outputDest == "-":
@@ -500,6 +509,6 @@ func etlObjectHandler(c *cli.Context) error {
 		defer f.Close()
 	}
 
-	_, err := api.ETLObject(apiBP, &api.ETLObjArgs{ETLName: etlName}, bck, objName, w)
+	_, err := api.ETLObject(apiBP, etlArgs, bck, objName, w)
 	return handleETLHTTPError(err, etlName)
 }

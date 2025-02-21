@@ -1109,6 +1109,11 @@ var (
 		Usage: "Server-side timeout transforming a single object;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
+	etlTransformArgsFlag = cli.StringFlag{
+		Name: "args",
+		Usage: "Additional arguments applying to transform a single object;\n" +
+			indent4 + "\t--args=abc\t- send \"etl_args=abc\" as query parameter in the single object transformation request",
+	}
 	fromFileFlag = cli.StringFlag{
 		Name:     "from-file",
 		Usage:    "Absolute path to the file with the spec/code for ETL",
