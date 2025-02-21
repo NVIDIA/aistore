@@ -1,10 +1,10 @@
 // RUN k8s
-curl https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/hello_world/pod.yaml -o hello_world_init_spec.yaml -s // IGNORE
+curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o hello_world_init_spec.yaml -s // IGNORE
 ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-1 // IGNORE
 ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-2 --arg-type="fqn" // IGNORE
 rm -f hello_world_init_spec.yaml // IGNORE
 
-curl https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/hash_with_args/pod.yaml -o hash_with_args_init_spec.yaml -s // IGNORE
+curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml -o hash_with_args_init_spec.yaml -s // IGNORE
 ais etl init spec --from-file="hash_with_args_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-3 // IGNORE
 rm -f hash_with_args_init_spec.yaml // IGNORE
 

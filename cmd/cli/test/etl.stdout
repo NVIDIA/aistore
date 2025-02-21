@@ -11,7 +11,9 @@ ARGUMENT TYPE: fqn
 Hello World!
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
-4af87d32ee1fb306
-f7314f02fedb1a8b
+COMMUNICATION TYPE:  hpush://
+ARGUMENT TYPE:
+5328b3c272b5aab0
+aecb71fa663c6460
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$

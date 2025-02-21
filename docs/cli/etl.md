@@ -58,10 +58,7 @@ OPTIONS:
    --help, -h  Show help
 ```
 
-Additionally, use `--help` to display any specific command, e.g.:
-
-```console
-```
+Additionally, use `--help` to display any specific command.
 
 ## Init ETL with a specification file
 
@@ -236,6 +233,23 @@ $ ais etl object transformer-md5 ais://shards/shard-0.tar -
 $ ais etl object transformer-md5 ais://shards/shard-0.tar output.txt
 $ cat output.txt
 393c6706efb128fbc442d3f7d084a426
+```
+
+#### Transform object with arguments
+Compute the hash of `shards/shard-0.tar` with argument as seed.
+
+**Note:**
+
+- Arguments are currently supported only in the init spec.
+- The provided argument value is passed as the `etl_args` query parameter in the request.
+- The transformer server is responsible for receiving and processing the argument from the `etl_args` query parameter.
+
+```sh
+# init the `hash-with-args` example transformer
+# see https://github.com/NVIDIA/ais-etl/blob/main/transformers/hash_with_args/pod.yaml
+
+$ ais etl object transformer-hash-with-args ais://shards/shard-0.tar - --args=123
+4af87d32ee1fb306
 ```
 
 ---
