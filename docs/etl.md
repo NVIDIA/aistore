@@ -98,7 +98,7 @@ $ ais put text.txt ais://src
 
 # Step 4: Create a spec file to initialize the ETL process
 # In this example, we are using the MD5 transformer as a sample ETL.
-$ curl -s https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml -o md5_spec.yaml
+$ curl -s https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml -o md5_spec.yaml
 
 # Step 5: Initialize the ETL process
 $ export COMMUNICATION_TYPE="hpull://"

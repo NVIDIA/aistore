@@ -77,7 +77,7 @@ class Etl:
         Args:
             template (str): Kubernetes pod spec template
                 Existing templates can be found at `sdk.etl_templates`
-                For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
+                For more information visit: https://github.com/NVIDIA/ais-etl/tree/main/transformers
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
             timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
         Returns:

@@ -152,4 +152,4 @@ When rebalancing, the cluster remains fully operational and can be used to read 
   - [Leaving](/docs/leave_cluster.md)
 * [Global Rebalance](/docs/rebalance.md)
 * [AuthN](/docs/authn.md)
-* [AIS on Kubernetes deployment: playbooks](https://github.com/NVIDIA/ais-k8s/tree/master/playbooks)
+* [AIS on Kubernetes deployment: playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks)

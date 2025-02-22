@@ -165,7 +165,7 @@ spec:
 
 # Returns the transformed TensorFlow compatible data for the input TAR files. For
 # more information on command options, visit
-# https://github.com/NVIDIA/ais-etl/blob/master/transformers/tar2tf/README.md.
+# https://github.com/NVIDIA/ais-etl/blob/main/transformers/tar2tf/README.md.
 # pylint: disable=unused-variable
 TAR2TF = """
 apiVersion: v1
@@ -193,7 +193,7 @@ spec:
 """
 
 # Returns the compressed/decompressed file. For more information on command options, visit
-# https://github.com/NVIDIA/ais-etl/blob/master/transformers/compress/README.md.
+# https://github.com/NVIDIA/ais-etl/blob/main/transformers/compress/README.md.
 # pylint: disable=unused-variable
 COMPRESS = """
 apiVersion: v1
@@ -218,7 +218,7 @@ spec:
       env:
       # COMPRESS_OPTIONS is a dictionary (JSON string) of additional parameters
       # `mode` and `compression`. For more information on additional parameters, refer to
-      # https://github.com/NVIDIA/ais-etl/blob/master/transformers/compress/README.md.
+      # https://github.com/NVIDIA/ais-etl/blob/main/transformers/compress/README.md.
       - name: COMPRESS_OPTIONS
         value: '{compress_options}'
       readinessProbe:
@@ -275,7 +275,7 @@ spec:
 """
 
 # Returns the FFMPEG decoded content. For more information on command options, visit
-# https://github.com/NVIDIA/ais-etl/blob/master/transformers/ffmpeg/README.md.
+# https://github.com/NVIDIA/ais-etl/blob/main/transformers/ffmpeg/README.md.
 # pylint: disable=unused-variable
 FFMPEG = """
 apiVersion: v1
@@ -315,7 +315,7 @@ spec:
 
 # Returns the transformed images using `Torchvision` pre-processing. For more
 # information on command options, visit
-# https://github.com/NVIDIA/ais-etl/blob/master/transformers/torchvision_preprocess/README.md.
+# https://github.com/NVIDIA/ais-etl/blob/main/transformers/torchvision_preprocess/README.md.
 # pylint: disable=unused-variable
 TORCHVISION_TRANSFORMER = """
 apiVersion: v1
@@ -394,7 +394,7 @@ spec:
 """
 
 # Return the XXHASH of the original response
-# https://github.com/NVIDIA/ais-etl/blob/master/transformers/hash_with_args/README.md
+# https://github.com/NVIDIA/ais-etl/blob/main/transformers/hash_with_args/README.md
 HASH = """
 apiVersion: v1
 kind: Pod

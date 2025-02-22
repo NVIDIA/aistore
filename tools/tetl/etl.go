@@ -90,12 +90,12 @@ spec:
 
 var (
 	links = map[string]string{
-		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml",
-		HashWithArgs:  "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/hash_with_args/pod.yaml",
-		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
-		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/tar2tf/pod.yaml",
-		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/echo/pod.yaml",
-		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/go_echo/pod.yaml",
+		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml",
+		HashWithArgs:  "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml",
+		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
+		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
+		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/echo/pod.yaml",
+		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/go_echo/pod.yaml",
 	}
 
 	invalidSpecs = map[string]string{

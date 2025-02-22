@@ -510,7 +510,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 			// NOTE: have to use one of the predefined etlName which, by coincidence,
 			// corresponds to the test.transformer name and is further used to resolve
 			// the corresponding init-spec yaml, e.g.:
-			// https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml"
+			// https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml"
 			// See also: tetl.validateETLName
 			etlName := test.transformer
 

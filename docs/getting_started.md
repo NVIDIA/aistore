@@ -476,7 +476,7 @@ In the software, _type of the deployment_ is also present in some minimal way. I
 For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/main/docs/README.md) repository.
 The repo contains detailed [Ansible playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks) that cover a variety of use cases and configurations.
 
-Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
+Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
 
 ### Minimal all-in-one-docker Deployment
 

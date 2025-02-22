@@ -113,7 +113,7 @@ def etl():
 
 We will use `python3` (`python:3.10`) *runtime* and install the `torchvision` package to run the `etl` function above. When using the Python SDK `init_code`, it will automatically select the current version of Python (if supported) as the runtime for compatibility with the code passed in. To use a different runtime, check out the `init_spec` option.
 
-> [runtime](https://github.com/NVIDIA/ais-etl/tree/master/runtime) contains a predefined work environment in which the provided code/script will be run. A full list of supported runtimes can be found [here](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#runtimes).
+> [runtime](https://github.com/NVIDIA/ais-etl/tree/main/runtime) contains a predefined work environment in which the provided code/script will be run. A full list of supported runtimes can be found [here](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#runtimes).
 
 
 ```python

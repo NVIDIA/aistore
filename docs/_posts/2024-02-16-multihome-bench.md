@@ -56,9 +56,9 @@ worker1 ansible_host=10.51.248.2 additional_hosts=10.51.248.33
 worker2 ansible_host=10.51.248.3 additional_hosts=10.51.248.34
 ```
 
-By default, K8s pods do not allow multiple IPs. To add this, we'll need to use [Multus CNI](https://github.com/k8snetworkplumbingwg/multus-cni). The `create_network_definition` playbook (provided in the [ais-k8s repo](https://github.com/NVIDIA/ais-k8s/tree/master)) will automatically install the latest version of Multus in the cluster and create a network definition the pods can use.
+By default, K8s pods do not allow multiple IPs. To add this, we'll need to use [Multus CNI](https://github.com/k8snetworkplumbingwg/multus-cni). The `create_network_definition` playbook (provided in the [ais-k8s repo](https://github.com/NVIDIA/ais-k8s/tree/main)) will automatically install the latest version of Multus in the cluster and create a network definition the pods can use.
 
-Once the additional hosts have been added to the hosts file and the network attachment definition has been created, all that is needed is a standard AIS deployment. The AIS [K8s operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator) will take care of connecting each AIS pod to the specified additional hosts through Multus.
+Once the additional hosts have been added to the hosts file and the network attachment definition has been created, all that is needed is a standard AIS deployment. The AIS [K8s operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator) will take care of connecting each AIS pod to the specified additional hosts through Multus.
 
 Below is a simple network diagram of how the AIS pods work with Multus in our cluster. We are using a macvlan bridge to connect the pod to the second interface. This is configured in the network attachment definition created by our `create_network_definition` playbook. AIS can also be configured to use other Multus network attachment definitions. See our [multihome deployment doc](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/ais-deployment/docs/deploy_with_multihome.md) and the Multus [usage guide](https://github.com/k8snetworkplumbingwg/multus-cni/blob/master/docs/how-to-use.md) for details on using this playbook and configuring network attachment definitions. 
 
