@@ -897,6 +897,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 		return http.StatusInternalServerError, _awsErr(awsError, "")
 	}
 
+	code := reqErr.ErrorCode()
 	switch reqErr.(type) {
 	case *types.NoSuchBucket:
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
@@ -904,24 +905,28 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 		e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, reqErr.ErrorCode(), bck.Cname(objName))
 		return http.StatusNotFound, e
 	default:
-		var (
-			rspErr *awshttp.ResponseError
-			code   = reqErr.ErrorCode()
-		)
-		if errors.As(awsError, &rspErr) {
-			// [NOTE] when bucket does not exist, or is not accessible AWS may
-			// return http status 301 ("MovedPermanently") and,
-			// to further confusion, supplies it with ErrorCode() == "PermanentRedirect",
-			// which is supposed to be 308
-			if rspErr.HTTPStatusCode() == http.StatusMovedPermanently {
-				err := cmn.NewErrRemoteBckNotFound(bck)
-				err.Set(" (PermanentRedirect)")
-				return http.StatusNotFound, err
-			}
-
-			return rspErr.HTTPStatusCode(), _awsErr(awsError, code)
+		var rspErr *awshttp.ResponseError
+		if !errors.As(awsError, &rspErr) {
+			return http.StatusBadRequest, _awsErr(awsError, code)
 		}
-		return http.StatusBadRequest, _awsErr(awsError, code)
+		// handle assorted status codes
+		switch status := rspErr.HTTPStatusCode(); status {
+		case http.StatusMovedPermanently:
+			// [BUG] when bucket does not exist or isn't accessible AWS may return
+			// 301 ("MovedPermanently") with code == "PermanentRedirect" which is 308
+			err := cmn.NewErrRemoteBckNotFound(bck)
+			err.Set(" (PermanentRedirect)")
+			return http.StatusNotFound, err
+		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
+			if code == "" {
+				debug.Assert(false, "empty error code in ", awsError.Error()) // (unlikely)
+				code = strconv.Itoa(status)
+			}
+			e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, code, bck.Cname(objName))
+			return status, cmn.NewErrRemoteRetriable(e, status)
+		default:
+			return status, _awsErr(awsError, code)
+		}
 	}
 }
 

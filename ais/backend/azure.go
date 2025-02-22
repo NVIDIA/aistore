@@ -42,15 +42,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-type (
-	azbp struct {
-		t     core.TargetPut
-		creds *azblob.SharedKeyCredential
-		u     string
-		base
-	}
-)
-
 const (
 	azDefaultProto = "https://"
 	azHost         = ".blob.core.windows.net"
@@ -65,6 +56,15 @@ const (
 
 const (
 	azErrPrefix = "azure-error["
+)
+
+type (
+	azbp struct {
+		t     core.TargetPut
+		creds *azblob.SharedKeyCredential
+		u     string
+		base
+	}
 )
 
 // parse azure errors
@@ -172,13 +172,20 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	}
 
-	// azure error is usually a sizeable multi-line text with items including:
-	// request ID, authorization, variery of x-ms-* headers, server and user agent, and more
+	status, err := _azureErr(azureError, stgErr)
+	if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+		return status, cmn.NewErrRemoteRetriable(err, status)
+	}
+	return status, err
+}
 
+// azure error is usually a sizeable multi-line text with items including:
+// request ID, authorization, variery of x-ms-* headers, server and user agent, and more
+func _azureErr(azureError error, stgErr *azcore.ResponseError) (int, error) {
 	var (
-		status      = stgErr.StatusCode
 		code        string
 		description string
+		status      = stgErr.StatusCode
 		lines       = strings.Split(azureError.Error(), "\n")
 	)
 	if resp := stgErr.RawResponse; resp != nil {

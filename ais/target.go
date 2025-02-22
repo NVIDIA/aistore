@@ -914,7 +914,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		freePOI(poi)
 	}
 	if err != nil {
-		t.FSHC(err, lom.Mountpath(), "") // TODO -- FIXME: removed from the place where happened, fqn missing...
+		t.FSHC(err, lom.Mountpath(), "") // TODO: removed from the place where happened, fqn missing...
 		t.writeErr(w, r, err, ecode)
 	}
 }
@@ -1127,9 +1127,13 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		var oa *cmn.ObjAttrs
 		oa, ecode, err = t.HeadCold(lom, r)
 		if err != nil {
-			if ecode != http.StatusNotFound {
+			switch {
+			case ecode == http.StatusTooManyRequests || ecode == http.StatusServiceUnavailable:
+				_, ok := err.(*cmn.ErrRemoteRetriable)
+				debug.Assertf(ok, "expecting err-remote-retriable, got %T", err)
+			case ecode != http.StatusNotFound:
 				err = cmn.NewErrFailedTo(t, "HEAD", lom.Cname(), err)
-			} else if latest {
+			case latest:
 				ecode = http.StatusGone
 			}
 			return

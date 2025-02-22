@@ -338,6 +338,19 @@ func (poi *putOI) finalize() (ecode int, err error) {
 	return 0, nil
 }
 
+// TODO: poor man's retry; rate-limit instead & handle cmn.ErrRemoteRetriable - here and elsewhere
+// - only once; e.g. error message:
+// - googleapi: "Error 503: We encountered an internal error. Please try again."
+func (poi *putOI) _retry503() (ecode int, err error) {
+	time.Sleep(time.Second)
+	ecode, err = poi.putRemote()
+	if err != nil {
+		return ecode, err
+	}
+	nlog.Infoln("PUT [", poi.loghdr(), "] - retried 503 ok")
+	return 0, nil
+}
+
 // poi.workFQN => LOM
 func (poi *putOI) fini() (ecode int, err error) {
 	var (
@@ -348,19 +361,16 @@ func (poi *putOI) fini() (ecode int, err error) {
 	if bck.IsRemote() && poi.owt < cmn.OwtRebalance {
 		ecode, err = poi.putRemote()
 		if err != nil {
-			loghdr := poi.loghdr()
-			nlog.Errorf("PUT (%s): %v(%d)", loghdr, err, ecode)
+			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				loghdr := poi.loghdr()
+				nlog.Errorln("PUT [", loghdr, err, ecode, "]")
+			}
 			if ecode != http.StatusServiceUnavailable {
 				return ecode, err
 			}
-			// retry 503 only once; e.g. error message:
-			// (googleapi: "Error 503: We encountered an internal error. Please try again.")
-			time.Sleep(time.Second)
-			ecode, err = poi.putRemote()
-			if err != nil {
+			if ecode, err = poi._retry503(); err != nil {
 				return ecode, err
 			}
-			nlog.Infof("PUT (%s): retried OK", loghdr)
 		}
 	}
 

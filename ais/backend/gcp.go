@@ -485,17 +485,20 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 		return http.StatusNotFound, err
 	}
 	apiErr, ok := gcpError.(*googleapi.Error)
-	if !ok {
+	switch {
+	case !ok:
 		return http.StatusInternalServerError, err
-	}
-	if apiErr.Code == http.StatusForbidden && strings.Contains(apiErr.Error(), "may not exist") {
+	case apiErr.Code == http.StatusForbidden && strings.Contains(apiErr.Error(), "may not exist"):
 		// HACK: "not found or misspelled" vs  "service not paid for" (the latter less likely)
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln(err)
 		}
 		return http.StatusNotFound, err
+	case apiErr.Code == http.StatusTooManyRequests || apiErr.Code == http.StatusServiceUnavailable:
+		return apiErr.Code, cmn.NewErrRemoteRetriable(err, apiErr.Code)
+	default:
+		return apiErr.Code, err
 	}
-	return apiErr.Code, err
 }
 
 // (compare w/ _awsErr)

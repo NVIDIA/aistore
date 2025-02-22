@@ -242,6 +242,10 @@ type (
 		ranges []string // RFC 7233
 		size   int64    // [0, size)
 	}
+	ErrRemoteRetriable struct {
+		err    error
+		status int
+	}
 	ErrCreateHreq struct {
 		err error // original
 	}
@@ -972,6 +976,16 @@ func (e *ErrRangeNotSatisfiable) Error() string {
 func IsErrRangeNotSatisfiable(err error) bool {
 	_, ok := err.(*ErrRangeNotSatisfiable)
 	return ok
+}
+
+// ErrRemoteRetriable (429, 503)
+
+func NewErrRemoteRetriable(err error, status int) *ErrRemoteRetriable {
+	return &ErrRemoteRetriable{err, status}
+}
+
+func (e *ErrRemoteRetriable) Error() string {
+	return e.err.Error()
 }
 
 // ErrCreateHreq

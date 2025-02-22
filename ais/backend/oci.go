@@ -325,7 +325,7 @@ func (bp *ocibp) pooledLaunchChildRunner(mpChild mpChildIf) {
 
 // as core.Backend --------------------------------------------------------------
 
-func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	var (
 		cloudBck            = bck.RemoteBck()
 		continuationToken   string
@@ -343,7 +343,6 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 			Limit:         &limitAsInt,
 			Fields:        &fields,
 		}
-		resp ocios.ListObjectsResponse
 	)
 
 	if msg.Prefix != "" {
@@ -371,9 +370,8 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 		limitAsInt = int(bp.maxPageSize)
 	} else {
 		if msg.PageSize < maxPageSizeMin {
-			ecode = http.StatusInternalServerError
-			err = fmt.Errorf("msg.PageSize (%d) must be at least maxPageSizeMin (%d)", msg.PageSize, maxPageSizeMin)
-			return
+			return http.StatusInternalServerError,
+				fmt.Errorf("msg.PageSize (%d) must be at least maxPageSizeMin (%d)", msg.PageSize, maxPageSizeMin)
 		}
 		limitAsInt = int(msg.PageSize)
 	}
@@ -392,10 +390,9 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 			req.Start = &continuationToken
 		}
 
-		resp, err = bp.client.ListObjects(context.Background(), req)
+		resp, err := bp.client.ListObjects(context.Background(), req)
 		if err != nil {
-			ecode = ociStatus(resp.RawResponse)
-			return
+			return ociStatus(resp.RawResponse), err
 		}
 
 		// Note that we are trusting OCI to return a list of objects and, if present
@@ -412,7 +409,8 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 			}
 		} else {
 			if (len(resp.Objects) + len(resp.Prefixes)) > limitAsInt {
-				nlog.Warningf("OCI ListBuckets() returned %d objects and %d prefixes (greater than the %d requested)\n", len(resp.Objects), len(resp.Prefixes), limitAsInt)
+				nlog.Warningf("OCI ListBuckets() returned %d objects and %d prefixes (greater than the %d requested)\n",
+					len(resp.Objects), len(resp.Prefixes), limitAsInt)
 				limitAsInt = 0
 			} else {
 				limitAsInt -= len(resp.Objects) + len(resp.Prefixes)
@@ -466,20 +464,20 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (e
 
 	lst.ContinuationToken = continuationToken
 
-	return
+	return 0, nil
 }
 
-func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
+func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
 	req := ocios.ListBucketsRequest{
 		NamespaceName: &bp.namespace,
 		CompartmentId: &bp.compartmentOCID,
 	}
 	resp, err := bp.client.ListBuckets(context.Background(), req)
 	if err != nil {
-		return bcks, ociStatus(resp.RawResponse), err
+		return nil, ociStatus(resp.RawResponse), err
 	}
 
-	bcks = make(cmn.Bcks, len(resp.Items))
+	bcks := make(cmn.Bcks, len(resp.Items))
 	for idx, item := range resp.Items {
 		bcks[idx] = cmn.Bck{
 			Name:     *item.Name,
@@ -536,7 +534,7 @@ func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, e
 	return 0, nil
 }
 
-func (bp *ocibp) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (bp *ocibp) DeleteObj(lom *core.LOM) (int, error) {
 	cloudBck := lom.Bck().RemoteBck()
 	req := ocios.DeleteObjectRequest{
 		NamespaceName: &bp.namespace,
@@ -546,14 +544,12 @@ func (bp *ocibp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 
 	resp, err := bp.client.DeleteObject(context.Background(), req)
 	if err != nil {
-		ecode = ociStatus(resp.RawResponse)
-		return
+		return ociStatus(resp.RawResponse), err
 	}
-
-	return
+	return 0, nil
 }
 
-func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	cloudBck := bck.RemoteBck()
 	req := ocios.HeadBucketRequest{
 		NamespaceName: &bp.namespace,
@@ -562,18 +558,17 @@ func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.St
 
 	resp, err := bp.client.HeadBucket(ctx, req)
 	if err != nil {
-		ecode = ociStatus(resp.RawResponse)
-		return
+		return nil, ociStatus(resp.RawResponse), err
 	}
 
-	bckProps = make(cos.StrKVs, 2)
+	bckProps := make(cos.StrKVs, 2)
 	bckProps[apc.HdrBackendProvider] = apc.OCI
 	bckProps[apc.HdrBucketVerEnabled] = "false" // [TODO] At some point, if needed, add support for bucket versioning
 
-	return
+	return bckProps, 0, nil
 }
 
-func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error) {
+func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	h := cmn.BackendHelpers.OCI
 	cloudBck := lom.Bck().RemoteBck()
 	req := ocios.HeadObjectRequest{
@@ -584,11 +579,10 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (o
 
 	resp, err := bp.client.HeadObject(ctx, req)
 	if err != nil {
-		ecode = ociStatus(resp.RawResponse)
-		return
+		return nil, ociStatus(resp.RawResponse), err
 	}
 
-	objAttrs = &cmn.ObjAttrs{
+	objAttrs := &cmn.ObjAttrs{
 		CustomMD: make(cos.StrKVs, 3),
 		Size:     resp.RawResponse.ContentLength,
 	}
@@ -600,7 +594,7 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (o
 		objAttrs.CustomMD[cmn.MD5ObjMD] = v
 	}
 
-	return
+	return objAttrs, 0, nil
 }
 
 func (bp *ocibp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
@@ -651,5 +645,5 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 
 	res.R = resp.Content
 	res.Size = *resp.ContentLength
-	return
+	return res
 }
