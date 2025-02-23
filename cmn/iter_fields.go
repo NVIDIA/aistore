@@ -228,6 +228,10 @@ func CopyProps(src, dst any, asType string) error {
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
 	}
+	return _copyProps(srcVal, dstVal, asType)
+}
+
+func _copyProps(srcVal, dstVal reflect.Value, asType string) error {
 	for i := range srcVal.NumField() {
 		copyTag, ok := srcVal.Type().Field(i).Tag.Lookup("copy")
 		if ok && copyTag == "skip" {
@@ -239,9 +243,32 @@ func CopyProps(src, dst any, asType string) error {
 			fieldName   = srcVal.Type().Field(i).Name
 			dstValField = dstVal.FieldByName(fieldName)
 		)
+
+		// copy embedded struct recursively
+		if srcValField.Kind() == reflect.Struct {
+			if i >= dstVal.NumField() {
+				err := fmt.Errorf("source and destination structures mismatch [%s, idx %d, src-num %d, dst-num %d]",
+					fieldName, i, srcVal.NumField(), dstVal.NumField())
+				debug.AssertNoErr(err)
+				return err
+			}
+			dstValField = dstVal.Field(i)
+			if !dstValField.IsValid() {
+				err := fmt.Errorf("destination field is invalid [src-name %s, dst-name %s, idx %d]",
+					fieldName, dstVal.Type().Field(i).Name, i)
+				debug.AssertNoErr(err)
+				return err
+			}
+			if err := _copyProps(srcValField, dstValField, asType); err != nil {
+				return err
+			}
+			continue
+		}
+
 		if srcValField.IsNil() {
 			continue
 		}
+
 		t, ok := dstVal.Type().FieldByName(fieldName)
 		debug.Assert(ok, fieldName)
 
