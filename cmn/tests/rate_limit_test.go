@@ -87,14 +87,71 @@ func TestAdaptRateLim(t *testing.T) {
 			}
 			time.Sleep(sleep)
 			if !arl.TryAcquire() {
-				msg := fmt.Sprintf("failed to replenish after %v: %s", sleep, arl.String())
-				if _, minBtwn := arl.Get(); minBtwn <= sleep {
-					t.Error(msg)
-				} else {
-					time.Sleep(minBtwn - sleep)
-					if !arl.TryAcquire() {
-						t.Errorf("failed to replenish after %v: %s", minBtwn, arl.String())
-					}
+				if err := arl.SleepMore(sleep); err != nil {
+					t.Error(err)
+				} else if !arl.TryAcquire() {
+					t.Error("failed to replenish after sleeping for the computed duration")
+				}
+			}
+		})
+	}
+}
+
+func TestBurstRateLim(t *testing.T) {
+	var (
+		tests = []struct {
+			maxTokens int
+			burstSize int
+			tokenIval time.Duration
+		}{
+			{maxTokens: 10, burstSize: 4, tokenIval: time.Second},
+			{maxTokens: 100, burstSize: 30, tokenIval: 3 * time.Second},
+			{maxTokens: 1000, burstSize: 200, tokenIval: 5 * time.Second},
+		}
+	)
+	for _, test := range tests {
+		tname := fmt.Sprintf("tokens_%d:burst_%d:%v", test.maxTokens, test.burstSize, test.tokenIval)
+		t.Run(tname, func(t *testing.T) {
+			brl, err := cos.NewBurstRateLim(test.maxTokens, test.burstSize, test.tokenIval)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			sleep := test.tokenIval / time.Duration(test.maxTokens)
+			// compare with BurstRateLim.recompute()
+			burstSleep := time.Duration(float64(sleep) * (1 - float64(test.burstSize)/float64(test.maxTokens)))
+
+			// 1st burst
+			for i := range test.burstSize {
+				time.Sleep(burstSleep)
+				if !brl.TryAcquire() {
+					t.Errorf("failed to acquire during first burst phase: iter %d, sleep %v", i+1, burstSleep)
+					break
+				}
+			}
+
+			// normal rate
+			for i := range test.maxTokens {
+				randSleep := sleep - time.Duration(rand.Int64N(int64(sleep/3)))
+				time.Sleep(randSleep)
+				if !brl.TryAcquire() {
+					t.Errorf("failed to acquire during normal phase: iter %d, sleep %v", i+1, randSleep)
+					break
+				}
+			}
+
+			// replenish for half interval
+			time.Sleep(test.tokenIval / 2)
+			if !brl.TryAcquire() {
+				t.Errorf("failed to replenish after half token interval %v", test.tokenIval)
+			}
+
+			// 2nd burst
+			for i := range test.burstSize {
+				time.Sleep(burstSleep)
+				if !brl.TryAcquire() {
+					t.Errorf("failed to acquire during first burst phase: iter %d, sleep %v", i+1, burstSleep)
+					break
 				}
 			}
 		})

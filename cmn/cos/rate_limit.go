@@ -10,24 +10,38 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
+// tunables
 const (
 	dfltMinBtwn = 10 * time.Millisecond
 	dfltMinIval = time.Second
 	dfltMaxIval = 10 * time.Minute
 )
 
-const (
-	rltag  = "rate-limiter"
-	arltag = "adaptive-rate-limiter"
-)
-
+// more tunables
 const (
 	erateLow    = 0.1
 	erateMedium = 0.3
 	erateHigh   = 0.5
+
+	erateSample = 3
+)
+
+// names
+const (
+	rltag  = "rate-limiter"
+	arltag = "adaptive-rate-limiter"
+	brltag = "bursty-rate-limiter"
+)
+
+// reason
+const (
+	acquireOK = iota
+	acquireNoTokens
+	acquireTooSoon
 )
 
 type (
@@ -36,7 +50,7 @@ type (
 		maxTokens float64       // max tokens
 		tokenIval float64       // duration in nanoseconds as in: maxTokens per tokenIval
 		minBtwn   time.Duration // min duration since the previous granted; >= 1ms (above)
-		// 'last' timestamps
+		// runtime: "last" timestamps
 		tsb struct {
 			granted int64
 			refill  int64
@@ -47,8 +61,21 @@ type (
 		RateLim
 		origTokens int
 		retries    int
-		stats      struct {
-			nerr, n, perr int
+		// runtime
+		stats struct {
+			// respectively, (errors, granted, prev. errors, prev. granted) counters
+			// TODO: consider adding prev-granted timestamp, to discard previous numbers when they become stale
+			nerr, n, perr, pn int
+		}
+	}
+	BurstRateLim struct {
+		RateLim
+		origTokens int
+		burstSize  int // max allowed burst; cannot exceed maxTokens/2
+		// runtime
+		stats struct {
+			burstLeft int // remaining burst capacity for the current interval
+			n         int // number of granted requests since last reset
 		}
 	}
 )
@@ -82,19 +109,20 @@ func (rl *RateLim) recompute() time.Duration {
 	return max(time.Duration(rl.tokenIval/rl.maxTokens), dfltMinBtwn)
 }
 
-func (rl *RateLim) TryAcquire() (ok bool) {
+func (rl *RateLim) TryAcquire() bool {
+	var reason int
 	rl.mu.Lock()
-	ok = rl.acquire()
+	reason = rl.acquire()
 	rl.mu.Unlock()
-	return ok
+	return reason == acquireOK
 }
 
 // is called under lock
-func (rl *RateLim) acquire() bool {
+func (rl *RateLim) acquire() int {
 	now := mono.NanoTime()
 	elapsed := time.Duration(now - rl.tsb.granted)
 	if elapsed < rl.minBtwn>>1 {
-		return false
+		return acquireTooSoon
 	}
 
 	// replenish
@@ -109,11 +137,11 @@ func (rl *RateLim) acquire() bool {
 	}
 
 	if rl.tokens < 1 {
-		return false
+		return acquireNoTokens
 	}
 	rl.tokens--
 	rl.tsb.granted = now
-	return true
+	return acquireOK
 }
 
 //////////////////
@@ -135,8 +163,8 @@ func (arl *AdaptRateLim) Acquire() error {
 	var sleep time.Duration
 	for i := 0; ; i++ {
 		arl.mu.Lock()
-		ok := arl.acquire()
-		if ok {
+		reason := arl.acquire()
+		if reason == acquireOK {
 			arl.stats.n++
 			if arl.stats.n >= arl.origTokens {
 				arl.recompute()
@@ -156,13 +184,11 @@ func (arl *AdaptRateLim) Acquire() error {
 
 // backoff before retrying 429
 func (arl *AdaptRateLim) OnErr() {
-	var (
-		sleep time.Duration
-		erate float64
-	)
+	var sleep time.Duration
 	arl.mu.Lock()
 	arl.stats.nerr++
-	erate = float64(arl.stats.nerr) / float64(arl.stats.n)
+
+	erate := arl._erate()
 	switch {
 	case erate > erateHigh:
 		sleep = arl.minBtwn << 3
@@ -175,11 +201,18 @@ func (arl *AdaptRateLim) OnErr() {
 	time.Sleep(sleep)
 }
 
-// recompute maxTokens for the next interval, and
-// reset counters
+func (arl *AdaptRateLim) _erate() (erate float64) {
+	if n := arl.stats.pn + arl.stats.n; n >= erateSample {
+		erate = float64(arl.stats.nerr+arl.stats.perr) / float64(n)
+	}
+	return erate
+}
+
+// - recompute maxTokens for the next interval
+// - swap/reset counters
 func (arl *AdaptRateLim) recompute() {
 	var (
-		erate = float64(arl.stats.nerr) / float64(arl.stats.n)
+		erate = arl._erate()
 		delta = max(math.Floor(arl.maxTokens/10), 1)
 	)
 	switch {
@@ -205,19 +238,75 @@ func (arl *AdaptRateLim) recompute() {
 
 	arl.minBtwn = arl.RateLim.recompute()
 
-	// reset counters for the next interval, keep previous error count
+	// swap/reset counters for the next interval
 	arl.stats.perr, arl.stats.nerr = arl.stats.nerr, 0
-	arl.stats.n = 0
+	arl.stats.pn, arl.stats.n = arl.stats.n, 0
 }
 
-func (arl *AdaptRateLim) Get() (tokens float64, minBtwn time.Duration) {
+func (arl *AdaptRateLim) SleepMore(sleep time.Duration) error {
+	var minBtwn time.Duration
 	arl.mu.Lock()
-	tokens, minBtwn = arl.maxTokens, arl.minBtwn
+	minBtwn = arl.minBtwn
 	arl.mu.Unlock()
-	return tokens, minBtwn
+	debug.Assert(minBtwn > 0)
+	if minBtwn <= sleep {
+		return fmt.Errorf("failed to replenish after %v: %s", sleep, arl._str())
+	}
+	time.Sleep(minBtwn - sleep)
+	return nil
 }
 
-func (arl *AdaptRateLim) String() string {
+func (arl *AdaptRateLim) _str() string {
 	return fmt.Sprintf("%s[tokens=(%d,%f),retries=%d,minBtwn=%v]", arltag,
 		arl.origTokens, arl.maxTokens, arl.retries, arl.minBtwn)
+}
+
+//////////////////
+// BurstRateLim //
+//////////////////
+
+func NewBurstRateLim(maxTokens, burstSize int, tokenIval time.Duration) (*BurstRateLim, error) {
+	if burstSize < 0 || burstSize > maxTokens/2 {
+		return nil, fmt.Errorf("%s: invalid burst size %d (cannot exceed %d = maxTokens/2", brltag, burstSize, maxTokens)
+	}
+	brl := &BurstRateLim{
+		origTokens: maxTokens,
+		burstSize:  burstSize,
+	}
+	brl.stats.burstLeft = burstSize
+	return brl, brl.RateLim.init(brltag, maxTokens, tokenIval)
+}
+
+func (brl *BurstRateLim) TryAcquire() bool {
+	brl.mu.Lock()
+	defer brl.mu.Unlock()
+
+	reason := brl.RateLim.acquire()
+	switch reason {
+	case acquireOK:
+	case acquireNoTokens:
+		return false
+	case acquireTooSoon:
+		if brl.stats.burstLeft > 0 {
+			// adjust for burstiness and try again
+			brl.recompute(1 - float64(brl.stats.burstLeft)/brl.maxTokens)
+			reason = brl.RateLim.acquire()
+			if reason != acquireOK {
+				return false
+			}
+			brl.stats.burstLeft--
+		}
+	}
+
+	brl.stats.n++
+	if brl.stats.n >= brl.origTokens {
+		debug.Assert(brl.stats.n >= int(brl.maxTokens)) // same
+		brl.stats.burstLeft = brl.burstSize
+		brl.stats.n = 0
+	}
+	return true
+}
+
+func (brl *BurstRateLim) recompute(factor float64) {
+	brl.minBtwn = time.Duration(float64(brl.minBtwn) * factor)
 }
