@@ -353,6 +353,7 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		})
 	}
 
+	// poor man's throttle; see "rate limit"
 	if j.opts.Throttle {
 		j.num++
 		if fs.IsThrottle(j.num) {

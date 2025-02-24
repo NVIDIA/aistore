@@ -42,7 +42,9 @@ type (
 	XactTCB struct {
 		p      *tcbFactory
 		dm     *bundle.DataMover
-		rxlast atomic.Int64 // finishing
+		arl    *cos.AdaptRateLim // rate limit by destination
+		sleep  time.Duration     // (ditto)
+		rxlast atomic.Int64      // finishing
 		xact.BckJog
 		prune    prune
 		nam, str string
@@ -72,6 +74,8 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *tcbFactory) Start() error {
 	var (
+		smap      = core.T.Sowner().Get()
+		nat       = smap.CountActiveTs()
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	)
@@ -82,14 +86,12 @@ func (p *tcbFactory) Start() error {
 		p.owt = cmn.OwtTransform
 	}
 
-	smap := core.T.Sowner().Get()
-	p.xctn = newTCB(p, slab, config, smap)
+	p.xctn = newTCB(p, slab, config, smap, nat)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}
-	nat := smap.CountActiveTs()
 	p.xctn.refc.Store(int32(nat - 1))
 	p.xctn.wg.Add(1)
 
@@ -155,9 +157,7 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap) (r *XactTCB) {
-	r = &XactTCB{p: p}
-
+func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB) {
 	var (
 		args     = p.args
 		msg      = args.Msg
@@ -166,6 +166,8 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	if p.kind == apc.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
+
+	r = &XactTCB{p: p}
 	mpopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.do,
@@ -173,7 +175,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 		Slab:     slab,
 		Parallel: parallel,
 		DoLoad:   mpather.Load,
-		Throttle: true, // always trottling
+		Throttle: false, // superseded by destination rate-limiting (v3.28)
 	}
 	mpopts.Bck.Copy(args.BckFrom.Bucket())
 
@@ -185,6 +187,22 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 
 		r.nam = r.Base.Name() + ": " + sb.String()
 		r.str = r.Base.String() + "<=" + args.BckFrom.Cname(msg.Prefix)
+	}
+
+	// TODO -- FIXME rate-limit: use cases
+	if args.BckTo.Props != nil {
+		if confarl := args.BckTo.Props.RateLimit.Backend; confarl.Enabled {
+			var (
+				err       error
+				maxTokens = (confarl.MaxTokens + nat/2) / nat // cos.DivRound between targets
+				retries   = cos.NonZero(confarl.NumRetries, 3)
+			)
+			// increase it slightly to compensate for potential intra-cluster imbalance
+			maxTokens = max(maxTokens+maxTokens>>2, 2)
+			r.arl, err = cos.NewAdaptRateLim(maxTokens, retries, confarl.Interval.D())
+			debug.AssertNoErr(err)
+			r.sleep = confarl.Interval.D() / time.Duration(maxTokens)
+		}
 	}
 
 	if msg.Sync {
@@ -274,6 +292,18 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
 	}
+
+	if r.arl != nil {
+		// 5 iterations with exponential backoff
+		for sleep := r.sleep; sleep < r.sleep*10; sleep += sleep >> 1 {
+			if err := r.arl.Acquire(); err == nil {
+				break
+			}
+			time.Sleep(sleep)
+		}
+	}
+
+retry:
 	coiParams := AllocCOI()
 	{
 		coiParams.DP = args.DP
@@ -293,6 +323,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 	}
 	_, err = gcoi.CopyObject(lom, r.dm, coiParams)
 	FreeCOI(coiParams)
+
 	switch {
 	case err == nil:
 		if args.Msg.Sync {
@@ -302,10 +333,14 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 		// do nothing
 	case cos.IsErrOOS(err):
 		r.Abort(err)
+	case r.arl != nil && cmn.IsErrTooManyRequests(err):
+		r.arl.OnErr()
+		goto retry
 	default:
 		r.AddErr(err, 5, cos.SmoduleXs)
 	}
-	return
+
+	return err
 }
 
 // NOTE: strict(est) error handling: abort on any of the errors below

@@ -242,7 +242,7 @@ type (
 		ranges []string // RFC 7233
 		size   int64    // [0, size)
 	}
-	ErrRemoteRetriable struct {
+	ErrTooManyRequests struct {
 		err    error
 		status int
 	}
@@ -978,14 +978,19 @@ func IsErrRangeNotSatisfiable(err error) bool {
 	return ok
 }
 
-// ErrRemoteRetriable (429, 503)
+// ErrTooManyRequests (429, 503)
 
-func NewErrRemoteRetriable(err error, status int) *ErrRemoteRetriable {
-	return &ErrRemoteRetriable{err, status}
+func NewErrTooManyRequests(err error, status int) *ErrTooManyRequests {
+	return &ErrTooManyRequests{err, status}
 }
 
-func (e *ErrRemoteRetriable) Error() string {
+func (e *ErrTooManyRequests) Error() string {
 	return e.err.Error()
+}
+
+func IsErrTooManyRequests(err error) bool {
+	_, ok := err.(*ErrTooManyRequests)
+	return ok
 }
 
 // ErrCreateHreq

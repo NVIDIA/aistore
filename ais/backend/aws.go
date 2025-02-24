@@ -923,7 +923,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 				code = strconv.Itoa(status)
 			}
 			e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, code, bck.Cname(objName))
-			return status, cmn.NewErrRemoteRetriable(e, status)
+			return status, cmn.NewErrTooManyRequests(e, status)
 		default:
 			return status, _awsErr(awsError, code)
 		}

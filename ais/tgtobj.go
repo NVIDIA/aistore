@@ -338,7 +338,7 @@ func (poi *putOI) finalize() (ecode int, err error) {
 	return 0, nil
 }
 
-// TODO: poor man's retry; rate-limit instead & handle cmn.ErrRemoteRetriable - here and elsewhere
+// TODO: poor man's retry; rate-limit instead & handle cmn.ErrTooManyRequests - here and elsewhere
 // - only once; e.g. error message:
 // - googleapi: "Error 503: We encountered an internal error. Please try again."
 func (poi *putOI) _retry503() (ecode int, err error) {

@@ -495,7 +495,7 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 		}
 		return http.StatusNotFound, err
 	case apiErr.Code == http.StatusTooManyRequests || apiErr.Code == http.StatusServiceUnavailable:
-		return apiErr.Code, cmn.NewErrRemoteRetriable(err, apiErr.Code)
+		return apiErr.Code, cmn.NewErrTooManyRequests(err, apiErr.Code)
 	default:
 		return apiErr.Code, err
 	}

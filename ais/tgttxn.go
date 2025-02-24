@@ -521,15 +521,15 @@ func etlDP(msg *apc.TCBMsg) (core.DP, error) {
 func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
-		if err := c.bck.Init(t.owner.bmd); err != nil {
-			return "", err
-		}
 		bckTo, bckFrom := c.bckTo, c.bck
-		if err := bckTo.Validate(); err != nil {
+		if err := bckFrom.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		if err := bckFrom.Validate(); err != nil {
-			return "", err
+		// destination does not have to exist but must have a valid name
+		if err := bckTo.Init(t.owner.bmd); err != nil {
+			if err = bckTo.Validate(); err != nil {
+				return "", err
+			}
 		}
 		cs := fs.Cap()
 		if err := cs.Err(); err != nil {
