@@ -174,6 +174,20 @@ cat > $AIS_CONF_FILE <<EOL
 		"data": "${WRITE_POLICY_DATA:-}",
 		"md": "${WRITE_POLICY_MD:-}"
 	},
+	"rate_limit": {
+		"backend": {
+			"num_retries": 3,
+			"interval":    "1m",
+			"max_tokens":  1000,
+			"enabled":     false
+		},
+		"frontend": {
+			"burst_size":  375,
+			"interval":    "1m",
+			"max_tokens":  1000,
+			"enabled":     false
+		}
+	},
 	"features": "0"
 }
 EOL

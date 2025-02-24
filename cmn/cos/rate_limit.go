@@ -16,9 +16,12 @@ import (
 
 // tunables
 const (
-	dfltMinBtwn = 10 * time.Millisecond
-	dfltMinIval = time.Second
-	dfltMaxIval = 10 * time.Minute
+	dfltRateMinBtwn = 10 * time.Millisecond
+
+	DfltRateMinIval     = time.Second
+	DfltRateMaxIval     = time.Hour
+	DfltRateMaxRetries  = 10
+	DfltRateMaxBurstPct = 50
 )
 
 // more tunables
@@ -90,8 +93,8 @@ func NewRateLim(maxTokens int, tokenIval time.Duration) (*RateLim, error) {
 }
 
 func (rl *RateLim) init(tag string, maxTokens int, tokenIval time.Duration) error {
-	if tokenIval < dfltMinIval || tokenIval > dfltMaxIval {
-		return fmt.Errorf("%s: invalid token interval %v (min=%v, max=%v)", tag, tokenIval, dfltMinIval, dfltMaxIval)
+	if tokenIval < DfltRateMinIval || tokenIval > DfltRateMaxIval {
+		return fmt.Errorf("%s: invalid token interval %v (min=%v, max=%v)", tag, tokenIval, DfltRateMinIval, DfltRateMaxIval)
 	}
 	if maxTokens <= 0 || maxTokens >= math.MaxInt32 {
 		return fmt.Errorf("%s: invalid number of tokens %d per (token) interval", tag, maxTokens)
@@ -106,7 +109,7 @@ func (rl *RateLim) init(tag string, maxTokens int, tokenIval time.Duration) erro
 
 // recompute minBtwn
 func (rl *RateLim) recompute() time.Duration {
-	return max(time.Duration(rl.tokenIval/rl.maxTokens), dfltMinBtwn)
+	return max(time.Duration(rl.tokenIval/rl.maxTokens), dfltRateMinBtwn)
 }
 
 func (rl *RateLim) TryAcquire() bool {
@@ -149,7 +152,7 @@ func (rl *RateLim) acquire() int {
 //////////////////
 
 func NewAdaptRateLim(maxTokens, retries int, tokenIval time.Duration) (*AdaptRateLim, error) {
-	if retries < 0 || retries > 10 {
+	if retries < 0 || retries > DfltRateMaxRetries {
 		return nil, fmt.Errorf("%s: invalid number of retries %d", arltag, retries)
 	}
 	arl := &AdaptRateLim{
@@ -266,8 +269,9 @@ func (arl *AdaptRateLim) _str() string {
 //////////////////
 
 func NewBurstRateLim(maxTokens, burstSize int, tokenIval time.Duration) (*BurstRateLim, error) {
-	if burstSize < 0 || burstSize > maxTokens/2 {
-		return nil, fmt.Errorf("%s: invalid burst size %d (cannot exceed %d = maxTokens/2", brltag, burstSize, maxTokens)
+	if burstSize <= 0 || burstSize > maxTokens*DfltRateMaxBurstPct/100 {
+		return nil, fmt.Errorf("%s: invalid burst size %d (expecting positive integer <= (%d%% of maxTokens %d)",
+			brltag, burstSize, DfltRateMaxBurstPct, maxTokens)
 	}
 	brl := &BurstRateLim{
 		origTokens: maxTokens,

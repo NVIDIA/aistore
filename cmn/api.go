@@ -57,12 +57,13 @@ type (
 		BID         uint64          `json:"bid,string" list:"omit"`         // unique ID
 		Created     int64           `json:"created,string" list:"readonly"` // creation timestamp
 		Versioning  VersionConf     `json:"versioning"`                     // versioning (see "inherit")
+		RateLimit   RateLimitConf   `json:"rate_limit"`                     // adaptive rate limiting (front, back) if enabled
 	}
 
 	ExtraProps struct {
-		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
 		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"` // NOTE: obsolete; rm with meta-version
+		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
 	}
 	ExtraToSet struct { // ref. bpropsFilterExtra
 		AWS  *ExtraPropsAWSToSet  `json:"aws"`
@@ -124,6 +125,7 @@ type (
 		Mirror      *MirrorConfToSet      `json:"mirror,omitempty"`
 		EC          *ECConfToSet          `json:"ec,omitempty"`
 		Access      *apc.AccessAttrs      `json:"access,string,omitempty"`
+		RateLimit   *RateLimitConfToSet   `json:"rate_limit,omitempty"`
 		Features    *feat.Flags           `json:"features,string,omitempty"`
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
 		Extra       *ExtraToSet           `json:"extra,omitempty"`
@@ -136,9 +138,9 @@ type (
 	}
 )
 
-/////////////////
-// Bprops //
-/////////////////
+//
+// bucket props (Bprops)
+//
 
 // By default, created buckets inherit their properties from the cluster (global) configuration.
 // Global configuration, in turn, is protected versioned, checksummed, and replicated across the entire cluster.
@@ -168,6 +170,8 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	if wp.Data.IsImmediate() {
 		wp.Data = apc.WriteImmediate
 	}
+
+	// inherit cluster defaults (w/ override via api.CreateBucket and api.SetBucketProps)
 	return &Bprops{
 		Cksum:       cksum,
 		LRU:         lru,
@@ -176,6 +180,7 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 		Access:      apc.AccessAll,
 		EC:          c.EC,
 		WritePolicy: wp,
+		RateLimit:   c.RateLimit,
 		Features:    c.Features,
 	}
 }

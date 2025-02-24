@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path"
@@ -118,6 +119,7 @@ type (
 		Periodic    PeriodConf      `json:"periodic"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
 		Downloader  DownloaderConf  `json:"downloader"`
+		RateLimit   RateLimitConf   `json:"rate_limit"`
 
 		// standalone enumerated features that can be configured
 		// to flip assorted global defaults (see cmn/feat/feat.go)
@@ -155,6 +157,7 @@ type (
 		TCB         *TCBConfToSet         `json:"tcb,omitempty"`
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToSet       `json:"proxy,omitempty"`
+		RateLimit   *RateLimitConfToSet   `json:"rate_limit"`
 		Features    *feat.Flags           `json:"features,string,omitempty"`
 
 		// LocalConfig
@@ -670,6 +673,56 @@ type (
 	}
 )
 
+// global config that can be used to manage:
+// * adaptive rate limit vis-à-vis Cloud backend
+// * rate limiting (bursty) user workloads on the front
+type (
+	RateLimitConf struct {
+		Backend  Adaptive `json:"backend"`
+		Frontend Bursty   `json:"frontend"`
+	}
+	RateLimitConfToSet struct {
+		Backend  *AdaptiveToSet `json:"backend,omitempty"`
+		Frontend *BurstyToSet   `json:"frontend,omitempty"`
+	}
+	RateLimitBase struct {
+		Interval  cos.Duration `json:"interval"`
+		MaxTokens int          `json:"max_tokens"`
+		Enabled   bool         `json:"enabled"`
+	}
+	RateLimitBaseToSet struct {
+		Interval  *cos.Duration `json:"interval,omitempty"`
+		MaxTokens *int          `json:"max_tokens,omitempty"`
+		Enabled   *bool         `json:"enabled,omitempty"`
+	}
+
+	// Adaptive rate limit (a.k.a. rate shaper):
+	// usage: handle status 429 and 503 from remote backends
+	// - up to max tokens (originally, `MaxTokens`) during one Interval with NumRetries and
+	// - `recompute` between Intervals
+	// - see cmn/cos/rate_limit
+	Adaptive struct {
+		NumRetries int `json:"num_retries"`
+		RateLimitBase
+	}
+	AdaptiveToSet struct {
+		NumRetries *int `json:"num_retries,omitempty"`
+		RateLimitBaseToSet
+	}
+
+	// rate limit that fails 'too-many requests' while permitting a certain level of burstiness
+	// - usage: to restrict the rate of user GET, PUT, and HEAD requests
+	// - see cmn/cos/rate_limit
+	Bursty struct {
+		Size int `json:"burst_size"`
+		RateLimitBase
+	}
+	BurstyToSet struct {
+		Size *int `json:"burst_size,omitempty"`
+		RateLimitBaseToSet
+	}
+)
+
 // assorted named fields that require (cluster | node) restart for changes to make an effect
 // (used by CLI)
 var ConfigRestartRequired = [...]string{"auth.secret", "memsys", "net"}
@@ -733,9 +786,9 @@ var (
 	_ json.Unmarshaler = (*FSPConf)(nil)
 )
 
-/////////////////////////////////////////////
-// Config and its nested (Cluster | Local) //
-/////////////////////////////////////////////
+//
+// Config and its nested (Cluster | Local) -------------------------
+//
 
 // main config validator
 func (c *Config) Validate() error {
@@ -792,6 +845,50 @@ func (c *Config) TestingEnv() bool {
 	return c.LocalConfig.TestingEnv()
 }
 
+/////////////////
+// ConfigToSet //
+/////////////////
+
+// FillFromQuery populates ConfigToSet from URL query values
+func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
+	var anyExists bool
+	for key := range query {
+		if key == apc.ActTransient {
+			continue
+		}
+		anyExists = true
+		name, value := strings.ToLower(key), query.Get(key)
+		if err := UpdateFieldValue(ctu, name, value); err != nil {
+			return err
+		}
+	}
+
+	if !anyExists {
+		return errors.New("no properties to update")
+	}
+	return nil
+}
+
+func (ctu *ConfigToSet) Merge(update *ConfigToSet) {
+	mergeProps(update, ctu)
+}
+
+// FillFromKVS populates `ConfigToSet` from key value pairs of the form `key=value`
+func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
+	const format = "failed to parse `-config_custom` flag (invalid entry: %q)"
+	for _, kv := range kvs {
+		entry := strings.SplitN(kv, "=", 2)
+		if len(entry) != 2 {
+			return fmt.Errorf(format, kv)
+		}
+		name, value := entry[0], entry[1]
+		if err := UpdateFieldValue(ctu, name, value); err != nil {
+			return fmt.Errorf(format, kv)
+		}
+	}
+	return
+}
+
 ///////////////////
 // ClusterConfig //
 ///////////////////
@@ -824,6 +921,10 @@ func (c *LocalConfig) DelPath(mpath string) {
 	debug.Assert(!c.TestingEnv())
 	c.FSP.Paths.Delete(mpath)
 }
+
+//
+// config sections: validation, default settings, helpers ------------------------------
+//
 
 ////////////////
 // PeriodConf //
@@ -1281,7 +1382,7 @@ func KeepaliveRetryDuration(c *Config) time.Duration {
 }
 
 /////////////
-// NetConf //
+// NetConf and NetConf.HTTPConf
 /////////////
 
 func (c *NetConf) Validate() (err error) {
@@ -1330,8 +1431,8 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 //////////////
 
 const (
-	IOErrTimeDflt = 10 * time.Second
-	IOErrsLimit   = 10
+	ioErrTimeDflt = 10 * time.Second
+	ioErrsLimit   = 10
 )
 
 func (c *FSHCConf) Validate() error {
@@ -1343,14 +1444,14 @@ func (c *FSHCConf) Validate() error {
 	}
 
 	if c.IOErrs == 0 && c.IOErrTime == 0 {
-		c.IOErrs = IOErrsLimit
-		c.IOErrTime = cos.Duration(IOErrTimeDflt)
+		c.IOErrs = ioErrsLimit
+		c.IOErrTime = cos.Duration(ioErrTimeDflt)
 	}
 	if c.IOErrs == 0 {
-		c.IOErrs = IOErrsLimit
+		c.IOErrs = ioErrsLimit
 	}
 	if c.IOErrTime == 0 {
-		c.IOErrTime = cos.Duration(IOErrTimeDflt)
+		c.IOErrTime = cos.Duration(ioErrTimeDflt)
 	}
 
 	if c.IOErrs < 10 {
@@ -1773,8 +1874,8 @@ func (c *ResilverConf) String() string {
 	return confDisabled
 }
 
-///////////////////
-// Tracing Conf //
+/////////////////
+// TracingConf //
 /////////////////
 
 const defaultSampleProbability = 1.0
@@ -1784,7 +1885,7 @@ func (c *TracingConf) Validate() error {
 		return nil
 	}
 	if c.ExporterEndpoint == "" {
-		return errors.New("invalid tracing.exporter_endpoint can't be empty when tracing is enabled")
+		return errors.New("tracing.exporter_endpoint can't be empty when tracing enabled")
 	}
 	if c.SamplerProbabilityStr == "" {
 		c.SamplerProbability = defaultSampleProbability
@@ -1798,56 +1899,61 @@ func (c *TracingConf) Validate() error {
 	return nil
 }
 
+// only with `oteltracing` build tag
 func (tac TraceExporterAuthConf) IsEnabled() bool {
 	return tac.TokenFile != "" && tac.TokenHeader != ""
 }
 
-////////////////////
-// ConfigToSet //
-////////////////////
+///////////////////
+// RateLimitConf: adaptive (back) and bursty (front)
+///////////////////
 
-// FillFromQuery populates ConfigToSet from URL query values
-func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
-	var anyExists bool
-	for key := range query {
-		if key == apc.ActTransient {
-			continue
-		}
-		anyExists = true
-		name, value := strings.ToLower(key), query.Get(key)
-		if err := UpdateFieldValue(ctu, name, value); err != nil {
-			return err
-		}
+const (
+	dfltRateIval      = time.Minute
+	dfltRateMaxTokens = 1000
+	dfltRateRetries   = 3
+	dfltRateBurst     = dfltRateMaxTokens>>1 - dfltRateMaxTokens>>3
+)
+
+func (c *RateLimitConf) Validate() error {
+	const tag = "rate limit"
+	{
+		c.Backend.NumRetries = cos.NonZero(c.Backend.NumRetries, dfltRateRetries)
+		c.Backend.Interval = cos.Duration(cos.NonZero(c.Backend.Interval.D(), dfltRateIval))
+		c.Backend.MaxTokens = cos.NonZero(c.Backend.MaxTokens, dfltRateMaxTokens)
+	}
+	{
+		c.Frontend.Size = cos.NonZero(c.Frontend.Size, dfltRateBurst)
+		c.Frontend.Interval = cos.Duration(cos.NonZero(c.Frontend.Interval.D(), dfltRateIval))
+		c.Frontend.MaxTokens = cos.NonZero(c.Frontend.MaxTokens, dfltRateMaxTokens)
 	}
 
-	if !anyExists {
-		return errors.New("no properties to update")
+	if c.Backend.Interval.D() < cos.DfltRateMinIval || c.Backend.Interval.D() > cos.DfltRateMaxIval {
+		return fmt.Errorf("%s: invalid backend.interval %v (min=%v, max=%v)", tag,
+			c.Backend.Interval, cos.DfltRateMinIval, cos.DfltRateMaxIval)
+	}
+	if c.Frontend.Interval.D() < cos.DfltRateMinIval || c.Frontend.Interval.D() > cos.DfltRateMaxIval {
+		return fmt.Errorf("%s: invalid frontend.interval %v (min=%v, max=%v)", tag,
+			c.Frontend.Interval, cos.DfltRateMinIval, cos.DfltRateMaxIval)
+	}
+	if c.Backend.MaxTokens <= 0 || c.Backend.MaxTokens >= math.MaxInt32 {
+		return fmt.Errorf("%s: invalid backend.max_tokens %d", tag, c.Backend.MaxTokens)
+	}
+	if c.Frontend.MaxTokens <= 0 || c.Frontend.MaxTokens >= math.MaxInt32 {
+		return fmt.Errorf("%s: invalid frontend.max_tokens %d", tag, c.Frontend.MaxTokens)
+	}
+	if c.Backend.NumRetries <= 0 || c.Backend.NumRetries > cos.DfltRateMaxRetries {
+		return fmt.Errorf("%s: invalid backend.num_retries %d", tag, c.Backend.NumRetries)
+	}
+	if c.Frontend.Size <= 0 || c.Frontend.Size > c.Frontend.MaxTokens*cos.DfltRateMaxBurstPct/100 {
+		return fmt.Errorf("%s: invalid frontend.burst_size %d (expecting positive integer <= (%d%% of maxTokens %d)",
+			tag, c.Frontend.Size, cos.DfltRateMaxBurstPct, c.Frontend.MaxTokens)
 	}
 	return nil
 }
 
-func (ctu *ConfigToSet) Merge(update *ConfigToSet) {
-	mergeProps(update, ctu)
-}
-
-// FillFromKVS populates `ConfigToSet` from key value pairs of the form `key=value`
-func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
-	const format = "failed to parse `-config_custom` flag (invalid entry: %q)"
-	for _, kv := range kvs {
-		entry := strings.SplitN(kv, "=", 2)
-		if len(entry) != 2 {
-			return fmt.Errorf(format, kv)
-		}
-		name, value := entry[0], entry[1]
-		if err := UpdateFieldValue(ctu, name, value); err != nil {
-			return fmt.Errorf(format, kv)
-		}
-	}
-	return
-}
-
 //
-// misc config utils
+// misc config utilities ---------------------------------------------------------
 //
 
 // checks if the two comma-separated IPv4 address lists contain at least one common IPv4
