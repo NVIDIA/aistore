@@ -14,7 +14,9 @@ func DivCeil(a, b int64) int64 {
 	return d
 }
 
-func DivRound(a, b int64) int64      { return (a + b/2) / b }
+// inlines (rather than generics)
+func DivRound(a, b int) int          { return (a + b/2) / b }
+func DivRoundI64(a, b int64) int64   { return (a + b/2) / b }
 func DivRoundU64(a, b uint64) uint64 { return (a + b/2) / b }
 
 // returns smallest number divisible by `align` that is greater or equal `val`

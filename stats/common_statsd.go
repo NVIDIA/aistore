@@ -139,7 +139,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			out[name] = copyValue{lat}
 
 			// NOTE: if not zero, report StatsD latency (milliseconds) over the last "periodic.stats_time" interval
-			millis := cos.DivRound(lat, int64(time.Millisecond))
+			millis := cos.DivRoundI64(lat, int64(time.Millisecond))
 			if !s.statsdDisabled() && millis > 0 {
 				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stpr, Value: float64(millis)}, s.sgl)
 			}

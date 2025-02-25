@@ -41,6 +41,7 @@ type (
 			mtx sync.RWMutex
 		}
 		args     *xreg.TCObjsArgs
+		rate     *tcrate
 		workCh   chan *cmn.TCOMsg
 		chanFull atomic.Int64
 		streamingX
@@ -92,6 +93,9 @@ func (p *tcoFactory) Start() error {
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
+	smap := core.T.Sowner().Get()
+	r.iniRateLimit(p.args, smap.CountActiveTs())
+
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
 		// unlike apc.ActCopyObjects (where we know the size)
@@ -114,6 +118,21 @@ func (p *tcoFactory) Start() error {
 ////////////////
 // XactTCObjs //
 ////////////////
+
+func (r *XactTCObjs) iniRateLimit(args *xreg.TCObjsArgs, nat int) {
+	var rate tcrate
+	rate.src.brl, rate.src.sleep = args.BckFrom.NewFrontendRateLim(nat)
+	if rate.src.brl != nil {
+		r.rate = &rate
+	}
+	if args.BckTo.Props == nil { // destination may not exist
+		return
+	}
+	rate.dst.arl, rate.dst.sleep = args.BckTo.NewBackendRateLim(nat)
+	if rate.dst.arl != nil {
+		r.rate = &rate
+	}
+}
 
 func (r *XactTCObjs) Name() string {
 	return fmt.Sprintf("%s => %s", r.streamingX.Name(), r.args.BckTo)
@@ -325,39 +344,63 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	var (
 		objNameTo = wi.msg.ToName(lom.ObjName)
 		buf, slab = core.T.PageMM().Alloc()
+		r         = wi.r
 	)
 
+	if r.rate != nil {
+		if r.rate.src.brl != nil {
+			r.rate.src.brl.RetryAcquire(r.rate.src.sleep) //  with exponential backoff
+		}
+		if r.rate.dst.arl != nil {
+			r.rate.dst.arl.RetryAcquire(r.rate.dst.sleep) //  ditto
+		}
+	}
+
+retry:
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
 
 	coiParams := AllocCOI()
 	{
-		coiParams.DP = wi.r.args.DP
-		coiParams.Xact = wi.r
-		coiParams.Config = wi.r.config
-		coiParams.BckTo = wi.r.args.BckTo
+		coiParams.DP = r.args.DP
+		coiParams.Xact = r
+		coiParams.Config = r.config
+		coiParams.BckTo = r.args.BckTo
 		coiParams.ObjnameTo = objNameTo
 		coiParams.Buf = buf
 		coiParams.DryRun = wi.msg.DryRun
 		coiParams.LatestVer = wi.msg.LatestVer
 		coiParams.Sync = wi.msg.Sync
-		coiParams.OWT = wi.r.owt
+		coiParams.OWT = r.owt
 		coiParams.Finalize = false
 		if coiParams.ObjnameTo == "" {
 			coiParams.ObjnameTo = lom.ObjName
 		}
 	}
-	_, err := gcoi.CopyObject(lom, wi.r.p.dm, coiParams)
+	_, err := gcoi.CopyObject(lom, r.p.dm, coiParams)
 	FreeCOI(coiParams)
 	slab.Free(buf)
 
-	if err != nil {
-		if !cos.IsNotExist(err, 0) || lrit.lrp == lrpList {
-			wi.r.AddErr(err, 5, cos.SmoduleXs)
+	switch {
+	case err == nil:
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			nlog.Infoln(wi.r.Name(), lom.Cname(), "=>", wi.r.args.BckTo.Cname(objNameTo))
 		}
-	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name()+":", lom.Cname(), "=>", wi.r.args.BckTo.Cname(objNameTo))
+	case cos.IsNotExist(err, 0):
+		if lrit.lrp == lrpList {
+			r.AddErr(err, 5, cos.SmoduleXs)
+		}
+	case cos.IsErrOOS(err):
+		r.Abort(err)
+	case cmn.IsErrTooManyRequests(err):
+		if r.rate != nil && r.rate.dst.arl != nil {
+			r.rate.dst.arl.OnErr()
+			goto retry
+		}
+		fallthrough
+	default:
+		r.AddErr(err, 5, cos.SmoduleXs)
 	}
 }
 

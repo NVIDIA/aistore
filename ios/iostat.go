@@ -416,8 +416,8 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		statsCache     = ios._get()
 		nowTs          = mono.NanoTime()
 		elapsed        = nowTs - statsCache.timestamp
-		elapsedSeconds = cos.DivRound(elapsed, int64(time.Second))
-		elapsedMillis  = cos.DivRound(elapsed, int64(time.Millisecond))
+		elapsedSeconds = cos.DivRoundI64(elapsed, int64(time.Second))
+		elapsedMillis  = cos.DivRoundI64(elapsed, int64(time.Millisecond))
 	)
 
 	ncache.timestamp = nowTs
@@ -465,7 +465,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 			if ioMs >= elapsedMillis {
 				ncache.util[disk] = 100
 			} else {
-				ncache.util[disk] = cos.DivRound(ioMs*100, elapsedMillis)
+				ncache.util[disk] = cos.DivRoundI64(ioMs*100, elapsedMillis)
 			}
 		} else {
 			ncache.util[disk] = statsCache.util[disk]
@@ -474,8 +474,8 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 			ncache.mpathUtil[mpath] += ncache.util[disk]
 		}
 		if elapsedSeconds > 0 {
-			ncache.rbps[disk] = cos.DivRound(readBytes, elapsedSeconds)
-			ncache.wbps[disk] = cos.DivRound(writeBytes, elapsedSeconds)
+			ncache.rbps[disk] = cos.DivRoundI64(readBytes, elapsedSeconds)
+			ncache.wbps[disk] = cos.DivRoundI64(writeBytes, elapsedSeconds)
 		} else {
 			ncache.rbps[disk] = statsCache.rbps[disk]
 			ncache.wbps[disk] = statsCache.wbps[disk]
@@ -483,7 +483,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		// averages
 		switch {
 		case reads > 0:
-			ncache.ravg[disk] = cos.DivRound(readBytes, reads)
+			ncache.ravg[disk] = cos.DivRoundI64(readBytes, reads)
 		case elapsedSeconds == 0:
 			ncache.ravg[disk] = statsCache.ravg[disk]
 		default:
@@ -491,7 +491,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		}
 		switch {
 		case writes > 0:
-			ncache.wavg[disk] = cos.DivRound(writeBytes, writes)
+			ncache.wavg[disk] = cos.DivRoundI64(writeBytes, writes)
 		case elapsedSeconds == 0:
 			ncache.wavg[disk] = statsCache.wavg[disk]
 		default:
@@ -521,7 +521,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 			debug.Assert(ncache.mpathUtil[mpath] == 0)
 			continue
 		}
-		u := cos.DivRound(ncache.mpathUtil[mpath], num)
+		u := cos.DivRoundI64(ncache.mpathUtil[mpath], num)
 		ncache.mpathUtil[mpath] = u
 		ncache.mpathUtilRO.Set(mpath, u)
 		maxUtil = max(maxUtil, u)

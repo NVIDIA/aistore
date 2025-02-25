@@ -39,7 +39,7 @@ type (
 		args  *xreg.TCBArgs
 		owt   cmn.OWT
 	}
-	rate struct {
+	tcrate struct {
 		src struct {
 			brl   *cos.BurstRateLim
 			sleep time.Duration
@@ -52,7 +52,7 @@ type (
 	XactTCB struct {
 		p      *tcbFactory
 		dm     *bundle.DataMover
-		rate   *rate
+		rate   *tcrate
 		rxlast atomic.Int64 // finishing
 		xact.BckJog
 		prune    prune
@@ -216,35 +216,17 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 }
 
 func (r *XactTCB) iniRateLimit(args *xreg.TCBArgs, nat int) {
-	var err error
-	if conf := args.BckFrom.Props.RateLimit.Frontend; conf.Enabled {
-		r.rate = &rate{}
-		maxTokens := (conf.MaxTokens + nat/2) / nat // cos.DivRound between targets
-		r.rate.src.brl, err = cos.NewBurstRateLim(maxTokens, conf.Size, conf.Interval.D())
-		if err != nil {
-			nlog.Errorln(err)
-			debug.AssertNoErr(err)
-		}
-		r.rate.src.sleep = conf.Interval.D() / time.Duration(maxTokens)
+	var rate tcrate
+	rate.src.brl, rate.src.sleep = args.BckFrom.NewFrontendRateLim(nat)
+	if rate.src.brl != nil {
+		r.rate = &rate
 	}
-	if args.BckTo.Props == nil {
+	if args.BckTo.Props == nil { // destination may not exist
 		return
 	}
-	if conf := args.BckTo.Props.RateLimit.Backend; conf.Enabled {
-		var (
-			maxTokens = (conf.MaxTokens + nat/2) / nat // ditto
-			retries   = cos.NonZero(conf.NumRetries, 3)
-		)
-		if r.rate == nil {
-			r.rate = &rate{}
-		}
-		maxTokens = max(maxTokens+maxTokens>>2, 2) // to compensate for potential intra-cluster imbalance
-		r.rate.dst.arl, err = cos.NewAdaptRateLim(maxTokens, retries, conf.Interval.D())
-		if err != nil {
-			nlog.Errorln(err)
-			debug.AssertNoErr(err)
-		}
-		r.rate.dst.sleep = conf.Interval.D() / time.Duration(maxTokens)
+	rate.dst.arl, rate.dst.sleep = args.BckTo.NewBackendRateLim(nat)
+	if rate.dst.arl != nil {
+		r.rate = &rate
 	}
 }
 
@@ -323,10 +305,10 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 
 	if r.rate != nil {
 		if r.rate.src.brl != nil {
-			r.rate.src.brl.RetryAcquire(r.rate.src.sleep) //  with exponential backoff
+			r.rate.src.brl.RetryAcquire(r.rate.src.sleep) // with exponential backoff
 		}
 		if r.rate.dst.arl != nil {
-			r.rate.dst.arl.RetryAcquire(r.rate.dst.sleep) //  with exponential backoff
+			r.rate.dst.arl.RetryAcquire(r.rate.dst.sleep) // ditto
 		}
 	}
 

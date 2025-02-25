@@ -10,10 +10,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type Bck cmn.Bck
@@ -268,4 +271,47 @@ func (b *Bck) MaxPageSize() int64 {
 	default:
 		return 1000
 	}
+}
+
+//
+// rate limits: frontend, backend with respect to `nat` (number active targets)
+//
+
+func (b *Bck) NewFrontendRateLim(nat int) (*cos.BurstRateLim, time.Duration) {
+	conf := b.Props.RateLimit.Frontend
+	if !conf.Enabled {
+		return nil, 0
+	}
+	maxTokens := cos.DivRound(conf.MaxTokens, nat)
+	brl, err := cos.NewBurstRateLim(maxTokens, conf.Size, conf.Interval.D())
+	if err != nil {
+		nlog.ErrorDepth(1, err)
+		debug.AssertNoErr(err)
+	}
+	return brl, divRound(conf.Interval.D(), maxTokens)
+}
+
+func divRound(ival time.Duration, maxTokens int) time.Duration {
+	a, b := int64(ival), int64(maxTokens)
+	return time.Duration((a + b/2) / b)
+}
+
+func (b *Bck) NewBackendRateLim(nat int) (*cos.AdaptRateLim, time.Duration) {
+	conf := b.Props.RateLimit.Backend
+	if !conf.Enabled {
+		return nil, 0
+	}
+	if b.IsCloud() && conf.NumRetries < 3 {
+		nlog.Warningf("%s: backend.num_retries set to %d is, which is dangerously low", b.Cname(""), conf.NumRetries)
+	}
+	// slightly increase, to compensate for potential intra-cluster imbalance
+	maxTokens := cos.DivRound(conf.MaxTokens, nat)
+	maxTokens = max(maxTokens+maxTokens>>2, 2) // slightly increase, to compensate for potential intra-cluster imbalance
+
+	arl, err := cos.NewAdaptRateLim(maxTokens, conf.NumRetries, conf.Interval.D())
+	if err != nil {
+		nlog.Errorln(err)
+		debug.AssertNoErr(err)
+	}
+	return arl, divRound(conf.Interval.D(), maxTokens)
 }
