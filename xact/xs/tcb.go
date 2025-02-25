@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -39,12 +39,21 @@ type (
 		args  *xreg.TCBArgs
 		owt   cmn.OWT
 	}
+	rate struct {
+		src struct {
+			brl   *cos.BurstRateLim
+			sleep time.Duration
+		}
+		dst struct {
+			arl   *cos.AdaptRateLim
+			sleep time.Duration
+		}
+	}
 	XactTCB struct {
 		p      *tcbFactory
 		dm     *bundle.DataMover
-		arl    *cos.AdaptRateLim // rate limit by destination
-		sleep  time.Duration     // (ditto)
-		rxlast atomic.Int64      // finishing
+		rate   *rate
+		rxlast atomic.Int64 // finishing
 		xact.BckJog
 		prune    prune
 		nam, str string
@@ -189,21 +198,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 		r.str = r.Base.String() + "<=" + args.BckFrom.Cname(msg.Prefix)
 	}
 
-	// TODO -- FIXME rate-limit: use cases
-	if args.BckTo.Props != nil {
-		if confarl := args.BckTo.Props.RateLimit.Backend; confarl.Enabled {
-			var (
-				err       error
-				maxTokens = (confarl.MaxTokens + nat/2) / nat // cos.DivRound between targets
-				retries   = cos.NonZero(confarl.NumRetries, 3)
-			)
-			// increase it slightly to compensate for potential intra-cluster imbalance
-			maxTokens = max(maxTokens+maxTokens>>2, 2)
-			r.arl, err = cos.NewAdaptRateLim(maxTokens, retries, confarl.Interval.D())
-			debug.AssertNoErr(err)
-			r.sleep = confarl.Interval.D() / time.Duration(maxTokens)
-		}
-	}
+	r.iniRateLimit(args, nat)
 
 	if msg.Sync {
 		debug.Assert(msg.Prepend == "", msg.Prepend) // validated (cli, P)
@@ -218,6 +213,39 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	}
 
 	return r
+}
+
+func (r *XactTCB) iniRateLimit(args *xreg.TCBArgs, nat int) {
+	var err error
+	if conf := args.BckFrom.Props.RateLimit.Frontend; conf.Enabled {
+		r.rate = &rate{}
+		maxTokens := (conf.MaxTokens + nat/2) / nat // cos.DivRound between targets
+		r.rate.src.brl, err = cos.NewBurstRateLim(maxTokens, conf.Size, conf.Interval.D())
+		if err != nil {
+			nlog.Errorln(err)
+			debug.AssertNoErr(err)
+		}
+		r.rate.src.sleep = conf.Interval.D() / time.Duration(maxTokens)
+	}
+	if args.BckTo.Props == nil {
+		return
+	}
+	if conf := args.BckTo.Props.RateLimit.Backend; conf.Enabled {
+		var (
+			maxTokens = (conf.MaxTokens + nat/2) / nat // ditto
+			retries   = cos.NonZero(conf.NumRetries, 3)
+		)
+		if r.rate == nil {
+			r.rate = &rate{}
+		}
+		maxTokens = max(maxTokens+maxTokens>>2, 2) // to compensate for potential intra-cluster imbalance
+		r.rate.dst.arl, err = cos.NewAdaptRateLim(maxTokens, retries, conf.Interval.D())
+		if err != nil {
+			nlog.Errorln(err)
+			debug.AssertNoErr(err)
+		}
+		r.rate.dst.sleep = conf.Interval.D() / time.Duration(maxTokens)
+	}
 }
 
 func (r *XactTCB) WaitRunning() { r.wg.Wait() }
@@ -293,13 +321,12 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
 	}
 
-	if r.arl != nil {
-		// 5 iterations with exponential backoff
-		for sleep := r.sleep; sleep < r.sleep*10; sleep += sleep >> 1 {
-			if err := r.arl.Acquire(); err == nil {
-				break
-			}
-			time.Sleep(sleep)
+	if r.rate != nil {
+		if r.rate.src.brl != nil {
+			r.rate.src.brl.RetryAcquire(r.rate.src.sleep) //  with exponential backoff
+		}
+		if r.rate.dst.arl != nil {
+			r.rate.dst.arl.RetryAcquire(r.rate.dst.sleep) //  with exponential backoff
 		}
 	}
 
@@ -333,9 +360,12 @@ retry:
 		// do nothing
 	case cos.IsErrOOS(err):
 		r.Abort(err)
-	case r.arl != nil && cmn.IsErrTooManyRequests(err):
-		r.arl.OnErr()
-		goto retry
+	case cmn.IsErrTooManyRequests(err):
+		if r.rate != nil && r.rate.dst.arl != nil {
+			r.rate.dst.arl.OnErr()
+			goto retry
+		}
+		fallthrough
 	default:
 		r.AddErr(err, 5, cos.SmoduleXs)
 	}

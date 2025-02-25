@@ -18,8 +18,11 @@ import (
 const (
 	dfltRateMinBtwn = 10 * time.Millisecond
 
-	DfltRateMinIval     = time.Second
-	DfltRateMaxIval     = time.Hour
+	DfltRateMinIval = time.Second
+	DfltRateMaxIval = time.Hour
+
+	dfltRateMaxWait = time.Minute
+
 	DfltRateMaxRetries  = 10
 	DfltRateMaxBurstPct = 50
 )
@@ -60,6 +63,7 @@ type (
 		}
 		mu sync.Mutex
 	}
+	// usage: adapt to the rate limit from s3, gcp, et al. ("rate shaper")
 	AdaptRateLim struct {
 		RateLim
 		origTokens int
@@ -67,10 +71,11 @@ type (
 		// runtime
 		stats struct {
 			// respectively, (errors, granted, prev. errors, prev. granted) counters
-			// TODO: consider adding prev-granted timestamp, to discard previous numbers when they become stale
+			// TODO: consider prev-granted timestamp, to discard previous numbers when they become stale
 			nerr, n, perr, pn int
 		}
 	}
+	// usage: rate limit user GET, PUT, and DELETE requests
 	BurstRateLim struct {
 		RateLim
 		origTokens int
@@ -185,7 +190,7 @@ func (arl *AdaptRateLim) Acquire() error {
 	}
 }
 
-// backoff before retrying 429
+// backoff before retrying (429, 503)
 func (arl *AdaptRateLim) OnErr() {
 	var sleep time.Duration
 	arl.mu.Lock()
@@ -259,6 +264,15 @@ func (arl *AdaptRateLim) SleepMore(sleep time.Duration) error {
 	return nil
 }
 
+func (arl *AdaptRateLim) RetryAcquire(sleep time.Duration) {
+	for ; sleep < dfltRateMaxWait; sleep += sleep >> 1 {
+		if arl.Acquire() == nil {
+			return
+		}
+		time.Sleep(sleep)
+	}
+}
+
 func (arl *AdaptRateLim) _str() string {
 	return fmt.Sprintf("%s[tokens=(%d,%f),retries=%d,minBtwn=%v]", arltag,
 		arl.origTokens, arl.maxTokens, arl.retries, arl.minBtwn)
@@ -313,4 +327,14 @@ func (brl *BurstRateLim) TryAcquire() bool {
 
 func (brl *BurstRateLim) recompute(factor float64) {
 	brl.minBtwn = time.Duration(float64(brl.minBtwn) * factor)
+}
+
+// with exponential backoff
+func (brl *BurstRateLim) RetryAcquire(sleep time.Duration) {
+	for ; sleep < dfltRateMaxWait; sleep += sleep >> 1 {
+		if brl.TryAcquire() {
+			return
+		}
+		time.Sleep(sleep)
+	}
 }

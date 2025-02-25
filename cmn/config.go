@@ -711,7 +711,7 @@ type (
 	}
 
 	// rate limit that fails 'too-many requests' while permitting a certain level of burstiness
-	// - usage: to restrict the rate of user GET, PUT, and HEAD requests
+	// - usage: to restrict the rate of user GET, PUT, and DELETE requests
 	// - see cmn/cos/rate_limit
 	Bursty struct {
 		Size int `json:"burst_size"`
