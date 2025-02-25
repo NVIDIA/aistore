@@ -275,7 +275,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		goto cleanup
 	}
 	// 4. Waiting for pod's readiness
-	if err = boot.waitPodReady(); err != nil {
+	if err = boot.waitPodReady(pw.podCtx); err != nil {
 		goto cleanup
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {

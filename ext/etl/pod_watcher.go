@@ -5,6 +5,7 @@
 package etl
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -21,11 +22,13 @@ type (
 	podWatcher struct {
 		podName         string
 		recentPodStatus *podStatus
-		eventCh         <-chan watch.Event
+		watcher         watch.Interface
 
 		// sync
-		stopCh *cos.StopCh
-		wg     sync.WaitGroup
+		podCtx           context.Context
+		podCtxCancelFunc context.CancelFunc
+		stopCh           *cos.StopCh
+		wg               sync.WaitGroup
 	}
 
 	podStatus struct {
@@ -41,31 +44,47 @@ func newPodWatcher(podName string) (pw *podWatcher) {
 		stopCh:  cos.NewStopCh(),
 	}
 	pw.stopCh.Init()
+	pw.podCtx, pw.podCtxCancelFunc = context.WithCancel(context.Background())
 	return pw
 }
 
 func (pw *podWatcher) processEvents() {
+	defer pw.podCtxCancelFunc()
+
 	for {
 		select {
-		case event := <-pw.eventCh:
+		case event := <-pw.watcher.ResultChan():
 			pod, ok := event.Object.(*corev1.Pod)
 			if !ok {
 				continue
 			}
 
-			// For now, only watch modified status
-			if event.Type != watch.Modified {
-				continue
+			// Init container state changes:
+			// - watch only one problematic state: `pip install` command in init container terminates with non-zero exit code
+			for i := range pod.Status.InitContainerStatuses {
+				ics := &pod.Status.InitContainerStatuses[i]
+				if ics.State.Terminated != nil && ics.State.Terminated.ExitCode != 0 {
+					pw.recentPodStatus = &podStatus{cname: ics.Name, reason: ics.State.Terminated.Reason, message: ics.State.Terminated.Message}
+					return
+				}
 			}
 
-			// TODO: handle states diffrerntly based severity and source
+			// Main container state changes:
+			// - Waiting & Running: Record state changes with detailed reason in pod watcher and continue to watch
+			// - Terminated with non-zero exit code: Terminates the pod watcher goroutine, cancel context to cleans up, and reports the error immediately
 			for i := range pod.Status.ContainerStatuses {
 				cs := &pod.Status.ContainerStatuses[i]
-				if cs.State.Waiting != nil {
+
+				switch {
+				case cs.State.Waiting != nil:
 					pw.recentPodStatus = &podStatus{cname: cs.Name, reason: cs.State.Waiting.Reason, message: cs.State.Waiting.Message}
-				}
-				if cs.State.Terminated != nil {
+				case cs.State.Running != nil:
+					pw.recentPodStatus = &podStatus{cname: cs.Name, reason: "Running", message: cs.State.Running.String()}
+				case cs.State.Terminated != nil:
 					pw.recentPodStatus = &podStatus{cname: cs.Name, reason: cs.State.Terminated.Reason, message: cs.State.Terminated.Message}
+					if cs.State.Terminated.ExitCode != 0 {
+						return
+					}
 				}
 			}
 
@@ -86,12 +105,10 @@ func (pw *podWatcher) start() error {
 		return err
 	}
 
-	watcher, err := client.WatchPodEvents(pw.podName)
+	pw.watcher, err = client.WatchPodEvents(pw.podName)
 	if err != nil {
 		return err
 	}
-
-	pw.eventCh = watcher.ResultChan()
 
 	pw.wg.Add(1)
 	go func() {
@@ -102,8 +119,15 @@ func (pw *podWatcher) start() error {
 	return nil
 }
 
+// stop must always be called, even if the pod watcher is not yet started or failed to start.
 func (pw *podWatcher) stop() {
 	pw.stopCh.Close()
+
+	// must stop and drain the watch channel before exiting
+	pw.watcher.Stop()
+	for range pw.watcher.ResultChan() {
+	}
+
 	pw.wg.Wait()
 }
 

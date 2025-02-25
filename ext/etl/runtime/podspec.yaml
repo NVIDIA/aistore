@@ -11,6 +11,9 @@ spec:
         - name: default
           containerPort: 80
       command: <COMMAND>
+      # Reference: https://kubernetes.io/docs/tasks/debug/debug-application/determine-reason-pod-failure/#customizing-the-termination-message
+      # TODO: The ETL pod error log captured using this method may be truncated. Consider storing the full log in a persistent location for users to inspect.
+      terminationMessagePolicy: FallbackToLogsOnError
       env:
         - name: MOD_NAME
           value: code
@@ -38,7 +41,7 @@ spec:
   initContainers:
     - name: server-deps
       image: aistorage/runtime_python:<TAG>
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       command:
         - 'sh'
         - '-c'
@@ -46,6 +49,7 @@ spec:
           echo "${AISTORE_CODE}" > /dst/code.py
           echo "${AISTORE_DEPS}" > /dst/requirements.txt
           pip install --target="/runtime" -r /dst/requirements.txt
+      terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
         - name: code
           mountPath: "/dst"

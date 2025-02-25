@@ -224,6 +224,23 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName, args string, onlyLon
 	tassert.Errorf(t, bf.Len() == cos.KiB, "Expected %d bytes, got %d", cos.KiB, bf.Len())
 }
 
+func testETLAllErrors(t *testing.T, err error, expectedErrSubstrs ...string) {
+	tassert.Fatal(t, err != nil, "No error occurred during test")
+	for _, e := range expectedErrSubstrs {
+		tassert.Fatalf(t, strings.Contains(err.Error(), e), "Error mismatch: expect [%q] appears in %q", e, err.Error())
+	}
+}
+
+func testETLAnyErrors(t *testing.T, err error, expectedErrSubstrs ...string) {
+	tassert.Fatal(t, err != nil, "No error occurred during test")
+	for _, e := range expectedErrSubstrs {
+		if strings.Contains(err.Error(), e) {
+			return
+		}
+	}
+	tassert.Fatalf(t, false, "Error mismatch: expect at least one of %v appears in %q", expectedErrSubstrs, err.Error())
+}
+
 // NOTE: BytesCount references number of bytes *before* the transformation.
 func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCnt uint64, skipByteStats bool) {
 	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
@@ -933,7 +950,7 @@ func TestETLList(t *testing.T) {
 	tassert.Fatalf(t, list[0].Name == etlName, "expected ETL[%s], got %q", etlName, list[0].Name)
 }
 
-func TestETLPodFailure(t *testing.T) {
+func TestETLPodInitSpecFailure(t *testing.T) {
 	var (
 		proxyURL           = tools.RandomProxyURL(t)
 		baseParams         = tools.BaseAPIParams(proxyURL)
@@ -943,46 +960,97 @@ func TestETLPodFailure(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
-	t.Run("etl_init_spec_invalid", func(t *testing.T) {
-		var (
-			etlName     = tetl.InvalidYaml
-			expectedErr = "could not find expected ':'"
-		)
-		spec, err := tetl.GetTransformYaml(etlName)
-		tassert.CheckFatal(t, err)
+	tests := []struct {
+		etlName      string
+		commType     string
+		expectedErrs []string
+	}{
+		{etlName: tetl.InvalidYaml, commType: etl.Hpull, expectedErrs: []string{"could not find expected ':'"}},
+		{etlName: tetl.NonExistImage, commType: etl.Hpull, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff"}},
+	}
 
-		msg := &etl.InitSpecMsg{
-			InitMsgBase: etl.InitMsgBase{
-				IDX:       etlName,
-				CommTypeX: etl.Hpull,
-				Timeout:   failureTestTimeout,
-			},
-			Spec: spec,
-		}
-		tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName)
-		_, err = api.ETLInit(baseParams, msg)
-		tassert.Fatalf(t, strings.Contains(err.Error(), expectedErr), "expect %s, have %s", expectedErr, err.Error())
-	})
-	t.Run("etl_init_spec_failure", func(t *testing.T) {
-		var etlName = tetl.NonExistImage
-		spec, err := tetl.GetTransformYaml(etlName)
-		tassert.CheckFatal(t, err)
+	for _, test := range tests {
+		t.Run(test.etlName, func(t *testing.T) {
+			spec, err := tetl.GetTransformYaml(test.etlName)
+			tassert.CheckFatal(t, err)
 
-		msg := &etl.InitSpecMsg{
-			InitMsgBase: etl.InitMsgBase{
-				IDX:       etlName,
-				CommTypeX: etl.Hpull,
-				Timeout:   failureTestTimeout,
-			},
-			Spec: spec,
-		}
-		tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName)
+			msg := &etl.InitSpecMsg{
+				InitMsgBase: etl.InitMsgBase{
+					IDX:       test.etlName,
+					CommTypeX: test.commType,
+					Timeout:   failureTestTimeout,
+				},
+				Spec: spec,
+			}
+			tassert.Fatalf(t, msg.Name() == test.etlName, "%q vs %q", msg.Name(), test.etlName)
 
-		// No need to clean up, as the creation should fail and the pod should terminate on its own.
-		_, err = api.ETLInit(baseParams, msg)
-		// Example error message format:
-		// recent pod status: "container: \"server\", reason: \"ErrImagePull\", message: \"Error response from daemon: pull access denied for aistorage/non-exist-image, repository does not exist or may require 'docker login': denied: requested access to the resource is denied\"
-		tassert.Fatalf(t, strings.Contains(err.Error(), "ErrImagePull") || strings.Contains(err.Error(), "ImagePullBackOff"),
-			"expect ErrImagePull, have %s", err.Error())
-	})
+			// No need to clean up, as the creation should fail and the pod should terminate on its own.
+			_, err = api.ETLInit(baseParams, msg)
+			testETLAnyErrors(t, err, test.expectedErrs...)
+		})
+	}
+}
+
+func TestETLPodInitCodeFailure(t *testing.T) {
+	var (
+		proxyURL           = tools.RandomProxyURL(t)
+		baseParams         = tools.BaseAPIParams(proxyURL)
+		failureTestTimeout = cos.Duration(time.Second * 10) // Should fail quickly, no need to wait too long
+	)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	const (
+		invalidFuncBody = `
+def transform(input_bytes):
+	invalid_code_function_body...
+`
+		echo = `
+def transform(input_bytes):
+	return input_bytes
+`
+		invalidModuleImport = `
+import torch
+def transform(input_bytes):
+	return input_bytes
+`
+		undefinedTransformFunc = `
+def not_transform_func(input_bytes):
+	return input_bytes
+`
+		invalidDeps = `numpy==invalid.version.number`
+	)
+
+	tests := []struct {
+		etlName      string
+		code         string
+		deps         string
+		runtime      string
+		commType     string
+		expectedErrs []string
+	}{
+		{etlName: "invalid-transform-function-body", code: invalidFuncBody, deps: "", runtime: runtime.Py310, expectedErrs: []string{"SyntaxError", "invalid_code_function_body..."}},
+		{etlName: "invalid-dependency", code: echo, deps: invalidDeps, runtime: runtime.Py310, expectedErrs: []string{"No matching distribution found for numpy==invalid.version.number"}},
+		{etlName: "invalid-module-import", code: invalidModuleImport, deps: "", runtime: runtime.Py311, expectedErrs: []string{"ModuleNotFoundError"}},
+		{etlName: "undefined-transform-function", code: undefinedTransformFunc, deps: "", runtime: runtime.Py312, expectedErrs: []string{"module 'function' has no attribute 'transform'"}},
+	}
+	for _, test := range tests {
+		t.Run(test.etlName, func(t *testing.T) {
+			msg := etl.InitCodeMsg{
+				InitMsgBase: etl.InitMsgBase{
+					IDX:       test.etlName,
+					CommTypeX: test.commType,
+					Timeout:   failureTestTimeout,
+				},
+				Code:    []byte(test.code),
+				Deps:    []byte(test.deps),
+				Runtime: test.runtime,
+			}
+			msg.Funcs.Transform = "transform"
+
+			_, err := api.ETLInit(baseParams, &msg)
+			testETLAllErrors(t, err, test.expectedErrs...)
+		})
+	}
 }

@@ -183,7 +183,7 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 // `readinessProbe` config specified the last step gets skipped.
 //
 // NOTE: currently, we do require readinessProbe config in the ETL spec.
-func (b *etlBootstrapper) waitPodReady() error {
+func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 	var (
 		timeout     = b.msg.Timeout.D()
 		interval    = cos.ProbingFrequency(timeout)
@@ -197,7 +197,7 @@ func (b *etlBootstrapper) waitPodReady() error {
 			b.pod.Name, b.msg.String(), b.errCtx, timeout, interval)
 	}
 	// wait
-	err = wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, /*immediate*/
+	err = wait.PollUntilContextTimeout(podCtx, interval, timeout, false, /*immediate*/
 		func(context.Context) (ready bool, err error) {
 			return checkPodReady(client, b.pod.Name)
 		},
