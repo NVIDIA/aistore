@@ -1,7 +1,7 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
@@ -60,7 +60,7 @@ func (c *rcbCtx) xtar(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 		// Add offset for `tar.TypeXHeader`.
 		c.offset += c.parent.MetadataSize()
 		sz := estimateXHeaderSize(header.PAXRecords)
-		sz = cos.CeilAlignInt64(sz, archive.TarBlockSize)
+		sz = cos.CeilAlignI64(sz, archive.TarBlockSize)
 
 		// Add offset for size of PAX records - there is no way of knowing
 		// the size, so we must estimate it by ourselves...
@@ -99,7 +99,7 @@ func (c *rcbCtx) xtar(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 	debug.Assert(size > 0)
 	c.extractedSize += size
 	c.extractedCount++
-	c.offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize) // .tar padding
+	c.offset += cos.CeilAlignI64(header.Size, archive.TarBlockSize) // .tar padding
 	return false, nil
 }
 

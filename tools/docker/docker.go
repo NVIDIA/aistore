@@ -1,6 +1,6 @@
 // Packager docker provides common utilities for managing containerized AIS deployments
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package docker
 

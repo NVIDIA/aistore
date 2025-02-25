@@ -1,7 +1,7 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
@@ -34,7 +34,7 @@ func writeCompressedTar(s *Shard, tw *tar.Writer, aw io.Writer, loader ContentLo
 					return written, err
 				}
 				// pad to 512
-				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
+				diff := cos.CeilAlignI64(n, archive.TarBlockSize) - n
 				debug.Assert(diff >= 0)
 				if diff > 0 {
 					npad, errP := aw.Write(padBuf[:diff])

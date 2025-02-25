@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tests_test
 
@@ -96,7 +96,17 @@ var _ = Describe("IterFields", func() {
 					"extra.aws.profile":      "",
 					"extra.aws.max_pagesize": int64(0),
 
-					"access":   apc.AccessAttrs(0),
+					"access": apc.AccessAttrs(0),
+
+					"rate_limit.backend.enabled":     false,
+					"rate_limit.frontend.enabled":    false,
+					"rate_limit.backend.interval":    cos.Duration(0),
+					"rate_limit.frontend.interval":   cos.Duration(0),
+					"rate_limit.backend.max_tokens":  0,
+					"rate_limit.frontend.max_tokens": 0,
+					"rate_limit.backend.num_retries": 0,
+					"rate_limit.frontend.burst_size": 0,
+
 					"features": feat.Flags(0),
 					"created":  int64(0),
 
@@ -135,6 +145,15 @@ var _ = Describe("IterFields", func() {
 					"ec.compression":       (*string)(nil),
 					"ec.bundle_multiplier": (*int)(nil),
 					"ec.disk_only":         (*bool)(nil),
+
+					"rate_limit.backend.enabled":     (*bool)(nil),
+					"rate_limit.frontend.enabled":    (*bool)(nil),
+					"rate_limit.backend.interval":    (*cos.Duration)(nil),
+					"rate_limit.frontend.interval":   (*cos.Duration)(nil),
+					"rate_limit.backend.max_tokens":  (*int)(nil),
+					"rate_limit.frontend.max_tokens": (*int)(nil),
+					"rate_limit.backend.num_retries": (*int)(nil),
+					"rate_limit.frontend.burst_size": (*int)(nil),
 
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),

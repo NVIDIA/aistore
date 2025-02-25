@@ -1,7 +1,7 @@
 // Package hrw provides a way to benchmark different HRW variants.
 // See /bench/hrw/README.md for more info.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package hrw
 

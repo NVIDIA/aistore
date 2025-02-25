@@ -784,7 +784,7 @@ func _init(p *params) (err error) {
 				return errors.New("loaderIDHashLen has to be larger than 0 and smaller than 64")
 			}
 
-			suffixIDMaskLen = cos.CeilAlign(p.loaderIDHashLen, 4)
+			suffixIDMaskLen = ceilAlign(p.loaderIDHashLen, 4)
 			suffixID = getIDFromString(p.loaderID, suffixIDMaskLen)
 		} else {
 			// p.loaderCnt > 0
@@ -946,7 +946,7 @@ func isDirectS3() bool {
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
 	// take first bigger power of 2, then take first bigger or equal number
 	// divisible by 4. This makes loaderID more visible in hex object name
-	return cos.CeilAlign(fastLog2Ceil(totalLoaders), 4)
+	return ceilAlign(fastLog2Ceil(totalLoaders), 4)
 }
 
 func printArguments(set *flag.FlagSet) {
@@ -1219,4 +1219,13 @@ func listObjects() error {
 	}
 	bucketObjsNames.Init(names, rnd)
 	return err
+}
+
+// returns smallest number divisible by `align` that is greater or equal `val`
+func ceilAlign(val, align uint) uint {
+	mod := val % align
+	if mod != 0 {
+		val += align - mod
+	}
+	return val
 }

@@ -1,6 +1,6 @@
 // Package statsd provides a client to send basic statd metrics (timer, counter and gauge) to listening UDP StatsD server.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package statsd
 

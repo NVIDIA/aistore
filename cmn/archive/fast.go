@@ -79,7 +79,7 @@ func _seekTarEnd(cname string, fh *os.File) (tarFormat tar.Format, offset int64,
 		return tarFormat, 0, fmt.Errorf("failed to seek end of the TAR %s", cname)
 	}
 
-	padded := cos.CeilAlignInt64(size, TarBlockSize)
+	padded := cos.CeilAlignI64(size, TarBlockSize)
 	offset, err = fh.Seek(pos+padded, io.SeekStart)
 	debug.AssertNoErr(err)
 	debug.Assert(offset > 0)
