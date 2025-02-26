@@ -47,6 +47,10 @@ type (
 	prefetch struct {
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
+		rate   struct {
+			arl   *cos.AdaptRateLim
+			sleep time.Duration
+		}
 		lrit
 		pebl pebl
 		xact.Base
@@ -95,6 +99,10 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	}
 	r.InitBase(xargs.UUID, kind, msg.Str(r.lrp == lrpPrefix), bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
+
+	smap := core.T.Sowner().Get()
+	nat := smap.CountActiveTs()
+	r.rate.arl, r.rate.sleep = bck.NewBackendRateLim(nat)
 
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
@@ -157,6 +165,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 	// NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
 	//
 
+retry:
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && r.pebl.num() < maxPebls {
 		err = r.blobdl(lom, oa)
 	} else {
@@ -182,12 +191,28 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 		}
 	}
 
-	if err == nil { // done
-		return
+	switch {
+	case err == nil:
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			nlog.Infoln(r.Name(), lom.Cname())
+		}
+	case cos.IsNotExist(err, ecode):
+		if lrit.lrp == lrpList {
+			r.AddErr(err, 5, cos.SmoduleXs)
+		}
+	case cos.IsErrOOS(err):
+		r.Abort(err)
+	case cmn.IsErrTooManyRequests(err):
+		if r.rate.arl != nil {
+			r.rate.arl.OnErr()
+			goto retry
+		}
+		fallthrough
+	default:
+		r.AddErr(err, 5, cos.SmoduleXs)
 	}
-	if cos.IsNotExist(err, ecode) && lrit.lrp != lrpList {
-		return // not found, prefix or range
-	}
+	return
+
 eret:
 	r.AddErr(err, 5, cos.SmoduleXs)
 }
