@@ -28,6 +28,7 @@ For supported backends (that include, but are not limited, to AWS S3), see also:
 - [Setting profile with alternative access/secret keys and/or region](#setting-profile-with-alternative-accesssecret-keys-andor-region)
 - [When bucket does not exist](#when-bucket-does-not-exist)
 - [Configuring custom AWS S3 endpoint](#configuring-custom-aws-s3-endpoint)
+- [Multipart size threshold](#multipart-size-threshold)
 
 ## Viewing vendor-specific properties
 
@@ -35,8 +36,19 @@ While `ais show bucket` will show all properties (which is a lengthy list), the 
 
 ```console
 $ ais show bucket s3://abc | grep extra
+```
+or, same:
+```console
+$ ais bucket props show s3://abc extra
+```
+
+The typical result would include the following defaults:
+
+```console
 extra.aws.cloud_region      us-east-2
 extra.aws.endpoint
+extra.aws.max_pagesize           0
+extra.aws.multipart_size         0B
 extra.aws.profile
 ```
 
@@ -178,3 +190,40 @@ README.md        8.96KiB
 
 > On the other hand, for any given `s3://bucket` its S3 endpoint can be set, unset, and otherwise changed at any time - at runtime. As shown above.
 
+
+## Multipart size threshold
+
+Multipart upload size threshold is, effectively, **yet another performance tunable** that, according to Amazon documentation, must be greater than or equal to 5MB.
+
+Further,
+
+- AWS SDK v2 sets the default `5MB`
+  - see https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/s3/manager
+- AIS default, however, is `128MiB`
+  - at time of this writing but check ais/s3/const for the most recent update
+
+In addition, you can always configure a different value on a per-bucket basis, as follows:
+
+```console
+$ ais bucket props set s3://abc extra.aws.multipart_size
+PROPERTY                         VALUE
+extra.aws.multipart_size         0B
+
+$ ais bucket props set s3://abc extra.aws.multipart_size 1gb
+"extra.aws.multipart_size" set to: "1GiB" (was: "0B")
+
+Bucket props successfully updated.
+```
+
+To show all AWS-specific settings for the bucket:
+
+
+```console
+$ ais bucket props set s3://abc extra.aws
+PROPERTY                         VALUE
+extra.aws.cloud_region           us-east-2
+extra.aws.endpoint
+extra.aws.max_pagesize           0
+extra.aws.multipart_size         1GiB
+extra.aws.profile
+```

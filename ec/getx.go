@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -121,21 +122,21 @@ func (r *XactGet) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 	// the transfer is complete
 	case respPut:
 		if cmn.Rom.FastV(4, cos.SmoduleEC) {
-			nlog.Infof("Response from %s, %s", hdr.SID, uname)
+			nlog.Infoln("response from", hdr.SID, bck.Cname(objName))
 		}
 		r.dOwner.mtx.Lock()
 		writer, ok := r.dOwner.slices[uname]
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", core.T, bck.Cname(objName), uname)
+			err := fmt.Errorf("%s: no slice writer for %s", core.T, bck.Cname(objName))
 			r.AddErr(err, 0)
 			return
 		}
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			errN := fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", core.T, bck.Cname(objName), err, uname)
+			errN := fmt.Errorf("%s: failed to read %s replica: %w", core.T, bck.Cname(objName), err)
 			r.AddErr(errN, 0)
-			if err == io.ErrUnexpectedEOF {
+			if err == io.ErrUnexpectedEOF || errors.Is(err, io.ErrUnexpectedEOF) {
 				r.Abort(errN)
 			}
 		}

@@ -91,17 +91,18 @@ type (
 		// - https://docs.openstack.org/swift/latest/api/pagination.html
 		MaxPageSize int64 `json:"max_pagesize,omitempty"`
 
-		// Multipart upload size threshold that must be greater or equal 5MB
-		// - aws-sdk-go-v2 default is 5MB (https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/s3/manager)
-		// - for the real default, see `DefaultPartSize` in ais/s3/const
-		MultiPartSize int64 `json:"multipart_size,omitempty"`
+		// Multipart upload size threshold must be greater or equal 5MB
+		// - https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/s3/manager
+		// - for the AIS default, see `DefaultPartSize` in ais/s3/const
+		// - NOTE: the threshold is, effectively, one of the **performance tunables**
+		MultiPartSize cos.SizeIEC `json:"multipart_size,omitempty"`
 	}
 	ExtraPropsAWSToSet struct {
-		CloudRegion   *string `json:"cloud_region,omitempty"`
-		Endpoint      *string `json:"endpoint,omitempty"`
-		Profile       *string `json:"profile,omitempty"`
-		MaxPageSize   *int64  `json:"max_pagesize,omitempty"`
-		MultiPartSize *int64  `json:"multipart_size,omitempty"`
+		CloudRegion   *string      `json:"cloud_region,omitempty"`
+		Endpoint      *string      `json:"endpoint,omitempty"`
+		Profile       *string      `json:"profile,omitempty"`
+		MaxPageSize   *int64       `json:"max_pagesize,omitempty"`
+		MultiPartSize *cos.SizeIEC `json:"multipart_size,omitempty"`
 	}
 
 	ExtraPropsHTTP struct {
