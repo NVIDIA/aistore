@@ -97,10 +97,11 @@ type (
 		MultiPartSize int64 `json:"multipart_size,omitempty"`
 	}
 	ExtraPropsAWSToSet struct {
-		CloudRegion *string `json:"cloud_region"`
-		Endpoint    *string `json:"endpoint"`
-		Profile     *string `json:"profile"`
-		MaxPageSize *int64  `json:"max_pagesize"`
+		CloudRegion   *string `json:"cloud_region,omitempty"`
+		Endpoint      *string `json:"endpoint,omitempty"`
+		Profile       *string `json:"profile,omitempty"`
+		MaxPageSize   *int64  `json:"max_pagesize,omitempty"`
+		MultiPartSize *int64  `json:"multipart_size,omitempty"`
 	}
 
 	ExtraPropsHTTP struct {

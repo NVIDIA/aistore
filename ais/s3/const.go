@@ -49,7 +49,7 @@ const (
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	MaxPartsPerUpload = 10000
 
-	DefaultPartSize = cos.GiB
+	DefaultPartSize = 128 * cos.MiB
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
 
