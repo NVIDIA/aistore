@@ -155,9 +155,9 @@ func collapseDisks(dsh []*teb.DiskStatsHelper, numTs int) {
 	}
 	for tid, dst := range tsums {
 		dn := int64(dnums[tid])
-		dst.Stat.Ravg = cos.DivRound(dst.Stat.Ravg, dn)
-		dst.Stat.Wavg = cos.DivRound(dst.Stat.Wavg, dn)
-		dst.Stat.Util = cos.DivRound(dst.Stat.Util, dn)
+		dst.Stat.Ravg = cos.DivRoundI64(dst.Stat.Ravg, dn)
+		dst.Stat.Wavg = cos.DivRoundI64(dst.Stat.Wavg, dn)
+		dst.Stat.Util = cos.DivRoundI64(dst.Stat.Util, dn)
 	}
 	// finally, re-append & sort
 	dsh = dsh[:0]

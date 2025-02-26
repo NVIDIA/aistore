@@ -409,7 +409,7 @@ func _compAvgSize(ds *stats.NodeStatus, ns string, vs int64, n2n cos.StrKVs) (av
 	}
 	ok = false
 	if vc, exists := ds.Tracker[nc]; exists {
-		avg, ok = cos.DivRound(vs, vc.Value), true
+		avg, ok = cos.DivRoundI64(vs, vc.Value), true
 	}
 	return
 }

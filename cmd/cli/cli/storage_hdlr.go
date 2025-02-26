@@ -348,9 +348,9 @@ func showDiskStats(c *cli.Context, tid string) error {
 			tally.Stat.Wavg += ds.Stat.Wavg
 			tally.Stat.Util += ds.Stat.Util
 		}
-		tally.Stat.Ravg = cos.DivRound(tally.Stat.Ravg, l)
-		tally.Stat.Wavg = cos.DivRound(tally.Stat.Wavg, l)
-		tally.Stat.Util = cos.DivRound(tally.Stat.Util, l)
+		tally.Stat.Ravg = cos.DivRoundI64(tally.Stat.Ravg, l)
+		tally.Stat.Wavg = cos.DivRoundI64(tally.Stat.Wavg, l)
+		tally.Stat.Util = cos.DivRoundI64(tally.Stat.Util, l)
 
 		dsh = append(dsh, &tally)
 	}
