@@ -71,7 +71,6 @@ type (
 		// runtime
 		stats struct {
 			// respectively, (errors, granted, prev. errors, prev. granted) counters
-			// TODO: consider prev-granted timestamp, to discard previous numbers when they become stale
 			nerr, n, perr, pn int
 		}
 	}
@@ -171,8 +170,16 @@ func (arl *AdaptRateLim) Acquire() error {
 	var sleep time.Duration
 	for i := 0; ; i++ {
 		arl.mu.Lock()
-		reason := arl.acquire()
+		prevGranted := arl.tsb.granted
+		reason := arl.RateLim.acquire()
 		if reason == acquireOK {
+			if i == 0 {
+				elapsed := time.Duration(arl.tsb.granted - prevGranted)
+				old := max(time.Duration(arl.tokenIval)<<2, dfltRateMaxWait)
+				if elapsed > old {
+					arl.stats.perr, arl.stats.pn = 0, 0 // reset stale stats
+				}
+			}
 			arl.stats.n++
 			if arl.stats.n >= arl.origTokens {
 				arl.recompute()
