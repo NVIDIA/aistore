@@ -90,6 +90,11 @@ type (
 		// vs OpenStack Swift: 10,000
 		// - https://docs.openstack.org/swift/latest/api/pagination.html
 		MaxPageSize int64 `json:"max_pagesize,omitempty"`
+
+		// Multipart upload size threshold that must be greater or equal 5MB
+		// - aws-sdk-go-v2 default is 5MB (https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/s3/manager)
+		// - for the real default, see `DefaultPartSize` in ais/s3/const
+		MultiPartSize int64 `json:"multipart_size,omitempty"`
 	}
 	ExtraPropsAWSToSet struct {
 		CloudRegion *string `json:"cloud_region"`
@@ -288,6 +293,9 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	debug.Assert(ok)
 	if provider == apc.HT && c.HTTP.OrigURLBck == "" {
 		return errors.New("original bucket URL must be set for a bucket with HTTP provider")
+	}
+	if provider == apc.AWS && c.AWS.MultiPartSize != 0 && (c.AWS.MultiPartSize < 5*cos.MB || c.AWS.MultiPartSize > cos.TB) {
+		return fmt.Errorf("invalid aws.multipart_size %d (expecting range 5MB to 1TB)", c.AWS.MultiPartSize)
 	}
 	return nil
 }

@@ -4,7 +4,10 @@
  */
 package s3
 
-import "github.com/NVIDIA/aistore/cmn"
+import (
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
+)
 
 const (
 	// AWS URL params
@@ -45,6 +48,8 @@ const (
 	// Maximum number of parts per upload
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	MaxPartsPerUpload = 10000
+
+	DefaultPartSize = cos.GiB
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
 
