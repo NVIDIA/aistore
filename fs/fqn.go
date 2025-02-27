@@ -196,16 +196,16 @@ func CleanPathErr(err error) {
 		var what string
 		switch parsed.ContentType {
 		case ObjectType:
-			what = "'object'"
+			what = "object"
 		case WorkfileType:
-			what = "'work file'"
+			what = "work file"
 		case ECSliceType:
-			what = "'ec slice'"
+			what = "ec slice"
 		case ECMetaType:
-			what = "'ec metadata'"
+			what = "ec metadata"
 		default:
-			what = fmt.Sprintf("'%s'(?)", parsed.ContentType)
+			what = fmt.Sprintf("content type '%s'(?)", parsed.ContentType)
 		}
-		pathErr.Err = cos.NewErrNotFound(nil, "content type "+what)
+		pathErr.Err = cos.NewErrNotFound(nil, what)
 	}
 }
