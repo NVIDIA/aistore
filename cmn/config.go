@@ -686,11 +686,20 @@ type (
 		Frontend *BurstyToSet   `json:"frontend,omitempty"`
 	}
 	RateLimitBase struct {
+		// optional per-operation MaxTokens override - a space-separated key:value list, e.g.:
+		// - "put:3500"
+		// - "get:5000 delete:1000"
+		// optional; case-insensitive
+		Verbs string `json:"per_op_max_tokens,omitempty"`
+		//
+		// mandatory parameters; for default values and min/max ranges, see RateLimitConf.Validate
+		//
 		Interval  cos.Duration `json:"interval"`
 		MaxTokens int          `json:"max_tokens"`
 		Enabled   bool         `json:"enabled"`
 	}
 	RateLimitBaseToSet struct {
+		Verbs     *string       `json:"per_op_max_tokens,omitempty"`
 		Interval  *cos.Duration `json:"interval,omitempty"`
 		MaxTokens *int          `json:"max_tokens,omitempty"`
 		Enabled   *bool         `json:"enabled,omitempty"`
@@ -1928,20 +1937,19 @@ func (c *RateLimitConf) Validate() error {
 		c.Frontend.MaxTokens = cos.NonZero(c.Frontend.MaxTokens, dfltRateMaxTokens)
 	}
 
-	if c.Backend.Interval.D() < cos.DfltRateMinIval || c.Backend.Interval.D() > cos.DfltRateMaxIval {
-		return fmt.Errorf("%s: invalid backend.interval %v (min=%v, max=%v)", tag,
-			c.Backend.Interval, cos.DfltRateMinIval, cos.DfltRateMaxIval)
+	if err := c.interval(tag, "backend.interval", c.Backend.Interval.D()); err != nil {
+		return err
 	}
-	if c.Frontend.Interval.D() < cos.DfltRateMinIval || c.Frontend.Interval.D() > cos.DfltRateMaxIval {
-		return fmt.Errorf("%s: invalid frontend.interval %v (min=%v, max=%v)", tag,
-			c.Frontend.Interval, cos.DfltRateMinIval, cos.DfltRateMaxIval)
+	if err := c.interval(tag, "frontend.interval", c.Frontend.Interval.D()); err != nil {
+		return err
 	}
-	if c.Backend.MaxTokens <= 0 || c.Backend.MaxTokens >= math.MaxInt32 {
-		return fmt.Errorf("%s: invalid backend.max_tokens %d", tag, c.Backend.MaxTokens)
+	if err := c.tokens(tag, "backend.max_tokens", c.Backend.MaxTokens); err != nil {
+		return err
 	}
-	if c.Frontend.MaxTokens <= 0 || c.Frontend.MaxTokens >= math.MaxInt32 {
-		return fmt.Errorf("%s: invalid frontend.max_tokens %d", tag, c.Frontend.MaxTokens)
+	if err := c.tokens(tag, "frontend.max_tokens", c.Frontend.MaxTokens); err != nil {
+		return err
 	}
+
 	if c.Backend.NumRetries <= 0 || c.Backend.NumRetries > cos.DfltRateMaxRetries {
 		return fmt.Errorf("%s: invalid backend.num_retries %d", tag, c.Backend.NumRetries)
 	}
@@ -1949,8 +1957,59 @@ func (c *RateLimitConf) Validate() error {
 		return fmt.Errorf("%s: invalid frontend.burst_size %d (expecting positive integer <= (%d%% of maxTokens %d)",
 			tag, c.Frontend.Size, cos.DfltRateMaxBurstPct, c.Frontend.MaxTokens)
 	}
+
+	//
+	// optional, per-operation
+	//
+	const name = "per_op_max_tokens"
+	if err := c.verbs(tag, "backend."+name, c.Backend.Verbs); err != nil {
+		return err
+	}
+	return c.verbs(tag, "frontend."+name, c.Frontend.Verbs)
+}
+
+func (*RateLimitConf) interval(tag, name string, value time.Duration) error {
+	if value < cos.DfltRateMinIval || value > cos.DfltRateMaxIval {
+		return fmt.Errorf("%s: invalid %s %v (min=%v, max=%v)", tag, name, value, cos.DfltRateMinIval, cos.DfltRateMaxIval)
+	}
 	return nil
 }
+
+func (*RateLimitConf) tokens(tag, name string, value int) error {
+	if value <= 0 || value >= math.MaxInt32 {
+		return fmt.Errorf("%s: invalid %s %d", tag, name, value)
+	}
+	return nil
+}
+
+func (*RateLimitConf) verbs(tag, name, value string) error {
+	if value == "" {
+		return nil
+	}
+	lst := strings.Split(value, " ")
+	for i, val := range lst {
+		lst[i] = strings.TrimSpace(val)
+	}
+	for _, s := range lst {
+		kv := strings.Split(strings.ToLower(s), ":")
+		if len(kv) != 2 {
+			return fmt.Errorf("%s: invalid format %s (number of items in '%v')", tag, name, kv)
+		}
+
+		// TODO: add and enforce verbs enum ("get", "put", "delete")
+
+		tokens, err := strconv.Atoi(strings.TrimSpace(kv[1]))
+		if err != nil {
+			return fmt.Errorf("%s: invalid %s (number of tokens in '%v')", tag, name, kv)
+		}
+		if tokens <= 0 || tokens > math.MaxInt32 {
+			return fmt.Errorf("%s: invalid %s (number of tokens out of range in '%v')", tag, name, kv)
+		}
+	}
+	return nil
+}
+
+func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
 
 //
 // misc config utilities ---------------------------------------------------------
