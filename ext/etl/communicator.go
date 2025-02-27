@@ -155,7 +155,7 @@ func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 func (c *baseComm) Stop() {
 	c.boot.xctn.Finish()
 	if c.pw != nil {
-		c.pw.stop()
+		c.pw.stop(false)
 	}
 }
 

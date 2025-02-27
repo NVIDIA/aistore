@@ -293,14 +293,14 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		goto cleanup
 	}
 	core.T.Sowner().Listeners().Reg(comm)
-	return
+	return podName, svcName, nil
 
 cleanup:
 	nlog.Warningln(cmn.NewErrETL(errCtx, fmt.Sprintf("failed to start etl[%s], msg %s, err %v - cleaning up..", xid, msg, err)))
 	if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
 		nlog.Errorln(errV)
 	}
-	pw.stop()
+	pw.stop(false)
 	err = pw.wrapError(err)
 	return
 }
