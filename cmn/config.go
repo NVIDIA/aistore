@@ -1991,7 +1991,7 @@ func (*RateLimitConf) verbs(tag, name, value string) error {
 		lst[i] = strings.TrimSpace(val)
 	}
 	for _, s := range lst {
-		kv := strings.Split(strings.ToLower(s), ":")
+		kv := strings.Split(strings.ToUpper(s), ":") // upper as in: http.MethodGet, et al.
 		if len(kv) != 2 {
 			return fmt.Errorf("%s: invalid format %s (number of items in '%v')", tag, name, kv)
 		}

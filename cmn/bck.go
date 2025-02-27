@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -343,10 +344,11 @@ func (b *Bck) LenUnameGlob(objName string) int {
 	return len(b.Provider) + 1 + len(NsGlobalUname) + 1 + len(b.Name) + 1 + len(objName) // compare with the below
 }
 
-// Bck => unique name (use ParseUname below to translate back)
+// Bck => unique name
+// - use ParseUname below to translate back
+// - compare with HashUname
 func (b *Bck) MakeUname(objName string) []byte {
 	var (
-		// TODO: non-global case can be optimized via b.Ns._copy(buf)
 		nsUname = b.Ns.Uname()
 		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName) // compare with the above
 		buf     = make([]byte, 0, l)
@@ -363,6 +365,19 @@ func (b *Bck) ubuf(buf []byte, nsUname, objName string) []byte {
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return buf
+}
+
+// alternative (one-way) uniqueness
+func (b *Bck) HashUname(s string /*verb*/) uint64 {
+	const sepa = "\x00"
+	h := xxhash.New64()
+	h.WriteString(s)
+	h.WriteString(sepa)
+	h.WriteString(b.Provider)
+	nsName := b.Ns.Uname()
+	h.WriteString(nsName)
+	h.WriteString(b.Name)
+	return h.Sum64()
 }
 
 //

@@ -747,8 +747,14 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	started := time.Now()
 
-	// 3. redirect
+	// 3. rate limit
 	smap := p.owner.smap.get()
+	if err := p.ratelim.apply(bck, http.MethodGet, smap); err != nil {
+		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
+		return
+	}
+
+	// 4. redirect
 	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		p.statsT.IncBck(stats.ErrGetCount, bck.Bucket())
@@ -762,7 +768,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
-	// 4. stats
+	// 5. stats
 	p.statsT.IncBck(stats.GetCount, bck.Bucket())
 }
 
@@ -816,8 +822,8 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelim.apply(bck, smap); err != nil {
-		p.writeErr(w, r, err, http.StatusTooManyRequests)
+	if err := p.ratelim.apply(bck, http.MethodPut, smap); err != nil {
+		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
 		return
 	}
 
@@ -884,7 +890,14 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
+
+	// rate limit
 	smap := p.owner.smap.get()
+	if err := p.ratelim.apply(bck, http.MethodDelete, smap); err != nil {
+		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
+		return
+	}
+
 	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		p.statsT.IncBck(stats.ErrDeleteCount, bck.Bucket())

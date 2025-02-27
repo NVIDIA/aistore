@@ -28,21 +28,21 @@ func (rl *ratelim) init() {
 	hk.Reg(prateName+hk.NameSuffix, rl.housekeep, hk.PruneFrontendRL)
 }
 
-func (rl *ratelim) apply(bck *meta.Bck, smap *smapX) error {
+func (rl *ratelim) apply(bck *meta.Bck, verb string, smap *smapX) error {
 	if !bck.Props.RateLimit.Frontend.Enabled {
 		return nil
 	}
 	var (
 		brl   *cos.BurstRateLim
-		uname = bck.MakeUname("")
-		v, ok = rl.Load(uname)
+		uhash = bck.HashUname(verb)
+		v, ok = rl.Load(uhash)
 	)
 	if ok {
 		brl = v.(*cos.BurstRateLim)
 	} else {
 		// ignore sleep time - only relevant for clients
 		brl, _ = bck.NewFrontendRateLim(smap.CountActivePs())
-		rl.Store(uname, brl)
+		rl.Store(uhash, brl)
 	}
 	if !brl.TryAcquire() {
 		return errors.New(http.StatusText(http.StatusTooManyRequests))
