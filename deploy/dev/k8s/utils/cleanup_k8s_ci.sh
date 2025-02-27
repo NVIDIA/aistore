@@ -1,7 +1,8 @@
 # Kill all pods and services created by ci job and ignore errors
-kubectl delete pods -l app=ais,type=ais-target || true
-kubectl delete pods -l app=ais,type=ais-proxy || true
+kubectl delete statefulset ais-proxy ais-target || true
+kubectl delete svc ais-target ais-proxy || true
 kubectl delete svc -l app=ais || true
+kubectl delete configmap ci-target-cm ci-proxy-cm || true 
 
 # Use a cleanup job to delete any AIS files mounted with hostpath inside the minikube vm
 export PARENT_DIR="/tmp"

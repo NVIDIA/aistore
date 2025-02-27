@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${CONFIGMAP_NAME}
+data:
+  ais_local_template.json: |
+    {
+      "confdir": "/etc/ais",
+      "log_dir": "${AIS_LOG_DIR}",
+      "host_net": {
+        "port": "${PORT}",
+        "port_intra_control": "${PORT_INTRA_CONTROL}",
+        "port_intra_data": "${PORT_INTRA_DATA}"
+      },
+      "fspaths": {
+        ${AIS_FS_PATHS}
+      },
+      "test_fspaths": {
+        "root": "/tmp/ais",
+        "count": ${TEST_FSPATH_COUNT},
+        "instance": ${INSTANCE}
+      }
+    }
+  ais_cluster_override.json: |
+    {
+      "backend": ${AIS_BACKEND_PROVIDERS},
+      "proxy": {
+        "primary_url": "${AIS_PRIMARY_URL}",
+        "original_url": "${AIS_PRIMARY_URL}"
+      },
+      "net": {
+        "http": {
+          "use_https": ${AIS_USE_HTTPS},
+          "server_crt": "${AIS_SERVER_CRT}",
+          "server_key": "${AIS_SERVER_KEY}",
+          "skip_verify": ${AIS_SKIP_VERIFY_CRT}
+        }
+      }
+    }

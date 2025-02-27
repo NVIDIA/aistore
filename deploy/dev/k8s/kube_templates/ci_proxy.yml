@@ -1,94 +1,145 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: ${POD_NAME}
+  name: ais-proxy
   labels:
     app: ais
+    type: ais-proxy
 spec:
-  type: ClusterIP
-  ports:
-    - port: ${PORT}
-      targetPort: ${PORT}
-      protocol: TCP
-      name: http
+  clusterIP: None
   selector:
     app: ais
     type: ais-proxy
-    pod-name: ${POD_NAME}
----  
-apiVersion: v1
-kind: Pod
+  ports:
+    - name: public
+      port: ${PORT}
+      targetPort: ${PORT}
+      protocol: TCP
+    - name: control
+      port: ${PORT_INTRA_CONTROL}
+      targetPort: ${PORT_INTRA_CONTROL}
+      protocol: TCP
+    - name: data
+      port: ${PORT_INTRA_DATA}
+      targetPort: ${PORT_INTRA_DATA}
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: ${POD_NAME}
+  name: ais-proxy
   labels:
     app: ais
     type: ais-proxy
-    pod-name: ${POD_NAME}
 spec:
-  containers:
-  - name: aisnode
-    image: ${AISNODE_IMAGE}
-    imagePullPolicy: IfNotPresent
-    livenessProbe:
-      httpGet:
-        path: /v1/health
-        port: ${PORT}
-        scheme: ${PROTOCOL}
-      initialDelaySeconds: 60
-      periodSeconds: 10
-    readinessProbe:
-      httpGet:
-        path: /v1/health?readiness=true # Don't require the whole cluster to be ready
-        port: ${PORT}
-        scheme: ${PROTOCOL}
-      initialDelaySeconds: 10
-      failureThreshold: 5
-      periodSeconds: 5
-    env:
-      - name: MY_NODE
-        valueFrom:
-          fieldRef:
-            fieldPath: spec.nodeName
-      - name: AIS_NODE_ROLE
-        value: "proxy"
-    volumeMounts:
-     - name: ais-tls-certs
-       mountPath: /var/certs
-     - name: ais-logs
-       mountPath: ${AIS_LOG_DIR}
-    ports:
-      - containerPort: ${PORT}
-    command: ["bash","-c"]
-    args:
-      - export PORT=${PORT} &&
-        export HOSTNAME_LIST=${HOSTNAME_LIST} &&
-        export AIS_PRIMARY_URL=${AIS_PRIMARY_URL} &&
-        export AIS_BACKEND_PROVIDERS="${AIS_BACKEND_PROVIDERS}" &&
-        export AIS_CONF_FILE=/etc/ais/ais.json &&
-        export AIS_LOCAL_CONF_FILE=/etc/ais/ais_local.json &&
-        export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
-        export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
-        export INSTANCE=${INSTANCE} &&
-        export AIS_LOG_DIR=${AIS_LOG_DIR} &&
-        export AIS_USE_HTTPS=${AIS_USE_HTTPS} &&
-        export AIS_SKIP_VERIFY_CRT=${AIS_SKIP_VERIFY_CRT} &&
-        export AIS_SERVER_CRT=${AIS_SERVER_CRT} &&
-        export AIS_SERVER_KEY=${AIS_SERVER_KEY} &&
-        source /etc/ais/utils.sh &&
-        source /etc/ais/aisnode_config.sh &&
-        aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=proxy -ntargets=${NUM_TARGET};
-  volumes:
-    - name: collectd-config
-      configMap:
-        name: collectd-config
-    - name: statsd-config
-      configMap:
-        name: statsd-config
-    - name: ais-tls-certs
-      secret:
-        secretName: ais-tls-certs
-        optional: true
-    - name: ais-logs
-      hostPath:
-        path: ${AIS_LOG_DIR}/proxy-${INSTANCE}
-        type: DirectoryOrCreate
+  serviceName: ais-proxy
+  replicas: ${NUM_PROXY}
+  selector:
+    matchLabels:
+      app: ais
+      type: ais-proxy
+  template:
+    metadata:
+      labels:
+        app: ais
+        type: ais-proxy
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - ais
+                  - key: type
+                    operator: In
+                    values:
+                      - ais-proxy
+              topologyKey: "kubernetes.io/hostname"
+      initContainers:
+      - name: aisinit
+        image: ${AISINIT_IMAGE}
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: MY_SERVICE
+            value: ais-proxy
+          - name: MY_POD
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: K8S_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: AIS_PUBLIC_HOSTNAME
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+        volumeMounts:
+          - name: ais-config-templates
+            mountPath: /config-templates
+          - name: ais-config
+            mountPath: /etc/ais
+        command: ["aisinit"]
+        args:
+          - "-role=proxy"
+          - "-local_config_template=/config-templates/ais_local_template.json"
+          - "-output_local_config=/etc/ais/ais_local.json"
+          - "-cluster_config_override=/config-templates/ais_cluster_override.json"
+          - "-output_cluster_config=/etc/ais/ais.json"
+      containers:
+      - name: aisnode
+        image: ${AISNODE_IMAGE}
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /v1/health
+            port: ${PORT}
+            scheme: ${PROTOCOL}
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v1/health?readiness=true # Don't require the whole cluster to be ready
+            port: ${PORT}
+            scheme: ${PROTOCOL}
+          initialDelaySeconds: 10
+          failureThreshold: 5
+          periodSeconds: 5
+        env:
+          - name: MY_NODE
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        volumeMounts:
+        - name: ais-config
+          mountPath: /etc/ais
+        - name: ais-tls-certs
+          mountPath: /var/certs
+        - name: ais-logs
+          mountPath: ${AIS_LOG_DIR}
+        ports:
+          - containerPort: ${PORT}
+            hostPort: ${PORT}
+        command: ["aisnode"]
+        args:
+          - "-config=/etc/ais/ais.json"
+          - "-local_config=/etc/ais/ais_local.json"
+          - "-role=proxy"
+          - "-ntargets=${NUM_TARGET}"
+      volumes:
+        - name: ais-config-templates
+          configMap:
+            name: ci-proxy-cm
+        - name: ais-config
+          emptyDir: {}
+        - name: ais-tls-certs
+          secret:
+            secretName: ais-tls-certs
+            optional: true
+        - name: ais-logs
+          hostPath:
+            path: ${AIS_LOG_DIR}
+            type: DirectoryOrCreate
