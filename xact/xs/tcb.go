@@ -215,6 +215,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	return r
 }
 
+// TODO: support RateLimitConf.Verbs, here and elsewhere
 func (r *XactTCB) iniRateLimit(args *xreg.TCBArgs, nat int) {
 	var rate tcrate
 	rate.src.brl, rate.src.sleep = args.BckFrom.NewFrontendRateLim(nat)

@@ -111,6 +111,9 @@ func (rl *RateLim) init(tag string, maxTokens int, tokenIval time.Duration) erro
 	return nil
 }
 
+// NOTE: not locking (currently used to cleanup where we don't care about millisecond precision)
+func (rl *RateLim) LastUsed() int64 { return max(rl.tsb.granted, rl.tsb.refill) }
+
 // recompute minBtwn
 func (rl *RateLim) recompute() time.Duration {
 	return max(time.Duration(rl.tokenIval/rl.maxTokens), dfltRateMinBtwn)

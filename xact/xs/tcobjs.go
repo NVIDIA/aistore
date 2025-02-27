@@ -119,6 +119,7 @@ func (p *tcoFactory) Start() error {
 // XactTCObjs //
 ////////////////
 
+// TODO: support RateLimitConf.Verbs, here and elsewhere
 func (r *XactTCObjs) iniRateLimit(args *xreg.TCObjsArgs, nat int) {
 	var rate tcrate
 	rate.src.brl, rate.src.sleep = args.BckFrom.NewFrontendRateLim(nat)

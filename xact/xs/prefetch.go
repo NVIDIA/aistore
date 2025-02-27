@@ -100,6 +100,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	r.InitBase(xargs.UUID, kind, msg.Str(r.lrp == lrpPrefix), bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
+	// TODO: support RateLimitConf.Verbs, here and elsewhere
 	smap := core.T.Sowner().Get()
 	nat := smap.CountActiveTs()
 	r.rate.arl, r.rate.sleep = bck.NewBackendRateLim(nat)

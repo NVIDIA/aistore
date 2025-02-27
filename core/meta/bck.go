@@ -277,12 +277,12 @@ func (b *Bck) MaxPageSize() int64 {
 // rate limits: frontend, backend with respect to `nat` (number active targets)
 //
 
-func (b *Bck) NewFrontendRateLim(nat int) (*cos.BurstRateLim, time.Duration) {
+func (b *Bck) NewFrontendRateLim(na int) (*cos.BurstRateLim, time.Duration) {
 	conf := b.Props.RateLimit.Frontend
 	if !conf.Enabled {
 		return nil, 0
 	}
-	maxTokens := cos.DivRound(conf.MaxTokens, nat)
+	maxTokens := cos.DivRound(conf.MaxTokens, na)
 	brl, err := cos.NewBurstRateLim(maxTokens, conf.Size, conf.Interval.D())
 	if err != nil {
 		nlog.ErrorDepth(1, err)

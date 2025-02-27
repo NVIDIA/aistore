@@ -1,4 +1,4 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package ais provides AIStore's proxy and target nodes.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -61,6 +61,7 @@ type (
 		rproxy     reverseProxy
 		notifs     notifs
 		lstca      lstca
+		ratelim    ratelim
 		reg        struct {
 			pool nodeRegPool
 			mu   sync.RWMutex
@@ -200,6 +201,7 @@ func (p *proxy) Run() error {
 	p.rproxy.init()
 
 	p.notifs.init(p)
+	p.ratelim.init()
 	p.ic.init(p)
 
 	//
@@ -812,10 +814,16 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	}
 	vlabs[stats.VarlabBucket] = bck.Cname("")
 
-	// 3. redirect
+	// 3. rate limit
+	smap := p.owner.smap.get()
+	if err := p.ratelim.apply(bck, smap); err != nil {
+		p.writeErr(w, r, err, http.StatusTooManyRequests)
+		return
+	}
+
+	// 4. redirect
 	var (
 		tsi     *meta.Snode
-		smap    = p.owner.smap.get()
 		started = time.Now()
 		objName = apireq.items[1]
 		netPub  = cmn.NetPublic
@@ -853,7 +861,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	// 4. stats
+	// 5. stats
 	p.statsT.IncWith(scnt, vlabs)
 }
 
