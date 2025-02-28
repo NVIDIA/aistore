@@ -221,6 +221,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		msg.IDX = parseStrFlag(c, etlNameFlag)
 		msg.CommTypeX = parseStrFlag(c, commTypeFlag)
 		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
+		msg.Timeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
 		msg.Spec = spec
 	}
 
