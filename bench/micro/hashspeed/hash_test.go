@@ -12,7 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/OneOfOne/xxhash"
-	"github.com/minio/highwayhash"
+	cespare "github.com/cespare/xxhash/v2"
 )
 
 // Examples:
@@ -55,16 +55,21 @@ func BenchmarkID(b *testing.B) {
 		copy(bytes[:], vids[i])
 	}
 
-	b.Run("aligned", func(b *testing.B) {
-		aligned(b)
+	b.Run("aligned-one", func(b *testing.B) {
+		aligned_one(b)
 	})
-
-	b.Run("na", func(b *testing.B) {
-		na(b)
+	b.Run("na-one", func(b *testing.B) {
+		na_one(b)
+	})
+	b.Run("aligned-cespare", func(b *testing.B) {
+		aligned_cespare(b)
+	})
+	b.Run("na-cespare", func(b *testing.B) {
+		na_cespare(b)
 	})
 }
 
-func aligned(b *testing.B) {
+func aligned_one(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -77,13 +82,42 @@ func aligned(b *testing.B) {
 	})
 }
 
-func na(b *testing.B) {
+func na_one(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
 				v := vids[i][1:] // force misalignment
 				_ = xxhash.Checksum64S(v, MLCG32)
+			}
+		}
+	})
+}
+
+func aligned_cespare(b *testing.B) {
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			for i := 0; i < numIDs; i++ {
+				v := vecAligned[i]
+				bytes := (*[sizeID]byte)(unsafe.Pointer(&v[0]))
+				h := cespare.New()
+				h.Write(bytes[:])
+				_ = h.Sum64()
+			}
+		}
+	})
+}
+
+func na_cespare(b *testing.B) {
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			for i := 0; i < numIDs; i++ {
+				v := vids[i][1:] // force misalignment
+				h := cespare.New()
+				h.Write(v)
+				_ = h.Sum64()
 			}
 		}
 	})
@@ -100,19 +134,19 @@ func BenchmarkThroughput(b *testing.B) {
 		newHash func() (hash.Hash, error)
 	}{
 		{
-			name:    "highwayhash-1M",
+			name:    "cespare-1M",
 			size:    1024 * 1024,
-			newHash: func() (hash.Hash, error) { return highwayhash.New(hwkey[:]) },
+			newHash: func() (hash.Hash, error) { return cespare.New(), nil },
 		},
 		{
-			name:    "highwayhash-8M",
+			name:    "cespare-8M",
 			size:    8 * 1024 * 1024,
-			newHash: func() (hash.Hash, error) { return highwayhash.New(hwkey[:]) },
+			newHash: func() (hash.Hash, error) { return cespare.New(), nil },
 		},
 		{
-			name:    "highwayhash-64M",
+			name:    "cespare-64M",
 			size:    64 * 1024 * 1024,
-			newHash: func() (hash.Hash, error) { return highwayhash.New(hwkey[:]) },
+			newHash: func() (hash.Hash, error) { return cespare.New(), nil },
 		},
 		{
 			name:    "xxhash-1M",
