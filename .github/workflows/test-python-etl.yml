@@ -24,6 +24,7 @@ jobs:
           container-runtime: docker
           cpus: max
           memory: max
+        timeout-minutes: 5
 
       - name: Run AIStore in Minikube
         run: |
