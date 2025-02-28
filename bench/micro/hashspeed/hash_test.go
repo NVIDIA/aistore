@@ -1,6 +1,6 @@
 // Package hashspeed is a benchmark througput benchmark
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package hashspeed
 
@@ -8,6 +8,7 @@ import (
 	cryptorand "crypto/rand"
 	"hash"
 	"runtime"
+	"strconv"
 	"testing"
 	"unsafe"
 
@@ -24,17 +25,16 @@ import (
 // go test -v -tags=debug -bench=ID -benchtime=10s
 
 const (
-	numThr = 64 * 1024 * 1024
-	numIDs = 262144
+	largeSize = 64 * 1024 * 1024
+	numIDs    = 512 * 1024
 
-	sizeID = 16
+	maxSizeID = 128
 )
 
 const MLCG32 = 1103515245 // xxhash seed
 
 var (
 	cores = runtime.GOMAXPROCS(0)
-	hwkey [32]byte
 	vec   = make([][]byte, cores)
 
 	vids       = make([][]byte, numIDs)
@@ -46,75 +46,86 @@ var (
 // 6 3 [88 158 198 47 235 152 81 107 49 248 216 192 90 239 228 121]
 
 func BenchmarkID(b *testing.B) {
+	var u int32
 	for i := range vids {
-		vids[i] = make([]byte, sizeID+1) // NOTE: to force misalign
+		vids[i] = make([]byte, maxSizeID+1) // NOTE: to force misalign
 		cryptorand.Read(vids[i])
 
-		vecAligned[i] = make([]int32, 4)
-		bytes := (*[sizeID]byte)(unsafe.Pointer(&vecAligned[i][0]))
+		vecAligned[i] = make([]int32, maxSizeID/unsafe.Sizeof(u))
+		bytes := (*[maxSizeID]byte)(unsafe.Pointer(&vecAligned[i][0]))
 		copy(bytes[:], vids[i])
 	}
-
-	b.Run("aligned-one", func(b *testing.B) {
-		aligned_one(b)
-	})
-	b.Run("na-one", func(b *testing.B) {
-		na_one(b)
-	})
-	b.Run("aligned-cespare", func(b *testing.B) {
-		aligned_cespare(b)
-	})
-	b.Run("na-cespare", func(b *testing.B) {
-		na_cespare(b)
-	})
+	for _, size := range []int{16, 32, 64, 128} {
+		s := strconv.Itoa(size)
+		b.Run("aligned-one-"+s, func(b *testing.B) {
+			aligned_one(b, size)
+		})
+		b.Run("na-one-"+s, func(b *testing.B) {
+			na_one(b, size)
+		})
+		b.Run("aligned-cespare-"+s, func(b *testing.B) {
+			aligned_cespare(b, size)
+		})
+		b.Run("na-cespare-"+s, func(b *testing.B) {
+			na_cespare(b, size)
+		})
+	}
 }
 
-func aligned_one(b *testing.B) {
+func aligned_one(b *testing.B, size int) {
+	var (
+		u int32
+		n = size / int(unsafe.Sizeof(u))
+	)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
-				v := vecAligned[i]
-				bytes := (*[sizeID]byte)(unsafe.Pointer(&v[0]))
-				_ = xxhash.Checksum64S(bytes[:], MLCG32)
+				v := vecAligned[i][:n]
+				bytes := (*[maxSizeID]byte)(unsafe.Pointer(&v[0]))
+				_ = xxhash.Checksum64S(bytes[:size], MLCG32)
 			}
 		}
 	})
 }
 
-func na_one(b *testing.B) {
+func na_one(b *testing.B, size int) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
-				v := vids[i][1:] // force misalignment
+				v := vids[i][1 : size+1] // force misalignment
 				_ = xxhash.Checksum64S(v, MLCG32)
 			}
 		}
 	})
 }
 
-func aligned_cespare(b *testing.B) {
+func aligned_cespare(b *testing.B, size int) {
+	var (
+		u int32
+		n = size / int(unsafe.Sizeof(u))
+	)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
-				v := vecAligned[i]
-				bytes := (*[sizeID]byte)(unsafe.Pointer(&v[0]))
+				v := vecAligned[i][:n]
+				bytes := (*[maxSizeID]byte)(unsafe.Pointer(&v[0]))
 				h := cespare.New()
-				h.Write(bytes[:])
+				h.Write(bytes[:size])
 				_ = h.Sum64()
 			}
 		}
 	})
 }
 
-func na_cespare(b *testing.B) {
+func na_cespare(b *testing.B, size int) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
-				v := vids[i][1:] // force misalignment
+				v := vids[i][1 : size+1] // force misalignment
 				h := cespare.New()
 				h.Write(v)
 				_ = h.Sum64()
@@ -125,43 +136,38 @@ func na_cespare(b *testing.B) {
 
 func BenchmarkThroughput(b *testing.B) {
 	for i := range vec {
-		vec[i] = make([]byte, numThr)
+		vec[i] = make([]byte, largeSize)
 		cryptorand.Read(vec[i])
 	}
 	tests := []struct {
 		name    string
 		size    int64
-		newHash func() (hash.Hash, error)
+		newHash func() hash.Hash64
 	}{
 		{
-			name:    "cespare-1M",
-			size:    1024 * 1024,
-			newHash: func() (hash.Hash, error) { return cespare.New(), nil },
+			name: "cespare-1M", size: 1024 * 1024,
+			newHash: func() hash.Hash64 { return cespare.New() },
 		},
 		{
-			name:    "cespare-8M",
-			size:    8 * 1024 * 1024,
-			newHash: func() (hash.Hash, error) { return cespare.New(), nil },
+			name: "cespare-8M", size: 8 * 1024 * 1024,
+			newHash: func() hash.Hash64 { return cespare.New() },
 		},
 		{
-			name:    "cespare-64M",
-			size:    64 * 1024 * 1024,
-			newHash: func() (hash.Hash, error) { return cespare.New(), nil },
+			name: "cespare-64M", size: 64 * 1024 * 1024,
+			newHash: func() hash.Hash64 { return cespare.New() },
 		},
 		{
-			name:    "xxhash-1M",
-			size:    1024 * 1024,
-			newHash: func() (hash.Hash, error) { return xxhash.New64(), nil },
+			name: "xxhash-1M", size: 1024 * 1024,
+			newHash: func() hash.Hash64 { return xxhash.New64() },
 		},
 		{
 			name:    "xxhash-8M",
 			size:    8 * 1024 * 1024,
-			newHash: func() (hash.Hash, error) { return xxhash.New64(), nil },
+			newHash: func() hash.Hash64 { return xxhash.New64() },
 		},
 		{
-			name:    "xxhash-64M",
-			size:    64 * 1024 * 1024,
-			newHash: func() (hash.Hash, error) { return xxhash.New64(), nil },
+			name: "xxhash-64M", size: 64 * 1024 * 1024,
+			newHash: func() hash.Hash64 { return xxhash.New64() },
 		},
 	}
 	for _, test := range tests {
@@ -171,19 +177,18 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 }
 
-func throughput(b *testing.B, size int64, newHash func() (hash.Hash, error)) {
+func throughput(b *testing.B, size int64, newHash func() hash.Hash64) {
 	b.SetBytes(size)
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
 		var i int
 		for pb.Next() {
-			h, err := newHash()
-			assert(err == nil, "new")
+			h := newHash()
 			i = (i + 1) % cores
 			l, err := h.Write(vec[i][:size])
 			assert(int64(l) == size && err == nil, "write")
-			h.Sum(nil)
+			h.Sum64()
 		}
 	})
 }
