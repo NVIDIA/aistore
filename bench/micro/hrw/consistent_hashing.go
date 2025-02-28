@@ -8,7 +8,7 @@ package hrw
 import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const xxHashSeed = 1103515245
@@ -16,14 +16,14 @@ const xxHashSeed = 1103515245
 type node struct {
 	id          string
 	idDigestInt uint64
-	idDigestXX  *xxhash.XXHash64
+	idDigestXX  *onexxh.XXHash64
 }
 
 func hrwXXHash(key string, nodes []node) int {
 	var maxCksum uint64
 	var destIdx int
 	for idx, node := range nodes {
-		cksum := xxhash.Checksum64S(cos.UnsafeB(node.id+":"+key), xxHashSeed)
+		cksum := onexxh.Checksum64S(cos.UnsafeB(node.id+":"+key), xxHashSeed)
 		if cksum > maxCksum {
 			maxCksum = cksum
 			destIdx = idx
@@ -35,7 +35,7 @@ func hrwXXHash(key string, nodes []node) int {
 
 // This turns out to be actually slower than the case without the append.
 // Possible reason is that in the case without the append - the method
-// `xxhash.Checksum64S` would iterate over the entire string just once.
+// `Checksum64S` would iterate over the entire string just once.
 // Whereas in this case with append, there are a few additional steps:
 // 1. Copying the object pointed by the stored pointer.
 // 2. Writing the key to the current hash. `WriteString`
@@ -44,7 +44,7 @@ func hrwXXHashWithAppend(key string, nodes []node) int {
 	var maxCksum uint64
 	var destIdx int
 	for idx, node := range nodes {
-		// node.hash equals xxhash.Checksum64S(node.id, xxHashSeed)
+		// node.hash equals Checksum64S(node.id, xxHashSeed)
 		xxhashNode := *node.idDigestXX
 		xxhashNode.WriteString(":" + key)
 		cksum := xxhashNode.Sum64()
@@ -58,12 +58,12 @@ func hrwXXHashWithAppend(key string, nodes []node) int {
 }
 
 func hrwHybridXXHashXorshift(key string, nodes []node) int {
-	keyHash := xxhash.Checksum64S(cos.UnsafeB(":"+key), xxHashSeed)
+	keyHash := onexxh.Checksum64S(cos.UnsafeB(":"+key), xxHashSeed)
 
 	var maxCksum uint64
 	var destIdx int
 	for idx, node := range nodes {
-		// node.hash equals xxhash.Checksum64S(node.id, xxHashSeed)
+		// node.hash equals Checksum64S(node.id, xxHashSeed)
 		cksum := xorshift64(node.idDigestInt ^ keyHash)
 		if cksum > maxCksum {
 			maxCksum = cksum
@@ -75,12 +75,12 @@ func hrwHybridXXHashXorshift(key string, nodes []node) int {
 }
 
 func hrwHybridXXHashXoshiro256(key string, nodes []node) int {
-	keyHash := xxhash.Checksum64S(cos.UnsafeB(":"+key), xxHashSeed)
+	keyHash := onexxh.Checksum64S(cos.UnsafeB(":"+key), xxHashSeed)
 
 	var maxCksum uint64
 	var destIdx int
 	for idx, node := range nodes {
-		// node.hash equals xxhash.Checksum64S(node.id, xxHashSeed)
+		// node.hash equals Checksum64S(node.id, xxHashSeed)
 		cksum := xoshiro256.Hash(node.idDigestInt ^ keyHash)
 		if cksum > maxCksum {
 			maxCksum = cksum

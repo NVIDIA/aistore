@@ -31,7 +31,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 	const (
 		copyCnt   = 20
 		objSize   = 128
-		cksumType = cos.ChecksumXXHash
+		cksumType = cos.ChecksumCesXxh
 	)
 	var (
 		objCnt     = 2345

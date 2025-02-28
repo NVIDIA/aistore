@@ -40,12 +40,12 @@ var _ = Describe("LOM Xattributes", func() {
 		bmdMock       = mock.NewBaseBownerMock(
 			meta.NewBck(
 				bucketLocal, apc.AIS, cmn.NsGlobal,
-				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 201},
+				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumOneXxh}, BID: 201},
 			),
 			meta.NewBck(
 				bucketCached, apc.AIS, cmn.NsGlobal,
 				&cmn.Bprops{
-					Cksum:       cmn.CksumConf{Type: cos.ChecksumXXHash},
+					Cksum:       cmn.CksumConf{Type: cos.ChecksumOneXxh},
 					WritePolicy: cmn.WritePolicyConf{Data: apc.WriteImmediate, MD: apc.WriteNever},
 					BID:         202,
 				},
@@ -109,7 +109,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.IsHRW()).To(BeTrue())
 				lom.Lock(true)
 				defer lom.Unlock(true)
-				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
+				lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				lom.SetCustomMD(cos.StrKVs{
 					cmn.SourceObjMD: apc.GCP,
@@ -144,7 +144,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.IsHRW()).To(BeTrue())
 				lom.Lock(true)
 				defer lom.Unlock(true)
-				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
+				lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
 				lom.SetVersion("dummy_version")
 				Expect(persist(lom)).NotTo(HaveOccurred())
 
@@ -228,12 +228,12 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := filePut(localFQN, testFileSize)
 				lom.Lock(true)
 				defer lom.Unlock(true)
-				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
+				lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
 				lom.SetVersion("dummy_version1")
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
 
-				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
+				lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
 				lom.SetVersion("dummy_version2")
 				Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
@@ -264,7 +264,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom2 := NewBasicLom(localFQN)
 				lom1.Lock(true)
 				defer lom1.Unlock(true)
-				lom1.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
+				lom1.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
 				lom1.SetVersion("dummy_version")
 				Expect(lom1.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 				Expect(lom1.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())
@@ -287,7 +287,7 @@ var _ = Describe("LOM Xattributes", func() {
 					lom = NewBasicLom(localFQN)
 					lom.Lock(true)
 					defer lom.Unlock(true)
-					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "test_checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
 					lom.SetVersion("dummy_version")
 					Expect(lom.AddCopy(fqns[0], copyMpathInfo)).NotTo(HaveOccurred())
 					Expect(lom.AddCopy(fqns[1], copyMpathInfo)).NotTo(HaveOccurred())

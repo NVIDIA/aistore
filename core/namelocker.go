@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const nlpTryDefault = time.Second // nlp.TryLock default duration
@@ -189,7 +189,7 @@ var _ NLP = (*nlp)(nil)
 func NewNLP(name []byte) NLP {
 	var (
 		nlp  = &nlp{uname: cos.UnsafeS(name)}
-		hash = xxhash.Checksum64S(name, cos.MLCG32)
+		hash = onexxh.Checksum64S(name, cos.MLCG32)
 		idx  = int(hash & cos.MultiHashMapMask)
 	)
 	nlp.nlc = &bckLocker[idx] // NOTE: bckLocker

@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 var (
@@ -28,7 +28,7 @@ func GenBEID(div uint64, tag []byte) (beid string, xctn core.Xact, err error) {
 	// compute
 	val := now / div
 	org := val
-	val ^= xxhash.Checksum64S(tag, val)
+	val ^= onexxh.Checksum64S(tag, val)
 	beid = cos.GenBEID(val, cos.LenShortID)
 
 	// check vs registry

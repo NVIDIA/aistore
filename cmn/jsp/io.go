@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 
@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pierrec/lz4/v3"
 )
@@ -68,7 +68,7 @@ func Encode(ws cos.WriterAt, v any, opts Options) (err error) {
 		defer zw.Close()
 	}
 	if opts.Checksum {
-		h = xxhash.New64()
+		h = onexxh.New64()
 		cos.Assert(h.Size() == sizeXXHash64)
 		w = io.MultiWriter(h, w)
 	}
@@ -143,7 +143,7 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		r = zr
 	}
 	if opts.Checksum {
-		h = xxhash.New64()
+		h = onexxh.New64()
 		r = io.TeeReader(r, h)
 	}
 	if err = cos.JSON.NewDecoder(r).Decode(v); err != nil {
@@ -165,7 +165,7 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 			err = cos.NewErrMetaCksum(expectedCksum, actualCksum, tag)
 			return
 		}
-		checksum = cos.NewCksum(cos.ChecksumXXHash, hex.EncodeToString(actual))
+		checksum = cos.NewCksum(cos.ChecksumOneXxh, hex.EncodeToString(actual))
 	}
 	return
 }

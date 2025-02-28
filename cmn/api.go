@@ -168,7 +168,7 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	}
 	cksum := c.Cksum
 	if cksum.Type == "" { // tests with empty cluster config
-		cksum.Type = cos.ChecksumXXHash
+		cksum.Type = cos.ChecksumOneXxh
 	}
 	wp := c.WritePolicy
 	if wp.MD.IsImmediate() {

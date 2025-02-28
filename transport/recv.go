@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/pierrec/lz4/v3"
 )
 
@@ -447,7 +447,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 //
 
 func uniqueID(r *http.Request, sessID int64) uint64 {
-	hash := xxhash.Checksum64S(cos.UnsafeB(r.RemoteAddr), cos.MLCG32)
+	hash := onexxh.Checksum64S(cos.UnsafeB(r.RemoteAddr), cos.MLCG32)
 	return (hash&math.MaxUint32)<<32 | uint64(sessID)
 }
 

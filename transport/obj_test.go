@@ -162,7 +162,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: cmn.ObjAttrs{
 			Size:  sgl1.Size(),
 			Atime: 663346294,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h1"),
+			Cksum: cos.NewCksum(cos.ChecksumOneXxh, "h1"),
 		},
 		Opaque: nil,
 	}
@@ -183,7 +183,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: cmn.ObjAttrs{
 			Size:  sgl2.Size(),
 			Atime: 663346294,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h2"),
+			Cksum: cos.NewCksum(cos.ChecksumOneXxh, "h2"),
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
@@ -383,7 +383,7 @@ func TestObjAttrs(t *testing.T) {
 		{
 			Size:  1024,
 			Atime: math.MaxInt64,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "120421"),
+			Cksum: cos.NewCksum(cos.ChecksumOneXxh, "120421"),
 			Ver:   _ptrstr("102.44"),
 		},
 		{
@@ -752,7 +752,7 @@ func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	hdr.ObjAttrs.Size = cos.GiB
 	hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), "d")
 	hdr.ObjAttrs.SetCustomKey("e", "")
-	hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
+	hdr.ObjAttrs.SetCksum(cos.ChecksumOneXxh, "xxhash")
 	return
 }
 
@@ -784,7 +784,7 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 		hdr.ObjAttrs.SetCksum(cos.ChecksumMD5, "md5")
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
-		hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
+		hdr.ObjAttrs.SetCksum(cos.ChecksumOneXxh, "xxhash")
 		for range int(x & 0x1f) {
 			hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), s)
 		}

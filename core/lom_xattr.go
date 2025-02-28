@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -319,7 +319,7 @@ func (md *lmeta) unpack(buf []byte) error {
 		return fmt.Errorf("%s: unknown checksum %d", badLmeta, buf[1])
 	}
 	payload = buf[prefLen:]
-	actualCksum = xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
+	actualCksum = onexxh.Checksum64S(buf[prefLen:], cos.MLCG32)
 	expectedCksum = binary.BigEndian.Uint64(buf[2:])
 	if expectedCksum != actualCksum {
 		return cos.NewErrMetaCksum(expectedCksum, actualCksum, md.String())
@@ -452,7 +452,7 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	// checksum, prepend, and return
 	buf[0] = MetaverLOM
 	buf[1] = mdCksumTyXXHash
-	mdCksumValue := xxhash.Checksum64S(buf[prefLen:], cos.MLCG32)
+	mdCksumValue := onexxh.Checksum64S(buf[prefLen:], cos.MLCG32)
 	binary.BigEndian.PutUint64(buf[2:], mdCksumValue)
 	return
 }

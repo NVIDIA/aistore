@@ -59,7 +59,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -603,7 +603,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.stoppable, "stoppable", false, "when true, stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "when true, show the configuration and parameters that aisloader will use for benchmark")
 	f.BoolVar(&p.traceHTTP, "trace-http", false, "when true, trace HTTP latencies") // see httpLatencies
-	f.StringVar(&p.cksumType, "cksum-type", cos.ChecksumXXHash, "cksum type to use for put object requests")
+	f.StringVar(&p.cksumType, "cksum-type", cos.ChecksumOneXxh, "cksum type to use for put object requests")
 	f.BoolVar(&p.latest, "latest", false, "when true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket")
 	f.BoolVar(&p.cached, "cached", false, "list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")")
 	f.BoolVar(&p.listDirs, "list-dirs", false, "list virtual subdirectories (remote buckets only)")
@@ -1080,7 +1080,7 @@ func setupBucket(runParams *params, created *bool) error {
 }
 
 func getIDFromString(val string, hashLen uint) uint64 {
-	hash := xxhash.Checksum64S(cos.UnsafeB(val), cos.MLCG32)
+	hash := onexxh.Checksum64S(cos.UnsafeB(val), cos.MLCG32)
 	// keep just the loaderIDHashLen bytes
 	hash <<= 64 - hashLen
 	hash >>= 64 - hashLen

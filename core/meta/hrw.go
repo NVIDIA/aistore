@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
@@ -20,14 +20,14 @@ import (
 // See also: fs/hrw.go
 
 func (smap *Smap) HrwName2T(uname []byte) (*Snode, error) {
-	digest := xxhash.Checksum64S(uname, cos.MLCG32)
+	digest := onexxh.Checksum64S(uname, cos.MLCG32)
 	return smap.HrwHash2T(digest)
 }
 
 // TODO: control plane multihoming: return LRU data plane interface
 
 func (smap *Smap) HrwMultiHome(uname []byte) (si *Snode, netName string, err error) {
-	digest := xxhash.Checksum64S(uname, cos.MLCG32)
+	digest := onexxh.Checksum64S(uname, cos.MLCG32)
 	si, err = smap.HrwHash2T(digest)
 	if err != nil {
 		return nil, cmn.NetPublic, err
@@ -97,7 +97,7 @@ func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
 func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 	var (
 		maxH   uint64
-		digest = xxhash.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
+		digest = onexxh.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
 		if psi.InMaintOrDecomm() || !psi.IsIC() {
@@ -120,7 +120,7 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
 	var (
 		maxH   uint64
-		digest = xxhash.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
+		digest = onexxh.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
 		if tsi.InMaintOrDecomm() {
@@ -161,7 +161,7 @@ func (smap *Smap) HrwTargetList(uname *string, count int) (sis Nodes, err error)
 		return
 	}
 	b := cos.UnsafeBptr(uname)
-	digest := xxhash.Checksum64S(*b, cos.MLCG32)
+	digest := onexxh.Checksum64S(*b, cos.MLCG32)
 	hlist := newHrwList(count)
 
 	for _, tsi := range smap.Tmap {

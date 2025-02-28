@@ -53,7 +53,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cos.ChecksumXXHash,
+						Type: cos.ChecksumOneXxh,
 					},
 					Extra: cmn.ExtraProps{
 						AWS: cmn.ExtraPropsAWS{CloudRegion: "us-central"},
@@ -81,7 +81,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.validate_warm_get": false,
 					"versioning.synchronize":       false,
 
-					"checksum.type":              cos.ChecksumXXHash,
+					"checksum.type":              cos.ChecksumOneXxh,
 					"checksum.validate_warm_get": false,
 					"checksum.validate_cold_get": false,
 					"checksum.validate_obj_move": false,
@@ -122,7 +122,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: &cmn.LRUConfToSet{},
 					Cksum: &cmn.CksumConfToSet{
-						Type: apc.Ptr(cos.ChecksumXXHash),
+						Type: apc.Ptr(cos.ChecksumOneXxh),
 					},
 					Access:   apc.Ptr[apc.AccessAttrs](1024),
 					Features: apc.Ptr[feat.Flags](1024),
@@ -159,7 +159,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.validate_warm_get": (*bool)(nil),
 					"versioning.synchronize":       (*bool)(nil),
 
-					"checksum.type":              apc.Ptr(cos.ChecksumXXHash),
+					"checksum.type":              apc.Ptr(cos.ChecksumOneXxh),
 					"checksum.validate_warm_get": (*bool)(nil),
 					"checksum.validate_cold_get": (*bool)(nil),
 					"checksum.validate_obj_move": (*bool)(nil),
@@ -253,7 +253,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cos.ChecksumXXHash,
+					"checksum.type": cos.ChecksumOneXxh,
 
 					"access":          "12", // type == uint64
 					"write_policy.md": apc.WriteNever,
@@ -270,7 +270,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cos.ChecksumXXHash,
+						Type: cos.ChecksumOneXxh,
 					},
 					Versioning: cmn.VersionConf{
 						Enabled:         false,
@@ -298,7 +298,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cos.ChecksumXXHash,
+					"checksum.type": cos.ChecksumOneXxh,
 
 					"access":          "12", // type == uint64
 					"write_policy.md": apc.WriteNever,
@@ -319,7 +319,7 @@ var _ = Describe("IterFields", func() {
 						Compression:  apc.Ptr(""),
 					},
 					Cksum: &cmn.CksumConfToSet{
-						Type:            apc.Ptr(cos.ChecksumXXHash),
+						Type:            apc.Ptr(cos.ChecksumOneXxh),
 						ValidateWarmGet: apc.Ptr(true),
 					},
 					Access: apc.Ptr[apc.AccessAttrs](12),

@@ -809,7 +809,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	_ = mock.NewTarget(mock.NewBaseBownerMock(
 		meta.NewBck(
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
-			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumCesXxh}, Extra: p.Extra, BID: 0xa73b9f11},
 		),
 	))
 
@@ -860,7 +860,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	oldFileInfo, _ = os.Stat(fqn)
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -879,7 +879,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	}
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234abcde"))
 	tassert.CheckError(t, err)
 
 	_, err = api.GetObject(baseParams, m.bck, objName, nil)
@@ -913,7 +913,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 	tMock := mock.NewTarget(mock.NewBaseBownerMock(
 		meta.NewBck(
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
-			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumCesXxh}, Extra: p.Extra, BID: 0xa73b9f11},
 		),
 	))
 
@@ -941,7 +941,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 		propsToSet := &cmn.BpropsToSet{
 			Versioning: &cmn.VersionConfToSet{ValidateWarmGet: apc.Ptr(true)},
 			Cksum: &cmn.CksumConfToSet{
-				Type:            apc.Ptr(cos.ChecksumXXHash),
+				Type:            apc.Ptr(cos.ChecksumCesXxh),
 				ValidateWarmGet: apc.Ptr(true),
 			},
 		}
@@ -980,7 +980,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 			modify     func(*testing.T, *core.LOM)
 		}{
 			"checksum": {modify: func(_ *testing.T, lom *core.LOM) {
-				lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "01234"))
+				lom.SetCksum(cos.NewCksum(cos.ChecksumCesXxh, "01234"))
 			}},
 			"local_content": {modify: func(t *testing.T, lom *core.LOM) {
 				err := os.WriteFile(lom.FQN, []byte("modified"), cos.PermRWR)
@@ -1158,7 +1158,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		_          = mock.NewTarget(mock.NewBaseBownerMock(
 			meta.NewBck(
 				m.bck.Name, apc.AIS, cmn.NsGlobal,
-				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
+				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumCesXxh}, BID: 1},
 			),
 			meta.CloneBck(&m.bck),
 		))
@@ -1199,7 +1199,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName = m.objNames[1]
 	fqn = findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234abcde"))
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
@@ -1218,7 +1218,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumXXHash, "01234abcde"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234abcde"))
 	tassert.CheckError(t, err)
 	_, err = api.GetObject(baseParams, m.bck, objName, nil)
 	tassert.CheckError(t, err)
@@ -1501,7 +1501,7 @@ func Test_checksum(t *testing.T) {
 
 	propsToSet := &cmn.BpropsToSet{
 		Cksum: &cmn.CksumConfToSet{
-			Type:            apc.Ptr(cos.ChecksumXXHash),
+			Type:            apc.Ptr(cos.ChecksumCesXxh),
 			ValidateColdGet: apc.Ptr(true),
 		},
 	}

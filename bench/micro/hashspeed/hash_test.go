@@ -12,8 +12,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/OneOfOne/xxhash"
-	cespare "github.com/cespare/xxhash/v2"
+	onexxh "github.com/OneOfOne/xxhash"
+	cesxxh "github.com/cespare/xxhash/v2"
 )
 
 // Examples:
@@ -63,11 +63,11 @@ func BenchmarkID(b *testing.B) {
 		b.Run("na-one-"+s, func(b *testing.B) {
 			na_one(b, size)
 		})
-		b.Run("aligned-cespare-"+s, func(b *testing.B) {
-			aligned_cespare(b, size)
+		b.Run("aligned-cesxxh-"+s, func(b *testing.B) {
+			aligned_cesxxh(b, size)
 		})
-		b.Run("na-cespare-"+s, func(b *testing.B) {
-			na_cespare(b, size)
+		b.Run("na-cesxxh-"+s, func(b *testing.B) {
+			na_cesxxh(b, size)
 		})
 	}
 }
@@ -83,7 +83,7 @@ func aligned_one(b *testing.B, size int) {
 			for i := 0; i < numIDs; i++ {
 				v := vecAligned[i][:n]
 				bytes := (*[maxSizeID]byte)(unsafe.Pointer(&v[0]))
-				_ = xxhash.Checksum64S(bytes[:size], MLCG32)
+				_ = onexxh.Checksum64S(bytes[:size], MLCG32)
 			}
 		}
 	})
@@ -95,13 +95,13 @@ func na_one(b *testing.B, size int) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
 				v := vids[i][1 : size+1] // force misalignment
-				_ = xxhash.Checksum64S(v, MLCG32)
+				_ = onexxh.Checksum64S(v, MLCG32)
 			}
 		}
 	})
 }
 
-func aligned_cespare(b *testing.B, size int) {
+func aligned_cesxxh(b *testing.B, size int) {
 	var (
 		u int32
 		n = size / int(unsafe.Sizeof(u))
@@ -112,7 +112,7 @@ func aligned_cespare(b *testing.B, size int) {
 			for i := 0; i < numIDs; i++ {
 				v := vecAligned[i][:n]
 				bytes := (*[maxSizeID]byte)(unsafe.Pointer(&v[0]))
-				h := cespare.New()
+				h := cesxxh.New()
 				h.Write(bytes[:size])
 				_ = h.Sum64()
 			}
@@ -120,13 +120,13 @@ func aligned_cespare(b *testing.B, size int) {
 	})
 }
 
-func na_cespare(b *testing.B, size int) {
+func na_cesxxh(b *testing.B, size int) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for i := 0; i < numIDs; i++ {
 				v := vids[i][1 : size+1] // force misalignment
-				h := cespare.New()
+				h := cesxxh.New()
 				h.Write(v)
 				_ = h.Sum64()
 			}
@@ -145,29 +145,29 @@ func BenchmarkThroughput(b *testing.B) {
 		newHash func() hash.Hash64
 	}{
 		{
-			name: "cespare-1M", size: 1024 * 1024,
-			newHash: func() hash.Hash64 { return cespare.New() },
+			name: "cesxxh-1M", size: 1024 * 1024,
+			newHash: func() hash.Hash64 { return cesxxh.New() },
 		},
 		{
-			name: "cespare-8M", size: 8 * 1024 * 1024,
-			newHash: func() hash.Hash64 { return cespare.New() },
+			name: "cesxxh-8M", size: 8 * 1024 * 1024,
+			newHash: func() hash.Hash64 { return cesxxh.New() },
 		},
 		{
-			name: "cespare-64M", size: 64 * 1024 * 1024,
-			newHash: func() hash.Hash64 { return cespare.New() },
+			name: "cesxxh-64M", size: 64 * 1024 * 1024,
+			newHash: func() hash.Hash64 { return cesxxh.New() },
 		},
 		{
 			name: "xxhash-1M", size: 1024 * 1024,
-			newHash: func() hash.Hash64 { return xxhash.New64() },
+			newHash: func() hash.Hash64 { return onexxh.New64() },
 		},
 		{
 			name:    "xxhash-8M",
 			size:    8 * 1024 * 1024,
-			newHash: func() hash.Hash64 { return xxhash.New64() },
+			newHash: func() hash.Hash64 { return onexxh.New64() },
 		},
 		{
 			name: "xxhash-64M", size: 64 * 1024 * 1024,
-			newHash: func() hash.Hash64 { return xxhash.New64() },
+			newHash: func() hash.Hash64 { return onexxh.New64() },
 		},
 	}
 	for _, test := range tests {
