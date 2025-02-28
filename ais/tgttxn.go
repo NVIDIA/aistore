@@ -1029,7 +1029,7 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 		return
 	}
 	if autoDetect {
-		cksum = cos.NewCksumHash(cos.ChecksumXXHash)
+		cksum = cos.NewCksumHash(cos.ChecksumCesXxh)
 	}
 	if prmMsg.Recursive {
 		opts := &fs.WalkOpts{Dir: dirFQN, Callback: cb, Sorted: true}

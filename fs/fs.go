@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const bidUnknownTTL = 2 * time.Minute // comment below; TODO: unify and move to config along w/ lom cache
@@ -118,7 +118,7 @@ func NewMountpath(mpath string, label cos.MountpathLabel) (*Mountpath, error) {
 	mi := &Mountpath{
 		Path:       cleanMpath,
 		Label:      label,
-		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
+		PathDigest: onexxh.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
 	err = mi.resolveFS()
 	return mi, err

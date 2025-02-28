@@ -28,8 +28,8 @@ duis='Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolo
 bucket="ais://@remais/abc"
 
 ## constants
-sum1="xxhash[ad97df912d23103f]"
-sum2="xxhash[ecb5ed42299ea74d]"
+sum1="xxhash2[ad97df912d23103f]"
+sum2="xxhash2[ecb5ed42299ea74d]"
 
 ## the one metric that we closely check in this test
 cold_counter="REMAIS-GET"

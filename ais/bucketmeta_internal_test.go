@@ -33,7 +33,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 		// Set path for proxy (it uses ConfigDir)
 		config := cmn.GCO.BeginUpdate()
 		config.ConfigDir = mpath
-		config.Cksum.Type = cos.ChecksumXXHash
+		config.Cksum.Type = cos.ChecksumOneXxh
 		config.Space = cmn.SpaceConf{
 			LowWM: 75, HighWM: 90, OOS: 95,
 		}

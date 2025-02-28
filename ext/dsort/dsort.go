@@ -34,7 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"github.com/tinylib/msgp/msgp"
@@ -155,7 +155,7 @@ func _torder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
 		if d.InMaintOrDecomm() {
 			continue
 		}
-		c := xxhash.Checksum64S(cos.UnsafeB(i), salt)
+		c := onexxh.Checksum64S(cos.UnsafeB(i), salt)
 		targets[c] = d
 		keys = append(keys, c)
 	}

@@ -87,7 +87,7 @@ func newPrimary() *proxy {
 	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Client.Timeout = cos.Duration(10 * time.Second)
 	config.Client.TimeoutLong = cos.Duration(10 * time.Second)
-	config.Cksum.Type = cos.ChecksumXXHash
+	config.Cksum.Type = cos.ChecksumOneXxh
 	cmn.GCO.CommitUpdate(config)
 	cmn.GCO.SetInitialGconfPath("/tmp/ais-tests/ais.config")
 
@@ -123,7 +123,7 @@ func newSecondary(name string) *proxy {
 	config.Keepalive.Proxy.Interval = cos.Duration(3 * time.Second)
 	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
 	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
-	config.Cksum.Type = cos.ChecksumXXHash
+	config.Cksum.Type = cos.ChecksumOneXxh
 	cmn.GCO.CommitUpdate(config)
 
 	o := newBMDOwnerPrx(cmn.GCO.Get())
@@ -174,22 +174,22 @@ func TestMetasyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
 	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumXXHash,
+			Type: cos.ChecksumOneXxh,
 		},
 	})
 	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumXXHash,
+			Type: cos.ChecksumOneXxh,
 		},
 	})
 	bmd.add(meta.NewBck("bucket3", apc.AWS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumXXHash,
+			Type: cos.ChecksumOneXxh,
 		},
 	})
 	bmd.add(meta.NewBck("bucket4", apc.AWS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumXXHash,
+			Type: cos.ChecksumOneXxh,
 		},
 	})
 
@@ -640,12 +640,12 @@ func TestMetasyncData(t *testing.T) {
 	// sync bucketmd, fail target and retry
 	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumXXHash,
+			Type: cos.ChecksumOneXxh,
 		},
 	})
 	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
-			Type: cos.ChecksumXXHash,
+			Type: cos.ChecksumOneXxh,
 		},
 	})
 	primary.owner.bmd.putPersist(bmd, nil)
@@ -664,7 +664,7 @@ func TestMetasyncData(t *testing.T) {
 	// after rejecting a few sync requests
 	bmd = bmd.clone()
 	bprops := &cmn.Bprops{
-		Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
+		Cksum: cmn.CksumConf{Type: cos.ChecksumOneXxh},
 		LRU:   cmn.GCO.Get().LRU,
 	}
 	bmd.add(meta.NewBck("bucket3", apc.AIS, cmn.NsGlobal), bprops)

@@ -50,7 +50,7 @@ func fillBucket(tb testing.TB, proxyURL string, bck cmn.Bck, objSize uint64, obj
 		ObjCnt:    objCount,
 		ObjSize:   objSize,
 		FixedSize: true,
-		CksumType: cos.ChecksumXXHash,
+		CksumType: cos.ChecksumOneXxh,
 	})
 	tassert.CheckFatal(tb, err)
 }

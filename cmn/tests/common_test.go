@@ -190,10 +190,10 @@ var _ = Describe("Common file", func() {
 		})
 
 		It("should copy a object and compute its checksum", func() {
-			expectedCksum, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumXXHash, 1000)
+			expectedCksum, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumCesXxh, 1000)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, cksum, err := cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumXXHash)
+			_, cksum, err := cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumCesXxh)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cksum).To(Equal(expectedCksum))
 

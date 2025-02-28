@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/teris-io/shortid"
 )
 
@@ -104,7 +104,7 @@ func ValidateDaemonID(id string) error {
 }
 
 func HashK8sProxyID(nodeName string) (pid string) {
-	digest := xxhash.Checksum64S(UnsafeB(nodeName), MLCG32)
+	digest := onexxh.Checksum64S(UnsafeB(nodeName), MLCG32)
 	pid = strconv.FormatUint(digest, 36)
 	if pid[0] >= '0' && pid[0] <= '9' {
 		pid = pid[1:]

@@ -53,7 +53,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cos.ChecksumXXHash,
+						Type: cos.ChecksumOneXxh,
 					},
 					Extra: cmn.ExtraProps{
 						AWS: cmn.ExtraPropsAWS{CloudRegion: "us-central"},
@@ -81,7 +81,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.validate_warm_get": false,
 					"versioning.synchronize":       false,
 
-					"checksum.type":              cos.ChecksumXXHash,
+					"checksum.type":              cos.ChecksumOneXxh,
 					"checksum.validate_warm_get": false,
 					"checksum.validate_cold_get": false,
 					"checksum.validate_obj_move": false,
@@ -91,21 +91,24 @@ var _ = Describe("IterFields", func() {
 					"lru.dont_evict_time":   cos.Duration(0),
 					"lru.capacity_upd_time": cos.Duration(0),
 
-					"extra.aws.cloud_region": "us-central",
-					"extra.aws.endpoint":     "",
-					"extra.aws.profile":      "",
-					"extra.aws.max_pagesize": int64(0),
+					"extra.aws.cloud_region":   "us-central",
+					"extra.aws.endpoint":       "",
+					"extra.aws.profile":        "",
+					"extra.aws.max_pagesize":   int64(0),
+					"extra.aws.multipart_size": cos.SizeIEC(0),
 
 					"access": apc.AccessAttrs(0),
 
-					"rate_limit.backend.enabled":     false,
-					"rate_limit.frontend.enabled":    false,
-					"rate_limit.backend.interval":    cos.Duration(0),
-					"rate_limit.frontend.interval":   cos.Duration(0),
-					"rate_limit.backend.max_tokens":  0,
-					"rate_limit.frontend.max_tokens": 0,
-					"rate_limit.backend.num_retries": 0,
-					"rate_limit.frontend.burst_size": 0,
+					"rate_limit.backend.enabled":            false,
+					"rate_limit.frontend.enabled":           false,
+					"rate_limit.backend.interval":           cos.Duration(0),
+					"rate_limit.frontend.interval":          cos.Duration(0),
+					"rate_limit.backend.max_tokens":         0,
+					"rate_limit.frontend.max_tokens":        0,
+					"rate_limit.backend.num_retries":        0,
+					"rate_limit.frontend.burst_size":        0,
+					"rate_limit.backend.per_op_max_tokens":  "",
+					"rate_limit.frontend.per_op_max_tokens": "",
 
 					"features": feat.Flags(0),
 					"created":  int64(0),
@@ -122,7 +125,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: &cmn.LRUConfToSet{},
 					Cksum: &cmn.CksumConfToSet{
-						Type: apc.Ptr(cos.ChecksumXXHash),
+						Type: apc.Ptr(cos.ChecksumOneXxh),
 					},
 					Access:   apc.Ptr[apc.AccessAttrs](1024),
 					Features: apc.Ptr[feat.Flags](1024),
@@ -146,20 +149,22 @@ var _ = Describe("IterFields", func() {
 					"ec.bundle_multiplier": (*int)(nil),
 					"ec.disk_only":         (*bool)(nil),
 
-					"rate_limit.backend.enabled":     (*bool)(nil),
-					"rate_limit.frontend.enabled":    (*bool)(nil),
-					"rate_limit.backend.interval":    (*cos.Duration)(nil),
-					"rate_limit.frontend.interval":   (*cos.Duration)(nil),
-					"rate_limit.backend.max_tokens":  (*int)(nil),
-					"rate_limit.frontend.max_tokens": (*int)(nil),
-					"rate_limit.backend.num_retries": (*int)(nil),
-					"rate_limit.frontend.burst_size": (*int)(nil),
+					"rate_limit.backend.enabled":            (*bool)(nil),
+					"rate_limit.frontend.enabled":           (*bool)(nil),
+					"rate_limit.backend.interval":           (*cos.Duration)(nil),
+					"rate_limit.frontend.interval":          (*cos.Duration)(nil),
+					"rate_limit.backend.max_tokens":         (*int)(nil),
+					"rate_limit.frontend.max_tokens":        (*int)(nil),
+					"rate_limit.backend.num_retries":        (*int)(nil),
+					"rate_limit.frontend.burst_size":        (*int)(nil),
+					"rate_limit.backend.per_op_max_tokens":  (*string)(nil),
+					"rate_limit.frontend.per_op_max_tokens": (*string)(nil),
 
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),
 					"versioning.synchronize":       (*bool)(nil),
 
-					"checksum.type":              apc.Ptr(cos.ChecksumXXHash),
+					"checksum.type":              apc.Ptr(cos.ChecksumOneXxh),
 					"checksum.validate_warm_get": (*bool)(nil),
 					"checksum.validate_cold_get": (*bool)(nil),
 					"checksum.validate_obj_move": (*bool)(nil),
@@ -180,6 +185,7 @@ var _ = Describe("IterFields", func() {
 					"extra.aws.endpoint":       (*string)(nil),
 					"extra.aws.profile":        (*string)(nil),
 					"extra.aws.max_pagesize":   (*int64)(nil),
+					"extra.aws.multipart_size": (*cos.SizeIEC)(nil),
 					"extra.http.original_url":  (*string)(nil),
 				},
 			),
@@ -253,7 +259,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cos.ChecksumXXHash,
+					"checksum.type": cos.ChecksumOneXxh,
 
 					"access":          "12", // type == uint64
 					"write_policy.md": apc.WriteNever,
@@ -270,7 +276,7 @@ var _ = Describe("IterFields", func() {
 					},
 					LRU: cmn.LRUConf{},
 					Cksum: cmn.CksumConf{
-						Type: cos.ChecksumXXHash,
+						Type: cos.ChecksumOneXxh,
 					},
 					Versioning: cmn.VersionConf{
 						Enabled:         false,
@@ -298,7 +304,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled": false,
 
-					"checksum.type": cos.ChecksumXXHash,
+					"checksum.type": cos.ChecksumOneXxh,
 
 					"access":          "12", // type == uint64
 					"write_policy.md": apc.WriteNever,
@@ -319,7 +325,7 @@ var _ = Describe("IterFields", func() {
 						Compression:  apc.Ptr(""),
 					},
 					Cksum: &cmn.CksumConfToSet{
-						Type:            apc.Ptr(cos.ChecksumXXHash),
+						Type:            apc.Ptr(cos.ChecksumOneXxh),
 						ValidateWarmGet: apc.Ptr(true),
 					},
 					Access: apc.Ptr[apc.AccessAttrs](12),

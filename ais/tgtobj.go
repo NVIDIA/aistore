@@ -1836,7 +1836,7 @@ cpap: // copy + append
 	oah := cos.SimpleOAH{Size: a.size, Atime: a.started}
 	if a.put {
 		// when append becomes PUT (TODO: checksum type)
-		cksum.Init(cos.ChecksumXXHash)
+		cksum.Init(cos.ChecksumCesXxh)
 		aw = archive.NewWriter(a.mime, wfh, &cksum, nil /*opts*/)
 		err = aw.Write(a.filename, oah, a.r)
 		aw.Fini()

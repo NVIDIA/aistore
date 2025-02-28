@@ -156,7 +156,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			Provider: apc.AIS,
 			Ns:       cmn.NsGlobal,
 			Props: &cmn.Bprops{
-				Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
+				Cksum: cmn.CksumConf{Type: cos.ChecksumCesXxh},
 				BID:   0xa5b6e7d8,
 			},
 		}

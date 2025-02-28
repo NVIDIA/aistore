@@ -79,12 +79,12 @@ var _ = Describe("LOM", func() {
 		),
 		meta.NewBck(
 			bucketLocalB, apc.AIS, cmn.NsGlobal,
-			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumOneXxh}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
 		),
 		meta.NewBck(
 			bucketLocalC, apc.AIS, cmn.NsGlobal,
 			&cmn.Bprops{
-				Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
+				Cksum:  cmn.CksumConf{Type: cos.ChecksumOneXxh},
 				LRU:    cmn.LRUConf{Enabled: true},
 				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 				BID:    3,
@@ -330,7 +330,7 @@ var _ = Describe("LOM", func() {
 			testObjectName := "cksum-foldr/test-obj.ext"
 			// Bucket needs to have checksum enabled
 			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
-			dummyCksm := cos.NewCksum(cos.ChecksumXXHash, "dummycksm")
+			dummyCksm := cos.NewCksum(cos.ChecksumOneXxh, "dummycksm")
 
 			Describe("ComputeCksumIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {
@@ -362,7 +362,7 @@ var _ = Describe("LOM", func() {
 					cksum, err := lom.ComputeSetCksum()
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, cksumValue := cksum.Get()
-					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumXXHash))
+					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumOneXxh))
 					Expect(cksumValue).To(BeEquivalentTo(expectedChecksum))
 					Expect(lom.Checksum().Equal(cksum)).To(BeTrue())
 
@@ -423,7 +423,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 
-					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "wrong checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "wrong checksum"))
 					Expect(persist(lom)).NotTo(HaveOccurred())
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 				})
@@ -449,7 +449,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
-					lom.SetCksum(cos.NewCksum(cos.ChecksumXXHash, "wrong checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "wrong checksum"))
 					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
 				})
 
@@ -1106,7 +1106,7 @@ func createTestFile(fqn string, size int) {
 
 func getTestFileHash(fqn string) (hash string) {
 	reader, _ := os.Open(fqn)
-	_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cos.ChecksumXXHash)
+	_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cos.ChecksumOneXxh)
 	Expect(err).NotTo(HaveOccurred())
 	hash = cksum.Value()
 	reader.Close()

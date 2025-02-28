@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -370,7 +370,7 @@ func (b *Bck) ubuf(buf []byte, nsUname, objName string) []byte {
 // alternative (one-way) uniqueness
 func (b *Bck) HashUname(s string /*verb*/) uint64 {
 	const sepa = "\x00"
-	h := xxhash.New64()
+	h := onexxh.New64()
 	h.WriteString(s)
 	h.WriteString(sepa)
 	h.WriteString(b.Provider)

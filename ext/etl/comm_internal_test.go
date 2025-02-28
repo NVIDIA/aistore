@@ -42,7 +42,7 @@ var _ = Describe("CommunicatorTest", func() {
 		etlTransformArgs = "{\"from_time\":2.43,\"to_time\":3.43}"
 		clusterBck       = meta.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
-			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumCesXxh}},
 		)
 		bmdMock = mock.NewBaseBownerMock(clusterBck)
 	)

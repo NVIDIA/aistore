@@ -18,7 +18,7 @@
 ^PUT.*=> ais://$BUCKET_1/object_2.txt$
 
 NAME			 SIZE	 VERSION
-cksum		 11B	 4
+cksum		 11B	 5
 object_1.txt		 11B	 1
 object_2.txt		 11B	 1
 rand.txt 30.49MiB 2
@@ -27,7 +27,7 @@ rand.txt 30.49MiB 2
 ^PUT.*=> ais://$BUCKET_1/object_3.txt$
 
 NAME			 SIZE	 VERSION
-cksum		 11B	 4
+cksum		 11B	 5
 object_1.txt		 2B  2
 object_2.txt		 11B     1
 object_3.txt         11B     1

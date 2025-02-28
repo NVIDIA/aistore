@@ -1,6 +1,6 @@
 // Package meta: cluster-level metadata
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package meta
 
@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 // enum Snode.Flags
@@ -113,7 +113,7 @@ func (d *Snode) digest() uint64 { return d.IDDigest }
 
 func (d *Snode) setDigest() {
 	if d.IDDigest == 0 {
-		d.IDDigest = xxhash.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
+		d.IDDigest = onexxh.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
 	}
 }
 

@@ -1,6 +1,13 @@
 # NOTE: system environment variables are listed in the `env` package,
 # see https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 
+# NOTE: aws.extra settings:
+#      "extra.aws.cloud_region"
+#      "extra.aws.endpoint"
+#      "extra.aws.profile"
+#      "extra.aws.max_pagesize"
+#      "extra.aws.multipart_size"
+
 cat > $AIS_CONF_FILE <<EOL
 {
 	"backend": $(make_backend_conf),
@@ -80,7 +87,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled": true
 	},
 	"checksum": {
-		"type":			"xxhash",
+		"type":			"xxhash2",
 		"validate_cold_get":	false,
 		"validate_warm_get":	false,
 		"validate_obj_move":	false,
@@ -176,16 +183,18 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"rate_limit": {
 		"backend": {
-			"num_retries": 3,
-			"interval":    "1m",
-			"max_tokens":  1000,
-			"enabled":     false
+			"num_retries":       3,
+			"interval":          "1m",
+			"per_op_max_tokens": "",
+			"max_tokens":        1000,
+			"enabled":           false
 		},
 		"frontend": {
-			"burst_size":  375,
-			"interval":    "1m",
-			"max_tokens":  1000,
-			"enabled":     false
+			"burst_size":        375,
+			"interval":          "1m",
+			"per_op_max_tokens": "",
+			"max_tokens":        1000,
+			"enabled":           false
 		}
 	},
 	"features": "0"

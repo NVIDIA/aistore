@@ -39,7 +39,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -456,7 +456,7 @@ func TestETLInlineObjWithArgs(t *testing.T) {
 					// Read the object and calculate the hash using the same hash algorithm as the ETL (same random seed).
 					// The results should match because the hash is calculated in the same way.
 					data, _ := io.ReadAll(r)
-					hash := xxhash.Checksum64S(data, seed)
+					hash := onexxh.Checksum64S(data, seed)
 					hashHex := fmt.Sprintf("%016x", hash)
 
 					return bytes.NewReader([]byte(hashHex))

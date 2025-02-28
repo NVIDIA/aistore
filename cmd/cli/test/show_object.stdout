@@ -1,6 +1,6 @@
 PROPERTY         VALUE
 ^atime(.*)$
-checksum         xxhash[05967d5390ac53b0]
+checksum         xxhash2[05967d5390ac53b0]
 name             ais://$BUCKET_1/object_1.txt
 size             11B
 PROPERTY         VALUE
@@ -8,7 +8,7 @@ size             11B
 version          1
 PROPERTY         VALUE
 ^atime(.*)$
-checksum         xxhash[05967d5390ac53b0]
+checksum         xxhash2[05967d5390ac53b0]
 ^copies\s*1(.*)$
 custom           -
 ec               -
@@ -18,7 +18,7 @@ size             11B
 version          1
 PROPERTY         VALUE
 ^atime(.*)$
-checksum         xxhash[05967d5390ac53b0]
+checksum         xxhash2[05967d5390ac53b0]
 ^copies\s*1(.*)$
 ^custom\s*\[key(.*)$
 ec               -

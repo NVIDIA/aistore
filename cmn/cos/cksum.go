@@ -16,21 +16,22 @@ import (
 	"io"
 	"sort"
 
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
+	cesxxh "github.com/cespare/xxhash/v2"
 	jsoniter "github.com/json-iterator/go"
 )
 
 // [NOTE]
 // - currently, we have only two crypto-secure types: sha256 and sha512
 // - see related object comparison logic in cmn/objattrs
-
 // [TODO]
 // revisit and maybe add SHA-3 family (see golang.org/x/crypto/sha3 for: `BinaryMarshaler`)
 
 // supported checksums
 const (
 	ChecksumNone   = "none"
-	ChecksumXXHash = "xxhash"
+	ChecksumOneXxh = "xxhash"
+	ChecksumCesXxh = "xxhash2"
 	ChecksumMD5    = "md5"
 	ChecksumCRC32C = "crc32c"
 	ChecksumSHA256 = "sha256" // crypto.SHA512_256 (SHA-2)
@@ -68,7 +69,8 @@ type (
 
 var checksums = StrSet{
 	ChecksumNone:   {},
-	ChecksumXXHash: {},
+	ChecksumOneXxh: {},
+	ChecksumCesXxh: {},
 	ChecksumMD5:    {},
 	ChecksumCRC32C: {},
 	ChecksumSHA256: {},
@@ -120,8 +122,10 @@ func (ck *CksumHash) Init(ty string) {
 	switch ty {
 	case ChecksumNone, "":
 		ck.ty, ck.H = ChecksumNone, newNoopHash()
-	case ChecksumXXHash:
-		ck.H = xxhash.New64()
+	case ChecksumOneXxh:
+		ck.H = onexxh.New64()
+	case ChecksumCesXxh:
+		ck.H = cesxxh.New()
 	case ChecksumMD5:
 		ck.H = md5.New() //nolint:gosec // G401 ditto (see G501 above)
 	case ChecksumCRC32C:

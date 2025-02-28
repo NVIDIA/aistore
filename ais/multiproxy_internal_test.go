@@ -56,7 +56,7 @@ func newDiscoverServerPrimary() *proxy {
 	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Client.Timeout = cos.Duration(10 * time.Second)
 	config.Client.TimeoutLong = cos.Duration(10 * time.Second)
-	config.Cksum.Type = cos.ChecksumXXHash
+	config.Cksum.Type = cos.ChecksumCesXxh
 	cmn.GCO.CommitUpdate(config)
 
 	p.owner.smap = newSmapOwner(config)

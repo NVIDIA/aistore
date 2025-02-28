@@ -141,8 +141,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// Bck:s3://@uuid#namespace/abc ObjName:X SID: Opaque:[] ObjAttrs:{231B, v"1", xxhash[h1], map[]} (69)
-	// Bck:ais://abracadabra ObjName:p/q/s SID: Opaque:[49 50 51] ObjAttrs:{213B, v"222222222222222222222222", xxhash[h2], map[xx:11 yy:22]} (110)
+	// Bck:s3://@uuid#namespace/abc ObjName:X SID: Opaque:[] ObjAttrs:{231B, v"1", xxhash2[h1], map[]} (70)
+	// Bck:ais://abracadabra ObjName:p/q/s SID: Opaque:[49 50 51] ObjAttrs:{213B, v"222222222222222222222222", xxhash2[h2], map[xx:11 yy:22]} (111)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -162,7 +162,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: cmn.ObjAttrs{
 			Size:  sgl1.Size(),
 			Atime: 663346294,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h1"),
+			Cksum: cos.NewCksum(cos.ChecksumCesXxh, "h1"),
 		},
 		Opaque: nil,
 	}
@@ -183,7 +183,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 		ObjAttrs: cmn.ObjAttrs{
 			Size:  sgl2.Size(),
 			Atime: 663346294,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "h2"),
+			Cksum: cos.NewCksum(cos.ChecksumCesXxh, "h2"),
 		},
 		Opaque: []byte{'1', '2', '3'},
 	}
@@ -383,7 +383,7 @@ func TestObjAttrs(t *testing.T) {
 		{
 			Size:  1024,
 			Atime: math.MaxInt64,
-			Cksum: cos.NewCksum(cos.ChecksumXXHash, "120421"),
+			Cksum: cos.NewCksum(cos.ChecksumCesXxh, "120421"),
 			Ver:   _ptrstr("102.44"),
 		},
 		{
@@ -752,7 +752,7 @@ func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 	hdr.ObjAttrs.Size = cos.GiB
 	hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), "d")
 	hdr.ObjAttrs.SetCustomKey("e", "")
-	hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
+	hdr.ObjAttrs.SetCksum(cos.ChecksumCesXxh, "xxhash")
 	return
 }
 
@@ -784,7 +784,7 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 		hdr.ObjAttrs.SetCksum(cos.ChecksumMD5, "md5")
 	case 2:
 		hdr.ObjAttrs.Size = (x & 0xffff) + 1
-		hdr.ObjAttrs.SetCksum(cos.ChecksumXXHash, "xxhash")
+		hdr.ObjAttrs.SetCksum(cos.ChecksumCesXxh, "xxhash")
 		for range int(x & 0x1f) {
 			hdr.ObjAttrs.SetCustomKey(strconv.FormatInt(random.Int64(), 10), s)
 		}

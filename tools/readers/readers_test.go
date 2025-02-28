@@ -232,7 +232,7 @@ func testReaderAdv(t *testing.T, r readers.Reader, size int64) {
 
 func TestRandReader(t *testing.T) {
 	size := int64(1024)
-	r, err := readers.NewRand(size, cos.ChecksumXXHash)
+	r, err := readers.NewRand(size, cos.ChecksumCesXxh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestSGReader(t *testing.T) {
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := readers.NewSG(sgl, size, cos.ChecksumXXHash)
+		r, err := readers.NewSG(sgl, size, cos.ChecksumCesXxh)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -284,7 +284,7 @@ func TestSGReader(t *testing.T) {
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := readers.NewSG(sgl, size, cos.ChecksumXXHash)
+		r, err := readers.NewSG(sgl, size, cos.ChecksumCesXxh)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -298,7 +298,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for range b.N {
-		r, err := readers.NewRandFile(filepath, fn, cos.MiB, cos.ChecksumXXHash)
+		r, err := readers.NewRandFile(filepath, fn, cos.MiB, cos.ChecksumCesXxh)
 		if err != nil {
 			os.Remove(path.Join(filepath, fn))
 			b.Fatal(err)
@@ -313,7 +313,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for range b.N {
-		r, err := readers.NewRand(cos.MiB, cos.ChecksumXXHash)
+		r, err := readers.NewRand(cos.MiB, cos.ChecksumCesXxh)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -331,7 +331,7 @@ func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
 
 	for range b.N {
 		sgl.Reset()
-		r, err := readers.NewSG(sgl, cos.MiB, cos.ChecksumXXHash)
+		r, err := readers.NewSG(sgl, cos.MiB, cos.ChecksumCesXxh)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)

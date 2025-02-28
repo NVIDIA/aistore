@@ -47,7 +47,7 @@ var _ = Describe("Mirror", func() {
 
 	var (
 		props = &cmn.Bprops{
-			Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
+			Cksum:  cmn.CksumConf{Type: cos.ChecksumCesXxh},
 			LRU:    cmn.LRUConf{Enabled: true},
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 			BID:    1,

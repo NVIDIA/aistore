@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -53,7 +53,7 @@ func ParseURLScheme(url string) (scheme, address string) {
 
 func OrigURLBck2Name(origURLBck string) (bckName string) {
 	_, b := ParseURLScheme(origURLBck)
-	b1 := xxhash.Checksum64S(cos.UnsafeB(b), cos.MLCG32)
+	b1 := onexxh.Checksum64S(cos.UnsafeB(b), cos.MLCG32)
 	b2 := strconv.FormatUint(b1, 16)
 	bckName = base64.RawURLEncoding.EncodeToString([]byte(b2))
 	return

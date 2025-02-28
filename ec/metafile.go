@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/OneOfOne/xxhash"
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 const MDVersionLast = 1 // current version of metadata
@@ -138,7 +138,7 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 		return
 	}
 	b := unpacker.Bytes()
-	calcCksum := xxhash.Checksum64S(b[:len(b)-cos.SizeofI64], cos.MLCG32)
+	calcCksum := onexxh.Checksum64S(b[:len(b)-cos.SizeofI64], cos.MLCG32)
 	if cksum != calcCksum {
 		err = cos.NewErrMetaCksum(cksum, calcCksum, "EC metadata")
 	}
@@ -201,7 +201,7 @@ func (md *Metadata) Pack(packer *cos.BytePack) {
 	packer.WriteString(md.CksumType)
 	packer.WriteString(md.CksumValue)
 	packer.WriteMapStrUint16(md.Daemons)
-	h := xxhash.Checksum64S(packer.Bytes(), cos.MLCG32)
+	h := onexxh.Checksum64S(packer.Bytes(), cos.MLCG32)
 	packer.WriteUint64(h)
 }
 

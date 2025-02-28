@@ -3130,7 +3130,7 @@ func TestAllChecksums(t *testing.T) {
 	checksums := cos.SupportedChecksums()
 	for _, mirrored := range []bool{false, true} {
 		for _, cksumType := range checksums {
-			if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumXXHash {
+			if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumOneXxh && cksumType != cos.ChecksumCesXxh {
 				continue
 			}
 			tag := cksumType
@@ -3146,7 +3146,7 @@ func TestAllChecksums(t *testing.T) {
 	}
 
 	for _, cksumType := range checksums {
-		if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumXXHash {
+		if testing.Short() && cksumType != cos.ChecksumNone && cksumType != cos.ChecksumOneXxh && cksumType != cos.ChecksumCesXxh {
 			continue
 		}
 		tag := cksumType + "/EC"
@@ -3171,13 +3171,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			t:               t,
 			num:             1000,
 			numGetsEachFile: 1,
-			fileSize:        uint64(cos.KiB + rand.Int64N(cos.KiB*10)),
+			fileSize:        cos.MiB/2 + rand.Uint64N(cos.KiB*10),
 		}
 		numCorrupted = rand.IntN(m.num/100) + 2
 	)
 	if testing.Short() {
 		m.num = 40
-		m.fileSize = cos.KiB
+		m.fileSize = cos.KiB + rand.Uint64N(cos.KiB)
 		numCorrupted = 13
 	}
 

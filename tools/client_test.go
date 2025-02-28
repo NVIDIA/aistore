@@ -27,7 +27,7 @@ import (
 var bp api.BaseParams
 
 func TestPutFile(t *testing.T) {
-	err := putFile(1024, cos.ChecksumXXHash)
+	err := putFile(1024, cos.ChecksumCesXxh)
 	if err != nil {
 		t.Fatal("Put file failed", err)
 	}
@@ -39,7 +39,7 @@ func TestPutSG(t *testing.T) {
 	sgl := mmsa.NewSGL(size)
 	defer sgl.Free()
 
-	err := putSG(sgl, size, cos.ChecksumXXHash)
+	err := putSG(sgl, size, cos.ChecksumCesXxh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
 	for range b.N {
-		err := putFile(1024*1024, cos.ChecksumXXHash)
+		err := putFile(1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -108,7 +108,7 @@ func BenchmarkPutFileWithHash1M(b *testing.B) {
 
 func BenchmarkPutRandWithHash1M(b *testing.B) {
 	for range b.N {
-		err := putRand(1024*1024, cos.ChecksumXXHash)
+		err := putRand(1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -121,7 +121,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 	defer sgl.Free()
 
 	for range b.N {
-		err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)
+		err := putSG(sgl, 1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -162,7 +162,7 @@ func BenchmarkPutSGNoHash1M(b *testing.B) {
 func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err := putFile(1024*1024, cos.ChecksumXXHash)
+			err := putFile(1024*1024, cos.ChecksumCesXxh)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -173,7 +173,7 @@ func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
 func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err := putRand(1024*1024, cos.ChecksumXXHash)
+			err := putRand(1024*1024, cos.ChecksumCesXxh)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -190,7 +190,7 @@ func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 		}()
 
 		for pb.Next() {
-			err := putSG(sgl, 1024*1024, cos.ChecksumXXHash)
+			err := putSG(sgl, 1024*1024, cos.ChecksumCesXxh)
 			if err != nil {
 				b.Fatal(err)
 			}
