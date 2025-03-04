@@ -248,10 +248,11 @@ rerr:
 }
 
 func (poi *putOI) _vlabs() map[string]string {
-	vlabs := map[string]string{stats.VarlabBucket: poi.lom.Bck().Cname(""), stats.VarlabXactKind: ""}
+	var xkind string
 	if poi.xctn != nil {
-		vlabs[stats.VarlabXactKind] = poi.xctn.Kind()
+		xkind = poi.xctn.Kind()
 	}
+	vlabs := map[string]string{stats.VarlabBucket: poi.lom.Bck().Cname(""), stats.VarlabXactKind: xkind}
 	return vlabs
 }
 
@@ -1215,8 +1216,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 }
 
 func (goi *getOI) stats(written int64) {
-	vlabs := map[string]string{stats.VarlabBucket: goi.lom.Bck().Cname("")}
-	delta := mono.SinceNano(goi.ltime)
+	var (
+		bck   = goi.lom.Bck()
+		vlabs = map[string]string{stats.VarlabBucket: bck.Cname("")}
+		delta = mono.SinceNano(goi.ltime)
+	)
 	goi.t.statsT.IncWith(stats.GetCount, vlabs)
 	goi.t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.GetSize, Value: written, VarLabs: vlabs},
@@ -1231,21 +1235,24 @@ func (goi *getOI) stats(written int64) {
 		)
 	}
 
-	if goi.rltime > 0 {
-		bck := goi.lom.Bck()
-		backend := goi.t.Backend(bck)
-		goi.t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
+	if goi.rltime == 0 {
+		return
+	}
+
+	// cold (compare with t.coldstats)
+	backend := goi.t.Backend(bck)
+	vlabs[stats.VarlabXactKind] = ""
+	goi.t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
+	goi.t.statsT.AddWith(
+		cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta, VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime, VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written, VarLabs: vlabs},
+	)
+	if goi.verchanged {
+		goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)
 		goi.t.statsT.AddWith(
-			cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta, VarLabs: vlabs},
-			cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime, VarLabs: vlabs},
-			cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written, VarLabs: vlabs},
+			cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize(), VarLabs: vlabs},
 		)
-		if goi.verchanged {
-			goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)
-			goi.t.statsT.AddWith(
-				cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize(), VarLabs: vlabs},
-			)
-		}
 	}
 }
 
@@ -1537,7 +1544,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error)
 //
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ int, _ error) {
+func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, ecode int, err error) {
 	reader, oah, errN := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 	if errN != nil {
 		return 0, 0, errN
@@ -1569,12 +1576,18 @@ func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (si
 		}
 	}
 
-	ecode, err := poi.putObject()
+	ecode, err = poi.putObject()
 	freePOI(poi)
 	if err == nil {
-		// xaction stats: inc locally processed (and see data mover for in and out objs)
+		// xaction stats: increment locally processed
+		// (and see DM (data mover) for in and out counting)
 		size = oah.Lsize()
+
+		// TODO -- FIXME
+		// backend := t.Backend(bck)
+		// t.coldstats()
 	}
+
 	return size, ecode, err
 }
 
@@ -1752,7 +1765,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 
 	resp, err := g.client.data.Do(req)
 	if err != nil {
-		err = cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
+		err = cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Cname(sargs.objNameTo), sargs.tsi, err)
 	} else {
 		cos.DrainReader(resp.Body)
 		resp.Body.Close()

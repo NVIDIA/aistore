@@ -212,7 +212,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 	lom.Unlock(false)
 
 	if err != nil && cos.IsNotExist(err, ecode) && lom.Bucket().IsRemote() {
-		_, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
+		_, err = core.T.GetCold(context.Background(), lom, pc.boot.xctn.Kind(), cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
 		}

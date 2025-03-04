@@ -34,10 +34,6 @@ import (
 const (
 	// KindCounter & KindSize - always incremented
 
-	// NOTE semantics:
-	// - counts all instances when remote GET is followed by storing of the new object (version) locally
-	// - does _not_ count assorted calls to `GetObjReader` (e.g., via tcb/tco -> LDP.Reader)
-
 	LruEvictCount = "lru.evict.n"
 	LruEvictSize  = "lru.evict.size"
 
@@ -60,15 +56,19 @@ const (
 	IOErrDeleteCount = ioErrPrefix + "del.n"
 
 	// KindLatency
+	GetLatency         = "get.ns"
+	GetLatencyTotal    = "get.ns.total"
+	GetE2ELatencyTotal = "e2e.get.ns.total" // end to end (e2e) cold-GET latency
 	PutLatency         = "put.ns"
 	PutLatencyTotal    = "put.ns.total"
 	PutE2ELatencyTotal = "e2e.put.ns.total" // end to end (e2e) write-through PUT latency
-	AppendLatency      = "append.ns"
-	GetRedirLatency    = "get.redir.ns"
-	PutRedirLatency    = "put.redir.ns"
-	DloadLatencyTotal  = "dl.ns.total"
-	HeadLatency        = "head.ns"
-	HeadLatencyTotal   = "head.ns.total"
+
+	AppendLatency     = "append.ns"
+	GetRedirLatency   = "get.redir.ns"
+	PutRedirLatency   = "put.redir.ns"
+	DloadLatencyTotal = "dl.ns.total"
+	HeadLatency       = "head.ns"
+	HeadLatencyTotal  = "head.ns.total"
 
 	// Dsort
 	DsortCreationReqCount    = "dsort.creation.req.n"

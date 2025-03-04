@@ -186,7 +186,7 @@ retry:
 			}
 		}
 		// OwtGetPrefetchLock: minimal locking, optimistic concurrency
-		ecode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
+		ecode, err = core.T.GetCold(context.Background(), lom, r.Kind(), cmn.OwtGetPrefetchLock)
 		if err == nil { // done
 			r.ObjsAdd(1, lom.Lsize())
 		}

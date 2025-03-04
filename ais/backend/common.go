@@ -1,4 +1,4 @@
-// Package backend contains implementation of various backend providers.
+// Package backend contains core/backend interface implementations for supported backend providers.
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
@@ -61,7 +61,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 				Help:    "GET: total number of executed remote requests (cold GETs)",
 				StrName: "remote_get_count",
 				Labels:  labels,
-				VarLabs: stats.BckVarlabs,
+				VarLabs: stats.BckXactVarlabs,
 			},
 		)
 		tr.RegExtMetric(snode,
@@ -71,7 +71,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 				Help:    "GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster",
 				StrName: "remote_get_ns_total",
 				Labels:  labels,
-				VarLabs: stats.BckVarlabs,
+				VarLabs: stats.BckXactVarlabs,
 			},
 		)
 		tr.RegExtMetric(snode,
@@ -82,7 +82,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 					"includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response",
 				StrName: "remote_e2e_get_ns_total",
 				Labels:  labels,
-				VarLabs: stats.BckVarlabs,
+				VarLabs: stats.BckXactVarlabs,
 			},
 		)
 		tr.RegExtMetric(snode,
@@ -92,7 +92,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 				Help:    "GET: total cumulative size (bytes) of all cold-GET transactions",
 				StrName: "remote_get_bytes_total",
 				Labels:  labels,
-				VarLabs: stats.BckVarlabs,
+				VarLabs: stats.BckXactVarlabs,
 			},
 		)
 	}

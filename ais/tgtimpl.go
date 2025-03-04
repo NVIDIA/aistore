@@ -142,8 +142,9 @@ func (t *target) CopyObject(lom *core.LOM, dm *bundle.DataMover, params *xs.CoiP
 	return size, err
 }
 
-// use `backend.GetObj` (compare w/ other instances calling `backend.GetObjReader`)
-func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode int, err error) {
+// use `backend.GetObj`
+// (compare w/ `backend.GetObjReader` via ldp and blob download)
+func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt cmn.OWT) (ecode int, err error) {
 	// 1. lock
 	switch owt {
 	case cmn.OwtGetPrefetchLock:
@@ -167,7 +168,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 
 	// 2. GET remote object and store it
 	var (
-		now     = mono.NanoTime()
+		started = mono.NanoTime()
 		backend = t.Backend(lom.Bck())
 	)
 	if ecode, err = backend.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
@@ -191,13 +192,15 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	}
 
 	// 4. stats
-	t.coldstats(backend, lom, now)
+	t.coldstats(backend, lom, xkind, started)
 	return 0, nil
 }
 
-// TODO: support BckXactVarlabs (+ `xkind`): etl, prefetch, copy, archive
-func (t *target) coldstats(backend core.Backend, lom *core.LOM, started int64) {
-	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+func (t *target) coldstats(backend core.Backend, lom *core.LOM, xkind string, started int64) {
+	vlabs := map[string]string{
+		stats.VarlabBucket:   lom.Bck().Cname(""),
+		stats.VarlabXactKind: xkind,
+	}
 	t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
 	t.statsT.AddWith(
 		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(started), VarLabs: vlabs},

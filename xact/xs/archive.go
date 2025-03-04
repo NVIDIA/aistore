@@ -598,7 +598,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit) {
 
 	if coldGet {
 		// cold
-		if ecode, err := core.T.GetCold(context.Background(), lom, cmn.OwtGetLock); err != nil {
+		if ecode, err := core.T.GetCold(context.Background(), lom, wi.r.Kind(), cmn.OwtGetLock); err != nil {
 			if lrit.lrp != lrpList && cos.IsNotExist(err, ecode) {
 				return // range or prefix, not found
 			}

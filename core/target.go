@@ -100,7 +100,7 @@ type (
 		EvictObject(lom *LOM) (ecode int, err error)
 		DeleteObject(lom *LOM, evict bool) (ecode int, err error)
 
-		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (ecode int, err error)
+		GetCold(ctx context.Context, lom *LOM, xkind string, owt cmn.OWT) (ecode int, err error)
 
 		HeadCold(lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 

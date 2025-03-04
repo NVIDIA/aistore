@@ -66,7 +66,7 @@ func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.Tcdf) fs.CapStatus {
 	return fs.CapStatus{}
 }
 
-func (*TargetMock) GetCold(context.Context, *core.LOM, cmn.OWT) (int, error) {
+func (*TargetMock) GetCold(context.Context, *core.LOM, string, cmn.OWT) (int, error) {
 	return http.StatusOK, nil
 }
 

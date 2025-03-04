@@ -60,11 +60,13 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 
 // (compare with ext/etl/dp.go)
 func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH, error) {
+	bck := lom.Bck()
+
 	lom.Lock(false)
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
 	if loadErr == nil {
 		if latestVer || sync {
-			debug.Assert(lom.Bck().IsRemote(), lom.Bck().String()) // caller's responsibility
+			debug.Assert(bck.IsRemote(), bck.String()) // caller's responsibility
 			res := lom.CheckRemoteMD(true /* rlocked*/, sync, nil /*origReq*/)
 			if res.Err != nil {
 				lom.Unlock(false)
@@ -88,7 +90,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 	if !cos.IsNotExist(loadErr, 0) {
 		return nil, nil, cmn.NewErrFailedTo(T, "ldp-load", lom.Cname(), loadErr)
 	}
-	if !lom.Bck().IsRemote() {
+	if !bck.IsRemote() {
 		return nil, nil, cos.NewErrNotFound(T, lom.Cname())
 	}
 
@@ -101,7 +103,7 @@ remote:
 		Cksum: cos.NoneCksum, // will likely reassign (below)
 		Atime: lom.AtimeUnix(),
 	}
-	res := T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, 0, 0)
+	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
 
 	if lom.Checksum() != nil {
 		oah.Cksum = lom.Checksum()

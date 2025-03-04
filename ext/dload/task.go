@@ -221,7 +221,7 @@ func (task *singleTask) downloadRemote(lom *core.LOM) error {
 	task.getCtx = ctx
 
 	// Do final GET (prefetch) request.
-	_, err := core.T.GetCold(ctx, lom, cmn.OwtGetTryLock)
+	_, err := core.T.GetCold(ctx, lom, task.xdl.Kind(), cmn.OwtGetTryLock)
 	return err
 }
 

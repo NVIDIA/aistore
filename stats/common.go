@@ -73,13 +73,20 @@ const (
 	ioErrPrefix = "err.io." // excluding connection-reset-by-peer and similar (see ioErrNames)
 )
 
-// metrics
+//
+// common metrics ---------------------------------------------------------------
+//
+
+// KindCounter:
+// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
+// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
 const (
-	// KindCounter:
-	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
-	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
-	GetCount    = "get.n" // GET(object) count = (cold + warm)
-	PutCount    = "put.n" // ditto PUT
+	// NOTE semantics:
+	// - counts all instances when remote GET is followed by storing of the new object (version) locally
+	// - does _not_ count assorted calls to `GetObjReader` (e.g., via tcb/tco -> LDP.Reader)
+	GetCount = "get.n" // GET(object) count = (cold + warm)
+
+	PutCount    = "put.n" // ditto PUT(object) count = (all PUTs including remote)
 	HeadCount   = "head.n"
 	AppendCount = "append.n"
 	DeleteCount = "del.n"
@@ -101,15 +108,16 @@ const (
 	// more errors
 	// (for even more errors, see target_stats)
 	ErrHTTPWriteCount = errPrefix + "http.write.n"
+)
 
-	// KindLatency
-	// latency stats have numSamples used to compute average latency
-	GetLatency         = "get.ns"
-	GetLatencyTotal    = "get.ns.total"
-	GetE2ELatencyTotal = "e2e.get.ns.total" // end to end (e2e) cold-GET latency
-	ListLatency        = "lst.ns"
-	KeepAliveLatency   = "kalive.ns"
+// KindLatency (most latency metrics are target-only - see target_stats)
+// latency stats have numSamples used to compute average latency
+const (
+	ListLatency      = "lst.ns"
+	KeepAliveLatency = "kalive.ns"
+)
 
+const (
 	// KindSpecial
 	Uptime = "up.ns.time"
 
