@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -17,7 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/pierrec/lz4/v3"
+	"github.com/pierrec/lz4/v4"
 )
 
 const (

@@ -16,12 +16,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	onexxh "github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/pierrec/lz4/v3"
+	"github.com/pierrec/lz4/v4"
 )
 
 const (
 	sizeXXHash64  = cos.SizeofI64
-	lz4BufferSize = 64 << 10
+	lz4BufferSize = lz4.Block64Kb
 )
 
 func Encode(ws cos.WriterAt, v any, opts Options) (err error) {
@@ -63,7 +63,8 @@ func Encode(ws cos.WriterAt, v any, opts Options) (err error) {
 	}
 	if opts.Compress {
 		zw := lz4.NewWriter(w)
-		zw.BlockMaxSize = lz4BufferSize
+		errN := zw.Apply(lz4.BlockSizeOption(lz4BufferSize))
+		debug.AssertNoErr(errN)
 		w = zw
 		defer zw.Close()
 	}
@@ -138,9 +139,7 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		expectedCksum = binary.BigEndian.Uint64(cksum[:])
 	}
 	if opts.Compress {
-		zr := lz4.NewReader(r)
-		zr.BlockMaxSize = lz4BufferSize
-		r = zr
+		r = lz4.NewReader(r)
 	}
 	if opts.Checksum {
 		h = onexxh.New64()

@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/pierrec/lz4/v3"
+	"github.com/pierrec/lz4/v4"
 )
 
 // object stream & private types
@@ -167,10 +167,14 @@ func (s *Stream) doRequest() error {
 	} else {
 		s.lz4s.zw.Reset(s.lz4s.sgl)
 	}
-	// lz4 framing spec at http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
-	s.lz4s.zw.Header.BlockChecksum = false
-	s.lz4s.zw.Header.NoChecksum = !s.lz4s.frameChecksum
-	s.lz4s.zw.Header.BlockMaxSize = s.lz4s.blockMaxSize
+
+	err := s.lz4s.zw.Apply(
+		lz4.BlockChecksumOption(false),
+		lz4.ChecksumOption(s.lz4s.frameChecksum),
+		lz4.BlockSizeOption(lz4.BlockSize(s.lz4s.blockMaxSize)),
+	)
+	debug.AssertNoErr(err)
+
 	return s.doCmpr(s.lz4s)
 }
 

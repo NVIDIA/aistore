@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	onexxh "github.com/OneOfOne/xxhash"
-	"github.com/pierrec/lz4/v3"
+	"github.com/pierrec/lz4/v4"
 )
 
 const sessionIsOld = time.Hour

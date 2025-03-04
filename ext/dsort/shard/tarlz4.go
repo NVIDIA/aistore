@@ -1,18 +1,19 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package shard
 
 import (
 	"archive/tar"
+	"errors"
 	"io"
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/pierrec/lz4/v3"
+	"github.com/pierrec/lz4/v4"
 )
 
 type tlz4RW struct {
@@ -46,12 +47,24 @@ func (*tlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (writte
 		lzw      = lz4.NewWriter(tarball)
 		tw       = tar.NewWriter(lzw)
 		rdReader = newTarRecordDataReader()
+		nilit    bool
 	)
 	written, err = writeCompressedTar(s, tw, lzw, loader, rdReader)
 
+	if err != nil && errors.Is(err, lz4.ErrInternalUnhandledState) {
+		nilit = true
+	}
+
 	// note the order of closing: tw, gzw, and eventually tarball (by the caller)
 	rdReader.free()
-	cos.Close(tw)
-	cos.Close(lzw)
+	if errN := tw.Close(); errN != nil && err == nil {
+		err = errN
+	}
+	if errN := lzw.Close(); errN != nil && err == nil {
+		err = errN
+	}
+	if nilit {
+		err = nil
+	}
 	return written, err
 }
