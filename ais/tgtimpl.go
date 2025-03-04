@@ -195,6 +195,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (ecode
 	return 0, nil
 }
 
+// TODO: support BckXactVarlabs (+ `xkind`): etl, prefetch, copy, archive
 func (t *target) coldstats(backend core.Backend, lom *core.LOM, started int64) {
 	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
 	t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)

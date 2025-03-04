@@ -47,13 +47,12 @@ const (
 const (
 	VarlabBucket    = "bucket"
 	VarlabXactKind  = "xkind"
-	VarlabXactID    = "xid"
 	VarlabMountpath = "mountpath"
 )
 
 var (
 	BckVarlabs     = []string{VarlabBucket}
-	BckXactVarlabs = []string{VarlabBucket, VarlabXactKind, VarlabXactID}
+	BckXactVarlabs = []string{VarlabBucket, VarlabXactKind}
 	MpathVarlabs   = []string{VarlabMountpath}
 )
 

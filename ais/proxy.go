@@ -780,7 +780,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		errcnt = stats.ErrPutCount
 		scnt   = stats.PutCount
 		perms  = apc.AcePUT
-		vlabs  = map[string]string{stats.VarlabBucket: "", stats.VarlabXactKind: "", stats.VarlabXactID: ""}
+		vlabs  = map[string]string{stats.VarlabBucket: "", stats.VarlabXactKind: ""}
 	)
 	// 1. request
 	if err := p.parseReq(w, r, apireq); err != nil {

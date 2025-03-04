@@ -248,10 +248,9 @@ rerr:
 }
 
 func (poi *putOI) _vlabs() map[string]string {
-	vlabs := map[string]string{stats.VarlabBucket: poi.lom.Bck().Cname(""), stats.VarlabXactKind: "", stats.VarlabXactID: ""}
+	vlabs := map[string]string{stats.VarlabBucket: poi.lom.Bck().Cname(""), stats.VarlabXactKind: ""}
 	if poi.xctn != nil {
 		vlabs[stats.VarlabXactKind] = poi.xctn.Kind()
-		vlabs[stats.VarlabXactID] = poi.xctn.ID()
 	}
 	return vlabs
 }

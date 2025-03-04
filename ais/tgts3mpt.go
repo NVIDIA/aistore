@@ -211,7 +211,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	w.Header().Set(cos.S3CksumHeader, md5) // s3cmd checks this one
 
 	delta := mono.SinceNano(startTime)
-	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: "", stats.VarlabXactID: ""}
+	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: ""}
 	t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
@@ -397,7 +397,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	sgl.Free()
 
 	// stats
-	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: "", stats.VarlabXactID: ""}
+	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: ""}
 	t.statsT.IncWith(stats.PutCount, vlabs)
 	if remote {
 		t.statsT.IncWith(t.Backend(bck).MetricName(stats.PutCount), vlabs)
