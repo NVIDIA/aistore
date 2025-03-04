@@ -18,7 +18,7 @@ var (
 	}
 
 	defaultCksum = aiscmn.CksumConf{
-		Type:            cos.ChecksumOneXxh,
+		Type:            cos.ChecksumCesXxh,
 		ValidateColdGet: false,
 	}
 
