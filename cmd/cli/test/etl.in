@@ -17,6 +17,9 @@ ais etl show details $ETL_NAME-1 | grep "COMMUNICATION TYPE"
 ais etl show details $ETL_NAME-1 | grep "ARGUMENT"
 ais etl object $ETL_NAME-1 ais://$BUCKET_1/object_1.txt -
 ais etl stop $ETL_NAME-1
+ais etl start $ETL_NAME-1
+ais etl object $ETL_NAME-1 ais://$BUCKET_1/object_1.txt -
+ais etl stop $ETL_NAME-1
 ais etl rm $ETL_NAME-1
 
 ais etl show details $ETL_NAME-2 | grep "COMMUNICATION TYPE"

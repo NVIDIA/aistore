@@ -123,8 +123,8 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// add to cluster MD and start running
-	if err := p.startETL(w, initMsg, true /*add to etlMD*/); err != nil {
+	// start initialization and add to cluster MD
+	if err := p.initETL(w, initMsg); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -156,10 +156,10 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLStop:
 		p.stopETL(w, r)
 	case apc.ETLStart:
-		p.startETL(w, etlMsg, false /*add to etlMD*/)
+		p.startETL(w, r, etlMsg)
 	default:
 		debug.Assert(false, "invalid operation: "+op)
-		p.writeErrURL(w, r)
+		p.writeErrAct(w, r, "invalid operation: "+op)
 	}
 }
 
@@ -215,8 +215,8 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 	return
 }
 
-// broadcast (start ETL) request to all targets
-func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) error {
+// broadcast (init ETL) request to all targets
+func (p *proxy) initETL(w http.ResponseWriter, msg etl.InitMsg) error {
 	var (
 		err  error
 		args = allocBcArgs()
@@ -254,19 +254,52 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) e
 		return err
 	}
 
-	if addToMD {
-		ctx := &etlMDModifier{
-			pre:   _addETLPre,
-			final: p._syncEtlMDFinal,
-			msg:   msg,
-			wait:  true,
-		}
-		p.owner.etl.modify(ctx)
+	ctx := &etlMDModifier{
+		pre:   _addETLPre,
+		final: p._syncEtlMDFinal,
+		msg:   msg,
+		wait:  true,
 	}
+	p.owner.etl.modify(ctx)
+
 	// All init calls succeeded - return running xaction
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 	w.Write(cos.UnsafeB(xid))
 	return nil
+}
+
+func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
+	var (
+		err  error
+		args = allocBcArgs()
+	)
+	{
+		args.req = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Path:   r.URL.Path,
+			Body:   cos.MustMarshal(msg),
+		}
+		args.timeout = apc.LongTimeout
+	}
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+	for _, res := range results {
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr())
+			err = res.toErr()
+			nlog.Errorln(err)
+			break
+		}
+	}
+	freeBcastRes(results)
+
+	if err != nil {
+		argsTerm := allocBcArgs()
+		argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathETL.Join(msg.Name(), apc.ETLStop)}
+		argsTerm.timeout = apc.LongTimeout
+		p.bcastGroup(argsTerm)
+		freeBcArgs(argsTerm)
+	}
 }
 
 func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {

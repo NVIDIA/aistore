@@ -42,7 +42,7 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/etl
-// start ETL spec/code
+// init ETL spec/code
 func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	// disallow to run when above high wm (let alone OOS)
 	cs := fs.Cap()
@@ -51,37 +51,12 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := t.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
-		return
-	}
-
-	b, err := cos.ReadAll(r.Body)
-	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-	r.Body.Close()
-
-	initMsg, err := etl.UnmarshalInitMsg(b)
-	if err != nil {
+	if err := initETLFromMsg(r); err != nil {
 		t.writeErr(w, r, err)
 		return
-	}
-	xid := r.URL.Query().Get(apc.QparamUUID)
-
-	switch msg := initMsg.(type) {
-	case *etl.InitSpecMsg:
-		err = etl.InitSpec(msg, xid, etl.StartOpts{})
-	case *etl.InitCodeMsg:
-		err = etl.InitCode(msg, xid)
-	default:
-		debug.Assert(false, initMsg.String())
-	}
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infoln(t.String(), initMsg.String())
 	}
 }
 
@@ -131,24 +106,30 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	switch apiItems[1] {
+	switch op := apiItems[1]; op {
 	case apc.ETLStop:
 		t.stopETL(w, r, apiItems[0])
 	case apc.ETLStart:
-		debug.Assert(false, "Not implemented yet")
+		t.startETL(w, r)
 	default:
-		t.writeErrURL(w, r)
+		debug.Assert(false, "invalid operation: "+op)
+		t.writeErrAct(w, r, "invalid operation: "+op)
+	}
+}
+
+func (t *target) startETL(w http.ResponseWriter, r *http.Request) {
+	if err := initETLFromMsg(r); err != nil {
+		t.writeErr(w, r, err)
 	}
 }
 
 func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	if err := etl.Stop(etlName, cmn.ErrXactUserAbort); err != nil {
-		statusCode := http.StatusBadRequest
 		if cos.IsErrNotFound(err) {
-			statusCode = http.StatusNotFound
+			t.writeErr(w, r, err, http.StatusNotFound)
+			return
 		}
-		t.writeErr(w, r, err, statusCode)
-		return
+		t.writeErr(w, r, err)
 	}
 }
 
@@ -300,4 +281,31 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		// always silent (compare w/ httpobjhead)
 		t.writeErr(w, r, err, ecode, Silent)
 	}
+}
+
+func initETLFromMsg(r *http.Request) error {
+	b, err := cos.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	r.Body.Close()
+
+	initMsg, err := etl.UnmarshalInitMsg(b)
+	if err != nil {
+		return err
+	}
+	xid := r.URL.Query().Get(apc.QparamUUID)
+
+	switch msg := initMsg.(type) {
+	case *etl.InitSpecMsg:
+		err = etl.InitSpec(msg, xid, etl.StartOpts{})
+	case *etl.InitCodeMsg:
+		err = etl.InitCode(msg, xid)
+	default:
+		debug.Assert(false, initMsg.String())
+	}
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		nlog.Infoln(initMsg.String())
+	}
+	return err
 }

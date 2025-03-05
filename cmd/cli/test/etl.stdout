@@ -5,6 +5,9 @@ COMMUNICATION TYPE:  hpush://
 ARGUMENT TYPE:
 Hello World!
 ^ETL\[etl.*\]stopped$
+^ETL\[etl.*\]started successfully$
+Hello World!
+^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 COMMUNICATION TYPE:  hpush://
 ARGUMENT TYPE: fqn
