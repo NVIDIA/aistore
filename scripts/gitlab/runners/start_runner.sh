@@ -3,18 +3,49 @@
 # This script starts or restarts minikube with a specific amount of resources, 
 # registers a gitlab runner if necessary, then opens a minikube tunnel 
 
-# Check if the RUNNER_TOKEN was provided
-RUNNER_TOKEN=$1
+# Parse command line arguments
+RUNNER_TOKEN=""
+NODES=""
+
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --token=*)
+      RUNNER_TOKEN="${1#*=}"
+      shift
+      ;;
+    --token)
+      RUNNER_TOKEN="$2"
+      shift 2
+      ;;
+    --nodes=*)
+      NODES="${1#*=}"
+      shift
+      ;;
+    --nodes)
+      NODES="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown parameter: $1"
+      echo "Usage: $0 --nodes <number_of_nodes> [--token <runner_token>]"
+      exit 1
+      ;;
+  esac
+done
+
+if [ -z "$NODES" ]; then
+  echo "Error: --nodes parameter is required"
+  echo "Usage: $0 --nodes=<number_of_nodes> [--token=<runner_token>]"
+  exit 1
+fi
+
 if [ -z "$RUNNER_TOKEN" ]; then
   echo "No runner token provided. No new runner will be registered."
 fi
 
-# Install required packages and make sure the gitlab runner system service is running
-sudo ./setup.sh
-
 GITLAB_HOST="https://gitlab-master.nvidia.com/"
 
-MINIKUBE_NODES=${MINIKUBE_NODES:-3}
 # Requirements for each minikube node
 MAX_CPU=16
 MAX_RAM=32768
@@ -27,7 +58,7 @@ HOST_CPU=2
 NUM_CPU=$(nproc --all)
 TOTAL_MEM=$(free -m | awk '/^Mem:/{print $2}')
 # Reserve 2 cores for the host system, but do not exceed the max number of cores
-MINIKUBE_CPU=$(((NUM_CPU-HOST_CPU) / MINIKUBE_NODES))
+MINIKUBE_CPU=$(((NUM_CPU-HOST_CPU) / NODES))
 if [ "$MINIKUBE_CPU" -gt "$MAX_CPU" ]; then
   MINIKUBE_CPU=$MAX_CPU
 elif [ "$MINIKUBE_CPU" -lt $MIN_CPU ]; then
@@ -35,7 +66,7 @@ elif [ "$MINIKUBE_CPU" -lt $MIN_CPU ]; then
 fi
 
 # Reserve 2000MB for the host system, but do not exceed the max amount of memory
-MINIKUBE_MEMORY=$(((TOTAL_MEM - HOST_MEM) / MINIKUBE_NODES))
+MINIKUBE_MEMORY=$(((TOTAL_MEM - HOST_MEM) / NODES))
 if [ "$MINIKUBE_MEMORY" -gt "$MAX_RAM" ]; then
   MINIKUBE_MEMORY=$MAX_RAM
 elif [ "$MINIKUBE_MEMORY" -lt "$MIN_RAM" ]; then
@@ -70,7 +101,7 @@ cleanup_minikube() {
 
 # (Re)Start minikube
 cleanup_minikube
-minikube start --cpus=$MINIKUBE_CPU --memory=$MINIKUBE_MEMORY --nodes=$MINIKUBE_NODES
+minikube start --cpus=$MINIKUBE_CPU --memory=$MINIKUBE_MEMORY --nodes="$NODES"
 
 # Required for hostPath mounts on multi-node clusters https://minikube.sigs.k8s.io/docs/tutorials/multi_node/
 minikube addons enable volumesnapshots

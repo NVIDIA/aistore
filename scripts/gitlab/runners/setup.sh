@@ -1,10 +1,9 @@
-
 #!/bin/bash
 # Combination of steps from https://confluence.nvidia.com/pages/viewpage.action?pageId=2565826909#id-%F0%9F%A6%8AGitLabRunnerSetup-ContainerRuntime 
 # Run as root
 set -e
 
-SCRIPTS_DIR=$(dirname $(realpath -s $0))
+SCRIPTS_DIR=$(dirname "$(realpath -s $"0")")
 TMP_DOWNLOAD="$SCRIPTS_DIR/tmp_download"
 
 SYSBOX_VER=v0.6.4
@@ -15,7 +14,7 @@ RUNNER_VERSION=16.9.1-1
 if [ ! -d "$TMP_DOWNLOAD" ]; then
     mkdir -p "$TMP_DOWNLOAD"
 fi
-cd $TMP_DOWNLOAD
+cd "$TMP_DOWNLOAD"
 
 install_docker() {
   # Add Docker's official GPG key
@@ -37,15 +36,14 @@ install_docker() {
   systemctl status docker --no-pager
 
   # Assuming this script is run as sudo, add the calling user to the docker group
-  usermod -aG docker $SUDO_USER
+  usermod -aG docker "$SUDO_USER"
 
   echo "Docker installed"
   echo "Log out and back in or run 'newgrp docker' to allow root-less docker access (required for minikube). Then re-run start_runner.sh"
 }
 
 confirm_docker_rm() {
-    # Call with a prompt string or use a default
-    read -r -p "${1:-Are you sure you want to remove all Docker containers? [y/N]} " response
+    read -r -p "Are you sure you want to remove all Docker containers? [y/N] " response
     case "$response" in
         [yY][eE][sS]|[yY]) 
             true
@@ -63,7 +61,7 @@ install_sysbox() {
 
   if confirm_docker_rm; then
     echo "Removing all Docker containers..."
-    docker rm $(docker ps -a -q) -f || true
+    docker rm "$(docker ps -a -q)" -f || true
   else
       echo "Canceled setup script due to user request."
       exit 1
@@ -118,10 +116,9 @@ if ! docker info > /dev/null 2>&1; then
   install_docker
 fi
 
-defaultRuntime=$(docker info --format '{{.DefaultRuntime}}')
-
 # TODO: Restore later if we need docker available in runners
-# if [ "$defaultRuntime" != "sysbox-runc" ]; then
+# DEFAULT_RUNTIME=$(docker info --format '{{.DefaultRuntime}}')
+# if [ "$DEFAULT_RUNTIME" != "sysbox-runc" ]; then
 #   echo "Installing sysbox and setting as default Docker runtime"
 #   install_sysbox
 # fi
@@ -151,5 +148,5 @@ if ! systemctl is-active --quiet gitlab-runner; then
   start_runner
 fi
 
-cd $SCRIPTS_DIR
+cd "$SCRIPTS_DIR"
 rm -rf "$TMP_DOWNLOAD"
