@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -41,19 +41,19 @@ func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
 
 // Returns reader resulting from lom ETL transformation.
 // TODO -- FIXME: comm.OfflineTransform to support latestVer and sync
-func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH, error) {
+func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (resp core.ReadResp) {
 	var (
 		r      cos.ReadCloseSizer // note: +sizer
-		err    error
 		action = "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname()
 	)
 	debug.Assert(!latestVer && !sync, "NIY") // TODO -- FIXME
-	call := func() (int, error) {
+	call := func() (_ int, err error) {
 		r, err = dp.comm.OfflineTransform(lom, dp.requestTimeout)
 		return 0, err
 	}
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
-	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+	lom.SetAtimeUnix(time.Now().UnixNano())
+	resp.Err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
 		Action:    action,
 		SoftErr:   5,
@@ -63,17 +63,23 @@ func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (cos.ReadOpenCl
 		Verbosity: cmn.RetryLogQuiet,
 	})
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(action, err)
+		nlog.Infoln(action, resp.Err)
 	}
-	if err != nil {
-		return nil, nil, err
+	if resp.Err != nil {
+		return resp
 	}
-	lom.SetAtimeUnix(time.Now().UnixNano())
 	oah := &cmn.ObjAttrs{
 		Size:  r.Size(),
 		Ver:   nil,           // NOTE: transformed object - current version does not apply
 		Cksum: cos.NoneCksum, // TODO: checksum
 		Atime: lom.AtimeUnix(),
 	}
-	return cos.NopOpener(r), oah, nil
+	resp.OAH = oah
+
+	// [NOTE] ref 6079834
+	// non-trivial limitation: this reader cannot be transmitted to
+	// multiple targets (where we actually rely on real re-opening);
+	// current usage: tcb/tco
+	resp.R = cos.NopOpener(r)
+	return resp
 }

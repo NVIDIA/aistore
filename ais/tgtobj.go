@@ -1480,7 +1480,10 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, 
 	if coi.DP != nil {
 		var ecode int
 		size, ecode, err = coi._reader(t, dm, lom, dst)
-		debug.Assert(ecode != http.StatusNotFound || cos.IsNotExist(err, 0), err, ecode)
+		if ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
+			// to keep not-found
+			err = cos.NewErrNotFound(t, err.Error())
+		}
 	} else {
 		// fast path (Copy2FQN)
 		size, err = coi._regular(t, lom, dst)
@@ -1521,13 +1524,13 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error)
 		return size, nil
 	}
 
-	// discard the reader and be done
-	var reader io.ReadCloser
-	if reader, _, err = coi.DP.Reader(lom, false, false); err != nil {
-		return 0, err
+	resp := coi.DP.Reader(lom, false, false)
+	if resp.Err != nil {
+		return 0, resp.Err
 	}
-	size, err = io.Copy(io.Discard, reader)
-	reader.Close()
+	// discard the reader and be done
+	size, err = io.Copy(io.Discard, resp.R)
+	resp.R.Close()
 	return size, err
 }
 
@@ -1545,20 +1548,20 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error)
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, ecode int, err error) {
-	reader, oah, errN := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
-	if errN != nil {
-		return 0, 0, errN
+	resp := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
+	if resp.Err != nil {
+		return 0, resp.Ecode, resp.Err
 	}
 	poi := allocPOI()
 	{
 		poi.t = t
 		poi.lom = dst
 		poi.config = coi.Config
-		poi.r = reader
+		poi.r = resp.R
 		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
-		poi.atime = oah.AtimeUnix()
-		poi.cksumToUse = oah.Checksum()
+		poi.atime = resp.OAH.AtimeUnix()
+		poi.cksumToUse = resp.OAH.Checksum()
 
 		poi.owt = coi.OWT
 		if dm != nil {
@@ -1581,7 +1584,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (si
 	if err == nil {
 		// xaction stats: increment locally processed
 		// (and see DM (data mover) for in and out counting)
-		size = oah.Lsize()
+		size = resp.OAH.Lsize()
 
 		// TODO -- FIXME
 		// backend := t.Backend(bck)
@@ -1696,15 +1699,15 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ 
 		size = lom.Lsize()
 		sargs.reader, sargs.objAttrs = reader, lom
 	default:
-		// 3. DP transform (possibly, no-op)
+		// 3. DP transform (possibly, a no-op)
 		// If the object is not present call t.Backend.GetObjReader
-		reader, oah, err := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
-		if err != nil {
-			return
+		resp := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
+		if resp.Err != nil {
+			return 0, resp.Err
 		}
 		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
-		size = oah.Lsize()
-		sargs.reader, sargs.objAttrs = reader, oah
+		size = resp.OAH.Lsize()
+		sargs.reader, sargs.objAttrs = resp.R, resp.OAH
 	}
 
 	// do

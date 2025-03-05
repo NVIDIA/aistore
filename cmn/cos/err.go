@@ -68,7 +68,10 @@ func NewErrNotFound(where fmt.Stringer, what string) *ErrNotFound {
 }
 
 func (e *ErrNotFound) Error() string {
-	s := e.what + " does not exist"
+	s := e.what
+	if !strings.Contains(s, "not exist") && !strings.Contains(s, "not found") {
+		s += " does not exist"
+	}
 	if e.where == nil {
 		return s
 	}

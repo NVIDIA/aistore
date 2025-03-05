@@ -18,24 +18,33 @@ import (
 // NOTE: compare with ext/etl/dp.go
 
 type (
-	// data provider
-	DP interface {
-		Reader(lom *LOM, latestVer, sync bool) (reader cos.ReadOpenCloser, oah cos.OAH, err error)
+	ReadResp struct {
+		R      cos.ReadOpenCloser
+		OAH    cos.OAH
+		Err    error
+		Ecode  int
+		Remote bool
+	}
+	DP interface { // data provider
+		Reader(lom *LOM, latestVer, sync bool) ReadResp
 	}
 
 	LDP struct{}
 
-	// compare with `deferROC` from cmn/cos/io.go
-	deferROC struct {
-		cos.ReadOpenCloser
-		lif LIF
-	}
-
+	// returned by lom.CheckRemoteMD
 	CRMD struct {
 		Err      error
 		ObjAttrs *cmn.ObjAttrs
 		ErrCode  int
 		Eq       bool
+	}
+)
+
+type (
+	// compare with `deferROC` from cmn/cos/io.go
+	deferROC struct {
+		cos.ReadOpenCloser
+		lif LIF
 	}
 )
 
@@ -58,8 +67,8 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 	return nil, cmn.NewErrFailedTo(T, "open", lom.Cname(), err)
 }
 
-// (compare with ext/etl/dp.go)
-func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH, error) {
+// compare with ext/etl/dp.go - the second (and alternative) DP implementation
+func (*LDP) Reader(lom *LOM, latestVer, sync bool) (resp ReadResp) {
 	bck := lom.Bck()
 
 	lom.Lock(false)
@@ -67,51 +76,68 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 	if loadErr == nil {
 		if latestVer || sync {
 			debug.Assert(bck.IsRemote(), bck.String()) // caller's responsibility
-			res := lom.CheckRemoteMD(true /* rlocked*/, sync, nil /*origReq*/)
-			if res.Err != nil {
+			crmd := lom.CheckRemoteMD(true /* rlocked*/, sync, nil /*origReq*/)
+			if crmd.Err != nil {
 				lom.Unlock(false)
-				if !cos.IsNotExist(res.Err, res.ErrCode) {
-					res.Err = cmn.NewErrFailedTo(T, "head-latest", lom.Cname(), res.Err)
+				resp.Err, resp.Ecode = crmd.Err, crmd.ErrCode
+				if !cos.IsNotExist(crmd.Err, crmd.ErrCode) {
+					resp.Err = cmn.NewErrFailedTo(T, "head-latest", lom.Cname(), crmd.Err)
 				}
-				return nil, nil, res.Err
+				return resp
 			}
-			if !res.Eq {
+			if !crmd.Eq {
 				// version changed
 				lom.Unlock(false)
 				goto remote
 			}
 		}
 
-		roc, err := lom.NewDeferROC() // keeping lock, reading local
-		return roc, lom, err
+		resp.R, resp.Err = lom.NewDeferROC() // keeping lock, reading local
+		resp.OAH = lom
+		return resp
 	}
 
 	lom.Unlock(false)
 	if !cos.IsNotExist(loadErr, 0) {
-		return nil, nil, cmn.NewErrFailedTo(T, "ldp-load", lom.Cname(), loadErr)
+		resp.Err = cmn.NewErrFailedTo(T, "ldp-load", lom.Cname(), loadErr)
+		return resp
 	}
 	if !bck.IsRemote() {
-		return nil, nil, cos.NewErrNotFound(T, lom.Cname())
+		resp.Err, resp.Ecode = cos.NewErrNotFound(T, lom.Cname()), http.StatusNotFound
+		return resp
 	}
 
 remote:
 	// GetObjReader and return remote (object) reader and oah for object metadata
 	// (compare w/ T.GetCold)
 	lom.SetAtimeUnix(time.Now().UnixNano())
+	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
+
+	if res.Err != nil {
+		resp.Err, resp.Ecode = res.Err, res.ErrCode
+		return resp
+	}
+
 	oah := &cmn.ObjAttrs{
 		Ver:   nil,           // TODO: differentiate between copying (same version) vs. transforming
 		Cksum: cos.NoneCksum, // will likely reassign (below)
 		Atime: lom.AtimeUnix(),
 	}
-	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
-
 	if lom.Checksum() != nil {
 		oah.Cksum = lom.Checksum()
 	} else if res.ExpCksum != nil {
 		oah.Cksum = res.ExpCksum
 	}
 	oah.Size = res.Size
-	return cos.NopOpener(res.R), oah, res.Err
+	resp.OAH = oah
+	resp.Remote = true
+
+	// [NOTE] ref 6079834
+	// non-trivial limitation: this reader cannot be transmitted to
+	// multiple targets (where we actually rely on real re-opening);
+	// current usage: tcb/tco
+	resp.R = cos.NopOpener(res.R)
+	return resp
 }
 
 // NOTE:
