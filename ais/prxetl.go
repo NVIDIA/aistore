@@ -179,6 +179,24 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
+
+	// 1. broadcast stop to all targets
+	argsTerm := allocBcArgs()
+	argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathETL.Join(etlName, apc.ETLStop)}
+	argsTerm.timeout = apc.LongTimeout
+	results := p.bcastGroup(argsTerm)
+	defer freeBcArgs(argsTerm)
+
+	for _, res := range results {
+		// ignore not found error, as the ETL might be manually stopped before
+		if res.err == nil || res.status == http.StatusNotFound {
+			continue
+		}
+		p.writeErr(w, r, res.toErr())
+		return
+	}
+
+	// 2. if successfully stopped, remove from etlMD
 	ctx := &etlMDModifier{
 		pre:     p._deleteETLPre,
 		final:   p._syncEtlMDFinal,

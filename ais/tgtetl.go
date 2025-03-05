@@ -123,7 +123,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/<etl-name>/stop (or) TODO: /v1/etl/<etl-name>/start
+// POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
 //
 // Handles starting/stopping ETL pods
 func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
@@ -131,12 +131,14 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if apiItems[1] == apc.ETLStop {
+	switch apiItems[1] {
+	case apc.ETLStop:
 		t.stopETL(w, r, apiItems[0])
-		return
+	case apc.ETLStart:
+		debug.Assert(false, "Not implemented yet")
+	default:
+		t.writeErrURL(w, r)
 	}
-	// TODO: Implement ETLStart to start inactive ETLs
-	t.writeErrURL(w, r)
 }
 
 func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {

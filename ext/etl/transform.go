@@ -238,7 +238,7 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (podName, svcName string, err error) {
+func start(msg *InitSpecMsg, etlName string, opts StartOpts, config *cmn.Config) (podName, svcName string, err error) {
 	var (
 		comm   Communicator
 		pw     *podWatcher
@@ -285,7 +285,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		goto cleanup
 	}
 
-	boot.setupXaction(xid)
+	boot.setupXaction(etlName)
 
 	// finally, add Communicator to the runtime registry
 	comm = newCommunicator(newAborter(msg.IDX), boot, pw)
@@ -296,13 +296,12 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 	return podName, svcName, nil
 
 cleanup:
-	nlog.Warningln(cmn.NewErrETL(errCtx, fmt.Sprintf("failed to start etl[%s], msg %s, err %v - cleaning up..", xid, msg, err)))
+	nlog.Warningln(cmn.NewErrETL(errCtx, fmt.Sprintf("failed to start etl[%s], msg %s, err %v - cleaning up..", etlName, msg, err)))
 	if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
 		nlog.Errorln(errV)
 	}
 	pw.stop(false)
-	err = pw.wrapError(err)
-	return
+	return podName, svcName, pw.wrapError(err)
 }
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
@@ -318,7 +317,7 @@ func Stop(id string, errCause error) error {
 
 	c, err := GetCommunicator(id)
 	if err != nil {
-		return cmn.NewErrETL(errCtx, err.Error())
+		return err
 	}
 	errCtx.PodName = c.PodName()
 	errCtx.SvcName = c.SvcName()
