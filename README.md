@@ -113,6 +113,16 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 
 Since AIS natively supports [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3, GCS, Azure, and OCI buckets, and more.
 
+## AIStore Badge
+
+Let others know your project is powered by high-performance AI storage:
+
+[![aistore](https://img.shields.io/badge/powered%20by-AIStore-76B900?style=flat&labelColor=000000)](https://github.com/NVIDIA/aistore)
+
+```markdown
+[![aistore](https://img.shields.io/badge/powered%20by-AIStore-76B900?style=flat&labelColor=000000)](https://github.com/NVIDIA/aistore)
+```
+
 ## Guides and References
 
 - [Getting Started](/docs/getting_started.md)
