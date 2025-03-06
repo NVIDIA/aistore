@@ -24,6 +24,14 @@ type (
 		config         *cmn.Config
 		requestTimeout time.Duration
 	}
+
+	lomCtx struct {
+		dp  *OfflineDP
+		lom *core.LOM
+		cmn.RetryArgs
+		// resulting read-close-sizer
+		rcs cos.ReadCloseSizer
+	}
 )
 
 // interface guard
@@ -41,35 +49,25 @@ func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
 
 // Returns reader resulting from lom ETL transformation.
 // TODO -- FIXME: comm.OfflineTransform to support latestVer and sync
+// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (resp core.ReadResp) {
 	var (
-		r      cos.ReadCloseSizer // note: +sizer
 		action = "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname()
+		ctx    = dp.newLomCtx(lom, action)
 	)
-	debug.Assert(!latestVer && !sync, "NIY") // TODO -- FIXME
-	call := func() (_ int, err error) {
-		r, err = dp.comm.OfflineTransform(lom, dp.requestTimeout)
-		return 0, err
-	}
-	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
+	debug.Assert(!latestVer && !sync, "NIY")
+
 	lom.SetAtimeUnix(time.Now().UnixNano())
-	resp.Err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
-		Call:      call,
-		Action:    action,
-		SoftErr:   5,
-		HardErr:   2,
-		Sleep:     50 * time.Millisecond,
-		BackOff:   true,
-		Verbosity: cmn.RetryLogQuiet,
-	})
+	resp.Ecode, resp.Err = cmn.NetworkCallWithRetry(&ctx.RetryArgs)
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(action, resp.Err)
 	}
 	if resp.Err != nil {
 		return resp
 	}
+	debug.Assert(resp.Ecode == 0)
 	oah := &cmn.ObjAttrs{
-		Size:  r.Size(),
+		Size:  ctx.rcs.Size(),
 		Ver:   nil,           // NOTE: transformed object - current version does not apply
 		Cksum: cos.NoneCksum, // TODO: checksum
 		Atime: lom.AtimeUnix(),
@@ -80,6 +78,33 @@ func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (resp core.Read
 	// non-trivial limitation: this reader cannot be transmitted to
 	// multiple targets (where we actually rely on real re-opening);
 	// current usage: tcb/tco
-	resp.R = cos.NopOpener(r)
+	resp.R = cos.NopOpener(ctx.rcs)
 	return resp
+}
+
+//
+// transform-one-lom context
+//
+
+// TODO -- FIXME: all (time, error count) tunables are hardcoded
+func (dp *OfflineDP) newLomCtx(lom *core.LOM, action string) *lomCtx {
+	ctx := &lomCtx{
+		dp:  dp,
+		lom: lom,
+		RetryArgs: cmn.RetryArgs{
+			Action:    action,
+			SoftErr:   5,
+			HardErr:   2,
+			Sleep:     50 * time.Millisecond,
+			BackOff:   true,
+			Verbosity: cmn.RetryLogQuiet,
+		},
+	}
+	ctx.RetryArgs.Call = ctx.call
+	return ctx
+}
+
+func (ctx *lomCtx) call() (ecode int, err error) {
+	ctx.rcs, ecode, err = ctx.dp.comm.OfflineTransform(ctx.lom, ctx.dp.requestTimeout)
+	return ecode, err
 }

@@ -195,8 +195,9 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 }
 
 func initProxyURL() (err error) {
-	// Discover if a proxy is ready to accept requests.
-	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+	// Discover if ais proxy is ready to accept requests.
+	var ecode int
+	ecode, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:     func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
 		SoftErr:  5,
 		HardErr:  5,
@@ -205,7 +206,11 @@ func initProxyURL() (err error) {
 		IsClient: true,
 	})
 	if err != nil {
-		return errors.New("AIS is unreachable at " + proxyURLReadOnly)
+		err = errors.New("AIS is unreachable at " + proxyURLReadOnly)
+		if ecode != 0 {
+			err = fmt.Errorf("%v (%d)", err, ecode)
+		}
+		return err
 	}
 
 	if testClusterType == ClusterTypeK8s {

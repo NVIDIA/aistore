@@ -196,7 +196,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	SetAuxHeaders(req, &reqParams.BaseParams)
 
 	rr := reqResp{client: reqParams.BaseParams.Client, req: req}
-	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+	_, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      rr.call,
 		Verbosity: cmn.RetryLogOff,
 		SoftErr:   httpMaxRetries,
@@ -385,7 +385,7 @@ func (rr *reqResp) call() (status int, err error) {
 	if rr.resp != nil {
 		status = rr.resp.StatusCode
 	}
-	return
+	return status, err
 }
 
 //

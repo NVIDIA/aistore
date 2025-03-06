@@ -87,8 +87,9 @@ var _ = Describe("CommunicatorTest", func() {
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			receivedEtlTransformArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
-			err := comm.InlineTransform(w, r, lom, receivedEtlTransformArgs)
+			ecode, err := comm.InlineTransform(w, r, lom, receivedEtlTransformArgs)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(ecode).To(Equal(0))
 		}))
 		proxyServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			redirectURL := targetServer.URL + r.URL.Path + "?"

@@ -46,7 +46,7 @@ type (
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) error
+		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error)
 
 		// OfflineTransform is driven by `OfflineDP` to provide offline transformation, as it were
 		// Implementations include:
@@ -54,7 +54,7 @@ type (
 		// - redirectComm
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
-		OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, error)
+		OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, int, error)
 
 		Stop()
 
@@ -159,9 +159,9 @@ func (c *baseComm) Stop() {
 	}
 }
 
-func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
 	if err := c.boot.xctn.AbortErr(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var (
@@ -183,7 +183,10 @@ func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.Read
 		if cancel != nil {
 			cancel()
 		}
-		return nil, err
+		if resp != nil {
+			ecode = resp.StatusCode
+		}
+		return nil, ecode, err
 	}
 
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
@@ -194,33 +197,32 @@ func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.Read
 				cancel()
 			}
 		},
-	}), nil
+	}), 0, nil
 }
 
 //////////////
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string) (r cos.ReadCloseSizer, ecode int, err error) {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	var ecode int
 	lom.Lock(false)
 	r, ecode, err = pc.do(lom, timeout, targs)
 	lom.Unlock(false)
 
 	if err != nil && cos.IsNotExist(err, ecode) && lom.Bucket().IsRemote() {
-		_, err = core.T.GetCold(context.Background(), lom, pc.boot.xctn.Kind(), cmn.OwtGetLock)
+		ecode, err = core.T.GetCold(context.Background(), lom, pc.boot.xctn.Kind(), cmn.OwtGetLock)
 		if err != nil {
-			return nil, err
+			return nil, ecode, err
 		}
 		lom.Lock(false)
-		r, _, err = pc.do(lom, timeout, targs)
+		r, ecode, err = pc.do(lom, timeout, targs)
 		lom.Unlock(false)
 	}
-	return
+	return r, ecode, err
 }
 
 func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs string) (_ cos.ReadCloseSizer, ecode int, err error) {
@@ -230,46 +232,48 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs string) (_ co
 		req    *http.Request
 		resp   *http.Response
 		u      string
-		query  = url.Values{}
 	)
-	if err := pc.boot.xctn.AbortErr(); err != nil {
-		return nil, 0, err
+	if e := pc.boot.xctn.AbortErr(); e != nil {
+		return nil, 0, e
 	}
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return nil, 0, err
+	if e := lom.Load(false /*cache it*/, true /*locked*/); e != nil {
+		return nil, 0, e
 	}
 	size := lom.Lsize()
 
 	switch pc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
-		// to remove the following assert (and the corresponding limitation):
+		// [TODO] to remove the following assert (and the corresponding limitation):
 		// - container must be ready to receive complete bucket name including namespace
 		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
 		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
 		u = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
 
-		fh, err := cos.NewFileHandle(lom.FQN)
-		if err != nil {
-			return nil, 0, err
+		fh, e := cos.NewFileHandle(lom.FQN)
+		if e != nil {
+			return nil, 0, e
 		}
 		body = fh
 	case ArgTypeFQN:
 		body = http.NoBody
 		u = cos.JoinPath(pc.boot.uri, url.PathEscape(lom.FQN)) // compare w/ rc.redirectURL()
 	default:
-		debug.Assert(false, "unexpected msg type:", pc.boot.msg.ArgTypeX) // is validated at construction time
+		e := pc.boot.msg.errInvalidArg()
+		debug.AssertNoErr(e) // is validated at construction time
+		nlog.Errorln(e)
 	}
 
 	if targs != "" {
-		query.Add(apc.QparamETLTransformArgs, targs)
+		q := url.Values{apc.QparamETLTransformArgs: []string{targs}}
+		u = cos.JoinQuery(u, q)
 	}
 
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodPut, cos.JoinQuery(u, query), body)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, u, body)
 	} else {
-		req, err = http.NewRequest(http.MethodPut, cos.JoinQuery(u, query), body)
+		req, err = http.NewRequest(http.MethodPut, u, body)
 	}
 	if err != nil {
 		cos.Close(body)
@@ -285,9 +289,7 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs string) (_ co
 	req.ContentLength = size
 	req.Header.Set(cos.HdrContentType, cos.ContentBinary)
 
-	//
-	// Do it
-	//
+	// do
 	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 
 finish:
@@ -312,97 +314,100 @@ finish:
 	return cos.NewReaderWithArgs(rargs), 0, nil
 }
 
-func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, targs string) error {
-	r, err := pc.doRequest(lom, 0 /*timeout*/, targs)
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, targs string) (int, error) {
+	r, ecode, err := pc.doRequest(lom, 0 /*timeout*/, targs)
 	if err != nil {
-		return err
+		return ecode, err
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
 
-	size := r.Size()
-	if size < 0 {
-		size = memsys.DefaultBufSize // TODO: track an average
+	bufsz := r.Size()
+	if bufsz < 0 {
+		bufsz = memsys.DefaultBufSize // TODO: track an average
 	}
-	buf, slab := core.T.PageMM().AllocSize(size)
+	buf, slab := core.T.PageMM().AllocSize(bufsz)
 	_, err = io.CopyBuffer(w, r, buf)
 
 	slab.Free(buf)
 	r.Close()
-	return err
+	return 0, err
 }
 
-func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, int, error) {
 	clone := *lom
-	r, err = pc.doRequest(&clone, timeout, "")
+	r, ecode, err := pc.doRequest(&clone, timeout, "")
 	if err == nil && cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, clone.Cname(), err)
 	}
-	return
+	return r, ecode, err
 }
 
 //////////////////
 // redirectComm: implements Hpull
 //////////////////
 
-func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) error {
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error) {
 	if err := rc.boot.xctn.AbortErr(); err != nil {
-		return err
+		return 0, err
 	}
 	err := lomLoad(lom)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	query := url.Values{}
+	u := rc.redirectURL(lom)
 	if targs != "" {
-		query.Add(apc.QparamETLTransformArgs, targs)
+		q := url.Values{apc.QparamETLTransformArgs: []string{targs}}
+		u = cos.JoinQuery(u, q)
 	}
-
-	http.Redirect(w, r, cos.JoinQuery(rc.redirectURL(lom), query), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname())
 	}
-	return nil
+	return 0, nil
 }
 
-func (rc *redirectComm) redirectURL(lom *core.LOM) string {
+func (rc *redirectComm) redirectURL(lom *core.LOM) (u string) {
 	switch rc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
-		return cos.JoinPath(rc.boot.uri, transformerPath(lom))
+		u = cos.JoinPath(rc.boot.uri, transformerPath(lom))
 	case ArgTypeFQN:
-		return cos.JoinPath(rc.boot.uri, url.PathEscape(lom.FQN))
+		u = cos.JoinPath(rc.boot.uri, url.PathEscape(lom.FQN))
+	default:
+		err := rc.boot.msg.errInvalidArg()
+		debug.AssertNoErr(err)
+		nlog.Errorln(err)
 	}
-	cos.Assert(false) // is validated at construction time
-	return ""
+	return u
 }
 
-func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, int, error) {
 	clone := *lom
 	errV := lomLoad(&clone)
 	if errV != nil {
-		return nil, errV
+		return nil, 0, errV
 	}
 
 	etlURL := rc.redirectURL(&clone)
-	r, err := rc.getWithTimeout(etlURL, timeout)
+	r, ecode, err := rc.getWithTimeout(etlURL, timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpull, clone.Cname(), err)
+		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
 	}
-	return r, err
+	return r, ecode, err
 }
 
 //////////////////
 // revProxyComm: implements Hrev
 //////////////////
 
-func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _ string) error {
+func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _ string) (int, error) {
 	err := lomLoad(lom)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	path := transformerPath(lom)
 
@@ -410,22 +415,22 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
 	rp.rp.ServeHTTP(w, r)
 
-	return nil
+	return 0, nil
 }
 
-func (rp *revProxyComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (rp *revProxyComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (cos.ReadCloseSizer, int, error) {
 	clone := *lom
 	errV := lomLoad(&clone)
 	if errV != nil {
-		return nil, errV
+		return nil, 0, errV
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, err := rp.getWithTimeout(etlURL, timeout)
+	r, ecode, err := rp.getWithTimeout(etlURL, timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hrev, clone.Cname(), err)
+		nlog.Infoln(Hrev, clone.Cname(), err, ecode)
 	}
-	return r, err
+	return r, ecode, err
 }
 
 //////////////

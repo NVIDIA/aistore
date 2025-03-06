@@ -186,6 +186,7 @@ type (
 	}
 	ErrETL struct {
 		Reason string
+		Ecode  int
 		ETLErrCtx
 	}
 	ETLErrCtx struct {
@@ -750,8 +751,11 @@ func IsErrInitMissingBackend(err error) bool {
 
 // ErrETL
 
-func NewErrETL(ctx *ETLErrCtx, msg string) *ErrETL {
-	e := &ErrETL{Reason: msg}
+func NewErrETL(ctx *ETLErrCtx, reason string, ecode ...int) *ErrETL {
+	e := &ErrETL{Reason: reason}
+	if len(ecode) > 0 {
+		e.Ecode = ecode[0]
+	}
 	return e.WithContext(ctx)
 }
 

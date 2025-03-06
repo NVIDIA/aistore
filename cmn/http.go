@@ -36,8 +36,8 @@ type (
 		Action string
 		Caller string
 
-		SoftErr uint // How many retires on ConnectionRefused or ConnectionReset error.
-		HardErr uint // How many retries on any other error.
+		SoftErr int // How many retires on ConnectionRefused or ConnectionReset error.
+		HardErr int // How many retries on any other error.
 		Sleep   time.Duration
 
 		Verbosity int  // Determine the verbosity level.
@@ -180,11 +180,10 @@ func copyHeaders(src http.Header, dst *http.Header) {
 	}
 }
 
-func NetworkCallWithRetry(args *RetryArgs) (err error) {
+func NetworkCallWithRetry(args *RetryArgs) (ecode int, err error) {
 	var (
-		hardErrCnt, softErrCnt, iter uint
-		status                       int
-		nonEmptyErr                  error
+		hardErrCnt, softErrCnt, iter int
+		lastErr                      error
 		callerStr                    string
 		sleep                        = args.Sleep
 	)
@@ -201,21 +200,22 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	if args.Action == "" {
 		args.Action = "call"
 	}
-	for hardErrCnt, softErrCnt, iter = uint(0), uint(0), uint(1); ; iter++ {
-		if status, err = args.Call(); err == nil {
+	for iter = 1; ; iter++ {
+		if ecode, err = args.Call(); err == nil {
 			if args.Verbosity == RetryLogVerbose && (hardErrCnt > 0 || softErrCnt > 0) {
 				nlog.Warningf("%s successful %s after (soft/hard errors: %d/%d, last: %v)",
-					callerStr, args.Action, softErrCnt, hardErrCnt, nonEmptyErr)
+					callerStr, args.Action, softErrCnt, hardErrCnt, lastErr)
 			}
-			return
+			return 0, nil
 		}
+		lastErr = err
+
 		// handle
-		nonEmptyErr = err
 		if args.IsFatal != nil && args.IsFatal(err) {
-			return
+			return ecode, err
 		}
 		if args.Verbosity == RetryLogVerbose {
-			nlog.Errorf("%s failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, status)
+			nlog.Errorf("%s failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, ecode)
 		}
 		if cos.IsRetriableConnErr(err) {
 			softErrCnt++
@@ -239,7 +239,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 		nlog.Errorf("%sfailed to %s (soft/hard errors: %d/%d, last: %v)",
 			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
-	return
+	return ecode, err
 }
 
 func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {

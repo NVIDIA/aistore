@@ -121,14 +121,17 @@ func GetTransformYaml(etlName string) ([]byte, error) {
 		return nil, err
 	}
 
-	var resp *http.Response
+	var (
+		resp   *http.Response
+		action = "get transform yaml for ETL[" + etlName + "]"
+	)
 	// with retry in case github in unavailable for a moment
-	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
-		Call: func() (code int, err error) {
+	_, err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+		Call: func() (_ int, err error) {
 			resp, err = client.Get(links[etlName]) //nolint:bodyclose // see defer close below
-			return
+			return 0, err
 		},
-		Action:   "get transform yaml for ETL[" + etlName + "]",
+		Action:   action,
 		SoftErr:  3,
 		HardErr:  1,
 		IsClient: true,

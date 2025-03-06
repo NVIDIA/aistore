@@ -151,12 +151,19 @@ func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lo
 		return
 	}
 
-	if err := comm.InlineTransform(w, r, lom, targs); err != nil {
-		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: name, ETLTransformArgs: targs, PodName: comm.PodName(), SvcName: comm.SvcName()},
-			err.Error())
-		xetl := comm.Xact()
+	if ecode, err := comm.InlineTransform(w, r, lom, targs); err != nil {
+		var (
+			ectx = &cmn.ETLErrCtx{
+				ETLName:          name,
+				ETLTransformArgs: targs,
+				PodName:          comm.PodName(),
+				SvcName:          comm.SvcName(),
+			}
+			errV = cmn.NewErrETL(ectx, err.Error(), ecode)
+			xetl = comm.Xact()
+		)
 		xetl.AddErr(errV)
-		t.writeErr(w, r, errV)
+		t.writeErr(w, r, errV, ecode)
 		return
 	}
 

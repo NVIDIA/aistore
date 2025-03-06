@@ -163,6 +163,10 @@ func (m *InitSpecMsg) String() string {
 	return fmt.Sprintf("init-%s[%s-%s-%s]", Spec, m.IDX, m.CommTypeX, m.ArgTypeX)
 }
 
+func (m *InitSpecMsg) errInvalidArg() error {
+	return fmt.Errorf("%s: unexpected argument type %q", m, m.ArgTypeX)
+}
+
 func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 	var msgInf map[string]json.RawMessage
 	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {

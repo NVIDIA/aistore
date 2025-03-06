@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -38,6 +39,7 @@ type etlBootstrapper struct {
 	svc             *corev1.Service
 	uri             string
 	originalPodName string
+	podAddr         string
 	originalCommand []string
 }
 
@@ -112,49 +114,54 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 	}
 
 	// Retrieve assigned port by the service.
-	var nodePort uint
+	var nodePort int
 	if nodePort, err = b._getPort(); err != nil {
 		return
 	}
 
-	// Make sure we can access the pod via TCP socket address to ensure that
-	// it is accessible from target.
-	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
-	if err = b._dial(etlSocketAddr); err != nil {
+	// the pod must be reachable via its tcp addr
+	var ecode int
+	b.podAddr = hostIP + ":" + strconv.Itoa(nodePort)
+	if ecode, err = b.dial(); err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleETL) {
-			nlog.Warningf("failed to dial -> %s: %s, %+v, %s", etlSocketAddr, b.msg.String(), b.errCtx, b.uri)
+			nlog.Warningf("%s: failed to dial %s [%+v, %s]", b.msg, b.podAddr, b.errCtx, b.uri)
 		}
-		err = cmn.NewErrETL(b.errCtx, err.Error())
+		err = cmn.NewErrETL(b.errCtx, err.Error(), ecode)
 		return
 	}
 
-	b.uri = "http://" + etlSocketAddr
+	// TODO -- FIXME: versus HTTPS deployment
+	b.uri = "http://" + b.podAddr
+
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("setup connection -> %s, %+v, %s", b.uri, b.msg.String(), b.errCtx)
+		nlog.Infof("%s: setup connection to %s [%+v]", b.msg, b.uri, b.errCtx)
 	}
 	return nil
 }
 
-func (b *etlBootstrapper) _dial(socketAddr string) error {
-	probeInterval := cmn.Rom.MaxKeepalive()
-	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
-		Call: func() (int, error) {
-			conn, err := net.DialTimeout("tcp", socketAddr, probeInterval)
-			if err != nil {
-				return 0, err
-			}
-			cos.Close(conn)
-			return 0, nil
-		},
+// TODO -- FIXME: hardcoded (time, error counts) tunables
+func (b *etlBootstrapper) dial() (int, error) {
+	action := "dial POD " + b.pod.Name + " at " + b.podAddr
+	ecode, err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+		Call:    b.call,
 		SoftErr: 10,
 		HardErr: 2,
 		Sleep:   3 * time.Second,
-		Action:  "dial POD " + b.pod.Name + " at " + socketAddr,
+		Action:  action,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to wait for ETL Service/Pod %q to respond, err: %v", b.pod.Name, err)
+		return ecode, fmt.Errorf("failed to wait for ETL Service/Pod %q to respond: %v", b.pod.Name, err)
 	}
-	return nil
+	return 0, nil
+}
+
+func (b *etlBootstrapper) call() (int, error) {
+	conn, err := net.DialTimeout("tcp", b.podAddr, cmn.Rom.MaxKeepalive())
+	if err != nil {
+		return 0, err
+	}
+	cos.Close(conn)
+	return 0, nil
 }
 
 func (b *etlBootstrapper) createEntity(entity string) error {
@@ -168,7 +175,9 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 	case k8s.Svc:
 		err = client.Create(b.svc)
 	default:
-		cos.AssertMsg(false, "invalid K8s entity :"+entity)
+		err = fmt.Errorf("invalid K8s entity %q", entity)
+		debug.AssertNoErr(err)
+		nlog.Errorln(err)
 	}
 
 	if err != nil {
@@ -362,7 +371,7 @@ func (b *etlBootstrapper) _getHost() (string, error) {
 	return p.Status.HostIP, nil
 }
 
-func (b *etlBootstrapper) _getPort() (uint, error) {
+func (b *etlBootstrapper) _getPort() (int, error) {
 	client, err := k8s.GetClient()
 	if err != nil {
 		return 0, cmn.NewErrETL(b.errCtx, err.Error())
@@ -378,5 +387,5 @@ func (b *etlBootstrapper) _getPort() (uint, error) {
 	if err != nil {
 		return 0, cmn.NewErrETL(b.errCtx, err.Error())
 	}
-	return uint(port), nil
+	return port, nil
 }

@@ -1218,7 +1218,8 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 func (goi *getOI) stats(written int64) {
 	var (
 		bck   = goi.lom.Bck()
-		vlabs = map[string]string{stats.VarlabBucket: bck.Cname("")}
+		cname = bck.Cname("")
+		vlabs = map[string]string{stats.VarlabBucket: cname}
 		delta = mono.SinceNano(goi.ltime)
 	)
 	goi.t.statsT.IncWith(stats.GetCount, vlabs)
@@ -1240,13 +1241,15 @@ func (goi *getOI) stats(written int64) {
 	}
 
 	// cold (compare with t.coldstats)
-	backend := goi.t.Backend(bck)
-	vlabs[stats.VarlabXactKind] = ""
-	goi.t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
+	var (
+		backend = goi.t.Backend(bck)
+		vlabs2  = map[string]string{stats.VarlabBucket: cname, stats.VarlabXactKind: ""}
+	)
+	goi.t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs2)
 	goi.t.statsT.AddWith(
-		cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta, VarLabs: vlabs},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime, VarLabs: vlabs},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written, VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta, VarLabs: vlabs2},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime, VarLabs: vlabs2},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written, VarLabs: vlabs2},
 	)
 	if goi.verchanged {
 		goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)

@@ -192,7 +192,7 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil || res.status == http.StatusNotFound {
 			continue
 		}
-		p.writeErr(w, r, res.toErr())
+		p.writeErr(w, r, res.toErr(), res.status)
 		return
 	}
 
@@ -285,7 +285,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 	freeBcArgs(args)
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.toErr())
+			p.writeErr(w, r, res.toErr(), res.status)
 			err = res.toErr()
 			nlog.Errorln(err)
 			break
@@ -345,7 +345,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.toErr())
+			p.writeErr(w, r, res.toErr(), res.status)
 			freeBcastRes(results)
 			return
 		}
@@ -409,7 +409,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 	logs := make(etl.LogsByTarget, 0, len(results))
 	for _, res := range results {
 		if res.err != nil {
-			p.writeErr(w, r, res.toErr())
+			p.writeErr(w, r, res.toErr(), res.status)
 			freeBcastRes(results)
 			return
 		}
@@ -483,7 +483,7 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		p.writeErr(w, r, res.toErr())
+		p.writeErr(w, r, res.toErr(), res.status)
 		break
 	}
 	freeBcastRes(results)
