@@ -447,6 +447,11 @@ func (e *ErrBusy) Error() string {
 	return fmt.Sprintf("%s %q is currently busy%s, please try again", e.whereOrType, e.what, s)
 }
 
+func isErrBusy(err error) bool {
+	_, ok := err.(*ErrBusy)
+	return ok
+}
+
 // errAccessDenied & ErrBucketAccessDenied
 
 func (e *errAccessDenied) String() string {
@@ -1281,6 +1286,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 			status = http.StatusRequestedRangeNotSatisfiable
 		case isErrUnsupp(err), isErrNotImpl(err):
 			status = http.StatusNotImplemented
+		case isErrBusy(err):
+			status = http.StatusConflict
 		}
 	}
 

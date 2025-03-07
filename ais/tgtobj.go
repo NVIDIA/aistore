@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -92,7 +91,6 @@ type (
 		isIOErr    bool       // to count GET error as a "IO error"; see `Trunner._softErrs()`
 	}
 	_uplock struct {
-		config  *cmn.Config
 		timeout time.Duration
 		elapsed time.Duration
 		sleep   time.Duration
@@ -593,7 +591,8 @@ func (goi *getOI) get() (ecode int, err error) {
 		retried     bool
 		cold        bool
 	)
-do:
+do: // retry uplock or ec-recovery, the latter only once
+
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
 		cold = cos.IsNotExist(err, 0)
@@ -680,19 +679,17 @@ do:
 			return http.StatusInsufficientStorage, cs.Err()
 		}
 
-		// try upgrading rlock => wlock; poll for a while
+		// try upgrading rlock => wlock
 		if !goi.lom.UpgradeLock() {
 			if uplock == nil {
-				c := cmn.GCO.Get()
-				uplock = &_uplock{config: c, sleep: time.Second}
-				uplock.timeout = max(c.Timeout.MaxHostBusy.D()-c.Timeout.CplaneOperation.D(), 4*time.Second)
-
+				uplock = goi.uplock(cmn.GCO.Get())
 				nlog.Warningln(uplockWarn, goi.lom.String())
 			}
 			if err := uplock.do(goi.lom); err != nil {
 				return http.StatusConflict, err
 			}
-			goto do
+			cold = false
+			goto do // repeat
 		}
 
 		goi.lom.SetAtimeUnix(goi.atime)
@@ -1983,6 +1980,23 @@ func (t *target) putMirror(lom *core.LOM) {
 
 const uplockWarn = "conflict getting remote"
 
+func (goi *getOI) uplock(c *cmn.Config) (u *_uplock) {
+	u = &_uplock{sleep: time.Second}
+	// jitter
+	switch goi.ltime & 0x3 {
+	case 0:
+		u.sleep += 3 * time.Millisecond
+	case 0x01:
+		u.sleep += 7 * time.Millisecond
+	case 0x10:
+		u.sleep -= 7 * time.Millisecond
+	case 0x11:
+		u.sleep -= 3 * time.Millisecond
+	}
+	u.timeout = max(c.Timeout.MaxHostBusy.D()-c.Timeout.CplaneOperation.D(), c.Timeout.MaxKeepalive.D())
+	return u
+}
+
 func (u *_uplock) do(lom *core.LOM) error {
 	if u.elapsed > u.timeout {
 		err := cmn.NewErrBusy("node", core.T.String(), uplockWarn+" '"+lom.Cname()+"'")
@@ -1991,13 +2005,12 @@ func (u *_uplock) do(lom *core.LOM) error {
 	}
 
 	lom.Unlock(false)
-	runtime.Gosched()
 	time.Sleep(u.sleep)
 	lom.Lock(false) // all over again: try load and check all respective conditions
 
 	u.elapsed += u.sleep
-	if u.elapsed == 3*u.sleep && u.sleep < u.config.Timeout.CplaneOperation.D() {
-		u.sleep <<= 1
+	if u.sleep < u.timeout>>1 {
+		u.sleep += u.sleep >> 1
 	}
 	return nil
 }

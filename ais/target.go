@@ -736,6 +736,9 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	// GET: regular | archive | range
 	goi := allocGOI()
 	{
+		// [TODO]
+		// - consider smth like: goi.atime = (elapsed-since-ref-monotime) + ref-calendar-time
+		// - with periodic readjustment (***)
 		goi.atime = time.Now().UnixNano()
 		goi.ltime = mono.NanoTime()
 		if dpq.ptime != "" {
