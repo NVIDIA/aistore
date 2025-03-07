@@ -340,7 +340,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: core.T.Snode().URL(cmn.NetPublic) + apc.URLPathETLObject.Join(reqSecret),
+			Value: core.T.Snode().URL(cmn.NetIntraData) + apc.URLPathETLObject.Join(reqSecret),
 		})
 		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
