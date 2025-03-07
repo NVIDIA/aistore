@@ -152,7 +152,7 @@ build:k8s:
     - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $CI_REGISTRY
   script:
     - buildah images
-    - buildah build -t $FQ_IMAGE_NAME -f deploy/dev/k8s/Dockerfile --build-arg MODE="debug" --build-arg providers="gcp aws oci"
+    - buildah build -t $FQ_IMAGE_NAME -f deploy/dev/k8s/Dockerfile --build-arg mode="debug" --build-arg providers="gcp aws oci"
     - buildah images
     - buildah push $FQ_IMAGE_NAME
   rules:

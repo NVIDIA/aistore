@@ -16,7 +16,11 @@ import (
 )
 
 type (
-	ETLs map[string]InitMsg
+	Instance struct {
+		InitMsg `json:"init_msg,omitempty"`
+		XactID  string `json:"xid,omitempty"`
+	}
+	ETLs map[string]Instance
 
 	// ETL metadata
 	MD struct {
@@ -26,8 +30,9 @@ type (
 	}
 
 	jsonETL struct {
-		Type string              `json:"type,string"`
-		Msg  jsoniter.RawMessage `json:"msg"`
+		Type   string              `json:"type,string"`
+		XactID string              `json:"xid"`
+		Msg    jsoniter.RawMessage `json:"msg"`
 	}
 	jsonMD struct {
 		Version int64              `json:"version"`
@@ -50,8 +55,10 @@ var (
 // MD //
 ////////
 
-func (e *MD) Init(l int)         { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg)    { e.ETLs[msg.Name()] = msg }
+func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
+func (e *MD) Add(msg InitMsg, xid string) {
+	e.ETLs[msg.Name()] = Instance{InitMsg: msg, XactID: xid}
+}
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
 func (e *MD) Get(id string) (msg InitMsg, present bool) {
@@ -84,7 +91,7 @@ func (e *MD) MarshalJSON() ([]byte, error) {
 		Ext:     e.Ext,
 	}
 	for k, v := range e.ETLs {
-		jsonMD.ETLs[k] = jsonETL{v.MsgType(), cos.MustMarshal(v)}
+		jsonMD.ETLs[k] = jsonETL{v.MsgType(), v.XactID, cos.MustMarshal(v.InitMsg)}
 	}
 	return jsoniter.Marshal(jsonMD)
 }
@@ -99,15 +106,15 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	for k, v := range jsonMD.ETLs {
 		switch v.Type {
 		case Code:
-			e.ETLs[k] = &InitCodeMsg{}
+			e.ETLs[k] = Instance{InitMsg: &InitCodeMsg{}, XactID: v.XactID}
 		case Spec:
-			e.ETLs[k] = &InitSpecMsg{}
+			e.ETLs[k] = Instance{InitMsg: &InitSpecMsg{}, XactID: v.XactID}
 		default:
 			err = fmt.Errorf("invalid InitMsg type %q", v.Type)
 			debug.AssertNoErr(err)
 			return
 		}
-		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k]); err != nil {
+		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k].InitMsg); err != nil {
 			break
 		}
 	}

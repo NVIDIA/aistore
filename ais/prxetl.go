@@ -118,7 +118,7 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 
 	// must be new
 	etlMD := p.owner.etl.get()
-	if etlMD.get(initMsg.Name()) != nil {
+	if msg, _ := etlMD.get(initMsg.Name()); msg != nil {
 		p.writeErrStatusf(w, r, http.StatusConflict, "%s: etl job %s already exists", p, initMsg.Name())
 		return
 	}
@@ -146,7 +146,7 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etlMD := p.owner.etl.get()
-	etlMsg := etlMD.get(etlName)
+	etlMsg, xid := etlMD.get(etlName)
 	if etlMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
@@ -156,7 +156,7 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLStop:
 		p.stopETL(w, r)
 	case apc.ETLStart:
-		p.startETL(w, r, etlMsg)
+		p.startETL(w, r, etlMsg, xid)
 	default:
 		debug.Assert(false, "invalid operation: "+op)
 		p.writeErrAct(w, r, "invalid operation: "+op)
@@ -258,6 +258,7 @@ func (p *proxy) initETL(w http.ResponseWriter, msg etl.InitMsg) error {
 		pre:   _addETLPre,
 		final: p._syncEtlMDFinal,
 		msg:   msg,
+		xid:   xid,
 		wait:  true,
 	}
 	p.owner.etl.modify(ctx)
@@ -268,7 +269,7 @@ func (p *proxy) initETL(w http.ResponseWriter, msg etl.InitMsg) error {
 	return nil
 }
 
-func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
+func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg, xid string) {
 	var (
 		err  error
 		args = allocBcArgs()
@@ -278,6 +279,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 			Method: http.MethodPost,
 			Path:   r.URL.Path,
 			Body:   cos.MustMarshal(msg),
+			Query:  url.Values{apc.QparamUUID: []string{xid}},
 		}
 		args.timeout = apc.LongTimeout
 	}
@@ -304,7 +306,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 
 func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
 	debug.Assert(ctx.msg != nil)
-	clone.add(ctx.msg)
+	clone.add(ctx.msg, ctx.xid)
 	return
 }
 
@@ -323,7 +325,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 	}
 
 	etlMD := p.owner.etl.get()
-	initMsg := etlMD.get(etlName)
+	initMsg, _ := etlMD.get(etlName)
 	if initMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return

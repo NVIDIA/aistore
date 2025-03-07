@@ -73,7 +73,7 @@ type (
 
 	// and implementations
 	InitMsgBase struct {
-		IDX       string       `json:"id"`            // etlName (not to be confused)
+		IDX       string       `json:"id"`            // TODO -- FIXME: completely separate etlName and XactID
 		CommTypeX string       `json:"communication"` // enum commTypes
 		ArgTypeX  string       `json:"argument"`      // enum argTypes
 		Timeout   cos.Duration `json:"timeout"`

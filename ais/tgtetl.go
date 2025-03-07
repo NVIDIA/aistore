@@ -168,7 +168,7 @@ func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lo
 	}
 
 	xetl := comm.Xact()
-	xetl.ObjsAdd(1, lom.Lsize())
+	xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {

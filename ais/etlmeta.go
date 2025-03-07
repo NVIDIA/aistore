@@ -48,6 +48,7 @@ type (
 		final func(ctx *etlMDModifier, clone *etlMD)
 
 		msg     etl.InitMsg
+		xid     string
 		etlName string
 		wait    bool
 	}
@@ -105,12 +106,14 @@ func (e *etlMD) clone() *etlMD {
 	return dst
 }
 
-func (e *etlMD) add(spec etl.InitMsg) {
-	e.Add(spec)
+func (e *etlMD) add(spec etl.InitMsg, xid string) {
+	e.Add(spec, xid)
 	e.Version++
 }
 
-func (e *etlMD) get(id string) etl.InitMsg { return e.ETLs[id] }
+func (e *etlMD) get(id string) (msg etl.InitMsg, xid string) {
+	return e.ETLs[id].InitMsg, e.ETLs[id].XactID
+}
 
 func (e *etlMD) del(id string) (exists bool) {
 	_, exists = e.ETLs[id]
