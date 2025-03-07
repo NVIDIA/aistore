@@ -1,3 +1,4 @@
+//nolint:usetesting // need mkdir(dir = bdir)
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.

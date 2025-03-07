@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -153,12 +152,7 @@ func TestMultipartUploadUsingScript(t *testing.T) {
 		Long: true,
 	})
 
-	tempdir, err := os.MkdirTemp("", "s3-mpt")
-	tassert.CheckFatal(t, err)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tempdir)
-	})
-
+	tempdir := t.TempDir()
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 
 	// 1. set MD5 to satisfy `s3cmd` (for details, see docs/s3cmd.md & docs/s3compat.md)
@@ -238,11 +232,7 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 		remaisScript = "./scripts/remais-del-list-deleted.sh"
 	)
 	// 1. create temp root
-	root, err := os.MkdirTemp("", "ais-lpi-")
-	tassert.CheckFatal(t, err)
-	defer func() {
-		os.RemoveAll(root)
-	}()
+	root := t.TempDir()
 
 	//
 	// 2. script #1: generate

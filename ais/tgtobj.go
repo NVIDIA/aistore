@@ -741,6 +741,7 @@ fin:
 		if !retried {
 			nlog.Warningln("retrying", goi.lom.String(), err)
 			retried = true
+			cold = false
 			goto do
 		}
 	}

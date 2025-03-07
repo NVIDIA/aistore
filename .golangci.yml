@@ -22,6 +22,7 @@ linters:
     - gosec
     - gosimple
     - govet
+    # iface
     - importas
     - ineffassign
     - intrange
@@ -32,6 +33,7 @@ linters:
     - prealloc
     - protogetter
     - reassign
+    # recvcheck
     - revive
     - staticcheck
     - testpackage
@@ -39,6 +41,7 @@ linters:
     - unconvert
     - unparam
     - unused
+    - usetesting
     - whitespace
 
 # See: https://golangci-lint.run/usage/linters/

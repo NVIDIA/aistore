@@ -8,7 +8,6 @@ import (
 	"fmt"
 	iofs "io/fs"
 	"math/rand/v2"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -129,17 +128,15 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	)
 	m.saveCluState(m.proxyURL)
 
-	tempdir, err := os.MkdirTemp("", "prm")
-	tassert.CheckFatal(t, err)
+	tempdir := t.TempDir()
 	subdirFQN := filepath.Join(tempdir, subdir)
-	err = cos.CreateDir(subdirFQN)
+	err := cos.CreateDir(subdirFQN)
 	tassert.CheckFatal(t, err)
 
 	if m.bck.IsRemote() {
 		m.del()
 	}
 	t.Cleanup(func() {
-		_ = os.RemoveAll(tempdir)
 		if m.bck.IsRemote() {
 			m.del()
 		}

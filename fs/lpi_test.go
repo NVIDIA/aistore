@@ -8,7 +8,6 @@ package fs_test
 import (
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -29,13 +28,7 @@ const (
 
 func TestLocalPageIterator(t *testing.T) {
 	// 1. create temp root
-	root, err := os.MkdirTemp("", "ais-lpi-")
-	tassert.CheckFatal(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(root)
-		}
-	}()
+	root := t.TempDir()
 
 	// 2. generate
 	cmd := exec.Command(lpiTestScript, "--root_dir", root)
