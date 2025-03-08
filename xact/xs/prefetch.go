@@ -51,12 +51,12 @@ type (
 		ctx    context.Context
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
+		vlabs  map[string]string
 		rate   struct {
 			arl   *cos.AdaptRateLim
 			sleep time.Duration
 		}
-		cname string
-		pebl  pebl
+		pebl pebl
 		lrit
 		xact.Base
 		latestVer bool
@@ -111,7 +111,10 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	r.rate.arl, r.rate.sleep = bck.NewBackendRateLim(nat)
 
 	r.bp = core.T.Backend(bck)
-	r.cname = bck.Cname("")
+	r.vlabs = map[string]string{
+		stats.VarlabBucket:   bck.Cname(""),
+		stats.VarlabXactKind: r.Kind(),
+	}
 	r.ctx = context.Background()
 
 	if r.msg.BlobThreshold > 0 {
@@ -234,14 +237,10 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 	// (compare with ais/tgtimpl coldstats)
 	lat := mono.SinceNano(started)
 	tstats := core.T.StatsUpdater()
-	vlabs := map[string]string{
-		stats.VarlabBucket:   r.cname,
-		stats.VarlabXactKind: r.Kind(),
-	}
-	tstats.IncWith(r.bp.MetricName(stats.GetCount), vlabs)
+	tstats.IncWith(r.bp.MetricName(stats.GetCount), r.vlabs)
 	tstats.AddWith(
-		cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: lat, VarLabs: vlabs},
-		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: vlabs},
+		cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: lat, VarLabs: r.vlabs},
+		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: r.vlabs},
 	)
 
 	// own stats
