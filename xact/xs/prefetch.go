@@ -202,7 +202,7 @@ retry:
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infoln(r.Name(), lom.Cname())
 		}
-	case cos.IsNotExist(err, ecode):
+	case cos.IsNotExist(err, ecode) || cmn.IsErrBusy(err) || err == cmn.ErrSkip:
 		if lrit.lrp == lrpList {
 			r.AddErr(err, 5, cos.SmoduleXs)
 		}
@@ -228,17 +228,6 @@ eret:
 func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 	started := mono.NanoTime()
 	if ecode, err = r.bp.GetObj(r.ctx, lom, cmn.OwtGetPrefetchLock, nil /*origReq*/); err != nil {
-		switch {
-		case cmn.IsErrFailedTo(err):
-			nlog.Warningln(err)
-		case cmn.IsErrBusy(err) || err == cmn.ErrSkip:
-			if cmn.Rom.FastV(4, cos.SmoduleXs) {
-				nlog.Warningln("skip getting remote", lom.Cname(), "[", err, ecode, "]")
-			}
-			return 0, nil
-		default:
-			nlog.Warningln("failed to GET remote", lom.Cname(), "[", err, ecode, "]")
-		}
 		return ecode, err
 	}
 
