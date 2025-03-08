@@ -351,8 +351,9 @@ func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {
 func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
 	lsmsg.SetFlag(apc.LsNameSize | apc.LsNoDirs)
+	bp := core.T.Backend(bck)
 	for !r.IsAborted() {
-		npg := newNpgCtx(bck, lsmsg, noopCb, nil) // TODO: inventory offset
+		npg := newNpgCtx(bck, lsmsg, noopCb, nil, bp) // TODO: inventory offset
 		nentries := allocLsoEntries()
 		lst, err := npg.nextPageR(nentries)
 		if err != nil {

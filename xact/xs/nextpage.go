@@ -18,6 +18,7 @@ import (
 )
 
 type npgCtx struct {
+	bp   core.Backend
 	bck  *meta.Bck
 	ctx  *core.LsoInvCtx
 	wi   walkInfo
@@ -25,8 +26,9 @@ type npgCtx struct {
 	idx  int
 }
 
-func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInvCtx) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInvCtx, bp core.Backend) (npg *npgCtx) {
 	npg = &npgCtx{
+		bp:  bp,
 		bck: bck,
 		wi: walkInfo{
 			msg:          msg.Clone(),
@@ -89,13 +91,13 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err erro
 	lst = &cmn.LsoRes{Entries: nentries}
 	if npg.ctx != nil {
 		if npg.ctx.Lom == nil {
-			_, err = core.T.Backend(npg.bck).GetBucketInv(npg.bck, npg.ctx)
+			_, err = npg.bp.GetBucketInv(npg.bck, npg.ctx)
 		}
 		if err == nil {
-			err = core.T.Backend(npg.bck).ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
+			err = npg.bp.ListObjectsInv(npg.bck, npg.wi.msg, lst, npg.ctx)
 		}
 	} else {
-		_, err = core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
+		_, err = npg.bp.ListObjects(npg.bck, npg.wi.msg, lst)
 	}
 	if err != nil {
 		freeLsoEntries(nentries)

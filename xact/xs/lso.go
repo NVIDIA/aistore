@@ -43,29 +43,31 @@ type (
 		streamingF
 	}
 	LsoXact struct {
-		msg       *apc.LsoMsg
-		msgCh     chan *apc.LsoMsg // incoming requests
+		lpis      lpi.Lpis
+		msg       *apc.LsoMsg      // first message
+		msgCh     chan *apc.LsoMsg // next messages
 		respCh    chan *LsoRsp     // responses - next pages
 		remtCh    chan *LsoRsp     // remote paging by the responsible target
-		stopCh    cos.StopCh       // to stop xaction
-		token     string           // continuation token -> last responded page
+		ctx       *core.LsoInvCtx  // bucket inventory
 		nextToken string           // next continuation token -> next pages
+		token     string           // continuation token -> last responded page
+		stopCh    cos.StopCh       // to stop xaction
 		page      cmn.LsoEntries   // current page (contents)
 		walk      struct {
 			pageCh       chan *cmn.LsoEnt // channel to accumulate listed object entries
 			stopCh       *cos.StopCh      // to abort bucket walk
 			wi           *walkInfo        // walking context and state
+			bp           core.Backend     // t.Backend(bck)
 			wg           sync.WaitGroup   // wait until this walk finishes
 			done         bool             // done walking (indication)
 			wor          bool             // wantOnlyRemote
 			dontPopulate bool             // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
 			this         bool             // r.msg.SID == core.T.SID(): true when this target does remote paging
 			last         bool             // last remote page
+			remote       bool             // list remote
 		}
 		streamingX
-		lensgl int64
-		ctx    *core.LsoInvCtx
-		lpis   lpi.Lpis
+		lensgl int64 // channel to accumulate listed object entries
 	}
 	LsoRsp struct {
 		Err    error
@@ -190,8 +192,11 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 func (r *LsoXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
-	if !lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
+	r.walk.remote = lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached))
+	if !r.walk.remote {
 		r.initWalk()
+	} else {
+		r.walk.bp = core.T.Backend(r.p.Bck)
 	}
 loop:
 	for {
@@ -203,8 +208,9 @@ loop:
 			r.msg.PageSize = msg.PageSize
 
 			// cannot change
-			debug.Assert((r.msg.SID == core.T.SID()) == r.walk.this)
-			debug.Assert(r.walk.wor == r.msg.WantOnlyRemoteProps())
+			debug.Assert(r.msg.SID == msg.SID, r.msg.SID, " vs ", msg.SID)
+			debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), msg.Str(r.p.Bck.Cname("")))
+			debug.Assert(r.walk.remote == lsoIsRemote(r.p.Bck, msg.IsFlagSet(apc.LsCached)), msg.Str(r.p.Bck.Cname("")))
 
 			r.IncPending()
 			resp := r.doPage()
@@ -345,7 +351,7 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 }
 
 func (r *LsoXact) doPage() *LsoRsp {
-	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
+	if r.walk.remote {
 		if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
 			// can't extract the next-to-list object name from the remotely generated
 			// continuation token, keeping and returning the entire last page
@@ -405,7 +411,7 @@ func (r *LsoXact) havePage(token string, cnt int64) bool {
 func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoRes
-		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.ctx)
+		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd, r.ctx, r.walk.bp)
 		smap = core.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)

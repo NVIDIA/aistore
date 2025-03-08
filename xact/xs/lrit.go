@@ -262,7 +262,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		ecode   int
 		lst     *cmn.LsoRes
 		lsmsg   = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
-		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil /*core.LsoInvCtx bucket inventory*/)
+		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil /*inventory*/, nil /*bp: see below*/)
 		bremote = r.bck.IsRemote()
 	)
 	lsmsg.SetFlag(apc.LsNoDirs)
@@ -272,6 +272,8 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	}
 	if !bremote {
 		smap = nil // not needed
+	} else {
+		npg.bp = core.T.Backend(r.bck)
 	}
 	for {
 		if r.done() {
