@@ -82,9 +82,11 @@ const (
 // e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
 const (
 	// NOTE semantics:
-	// - counts all instances when remote GET is followed by storing of the new object (version) locally
-	// - does _not_ count assorted calls to `GetObjReader` (e.g., via tcb/tco -> LDP.Reader)
-	GetCount = "get.n" // GET(object) count = (cold + warm)
+	// - counts all "warm" GETs
+	// - counts all "cold" GETs (when remote GET is followed by storing new object (or, new object version) locally)
+	// - does _not_ count GET (more exactly, GetObjReader) when copying or transforming remote source
+	// - see also: ais/backend/common
+	GetCount = "get.n"
 
 	PutCount    = "put.n" // ditto PUT(object) count = (all PUTs including remote)
 	HeadCount   = "head.n"

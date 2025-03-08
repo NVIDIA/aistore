@@ -56,12 +56,12 @@ const (
 	IOErrDeleteCount = ioErrPrefix + "del.n"
 
 	// KindLatency
-	GetLatency         = "get.ns"
-	GetLatencyTotal    = "get.ns.total"
-	GetE2ELatencyTotal = "e2e.get.ns.total" // end to end (e2e) cold-GET latency
+	GetLatency      = "get.ns"
+	GetLatencyTotal = "get.ns.total"
+
 	PutLatency         = "put.ns"
-	PutLatencyTotal    = "put.ns.total"
-	PutE2ELatencyTotal = "e2e.put.ns.total" // end to end (e2e) write-through PUT latency
+	PutLatencyTotal    = "put.ns.total"     // "pure" remote PUT latency
+	PutE2ELatencyTotal = "e2e.put.ns.total" // end to end (e2e) PUT latency
 
 	AppendLatency     = "append.ns"
 	GetRedirLatency   = "get.redir.ns"

@@ -19,9 +19,9 @@ import (
 
 type npgCtx struct {
 	bck  *meta.Bck
+	ctx  *core.LsoInvCtx
 	wi   walkInfo
 	page cmn.LsoRes
-	ctx  *core.LsoInvCtx
 	idx  int
 }
 
@@ -37,9 +37,9 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInv
 		ctx: ctx,
 	}
 	if msg.IsFlagSet(apc.LsDiff) {
-		npg.wi.custom = make(cos.StrKVs) // TODO -- FIXME: move to parent x-lso; clear and reuse here
+		npg.wi.custom = make(cos.StrKVs) // TODO: move to parent x-lso; clear and reuse here
 	}
-	return
+	return npg
 }
 
 // limited usage: bucket summary, multi-obj

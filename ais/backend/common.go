@@ -1,6 +1,6 @@
 // Package backend contains core/backend interface implementations for supported backend providers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -47,10 +47,12 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 	labels := cos.StrKVs{"backend": prefix}
 	b.metrics = make(map[string]string, numBackendMetricks)
 
-	// GET
+	// NOTE semantics:
+	// - counts absolutely all remote GETs
+	// - including those performed by tcb/tco jobs to copy or transform remote source
+	// - see also: stats/common
 	b.metrics[stats.GetCount] = prefix + "." + stats.GetCount
 	b.metrics[stats.GetLatencyTotal] = prefix + "." + stats.GetLatencyTotal
-	b.metrics[stats.GetE2ELatencyTotal] = prefix + "." + stats.GetE2ELatencyTotal
 	b.metrics[stats.GetSize] = prefix + "." + stats.GetSize
 
 	if regExt {
@@ -68,19 +70,8 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 			b.metrics[stats.GetLatencyTotal],
 			stats.KindTotal,
 			&stats.Extra{
-				Help:    "GET: total cumulative time (nanoseconds) to execute cold GETs and store new object versions in-cluster",
+				Help:    "GET: total cumulative time (nanoseconds) to execute remote requests and store, copy, or transform objects",
 				StrName: "remote_get_ns_total",
-				Labels:  labels,
-				VarLabs: stats.BckXactVarlabs,
-			},
-		)
-		tr.RegExtMetric(snode,
-			b.metrics[stats.GetE2ELatencyTotal],
-			stats.KindTotal,
-			&stats.Extra{
-				Help: "GET: total end-to-end time (nanoseconds) servicing remote requests; " +
-					"includes: receiving request, executing cold-GET, storing new object version in-cluster, and transmitting response",
-				StrName: "remote_e2e_get_ns_total",
 				Labels:  labels,
 				VarLabs: stats.BckXactVarlabs,
 			},
@@ -118,7 +109,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 			b.metrics[stats.PutLatencyTotal],
 			stats.KindTotal,
 			&stats.Extra{
-				Help:    "PUT: total cumulative time (nanoseconds) to execute remote requests and store new object versions in-cluster",
+				Help:    "PUT: total cumulative time (nanoseconds) to execute remote requests",
 				StrName: "remote_put_ns_total",
 				Labels:  labels,
 				VarLabs: stats.BckXactVarlabs,
@@ -129,8 +120,8 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 			stats.KindTotal,
 			&stats.Extra{
 				StrName: "remote_e2e_put_ns_total",
-				Help: "PUT: total end-to-end time (nanoseconds) servicing remote requests; " +
-					"includes: receiving PUT payload, storing it in-cluster, executing remote PUT, finalizing new in-cluster object",
+				Help: "PUT: total end-to-end time (nanoseconds) for servicing remote requests; " +
+					"includes the time to receive PUT payload, store it in-cluster, execute the remote PUT, and finalize new in-cluster object",
 				Labels:  labels,
 				VarLabs: stats.BckXactVarlabs,
 			},

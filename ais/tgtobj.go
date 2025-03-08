@@ -80,8 +80,6 @@ type (
 		ranges     byteRanges // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 		atime      int64      // access time.Now()
 		ltime      int64      // mono.NanoTime, to measure latency
-		rstarttime int64      // mono.NanoTime, mark start of remote GET to measure latency
-		rltime     int64      // mono.NanoTime, to measure remote bucket latency
 		chunked    bool       // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 		unlocked   bool       // internal
 		verchanged bool       // version changed
@@ -89,6 +87,7 @@ type (
 		cold       bool       // true if executed backend.Get
 		latestVer  bool       // QparamLatestVer || 'versioning.*_warm_get'
 		isIOErr    bool       // to count GET error as a "IO error"; see `Trunner._softErrs()`
+		remote     bool       // backend.GetObjReader for any reason and any streaming scenario
 	}
 	_uplock struct {
 		timeout time.Duration
@@ -696,8 +695,8 @@ do: // retry uplock or ec-recovery, the latter only once
 		// zero-out prev. version custom metadata, if any
 		goi.lom.SetCustomMD(nil)
 
-		goi.rstarttime = mono.NanoTime()
 		// get remote reader (compare w/ t.GetCold)
+		goi.remote = true
 		res = backend.GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
@@ -726,7 +725,6 @@ do: // retry uplock or ec-recovery, the latter only once
 			goi.unlocked = true
 			return ecode, err
 		}
-		goi.rltime = mono.SinceNano(goi.rstarttime)
 	}
 
 	// read locally and stream back
@@ -1234,21 +1232,16 @@ func (goi *getOI) stats(written int64) {
 		)
 	}
 
-	if goi.rltime == 0 {
+	if !goi.remote {
 		return
 	}
 
-	// cold (compare with t.coldstats)
+	// cold
 	var (
 		backend = goi.t.Backend(bck)
-		vlabs2  = map[string]string{stats.VarlabBucket: cname, stats.VarlabXactKind: ""}
 	)
-	goi.t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs2)
-	goi.t.statsT.AddWith(
-		cos.NamedVal64{Name: backend.MetricName(stats.GetE2ELatencyTotal), Value: delta, VarLabs: vlabs2},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: goi.rltime, VarLabs: vlabs2},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: written, VarLabs: vlabs2},
-	)
+	goi.t.coldstats(backend, cname, "" /*xkind*/, written, delta)
+
 	if goi.verchanged {
 		goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)
 		goi.t.statsT.AddWith(
@@ -1582,16 +1575,19 @@ func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (si
 
 	ecode, err = poi.putObject()
 	freePOI(poi)
-	if err == nil {
-		// xaction stats: increment locally processed
-		// (and see DM (data mover) for in and out counting)
-		size = resp.OAH.Lsize()
-
-		// TODO -- FIXME
-		// backend := t.Backend(bck)
-		// t.coldstats()
+	if err != nil {
+		return 0, ecode, err
 	}
 
+	// xaction stats: increment locally processed
+	// see transport/bundle/dmover for in and out stats - receive and transmit, respectively
+	size = resp.OAH.Lsize()
+
+	// reading from remote, writing elsewhere: increment "cold" stats only
+	if resp.Remote {
+		lat := time.Now().UnixNano() - lom.AtimeUnix()
+		t.coldstats(t.Backend(lom.Bck()), lom.Bck().Cname(""), coi.Xact.Kind(), size, lat)
+	}
 	return size, ecode, err
 }
 
@@ -1659,7 +1655,8 @@ func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo s
 }
 
 func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
-	debug.Assert(!coi.DryRun)
+	var remote bool // when reading source via backend.GetObjReader
+
 	if sargs.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
 		lom = lom.CloneMD(lom.FQN)
@@ -1709,6 +1706,7 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ 
 		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
 		size = resp.OAH.Lsize()
 		sargs.reader, sargs.objAttrs = resp.R, resp.OAH
+		remote = resp.Remote
 	}
 
 	// do
@@ -1718,6 +1716,10 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ 
 		err = coi._dm(lom /*for attrs*/, sargs)
 	} else {
 		err = coi.put(t, sargs)
+	}
+	if remote && err == nil {
+		lat := time.Now().UnixNano() - lom.AtimeUnix()
+		t.coldstats(t.Backend(lom.Bck()), lom.Bck().Cname(""), coi.Xact.Kind(), size, lat)
 	}
 	return size, err
 }

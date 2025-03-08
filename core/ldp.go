@@ -72,7 +72,10 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (resp ReadResp) {
 	bck := lom.Bck()
 
 	lom.Lock(false)
+	lom.SetAtimeUnix(time.Now().UnixNano())
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
+
+	// loaded: check ver
 	if loadErr == nil {
 		if latestVer || sync {
 			debug.Assert(bck.IsRemote(), bck.String()) // caller's responsibility
@@ -88,7 +91,7 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (resp ReadResp) {
 			if !crmd.Eq {
 				// version changed
 				lom.Unlock(false)
-				goto remote
+				goto remote // ---->
 			}
 		}
 
@@ -110,7 +113,6 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (resp ReadResp) {
 remote:
 	// GetObjReader and return remote (object) reader and oah for object metadata
 	// (compare w/ T.GetCold)
-	lom.SetAtimeUnix(time.Now().UnixNano())
 	res := T.Backend(bck).GetObjReader(context.Background(), lom, 0, 0)
 
 	if res.Err != nil {
@@ -119,16 +121,11 @@ remote:
 	}
 
 	oah := &cmn.ObjAttrs{
-		Ver:   nil,           // TODO: differentiate between copying (same version) vs. transforming
-		Cksum: cos.NoneCksum, // will likely reassign (below)
-		Atime: lom.AtimeUnix(),
+		Cksum:    res.ExpCksum,
+		CustomMD: lom.GetCustomMD(),
+		Atime:    lom.AtimeUnix(),
+		Size:     res.Size,
 	}
-	if lom.Checksum() != nil {
-		oah.Cksum = lom.Checksum()
-	} else if res.ExpCksum != nil {
-		oah.Cksum = res.ExpCksum
-	}
-	oah.Size = res.Size
 	resp.OAH = oah
 	resp.Remote = true
 

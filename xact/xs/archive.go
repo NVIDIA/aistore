@@ -71,8 +71,8 @@ type (
 	XactArch struct {
 		bckTo   *meta.Bck
 		joggers struct {
-			wg sync.WaitGroup
 			m  map[string]*jogger
+			wg sync.WaitGroup
 			sync.RWMutex
 		}
 		pending struct {

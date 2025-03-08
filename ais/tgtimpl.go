@@ -192,19 +192,20 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 	}
 
 	// 4. stats
-	t.coldstats(backend, lom, xkind, started)
+	lat := mono.SinceNano(started)
+	t.coldstats(backend, lom.Bck().Cname(""), xkind, lom.Lsize(), lat)
 	return 0, nil
 }
 
-func (t *target) coldstats(backend core.Backend, lom *core.LOM, xkind string, started int64) {
+func (t *target) coldstats(backend core.Backend, cname, xkind string, size, lat int64) {
 	vlabs := map[string]string{
-		stats.VarlabBucket:   lom.Bck().Cname(""),
+		stats.VarlabBucket:   cname,
 		stats.VarlabXactKind: xkind,
 	}
 	t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
 	t.statsT.AddWith(
-		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(started), VarLabs: vlabs},
-		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetLatencyTotal), Value: lat, VarLabs: vlabs},
+		cos.NamedVal64{Name: backend.MetricName(stats.GetSize), Value: size, VarLabs: vlabs},
 	)
 }
 

@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ec"
@@ -137,8 +136,6 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 
 // stats and redundancy (compare w/ goi.txfini)
 func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
-	// latency from cold-get start time.
-	goi.rltime = mono.SinceNano(goi.rstarttime)
 	lom := goi.lom
 	if revert != "" {
 		if err := cos.RemoveFile(revert); err != nil {
