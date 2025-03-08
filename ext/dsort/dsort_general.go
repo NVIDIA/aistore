@@ -383,8 +383,8 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	} else {
 		// stats
 		delta := mono.Since(beforeRecv)
-		g.tstats.Inc(stats.DsortCreationRespCount)
-		g.tstats.Add(stats.DsortCreationRespLatency, int64(delta))
+		core.T.StatsUpdater().Inc(stats.DsortCreationRespCount)
+		core.T.StatsUpdater().Add(stats.DsortCreationRespLatency, int64(delta))
 	}
 
 	// If we timed out or were stopped but failed to pull the
@@ -414,7 +414,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 
 func (ds *dsorterGeneral) sentCallback(_ *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
-		g.tstats.Add(stats.DsortCreationReqCount, 1)
+		core.T.StatsUpdater().Add(stats.DsortCreationReqCount, 1)
 		return
 	}
 	req := arg.(*remoteRequest)

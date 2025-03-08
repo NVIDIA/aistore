@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -53,8 +52,7 @@ const (
 
 type (
 	global struct {
-		tstats stats.Tracker
-		mem    *memsys.MMSA
+		mem *memsys.MMSA
 
 		// internal
 		mg   *managerGroup
@@ -137,16 +135,14 @@ func Pinit(si core.Node, config *cmn.Config) {
 	newBcastClient(config)
 }
 
-func Tinit(tstats stats.Tracker, db kvdb.Driver, config *cmn.Config) {
+func Tinit(db kvdb.Driver, config *cmn.Config) {
 	g.mg = newManagerGroup(db)
 
 	xreg.RegBckXact(&factory{})
 
 	debug.Assert(g.mem == nil) // only once
-	{
-		g.tstats = tstats
-		g.mem = core.T.PageMM()
-	}
+	g.mem = core.T.PageMM()
+
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
 

@@ -142,39 +142,33 @@ func (t *target) CopyObject(lom *core.LOM, dm *bundle.DataMover, params *xs.CoiP
 	return size, err
 }
 
-// use `backend.GetObj`
-// (compare w/ `backend.GetObjReader` via ldp and blob download)
 func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt cmn.OWT) (ecode int, err error) {
-	// 1. lock
+	// lock
 	switch owt {
-	case cmn.OwtGetPrefetchLock:
-		// do nothing
-	case cmn.OwtGetTryLock, cmn.OwtGetLock:
-		if owt == cmn.OwtGetTryLock {
-			if !lom.TryLock(true) {
-				if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-					nlog.Warningln(t.String(), lom.String(), owt.String(), "is busy")
-				}
-				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
+	case cmn.OwtGetTryLock: // e.g., downloader
+		if !lom.TryLock(true) {
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+				nlog.Warningln(t.String(), lom.String(), owt.String(), "is busy")
 			}
-		} else {
-			lom.Lock(true)
+			return 0, cmn.ErrSkip // TODO: must be cmn.ErrBusy
 		}
+	case cmn.OwtGetLock: // regular usage
+		lom.Lock(true)
 	default:
-		// for cmn.OwtGet, see goi.getCold
+		// other cold-get use cases include:
+		// - cmn.OwtGet, goi.getCold
+		// - cmn.OwtGetPrefetchLock, xs/prefetch
 		debug.Assert(false, owt.String())
-		return http.StatusInternalServerError, errors.New("invalid " + owt.String())
+		return http.StatusInternalServerError, errors.New("cold-get: invalid " + owt.String())
 	}
 
-	// 2. GET remote object and store it
+	// cold GET
 	var (
 		started = mono.NanoTime()
 		backend = t.Backend(lom.Bck())
 	)
 	if ecode, err = backend.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
-		if owt != cmn.OwtGetPrefetchLock {
-			lom.Unlock(true)
-		}
+		lom.Unlock(true)
 		if cmn.IsErrFailedTo(err) {
 			nlog.Warningln(err)
 		} else {
@@ -183,17 +177,11 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 		return ecode, err
 	}
 
-	// 3. unlock
-	switch owt {
-	case cmn.OwtGetPrefetchLock:
-		// do nothing
-	case cmn.OwtGetTryLock, cmn.OwtGetLock:
-		lom.Unlock(true)
-	}
-
-	// 4. stats
+	// unlock and stats
+	lom.Unlock(true)
 	lat := mono.SinceNano(started)
 	t.coldstats(backend, lom.Bck().Cname(""), xkind, lom.Lsize(), lat)
+
 	return 0, nil
 }
 

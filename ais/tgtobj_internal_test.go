@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 	t.htrun.init(config)
 
 	t.statsT = mock.NewStatsTracker()
-	core.Tinit(t, t.statsT, config, false)
+	core.Tinit(t, config, false)
 
 	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
 	bmd := newBucketMD()

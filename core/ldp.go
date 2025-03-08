@@ -178,7 +178,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 			ecode, err = 0, errDel
 		} else {
 			vlabs := map[string]string{"bucket": lom.Bck().Cname("")} // TODO -- FIXME: cannot import stats
-			g.tstats.IncWith(RemoteDeletedDelCount, vlabs)
+			T.StatsUpdater().IncWith(RemoteDeletedDelCount, vlabs)
 		}
 		debug.Assert(err != nil)
 		return CRMD{ErrCode: ecode, Err: err}

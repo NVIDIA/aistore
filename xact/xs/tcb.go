@@ -34,9 +34,9 @@ type (
 	tcbFactory struct {
 		xreg.RenewBase
 		xctn  *XactTCB
+		args  *xreg.TCBArgs
 		kind  string
 		phase string // (see "transition")
-		args  *xreg.TCBArgs
 		owt   cmn.OWT
 	}
 	tcrate struct {
@@ -50,15 +50,16 @@ type (
 		}
 	}
 	XactTCB struct {
-		p      *tcbFactory
-		dm     *bundle.DataMover
-		rate   *tcrate
-		rxlast atomic.Int64 // finishing
+		p     *tcbFactory
+		dm    *bundle.DataMover
+		rate  *tcrate
+		prune prune
+		nam   string
+		str   string
 		xact.BckJog
-		prune    prune
-		nam, str string
-		wg       sync.WaitGroup // starting up
-		refc     atomic.Int32   // finishing
+		wg     sync.WaitGroup // starting up
+		rxlast atomic.Int64   // finishing
+		refc   atomic.Int32   // finishing
 	}
 )
 

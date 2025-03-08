@@ -51,18 +51,18 @@ const (
 
 type (
 	XactBlobDl struct {
-		writer   io.Writer
-		args     *core.BlobParams
-		readers  []*blobReader
-		workCh   chan chunkWi
-		doneCh   chan chunkDone
+		writer  io.Writer
+		doneCh  chan chunkDone
+		args    *core.BlobParams
+		workCh  chan chunkWi
+		cksum   cos.CksumHash
+		sgls    []*memsys.SGL
+		readers []*blobReader
+		xact.Base
+		wg       sync.WaitGroup
 		nextRoff int64
 		woff     int64
-		xact.Base
-		sgls  []*memsys.SGL
-		cksum cos.CksumHash
-		wg    sync.WaitGroup
-		// not necessarily equal user-provided apc.BlobMsg values;
+		// not necessarily user-provided apc.BlobMsg values
 		// in particular, chunk size and num workers might be adjusted based on resources
 		chunkSize  int64
 		fullSize   int64

@@ -98,7 +98,7 @@ func (task *singleTask) download(lom *core.LOM) {
 
 	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
 	lsize := task.currentSize.Load()
-	g.tstats.AddWith(
+	core.T.StatsUpdater().AddWith(
 		cos.NamedVal64{Name: stats.DloadSize, Value: lsize, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.DloadLatencyTotal, Value: int64(task.ended.Load().Sub(task.started.Load())), VarLabs: vlabs},
 	)
@@ -251,7 +251,7 @@ func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
-	g.tstats.Inc(stats.ErrDloadCount)
+	core.T.StatsUpdater().Inc(stats.ErrDloadCount)
 	g.store.persistError(task.jobID(), task.obj.objName, statusMsg)
 	g.store.incErrorCnt(task.jobID())
 }

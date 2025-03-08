@@ -26,11 +26,13 @@ type (
 	}
 
 	lomCtx struct {
+		// resulting read-close-sizer
+		rcs cos.ReadCloseSizer
+
+		// construction
 		dp  *OfflineDP
 		lom *core.LOM
 		cmn.RetryArgs
-		// resulting read-close-sizer
-		rcs cos.ReadCloseSizer
 	}
 )
 

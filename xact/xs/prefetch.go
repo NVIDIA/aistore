@@ -18,10 +18,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -45,14 +47,17 @@ type (
 		mu      sync.Mutex
 	}
 	prefetch struct {
+		bp     core.Backend
+		ctx    context.Context
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
 		rate   struct {
 			arl   *cos.AdaptRateLim
 			sleep time.Duration
 		}
+		cname string
+		pebl  pebl
 		lrit
-		pebl pebl
 		xact.Base
 		latestVer bool
 	}
@@ -76,8 +81,8 @@ func (p *prfFactory) Start() (err error) {
 	if err = b.Init(core.T.Bowner()); err != nil {
 		return err
 	}
-	if b.IsAIS() {
-		return fmt.Errorf("bucket %s is not _remote_ (can only prefetch remote buckets)", b)
+	if !b.IsCloud() && !b.IsRemoteAIS() {
+		return fmt.Errorf("can only prefetch Cloud and remote AIS buckets (have %s)", b.Cname(""))
 	}
 	p.xctn, err = newPrefetch(&p.Args, p.Kind(), b, p.msg)
 	return err
@@ -104,6 +109,10 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	smap := core.T.Sowner().Get()
 	nat := smap.CountActiveTs()
 	r.rate.arl, r.rate.sleep = bck.NewBackendRateLim(nat)
+
+	r.bp = core.T.Backend(bck)
+	r.cname = bck.Cname("")
+	r.ctx = context.Background()
 
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
@@ -185,11 +194,7 @@ retry:
 				nlog.Warningln(sb.String())
 			}
 		}
-		// OwtGetPrefetchLock: minimal locking, optimistic concurrency
-		ecode, err = core.T.GetCold(context.Background(), lom, r.Kind(), cmn.OwtGetPrefetchLock)
-		if err == nil { // done
-			r.ObjsAdd(1, lom.Lsize())
-		}
+		ecode, err = r.getCold(lom)
 	}
 
 	switch {
@@ -216,6 +221,44 @@ retry:
 
 eret:
 	r.AddErr(err, 5, cos.SmoduleXs)
+}
+
+// OwtGetPrefetchLock: minimal locking, optimistic concurrency
+// (light-weight alternative to t.GetCold impl.)
+func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
+	started := mono.NanoTime()
+	if ecode, err = r.bp.GetObj(r.ctx, lom, cmn.OwtGetPrefetchLock, nil /*origReq*/); err != nil {
+		switch {
+		case cmn.IsErrFailedTo(err):
+			nlog.Warningln(err)
+		case cmn.IsErrBusy(err) || err == cmn.ErrSkip:
+			if cmn.Rom.FastV(4, cos.SmoduleXs) {
+				nlog.Warningln("skip getting remote", lom.Cname(), "[", err, ecode, "]")
+			}
+			return 0, nil
+		default:
+			nlog.Warningln("failed to GET remote", lom.Cname(), "[", err, ecode, "]")
+		}
+		return ecode, err
+	}
+
+	// (compare with ais/tgtimpl coldstats)
+	lat := mono.SinceNano(started)
+	tstats := core.T.StatsUpdater()
+	vlabs := map[string]string{
+		stats.VarlabBucket:   r.cname,
+		stats.VarlabXactKind: r.Kind(),
+	}
+	tstats.IncWith(r.bp.MetricName(stats.GetCount), vlabs)
+	tstats.AddWith(
+		cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: lat, VarLabs: vlabs},
+		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: vlabs},
+	)
+
+	// own stats
+	r.ObjsAdd(1, lom.Lsize())
+
+	return 0, nil
 }
 
 func (r *prefetch) Snap() (snap *core.Snap) {

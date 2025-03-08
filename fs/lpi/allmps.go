@@ -23,8 +23,8 @@ type (
 		mi   *fs.Mountpath
 	}
 	Lpis struct {
-		a   []milpi
 		bck *cmn.Bck
+		a   []milpi
 	}
 )
 

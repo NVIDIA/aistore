@@ -322,9 +322,7 @@ func (t *target) Run() error {
 	t.htrun.init(config)
 	t.setusr1()
 
-	tstats := t.statsT.(*stats.Trunner)
-
-	core.Tinit(t, tstats, config, true /*run hk*/)
+	core.Tinit(t, config, true /*run hk*/)
 
 	fatalErr, writeErr := t.checkRestarted(config)
 	if fatalErr != nil {
@@ -354,6 +352,8 @@ func (t *target) Run() error {
 		nlog.Infoln(t.String()+": loaded", smap.StringEx())
 	}
 	t.owner.smap.put(smap)
+
+	tstats := t.statsT.(*stats.Trunner)
 
 	if daemon.cli.target.standby {
 		tstats.Standby(true)
@@ -411,8 +411,8 @@ func (t *target) Run() error {
 		go t.goresilver(marked.Interrupted)
 	}
 
-	dsort.Tinit(t.statsT, db, config)
-	dload.Init(t.statsT, db, &config.Client)
+	dsort.Tinit(db, config)
+	dload.Init(db, &config.Client)
 
 	err = t.htrun.run(config)
 

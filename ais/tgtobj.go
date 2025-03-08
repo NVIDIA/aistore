@@ -379,7 +379,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			nlog.Warningln(poi.loghdr(), "is busy")
-			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
+			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going // TODO: must be cmn.ErrBusy
 		}
 		defer lom.Unlock(true)
 	default:

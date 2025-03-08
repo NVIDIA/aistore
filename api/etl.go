@@ -18,12 +18,13 @@ import (
 )
 
 type ETLObjArgs struct {
-	// ETLName specifies the running ETL instance to be used in inline transform.
-	ETLName string
-
 	// TransformArgs holds the arguments to be used in ETL inline transform,
 	// which will be sent as `apc.QparamETLArgs` query parameter in the request.
+	// Optional, can be omitted (nil).
 	TransformArgs any
+
+	// ETLName specifies the running ETL instance to be used in inline transform.
+	ETLName string
 }
 
 // Initiate custom ETL workload by executing one of the documented `etl.InitMsg`

@@ -24,9 +24,9 @@ type (
 
 	// ETL metadata
 	MD struct {
-		Version int64
-		ETLs    ETLs
 		Ext     any
+		ETLs    ETLs
+		Version int64
 	}
 
 	jsonETL struct {
@@ -35,9 +35,9 @@ type (
 		Msg    jsoniter.RawMessage `json:"msg"`
 	}
 	jsonMD struct {
-		Version int64              `json:"version"`
-		ETLs    map[string]jsonETL `json:"etls"`
 		Ext     any                `json:"ext,omitempty"` // within meta-version extensions
+		ETLs    map[string]jsonETL `json:"etls"`
+		Version int64              `json:"version"`
 	}
 )
 

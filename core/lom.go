@@ -68,7 +68,6 @@ type (
 
 type (
 	global struct {
-		tstats   cos.StatsUpdater // (stats.Trunner)
 		pmm      *memsys.MMSA
 		smm      *memsys.MMSA
 		locker   nameLocker
@@ -97,13 +96,12 @@ var (
 
 func Pinit() { bckLocker = newNameLocker() }
 
-func Tinit(t Target, tstats cos.StatsUpdater, config *cmn.Config, runHK bool) {
+func Tinit(t Target, config *cmn.Config, runHK bool) {
 	bckLocker = newNameLocker()
 	T = t
 	{
 		g.maxLmeta.Store(xattrMaxSize)
 		g.locker = newNameLocker()
-		g.tstats = tstats
 		g.pmm = t.PageMM()
 		g.smm = t.ByteMM()
 	}
@@ -516,7 +514,7 @@ func (lom *LOM) _collide(lmd *lmeta) {
 	if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 {
 		nlog.InfoDepth(1, LcacheCollisionCount, lom.digest, "[", *lmd.uname, "]", *lom.md.uname, lom.Cname())
 	}
-	g.tstats.Inc(LcacheCollisionCount)
+	T.StatsUpdater().Inc(LcacheCollisionCount)
 }
 
 func (lom *LOM) Uncache() {

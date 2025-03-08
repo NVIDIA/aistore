@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"golang.org/x/sync/errgroup"
 )
@@ -46,9 +45,8 @@ type (
 	}
 
 	global struct {
-		tstats stats.Tracker
-		db     kvdb.Driver
-		store  *infoStore
+		db    kvdb.Driver
+		store *infoStore
 
 		// Downloader selects one of the two clients (below) by the destination URL.
 		// Certification check is disabled for now and does not depend on cluster settings.
@@ -61,16 +59,13 @@ type (
 
 var g global
 
-func Init(tstats stats.Tracker, db kvdb.Driver, clientConf *cmn.ClientConf) {
+func Init(db kvdb.Driver, clientConf *cmn.ClientConf) {
 	g.clientH, g.clientTLS = cmn.NewDefaultClients(clientConf.TimeoutLong.D())
 
 	if db == nil { // unit tests only
 		return
 	}
-	{
-		g.tstats = tstats
-		g.db = db
-	}
+	g.db = db
 	xreg.RegNonBckXact(&factory{})
 }
 

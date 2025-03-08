@@ -1028,11 +1028,11 @@ func (es *extractShard) _do(lom *core.LOM) error {
 	}
 
 	if toDisk {
-		g.tstats.Add(stats.DsortExtractShardDskCnt, 1)
+		core.T.StatsUpdater().Add(stats.DsortExtractShardDskCnt, 1)
 	} else {
-		g.tstats.Add(stats.DsortExtractShardMemCnt, 1)
+		core.T.StatsUpdater().Add(stats.DsortExtractShardMemCnt, 1)
 	}
-	g.tstats.Add(stats.DsortExtractShardSize, extractedSize)
+	core.T.StatsUpdater().Add(stats.DsortExtractShardSize, extractedSize)
 
 	//
 	// update metrics, check OOM

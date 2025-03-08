@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -31,21 +32,22 @@ var _ core.Target = (*TargetMock)(nil)
 
 func NewTarget(bo meta.Bowner) *TargetMock {
 	t := &TargetMock{BO: bo}
-	core.Tinit(t, NewStatsTracker(), nil /*config*/, false /*run HK*/)
+	core.Tinit(t, nil /*config*/, false /*run HK*/)
 	return t
 }
 
 func (t *TargetMock) Bowner() meta.Bowner { return t.BO }
 func (t *TargetMock) Sowner() meta.Sowner { return t.SO }
 
-func (*TargetMock) SID() string              { return mockID }
-func (*TargetMock) String() string           { return "tmock" }
-func (*TargetMock) Snode() *meta.Snode       { return &meta.Snode{DaeID: mockID} }
-func (*TargetMock) ClusterStarted() bool     { return true }
-func (*TargetMock) NodeStarted() bool        { return true }
-func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
-func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
-func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
+func (*TargetMock) SID() string                    { return mockID }
+func (*TargetMock) String() string                 { return "tmock" }
+func (*TargetMock) Snode() *meta.Snode             { return &meta.Snode{DaeID: mockID} }
+func (*TargetMock) ClusterStarted() bool           { return true }
+func (*TargetMock) NodeStarted() bool              { return true }
+func (*TargetMock) DataClient() *http.Client       { return http.DefaultClient }
+func (*TargetMock) StatsUpdater() cos.StatsUpdater { return NewStatsTracker() }
+func (*TargetMock) PageMM() *memsys.MMSA           { return memsys.PageMM() }
+func (*TargetMock) ByteMM() *memsys.MMSA           { return memsys.ByteMM() }
 
 func (*TargetMock) MaxUtilLoad() (int64, float64) { return 0, 0 }
 
