@@ -48,6 +48,7 @@ type (
 		final func(ctx *etlMDModifier, clone *etlMD)
 
 		msg     etl.InitMsg
+		stage   etl.Stage
 		xid     string
 		etlName string
 		wait    bool
@@ -106,8 +107,8 @@ func (e *etlMD) clone() *etlMD {
 	return dst
 }
 
-func (e *etlMD) add(spec etl.InitMsg, xid string) {
-	e.Add(spec, xid)
+func (e *etlMD) add(spec etl.InitMsg, status etl.Stage, xid string) {
+	e.Add(spec, status, xid)
 	e.Version++
 }
 

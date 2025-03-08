@@ -18,7 +18,8 @@ import (
 type (
 	Instance struct {
 		InitMsg `json:"init_msg,omitempty"`
-		XactID  string `json:"xid,omitempty"`
+		Stage   `json:"stage"` // enum ETL lifecycle stage
+		XactID  string         `json:"xid,omitempty"`
 	}
 	ETLs map[string]Instance
 
@@ -56,17 +57,30 @@ var (
 ////////
 
 func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg, xid string) {
-	e.ETLs[msg.Name()] = Instance{InitMsg: msg, XactID: xid}
+func (e *MD) Add(msg InitMsg, stage Stage, xid string) {
+	pre, ok := e.ETLs[msg.Name()]
+	if !ok {
+		e.ETLs[msg.Name()] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
+		return
+	}
+
+	debug.Assertf(xid == "" || xid == pre.XactID, "xid should be empty or unchanged, %s vs %s", xid, pre.XactID)
+	if xid == "" {
+		xid = pre.XactID
+	}
+	if stage == Unknown {
+		stage = pre.Stage
+	}
+	e.ETLs[msg.Name()] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
-func (e *MD) Get(id string) (msg InitMsg, present bool) {
+func (e *MD) Get(id string) (InitMsg, bool) {
 	if e == nil {
-		return
+		return nil, false
 	}
-	msg, present = e.ETLs[id]
-	return
+	inst, present := e.ETLs[id]
+	return inst.InitMsg, present
 }
 
 func (e *MD) Del(id string) (deleted bool) {

@@ -340,6 +340,41 @@ There are two ways to run ETL transformations:
 - [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
 - [AIS Loader](/docs/aisloader.md)
 
+## ETL Pod Lifecycle
+
+ETL follows a structured lifecycle to enhance observability. The lifecycle consists of three stages: `Initializing`, `Running`, and `Stopped`. This design prevents ETL from consuming resources when not in use while maintaining visibility into failures.
+
+### Lifecycle Stages & Transitions
+
+```sh
++--------------+     Success      +---------+
+| Initializing |  ------------->  | Running |
++--------------+                  +---------+
+       | ^                             |
+ Error | | User Restarts               | 
+       v |                             |
++--------------+      Runtime Error    |
+|   Stopped    |  <--------------------+
++--------------+       User Stops
+        |
+        | User Deletes
+        v
+    (Removed)
+```
+
+#### 1. `Initializing` Stage
+The ETL enters this stage when created via an [Init](#api-reference) requests. The system provisions the required Kubernetes resources, including pods and services.
+- **Success**: Transitions to `Running` stage.
+- **Failure (Pod Initialization Error/Timeout)**: Transitions to `Stopped` stage.
+#### 2. `Running` Stage
+The ETL is actively processing requests and remains in this stage unless stopped manually or due to an error.
+- **User Sends [Stop ETL](#api-reference)**: Transitions to `Stopped` stage with error message `user abort`.
+- **Runtime Error**: Transitions to `Stopped` stage.
+#### 3. `Stopped` Stage
+The ETL is inactive but retains metadata, allowing for future restarts. Upon entering the Stopped state, AIStore automatically cleans up all associated Kubernetes resources (pods, services) across all targets.
+- **User Sends [Restart ETL](#api-reference)**: Transitions to `Initializing` stage.
+- **User Sends [Delete ETL](#api-reference)**: Permanently removes the ETL instance and its metadata from AIStore.
+
 ## API Reference
 
 This section describes how to interact with ETLs via RESTful API.
@@ -356,8 +391,9 @@ This section describes how to interact with ETLs via RESTful API.
 | Transform bucket | Transforms all objects in a bucket and puts them to destination bucket. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "ext":{"SRC_EXT": "DEST_EXT"}, "prefix":"PREFIX_FILTER", "prepend":"PREPEND_NAME"}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
 | Transform and synchronize bucket | Synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "synchronize": true}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
 | Dry run transform bucket | Accumulates in xaction stats how many objects and bytes would be created, without actually doing it. | POST {"action": "etl-bck"} /v1/buckets/SRC_BUCKET | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "etl-bck", "name": "to-name", "value":{"id": "ETL_NAME", "dry_run": true}}' 'http://G/v1/buckets/SRC_BUCKET?bck_to=PROVIDER%2FNAMESPACE%2FDEST_BUCKET%2F'` |
-| Stop ETL | Stops ETL with given `ETL_NAME`. | DELETE /v1/etl/ETL_NAME/stop | `curl -X POST 'http://G/v1/etl/ETL_NAME/stop'` |
-| Delete ETL | Delete ETL spec/code with given `ETL_NAME` | DELETE /v1/etl/<ETL_NAME> | `curl -X DELETE 'http://G/v1/etl/ETL_NAME' |
+| Stop ETL | Stops ETL with given `ETL_NAME`. | POST /v1/etl/ETL_NAME/stop | `curl -X POST 'http://G/v1/etl/ETL_NAME/stop'` |
+| Restart ETL | Restarts ETL with given `ETL_NAME`. | POST /v1/etl/ETL_NAME/start | `curl -X POST 'http://G/v1/etl/ETL_NAME/start'` |
+| Delete ETL | Delete ETL spec/code with given `ETL_NAME` | DELETE /v1/etl/ETL_NAME | `curl -X DELETE 'http://G/v1/etl/ETL_NAME'` |
 
 
 ## ETL name specifications

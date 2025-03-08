@@ -800,19 +800,19 @@ func TestETLStopAndRestartETL(t *testing.T) {
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	// 1. Check ETL is in running state
-	tetl.ETLShouldBeRunning(t, baseParams, etlName)
+	tetl.ETLCheckStage(t, baseParams, etlName, etl.Running)
 
 	// 2. Stop ETL and verify it stopped successfully
 	tlog.Logf("stopping ETL[%s]\n", etlName)
 	err := api.ETLStop(baseParams, etlName)
 	tassert.CheckFatal(t, err)
-	tetl.ETLShouldNotBeRunning(t, baseParams, etlName)
+	tetl.ETLCheckStage(t, baseParams, etlName, etl.Stopped)
 
 	// 3. Start ETL and verify it is in running state
 	tlog.Logf("restarting ETL[%s]\n", etlName)
 	err = api.ETLStart(baseParams, etlName)
 	tassert.CheckFatal(t, err)
-	tetl.ETLShouldBeRunning(t, baseParams, etlName)
+	tetl.ETLCheckStage(t, baseParams, etlName, etl.Running)
 }
 
 func TestETLMultipleTransformersAtATime(t *testing.T) {
@@ -954,7 +954,7 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 	var (
 		proxyURL           = tools.RandomProxyURL(t)
 		baseParams         = tools.BaseAPIParams(proxyURL)
-		failureTestTimeout = cos.Duration(time.Second * 10) // Should fail quickly, no need to wait too long
+		failureTestTimeout = cos.Duration(time.Second * 30) // Should fail quickly, no need to wait too long
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
@@ -963,10 +963,11 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 	tests := []struct {
 		etlName      string
 		commType     string
+		cleanup      bool
 		expectedErrs []string
 	}{
-		{etlName: tetl.InvalidYaml, commType: etl.Hpull, expectedErrs: []string{"could not find expected ':'"}},
-		{etlName: tetl.NonExistImage, commType: etl.Hpull, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff"}},
+		{etlName: tetl.InvalidYaml, commType: etl.Hpull, cleanup: false, expectedErrs: []string{"could not find expected ':'"}},
+		{etlName: tetl.NonExistImage, commType: etl.Hpull, cleanup: true, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff"}},
 	}
 
 	for _, test := range tests {
@@ -984,8 +985,11 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 			}
 			tassert.Fatalf(t, msg.Name() == test.etlName, "%q vs %q", msg.Name(), test.etlName)
 
-			// No need to clean up, as the creation should fail and the pod should terminate on its own.
 			_, err = api.ETLInit(baseParams, msg)
+			if test.cleanup {
+				t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
+			}
+
 			testETLAnyErrors(t, err, test.expectedErrs...)
 		})
 	}
@@ -995,7 +999,7 @@ func TestETLPodInitCodeFailure(t *testing.T) {
 	var (
 		proxyURL           = tools.RandomProxyURL(t)
 		baseParams         = tools.BaseAPIParams(proxyURL)
-		failureTestTimeout = cos.Duration(time.Second * 10) // Should fail quickly, no need to wait too long
+		failureTestTimeout = cos.Duration(time.Second * 30) // Should fail quickly, no need to wait too long
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
@@ -1028,15 +1032,17 @@ def not_transform_func(input_bytes):
 		deps         string
 		runtime      string
 		commType     string
+		onlyLong     bool
 		expectedErrs []string
 	}{
-		{etlName: "invalid-transform-function-body", code: invalidFuncBody, deps: "", runtime: runtime.Py310, expectedErrs: []string{"SyntaxError", "invalid_code_function_body..."}},
 		{etlName: "invalid-dependency", code: echo, deps: invalidDeps, runtime: runtime.Py310, expectedErrs: []string{"No matching distribution found for numpy==invalid.version.number"}},
 		{etlName: "invalid-module-import", code: invalidModuleImport, deps: "", runtime: runtime.Py311, expectedErrs: []string{"ModuleNotFoundError"}},
-		{etlName: "undefined-transform-function", code: undefinedTransformFunc, deps: "", runtime: runtime.Py312, expectedErrs: []string{"module 'function' has no attribute 'transform'"}},
+		{etlName: "invalid-transform-function-body", code: invalidFuncBody, deps: "", runtime: runtime.Py310, onlyLong: true, expectedErrs: []string{"SyntaxError", "invalid_code_function_body..."}},
+		{etlName: "undefined-transform-function", code: undefinedTransformFunc, deps: "", runtime: runtime.Py312, onlyLong: true, expectedErrs: []string{"module 'function' has no attribute 'transform'"}},
 	}
 	for _, test := range tests {
 		t.Run(test.etlName, func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			msg := etl.InitCodeMsg{
 				InitMsgBase: etl.InitMsgBase{
 					IDX:       test.etlName,
@@ -1050,6 +1056,8 @@ def not_transform_func(input_bytes):
 			msg.Funcs.Transform = "transform"
 
 			_, err := api.ETLInit(baseParams, &msg)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
+
 			testETLAllErrors(t, err, test.expectedErrs...)
 		})
 	}

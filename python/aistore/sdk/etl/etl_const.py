@@ -13,6 +13,11 @@ ETL_COMM_HREV = "hrev"
 # ext/etl/api.go HpushStdin
 ETL_COMM_IO = "io"
 
+# ETL lifecycle stages (see docs/etl.md#etl-pod-lifecycle)
+ETL_STAGE_INIT = "Initializing"
+ETL_STAGE_RUNNING = "Running"
+ETL_STAGE_STOPPED = "Stopped"
+
 ETL_COMM_CODE = [ETL_COMM_IO, ETL_COMM_HPUSH, ETL_COMM_HREV, ETL_COMM_HPULL]
 ETL_COMM_SPEC = [ETL_COMM_HPUSH, ETL_COMM_HREV, ETL_COMM_HPULL]
 

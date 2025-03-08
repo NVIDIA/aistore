@@ -365,25 +365,15 @@ func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bc
 	return xid
 }
 
-func ETLShouldBeRunning(t *testing.T, params api.BaseParams, etlName string) {
+func ETLCheckStage(t *testing.T, params api.BaseParams, etlName string, stage etl.Stage) {
 	etls, err := api.ETLList(params)
 	tassert.CheckFatal(t, err)
-	for _, etl := range etls {
-		if etlName == etl.Name {
+	for _, inst := range etls {
+		if etlName == inst.Name && inst.Stage == stage.String() {
 			return
 		}
 	}
-	t.Fatalf("etl[%s] is not running (%v)", etlName, etls)
-}
-
-func ETLShouldNotBeRunning(t *testing.T, params api.BaseParams, etlName string) {
-	etls, err := api.ETLList(params)
-	tassert.CheckFatal(t, err)
-	for _, etl := range etls {
-		if etlName == etl.Name {
-			t.Fatalf("expected etl[%s] to be stopped (%v)", etlName, etls)
-		}
-	}
+	t.Fatalf("etl[%s] doesn't exist or isn't in status %s (%v)", etlName, stage.String(), etls)
 }
 
 func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {

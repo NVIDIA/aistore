@@ -10,9 +10,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- `stage` field in `ETLInfo` to represent the ETL lifecycle stage
+
 ### Changed
 
 - `cluster.get_performance()` now returns raw performance data as a `dict` keyed by target IDs, rather than typed aggregator objects.
+- `cluster.list_running_etls()` now excludes non-running ETL instances
 
 ### Removed
 

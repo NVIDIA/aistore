@@ -38,6 +38,16 @@ const (
 
 const DefaultTimeout = 45 * time.Second
 
+// enum ETL lifecycle status (see docs/etl.md#etl-pod-lifecycle for details)
+type Stage int
+
+const (
+	Unknown Stage = iota
+	Initializing
+	Running
+	Stopped
+)
+
 // enum communication types (`commTypes`)
 const (
 	// ETL container receives POST request from target with the data. It
@@ -108,6 +118,7 @@ type (
 	InfoList []Info
 	Info     struct {
 		Name     string `json:"id"`
+		Stage    string `json:"stage"`
 		XactID   string `json:"xaction_id"`
 		ObjCount int64  `json:"obj_count"`
 		InBytes  int64  `json:"in_bytes"`
@@ -338,6 +349,19 @@ func ParsePodSpec(errCtx *cmn.ETLErrCtx, spec []byte) (*corev1.Pod, error) {
 	return pod, nil
 }
 
+func (s Stage) String() string {
+	switch s {
+	case Initializing:
+		return "Initializing"
+	case Running:
+		return "Running"
+	case Stopped:
+		return "Stopped"
+	default:
+		return "Unknown"
+	}
+}
+
 //////////////
 // InfoList //
 //////////////
@@ -347,3 +371,4 @@ var _ sort.Interface = (*InfoList)(nil)
 func (il InfoList) Len() int           { return len(il) }
 func (il InfoList) Less(i, j int) bool { return il[i].Name < il[j].Name }
 func (il InfoList) Swap(i, j int)      { il[i], il[j] = il[j], il[i] }
+func (il *InfoList) Append(i Info)     { *il = append(*il, i) }

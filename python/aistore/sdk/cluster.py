@@ -25,6 +25,7 @@ from aistore.sdk.const import (
     WHAT_ALL_RUNNING_STATUS,
     WHAT_NODE_STATS_AND_STATUS,
 )
+from aistore.sdk.etl.etl_const import ETL_STAGE_RUNNING
 from aistore.sdk.provider import Provider
 
 from aistore.sdk.types import (
@@ -154,9 +155,10 @@ class Cluster:
         Returns:
             List[ETLInfo]: A list of details on running ETLs
         """
-        return self._client.request_deserialize(
+        res = self._client.request_deserialize(
             HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETLInfo]
         )
+        return [info for info in res if info.stage == ETL_STAGE_RUNNING]
 
     def is_ready(self) -> bool:
         """

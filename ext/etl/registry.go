@@ -65,6 +65,7 @@ func (r *registry) list() []Info {
 	for name, comm := range r.m {
 		etls = append(etls, Info{
 			Name:     name,
+			Stage:    Running.String(), // for now, targets should only manage and report "Running" ETL instances
 			XactID:   comm.Xact().ID(),
 			ObjCount: comm.ObjCount(),
 			InBytes:  comm.InBytes(),

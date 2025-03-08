@@ -305,6 +305,7 @@ class ETLInfo(BaseModel):  # pylint: disable=too-few-public-methods,unused-varia
 
     id: str = ""
     xaction_id: str = ""
+    stage: str = ""
     obj_count: int = 0
     in_bytes: int = 0
     out_bytes: int = 0
