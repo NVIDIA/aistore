@@ -175,7 +175,7 @@ func (t *traceableTransport) set(l *httpLatencies) {
 
 // implements callback of the type `api.NewRequestCB`
 func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
-	req, err := reqArgs.ReqDeprecated()
+	req, err := reqArgs.Req()
 	if err != nil {
 		return nil, err
 	}
