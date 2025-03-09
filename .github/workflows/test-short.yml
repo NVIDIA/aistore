@@ -10,7 +10,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: ['1.23.x']
+        go-version: ['1.24.x']
         # os: [ubuntu-latest, macos-latest]
         # TODO: provide support for MacOS (!1169)
         os: [ubuntu-latest]

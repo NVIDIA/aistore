@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        go-version: ['1.23.x']
+        go-version: ['1.24.x']
         os: [ubuntu-latest]
         # TODO: provide support for MacOS (revisit !7808)
     runs-on: ${{ matrix.os }}

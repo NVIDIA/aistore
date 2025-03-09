@@ -5,7 +5,6 @@
 package integration_test
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
@@ -490,7 +489,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 
 	var (
 		baseParams = tools.BaseAPIParams()
-		group, _   = errgroup.WithContext(context.Background())
+		group, _   = errgroup.WithContext(t.Context())
 	)
 
 	for range bckCount {

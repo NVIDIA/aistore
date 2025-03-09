@@ -10,7 +10,7 @@ on:
       go_version:
         description: 'Version of GO used as the CI image base'
         required: true
-        default: '1.23'
+        default: '1.24'
 
 env:
   CI_IMAGE: 'aistorage/ci'

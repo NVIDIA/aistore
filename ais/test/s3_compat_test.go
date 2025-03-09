@@ -160,7 +160,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 
 	/* TODO -- FIXME: alternatively, use env vars AWS_PROFILE et al:
 	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
+		t.Context(),
 		config.WithSharedConfigProfile("default"),
 	)
 	tassert.CheckFatal(t, err)
@@ -169,7 +169,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 	*/
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
-	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
+	putOutput, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 		Body:   io.LimitReader(rand.Reader, fileSize),
@@ -178,7 +178,7 @@ func TestS3PresignedPutGet(t *testing.T) {
 	tassert.Errorf(t, putOutput.ETag != nil, "ETag for PUT operation was not set")
 	tassert.Errorf(t, *putOutput.ETag != "", "ETag for PUT operation is empty")
 
-	getOutput, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+	getOutput, err := s3Client.GetObject(t.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 	})
@@ -211,7 +211,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
-	createMultipartUploadOutput, err := s3Client.CreateMultipartUpload(context.Background(), &s3.CreateMultipartUploadInput{
+	createMultipartUploadOutput, err := s3Client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 	})
@@ -221,7 +221,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 
 	var parts []types.CompletedPart //nolint:prealloc // Not needed.
 	for i := 1; i <= 3; i++ {
-		uploadPartOutput, err := s3Client.UploadPart(context.Background(), &s3.UploadPartInput{
+		uploadPartOutput, err := s3Client.UploadPart(t.Context(), &s3.UploadPartInput{
 			Bucket:        aws.String(bck.Name),
 			Key:           aws.String(objName),
 			PartNumber:    aws.Int32(int32(i)),
@@ -238,7 +238,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 		})
 	}
 
-	completeMultipartUpload, err := s3Client.CompleteMultipartUpload(context.Background(), &s3.CompleteMultipartUploadInput{
+	completeMultipartUpload, err := s3Client.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
 		Bucket:          aws.String(bck.Name),
 		Key:             aws.String(objName),
 		UploadId:        createMultipartUploadOutput.UploadId,
@@ -247,7 +247,7 @@ func TestS3PresignedMultipart(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, completeMultipartUpload.ETag != nil, "ETag for CreateMultipartUpload was not set")
 
-	getOutput, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+	getOutput, err := s3Client.GetObject(t.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 	})
@@ -287,7 +287,7 @@ func TestDisableColdGet(t *testing.T) {
 
 	s3Client := s3.New(s3.Options{HTTPClient: newS3Client(false /*pathStyle*/), Region: env.AwsDefaultRegion()})
 
-	putOutput, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
+	putOutput, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 		Body:   io.LimitReader(rand.Reader, fileSize),
@@ -299,7 +299,7 @@ func TestDisableColdGet(t *testing.T) {
 	err = api.EvictRemoteBucket(baseParams, bck, true)
 	tassert.CheckFatal(t, err)
 
-	_, err = s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+	_, err = s3Client.GetObject(t.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(bck.Name),
 		Key:    aws.String(objName),
 	})
@@ -320,7 +320,7 @@ func TestS3ETag(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
+		t.Context(),
 		loadCredentials(t),
 	)
 	tassert.CheckFatal(t, err)
@@ -337,7 +337,7 @@ func TestS3ETag(t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 
-		output, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		output, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
 			Bucket: aws.String(bck.Name),
 			Key:    aws.String(objName),
 		})
@@ -374,7 +374,7 @@ func TestS3ETag(t *testing.T) {
 				})
 			})
 		})
-		multipartOutput, err := uploader.Upload(context.Background(), &s3.PutObjectInput{
+		multipartOutput, err := uploader.Upload(t.Context(), &s3.PutObjectInput{
 			Bucket:        aws.String(bck.Name),
 			Key:           aws.String(objName),
 			Body:          reader,
@@ -382,7 +382,7 @@ func TestS3ETag(t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 
-		headOutput, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		headOutput, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
 			Bucket: aws.String(bck.Name),
 			Key:    aws.String(objName),
 		})
@@ -406,7 +406,7 @@ func TestS3ObjMetadata(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
+		t.Context(),
 		loadCredentials(t),
 	)
 	tassert.CheckFatal(t, err)
@@ -433,7 +433,7 @@ func TestS3ObjMetadata(t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 
-		output, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		output, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
 			Bucket: aws.String(bck.Name),
 			Key:    aws.String(objName),
 		})
@@ -468,7 +468,7 @@ func TestS3ObjMetadata(t *testing.T) {
 				})
 			})
 		})
-		_, err = uploader.Upload(context.Background(), &s3.PutObjectInput{
+		_, err = uploader.Upload(t.Context(), &s3.PutObjectInput{
 			Bucket:        aws.String(bck.Name),
 			Key:           aws.String(objName),
 			Body:          reader,
@@ -477,7 +477,7 @@ func TestS3ObjMetadata(t *testing.T) {
 		})
 		tassert.CheckFatal(t, err)
 
-		headOutput, err := s3Client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		headOutput, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
 			Bucket: aws.String(bck.Name),
 			Key:    aws.String(objName),
 		})

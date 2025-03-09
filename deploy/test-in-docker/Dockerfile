@@ -21,7 +21,7 @@ RUN apt-get clean && apt-get update &&\
 
 RUN pip3 install awscli s3cmd
 
-ENV GOLANG_VERSION="1.23.5"
+ENV GOLANG_VERSION="1.24"
 
 ENV GOPATH /go
 ENV GOBIN $GOPATH/bin

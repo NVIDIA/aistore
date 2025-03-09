@@ -1,7 +1,7 @@
 #
 # Dockerfile to build an aisinit Docker image
 #
-ARG BUILDER_IMAGE=golang:1.23
+ARG BUILDER_IMAGE=golang:1.24
 ARG BASE_IMAGE=gcr.io/distroless/static:nonroot
 
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILDER_IMAGE} AS builder

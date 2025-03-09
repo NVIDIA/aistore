@@ -2,7 +2,7 @@ DOCKER       ?= docker
 REGISTRY_URL ?= docker.io
 CI_IMAGE     ?= aistorage/ci
 IMAGE_TAG    ?= latest
-GO_VERSION	 ?= 1.23
+GO_VERSION   ?= 1.24
 
 all: build push
 

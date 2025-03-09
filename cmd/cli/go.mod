@@ -1,6 +1,6 @@
 module github.com/NVIDIA/aistore/cmd/cli
 
-go 1.23.5
+go 1.24
 
 require (
 	github.com/NVIDIA/aistore v1.3.28-0.20250307153132-05e7fcbb818e

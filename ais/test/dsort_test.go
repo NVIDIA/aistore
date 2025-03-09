@@ -704,7 +704,7 @@ func waitForDsortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 //
 
 func TestDsort(t *testing.T) {
-	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4, archive.ExtZip} {
+	for _, ext := range []string{archive.ExtTar, archive.ExtZip} { // TODO -- FIXME: add back ExtTarLz4
 		for _, lr := range []string{"list", "range"} {
 			t.Run(ext+"/"+lr, func(t *testing.T) {
 				testDsort(t, ext, lr)

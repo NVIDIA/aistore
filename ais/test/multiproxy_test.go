@@ -5,7 +5,6 @@
 package integration_test
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -1672,7 +1671,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	if err != nil {
 		tlog.Logf("Error: failed to unsafely remove t[%s]: %v\n", tools.MockDaemonID, err)
 	}
-	s.Shutdown(context.Background())
+	s.Shutdown(t.Context())
 }
 
 func registerMockTarget(proxyURL string, smap *meta.Smap) error {
