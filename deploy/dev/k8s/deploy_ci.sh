@@ -72,6 +72,7 @@ export AIS_BACKEND_PROVIDERS=$(make_backend_conf)
 echo "Starting AIS K8s deployment..."
 
 export INSTANCE=0
+export AIS_LOG_DIR="/tmp/ais/log"
 
 echo "Deploying ${NUM_PROXY} proxies..."
 
@@ -81,7 +82,6 @@ export PORT_INTRA_DATA=10080
 export TEST_FSPATH_COUNT=0
 export INSTANCE=0
 export CONFIGMAP_NAME="ci-proxy-cm"
-export AIS_LOG_DIR="/tmp/ais/log/proxy"
 export AIS_PRIMARY_URL="${SCHEME}ais-proxy-0.ais-proxy.default.svc.cluster.local:${PORT}"
 
 envsubst < kube_templates/ci_configmap.yml | kubectl apply -f -
@@ -97,7 +97,6 @@ export PORT_INTRA_CONTROL=9080
 export PORT_INTRA_DATA=10080
 export TEST_FSPATH_COUNT=${FS_CNT:-4}
 export INSTANCE=0
-export AIS_LOG_DIR="/tmp/ais/log/target"
 export CONFIGMAP_NAME="ci-target-cm"
 
 envsubst < kube_templates/ci_configmap.yml | kubectl apply -f -

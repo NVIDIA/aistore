@@ -14,7 +14,7 @@ spec:
                   - key: kubernetes.io/hostname
                     operator: In
                     values:
-                      - minikube
+                      - "${NODE_NAME}"
       containers:
         - name: delete-files
           image: busybox

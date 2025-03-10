@@ -489,7 +489,13 @@ test:long:ishard:
   after_script:
     - set +e
     - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+    - >
+      for node in $(kubectl get nodes -o name); do
+        pod_name=$(kubectl debug "$node" --image=busybox -- sleep 300 | grep -oP 'node-debugger-[^ ]+' | head -1)
+        kubectl wait --for=condition=Ready --timeout=60s pod "$pod_name" || true
+        kubectl cp "$pod_name:/host/tmp/ais/log" "$CI_PROJECT_DIR/logs" || true
+        kubectl delete pod "$pod_name" --ignore-not-found=true
+      done
     - cd deploy/dev/k8s
     - make cleanup-ci
   artifacts:
