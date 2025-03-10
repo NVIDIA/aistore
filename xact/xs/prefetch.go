@@ -146,6 +146,7 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
+// NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
 func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 	var (
 		err   error
@@ -174,28 +175,15 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 		goto eret
 	}
 
-	//
-	// NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
-	//
-
+	if r.rate.arl != nil {
+		r.rate.arl.RetryAcquire(r.rate.sleep)
+	}
 retry:
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && r.pebl.num() < maxPebls {
 		err = r.blobdl(lom, oa)
 	} else {
 		if r.msg.BlobThreshold == 0 && size > cos.GiB {
-			var sb strings.Builder
-			sb.Grow(256)
-			sb.WriteString(r.Name())
-			sb.WriteString(": prefetching large size ")
-			sb.WriteString(cos.ToSizeIEC(size, 1))
-			sb.WriteString(" with blob-downloading disabled [")
-			sb.WriteString(lom.Cname())
-			sb.WriteByte(']')
-			if size >= 5*cos.GiB {
-				nlog.Errorln(sb.String())
-			} else {
-				nlog.Warningln(sb.String())
-			}
+			r._whinge(lom, size)
 		}
 		ecode, err = r.getCold(lom)
 	}
@@ -213,7 +201,7 @@ retry:
 		r.Abort(err)
 	case cmn.IsErrTooManyRequests(err):
 		if r.rate.arl != nil {
-			r.rate.arl.OnErr()
+			onmanyreq(r.rate.arl, r.vlabs)
 			goto retry
 		}
 		fallthrough
@@ -224,6 +212,22 @@ retry:
 
 eret:
 	r.AddErr(err, 5, cos.SmoduleXs)
+}
+
+func (r *prefetch) _whinge(lom *core.LOM, size int64) {
+	var sb strings.Builder
+	sb.Grow(256)
+	sb.WriteString(r.Name())
+	sb.WriteString(": prefetching large size ")
+	sb.WriteString(cos.ToSizeIEC(size, 1))
+	sb.WriteString(" with blob-downloading disabled [")
+	sb.WriteString(lom.Cname())
+	sb.WriteByte(']')
+	if size >= 5*cos.GiB {
+		nlog.Errorln(sb.String())
+	} else {
+		nlog.Warningln(sb.String())
+	}
 }
 
 // OwtGetPrefetchLock: minimal locking, optimistic concurrency

@@ -33,7 +33,7 @@ func (rl *ratelim) apply(bck *meta.Bck, verb string, smap *smapX) error {
 		return nil
 	}
 	var (
-		brl   *cos.BurstRateLim
+		brl   *cos.BurstRateLim // bursty
 		uhash = bck.HashUname(verb)
 		v, ok = rl.Load(uhash)
 	)

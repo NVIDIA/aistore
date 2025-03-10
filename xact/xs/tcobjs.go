@@ -98,7 +98,8 @@ func (p *tcoFactory) Start() error {
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
 	smap := core.T.Sowner().Get()
-	r.iniRateLimit(p.args, smap.CountActiveTs())
+
+	r.rate = newrate(p.args.BckFrom, p.args.BckTo, smap.CountActiveTs())
 
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
@@ -132,22 +133,6 @@ func (p *tcoFactory) Start() error {
 ////////////////
 // XactTCObjs //
 ////////////////
-
-// TODO: support RateLimitConf.Verbs, here and elsewhere
-func (r *XactTCObjs) iniRateLimit(args *xreg.TCObjsArgs, nat int) {
-	var rate tcrate
-	rate.src.brl, rate.src.sleep = args.BckFrom.NewFrontendRateLim(nat)
-	if rate.src.brl != nil {
-		r.rate = &rate
-	}
-	if args.BckTo.Props == nil { // destination may not exist
-		return
-	}
-	rate.dst.arl, rate.dst.sleep = args.BckTo.NewBackendRateLim(nat)
-	if rate.dst.arl != nil {
-		r.rate = &rate
-	}
-}
 
 func (r *XactTCObjs) Name() string {
 	return fmt.Sprintf("%s => %s", r.streamingX.Name(), r.args.BckTo)
@@ -367,11 +352,11 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	)
 
 	if r.rate != nil {
-		if r.rate.src.brl != nil {
-			r.rate.src.brl.RetryAcquire(r.rate.src.sleep) //  with exponential backoff
+		if r.rate.src.rl != nil {
+			r.rate.src.rl.RetryAcquire(r.rate.src.sleep) //  with exponential backoff
 		}
-		if r.rate.dst.arl != nil {
-			r.rate.dst.arl.RetryAcquire(r.rate.dst.sleep) //  ditto
+		if r.rate.dst.rl != nil {
+			r.rate.dst.rl.RetryAcquire(r.rate.dst.sleep) //  ditto
 		}
 	}
 
@@ -422,8 +407,8 @@ retry:
 	case cos.IsErrOOS(res.Err):
 		r.Abort(res.Err)
 	case cmn.IsErrTooManyRequests(res.Err):
-		if r.rate != nil && r.rate.dst.arl != nil {
-			r.rate.dst.arl.OnErr()
+		if r.rate != nil {
+			r.rate.onerr(r.vlabs)
 			goto retry
 		}
 		fallthrough

@@ -107,11 +107,10 @@ const (
 	ErrRenameCount = errPrefix + RenameCount
 	ErrListCount   = errPrefix + ListCount
 
-	ErrKaliveCount = errPrefix + "kalive.n"
-
-	// more errors
-	// (for even more errors, see target_stats)
+	ErrKaliveCount    = errPrefix + "kalive.n"
 	ErrHTTPWriteCount = errPrefix + "http.write.n"
+
+	// (for more errors, see target_stats)
 )
 
 // KindLatency (most latency metrics are target-only - see target_stats)

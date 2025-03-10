@@ -50,6 +50,8 @@ const (
 
 	ErrDloadCount = errPrefix + "dl.n"
 
+	ErrRateRetryCount = errPrefix + "rate.retry.n" // http 409 and 503 from remote backends
+
 	// IO errors (must have ioErrPrefix)
 	IOErrGetCount    = ioErrPrefix + "get.n"
 	IOErrPutCount    = ioErrPrefix + "put.n"
@@ -62,6 +64,8 @@ const (
 	PutLatency         = "put.ns"
 	PutLatencyTotal    = "put.ns.total"     // "pure" remote PUT latency
 	PutE2ELatencyTotal = "e2e.put.ns.total" // end to end (e2e) PUT latency
+
+	RateRetryLatencyTotal = errPrefix + "rate.retry.ns.total" // ditto, 409 and 503
 
 	AppendLatency     = "append.ns"
 	GetRedirLatency   = "get.redir.ns"
@@ -375,6 +379,11 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 			Help: "downloader: number of download errors",
 		},
 	)
+	r.reg(snode, ErrRateRetryCount, KindCounter,
+		&Extra{
+			Help: "number of rate-limited retries triggered by remote backends returning 409 and 503 status codes",
+		},
+	)
 
 	r.reg(snode, IOErrGetCount, KindCounter,
 		&Extra{
@@ -434,6 +443,12 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		&Extra{
 			Help:    "total downloading time (nanoseconds)",
 			VarLabs: BckVarlabs,
+		},
+	)
+	r.reg(snode, RateRetryLatencyTotal, KindTotal,
+		&Extra{
+			Help:    "total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
+			VarLabs: BckXactVarlabs,
 		},
 	)
 

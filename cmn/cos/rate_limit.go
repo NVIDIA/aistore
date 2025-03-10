@@ -201,8 +201,7 @@ func (arl *AdaptRateLim) Acquire() error {
 }
 
 // backoff before retrying (429, 503)
-func (arl *AdaptRateLim) OnErr() {
-	var sleep time.Duration
+func (arl *AdaptRateLim) OnErr() (sleep time.Duration) {
 	arl.mu.Lock()
 	arl.stats.nerr++
 
@@ -217,6 +216,7 @@ func (arl *AdaptRateLim) OnErr() {
 	}
 	arl.mu.Unlock()
 	time.Sleep(sleep)
+	return sleep
 }
 
 func (arl *AdaptRateLim) _erate() (erate float64) {

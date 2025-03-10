@@ -923,6 +923,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 				debug.Assert(false, "empty error code in ", awsError.Error()) // (unlikely)
 				code = strconv.Itoa(status)
 			}
+			core.T.StatsUpdater().Inc(stats.ErrRateRetryCount)
 			e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, code, bck.Cname(objName))
 			return status, cmn.NewErrTooManyRequests(e, status)
 		default:

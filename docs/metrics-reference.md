@@ -188,12 +188,14 @@ For convenience, a table that summarizes target metrics follows below.
 | `append.ns` | `append_ms` | latency | APPEND(object): average time (milliseconds) over the last periodic.stats_time interval | default |
 | `get.redir.ns` | `get_redir_ms` | latency | GET: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval | default |
 | `put.redir.ns` | `put_redir_ms` | latency | PUT: average gateway-to-target HTTP redirect latency (milliseconds) over the last periodic.stats_time interval | default |
+| `rate.retry.ns.total` | `rate_retry_ns_total` | total | total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes | default |
 | `get.bps` | `get_mbps` | bandwidth | GET: average throughput (MB/s) over the last periodic.stats_time interval | default |
 | `put.bps` | `put_mbps` | bandwidth | PUT: average throughput (MB/s) over the last periodic.stats_time interval | default |
 | `get.size` | `get_bytes` | size | GET: total cumulative size (bytes) | default |
 | `put.size` | `put_bytes` | size | PUT: total cumulative size (bytes) | default |
 | `err.cksum.n` | `err_cksum_count` | counter | PUT: number of checksum errors | default |
 | `err.fshc.n` | `err_fshc_count` | counter | number of times filesystem health checker (FSHC) was triggered by an I/O error or errors | default |
+| `err.rate.retry.n` | `err_rate_retry_count` | counter | number of rate-limited retries triggered by remote backends returning 409 and 503 status codes | default |
 | `err.io.get.n` | `err_io_get_count` | counter | GET: number of I/O errors _not_ including remote backend and network errors | default |
 | `err.io.put.n` | `err_io_put_count` | counter | PUT: number of I/O errors _not_ including remote backend and network errors | default |
 | `err.io.del.n` | `err_io_del_count` | counter | DELETE(object): number of I/O errors _not_ including remote backend and network errors | default |
