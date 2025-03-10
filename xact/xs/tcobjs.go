@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -18,11 +18,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -36,6 +38,7 @@ type (
 		streamingF
 	}
 	XactTCObjs struct {
+		bp      core.Backend // backend(source bucket)
 		pending struct {
 			m   map[string]*tcowi
 			mtx sync.RWMutex
@@ -43,6 +46,7 @@ type (
 		args     *xreg.TCObjsArgs
 		rate     *tcrate
 		workCh   chan *cmn.TCOMsg
+		vlabs    map[string]string
 		chanFull atomic.Int64
 		streamingX
 		owt cmn.OWT
@@ -111,6 +115,16 @@ func (p *tcoFactory) Start() error {
 		p.dm.SetXact(r)
 		p.dm.Open()
 	}
+
+	// (rgetstats)
+	if bck := r.args.BckFrom; bck.IsRemote() {
+		r.bp = core.T.Backend(bck)
+		r.vlabs = map[string]string{
+			stats.VarlabBucket:   bck.Cname(""),
+			stats.VarlabXactKind: r.Kind(),
+		}
+	}
+
 	xact.GoRunW(r)
 	return nil
 }
@@ -166,9 +180,9 @@ func (r *XactTCObjs) Begin(msg *cmn.TCOMsg) {
 }
 
 func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
-	var err error
 	nlog.Infoln(r.Name())
 	wg.Done()
+
 	for {
 		select {
 		case msg := <-r.workCh:
@@ -189,7 +203,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			}
 
 			// this target must be active (ref: ignoreMaintenance)
-			if err = core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
+			if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
 				nlog.Errorln(err)
 				goto fin
 			}
@@ -198,7 +212,8 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 
 			// run
 			var wg *sync.WaitGroup
-			if err = lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt); err == nil {
+			err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt)
+			if err == nil {
 				// dynamic ctlmsg
 				{
 					var sb strings.Builder
@@ -341,11 +356,14 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 // tcowi //
 ///////////
 
+// TODO -- FIXME: almost identical to tcb.go do() - unify
+
 func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	var (
 		objNameTo = wi.msg.ToName(lom.ObjName)
 		buf, slab = core.T.PageMM().Alloc()
 		r         = wi.r
+		started   int64
 	)
 
 	if r.rate != nil {
@@ -362,46 +380,55 @@ retry:
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
 
-	coiParams := AllocCOI()
+	a := AllocCOI()
 	{
-		coiParams.DP = r.args.DP
-		coiParams.Xact = r
-		coiParams.Config = r.config
-		coiParams.BckTo = r.args.BckTo
-		coiParams.ObjnameTo = objNameTo
-		coiParams.Buf = buf
-		coiParams.DryRun = wi.msg.DryRun
-		coiParams.LatestVer = wi.msg.LatestVer
-		coiParams.Sync = wi.msg.Sync
-		coiParams.OWT = r.owt
-		coiParams.Finalize = false
-		if coiParams.ObjnameTo == "" {
-			coiParams.ObjnameTo = lom.ObjName
+		a.DP = r.args.DP
+		a.Xact = r
+		a.Config = r.config
+		a.BckTo = r.args.BckTo
+		a.ObjnameTo = objNameTo
+		a.Buf = buf
+		a.DryRun = wi.msg.DryRun
+		a.LatestVer = wi.msg.LatestVer
+		a.Sync = wi.msg.Sync
+		a.OWT = r.owt
+		a.Finalize = false
+		if a.ObjnameTo == "" {
+			a.ObjnameTo = lom.ObjName
 		}
 	}
-	_, err := gcoi.CopyObject(lom, r.p.dm, coiParams)
-	FreeCOI(coiParams)
+	if r.bp != nil {
+		started = mono.NanoTime()
+	}
+	res := gcoi.CopyObject(lom, r.p.dm, a)
+	FreeCOI(a)
 	slab.Free(buf)
 
 	switch {
-	case err == nil:
+	case res.Err == nil:
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infoln(wi.r.Name(), lom.Cname(), "=>", wi.r.args.BckTo.Cname(objNameTo))
 		}
-	case cos.IsNotExist(err, 0):
-		if lrit.lrp == lrpList {
-			r.AddErr(err, 5, cos.SmoduleXs)
+		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
+		r.ObjsAdd(1, res.Lsize)
+		if res.RGET {
+			// (compare with ais/tgtimpl rgetstats)
+			rgetstats(r.bp /*from*/, r.vlabs, res.Lsize, started)
 		}
-	case cos.IsErrOOS(err):
-		r.Abort(err)
-	case cmn.IsErrTooManyRequests(err):
+	case cos.IsNotExist(res.Err, 0):
+		if lrit.lrp == lrpList {
+			r.AddErr(res.Err, 5, cos.SmoduleXs)
+		}
+	case cos.IsErrOOS(res.Err):
+		r.Abort(res.Err)
+	case cmn.IsErrTooManyRequests(res.Err):
 		if r.rate != nil && r.rate.dst.arl != nil {
 			r.rate.dst.arl.OnErr()
 			goto retry
 		}
 		fallthrough
 	default:
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(res.Err, 5, cos.SmoduleXs)
 	}
 }
 

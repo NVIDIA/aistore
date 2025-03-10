@@ -84,6 +84,7 @@ type redial struct {
 var (
 	_ cos.Runner  = (*target)(nil)
 	_ htext       = (*target)(nil)
+	_ xs.COI      = (*target)(nil)
 	_ core.Target = (*target)(nil)
 	_ fs.HC       = (*target)(nil)
 )
@@ -285,25 +286,27 @@ func (t *target) initHostIP(config *cmn.Config) {
 func initTID(config *cmn.Config) (tid string, generated bool) {
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
-			nlog.Errorln("Daemon ID loaded from env is invalid:", err)
+			cos.ExitLog(err) // FATAL
 		}
-		nlog.Infof("Initialized %s from env", meta.Tname(tid))
+		nlog.Infoln("initialized tid", meta.Tname(tid), "from env")
 		return tid, false
 	}
 
-	if tid, err := fs.LoadNodeID(config.FSP.Paths); err != nil {
+	var err error
+	tid, err = fs.LoadNodeID(config.FSP.Paths)
+	switch {
+	case err != nil:
 		cos.ExitLog(err) // FATAL
-	} else if tid != "" {
-		nlog.Infof("Initialized %s from file", meta.Tname(tid))
-		return tid, false
+	case tid != "":
+		nlog.Infof("loaded tid %s", meta.Tname(tid))
+	default:
+		tid = genDaemonID(apc.Target, config)
+		err = cos.ValidateDaemonID(tid)
+		debug.AssertNoErr(err)
+		nlog.Infoln("generated tid", meta.Tname(tid))
+		generated = true
 	}
-
-	// this target: generate random ID
-	tid = genDaemonID(apc.Target, config)
-	err := cos.ValidateDaemonID(tid)
-	debug.AssertNoErr(err)
-	nlog.Infof("Initialized %s with randomly generated ID", meta.Tname(tid))
-	return tid, true
+	return tid, generated
 }
 
 func regDiskMetrics(node *meta.Snode, tstats *stats.Trunner, mpi fs.MPI) {
@@ -1376,7 +1379,8 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 }
 
 // rename obj
-func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
+// TODO: (copy, delete) under a single wlock
+func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) error {
 	if lom.Bck().IsRemote() {
 		return fmt.Errorf("%s: cannot rename object %s from remote bucket", t.si, lom)
 	}
@@ -1398,14 +1402,13 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 		coiParams.Finalize = true
 	}
 	coi := (*coi)(coiParams)
-	_, err = coi.do(t, nil /*DM*/, lom)
+	res := coi.do(t, nil /*DM*/, lom)
 	xs.FreeCOI(coiParams)
 	slab.Free(buf)
-	if err != nil {
-		return err
+	if res.Err != nil {
+		return res.Err
 	}
 
-	// TODO: combine copy+delete under a single write lock
 	lom.Lock(true)
 	if err := lom.RemoveObj(); err != nil {
 		nlog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t, lom, msg.Name, err)

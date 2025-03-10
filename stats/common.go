@@ -82,10 +82,12 @@ const (
 // e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
 const (
 	// NOTE semantics:
-	// - counts all "warm" GETs
-	// - counts all "cold" GETs (when remote GET is followed by storing new object (or, new object version) locally)
-	// - does _not_ count GET (more exactly, GetObjReader) when copying or transforming remote source
-	// - see also: ais/backend/common
+	// - counts all warm GETs
+	// - counts all cold GETs (when remote GET is followed by storing new object (or, new object version) locally)
+	// - does NOT count internal GetObjReader calls (e.g., by copy or transform jobs)
+	// - see also:
+	//   - ais/backend/common
+	//   - rgetstats
 	GetCount = "get.n"
 
 	PutCount    = "put.n" // ditto PUT(object) count = (all PUTs including remote)

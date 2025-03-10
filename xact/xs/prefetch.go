@@ -234,14 +234,8 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 		return ecode, err
 	}
 
-	// (compare with ais/tgtimpl coldstats)
-	lat := mono.SinceNano(started)
-	tstats := core.T.StatsUpdater()
-	tstats.IncWith(r.bp.MetricName(stats.GetCount), r.vlabs)
-	tstats.AddWith(
-		cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: lat, VarLabs: r.vlabs},
-		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: lom.Lsize(), VarLabs: r.vlabs},
-	)
+	// (compare with ais/tgtimpl rgetstats)
+	rgetstats(r.bp, r.vlabs, lom.Lsize(), started)
 
 	// own stats
 	r.ObjsAdd(1, lom.Lsize())

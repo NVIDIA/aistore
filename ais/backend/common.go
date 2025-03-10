@@ -60,7 +60,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 			b.metrics[stats.GetCount],
 			stats.KindCounter,
 			&stats.Extra{
-				Help:    "GET: total number of executed remote requests (cold GETs)",
+				Help:    "GET: total number of executed remote requests",
 				StrName: "remote_get_count",
 				Labels:  labels,
 				VarLabs: stats.BckXactVarlabs,
@@ -70,7 +70,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 			b.metrics[stats.GetLatencyTotal],
 			stats.KindTotal,
 			&stats.Extra{
-				Help:    "GET: total cumulative time (nanoseconds) to execute remote requests and store, copy, or transform objects",
+				Help:    "GET: total cumulative time (in nanoseconds) to execute remote requests and store, copy, or transform objects",
 				StrName: "remote_get_ns_total",
 				Labels:  labels,
 				VarLabs: stats.BckXactVarlabs,
@@ -80,7 +80,7 @@ func (b *base) init(snode *meta.Snode, tr stats.Tracker, startingUp bool) {
 			b.metrics[stats.GetSize],
 			stats.KindSize,
 			&stats.Extra{
-				Help:    "GET: total cumulative size (bytes) of all cold-GET transactions",
+				Help:    "GET: total cumulative size (in bytes) of all remote GET transactions",
 				StrName: "remote_get_bytes_total",
 				Labels:  labels,
 				VarLabs: stats.BckXactVarlabs,

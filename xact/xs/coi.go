@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -26,8 +26,14 @@ type (
 		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
 		Sync      bool // ditto -  bucket's 'versioning.synchronize'
 	}
+	CoiRes struct {
+		Err   error
+		Lsize int64
+		Ecode int
+		RGET  bool // when reading source via backend.GetObjReader
+	}
 
 	COI interface {
-		CopyObject(lom *core.LOM, dm *bundle.DataMover, coi *CoiParams) (int64, error)
+		CopyObject(lom *core.LOM, dm *bundle.DataMover, coi *CoiParams) CoiRes
 	}
 )

@@ -307,7 +307,8 @@ func (lchk *lchk) evict(timeout time.Duration, now time.Time, pct int) {
 	var (
 		avail   = fs.GetAvail()
 		wg      = &sync.WaitGroup{}
-		evicted = T.StatsUpdater().Get(LcacheEvictedCount)
+		tstats  = T.StatsUpdater()
+		evicted = tstats.Get(LcacheEvictedCount)
 	)
 	lchk.total.Store(0)
 	for _, mi := range avail {
@@ -323,7 +324,7 @@ func (lchk *lchk) evict(timeout time.Duration, now time.Time, pct int) {
 		go evct.do()
 	}
 	wg.Wait()
-	evicted = T.StatsUpdater().Get(LcacheEvictedCount) - evicted
+	evicted = tstats.Get(LcacheEvictedCount) - evicted
 	nlog.Infoln("hk done:", lchk.total.Load(), evicted)
 }
 
@@ -391,14 +392,16 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 	if lom.WritePolicy() == apc.WriteNever {
 		return
 	}
+
+	tstats := T.StatsUpdater()
 	if err = lom.flushAtime(atime); err != nil {
-		T.StatsUpdater().Inc(LcacheErrCount)
+		tstats.Inc(LcacheErrCount)
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 		return
 	}
 
 	// stats
-	T.StatsUpdater().Inc(LcacheFlushColdCount)
+	tstats.Inc(LcacheFlushColdCount)
 
 	if !md.isDirty() {
 		return
@@ -418,7 +421,7 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 				continue
 			}
 			if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
-				T.StatsUpdater().Inc(LcacheErrCount)
+				tstats.Inc(LcacheErrCount)
 				nlog.Errorln("set-xattr [", copyFQN, err, "]")
 				break
 			}

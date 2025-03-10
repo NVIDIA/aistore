@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -50,9 +51,11 @@ type (
 		}
 	}
 	XactTCB struct {
+		bp    core.Backend // backend(source bucket)
 		p     *tcbFactory
 		dm    *bundle.DataMover
 		rate  *tcrate
+		vlabs map[string]string
 		prune prune
 		nam   string
 		str   string
@@ -213,6 +216,16 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 		r.prune.init(config)
 	}
 
+	debug.Assert(args.BckFrom.Props != nil)
+	// (rgetstats)
+	if bck := args.BckFrom; bck.IsRemote() {
+		r.bp = core.T.Backend(bck)
+		r.vlabs = map[string]string{
+			stats.VarlabBucket:   bck.Cname(""),
+			stats.VarlabXactKind: r.Kind(),
+		}
+	}
+
 	return r
 }
 
@@ -296,10 +309,13 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	return core.QuiInactiveCB
 }
 
-func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
+// TODO -- FIXME: almost identical to tcobjs.go do() - unify
+
+func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 	var (
-		args   = r.p.args // TCBArgs
-		toName = args.Msg.ToName(lom.ObjName)
+		args    = r.p.args // TCBArgs
+		toName  = args.Msg.ToName(lom.ObjName)
+		started int64
 	)
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
@@ -315,46 +331,55 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) (err error) {
 	}
 
 retry:
-	coiParams := AllocCOI()
+	a := AllocCOI()
 	{
-		coiParams.DP = args.DP
-		coiParams.Xact = r
-		coiParams.Config = r.Config
-		coiParams.BckTo = args.BckTo
-		coiParams.ObjnameTo = toName
-		coiParams.Buf = buf
-		coiParams.DryRun = args.Msg.DryRun
-		coiParams.LatestVer = args.Msg.LatestVer
-		coiParams.Sync = args.Msg.Sync
-		coiParams.OWT = r.p.owt
-		coiParams.Finalize = false
-		if coiParams.ObjnameTo == "" {
-			coiParams.ObjnameTo = lom.ObjName
+		a.DP = args.DP
+		a.Xact = r
+		a.Config = r.Config
+		a.BckTo = args.BckTo
+		a.ObjnameTo = toName
+		a.Buf = buf
+		a.DryRun = args.Msg.DryRun
+		a.LatestVer = args.Msg.LatestVer
+		a.Sync = args.Msg.Sync
+		a.OWT = r.p.owt
+		a.Finalize = false
+		if a.ObjnameTo == "" {
+			a.ObjnameTo = lom.ObjName
 		}
 	}
-	_, err = gcoi.CopyObject(lom, r.dm, coiParams)
-	FreeCOI(coiParams)
+	if r.bp != nil {
+		started = mono.NanoTime()
+	}
+	res := gcoi.CopyObject(lom, r.dm, a)
+	FreeCOI(a)
 
 	switch {
-	case err == nil:
+	case res.Err == nil:
 		if args.Msg.Sync {
 			r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
 		}
-	case cos.IsNotExist(err, 0):
+		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
+		r.ObjsAdd(1, res.Lsize)
+		if res.RGET {
+			// (compare with ais/tgtimpl rgetstats)
+			rgetstats(r.bp /*from*/, r.vlabs, res.Lsize, started)
+		}
+	case cos.IsNotExist(res.Err, 0):
 		// do nothing
-	case cos.IsErrOOS(err):
-		r.Abort(err)
-	case cmn.IsErrTooManyRequests(err):
+	case cos.IsErrOOS(res.Err):
+		r.Abort(res.Err)
+	case cmn.IsErrTooManyRequests(res.Err):
 		if r.rate != nil && r.rate.dst.arl != nil {
 			r.rate.dst.arl.OnErr()
 			goto retry
 		}
 		fallthrough
 	default:
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(res.Err, 5, cos.SmoduleXs)
 	}
 
-	return err
+	return res.Err
 }
 
 // NOTE: strict(est) error handling: abort on any of the errors below

@@ -135,11 +135,9 @@ func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *core.LOM, dm *bundle.DataMover, params *xs.CoiParams) (size int64, err error) {
+func (t *target) CopyObject(lom *core.LOM, dm *bundle.DataMover, params *xs.CoiParams) xs.CoiRes {
 	coi := (*coi)(params)
-	size, err = coi.do(t, dm, lom)
-	coi.stats(size, err)
-	return size, err
+	return coi.do(t, dm, lom)
 }
 
 func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt cmn.OWT) (ecode int, err error) {
@@ -180,12 +178,12 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 	// unlock and stats
 	lom.Unlock(true)
 	lat := mono.SinceNano(started)
-	t.coldstats(backend, lom.Bck().Cname(""), xkind, lom.Lsize(), lat)
+	t.rgetstats(backend, lom.Bck().Cname(""), xkind, lom.Lsize(), lat)
 
 	return 0, nil
 }
 
-func (t *target) coldstats(backend core.Backend, cname, xkind string, size, lat int64) {
+func (t *target) rgetstats(backend core.Backend, cname, xkind string, size, lat int64) {
 	vlabs := map[string]string{
 		stats.VarlabBucket:   cname,
 		stats.VarlabXactKind: xkind,
@@ -356,10 +354,10 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 		coiParams.Config = params.Config
 	}
 	coi := (*coi)(coiParams)
-	size, err := coi.send(t, nil /*DM*/, lom, lom.ObjName, tsi)
+	res := coi.send(t, nil /*DM*/, lom, lom.ObjName, tsi)
 	xs.FreeCOI(coiParams)
 
-	return size, err
+	return res.Lsize, res.Err
 }
 
 func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode, uuid string) error {

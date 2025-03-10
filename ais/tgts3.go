@@ -152,18 +152,20 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		coiParams.OWT = cmn.OwtCopy
 	}
 	coi := (*coi)(coiParams)
-	_, err = coi.do(t, nil /*DM*/, lom)
+	res := coi.do(t, nil /*DM*/, lom)
 	xs.FreeCOI(coiParams)
 
-	if err != nil {
-		if err == cmn.ErrSkip {
+	if res.Err != nil {
+		if res.Err == cmn.ErrSkip {
 			name := lom.Cname()
 			s3.WriteErr(w, r, cos.NewErrNotFound(t, name), http.StatusNotFound)
 		} else {
-			s3.WriteErr(w, r, err, 0)
+			s3.WriteErr(w, r, res.Err, 0)
 		}
 		return
 	}
+
+	// TODO -- FIXME: remote (source) get stats (t.rgetstats)
 
 	var cksumValue string
 	if cksum := lom.Checksum(); cksum != nil && cksum.Type() == cos.ChecksumMD5 {

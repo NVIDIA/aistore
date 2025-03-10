@@ -87,7 +87,7 @@ type (
 		cold       bool       // true if executed backend.Get
 		latestVer  bool       // QparamLatestVer || 'versioning.*_warm_get'
 		isIOErr    bool       // to count GET error as a "IO error"; see `Trunner._softErrs()`
-		remote     bool       // backend.GetObjReader for any reason and any streaming scenario
+		rget       bool       // when reading remote source via backend.GetObjReader, scenarios including: cold-GET, copy, transform, blob
 	}
 	_uplock struct {
 		timeout time.Duration
@@ -696,7 +696,7 @@ do: // retry uplock or ec-recovery, the latter only once
 		goi.lom.SetCustomMD(nil)
 
 		// get remote reader (compare w/ t.GetCold)
-		goi.remote = true
+		goi.rget = true
 		res = backend.GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
@@ -1232,15 +1232,11 @@ func (goi *getOI) stats(written int64) {
 		)
 	}
 
-	if !goi.remote {
+	if !goi.rget {
 		return
 	}
-
-	// cold
-	var (
-		backend = goi.t.Backend(bck)
-	)
-	goi.t.coldstats(backend, cname, "" /*xkind*/, written, delta)
+	backend := goi.t.Backend(bck)
+	goi.t.rgetstats(backend, cname, "" /*xkind*/, written, delta)
 
 	if goi.verchanged {
 		goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)
@@ -1435,7 +1431,7 @@ func (a *apndOI) pack(workFQN string) string {
 //
 
 // main method
-func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, err error) {
+func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRes) {
 	if coi.DryRun {
 		return coi._dryRun(lom, coi.ObjnameTo)
 	}
@@ -1447,9 +1443,9 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, 
 
 	// 1: dst location
 	smap := t.owner.smap.Get()
-	tsi, errN := smap.HrwName2T(coi.BckTo.MakeUname(coi.ObjnameTo))
-	if errN != nil {
-		return 0, errN
+	tsi, err := smap.HrwName2T(coi.BckTo.MakeUname(coi.ObjnameTo))
+	if err != nil {
+		return xs.CoiRes{Err: err}
 	}
 	if tsi.ID() != t.SID() {
 		return coi.send(t, dm, lom, coi.ObjnameTo, tsi)
@@ -1461,28 +1457,27 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, 
 	defer core.FreeLOM(dst)
 
 	if err := dst.InitBck(coi.BckTo.Bucket()); err != nil {
-		return 0, err
+		return xs.CoiRes{Err: err}
 	}
-	// check for no-op
-	if coi.isNOP(lom, dst, dm) {
+
+	switch {
+	// no-op
+	case coi.isNOP(lom, dst, dm):
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
 		}
-		return
-	}
-	// do
-	if coi.DP != nil {
-		var ecode int
-		size, ecode, err = coi._reader(t, dm, lom, dst)
-		if ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
+	case coi.DP != nil:
+		res = coi._reader(t, dm, lom, dst)
+		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
 			// to keep not-found
-			err = cos.NewErrNotFound(t, err.Error())
+			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
-	} else {
+	default:
 		// fast path (Copy2FQN)
-		size, err = coi._regular(t, lom, dst)
+		res = coi._regular(t, lom, dst)
 	}
-	return size, err
+
+	return res
 }
 
 func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DataMover) bool {
@@ -1509,23 +1504,23 @@ func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DataMover) bool {
 	return res.Eq
 }
 
-func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
+func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 	if coi.DP == nil {
 		uname := coi.BckTo.MakeUname(objnameTo)
 		if lom.Uname() != cos.UnsafeS(uname) {
-			size = lom.Lsize()
+			res.Lsize = lom.Lsize()
 		}
-		return size, nil
+		return res
 	}
 
 	resp := coi.DP.Reader(lom, false, false)
 	if resp.Err != nil {
-		return 0, resp.Err
+		return xs.CoiRes{Err: resp.Err}
 	}
 	// discard the reader and be done
-	size, err = io.Copy(io.Discard, resp.R)
+	size, err := io.Copy(io.Discard, resp.R)
 	resp.R.Close()
-	return size, err
+	return xs.CoiRes{Lsize: size, Err: err}
 }
 
 // PUT DP(lom) => dst
@@ -1541,10 +1536,10 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error)
 //
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, ecode int, err error) {
+func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (res xs.CoiRes) {
 	resp := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 	if resp.Err != nil {
-		return 0, resp.Ecode, resp.Err
+		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
 	poi := allocPOI()
 	{
@@ -1573,25 +1568,17 @@ func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (si
 		}
 	}
 
-	ecode, err = poi.putObject()
+	ecode, err := poi.putObject()
 	freePOI(poi)
 	if err != nil {
-		return 0, ecode, err
+		return xs.CoiRes{Ecode: ecode, Err: err}
 	}
 
-	// xaction stats: increment locally processed
-	// see transport/bundle/dmover for in and out stats - receive and transmit, respectively
-	size = resp.OAH.Lsize()
-
-	// reading from remote, writing elsewhere: increment "cold" stats only
-	if resp.Remote {
-		lat := time.Now().UnixNano() - lom.AtimeUnix()
-		t.coldstats(t.Backend(lom.Bck()), lom.Bck().Cname(""), coi.Xact.Kind(), size, lat)
-	}
-	return size, ecode, err
+	res.Lsize = resp.OAH.Lsize()
+	return res
 }
 
-func (coi *coi) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
+func (coi *coi) _regular(t *target, lom, dst *core.LOM) (res xs.CoiRes) {
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
 		return
 	}
@@ -1603,7 +1590,7 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
 		if !cos.IsNotExist(err, 0) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom.Cname(), err)
 		}
-		return 0, err
+		return xs.CoiRes{Err: err}
 	}
 
 	// w-lock the destination unless already locked (above)
@@ -1612,17 +1599,17 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
 		defer dst.Unlock(true)
 		if err := dst.Load(false /*cache it*/, true /*locked*/); err == nil {
 			if lom.EqCksum(dst.Checksum()) {
-				return 0, nil
+				return xs.CoiRes{}
 			}
 		} else if cmn.IsErrBucketNought(err) {
-			return 0, err
+			return xs.CoiRes{Err: err}
 		}
 	}
 
 	// TODO: add a metric to count and size local copying
 	dst2, err := lom.Copy2FQN(dst.FQN, coi.Buf)
-	if err == nil {
-		size = lom.Lsize()
+	if res.Err = err; res.Err == nil {
+		res.Lsize = lom.Lsize()
 		if coi.Finalize {
 			t.putMirror(dst2)
 		}
@@ -1630,13 +1617,13 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
 	if dst2 != nil {
 		core.FreeLOM(dst2)
 	}
-	return size, err
+	return res
 }
 
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
+func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo string, tsi *meta.Snode) (res xs.CoiRes) {
 	debug.Assert(coi.OWT > 0)
 	sargs := allocSnda()
 	{
@@ -1649,14 +1636,12 @@ func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo s
 			sargs.owt = dm.OWT() // (precedence; cmn.OwtCopy, cmn.OwtTransform - what else?)
 		}
 	}
-	size, err = coi._send(t, lom, sargs)
+	res = coi._send(t, lom, sargs)
 	freeSnda(sargs)
-	return
+	return res
 }
 
-func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
-	var remote bool // when reading source via backend.GetObjReader
-
+func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes) {
 	if sargs.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
 		lom = lom.CloneMD(lom.FQN)
@@ -1671,16 +1656,16 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ 
 		fh, err := cos.NewFileHandle(lom.FQN)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return 0, nil
+				return xs.CoiRes{}
 			}
-			return 0, cmn.NewErrFailedTo(t, "open", lom.Cname(), err)
+			return xs.CoiRes{Err: cmn.NewErrFailedTo(t, "open", lom.Cname(), err)}
 		}
 		fi, err := fh.Stat()
 		if err != nil {
 			fh.Close()
-			return 0, cmn.NewErrFailedTo(t, "fstat", lom.Cname(), err)
+			return xs.CoiRes{Err: cmn.NewErrFailedTo(t, "fstat", lom.Cname(), err)}
 		}
-		size = fi.Size()
+		res.Lsize = fi.Size()
 		sargs.reader, sargs.objAttrs = fh, lom
 	case coi.DP == nil:
 		// 2. migrate/replicate lom
@@ -1688,40 +1673,35 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ 
 		lom.Lock(false)
 		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
-			return 0, nil
+			return xs.CoiRes{}
 		}
 		reader, err := lom.NewDeferROC()
 		if err != nil {
-			return 0, err
+			return xs.CoiRes{Err: err}
 		}
-		size = lom.Lsize()
+		res.Lsize = lom.Lsize()
 		sargs.reader, sargs.objAttrs = reader, lom
 	default:
 		// 3. DP transform (possibly, a no-op)
 		// If the object is not present call t.Backend.GetObjReader
 		resp := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 		if resp.Err != nil {
-			return 0, resp.Err
+			return xs.CoiRes{Err: resp.Err}
 		}
 		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
-		size = resp.OAH.Lsize()
+		res.Lsize = resp.OAH.Lsize()
+		res.RGET = resp.Remote
 		sargs.reader, sargs.objAttrs = resp.R, resp.OAH
-		remote = resp.Remote
 	}
 
 	// do
-	var err error
 	sargs.bckTo = coi.BckTo
 	if sargs.dm != nil {
-		err = coi._dm(lom /*for attrs*/, sargs)
+		res.Err = coi._dm(lom /*for attrs*/, sargs)
 	} else {
-		err = coi.put(t, sargs)
+		res.Err = coi.put(t, sargs)
 	}
-	if remote && err == nil {
-		lat := time.Now().UnixNano() - lom.AtimeUnix()
-		t.coldstats(t.Backend(lom.Bck()), lom.Bck().Cname(""), coi.Xact.Kind(), size, lat)
-	}
-	return size, err
+	return res
 }
 
 // use data mover to transmit objects to other targets
@@ -1780,15 +1760,6 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 	cmn.HreqFree(req)
 	cancel()
 	return err
-}
-
-func (coi *coi) stats(size int64, err error) {
-	if err == nil && coi.Xact != nil {
-		if size == cos.ContentLengthUnknown {
-			size = 0
-		}
-		coi.Xact.ObjsAdd(1, size)
-	}
 }
 
 //

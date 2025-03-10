@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -12,10 +12,14 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// target i/f (ais/tgtimpl)
 var (
-	gcoi COI // target
+	gcoi COI
+)
 
-	coiPool sync.Pool // mem pool
+// mem pool
+var (
+	coiPool sync.Pool
 	coi0    CoiParams
 )
 
