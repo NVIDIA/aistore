@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../../base/target
+
+patches:
+- path: statefulset.yaml
+
+configMapGenerator:
+- name: ci-images
+  envs:
+  - ../properties.env
+- name: target-vars
+  envs:
+  - properties.env
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+replacements:
+- source:
+    kind: ConfigMap
+    name: ci-images
+    fieldPath: data.AISNODE_IMAGE
+  targets:
+    - select:
+        kind: StatefulSet
+        name: ais-target
+      fieldPaths:
+        - spec.template.spec.containers.[name=aisnode].image
+- source:
+    kind: ConfigMap
+    name: ci-images
+    fieldPath: data.AISINIT_IMAGE
+  targets:
+    - select:
+        kind: StatefulSet
+        name: ais-target
+      fieldPaths:
+        - spec.template.spec.initContainers.[name=aisinit].image
+- source:
+    kind: ConfigMap
+    name: target-vars
+    fieldPath: data.NUM_TARGET
+  targets:
+    - select:
+        kind: StatefulSet
+        name: ais-target
+      fieldPaths:
+        - spec.replicas

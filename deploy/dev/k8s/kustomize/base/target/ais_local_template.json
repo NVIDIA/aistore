@@ -1,0 +1,14 @@
+{
+    "confdir": "/etc/ais",
+    "log_dir": "/tmp/ais/log",
+    "host_net": {
+      "port": "9090",
+      "port_intra_control": "9080",
+      "port_intra_data": "10080"
+    },
+    "test_fspaths": {
+      "root": "/tmp/ais",
+      "count": 4,
+      "instance": 0
+    }
+  }

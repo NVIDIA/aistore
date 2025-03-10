@@ -1,0 +1,14 @@
+{
+    "backend": {},
+    "proxy": {
+      "primary_url": "http://ais-proxy-0.ais-proxy.default.svc.cluster.local:8080"
+    },
+    "net": {
+      "http": {
+        "use_https": false,
+        "server_crt": "",
+        "server_key": "",
+        "skip_verify": false
+      }
+    }
+}

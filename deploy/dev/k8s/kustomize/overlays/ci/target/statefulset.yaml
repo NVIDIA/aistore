@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ais-target
+spec:
+  template:
+    spec:
+      containers:
+      - name: aisnode
+        env:
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /tmp/gcp/creds.json
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: AWS_ACCESS_KEY_ID
+                optional: true
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: AWS_SECRET_ACCESS_KEY
+                optional: true
+          - name: AWS_DEFAULT_REGION
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: AWS_DEFAULT_REGION
+                optional: true
+          - name: OCI_TENANCY_OCID
+            valueFrom:
+              secretKeyRef:
+                name: oci-credentials
+                key: OCI_TENANCY_OCID
+                optional: true
+          - name: OCI_USER_OCID
+            valueFrom:
+              secretKeyRef:
+                name: oci-credentials
+                key: OCI_USER_OCID
+                optional: true
+          - name: OCI_REGION
+            valueFrom:
+              secretKeyRef:
+                name: oci-credentials
+                key: OCI_REGION
+                optional: true
+          - name: OCI_FINGERPRINT
+            valueFrom:
+              secretKeyRef:
+                name: oci-credentials
+                key: OCI_FINGERPRINT
+                optional: true
+          - name: OCI_PRIVATE_KEY
+            valueFrom: 
+              secretKeyRef:
+                name: oci-credentials
+                key: OCI_PRIVATE_KEY
+                optional: true
+          - name: OCI_COMPARTMENT_OCID
+            valueFrom:
+              secretKeyRef:
+                name: oci-credentials
+                key: OCI_COMPARTMENT_OCID
+                optional: true
+        volumeMounts:
+          - name: gcp-credentials
+            mountPath: /tmp/gcp
+      volumes:
+        - name: aws-credentials
+          secret:
+            secretName: aws-credentials
+            optional: true
+        - name: gcp-credentials
+          secret:
+            secretName: gcp-credentials
+            optional: true
+        - name: oci-credentials
+          secret:
+            secretName: oci-credentials
+            optional: true

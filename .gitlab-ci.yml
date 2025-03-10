@@ -546,9 +546,9 @@ test:long:ishard:
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
-    - cd deploy/dev/k8s
-    - make deploy-ci
-    - cd ../../..
+    - cd deploy/dev/k8s/kustomize
+    - make ci
+    - cd ../../../..
     - make cli
   after_script:
     - set +e
@@ -560,8 +560,8 @@ test:long:ishard:
         kubectl cp "$pod_name:/host/tmp/ais/log" "$CI_PROJECT_DIR/logs" || true
         kubectl delete pod "$pod_name" --ignore-not-found=true
       done
-    - cd deploy/dev/k8s
-    - make cleanup-ci
+    - cd deploy/dev/k8s/kustomize
+    - make ci-cleanup
   artifacts:
     when: on_failure
     paths: [ logs/ ]
@@ -701,9 +701,9 @@ test:long:k8s:all:
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
     - make aisloader
-    - cd deploy/dev/k8s
-    - make deploy-ci
-    - cd ../../..
+    - cd deploy/dev/k8s/kustomize
+    - make ci
+    - cd ../../../..
     # Make sure that metrics collection is enabled.
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
