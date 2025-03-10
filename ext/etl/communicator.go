@@ -159,7 +159,7 @@ func (c *baseComm) Stop() {
 	}
 }
 
-func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
+func (c *baseComm) getWithTimeout(lom *core.LOM, url string, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
 	if err := c.boot.xctn.AbortErr(); err != nil {
 		return nil, 0, err
 	}
@@ -189,9 +189,15 @@ func (c *baseComm) getWithTimeout(url string, timeout time.Duration) (r cos.Read
 		return nil, ecode, err
 	}
 
+	// if the transformed object's size is unknown, fall back to the original source size.
+	size := resp.ContentLength
+	if size == cos.ContentLengthUnknown {
+		size = lom.Lsize()
+	}
+
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:    resp.Body,
-		Size: resp.ContentLength,
+		Size: size,
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
@@ -239,7 +245,6 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs string) (_ co
 	if e := lom.Load(false /*cache it*/, true /*locked*/); e != nil {
 		return nil, 0, e
 	}
-	size := lom.Lsize()
 
 	switch pc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
@@ -286,7 +291,7 @@ func (pc *pushComm) do(lom *core.LOM, timeout time.Duration, targs string) (_ co
 		q["command"] = []string{"bash", "-c", strings.Join(pc.command, " ")}
 		req.URL.RawQuery = q.Encode()
 	}
-	req.ContentLength = size
+	req.ContentLength = lom.Lsize()
 	req.Header.Set(cos.HdrContentType, cos.ContentBinary)
 
 	// do
@@ -302,9 +307,16 @@ finish:
 		}
 		return nil, ecode, err
 	}
+
+	// if the transformed object's size is unknown, fall back to the original source size.
+	size := resp.ContentLength
+	if size == cos.ContentLengthUnknown {
+		size = lom.Lsize()
+	}
+
 	rargs := cos.ReaderArgs{
 		R:    resp.Body,
-		Size: resp.ContentLength,
+		Size: size,
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
@@ -392,7 +404,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (
 	}
 
 	etlURL := rc.redirectURL(&clone)
-	r, ecode, err := rc.getWithTimeout(etlURL, timeout)
+	r, ecode, err := rc.getWithTimeout(&clone, etlURL, timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
@@ -425,7 +437,7 @@ func (rp *revProxyComm) OfflineTransform(lom *core.LOM, timeout time.Duration) (
 		return nil, 0, errV
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, ecode, err := rp.getWithTimeout(etlURL, timeout)
+	r, ecode, err := rp.getWithTimeout(&clone, etlURL, timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, clone.Cname(), err, ecode)
