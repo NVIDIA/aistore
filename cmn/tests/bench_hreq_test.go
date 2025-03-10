@@ -14,23 +14,7 @@ import (
 
 // go test -bench=. -benchmem -benchtime=5s
 
-func BenchmarkWithoutHpool(b *testing.B) {
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			args := &cmn.HreqArgs{
-				Method: http.MethodGet,
-				Base:   "http://localhost:80",
-				Path:   "/v1/bucket",
-			}
-			_, err := args.ReqDeprecated()
-			if err != nil {
-				panic(err)
-			}
-		}
-	})
-}
-
-func BenchmarkWitHpool(b *testing.B) {
+func BenchmarkWithHpool(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			args := &cmn.HreqArgs{

@@ -66,22 +66,6 @@ func (u *HreqArgs) URL() string {
 	return url
 }
 
-// TODO: remaining usage - `api` package (remove when time permits)
-func (u *HreqArgs) ReqDeprecated() (*http.Request, error) {
-	r := u.BodyR
-	if r == nil && u.Body != nil {
-		r = cos.NewByteReader(u.Body)
-	}
-	req, err := http.NewRequest(u.Method, u.URL(), r)
-	if err != nil {
-		return nil, err
-	}
-	if u.Header != nil {
-		copyHeaders(u.Header, &req.Header)
-	}
-	return req, nil
-}
-
 // NOTE: unlike standard http.NewRequest (above)
 // - this method returns context-less request
 // - it also does not assign req.GetBody - it is the caller's responsibility to assign one when and if required
