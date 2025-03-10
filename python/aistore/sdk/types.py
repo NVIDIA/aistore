@@ -422,40 +422,39 @@ class PromoteAPIArgs(BaseModel):
 
 class JobStats(BaseModel):
     """
-    Structure for job statistics
+    Represents performance statistics for a job.
     """
 
-    objects: int = 0
-    bytes: int = 0
-    out_objects: int = 0
-    out_bytes: int = 0
-    in_objects: int = 0
-    in_bytes: int = 0
+    objects: int = Field(default=0, alias="loc-objs")
+    bytes: int = Field(default=0, alias="loc-bytes")
+    out_objects: int = Field(default=0, alias="out-objs")
+    out_bytes: int = Field(default=0, alias="out-bytes")
+    in_objects: int = Field(default=0, alias="in-objs")
+    in_bytes: int = Field(default=0, alias="in-bytes")
+
+    class Config:  # pylint: disable=missing-class-docstring
+        allow_population_by_field_name = True
 
 
 class JobSnapshot(BaseModel):
     """
-    Structure for the data returned when querying a single job on a single target node
+    Represents a snapshot of a job on a target node.
     """
 
-    id: str = Field(default="", alias="id")
-    kind: str = Field(default="", alias="kind")
+    id: str = Field(default="")
+    kind: str = Field(default="")
     start_time: str = Field(default="", alias="start-time")
     end_time: str = Field(default="", alias="end-time")
-    bucket: BucketModel = Field(default=None, alias="bck")
-    source_bck: str = Field(default="", alias="source-bck")
-    dest_bck: str = Field(default="", alias="dest-bck")
+    bucket: Optional[BucketModel] = Field(default=None, alias="bck")
+    source_bck: Optional[BucketModel] = Field(default=None, alias="src-bck")
+    destination_bck: Optional[BucketModel] = Field(default=None, alias="dst-bck")
     rebalance_id: str = Field(default="", alias="glob.id")
-    stats: JobStats = Field(default=None, alias="stats")
-    aborted: bool = Field(default=False, alias="aborted")
-    is_idle: bool = Field(default=False, alias="is_idle")
+    stats: Optional[JobStats] = Field(default=None)
+    aborted: bool = Field(default=False)
+    is_idle: bool = Field(default=False)
     abort_err: str = Field(default="", alias="abort-err")
 
-    class Config:
-        """
-        Configuration for Pydantic model to use alias.
-        """
-
+    class Config:  # pylint: disable=missing-class-docstring
         allow_population_by_field_name = True
 
 
