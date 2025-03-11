@@ -1,3 +1,6 @@
+Running
+Running
+Running
 ^*.ais://$BUCKET_1*.created$
 ^PUT.*=> ais://$BUCKET_1/object_1.txt$
 
@@ -5,6 +8,7 @@ COMMUNICATION TYPE:  hpush://
 ARGUMENT TYPE:
 Hello World!
 ^ETL\[etl.*\]stopped$
+Stopped
 ^ETL\[etl.*\]started successfully$
 Hello World!
 ^ETL\[etl.*\]stopped$

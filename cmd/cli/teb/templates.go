@@ -98,8 +98,8 @@ const (
 		indent1 + "Description:\t{{$value.Metrics.Description}}\n" +
 		"{{end}}"
 
-	transformListHdr  = "ETL NAME\t XACTION\t OBJECTS\n"
-	transformListBody = "{{$value.Name}}\t {{$value.XactID}}\t " +
+	transformListHdr  = "NAME\t STAGE\t XACTION\t OBJECTS\n"
+	transformListBody = "{{$value.Name}}\t {{$value.Stage}}\t {{$value.XactID}}\t " +
 		"{{if (eq $value.ObjCount 0) }}-{{else}}{{$value.ObjCount}}{{end}}\n"
 	TransformListNoHdrTmpl = "{{ range $value := . }}" + transformListBody + "{{end}}"
 	TransformListTmpl      = transformListHdr + TransformListNoHdrTmpl

@@ -1,11 +1,14 @@
 // RUN k8s
 curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o hello_world_init_spec.yaml -s // IGNORE
 ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-1 // IGNORE
+ais etl show | grep $ETL_NAME-1 | awk '{print $2}'
 ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-2 --arg-type="fqn" // IGNORE
+ais etl show | grep $ETL_NAME-2 | awk '{print $2}'
 rm -f hello_world_init_spec.yaml // IGNORE
 
 curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml -o hash_with_args_init_spec.yaml -s // IGNORE
 ais etl init spec --from-file="hash_with_args_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-3 // IGNORE
+ais etl show | grep $ETL_NAME-3 | awk '{print $2}'
 rm -f hash_with_args_init_spec.yaml // IGNORE
 
 echo "0123456789" > $OBJECT_1.txt
@@ -17,6 +20,7 @@ ais etl show details $ETL_NAME-1 | grep "COMMUNICATION TYPE"
 ais etl show details $ETL_NAME-1 | grep "ARGUMENT"
 ais etl object $ETL_NAME-1 ais://$BUCKET_1/object_1.txt -
 ais etl stop $ETL_NAME-1
+ais etl show | grep $ETL_NAME-1 | awk '{print $2}'
 ais etl start $ETL_NAME-1
 ais etl object $ETL_NAME-1 ais://$BUCKET_1/object_1.txt -
 ais etl stop $ETL_NAME-1

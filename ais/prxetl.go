@@ -542,9 +542,7 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 	freeBcArgs(args)
 	for _, res := range results {
 		// 404 from target implies it's already stopped
-		nlog.Errorln(res.err)
 		if res.err == nil || cos.IsErrNotFound(res.err) {
-			nlog.Errorln("Skipped")
 			continue
 		}
 		p.writeErr(w, r, res.toErr(), res.status)

@@ -126,7 +126,7 @@ func (t *target) startETL(w http.ResponseWriter, r *http.Request) {
 func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	if err := etl.Stop(etlName, cmn.ErrXactUserAbort); err != nil {
 		if cos.IsErrNotFound(err) {
-			t.writeErr(w, r, err, http.StatusNotFound)
+			nlog.Infof("ETL %q doesn't exist on target\n", etlName)
 			return
 		}
 		t.writeErr(w, r, err)
