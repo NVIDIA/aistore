@@ -15,8 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 )
 
-// NOTE: compare with ext/etl/dp.go
-
 type (
 	ReadResp struct {
 		R      cos.ReadOpenCloser
@@ -26,10 +24,10 @@ type (
 		Remote bool
 	}
 	DP interface { // data provider
-		Reader(lom *LOM, latestVer, sync bool) ReadResp
+		GetROC(lom *LOM, latestVer, sync bool) ReadResp
 	}
 
-	LDP struct{}
+	LDP struct{} // TODO: try to simplify-out - remove
 
 	// returned by lom.CheckRemoteMD
 	CRMD struct {
@@ -51,6 +49,11 @@ type (
 // interface guard
 var _ DP = (*LDP)(nil)
 
+// TODO: try to simplify-out
+func (*LDP) GetROC(lom *LOM, latestVer, sync bool) (resp ReadResp) {
+	return lom.GetROC(latestVer, sync)
+}
+
 func (r *deferROC) Close() (err error) {
 	err = r.ReadOpenCloser.Close()
 	r.lif.Unlock(false)
@@ -67,8 +70,7 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 	return nil, cmn.NewErrFailedTo(T, "open", lom.Cname(), err)
 }
 
-// compare with ext/etl/dp.go - the second (and alternative) DP implementation
-func (*LDP) Reader(lom *LOM, latestVer, sync bool) (resp ReadResp) {
+func (lom *LOM) GetROC(latestVer, sync bool) (resp ReadResp) {
 	bck := lom.Bck()
 
 	lom.Lock(false)

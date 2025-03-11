@@ -560,7 +560,7 @@ func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 		v = true
 	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
 		v = c.ValidateColdGet
-	case cmn.OwtGetPrefetchLock:
+	case cmn.OwtGetPrefetchLock, cmn.OwtTransform:
 	default:
 		debug.Assert(false, poi.owt)
 	}
@@ -1513,7 +1513,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 		return res
 	}
 
-	resp := coi.DP.Reader(lom, false, false)
+	resp := coi.DP.GetROC(lom, false, false)
 	if resp.Err != nil {
 		return xs.CoiRes{Err: resp.Err}
 	}
@@ -1537,7 +1537,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (res xs.CoiRes) {
-	resp := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
+	resp := coi.DP.GetROC(lom, coi.LatestVer, coi.Sync)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
@@ -1684,7 +1684,7 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 	default:
 		// 3. DP transform (possibly, a no-op)
 		// If the object is not present call t.Backend.GetObjReader
-		resp := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
+		resp := coi.DP.GetROC(lom, coi.LatestVer, coi.Sync)
 		if resp.Err != nil {
 			return xs.CoiRes{Err: resp.Err}
 		}

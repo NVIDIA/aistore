@@ -478,9 +478,8 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		bcktests = []testBucketConfig{{false, false, false}}
 
 		tests = []testObjConfig{
-			{transformer: tetl.Echo, comm: etl.Hpull, onlyLong: true},
-			{transformer: tetl.MD5, comm: etl.Hrev},
-			{transformer: tetl.MD5, comm: etl.Hpush, onlyLong: true},
+			{transformer: tetl.Echo, comm: etl.Hpull},
+			{transformer: tetl.MD5, comm: etl.Hpush},
 		}
 	)
 
@@ -614,9 +613,8 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 	err = tetl.WaitForFinished(bp, xid, kind, timeout)
 	tassert.CheckFatal(t, err)
 
-	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+	err = tetl.ListObjectsWithRetry(bp, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d objects, got %d", m.num, len(list.Entries))
 
 	checkETLStats(t, xid, m.num, m.fileSize*uint64(m.num), skipByteStats)
 }

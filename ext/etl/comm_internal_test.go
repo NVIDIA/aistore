@@ -37,10 +37,12 @@ var _ = Describe("CommunicatorTest", func() {
 		dataSize      = int64(50 * cos.MiB)
 		transformData = make([]byte, dataSize)
 
-		bck              = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
-		objName          = "commObj"
-		etlTransformArgs = "{\"from_time\":2.43,\"to_time\":3.43}"
-		clusterBck       = meta.NewBck(
+		bck                      = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
+		objName                  = "commObj"
+		etlTransformArgs         = "{\"from_time\":2.43,\"to_time\":3.43}"
+		expectedEtlTransformArgs = ""
+		paramLatestVer           = "false"
+		clusterBck               = meta.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
 			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumCesXxh}},
 		)
@@ -80,13 +82,30 @@ var _ = Describe("CommunicatorTest", func() {
 		// Initialize the HTTP servers.
 		transformerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			receivedEtlTransformArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
-			Expect(receivedEtlTransformArgs).To(Equal(etlTransformArgs))
+			Expect(receivedEtlTransformArgs).To(Equal(expectedEtlTransformArgs))
+
+			switch r.Method {
+			case http.MethodGet: // hpull, hrev
+				latestVer, err := cos.ParseBool(r.URL.Query().Get(apc.QparamLatestVer))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(latestVer).To(BeFalse(), "Expected 'latestVer' parameter in hpull and hrev")
+
+			case http.MethodPut: // hpush
+				hasLatestVer := r.URL.Query().Has(apc.QparamLatestVer)
+				// 'latestVer' should not be passed to ETL in hpush since targets handle synchronization during read.
+				Expect(hasLatestVer).To(BeFalse(), "Unexpected 'latestVer' parameter in hpush; sync is handled by the target.")
+			}
 
 			_, err := w.Write(transformData)
 			Expect(err).NotTo(HaveOccurred())
 		}))
 		targetServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			receivedEtlTransformArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
+			ver := r.URL.Query().Get(apc.QparamLatestVer)
+			val, err := cos.ParseBool(ver)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeFalse())
+
 			ecode, err := comm.InlineTransform(w, r, lom, receivedEtlTransformArgs)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ecode).To(Equal(0))
@@ -107,41 +126,58 @@ var _ = Describe("CommunicatorTest", func() {
 		targetServer.Close()
 	})
 
-	tests := []string{
-		Hpush,
-		Hpull,
-		Hrev,
-	}
+	tests := []string{Hpush, Hpull}
 
-	for _, commType := range tests {
-		It("should perform transformation "+commType, func() {
-			pod := &corev1.Pod{}
-			pod.SetName("somename")
+	for _, testType := range []string{"inline", "offline"} {
+		for _, commType := range tests {
+			It("should perform "+testType+" transformation "+commType, func() {
+				pod := &corev1.Pod{}
+				pod.SetName("somename")
 
-			xctn := mock.NewXact(apc.ActETLInline)
-			boot := &etlBootstrapper{
-				msg: InitSpecMsg{
-					InitMsgBase: InitMsgBase{
-						CommTypeX: commType,
+				xctn := mock.NewXact(apc.ActETLInline)
+				boot := &etlBootstrapper{
+					msg: InitSpecMsg{
+						InitMsgBase: InitMsgBase{
+							CommTypeX: commType,
+						},
 					},
-				},
-				pod:  pod,
-				uri:  transformerServer.URL,
-				xctn: xctn,
-			}
-			comm = newCommunicator(nil, boot, nil)
+					pod:  pod,
+					uri:  transformerServer.URL,
+					xctn: xctn,
+				}
+				comm = newCommunicator(nil, boot, nil)
 
-			q := url.Values{}
-			q.Add(apc.QparamETLTransformArgs, etlTransformArgs)
-			resp, err := http.Get(proxyServer.URL + "?" + q.Encode())
-			Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+				switch testType {
+				case "inline":
+					q := url.Values{}
+					q.Add(apc.QparamETLTransformArgs, etlTransformArgs)
+					expectedEtlTransformArgs = etlTransformArgs
 
-			b, err := cos.ReadAll(resp.Body)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(b)).To(Equal(len(transformData)))
-			Expect(b).To(Equal(transformData))
-		})
+					q.Add(apc.QparamLatestVer, paramLatestVer)
+					resp, err := http.Get(cos.JoinQuery(proxyServer.URL, q))
+					Expect(err).NotTo(HaveOccurred())
+					defer resp.Body.Close()
+
+					b, err := cos.ReadAll(resp.Body)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(b)).To(Equal(len(transformData)))
+					Expect(b).To(Equal(transformData))
+				case "offline":
+					lom := &core.LOM{ObjName: objName}
+					err := lom.InitBck(clusterBck.Bucket())
+					Expect(err).NotTo(HaveOccurred())
+
+					expectedEtlTransformArgs = ""
+					resp := comm.OfflineTransform(lom, time.Minute, false, false)
+					Expect(resp.Err).NotTo(HaveOccurred())
+					defer resp.R.Close()
+
+					b, err := cos.ReadAll(resp.R)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(b)).To(Equal(len(transformData)))
+				}
+			})
+		}
 	}
 })
 

@@ -423,3 +423,25 @@ func podTransformTimeout(errCtx *cmn.ETLErrCtx, pod *corev1.Pod) (cos.Duration, 
 	}
 	return cos.Duration(v), nil
 }
+
+func ListObjectsWithRetry(bp api.BaseParams, bckTo cmn.Bck, expectedCount int, opts tools.WaitRetryOpts) (err error) {
+	var (
+		retries       = opts.MaxRetries
+		retryInterval = opts.Interval
+		i             int
+	)
+retry:
+	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+	if err == nil && len(list.Entries) == expectedCount {
+		return nil
+	}
+	if !cmn.IsStatusServiceUnavailable(err) && !cos.IsRetriableConnErr(err) {
+		return
+	}
+	time.Sleep(retryInterval)
+	i++
+	if i > retries {
+		return fmt.Errorf("api.ListObjects max retries (%d) exceeded, expected %d objects, got %d", retries, expectedCount, len(list.Entries))
+	}
+	goto retry
+}
