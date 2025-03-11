@@ -1,14 +1,12 @@
 #
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import itertools
-from datetime import datetime
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta
+from typing import List, Optional
 import time
-
 from dateutil.parser import isoparse
-
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
@@ -23,7 +21,14 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.errors import Timeout, JobInfoNotFound
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.types import JobStatus, JobArgs, ActionMsg, JobSnapshot, BucketModel
+from aistore.sdk.types import (
+    JobStatus,
+    JobArgs,
+    ActionMsg,
+    JobSnapshot,
+    BucketModel,
+    AggregatedJobSnapshots,
+)
 from aistore.sdk.utils import probing_frequency, get_logger
 
 logger = get_logger(__name__)
@@ -246,7 +251,7 @@ class Job:
         Raises:
             JobInfoNotFound: Raised when no relevant job info is found.
         """
-        snapshots = self._query_job_snapshots()
+        snapshots = self._get_all_snapshots()
         jobs_found = []
         for snapshot in snapshots:
             if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
@@ -262,18 +267,79 @@ class Job:
             raise JobInfoNotFound("No relevant job info found")
         return jobs_found
 
-    def _query_job_snapshots(self) -> List[JobSnapshot]:
-        value = JobArgs(id=self._job_id, kind=self._job_kind).as_dict()
-        params = {QPARAM_WHAT: WHAT_QUERY_XACT_STATS}
-        snapshot_lists = self._client.request_deserialize(
+    def get_details(self) -> AggregatedJobSnapshots:
+        """
+        Retrieve detailed job snapshot information across all targets.
+
+        Returns:
+            AggregatedJobSnapshots: A snapshot containing detailed metrics for the job.
+        """
+        job_args = JobArgs(id=self._job_id, kind=self._job_kind).as_dict()
+        query_params = {QPARAM_WHAT: WHAT_QUERY_XACT_STATS}
+        return self._client.request_deserialize(
             HTTP_METHOD_GET,
             path=URL_PATH_CLUSTER,
-            json=value,
-            params=params,
-            res_model=Dict[str, List[JobSnapshot]],
-        ).values()
-        snapshots = list(itertools.chain.from_iterable(snapshot_lists))
-        return snapshots
+            json=job_args,
+            params=query_params,
+            res_model=AggregatedJobSnapshots,
+        )
+
+    def get_total_time(self) -> Optional[timedelta]:
+        """
+        Calculates the total job duration as the difference between the earliest start time
+        and the latest end time among all job snapshots. If any snapshot is missing an end_time,
+        returns None to indicate the job is incomplete.
+
+        Returns:
+            Optional[timedelta]: The total duration of the job, or None if incomplete.
+        """
+        snapshots = self._get_all_snapshots()
+
+        try:
+            if not snapshots:
+                return None
+
+            earliest_start = None
+            latest_end = None
+
+            for s in snapshots:
+                # First check for incomplete jobs
+                if s.end_time is None:
+                    return None
+
+                current_end = isoparse(s.end_time)
+                latest_end = (
+                    current_end if latest_end is None else max(latest_end, current_end)
+                )
+
+                if s.start_time:
+                    current_start = isoparse(s.start_time)
+                    earliest_start = (
+                        current_start
+                        if earliest_start is None
+                        else min(earliest_start, current_start)
+                    )
+
+                if earliest_start is None:  # No valid start times
+                    return None
+
+            return latest_end - earliest_start
+        except (ValueError, TypeError) as e:
+            logger.error("Invalid timestamp format: %s", e)
+            return None
+        except IndexError:
+            return None  # No valid timestamps
+
+    def _get_all_snapshots(self) -> List[JobSnapshot]:
+        """
+        Returns a flat list of all job snapshots across all target nodes.
+
+        Returns:
+            List[JobSnapshot]: A combined list of snapshots.
+        """
+        details = self.get_details()
+        # Access the __root__ dictionary and chain its values
+        return list(itertools.chain.from_iterable(details.__root__.values()))
 
     def _check_snapshot_finished(self, snapshots):
         job_found = False
@@ -316,7 +382,7 @@ class Job:
         sleep_time = probing_frequency(timeout)
 
         while True:
-            snapshots = self._query_job_snapshots()
+            snapshots = self._get_all_snapshots()
             try:
                 if condition_fn(snapshots):
                     return

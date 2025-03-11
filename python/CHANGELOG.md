@@ -11,6 +11,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Added
 
 - `stage` field in `ETLInfo` to represent the ETL lifecycle stage.
+- Add `details` method to retrieve detailed job snapshot information across all targets.
+- Introduce and type the `AggregatedJobSnapshots` model.
+- Implement `get_total_time` to compute the overall job duration.
+- Implement `get_all_snapshots` to return a flat list of all job snapshots.
 
 ### Changed
 

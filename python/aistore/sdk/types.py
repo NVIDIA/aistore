@@ -1,16 +1,12 @@
 #
 # Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
 #
-
 from __future__ import annotations
 import base64
 from typing import Any, Mapping, List, Optional, Dict
-
 import msgspec
 from pydantic.v1 import BaseModel, Field, validator
-
 from requests.structures import CaseInsensitiveDict
-
 from aistore.sdk.namespace import Namespace
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.obj.object_props import ObjectProps
@@ -456,6 +452,16 @@ class JobSnapshot(BaseModel):
 
     class Config:  # pylint: disable=missing-class-docstring
         allow_population_by_field_name = True
+
+
+class AggregatedJobSnapshots(BaseModel):
+    """
+    Represents job snapshots grouped by target ID.
+
+    The __root__ attribute is a dictionary mapping target node IDs to lists of JobSnapshot instances.
+    """
+
+    __root__: Dict[str, List[JobSnapshot]] = Field(default={})
 
 
 class CopyBckMsg(BaseModel):
