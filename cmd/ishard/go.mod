@@ -3,7 +3,7 @@ module github.com/NVIDIA/aistore/cmd/ishard
 go 1.24
 
 require (
-	github.com/NVIDIA/aistore v1.3.28-0.20250307153132-05e7fcbb818e
+	github.com/NVIDIA/aistore v1.3.28-0.20250311192106-70262010873d
 	github.com/json-iterator/go v1.1.12
 	github.com/vbauerster/mpb/v4 v4.12.2
 )

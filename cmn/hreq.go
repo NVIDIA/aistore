@@ -138,7 +138,7 @@ func splitUpath(surl string) (prefix, path string) {
 	}
 	prefix, path = surl[:i], surl[i:]
 	for _, c := range path { // reject control characters and space
-		if c < 0x20 || c == 0x7f {
+		if c <= 0x20 || c == 0x7f {
 			return "", ""
 		}
 	}
