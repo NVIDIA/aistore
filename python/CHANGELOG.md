@@ -17,6 +17,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `cluster.get_performance()` now returns raw performance data as a `dict` keyed by target IDs, rather than typed aggregator objects.
 - `cluster.list_running_etls()` now excludes non-running ETL instances.
 - fix `JobStats` and `JobSnapshot` models.
+- Update `pyproject.toml` to enforce a higher minimum version requirement and `common_requirements` to use the latest stable versions for testing.
 
 ### Removed
 
