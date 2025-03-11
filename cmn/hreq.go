@@ -10,9 +10,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -38,6 +40,7 @@ var (
 
 var (
 	hpool sync.Pool
+	hmap  sync.Map
 	req0  http.Request
 )
 
@@ -125,27 +128,70 @@ func (u *HreqArgs) ReqWith(timeout time.Duration) (*http.Request, context.Contex
 	return req, ctx, cancel, nil
 }
 
-func newRequest(method, urls string) (*http.Request, error) {
-	// 1. parse
-	// TODO: split (before url.Path) and (after), and optimize
-	u, err := url.Parse(urls)
-	if err != nil {
-		return nil, err
+func splitUpath(surl string) (prefix, path string) {
+	const (
+		minSchemeHostLen = 10
+	)
+	i := strings.Index(surl, apc.URLPathObjects.S)
+	if i <= minSchemeHostLen {
+		return "", ""
+	}
+	prefix, path = surl[:i], surl[i:]
+	for _, c := range path { // reject control characters and space
+		if c < 0x20 || c == 0x7f {
+			return "", ""
+		}
+	}
+	return prefix, path
+}
+
+func newRequest(method, surl string) (*http.Request, error) {
+	var (
+		err error
+		u   *url.URL
+	)
+	// 1. fast path: split and reuse "/v1/objects/" url
+	prefix, path := splitUpath(surl)
+	if prefix == "" {
+		u, err = url.Parse(surl)
+		if err != nil {
+			return nil, err
+		}
+	} else if parsed, ok := hmap.Load(prefix); ok {
+		u = parsed.(*url.URL)
+		tmp := *u // shallow copy (not to mutate the cached one)
+
+		p, q, ok := strings.Cut(path, "?")
+		if ok {
+			tmp.RawQuery = q
+		} else {
+			tmp.RawQuery = ""
+		}
+		decoded, _ := url.PathUnescape(p)
+		tmp.Path = decoded
+		tmp.RawPath = p
+
+		u = &tmp
+	} else {
+		u, err = url.Parse(surl)
+		if err != nil {
+			return nil, err
+		}
+		hmap.Store(prefix, u)
 	}
 
 	// 2. reuse and initialize request
 	req := hreqAlloc()
-	{
-		req.Method = method
-		req.URL = u
-		req.Proto = "HTTP/1.1"
-		req.ProtoMajor = 1
-		req.ProtoMinor = 1
-		if req.Header == nil {
-			req.Header = make(http.Header, 4)
-		}
-		req.Host = u.Host
+	req.Method = method
+	req.URL = u
+	req.Proto = "HTTP/1.1"
+	req.ProtoMajor = 1
+	req.ProtoMinor = 1
+	if req.Header == nil {
+		req.Header = make(http.Header, 4)
 	}
+	req.Host = u.Host
+
 	return req, nil
 }
 

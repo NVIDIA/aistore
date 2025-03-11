@@ -24,7 +24,7 @@ import (
 // [NOTE]
 // - currently, we have only two crypto-secure types: sha256 and sha512 (SHA-2 family)
 // - see related object comparison logic in cmn/objattrs
-// - now that in the standard library, SHA-3 checksum(s) can be easily added (as in: ck.H = sha3.New512())
+// - now that SHA-3 is in the standard library, it can be easily added (as in: ck.H = sha3.New512())
 //   not adding it yet, though, as there's no pressing need
 
 // supported checksums
