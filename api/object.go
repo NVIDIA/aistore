@@ -261,7 +261,7 @@ func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) 
 func (args *PutArgs) getBody() (io.ReadCloser, error) { return args.Reader.Open() }
 
 func (args *PutArgs) put(reqArgs *cmn.HreqArgs) (*http.Request, error) {
-	req, err := reqArgs.ReqDeprecated() // TODO: deprecated; use reqArgs.Req()
+	req, err := reqArgs.Req()
 	if err != nil {
 		return nil, cmn.NewErrCreateHreq(err)
 	}

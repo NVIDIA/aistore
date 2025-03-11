@@ -22,10 +22,10 @@ import (
 )
 
 // [NOTE]
-// - currently, we have only two crypto-secure types: sha256 and sha512
+// - currently, we have only two crypto-secure types: sha256 and sha512 (SHA-2 family)
 // - see related object comparison logic in cmn/objattrs
-// [TODO]
-// revisit and maybe add SHA-3 family (see golang.org/x/crypto/sha3 for: `BinaryMarshaler`)
+// - now that in the standard library, SHA-3 checksum(s) can be easily added (as in: ck.H = sha3.New512())
+//   not adding it yet, though, as there's no pressing need
 
 // supported checksums
 const (

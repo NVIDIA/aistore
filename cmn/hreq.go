@@ -38,7 +38,6 @@ var (
 
 var (
 	hpool sync.Pool
-	hmap  sync.Map
 	req0  http.Request
 )
 
@@ -127,21 +126,11 @@ func (u *HreqArgs) ReqWith(timeout time.Duration) (*http.Request, context.Contex
 }
 
 func newRequest(method, urls string) (*http.Request, error) {
-	var (
-		err error
-		u   *url.URL
-	)
-
-	// 1. parse and reuse url
-	if parsed, ok := hmap.Load(urls); ok {
-		u = parsed.(*url.URL)
-	} else {
-		u, err = url.Parse(urls)
-		if err != nil {
-			return nil, err
-		}
-		// NOTE: given current usage scenarios, there's no real need to ever clear this map
-		hmap.Store(urls, u)
+	// 1. parse
+	// TODO: split (before url.Path) and (after), and optimize
+	u, err := url.Parse(urls)
+	if err != nil {
+		return nil, err
 	}
 
 	// 2. reuse and initialize request
