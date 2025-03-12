@@ -100,7 +100,7 @@ class Etl:
 
         return self._client.request(HTTP_METHOD_PUT, path=URL_PATH_ETL, json=value).text
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def init_code(
         self,
         transform: Callable,

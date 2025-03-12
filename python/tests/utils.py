@@ -121,7 +121,7 @@ def cleanup_local(path: str):
         pass
 
 
-# pylint: disable=too-many-arguments
+# pylint: disable=too-many-arguments,too-many-positional-arguments
 def create_and_put_objects(
     client, bucket, prefix, suffix, num_obj, obj_names, obj_size=None
 ):

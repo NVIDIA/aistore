@@ -102,7 +102,7 @@ class TestJob(unittest.TestCase):
 
         self.assertRaises(Timeout, self.job.wait)
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def wait_exec_assert(
         self,
         job,

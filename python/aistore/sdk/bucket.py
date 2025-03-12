@@ -298,7 +298,7 @@ class Bucket(AISSource):
             params=self.qparam,
         ).headers
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def summary(
         self,
         uuid: str = "",
@@ -472,7 +472,7 @@ class Bucket(AISSource):
 
         return bucket_props, result
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def copy(
         self,
         to_bck: Bucket,
@@ -521,7 +521,7 @@ class Bucket(AISSource):
             HTTP_METHOD_POST, ACT_COPY_BCK, value=value, params=params
         ).text
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def list_objects(
         self,
         prefix: str = "",
@@ -698,7 +698,7 @@ class Bucket(AISSource):
             uuid = resp.uuid
         return obj_list
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def transform(
         self,
         etl_name: str,

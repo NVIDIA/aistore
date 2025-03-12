@@ -43,7 +43,7 @@ class TestDsortOps(unittest.TestCase):
         self.buckets.append(bck_name)
         bck.put_files(dir_name)
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     @staticmethod
     def _generate_tar(
         filename,
@@ -76,7 +76,7 @@ class TestDsortOps(unittest.TestCase):
                     tar.add(key_file_name)
                     Path(key_file_name).unlink()
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _generate_shards(
         self,
         bck_name,

@@ -10,7 +10,7 @@ braceexpand>=0.1.7
 msgspec>=0.18.5
 xxhash>=3.5.0
 boto3>=1.37.10
-pylint==3.2.7
+pylint>=3.2.7
 pytest>=8.3.5
 typing-extensions>=4.12.2
 webdataset>=0.2.100

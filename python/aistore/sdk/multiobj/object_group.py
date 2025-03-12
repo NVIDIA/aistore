@@ -220,7 +220,7 @@ class ObjectGroup(AISSource):
             value=value,
         ).text
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def copy(
         self,
         to_bck: "Bucket",
@@ -286,7 +286,7 @@ class ObjectGroup(AISSource):
             value=value,
         ).text
 
-    # pylint: disable=too-many-arguments, too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments, too-many-locals
     def transform(
         self,
         to_bck: "Bucket",
@@ -356,7 +356,7 @@ class ObjectGroup(AISSource):
             HTTP_METHOD_POST, ACT_TRANSFORM_OBJECTS, value=value
         ).text
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def archive(
         self,
         archive_name: str,

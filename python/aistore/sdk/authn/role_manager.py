@@ -39,7 +39,7 @@ class RoleManager:
         client (RequestClient): The RequestClient used to make HTTP requests.
     """
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, client: RequestClient):
         self._client = client
 

@@ -25,7 +25,7 @@ class ObjectClient:
         uname (Optional[str]): Unique (namespaced) name of the object (used for determining the target node)
     """
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
         request_client: RequestClient,

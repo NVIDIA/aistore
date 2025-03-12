@@ -133,7 +133,7 @@ class Object:
         self._props = ObjectProps(headers)
         return headers
 
-    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def get_reader(
         self,
         archive_config: Optional[ArchiveConfig] = None,
@@ -247,7 +247,7 @@ class Object:
 
         return obj_reader
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def get(
         self,
         archive_config: ArchiveConfig = None,
@@ -393,7 +393,7 @@ class Object:
         """
         return ObjectWriter(self._client, self._object_path, self.query_params)
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def promote(
         self,
         path: str,

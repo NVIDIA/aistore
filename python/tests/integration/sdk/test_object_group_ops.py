@@ -287,7 +287,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         content = bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _copy_and_check_with_latest(
         self, from_bck, to_bck, obj_name, expected, latest_flag
     ):

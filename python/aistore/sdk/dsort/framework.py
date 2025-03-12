@@ -108,7 +108,7 @@ class DsortFramework:
     Represents the framework for a dSort job, including input and output shard configurations.
     """
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
         input_shards: DsortShardsGroup,

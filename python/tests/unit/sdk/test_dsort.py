@@ -305,7 +305,7 @@ class TestDsort(unittest.TestCase):
             expected_sleep_calls,
         )
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _wait_test_helper(
         self,
         dsort,
