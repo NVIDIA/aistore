@@ -33,15 +33,16 @@ type (
 		msg  *apc.BsummCtrlMsg
 	}
 	XactNsumm struct {
-		p             *nsummFactory
-		oneRes        cmn.BsummResult
-		mapRes        map[uint64]*cmn.BsummResult
-		buckets       []*meta.Bck
-		_nam, _str    string
-		totalDiskSize uint64
+		p       *nsummFactory
+		mapRes  map[uint64]*cmn.BsummResult
+		_nam    string
+		_str    string
+		buckets []*meta.Bck
 		xact.BckJog
-		single     bool
-		listRemote bool
+		oneRes        cmn.BsummResult
+		totalDiskSize uint64
+		single        bool
+		listRemote    bool
 	}
 )
 

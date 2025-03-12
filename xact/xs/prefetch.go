@@ -8,6 +8,7 @@ package xs
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -43,6 +45,7 @@ type (
 	pebl struct {
 		parent  *prefetch
 		pending []core.Xact
+		load    atomic.Uint64
 		n       atomic.Int32
 		mu      sync.Mutex
 	}
@@ -179,7 +182,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 		r.rate.arl.RetryAcquire(r.rate.sleep)
 	}
 retry:
-	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && r.pebl.num() < maxPebls {
+	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && !r.pebl.busy() {
 		err = r.blobdl(lom, oa)
 	} else {
 		if r.msg.BlobThreshold == 0 && size > cos.GiB {
@@ -238,7 +241,7 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 		return ecode, err
 	}
 
-	// (compare with ais/tgtimpl rgetstats)
+	// RGET stats (compare with ais/tgtimpl namesake)
 	rgetstats(r.bp, r.vlabs, lom.Lsize(), started)
 
 	// own stats
@@ -291,7 +294,9 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) error {
 // pebl (pending blob downloads)
 //////////
 
-const maxPebls = 16 // max concurrent blob downloads (TODO: tuneup)
+// max concurrent blob downloads by a given prefetch job
+// works in conjunction with the current load average - see pebl.busy
+const maxPebls = 32
 
 const (
 	peblSleep   = 4 * time.Second
@@ -335,7 +340,10 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 	}
 	pebl.pending = pebl.pending[:n]
 	pebl.n.Store(n)
+
 	pebl.mu.Unlock()
+
+	pebl.load.Store(uint64(math.Ceil(sys.MaxLoad()))) // pebl.busy()
 
 	if xblob == nil {
 		return
@@ -397,6 +405,10 @@ func (pebl *pebl) abort(err error) {
 }
 
 func (pebl *pebl) num() int32 { return pebl.n.Load() }
+
+func (pebl *pebl) busy() bool {
+	return pebl.n.Load() > maxPebls || pebl.load.Load() >= uint64(sys.HighLoadWM())
+}
 
 func (pebl *pebl) str() string {
 	var sb strings.Builder

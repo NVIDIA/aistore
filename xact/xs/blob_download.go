@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -21,11 +21,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -51,9 +53,11 @@ const (
 
 type (
 	XactBlobDl struct {
+		bp      core.Backend
 		writer  io.Writer
 		doneCh  chan chunkDone
 		args    *core.BlobParams
+		vlabs   map[string]string
 		workCh  chan chunkWi
 		cksum   cos.CksumHash
 		sgls    []*memsys.SGL
@@ -175,9 +179,17 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *blobFactory) Start() error {
-	// reuse the same args-carrying structure and keep filling-in
+	// reuse the same args-carrying structure and keep initializing
 	r := p.pre
-	r.InitBase(p.Args.UUID, p.Kind(), r.args.Lom.Cname(), r.args.Lom.Bck())
+
+	bck := r.args.Lom.Bck()
+	r.InitBase(p.Args.UUID, p.Kind(), r.args.Lom.Cname(), bck)
+
+	r.bp = core.T.Backend(bck)
+	r.vlabs = map[string]string{
+		stats.VarlabBucket:   bck.Cname(""),
+		stats.VarlabXactKind: r.Kind(),
+	}
 
 	// 2nd (just in time) tune-up
 	var (
@@ -311,6 +323,7 @@ func (r *XactBlobDl) Run(*sync.WaitGroup) {
 	)
 	nlog.Infoln(r.String())
 	r.start()
+	now := mono.NanoTime()
 outer:
 	for {
 		select {
@@ -341,7 +354,7 @@ outer:
 					}
 				}
 			}
-			// type1 write
+			// type #1 write
 			if err = r.write(sgl); err != nil {
 				goto fin
 			}
@@ -352,26 +365,11 @@ outer:
 				r.nextRoff += r.chunkSize
 			}
 
-			// walk backwards and plug any holes
-			for i := len(pending) - 1; i >= 0; i-- {
-				done := pending[i]
-				if done.roff > r.woff {
-					break
-				}
-				debug.Assert(done.roff == r.woff)
-
-				// type2 write: remove from pending and append
-				sgl := done.sgl
-				pending = pending[:i]
-				if err = r.write(sgl); err != nil {
-					goto fin
-				}
-				if r.nextRoff < r.fullSize {
-					debug.Assert(sgl.Size() == 0)
-					r.workCh <- chunkWi{sgl, r.nextRoff}
-					r.nextRoff += r.chunkSize
-				}
+			// walk backwards and plug any holes (type #2 write)
+			if pending, err = r.plugholes(pending); err != nil {
+				goto fin
 			}
+
 			if r.woff >= r.fullSize {
 				debug.Assertf(r.woff == r.fullSize, "%d > %d", r.woff, r.fullSize)
 				goto fin
@@ -413,7 +411,15 @@ fin:
 				_, err = core.T.FinalizeObj(r.args.Lom, r.args.Wfqn, r, cmn.OwtGetPrefetchLock)
 			}
 		}
+
 		if err == nil {
+			// stats
+			tstats := core.T.StatsUpdater()
+			tstats.IncWith(r.bp.MetricName(stats.GetCount), r.vlabs)
+			tstats.AddWith(
+				cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.vlabs},
+			)
+
 			r.ObjsAdd(1, 0)
 		} else {
 			if errRemove := cos.RemoveFile(r.args.Wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
@@ -448,11 +454,14 @@ func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
 		size    = sgl.Size()
 	)
 	if r.args.WriteSGL != nil {
-		err = r.args.WriteSGL(sgl)
+		err = r.args.WriteSGL(sgl) // custom write
 		written = sgl.Size() - sgl.Len()
 	} else {
-		written, err = io.Copy(r.writer, sgl) // using sgl.ReadFrom
+		written, err = io.Copy(r.writer, sgl) // utilizing sgl.ReadFrom
 	}
+
+	sgl.Reset()
+
 	if err != nil {
 		if cmn.Rom.FastV(4, cos.SmoduleXs) {
 			nlog.Errorf("%s: failed to write (woff=%d, next=%d, sgl-size=%d): %v",
@@ -463,9 +472,38 @@ func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
 	debug.Assertf(written == size, "%s: expected written size=%d, got %d (at woff %d)", r.Name(), size, written, r.woff)
 
 	r.woff += size
+
+	// stats
+	tstats := core.T.StatsUpdater()
+	tstats.AddWith(
+		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: size, VarLabs: r.vlabs},
+	)
 	r.ObjsAdd(0, size)
-	sgl.Reset()
+
 	return nil
+}
+
+func (r *XactBlobDl) plugholes(pending []chunkDone) (_ []chunkDone, err error) {
+	for i := len(pending) - 1; i >= 0; i-- {
+		done := pending[i]
+		if done.roff > r.woff {
+			break
+		}
+		debug.Assert(done.roff == r.woff)
+
+		sgl := done.sgl
+		pending = pending[:i]
+		if err = r.write(sgl); err != nil { // type #2 write: remove from pending and append
+			return pending, err
+		}
+
+		if r.nextRoff < r.fullSize {
+			debug.Assert(sgl.Size() == 0)
+			r.workCh <- chunkWi{sgl, r.nextRoff}
+			r.nextRoff += r.chunkSize
+		}
+	}
+	return pending, nil
 }
 
 func (r *XactBlobDl) cleanup() {
@@ -513,8 +551,6 @@ func (reader *blobReader) run() {
 			break
 		}
 		debug.Assert(res.Size == written, res.Size, " ", written)
-		debug.Assert(sgl.Size() == written, sgl.Size(), " ", written)
-		debug.Assert(sgl.Size() == sgl.Len(), sgl.Size(), " ", sgl.Len())
 
 		reader.parent.doneCh <- chunkDone{nil, sgl, msg.roff, res.ErrCode}
 	}

@@ -31,11 +31,10 @@ type prune struct {
 	parent         core.Xact
 	bckFrom, bckTo *meta.Bck
 	smap           *meta.Smap
+	joggers        *mpather.Jgroup
+	filter         *prob.Filter
 	prefix         string
-	// run
-	joggers *mpather.Jgroup
-	filter  *prob.Filter
-	same    bool
+	same           bool
 }
 
 func (rp *prune) init(config *cmn.Config) {

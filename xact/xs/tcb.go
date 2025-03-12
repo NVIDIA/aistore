@@ -336,7 +336,7 @@ retry:
 		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
 		r.ObjsAdd(1, res.Lsize)
 		if res.RGET {
-			// (compare with ais/tgtimpl rgetstats)
+			// RGET stats (compare with ais/tgtimpl namesake)
 			rgetstats(r.bp /*from*/, r.vlabs, res.Lsize, started)
 		}
 	case cos.IsNotExist(res.Err, 0):

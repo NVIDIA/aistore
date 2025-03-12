@@ -39,17 +39,17 @@ type (
 	}
 	XactTCObjs struct {
 		bp      core.Backend // backend(source bucket)
+		args    *xreg.TCObjsArgs
+		rate    *tcrate
+		workCh  chan *cmn.TCOMsg
+		vlabs   map[string]string
 		pending struct {
 			m   map[string]*tcowi
 			mtx sync.RWMutex
 		}
-		args     *xreg.TCObjsArgs
-		rate     *tcrate
-		workCh   chan *cmn.TCOMsg
-		vlabs    map[string]string
-		chanFull atomic.Int64
 		streamingX
-		owt cmn.OWT
+		chanFull atomic.Int64
+		owt      cmn.OWT
 	}
 	tcowi struct {
 		r   *XactTCObjs
@@ -397,7 +397,7 @@ retry:
 		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
 		r.ObjsAdd(1, res.Lsize)
 		if res.RGET {
-			// (compare with ais/tgtimpl rgetstats)
+			// RGET stats (compare with ais/tgtimpl namesake)
 			rgetstats(r.bp /*from*/, r.vlabs, res.Lsize, started)
 		}
 	case cos.IsNotExist(res.Err, 0):
