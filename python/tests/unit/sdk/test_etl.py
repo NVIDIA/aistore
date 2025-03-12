@@ -99,7 +99,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "timeout": "5m",
             "funcs": {"transform": "transform"},
             "code": self.encode_fn([], self.transform_fn, communication_type),
-            "dependencies": base64.b64encode(b"cloudpickle==2.2.0").decode(
+            "dependencies": base64.b64encode(b"cloudpickle>=3.0.0").decode(
                 UTF_ENCODING
             ),
             "argument": "",
@@ -120,7 +120,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         arg_type = "url"
 
         expected_dependencies = user_dependencies.copy()
-        expected_dependencies.append("cloudpickle==2.2.0")
+        expected_dependencies.append("cloudpickle>=3.0.0")
         expected_dep_str = base64.b64encode(
             "\n".join(expected_dependencies).encode(UTF_ENCODING)
         ).decode(UTF_ENCODING)

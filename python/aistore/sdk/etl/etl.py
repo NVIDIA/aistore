@@ -218,7 +218,7 @@ class Etl:
     def _encode_dependencies(dependencies: List[str]):
         if dependencies is None:
             dependencies = []
-        dependencies.append("cloudpickle==2.2.0")
+        dependencies.append("cloudpickle>=3.0.0")
         deps = "\n".join(dependencies).encode(UTF_ENCODING)
         return base64.b64encode(deps).decode(UTF_ENCODING)
 
