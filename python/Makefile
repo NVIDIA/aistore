@@ -56,7 +56,7 @@ python_sdk_integration_tests: common_deps
 	$(PYTEST) -v tests/integration/sdk -m "not etl and not authn"
 
 .PHONY: python_sdk_unit_tests
-python_sdk_unit_tests: common_deps python_unit_tests_scenario_gen
+python_sdk_unit_tests: common_deps
 	$(PYTEST) -v tests/unit/sdk
 
 .PHONY: python_etl_tests

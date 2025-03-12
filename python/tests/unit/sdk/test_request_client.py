@@ -22,12 +22,16 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_session = Mock(name="Mock session", spec=Session)
         self.mock_session.request.return_value = self.mock_response
         self.mock_session_manager = Mock(spec=SessionManager, session=self.mock_session)
+        self.mock_response_handler = Mock()
+        self.mock_response_handler.handle_response.return_value = self.mock_response
         self.request_headers = {
             HEADER_CONTENT_TYPE: JSON_CONTENT_TYPE,
             HEADER_USER_AGENT: f"{USER_AGENT_BASE}/{sdk_version}",
         }
         self.default_request_client = RequestClient(
-            self.endpoint, self.mock_session_manager
+            self.endpoint,
+            self.mock_session_manager,
+            response_handler=self.mock_response_handler,
         )
 
     def test_init_default(self):
@@ -119,20 +123,9 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             )
         self._request_assert(method, req_url, timeout, extra_kw_arg)
         self.assertEqual(self.mock_response, res)
-
-        for response_code in [199, 300]:
-            with patch("aistore.sdk.request_client.handle_errors") as mock_handle_err:
-                self.mock_response.status_code = response_code
-                res = self.default_request_client.request(
-                    method,
-                    path,
-                    endpoint=endpoint_arg,
-                    headers=extra_headers,
-                    keyword=extra_kw_arg,
-                )
-                self._request_assert(method, req_url, timeout, extra_kw_arg)
-                self.assertEqual(self.mock_response, res)
-                mock_handle_err.assert_called_once()
+        self.mock_response_handler.handle_response.assert_called_with(
+            self.mock_response
+        )
 
     def _request_assert(self, method, url, timeout, expected_kw):
         if timeout:
@@ -189,6 +182,10 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_session.request.assert_has_calls(
             [expected_proxy_call, expected_target_call]
         )
+        self.mock_response_handler.handle_response.assert_called_with(
+            self.mock_response
+        )
+        self.mock_response_handler.handle_response.assert_called_once()
 
     def test_get_full_url(self):
         path = "/testpath/to_obj"

@@ -2,7 +2,8 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from urllib.parse import urljoin, urlencode
-from typing import Callable, TypeVar, Type, Any, Dict, Optional, Tuple, Union
+from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
+
 from requests import Response
 
 from aistore.sdk.const import (
@@ -20,10 +21,11 @@ from aistore.sdk.const import (
     QPARAM_WHAT,
     HTTP_METHOD_GET,
 )
+from aistore.sdk.response_handler import ResponseHandler, AISResponseHandler
 from aistore.sdk.session_manager import SessionManager
-from aistore.sdk.utils import parse_ais_error, handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
 from aistore.sdk.types import Smap
+from aistore.sdk.utils import decode_response
 
 T = TypeVar("T")
 
@@ -39,8 +41,7 @@ class RequestClient:
             for both connect/read timeouts (e.g., 5.0), a tuple for separate connect/read timeouts (e.g., (3.0, 10.0)),
             or None to disable timeout.
         token (str, optional): Authorization token.
-        error_handler (Callable[[str], None], optional): Error handler for managing response errors. Defaults to
-            parse_ais_error.
+        response_handler (ResponseHandler): Handler for processing HTTP responses. Defaults to AISResponseHandler.
     """
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -50,13 +51,13 @@ class RequestClient:
         session_manager: SessionManager,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
-        error_handler: Callable[[str], Exception] = parse_ais_error,
+        response_handler: ResponseHandler = AISResponseHandler(),
     ):
         self._base_url = urljoin(endpoint, "v1")
         self._session_manager = session_manager
         self._token = token
         self._timeout = timeout
-        self._error_handler = error_handler
+        self._response_handler = response_handler
         # smap is used to calculate the target node for a given object
         self._smap = None
 
@@ -141,7 +142,7 @@ class RequestClient:
             session_manager=self._session_manager,
             timeout=self._timeout,
             token=self._token,
-            error_handler=self._error_handler,
+            response_handler=self._response_handler,
         )
 
     def request_deserialize(
@@ -191,16 +192,11 @@ class RequestClient:
         headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
         if self.token:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
-
         if url.startswith(HTTPS) and "data" in kwargs:
             resp = self._request_with_manual_redirect(method, url, headers, **kwargs)
         else:
             resp = self._session_request(method, url, headers, **kwargs)
-
-        if resp.status_code < 200 or resp.status_code >= 300:
-            handle_errors(resp, self._error_handler)
-
-        return resp
+        return self._response_handler.handle_response(resp)
 
     def _request_with_manual_redirect(
         self, method: str, url: str, headers, **kwargs
@@ -234,7 +230,6 @@ class RequestClient:
 
         # Request to proxy, which should redirect
         resp = self.session_manager.session.request(method, url, **proxy_request_kwargs)
-        self.session_manager.session.close()
         if resp.status_code in (STATUS_REDIRECT_PERM, STATUS_REDIRECT_TMP):
             target_url = resp.headers.get(HEADER_LOCATION)
             # Redirected request to target
@@ -245,7 +240,6 @@ class RequestClient:
         request_kwargs = {"headers": headers, **kwargs}
         if self._timeout is not None:
             request_kwargs["timeout"] = self._timeout
-
         return self.session_manager.session.request(method, url, **request_kwargs)
 
     def get_full_url(self, path: str, params: Dict[str, Any]) -> str:
@@ -253,8 +247,8 @@ class RequestClient:
         Get the full URL to the path on the cluster with the given parameters.
 
         Args:
-            path: Path on the cluster.
-            params: Query parameters to include.
+            path (str): Path on the cluster.
+            params (Dict[str, Any]): Query parameters to include.
 
         Returns:
             URL including cluster base URL and parameters.

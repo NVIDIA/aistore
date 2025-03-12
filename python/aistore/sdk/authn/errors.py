@@ -1,17 +1,13 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
+from aistore.sdk.errors import APIRequestError
 
 
-class AuthNError(Exception):
+class AuthNError(APIRequestError):
     """
     Raised when an error occurs during a query to the AuthN cluster.
     """
-
-    def __init__(self, status_code: int, message: str):
-        super().__init__(f"STATUS:{status_code}, MESSAGE:{message}")
-        self.status_code = status_code
-        self.message = message
 
 
 # pylint: disable=unused-variable

@@ -256,6 +256,7 @@ test:short:python-unit:
         uv venv --python "$ver" .venv
         source .venv/bin/activate
         make python_sdk_unit_tests
+        make python_unit_tests_scenario_gen
         make python_botocore_unit_tests
         deactivate || true
         rm -rf .venv

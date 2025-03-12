@@ -3,15 +3,22 @@
 #
 
 
-class AISError(Exception):
+class APIRequestError(Exception):
+    """
+    Base class for errors from HTTP servers, e.g. AIS or AuthN
+    """
+
+    def __init__(self, status_code: int, message: str, req_url: str):
+        self.status_code = status_code
+        self.message = message
+        self.req_url = req_url  # Standardize attribute name across errors
+        super().__init__(f"STATUS:{status_code}, MESSAGE:{message}, REQ_URL:{req_url}")
+
+
+class AISError(APIRequestError):
     """
     Raised when an error is encountered from a query to the AIS cluster
     """
-
-    def __init__(self, status_code: int, message: str):
-        self.status_code = status_code
-        self.message = message
-        super().__init__(f"STATUS:{status_code}, MESSAGE:{message}")
 
 
 # pylint: disable=unused-variable
@@ -119,4 +126,15 @@ class InvalidURLException(Exception):
     def __init__(self, url):
         super().__init__(
             f"Invalid URL: '{url}'. Ensure it follows the format 'provider://bucket/object'."
+        )
+
+
+class NoTargetError(Exception):
+    """
+    Raised when attempting to select a target for an object, but none were found in cluster map
+    """
+
+    def __init__(self, total_nodes: int):
+        super().__init__(
+            f"No available targets in the cluster map. Total nodes: {total_nodes}"
         )

@@ -4,6 +4,8 @@
 
 from typing import Optional, Tuple, Union
 from urllib3 import Retry
+
+from aistore.sdk.authn.response_handler import AuthNResponseHandler
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.utils import get_logger
@@ -12,7 +14,6 @@ from aistore.sdk.authn.cluster_manager import ClusterManager
 from aistore.sdk.authn.role_manager import RoleManager
 from aistore.sdk.authn.token_manager import TokenManager
 from aistore.sdk.authn.user_manager import UserManager
-from aistore.sdk.authn.utils import parse_authn_error
 from aistore.sdk.const import (
     HTTP_METHOD_POST,
     URL_PATH_AUTHN_USERS,
@@ -58,7 +59,7 @@ class AuthNClient:
             session_manager=session_manager,
             timeout=timeout,
             token=token,
-            error_handler=parse_authn_error,
+            response_handler=AuthNResponseHandler(),
         )
         logger.info("AuthNClient initialized with endpoint: %s", endpoint)
 

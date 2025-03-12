@@ -1,7 +1,8 @@
 from unittest import TestCase
 from unittest.mock import patch, create_autospec
+
+from aistore.sdk.errors import NoTargetError
 from aistore.sdk.types import Smap, Snode
-from aistore.sdk.errors import AISError
 
 
 class TestSmap(TestCase):
@@ -64,12 +65,12 @@ class TestSmap(TestCase):
         mock_get_digest.return_value = 1234
         smap = self.smap_without_nodes()
 
-        with self.assertRaises(AISError) as context:
+        with self.assertRaises(NoTargetError) as context:
             smap.get_target_for_object("test_object")
 
         self.assertEqual(
             str(context.exception),
-            "STATUS:500, MESSAGE:No available targets in the map. Total nodes: 0",
+            "No available targets in the cluster map. Total nodes: 0",
             msg="Expected an error when no nodes are available.",
         )
 
@@ -94,11 +95,11 @@ class TestSmap(TestCase):
             proxy_si=self.mock_proxy,
         )
 
-        with self.assertRaises(AISError) as context:
+        with self.assertRaises(NoTargetError) as context:
             smap.get_target_for_object("test_object")
 
         self.assertEqual(
             str(context.exception),
-            "STATUS:500, MESSAGE:No available targets in the map. Total nodes: 2",
+            "No available targets in the cluster map. Total nodes: 2",
             msg="Expected an error when all nodes are in maintenance mode.",
         )

@@ -7,6 +7,8 @@ from typing import Any, Mapping, List, Optional, Dict
 import msgspec
 from pydantic.v1 import BaseModel, Field, validator
 from requests.structures import CaseInsensitiveDict
+
+from aistore.sdk.errors import NoTargetError
 from aistore.sdk.namespace import Namespace
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.obj.object_props import ObjectProps
@@ -20,7 +22,6 @@ from aistore.sdk.const import (
     AIS_MIRROR_COPIES,
 )
 from aistore.sdk.utils import get_digest, xoshiro256_hash
-from aistore.sdk.errors import AISError
 
 
 # pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring,too-many-lines
@@ -101,9 +102,7 @@ class Smap(BaseModel):
                 max_hash, selected_node = cs, tsi
 
         if selected_node is None:
-            raise AISError(
-                500, f"No available targets in the map. Total nodes: {len(self.tmap)}"
-            )
+            raise NoTargetError(len(self.tmap))
 
         return selected_node
 

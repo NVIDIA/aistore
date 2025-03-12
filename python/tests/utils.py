@@ -9,6 +9,8 @@ from pathlib import Path
 from unittest.mock import Mock
 
 from typing import Dict, List, Iterator
+
+import requests
 from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk import Client
@@ -239,3 +241,24 @@ def create_random_tarballs(
     num_input_shards = create_tarballs(min_shard_size, dest_dir, filename_list)
     filename_list = list(map(lambda filepath: filepath.stem, filename_list))
     return filename_list, extension_list, num_input_shards
+
+
+def create_api_error_response(req_url: str, status: str, msg: str) -> requests.Response:
+    """
+       Given test details, manually generate a requests.Response object
+
+    Args:
+        req_url (str): Original request url
+        status (str): Response HTTP status code
+        msg (str): Response text content
+
+    Returns: requests.Response containing the given details
+    """
+    req = requests.Request()
+    req.url = req_url
+    response = requests.Response()
+    response.status_code = status
+    # pylint: disable=protected-access
+    response._content = msg.encode("utf-8")
+    response.request = req
+    return response

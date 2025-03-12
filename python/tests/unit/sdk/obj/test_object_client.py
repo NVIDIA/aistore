@@ -15,7 +15,7 @@ class TestObjectClient(unittest.TestCase):
     def setUp(self) -> None:
         self.request_client = Mock(spec=RequestClient)
         self.path = "/test/path"
-        self.params = ["param1", "param2"]
+        self.params = {"param1": "val1", "param2": "val2"}
         self.headers = {"header1": "req1", "header2": "req2"}
         self.response_headers = {"attr1": "resp1", "attr2": "resp2"}
         self.object_client = ObjectClient(
@@ -107,7 +107,7 @@ class TestObjectClient(unittest.TestCase):
         Test that the get method retries with a new smap when ErrObjNotFound is raised and catched.
         """
         self.request_client.request.side_effect = ErrObjNotFound(
-            404, "Object not found"
+            404, "Object not found", "object_url"
         )
         # pylint: disable=protected-access
         self.object_client._uname = (
@@ -135,7 +135,7 @@ class TestObjectClient(unittest.TestCase):
         """
         object_client = ObjectClient(self.request_client, self.path, self.params)
         self.request_client.request.side_effect = ErrObjNotFound(
-            404, "Object not found"
+            404, "Object not found", "object_url"
         )
 
         with self.assertRaises(ErrObjNotFound):

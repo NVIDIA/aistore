@@ -140,7 +140,7 @@ class TestBucket(unittest.TestCase):
         self._assert_bucket_created(res)
 
     def test_create_already_exists(self):
-        already_exists_err = ErrBckAlreadyExists(400, "message")
+        already_exists_err = ErrBckAlreadyExists(400, "message", "bck_create_url")
         self.mock_client.request.side_effect = already_exists_err
         with self.assertRaises(ErrBckAlreadyExists):
             self.ais_bck.create()
@@ -185,7 +185,9 @@ class TestBucket(unittest.TestCase):
         )
 
     def test_delete_missing(self):
-        self.mock_client.request.side_effect = ErrBckNotFound(400, "not found")
+        self.mock_client.request.side_effect = ErrBckNotFound(
+            400, "not found", "bck_delete_url"
+        )
         with self.assertRaises(ErrBckNotFound):
             Bucket(client=self.mock_client, name="missing-bucket").delete()
         self.ais_bck.delete(missing_ok=True)

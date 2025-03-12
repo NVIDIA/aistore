@@ -10,6 +10,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- `ResponseHandler` and implementations for AIS and AuthN, to replace static utils.
 - `stage` field in `ETLInfo` to represent the ETL lifecycle stage.
 - Add `details` method to retrieve detailed job snapshot information across all targets.
 - Introduce and type the `AggregatedJobSnapshots` model.
@@ -18,6 +19,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- Cluster map with no targets will now result in a `NoTargetError` when using direct object requests.
+- `AISError` and `AuthNError` now both inherit from `APIRequestError`.
 - `cluster.get_performance()` now returns raw performance data as a `dict` keyed by target IDs, rather than typed aggregator objects.
 - `cluster.list_running_etls()` now excludes non-running ETL instances.
 - fix `JobStats` and `JobSnapshot` models.
