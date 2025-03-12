@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
@@ -49,6 +50,7 @@ type tcrate struct {
 		rl    *cos.AdaptRateLim
 		sleep time.Duration
 	}
+	onerr *cos.AdaptRateLim // the one we use to handle (409, 503)
 }
 
 func newrate(src, dst *meta.Bck, nat int) *tcrate {
@@ -57,18 +59,34 @@ func newrate(src, dst *meta.Bck, nat int) *tcrate {
 	if dst.Props != nil { // destination may not exist
 		rate.dst.rl, rate.dst.sleep = dst.NewBackendRateLim(nat)
 	}
-	if rate.src.rl == nil && rate.dst.rl == nil {
-		return nil
+
+	switch {
+	case rate.src.rl != nil && rate.dst.rl != nil:
+		nlog.Warningln("both source and destination buckets are rate limited:", src.Cname(""), dst.Cname(""))
+		if src.IsRemote() {
+			if dst.IsRemote() {
+				nlog.Warningln("\tchoosing destination")
+				rate.onerr = rate.dst.rl
+			} else {
+				nlog.Warningln("\tchoosing source")
+				rate.onerr = rate.src.rl
+			}
+		} else {
+			nlog.Warningln("\tchoosing destination")
+			rate.onerr = rate.dst.rl
+		}
+	case rate.src.rl != nil:
+		rate.onerr = rate.src.rl
+	case rate.dst.rl != nil:
+		rate.onerr = rate.dst.rl
+	default:
+		return nil // n/a
 	}
+
 	return &rate
 }
 
-// NOTE: destination rate-limiter takes precedence if both defined
-func (rate *tcrate) onerr(vlabs map[string]string) {
-	arl := rate.dst.rl
-	if arl == nil {
-		arl = rate.src.rl
-	}
-	debug.Assert(arl != nil)
-	onmanyreq(arl, vlabs)
+func (rate *tcrate) onmanyreq(vlabs map[string]string) {
+	debug.Assert(rate.onerr != nil)
+	onmanyreq(rate.onerr, vlabs)
 }

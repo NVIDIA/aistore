@@ -408,7 +408,7 @@ retry:
 		r.Abort(res.Err)
 	case cmn.IsErrTooManyRequests(res.Err):
 		if r.rate != nil {
-			r.rate.onerr(r.vlabs)
+			r.rate.onmanyreq(r.vlabs)
 			goto retry
 		}
 		fallthrough

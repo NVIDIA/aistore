@@ -303,7 +303,7 @@ func (b *Bck) NewBackendRateLim(nat int) (*cos.AdaptRateLim, time.Duration) {
 		return nil, 0
 	}
 	if b.IsCloud() && conf.NumRetries < 3 {
-		nlog.Warningf("%s: backend.num_retries set to %d is, which is dangerously low", b.Cname(""), conf.NumRetries)
+		nlog.Warningf("%s: rate_limit.backend.num_retries set to %d is, which is dangerously low", b.Cname(""), conf.NumRetries)
 	}
 	// slightly increase, to compensate for potential intra-cluster imbalance
 	maxTokens := cos.DivRound(conf.MaxTokens, nat)
