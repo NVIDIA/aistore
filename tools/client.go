@@ -214,11 +214,11 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	}
 }
 
-func EvictRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
+func EvictRemoteBucket(tb testing.TB, proxyURL string, bck cmn.Bck, keepMD bool) {
 	if backend := bck.Backend(); backend != nil {
 		bck.Copy(backend)
 	}
-	err := api.EvictRemoteBucket(BaseAPIParams(proxyURL), bck, false)
+	err := api.EvictRemoteBucket(BaseAPIParams(proxyURL), bck, keepMD)
 	tassert.CheckFatal(tb, err)
 }
 
@@ -229,7 +229,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 
 	toDelete, err := ListObjectNames(proxyURL, bck, prefix, 0, false /*cached*/)
 	tassert.CheckFatal(t, err)
-	defer EvictRemoteBucket(t, proxyURL, bck)
+	defer EvictRemoteBucket(t, proxyURL, bck, false /*keepMD*/)
 
 	if len(toDelete) == 0 {
 		return

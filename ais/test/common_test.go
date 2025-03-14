@@ -148,21 +148,17 @@ func (m *ioContext) init(cleanup bool) {
 		if m.deleteRemoteBckObjs {
 			m.del(-1 /*delete all*/, 0 /* lsmsg.Flags */)
 		} else {
-			tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck) // evict from AIStore
+			tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck, true /*keepMD*/)
 		}
 	}
-
 	if cleanup {
-		// cleanup m.bck upon exit from the test
-		m.t.Cleanup(m._cleanup)
-	}
-}
-
-func (m *ioContext) _cleanup() {
-	m.del()
-	if m.bck.IsRemote() {
-		// Ensure all local objects are removed.
-		tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck)
+		// cleanup upon exit from this (m.t) test
+		m.t.Cleanup(func() {
+			m.del()
+			if m.bck.IsRemote() {
+				tools.EvictRemoteBucket(m.t, m.proxyURL, m.bck, true /*keepMD*/)
+			}
+		})
 	}
 }
 
