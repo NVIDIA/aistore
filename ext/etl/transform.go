@@ -256,7 +256,7 @@ func start(msg *InitSpecMsg, etlName string, opts StartOpts, config *cmn.Config)
 	boot.createServiceSpec()
 
 	// first of all, start the pod watcher
-	pw = newPodWatcher(podName)
+	pw = newPodWatcher(podName, boot)
 	if err = pw.start(); err != nil {
 		goto cleanup
 	}
@@ -305,8 +305,8 @@ cleanup:
 }
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
-// It unregisters ETL smap listener.
-func Stop(id string, errCause error) error {
+// It unregisters the ETL SMAP listener and looks up the ETL first by name, then by xid.
+func Stop(id string, errCause error) (err error) {
 	errCtx := &cmn.ETLErrCtx{
 		TID:     core.T.SID(),
 		ETLName: id,
@@ -315,22 +315,24 @@ func Stop(id string, errCause error) error {
 	// Abort all running offline ETLs.
 	xreg.AbortKind(errCause, apc.ActETLBck)
 
-	c, err := GetCommunicator(id)
+	comm, err := GetCommunicator(id)
 	if err != nil {
 		return err
 	}
-	errCtx.PodName = c.PodName()
-	errCtx.SvcName = c.SvcName()
+	errCtx.PodName, errCtx.SvcName = comm.PodName(), comm.SvcName()
 
-	if err := cleanupEntities(errCtx, c.PodName(), c.SvcName()); err != nil {
+	if err := cleanupEntities(errCtx, comm.PodName(), comm.SvcName()); err != nil {
 		return err
 	}
 
-	if c := reg.del(id); c != nil {
-		core.T.Sowner().Listeners().Unreg(c)
+	// Remove the communicator entry from the registry
+	if !reg.del(id) && !reg.delByXid(id) {
+		return cos.NewErrNotFound(core.T, "ETL delete job "+id)
 	}
 
-	c.Stop()
+	// Unregister and stop
+	core.T.Sowner().Listeners().Unreg(comm)
+	comm.Stop()
 
 	return nil
 }
@@ -347,12 +349,15 @@ func StopAll() {
 	}
 }
 
-func GetCommunicator(etlName string) (Communicator, error) {
-	c, exists := reg.get(etlName)
-	if !exists {
-		return nil, cos.NewErrNotFound(core.T, "etl job "+etlName)
+// get Communicator from registry by either etl name or xid
+func GetCommunicator(id string) (Communicator, error) {
+	if c, exists := reg.get(id); exists {
+		return c, nil
 	}
-	return c, nil
+	if c, exists := reg.getByXid(id); exists {
+		return c, nil
+	}
+	return nil, cos.NewErrNotFound(core.T, "ETL job "+id)
 }
 
 func List() []Info { return reg.list() }

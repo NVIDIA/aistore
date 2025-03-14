@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // [METHOD] /v1/etl
@@ -54,7 +56,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := initETLFromMsg(r); err != nil {
+	if err := t.initETLFromMsg(r); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -118,7 +120,7 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) startETL(w http.ResponseWriter, r *http.Request) {
-	if err := initETLFromMsg(r); err != nil {
+	if err := t.initETLFromMsg(r); err != nil {
 		t.writeErr(w, r, err)
 	}
 }
@@ -290,7 +292,7 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func initETLFromMsg(r *http.Request) error {
+func (t *target) initETLFromMsg(r *http.Request) error {
 	b, err := cos.ReadAll(r.Body)
 	if err != nil {
 		return err
@@ -311,8 +313,23 @@ func initETLFromMsg(r *http.Request) error {
 	default:
 		debug.Assert(false, initMsg.String())
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infoln(initMsg.String())
+
+	if err != nil {
+		return err
 	}
+
+	// setup proxy notification on abort
+	comm, err := etl.GetCommunicator(initMsg.Name())
+	if err != nil {
+		return err
+	}
+
+	xetl := comm.Xact()
+	notif := &xact.NotifXact{
+		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		Xact: xetl,
+	}
+	xetl.AddNotif(notif)
+
 	return err
 }

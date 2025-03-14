@@ -26,7 +26,7 @@ func TestEtlMDDeepCopy(t *testing.T) {
 			CommTypeX: etl.Hpush,
 		},
 		Code: []byte("print('hello')"),
-	}, etl.Running, "")
+	}, "", etl.Running)
 	clone := etlMD.clone()
 	s1 := string(cos.MustMarshal(etlMD))
 	s2 := string(cos.MustMarshal(clone))
@@ -83,7 +83,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 						Spec: []byte(fmt.Sprintf("test spec - %d", i)),
 					}
 				}
-				etlMD.Add(msg, etl.Running, "")
+				etlMD.Add(msg, "", etl.Running)
 			}
 		}
 	})
@@ -109,7 +109,6 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 			})
 
 			It("should correctly load etlMD for "+node, func() {
-				eowner.init()
 				Expect(eowner.Get()).To(Equal(&etlMD.MD))
 			})
 
@@ -134,7 +133,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							}
 
 							// Add bucket and save.
-							clone.Add(msg, etl.Running, "")
+							clone.Add(msg, "", etl.Running)
 							err := jsp.Save(testpath, clone, opts, nil)
 							Expect(err).NotTo(HaveOccurred())
 

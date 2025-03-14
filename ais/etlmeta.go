@@ -107,8 +107,8 @@ func (e *etlMD) clone() *etlMD {
 	return dst
 }
 
-func (e *etlMD) add(spec etl.InitMsg, status etl.Stage, xid string) {
-	e.Add(spec, status, xid)
+func (e *etlMD) add(spec etl.InitMsg, xid string, stage etl.Stage) {
+	e.Add(spec, xid, stage)
 	e.Version++
 }
 

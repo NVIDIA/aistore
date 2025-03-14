@@ -143,11 +143,12 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 func (b *etlBootstrapper) dial() (int, error) {
 	action := "dial POD " + b.pod.Name + " at " + b.podAddr
 	ecode, err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
-		Call:    b.call,
-		SoftErr: 10,
-		HardErr: 2,
-		Sleep:   3 * time.Second,
-		Action:  action,
+		Call:      b.call,
+		SoftErr:   10,
+		HardErr:   2,
+		Sleep:     3 * time.Second,
+		Verbosity: cmn.RetryLogOff,
+		Action:    action,
 	})
 	if err != nil {
 		return ecode, fmt.Errorf("failed to wait for ETL Service/Pod %q to respond: %v", b.pod.Name, err)

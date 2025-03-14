@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -28,14 +29,15 @@ type (
 	// providing diagnostic information about the pod's internal state.
 	podWatcher struct {
 		podName         string
+		boot            *etlBootstrapper
 		recentPodStatus *podStatus
 		watcher         watch.Interface
 
 		// sync
-		podCtx           context.Context
-		podCtxCancelFunc context.CancelFunc
-		stopCh           *cos.StopCh
-		psMutex          sync.Mutex
+		podCtx       context.Context
+		podCtxCancel context.CancelFunc
+		stopCh       *cos.StopCh
+		psMutex      sync.Mutex
 	}
 
 	podStatus struct {
@@ -46,19 +48,19 @@ type (
 	}
 )
 
-func newPodWatcher(podName string) (pw *podWatcher) {
+func newPodWatcher(podName string, boot *etlBootstrapper) (pw *podWatcher) {
 	pw = &podWatcher{
 		podName:         podName,
+		boot:            boot,
 		stopCh:          cos.NewStopCh(),
 		recentPodStatus: &podStatus{},
 	}
-	pw.podCtx, pw.podCtxCancelFunc = context.WithCancel(context.Background())
+	pw.podCtx, pw.podCtxCancel = context.WithCancel(context.Background())
 	return pw
 }
 
 func (pw *podWatcher) processEvents() {
-	defer pw.podCtxCancelFunc()
-
+	defer pw.podCtxCancel()
 	for {
 		select {
 		case event := <-pw.watcher.ResultChan():
@@ -67,6 +69,14 @@ func (pw *podWatcher) processEvents() {
 				continue
 			}
 			if exitCode := pw._process(pod); exitCode != 0 {
+				if pw.boot != nil && pw.boot.xctn != nil { // pw.boot.xctn is not yet assigned in init error
+					abortErr := cmn.NewErrETL(pw.boot.errCtx, ctrTerminated)
+					if pw.boot.xctn.Abort(pw.wrapError(abortErr)) {
+						// After Finish() call succeed, proxy will be notified and broadcast to call etl.Stop()
+						// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
+						pw.boot.xctn.Finish()
+					}
+				}
 				return
 			}
 		case <-pw.stopCh.Listen():

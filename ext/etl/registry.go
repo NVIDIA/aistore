@@ -15,7 +15,7 @@ import (
 
 type (
 	registry struct {
-		m   map[string]Communicator
+		m   map[string]Communicator // primary index
 		mtx sync.RWMutex
 	}
 )
@@ -48,15 +48,37 @@ func (r *registry) get(name string) (c Communicator, exists bool) {
 	return
 }
 
-func (r *registry) del(name string) (c Communicator) {
-	var ok bool
+func (r *registry) getByXid(xid string) (c Communicator, exists bool) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	for _, c := range r.m {
+		if c.Xact().ID() == xid {
+			return c, true
+		}
+	}
+	return nil, false
+}
+
+func (r *registry) del(name string) (exists bool) {
 	debug.Assert(name != "")
 	r.mtx.Lock()
-	if c, ok = r.m[name]; ok {
+	if _, exists = r.m[name]; exists {
 		delete(r.m, name)
 	}
 	r.mtx.Unlock()
-	return c
+	return exists
+}
+
+func (r *registry) delByXid(xid string) (exists bool) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	for name, c := range r.m {
+		if c.Xact().ID() == xid {
+			delete(r.m, name)
+			return true
+		}
+	}
+	return false
 }
 
 func (r *registry) list() []Info {

@@ -3,6 +3,7 @@ kind: Pod
 metadata:
   name: <NAME>
 spec:
+  restartPolicy: Never
   containers:
     - name: server
       image: aistorage/runtime_python:<TAG>

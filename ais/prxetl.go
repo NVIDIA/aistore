@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // TODO: support start/stop/list using `xid`
@@ -235,7 +235,13 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 	}
 	p.owner.etl.modify(ctx)
 
-	// 2. broadcast the init request
+	// 2. IC
+	smap := p.owner.smap.get()
+	nl := xact.NewXactNL(xid, apc.ActETLInline, &smap.Smap, nil)
+	nl.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{nl: nl, smap: smap, query: r.URL.Query()})
+
+	// 3. broadcast the init request
 	{
 		args.req = cmn.HreqArgs{
 			Method: http.MethodPut,
@@ -265,11 +271,11 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		return err
 	}
 
-	// 3. update stage to "Running"
+	// 4. update stage to "Running"
 	ctx.stage = etl.Running
 	p.owner.etl.modify(ctx)
 
-	// 4. init calls succeeded - return running xaction
+	// 5. init calls succeeded - return running xaction
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 	w.Write(cos.UnsafeB(xid))
 	return nil
@@ -320,8 +326,7 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 }
 
 func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
-	debug.Assert(ctx.msg != nil)
-	clone.add(ctx.msg, ctx.stage, ctx.xid)
+	clone.add(ctx.msg, ctx.xid, ctx.stage)
 	return
 }
 
@@ -386,7 +391,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 		sort.Sort(infoList)
 
 		if etls.Len() != 0 && !reflect.DeepEqual(etls, infoList) {
-			p.writeErrMsg(w, r, fmt.Sprintf("Targets returned different ETLs: %v vs %v", etls, infoList), http.StatusInternalServerError)
+			p.writeErrStatusf(w, r, http.StatusInternalServerError, "Target %s returned different ETLs: %v vs %v", res.si.ID(), etls, infoList)
 			freeBcastRes(results)
 			return
 		}

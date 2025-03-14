@@ -7,6 +7,7 @@ package etl
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -57,21 +58,43 @@ var (
 ////////
 
 func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg, stage Stage, xid string) {
-	pre, ok := e.ETLs[msg.Name()]
+func (e *MD) Add(msg InitMsg, xid string, stage Stage) {
+	var etlName string
+	if msg != nil {
+		etlName = msg.Name()
+	} else {
+		// if msg is not provided, find the match by xid
+		for name, inst := range e.ETLs {
+			if inst.XactID == xid {
+				etlName = name
+				msg = inst.InitMsg
+				break
+			}
+		}
+	}
+	debug.Assertf(etlName != "", "No matching ETL found in MD, msg=%v, xid=%s, stage=%s, e.ETLs=%v\n", msg, xid, stage.String(), e.ETLs)
+	pre, ok := e.ETLs[etlName]
 	if !ok {
-		e.ETLs[msg.Name()] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
+		e.ETLs[etlName] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
 		return
+	}
+
+	// preserve previous values if new ones are not provided
+	debug.Assertf(msg == nil || reflect.DeepEqual(msg, pre.InitMsg), "msg should be empty or unchanged, %s vs %s", msg, pre.InitMsg)
+	if msg == nil {
+		msg = pre.InitMsg
 	}
 
 	debug.Assertf(xid == "" || xid == pre.XactID, "xid should be empty or unchanged, %s vs %s", xid, pre.XactID)
 	if xid == "" {
 		xid = pre.XactID
 	}
+
 	if stage == Unknown {
 		stage = pre.Stage
 	}
-	e.ETLs[msg.Name()] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
+
+	e.ETLs[etlName] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 

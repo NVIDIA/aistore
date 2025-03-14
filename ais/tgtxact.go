@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xact"
@@ -168,6 +169,14 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		}
 		flt := xreg.Flt{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
 		xreg.DoAbort(flt, err)
+
+		// TODO -- FIXME: add a new kind of xact to represent the running ETL instance itself
+		// stop relying on transformation xacts (such as `apc.ActETLInline` and `apc.ActETLBck`)
+		if xargs.Kind == apc.ActETLInline {
+			if err := etl.Stop(xargs.ID, nil); err != nil {
+				t.writeErrf(w, r, "%v: %s", err, xargs.String())
+			}
+		}
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}

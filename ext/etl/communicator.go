@@ -153,9 +153,12 @@ func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
 func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
 func (c *baseComm) Stop() {
-	c.boot.xctn.Finish()
+	// Note: xctn might have already been aborted and finished by pod watcher
+	if !c.boot.xctn.Finished() && !c.boot.xctn.IsAborted() {
+		c.boot.xctn.Finish()
+	}
 	if c.pw != nil {
-		c.pw.stop(false)
+		c.pw.stop(true)
 	}
 }
 

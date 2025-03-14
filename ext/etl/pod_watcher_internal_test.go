@@ -26,7 +26,7 @@ var _ = Describe("ETLPodWatcherTest", func() {
 
 	BeforeEach(func() {
 		// simulate the pw.start() procedure with a mocked watcher to avoid real K8s API get involved
-		pw = newPodWatcher("test-pod")
+		pw = newPodWatcher("test-pod", nil)
 		mockWatcher = newMockWatcher()
 		pw.watcher = mockWatcher
 		go pw.processEvents()
