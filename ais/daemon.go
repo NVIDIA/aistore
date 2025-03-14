@@ -321,7 +321,7 @@ func newProxy(co *configOwner) *proxy {
 }
 
 func newTarget(co *configOwner) *target {
-	t := &target{backend: make(backends, 8)}
+	t := &target{}
 	t.owner.bmd = newBMDOwnerTgt()
 	t.owner.etl = newEtlMDOwnerTgt()
 	t.owner.config = co

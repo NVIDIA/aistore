@@ -59,11 +59,13 @@ type (
 		disabled atomic.Bool // true: standing by
 		prevbmd  atomic.Bool // special
 	}
-	backends map[string]core.Backend
+	backends   map[string]core.Backend
+	rlbackends map[string]*rlbackend
 	// main
 	target struct {
 		htrun
-		backend      backends
+		bps          backends
+		rlbps        rlbackends
 		fshc         *health.FSHC
 		fsprg        fsprungroup
 		reb          *reb.Reb
@@ -99,13 +101,45 @@ func (*target) interruptedRestarted() (i, r bool) {
 }
 
 //
-// target
+// backends
 //
 
+func (t *target) Backend(bck *meta.Bck) core.Backend { // as core.Target
+	if bck.IsRemoteAIS() {
+		return t._rlbp(t.bps[apc.AIS], bck.Props, apc.AIS)
+	}
+	provider := bck.Provider
+	if bck.Props != nil {
+		provider = bck.RemoteBck().Provider
+	}
+	config := cmn.GCO.Get()
+	if _, ok := config.Backend.Providers[provider]; ok {
+		bp, k := t.bps[provider]
+		debug.Assert(k, provider)
+		if bp != nil {
+			return t._rlbp(bp, bck.Props, provider)
+		}
+		// nil when configured & not-built
+	}
+	dummy, _ := backend.NewDummyBackend(t, nil)
+	return dummy
+}
+
+func (t *target) _rlbp(bp core.Backend, bprops *cmn.Bprops, provider string) core.Backend {
+	if bprops == nil || !bprops.RateLimit.Backend.Enabled {
+		return bp
+	}
+	// with rate limit
+	return t.rlbps[provider]
+}
+
 func (t *target) initBackends(tstats *stats.Trunner) {
+	t.bps = make(backends, 8)
+	t.rlbps = make(rlbackends, 8)
+
 	config := cmn.GCO.Get()
 	aisbp := backend.NewAIS(t, tstats, true)
-	t.backend[apc.AIS] = aisbp // always present
+	t.bps[apc.AIS] = aisbp // always present
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
 		if err := aisbp.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
@@ -117,6 +151,11 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 
 	if err := t.initBuiltTagged(tstats, config, true /*starting up*/); err != nil {
 		cos.ExitLog(err)
+	}
+
+	// add rate-limited wrappers
+	for provider, bp := range t.bps {
+		t.rlbps[provider] = &rlbackend{Backend: bp, t: t}
 	}
 }
 
@@ -146,7 +185,7 @@ func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config, star
 		default:
 			return fmt.Errorf("unknown backend provider %q", provider)
 		}
-		t.backend[provider] = add
+		t.bps[provider] = add
 
 		configured := config.Backend.Get(provider) != nil
 		switch {
@@ -193,9 +232,13 @@ func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config, star
 }
 
 func (t *target) aisbp() *backend.AISbp {
-	bendp := t.backend[apc.AIS]
+	bendp := t.bps[apc.AIS]
 	return bendp.(*backend.AISbp)
 }
+
+//
+// target init and startup
+//
 
 func (t *target) init(config *cmn.Config) {
 	t.initSnode(config)
@@ -598,6 +641,10 @@ func (t *target) errURL(w http.ResponseWriter, r *http.Request) {
 		t.writeErrURL(w, r)
 	}
 }
+
+//
+// endpoints
+//
 
 // verb /v1/buckets
 func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
@@ -1298,7 +1345,8 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 		if code == http.StatusServiceUnavailable || strings.Contains(err.Error(), "try again") {
 			nlog.Errorf("failed to delete %s: %v(%d) - retrying...", lom, err, code)
 			time.Sleep(time.Second)
-			code, err = t.Backend(lom.Bck()).DeleteObj(context.Background(), lom)
+			bp := t.Backend(lom.Bck())
+			code, err = bp.DeleteObj(context.Background(), lom)
 		}
 	}
 

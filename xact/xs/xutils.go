@@ -31,7 +31,7 @@ func onmanyreq(arl *cos.AdaptRateLim, vlabs map[string]string) {
 	tstats := core.T.StatsUpdater()
 	sleep := arl.OnErr()
 	tstats.AddWith(
-		cos.NamedVal64{Name: stats.RateRetryLatencyTotal, Value: int64(sleep), VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetRateRetryLatencyTotal, Value: int64(sleep), VarLabs: vlabs},
 	)
 }
 

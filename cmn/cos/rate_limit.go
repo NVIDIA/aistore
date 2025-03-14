@@ -21,7 +21,7 @@ const (
 	DfltRateMinIval = time.Second
 	DfltRateMaxIval = time.Hour
 
-	dfltRateMaxWait = time.Minute
+	DfltRateMaxWait = time.Minute
 
 	DfltRateMaxRetries  = 10
 	DfltRateMaxBurstPct = 50
@@ -51,6 +51,10 @@ const (
 )
 
 type (
+	Rater interface {
+		LastUsed() int64
+	}
+
 	RateLim struct {
 		tokens    float64       // current tokens
 		maxTokens float64       // max tokens
@@ -178,7 +182,7 @@ func (arl *AdaptRateLim) Acquire() error {
 		if reason == acquireOK {
 			if i == 0 {
 				elapsed := time.Duration(arl.tsb.granted - prevGranted)
-				old := max(time.Duration(arl.tokenIval)<<2, dfltRateMaxWait)
+				old := max(time.Duration(arl.tokenIval)<<2, DfltRateMaxWait)
 				if elapsed > old {
 					arl.stats.perr, arl.stats.pn = 0, 0 // reset stale stats
 				}
@@ -275,7 +279,7 @@ func (arl *AdaptRateLim) SleepMore(sleep time.Duration) error {
 }
 
 func (arl *AdaptRateLim) RetryAcquire(sleep time.Duration) {
-	for ; sleep < dfltRateMaxWait; sleep += sleep >> 1 {
+	for ; sleep < DfltRateMaxWait; sleep += sleep >> 1 {
 		if arl.Acquire() == nil {
 			return
 		}
@@ -337,14 +341,4 @@ func (brl *BurstRateLim) TryAcquire() bool {
 
 func (brl *BurstRateLim) recompute(factor float64) {
 	brl.minBtwn = time.Duration(float64(brl.minBtwn) * factor)
-}
-
-// with exponential backoff
-func (brl *BurstRateLim) RetryAcquire(sleep time.Duration) {
-	for ; sleep < dfltRateMaxWait; sleep += sleep >> 1 {
-		if brl.TryAcquire() {
-			return
-		}
-		time.Sleep(sleep)
-	}
 }

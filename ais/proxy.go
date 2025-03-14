@@ -61,7 +61,6 @@ type (
 		rproxy     reverseProxy
 		notifs     notifs
 		lstca      lstca
-		ratelim    ratelim
 		reg        struct {
 			pool nodeRegPool
 			mu   sync.RWMutex
@@ -201,7 +200,6 @@ func (p *proxy) Run() error {
 	p.rproxy.init()
 
 	p.notifs.init(p)
-	p.ratelim.init()
 	p.ic.init(p)
 
 	//
@@ -749,7 +747,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelim.apply(bck, http.MethodGet, smap); err != nil {
+	if err := p.ratelimit(bck, http.MethodGet, smap); err != nil {
 		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
 		return
 	}
@@ -822,7 +820,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelim.apply(bck, http.MethodPut, smap); err != nil {
+	if err := p.ratelimit(bck, http.MethodPut, smap); err != nil {
 		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
 		return
 	}
@@ -893,7 +891,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 	// rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelim.apply(bck, http.MethodDelete, smap); err != nil {
+	if err := p.ratelimit(bck, http.MethodDelete, smap); err != nil {
 		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
 		return
 	}
@@ -3420,6 +3418,33 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
 	cmn.HreqFree(req)
+}
+
+//
+// rate limit on the front
+//
+
+func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) error {
+	if !bck.Props.RateLimit.Frontend.Enabled {
+		return nil
+	}
+	var (
+		brl   *cos.BurstRateLim // bursty
+		rl    = &p.ratelim
+		uhash = bck.HashUname(verb)
+		v, ok = rl.Load(uhash)
+	)
+	if ok {
+		brl = v.(*cos.BurstRateLim)
+	} else {
+		// ignore sleep time - only relevant for clients
+		brl, _ = bck.NewFrontendRateLim(smap.CountActivePs())
+		rl.Store(uhash, brl)
+	}
+	if !brl.TryAcquire() {
+		return errors.New(http.StatusText(http.StatusTooManyRequests))
+	}
+	return nil
 }
 
 //

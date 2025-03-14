@@ -269,12 +269,12 @@ func (poi *putOI) stats() {
 	)
 	if poi.rltime > 0 {
 		debug.Assert(bck.IsRemote())
-		backend := poi.t.Backend(bck)
-		poi.t.statsT.IncWith(backend.MetricName(stats.PutCount), vlabs)
+		bp := poi.t.Backend(bck)
+		poi.t.statsT.IncWith(bp.MetricName(stats.PutCount), vlabs)
 		poi.t.statsT.AddWith(
-			cos.NamedVal64{Name: backend.MetricName(stats.PutLatencyTotal), Value: poi.rltime, VarLabs: vlabs},
-			cos.NamedVal64{Name: backend.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
-			cos.NamedVal64{Name: backend.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
+			cos.NamedVal64{Name: bp.MetricName(stats.PutLatencyTotal), Value: poi.rltime, VarLabs: vlabs},
+			cos.NamedVal64{Name: bp.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
+			cos.NamedVal64{Name: bp.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
 		)
 	}
 }
@@ -432,13 +432,13 @@ func (poi *putOI) putRemote() (int, error) {
 		lom.ObjAttrs().DelStdCustom() // backend.PutObj() will set updated values
 	}
 	var (
-		ecode   int
-		backend = poi.t.Backend(lom.Bck())
+		ecode int
+		bp    = poi.t.Backend(lom.Bck())
 	)
-	ecode, err = backend.PutObj(context.Background(), lmfh, lom, poi.oreq)
+	ecode, err = bp.PutObj(context.Background(), lmfh, lom, poi.oreq)
 	if err == nil {
 		if !lom.Bck().IsRemoteAIS() {
-			lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
+			lom.SetCustomKey(cmn.SourceObjMD, bp.Provider())
 		}
 		poi.rltime = mono.SinceNano(startTime)
 		return 0, nil
@@ -667,9 +667,9 @@ do: // retry uplock or ec-recovery, the latter only once
 	// cold-GET: upgrade rlock => wlock and call t.Backend.GetObjReader
 	if cold {
 		var (
-			res     core.GetReaderResult
-			ckconf  = goi.lom.CksumConf()
-			backend = goi.t.Backend(goi.lom.Bck())
+			res    core.GetReaderResult
+			ckconf = goi.lom.CksumConf()
+			bp     = goi.t.Backend(goi.lom.Bck())
 		)
 		if cs.IsNil() {
 			cs = fs.Cap()
@@ -697,7 +697,7 @@ do: // retry uplock or ec-recovery, the latter only once
 
 		// get remote reader (compare w/ t.GetCold)
 		goi.rget = true
-		res = backend.GetObjReader(goi.ctx, goi.lom, 0, 0)
+		res = bp.GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
 			goi.unlocked = true

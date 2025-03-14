@@ -217,35 +217,34 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, 
 	debug.Assert(!qbck.IsAIS())
 	if qbck.IsCloud() { // must be configured
 		if config.Backend.Get(qbck.Provider) == nil {
-			err = &cmn.ErrMissingBackend{Provider: qbck.Provider}
-			return
+			return nil, 0, &cmn.ErrMissingBackend{Provider: qbck.Provider}
 		}
 	} else if qbck.IsRemoteAIS() && qbck.Ns.IsAnyRemote() {
 		if config.Backend.Get(apc.AIS) == nil {
 			nlog.Warningln(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
-			return
+			return nil, 0, nil
 			// otherwise go ahead and try to list below
 		}
 	}
-	backend := t.Backend((*meta.Bck)(qbck))
+
+	bp := t.Backend((*meta.Bck)(qbck))
 	if qbck.IsBucket() {
-		var (
-			bck = (*meta.Bck)(qbck)
-			ctx = context.Background()
-		)
-		_, ecode, err = backend.HeadBucket(ctx, bck)
+		bck := (*meta.Bck)(qbck)
+		ctx := context.Background()
+		_, ecode, err = bp.HeadBucket(ctx, bck)
 		if err == nil {
 			bcks = cmn.Bcks{bck.Clone()}
 		} else if ecode == http.StatusNotFound {
 			err = nil
 		}
 	} else {
-		bcks, ecode, err = backend.ListBuckets(*qbck)
+		bcks, ecode, err = bp.ListBuckets(*qbck)
+		if err == nil && len(bcks) > 1 {
+			sort.Sort(bcks)
+		}
 	}
-	if err == nil && len(bcks) > 1 {
-		sort.Sort(bcks)
-	}
-	return
+
+	return bcks, ecode, err
 }
 
 // returns `cmn.LsoRes` containing object names and (requested) props
@@ -511,7 +510,8 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	}
 	// + cloud
-	bucketProps, code, err = t.Backend(apireq.bck).HeadBucket(ctx, apireq.bck)
+	bp := t.Backend(apireq.bck)
+	bucketProps, code, err = bp.HeadBucket(ctx, apireq.bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {

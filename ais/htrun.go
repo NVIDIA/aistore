@@ -36,6 +36,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -65,6 +66,11 @@ type htext interface {
 	interruptedRestarted() (bool, bool)
 }
 
+type ratelim struct {
+	sync.Map
+	now int64
+}
+
 type htrun struct {
 	owner struct {
 		smap   *smapOwner
@@ -78,6 +84,7 @@ type htrun struct {
 	si        *meta.Snode
 	gmm       *memsys.MMSA // system pagesize-based memory manager and slab allocator
 	smm       *memsys.MMSA // small-size allocator (up to 4K)
+	ratelim   ratelim
 	startup   struct {
 		cluster atomic.Int64 // mono.NanoTime() since cluster startup, zero prior to that
 		node    atomic.Int64 // ditto - for this node
@@ -310,6 +317,8 @@ func (h *htrun) init(config *cmn.Config) {
 	h.gmm.RegWithHK()
 	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
+
+	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
 }
 
 // steps 1 thru 4
@@ -2383,4 +2392,22 @@ func (h *htrun) _status(smap *smapX) (daeStatus string) {
 		daeStatus = apc.NodeDecommission
 	}
 	return
+}
+
+//
+// common housekeeping for rate limiters
+//
+
+func (rl *ratelim) housekeep(now int64) time.Duration {
+	rl.now = now
+	rl.Range(rl.cleanup)
+	return hk.PruneRateLimiters
+}
+
+func (rl *ratelim) cleanup(k, v any) bool {
+	r := v.(cos.Rater)
+	if time.Duration(rl.now-r.LastUsed()) >= hk.PruneRateLimiters>>1 {
+		rl.Delete(k)
+	}
+	return true // keep going
 }

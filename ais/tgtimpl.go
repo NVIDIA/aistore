@@ -12,7 +12,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -36,27 +35,6 @@ func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 
 func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
 	return t.reqHealth(si, timeout, query, t.owner.smap.get(), false /*retry*/)
-}
-
-func (t *target) Backend(bck *meta.Bck) core.Backend {
-	if bck.IsRemoteAIS() {
-		return t.backend[apc.AIS]
-	}
-	provider := bck.Provider
-	if bck.Props != nil {
-		provider = bck.RemoteBck().Provider
-	}
-	config := cmn.GCO.Get()
-	if _, ok := config.Backend.Providers[provider]; ok {
-		bp, k := t.backend[provider]
-		debug.Assert(k, provider)
-		if bp != nil {
-			return bp
-		}
-		// nil when configured & not-built
-	}
-	c, _ := backend.NewDummyBackend(t, nil)
-	return c
 }
 
 func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
@@ -163,9 +141,9 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 	// cold GET
 	var (
 		started = mono.NanoTime()
-		backend = t.Backend(lom.Bck())
+		bp      = t.Backend(lom.Bck())
 	)
-	if ecode, err = backend.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
+	if ecode, err = bp.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
 		lom.Unlock(true)
 		if cmn.IsErrFailedTo(err) {
 			nlog.Warningln(err)
@@ -178,7 +156,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 	// unlock and stats
 	lom.Unlock(true)
 	lat := mono.SinceNano(started)
-	t.rgetstats(backend, lom.Bck().Cname(""), xkind, lom.Lsize(), lat)
+	t.rgetstats(bp, lom.Bck().Cname(""), xkind, lom.Lsize(), lat)
 
 	return 0, nil
 }
@@ -204,17 +182,17 @@ func (t *target) GetColdBlob(params *core.BlobParams, oa *cmn.ObjAttrs) (xctn co
 
 func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
-		backend = t.Backend(lom.Bck())
-		now     = mono.NanoTime()
-		vlabs   = map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+		bp    = t.Backend(lom.Bck())
+		now   = mono.NanoTime()
+		vlabs = map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
 	)
-	oa, ecode, err = backend.HeadObj(context.Background(), lom, origReq)
+	oa, ecode, err = bp.HeadObj(context.Background(), lom, origReq)
 	if err != nil {
 		t.statsT.IncWith(stats.ErrHeadCount, vlabs)
 	} else {
-		t.statsT.IncWith(backend.MetricName(stats.HeadCount), vlabs)
+		t.statsT.IncWith(bp.MetricName(stats.HeadCount), vlabs)
 		t.statsT.AddWith(
-			cos.NamedVal64{Name: backend.MetricName(stats.HeadLatencyTotal), Value: mono.SinceNano(now), VarLabs: vlabs},
+			cos.NamedVal64{Name: bp.MetricName(stats.HeadLatencyTotal), Value: mono.SinceNano(now), VarLabs: vlabs},
 		)
 	}
 	return oa, ecode, err

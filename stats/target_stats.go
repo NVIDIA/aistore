@@ -50,8 +50,6 @@ const (
 
 	ErrDloadCount = errPrefix + "dl.n"
 
-	ErrRateRetryCount = errPrefix + "rate.retry.n" // http 409 and 503 from remote backends
-
 	// IO errors (must have ioErrPrefix)
 	IOErrGetCount    = ioErrPrefix + "get.n"
 	IOErrPutCount    = ioErrPrefix + "put.n"
@@ -65,7 +63,11 @@ const (
 	PutLatencyTotal    = "put.ns.total"     // "pure" remote PUT latency
 	PutE2ELatencyTotal = "e2e.put.ns.total" // end to end (e2e) PUT latency
 
-	RateRetryLatencyTotal = errPrefix + "rate.retry.ns.total" // ditto, 409 and 503
+	// rate limit (409, 503)
+	ErrRateRetryCount           = errPrefix + "rate.retry.n" // http 409 and 503 from remote backends
+	GetRateRetryLatencyTotal    = "get.rate.retry.ns.total"
+	PutRateRetryLatencyTotal    = "put.rate.retry.ns.total"
+	DeleteRateRetryLatencyTotal = "del.rate.retry.ns.total"
 
 	AppendLatency     = "append.ns"
 	GetRedirLatency   = "get.redir.ns"
@@ -445,9 +447,21 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 			VarLabs: BckVarlabs,
 		},
 	)
-	r.reg(snode, RateRetryLatencyTotal, KindTotal,
+	r.reg(snode, GetRateRetryLatencyTotal, KindTotal,
 		&Extra{
-			Help:    "total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
+			Help:    "GET: total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
+			VarLabs: BckXactVarlabs,
+		},
+	)
+	r.reg(snode, PutRateRetryLatencyTotal, KindTotal,
+		&Extra{
+			Help:    "PUT: total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
+			VarLabs: BckXactVarlabs,
+		},
+	)
+	r.reg(snode, DeleteRateRetryLatencyTotal, KindTotal,
+		&Extra{
+			Help:    "DELETE: total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
 			VarLabs: BckXactVarlabs,
 		},
 	)

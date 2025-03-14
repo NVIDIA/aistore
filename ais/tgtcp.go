@@ -210,7 +210,7 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.backend[provider] = add
+		t.bps[provider] = add
 	case apc.ActStartMaintenance:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
@@ -290,7 +290,7 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 		t.writeErrf(w, r, "backend %q is not configured, cannot enable", provider)
 		return
 	}
-	bp, k := t.backend[provider]
+	bp, k := t.bps[provider]
 	debug.Assert(k, provider)
 	if bp != nil {
 		// TODO: return http.StatusNoContent
@@ -314,7 +314,7 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 			t.writeErr(w, r, err)
 			return
 		}
-		t.backend[provider] = bp
+		t.bps[provider] = bp
 	}
 	nlog.Infoln(phase+":", "enable", provider)
 }
@@ -334,7 +334,7 @@ func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, items []
 		t.writeErrf(w, r, "backend %q is not configured, nothing to do", provider)
 		return
 	}
-	bp, k := t.backend[provider]
+	bp, k := t.bps[provider]
 	debug.Assert(k, provider)
 	if bp == nil {
 		// TODO: return http.StatusNoContent
@@ -342,7 +342,7 @@ func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	if phase == apc.ActCommit {
-		t.backend[provider] = nil
+		t.bps[provider] = nil
 	}
 	nlog.Infoln(phase+":", "disable", provider)
 }
@@ -1205,7 +1205,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
 			err = t.attachDetachRemAis(newConfig, msg)
 		} else {
-			t.backend[apc.AIS] = backend.NewAIS(t, t.statsT, false)
+			t.bps[apc.AIS] = backend.NewAIS(t, t.statsT, false)
 		}
 	}
 	return
