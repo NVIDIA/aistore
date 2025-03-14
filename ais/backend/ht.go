@@ -208,10 +208,10 @@ func (htbp *htbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	return res
 }
 
-func (*htbp) PutObj(io.ReadCloser, *core.LOM, *http.Request) (int, error) {
+func (*htbp) PutObj(context.Context, io.ReadCloser, *core.LOM, *http.Request) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("PUT", " objects => HTTP backend")
 }
 
-func (*htbp) DeleteObj(*core.LOM) (int, error) {
+func (*htbp) DeleteObj(context.Context, *core.LOM) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("DELETE", " objects from HTTP backend")
 }

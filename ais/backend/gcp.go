@@ -56,9 +56,6 @@ var (
 	//     The default scope is ScopeFullControl."
 	gcpClient *storage.Client
 
-	// context placeholder
-	gctx context.Context
-
 	// interface guard
 	_ core.Backend = (*gsbp)(nil)
 )
@@ -92,8 +89,7 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (_ core.Bac
 	// register metrics
 	bp.base.init(t.Snode(), tstats, startingUp)
 
-	gctx = context.Background()
-	gcpClient, err = bp.createClient(gctx)
+	gcpClient, err = bp.createClient(context.Background())
 
 	return bp, err
 }
@@ -173,7 +169,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	}
 
 	var (
-		it    = gcpClient.Bucket(cloudBck.Name).Objects(gctx, query)
+		it    = gcpClient.Bucket(cloudBck.Name).Objects(context.Background(), query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)
@@ -238,7 +234,7 @@ func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err er
 			errors.New("empty project ID: cannot list GCP buckets with no authentication")
 	}
 	bcks = make(cmn.Bcks, 0, 16)
-	it := gcpClient.Buckets(gctx, gsbp.projectID)
+	it := gcpClient.Buckets(context.Background(), gsbp.projectID)
 	for {
 		var battrs *storage.BucketAttrs
 
@@ -397,14 +393,14 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 // PUT OBJECT
 //
 
-func (gsbp *gsbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
+func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		written  int64
 		cloudBck = lom.Bck().RemoteBck()
 		md       = make(cos.StrKVs, 2)
 		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
-		wc       = gcpObj.NewWriter(gctx)
+		wc       = gcpObj.NewWriter(ctx)
 	)
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Checksum().Get()
 
@@ -420,9 +416,9 @@ func (gsbp *gsbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode
 		ecode, err = gcpErrorToAISError(err, cloudBck)
 		return
 	}
-	attrs, err = gcpObj.Attrs(gctx)
+	attrs, err = gcpObj.Attrs(ctx)
 	if err != nil {
-		ecode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
+		ecode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
 		return
 	}
 	_ = setCustomGs(lom, attrs)
@@ -436,13 +432,13 @@ func (gsbp *gsbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode
 // DELETE OBJECT
 //
 
-func (*gsbp) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (*gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
-	if err = o.Delete(gctx); err != nil {
-		ecode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
+	if err = o.Delete(ctx); err != nil {
+		ecode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {

@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -42,8 +42,8 @@ type (
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
 		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error)
-		PutObj(r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
-		DeleteObj(lom *LOM) (ecode int, err error)
+		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
+		DeleteObj(ctx context.Context, lom *LOM) (ecode int, err error)
 
 		// head
 		HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error)

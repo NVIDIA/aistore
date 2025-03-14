@@ -623,7 +623,7 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 }
 
 // TODO: retry upon 'unreachable' or timeout
-func (m *AISbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
+func (m *AISbp) PutObj(_ context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
 	var (
 		oah       api.ObjAttrs
 		remAis    *remAis
@@ -658,7 +658,7 @@ func (m *AISbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode i
 	return
 }
 
-func (m *AISbp) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (m *AISbp) DeleteObj(_ context.Context, lom *core.LOM) (ecode int, err error) {
 	var (
 		remAis    *remAis
 		remoteBck = lom.Bck().Clone()

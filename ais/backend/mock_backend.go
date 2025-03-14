@@ -1,6 +1,6 @@
 // Package backend contains core/backend interface implementations for supported backend providers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -64,10 +64,10 @@ func (*mockbp) GetObjReader(_ context.Context, lom *core.LOM, _, _ int64) (res c
 	return
 }
 
-func (*mockbp) PutObj(_ io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+func (*mockbp) PutObj(_ context.Context, _ io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockbp) DeleteObj(lom *core.LOM) (int, error) {
+func (*mockbp) DeleteObj(_ context.Context, lom *core.LOM) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }

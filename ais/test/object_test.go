@@ -993,7 +993,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 					}
 
 					r := io.NopCloser(bytes.NewReader([]byte("modified")))
-					_, err := tMock.Backend(lom.Bck()).PutObj(r, lom, nil)
+					_, err := tMock.Backend(lom.Bck()).PutObj(t.Context(), r, lom, nil)
 					tassert.CheckFatal(t, err)
 				},
 			},
@@ -1016,7 +1016,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 							"(try running this test with -tags=%q)\n\n", "debug,aws,gcp,azure")
 					}
 
-					_, err = backend.PutObj(r, lom, nil)
+					_, err = backend.PutObj(t.Context(), r, lom, nil)
 					tassert.CheckFatal(t, err)
 				},
 			},

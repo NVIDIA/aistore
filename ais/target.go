@@ -1298,7 +1298,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 		if code == http.StatusServiceUnavailable || strings.Contains(err.Error(), "try again") {
 			nlog.Errorf("failed to delete %s: %v(%d) - retrying...", lom, err, code)
 			time.Sleep(time.Second)
-			code, err = t.Backend(lom.Bck()).DeleteObj(lom)
+			code, err = t.Backend(lom.Bck()).DeleteObj(context.Background(), lom)
 		}
 	}
 
@@ -1351,7 +1351,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 
 	// do
 	if delFromBackend {
-		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(lom)
+		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(context.Background(), lom)
 	}
 	if delFromAIS {
 		size := lom.Lsize()

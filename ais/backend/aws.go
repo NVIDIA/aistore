@@ -633,7 +633,7 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
+func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode int, err error) {
 	const tag = "[put_object]"
 	var (
 		svc                   *s3.Client
@@ -676,7 +676,7 @@ func (*s3bp) PutObj(r io.ReadCloser, lom *core.LOM, oreq *http.Request) (ecode i
 
 	uploader = s3manager.NewUploader(svc)
 	uploader.PartSize = cos.NonZero(int64(lom.Bprops().Extra.AWS.MultiPartSize), aiss3.DefaultPartSize)
-	uploadOutput, err = uploader.Upload(context.Background(), &s3.PutObjectInput{
+	uploadOutput, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:   aws.String(cloudBck.Name),
 		Key:      aws.String(lom.ObjName),
 		Body:     r,
@@ -723,7 +723,7 @@ exit:
 // - `s3.DeleteObjectOutput` does not help to differentiate
 // - to fight it, specify some sort of matching criteria as per:
 // - https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html#ExampleVersionObjectDelete
-func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
+func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error) {
 	const tag = "[delete_object]"
 	var (
 		svc      *s3.Client
@@ -734,7 +734,7 @@ func (*s3bp) DeleteObj(lom *core.LOM) (ecode int, err error) {
 	if err != nil {
 		return
 	}
-	_, err = svc.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+	_, err = svc.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),
 		Key:    aws.String(lom.ObjName),
 	})

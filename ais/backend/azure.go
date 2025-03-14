@@ -483,7 +483,7 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 // PUT OBJECT
 //
 
-func (azbp *azbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+func (azbp *azbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	defer cos.Close(r)
 
 	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
@@ -497,7 +497,7 @@ func (azbp *azbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, 
 		opts.Concurrency = int(min((size+cos.MiB-1)/cos.MiB, 8))
 	}
 
-	resp, err := client.UploadStream(context.Background(), cloudBck.Name, lom.ObjName, r, &opts)
+	resp, err := client.UploadStream(ctx, cloudBck.Name, lom.ObjName, r, &opts)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
@@ -520,14 +520,14 @@ func (azbp *azbp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, 
 // DELETE OBJECT
 //
 
-func (azbp *azbp) DeleteObj(lom *core.LOM) (int, error) {
+func (azbp *azbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
 	if err != nil {
 		return azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 	}
 	cloudBck := lom.Bck().RemoteBck()
 
-	_, err = client.DeleteBlob(context.Background(), cloudBck.Name, lom.ObjName, nil)
+	_, err = client.DeleteBlob(ctx, cloudBck.Name, lom.ObjName, nil)
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}

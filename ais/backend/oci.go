@@ -487,7 +487,7 @@ func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
 	return bcks, 0, nil
 }
 
-func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	var (
 		avoidingMPU bool // true if object size is not known or known to be <= bp.mpuThreshold
 		cloudBck    = lom.Bck().RemoteBck()
@@ -514,7 +514,7 @@ func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, e
 		PutObjectBody: r,
 	}
 
-	resp, err := bp.client.PutObject(context.Background(), req)
+	resp, err := bp.client.PutObject(ctx, req)
 	// Note: in case PutObject() failed to close r...
 	_ = r.Close()
 	if err != nil {
@@ -534,7 +534,7 @@ func (bp *ocibp) PutObj(r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, e
 	return 0, nil
 }
 
-func (bp *ocibp) DeleteObj(lom *core.LOM) (int, error) {
+func (bp *ocibp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 	cloudBck := lom.Bck().RemoteBck()
 	req := ocios.DeleteObjectRequest{
 		NamespaceName: &bp.namespace,
@@ -542,7 +542,7 @@ func (bp *ocibp) DeleteObj(lom *core.LOM) (int, error) {
 		ObjectName:    &lom.ObjName,
 	}
 
-	resp, err := bp.client.DeleteObject(context.Background(), req)
+	resp, err := bp.client.DeleteObject(ctx, req)
 	if err != nil {
 		return ociStatus(resp.RawResponse), err
 	}

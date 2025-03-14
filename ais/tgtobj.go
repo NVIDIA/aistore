@@ -435,7 +435,7 @@ func (poi *putOI) putRemote() (int, error) {
 		ecode   int
 		backend = poi.t.Backend(lom.Bck())
 	)
-	ecode, err = backend.PutObj(lmfh, lom, poi.oreq)
+	ecode, err = backend.PutObj(context.Background(), lmfh, lom, poi.oreq)
 	if err == nil {
 		if !lom.Bck().IsRemoteAIS() {
 			lom.SetCustomKey(cmn.SourceObjMD, backend.Provider())
