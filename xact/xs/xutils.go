@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -24,14 +23,6 @@ func rgetstats(bp core.Backend, vlabs map[string]string, size, started int64) {
 	tstats.AddWith(
 		cos.NamedVal64{Name: bp.MetricName(stats.GetLatencyTotal), Value: delta, VarLabs: vlabs},
 		cos.NamedVal64{Name: bp.MetricName(stats.GetSize), Value: size, VarLabs: vlabs},
-	)
-}
-
-func onmanyreq(arl *cos.AdaptRateLim, vlabs map[string]string) {
-	tstats := core.T.StatsUpdater()
-	sleep := arl.OnErr()
-	tstats.AddWith(
-		cos.NamedVal64{Name: stats.GetRateRetryLatencyTotal, Value: int64(sleep), VarLabs: vlabs},
 	)
 }
 
@@ -86,7 +77,12 @@ func newrate(src, dst *meta.Bck, nat int) *tcrate {
 	return &rate
 }
 
+// TODO -- FIXME: remove
 func (rate *tcrate) onmanyreq(vlabs map[string]string) {
-	debug.Assert(rate.onerr != nil)
-	onmanyreq(rate.onerr, vlabs)
+	arl := rate.onerr
+	tstats := core.T.StatsUpdater()
+	sleep := arl.OnErr()
+	tstats.AddWith(
+		cos.NamedVal64{Name: stats.GetRateRetryLatencyTotal, Value: int64(sleep), VarLabs: vlabs},
+	)
 }

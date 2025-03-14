@@ -15,11 +15,10 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // NOTE: backend.GetObjReader is handled elsewhere - by xactions
-
-// TODO -- FIXME: nil context (below); callers to provide context
 
 type (
 	rlbackend struct {
@@ -29,50 +28,68 @@ type (
 )
 
 func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, origReq *http.Request) (ecode int, err error) {
+	ecode, err = bp.Backend.GetObj(ctx, lom, owt, origReq)
+	if err == nil {
+		return ecode, nil
+	}
+
 	var tot time.Duration
 	for tot < cos.DfltRateMaxWait {
-		ecode, err = bp.Backend.GetObj(ctx, lom, owt, origReq)
-		if err == nil {
-			return ecode, nil
-		}
-		sleep := bp.retry(ctx, err, lom.Bck(), http.MethodGet, stats.GetRateRetryLatencyTotal)
+		sleep := bp.retry(err, lom.Bck(), http.MethodGet)
 		if sleep == 0 {
-			return ecode, err
+			break
 		}
 		tot += sleep
+		ecode, err = bp.Backend.GetObj(ctx, lom, owt, origReq)
+		if err == nil {
+			break
+		}
 	}
+	bp.stats(ctx, lom.Bck(), stats.GetRateRetryLatencyTotal, tot)
 	return ecode, err
 }
 
 func (bp *rlbackend) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, origReq *http.Request) (ecode int, err error) {
+	ecode, err = bp.Backend.PutObj(ctx, r, lom, origReq)
+	if err == nil {
+		return ecode, nil
+	}
+
 	var tot time.Duration
 	for tot < cos.DfltRateMaxWait {
-		ecode, err = bp.Backend.PutObj(ctx, r, lom, origReq)
-		if err == nil {
-			return ecode, nil
-		}
-		sleep := bp.retry(ctx, err, lom.Bck(), http.MethodPut, stats.PutRateRetryLatencyTotal)
+		sleep := bp.retry(err, lom.Bck(), http.MethodPut)
 		if sleep == 0 {
-			return ecode, err
+			break
 		}
 		tot += sleep
+		ecode, err = bp.Backend.PutObj(ctx, r, lom, origReq)
+		if err == nil {
+			break
+		}
 	}
+	bp.stats(ctx, lom.Bck(), stats.PutRateRetryLatencyTotal, tot)
 	return ecode, err
 }
 
 func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error) {
+	ecode, err = bp.Backend.DeleteObj(ctx, lom)
+	if err == nil {
+		return ecode, nil
+	}
+
 	var tot time.Duration
 	for tot < cos.DfltRateMaxWait {
-		ecode, err = bp.Backend.DeleteObj(ctx, lom)
-		if err == nil {
-			return ecode, nil
-		}
-		sleep := bp.retry(ctx, err, lom.Bck(), http.MethodDelete, stats.DeleteRateRetryLatencyTotal)
+		sleep := bp.retry(err, lom.Bck(), http.MethodDelete)
 		if sleep == 0 {
-			return ecode, err
+			break
 		}
 		tot += sleep
+		ecode, err = bp.Backend.DeleteObj(ctx, lom)
+		if err == nil {
+			break
+		}
 	}
+	bp.stats(ctx, lom.Bck(), stats.DeleteRateRetryLatencyTotal, tot)
 	return ecode, err
 }
 
@@ -80,9 +97,9 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, e
 // apply (compare with ais/prate_limit)
 //
 
-func (bp *rlbackend) retry(ctx context.Context, err error, bck *meta.Bck, verb, metric string) time.Duration {
+func (bp *rlbackend) retry(err error, bck *meta.Bck, verb string) time.Duration {
 	if !cmn.IsErrTooManyRequests(err) || !bck.Props.RateLimit.Backend.Enabled {
-		return 0
+		return 0 // not retrying
 	}
 
 	var (
@@ -99,12 +116,18 @@ func (bp *rlbackend) retry(ctx context.Context, err error, bck *meta.Bck, verb, 
 	}
 
 	// onerr
-	sleep := arl.OnErr()
+	return arl.OnErr()
+}
 
-	_ = ctx // TODO -- FIXME: in progress
-	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: ""}
+func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, metric string, total time.Duration) {
+	if total == 0 {
+		return
+	}
+	vlabs := xact.GetCtxVlabs(ctx) // fast path
+	if vlabs == nil {
+		vlabs = map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: ""}
+	}
 	bp.t.statsT.AddWith(
-		cos.NamedVal64{Name: metric, Value: int64(sleep), VarLabs: vlabs},
+		cos.NamedVal64{Name: metric, Value: int64(total), VarLabs: vlabs},
 	)
-	return sleep
 }

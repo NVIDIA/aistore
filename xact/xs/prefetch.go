@@ -50,8 +50,8 @@ type (
 		mu      sync.Mutex
 	}
 	prefetch struct {
-		bp     core.Backend
 		ctx    context.Context
+		bp     core.Backend
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
 		vlabs  map[string]string
@@ -118,7 +118,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 		stats.VarlabBucket:   bck.Cname(""),
 		stats.VarlabXactKind: r.Kind(),
 	}
-	r.ctx = context.Background()
+	r.ctx = xact.NewCtxVlabs(r.vlabs)
 
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
@@ -181,7 +181,6 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 	if r.rate.arl != nil {
 		r.rate.arl.RetryAcquire(r.rate.sleep)
 	}
-retry:
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && !r.pebl.busy() {
 		err = r.blobdl(lom, oa)
 	} else {
@@ -202,12 +201,6 @@ retry:
 		}
 	case cos.IsErrOOS(err):
 		r.Abort(err)
-	case cmn.IsErrTooManyRequests(err):
-		if r.rate.arl != nil {
-			onmanyreq(r.rate.arl, r.vlabs)
-			goto retry
-		}
-		fallthrough
 	default:
 		r.AddErr(err, 5, cos.SmoduleXs)
 	}
@@ -234,7 +227,8 @@ func (r *prefetch) _whinge(lom *core.LOM, size int64) {
 }
 
 // OwtGetPrefetchLock: minimal locking, optimistic concurrency
-// (light-weight alternative to t.GetCold impl.)
+// - light-weight alternative to t.GetCold impl.
+// - rate limited via ais/rlbackend, if defined
 func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 	started := mono.NanoTime()
 	if ecode, err = r.bp.GetObj(r.ctx, lom, cmn.OwtGetPrefetchLock, nil /*origReq*/); err != nil {
