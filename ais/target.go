@@ -106,7 +106,8 @@ func (*target) interruptedRestarted() (i, r bool) {
 
 func (t *target) Backend(bck *meta.Bck) core.Backend { // as core.Target
 	if bck.IsRemoteAIS() {
-		return t._rlbp(t.bps[apc.AIS], bck.Props, apc.AIS)
+		aisbp := t.bps[apc.AIS]
+		return t._rlbp(aisbp, bck.Props, apc.AIS)
 	}
 	provider := bck.Provider
 	if bck.Props != nil {
@@ -133,12 +134,12 @@ func (t *target) _rlbp(bp core.Backend, bprops *cmn.Bprops, provider string) cor
 	return t.rlbps[provider]
 }
 
-func (t *target) initBackends(tstats *stats.Trunner) {
+func (t *target) initBackends() {
 	t.bps = make(backends, 8)
 	t.rlbps = make(rlbackends, 8)
 
 	config := cmn.GCO.Get()
-	aisbp := backend.NewAIS(t, tstats, true)
+	aisbp := backend.NewAIS(t, t.statsT, true)
 	t.bps[apc.AIS] = aisbp // always present
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
@@ -149,7 +150,7 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 		}
 	}
 
-	if err := t.initBuiltTagged(tstats, config, true /*starting up*/); err != nil {
+	if err := t.initBuiltTagged(config, true /*starting up*/); err != nil {
 		cos.ExitLog(err)
 	}
 
@@ -161,31 +162,35 @@ func (t *target) initBackends(tstats *stats.Trunner) {
 
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
-func (t *target) initBuiltTagged(tstats *stats.Trunner, config *cmn.Config, startingUp bool) error {
-	var enabled, disabled, notlinked []string
-
+func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
+	var (
+		enabled   []string
+		disabled  []string
+		notlinked []string
+		tstats    = t.statsT
+	)
 	for provider := range apc.Providers {
 		var (
-			add core.Backend
+			bp  core.Backend
 			err error
 		)
 		switch provider {
 		case apc.AWS:
-			add, err = backend.NewAWS(t, tstats, startingUp)
+			bp, err = backend.NewAWS(t, tstats, startingUp)
 		case apc.GCP:
-			add, err = backend.NewGCP(t, tstats, startingUp)
+			bp, err = backend.NewGCP(t, tstats, startingUp)
 		case apc.Azure:
-			add, err = backend.NewAzure(t, tstats, startingUp)
+			bp, err = backend.NewAzure(t, tstats, startingUp)
 		case apc.OCI:
-			add, err = backend.NewOCI(t, tstats, startingUp)
+			bp, err = backend.NewOCI(t, tstats, startingUp)
 		case apc.HT:
-			add, err = backend.NewHT(t, config, tstats, startingUp)
+			bp, err = backend.NewHT(t, config, tstats, startingUp)
 		case apc.AIS:
 			continue
 		default:
 			return fmt.Errorf("unknown backend provider %q", provider)
 		}
-		t.bps[provider] = add
+		t.bps[provider] = bp
 
 		configured := config.Backend.Get(provider) != nil
 		switch {
@@ -429,7 +434,7 @@ func (t *target) Run() error {
 
 	tstats.RegMetrics(t.si)
 
-	t.initBackends(tstats) // (+ reg backend metrics)
+	t.initBackends() // (+ reg backend metrics)
 
 	// end target metrics -----------------------
 

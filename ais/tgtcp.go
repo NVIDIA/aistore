@@ -29,7 +29,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -183,34 +182,38 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
 	case apc.ActReloadBackendCreds:
-		var (
-			tstats   = t.statsT.(*stats.Trunner)
-			provider = msg.Name
-		)
-		if provider == "" { // all
-			if err := t.initBuiltTagged(t.statsT.(*stats.Trunner), cmn.GCO.Get(), false); err != nil {
+		provider := msg.Name
+
+		// all
+		if provider == "" {
+			if err := t.initBuiltTagged(cmn.GCO.Get(), false); err != nil {
 				t.writeErr(w, r, err)
+			}
+			// rate-limited wrappers, respectively
+			for provider, bp := range t.bps {
+				t.rlbps[provider] = &rlbackend{Backend: bp, t: t}
 			}
 			return
 		}
-
 		// one
-		var add core.Backend
+		var bp core.Backend
 		switch provider {
 		case apc.AWS:
-			add, err = backend.NewAWS(t, tstats, false /*starting up*/)
+			bp, err = backend.NewAWS(t, t.statsT, false /*starting up*/)
 		case apc.GCP:
-			add, err = backend.NewGCP(t, tstats, false)
+			bp, err = backend.NewGCP(t, t.statsT, false)
 		case apc.Azure:
-			add, err = backend.NewAzure(t, tstats, false)
+			bp, err = backend.NewAzure(t, t.statsT, false)
 		case apc.OCI:
-			add, err = backend.NewOCI(t, tstats, false)
+			bp, err = backend.NewOCI(t, t.statsT, false)
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.bps[provider] = add
+		debug.Assert(bp != nil)
+		t.bps[provider] = bp
+		t.rlbps[provider] = &rlbackend{Backend: bp, t: t}
 	case apc.ActStartMaintenance:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
@@ -246,7 +249,7 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	switch apiItems[0] {
+	switch act := apiItems[0]; act {
 	case apc.Proxy:
 		// PUT /v1/daemon/proxy/newprimaryproxyid
 		t.daeSetPrimary(w, r, apiItems)
@@ -263,28 +266,39 @@ func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []
 		t.handleMpathReq(w, r)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		t.setDaemonConfigQuery(w, r)
-	case apc.ActEnableBackend:
+	case apc.ActEnableBackend, apc.ActDisableBackend:
 		t.regstate.mu.Lock()
-		t.enableBackend(w, r, apiItems)
-		t.regstate.mu.Unlock()
-	case apc.ActDisableBackend:
-		t.regstate.mu.Lock()
-		t.disableBackend(w, r, apiItems)
-		t.regstate.mu.Unlock()
+		defer t.regstate.mu.Unlock()
+		if len(apiItems) < 3 { // act, provider, phase
+			t.writeErrURL(w, r)
+			return
+		}
+		var (
+			provider = apiItems[1]
+			phase    = apiItems[2]
+		)
+		if !apc.IsCloudProvider(provider) {
+			t.writeErrf(w, r, "expecting cloud storage provider (have %q)", provider)
+			return
+		}
+		if phase != apc.ActBegin && phase != apc.ActCommit {
+			t.writeErrf(w, r, "expecting 'begin' or 'commit' phase (have %q)", phase)
+			return
+		}
+		if act == apc.ActEnableBackend {
+			t.enableBackend(w, r, provider, phase)
+		} else {
+			t.disableBackend(w, r, provider, phase)
+		}
 	case apc.LoadX509:
 		t.daeLoadX509(w, r)
 	}
 }
 
-func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, provider, phase string) {
 	var (
-		provider = items[1]
-		phase    = items[2]
-		config   = cmn.GCO.Get()
+		config = cmn.GCO.Get()
 	)
-	debug.Assert(apc.IsCloudProvider(provider), provider)
-	debug.Assert(phase == apc.ActBegin || phase == apc.ActCommit, phase)
-
 	_, ok := config.Backend.Providers[provider]
 	if !ok {
 		t.writeErrf(w, r, "backend %q is not configured, cannot enable", provider)
@@ -292,12 +306,13 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 	}
 	bp, k := t.bps[provider]
 	debug.Assert(k, provider)
-	if bp != nil {
-		// TODO: return http.StatusNoContent
+
+	switch {
+	case bp != nil:
 		t.writeErrf(w, r, "backend %q is already enabled, nothing to do", provider)
-		return
-	}
-	if phase == apc.ActCommit {
+	case phase == apc.ActBegin:
+		nlog.Infof("ready to enable backend %q", provider)
+	default:
 		var err error
 		switch provider {
 		case apc.AWS:
@@ -314,37 +329,37 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, items []s
 			t.writeErr(w, r, err)
 			return
 		}
+
+		debug.Assert(bp != nil)
 		t.bps[provider] = bp
+		t.rlbps[provider] = &rlbackend{Backend: bp, t: t}
+
+		nlog.Infof("enabled backend %q", provider)
 	}
-	nlog.Infoln(phase+":", "enable", provider)
 }
 
-func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, provider, phase string) {
 	var (
-		provider = items[1]
-		phase    = items[2]
-		config   = cmn.GCO.Get()
+		config = cmn.GCO.Get()
 	)
-	debug.Assert(apc.IsCloudProvider(provider), provider)
-	debug.Assert(phase == apc.ActBegin || phase == apc.ActCommit, phase)
-
 	_, ok := config.Backend.Providers[provider]
 	if !ok {
-		// TODO: return http.StatusNoContent
 		t.writeErrf(w, r, "backend %q is not configured, nothing to do", provider)
 		return
 	}
 	bp, k := t.bps[provider]
 	debug.Assert(k, provider)
-	if bp == nil {
-		// TODO: return http.StatusNoContent
+
+	switch {
+	case bp == nil:
 		t.writeErrf(w, r, "backend %q is already disabled, nothing to do", provider)
-		return
-	}
-	if phase == apc.ActCommit {
+	case phase == apc.ActBegin:
+		nlog.Infof("ready to disable backend %q", provider)
+	default:
+		// NOTE: not locking bp := t.Backend()
 		t.bps[provider] = nil
+		nlog.Infof("disabled backend %q", provider)
 	}
-	nlog.Infoln(phase+":", "disable", provider)
 }
 
 func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems []string) {
@@ -1205,7 +1220,9 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
 			err = t.attachDetachRemAis(newConfig, msg)
 		} else {
-			t.bps[apc.AIS] = backend.NewAIS(t, t.statsT, false)
+			aisbp := backend.NewAIS(t, t.statsT, false)
+			t.bps[apc.AIS] = aisbp
+			t.rlbps[apc.AIS] = &rlbackend{Backend: aisbp, t: t}
 		}
 	}
 	return

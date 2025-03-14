@@ -103,7 +103,7 @@ func (bp *rlbackend) retry(ctx context.Context, err error, bck *meta.Bck, verb, 
 
 	_ = ctx // TODO -- FIXME: in progress
 	vlabs := map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: ""}
-	bp.t.StatsUpdater().AddWith(
+	bp.t.statsT.AddWith(
 		cos.NamedVal64{Name: metric, Value: int64(sleep), VarLabs: vlabs},
 	)
 	return sleep
