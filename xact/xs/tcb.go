@@ -44,7 +44,7 @@ type (
 		bp    core.Backend // backend(source bucket)
 		p     *tcbFactory
 		dm    *bundle.DataMover
-		rate  *tcrate
+		rate  tcrate
 		vlabs map[string]string
 		prune prune
 		nam   string
@@ -192,7 +192,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 		r.str = r.Base.String() + "<=" + args.BckFrom.Cname(msg.Prefix)
 	}
 
-	r.rate = newrate(args.BckFrom, args.BckTo, nat)
+	r.rate.init(args.BckFrom, args.BckTo, nat)
 
 	if msg.Sync {
 		debug.Assert(msg.Prepend == "", msg.Prepend) // validated (cli, P)
@@ -295,16 +295,14 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
 	}
 
-	if r.rate != nil {
-		if r.rate.src.rl != nil {
-			r.rate.src.rl.RetryAcquire(r.rate.src.sleep) // with exponential backoff
-		}
-		if r.rate.dst.rl != nil {
-			r.rate.dst.rl.RetryAcquire(r.rate.dst.sleep) // ditto
-		}
+	// apply frontend rate-limit, if any
+	if r.rate.src != nil {
+		r.rate.src.RetryAcquire(time.Second)
+	}
+	if r.rate.dst != nil {
+		r.rate.dst.RetryAcquire(time.Second)
 	}
 
-retry:
 	a := AllocCOI()
 	{
 		a.DP = args.DP
@@ -343,12 +341,6 @@ retry:
 		// do nothing
 	case cos.IsErrOOS(res.Err):
 		r.Abort(res.Err)
-	case cmn.IsErrTooManyRequests(res.Err):
-		if r.rate != nil {
-			r.rate.onmanyreq(r.vlabs)
-			goto retry
-		}
-		fallthrough
 	default:
 		r.AddErr(res.Err, 5, cos.SmoduleXs)
 	}

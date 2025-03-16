@@ -342,3 +342,13 @@ func (brl *BurstRateLim) TryAcquire() bool {
 func (brl *BurstRateLim) recompute(factor float64) {
 	brl.minBtwn = time.Duration(float64(brl.minBtwn) * factor)
 }
+
+// with exponential backoff
+func (brl *BurstRateLim) RetryAcquire(sleep time.Duration) {
+	for ; sleep < DfltRateMaxWait; sleep += sleep >> 1 {
+		if brl.TryAcquire() {
+			return
+		}
+		time.Sleep(sleep)
+	}
+}

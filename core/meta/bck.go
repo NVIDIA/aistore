@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -278,10 +277,10 @@ func (b *Bck) MaxPageSize() int64 {
 // rate limits: frontend, backend with respect to `nat` (number active targets)
 //
 
-func (b *Bck) NewFrontendRateLim(na int) (*cos.BurstRateLim, time.Duration) {
+func (b *Bck) NewFrontendRateLim(na int) *cos.BurstRateLim {
 	conf := b.Props.RateLimit.Frontend
 	if !conf.Enabled {
-		return nil, 0
+		return nil
 	}
 	maxTokens := cos.DivRound(conf.MaxTokens, na)
 	brl, err := cos.NewBurstRateLim(maxTokens, conf.Size, conf.Interval.D())
@@ -289,18 +288,13 @@ func (b *Bck) NewFrontendRateLim(na int) (*cos.BurstRateLim, time.Duration) {
 		nlog.ErrorDepth(1, err)
 		debug.AssertNoErr(err)
 	}
-	return brl, divRound(conf.Interval.D(), maxTokens)
+	return brl
 }
 
-func divRound(ival time.Duration, maxTokens int) time.Duration {
-	a, b := int64(ival), int64(maxTokens)
-	return time.Duration((a + b/2) / b)
-}
-
-func (b *Bck) NewBackendRateLim(nat int) (*cos.AdaptRateLim, time.Duration) {
+func (b *Bck) NewBackendRateLim(nat int) *cos.AdaptRateLim {
 	conf := b.Props.RateLimit.Backend
 	if !conf.Enabled {
-		return nil, 0
+		return nil
 	}
 	if b.IsCloud() && conf.NumRetries < 3 {
 		nlog.Warningf("%s: rate_limit.backend.num_retries set to %d is, which is dangerously low", b.Cname(""), conf.NumRetries)
@@ -314,5 +308,5 @@ func (b *Bck) NewBackendRateLim(nat int) (*cos.AdaptRateLim, time.Duration) {
 		nlog.Errorln(err)
 		debug.AssertNoErr(err)
 	}
-	return arl, divRound(conf.Interval.D(), maxTokens)
+	return arl
 }

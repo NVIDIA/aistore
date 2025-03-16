@@ -3437,8 +3437,7 @@ func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) error {
 	if ok {
 		brl = v.(*cos.BurstRateLim)
 	} else {
-		// ignore sleep time - only relevant for clients
-		brl, _ = bck.NewFrontendRateLim(smap.CountActivePs())
+		brl = bck.NewFrontendRateLim(smap.CountActivePs())
 		rl.Store(uhash, brl)
 	}
 	if !brl.TryAcquire() {

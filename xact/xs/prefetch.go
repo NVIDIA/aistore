@@ -55,11 +55,8 @@ type (
 		config *cmn.Config
 		msg    *apc.PrefetchMsg
 		vlabs  map[string]string
-		rate   struct {
-			arl   *cos.AdaptRateLim
-			sleep time.Duration
-		}
-		pebl pebl
+		brl    *cos.BurstRateLim
+		pebl   pebl
 		lrit
 		xact.Base
 		latestVer bool
@@ -108,10 +105,9 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	r.InitBase(xargs.UUID, kind, msg.Str(r.lrp == lrpPrefix), bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
-	// TODO: support RateLimitConf.Verbs, here and elsewhere
 	smap := core.T.Sowner().Get()
 	nat := smap.CountActiveTs()
-	r.rate.arl, r.rate.sleep = bck.NewBackendRateLim(nat)
+	r.brl = bck.NewFrontendRateLim(nat) // TODO: support RateLimitConf.Verbs - here and elsewhere; `nat` vs num-workers
 
 	r.bp = core.T.Backend(bck)
 	r.vlabs = map[string]string{
@@ -178,8 +174,9 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
 		goto eret
 	}
 
-	if r.rate.arl != nil {
-		r.rate.arl.RetryAcquire(r.rate.sleep)
+	// apply frontend rate-limit, if any
+	if r.brl != nil {
+		r.brl.RetryAcquire(time.Second)
 	}
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && !r.pebl.busy() {
 		err = r.blobdl(lom, oa)

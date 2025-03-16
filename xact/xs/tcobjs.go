@@ -40,7 +40,7 @@ type (
 	XactTCObjs struct {
 		bp      core.Backend // backend(source bucket)
 		args    *xreg.TCObjsArgs
-		rate    *tcrate
+		rate    tcrate
 		workCh  chan *cmn.TCOMsg
 		vlabs   map[string]string
 		pending struct {
@@ -98,8 +98,7 @@ func (p *tcoFactory) Start() error {
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
 	smap := core.T.Sowner().Get()
-
-	r.rate = newrate(p.args.BckFrom, p.args.BckTo, smap.CountActiveTs())
+	r.rate.init(p.args.BckFrom, p.args.BckTo, smap.CountActiveTs())
 
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
@@ -351,16 +350,14 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 		started   int64
 	)
 
-	if r.rate != nil {
-		if r.rate.src.rl != nil {
-			r.rate.src.rl.RetryAcquire(r.rate.src.sleep) //  with exponential backoff
-		}
-		if r.rate.dst.rl != nil {
-			r.rate.dst.rl.RetryAcquire(r.rate.dst.sleep) //  ditto
-		}
+	// apply frontend rate-limit, if any
+	if r.rate.src != nil {
+		r.rate.src.RetryAcquire(time.Second)
+	}
+	if r.rate.dst != nil {
+		r.rate.dst.RetryAcquire(time.Second)
 	}
 
-retry:
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
@@ -406,12 +403,6 @@ retry:
 		}
 	case cos.IsErrOOS(res.Err):
 		r.Abort(res.Err)
-	case cmn.IsErrTooManyRequests(res.Err):
-		if r.rate != nil {
-			r.rate.onmanyreq(r.vlabs)
-			goto retry
-		}
-		fallthrough
 	default:
 		r.AddErr(res.Err, 5, cos.SmoduleXs)
 	}
