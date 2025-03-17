@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"time"
+
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
@@ -40,5 +42,14 @@ func (rate *tcrate) init(src, dst *meta.Bck, nat int) {
 	rate.src = src.NewFrontendRateLim(nat)
 	if dst.Props != nil { // destination may not exist
 		rate.dst = dst.NewFrontendRateLim(nat)
+	}
+}
+
+func (rate *tcrate) acquire() {
+	if rate.src != nil {
+		rate.src.RetryAcquire(time.Second)
+	}
+	if rate.dst != nil {
+		rate.dst.RetryAcquire(time.Second)
 	}
 }

@@ -45,6 +45,7 @@ var clusterFeatDesc = [...]string{
 	"intra-cluster control plane: do not set IPv4 ToS field (to low-latency)",
 	"when checking whether objects are identical trust only cryptographically secure checksums",
 	"when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)",
+	"include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction",
 
 	// "none" ====================
 }

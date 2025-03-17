@@ -45,6 +45,8 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `Do-not-Delete-When-Rebalancing` | when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources |
 | `Do-not-Set-Control-Plane-ToS` | intra-cluster control plane: do not set IPv4 ToS field (to low-latency) |
 | `Trust-Crypto-Safe-Checksums` | when checking whether objects are identical trust only cryptographically secure checksums |
+| `S3-ListObjectVersions` | when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only) |
+| `Enable-Detailed-Prom-Metrics` | include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction |
 
 ## Global features
 
@@ -55,9 +57,9 @@ Enforce-IntraCluster-Access            Do-not-Allow-Passing-FQN-to-ETL        S3
 Skip-Loading-VersionChecksum-MD        Ignore-LimitedCoexistence-Conflicts    Do-not-Delete-When-Rebalancing
 Do-not-Auto-Detect-FileShare           S3-Presigned-Request                   Do-not-Set-Control-Plane-ToS
 S3-API-via-Root                        Do-not-Optimize-Listing-Virtual-Dirs   Trust-Crypto-Safe-Checksums
-Fsync-PUT                              Disable-Cold-GET                       none
-LZ4-Block-1MB                          Streaming-Cold-GET
-LZ4-Frame-Checksum                     S3-Reverse-Proxy
+Fsync-PUT                              Disable-Cold-GET                       S3-ListObjectVersions
+LZ4-Block-1MB                          Streaming-Cold-GET                     Enable-Detailed-Prom-Metrics
+LZ4-Frame-Checksum                     S3-Reverse-Proxy                       none
 ```
 
 For example:
@@ -89,6 +91,8 @@ S3-Use-Path-Style                    use older path-style addressing (as opposed
 Do-not-Delete-When-Rebalancing       when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
 Do-not-Set-Control-Plane-ToS         intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 Trust-Crypto-Safe-Checksums          when checking whether objects are identical trust only cryptographically secure checksums
+S3-ListObjectVersions                when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
+Enable-Detailed-Prom-Metrics         include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction
 
 Cluster config updated
 ```
@@ -126,6 +130,8 @@ S3-Use-Path-Style                    use older path-style addressing (as opposed
 Do-not-Delete-When-Rebalancing       when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
 Do-not-Set-Control-Plane-ToS         intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 Trust-Crypto-Safe-Checksums          when checking whether objects are identical trust only cryptographically secure checksums
+S3-ListObjectVersions                when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
+Enable-Detailed-Prom-Metrics         include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction
 ```
 
 The same in JSON:

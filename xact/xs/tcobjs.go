@@ -351,12 +351,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	)
 
 	// apply frontend rate-limit, if any
-	if r.rate.src != nil {
-		r.rate.src.RetryAcquire(time.Second)
-	}
-	if r.rate.dst != nil {
-		r.rate.dst.RetryAcquire(time.Second)
-	}
+	r.rate.acquire()
 
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats

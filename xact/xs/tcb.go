@@ -296,12 +296,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 	}
 
 	// apply frontend rate-limit, if any
-	if r.rate.src != nil {
-		r.rate.src.RetryAcquire(time.Second)
-	}
-	if r.rate.dst != nil {
-		r.rate.dst.RetryAcquire(time.Second)
-	}
+	r.rate.acquire()
 
 	a := AllocCOI()
 	{
