@@ -96,7 +96,7 @@ func (task *singleTask) download(lom *core.LOM) {
 
 	g.store.incFinished(task.jobID())
 
-	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 	lsize := task.currentSize.Load()
 	core.T.StatsUpdater().AddWith(
 		cos.NamedVal64{Name: stats.DloadSize, Value: lsize, VarLabs: vlabs},

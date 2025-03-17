@@ -832,7 +832,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// do
 	if ecode, err := goi.getObject(); err != nil {
-		vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
 		if goi.isIOErr {
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
 			t.statsT.IncWith(stats.IOErrGetCount, vlabs)
@@ -950,7 +950,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
-		vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+		vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 		t.statsT.IncWith(stats.ErrAppendCount, vlabs)
 	default:
 		poi := allocPOI()
@@ -1042,7 +1042,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			core.FreeLOM(lom)
 			lom = nil
 		} else {
-			vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+			vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 			t.statsT.IncWith(stats.ErrRenameCount, vlabs)
 		}
 	case apc.ActBlobDl:
@@ -1356,7 +1356,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	}
 
 	// stats
-	vlabs := map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 	switch {
 	case err == nil:
 		t.statsT.IncWith(stats.DeleteCount, vlabs)

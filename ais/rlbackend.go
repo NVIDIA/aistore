@@ -148,7 +148,7 @@ func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, metric string, to
 	}
 	vlabs := xact.GetCtxVlabs(ctx) // fast path
 	if vlabs == nil {
-		vlabs = map[string]string{stats.VarlabBucket: bck.Cname(""), stats.VarlabXactKind: ""}
+		vlabs = map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
 	}
 	bp.t.statsT.AddWith(
 		cos.NamedVal64{Name: metric, Value: int64(total), VarLabs: vlabs},

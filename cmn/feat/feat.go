@@ -42,6 +42,7 @@ const (
 	DontSetControlPlaneToS    // intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
 	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
+	EnableDetailedPromMetrics // include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction
 )
 
 var Cluster = [...]string{
@@ -64,6 +65,7 @@ var Cluster = [...]string{
 	"Do-not-Set-Control-Plane-ToS",
 	"Trust-Crypto-Safe-Checksums",
 	"S3-ListObjectVersions",
+	"Enable-Detailed-Prom-Metrics",
 
 	// "none" ====================
 }

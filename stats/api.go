@@ -45,15 +45,9 @@ const (
 
 // variable labels
 const (
-	VarlabBucket    = "bucket"
-	VarlabXactKind  = "xkind"
-	VarlabMountpath = "mountpath"
-)
-
-var (
-	BckVarlabs     = []string{VarlabBucket}
-	BckXactVarlabs = []string{VarlabBucket, VarlabXactKind}
-	MpathVarlabs   = []string{VarlabMountpath}
+	VlabBucket    = "bucket"
+	VlabXkind     = "xkind"
+	VlabMountpath = "mountpath"
 )
 
 type (
@@ -120,7 +114,7 @@ type (
 		Labels  cos.StrKVs // static or (same) constant
 		StrName string
 		Help    string
-		VarLabs []string // variable labels: {VarlabBucket, ...}
+		VarLabs []string // variable labels: {VlabBucket, ...}
 	}
 )
 

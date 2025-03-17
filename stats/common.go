@@ -163,6 +163,16 @@ type (
 	}
 )
 
+var (
+	BckVlabs      = []string{VlabBucket}
+	EmptyBckVlabs = map[string]string{VlabBucket: ""}
+
+	BckXlabs      = []string{VlabBucket, VlabXkind}
+	EmptyBckXlabs = map[string]string{VlabBucket: "", VlabXkind: ""}
+
+	mpathVlabs = []string{VlabMountpath}
+)
+
 var ignoreIdle = [...]string{"kalive", Uptime, "disk."}
 
 ////////////
@@ -181,43 +191,43 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, GetCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed GET(object) requests",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, PutCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed PUT(object) requests",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, HeadCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed HEAD(object) requests", // NOTE: currently, we only count remote ("cold") HEAD
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, AppendCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed APPEND(object) requests",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, DeleteCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed DELETE(object) requests",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, RenameCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed rename(object) requests",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ListCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed list-objects requests",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 
@@ -225,43 +235,43 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, ErrGetCount, KindCounter,
 		&Extra{
 			Help:    "total number of GET(object) errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrPutCount, KindCounter,
 		&Extra{
 			Help:    "total number of PUT(object) errors",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, ErrHeadCount, KindCounter,
 		&Extra{
 			Help:    "total number of HEAD(object) errors", // ditto (HeadCount above)
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrAppendCount, KindCounter,
 		&Extra{
 			Help:    "total number of APPEND(object) errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrDeleteCount, KindCounter,
 		&Extra{
 			Help:    "total number of DELETE(object) errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrRenameCount, KindCounter,
 		&Extra{
 			Help:    "total number of rename(object) errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrListCount, KindCounter,
 		&Extra{
 			Help:    "total number of list-objects errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrKaliveCount, KindCounter,
@@ -279,19 +289,19 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, GetLatency, KindLatency,
 		&Extra{
 			Help:    "GET: average time (milliseconds) over the last periodic.stats_time interval",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, GetLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "GET: total cumulative time (nanoseconds)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ListLatency, KindLatency,
 		&Extra{
 			Help:    "list-objects: average time (milliseconds) over the last periodic.stats_time interval",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, KeepAliveLatency, KindLatency,
@@ -338,7 +348,7 @@ func (r *runner) IncWith(name string, vlabs map[string]string) {
 
 // (ditto)
 func (r *runner) IncBck(name string, bck *cmn.Bck) {
-	r.IncWith(name, map[string]string{VarlabBucket: bck.Cname("")})
+	r.IncWith(name, map[string]string{VlabBucket: bck.Cname("")})
 }
 
 func (r *runner) SetFlag(name string, set cos.NodeStateFlags) {

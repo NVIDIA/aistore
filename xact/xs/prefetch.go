@@ -111,8 +111,8 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 
 	r.bp = core.T.Backend(bck)
 	r.vlabs = map[string]string{
-		stats.VarlabBucket:   bck.Cname(""),
-		stats.VarlabXactKind: r.Kind(),
+		stats.VlabBucket: bck.Cname(""),
+		stats.VlabXkind:  r.Kind(),
 	}
 	r.ctx = xact.NewCtxVlabs(r.vlabs)
 

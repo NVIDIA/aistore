@@ -53,7 +53,7 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 	nlog.ErrorDepth(1, warn)
 
 	// counting I/O errors per mountpath
-	vlabs := map[string]string{stats.VarlabMountpath: mi.String()}
+	vlabs := map[string]string{stats.VlabMountpath: mi.String()}
 	t.statsT.AddWith(cos.NamedVal64{
 		Name:    stats.ErrFSHCCount,
 		Value:   1,

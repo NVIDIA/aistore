@@ -163,8 +163,8 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 
 func (t *target) rgetstats(backend core.Backend, cname, xkind string, size, lat int64) {
 	vlabs := map[string]string{
-		stats.VarlabBucket:   cname,
-		stats.VarlabXactKind: xkind,
+		stats.VlabBucket: cname,
+		stats.VlabXkind:  xkind,
 	}
 	t.statsT.IncWith(backend.MetricName(stats.GetCount), vlabs)
 	t.statsT.AddWith(
@@ -184,7 +184,7 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 	var (
 		bp    = t.Backend(lom.Bck())
 		now   = mono.NanoTime()
-		vlabs = map[string]string{stats.VarlabBucket: lom.Bck().Cname("")}
+		vlabs = map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 	)
 	oa, ecode, err = bp.HeadObj(context.Background(), lom, origReq)
 	if err != nil {

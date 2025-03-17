@@ -120,8 +120,8 @@ func (p *tcoFactory) Start() error {
 	if bck := r.args.BckFrom; bck.IsRemote() {
 		r.bp = core.T.Backend(bck)
 		r.vlabs = map[string]string{
-			stats.VarlabBucket:   bck.Cname(""),
-			stats.VarlabXactKind: r.Kind(),
+			stats.VlabBucket: bck.Cname(""),
+			stats.VlabXkind:  r.Kind(),
 		}
 	}
 

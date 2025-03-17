@@ -778,7 +778,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		errcnt = stats.ErrPutCount
 		scnt   = stats.PutCount
 		perms  = apc.AcePUT
-		vlabs  = map[string]string{stats.VarlabBucket: "", stats.VarlabXactKind: ""}
+		vlabs  = map[string]string{stats.VlabBucket: "", stats.VlabXkind: ""}
 	)
 	// 1. request
 	if err := p.parseReq(w, r, apireq); err != nil {
@@ -790,7 +790,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		perms = apc.AceAPPEND
 		errcnt = stats.ErrAppendCount
 		scnt = stats.AppendCount
-		vlabs = map[string]string{stats.VarlabBucket: ""}
+		vlabs = map[string]string{stats.VlabBucket: ""}
 		if apireq.dpq.apnd.hdl != "" {
 			items, err := preParse(apireq.dpq.apnd.hdl) // apc.QparamAppendHandle
 			if err != nil {
@@ -816,7 +816,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	if err != nil {
 		return
 	}
-	vlabs[stats.VarlabBucket] = bck.Cname("")
+	vlabs[stats.VlabBucket] = bck.Cname("")
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
@@ -1695,7 +1695,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		return
 	}
 
-	vlabs := map[string]string{stats.VarlabBucket: bck.Cname("")}
+	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
 	p.statsT.IncWith(stats.ListCount, vlabs)
 	p.statsT.AddWith(
 		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},

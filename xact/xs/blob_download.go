@@ -187,8 +187,8 @@ func (p *blobFactory) Start() error {
 
 	r.bp = core.T.Backend(bck)
 	r.vlabs = map[string]string{
-		stats.VarlabBucket:   bck.Cname(""),
-		stats.VarlabXactKind: r.Kind(),
+		stats.VlabBucket: bck.Cname(""),
+		stats.VlabXkind:  r.Kind(),
 	}
 
 	// 2nd (just in time) tune-up

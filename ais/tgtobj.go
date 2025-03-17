@@ -231,7 +231,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	return 0, nil
 rerr:
 	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
-		vlabs := poi._vlabs()
+		vlabs := poi._vlabs(true /*detailed*/)
 		poi.t.statsT.IncWith(stats.ErrPutCount, vlabs)
 
 		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF && !cos.IsRetriableConnErr(err) && !cos.IsErrMv(err) {
@@ -244,12 +244,16 @@ rerr:
 	return ecode, err
 }
 
-func (poi *putOI) _vlabs() map[string]string {
+// when detailed metrics are disabled, returns pre-allocated empty map
+func (poi *putOI) _vlabs(detailed bool) map[string]string {
+	if !detailed {
+		return stats.EmptyBckXlabs
+	}
 	var xkind string
 	if poi.xctn != nil {
 		xkind = poi.xctn.Kind()
 	}
-	vlabs := map[string]string{stats.VarlabBucket: poi.lom.Bck().Cname(""), stats.VarlabXactKind: xkind}
+	vlabs := map[string]string{stats.VlabBucket: poi.lom.Bck().Cname(""), stats.VlabXkind: xkind}
 	return vlabs
 }
 
@@ -258,7 +262,8 @@ func (poi *putOI) stats() {
 		bck   = poi.lom.Bck()
 		size  = poi.lom.Lsize()
 		delta = mono.SinceNano(poi.ltime)
-		vlabs = poi._vlabs()
+		fl    = cmn.Rom.Features()
+		vlabs = poi._vlabs(fl.IsSet(feat.EnableDetailedPromMetrics))
 	)
 	poi.t.statsT.IncWith(stats.PutCount, vlabs)
 	poi.t.statsT.AddWith(
@@ -508,7 +513,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		cksums.compt.Finalize()
 		if !cksums.compt.Equal(cksums.expct) {
 			err = cos.NewErrDataCksum(cksums.expct, &cksums.compt.Cksum, poi.lom.Cname())
-			poi.t.statsT.IncWith(stats.ErrPutCksumCount, poi._vlabs())
+			poi.t.statsT.IncWith(stats.ErrPutCksumCount, poi._vlabs(true /*detailed*/))
 			return
 		}
 	}
@@ -1214,10 +1219,15 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
 func (goi *getOI) stats(written int64) {
 	var (
 		bck   = goi.lom.Bck()
-		cname = bck.Cname("")
-		vlabs = map[string]string{stats.VarlabBucket: cname}
 		delta = mono.SinceNano(goi.ltime)
+		vlabs = stats.EmptyBckVlabs
+		fl    = cmn.Rom.Features()
+		cname string
 	)
+	if fl.IsSet(feat.EnableDetailedPromMetrics) {
+		cname = bck.Cname("")
+		vlabs = map[string]string{stats.VlabBucket: cname}
+	}
 	goi.t.statsT.IncWith(stats.GetCount, vlabs)
 	goi.t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.GetSize, Value: written, VarLabs: vlabs},
@@ -1225,25 +1235,33 @@ func (goi *getOI) stats(written int64) {
 		cos.NamedVal64{Name: stats.GetLatency, Value: delta, VarLabs: vlabs},      // see also: per-backend *LatencyTotal below
 		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: delta, VarLabs: vlabs}, // ditto
 	)
-	if goi.verchanged {
-		goi.t.statsT.IncWith(stats.VerChangeCount, vlabs)
-		goi.t.statsT.AddWith(
-			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.Lsize(), VarLabs: vlabs},
-		)
-	}
 
 	if !goi.rget {
+		debug.Assert(!goi.verchanged)
 		return
 	}
+
 	backend := goi.t.Backend(bck)
+	if !fl.IsSet(feat.EnableDetailedPromMetrics) {
+		// always provide for backend stats
+		cname = bck.Cname("")
+		vlabs = map[string]string{stats.VlabBucket: cname}
+	}
 	goi.t.rgetstats(backend, cname, "" /*xkind*/, written, delta)
 
-	if goi.verchanged {
-		goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)
-		goi.t.statsT.AddWith(
-			cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize(), VarLabs: vlabs},
-		)
+	if !goi.verchanged {
+		return
 	}
+
+	goi.t.statsT.IncWith(stats.VerChangeCount, vlabs)
+	goi.t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.Lsize(), VarLabs: vlabs},
+	)
+
+	goi.t.statsT.IncWith(backend.MetricName(stats.VerChangeCount), vlabs)
+	goi.t.statsT.AddWith(
+		cos.NamedVal64{Name: backend.MetricName(stats.VerChangeSize), Value: goi.lom.Lsize(), VarLabs: vlabs},
+	)
 }
 
 // - parse and validate user specified read range (goi.ranges)
@@ -1358,7 +1376,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 
 	// stats (TODO: add `stats.FlushCount` for symmetry)
 	lat := time.Now().UnixNano() - a.started
-	vlabs := map[string]string{stats.VarlabBucket: a.lom.Bck().Cname("")}
+	vlabs := map[string]string{stats.VlabBucket: a.lom.Bck().Cname("")}
 	a.t.statsT.IncWith(stats.AppendCount, vlabs)
 	a.t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.AppendLatency, Value: lat, VarLabs: vlabs},

@@ -279,50 +279,50 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, VerChangeCount, KindCounter,
 		&Extra{
 			Help:    "number of out-of-band updates (by a 3rd party performing remote PUTs from outside this cluster)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, VerChangeSize, KindSize,
 		&Extra{
 			Help:    "total cumulative size (bytes) of objects that were updated out-of-band across all backends combined",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, RemoteDeletedDelCount, KindCounter,
 		&Extra{
 			Help:    "number of out-of-band deletes (by a 3rd party remote DELETE(object) from outside this cluster)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 
 	r.reg(snode, PutLatency, KindLatency,
 		&Extra{
 			Help:    "PUT: average time (milliseconds) over the last periodic.stats_time interval",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, PutLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "PUT: total cumulative time (nanoseconds)",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, HeadLatency, KindLatency,
 		&Extra{
 			Help:    "HEAD: average time (milliseconds) over the last periodic.stats_time interval",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, HeadLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "HEAD: total cumulative time (nanoseconds)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, AppendLatency, KindLatency,
 		&Extra{
 			Help:    "APPEND(object): average time (milliseconds) over the last periodic.stats_time interval",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, GetRedirLatency, KindLatency,
@@ -340,26 +340,26 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, GetThroughput, KindThroughput,
 		&Extra{
 			Help:    "GET: average throughput (MB/s) over the last periodic.stats_time interval",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, PutThroughput, KindThroughput,
 		&Extra{
 			Help:    "PUT: average throughput (MB/s) over the last periodic.stats_time interval",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 
 	r.reg(snode, GetSize, KindSize,
 		&Extra{
 			Help:    "GET: total cumulative size (bytes)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, PutSize, KindSize,
 		&Extra{
 			Help:    "PUT: total cumulative size (bytes)",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 
@@ -367,13 +367,13 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, ErrPutCksumCount, KindCounter,
 		&Extra{
 			Help:    "PUT: number of checksum errors",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, ErrFSHCCount, KindCounter,
 		&Extra{
 			Help:    "number of times filesystem health checker (FSHC) was triggered by an I/O error or errors",
-			VarLabs: MpathVarlabs,
+			VarLabs: mpathVlabs,
 		},
 	)
 	r.reg(snode, ErrDloadCount, KindCounter,
@@ -390,19 +390,19 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, IOErrGetCount, KindCounter,
 		&Extra{
 			Help:    "GET: number of I/O errors _not_ including remote backend and network errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, IOErrPutCount, KindCounter,
 		&Extra{
 			Help:    "PUT: number of I/O errors _not_ including remote backend and network errors",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, IOErrDeleteCount, KindCounter,
 		&Extra{
 			Help:    "DELETE(object): number of I/O errors _not_ including remote backend and network errors",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 
@@ -438,31 +438,31 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, DloadSize, KindSize,
 		&Extra{
 			Help:    "total downloaded size (bytes)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, DloadLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "total downloading time (nanoseconds)",
-			VarLabs: BckVarlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, GetRateRetryLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "GET: total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, PutRateRetryLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "PUT: total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, DeleteRateRetryLatencyTotal, KindTotal,
 		&Extra{
 			Help:    "DELETE: total waiting time (nanoseconds) caused by remote backends returning 409 and 503 status codes",
-			VarLabs: BckXactVarlabs,
+			VarLabs: BckXlabs,
 		},
 	)
 
