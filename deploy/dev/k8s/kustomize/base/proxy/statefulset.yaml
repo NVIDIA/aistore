@@ -99,7 +99,7 @@ spec:
             - name: ais-config
               mountPath: /etc/ais
             - name: ais-logs
-              mountPath: /tmp/ais/log
+              mountPath: /ais/log
       volumes:
         - name: ais-cluster-config-override
           configMap:
@@ -111,5 +111,5 @@ spec:
           emptyDir: {}
         - name: ais-logs
           hostPath:
-            path: /tmp/ais/log
+            path: /ais/log
             type: DirectoryOrCreate

@@ -1,8 +1,7 @@
 variables:
   MODE: debug # run aistore and tests with debug asserts enabled
-  CI_IMAGE: aistorage/ci:latest
-  RUNNER_TAG: "ais"
-  RUNNER_TAG_K8s: "ais-k8s"
+  CI_IMAGE: aistorage/gitlab-ci:1.0-podman
+  RUNNER_TAG: "ais-ci"
   SCRIPTS_DIR: "./scripts"
   NUM_TARGET:
     value: "6"
@@ -534,34 +533,29 @@ test:long:ishard:
 
 .test_k8s:
   tags:
-    - $RUNNER_TAG_K8s
+    - $RUNNER_TAG
   variables:
     BUCKET: "gs://ais-ci-kube"
     TESTS_DIR: "ais/test"
     AISNODE_IMAGE: "$CI_REGISTRY_IMAGE/aisnode:$CI_COMMIT_SHORT_SHA"
     AISINIT_IMAGE: "$CI_REGISTRY_IMAGE/ais-init:$CI_COMMIT_SHORT_SHA"
-    AIS_ENDPOINT: "http://ais-proxy-0.ais-proxy.default.svc.cluster.local:8080"
     FS_CNT: 6
     RE: "TestETL|TestConfig|TestMountpath"
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
-    - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
     - cd deploy/dev/k8s/kustomize
+    - dockerd > /var/log/dockerd.log 2>&1 &
+    - sleep 5  # wait for docker
+    - ./utils/generate_kind_config.sh > kind_config.yml
+    - kind create cluster --config=kind_config.yml
+    - kubectl cluster-info  # wait for k8s
     - make ci
+    - source ./utils/export_endpoint.sh
     - cd ../../../..
     - make cli
   after_script:
-    - set +e
     - mkdir $CI_PROJECT_DIR/logs
-    - >
-      for node in $(kubectl get nodes -o name); do
-        pod_name=$(kubectl debug "$node" --image=busybox -- sleep 300 | grep -oP 'node-debugger-[^ ]+' | head -1)
-        kubectl wait --for=condition=Ready --timeout=60s pod "$pod_name" || true
-        kubectl cp "$pod_name:/host/tmp/ais/log" "$CI_PROJECT_DIR/logs" || true
-        kubectl delete pod "$pod_name" --ignore-not-found=true
-      done
-    - cd deploy/dev/k8s/kustomize
-    - make ci-cleanup
+    - cp -r /ais/log $CI_PROJECT_DIR/logs
   artifacts:
     when: on_failure
     paths: [ logs/ ]
@@ -699,10 +693,15 @@ test:long:k8s:all:
   variables: 
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
-    - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
     - make aisloader
     - cd deploy/dev/k8s/kustomize
+    - dockerd > /var/log/dockerd.log 2>&1 &
+    - sleep 5  # wait for docker
+    - ./utils/generate_kind_config.sh > kind_config.yml
+    - kind create cluster --config=kind_config.yml
+    - kubectl cluster-info  # wait for k8s
     - make ci
+    - source ./utils/export_endpoint.sh
     - cd ../../../..
     # Make sure that metrics collection is enabled.
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
