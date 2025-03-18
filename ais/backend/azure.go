@@ -174,7 +174,6 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 
 	status, err := _azureErr(azureError, stgErr)
 	if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
-		core.T.StatsUpdater().Inc(stats.ErrRateRetryCount)
 		return status, cmn.NewErrTooManyRequests(err, status)
 	}
 	return status, err

@@ -491,7 +491,6 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 		}
 		return http.StatusNotFound, err
 	case apiErr.Code == http.StatusTooManyRequests || apiErr.Code == http.StatusServiceUnavailable:
-		core.T.StatsUpdater().Inc(stats.ErrRateRetryCount)
 		return apiErr.Code, cmn.NewErrTooManyRequests(err, apiErr.Code)
 	default:
 		return apiErr.Code, err

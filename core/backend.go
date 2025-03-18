@@ -40,8 +40,12 @@ type (
 		MetricName(string) string
 
 		CreateBucket(bck *meta.Bck) (ecode int, err error)
-		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
 		ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error)
+
+		// list-objects
+		ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error)
+		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) error
+
 		PutObj(ctx context.Context, r io.ReadCloser, lom *LOM, origReq *http.Request) (ecode int, err error)
 		DeleteObj(ctx context.Context, lom *LOM) (ecode int, err error)
 
@@ -49,12 +53,12 @@ type (
 		HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error)
 		HeadObj(ctx context.Context, lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 
-		// get
-		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT, origReq *http.Request) (ecode int, err error) // calls GetObjReader
+		// get (exclusively via GetCold; calls GetObjReader)
+		GetObj(ctx context.Context, lom *LOM, owt cmn.OWT, origReq *http.Request) (ecode int, err error)
+		// get (jobs; REST)
 		GetObjReader(ctx context.Context, lom *LOM, offset, length int64) GetReaderResult
 
 		// bucket inventory
 		GetBucketInv(bck *meta.Bck, ctx *LsoInvCtx) (ecode int, err error)
-		ListObjectsInv(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes, ctx *LsoInvCtx) error
 	}
 )

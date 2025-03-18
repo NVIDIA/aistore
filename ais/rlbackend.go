@@ -20,10 +20,15 @@ import (
 )
 
 // rate-limit 4 backend APIs:
-// - PutObj()
-// - DeleteObj()
 // - GetObj()
 // - GetObjReader()
+// - PutObj()
+// - DeleteObj()
+
+// stats:
+// - not counting proactive delay    - only (reactive) retries
+// - not counting individual retries - only totals (see "increment" comment below)
+// - not counting delete retries     - only get and put
 
 type (
 	rlbackend struct {
@@ -43,9 +48,10 @@ func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, ori
 	cb := func() (int, error) {
 		return bp.Backend.GetObj(ctx, lom, owt, origReq)
 	}
-	tot, code, e := bp.retry(ctx, arl, cb)
+	total, code, e := bp.retry(ctx, arl, cb)
 
-	bp.stats(ctx, lom.Bck(), stats.GetRateRetryLatencyTotal, tot)
+	// increment retry count by 1, retry latency by `total`
+	bp.stats(ctx, lom.Bck(), stats.RatelimGetRetryCount, stats.RatelimGetRetryLatencyTotal, total)
 	return code, e
 }
 
@@ -61,10 +67,11 @@ func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, le
 		res = bp.Backend.GetObjReader(ctx, lom, offset, length)
 		return res.ErrCode, res.Err
 	}
-	tot, code, e := bp.retry(ctx, arl, cb)
+	total, code, e := bp.retry(ctx, arl, cb)
 	debug.Assertf(res.ErrCode == code && res.Err == e, "(%d, %v) vs (%d, %v)", res.ErrCode, res.Err, code, e)
 
-	bp.stats(ctx, lom.Bck(), stats.GetRateRetryLatencyTotal, tot)
+	// ditto
+	bp.stats(ctx, lom.Bck(), stats.RatelimGetRetryCount, stats.RatelimGetRetryLatencyTotal, total)
 	return res
 }
 
@@ -79,12 +86,13 @@ func (bp *rlbackend) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM,
 	cb := func() (int, error) {
 		return bp.Backend.PutObj(ctx, r, lom, origReq)
 	}
-	tot, code, e := bp.retry(ctx, arl, cb)
+	total, code, e := bp.retry(ctx, arl, cb)
 
-	bp.stats(ctx, lom.Bck(), stats.PutRateRetryLatencyTotal, tot)
+	bp.stats(ctx, lom.Bck(), stats.RatelimPutRetryCount, stats.RatelimPutRetryLatencyTotal, total)
 	return code, e
 }
 
+// note: not counting stats
 func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodDelete)
@@ -96,9 +104,7 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) 
 	cb := func() (int, error) {
 		return bp.Backend.DeleteObj(ctx, lom)
 	}
-	tot, code, e := bp.retry(ctx, arl, cb)
-
-	bp.stats(ctx, lom.Bck(), stats.DeleteRateRetryLatencyTotal, tot)
+	_, code, e := bp.retry(ctx, arl, cb)
 	return code, e
 }
 
@@ -126,11 +132,11 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 	return arl
 }
 
-func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (int, error)) (tot time.Duration, ecode int, err error) {
-	for tot < cos.DfltRateMaxWait {
+func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (int, error)) (total time.Duration, ecode int, err error) {
+	for total < cos.DfltRateMaxWait {
 		// reactive
 		sleep := arl.OnErr()
-		tot += sleep
+		total += sleep
 		if err = ctx.Err(); err != nil {
 			break
 		}
@@ -139,10 +145,10 @@ func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, cb func() (i
 			break
 		}
 	}
-	return tot, ecode, err
+	return total, ecode, err
 }
 
-func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, metric string, total time.Duration) {
+func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, count, latency string, total time.Duration) {
 	if total == 0 {
 		return
 	}
@@ -150,7 +156,8 @@ func (bp *rlbackend) stats(ctx context.Context, bck *meta.Bck, metric string, to
 	if vlabs == nil {
 		vlabs = map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
 	}
+	bp.t.statsT.IncWith(count, vlabs)
 	bp.t.statsT.AddWith(
-		cos.NamedVal64{Name: metric, Value: int64(total), VarLabs: vlabs},
+		cos.NamedVal64{Name: latency, Value: int64(total), VarLabs: vlabs},
 	)
 }

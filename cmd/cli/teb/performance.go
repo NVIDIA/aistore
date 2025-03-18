@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -125,6 +125,10 @@ func (c *PerfTabCtx) MakeTab(st StstMap) (*Table, int, error) {
 
 	// 10. construct an empty table
 	table := newTable(printedColumns...)
+
+	if len(cols) < 2 {
+		return table, numNZ, nil
+	}
 
 	// 11. finally, add rows
 	for _, tid := range tids {

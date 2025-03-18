@@ -1,6 +1,6 @@
 // Package s3 provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package s3
 

@@ -131,14 +131,18 @@ func IsIOErrMetric(name string) bool {
 // see stats/common for "Naming conventions"
 //
 
-// compare with base.init() at ais/backend/common
+// see also base.init() in ais/backend/common
 func LatencyToCounter(latName string) string {
-	// 1. basics first
+	// 1. common
 	switch latName {
 	case GetLatency, GetRedirLatency, GetLatencyTotal:
 		return GetCount
 	case PutLatency, PutRedirLatency, PutLatencyTotal:
 		return PutCount
+	case RatelimGetRetryLatencyTotal:
+		return RatelimGetRetryCount
+	case RatelimPutRetryLatencyTotal:
+		return RatelimPutRetryCount
 	case HeadLatency:
 		return HeadCount
 	case ListLatency:
@@ -147,20 +151,21 @@ func LatencyToCounter(latName string) string {
 		return AppendCount
 	}
 	// 2. filter out
-	if !strings.Contains(latName, "get.") && !strings.Contains(latName, "put.") {
+	isget := strings.Contains(latName, "get.")
+	if !isget && !strings.Contains(latName, "put.") {
 		return ""
 	}
-	// backend first
+	// backend
 	if strings.HasSuffix(latName, ".ns.total") {
-		for prefix := range apc.Providers {
-			if prefix == apc.AIS {
-				prefix = apc.RemAIS
+		for p := range apc.Providers {
+			if p == apc.AIS {
+				p = apc.RemAIS
 			}
-			if strings.HasPrefix(latName, prefix) {
-				if strings.Contains(latName, ".get.") {
-					return prefix + "." + GetCount
+			if strings.HasPrefix(latName, p) {
+				if isget {
+					return p + "." + GetCount
 				}
-				return prefix + "." + PutCount
+				return p + "." + PutCount
 			}
 		}
 	}
