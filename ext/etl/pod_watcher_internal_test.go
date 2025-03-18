@@ -5,8 +5,10 @@
 package etl
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +31,8 @@ var _ = Describe("ETLPodWatcherTest", func() {
 		pw = newPodWatcher("test-pod", nil)
 		mockWatcher = newMockWatcher()
 		pw.watcher = mockWatcher
+		pw.stopCh = cos.NewStopCh()
+		pw.podCtx, pw.podCtxCancel = context.WithCancel(context.Background())
 		go pw.processEvents()
 	})
 

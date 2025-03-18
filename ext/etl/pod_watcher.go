@@ -52,10 +52,8 @@ func newPodWatcher(podName string, boot *etlBootstrapper) (pw *podWatcher) {
 	pw = &podWatcher{
 		podName:         podName,
 		boot:            boot,
-		stopCh:          cos.NewStopCh(),
 		recentPodStatus: &podStatus{},
 	}
-	pw.podCtx, pw.podCtxCancel = context.WithCancel(context.Background())
 	return pw
 }
 
@@ -137,6 +135,8 @@ func (pw *podWatcher) start() error {
 		return err
 	}
 
+	pw.stopCh = cos.NewStopCh()
+	pw.podCtx, pw.podCtxCancel = context.WithCancel(context.Background())
 	go pw.processEvents()
 
 	return nil

@@ -14,8 +14,12 @@ import (
 )
 
 type (
+	entity struct {
+		comm  Communicator
+		stage Stage
+	}
 	registry struct {
-		m   map[string]Communicator // primary index
+		m   map[string]*entity
 		mtx sync.RWMutex
 	}
 )
@@ -26,7 +30,7 @@ var (
 )
 
 func init() {
-	reg = &registry{m: make(map[string]Communicator)}
+	reg = &registry{m: make(map[string]*entity)}
 	reqSecret = cos.CryptoRandS(10)
 }
 
@@ -35,28 +39,47 @@ func (r *registry) add(name string, c Communicator) (err error) {
 	if _, ok := r.m[name]; ok {
 		err = fmt.Errorf("etl[%s] already exists", name)
 	} else {
-		r.m[name] = c
+		r.m[name] = &entity{c, Initializing}
 	}
 	r.mtx.Unlock()
 	return
 }
 
-func (r *registry) get(name string) (c Communicator, exists bool) {
-	r.mtx.RLock()
-	c, exists = r.m[name]
-	r.mtx.RUnlock()
-	return
+// transition return false if the entry does not exist or is already in the given stage
+func (r *registry) transition(name string, stage Stage) (updated bool) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	entry, exists := r.m[name]
+	if !exists || entry.stage == stage {
+		return false
+	}
+
+	entry.stage = stage
+	r.m[name] = entry
+	return true
 }
 
-func (r *registry) getByXid(xid string) (c Communicator, exists bool) {
+func (r *registry) get(name string) (c Communicator, stage Stage) {
 	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	for _, c := range r.m {
-		if c.Xact().ID() == xid {
-			return c, true
+	if en, exists := r.m[name]; exists {
+		c = en.comm
+		stage = en.stage
+	}
+	r.mtx.RUnlock()
+	return c, stage
+}
+
+func (r *registry) getByXid(xid string) (c Communicator, stage Stage) {
+	r.mtx.RLock()
+	for _, en := range r.m {
+		if en.comm.Xact().ID() == xid {
+			c = en.comm
+			stage = en.stage
 		}
 	}
-	return nil, false
+	r.mtx.RUnlock()
+	return c, stage
 }
 
 func (r *registry) del(name string) (exists bool) {
@@ -69,29 +92,17 @@ func (r *registry) del(name string) (exists bool) {
 	return exists
 }
 
-func (r *registry) delByXid(xid string) (exists bool) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	for name, c := range r.m {
-		if c.Xact().ID() == xid {
-			delete(r.m, name)
-			return true
-		}
-	}
-	return false
-}
-
 func (r *registry) list() []Info {
 	r.mtx.RLock()
 	etls := make([]Info, 0, len(r.m))
-	for name, comm := range r.m {
+	for name, en := range r.m {
 		etls = append(etls, Info{
 			Name:     name,
-			Stage:    Running.String(), // for now, targets should only manage and report "Running" ETL instances
-			XactID:   comm.Xact().ID(),
-			ObjCount: comm.ObjCount(),
-			InBytes:  comm.InBytes(),
-			OutBytes: comm.OutBytes(),
+			Stage:    en.stage.String(),
+			XactID:   en.comm.Xact().ID(),
+			ObjCount: en.comm.ObjCount(),
+			InBytes:  en.comm.InBytes(),
+			OutBytes: en.comm.OutBytes(),
 		})
 	}
 	r.mtx.RUnlock()

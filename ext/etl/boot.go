@@ -55,7 +55,7 @@ func (b *etlBootstrapper) createPodSpec() (err error) {
 func (b *etlBootstrapper) _prepSpec() (err error) {
 	// Override pod name: append target ID
 	// (K8s doesn't allow `_` and uppercase)
-	b.pod.SetName(k8s.CleanName(b.msg.IDX + "-" + core.T.SID()))
+	b.pod.SetName(k8s.CleanName(b.msg.Name() + "-" + core.T.SID()))
 	b.errCtx.PodName = b.pod.GetName()
 	b.pod.APIVersion = "v1"
 
@@ -230,7 +230,6 @@ func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 func (b *etlBootstrapper) setupXaction(xid string) {
 	rns := xreg.RenewETL(&b.msg, xid)
 	debug.AssertNoErr(rns.Err)
-	debug.Assert(!rns.IsRunning())
 	b.xctn = rns.Entry.Get()
 	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
 }

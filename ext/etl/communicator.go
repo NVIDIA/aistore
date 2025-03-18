@@ -36,7 +36,7 @@ type (
 	Communicator interface {
 		meta.Slistener
 
-		Name() string
+		ETLName() string
 		Xact() core.Xact
 		PodName() string
 		SvcName() string
@@ -57,6 +57,8 @@ type (
 		OfflineTransform(lom *core.LOM, timeout time.Duration, latestVer, sync bool) core.ReadResp
 
 		Stop()
+		Restart(boot *etlBootstrapper)
+		GetPodWatcher() *podWatcher
 
 		CommStats
 	}
@@ -137,7 +139,7 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 	return nil
 }
 
-func (c *baseComm) Name() string    { return c.boot.originalPodName }
+func (c *baseComm) ETLName() string { return c.boot.msg.EtlName }
 func (c *baseComm) PodName() string { return c.boot.pod.Name }
 func (c *baseComm) SvcName() string { return c.boot.pod.Name /*same as pod name*/ }
 
@@ -152,6 +154,8 @@ func (c *baseComm) ObjCount() int64 { return c.boot.xctn.Objs() }
 func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
 func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
+func (c *baseComm) GetPodWatcher() *podWatcher    { return c.pw }
+func (c *baseComm) Restart(boot *etlBootstrapper) { c.boot = boot }
 func (c *baseComm) Stop() {
 	// Note: xctn might have already been aborted and finished by pod watcher
 	if !c.boot.xctn.Finished() && !c.boot.xctn.IsAborted() {

@@ -83,7 +83,7 @@ type (
 
 	// and implementations
 	InitMsgBase struct {
-		IDX       string       `json:"id"`            // TODO -- FIXME: completely separate etlName and XactID
+		EtlName   string       `json:"id"`
 		CommTypeX string       `json:"communication"` // enum commTypes
 		ArgTypeX  string       `json:"argument"`      // enum argTypes
 		Timeout   cos.Duration `json:"timeout"`
@@ -162,16 +162,16 @@ var (
 
 func (m InitMsgBase) CommType() string { return m.CommTypeX }
 func (m InitMsgBase) ArgType() string  { return m.ArgTypeX }
-func (m InitMsgBase) Name() string     { return m.IDX }
+func (m InitMsgBase) Name() string     { return m.EtlName }
 func (*InitCodeMsg) MsgType() string   { return Code }
 func (*InitSpecMsg) MsgType() string   { return Spec }
 
 func (m *InitCodeMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s-%s]", Code, m.IDX, m.CommTypeX, m.ArgTypeX, m.Runtime)
+	return fmt.Sprintf("init-%s[%s-%s-%s-%s]", Code, m.EtlName, m.CommTypeX, m.ArgTypeX, m.Runtime)
 }
 
 func (m *InitSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s]", Spec, m.IDX, m.CommTypeX, m.ArgTypeX)
+	return fmt.Sprintf("init-%s[%s-%s-%s]", Spec, m.EtlName, m.CommTypeX, m.ArgTypeX)
 }
 
 func (m *InitSpecMsg) errInvalidArg() error {
@@ -208,7 +208,7 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 func (m *InitMsgBase) validate(detail string) error {
 	const ferr = "%v [%s]"
 
-	if err := k8s.ValidateEtlName(m.IDX); err != nil {
+	if err := k8s.ValidateEtlName(m.EtlName); err != nil {
 		return fmt.Errorf(ferr, err, detail)
 	}
 

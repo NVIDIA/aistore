@@ -7,7 +7,6 @@ package etl
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -17,12 +16,7 @@ import (
 )
 
 type (
-	Instance struct {
-		InitMsg `json:"init_msg,omitempty"`
-		Stage   `json:"stage"` // enum ETL lifecycle stage
-		XactID  string         `json:"xid,omitempty"`
-	}
-	ETLs map[string]Instance
+	ETLs map[string]InitMsg
 
 	// ETL metadata
 	MD struct {
@@ -32,9 +26,8 @@ type (
 	}
 
 	jsonETL struct {
-		Type   string              `json:"type,string"`
-		XactID string              `json:"xid"`
-		Msg    jsoniter.RawMessage `json:"msg"`
+		Type string              `json:"type,string"`
+		Msg  jsoniter.RawMessage `json:"msg"`
 	}
 	jsonMD struct {
 		Ext     any                `json:"ext,omitempty"` // within meta-version extensions
@@ -58,52 +51,20 @@ var (
 ////////
 
 func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg, xid string, stage Stage) {
-	var etlName string
-	if msg != nil {
-		etlName = msg.Name()
-	} else {
-		// if msg is not provided, find the match by xid
-		for name, inst := range e.ETLs {
-			if inst.XactID == xid {
-				etlName = name
-				msg = inst.InitMsg
-				break
-			}
-		}
-	}
-	debug.Assertf(etlName != "", "No matching ETL found in MD, msg=%v, xid=%s, stage=%s, e.ETLs=%v\n", msg, xid, stage.String(), e.ETLs)
-	pre, ok := e.ETLs[etlName]
-	if !ok {
-		e.ETLs[etlName] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
+func (e *MD) Add(msg InitMsg) {
+	if msg == nil {
 		return
 	}
-
-	// preserve previous values if new ones are not provided
-	debug.Assertf(msg == nil || reflect.DeepEqual(msg, pre.InitMsg), "msg should be empty or unchanged, %s vs %s", msg, pre.InitMsg)
-	if msg == nil {
-		msg = pre.InitMsg
-	}
-
-	debug.Assertf(xid == "" || xid == pre.XactID, "xid should be empty or unchanged, %s vs %s", xid, pre.XactID)
-	if xid == "" {
-		xid = pre.XactID
-	}
-
-	if stage == Unknown {
-		stage = pre.Stage
-	}
-
-	e.ETLs[etlName] = Instance{InitMsg: msg, XactID: xid, Stage: stage}
+	e.ETLs[msg.Name()] = msg
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
-func (e *MD) Get(id string) (InitMsg, bool) {
+func (e *MD) Get(id string) (msg InitMsg, present bool) {
 	if e == nil {
 		return nil, false
 	}
-	inst, present := e.ETLs[id]
-	return inst.InitMsg, present
+	msg, present = e.ETLs[id]
+	return
 }
 
 func (e *MD) Del(id string) (deleted bool) {
@@ -128,7 +89,7 @@ func (e *MD) MarshalJSON() ([]byte, error) {
 		Ext:     e.Ext,
 	}
 	for k, v := range e.ETLs {
-		jsonMD.ETLs[k] = jsonETL{v.MsgType(), v.XactID, cos.MustMarshal(v.InitMsg)}
+		jsonMD.ETLs[k] = jsonETL{v.MsgType(), cos.MustMarshal(v)}
 	}
 	return jsoniter.Marshal(jsonMD)
 }
@@ -143,15 +104,15 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	for k, v := range jsonMD.ETLs {
 		switch v.Type {
 		case Code:
-			e.ETLs[k] = Instance{InitMsg: &InitCodeMsg{}, XactID: v.XactID}
+			e.ETLs[k] = &InitCodeMsg{}
 		case Spec:
-			e.ETLs[k] = Instance{InitMsg: &InitSpecMsg{}, XactID: v.XactID}
+			e.ETLs[k] = &InitSpecMsg{}
 		default:
 			err = fmt.Errorf("invalid InitMsg type %q", v.Type)
 			debug.AssertNoErr(err)
 			return
 		}
-		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k].InitMsg); err != nil {
+		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k]); err != nil {
 			break
 		}
 	}

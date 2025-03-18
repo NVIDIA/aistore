@@ -34,7 +34,7 @@ func startTar2TfTransformer(t *testing.T) (etlName string) {
 
 	msg := &etl.InitSpecMsg{}
 	{
-		msg.IDX = etlName
+		msg.EtlName = etlName
 		msg.CommTypeX = etl.Hpull
 		msg.Spec = spec
 	}

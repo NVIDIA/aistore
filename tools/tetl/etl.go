@@ -306,7 +306,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
 
 	msg := &etl.InitSpecMsg{}
-	msg.IDX = etlName
+	msg.EtlName = etlName
 	msg.CommTypeX = comm
 	spec, err := GetTransformYaml(etlName)
 	tassert.CheckFatal(t, err)
@@ -390,9 +390,9 @@ func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
 		return msg, err
 	}
 	errCtx.ETLName = pod.GetName()
-	msg.IDX = pod.GetName()
+	msg.EtlName = pod.GetName()
 
-	if err := k8s.ValidateEtlName(msg.IDX); err != nil {
+	if err := k8s.ValidateEtlName(msg.EtlName); err != nil {
 		return msg, err
 	}
 	// Check annotations.

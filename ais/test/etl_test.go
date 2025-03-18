@@ -274,13 +274,10 @@ func TestETLObject(t *testing.T) {
 	noopTransform := func(r io.Reader) io.Reader { return r }
 	tests := []testObjConfig{
 		{transformer: tetl.Echo, comm: etl.Hpull, transform: noopTransform, filesEqual: tools.FilesEqual, onlyLong: true},
-		{transformer: tetl.Echo, comm: etl.Hrev, transform: noopTransform, filesEqual: tools.FilesEqual, onlyLong: true},
 		{transformer: tetl.Echo, comm: etl.Hpush, transform: noopTransform, filesEqual: tools.FilesEqual, onlyLong: true},
 		{tetl.Tar2TF, etl.Hpull, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
-		{tetl.Tar2TF, etl.Hrev, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
 		{tetl.Tar2TF, etl.Hpush, tar2tfIn, tar2tfOut, nil, tfDataEqual, true},
 		{tetl.Tar2tfFilters, etl.Hpull, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
-		{tetl.Tar2tfFilters, etl.Hrev, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
 		{tetl.Tar2tfFilters, etl.Hpush, tar2tfFiltersIn, tar2tfFiltersOut, nil, tfDataEqual, false},
 	}
 
@@ -302,10 +299,6 @@ func TestETLObjectCloud(t *testing.T) {
 
 	tcs := map[string][]*testCloudObjConfig{
 		etl.Hpull: {
-			{cached: true, onlyLong: false},
-			{cached: false, onlyLong: false},
-		},
-		etl.Hrev: {
 			{cached: true, onlyLong: false},
 			{cached: false, onlyLong: false},
 		},
@@ -440,7 +433,6 @@ func TestETLInlineObjWithArgs(t *testing.T) {
 		}{
 			{name: "etl-args-hpush", commType: etl.Hpush},
 			{name: "etl-args-hpull", commType: etl.Hpull},
-			{name: "etl-args-hrev", commType: etl.Hrev},
 		}
 	)
 
@@ -706,7 +698,7 @@ def transform(input_bytes: bytes) -> bytes:
 			t.Run(testType+"__"+test.etlName, func(t *testing.T) {
 				msg := etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
-						IDX:       test.etlName,
+						EtlName:   test.etlName,
 						CommTypeX: test.commType,
 						Timeout:   etlBucketTimeout,
 					},
@@ -975,7 +967,7 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 
 			msg := &etl.InitSpecMsg{
 				InitMsgBase: etl.InitMsgBase{
-					IDX:       test.etlName,
+					EtlName:   test.etlName,
 					CommTypeX: test.commType,
 					Timeout:   failureTestTimeout,
 				},
@@ -1043,7 +1035,7 @@ def not_transform_func(input_bytes):
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			msg := etl.InitCodeMsg{
 				InitMsgBase: etl.InitMsgBase{
-					IDX:       test.etlName,
+					EtlName:   test.etlName,
 					CommTypeX: test.commType,
 					Timeout:   failureTestTimeout,
 				},

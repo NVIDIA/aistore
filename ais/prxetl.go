@@ -119,7 +119,7 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 
 	// must be new
 	etlMD := p.owner.etl.get()
-	if msg, _ := etlMD.get(initMsg.Name()); msg != nil {
+	if msg := etlMD.get(initMsg.Name()); msg != nil {
 		p.writeErrStatusf(w, r, http.StatusConflict, "%s: etl job %s already exists", p, initMsg.Name())
 		return
 	}
@@ -147,7 +147,7 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etlMD := p.owner.etl.get()
-	etlMsg, xid := etlMD.get(etlName)
+	etlMsg := etlMD.get(etlName)
 	if etlMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
@@ -157,7 +157,7 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLStop:
 		p.stopETL(w, r, etlMsg)
 	case apc.ETLStart:
-		p.startETL(w, r, etlMsg, xid)
+		p.startETL(w, r, etlMsg)
 	default:
 		debug.Assert(false, "invalid operation: "+op)
 		p.writeErrAct(w, r, "invalid operation: "+op)
@@ -183,10 +183,11 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 
 	// 1. broadcast stop to all targets
 	argsTerm := allocBcArgs()
-	argsTerm.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathETL.Join(etlName, apc.ETLStop)}
+	argsTerm.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathETL.Join(etlName)}
 	argsTerm.timeout = apc.LongTimeout
 	results := p.bcastGroup(argsTerm)
-	defer freeBcArgs(argsTerm)
+	freeBcArgs(argsTerm)
+	defer freeBcastRes(results)
 
 	for _, res := range results {
 		// ignore not found error, as the ETL might be manually stopped before
@@ -224,24 +225,16 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		xid  = etl.PrefixXactID + cos.GenUUID()
 	)
 
-	// 1. update stage to "Initializing"
+	// 1. add to etlMD
 	ctx := &etlMDModifier{
 		pre:   _addETLPre,
 		final: p._syncEtlMDFinal,
 		msg:   msg,
-		stage: etl.Initializing,
-		xid:   xid,
 		wait:  true,
 	}
 	p.owner.etl.modify(ctx)
 
-	// 2. IC
-	smap := p.owner.smap.get()
-	nl := xact.NewXactNL(xid, apc.ActETLInline, &smap.Smap, nil)
-	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{nl: nl, smap: smap, query: r.URL.Query()})
-
-	// 3. broadcast the init request
+	// 2. broadcast the init request
 	{
 		args.req = cmn.HreqArgs{
 			Method: http.MethodPut,
@@ -258,7 +251,6 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 			continue
 		}
 		err = res.toErr()
-		nlog.Errorln(err)
 	}
 	freeBcastRes(results)
 
@@ -266,22 +258,24 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		// At least one target failed. Terminate all.
 		// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 		//  or fail otherwise - ignore the failures).
-		p.stopETL(w, r, msg) // will handle etlMD stage update
+		p.stopETL(w, r, msg)
 		nlog.Errorln(err)
 		return err
 	}
 
-	// 4. update stage to "Running"
-	ctx.stage = etl.Running
-	p.owner.etl.modify(ctx)
+	// 3. IC
+	smap := p.owner.smap.get()
+	nl := xact.NewXactNL(xid, apc.ActETLInline, &smap.Smap, nil)
+	nl.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
-	// 5. init calls succeeded - return running xaction
+	// 4. init calls succeeded - return running xaction
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 	w.Write(cos.UnsafeB(xid))
 	return nil
 }
 
-func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg, xid string) {
+func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
 	var (
 		err  error
 		args = allocBcArgs()
@@ -291,7 +285,6 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 			Method: http.MethodPost,
 			Path:   r.URL.Path,
 			Body:   cos.MustMarshal(msg),
-			Query:  url.Values{apc.QparamUUID: []string{xid}},
 		}
 		args.timeout = apc.LongTimeout
 	}
@@ -312,21 +305,10 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 		p.stopETL(w, r, msg)
 		return
 	}
-
-	// if succeed, resume Running stage
-	ctx := &etlMDModifier{
-		pre:   _addETLPre,
-		final: p._syncEtlMDFinal,
-		msg:   msg,
-		stage: etl.Running,
-		xid:   xid,
-		wait:  true,
-	}
-	p.owner.etl.modify(ctx)
 }
 
 func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
-	clone.add(ctx.msg, ctx.xid, ctx.stage)
+	clone.add(ctx.msg)
 	return
 }
 
@@ -345,7 +327,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 	}
 
 	etlMD := p.owner.etl.get()
-	initMsg, _ := etlMD.get(etlName)
+	initMsg := etlMD.get(etlName)
 	if initMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
@@ -355,75 +337,54 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 
 // GET /v1/etl
 func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
-	var (
-		args = allocBcArgs()
-		etls = &etl.InfoList{}
-	)
-	{
-		args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.S}
-		args.timeout = apc.DefaultTimeout
-		args.cresv = cresjGeneric[etl.InfoList]{}
-	}
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.S}
+	args.timeout = apc.DefaultTimeout
+	args.cresv = cresjGeneric[etl.InfoList]{}
 
 	etlMD := p.owner.etl.get()
-	etlMDClone := make(etl.ETLs, len(etlMD.ETLs))
-	for k, v := range etlMD.ETLs {
-		etlMDClone[k] = v
-	}
+	etls := make(map[string]*etl.Info, len(etlMD.ETLs))
 
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
+	defer freeBcastRes(results)
 
 	// verify all targets return the same InfoList
 	for _, res := range results {
 		if res.err != nil {
 			p.writeErr(w, r, res.toErr())
-			freeBcastRes(results)
 			return
 		}
 
 		infoList, ok := res.v.(*etl.InfoList)
 		if !ok {
-			p.writeErrMsg(w, r, "Invalid response type from target", http.StatusInternalServerError)
+			p.writeErrMsg(w, r, "invalid response type from target", http.StatusInternalServerError)
 			break
 		}
 
-		sort.Sort(infoList)
+		for _, another := range *infoList {
+			current, exists := etls[another.Name]
+			if exists {
+				if !reflect.DeepEqual(current, another) {
+					p.writeErrStatusf(w, r, http.StatusInternalServerError, "target %s returned different etl instance: %v vs %v", res.si.ID(), another, current)
+					return
+				}
+				continue
+			}
 
-		if etls.Len() != 0 && !reflect.DeepEqual(etls, infoList) {
-			p.writeErrStatusf(w, r, http.StatusInternalServerError, "Target %s returned different ETLs: %v vs %v", res.si.ID(), etls, infoList)
-			freeBcastRes(results)
-			return
+			etls[another.Name] = &another
+			if _, tracked := etlMD.ETLs[another.Name]; !tracked {
+				nlog.Errorf("unexpected etl instance %q returned from targets (not tracked by etlMD)\n", another.Name)
+				etls[another.Name].Stage = etl.Unknown.String()
+			}
 		}
-		etls = infoList
-	}
-	freeBcastRes(results)
-
-	// NOTE: Targets should only manage and report "Running" ETL instances to avoid unnecessary resource usage.
-	// All other ETL stages are tracked and maintained independently by the proxy's etlMD.
-	for i, info := range *etls {
-		inst, tracked := etlMDClone[info.Name]
-
-		debug.Assertf(tracked, "Unexpected ETL instance %q returned from targets (not tracked by etlMD)", inst.Name())
-		debug.Assertf(inst.Stage == etl.Running, "Non-running ETL instance %q returned by targets", inst.Name())
-
-		// If an instance is unexpectedly reported or not running, mark it as "Unknown".
-		if !tracked || inst.Stage != etl.Running || info.Stage != etl.Running.String() {
-			(*etls)[i].Stage = etl.Unknown.String()
-		}
-		delete(etlMDClone, info.Name)
 	}
 
-	// Append non-running ETL instances from etlMD, which are managed only by the proxy.
-	for _, inst := range etlMDClone {
-		debug.Assertf(inst.Stage != etl.Running, "Running ETL instance %s missing from target responses", inst.Name())
-		if inst.Stage == etl.Running {
-			inst.Stage = etl.Unknown
-		}
-		etls.Append(etl.Info{Name: inst.Name(), Stage: inst.Stage.String(), XactID: inst.XactID})
+	list := etl.InfoList{}
+	for i := range etls {
+		list.Append(*etls[i])
 	}
-
-	p.writeJSON(w, r, *etls, "list-etl")
+	p.writeJSON(w, r, list, "list-etl")
 }
 
 // GET /v1/etl/<etl-name>/logs[/<target_id>]
@@ -530,16 +491,6 @@ func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/etl/<etl-name>/stop
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
-	etlMD := p.owner.etl.get()
-	inst, ok := etlMD.ETLs[msg.Name()]
-	if !ok {
-		p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found", msg.Name())
-		return
-	}
-	if inst.Stage == etl.Stopped {
-		// already stopped, nothing to do
-		return
-	}
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathETL.Join(msg.Name(), apc.ETLStop)}
 	args.timeout = apc.LongTimeout
@@ -547,20 +498,11 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 	freeBcArgs(args)
 	for _, res := range results {
 		// 404 from target implies it's already stopped
-		if res.err == nil || cos.IsErrNotFound(res.err) {
+		if res.err == nil || cos.IsNotExist(res.err, res.status) {
 			continue
 		}
 		p.writeErr(w, r, res.toErr(), res.status)
 		break
 	}
 	freeBcastRes(results)
-
-	ctx := &etlMDModifier{
-		pre:   _addETLPre,
-		final: p._syncEtlMDFinal,
-		msg:   msg,
-		stage: etl.Stopped,
-		wait:  true,
-	}
-	p.owner.etl.modify(ctx)
 }

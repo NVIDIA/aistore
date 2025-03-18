@@ -22,11 +22,11 @@ func TestEtlMDDeepCopy(t *testing.T) {
 	etlMD := newEtlMD()
 	etlMD.Add(&etl.InitCodeMsg{
 		InitMsgBase: etl.InitMsgBase{
-			IDX:       "init-code",
+			EtlName:   "init-code",
 			CommTypeX: etl.Hpush,
 		},
 		Code: []byte("print('hello')"),
-	}, "", etl.Running)
+	})
 	clone := etlMD.clone()
 	s1 := string(cos.MustMarshal(etlMD))
 	s2 := string(cos.MustMarshal(clone))
@@ -69,7 +69,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 				if initType == etl.Code {
 					msg = &etl.InitCodeMsg{
 						InitMsgBase: etl.InitMsgBase{
-							IDX:       fmt.Sprintf("init-code-%d", i),
+							EtlName:   fmt.Sprintf("init-code-%d", i),
 							CommTypeX: etl.Hpush,
 						},
 						Code: []byte(fmt.Sprintf("print('hello-%d')", i)),
@@ -77,13 +77,13 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 				} else {
 					msg = &etl.InitSpecMsg{
 						InitMsgBase: etl.InitMsgBase{
-							IDX:       fmt.Sprintf("init-spec-%d", i),
+							EtlName:   fmt.Sprintf("init-spec-%d", i),
 							CommTypeX: etl.Hpush,
 						},
 						Spec: []byte(fmt.Sprintf("test spec - %d", i)),
 					}
 				}
-				etlMD.Add(msg, "", etl.Running)
+				etlMD.Add(msg)
 			}
 		}
 	})
@@ -109,6 +109,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 			})
 
 			It("should correctly load etlMD for "+node, func() {
+				eowner.init()
 				Expect(eowner.Get()).To(Equal(&etlMD.MD))
 			})
 
@@ -126,14 +127,14 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							clone := etlMD.clone()
 							msg := &etl.InitCodeMsg{
 								InitMsgBase: etl.InitMsgBase{
-									IDX:       "init-code-" + cos.GenTie(),
+									EtlName:   "init-code-" + cos.GenTie(),
 									CommTypeX: etl.Hpush,
 								},
 								Code: []byte("print('hello')"),
 							}
 
 							// Add bucket and save.
-							clone.Add(msg, "", etl.Running)
+							clone.Add(msg)
 							err := jsp.Save(testpath, clone, opts, nil)
 							Expect(err).NotTo(HaveOccurred())
 

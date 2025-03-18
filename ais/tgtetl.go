@@ -29,14 +29,16 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, k8s.ErrK8sRequired, 0, Silent)
 		return
 	}
-	switch {
-	case r.Method == http.MethodPut:
+	switch r.Method {
+	case http.MethodPut:
 		t.handleETLPut(w, r)
-	case r.Method == http.MethodPost:
+	case http.MethodPost:
 		t.handleETLPost(w, r)
-	case r.Method == http.MethodGet:
+	case http.MethodDelete:
+		t.handleETLDelete(w, r)
+	case http.MethodGet:
 		t.handleETLGet(w, r)
-	case r.Method == http.MethodHead:
+	case http.MethodHead:
 		t.headObjectETL(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodHead, http.MethodPost)
@@ -116,6 +118,19 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	default:
 		debug.Assert(false, "invalid operation: "+op)
 		t.writeErrAct(w, r, "invalid operation: "+op)
+	}
+}
+
+// DELETE /v1/etl/<etl-name>
+//
+// Handles deleting ETL pods
+func (t *target) handleETLDelete(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 1, true)
+	if err != nil {
+		return
+	}
+	if err := etl.Delete(apiItems[0]); err != nil {
+		t.writeErr(w, r, err)
 	}
 }
 
