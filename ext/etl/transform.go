@@ -255,22 +255,22 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 	podName, svcName = boot.pod.GetName(), boot.svc.GetName()
 
 	// 2. Attempt to restart or start fresh
-	comm, stage = reg.get(msg.Name())
+	comm, stage = mgr.getByName(msg.Name())
+	if stage == Running { // do nothing if already in Running stage
+		return podName, svcName, nil
+	}
+
 	if comm != nil {
-		if stage == Running { // do nothing if already in Running stage
-			return podName, svcName, nil
-		}
 		// Restart case: reuse existing xaction and pod watcher
 		xid = comm.Xact().ID()
 		pw = comm.GetPodWatcher()
-
 		comm.Restart(boot) // Note: pod's uri might change after restart, need to update the bootstrapper
 	} else {
-		// Fresh start: xid must be provided by the caller
+		// Fresh start (xid must be provided by the caller)
 		pw = newPodWatcher(podName, boot)
 		comm = newCommunicator(newAborter(msg.Name()), boot, pw)
 
-		if err = reg.add(msg.Name(), comm); err != nil {
+		if err = mgr.add(msg.Name(), comm); err != nil {
 			return podName, svcName, err
 		}
 	}
@@ -305,7 +305,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 	}
 
 	// 6. Transition to the Running stage if everything succeeds
-	if !reg.transition(msg.Name(), Running) {
+	if !mgr.transition(msg.Name(), Running) {
 		err = fmt.Errorf("etl[%s] fail to transition to Running stage", msg.Name())
 		goto cleanup
 	}
@@ -318,7 +318,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 
 cleanup:
 	nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to start etl[%s] with xid %s, msg %s, err %v - cleaning up..", msg.Name(), xid, msg, err))
-	if !reg.transition(comm.ETLName(), Stopped) {
+	if !mgr.transition(comm.ETLName(), Stopped) {
 		nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to cleanup etl[%s], already in Stopped stage", msg.Name()))
 	}
 
@@ -330,25 +330,34 @@ cleanup:
 	return podName, svcName, pw.wrapError(err)
 }
 
-// TODO -- FIXME: Stop shouldn't accept both etlName and the ETL's underlying xaction ID as parameter
-func Stop(id string, errCause error) (err error) {
+func StopByXid(xid string, errCause error) error {
+	comm, _ := mgr.getByXid(xid)
+	if comm == nil {
+		return cos.NewErrNotFound(core.T, "etl with xid "+xid+" not found")
+	}
+	return Stop(comm.ETLName(), errCause)
+}
+
+func Stop(etlName string, errCause error) (err error) {
 	errCtx := &cmn.ETLErrCtx{
 		TID:     core.T.SID(),
-		ETLName: id,
+		ETLName: etlName,
 	}
 
 	// Abort all running offline ETLs.
 	xreg.AbortKind(errCause, apc.ActETLBck)
 
-	comm, err := GetCommunicator(id)
-	if err != nil {
-		return err
+	comm, stage := mgr.getByName(etlName)
+	if comm == nil {
+		return cos.NewErrNotFound(core.T, etlName+" not found")
 	}
 
 	// Do nothing if the ETL is already stopped.
-	if !reg.transition(comm.ETLName(), Stopped) {
+	if stage == Stopped {
 		return nil
 	}
+
+	mgr.transition(etlName, Stopped)
 
 	errCtx.PodName, errCtx.SvcName = comm.PodName(), comm.SvcName()
 	if err := cleanupEntities(errCtx, comm.PodName(), comm.SvcName()); err != nil {
@@ -362,13 +371,13 @@ func Stop(id string, errCause error) (err error) {
 	return nil
 }
 
-func Delete(id string) error {
-	if err := Stop(id, cmn.ErrXactUserAbort); !cos.IsErrNotFound(err) { // discard not found error
+func Delete(etlName string) error {
+	if err := Stop(etlName, cmn.ErrXactUserAbort); err != nil {
 		return err
 	}
-	// Remove communicator from the registry
-	if !reg.del(id) {
-		return cos.NewErrNotFound(core.T, "ETL delete job "+id)
+	// Remove etl entity
+	if !mgr.del(etlName) {
+		return cos.NewErrNotFound(core.T, etlName+" not found")
 	}
 	return nil
 }
@@ -385,25 +394,22 @@ func StopAll() {
 	}
 }
 
-// GetCommunicator retrieves from registry by either etl name or xid
+// GetCommunicator retrieves from registry by etl name
 // Returns an error if not found or not in the Running stage.
-func GetCommunicator(id string) (Communicator, error) {
-	c, stage := reg.get(id)
+func GetCommunicator(etlName string) (Communicator, error) {
+	c, stage := mgr.getByName(etlName)
 	if c == nil {
-		c, stage = reg.getByXid(id)
-		if c == nil {
-			return nil, cos.NewErrNotFound(core.T, "ETL job "+id)
-		}
+		return nil, cos.NewErrNotFound(core.T, etlName)
 	}
 
 	if stage != Running {
-		return c, cos.NewErrNotFound(core.T, "ETL job "+id+"not in Running stage")
+		return c, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
 	}
 
 	return c, nil
 }
 
-func List() []Info { return reg.list() }
+func List() []Info { return mgr.list() }
 
 func PodLogs(transformID string) (logs Logs, err error) {
 	c, err := GetCommunicator(transformID)

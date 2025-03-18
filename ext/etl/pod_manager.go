@@ -14,27 +14,28 @@ import (
 )
 
 type (
+	// entity represents an existing (but not necessarily running) ETL instance
 	entity struct {
 		comm  Communicator
 		stage Stage
 	}
-	registry struct {
+	manager struct {
 		m   map[string]*entity
 		mtx sync.RWMutex
 	}
 )
 
 var (
-	reg       *registry
+	mgr       *manager
 	reqSecret string
 )
 
 func init() {
-	reg = &registry{m: make(map[string]*entity)}
+	mgr = &manager{m: make(map[string]*entity, 4)}
 	reqSecret = cos.CryptoRandS(10)
 }
 
-func (r *registry) add(name string, c Communicator) (err error) {
+func (r *manager) add(name string, c Communicator) (err error) {
 	r.mtx.Lock()
 	if _, ok := r.m[name]; ok {
 		err = fmt.Errorf("etl[%s] already exists", name)
@@ -46,7 +47,7 @@ func (r *registry) add(name string, c Communicator) (err error) {
 }
 
 // transition return false if the entry does not exist or is already in the given stage
-func (r *registry) transition(name string, stage Stage) (updated bool) {
+func (r *manager) transition(name string, stage Stage) (updated bool) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
@@ -60,7 +61,7 @@ func (r *registry) transition(name string, stage Stage) (updated bool) {
 	return true
 }
 
-func (r *registry) get(name string) (c Communicator, stage Stage) {
+func (r *manager) getByName(name string) (c Communicator, stage Stage) {
 	r.mtx.RLock()
 	if en, exists := r.m[name]; exists {
 		c = en.comm
@@ -70,7 +71,7 @@ func (r *registry) get(name string) (c Communicator, stage Stage) {
 	return c, stage
 }
 
-func (r *registry) getByXid(xid string) (c Communicator, stage Stage) {
+func (r *manager) getByXid(xid string) (c Communicator, stage Stage) {
 	r.mtx.RLock()
 	for _, en := range r.m {
 		if en.comm.Xact().ID() == xid {
@@ -82,7 +83,7 @@ func (r *registry) getByXid(xid string) (c Communicator, stage Stage) {
 	return c, stage
 }
 
-func (r *registry) del(name string) (exists bool) {
+func (r *manager) del(name string) (exists bool) {
 	debug.Assert(name != "")
 	r.mtx.Lock()
 	if _, exists = r.m[name]; exists {
@@ -92,7 +93,7 @@ func (r *registry) del(name string) (exists bool) {
 	return exists
 }
 
-func (r *registry) list() []Info {
+func (r *manager) list() []Info {
 	r.mtx.RLock()
 	etls := make([]Info, 0, len(r.m))
 	for name, en := range r.m {
