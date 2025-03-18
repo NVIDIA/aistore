@@ -14,3 +14,4 @@ pylint>=3.2.7
 pytest>=8.3.5
 typing-extensions>=4.12.2
 webdataset>=0.2.100
+tenacity>=9.0.0

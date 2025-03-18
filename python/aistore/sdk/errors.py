@@ -21,6 +21,12 @@ class AISError(APIRequestError):
     """
 
 
+class AISRetryableError(AISError):
+    """
+    Exception raised for AIStore related errors that may resolve by retrying.
+    """
+
+
 # pylint: disable=unused-variable
 class InvalidBckProvider(Exception):
     """
@@ -46,7 +52,7 @@ class ErrBckNotFound(AISError):
 
 
 # pylint: disable=unused-variable
-class ErrObjNotFound(AISError):
+class ErrObjNotFound(AISRetryableError):
     """
     Raised when an object is expected and not found
     """
@@ -61,6 +67,12 @@ class ErrBckAlreadyExists(AISError):
 
 # pylint: disable=unused-variable
 class ErrETLAlreadyExists(AISError):
+    """
+    Raised when an ETL is created but already exists in AIS
+    """
+
+
+class ErrGETConflict(AISRetryableError):
     """
     Raised when an ETL is created but already exists in AIS
     """

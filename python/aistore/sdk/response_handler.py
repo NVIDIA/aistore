@@ -17,6 +17,7 @@ from aistore.sdk.errors import (
     ErrBckAlreadyExists,
     InvalidBckProvider,
     APIRequestError,
+    ErrGETConflict,
 )
 from aistore.sdk.provider import Provider
 from aistore.sdk.utils import extract_and_parse_url
@@ -105,5 +106,9 @@ class AISResponseHandler(ResponseHandler):
                 exc_class = ErrETLAlreadyExists
             elif prov and not obj:
                 exc_class = ErrBckAlreadyExists
+            elif (
+                r.request.method == "GET"
+            ):  # Only raise ErrGETConflict for GET requests
+                exc_class = ErrGETConflict
 
         return exc_class(status, message, req_url)

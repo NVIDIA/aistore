@@ -3,8 +3,23 @@
 #
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
+import logging
 
 from requests import Response
+from requests.exceptions import (
+    ConnectTimeout,
+    ReadTimeout,
+    ChunkedEncodingError,
+    ConnectionError as RequestsConnectionError,
+)
+
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    wait_exponential,
+    stop_after_delay,
+    before_sleep_log,
+)
 
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
@@ -25,9 +40,20 @@ from aistore.sdk.response_handler import ResponseHandler, AISResponseHandler
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
 from aistore.sdk.types import Smap
-from aistore.sdk.utils import decode_response
+from aistore.sdk.utils import decode_response, get_logger
+from aistore.sdk.errors import AISRetryableError
 
 T = TypeVar("T")
+
+logger = get_logger(__name__)
+
+RETRYABLE_EXCEPTIONS = (
+    ConnectTimeout,
+    RequestsConnectionError,
+    ReadTimeout,
+    AISRetryableError,
+    ChunkedEncodingError,
+)
 
 
 class RequestClient:
@@ -163,6 +189,54 @@ class RequestClient:
         resp = self.request(method, path, **kwargs)
         return decode_response(res_model, resp)
 
+    @retry(
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        wait=wait_exponential(
+            multiplier=1, min=1, max=10
+        ),  # 0s, 2s, 4s, 8s, 10s, ..., 10s
+        stop=stop_after_delay(60),  # Retries stay under 60 seconds
+        reraise=True,
+        before_sleep=before_sleep_log(logger, logging.DEBUG),
+    )
+    def _retryable_session_request(
+        self, method: str, url: str, headers: dict, **kwargs
+    ) -> Response:
+        """
+        Makes an HTTP request with automatic retries on connection-related errors.
+
+        Retries the request if it encounters transient network issues such as:
+        - ConnectTimeout
+        - ReadTimeout
+        - ConnectionError (refused connection, reset by peer)
+        - AISRetriableError
+        - ChunkedEncodingError
+
+        If the request is an HTTPS request with a payload (`data`), it uses `_request_with_manual_redirect`.
+        Otherwise, it falls back to `_session_request`.
+
+        **Why `tenacity.retry` over `urllib3.Retry` for this function?**
+        `urllib3.Retry` always retries the **same failing URL**, which is problematic if a target is down or restarting.
+        Instead, we retry via the **proxy URL** to reach another available target—something `urllib3.Retry` does not
+        support.
+
+        Args:
+            method (str): HTTP method (e.g., GET, POST).
+            url (str): Target URL.
+            headers (dict): HTTP headers.
+            kwargs: Additional request parameters.
+
+        Returns:
+            Response: The HTTP response from the server.
+        """
+        if url.startswith(HTTPS) and "data" in kwargs:
+            response = self._request_with_manual_redirect(
+                method, url, headers, **kwargs
+            )
+        else:
+            response = self._session_request(method, url, headers, **kwargs)
+
+        return self._response_handler.handle_response(response)
+
     def request(
         self,
         method: str,
@@ -192,11 +266,7 @@ class RequestClient:
         headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
         if self.token:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
-        if url.startswith(HTTPS) and "data" in kwargs:
-            resp = self._request_with_manual_redirect(method, url, headers, **kwargs)
-        else:
-            resp = self._session_request(method, url, headers, **kwargs)
-        return self._response_handler.handle_response(resp)
+        return self._retryable_session_request(method, url, headers, **kwargs)
 
     def _request_with_manual_redirect(
         self, method: str, url: str, headers, **kwargs

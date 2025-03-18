@@ -2,7 +2,10 @@ import unittest
 from unittest.mock import patch, Mock, call
 
 from requests import Response, Session
-
+from requests.exceptions import (
+    ConnectTimeout,
+    ConnectionError as RequestsConnectionError,
+)
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
@@ -12,6 +15,7 @@ from aistore.sdk.const import (
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
+from aistore.sdk.errors import AISRetryableError
 from tests.utils import cases
 
 
@@ -194,3 +198,83 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(
             "https://aistore-endpoint/v1/testpath/to_obj?p1key=p1val&p2key=p2val", res
         )
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    def test_successful_request(self, mock_request):
+        """Test successful request with no retries."""
+
+        self.mock_response.status_code = 200
+        self.mock_response.text = "Success"
+        mock_request.return_value = self.mock_response
+        response = self.default_request_client.request("GET", "http://test-url", {})
+
+        # Validate expected attributes
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, "Success")
+
+        # Ensure only one request was made
+        mock_request.assert_called_once()
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    def test_retry_on_connect_timeout(self, mock_request):
+        """Test that the function retries on ConnectTimeout."""
+        self.mock_response.status_code = 200
+        mock_request.side_effect = [
+            ConnectTimeout,
+            self.mock_response,
+        ]  # Fails once, then succeeds
+
+        response = self.default_request_client.request("GET", "http://test-url", {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_request.call_count, 2)  # Retries once before success
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    def test_retry_on_connection_error(self, mock_request):
+        """Test that the function retries on ConnectionError (e.g., refused connection)."""
+        self.mock_response.status_code = 200
+        mock_request.side_effect = [
+            RequestsConnectionError,
+            RequestsConnectionError,
+            self.mock_response,
+        ]
+        response = self.default_request_client.request("GET", "http://test-url", {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_request.call_count, 3)  # Retries twice before success
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    def test_max_retries_exceeded(self, mock_request):
+        """Test that the function raises an error after max retries are exceeded."""
+        mock_request.side_effect = RequestsConnectionError  # Always fails
+
+        with self.assertRaises(RequestsConnectionError):
+            self.default_request_client.request("GET", "http://test-url", {})
+
+        self.assertEqual(mock_request.call_count, 10)  # Stops at max retry limit
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    def test_unexpected_exception(self, mock_request):
+        """Test that an unexpected exception is raised correctly."""
+        mock_request.side_effect = ValueError(
+            "Unexpected error"
+        )  # Simulate unexpected failure
+
+        with self.assertRaises(ValueError):
+            self.default_request_client.request("GET", "http://test-url", {})
+
+        mock_request.assert_called_once()  # Should fail immediately, no retries
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    def test_ais_retriable_errors(self, mock_request):
+        """Test that the function is retried if it raises AISRetriableError."""
+        self.mock_response.status_code = 200
+        mock_request.side_effect = [
+            AISRetryableError(409, "Conflict", "http://test-url"),
+            self.mock_response,
+        ]
+
+        response = self.default_request_client.request("GET", "http://test-url", {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_request.call_count, 2)  # Retries once before success

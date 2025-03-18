@@ -23,8 +23,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `AISError` and `AuthNError` now both inherit from `APIRequestError`.
 - `cluster.get_performance()` now returns raw performance data as a `dict` keyed by target IDs, rather than typed aggregator objects.
 - `cluster.list_running_etls()` now excludes non-running ETL instances.
-- fix `JobStats` and `JobSnapshot` models.
+- Fix `JobStats` and `JobSnapshot` models.
 - Update `pyproject.toml` to enforce a higher minimum version requirement and `common_requirements` to use the latest stable versions for testing.
+- Enhanced RequestClient retry strategy for better fault tolerance:
+  - Implemented full request retries for `ConnectTimeout`, `RequestsConnectionError`, `ReadTimeout`, `AISRetryableError` and `ChunkedEncodingError`, ensuring retries cover the entire request flow.
+  - Optimized `urllib3.Retry` configuration to improve backoff handling.
+  - Improved resilience to transient connection failures by refining retry logic.
+  - Updated dependencies to align with retry behavior improvements.
 
 ### Removed
 

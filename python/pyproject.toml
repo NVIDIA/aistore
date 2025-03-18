@@ -51,6 +51,7 @@ dependencies = [
     "braceexpand>=0.1.7",
     "msgspec>=0.18.5",
     "xxhash>=3.3.0",
+    "tenacity>=9.0.0",
 ]
 
 keywords = [
