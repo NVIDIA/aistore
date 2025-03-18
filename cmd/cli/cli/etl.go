@@ -218,7 +218,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 
 	msg := &etl.InitSpecMsg{}
 	{
-		msg.IDX = parseStrFlag(c, etlNameFlag)
+		msg.EtlName = parseStrFlag(c, etlNameFlag)
 		msg.CommTypeX = parseStrFlag(c, commTypeFlag)
 		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
 		msg.Timeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
@@ -254,7 +254,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("flag %s cannot be empty", qflprn(fromFileFlag))
 	}
 
-	msg.IDX = parseStrFlag(c, etlNameFlag)
+	msg.EtlName = parseStrFlag(c, etlNameFlag)
 	if msg.Name() != "" {
 		if err = k8s.ValidateEtlName(msg.Name()); err != nil {
 			return
