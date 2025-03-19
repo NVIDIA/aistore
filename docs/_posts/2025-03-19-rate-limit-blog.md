@@ -1,6 +1,14 @@
+---
+layout: post
+title:  "Opportunities Galore: Using Rate Limits to Enhance Reliability and Performance"
+date:   Mar 19, 2025
+author: Alex Aizman
+categories: reliability performance aistore
+---
+
 AIStore v3.28 introduces a unified **rate-limiting** capability that works at both the frontend (client-facing) and backend (cloud-facing) layers. It enables proactive control to prevent hitting limits and reactive handling when limits are encountered — all configurable at both the cluster and bucket levels, with zero performance overhead when disabled.
 
-<img src="/docs/images/rate-limit.png" alt="Dual-layer Rate Limiting" width="80%">
+![Dual-layer Rate Limiting](/assets/rate-limit-60pct.png)
 
 This text explains how it all fits together.
 
