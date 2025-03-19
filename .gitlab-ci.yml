@@ -192,15 +192,17 @@ build:k8s:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       allow_failure: false
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: never
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
       allow_failure: false
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
       allow_failure: false
-    - <<: *etl_change_rules
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      <<: *etl_change_rules
       allow_failure: false
-    - <<: *python_req_change_rules
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      <<: *python_req_change_rules
       allow_failure: false
 
 lint:linux:
@@ -303,6 +305,36 @@ test:short:pytorch:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
       - $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/
+
+test:short:python-authn:
+  stage: test-short
+  tags:
+    - $RUNNER_TAG
+  timeout: 20m
+  <<: *gather_logs_def
+  variables:
+    AIS_AUTHN_ENABLED: "true"
+    AIS_AUTHN_SU_NAME: "admin"
+    AIS_AUTHN_SU_PASS: "admin"
+    AIS_AUTHN_URL: "http://localhost:52001"
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - cd python/
+    - make python_authn_tests
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      <<: *python_req_change_rules
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      <<: *authn_change_rules
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
 
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
@@ -553,60 +585,30 @@ test:short:k8s:
   extends: .test_k8s_short_template
   timeout: 1h
   rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: never
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
       when: never
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
       when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       <<: *etl_change_rules
   variables:
     RE: "TestETL|TestConfig|TestMountpath"
   script:
     - make test-short
 
-test:short:python-authn:
-  stage: test-short
-  tags:
-    - $RUNNER_TAG
-  timeout: 20m
-  <<: *gather_logs_def
-  variables:
-    AIS_AUTHN_ENABLED: "true"
-    AIS_AUTHN_SU_NAME: "admin"
-    AIS_AUTHN_SU_PASS: "admin"
-    AIS_AUTHN_URL: "http://localhost:52001"
-  script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
-    - cd python/
-    - make python_authn_tests
-  rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      <<: *python_req_change_rules
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      <<: *authn_change_rules
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
-
 test:short:python-etl:
   extends: .test_k8s_short_template
   rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: never
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
       when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       <<: *python_req_change_rules
       when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       <<: *etl_change_rules
       when: on_success
   retry:
