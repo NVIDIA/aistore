@@ -14,9 +14,21 @@ import (
 )
 
 type (
-	// entity represents an existing (but not necessarily running) ETL instance
+	// entity represents an ETL instance managed by an individual target.
+	// - Created and added to the manager before entering the `Initializing` stage.
+	// - Removed only after the user explicitly deletes it from the `Stopped` stage.
+	//
+	// Expected state transitions:
+	// - `Initializing`: Set up resources in the following order:
+	//     1. Create (or reuse) communicator and pod watcher
+	//     2. Start (or renew) xaction
+	//     3. Create Kubernetes resources (pod/service)
+	// - `Running`: All resources are active, handling inline and offline transform requests via the communicator.
+	// - `Stopped`: Kubernetes resources (pod/service) are cleaned up, but the communicator,
+	//   pod watcher, and xaction remain available. This allows the ETL to be restarted by
+	//   reusing these components during the initialization process.
 	entity struct {
-		comm  Communicator
+		comm  Communicator // TODO: decouple xaction and pod watcher from communicator.
 		stage Stage
 	}
 	manager struct {

@@ -64,7 +64,7 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 		if err == nil {
 			size := lom.Lsize(true)
 			// (NOTE: check callers that give us a zero)
-			debug.Assertf(params.Size <= 0 || params.Size == size, "%s: %d vs %d", lom, params.Size, size)
+			debug.Assertf(params.OWT == cmn.OwtTransform || params.Size <= 0 || params.Size == size, "%s: %d vs %d", lom, params.Size, size)
 		}
 	})
 	return err

@@ -6,7 +6,6 @@ package etl
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,35 +23,26 @@ const (
 	ctrTerminated = "Terminated"
 )
 
-type (
-	// podWatcher uses the Kubernetes API to capture ETL pod status changes,
-	// providing diagnostic information about the pod's internal state.
-	podWatcher struct {
-		podName         string
-		boot            *etlBootstrapper
-		recentPodStatus *podStatus
-		watcher         watch.Interface
+// podWatcher uses the Kubernetes API to capture ETL pod status changes,
+// providing diagnostic information about the pod's internal state.
+type podWatcher struct {
+	podName         string
+	boot            *etlBootstrapper
+	recentPodStatus *k8s.PodStatus
+	watcher         watch.Interface
 
-		// sync
-		podCtx       context.Context
-		podCtxCancel context.CancelFunc
-		stopCh       *cos.StopCh
-		psMutex      sync.Mutex
-	}
-
-	podStatus struct {
-		state   string // "Waiting" | "Running" | "Terminated"
-		cname   string // container name
-		reason  string
-		message string
-	}
-)
+	// sync
+	podCtx       context.Context
+	podCtxCancel context.CancelFunc
+	stopCh       *cos.StopCh
+	psMutex      sync.Mutex
+}
 
 func newPodWatcher(podName string, boot *etlBootstrapper) (pw *podWatcher) {
 	pw = &podWatcher{
 		podName:         podName,
 		boot:            boot,
-		recentPodStatus: &podStatus{},
+		recentPodStatus: &k8s.PodStatus{},
 	}
 	return pw
 }
@@ -67,14 +57,17 @@ func (pw *podWatcher) processEvents() {
 				continue
 			}
 			if exitCode := pw._process(pod); exitCode != 0 {
-				if pw.boot != nil && pw.boot.xctn != nil { // pw.boot.xctn is not yet assigned in init error
-					abortErr := cmn.NewErrETL(pw.boot.errCtx, ctrTerminated)
-					if pw.boot.xctn.Abort(pw.wrapError(abortErr)) {
-						// After Finish() call succeed, proxy will be notified and broadcast to call etl.Stop()
-						// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
-						pw.boot.xctn.Finish()
-					}
+				// pw.boot.xctn is not yet assigned in init error
+				if pw.boot == nil || pw.boot.xctn == nil {
+					return
 				}
+				pw.boot.errCtx.PodStatus = pw.GetPodStatus()
+				if pw.boot.xctn.Abort(cmn.NewErrETL(pw.boot.errCtx, ctrTerminated)) {
+					// After Finish() call succeed, proxy will be notified and broadcast to call etl.Stop()
+					// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
+					pw.boot.xctn.Finish()
+				}
+
 				return
 			}
 		case <-pw.stopCh.Listen():
@@ -91,7 +84,7 @@ func (pw *podWatcher) _process(pod *corev1.Pod) int32 {
 	for i := range pod.Status.InitContainerStatuses {
 		ics := &pod.Status.InitContainerStatuses[i]
 		if ics.State.Terminated != nil && ics.State.Terminated.ExitCode != 0 {
-			pw.setPodStatus(ctrTerminated, ics.Name, ics.State.Terminated.Reason, ics.State.Terminated.Message)
+			pw.setPodStatus(ctrTerminated, ics.Name, ics.State.Terminated.Reason, ics.State.Terminated.Message, ics.State.Terminated.ExitCode)
 			return ics.State.Terminated.ExitCode
 		}
 	}
@@ -104,11 +97,11 @@ func (pw *podWatcher) _process(pod *corev1.Pod) int32 {
 
 		switch {
 		case cs.State.Waiting != nil:
-			pw.setPodStatus(ctrWaiting, cs.Name, cs.State.Waiting.Reason, cs.State.Waiting.Message)
+			pw.setPodStatus(ctrWaiting, cs.Name, cs.State.Waiting.Reason, cs.State.Waiting.Message, 0)
 		case cs.State.Running != nil:
-			pw.setPodStatus(ctrRunning, cs.Name, "Running", cs.State.Running.String())
+			pw.setPodStatus(ctrRunning, cs.Name, "Running", cs.State.Running.String(), 0)
 		case cs.State.Terminated != nil:
-			pw.setPodStatus(ctrTerminated, cs.Name, cs.State.Terminated.Reason, cs.State.Terminated.Message)
+			pw.setPodStatus(ctrTerminated, cs.Name, cs.State.Terminated.Reason, cs.State.Terminated.Message, cs.State.Terminated.ExitCode)
 			if cs.State.Terminated.ExitCode != 0 {
 				return cs.State.Terminated.ExitCode
 			}
@@ -153,7 +146,7 @@ func (pw *podWatcher) stop(wait bool) {
 	// Wait for `pw.processEvents()` to terminate, which will trigger `pw.podCtx` cancellation
 	<-pw.podCtx.Done()
 
-	if !wait || pw.getPodStatus().state == ctrTerminated {
+	if !wait || pw.GetPodStatus().State == ctrTerminated {
 		for range pw.watcher.ResultChan() {
 		}
 		return
@@ -169,33 +162,21 @@ func (pw *podWatcher) stop(wait bool) {
 	}
 }
 
-// wrapError wraps the provided error with the most recently captured pod status information.
-func (pw *podWatcher) wrapError(err error) error {
-	if err == nil {
-		return err
-	}
-	return fmt.Errorf("%w, recent pod status: %q", err, pw.getPodStatus())
-}
-
 // setPodStatus safely sets the pod status by mutex
-func (pw *podWatcher) setPodStatus(state, cname, reason, message string) {
+func (pw *podWatcher) setPodStatus(state, cname, reason, message string, exitCode int32) {
 	pw.psMutex.Lock()
-	defer pw.psMutex.Unlock()
-
-	pw.recentPodStatus.state, pw.recentPodStatus.cname, pw.recentPodStatus.reason, pw.recentPodStatus.message = state, cname, reason, message
+	pw.recentPodStatus.State, pw.recentPodStatus.CtrName, pw.recentPodStatus.Reason, pw.recentPodStatus.Message = state, cname, reason, message
+	pw.recentPodStatus.ExitCode = exitCode
+	pw.psMutex.Unlock()
 }
 
-// getPodStatus safely retrieves a copy of the pod status by mutex
-func (pw *podWatcher) getPodStatus() (rps podStatus) {
+// GetPodStatus safely retrieves a copy of the pod status by mutex
+func (pw *podWatcher) GetPodStatus() (rps k8s.PodStatus) {
 	pw.psMutex.Lock()
 	defer pw.psMutex.Unlock()
 
 	if pw.recentPodStatus == nil {
-		return podStatus{}
+		return rps
 	}
 	return *pw.recentPodStatus
-}
-
-func (ps *podStatus) Error() string {
-	return fmt.Sprintf("container: %q, state: %q, reason: %q, message: %q", ps.cname, ps.state, ps.reason, ps.message)
 }

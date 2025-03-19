@@ -168,23 +168,26 @@ func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lo
 		return
 	}
 
-	if ecode, err := comm.InlineTransform(w, r, lom, targs); err != nil {
-		var (
-			ectx = &cmn.ETLErrCtx{
-				ETLName:          name,
-				ETLTransformArgs: targs,
-				PodName:          comm.PodName(),
-				SvcName:          comm.SvcName(),
-			}
-			errV = cmn.NewErrETL(ectx, err.Error(), ecode)
-			xetl = comm.Xact()
-		)
+	xetl := comm.Xact()
+	ecode, err := comm.InlineTransform(w, r, lom, targs)
+	if err != nil {
+		// Wait for possible abort errors from the xaction (e.g., pod runtime errors)
+		if abortErr := xetl.AbortedAfter(etl.DefaultReqTimeout); abortErr != nil {
+			t.writeErr(w, r, abortErr, ecode)
+			return
+		}
+		ectx := &cmn.ETLErrCtx{
+			ETLName:          name,
+			ETLTransformArgs: targs,
+			PodName:          comm.PodName(),
+			SvcName:          comm.SvcName(),
+		}
+		errV := cmn.NewErrETL(ectx, err.Error(), ecode)
 		xetl.AddErr(errV)
 		t.writeErr(w, r, errV, ecode)
 		return
 	}
 
-	xetl := comm.Xact()
 	xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
 }
 

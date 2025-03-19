@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -44,14 +45,14 @@ var _ = Describe("ETLPodWatcherTest", func() {
 
 	Context("Sequential Events", func() {
 		It("Single Waiting Event", func() {
-			ps := podStatus{cname: "server", state: ctrWaiting, reason: "test-reason", message: "test-message"}
+			ps := k8s.PodStatus{CtrName: "server", State: ctrWaiting, Reason: "test-reason", Message: "test-message"}
 			mockWatcher.send("main", ps, 0)
 			pw.stop(true)
 
 			Expect(mockWatcher.stopped).To(BeTrue(), "mock watcher is not stopped after pw.stop() called")
 			Expect(pw.podCtx.Done()).To(BeClosed(), "pw.podCtx.Done() is not closed after pw.stop() called")
 
-			Expect(pw.getPodStatus()).To(Equal(ps))
+			Expect(pw.GetPodStatus()).To(Equal(ps))
 		})
 		It("Multiple Waiting Events", func() {
 			var (
@@ -59,7 +60,7 @@ var _ = Describe("ETLPodWatcherTest", func() {
 				testName  = "multiple-waiting-events"
 			)
 			for i := range numEvents {
-				ps := podStatus{cname: "server", state: ctrWaiting, reason: fmt.Sprintf(reasonFmt, testName, i), message: fmt.Sprintf(messageFmt, testName, i)}
+				ps := k8s.PodStatus{CtrName: "server", State: ctrWaiting, Reason: fmt.Sprintf(reasonFmt, testName, i), Message: fmt.Sprintf(messageFmt, testName, i)}
 				mockWatcher.send("main", ps, 0)
 			}
 			pw.stop(true)
@@ -67,10 +68,10 @@ var _ = Describe("ETLPodWatcherTest", func() {
 			Expect(mockWatcher.stopped).To(BeTrue(), "mock watcher is not stopped after pw.stop() called")
 			Expect(pw.podCtx.Done()).To(BeClosed(), "pw.podCtx.Done() is not closed after pw.stop() called")
 
-			Expect(pw.getPodStatus().cname).To(Equal("server"))
-			Expect(pw.getPodStatus().state).To(Equal(ctrWaiting))
-			Expect(pw.getPodStatus().reason).To(Equal(fmt.Sprintf(reasonFmt, testName, numEvents-1)))
-			Expect(pw.getPodStatus().message).To(Equal(fmt.Sprintf(messageFmt, testName, numEvents-1)))
+			Expect(pw.GetPodStatus().CtrName).To(Equal("server"))
+			Expect(pw.GetPodStatus().State).To(Equal(ctrWaiting))
+			Expect(pw.GetPodStatus().Reason).To(Equal(fmt.Sprintf(reasonFmt, testName, numEvents-1)))
+			Expect(pw.GetPodStatus().Message).To(Equal(fmt.Sprintf(messageFmt, testName, numEvents-1)))
 		})
 		It("Discard Unknown Events", func() {
 			var (
@@ -78,7 +79,7 @@ var _ = Describe("ETLPodWatcherTest", func() {
 				testName  = "discard-unknown-events"
 			)
 			for i := range numEvents {
-				ps := podStatus{cname: "server", state: ctrWaiting, reason: fmt.Sprintf(reasonFmt, testName, i), message: fmt.Sprintf(messageFmt, testName, i)}
+				ps := k8s.PodStatus{CtrName: "server", State: ctrWaiting, Reason: fmt.Sprintf(reasonFmt, testName, i), Message: fmt.Sprintf(messageFmt, testName, i)}
 				mockWatcher.send("main", ps, 0)
 			}
 
@@ -91,10 +92,10 @@ var _ = Describe("ETLPodWatcherTest", func() {
 			Expect(mockWatcher.stopped).To(BeTrue(), "mock watcher is not stopped after pw.stop() called")
 			Expect(pw.podCtx.Done()).To(BeClosed(), "pw.podCtx.Done() is not closed after pw.stop() called")
 
-			Expect(pw.getPodStatus().cname).To(Equal("server"))
-			Expect(pw.getPodStatus().state).To(Equal(ctrWaiting))
-			Expect(pw.getPodStatus().reason).To(Equal(fmt.Sprintf(reasonFmt, testName, numEvents-1)))
-			Expect(pw.getPodStatus().message).To(Equal(fmt.Sprintf(messageFmt, testName, numEvents-1)))
+			Expect(pw.GetPodStatus().CtrName).To(Equal("server"))
+			Expect(pw.GetPodStatus().State).To(Equal(ctrWaiting))
+			Expect(pw.GetPodStatus().Reason).To(Equal(fmt.Sprintf(reasonFmt, testName, numEvents-1)))
+			Expect(pw.GetPodStatus().Message).To(Equal(fmt.Sprintf(messageFmt, testName, numEvents-1)))
 		})
 	})
 
@@ -105,12 +106,12 @@ var _ = Describe("ETLPodWatcherTest", func() {
 				testName  = "simple-termination"
 			)
 			for i := range numEvents {
-				ps := podStatus{cname: "server", state: ctrWaiting, reason: fmt.Sprintf(reasonFmt, testName, i), message: fmt.Sprintf(messageFmt, testName, i)}
-				mockWatcher.send("main", ps, 1)
+				ps := k8s.PodStatus{CtrName: "server", State: ctrWaiting, Reason: fmt.Sprintf(reasonFmt, testName, i), Message: fmt.Sprintf(messageFmt, testName, i)}
+				mockWatcher.send("main", ps, 0)
 			}
 
 			for i := range numEvents {
-				ps := podStatus{cname: "server", state: ctrTerminated, reason: fmt.Sprintf(reasonFmt, testName, i), message: fmt.Sprintf(messageFmt, testName, i)}
+				ps := k8s.PodStatus{CtrName: "server", State: ctrTerminated, Reason: fmt.Sprintf(reasonFmt, testName, i), Message: fmt.Sprintf(messageFmt, testName, i), ExitCode: 1}
 				mockWatcher.send("main", ps, 1)
 			}
 			pw.stop(true)
@@ -118,34 +119,34 @@ var _ = Describe("ETLPodWatcherTest", func() {
 			Expect(mockWatcher.stopped).To(BeTrue(), "mock watcher is not stopped after pw.stop() called")
 			Expect(pw.podCtx.Done()).To(BeClosed(), "pw.podCtx.Done() is not closed after pw.stop() called")
 
-			Expect(pw.getPodStatus().cname).To(Equal("server"))
-			Expect(pw.getPodStatus().state).To(Equal(ctrTerminated))
+			Expect(pw.GetPodStatus().CtrName).To(Equal("server"))
+			Expect(pw.GetPodStatus().State).To(Equal(ctrTerminated))
 			// the captured pod status should stay as the first received Terminated state event (number 0),
 			// since the pod watcher goroutine exits on the first termination state chagne with non-zero exit code
-			Expect(pw.getPodStatus().reason).To(Equal(fmt.Sprintf(reasonFmt, testName, 0)))
-			Expect(pw.getPodStatus().message).To(Equal(fmt.Sprintf(messageFmt, testName, 0)))
+			Expect(pw.GetPodStatus().Reason).To(Equal(fmt.Sprintf(reasonFmt, testName, 0)))
+			Expect(pw.GetPodStatus().Message).To(Equal(fmt.Sprintf(messageFmt, testName, 0)))
 		})
 		It("Init Container Termination", func() {
-			ps := podStatus{cname: "server-deps", state: ctrTerminated, reason: "init-container-termination-reason", message: "init-container-termination-message"}
+			ps := k8s.PodStatus{CtrName: "server-deps", State: ctrTerminated, Reason: "init-container-termination-reason", Message: "init-container-termination-message", ExitCode: 1}
 			mockWatcher.send("init", ps, 1)
 			pw.stop(true)
 
 			Expect(mockWatcher.stopped).To(BeTrue(), "mock watcher is not stopped after pw.stop() called")
 			Expect(pw.podCtx.Done()).To(BeClosed(), "pw.podCtx.Done() is not closed after pw.stop() called")
 
-			Expect(pw.getPodStatus()).To(Equal(ps))
+			Expect(pw.GetPodStatus()).To(Equal(ps))
 		})
 		It("Manually Stopped without Wait", func() {
-			ps := podStatus{cname: "server", state: ctrTerminated, reason: "manual-stop-reason", message: "manual-stop-message"}
+			ps := k8s.PodStatus{CtrName: "server", State: ctrTerminated, Reason: "manual-stop-reason", Message: "manual-stop-message"}
 			mockWatcher.send("main", ps, 0)
 			pw.stop(false) // stop without wait
 
 			Expect(mockWatcher.stopped).To(BeTrue(), "mock watcher is not stopped after pw.stop() called")
 			Expect(pw.podCtx.Done()).To(BeClosed(), "pw.podCtx.Done() is not closed after pw.stop() called")
 
-			Expect(pw.getPodStatus()).To(SatisfyAny(
+			Expect(pw.GetPodStatus()).To(SatisfyAny(
 				Equal(ps),
-				Equal(podStatus{}),
+				Equal(k8s.PodStatus{}),
 			))
 		})
 	})
@@ -179,19 +180,19 @@ func newMockWatcher() *mockWatcher {
 }
 
 // send a mock K8s API event response to the resultChan
-func (mw *mockWatcher) send(source string, ps podStatus, exitCode int32) {
-	var cs = corev1.ContainerStatus{Name: ps.cname}
+func (mw *mockWatcher) send(source string, ps k8s.PodStatus, exitCode int32) {
+	var cs = corev1.ContainerStatus{Name: ps.CtrName}
 
 	// Assign the appropriate container state
-	switch ps.state {
+	switch ps.State {
 	case ctrWaiting:
-		cs.State = corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: ps.reason, Message: ps.message}}
+		cs.State = corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: ps.Reason, Message: ps.Message}}
 	case ctrRunning:
 		cs.State = corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
 	case ctrTerminated:
-		cs.State = corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: ps.reason, Message: ps.message, ExitCode: exitCode}}
+		cs.State = corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: ps.Reason, Message: ps.Message, ExitCode: exitCode}}
 	default:
-		Fail(fmt.Sprintf("Fail to send mock event. Unexpected container state: %q", ps.state))
+		Fail(fmt.Sprintf("Fail to send mock event. Unexpected container state: %q", ps.State))
 	}
 
 	// Send the event to resultChan based on source

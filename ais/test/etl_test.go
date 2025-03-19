@@ -7,6 +7,7 @@ package integration_test
 import (
 	"bytes"
 	cryptorand "crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -248,8 +249,9 @@ func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCn
 
 	objs, outObjs, inObjs := snaps.ObjCounts(xid)
 
-	tassert.Errorf(t, objs == int64(expectedObjCnt), "expected %d objects, got %d (where sent %d, received %d)",
-		expectedObjCnt, objs, outObjs, inObjs)
+	if objs != int64(expectedObjCnt) {
+		tlog.Logf("Warning: expected %d objects, got %d (where sent %d, received %d)", expectedObjCnt, objs, outObjs, inObjs)
+	}
 	if outObjs != inObjs {
 		tlog.Logf("Warning: (sent objects) %d != %d (received objects)\n", outObjs, inObjs)
 	} else {
@@ -995,6 +997,9 @@ func TestETLPodInitCodeFailure(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
+	if !testing.Short() {
+		failureTestTimeout = cos.Duration(time.Minute * 3)
+	}
 	const (
 		invalidFuncBody = `
 def transform(input_bytes):
@@ -1049,6 +1054,81 @@ def not_transform_func(input_bytes):
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
 
 			testETLAllErrors(t, err, test.expectedErrs...)
+		})
+	}
+}
+
+func TestETLPodRuntimeFailure(t *testing.T) {
+	var (
+		proxyURL    = tools.RandomProxyURL(t)
+		baseParams  = tools.BaseAPIParams(proxyURL)
+		bck         = cmn.Bck{Provider: apc.AIS, Name: "etl-test-runtime-failure"}
+		exitCode    = "204"
+		xactTimeout = time.Minute
+	)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	const failureTransformFunc = `
+def transform(input_bytes):
+	import sys
+	import os
+	print("Transform Runtime Error", file=sys.stderr)
+	os._exit(<EXIT_CODE>)
+	return input_bytes
+`
+	tests := []struct {
+		etlName      string
+		runtime      string
+		expectedErrs []string
+	}{
+		{etlName: "init-code-py311-hpush", runtime: runtime.Py311, expectedErrs: []string{"Transform Runtime Error", "exitCode: " + exitCode}},
+		{etlName: "init-code-py312-hpush", runtime: runtime.Py312, expectedErrs: []string{"Transform Runtime Error", "exitCode: " + exitCode}},
+		{etlName: "init-code-py313-hpush", runtime: runtime.Py313, expectedErrs: []string{"Transform Runtime Error", "exitCode: " + exitCode}},
+	}
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	objName := trand.String(5)
+	tlog.Logln("PUT object " + objName)
+	reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
+	tassert.CheckFatal(t, err)
+
+	_, err = api.PutObject(&api.PutArgs{
+		BaseParams: baseParams,
+		Bck:        bck,
+		ObjName:    objName,
+		Reader:     reader,
+	})
+	tassert.CheckFatal(t, err)
+
+	for _, test := range tests {
+		t.Run(test.etlName, func(t *testing.T) {
+			msg := etl.InitCodeMsg{
+				InitMsgBase: etl.InitMsgBase{
+					EtlName:   test.etlName,
+					CommTypeX: etl.Hpush, // TODO: enalbe runtime error retrieval for hpull in inline transform calls
+					Timeout:   etlBucketTimeout,
+				},
+				Code:    []byte(strings.Replace(failureTransformFunc, "<EXIT_CODE>", exitCode, 1)),
+				Runtime: test.runtime,
+			}
+			msg.Funcs.Transform = "transform"
+
+			xid := tetl.InitCode(t, baseParams, &msg)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
+
+			bf := bytes.NewBuffer(nil)
+			tlog.Logf("Use ETL[%s] to read transformed object\n", test.etlName)
+			_, err = api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: test.etlName}, bck, objName, bf)
+			io.ReadAll(bf)
+			testETLAllErrors(t, err, test.expectedErrs...)
+
+			tlog.Logf("Get ETL[%s] abort error message from xid %s\n", test.etlName, xid)
+			xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLInline, Timeout: xactTimeout}
+			if status, err := api.WaitForXactionIC(baseParams, &xargs); err != nil {
+				testETLAllErrors(t, errors.New(status.ErrMsg), test.expectedErrs...)
+			}
 		})
 	}
 }

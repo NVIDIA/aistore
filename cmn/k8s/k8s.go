@@ -6,6 +6,7 @@ package k8s
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -15,6 +16,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	v1 "k8s.io/api/core/v1"
 )
+
+type PodStatus struct {
+	State    string // "Waiting" | "Running" | "Terminated"
+	CtrName  string // main container name
+	Reason   string
+	Message  string
+	ExitCode int32
+}
 
 const (
 	defaultPodNameEnv   = "HOSTNAME"
@@ -113,4 +122,8 @@ func _short(err error) string {
 	default:
 		return msg[:sizeLimit] + " ..."
 	}
+}
+
+func (ps *PodStatus) String() string {
+	return fmt.Sprintf("container: %s, state: %s, reason: %s, message: %s, exitCode: %d", ps.CtrName, ps.State, ps.Reason, ps.Message, ps.ExitCode)
 }

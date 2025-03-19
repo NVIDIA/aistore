@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -195,6 +196,7 @@ type (
 		ETLTransformArgs string
 		PodName          string
 		SvcName          string
+		k8s.PodStatus
 	}
 	ErrWarning struct {
 		what string
@@ -785,6 +787,9 @@ func (e *ErrETL) Error() string {
 	if e.SvcName != "" {
 		s = append(s, fmt.Sprintf("service=%q", e.SvcName))
 	}
+	if e.PodStatus.State != "" {
+		s = append(s, fmt.Sprintf("pod_status=%q", e.PodStatus.String()))
+	}
 	return fmt.Sprintf("[%s] %s", strings.Join(s, ","), e.Reason)
 }
 
@@ -816,6 +821,13 @@ func (e *ErrETL) WithPodName(name string) *ErrETL {
 	return e
 }
 
+func (e *ErrETL) withPodStatus(ps k8s.PodStatus) *ErrETL {
+	if ps.State != "" {
+		e.PodStatus = ps
+	}
+	return e
+}
+
 func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 	if ctx == nil {
 		return e
@@ -824,7 +836,8 @@ func (e *ErrETL) WithContext(ctx *ETLErrCtx) *ErrETL {
 		withTarget(ctx.TID).
 		WithPodName(ctx.PodName).
 		withETLName(ctx.ETLName).
-		withSvcName(ctx.SvcName)
+		withSvcName(ctx.SvcName).
+		withPodStatus(ctx.PodStatus)
 }
 
 // ErrWarning

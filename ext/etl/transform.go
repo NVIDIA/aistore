@@ -317,6 +317,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 	return podName, svcName, nil
 
 cleanup:
+	errCtx.PodStatus = pw.GetPodStatus()
 	nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to start etl[%s] with xid %s, msg %s, err %v - cleaning up..", msg.Name(), xid, msg, err))
 	if !mgr.transition(comm.ETLName(), Stopped) {
 		nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to cleanup etl[%s], already in Stopped stage", msg.Name()))
@@ -327,7 +328,7 @@ cleanup:
 		nlog.Errorln(errV)
 	}
 	comm.Stop()
-	return podName, svcName, pw.wrapError(err)
+	return podName, svcName, cmn.NewErrETL(errCtx, err.Error())
 }
 
 func StopByXid(xid string, errCause error) error {

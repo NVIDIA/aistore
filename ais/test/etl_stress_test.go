@@ -5,7 +5,6 @@
 package integration_test
 
 import (
-	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -81,14 +80,12 @@ func TestETLBucketAbort(t *testing.T) {
 
 	m := &ioContext{
 		t:         t,
-		num:       1000,
+		num:       10000,
 		fileSize:  512,
 		fixedSize: true,
 	}
 
 	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
-
-	time.Sleep(time.Duration(rand.IntN(5)) * time.Second)
 
 	tlog.Logf("Aborting etl[%s]\n", xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck}
@@ -255,12 +252,8 @@ def transform(input_bytes):
 			tassert.CheckFatal(t, err)
 			tlog.Logf("Transforming bucket %s took %v\n", bckFrom.Cname(""), total)
 
-			lst, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
+			err = tetl.ListObjectsWithRetry(baseParams, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 			tassert.CheckFatal(t, err)
-			tassert.Fatalf(
-				t, len(lst.Entries) == m.num,
-				"expected %d objects to be transformed, got %d", m.num, len(lst.Entries),
-			)
 		})
 	}
 }

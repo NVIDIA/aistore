@@ -166,31 +166,25 @@ func (c *baseComm) Stop() {
 	}
 }
 
-func (c *baseComm) doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
-	if err := c.boot.xctn.AbortErr(); err != nil {
+func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
+	var (
+		req  *http.Request
+		resp *http.Response
+	)
+	if timeout == 0 {
+		timeout = DefaultReqTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	req, err = http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		cancel()
 		return nil, 0, err
 	}
 
-	var (
-		req    *http.Request
-		resp   *http.Response
-		cancel func()
-	)
-	if timeout != 0 {
-		var ctx context.Context
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, method, url, body)
-	} else {
-		req, err = http.NewRequest(method, url, body)
-	}
-	if err == nil {
-		req.ContentLength = srcSize
-		resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
-	}
+	req.ContentLength = srcSize
+	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	if err != nil {
-		if cancel != nil {
-			cancel()
-		}
+		cancel()
 		if resp != nil {
 			ecode = resp.StatusCode
 		}
@@ -207,11 +201,9 @@ func (c *baseComm) doWithTimeout(method, url string, body io.ReadCloser, srcSize
 		R:    resp.Body,
 		Size: dstSize,
 		DeferCb: func() {
-			if cancel != nil {
-				cancel()
-			}
+			cancel()
 		},
-	}), 0, nil
+	}), resp.StatusCode, nil
 }
 
 //////////////
@@ -265,14 +257,14 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		u = cos.JoinQuery(u, q)
 	}
 
-	r, ecode, err = pc.doWithTimeout(http.MethodPut, u, body, srcSize, timeout)
+	r, ecode, err = doWithTimeout(http.MethodPut, u, body, srcSize, timeout)
 
 	return r, ecode, err
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error) {
 	latestVer := r.URL.Query().Get(apc.QparamLatestVer)
-	resp, ecode, err := pc.doRequest(lom, 0 /*timeout*/, targs, cos.IsParseBool(latestVer), false)
+	resp, ecode, err := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, cos.IsParseBool(latestVer), false)
 	if err != nil {
 		return ecode, err
 	}
@@ -361,7 +353,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration, l
 	}
 
 	etlURL := rc.redirectURL(&clone, latestVer)
-	r, ecode, err := rc.doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), timeout)
+	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
@@ -399,7 +391,7 @@ func (rp *revProxyComm) OfflineTransform(lom *core.LOM, timeout time.Duration, _
 		return core.ReadResp{Err: err}
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, ecode, err := rp.doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), timeout)
+	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), timeout)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, clone.Cname(), err, ecode)

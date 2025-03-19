@@ -36,7 +36,10 @@ const (
 	WaitTimeoutAnnotation = "wait_timeout"
 )
 
-const DefaultTimeout = 45 * time.Second
+const (
+	DefaultTimeout    = 45 * time.Second
+	DefaultReqTimeout = 10 * time.Second
+)
 
 // enum ETL lifecycle status (see docs/etl.md#etl-pod-lifecycle for details)
 type Stage int
