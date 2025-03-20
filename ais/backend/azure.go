@@ -307,7 +307,7 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 			custom = custom[:0]
 			custom = append(custom, cmn.ETag, etag)
 			if !blob.Properties.LastModified.IsZero() {
-				custom = append(custom, cmn.LastModified, fmtTime(*blob.Properties.LastModified))
+				custom = append(custom, cmn.LsoLastModified, fmtLsoTime(*blob.Properties.LastModified))
 			}
 			if blob.Properties.ContentType != nil {
 				custom = append(custom, cos.HdrContentType, *blob.Properties.ContentType)
@@ -395,7 +395,7 @@ func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 		oa.SetCustomKey(cmn.MD5ObjMD, md5)
 	}
 	if v := resp.LastModified; v != nil {
-		oa.SetCustomKey(cmn.LastModified, fmtTime(*v))
+		oa.SetCustomKey(cos.HdrLastModified, fmtHdrTime(*v))
 	}
 	if v := resp.ContentType; v != nil {
 		// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
@@ -507,7 +507,8 @@ func (azbp *azbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 	lom.SetVersion(etag) // TODO #200224
 
 	if v := resp.LastModified; v != nil {
-		lom.SetCustomKey(cmn.LastModified, fmtTime(*v))
+		lom.SetCustomKey(cmn.LsoLastModified, fmtLsoTime(*v))
+		lom.SetCustomKey(cos.HdrLastModified, fmtHdrTime(*v))
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[put_object] %s", lom)

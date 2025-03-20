@@ -1065,16 +1065,16 @@ func (goi *getOI) txfini() (ecode int, err error) {
 
 func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htrange) (err error) {
 	var (
-		r     io.Reader
-		lom   = goi.lom
-		sgl   *memsys.SGL
-		cksum = lom.Checksum()
-		size  int64
+		r          io.Reader
+		sgl        *memsys.SGL
+		cksum      = goi.lom.Checksum()
+		ckconf     = goi.lom.CksumConf()
+		size       = hrng.Length
+		cksumRange = ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
 	)
-	ckconf := lom.CksumConf()
-	cksumRange := ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
-	size = hrng.Length
 	r = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
+
+	// compute range checksum
 	if cksumRange {
 		sgl = goi.t.gmm.NewSGL(size)
 		_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
@@ -1090,11 +1090,7 @@ func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htra
 	}
 
 	// set response header
-	whdr.Set(cos.HdrContentType, cos.ContentBinary)
-	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
-	if goi.dpq.isS3 {
-		s3.SetS3Headers(whdr, lom)
-	}
+	goi.setwhdr(whdr, cksum, size)
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
 	err = goi.transmit(r, buf, fqn)
@@ -1105,22 +1101,23 @@ func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htra
 	return err
 }
 
+func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
+	whdr.Set(cos.HdrContentType, cos.ContentBinary)
+	if goi.dpq.isS3 {
+		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
+		s3.SetS3Headers(whdr, goi.lom)
+	} else {
+		cmn.ToHeader(goi.lom.ObjAttrs(), whdr, size, cksum)
+	}
+}
+
 // in particular, setup reader and writer and set headers
 func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error) {
-	var (
-		dpq   = goi.dpq
-		lom   = goi.lom
-		cksum = lom.Checksum()
-		size  = lom.Lsize()
-	)
 	// set response header
-	whdr.Set(cos.HdrContentType, cos.ContentBinary)
-	cmn.ToHeader(lom.ObjAttrs(), whdr, size, cksum)
-	if dpq.isS3 {
-		// (expecting user to set bucket checksum = md5)
-		s3.SetS3Headers(whdr, lom)
-	}
+	size := goi.lom.Lsize()
+	goi.setwhdr(whdr, goi.lom.Checksum(), size)
 
+	// Tx
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
 	err = goi.transmit(lmfh, buf, fqn)
 	slab.Free(buf)

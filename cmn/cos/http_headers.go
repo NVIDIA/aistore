@@ -42,6 +42,8 @@ const (
 	HdrETag      = "ETag" // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 
 	HdrHSTS = "Strict-Transport-Security"
+
+	HdrLastModified = "Last-Modified" // RFC1123GMT or, same, http.TimeFormat ("Mon, 02 Jan 2006 15:04:05 GMT")
 )
 
 //
@@ -72,8 +74,6 @@ const (
 
 	S3MetadataChecksumType = "x-amz-meta-ais-cksum-type"
 	S3MetadataChecksumVal  = "x-amz-meta-ais-cksum-val"
-
-	S3LastModified = "Last-Modified"
 )
 
 const (

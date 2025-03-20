@@ -210,7 +210,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			}
 			if wantCustom {
 				etag, _ := h.EncodeETag(attrs.Etag)
-				en.Custom = cmn.CustomProps2S(cmn.ETag, etag, cmn.LastModified, fmtTime(attrs.Updated),
+				en.Custom = cmn.CustomProps2S(cmn.ETag, etag, cmn.LsoLastModified, fmtLsoTime(attrs.Updated),
 					cos.HdrContentType, attrs.ContentType)
 			}
 		}
@@ -298,7 +298,8 @@ func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *c
 		}
 	}
 
-	oa.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
+	oa.SetCustomKey(cos.HdrLastModified, fmtHdrTime(attrs.Updated))
+
 	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
 	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
@@ -385,8 +386,11 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 	if v, ok := h.EncodeETag(attrs.Etag); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
-	lom.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
-	return
+
+	lom.SetCustomKey(cmn.LsoLastModified, fmtLsoTime(attrs.Updated))
+	lom.SetCustomKey(cos.HdrLastModified, fmtHdrTime(attrs.Updated))
+
+	return expCksum
 }
 
 //

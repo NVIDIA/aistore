@@ -221,7 +221,8 @@ func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvC
 // common helpers and misc
 //
 
-func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
+func fmtLsoTime(t time.Time) string { return t.Format(time.RFC3339) }
+func fmtHdrTime(t time.Time) string { return t.Format(http.TimeFormat) }
 
 func calcPageSize(pageSize, maxPageSize int64) int64 {
 	debug.Assert(pageSize >= 0, pageSize)

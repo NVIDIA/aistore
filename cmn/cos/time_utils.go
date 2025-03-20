@@ -7,10 +7,7 @@ package cos
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
-
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // in addition to standard layouts at /usr/local/go/src/time/format.go
@@ -21,10 +18,6 @@ const (
 	// S3 ListObjectsV2
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 	ISO8601 = "2006-01-02T15:04:05.000Z"
-
-	// S3 HeadObject
-	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_Examples
-	RFC1123GMT = "Mon, 17 Dec 2012 02:14:10 GMT"
 )
 
 // `unixnano` here is expected to be "nanoseconds since January 1, 1970 UTC"
@@ -37,10 +30,6 @@ func FormatTime(t time.Time, format string) string {
 	switch format {
 	case "", time.RFC822:
 		return t.Format(time.RFC822) // default
-	case RFC1123GMT:
-		s := t.UTC().Format(time.RFC1123)
-		debug.Assert(strings.HasSuffix(s, "UTC"), s)
-		return strings.TrimSuffix(s, "UTC") + "GMT"
 	default:
 		return t.Format(format)
 	}

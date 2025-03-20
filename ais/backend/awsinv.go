@@ -356,7 +356,7 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 				}
 			case types.InventoryOptionalFieldLastModifiedDate:
 				if custom != nil {
-					custom[cmn.LastModified] = cmn.UnquoteCEV(line[i])
+					custom[cmn.LsoLastModified] = cmn.UnquoteCEV(line[i])
 				}
 			}
 		}

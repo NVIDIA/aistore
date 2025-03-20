@@ -146,7 +146,7 @@ const (
 )
 
 var (
-	stdCustomProps = [...]string{SourceObjMD, ETag, LastModified, CRC32CObjMD, MD5ObjMD, VersionObjMD}
+	stdCustomProps = [...]string{SourceObjMD, ETag, LsoLastModified, cos.HdrLastModified, CRC32CObjMD, MD5ObjMD, VersionObjMD}
 )
 
 // [NOTE]

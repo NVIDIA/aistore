@@ -347,6 +347,7 @@ func propsVersionAllProviders(t *testing.T, versioning bool) {
 			}
 		}()
 
+		// TODO -- FIXME: setBucketFeatures(t, bck, bck.Props, feat.S3ListObjectVersions)
 		propsVersion(t, bck.Clone(), bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
 	})
 }

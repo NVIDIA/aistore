@@ -435,7 +435,7 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 					customKVs[cmn.MD5ObjMD] = v
 				}
 				if en.TimeModified != nil {
-					customKVs[cmn.LastModified] = en.TimeModified.Time.Format(time.RFC3339)
+					customKVs[cmn.LsoLastModified] = en.TimeModified.Time.Format(time.RFC3339)
 				}
 				if len(customKVs) > 0 {
 					lsoEnt.Custom = cmn.CustomMD2S(customKVs)

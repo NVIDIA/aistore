@@ -36,8 +36,8 @@ const (
 
 	OrigURLObjMD = "orig_url"
 
-	// additional backend
-	LastModified = "LastModified"
+	// RFC3339; see also: cos.HdrLastModified formatted RFC1123GMT
+	LsoLastModified = "LastModified"
 
 	// as the name implies
 	OrigFntl = "orig_fntl"

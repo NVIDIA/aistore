@@ -174,7 +174,7 @@ func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
 		md := make(cos.StrKVs, 4)
 		cmn.S2CustomMD(md, entry.Custom, "")
 		if oi.LastModified == "" {
-			oi.LastModified = md[cmn.LastModified]
+			oi.LastModified = md[cmn.LsoLastModified]
 		}
 		oi.ETag = md[cmn.ETag]
 	}
@@ -196,10 +196,8 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {
 }
 
 func SetS3Headers(hdr http.Header, lom *core.LOM) {
-	// ETag
+	// 1. ETag (must be a quoted string: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
 	if etag := hdr.Get(cos.HdrETag); etag != "" {
-		// ETag is a quoted string:
-		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
 		debug.AssertFunc(func() bool {
 			return etag[0] == '"' && etag[len(etag)-1] == '"'
 		})
@@ -213,13 +211,24 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 		}
 	}
 
-	// s3 version
+	// 2. Last-Modified
+	if v, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
+		hdr.Set(cos.HdrLastModified, v)
+	} else {
+		// [NOTE]
+		// see "as we do not track mtime we choose to _prefer_ atime" comment above
+		atime := lom.Atime()
+		hdr.Set(cos.HdrLastModified, atime.Format(http.TimeFormat))
+	}
+
+	// 3. x-amz-version-id
 	if hdr.Get(cos.S3VersionHeader) == "" {
-		if v, exists := lom.GetCustomKey(cmn.VersionObjMD); exists {
-			// NOTE: could this `cmn.VersionObjMD` value be the result of original GET from gs:// bucket, for instance?
+		if v, ok := lom.GetCustomKey(cmn.VersionObjMD); ok {
 			hdr.Set(cos.S3VersionHeader, v)
 		}
 	}
+
+	// 4. finally, user metadata (X-Amz-Meta-...)
 	for k, v := range lom.GetCustomMD() {
 		if strings.HasPrefix(k, HeaderMetaPrefix) {
 			hdr.Set(k, v)

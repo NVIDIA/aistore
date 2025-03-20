@@ -346,7 +346,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			}
 			if wantCustom {
 				mtime := *(obj.LastModified)
-				en.Custom = cmn.CustomProps2S(cmn.ETag, en.Checksum, cmn.LastModified, fmtTime(mtime))
+				en.Custom = cmn.CustomProps2S(cmn.ETag, en.Checksum, cmn.LsoLastModified, fmtLsoTime(mtime))
 			}
 		}
 		lst.Entries = append(lst.Entries, &en)
@@ -506,7 +506,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		if oa.Atime == 0 {
 			oa.Atime = mtime.UnixNano()
 		}
-		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
+		oa.SetCustomKey(cos.HdrLastModified, fmtHdrTime(mtime))
 	}
 
 exit:
@@ -625,8 +625,12 @@ func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 		lom.SetCustomKey(k, v)
 	}
 	mtime := *(obj.LastModified)
-	lom.SetCustomKey(cmn.LastModified, fmtTime(mtime))
-	return
+
+	// double down
+	lom.SetCustomKey(cmn.LsoLastModified, fmtLsoTime(mtime))
+	lom.SetCustomKey(cos.HdrLastModified, fmtHdrTime(mtime))
+
+	return md5
 }
 
 //
