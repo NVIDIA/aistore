@@ -105,7 +105,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		xid, err = t.renameBucket(c)
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
-			dp     core.DP
+			roc    core.GetROC
 			tcbmsg = &apc.TCBMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcbmsg); err != nil {
@@ -113,16 +113,15 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if msg.Action == apc.ActETLBck {
-			var err error
-			if dp, err = etlDP(tcbmsg); err != nil {
+			if roc, err = getETLROC(tcbmsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xid, err = t.tcb(c, tcbmsg, dp)
+		xid, err = t.tcb(c, tcbmsg, roc)
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			dp     core.DP
+			roc    core.GetROC
 			tcomsg = &cmn.TCOMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcomsg); err != nil {
@@ -130,18 +129,12 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if msg.Action == apc.ActETLObjects {
-			cs := fs.Cap()
-			if err := cs.Err(); err != nil {
-				t.writeErr(w, r, err, http.StatusInsufficientStorage)
-				return
-			}
-			var err error
-			if dp, err = etlDP(&tcomsg.TCBMsg); err != nil {
+			if roc, err = getETLROC(&tcomsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xid, err = t.tcobjs(c, tcomsg, dp)
+		xid, err = t.tcobjs(c, tcomsg, roc)
 	case apc.ActECEncode:
 		xid, err = t.ecEncode(c)
 	case apc.ActArchive:
@@ -507,21 +500,28 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) err
 	return nil
 }
 
-func etlDP(msg *apc.TCBMsg) (core.DP, error) {
+func getETLROC(msg *apc.TCBMsg) (core.GetROC, error) {
 	if !k8s.IsK8s() {
 		return nil, k8s.ErrK8sRequired
 	}
 	if err := msg.Validate(true); err != nil {
 		return nil, err
 	}
-	return etl.NewOfflineDP(msg, cmn.GCO.Get())
+	comm, err := etl.GetCommunicator(msg.Transform.Name)
+	if err != nil {
+		return nil, err
+	}
+	return comm.OfflineTransform, nil
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (string, error) {
+func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
-		bckTo, bckFrom := c.bckTo, c.bck
+		var (
+			bckTo   = c.bckTo
+			bckFrom = c.bck // from
+		)
 		if err := bckFrom.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -545,7 +545,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (string, error) {
 		if _, present := bmd.Get(bckFrom); !present {
 			return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
-		if err := t._tcbBegin(c, msg, dp); err != nil {
+		if err := t._tcbBegin(c, msg, roc); err != nil {
 			return "", err
 		}
 	case apc.ActAbort:
@@ -596,7 +596,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (string, error) {
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (err error) {
+func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (err error) {
 	var (
 		bckTo, bckFrom = c.bckTo, c.bck
 		nlpFrom        = newBckNLP(bckFrom)
@@ -612,7 +612,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (err error) {
 			return cmn.NewErrBusy("bucket", bckTo.Cname(""))
 		}
 	}
-	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
+	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, GetROC: roc, Msg: msg}
 	rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, custom)
 	if err = rns.Err; err != nil {
 		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
@@ -634,7 +634,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (err error) {
 // Two IDs:
 // - TxnUUID: transaction (txn) ID
 // - xid: xaction ID (will have "tco-" prefix)
-func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, dp core.DP) (xid string, _ error) {
+func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, roc core.GetROC) (xid string, _ error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -663,7 +663,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, dp core.DP) (xid string, _ e
 			return xid, cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		// begin
-		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
+		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, GetROC: roc}
 		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)

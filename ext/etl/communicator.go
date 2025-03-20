@@ -48,13 +48,13 @@ type (
 		//  - Method "GET", Path "/bucket/object"
 		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error)
 
-		// OfflineTransform is driven by `OfflineDP` to provide offline transformation, as it were
+		// OfflineTransform is driven by `TCB` and `TCO` to provide offline transformation, as it were
 		// Implementations include:
 		// - pushComm
 		// - redirectComm
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
-		OfflineTransform(lom *core.LOM, timeout time.Duration, latestVer, sync bool) core.ReadResp
+		OfflineTransform(lom *core.LOM, latestVer, sync bool) core.ReadResp
 
 		Stop()
 		Restart(boot *etlBootstrapper)
@@ -284,9 +284,9 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom 
 	return 0, err
 }
 
-func (pc *pushComm) OfflineTransform(lom *core.LOM, timeout time.Duration, latestVer, sync bool) core.ReadResp {
+func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool) core.ReadResp {
 	clone := *lom
-	r, ecode, err := pc.doRequest(&clone, timeout, "", latestVer, sync)
+	r, ecode, err := pc.doRequest(&clone, pc.boot.msg.Timeout.D(), "", latestVer, sync)
 	if err == nil && cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, clone.Cname(), err)
 	}
@@ -345,7 +345,7 @@ func (rc *redirectComm) redirectURL(lom *core.LOM, latestVer bool) (u string) {
 	return u
 }
 
-func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration, latestVer, _ bool) core.ReadResp {
+func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool) core.ReadResp {
 	clone := *lom
 	_, err := lomLoad(&clone, rc.boot.xctn.Kind())
 	if err != nil {
@@ -353,7 +353,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, timeout time.Duration, l
 	}
 
 	etlURL := rc.redirectURL(&clone, latestVer)
-	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), timeout)
+	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), rc.boot.msg.Timeout.D())
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
@@ -384,14 +384,14 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	return 0, nil
 }
 
-func (rp *revProxyComm) OfflineTransform(lom *core.LOM, timeout time.Duration, _, _ bool) core.ReadResp {
+func (rp *revProxyComm) OfflineTransform(lom *core.LOM, _, _ bool) core.ReadResp {
 	clone := *lom
 	_, err := lomLoad(&clone, rp.boot.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err}
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), timeout)
+	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), rp.boot.msg.Timeout.D())
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, clone.Cname(), err, ecode)

@@ -359,7 +359,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 
 	a := AllocCOI()
 	{
-		a.DP = r.args.DP
+		a.GetROC = r.args.GetROC
 		a.Xact = r
 		a.Config = r.config
 		a.BckTo = r.args.BckTo

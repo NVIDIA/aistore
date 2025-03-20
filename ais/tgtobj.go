@@ -1454,9 +1454,9 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 		return coi._dryRun(lom, coi.ObjnameTo)
 	}
 
-	// DP == nil: use default (no-op transform) if source bucket is remote
-	if coi.DP == nil && (lom.Bck().IsRemote() || coi.BckTo.IsRemote()) {
-		coi.DP = &core.LDP{}
+	// (no-op transform) and (remote source and/or destination) => same flow as actual transform but with default reader
+	if coi.GetROC == nil && (lom.Bck().IsRemote() || coi.BckTo.IsRemote()) {
+		coi.GetROC = core.DefaultGetROC
 	}
 
 	// 1: dst location
@@ -1484,7 +1484,7 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
 		}
-	case coi.DP != nil:
+	case coi.GetROC != nil:
 		res = coi._reader(t, dm, lom, dst)
 		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
 			// to keep not-found
@@ -1523,7 +1523,7 @@ func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DataMover) bool {
 }
 
 func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
-	if coi.DP == nil {
+	if coi.GetROC == nil {
 		uname := coi.BckTo.MakeUname(objnameTo)
 		if lom.Uname() != cos.UnsafeS(uname) {
 			res.Lsize = lom.Lsize()
@@ -1531,7 +1531,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 		return res
 	}
 
-	resp := coi.DP.GetROC(lom, false, false)
+	resp := coi.GetROC(lom, false, false)
 	if resp.Err != nil {
 		return xs.CoiRes{Err: resp.Err}
 	}
@@ -1555,7 +1555,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (res xs.CoiRes) {
-	resp := coi.DP.GetROC(lom, coi.LatestVer, coi.Sync)
+	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
@@ -1668,7 +1668,7 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 	switch {
 	case coi.OWT == cmn.OwtPromote:
 		// 1. promote
-		debug.Assert(coi.DP == nil)
+		debug.Assert(coi.GetROC == nil)
 		debug.Assert(sargs.owt == cmn.OwtPromote)
 
 		fh, err := cos.NewFileHandle(lom.FQN)
@@ -1685,9 +1685,19 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 		}
 		res.Lsize = fi.Size()
 		sargs.reader, sargs.objAttrs = fh, lom
-	case coi.DP == nil:
-		// 2. migrate/replicate lom
-
+	case coi.GetROC != nil:
+		// 2. transform (via tcb/tco)
+		// If the object is not present call t.Backend.GetObjReader
+		resp := coi.GetROC(lom, coi.LatestVer, coi.Sync)
+		if resp.Err != nil {
+			return xs.CoiRes{Err: resp.Err}
+		}
+		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
+		res.Lsize = resp.OAH.Lsize()
+		res.RGET = resp.Remote
+		sargs.reader, sargs.objAttrs = resp.R, resp.OAH
+	default:
+		// 3. migrate/replicate in-cluster lom
 		lom.Lock(false)
 		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
@@ -1699,17 +1709,6 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 		}
 		res.Lsize = lom.Lsize()
 		sargs.reader, sargs.objAttrs = reader, lom
-	default:
-		// 3. DP transform (possibly, a no-op)
-		// If the object is not present call t.Backend.GetObjReader
-		resp := coi.DP.GetROC(lom, coi.LatestVer, coi.Sync)
-		if resp.Err != nil {
-			return xs.CoiRes{Err: resp.Err}
-		}
-		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
-		res.Lsize = resp.OAH.Lsize()
-		res.RGET = resp.Remote
-		sargs.reader, sargs.objAttrs = resp.R, resp.OAH
 	}
 
 	// do

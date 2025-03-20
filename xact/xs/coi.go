@@ -14,7 +14,6 @@ import (
 
 type (
 	CoiParams struct {
-		DP        core.DP // copy or transform via data provider, see impl-s: (ext/etl/dp.go, core/ldp.go)
 		Xact      core.Xact
 		Config    *cmn.Config
 		BckTo     *meta.Bck
@@ -25,6 +24,7 @@ type (
 		DryRun    bool
 		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
 		Sync      bool // ditto -  bucket's 'versioning.synchronize'
+		core.GetROC
 	}
 	CoiRes struct {
 		Err   error

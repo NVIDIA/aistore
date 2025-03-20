@@ -16,6 +16,7 @@ import (
 )
 
 type (
+	GetROC   func(lom *LOM, latestVer, sync bool) ReadResp
 	ReadResp struct {
 		R      cos.ReadOpenCloser
 		OAH    cos.OAH
@@ -23,11 +24,6 @@ type (
 		Ecode  int
 		Remote bool
 	}
-	DP interface { // data provider
-		GetROC(lom *LOM, latestVer, sync bool) ReadResp
-	}
-
-	LDP struct{} // TODO: try to simplify-out - remove
 
 	// returned by lom.CheckRemoteMD
 	CRMD struct {
@@ -45,14 +41,6 @@ type (
 		lif LIF
 	}
 )
-
-// interface guard
-var _ DP = (*LDP)(nil)
-
-// TODO: try to simplify-out
-func (*LDP) GetROC(lom *LOM, latestVer, sync bool) (resp ReadResp) {
-	return lom.GetROC(latestVer, sync)
-}
 
 func (r *deferROC) Close() (err error) {
 	err = r.ReadOpenCloser.Close()
@@ -137,6 +125,10 @@ remote:
 	// current usage: tcb/tco
 	resp.R = cos.NopOpener(res.R)
 	return resp
+}
+
+func DefaultGetROC(lom *LOM, latestVer, sync bool) ReadResp {
+	return lom.GetROC(latestVer, sync)
 }
 
 // NOTE:

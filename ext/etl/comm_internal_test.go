@@ -139,6 +139,7 @@ var _ = Describe("CommunicatorTest", func() {
 					msg: InitSpecMsg{
 						InitMsgBase: InitMsgBase{
 							CommTypeX: commType,
+							Timeout:   cos.Duration(DefaultTimeout),
 						},
 					},
 					pod:  pod,
@@ -168,7 +169,7 @@ var _ = Describe("CommunicatorTest", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					expectedEtlTransformArgs = ""
-					resp := comm.OfflineTransform(lom, time.Minute, false, false)
+					resp := comm.OfflineTransform(lom, false, false)
 					Expect(resp.Err).NotTo(HaveOccurred())
 					defer resp.R.Close()
 

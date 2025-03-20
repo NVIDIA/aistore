@@ -300,7 +300,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 
 	a := AllocCOI()
 	{
-		a.DP = args.DP
+		a.GetROC = args.GetROC
 		a.Xact = r
 		a.Config = r.Config
 		a.BckTo = args.BckTo

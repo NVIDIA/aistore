@@ -17,16 +17,16 @@ import (
 
 type (
 	TCBArgs struct {
-		DP      core.DP
 		BckFrom *meta.Bck
 		BckTo   *meta.Bck
 		Msg     *apc.TCBMsg
 		Phase   string
+		core.GetROC
 	}
 	TCObjsArgs struct {
 		BckFrom *meta.Bck
 		BckTo   *meta.Bck
-		DP      core.DP
+		core.GetROC
 	}
 	DsortArgs struct {
 		BckFrom *meta.Bck
