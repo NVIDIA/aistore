@@ -3,23 +3,10 @@
 #
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
-import logging
 
 from requests import Response
-from requests.exceptions import (
-    ConnectTimeout,
-    ReadTimeout,
-    ChunkedEncodingError,
-    ConnectionError as RequestsConnectionError,
-)
+from tenacity import Retrying
 
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    wait_exponential,
-    stop_after_delay,
-    before_sleep_log,
-)
 
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
@@ -41,19 +28,11 @@ from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
 from aistore.sdk.types import Smap
 from aistore.sdk.utils import decode_response, get_logger
-from aistore.sdk.errors import AISRetryableError
+from aistore.sdk.retry_config import RetryConfig
 
 T = TypeVar("T")
 
 logger = get_logger(__name__)
-
-RETRYABLE_EXCEPTIONS = (
-    ConnectTimeout,
-    RequestsConnectionError,
-    ReadTimeout,
-    AISRetryableError,
-    ChunkedEncodingError,
-)
 
 
 class RequestClient:
@@ -78,6 +57,7 @@ class RequestClient:
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
         response_handler: ResponseHandler = AISResponseHandler(),
+        network_retry_config: Retrying = None,
     ):
         self._base_url = urljoin(endpoint, "v1")
         self._session_manager = session_manager
@@ -86,6 +66,9 @@ class RequestClient:
         self._response_handler = response_handler
         # smap is used to calculate the target node for a given object
         self._smap = None
+        self._network_retry_config = (
+            network_retry_config or RetryConfig.default().network_retry
+        )
 
     @property
     def base_url(self):
@@ -124,6 +107,13 @@ class RequestClient:
         Return the token for authorization.
         """
         return self._token
+
+    @property
+    def network_retry_config(self) -> Retrying:
+        """
+        Return the network retry configuration for this client.
+        """
+        return self._network_retry_config
 
     @token.setter
     def token(self, token: str):
@@ -189,15 +179,6 @@ class RequestClient:
         resp = self.request(method, path, **kwargs)
         return decode_response(res_model, resp)
 
-    @retry(
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
-        wait=wait_exponential(
-            multiplier=1, min=1, max=10
-        ),  # 0s, 2s, 4s, 8s, 10s, ..., 10s
-        stop=stop_after_delay(60),  # Retries stay under 60 seconds
-        reraise=True,
-        before_sleep=before_sleep_log(logger, logging.DEBUG),
-    )
     def _retryable_session_request(
         self, method: str, url: str, headers: dict, **kwargs
     ) -> Response:
@@ -208,7 +189,7 @@ class RequestClient:
         - ConnectTimeout
         - ReadTimeout
         - ConnectionError (refused connection, reset by peer)
-        - AISRetriableError
+        - AISRetryableError (custom error for AIS)
         - ChunkedEncodingError
 
         If the request is an HTTPS request with a payload (`data`), it uses `_request_with_manual_redirect`.
@@ -228,13 +209,13 @@ class RequestClient:
         Returns:
             Response: The HTTP response from the server.
         """
+
         if url.startswith(HTTPS) and "data" in kwargs:
             response = self._request_with_manual_redirect(
                 method, url, headers, **kwargs
             )
         else:
             response = self._session_request(method, url, headers, **kwargs)
-
         return self._response_handler.handle_response(response)
 
     def request(
@@ -266,7 +247,10 @@ class RequestClient:
         headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
         if self.token:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
-        return self._retryable_session_request(method, url, headers, **kwargs)
+        # If the request is a GET to the daemon, we need to set the User-Agent header to avoid a 403 Forbidden
+        return self.network_retry_config(
+            self._retryable_session_request, method, url, headers, **kwargs
+        )
 
     def _request_with_manual_redirect(
         self, method: str, url: str, headers, **kwargs

@@ -16,6 +16,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Introduce and type the `AggregatedJobSnapshots` model.
 - Implement `get_total_time` to compute the overall job duration.
 - Implement `get_all_snapshots` to return a flat list of all job snapshots.
+- Introduce `RetryConfig` to standardize HTTP and network retries.
 
 ### Changed
 
@@ -27,9 +28,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Update `pyproject.toml` to enforce a higher minimum version requirement and `common_requirements` to use the latest stable versions for testing.
 - Enhanced RequestClient retry strategy for better fault tolerance:
   - Implemented full request retries for `ConnectTimeout`, `RequestsConnectionError`, `ReadTimeout`, `AISRetryableError` and `ChunkedEncodingError`, ensuring retries cover the entire request flow.
-  - Optimized `urllib3.Retry` configuration to improve backoff handling.
-  - Improved resilience to transient connection failures by refining retry logic.
-  - Updated dependencies to align with retry behavior improvements.
+  - Optimize `urllib3.Retry` configuration to improve backoff handling.
+  - Improve resilience to transient connection failures by refining retry logic.
+  - Update dependencies to align with retry behavior improvements.
+- Improve retry separation:
+  - **HTTP Retry (urllib3.Retry):** Handles HTTP status-based retries.
+  - **Network Retry (tenacity):** Manages connection failures and timeouts.
+- Update `SessionManager` and `Client` to accept `RetryConfig` for better configurability.
 
 ### Removed
 

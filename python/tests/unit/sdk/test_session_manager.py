@@ -6,7 +6,9 @@ from requests.adapters import HTTPAdapter
 import urllib3
 
 from aistore.sdk.const import AIS_CLIENT_CA, AIS_CLIENT_CRT, AIS_CLIENT_KEY
-from aistore.sdk.session_manager import SessionManager, DEFAULT_RETRY
+from aistore.sdk.session_manager import SessionManager
+from aistore.sdk.retry_config import RetryConfig
+
 from tests.utils import cases
 
 
@@ -15,9 +17,12 @@ class TestSessionManager(unittest.TestCase):  # pylint: disable=unused-variable
         self.endpoint = "https://aistore-endpoint"
         self.mock_session = Mock()
 
-    def test_init_default(self):
+    @patch("aistore.sdk.retry_config.RetryConfig.default")
+    def test_init_default(self, mock_retry_config):
+        retry_config = RetryConfig.default()
+        mock_retry_config.return_value = retry_config
         session_manager = SessionManager()
-        self.assertEqual(DEFAULT_RETRY, session_manager.retry)
+        self.assertEqual(retry_config.http_retry, session_manager.retry)
         self.assertIsNone(session_manager.ca_cert)
         self.assertFalse(session_manager.skip_verify)
 

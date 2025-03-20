@@ -11,28 +11,7 @@ from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 
 from aistore.sdk.const import AIS_CLIENT_CA, AIS_CLIENT_KEY, AIS_CLIENT_CRT, HTTPS, HTTP
-
-
-DEFAULT_RETRY = Retry(
-    total=3,
-    backoff_factor=0.5,
-    status_forcelist=[429, 500, 502, 503, 504],
-    connect=0,  # No retries for connection errors, handled in `_session_request_with_conn_retry`
-    read=0,  # No retries for read errors, handled in `_session_request_with_conn_retry`
-)
-"""
-Defines the default retry strategy for handling transient failures.
-
-- `total=3`: Maximum number of retry attempts.
-- `backoff_factor=0.5`: Implements exponential backoff with an initial delay.
-- `status_forcelist`: Retries on these HTTP status codes:
-  - 429 (Too Many Requests)
-  - 500 (Internal Server Error)
-  - 502 (Bad Gateway)
-  - 503 (Service Unavailable)
-  - 504 (Gateway Timeout)
-This ensures automatic retries for temporary failures while preventing excessive retries.
-"""
+from aistore.sdk.retry_config import RetryConfig
 
 
 class SessionManager:
@@ -40,8 +19,8 @@ class SessionManager:
     Class for storing and creating requests library sessions.
 
     Args:
-        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library.
-            Default: Retry(total=6, connect=3, backoff_factor=1).
+        retry (urllib3.Retry, optional): Defines the HTTP retry strategy using `urllib3.Retry`.
+            Defaults to `RetryConfig.default().http_retry`, which handles transient HTTP failures.
         skip_verify (bool, optional): If True, skip SSL certificate verification. Defaults to False.
         ca_cert (str, optional): Path to a CA certificate file for SSL verification. Defaults to None.
         client_cert (Union[str, Tuple[str, str], None], optional): Path to a client certificate PEM file
@@ -54,13 +33,13 @@ class SessionManager:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
-        retry: Retry = DEFAULT_RETRY,
+        retry: Retry = None,
         ca_cert: Optional[str] = None,
         skip_verify: bool = False,
         client_cert: Optional[Union[str, Tuple[str, str]]] = None,
         max_pool_size: int = 10,
     ):
-        self._retry = retry
+        self._retry = retry or RetryConfig.default().http_retry
         self._ca_cert = ca_cert
         self._skip_verify = skip_verify
         if not client_cert:

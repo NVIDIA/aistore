@@ -5,8 +5,6 @@ from typing import Optional, Tuple, Union
 import os
 import warnings
 
-from urllib3 import Retry
-
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.provider import Provider
 from aistore.sdk.const import AIS_AUTHN_TOKEN
@@ -20,6 +18,7 @@ from aistore.sdk.etl.etl import Etl
 from aistore.sdk.utils import parse_url
 from aistore.sdk.obj.object import Object
 from aistore.sdk.errors import InvalidURLException
+from aistore.sdk.retry_config import RetryConfig
 
 
 class Client:
@@ -34,10 +33,12 @@ class Client:
         client_cert (Union[str, Tuple[str, str], None], optional): Path to a client certificate PEM file
             or a tuple (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY' environment
             variables will be used. Defaults to None.
-        timeout (Union[float, Tuple[float, float], None], optional): Request timeout in seconds.
-            Can be a single float (e.g., 5.0) for both connect/read timeouts, a tuple (e.g., (3.0, 10.0)),
-            or None to disable timeout.
-        retry (urllib3.Retry, optional): Retry configuration object from the urllib3 library. Defaults to None.
+        timeout (Union[float, Tuple[float, float], None], optional): Timeout for HTTP requests.
+            - Single float (e.g., `5.0`): Applies to both connection and read timeouts.
+            - Tuple (e.g., `(3.0, 20.0)`): First value is the connection timeout, second is the read timeout.
+            - `None`: Disables timeouts (not recommended). Defaults to `(3, 20)`.
+        retry_config (RetryConfig, optional): Defines retry behavior for HTTP and network failures.
+            If not provided, the default retry configuration (`RetryConfig.default()`) is used.
         token (str, optional): Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
             will be used. Defaults to None.
         max_pool_size (int, optional): Maximum number of connections per host in the connection pool.
@@ -51,13 +52,16 @@ class Client:
         skip_verify: bool = False,
         ca_cert: Optional[str] = None,
         client_cert: Optional[Union[str, Tuple[str, str]]] = None,
-        timeout: Optional[Union[float, Tuple[float, float]]] = None,
-        retry: Optional[Retry] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = (3, 20),
+        retry_config: Optional[RetryConfig] = None,
         token: Optional[str] = None,
         max_pool_size: int = 10,
     ):
+
+        self.retry_config = retry_config or RetryConfig.default()
+
         session_manager = SessionManager(
-            retry=retry,
+            retry=self.retry_config.http_retry,
             ca_cert=ca_cert,
             client_cert=client_cert,
             skip_verify=skip_verify,
@@ -73,6 +77,7 @@ class Client:
             session_manager=session_manager,
             timeout=timeout,
             token=token,
+            network_retry_config=self.retry_config.network_retry,
         )
 
     def bucket(

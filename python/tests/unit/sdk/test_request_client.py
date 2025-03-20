@@ -267,7 +267,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
 
     @patch("aistore.sdk.request_client.RequestClient._session_request")
     def test_ais_retriable_errors(self, mock_request):
-        """Test that the function is retried if it raises AISRetriableError."""
+        """Test that the function is retried if it raises AISRetryableError."""
         self.mock_response.status_code = 200
         mock_request.side_effect = [
             AISRetryableError(409, "Conflict", "http://test-url"),

@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch, Mock
 from urllib3.util import Retry
 
+from tenacity import Retrying, stop_after_delay, wait_exponential
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.provider import Provider
@@ -13,6 +14,8 @@ from aistore.sdk.etl.etl import Etl
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
+from aistore.sdk.retry_config import RetryConfig
+
 from tests.const import ETL_NAME
 from tests.utils import cases
 
@@ -24,40 +27,77 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
 
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")
-    def test_init_defaults(self, mock_request_client, mock_sm):
+    @patch("aistore.sdk.retry_config.RetryConfig.default")
+    def test_init_defaults(self, mock_retry_config, mock_request_client, mock_sm):
+        retry_config = RetryConfig.default()
+        mock_retry_config.return_value = retry_config
         Client(self.endpoint)
+        mock_sm.assert_called_with(
+            retry=retry_config.http_retry,
+            ca_cert=None,
+            client_cert=None,
+            skip_verify=False,
+            max_pool_size=10,
+        )
         mock_request_client.assert_called_with(
             endpoint=self.endpoint,
             session_manager=mock_sm.return_value,
-            timeout=None,
+            timeout=(3, 20),
             token=None,
+            network_retry_config=retry_config.network_retry,
         )
 
     @cases(
-        (True, None, None, None, None, "dummy.token", 50),
-        (False, "ca_cert_location", None, None, None, None, 10),
-        (False, None, "client_cert_location", None, None, None, None),
-        (False, None, None, 30.0, Retry(total=4), None, 100),
-        (False, None, None, (10, 30.0), Retry(total=5, connect=2), "dummy.token", 10),
+        (True, None, None, None, None, None, "dummy.token", 50),
+        (False, "ca_cert_location", None, None, None, None, None, 10),
+        (False, None, "client_cert_location", None, None, None, None, None),
+        (
+            False,
+            None,
+            None,
+            30.0,
+            Retry(total=10),
+            Retrying(stop=stop_after_delay(60)),
+            None,
+            100,
+        ),
+        (
+            False,
+            None,
+            None,
+            (10, 30.0),
+            Retry(total=5, connect=2),
+            Retrying(stop=stop_after_delay(60), wait=wait_exponential(multiplier=2)),
+            "dummy.token",
+            10,
+        ),
     )
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")
     def test_init(self, test_case, mock_request_client, mock_sm):
-        skip_verify, ca_cert, client_cert, timeout, retry, token, max_pool_size = (
-            test_case
-        )
+        (
+            skip_verify,
+            ca_cert,
+            client_cert,
+            timeout,
+            http_retry,
+            network_retry,
+            token,
+            max_pool_size,
+        ) = test_case
+        retry_config = RetryConfig(http_retry=http_retry, network_retry=network_retry)
         Client(
             self.endpoint,
             skip_verify=skip_verify,
             ca_cert=ca_cert,
             client_cert=client_cert,
             timeout=timeout,
-            retry=retry,
+            retry_config=retry_config,
             token=token,
             max_pool_size=max_pool_size,
         )
         mock_sm.assert_called_with(
-            retry=retry,
+            retry=http_retry,
             ca_cert=ca_cert,
             client_cert=client_cert,
             skip_verify=skip_verify,
@@ -68,6 +108,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             session_manager=mock_sm.return_value,
             timeout=timeout,
             token=token,
+            network_retry_config=network_retry,
         )
 
     @cases(*Provider)
