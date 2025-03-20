@@ -173,8 +173,8 @@ func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
 	if entry.Custom != "" {
 		md := make(cos.StrKVs, 4)
 		cmn.S2CustomMD(md, entry.Custom, "")
-		if oi.LastModified == "" {
-			oi.LastModified = md[cmn.LsoLastModified]
+		if v, ok := md[cmn.LsoLastModified]; ok {
+			oi.LastModified = v
 		}
 		oi.ETag = md[cmn.ETag]
 	}

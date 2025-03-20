@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools"
@@ -347,7 +348,12 @@ func propsVersionAllProviders(t *testing.T, versioning bool) {
 			}
 		}()
 
-		// TODO -- FIXME: setBucketFeatures(t, bck, bck.Props, feat.S3ListObjectVersions)
+		if bck.Provider == apc.AWS {
+			// needed for the test
+			// reminder:
+			// "when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)"
+			setBucketFeatures(t, bck.Clone(), bck.Props, feat.S3ListObjectVersions)
+		}
 		propsVersion(t, bck.Clone(), bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
 	})
 }
