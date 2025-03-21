@@ -149,6 +149,8 @@ func (lom *LOM) RemoveMain() error {
 }
 
 func (lom *LOM) RemoveObj(force ...bool) (err error) {
+	lom.UncacheDel()
+
 	debug.AssertFunc(func() bool {
 		if lom.isLockedExcl() {
 			return true
@@ -156,7 +158,6 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 		// NOTE: making "rlock" exception to be able to forcefully rm corrupted object in the GET path
 		return len(force) > 0 && force[0] && lom.isLockedRW()
 	})
-	lom.Uncache()
 	err = lom.RemoveMain()
 	for copyFQN := range lom.md.copies {
 		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) && err == nil {

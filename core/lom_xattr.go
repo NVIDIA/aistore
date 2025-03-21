@@ -197,7 +197,7 @@ func (lom *LOM) PersistMain() (err error) {
 	// write-immediate (default)
 	buf := lom.pack()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		lom.Uncache()
+		lom.UncacheDel()
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
 		lom.md.clearDirty()
@@ -225,7 +225,7 @@ func (lom *LOM) Persist() (err error) {
 
 	buf := lom.pack()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		lom.Uncache()
+		lom.UncacheDel()
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
 		lom.md.clearDirty()

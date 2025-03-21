@@ -321,7 +321,7 @@ func (poi *putOI) finalize() (ecode int, err error) {
 				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
 		}
-		poi.lom.Uncache()
+		poi.lom.UncacheDel()
 		if ecode != http.StatusInsufficientStorage && cmn.IsErrCapExceeded(err) {
 			ecode = http.StatusInsufficientStorage
 		}
@@ -340,9 +340,10 @@ func (poi *putOI) finalize() (ecode int, err error) {
 	return 0, nil
 }
 
-// TODO: poor man's retry; rate-limit instead & handle cmn.ErrTooManyRequests - here and elsewhere
-// - only once; e.g. error message:
-// - googleapi: "Error 503: We encountered an internal error. Please try again."
+// poor man's retry when no rate-limit configured
+// - only once
+// - e.g. googleapi: "Error 503: We encountered an internal error. Please try again."
+// - see docs/rate-limit
 func (poi *putOI) _retry503() (ecode int, err error) {
 	time.Sleep(time.Second)
 	ecode, err = poi.putRemote()
@@ -367,10 +368,12 @@ func (poi *putOI) fini() (ecode int, err error) {
 				loghdr := poi.loghdr()
 				nlog.Errorln("PUT [", loghdr, err, ecode, "]")
 			}
-			if ecode != http.StatusServiceUnavailable {
-				return ecode, err
+			if !bck.Props.RateLimit.Backend.Enabled {
+				if ecode == http.StatusServiceUnavailable || ecode == http.StatusTooManyRequests {
+					ecode, err = poi._retry503()
+				}
 			}
-			if ecode, err = poi._retry503(); err != nil {
+			if err != nil {
 				return ecode, err
 			}
 		}
@@ -738,7 +741,7 @@ fin:
 	if err == nil {
 		return 0, nil
 	}
-	goi.lom.Uncache()
+	goi.lom.UncacheDel()
 	if goi.retry {
 		goi.retry = false
 		if !retried {

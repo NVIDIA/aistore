@@ -311,7 +311,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	// different versions may have different checksums
 	if md.Version() == lom.md.Version() && !lom.EqCksum(md.Cksum) {
 		err = cos.NewErrDataCksum(lom.md.Cksum, md.Cksum, lom.String())
-		lom.Uncache()
+		lom.UncacheDel()
 	}
 	return err
 }
@@ -370,7 +370,7 @@ recomp:
 	}
 ex:
 	err = cos.NewErrDataCksum(&cksums.comp.Cksum, cksums.stor, lom.String())
-	lom.Uncache()
+	lom.UncacheDel()
 	return
 }
 
@@ -529,6 +529,12 @@ func (lom *LOM) Uncache() {
 	} else {
 		lom.md.cpAtime(lmd)
 	}
+}
+
+// upon error; RemoveObj
+func (lom *LOM) UncacheDel() {
+	lcache := lom.lcache()
+	lcache.Delete(lom.digest)
 }
 
 // remove from cache unless dirty
