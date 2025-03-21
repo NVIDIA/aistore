@@ -9,7 +9,7 @@ from aistore.sdk.response_handler import ResponseHandler
 from tests.utils import cases, create_api_error_response
 
 
-class TestingException(APIRequestError):
+class MockAPIException(APIRequestError):
     """Custom exception for testing"""
 
 
@@ -18,7 +18,7 @@ class ResponseHandlerImpl(ResponseHandler):
 
     @property
     def exc_class(self) -> Type[APIRequestError]:
-        return TestingException
+        return MockAPIException
 
     def parse_error(self, r: requests.Response):
         return self.exc_class(r.status_code, r.text, r.request.url)
@@ -43,7 +43,7 @@ class TestResponseHandler(unittest.TestCase):
         err_msg, status, http_err = test_case
         test_url = "http://test-url"
         response = create_api_error_response(test_url, status, err_msg)
-        with self.assertRaises(TestingException) as context:
+        with self.assertRaises(MockAPIException) as context:
             self.resp_handler.handle_response(response)
         # Check if raised from HTTPError (includes error context)
         self.assertEqual(
