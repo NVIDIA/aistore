@@ -5,7 +5,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import Iterator, Optional, Tuple, Type, TypeVar
+from typing import Iterator, Optional, Tuple, Type, TypeVar, Union
 from urllib.parse import urlparse
 
 import braceexpand
@@ -236,3 +236,41 @@ def get_digest(name: str) -> int:
     Get the xxhash digest of a given string.
     """
     return xxhash.xxh64(seed=XX_HASH_SEED, input=name.encode("utf-8")).intdigest()
+
+
+def convert_to_seconds(time_val: Union[str, int]) -> int:
+    """
+    Converts a time value (e.g., '5s', '10m', '2h', '3d', or 10) to seconds.
+    If no unit is provided (e.g., '10' or 10), seconds are assumed.
+
+    Args:
+        time_val (Union[str, int]): The time value to convert.
+
+    Returns:
+        int: The equivalent time in seconds.
+
+    Raises:
+        ValueError: If the format or unit is invalid.
+    """
+    multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+    if isinstance(time_val, int):
+        return time_val
+
+    if not isinstance(time_val, str) or not time_val.strip():
+        raise ValueError("Time value must be a non-empty string or integer.")
+
+    time_val = time_val.strip()
+
+    if time_val.isdigit():
+        return int(time_val)
+
+    num, unit = time_val[:-1], time_val[-1]
+
+    if unit not in multipliers:
+        raise ValueError(f"Unsupported time unit: '{unit}'. Use 's', 'm', 'h', or 'd'.")
+
+    if not num.isdigit():
+        raise ValueError(f"Invalid numeric value in time: '{num}'.")
+
+    return int(num) * multipliers[unit]

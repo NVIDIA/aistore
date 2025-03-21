@@ -7,7 +7,6 @@ from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
 from requests import Response
 from tenacity import Retrying
 
-
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
@@ -292,7 +291,7 @@ class RequestClient:
 
     def _session_request(self, method, url, headers, **kwargs) -> Response:
         request_kwargs = {"headers": headers, **kwargs}
-        if self._timeout is not None:
+        if self._timeout is not None and "timeout" not in request_kwargs:
             request_kwargs["timeout"] = self._timeout
         return self.session_manager.session.request(method, url, **request_kwargs)
 

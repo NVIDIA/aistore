@@ -19,10 +19,12 @@ from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
     ETL_COMM_IO,
+    DEFAULT_ETL_TIMEOUT,
 )
 
 from aistore.sdk.etl.etl import Etl, _get_default_runtime
 from aistore.sdk.types import ETLDetails
+from aistore.sdk.utils import convert_to_seconds
 from tests.const import ETL_NAME
 
 
@@ -35,7 +37,6 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def test_init_spec_default_params(self):
         expected_action = {
             "communication": "hpush://",
-            "timeout": "5m",
             "argument": "",
         }
         self.init_spec_exec_assert(expected_action)
@@ -52,9 +53,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "timeout": timeout,
             "argument": "",
         }
-        self.init_spec_exec_assert(
-            expected_action, communication_type=communication_type, timeout=timeout
-        )
+        self.init_spec_exec_assert(expected_action, timeout=timeout)
 
     def init_spec_exec_assert(self, expected_action, **kwargs):
         template = "pod spec template"
@@ -62,6 +61,11 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             template.encode(UTF_ENCODING)
         ).decode(UTF_ENCODING)
         expected_action["id"] = self.etl_name
+
+        # all ETL INIT SPEC messages have timeout
+        if "timeout" not in expected_action:
+            expected_action["timeout"] = DEFAULT_ETL_TIMEOUT
+
         expected_response_text = self.etl_name
         mock_response = Mock()
         mock_response.text = expected_response_text
@@ -70,8 +74,19 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         response = self.etl.init_spec(template, **kwargs)
 
         self.assertEqual(expected_response_text, response)
+
+        # All ETL messages are called with timeout
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = DEFAULT_ETL_TIMEOUT
+
+        req_timeout = convert_to_seconds(kwargs.pop("timeout"))
+
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT, path=URL_PATH_ETL, json=expected_action
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=req_timeout,
+            json=expected_action,
+            **kwargs,
         )
 
     def test_init_code_default_runtime(self):
@@ -169,9 +184,20 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
         response = self.etl.init_code(transform=self.transform_fn, **kwargs)
 
+        if "timeout" not in expected_action:
+            expected_action["timeout"] = DEFAULT_ETL_TIMEOUT
+
         self.assertEqual(expected_response_text, response)
+
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = DEFAULT_ETL_TIMEOUT
+        req_timeout = convert_to_seconds(kwargs.pop("timeout"))
+
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT, path=URL_PATH_ETL, json=expected_action
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=req_timeout,
+            json=expected_action,
         )
 
     def test_view(self):
@@ -186,19 +212,25 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def test_start(self):
         self.etl.start()
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_POST, path=f"etl/{ self.etl_name }/start"
+            HTTP_METHOD_POST,
+            path=f"etl/{ self.etl_name }/start",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
     def test_stop(self):
         self.etl.stop()
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_POST, path=f"etl/{ self.etl_name }/stop"
+            HTTP_METHOD_POST,
+            path=f"etl/{ self.etl_name }/stop",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
     def test_delete(self):
         self.etl.delete()
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_DELETE, path=f"etl/{ self.etl_name }"
+            HTTP_METHOD_DELETE,
+            path=f"etl/{ self.etl_name }",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
     def test_valid_names(self):

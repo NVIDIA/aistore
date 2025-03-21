@@ -28,6 +28,7 @@ from aistore.sdk.etl.etl_const import (
 )
 
 from aistore.sdk.types import ETLDetails, InitCodeETLArgs, InitSpecETLArgs
+from aistore.sdk.utils import convert_to_seconds
 
 
 def _get_default_runtime():
@@ -79,7 +80,7 @@ class Etl:
                 Existing templates can be found at `sdk.etl_templates`
                 For more information visit: https://github.com/NVIDIA/ais-etl/tree/main/transformers
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
-            timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
+            timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes). Defaults to 5m.
         Returns:
             Job ID string associated with this ETL
         """
@@ -98,7 +99,12 @@ class Etl:
             arg_type=arg_type,
         ).as_dict()
 
-        return self._client.request(HTTP_METHOD_PUT, path=URL_PATH_ETL, json=value).text
+        return self._client.request(
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=convert_to_seconds(timeout),
+            json=value,
+        ).text
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def init_code(
@@ -158,6 +164,7 @@ class Etl:
         return self._client.request(
             HTTP_METHOD_PUT,
             path=URL_PATH_ETL,
+            timeout=convert_to_seconds(timeout),
             json=value,
         ).text
 
@@ -180,7 +187,9 @@ class Etl:
         Note: Deleted ETLs cannot be started.
         """
         self._client.request(
-            HTTP_METHOD_POST, path=f"{URL_PATH_ETL}/{self._name}/start"
+            HTTP_METHOD_POST,
+            path=f"{URL_PATH_ETL}/{self._name}/start",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
         )
 
     def stop(self):
@@ -188,7 +197,11 @@ class Etl:
         Stops ETL. Stops (but does not delete) all the pods created by Kubernetes for this ETL and
         terminates any transforms.
         """
-        self._client.request(HTTP_METHOD_POST, path=f"{URL_PATH_ETL}/{self._name}/stop")
+        self._client.request(
+            HTTP_METHOD_POST,
+            path=f"{URL_PATH_ETL}/{self._name}/stop",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+        )
 
     def delete(self):
         """
@@ -197,7 +210,11 @@ class Etl:
 
         Note: Running ETLs cannot be deleted.
         """
-        self._client.request(HTTP_METHOD_DELETE, path=f"{URL_PATH_ETL}/{self._name}")
+        self._client.request(
+            HTTP_METHOD_DELETE,
+            path=f"{URL_PATH_ETL}/{self._name}",
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+        )
 
     @staticmethod
     def _encode_transform(

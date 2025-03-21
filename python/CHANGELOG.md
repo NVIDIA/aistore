@@ -35,6 +35,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   - **HTTP Retry (urllib3.Retry):** Handles HTTP status-based retries.
   - **Network Retry (tenacity):** Manages connection failures and timeouts.
 - Update `SessionManager` and `Client` to accept `RetryConfig` for better configurability.
+- Allow ETL to override configured `RequestClient` timeout (for that specific ETL request).
 
 ### Removed
 
