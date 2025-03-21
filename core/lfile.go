@@ -145,7 +145,6 @@ func (*LOM) AppendWork(wfqn string) (fh cos.LomWriter, err error) {
 
 func (lom *LOM) RemoveMain() error {
 	return cos.RemoveFile(lom.FQN)
-	// if err != nil && cos.IsErrFntl(err)
 }
 
 func (lom *LOM) RemoveObj(force ...bool) (err error) {

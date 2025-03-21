@@ -531,7 +531,7 @@ func (lom *LOM) Uncache() {
 	}
 }
 
-// upon error; RemoveObj
+// upon: error; RemoveObj
 func (lom *LOM) UncacheDel() {
 	lcache := lom.lcache()
 	lcache.Delete(lom.digest)

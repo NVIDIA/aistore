@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -25,7 +25,7 @@ type (
 // interface guard to make sure that LIF can be used to unlock LOM
 var _ lifUnlocker = (*LIF)(nil)
 
-// constructor
+// LOM => LIF constructor
 func (lom *LOM) LIF() (lif LIF) {
 	debug.Assert(lom.md.uname != nil)
 	bprops := lom.Bprops()
@@ -42,7 +42,7 @@ func (lom *LOM) LIF() (lif LIF) {
 	}
 }
 
-// LIF => LOF with a check for bucket existence
+// LIF => LOM with a check for bucket existence
 func (lif *LIF) LOM() (lom *LOM, err error) {
 	b, objName := cmn.ParseUname(lif.uname)
 	lom = AllocLOM(objName)

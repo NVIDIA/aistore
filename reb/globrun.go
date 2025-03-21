@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -70,6 +70,7 @@ type (
 			ts      int64      // last time we have recomputed
 			mtx     sync.Mutex
 		}
+		lazydel lazydel
 		// (smap, xreb) + atomic state
 		rebID atomic.Int64
 		// quiescence
@@ -149,6 +150,8 @@ func New(config *cmn.Config) *Reb {
 	}
 	reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, dmExtra) // (compare with dm.Renew below)
 
+	reb.lazydel.init()
+
 	return reb
 }
 
@@ -213,6 +216,9 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 	if reb.rebID.Load() == extArgs.NID {
 		return
 	}
+
+	reb.lazydel.stop()
+
 	logHdr := reb.logHdr(extArgs.NID, smap, true /*initializing*/)
 	// preempt
 	if xact.IsValidRebID(extArgs.Oxid) {
@@ -296,6 +302,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 	extArgs.Tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	// run
+	go reb.lazydel.run(rargs.xreb)
 	err := reb.run(rargs)
 	if err == nil {
 		errCnt := reb.rebWaitAck(rargs)

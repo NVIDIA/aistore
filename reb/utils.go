@@ -190,9 +190,7 @@ func (reb *Reb) ackLomAck(lom *core.LOM) {
 	// NOTE: rm migrated object (and local copies, if any) right away
 	// TODO [feature]: mark "deleted" instead
 	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
-		lom.Lock(true)
-		err := lom.RemoveObj()
-		lom.Unlock(true)
-		debug.AssertNoErr(err)
+		lom.UncacheDel()
+		reb.lazydel.enqueue(lom.LIF())
 	}
 }
