@@ -42,6 +42,11 @@ func (lom *LOM) LIF() (lif LIF) {
 	}
 }
 
+func (lif *LIF) Name() string {
+	b, objName := cmn.ParseUname(lif.uname)
+	return b.Cname(objName)
+}
+
 // LIF => LOM with a check for bucket existence
 func (lif *LIF) LOM() (lom *LOM, err error) {
 	b, objName := cmn.ParseUname(lif.uname)

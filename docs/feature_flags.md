@@ -42,7 +42,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `Disable-Cold-GET` | do not perform cold GET request when using remote bucket |
 | `S3-Reverse-Proxy` | use reverse proxy calls instead of HTTP-redirect for S3 API |
 | `S3-Use-Path-Style` | use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY |
-| `Do-not-Delete-When-Rebalancing` | when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources |
+| `Do-not-Delete-When-Rebalancing` | disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects |
 | `Do-not-Set-Control-Plane-ToS` | intra-cluster control plane: do not set IPv4 ToS field (to low-latency) |
 | `Trust-Crypto-Safe-Checksums` | when checking whether objects are identical trust only cryptographically secure checksums |
 | `S3-ListObjectVersions` | when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only) |
@@ -88,7 +88,7 @@ Disable-Cold-GET                     disable cold-GET (from remote bucket)
 Streaming-Cold-GET                   write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 S3-Reverse-Proxy                     intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
 S3-Use-Path-Style                    use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
-Do-not-Delete-When-Rebalancing       when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
+Do-not-Delete-When-Rebalancing       disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects
 Do-not-Set-Control-Plane-ToS         intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 Trust-Crypto-Safe-Checksums          when checking whether objects are identical trust only cryptographically secure checksums
 S3-ListObjectVersions                when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
@@ -127,7 +127,7 @@ Disable-Cold-GET                     disable cold-GET (from remote bucket)
 Streaming-Cold-GET                   write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 S3-Reverse-Proxy                     intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
 S3-Use-Path-Style                    use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
-Do-not-Delete-When-Rebalancing       when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
+Do-not-Delete-When-Rebalancing       disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects
 Do-not-Set-Control-Plane-ToS         intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 Trust-Crypto-Safe-Checksums          when checking whether objects are identical trust only cryptographically secure checksums
 S3-ListObjectVersions                when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)

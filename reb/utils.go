@@ -191,6 +191,6 @@ func (reb *Reb) ackLomAck(lom *core.LOM) {
 	// TODO [feature]: mark "deleted" instead
 	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
 		lom.UncacheDel()
-		reb.lazydel.enqueue(lom.LIF())
+		reb.lazydel.enqueue(lom.LIF(), xreb)
 	}
 }

@@ -41,7 +41,7 @@ var clusterFeatDesc = [...]string{
 	"write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object",
 	"intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets",
 	"use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY",
-	"when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources",
+	"disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects",
 	"intra-cluster control plane: do not set IPv4 ToS field (to low-latency)",
 	"when checking whether objects are identical trust only cryptographically secure checksums",
 	"when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)",

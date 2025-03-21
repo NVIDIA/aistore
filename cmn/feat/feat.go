@@ -38,7 +38,7 @@ const (
 	StreamingColdGET          // write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object
 	S3ReverseProxy            // intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
 	S3UsePathStyle            // use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
-	DontDeleteWhenRebalancing // when objects get _rebalanced_ to their proper locations, do not delete their respective _misplaced_ sources
+	DontDeleteWhenRebalancing // disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects
 	DontSetControlPlaneToS    // intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
 	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
 	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
