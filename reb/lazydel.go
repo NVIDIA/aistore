@@ -37,7 +37,9 @@ type lazydel struct {
 // is called via recvRegularAck -> ackLomAck
 func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
 	if id := r.rebID.Load(); id != rebID {
-		nlog.Warningln(lazyTag, "enqueue from invalid (previous?)", xname, "[", rebID, "vs current", id, "]")
+		if id != 0 {
+			nlog.Warningln(lazyTag, "enqueue from invalid (previous?)", xname, "[", rebID, "vs current", id, "]")
+		}
 		return
 	}
 	l, c := len(r.workCh), cap(r.workCh)
@@ -179,6 +181,7 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 
 fin:
 	ticker.Stop()
+	r.rebID.Store(0)
 	r.cleanup()
 	r.running.Store(false)
 }

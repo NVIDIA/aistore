@@ -32,6 +32,7 @@ func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 		if smap.Version == olderSmapV {
 			if xreb.Abort(err) {
 				nlog.Warningf("%v - aborted", err)
+				reb.lazydel.stop()
 			}
 		}
 	}
@@ -128,6 +129,7 @@ func (reb *Reb) abortAll(err error) {
 	if xreb == nil || !xreb.Abort(err) {
 		return
 	}
+	reb.lazydel.stop()
 	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
 
 	var (

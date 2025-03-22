@@ -28,6 +28,7 @@ func (reb *Reb) _recvErr(err error) error {
 	}
 	if xreb := reb.xctn(); xreb != nil {
 		xreb.Abort(err)
+		reb.lazydel.stop()
 	}
 	return nil
 }
@@ -125,6 +126,7 @@ func (reb *Reb) _handleNtfn(ntfn *stageNtfn) {
 		loghdr := reb.logHdr(rebID, rsmap)
 		err := fmt.Errorf("%s: %s", loghdr, reb.warnID(ntfn.rebID, ntfn.daemonID))
 		xreb.Abort(err)
+		reb.lazydel.stop()
 	}
 }
 

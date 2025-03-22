@@ -242,6 +242,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	if status.RebID == reb.RebID() && status.Aborted {
 		err := cmn.NewErrAborted(xreb.Name(), rargs.logHdr, fmt.Errorf("status 'aborted' from %s", tname))
 		xreb.Abort(err)
+		reb.lazydel.stop()
 		return
 	}
 	if status.Stage >= desiredStage {
