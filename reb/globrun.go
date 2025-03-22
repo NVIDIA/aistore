@@ -583,7 +583,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 			curwt += sleep
 		}
 		if cnt > 0 {
-			nlog.Warningf("%s: timed out waiting for %d ACK%s", rargs.logHdr, cnt, cos.Plural(cnt))
+			nlog.Warningf("%s timed out waiting for %d ACK%s", rargs.logHdr, cnt, cos.Plural(cnt))
 		}
 		if xreb.IsAborted() {
 			return
@@ -592,11 +592,11 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		// NOTE: requires locally migrated objects *not* to be removed at the src
 		aPaths, _ := fs.Get()
 		if len(aPaths) > len(rargs.apaths) {
-			nlog.Warningf("%s: mountpath changes detected (%d, %d)", rargs.logHdr, len(aPaths), len(rargs.apaths))
+			nlog.Warningf("%s mountpath changes detected (%d, %d)", rargs.logHdr, len(aPaths), len(rargs.apaths))
 		}
 
 		// 8. synchronize
-		nlog.Infof("%s: poll targets for: stage=(%s or %s***)", rargs.logHdr, stages[rebStageFin], stages[rebStageWaitAck])
+		nlog.Infof("%s poll targets for: stage=(%s or %s***)", rargs.logHdr, stages[rebStageFin], stages[rebStageWaitAck])
 		errCnt = bcast(rargs, reb.waitAcksExtended)
 		if xreb.IsAborted() {
 			return

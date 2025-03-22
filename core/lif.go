@@ -5,6 +5,8 @@
 package core
 
 import (
+	"errors"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -24,6 +26,8 @@ type (
 
 // interface guard to make sure that LIF can be used to unlock LOM
 var _ lifUnlocker = (*LIF)(nil)
+
+var errEmptyLIF = errors.New("empty LIF")
 
 // LOM => LIF constructor
 func (lom *LOM) LIF() (lif LIF) {
@@ -49,6 +53,9 @@ func (lif *LIF) Name() string {
 
 // LIF => LOM with a check for bucket existence
 func (lif *LIF) LOM() (lom *LOM, err error) {
+	if lif.uname == "" {
+		return nil, errEmptyLIF
+	}
 	b, objName := cmn.ParseUname(lif.uname)
 	lom = AllocLOM(objName)
 	if err = lom.InitBck(&b); err != nil {
