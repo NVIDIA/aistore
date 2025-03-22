@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -166,7 +166,7 @@ func (reb *Reb) cleanupLomAck(lom *core.LOM) {
 }
 
 // called by recvRegularAck
-func (reb *Reb) ackLomAck(lom *core.LOM) {
+func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64) {
 	lomAck := reb.lomAcks()[lom.CacheIdx()]
 
 	lomAck.mu.Lock()
@@ -191,6 +191,6 @@ func (reb *Reb) ackLomAck(lom *core.LOM) {
 	// TODO [feature]: mark "deleted" instead
 	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
 		lom.UncacheDel()
-		reb.lazydel.enqueue(lom.LIF(), xreb)
+		reb.lazydel.enqueue(lom.LIF(), xreb.Name(), rebID)
 	}
 }

@@ -302,7 +302,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 	extArgs.Tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
 	// run
-	go reb.lazydel.run(rargs.xreb, rargs.config)
+	go reb.lazydel.run(rargs.xreb, rargs.config, rargs.id)
 	err := reb.run(rargs)
 	if err == nil {
 		errCnt := reb.rebWaitAck(rargs)

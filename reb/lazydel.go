@@ -18,6 +18,8 @@ import (
 
 const (
 	lazyChanSize = 1024 // NOTE: can become 4096 if we ever hit chanFull
+
+	lazyDelayMin = 4 * time.Second
 )
 
 const lazyTag = "lazy-delete"
@@ -27,23 +29,28 @@ type lazydel struct {
 	get      []core.LIF // ready for deletion
 	stopCh   *cos.StopCh
 	workCh   chan core.LIF
+	rebID    atomic.Int64
 	running  atomic.Bool
 	chanFull atomic.Bool
 }
 
 // is called via recvRegularAck -> ackLomAck
-func (r *lazydel) enqueue(lif core.LIF, xreb *xs.Rebalance) {
+func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
+	if id := r.rebID.Load(); id != rebID {
+		nlog.Warningln(lazyTag, "enqueue from invalid (previous?)", xname, "[", rebID, "vs current", id, "]")
+		return
+	}
 	l, c := len(r.workCh), cap(r.workCh)
 	debug.Assert(c >= lazyChanSize)
 
 	// (-8) should be enough to prevent racy blocking
 	if l >= c-8 {
 		r.chanFull.Store(true)
-		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Name(), xreb.Name(), l, "]")
+		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Name(), xname, l, "]")
 		return
 	}
 	if l == c-c>>2 || l == c-c>>3 {
-		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "[", xreb.Name(), l, "]")
+		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "[", xname, l, "]")
 	}
 	r.workCh <- lif
 }
@@ -66,11 +73,11 @@ func (r *lazydel) cleanup() {
 
 // tunables
 func lazytimes(config *cmn.Config) (delay, idle, busy time.Duration) {
-	lazyDelay := max(config.Timeout.MaxHostBusy.D(), 4*time.Second)
+	lazyDelay := max(config.Timeout.MaxHostBusy.D(), lazyDelayMin)
 	return lazyDelay, lazyDelay << 2, lazyDelay >> 2
 }
 
-func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config) {
+func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 	const (
 		prompt = "waiting for the previous " + lazyTag
 	)
@@ -93,11 +100,17 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config) {
 	if r.chanFull.Load() {
 		// NOTE: never resetting chanFull (a simplified attempt to avoid one)
 		size <<= 2
-		delay >>= 1
+		delay = max(delay>>1, lazyDelayMin)
 	}
-	r.put = make([]core.LIF, 0, size)
+	if cap(r.put) == 0 {
+		r.put = make([]core.LIF, 0, size)
+	} else {
+		// reuse both slices
+		r.cleanup()
+	}
 	r.workCh = make(chan core.LIF, size)
 	r.stopCh = cos.NewStopCh()
+	r.rebID.Store(rebID)
 
 	ticker := time.NewTicker(delay)
 

@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -252,14 +252,17 @@ func (reb *Reb) regACK(smap *meta.Smap, hdr *transport.ObjHdr, tsid string) erro
 }
 
 func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) error {
-	ack := &regularAck{}
+	var (
+		rebID = reb.RebID()
+		ack   = &regularAck{}
+	)
 	if err := unpacker.ReadAny(ack); err != nil {
-		return fmt.Errorf("g[%d]: failed to unpack regular ACK: %v", reb.RebID(), err)
+		return fmt.Errorf("g[%d]: failed to unpack regular ACK: %v", rebID, err)
 	}
 	if ack.rebID == 0 {
-		return fmt.Errorf("g[%d]: invalid g[0] ACK from %s", reb.RebID(), meta.Tname(ack.daemonID))
+		return fmt.Errorf("g[%d]: invalid g[0] ACK from %s", rebID, meta.Tname(ack.daemonID))
 	}
-	if ack.rebID != reb.rebID.Load() {
+	if ack.rebID != rebID {
 		nlog.Warningln("ACK from", ack.daemonID, "[", reb.warnID(ack.rebID, ack.daemonID), "]")
 		return nil
 	}
@@ -274,7 +277,7 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 	// [NOTE]
 	// - remove migrated object and copies (unless disallowed by feature flag)
 	// - free pending (original) transmitted LOM
-	reb.ackLomAck(lom)
+	reb.ackLomAck(lom, rebID)
 	core.FreeLOM(lom)
 
 	return nil
