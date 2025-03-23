@@ -60,13 +60,15 @@ func log(sev severity, depth int, format string, args ...any) {
 	case LogToStderr:
 		fb := alloc()
 		sprintf(sev, depth, format, fb, args...)
-		fb.flush(os.Stderr)
+		_, err := fb.flush(os.Stderr)
+		assert(err == nil)
 		free(fb)
 	case sev >= sevWarn:
 		fb := alloc()
 		sprintf(sev, depth, format, fb, args...)
 		if sev >= sevErr {
-			fb.flush(os.Stderr)
+			_, err := fb.flush(os.Stderr)
+			assert(err == nil)
 		}
 		if sev >= sevWarn {
 			nlog := nlogs[sevErr]

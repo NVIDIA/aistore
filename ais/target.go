@@ -64,14 +64,14 @@ type (
 	// main
 	target struct {
 		htrun
-		bps          backends
-		rlbps        rlbackends
-		fshc         *health.FSHC
-		fsprg        fsprungroup
-		reb          *reb.Reb
-		res          *res.Res
-		transactions transactions
-		regstate     regstate
+		bps      backends
+		rlbps    rlbackends
+		fshc     *health.FSHC
+		fsprg    fsprungroup
+		reb      *reb.Reb
+		res      *res.Res
+		txns     txns
+		regstate regstate
 	}
 )
 
@@ -444,7 +444,7 @@ func (t *target) Run() error {
 		return err
 	}
 
-	t.transactions.init(t)
+	t.txns.init(t)
 
 	t.reb = reb.New(config)
 	t.res = res.New()

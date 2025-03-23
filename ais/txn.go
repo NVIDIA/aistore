@@ -53,8 +53,8 @@ type (
 		timestamp  int64
 	}
 	// two maps, two locks
-	transactions struct {
-		t          *target
+	txns struct {
+		t          *target        // parent
 		m          map[string]txn // by txn.uuid
 		rendezvous struct {
 			m   map[string]rndzvs // ditto
@@ -62,6 +62,9 @@ type (
 		}
 		mtx sync.Mutex
 	}
+)
+
+type (
 	txnError struct { // a wrapper which presence means: "done"
 		err error
 	}
@@ -149,17 +152,17 @@ var (
 )
 
 //////////////////
-// transactions //
+// txns //
 //////////////////
 
-func (txns *transactions) init(t *target) {
+func (txns *txns) init(t *target) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
 	txns.rendezvous.m = make(map[string]rndzvs, 8)
 	hk.Reg("txn"+hk.NameSuffix, txns.housekeep, hk.DelOldIval)
 }
 
-func (txns *transactions) begin(txn txn, nlps ...core.NLP) (err error) {
+func (txns *txns) begin(txn txn, nlps ...core.NLP) (err error) {
 	txns.mtx.Lock()
 	if x, ok := txns.m[txn.uuid()]; ok {
 		txns.mtx.Unlock()
@@ -181,7 +184,7 @@ func (txns *transactions) begin(txn txn, nlps ...core.NLP) (err error) {
 	return
 }
 
-func (txns *transactions) find(uuid, act string) (txn, error) {
+func (txns *txns) find(uuid, act string) (txn, error) {
 	txns.mtx.Lock()
 	txn, ok := txns.m[uuid]
 	if !ok {
@@ -217,7 +220,7 @@ func (txns *transactions) find(uuid, act string) (txn, error) {
 	return txn, nil
 }
 
-func (txns *transactions) commitBefore(caller string, msg *actMsgExt) error {
+func (txns *txns) commitBefore(caller string, msg *actMsgExt) error {
 	var (
 		rndzvs rndzvs
 		ok     bool
@@ -233,7 +236,7 @@ func (txns *transactions) commitBefore(caller string, msg *actMsgExt) error {
 	return fmt.Errorf("rendezvous record %s:%d already exists", msg.UUID, rndzvs.timestamp)
 }
 
-func (txns *transactions) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (errDone error) {
+func (txns *txns) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (errDone error) {
 	txns.mtx.Lock()
 	txn, ok := txns.m[msg.UUID]
 	txns.mtx.Unlock()
@@ -266,7 +269,7 @@ func (txns *transactions) commitAfter(caller string, msg *actMsgExt, err error, 
 }
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
-func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
+func (txns *txns) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
 	// timestamp
 	txn.started(apc.ActCommit, time.Now())
 
@@ -290,7 +293,7 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 }
 
 // poll for 'done'
-func (txns *transactions) _wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
+func (txns *txns) _wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
 	var (
 		sleep       = 100 * time.Millisecond
 		done, found bool
@@ -331,8 +334,8 @@ func (txns *transactions) _wait(txn txn, timeoutNetw, timeoutHost time.Duration)
 	return err
 }
 
-// GC orphaned transactions
-func (txns *transactions) housekeep(int64) (d time.Duration) {
+// GC orphaned txns
+func (txns *txns) housekeep(int64) (d time.Duration) {
 	var (
 		errs    []error
 		orphans []txn
@@ -368,7 +371,7 @@ func (txns *transactions) housekeep(int64) (d time.Duration) {
 	return
 }
 
-func (txns *transactions) cleanup(orphans []txn, errs []error) {
+func (txns *txns) cleanup(orphans []txn, errs []error) {
 	if len(orphans) > 0 {
 		txns.rendezvous.mtx.Lock()
 		for _, txn := range orphans {

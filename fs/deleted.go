@@ -117,7 +117,7 @@ rm:
 	return err
 }
 
-func (mi *Mountpath) ClearMDs(inclBMD bool) (rerr error) {
+func (mi *Mountpath) clearMDs(inclBMD bool) (rerr error) {
 	for _, mdfd := range mdFilesDirs {
 		if !inclBMD && mdfd == fname.Bmd {
 			continue
@@ -161,7 +161,7 @@ func demd(allmpi []MPI) (rerr error) {
 	for _, mpi := range allmpi {
 		for _, mi := range mpi {
 			// NOTE: BMD goes with data (ie., no data - no BMD)
-			if err := mi.ClearMDs(false /*include BMD*/); err != nil {
+			if err := mi.clearMDs(false /*include BMD*/); err != nil {
 				rerr = err
 			}
 			// node ID (SID)

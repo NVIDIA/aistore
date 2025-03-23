@@ -85,14 +85,15 @@ func (fb *fixed) abcdef(millis int) {
 
 func (fb *fixed) flush(file *os.File) (n int, err error) {
 	n, err = file.Write(fb.buf[:fb.woff])
-	if err != nil {
-		if Stopping() {
-			_whileStopping(fb.buf[:fb.woff])
-			return 0, nil
-		}
-		os.Stderr.WriteString(err.Error() + "\n")
+	if err == nil {
+		return n, nil
 	}
-	return
+	if Stopping() {
+		_whileStopping(fb.buf[:fb.woff])
+		return 0, nil
+	}
+	os.Stderr.WriteString(err.Error() + "\n")
+	return n, err
 }
 
 func (fb *fixed) reset()      { fb.woff = 0 }

@@ -711,7 +711,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload,
 	}
 
 	// txn [before -- do -- after]
-	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
+	if errDone := t.txns.commitBefore(caller, msg); errDone != nil {
 		err = fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
 			nlog.Errorln(err)
@@ -730,7 +730,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload,
 			t, newBMD.StringEx(), caller, msg.Action, msg.UUID)
 	}
 	// --after]
-	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
+	if errDone := t.txns.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
 			nlog.Errorln(err)

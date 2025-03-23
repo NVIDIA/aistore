@@ -32,7 +32,7 @@ type IniCtx struct {
 // - load (or initialize new) volume
 // - initialize mountpaths
 // - check a variety of SIE (storage integrity error) conditions; terminate and exit if detected
-func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
+func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	var (
 		vmd     *VMD
 		tid     = t.SID()
@@ -60,9 +60,8 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 		} else {
 			vmd = v
 		}
-		nlog.Warningln(t.String()+":", vmd.String(), "initialized")
-		created = true
-		return
+		nlog.Warningln(t.String(), vmd.String(), "initialized")
+		return true // created
 	}
 
 	// otherwise, use loaded VMD to find the most recently updated (the current) one and, simultaneously,
@@ -84,12 +83,14 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) (created bool) {
 			debug.Assert(v == nil || v.Version == vmd.Version)
 		}
 		if persist {
-			vmd.persist()
+			if err := vmd.persist(); err != nil {
+				cos.ExitLogf("%s: %v (vmd-init-mpi-persist, have-old=%t, %+v, %s)", t, err, haveOld, ctx, vmd)
+			}
 		}
 	}
 
 	nlog.Infoln(vmd.String())
-	return
+	return false // created
 }
 
 // MPI => VMD
@@ -115,7 +116,7 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 		vmd.addMountpath(mi, false /*enabled*/)
 	}
 	err = vmd.persist()
-	return
+	return vmd, err
 }
 
 func newVMD(expectedSize int) *VMD {

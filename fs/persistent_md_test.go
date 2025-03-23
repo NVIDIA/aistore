@@ -69,36 +69,3 @@ func TestMarkers(t *testing.T) {
 		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 }
-
-func TestMarkersClear(t *testing.T) {
-	const mpathsCnt = 5
-	mpaths := tools.PrepareMountPaths(t, mpathsCnt)
-	defer tools.RemoveMpaths(t, mpaths)
-
-	checkMarkersExist(t,
-		markerEntry{marker: fname.RebalanceMarker, exists: false},
-		markerEntry{marker: fname.ResilverMarker, exists: false},
-	)
-
-	fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker)
-	tassert.CheckFatal(t, fatalErr)
-	tassert.CheckFatal(t, writeErr)
-
-	fatalErr, writeErr = fs.PersistMarker(fname.ResilverMarker)
-	tassert.CheckFatal(t, fatalErr)
-	tassert.CheckFatal(t, writeErr)
-
-	checkMarkersExist(t,
-		markerEntry{marker: fname.RebalanceMarker, exists: true},
-		markerEntry{marker: fname.ResilverMarker, exists: true},
-	)
-
-	for _, mpath := range mpaths {
-		mpath.ClearMDs(true)
-	}
-
-	checkMarkersExist(t,
-		markerEntry{marker: fname.RebalanceMarker, exists: false},
-		markerEntry{marker: fname.ResilverMarker, exists: false},
-	)
-}

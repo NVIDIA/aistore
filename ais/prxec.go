@@ -174,5 +174,8 @@ func (p *proxy) offEC(last int64) {
 	nlog.Warningln(err) // benign (see errCloseStreams)
 
 	// undo
-	p._onEC(mono.NanoTime())
+	err = p._onEC(mono.NanoTime())
+	if err != nil {
+		nlog.Warningln("nested failure:", apc.ActEcClose, "--> undo:", err)
+	}
 }

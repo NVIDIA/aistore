@@ -929,9 +929,11 @@ func _moveMarkers(avail MPI, from *Mountpath) {
 		return // no markers, nothing to do
 	}
 
-	// NOTE: `from` path must no longer be in the available mountpaths
+	// `from` path must no longer be in _available_
 	_, ok := avail[from.Path]
 	debug.Assert(!ok, from.String())
+
+	// copy + delete
 	for _, mi := range avail {
 		ok = true
 		for _, fi := range finfos {
@@ -951,7 +953,7 @@ func _moveMarkers(avail MPI, from *Mountpath) {
 			break
 		}
 	}
-	from.ClearMDs(true /*inclBMD*/)
+	_ = from.clearMDs(true /*inclBMD*/)
 }
 
 //

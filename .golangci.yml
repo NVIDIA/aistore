@@ -51,7 +51,7 @@ linters-settings:
     severity: warning
     rules:
       # name: import-shadowing ## (e.g., url)
-      # name: unhandled-error
+      # name: unhandled-error  ## (run/review periodically)
       # name: line-length-limit
       # name: dot-imports
       - name: blank-imports
