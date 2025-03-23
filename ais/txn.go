@@ -184,22 +184,17 @@ func (txns *txns) begin(txn txn, nlps ...core.NLP) (err error) {
 	return
 }
 
-func (txns *txns) find(uuid, act string) (txn, error) {
+// find and term: [cleanup | Commit | Abort]
+func (txns *txns) term(uuid, act string) {
+	debug.Assert(act == actTxnCleanup || act == apc.ActCommit || act == apc.ActAbort, "invalid ", act)
+
 	txns.mtx.Lock()
 	txn, ok := txns.m[uuid]
 	if !ok {
-		// a) not found (benign in an unlikely event of failing to commit)
 		txns.mtx.Unlock()
-		return nil, cos.NewErrNotFound(txns.t, "txn "+uuid)
+		return
 	}
 
-	if act == "" {
-		// b) just find & return
-		txns.mtx.Unlock()
-		return txn, nil
-	}
-
-	// or c) cleanup
 	delete(txns.m, uuid)
 	txns.mtx.Unlock()
 
@@ -210,14 +205,21 @@ func (txns *txns) find(uuid, act string) (txn, error) {
 	if act == apc.ActAbort {
 		txn.abort(errors.New("action: abort")) // NOTE: may call txn-specific abort, e.g. TxnAbort
 	} else {
-		debug.Assert(act == apc.ActCommit || act == ActCleanup, act)
 		txn.unlock()
 	}
-
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s %s: %s", txns.t, act, txn)
 	}
-	return txn, nil
+}
+
+func (txns *txns) find(uuid string) (_ txn, err error) {
+	txns.mtx.Lock()
+	found, ok := txns.m[uuid]
+	txns.mtx.Unlock()
+	if !ok {
+		err = cos.NewErrNotFound(txns.t, "txn["+uuid+"]")
+	}
+	return found, err
 }
 
 func (txns *txns) commitBefore(caller string, msg *actMsgExt) error {
@@ -288,7 +290,7 @@ func (txns *txns) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err err
 	if err != nil {
 		act = apc.ActAbort
 	}
-	txns.find(txn.uuid(), act)
+	txns.term(txn.uuid(), act)
 	return err
 }
 
@@ -303,7 +305,7 @@ func (txns *txns) _wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err er
 			return err
 		}
 		// aborted?
-		if _, err = txns.find(txn.uuid(), ""); err != nil {
+		if _, err = txns.find(txn.uuid()); err != nil {
 			return err
 		}
 

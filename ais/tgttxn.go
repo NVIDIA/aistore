@@ -34,7 +34,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const ActCleanup = "cleanup" // in addition to (apc.ActBegin, ...)
+const actTxnCleanup = "cleanup" // in addition to (apc.ActBegin, ...)
 
 // context structure to gather all (or most) of the relevant state in one place
 // (compare with txnCln)
@@ -85,6 +85,14 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		bucket, phase = apiItems[0], apiItems[1]
 	default:
 		t.writeErrURL(w, r)
+		return
+	}
+
+	switch phase {
+	case apc.ActBegin, apc.ActAbort, apc.ActCommit:
+	default:
+		debug.Assert(false, phase)
+		t.writeErrAct(w, r, phase+" (expecting begin|abort|commit)")
 		return
 	}
 
@@ -157,7 +165,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// cleanup on error
-	t.txns.find(c.uuid, ActCleanup)
+	t.txns.term(c.uuid, actTxnCleanup)
 
 	if cmn.IsErrCapExceeded(err) {
 		cs := t.oos(cmn.GCO.Get())
@@ -189,23 +197,23 @@ func (t *target) createBucket(c *txnSrv) error {
 			}
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
-		t._commitCreateDestroy(c)
-	default:
-		debug.Assert(false)
+		if err := t._commitCreateDestroy(c); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
-	txn, err := t.txns.find(c.uuid, "")
+	txn, err := t.txns.find(c.uuid)
 	if err != nil {
 		return err
 	}
 	// wait for newBMD w/timeout
 	if err = t.txns.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-		return cmn.NewErrFailedTo(t, "commit", txn, err)
+		err = cmn.NewErrFailedTo(t, "commit", txn, err)
 	}
 	return
 }
@@ -237,14 +245,14 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 			return "", err
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
 		copies, err := _parseNCopies(c.msg.Value)
 		debug.AssertNoErr(err)
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return "", err
 		}
@@ -268,8 +276,6 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 		xact.GoRunW(xctn)
 
 		return xctn.ID(), nil
-	default:
-		debug.Assert(false)
 	}
 	return "", nil
 }
@@ -321,13 +327,13 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 			return "", err
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
 		var xid string
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return "", err
 		}
@@ -370,8 +376,6 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 			}
 		}
 		return xid, nil
-	default:
-		debug.Assert(false)
 	}
 	return "", nil
 }
@@ -431,12 +435,12 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 			return "", err
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return "", err
 		}
@@ -461,8 +465,6 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 		xact.GoRunW(xctn) // run and wait until it starts running
 
 		return xctn.ID(), nil
-	default:
-		debug.Assert(false)
 	}
 	return "", nil
 }
@@ -549,12 +551,12 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error
 			return "", err
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return "", err
 		}
@@ -566,7 +568,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error
 				return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 			}
 		} else {
-			t.txns.find(c.uuid, apc.ActCommit)
+			t.txns.term(c.uuid, apc.ActCommit)
 		}
 
 		custom := txnTcb.xtcb.Args()
@@ -590,8 +592,6 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
 		return xid, nil
-	default:
-		debug.Assert(false)
 	}
 	return "", nil
 }
@@ -682,7 +682,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, roc core.GetROC) (xid string
 		}
 		xtco.Begin(msg)
 	case apc.ActAbort:
-		txn, err := t.txns.find(c.uuid, apc.ActAbort)
+		txn, err := t.txns.find(c.uuid)
 		if err == nil {
 			txnTco := txn.(*txnTCObjs)
 			// if _this_ transaction initiated _that_ on-demand
@@ -690,12 +690,13 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, roc core.GetROC) (xid string
 				xid = xtco.ID()
 				xtco.Abort(nil)
 			}
+			t.txns.term(c.uuid, apc.ActAbort)
 		}
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return xid, err
 		}
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return xid, err
 		}
@@ -712,10 +713,8 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, roc core.GetROC) (xid string
 		txnTco.xtco.Do(txnTco.msg)
 		xid = txnTco.xtco.ID()
 		if !done {
-			t.txns.find(c.uuid, apc.ActCommit)
+			t.txns.term(c.uuid, apc.ActCommit)
 		}
-	default:
-		debug.Assert(false)
 	}
 	return xid, nil
 }
@@ -747,12 +746,12 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 			return "", err
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return "", err
 		}
@@ -771,8 +770,6 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 		xact.GoRunW(xctn)
 
 		return xctn.ID(), rns.Err
-	default:
-		debug.Assert(false)
 	}
 	return "", nil
 }
@@ -847,7 +844,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 			return xid, err
 		}
 	case apc.ActAbort:
-		txn, err := t.txns.find(c.uuid, apc.ActAbort)
+		txn, err := t.txns.find(c.uuid)
 		if err == nil {
 			txnArch := txn.(*txnArchMultiObj)
 			// if _this_ transaction initiated _that_ on-demand
@@ -855,19 +852,20 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 				xid = xarch.ID()
 				xarch.Abort(nil)
 			}
+			t.txns.term(c.uuid, apc.ActAbort)
 		}
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return xid, err
 		}
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return xid, err
 		}
 		txnArch := txn.(*txnArchMultiObj)
 		txnArch.xarch.Do(txnArch.msg)
 		xid = txnArch.xarch.ID()
-		t.txns.find(c.uuid, apc.ActCommit)
+		t.txns.term(c.uuid, apc.ActCommit)
 	}
 	return xid, nil
 }
@@ -904,11 +902,11 @@ func (t *target) destroyBucket(c *txnSrv) error {
 			return err
 		}
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
-		t._commitCreateDestroy(c)
-	default:
-		debug.Assert(false)
+		if err := t._commitCreateDestroy(c); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -960,18 +958,18 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		hdr.Set(apc.HdrPromoteNamesHash, cksumVal)
 		hdr.Set(apc.HdrPromoteNamesNum, strconv.Itoa(totalN))
 	case apc.ActAbort:
-		t.txns.find(c.uuid, apc.ActAbort)
+		t.txns.term(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		txn, err := t.txns.find(c.uuid, "")
+		txn, err := t.txns.find(c.uuid)
 		if err != nil {
 			return "", err
 		}
 		txnPrm, ok := txn.(*txnPromote)
 		debug.Assert(ok)
-		defer t.txns.find(c.uuid, apc.ActCommit)
+		defer t.txns.term(c.uuid, apc.ActCommit)
 
 		if txnPrm.totalN == 0 {
 			nlog.Infof("%s: nothing to do (%s)", t, txnPrm)
@@ -1000,8 +998,6 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		c.addNotif(xprm) // upon completion
 		xact.GoRunW(xprm)
 		return xprm.ID(), nil
-	default:
-		debug.Assert(false)
 	}
 	return "", nil
 }
