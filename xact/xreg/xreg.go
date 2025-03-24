@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -722,7 +722,8 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 		}
 		nd = &d
 	}
-	var locked bool
+
+	var locked bool // rlock/runlock only once
 	for kind, d := range xact.Table {
 		// rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
 		// (by preempting)

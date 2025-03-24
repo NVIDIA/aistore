@@ -138,7 +138,7 @@ func (p *archFactory) Start() (err error) {
 //////////////
 
 func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) {
-	if err = archlom.InitBck(&msg.ToBck); err != nil {
+	if err := archlom.InitBck(&msg.ToBck); err != nil {
 		r.AddErr(err, 4, cos.SmoduleXs)
 		return err
 	}
@@ -150,7 +150,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
 	smap := core.T.Sowner().Get()
-	if err = core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
+	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
 		return err
 	}
 	nat := smap.CountActiveTs()

@@ -412,7 +412,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	}
 
 	// done
-	if err = lom.RenameFinalize(poi.workFQN); err != nil {
+	if err := lom.RenameFinalize(poi.workFQN); err != nil {
 		return 0, err
 	}
 	if lom.HasCopies() {

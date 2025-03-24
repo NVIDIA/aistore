@@ -127,7 +127,7 @@ func (co *configOwner) _runPre(ctx *configModifier) (clone *globalConfig, err er
 	}
 
 	ctx.oldConfig = cmn.GCO.Get()
-	if err = cmn.GCO.Update(&clone.ClusterConfig); err != nil {
+	if err := cmn.GCO.Update(&clone.ClusterConfig); err != nil {
 		return nil, err
 	}
 
@@ -202,7 +202,7 @@ func setConfig(toUpdate *cmn.ConfigToSet, transient bool) (err error) {
 		override.Merge(toUpdate)
 	}
 	if !transient {
-		if err = cmn.SaveOverrideConfig(clone.ConfigDir, override); err != nil {
+		if err := cmn.SaveOverrideConfig(clone.ConfigDir, override); err != nil {
 			return err
 		}
 	}

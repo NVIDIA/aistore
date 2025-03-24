@@ -483,7 +483,7 @@ func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
 	return nil
 }
 
-func (r *XactBlobDl) plugholes(pending []chunkDone) (_ []chunkDone, err error) {
+func (r *XactBlobDl) plugholes(pending []chunkDone) ([]chunkDone, error) {
 	for i := len(pending) - 1; i >= 0; i-- {
 		done := pending[i]
 		if done.roff > r.woff {
@@ -493,7 +493,7 @@ func (r *XactBlobDl) plugholes(pending []chunkDone) (_ []chunkDone, err error) {
 
 		sgl := done.sgl
 		pending = pending[:i]
-		if err = r.write(sgl); err != nil { // type #2 write: remove from pending and append
+		if err := r.write(sgl); err != nil { // type #2 write: remove from pending and append
 			return pending, err
 		}
 

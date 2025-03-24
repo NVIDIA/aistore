@@ -78,7 +78,7 @@ func (p *prfFactory) Start() (err error) {
 	}
 
 	b := p.Bck
-	if err = b.Init(core.T.Bowner()); err != nil {
+	if err := b.Init(core.T.Bowner()); err != nil {
 		return err
 	}
 	if !b.IsCloud() && !b.IsRemoteAIS() {

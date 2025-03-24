@@ -117,7 +117,7 @@ func (bctx *bctx) init() (_ int, err error) {
 		}
 	}
 
-	if err = bctx.accessSupported(); err != nil {
+	if err := bctx.accessSupported(); err != nil {
 		return http.StatusMethodNotAllowed, err
 	}
 	if bctx.skipBackend {
@@ -236,7 +236,7 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 	return bctx.try()
 }
 
-func (bctx *bctx) try() (bck *meta.Bck, err error) {
+func (bctx *bctx) try() (bck *meta.Bck, _ error) {
 	bck, ecode, err := bctx._try()
 	switch {
 	case err == nil || err == errForwarded:
@@ -261,7 +261,7 @@ func (bctx *bctx) try() (bck *meta.Bck, err error) {
 //
 
 func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
-	if err = bctx.bck.Validate(); err != nil {
+	if err := bctx.bck.Validate(); err != nil {
 		return bck, http.StatusBadRequest, err
 	}
 	if bctx.p.forwardCP(bctx.w, bctx.r, bctx.msg, "add-bucket", bctx.reqBody) {
@@ -341,12 +341,12 @@ func (bctx *bctx) _try() (bck *meta.Bck, ecode int, err error) {
 
 	// add/create
 creadd:
-	if err = bctx.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
+	if err := bctx.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
 		return bck, crerrStatus(err), err
 	}
 
 	// finally, initialize the newly added/created
-	if err = bck.Init(bctx.p.owner.bmd); err != nil {
+	if err := bck.Init(bctx.p.owner.bmd); err != nil {
 		debug.AssertNoErr(err)
 		return bck, http.StatusInternalServerError,
 			cmn.NewErrFailedTo(bctx.p, "post create-bucket init", bck, err, ecode)

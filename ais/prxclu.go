@@ -486,13 +486,14 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// handshake | check dup
-	if apiOp == apc.AdminJoin {
+	switch apiOp {
+	case apc.AdminJoin:
 		// call the node with cluster-metadata included
 		if ecode, err := p.adminJoinHandshake(smap, nsi, apiOp); err != nil {
 			p.writeErr(w, r, err, ecode)
 			return
 		}
-	} else if apiOp == apc.SelfJoin {
+	case apc.SelfJoin:
 		//
 		// check for: a) different node, duplicate node ID, or b) same node, net-info change
 		//

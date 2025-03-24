@@ -235,7 +235,7 @@ func (p *proxy) Run() error {
 		{r: "/" + apc.AZScheme, h: p.easyURLHandler, net: accessNetPublic},
 		{r: "/" + apc.AISScheme, h: p.easyURLHandler, net: accessNetPublic},
 
-		// ht:// _or_ S3 compatibility, depending on feature flag
+		// S3 compatibility, depending on feature flag
 		{r: "/", h: p.rootHandler, net: accessNetPublic},
 	}
 	p.regNetHandlers(networkHandlers)
@@ -1669,17 +1669,17 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 
 	// default props & flags => user-provided message
-	switch {
-	case lsmsg.Props == "":
+	switch lsmsg.Props {
+	case "":
 		if lsmsg.IsFlagSet(apc.LsCached) {
 			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
 		} else {
 			lsmsg.AddProps(apc.GetPropsMinimal...)
 			lsmsg.SetFlag(apc.LsNameSize)
 		}
-	case lsmsg.Props == apc.GetPropsName:
+	case apc.GetPropsName:
 		lsmsg.SetFlag(apc.LsNameOnly)
-	case lsmsg.Props == apc.GetPropsNameSize:
+	case apc.GetPropsNameSize:
 		lsmsg.SetFlag(apc.LsNameSize)
 	}
 	if bck.IsHT() || lsmsg.IsFlagSet(apc.LsArchDir) {
@@ -3285,12 +3285,12 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 
 	// call
 	res := p.call(cargs, smap)
-	switch {
-	case res.status == http.StatusNotFound:
+	switch res.status {
+	case http.StatusNotFound:
 		if err = res.err; err == nil {
 			err = cmn.NewErrRemoteBckNotFound(bck)
 		}
-	case res.status == http.StatusGone:
+	case http.StatusGone:
 		err = cmn.NewErrRemoteBckOffline(bck)
 	default:
 		err = res.err
@@ -3500,7 +3500,8 @@ func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
 			continue
 		}
 
-		debug.Assert(!(noDirs && en.IsAnyFlagSet(apc.EntryIsDir))) // expecting backends for filter out accordingly
+		// expecting backends for filter out accordingly
+		debug.Assert(!noDirs || !en.IsAnyFlagSet(apc.EntryIsDir))
 
 		entries[j] = en
 		j++

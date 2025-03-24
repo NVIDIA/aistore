@@ -275,10 +275,8 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	} else {
 		npg.bp = core.T.Backend(r.bck)
 	}
-	for {
-		if r.done() {
-			break
-		}
+
+	for !r.done() {
 		if bremote {
 			lst = &cmn.LsoRes{Entries: allocLsoEntries()}
 			ecode, err = core.T.Backend(r.bck).ListObjects(r.bck, lsmsg, lst) // (TODO comment above)

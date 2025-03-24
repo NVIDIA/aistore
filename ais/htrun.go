@@ -1808,7 +1808,7 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *actMsgExt, payload msPayl
 		}
 		nlog.Warningln(err, "- proceeding with force")
 	}
-	if err = h.owner.config.persist(newConfig, payload); err != nil {
+	if err := h.owner.config.persist(newConfig, payload); err != nil {
 		return err
 	}
 	return cmn.GCO.Update(&newConfig.ClusterConfig)

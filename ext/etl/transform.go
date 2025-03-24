@@ -270,13 +270,13 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		pw = newPodWatcher(podName, boot)
 		comm = newCommunicator(newAborter(msg.Name()), boot, pw)
 
-		if err = mgr.add(msg.Name(), comm); err != nil {
+		if err := mgr.add(msg.Name(), comm); err != nil {
 			return podName, svcName, err
 		}
 	}
 
 	debug.Assert(comm != nil && pw != nil && xid != "")
-	if err = pw.start(); err != nil {
+	if err := pw.start(); err != nil {
 		return podName, svcName, err
 	}
 	boot.setupXaction(xid)
@@ -318,7 +318,8 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 
 cleanup:
 	errCtx.PodStatus = pw.GetPodStatus()
-	nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to start etl[%s] with xid %s, msg %s, err %v - cleaning up..", msg.Name(), xid, msg, err))
+	nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to start etl[%s] with xid %s, msg %s, err %v - cleaning up..",
+		msg.Name(), xid, msg, err))
 	if !mgr.transition(comm.ETLName(), Stopped) {
 		nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to cleanup etl[%s], already in Stopped stage", msg.Name()))
 	}

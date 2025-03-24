@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -528,9 +528,9 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 }
 
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
-func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *core.LOM, err error) {
-	lom = core.AllocLOM(hdr.ObjName)
-	if err = lom.InitBck(&hdr.Bck); err != nil {
+func AllocLomFromHdr(hdr *transport.ObjHdr) (*core.LOM, error) {
+	lom := core.AllocLOM(hdr.ObjName)
+	if err := lom.InitBck(&hdr.Bck); err != nil {
 		return nil, err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)

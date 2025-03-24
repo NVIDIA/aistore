@@ -1,6 +1,6 @@
 // Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package kvdb
 
@@ -89,7 +89,7 @@ func (bd *BuntDriver) Get(collection, key string, object any) (int, error) {
 	if err != nil {
 		return code, err
 	}
-	if err = jsoniter.Unmarshal([]byte(s), object); err != nil {
+	if err := jsoniter.Unmarshal([]byte(s), object); err != nil {
 		return http.StatusInternalServerError, err
 	}
 	return http.StatusOK, nil

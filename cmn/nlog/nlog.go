@@ -130,15 +130,15 @@ func (nlog *nlog) write(line *fixed) {
 func (nlog *nlog) get() {
 	prev := nlog.pw
 	assert(prev == nlog.toFlush[len(nlog.toFlush)-1])
-	switch {
-	case prev == nlog.buf1:
+	switch prev {
+	case nlog.buf1:
 		if nlog.buf2 != nil {
 			nlog.pw = nlog.buf2
 		} else {
 			nlog.pw = alloc()
 		}
 		nlog.buf1 = nil
-	case prev == nlog.buf2:
+	case nlog.buf2:
 		if nlog.buf1 != nil {
 			nlog.pw = nlog.buf1
 		} else {

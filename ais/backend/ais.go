@@ -111,7 +111,7 @@ func extractErrCode(e error, uuid string) (int, error) {
 		if loc == nil {
 			loc = treg.FindStringIndex(msg)
 		}
-		if loc != nil && loc[1] > loc[0]+2 {
+		if len(loc) > 1 && loc[1] > loc[0]+2 {
 			herr.Message = msg[loc[0]:loc[1]-2] + "@" + uuid + ": " + msg[loc[1]:]
 		}
 	}

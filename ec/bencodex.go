@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -97,7 +97,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode, err error) {
+func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode, _ error) {
 	var ctlmsg string
 	r = &XactBckEncode{
 		bck:             bck,
@@ -111,7 +111,7 @@ func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *Xact
 	}
 	r.InitBase(uuid, apc.ActECEncode, ctlmsg, bck)
 
-	if err = bck.Init(core.T.Bowner()); err != nil {
+	if err := bck.Init(core.T.Bowner()); err != nil {
 		return nil, err
 	}
 	if !bck.Props.EC.Enabled {

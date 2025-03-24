@@ -56,9 +56,9 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete, err error) {
-	ed = &evictDelete{config: cmn.GCO.Get()}
-	if err = ed.lrit.init(ed, msg, bck, lrpWorkersDflt); err != nil {
+func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (*evictDelete, error) {
+	ed := &evictDelete{config: cmn.GCO.Get()}
+	if err := ed.lrit.init(ed, msg, bck, lrpWorkersDflt); err != nil {
 		return nil, err
 	}
 

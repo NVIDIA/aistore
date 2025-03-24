@@ -171,9 +171,9 @@ func (tr *tarReader) init(fh io.Reader) error {
 	return nil
 }
 
-func (tr *tarReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
+func (tr *tarReader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 	matcher := matcher{regex: regex, mmode: mmode}
-	if err = matcher.init(); err != nil {
+	if err := matcher.init(); err != nil {
 		return err
 	}
 	for {
@@ -257,9 +257,9 @@ func (zr *zipReader) init(fh io.Reader) (err error) {
 	return
 }
 
-func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
+func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 	matcher := matcher{regex: regex, mmode: mmode}
-	if err = matcher.init(); err != nil {
+	if err := matcher.init(); err != nil {
 		return err
 	}
 	for _, f := range zr.zr.File {
@@ -275,14 +275,16 @@ func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
 		}
 
 		csf := &cslFile{size: int64(f.FileHeader.UncompressedSize64)}
-		if csf.file, err = f.Open(); err != nil {
+		r, err := f.Open()
+		if err != nil {
 			return err
 		}
-		if stop, err := rcb.Call(f.FileHeader.Name, csf, &f.FileHeader); stop || err != nil {
-			return err
+		csf.file = r
+		if stop, e := rcb.Call(f.FileHeader.Name, csf, &f.FileHeader); stop || e != nil {
+			return e
 		}
 	}
-	return
+	return nil
 }
 
 func (zr *zipReader) ReadOne(filename string) (reader cos.ReadCloseSizer, err error) {

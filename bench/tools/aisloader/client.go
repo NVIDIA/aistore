@@ -558,12 +558,6 @@ func s3ListObjects() ([]string, error) {
 }
 
 func readDiscard(r *http.Response, tag, cksumType string) (int64, string, error) {
-	var (
-		n          int64
-		cksum      *cos.CksumHash
-		err        error
-		cksumValue string
-	)
 	if r.StatusCode >= http.StatusBadRequest {
 		bytes, err := cos.ReadAll(r.Body)
 		if err == nil {
@@ -571,10 +565,12 @@ func readDiscard(r *http.Response, tag, cksumType string) (int64, string, error)
 		}
 		return 0, "", fmt.Errorf("bad status %d from %s: %v", r.StatusCode, tag, err)
 	}
-	n, cksum, err = cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
+
+	n, cksum, err := cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}
+	var cksumValue string
 	if cksum != nil {
 		cksumValue = cksum.Value()
 	}

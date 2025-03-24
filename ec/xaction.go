@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -126,17 +126,17 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 }
 
 // replica/full object request
-func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (reader cos.ReadOpenCloser, err error) {
+func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (cos.ReadOpenCloser, error) {
 	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
-	if err = lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
-	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		nlog.Warningln(err)
 		return nil, err
 	}
-	reader, err = cos.NewFileHandle(lom.FQN)
+	reader, err := cos.NewFileHandle(lom.FQN)
 	if err != nil {
 		return nil, err
 	}

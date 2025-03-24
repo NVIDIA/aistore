@@ -114,7 +114,6 @@ func initDaemon(version, buildTime string) cos.Runner {
 	var (
 		flset  *flag.FlagSet
 		config *cmn.Config
-		err    error
 	)
 	// flags
 	flset = flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
@@ -148,8 +147,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// config
 	config = &cmn.Config{}
-	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
-	if err != nil {
+	if err := cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config); err != nil {
 		cos.ExitLog(err)
 	}
 	cmn.GCO.Put(config)
@@ -180,7 +178,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 		overrideConfig := cmn.GCO.MergeOverride(toUpdate)
 		if !daemon.cli.transient {
-			if err = cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
+			if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 				cos.ExitLogf("failed to save 'override' config: %v", err)
 			}
 		}

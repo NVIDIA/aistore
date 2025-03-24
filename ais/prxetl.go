@@ -29,18 +29,18 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	switch {
-	case r.Method == http.MethodPut:
+	switch r.Method {
+	case http.MethodPut:
 		// require Admin access (a no-op if AuthN is not used, here and elsewhere)
 		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 			return
 		}
 		p.httpetlput(w, r)
-	case r.Method == http.MethodPost:
+	case http.MethodPost:
 		p.httpetlpost(w, r)
-	case r.Method == http.MethodGet:
+	case http.MethodGet:
 		p.httpetlget(w, r)
-	case r.Method == http.MethodDelete:
+	case http.MethodDelete:
 		// ditto
 		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 			return

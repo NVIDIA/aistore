@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -110,11 +110,11 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 	}
 
 	// slow path: create sub-directories
-	if err = lom._checkBdir(); err != nil {
+	if err := lom._checkBdir(); err != nil {
 		return nil, err
 	}
 	fdir := filepath.Dir(fqn)
-	if err = cos.CreateDir(fdir); err != nil {
+	if err := cos.CreateDir(fdir); err != nil {
 		return nil, err
 	}
 	return os.OpenFile(fqn, _openFlags, cos.PermRWR)

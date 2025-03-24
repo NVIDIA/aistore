@@ -881,7 +881,8 @@ func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*meta.Bck, error) 
 
 func newQbckFromQ(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, error) {
 	qbck := (*cmn.QueryBcks)(_bckFromQ(bckName, query, dpq))
-	return qbck, qbck.Validate()
+	err := qbck.Validate()
+	return qbck, err
 }
 
 func _bckFromQ(bckName string, query url.Values, dpq *dpq) *meta.Bck {
