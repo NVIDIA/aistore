@@ -12,15 +12,15 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func LoadAppConfig(configDir, configFname string, v any) (err error) {
+func LoadAppConfig(configDir, configFname string, v any) error {
 	path := filepath.Join(configDir, configFname)
-	if err = cos.Stat(path); err != nil {
+	if err := cos.Stat(path); err != nil {
 		return err
 	}
-	if _, err = Load(path, v, Options{Indent: true}); err != nil {
-		err = fmt.Errorf("failed to load config file %q: %v", path, err)
+	if _, err := Load(path, v, Options{Indent: true}); err != nil {
+		return fmt.Errorf("failed to load config file %q: %w", path, err)
 	}
-	return
+	return nil
 }
 
 func SaveAppConfig(configDir, configFname string, v any) error {

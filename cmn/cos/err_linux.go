@@ -58,5 +58,5 @@ func IsIOError(err error) bool {
 }
 
 func IsErrXattrNotFound(err error) bool {
-	return os.IsNotExist(err) || err == syscall.ENODATA
+	return os.IsNotExist(err) || errors.Is(err, syscall.ENODATA)
 }

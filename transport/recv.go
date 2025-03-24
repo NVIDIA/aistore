@@ -126,7 +126,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	debug.Assert(config.Transport.IdleTeardown > 0, "invalid config ", config.Transport)
 	it.hbuf, _ = mm.AllocSize(_sizeHdr(config, 0))
 
-	// receive loop
+	// receive loop (until eof or error)
 	err = it.rxloop(uid, loghdr, mm)
 
 	// cleanup
@@ -138,7 +138,6 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 	mm.Free(it.hbuf)
 
-	// if err != io.EOF {
 	if !cos.IsEOF(err) {
 		cmn.WriteErr(w, r, err)
 	}

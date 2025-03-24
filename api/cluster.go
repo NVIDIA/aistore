@@ -547,7 +547,7 @@ func DecommissionCluster(bp BaseParams, rmUserData bool) error {
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
-	if cos.IsEOF(err) {
+	if err != nil && cos.IsEOF(err) {
 		err = nil
 	}
 	return err

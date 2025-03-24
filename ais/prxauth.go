@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -245,9 +246,9 @@ func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 }
 
 func aceErrToCode(err error) (status int) {
-	switch err {
-	case nil:
-	case tok.ErrNoToken, tok.ErrInvalidToken:
+	switch {
+	case err == nil:
+	case errors.Is(err, tok.ErrNoToken) || errors.Is(err, tok.ErrInvalidToken):
 		status = http.StatusUnauthorized
 	default:
 		status = http.StatusForbidden

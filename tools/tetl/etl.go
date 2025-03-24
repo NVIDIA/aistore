@@ -382,9 +382,9 @@ func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 	tassert.Fatalf(t, len(etls) == 0, "Expected no ETL running, got %+v", etls)
 }
 
-func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
+func SpecToInitMsg(spec []byte /*yaml*/) (*etl.InitSpecMsg, error) {
 	errCtx := &cmn.ETLErrCtx{}
-	msg = &etl.InitSpecMsg{Spec: spec}
+	msg := &etl.InitSpecMsg{Spec: spec}
 	pod, err := etl.ParsePodSpec(errCtx, msg.Spec)
 	if err != nil {
 		return msg, err
@@ -401,7 +401,8 @@ func SpecToInitMsg(spec []byte /*yaml*/) (msg *etl.InitSpecMsg, err error) {
 		return msg, err
 	}
 
-	return msg, msg.Validate()
+	err = msg.Validate()
+	return msg, err
 }
 
 func podTransformCommType(pod *corev1.Pod) string {
