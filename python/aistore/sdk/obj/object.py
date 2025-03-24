@@ -176,7 +176,7 @@ class Object:
 
         params = self.query_params.copy()
         headers = {}
-        byte_range_tuple = None
+        byte_range_tuple = (None, None)
 
         # Archive Configuration
         if archive_config:

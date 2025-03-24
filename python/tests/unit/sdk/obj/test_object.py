@@ -107,7 +107,7 @@ class TestObject(unittest.TestCase):
 
         blob_config = case.get("blob_config", None)
         byte_range = case.get("byte_range", None)
-        byte_range_tuple = case.get("byte_range_tuple", None)
+        byte_range_tuple = case.get("byte_range_tuple", (None, None))
 
         expected_headers = self.get_expected_headers({}, blob_config, byte_range)
 
@@ -144,7 +144,9 @@ class TestObject(unittest.TestCase):
         mock_obj_reader.return_value = Mock(spec=ObjectReader)
 
         expected_headers = kwargs.pop("expected_headers", {})
-        expected_byte_range_tuple = kwargs.pop("expected_byte_range_tuple", None)
+        expected_byte_range_tuple = kwargs.pop(
+            "expected_byte_range_tuple", (None, None)
+        )
         expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
         expected_uname = kwargs.pop("expected_uname", None)
 

@@ -36,6 +36,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   - **Network Retry (tenacity):** Manages connection failures and timeouts.
 - Update `SessionManager` and `Client` to accept `RetryConfig` for better configurability.
 - Allow ETL to override configured `RequestClient` timeout (for that specific ETL request).
+- Fix a `NoneType` unpack error in `ObjectClient.get()` by ensuring `byte_range` defaults to `(None, None)` when not explicitly set.
 
 ### Removed
 
