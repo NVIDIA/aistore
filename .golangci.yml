@@ -27,6 +27,7 @@ linters:
     - ineffassign
     - intrange
     - misspell
+    # nakedret    ## (TODO run/review periodically)
     - nilnesserr
     - nolintlint
     - perfsprint
@@ -51,7 +52,7 @@ linters-settings:
     severity: warning
     rules:
       # name: import-shadowing ## (e.g., url)
-      # name: unhandled-error  ## (run/review periodically)
+      # name: unhandled-error  ## (TODO run/review periodically)
       # name: line-length-limit
       # name: dot-imports
       - name: blank-imports
@@ -87,7 +88,7 @@ linters-settings:
   govet:
     enable-all: true
     disable:
-      - fieldalignment # TODO: enable once in a while (lots of noise though)
+      - fieldalignment # (TODO run/review periodically)
       - shadow # (e.g., proxyURL)
   errcheck:
     check-blank: true

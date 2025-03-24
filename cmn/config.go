@@ -1481,7 +1481,7 @@ func (c *FSHCConf) Validate() error {
 
 const HostnameListSepa = ","
 
-func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
+func (c *LocalNetConfig) Validate(contextConfig *Config) error {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
@@ -1505,16 +1505,16 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 
 	// Parse ports
 	if _, err := ValidatePort(c.Port); err != nil {
-		return fmt.Errorf("invalid %s port specified: %v", NetPublic, err)
+		return fmt.Errorf("invalid %s port: %v", NetPublic, err)
 	}
 	if c.PortIntraControl != 0 {
 		if _, err := ValidatePort(c.PortIntraControl); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetIntraControl, err)
+			return fmt.Errorf("invalid %s port: %v", NetIntraControl, err)
 		}
 	}
 	if c.PortIntraData != 0 {
 		if _, err := ValidatePort(c.PortIntraData); err != nil {
-			return fmt.Errorf("invalid %s port specified: %v", NetIntraData, err)
+			return fmt.Errorf("invalid %s port: %v", NetIntraData, err)
 		}
 	}
 
@@ -1528,7 +1528,7 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	differentPorts = c.Port != c.PortIntraData
 	c.UseIntraData = (contextConfig.TestingEnv() || c.HostnameIntraData != "") &&
 		c.PortIntraData != 0 && (differentIPs || differentPorts)
-	return
+	return nil
 }
 
 ///////////////
