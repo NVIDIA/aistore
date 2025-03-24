@@ -31,7 +31,6 @@ type (
 		Pod(name string) (*corev1.Pod, error)
 		Pods() (*corev1.PodList, error)
 		Service(name string) (*corev1.Service, error)
-		Node(name string) (*corev1.Node, error)
 		Logs(podName string) ([]byte, error)
 		WatchPodEvents(podName string) (watch.Interface, error)
 		Health(podName string) (string, error)
@@ -182,10 +181,6 @@ func (c *defaultClient) Pods() (*corev1.PodList, error) {
 
 func (c *defaultClient) Service(name string) (*corev1.Service, error) {
 	return c.services().Get(context.Background(), name, metav1.GetOptions{})
-}
-
-func (c *defaultClient) Node(name string) (*corev1.Node, error) {
-	return c.client.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
 }
 
 func (c *defaultClient) Logs(podName string) (b []byte, err error) {

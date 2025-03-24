@@ -53,9 +53,8 @@ func Init() {
 	}
 
 	var (
-		pod      *v1.Pod
-		podName  = os.Getenv(env.AisK8sPod)
-		nodeName = os.Getenv(env.AisK8sNode)
+		pod     *v1.Pod
+		podName = os.Getenv(env.AisK8sPod)
 	)
 	if podName != "" {
 		debug.Func(func() {
@@ -65,14 +64,10 @@ func Init() {
 	} else {
 		podName = os.Getenv(defaultPodNameEnv)
 	}
-	nlog.Infof("Checking pod: %q, node: %q", podName, nodeName)
+	nlog.Infof("Checking pod: %q", podName)
 
 	if podName == "" {
-		if nodeName != "" {
-			// If the Pod is not set but the Node is, we should continue checking.
-			goto checkNode
-		}
-		nlog.Infof("Env %q and %q are not set => %s", env.AisK8sNode, env.AisK8sPod, nonK8s)
+		nlog.Infof("Env %q is not set => %s", env.AisK8sPod, nonK8s)
 		return
 	}
 
@@ -82,19 +77,20 @@ func Init() {
 		cos.ExitLogf("Failed to get Pod %q, err: %v", podName, err)
 		return
 	}
-	nodeName = pod.Spec.NodeName
-	nlog.Infoln("Pod spec", "name", podName, "namespace", pod.Namespace, "node", nodeName, "hostname", pod.Spec.Hostname, "host_network", pod.Spec.HostNetwork)
-	_ppvols(pod.Spec.Volumes)
 
-checkNode:
-	// Check Node.
-	node, err := client.Node(nodeName)
-	if err != nil {
-		cos.ExitLogf("Failed to get Node %q, err: %v", nodeName, err)
+	// Check if pod is already scheduled or fall back to env var
+	switch {
+	case pod.Spec.NodeName != "":
+		NodeName = pod.Spec.NodeName
+	case os.Getenv(env.AisK8sNode) != "":
+		NodeName = os.Getenv(env.AisK8sNode)
+	default:
+		cos.ExitLogf("Failed to get K8s node name. %q is not set", env.AisK8sNode)
 		return
 	}
 
-	NodeName = node.Name
+	nlog.Infoln("Pod info:", "name", podName, ",namespace", pod.Namespace, ",node", NodeName, ",hostname", pod.Spec.Hostname, ",host_network", pod.Spec.HostNetwork)
+	_ppvols(pod.Spec.Volumes)
 }
 
 func _ppvols(volumes []v1.Volume) {
