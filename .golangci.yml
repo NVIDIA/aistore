@@ -47,6 +47,8 @@ linters:
 
 # See: https://golangci-lint.run/usage/linters/
 linters-settings:
+  ## dupl: ## (TODO run/review periodically)
+  ##   threshold: 100
   revive:
     ignore-generated-header: true
     severity: warning
