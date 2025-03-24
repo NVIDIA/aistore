@@ -34,6 +34,7 @@ TOTAL_SIZE = FILE_SIZE * NUM_FILES
 # Define the number of reads for the benchmark (to calculate median throughput)
 NUM_READS = 200
 
+
 def benchmark_obj_reader(obj: Object) -> List[float]:
     times = []
     for _ in range(NUM_READS):
@@ -43,6 +44,7 @@ def benchmark_obj_reader(obj: Object) -> List[float]:
         times.append(time.perf_counter() - start_time)
         clear_directory(EXTRACT_PATH)
     return times
+
 
 def benchmark_obj_file_reader(obj: Object) -> List[float]:
     times = []
@@ -54,6 +56,7 @@ def benchmark_obj_file_reader(obj: Object) -> List[float]:
         times.append(time.perf_counter() - start_time)
         clear_directory(EXTRACT_PATH)
     return times
+
 
 def main():
     client = Client(endpoint=AIS_ENDPOINT)
@@ -73,21 +76,42 @@ def main():
 
         # Benchmark with ObjectFileReader NUM_READS times and calculate median throughput
         file_reader_times = benchmark_obj_file_reader(obj)
-        file_reader_throughput = calculate_median_throughput(file_reader_times, TOTAL_SIZE) / MB
+        file_reader_throughput = (
+            calculate_median_throughput(file_reader_times, TOTAL_SIZE) / MB
+        )
 
         # Calculate the median % overhead
-        overhead = ((reader_throughput - file_reader_throughput) / reader_throughput) * 100
+        overhead = (
+            (reader_throughput - file_reader_throughput) / reader_throughput
+        ) * 100
 
         # Save results to CSV
         with open("benchmark_results.csv", mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["File Size (MB)", "File Count", "ObjectReader Throughput (MB/s)", "ObjectFileReader Throughput (MB/s)", "Overhead (%)"])
-            writer.writerow([FILE_SIZE / MB, NUM_FILES, reader_throughput, file_reader_throughput, overhead])
+            writer.writerow(
+                [
+                    "File Size (MB)",
+                    "File Count",
+                    "ObjectReader Throughput (MB/s)",
+                    "ObjectFileReader Throughput (MB/s)",
+                    "Overhead (%)",
+                ]
+            )
+            writer.writerow(
+                [
+                    FILE_SIZE / MB,
+                    NUM_FILES,
+                    reader_throughput,
+                    file_reader_throughput,
+                    overhead,
+                ]
+            )
 
     finally:
         bucket.delete()
         shutil.rmtree(GENERATE_PATH, ignore_errors=True)
         shutil.rmtree(EXTRACT_PATH, ignore_errors=True)
+
 
 if __name__ == "__main__":
     main()

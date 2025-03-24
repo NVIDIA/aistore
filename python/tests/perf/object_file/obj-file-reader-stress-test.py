@@ -2,19 +2,23 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-# This script tests AIStore's ObjectFileReader and its ability to resume object reading with interruptions 
-# to the underlying object stream (e.g. simulating intermittent AIStore K8s node failures). Run with
-# a one-node cluster to best and most consistently observe the behavior of the ObjectFileReader's resume 
-# functionality.
+# This script tests AIStore's ObjectFileReader and its ability to resume object reading with interruptions
+# to the underlying object stream (e.g. simulating intermittent AIStore K8s target node failures). Run with
+# a small multi-target cluster (e.g. two targets) to best and most consistently observe the behavior of the
+# ObjectFileReader's resume functionality.
 
 import logging
 import os
 import time
-import urllib3
 from kubernetes import client as k8s_client, config as k8s_config
 from aistore.sdk.client import Client
 from aistore.sdk.obj.object_reader import ObjectReader
-from utils import create_and_put_object, obj_file_reader_read, start_pod_killer, stop_pod_killer
+from utils import (
+    create_and_put_object,
+    obj_file_reader_read,
+    start_pod_killer,
+    stop_pod_killer,
+)
 
 logging.basicConfig(level=logging.INFO)  # Set to DEBUG for more detailed logs
 
@@ -22,10 +26,9 @@ KB = 1024
 MB = 1024 * KB
 GB = 1024 * MB
 
-# Adjust the object size, pod kill interval, and chunk size to control how often interruptions 
-# occur based on your specific test machine configuration and network setup. For example, increase 
+# Adjust the object size, pod kill interval, and chunk size to control how often interruptions
+# occur based on your specific test machine configuration and network setup. For example, increase
 # object size or decrease chunk size / pod kill interval to trigger more frequent disruptions.
-# Test on a one-node cluster to best observe the behavior of the ObjectFileReader's resume functionality.
 
 AIS_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://localhost:51080")
 BUCKET_NAME = "stress-test"
@@ -34,14 +37,14 @@ OBJECT_SIZE = 1 * GB
 MAX_RESUME = 100  # Set to a high value to allow resumes for stress-test
 INTERRUPT = True
 POD_KILL_NAMESPACE = "ais"
-POD_KILL_NAME = "ais-target-0"
 POD_KILL_INTERVAL = 1e-3
 CHUNK_SIZE = 128
 READ_SIZE = -1
-BUFFER_SIZE = 20 * MB  # To be used for MT implementation
 
 
-def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, object_reader: ObjectReader, generated_data: bytes):
+def test_with_interruptions(
+    k8s_client: k8s_client.CoreV1Api, object_reader: ObjectReader, generated_data: bytes
+):
     """Test ObjectFileReader read with pod interruptions and validate data."""
     logging.info("Starting test")
 
@@ -50,14 +53,20 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, object_reader: Obj
     # Start pod killer process
     if INTERRUPT:
         logging.info("Starting pod killer process...")
-        pod_killer_process = start_pod_killer(k8s_client, POD_KILL_NAMESPACE, POD_KILL_NAME, POD_KILL_INTERVAL)
+        pod_killer_process = start_pod_killer(
+            k8s_client, POD_KILL_NAMESPACE, POD_KILL_INTERVAL
+        )
 
     # Perform ObjectFileReader read
-    downloaded_data, resume_total = obj_file_reader_read(object_reader, READ_SIZE, BUFFER_SIZE, MAX_RESUME)
+    downloaded_data, resume_total = obj_file_reader_read(
+        object_reader, READ_SIZE, BUFFER_SIZE, MAX_RESUME
+    )
 
     end_time = time.time()
 
-    logging.info(f"Stress-test completed in {end_time - start_time:.2f} seconds w/ {resume_total} resumes")
+    logging.info(
+        f"Stress-test completed in {end_time - start_time:.2f} seconds w/ {resume_total} resumes"
+    )
 
     # Stop the pod killer process
     if INTERRUPT:
@@ -65,14 +74,15 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, object_reader: Obj
         stop_pod_killer(pod_killer_process)
 
     # Validate the downloaded data by comparing it to the generated data
-    assert downloaded_data == generated_data, "Validation Failed: Downloaded data does not match generated data"
+    assert (
+        downloaded_data == generated_data
+    ), "Validation Failed: Downloaded data does not match generated data"
     logging.info("Validation Passed: Downloaded data matches the generated data")
 
 
 def main():
     """Main function to run the stress-test."""
-    retry = urllib3.Retry(total=10, backoff_factor=0.5, status_forcelist=[400, 404])
-    client = Client(endpoint=AIS_ENDPOINT, retry=retry)
+    client = Client(endpoint=AIS_ENDPOINT)
     k8s_config.load_kube_config()
     v1 = k8s_client.CoreV1Api()
     bucket = client.bucket(BUCKET_NAME).create()

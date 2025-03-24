@@ -2,14 +2,13 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-# This script tests AIStore's ObjectFileWriter and its ability to handle interruptions 
-# during a write workload (e.g., simulating intermittent AIStore K8s node failures). Run with
-# a one-node cluster to best and most consistently observe the behavior of the ObjectFileWriter.
+# This script tests AIStore's ObjectFileWriter and its ability to handle interruptions
+# during a write workload (e.g., simulating intermittent AIStore K8s target node failures).
+# Run with a small multi-target cluster (e.g. two targets) to best and most consistently
+# observe the behavior of the ObjectFileWriter.
 
 import logging
 import os
-import time
-import urllib3
 import random
 import string
 from kubernetes import client as k8s_client, config as k8s_config
@@ -31,13 +30,14 @@ WRITE_COUNT = 1000
 WRITE_SIZE = 128 * KB
 INTERRUPT = True
 POD_KILL_NAMESPACE = "ais"
-POD_KILL_NAME = "ais-target-0"
 POD_KILL_INTERVAL = 1e-3
 
 
 def generate_random_data(size: int) -> bytes:
     """Generate random data of the specified size."""
-    return "".join(random.choices(string.ascii_letters + string.digits, k=size)).encode()
+    return "".join(
+        random.choices(string.ascii_letters + string.digits, k=size)
+    ).encode()
 
 
 def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, obj):
@@ -48,7 +48,9 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, obj):
     pod_killer_process = None
     if INTERRUPT:
         logging.info("Starting pod killer process...")
-        pod_killer_process = start_pod_killer(k8s_client, POD_KILL_NAMESPACE, POD_KILL_NAME, POD_KILL_INTERVAL)
+        pod_killer_process = start_pod_killer(
+            k8s_client, POD_KILL_NAMESPACE, POD_KILL_INTERVAL
+        )
 
     # Perform write workload
     expected_data = obj_file_write(obj)
@@ -61,7 +63,9 @@ def test_with_interruptions(k8s_client: k8s_client.CoreV1Api, obj):
     # Validate written data after interruptions
     logging.info("Validating written content...")
     actual_data = obj.get_reader().read_all()
-    assert actual_data == expected_data, "Validation Failed: Written content does not match expected content"
+    assert (
+        actual_data == expected_data
+    ), "Validation Failed: Written content does not match expected content"
     logging.info("Validation Passed: Written content matches expected content.")
 
 
@@ -80,8 +84,7 @@ def obj_file_write(obj):
 
 def main():
     """Main function to execute the stress test."""
-    retry = urllib3.Retry(total=10, backoff_factor=0.5, status_forcelist=[400, 404])
-    client = Client(endpoint=AIS_ENDPOINT, retry=retry)
+    client = Client(endpoint=AIS_ENDPOINT)
     k8s_config.load_kube_config()
     v1 = k8s_client.CoreV1Api()
 
