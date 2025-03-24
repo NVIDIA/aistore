@@ -6,6 +6,11 @@ from requests.exceptions import (
     ConnectTimeout,
     ConnectionError as RequestsConnectionError,
 )
+from tenacity import (
+    Retrying,
+    stop_after_attempt,
+    retry_if_exception_type,
+)
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
@@ -16,6 +21,7 @@ from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
 from aistore.sdk.errors import AISRetryableError
+from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS
 from tests.utils import cases
 
 
@@ -248,10 +254,22 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         """Test that the function raises an error after max retries are exceeded."""
         mock_request.side_effect = RequestsConnectionError  # Always fails
 
+        # change retry logic for this request
+        network_retry_conf = Retrying(
+            stop=stop_after_attempt(5),
+            retry=retry_if_exception_type(NETWORK_RETRY_EXCEPTIONS),
+            reraise=True,
+        )
+        self.default_request_client = RequestClient(
+            self.endpoint,
+            self.mock_session_manager,
+            response_handler=self.mock_response_handler,
+            network_retry_config=network_retry_conf,
+        )
         with self.assertRaises(RequestsConnectionError):
             self.default_request_client.request("GET", "http://test-url", {})
 
-        self.assertEqual(mock_request.call_count, 10)  # Stops at max retry limit
+        self.assertEqual(mock_request.call_count, 5)  # Stops at max retry limit
 
     @patch("aistore.sdk.request_client.RequestClient._session_request")
     def test_unexpected_exception(self, mock_request):
