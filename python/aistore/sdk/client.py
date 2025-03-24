@@ -4,6 +4,7 @@
 from typing import Optional, Tuple, Union
 import os
 import warnings
+from urllib3 import Retry
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.provider import Provider
@@ -39,6 +40,7 @@ class Client:
             - `None`: Disables timeouts (not recommended). Defaults to `(3, 20)`.
         retry_config (RetryConfig, optional): Defines retry behavior for HTTP and network failures.
             If not provided, the default retry configuration (`RetryConfig.default()`) is used.
+        retry (urllib3.Retry, optional): [Deprecated] Retry configuration from urllib3. Use `retry_config` instead.
         token (str, optional): Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
             will be used. Defaults to None.
         max_pool_size (int, optional): Maximum number of connections per host in the connection pool.
@@ -54,11 +56,24 @@ class Client:
         client_cert: Optional[Union[str, Tuple[str, str]]] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = (3, 20),
         retry_config: Optional[RetryConfig] = None,
+        retry: Optional[Retry] = None,  # deprecated
         token: Optional[str] = None,
         max_pool_size: int = 10,
     ):
-
-        self.retry_config = retry_config or RetryConfig.default()
+        # Use `retry_config` (RetryConfig) if provided; otherwise, fall back to the deprecated `retry` (urllib3.Retry)
+        if retry_config is not None:
+            self.retry_config = retry_config
+        elif retry is not None:
+            warnings.warn(
+                "'retry' is deprecated and will be removed in a future release. "
+                "Use 'retry_config' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.retry_config = RetryConfig.default()
+            self.retry_config.http_retry = retry
+        else:
+            self.retry_config = RetryConfig.default()
 
         session_manager = SessionManager(
             retry=self.retry_config.http_retry,

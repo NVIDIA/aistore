@@ -41,6 +41,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Typed classes `ClusterPerformance`, `NodeTracker`, `DiskInfo`, `DiskInfoV322`, `NodeCapacityV322`, `NodeCapacity`, `NodeStatsV322`, `NodeStats`, `NodeThroughput`, `NodeLatency`, and `NodeCounter`.
 
+### Deprecated
+
+- The `retry` parameter (`urllib3.Retry`) in `aistore.sdk.Client` is now deprecated. Please use the `retry_config` parameter (`RetryConfig`) instead for configuring retry behavior.
+
 ## [1.12.2] - 2025-02-18
 
 ### Changed
