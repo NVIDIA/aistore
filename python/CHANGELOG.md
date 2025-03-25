@@ -10,6 +10,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+### Changed
+
+### Removed
+
+## [1.13.0] - 2025-03-24
+
+### Added
+
 - `ResponseHandler` and implementations for AIS and AuthN, to replace static utils.
 - `stage` field in `ETLInfo` to represent the ETL lifecycle stage.
 - Add `details` method to retrieve detailed job snapshot information across all targets.
@@ -37,6 +45,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Update `SessionManager` and `Client` to accept `RetryConfig` for better configurability.
 - Allow ETL to override configured `RequestClient` timeout (for that specific ETL request).
 - Fix a `NoneType` unpack error in `ObjectClient.get()` by ensuring `byte_range` defaults to `(None, None)` when not explicitly set.
+- Set a default request timeout of (3, 20) seconds in AIStore Client.
 
 ### Removed
 
