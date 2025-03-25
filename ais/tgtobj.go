@@ -1454,8 +1454,8 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 		return coi._dryRun(lom, coi.ObjnameTo)
 	}
 
-	// (no-op transform) and (remote source and/or destination) => same flow as actual transform but with default reader
-	if coi.GetROC == nil && (lom.Bck().IsRemote() || coi.BckTo.IsRemote()) {
+	// (no-op transform) and (remote source) => same flow as actual transform but with default reader
+	if coi.GetROC == nil && lom.Bck().IsRemote() {
 		coi.GetROC = core.DefaultGetROC
 	}
 
@@ -1491,7 +1491,8 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
 	default:
-		// fast path (Copy2FQN)
+		// fast path: destination is _this_ target
+		// (note coi.send(=> another target) above)
 		res = coi._regular(t, lom, dst)
 	}
 
