@@ -33,6 +33,13 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ core.Xact      = (*evictDelete)(nil)
+	_ xreg.Renewable = (*evdFactory)(nil)
+	_ lrwi           = (*evictDelete)(nil)
+)
+
 //
 // evict/delete; utilizes mult-object lr-iterator
 //
@@ -72,7 +79,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 
 func (r *evictDelete) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	err := r.lrit.run(r, core.T.Sowner().Get())
+	err := r.lrit.run(r, core.T.Sowner().Get(), false /*prealloc buf*/)
 	if err != nil {
 		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
 	}
@@ -80,7 +87,7 @@ func (r *evictDelete) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *evictDelete) do(lom *core.LOM, lrit *lrit) {
+func (r *evictDelete) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	ecode, err := core.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.Lsize(true))

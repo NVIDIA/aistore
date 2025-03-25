@@ -508,7 +508,7 @@ func (j *jogger) run() {
 		case archtask := <-j.workCh:
 			lrit, wi := archtask.lrit, archtask.wi
 			smap := core.T.Sowner().Get()
-			err := lrit.run(wi, smap)
+			err := lrit.run(wi, smap, false /*prealloc buf*/)
 			if err != nil {
 				wi.r.AddErr(err)
 			}
@@ -580,7 +580,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 }
 
 // multi-object iterator i/f: "handle work item"
-func (wi *archwi) do(lom *core.LOM, lrit *lrit) {
+func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {

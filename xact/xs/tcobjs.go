@@ -222,7 +222,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 						wg.Done()
 					}(lrit.pt.Clone())
 				}
-				err = lrit.run(wi, smap)
+				err = lrit.run(wi, smap, true /*prealloc buf*/)
 			}
 			if wg != nil {
 				wg.Wait()
@@ -348,10 +348,9 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 
 // TODO -- FIXME: almost identical to tcb.go do() - unify
 
-func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
+func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 	var (
 		objNameTo = wi.msg.ToName(lom.ObjName)
-		buf, slab = core.T.PageMM().Alloc()
 		r         = wi.r
 		started   int64
 	)
@@ -385,7 +384,6 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit) {
 	}
 	res := gcoi.CopyObject(lom, r.p.dm, a)
 	FreeCOI(a)
-	slab.Free(buf)
 
 	switch {
 	case res.Err == nil:
@@ -442,10 +440,10 @@ func (r *XactTCObjs) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplat
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)
-	syncit.run(syncwi, smap)
+	syncit.run(syncwi, smap, false /*prealloc buf*/)
 	syncit.wait()
 }
 
-func (syncwi *syncwi) do(lom *core.LOM, _ *lrit) {
+func (syncwi *syncwi) do(lom *core.LOM, _ *lrit, _ []byte) {
 	syncwi.rp.do(lom, nil)
 }

@@ -297,7 +297,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 		started int64
 	)
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Base.Name()+":", lom.Cname(), "=>", args.BckTo.Cname(toName))
+		nlog.Infoln(r.Base.Name(), lom.Cname(), "=>", args.BckTo.Cname(toName))
 	}
 
 	// apply frontend rate-limit, if any

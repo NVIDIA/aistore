@@ -15,8 +15,8 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // Assorted multi-object (list/range templated) xactions: evict, delete, prefetch multiple objects
@@ -48,7 +48,7 @@ const (
 type (
 	// one multi-object operation work item
 	lrwi interface {
-		do(*core.LOM, *lrit)
+		do(*core.LOM, *lrit, []byte)
 	}
 	// a strict subset of core.Xact, includes only the methods
 	// lrit needs for itself
@@ -75,6 +75,7 @@ type (
 		workCh  chan lrpair // running concurrency
 		prefix  string
 		workers []*lrworker    // running concurrency
+		buf     []byte         // when (prealloc && no-workers)
 		wg      sync.WaitGroup // ditto
 		lrp     int            // enum { lrpList, ... }
 	}
@@ -85,21 +86,9 @@ type (
 	TestXFactory struct{ prfFactory } // tests only
 )
 
-// interface guard
-var (
-	_ core.Xact = (*evictDelete)(nil)
-	_ core.Xact = (*prefetch)(nil)
-
-	_ xreg.Renewable = (*evdFactory)(nil)
-	_ xreg.Renewable = (*prfFactory)(nil)
-
-	_ lrwi = (*evictDelete)(nil)
-	_ lrwi = (*prefetch)(nil)
-)
-
-////////////////
+//////////
 // lrit //
-////////////////
+//////////
 
 func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers int) error {
 	var (
@@ -189,11 +178,25 @@ pref:
 	return nil
 }
 
-func (r *lrit) run(wi lrwi, smap *meta.Smap) (err error) {
-	for _, worker := range r.workers {
-		r.wg.Add(1)
-		go worker.run()
+func (r *lrit) run(wi lrwi, smap *meta.Smap, prealloc bool) (err error) {
+	if r.workers == nil {
+		if prealloc {
+			r.buf, _ = core.T.PageMM().Alloc()
+		}
+		goto iterate
 	}
+	for _, worker := range r.workers {
+		var (
+			buf  []byte
+			slab *memsys.Slab
+		)
+		if prealloc {
+			buf, slab = core.T.PageMM().Alloc()
+		}
+		r.wg.Add(1)
+		go worker.run(buf, slab)
+	}
+iterate:
 	switch r.lrp {
 	case lrpList:
 		err = r._list(wi, smap)
@@ -207,6 +210,9 @@ func (r *lrit) run(wi lrwi, smap *meta.Smap) (err error) {
 
 func (r *lrit) wait() {
 	if r.workers == nil {
+		if r.buf != nil {
+			core.T.PageMM().Free(r.buf)
+		}
 		return
 	}
 	close(r.workCh)
@@ -339,9 +345,10 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 	}
 
 	if r.workers == nil {
-		wi.do(lom, r)
+		wi.do(lom, r, r.buf)
 		return true, nil
 	}
+
 	r.workCh <- lrpair{lom, wi} // lom eventually freed below
 	return false, nil
 }
@@ -350,17 +357,20 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 // lrworker //
 //////////////
 
-func (worker *lrworker) run() {
+func (worker *lrworker) run(buf []byte, slab *memsys.Slab) {
 	for {
 		lrpair, ok := <-worker.lrit.workCh
 		if !ok {
 			break
 		}
-		lrpair.wi.do(lrpair.lom, worker.lrit)
+		lrpair.wi.do(lrpair.lom, worker.lrit, buf)
 		core.FreeLOM(lrpair.lom)
 		if worker.lrit.parent.IsAborted() {
 			break
 		}
 	}
 	worker.lrit.wg.Done()
+	if buf != nil {
+		slab.Free(buf)
+	}
 }

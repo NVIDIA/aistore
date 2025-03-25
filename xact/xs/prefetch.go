@@ -63,6 +63,13 @@ type (
 	}
 )
 
+// interface guard
+var (
+	_ core.Xact      = (*prefetch)(nil)
+	_ xreg.Renewable = (*prfFactory)(nil)
+	_ lrwi           = (*prefetch)(nil)
+)
+
 func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	msg := args.Custom.(*apc.PrefetchMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
@@ -127,7 +134,7 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 
 	wg.Done()
 
-	err := r.lrit.run(r, core.T.Sowner().Get())
+	err := r.lrit.run(r, core.T.Sowner().Get(), false /*prealloc buf*/)
 	if err != nil {
 		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
 	}
@@ -146,7 +153,7 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 }
 
 // NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
-func (r *prefetch) do(lom *core.LOM, lrit *lrit) {
+func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	var (
 		err   error
 		size  int64
