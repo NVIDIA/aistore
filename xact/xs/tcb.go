@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -87,6 +88,11 @@ func (p *tcbFactory) Start() error {
 	p.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
 		p.owt = cmn.OwtTransform
+		comm, err := etl.GetCommunicator(p.args.Msg.Transform.Name)
+		if err != nil {
+			return err
+		}
+		p.args.GetROC = comm.OfflineTransform
 	}
 
 	p.xctn = newTCB(p, slab, config, smap, nat)
@@ -149,7 +155,6 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 /////////////
 
 // copies one bucket _into_ another with or without transformation.
-// args.DP.Reader() is the reader to receive transformed bytes; when nil we do a plain bucket copy.
 
 // limited pre-run abort
 func (r *XactTCB) TxnAbort(err error) {

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -93,6 +94,11 @@ func (p *tcoFactory) Start() error {
 	r.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLObjects {
 		r.owt = cmn.OwtTransform
+		comm, err := etl.GetCommunicator(p.args.Msg.Transform.Name)
+		if err != nil {
+			return err
+		}
+		p.args.GetROC = comm.OfflineTransform
 	}
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco

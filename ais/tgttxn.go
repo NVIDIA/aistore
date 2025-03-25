@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
@@ -112,37 +111,33 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActMoveBck:
 		xid, err = t.renameBucket(c)
 	case apc.ActCopyBck, apc.ActETLBck:
-		var (
-			roc    core.GetROC
-			tcbmsg = &apc.TCBMsg{}
-		)
+		// TODO: remove redundant unmarshal and validateETL calls in both begin and commit phases.
+		// In the commit phase, messages should already be validated and ready for use.
+		var tcbmsg = &apc.TCBMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, tcbmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == apc.ActETLBck {
-			if roc, err = getETLROC(tcbmsg); err != nil {
+			if err = validateETL(tcbmsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xid, err = t.tcb(c, tcbmsg, roc)
+		xid, err = t.tcb(c, tcbmsg)
 	case apc.ActCopyObjects, apc.ActETLObjects:
-		var (
-			roc    core.GetROC
-			tcomsg = &cmn.TCOMsg{}
-		)
+		var tcomsg = &cmn.TCOMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, tcomsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == apc.ActETLObjects {
-			if roc, err = getETLROC(&tcomsg.TCBMsg); err != nil {
+			if err = validateETL(&tcomsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xid, err = t.tcobjs(c, tcomsg, roc)
+		xid, err = t.tcobjs(c, tcomsg)
 	case apc.ActECEncode:
 		xid, err = t.ecEncode(c)
 	case apc.ActArchive:
@@ -502,22 +497,15 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) err
 	return nil
 }
 
-func getETLROC(msg *apc.TCBMsg) (core.GetROC, error) {
+func validateETL(msg *apc.TCBMsg) error {
 	if !k8s.IsK8s() {
-		return nil, k8s.ErrK8sRequired
+		return k8s.ErrK8sRequired
 	}
-	if err := msg.Validate(true); err != nil {
-		return nil, err
-	}
-	comm, err := etl.GetCommunicator(msg.Transform.Name)
-	if err != nil {
-		return nil, err
-	}
-	return comm.OfflineTransform, nil
+	return msg.Validate(true)
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error) {
+func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -547,7 +535,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error
 		if _, present := bmd.Get(bckFrom); !present {
 			return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
-		if err := t._tcbBegin(c, msg, roc); err != nil {
+		if err := t._tcbBegin(c, msg); err != nil {
 			return "", err
 		}
 	case apc.ActAbort:
@@ -596,7 +584,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (string, error
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (err error) {
+func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg) (err error) {
 	var (
 		bckTo, bckFrom = c.bckTo, c.bck
 		nlpFrom        = newBckNLP(bckFrom)
@@ -612,10 +600,14 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (err err
 			return cmn.NewErrBusy("bucket", bckTo.Cname(""))
 		}
 	}
-	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, GetROC: roc, Msg: msg}
+	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, Msg: msg}
 	rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, custom)
 	if err = rns.Err; err != nil {
 		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
+		nlpFrom.Unlock()
+		if nlpTo != nil {
+			nlpTo.Unlock()
+		}
 		return
 	}
 
@@ -634,7 +626,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, roc core.GetROC) (err err
 // Two IDs:
 // - TxnUUID: transaction (txn) ID
 // - xid: xaction ID (will have "tco-" prefix)
-func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, roc core.GetROC) (xid string, _ error) {
+func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg) (xid string, _ error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -663,7 +655,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, roc core.GetROC) (xid string
 			return xid, cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		// begin
-		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, GetROC: roc}
+		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg}
 		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
