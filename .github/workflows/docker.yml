@@ -39,6 +39,12 @@ on:
         type: boolean
         default: false
 
+      build_gitlab_ci_image:
+        description: 'Build GitLab CI image (aistorage/gitlab-ci)'
+        required: true
+        type: boolean
+        default: false
+
       image_tag:
         description: 'Tag of all the selected images'
         required: true
@@ -49,7 +55,7 @@ env:
   AISNODE_IMAGE: 'aistorage/aisnode'
   AISINIT_IMAGE: 'aistorage/ais-init'
   CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
-  CI_IMAGE: 'aistorage/ci'
+  CI_IMAGE: 'aistorage/gitlab-ci'
   AISNODE_MINIKUBE_IMAGE: 'aistorage/aisnode-minikube'
   AUTHN_IMAGE: 'aistorage/authn'
 
@@ -113,4 +119,11 @@ jobs:
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/authn_container
           IMAGE_REPO="${{ env.AUTHN_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make all
+          popd
+
+      - name: Build and push `gitlab-ci` image
+        if: ${{inputs.build_gitlab_ci_image}}
+        run: |
+          pushd $GITHUB_WORKSPACE/deploy/ci
+          CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
           popd
