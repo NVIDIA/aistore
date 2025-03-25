@@ -42,15 +42,13 @@ type (
 		owt   cmn.OWT
 	}
 	XactTCB struct {
-		bp    core.Backend // backend(source bucket)
 		p     *tcbFactory
 		dm    *bundle.DataMover
-		rate  tcrate
-		vlabs map[string]string
 		prune prune
 		nam   string
 		str   string
 		xact.BckJog
+		copier
 		wg     sync.WaitGroup // starting up
 		rxlast atomic.Int64   // finishing
 		refc   atomic.Int32   // finishing
@@ -78,6 +76,7 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *tcbFactory) Start() error {
 	var (
+		roc       core.GetROC
 		smap      = core.T.Sowner().Get()
 		nat       = smap.CountActiveTs()
 		config    = cmn.GCO.Get()
@@ -92,10 +91,10 @@ func (p *tcbFactory) Start() error {
 		if err != nil {
 			return err
 		}
-		p.args.GetROC = comm.OfflineTransform
+		roc = comm.OfflineTransform
 	}
 
-	p.xctn = newTCB(p, slab, config, smap, nat)
+	p.xctn = newTCB(p, slab, config, smap, roc, nat)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
@@ -165,7 +164,7 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB) {
+func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, roc core.GetROC, nat int) (r *XactTCB) {
 	var (
 		args     = p.args
 		msg      = args.Msg
@@ -210,6 +209,9 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 		}
 		r.prune.init(config)
 	}
+
+	r.copier.r = r
+	r.copier.getROC = roc
 
 	debug.Assert(args.BckFrom.Props != nil)
 	// (rgetstats)
@@ -288,64 +290,16 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	return core.QuiInactiveCB
 }
 
-// TODO -- FIXME: almost identical to tcobjs.go do() - unify
-
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
-	var (
-		args    = r.p.args // TCBArgs
-		toName  = args.Msg.ToName(lom.ObjName)
-		started int64
-	)
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Base.Name(), lom.Cname(), "=>", args.BckTo.Cname(toName))
-	}
+	args := r.p.args // TCBArgs
+	a := r.copier.prepare(lom, args.BckTo, args.Msg)
+	a.Config, a.Buf, a.OWT = r.Config, buf, r.p.owt
 
-	// apply frontend rate-limit, if any
-	r.rate.acquire()
-
-	a := AllocCOI()
-	{
-		a.GetROC = args.GetROC
-		a.Xact = r
-		a.Config = r.Config
-		a.BckTo = args.BckTo
-		a.ObjnameTo = toName
-		a.Buf = buf
-		a.DryRun = args.Msg.DryRun
-		a.LatestVer = args.Msg.LatestVer
-		a.Sync = args.Msg.Sync
-		a.OWT = r.p.owt
-		a.Finalize = false
-		if a.ObjnameTo == "" {
-			a.ObjnameTo = lom.ObjName
-		}
+	err := r.copier.do(a, lom, r.dm)
+	if err == nil && args.Msg.Sync {
+		r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
 	}
-	if r.bp != nil {
-		started = mono.NanoTime()
-	}
-	res := gcoi.CopyObject(lom, r.dm, a)
-	FreeCOI(a)
-
-	switch {
-	case res.Err == nil:
-		if args.Msg.Sync {
-			r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
-		}
-		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
-		r.ObjsAdd(1, res.Lsize)
-		if res.RGET {
-			// RGET stats (compare with ais/tgtimpl namesake)
-			rgetstats(r.bp /*from*/, r.vlabs, res.Lsize, started)
-		}
-	case cos.IsNotExist(res.Err, 0):
-		// do nothing
-	case cos.IsErrOOS(res.Err):
-		r.Abort(res.Err)
-	default:
-		r.AddErr(res.Err, 5, cos.SmoduleXs)
-	}
-
-	return res.Err
+	return err
 }
 
 // NOTE: strict(est) error handling: abort on any of the errors below

@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -39,15 +38,13 @@ type (
 		streamingF
 	}
 	XactTCObjs struct {
-		bp      core.Backend // backend(source bucket)
 		args    *xreg.TCObjsArgs
-		rate    tcrate
 		workCh  chan *cmn.TCOMsg
-		vlabs   map[string]string
 		pending struct {
 			m   map[string]*tcowi
 			mtx sync.RWMutex
 		}
+		copier
 		streamingX
 		chanFull atomic.Int64
 		owt      cmn.OWT
@@ -60,11 +57,19 @@ type (
 	}
 )
 
+type (
+	// remove objects not present at the source (when synchronizing bckFrom => bckTo)
+	syncwi struct {
+		rp *prune
+	}
+)
+
 // interface guard
 var (
 	_ core.Xact      = (*XactTCObjs)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
 	_ lrwi           = (*tcowi)(nil)
+	_ lrwi           = (*syncwi)(nil)
 )
 
 ////////////////
@@ -92,14 +97,16 @@ func (p *tcoFactory) Start() error {
 	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	r.owt = cmn.OwtCopy
+
 	if p.kind == apc.ActETLObjects {
 		r.owt = cmn.OwtTransform
 		comm, err := etl.GetCommunicator(p.args.Msg.Transform.Name)
 		if err != nil {
 			return err
 		}
-		p.args.GetROC = comm.OfflineTransform
+		r.copier.getROC = comm.OfflineTransform
 	}
+
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
 
@@ -121,6 +128,8 @@ func (p *tcoFactory) Start() error {
 		p.dm.SetXact(r)
 		p.dm.Open()
 	}
+
+	r.copier.r = r
 
 	// (rgetstats)
 	if bck := r.args.BckFrom; bck.IsRemote() {
@@ -346,64 +355,21 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 // tcowi //
 ///////////
 
-// TODO -- FIXME: almost identical to tcb.go do() - unify
+// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
+// until after the transformation; here we are disregarding the size anyway as the stats
+// are done elsewhere
 
 func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
-	var (
-		objNameTo = wi.msg.ToName(lom.ObjName)
-		r         = wi.r
-		started   int64
-	)
+	r := wi.r
+	a := r.copier.prepare(lom, r.args.BckTo, &r.args.Msg.TCBMsg)
+	a.Config, a.Buf, a.OWT = r.config, buf, r.owt
 
-	// apply frontend rate-limit, if any
-	r.rate.acquire()
+	// multiple messages per x-tco (compare w/ x-tcb)
+	a.LatestVer, a.Sync = wi.msg.LatestVer, wi.msg.Sync
 
-	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
-	// until after the transformation; here we are disregarding the size anyway as the stats
-	// are done elsewhere
-
-	a := AllocCOI()
-	{
-		a.GetROC = r.args.GetROC
-		a.Xact = r
-		a.Config = r.config
-		a.BckTo = r.args.BckTo
-		a.ObjnameTo = objNameTo
-		a.Buf = buf
-		a.DryRun = wi.msg.DryRun
-		a.LatestVer = wi.msg.LatestVer
-		a.Sync = wi.msg.Sync
-		a.OWT = r.owt
-		a.Finalize = false
-		if a.ObjnameTo == "" {
-			a.ObjnameTo = lom.ObjName
-		}
-	}
-	if r.bp != nil {
-		started = mono.NanoTime()
-	}
-	res := gcoi.CopyObject(lom, r.p.dm, a)
-	FreeCOI(a)
-
-	switch {
-	case res.Err == nil:
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infoln(wi.r.Name(), lom.Cname(), "=>", wi.r.args.BckTo.Cname(objNameTo))
-		}
-		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
-		r.ObjsAdd(1, res.Lsize)
-		if res.RGET {
-			// RGET stats (compare with ais/tgtimpl namesake)
-			rgetstats(r.bp /*from*/, r.vlabs, res.Lsize, started)
-		}
-	case cos.IsNotExist(res.Err, 0):
-		if lrit.lrp == lrpList {
-			r.AddErr(res.Err, 5, cos.SmoduleXs)
-		}
-	case cos.IsErrOOS(res.Err):
-		r.Abort(res.Err)
-	default:
-		r.AddErr(res.Err, 5, cos.SmoduleXs)
+	err := r.copier.do(a, lom, r.p.dm)
+	if cos.IsNotExist(err, 0) && lrit.lrp == lrpList {
+		r.AddErr(err, 5, cos.SmoduleXs)
 	}
 }
 
@@ -411,13 +377,6 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 // remove objects not present at the source (when synchronizing bckFrom => bckTo)
 // TODO: probabilistic filtering
 //
-
-type syncwi struct {
-	rp *prune
-}
-
-// interface guard
-var _ lrwi = (*syncwi)(nil)
 
 func (r *XactTCObjs) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) {
 	rp := prune{parent: r, smap: smap}

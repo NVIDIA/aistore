@@ -6,21 +6,8 @@
 package xs
 
 import (
-	"sync"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/xact/xreg"
-)
-
-// target i/f (ais/tgtimpl)
-var (
-	gcoi COI
-)
-
-// mem pool
-var (
-	coiPool sync.Pool
-	coi0    CoiParams
 )
 
 // for additional startup-time reg-s see lru, downloader, ec
@@ -55,21 +42,4 @@ func Treg(coi COI) {
 	xreg.RegBckXact(&lsoFactory{streamingF: streamingF{kind: apc.ActList}})
 
 	xreg.RegBckXact(&blobFactory{})
-}
-
-//
-// CoiParams pool
-//
-
-func AllocCOI() (a *CoiParams) {
-	if v := coiPool.Get(); v != nil {
-		a = v.(*CoiParams)
-		return
-	}
-	return &CoiParams{}
-}
-
-func FreeCOI(a *CoiParams) {
-	*a = coi0
-	coiPool.Put(a)
 }

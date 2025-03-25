@@ -21,13 +21,11 @@ type (
 		BckTo   *meta.Bck
 		Msg     *apc.TCBMsg
 		Phase   string
-		core.GetROC
 	}
 	TCObjsArgs struct {
 		BckFrom *meta.Bck
 		BckTo   *meta.Bck
 		Msg     *apc.TCOMsg
-		core.GetROC
 	}
 	DsortArgs struct {
 		BckFrom *meta.Bck
