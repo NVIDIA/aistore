@@ -23,8 +23,10 @@ func Treg(coi COI) {
 	xreg.RegNonBckXact(&etlFactory{})
 
 	xreg.RegBckXact(&bmvFactory{})
+
 	xreg.RegBckXact(&evdFactory{kind: apc.ActEvictObjects})
 	xreg.RegBckXact(&evdFactory{kind: apc.ActDeleteObjects})
+
 	xreg.RegBckXact(&prfFactory{})
 
 	xreg.RegNonBckXact(&nsummFactory{})

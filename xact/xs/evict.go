@@ -46,7 +46,7 @@ var (
 
 func (p *evdFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	msg := args.Custom.(*apc.ListRange)
-	debug.Assert(!msg.IsList() || !msg.HasTemplate())
+	debug.Assert(msg == nil || !msg.IsList() || !msg.HasTemplate()) // TODO -- FIXME
 	np := &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
 	return np
 }
@@ -65,6 +65,12 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (*evictDelete, error) {
 	ed := &evictDelete{config: cmn.GCO.Get()}
+	if msg == nil {
+		ed.InitBase(xargs.UUID, kind, "" /*ctlmsg*/, bck)
+		ed.Finish()
+		return ed, nil
+	}
+
 	if err := ed.lrit.init(ed, msg, bck, lrpWorkersDflt); err != nil {
 		return nil, err
 	}
