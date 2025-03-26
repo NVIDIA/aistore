@@ -832,6 +832,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// do
 	if ecode, err := goi.getObject(); err != nil {
+		// stats
 		vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
 		if goi.isIOErr {
 			t.statsT.IncWith(stats.ErrGetCount, vlabs)
@@ -845,6 +846,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 		// handle right here, return nil
 		if err != errSendingResp {
+			goi.lom.UncacheDel()
 			if dpq.isS3 {
 				s3.WriteErr(w, r, err, ecode)
 			} else {

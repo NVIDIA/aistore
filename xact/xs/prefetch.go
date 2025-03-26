@@ -155,13 +155,15 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 // NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
 func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	var (
-		err   error
-		size  int64
-		ecode int
+		err     error
+		oa      *cmn.ObjAttrs
+		size    int64
+		ecode   int
+		deleted bool
 	)
 
 	lom.Lock(false)
-	oa, deleted, err := lom.LoadLatest(r.latestVer || r.msg.BlobThreshold > 0) // NOTE: shortcut to find size
+	oa, deleted, err = lom.LoadLatest(r.latestVer || r.msg.BlobThreshold > 0) // shortcut to find size
 	lom.Unlock(false)
 
 	// handle assorted returns
@@ -171,14 +173,16 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		if lrit.lrp != lrpList {
 			return // deleted or not found remotely, prefix or range
 		}
-		goto eret
+		r.AddErr(err, 5, cos.SmoduleXs)
+		return
 	case oa != nil:
 		// not latest
 		size = oa.Size
 	case err == nil:
 		return // nothing to do
 	case !cmn.IsErrObjNought(err):
-		goto eret
+		r.AddErr(err, 5, cos.SmoduleXs)
+		return
 	}
 
 	// apply frontend rate-limit, if any
@@ -194,11 +198,15 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		ecode, err = r.getCold(lom)
 	}
 
-	switch {
-	case err == nil:
+	if err == nil {
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infoln(r.Name(), lom.Cname())
 		}
+		return
+	}
+
+	lom.UncacheDel()
+	switch {
 	case cos.IsNotExist(err, ecode) || cmn.IsErrBusy(err) || err == cmn.ErrSkip:
 		if lrit.lrp == lrpList {
 			r.AddErr(err, 5, cos.SmoduleXs)
@@ -208,10 +216,6 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	default:
 		r.AddErr(err, 5, cos.SmoduleXs)
 	}
-	return
-
-eret:
-	r.AddErr(err, 5, cos.SmoduleXs)
 }
 
 func (r *prefetch) _whinge(lom *core.LOM, size int64) {

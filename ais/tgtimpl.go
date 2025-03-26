@@ -145,6 +145,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 	)
 	if ecode, err = bp.GetObj(ctx, lom, owt, nil /*origReq*/); err != nil {
 		lom.Unlock(true)
+		lom.UncacheDel()
 		if cmn.IsErrFailedTo(err) {
 			nlog.Warningln(err)
 		} else {

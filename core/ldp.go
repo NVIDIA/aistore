@@ -171,7 +171,8 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 		if errDel != nil {
 			ecode, err = 0, errDel
 		} else {
-			vlabs := map[string]string{"bucket": lom.Bck().Cname("")} // TODO -- FIXME: cannot import stats
+			// TODO -- FIXME: cannot import `stats.VlabBucket`; optimize or remove
+			vlabs := map[string]string{"bucket": lom.Bck().Cname("")}
 			T.StatsUpdater().IncWith(RemoteDeletedDelCount, vlabs)
 		}
 		debug.Assert(err != nil)
@@ -197,6 +198,9 @@ func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err err
 		if res.Eq {
 			debug.AssertNoErr(res.Err)
 			return nil, false, nil
+		}
+		if err == nil { // undo lom.Load
+			lom.UncacheDel()
 		}
 		if res.Err != nil {
 			deleted = cos.IsNotExist(res.Err, res.ErrCode)

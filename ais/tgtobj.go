@@ -741,10 +741,10 @@ fin:
 	if err == nil {
 		return 0, nil
 	}
-	goi.lom.UncacheDel()
 	if goi.retry {
 		goi.retry = false
 		if !retried {
+			goi.lom.UncacheDel()
 			nlog.Warningln("retrying", goi.lom.String(), err)
 			retried = true
 			cold = false
