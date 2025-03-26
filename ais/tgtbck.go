@@ -379,7 +379,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		defer nlp.Unlock()
 		defer wg.Wait()
 
-		_ = xreg.RenewEvictDelete("123456", apc.ActEvictObjects, apireq.bck, nil) // TODO -- FIXME
+		_ = xreg.RenewEvictDelete("123456", apc.ActEvictRemoteBck, apireq.bck, nil) // TODO -- FIXME
 
 		core.UncacheBcks(wg, apireq.bck)
 		err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)

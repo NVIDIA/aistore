@@ -26,6 +26,7 @@ func Treg(coi COI) {
 
 	xreg.RegBckXact(&evdFactory{kind: apc.ActEvictObjects})
 	xreg.RegBckXact(&evdFactory{kind: apc.ActDeleteObjects})
+	xreg.RegBckXact(&evdFactory{kind: apc.ActEvictRemoteBck})
 
 	xreg.RegBckXact(&prfFactory{})
 
