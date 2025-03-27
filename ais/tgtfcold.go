@@ -95,6 +95,7 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 		return err
 	}
 	var (
+		errTx  error
 		hrng   *htrange
 		size             = lom.Lsize()
 		reader io.Reader = lmfh
@@ -123,15 +124,24 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 
 	written, err = cos.CopyBuffer(goi.w, reader, buf)
 	if err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(transmit)")
-		return errSendingResp
+		errTx = goi.whingeTx(err, goi.lom.FQN)
 	}
-	debug.Assertf(written == size, "%s: transmit-size %d != %d expected", lom.Cname(), written, size)
+	debug.Assertf(errTx != nil || written == size, "%s: transmit-size %d != %d expected", lom.Cname(), written, size)
 
 	cos.Close(lmfh)
 	slab.Free(buf)
 
-	return goi._fini(revert, res.Size, written)
+	// apc.QparamIsGFNRequest: update GFN filter to skip _rebalancing_ this one
+	if goi.dpq.isGFN {
+		bname := cos.UnsafeBptr(lom.UnamePtr())
+		goi.t.reb.FilterAdd(*bname)
+	}
+
+	err = goi._fini(revert, res.Size, written)
+	if err == nil {
+		err = errTx
+	}
+	return err
 }
 
 // stats and redundancy (compare w/ goi.txfini)
@@ -241,8 +251,9 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	cos.Close(res.R)
 
 	if err != nil {
+		// NOTE: cannot whingeTx(), have to revert/remove/cleanup
 		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")
-		return errSendingResp // NOTE: cannot return err: whdr is already on the wire
+		return errSendingResp
 	}
 	debug.Assertf(written == res.Size, "%s: remote-size %d != %d written/transmitted", lom.Cname(), res.Size, written)
 

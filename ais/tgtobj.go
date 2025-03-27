@@ -716,19 +716,23 @@ do: // retry uplock or ec-recovery, the latter only once
 		}
 		goi.cold = true
 
-		// 3 alternative ways to perform cold GET
+		//
+		// three alternative ways to cold GET
+		//
 		if goi.dpq.arch.path == "" && goi.dpq.arch.regx == "" &&
 			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange)) {
 			if goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET) {
+				// 1)
 				err = goi.coldStream(&res)
 			} else {
+				// 2)
 				err = goi.coldReopen(&res)
 			}
 			goi.unlocked = true // always
 			return 0, err
 		}
-		// otherwise, regular path
-		ecode, err = goi._coldPut(&res)
+		// otherwise, 3) regular path
+		ecode, err = goi.coldPut(&res)
 		if err != nil {
 			goi.unlocked = true
 			return ecode, err
@@ -754,7 +758,7 @@ fin:
 	return ecode, err
 }
 
-func (goi *getOI) _coldPut(res *core.GetReaderResult) (int, error) {
+func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 	var (
 		t, lom = goi.t, goi.lom
 		poi    = allocPOI()
@@ -1096,7 +1100,7 @@ func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htra
 	goi.setwhdr(whdr, cksum, size)
 
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
-	err = goi.transmit(r, buf, fqn)
+	err = goi.transmit(r, buf, fqn, size)
 	slab.Free(buf)
 	if sgl != nil {
 		sgl.Free()
@@ -1122,7 +1126,7 @@ func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error
 
 	// Tx
 	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
-	err = goi.transmit(lmfh, buf, fqn)
+	err = goi.transmit(lmfh, buf, fqn, size)
 	slab.Free(buf)
 	return err
 }
@@ -1158,7 +1162,7 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 		// found
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
 		buf, slab := goi.t.gmm.AllocSize(min(csl.Size(), memsys.DefaultBuf2Size))
-		err = goi.transmit(csl, buf, fqn)
+		err = goi.transmit(csl, buf, fqn, csl.Size())
 		slab.Free(buf)
 		csl.Close()
 		return err
@@ -1181,39 +1185,51 @@ func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
 	return err
 }
 
-func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
+func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) error {
+	var (
+		errTx error
+		lom   = goi.lom
+	)
 	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil {
-		if !cos.IsRetriableConnErr(err) || cmn.Rom.FastV(5, cos.SmoduleAIS) {
-			nlog.Warningln("failed to GET (Tx)", goi.lom.Cname(), err)
-			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
-		}
-
-		// at this point, error is already written into the response -
-		// return special code to indicate just that
-		return errSendingResp
+		errTx = goi.whingeTx(err, fqn /*lbget*/)
 	}
-	// Update objects sent during GFN. Thanks to this we will not
-	// have to resend them in rebalance. In case of a race between rebalance
-	// and GFN the former wins, resulting in duplicated transmission.
+	debug.Assertf(errTx != nil || written == size, "%s: transmit-size %d != %d expected", lom.Cname(), written, size)
+
+	// apc.QparamIsGFNRequest: update GFN filter to skip _rebalancing_ this one
 	if goi.dpq.isGFN {
-		uname := goi.lom.UnamePtr()
-		bname := cos.UnsafeBptr(uname)
+		bname := cos.UnsafeBptr(lom.UnamePtr())
 		goi.t.reb.FilterAdd(*bname)
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
-		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			fs.CleanPathErr(err)
 			nlog.Errorln(goi.t.String(), "GET post-transmission failure:", err)
-			return errSendingResp
+			return err
 		}
-		goi.lom.SetAtimeUnix(goi.atime)
-		goi.lom.Recache()
+		lom.SetAtimeUnix(goi.atime)
+		lom.Recache()
 	}
 	//
 	// stats
 	//
 	goi.stats(written)
-	return nil
+	return errTx
+}
+
+// failure to transmit: errSendingResp (and keep the object)
+func (goi *getOI) whingeTx(err error, fqn string) error {
+	const act = "(transmit)"
+	cname := goi.lom.Cname()
+	if cos.IsRetriableConnErr(err) {
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.WarningDepth(1, ftcg, act, cname, "err:", err)
+		}
+	} else {
+		// NOTE: return `errSendingResp` notwithstanding
+		goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
+		nlog.ErrorDepth(1, ftcg, act, cname, "err:", err)
+	}
+	return errSendingResp
 }
 
 func (goi *getOI) stats(written int64) {
