@@ -21,8 +21,9 @@ The command has the following subcommands:
 ```console
 $ ais cluster <TAB-TAB>
 
-show               remote-detach      set-primary        shutdown           add-remove-nodes    reload-backend-creds
-remote-attach      rebalance          download-logs      decommission       reset-stats
+show                   rebalance              shutdown               reset-stats
+remote-attach          set-primary            decommission           drop-lcache
+remote-detach          download-logs          add-remove-nodes       reload-backend-creds
 ```
 
 > **Important:** with the single exception of [`add-remove-nodes`](#adding-removing-nodes), all the other the commands listed above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.

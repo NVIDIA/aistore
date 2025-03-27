@@ -342,6 +342,10 @@ func ReloadBackendCreds(bp BaseParams, provider string) error {
 	return _putCluster(bp, apc.ActMsg{Action: apc.ActReloadBackendCreds, Name: provider})
 }
 
+func ClearLcache(bp BaseParams, tid string) error {
+	return _putCluster(bp, apc.ActMsg{Action: apc.ActClearLcache, Name: tid})
+}
+
 func _putCluster(bp BaseParams, msg apc.ActMsg) error {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()

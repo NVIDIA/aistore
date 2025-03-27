@@ -1800,7 +1800,11 @@ func (c *TCBConf) Validate() error {
 const (
 	EcStreamsEver = -time.Second
 	EcStreamsDflt = 10 * time.Minute
-	EcStreamsMini = 5 * time.Minute
+	EcStreamsMin  = 5 * time.Minute
+
+	LcacheEvictMin  = 20 * time.Minute
+	LcacheEvictDflt = 2 * time.Hour
+	LcacheEvictMax  = 16 * time.Hour
 
 	// and a few more hardcoded below
 )
@@ -1827,13 +1831,13 @@ func (c *TimeoutConf) Validate() error {
 		return fmt.Errorf("invalid timeout.send_file_time=%s (cannot be less than 1m)", c.SendFile)
 	}
 	// must be greater than (2 * keepalive.interval*keepalive.factor)
-	if c.EcStreams > 0 && c.EcStreams.D() < EcStreamsMini {
+	if c.EcStreams > 0 && c.EcStreams.D() < EcStreamsMin {
 		return fmt.Errorf("invalid timeout.ec_streams_time=%s (no timeout: %v; minimum: %s; default: %s)",
-			c.EcStreams, EcStreamsEver, EcStreamsMini, EcStreamsDflt)
+			c.EcStreams, EcStreamsEver, EcStreamsMin, EcStreamsDflt)
 	}
-	if c.ObjectMD != 0 && c.ObjectMD.D() < 20*time.Minute {
-		return fmt.Errorf("invalid timeout.object_md=%s (expecting 0 (zero) for system default or a value greater or equal 20m)",
-			c.ObjectMD)
+	if c.ObjectMD != 0 && (c.ObjectMD.D() < LcacheEvictMin || c.ObjectMD.D() > LcacheEvictMax) {
+		return fmt.Errorf("invalid timeout.object_md=%s (expecting 0 (zero) for system default or [%v, %v] range)",
+			c.ObjectMD, LcacheEvictMin, LcacheEvictMax)
 	}
 	return nil
 }

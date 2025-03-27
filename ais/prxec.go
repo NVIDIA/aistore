@@ -91,7 +91,7 @@ func (p *proxy) _respActiveEC(hdr http.Header, now int64) {
 //
 
 const (
-	ecStreamsNack = max(cmn.EcStreamsMini>>1, 3*time.Minute)
+	ecStreamsNack = max(cmn.EcStreamsMin>>1, 3*time.Minute)
 )
 
 func (p *proxy) onEC(bck *meta.Bck) error {
@@ -99,7 +99,7 @@ func (p *proxy) onEC(bck *meta.Bck) error {
 		return nil
 	}
 	now := mono.NanoTime()
-	debug.Assert(cmn.Rom.EcStreams() >= cmn.EcStreamsMini, cmn.Rom.EcStreams(), " vs ", cmn.EcStreamsMini)
+	debug.Assert(cmn.Rom.EcStreams() >= cmn.EcStreamsMin, cmn.Rom.EcStreams(), " vs ", cmn.EcStreamsMin)
 	if p.ec.rust != 0 && time.Duration(now-p.ec.rust) < ecStreamsNack {
 		return nil
 	}

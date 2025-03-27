@@ -65,6 +65,8 @@ const (
 
 	ActReloadBackendCreds = "reload-creds"
 
+	ActClearLcache = "clear-lcache"
+
 	ActShutdownCluster = "shutdown" // see also: ActShutdownNode
 
 	// multi-object (via `ListRange`)

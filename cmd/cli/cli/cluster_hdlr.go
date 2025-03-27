@@ -221,6 +221,13 @@ var (
 				BashComplete: suggestAllNodes,
 			},
 			{
+				Name:         cmdDropLcache,
+				Usage:        "Drop (discard) in-memory object metadata cache",
+				ArgsUsage:    optionalTargetIDArgument,
+				Action:       clearLcacheHandler,
+				BashComplete: suggestTargets,
+			},
+			{
 				Name:         cmdReloadCreds,
 				Usage:        "Reload (updated) backend credentials",
 				ArgsUsage:    "[PROVIDER]",
@@ -668,6 +675,29 @@ func resetStatsHandler(c *cli.Context) error {
 		return V(err)
 	}
 	msg := fmt.Sprintf("Cluster %s successfully reset", tag)
+	actionDone(c, msg)
+	return nil
+}
+
+func clearLcacheHandler(c *cli.Context) error {
+	var (
+		node, sname, err = arg0Node(c)
+		tid              string
+	)
+	if err != nil {
+		return err
+	}
+	if node != nil {
+		tid = node.ID()
+	}
+	err = api.ClearLcache(apiBP, tid)
+	if err != nil {
+		return err
+	}
+	msg := "Dropped in-memory object metadata caches cluster-wide"
+	if node != nil {
+		msg = fmt.Sprintf("Node %s: dropped in-memory object metadata cache", sname)
+	}
 	actionDone(c, msg)
 	return nil
 }

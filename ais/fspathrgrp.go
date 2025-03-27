@@ -133,7 +133,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		return rmi, nil
 	}
 
-	core.UncacheMountpath(rmi)
+	core.LcacheClearMpath(rmi)
 
 	config := cmn.GCO.Get()
 	if noResil || dontResilver || !config.Resilver.Enabled {

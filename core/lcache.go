@@ -22,14 +22,9 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// throttle tunables
 const (
-	skipEvictThreashold = 20 // likely not running when above
-
-	maxEvictThreashold = fs.MaxThrottlePct // not running when above
-
-	dfltEvictTime          = 2 * time.Hour
-	maxTimeWithNoEvictions = 16 * time.Hour
+	skipEvictThreashold = 20                // likely not running when above
+	maxEvictThreashold  = fs.MaxThrottlePct // not running when above
 )
 
 type (
@@ -71,17 +66,25 @@ type (
 	}
 )
 
-// g.lchk
-func (lchk *lchk) init(config *cmn.Config) {
-	lchk.running.Store(false)
-	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), dfltEvictTime)
+//
+// public
+//
 
-	lchk.last = time.Now()
-	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, lchk.timeout)
+func LcacheClear() {
+	avail := fs.GetAvail()
+	for _, mi := range avail {
+		LcacheClearMpath(mi)
+	}
 }
 
-// evict bucket
-func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
+func LcacheClearMpath(mi *fs.Mountpath) {
+	for idx := range cos.MultiHashMapCount {
+		cache := mi.LomCaches.Get(idx)
+		cache.Clear()
+	}
+}
+
+func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
 
@@ -115,6 +118,19 @@ func UncacheBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 		go u.do()
 	}
 	return false
+}
+
+//
+// private
+//
+
+// g.lchk
+func (lchk *lchk) init(config *cmn.Config) {
+	lchk.running.Store(false)
+	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), cmn.LcacheEvictDflt)
+
+	lchk.last = time.Now()
+	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, lchk.timeout)
 }
 
 func (u *rmbcks) do() {
@@ -161,14 +177,6 @@ func (u *rmbcks) f(hkey, value any) bool {
 		break
 	}
 	return true
-}
-
-// evict mountpath (see also: mempDropAll)
-func UncacheMountpath(mi *fs.Mountpath) {
-	for idx := range cos.MultiHashMapCount {
-		cache := mi.LomCaches.Get(idx)
-		cache.Clear()
-	}
 }
 
 func lcacheIdx(digest uint64) int { return int(digest & cos.MultiHashMapMask) }
@@ -235,7 +243,7 @@ func (*term) f(_, value any) bool {
 func (lchk *lchk) housekeep(int64) time.Duration {
 	// refresh
 	config := cmn.GCO.Get()
-	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), dfltEvictTime)
+	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), cmn.LcacheEvictDflt)
 
 	// concurrent term, uncache-bck, etc.
 	rc := lchk.rc.Load()
@@ -255,13 +263,13 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 
 	if pct > maxEvictThreashold {
 		nlog.Warningln("max-evict threshold:", maxEvictThreashold, "- not running")
-		return min(lchk.timeout>>1, dfltEvictTime>>1)
+		return min(lchk.timeout>>1, cmn.LcacheEvictDflt>>1)
 	}
 	now := time.Now()
 	if pct > skipEvictThreashold {
-		if elapsed := now.Sub(lchk.last); elapsed < min(maxTimeWithNoEvictions, max(lchk.timeout, time.Hour)*8) {
+		if elapsed := now.Sub(lchk.last); elapsed < min(cmn.LcacheEvictMax, max(lchk.timeout, time.Hour)*8) {
 			nlog.Warningln("skip-evict threshold:", skipEvictThreashold, "elapsed:", elapsed, "- not running")
-			return min(lchk.timeout>>1, dfltEvictTime>>1)
+			return min(lchk.timeout>>1, cmn.LcacheEvictDflt>>1)
 		}
 	}
 
@@ -284,7 +292,7 @@ func (lchk *lchk) mempDropAll() bool /*dropped*/ {
 	switch p {
 	case memsys.OOM, memsys.PressureExtreme:
 		nlog.ErrorDepth(1, "oom [", p, "] - dropping all caches")
-		lchk._drop()
+		LcacheClear()
 		lchk.last = time.Now()
 
 		oom.FreeToOS(true)
@@ -293,13 +301,6 @@ func (lchk *lchk) mempDropAll() bool /*dropped*/ {
 		nlog.Warningln("high memory pressure")
 	}
 	return false
-}
-
-func (*lchk) _drop() {
-	avail := fs.GetAvail()
-	for _, mi := range avail {
-		UncacheMountpath(mi)
-	}
 }
 
 func (lchk *lchk) evict(timeout time.Duration, now time.Time, pct int) {

@@ -930,8 +930,7 @@ func (h *htrun) bcastAsyncIC(msg *actMsgExt) {
 	freeBcArgs(args)
 }
 
-func (h *htrun) bcastAllNodes(w http.ResponseWriter, r *http.Request, args *bcastArgs) {
-	args.to = core.AllNodes
+func (h *htrun) bcastAndRespond(w http.ResponseWriter, r *http.Request, args *bcastArgs) {
 	results := h.bcastGroup(args)
 	for _, res := range results {
 		if res.err != nil {

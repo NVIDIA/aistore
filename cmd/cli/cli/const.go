@@ -110,6 +110,7 @@ const (
 	cmdAttach     = "attach"
 	cmdDetach     = "detach"
 	cmdResetStats = "reset-stats"
+	cmdDropLcache = "drop-lcache"
 
 	cmdReloadCreds = "reload-backend-creds"
 

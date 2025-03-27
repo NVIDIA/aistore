@@ -181,6 +181,9 @@ func (t *target) daeputMsg(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
+	case apc.ActClearLcache:
+		core.LcacheClear()
+
 	case apc.ActReloadBackendCreds:
 		provider := msg.Name
 
@@ -857,7 +860,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	// evict LOM cache
 	if len(rmbcks) > 0 {
 		wg := &sync.WaitGroup{}
-		core.UncacheBcks(wg, rmbcks...)
+		core.LcacheClearBcks(wg, rmbcks...)
 
 		errV := fmt.Errorf("[post-bmd] %s %s: remove bucket%s", tag, newBMD, cos.Plural(len(rmbcks)))
 		xreg.AbortAllBuckets(errV, rmbcks...)

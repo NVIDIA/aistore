@@ -1046,8 +1046,22 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 		p.statsT.ResetStats(errorsOnly)
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
-		p.bcastAllNodes(w, r, args)
+		args.to = core.AllNodes
+		p.bcastAndRespond(w, r, args)
 		freeBcArgs(args)
+
+	case apc.ActClearLcache:
+		if tid := msg.Name; tid != "" {
+			err := cmn.NewErrNotImpl("drop in-memory metadata cache for a single node", tid) // TODO but can wait
+			p.writeErr(w, r, err, http.StatusNotImplemented)
+			return
+		}
+		args := allocBcArgs()
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
+		args.to = core.Targets
+		p.bcastAndRespond(w, r, args)
+		freeBcArgs(args)
+
 	case apc.ActXactStart:
 		p.xstart(w, r, msg)
 	case apc.ActXactStop:
@@ -1157,7 +1171,8 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
-	p.bcastAllNodes(w, r, args)
+	args.to = core.AllNodes
+	p.bcastAndRespond(w, r, args)
 	freeBcArgs(args)
 }
 
@@ -1166,7 +1181,8 @@ func (p *proxy) rotateLogs(w http.ResponseWriter, r *http.Request, msg *apc.ActM
 	body := cos.MustMarshal(msg)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
-	p.bcastAllNodes(w, r, args)
+	args.to = core.AllNodes
+	p.bcastAndRespond(w, r, args)
 	freeBcArgs(args)
 }
 
@@ -1188,7 +1204,8 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 		Body:   cos.MustMarshal(msg),
 		Query:  url.Values{apc.ActTransient: []string{"true"}},
 	}
-	p.bcastAllNodes(w, r, args)
+	args.to = core.AllNodes
+	p.bcastAndRespond(w, r, args)
 	freeBcArgs(args)
 }
 
