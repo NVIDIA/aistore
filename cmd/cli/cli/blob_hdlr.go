@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
+
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 )

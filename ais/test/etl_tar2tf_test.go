@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/tools/tlog"
+
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 )
 

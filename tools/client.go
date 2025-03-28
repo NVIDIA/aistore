@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
+
 	"golang.org/x/sync/errgroup"
 )
 

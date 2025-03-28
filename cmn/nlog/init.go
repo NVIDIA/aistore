@@ -1,7 +1,7 @@
 // Package nlog - aistore logger, provides buffering, timestamping, writing, and
 // flushing/syncing/rotating
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package nlog
 

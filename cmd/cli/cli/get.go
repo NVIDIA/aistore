@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 )

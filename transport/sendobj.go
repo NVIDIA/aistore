@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
+
 	"github.com/pierrec/lz4/v4"
 )
 

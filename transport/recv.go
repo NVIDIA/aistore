@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
+
 	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/pierrec/lz4/v4"
 )

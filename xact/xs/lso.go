@@ -32,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
+
 	"github.com/tinylib/msgp/msgp"
 )
 

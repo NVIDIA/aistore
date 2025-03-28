@@ -1,6 +1,6 @@
 // Package s3 provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package s3
 
@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 

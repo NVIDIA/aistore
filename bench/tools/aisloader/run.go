@@ -59,6 +59,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/xact"
+
 	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	jsoniter "github.com/json-iterator/go"

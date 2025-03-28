@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ios"
+
 	onexxh "github.com/OneOfOne/xxhash"
 )
 

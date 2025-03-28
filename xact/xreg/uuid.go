@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
+
 	onexxh "github.com/OneOfOne/xxhash"
 )
 

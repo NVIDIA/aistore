@@ -1,11 +1,12 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
 	"github.com/NVIDIA/aistore/cmn/debug"
+
 	jsoniter "github.com/json-iterator/go"
 )
 

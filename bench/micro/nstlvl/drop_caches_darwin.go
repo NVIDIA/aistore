@@ -1,6 +1,6 @@
 // Package nstlvl is intended to measure impact (or lack of thereof) of POSIX directory nesting on random read performance.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package nstlvl
 

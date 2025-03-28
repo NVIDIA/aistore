@@ -1,7 +1,7 @@
 // Package xmeta provides low-level tools to format or extract
 // into plain text some of the AIS control structures.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/volume"
+
 	jsoniter "github.com/json-iterator/go"
 )
 

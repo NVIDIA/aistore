@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+
 	"github.com/pkg/errors"
 )
 

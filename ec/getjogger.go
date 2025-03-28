@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+
 	"github.com/klauspost/reedsolomon"
 )
 

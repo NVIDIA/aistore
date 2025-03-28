@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
+
 	jsoniter "github.com/json-iterator/go"
 )
 

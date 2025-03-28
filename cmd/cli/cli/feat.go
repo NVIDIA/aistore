@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/feat"
+
 	"github.com/urfave/cli"
 )
 
