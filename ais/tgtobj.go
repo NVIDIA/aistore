@@ -1558,11 +1558,9 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 	return xs.CoiRes{Lsize: size, Err: err}
 }
 
-// PUT DP(lom) => dst
-// The DP reader is responsible for any read-locking of the source lom.
-//
+// PUT lom => dst
 // NOTE: no assumpions are being made on whether the source lom is present in cluster.
-// (can be a "pure" metadata of a (non-existing) Cloud object; accordingly, DP's reader must
+// (can be a "pure" metadata of a (non-existing) Cloud object; accordingly, GetROC must
 // be able to hande cold get, warm get, etc.)
 //
 // If destination bucket is remote:

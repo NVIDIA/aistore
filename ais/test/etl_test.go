@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,7 +40,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
-
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 	onexxh "github.com/OneOfOne/xxhash"
 )
@@ -461,6 +461,60 @@ func TestETLInlineObjWithArgs(t *testing.T) {
 	}
 }
 
+func TestETLBucketTransformParallel(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		proxyURL    = tools.RandomProxyURL(t)
+		baseParams  = tools.BaseAPIParams(proxyURL)
+		transformer = tetl.Echo // TODO: add more
+		parallel    = 3
+	)
+
+	for _, commType := range []string{etl.WebSocket, etl.Hpush, etl.Hpull} {
+		t.Run("etl_bucket_transform_parallel__"+commType, func(t *testing.T) {
+			_ = tetl.InitSpec(t, baseParams, transformer, commType)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
+
+			wg := &sync.WaitGroup{}
+			for i := range parallel {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+
+					var (
+						bckFrom = cmn.Bck{Name: "etlsrc_" + cos.GenTie(), Provider: apc.AIS}
+						bckTo   = cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
+						m       = ioContext{
+							t:         t,
+							num:       100,
+							fileSize:  512,
+							fixedSize: true,
+							bck:       bckFrom,
+						}
+					)
+					m.init(true /*cleanup*/)
+					tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
+					m.puts()
+
+					msg := &apc.TCBMsg{
+						Transform: apc.Transform{
+							Name:    transformer,
+							Timeout: cos.Duration(30 * time.Second),
+						},
+						CopyBckMsg: apc.CopyBckMsg{Force: true},
+					}
+
+					tlog.Logf("dispatch %dth ETL bucket transform, from %s to %s\n", i, bckFrom.Cname(""), bckTo.Cname(""))
+					tetl.ETLBucketWithCmp(t, baseParams, bckFrom, bckTo, msg, tools.ReaderEqual)
+				}(i)
+			}
+			wg.Wait()
+		})
+	}
+}
+
 func TestETLAnyToAnyBucket(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
@@ -473,6 +527,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		bcktests = []testBucketConfig{{false, false, false}}
 
 		tests = []testObjConfig{
+			{transformer: tetl.Echo, comm: etl.WebSocket},
 			{transformer: tetl.Echo, comm: etl.Hpull},
 			{transformer: tetl.MD5, comm: etl.Hpush},
 		}
@@ -557,7 +612,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 
 					t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
 				}
-				testETLBucket(t, baseParams, etlName, &m, bckTo, time.Minute, false, bcktest.evictRemoteSrc)
+				testETLBucket(t, baseParams, etlName, &m, bckTo, time.Minute*3, false, bcktest.evictRemoteSrc)
 			})
 		}
 	}
@@ -1068,7 +1123,7 @@ func TestETLPodRuntimeFailure(t *testing.T) {
 		xactTimeout = time.Minute
 	)
 
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const failureTransformFunc = `

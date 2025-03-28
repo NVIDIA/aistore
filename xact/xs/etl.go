@@ -23,6 +23,8 @@ type (
 		xreg.RenewBase
 		xctn *xactETL
 	}
+	// represents `apc.ActETLInline` kind of xaction (`apc.ActETLBck`/`apc.ActETLObject` kinds are managed by tcb/tcobjs)
+	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
 	xactETL struct {
 		msg *etl.InitSpecMsg
 		xact.Base

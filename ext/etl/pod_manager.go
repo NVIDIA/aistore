@@ -28,7 +28,7 @@ type (
 	//   pod watcher, and xaction remain available. This allows the ETL to be restarted by
 	//   reusing these components during the initialization process.
 	entity struct {
-		comm  Communicator // TODO: decouple xaction and pod watcher from communicator.
+		comm  communicatorCommon // TODO: decouple xaction and pod watcher from communicator.
 		stage Stage
 	}
 	manager struct {
@@ -47,7 +47,7 @@ func init() {
 	reqSecret = cos.CryptoRandS(10)
 }
 
-func (r *manager) add(name string, c Communicator) (err error) {
+func (r *manager) add(name string, c communicatorCommon) (err error) {
 	r.mtx.Lock()
 	if _, ok := r.m[name]; ok {
 		err = fmt.Errorf("etl[%s] already exists", name)
@@ -73,7 +73,7 @@ func (r *manager) transition(name string, stage Stage) (updated bool) {
 	return true
 }
 
-func (r *manager) getByName(name string) (c Communicator, stage Stage) {
+func (r *manager) getByName(name string) (c communicatorCommon, stage Stage) {
 	r.mtx.RLock()
 	if en, exists := r.m[name]; exists {
 		c = en.comm
@@ -83,7 +83,7 @@ func (r *manager) getByName(name string) (c Communicator, stage Stage) {
 	return c, stage
 }
 
-func (r *manager) getByXid(xid string) (c Communicator, stage Stage) {
+func (r *manager) getByXid(xid string) (c communicatorCommon, stage Stage) {
 	r.mtx.RLock()
 	for _, en := range r.m {
 		if en.comm.Xact().ID() == xid {

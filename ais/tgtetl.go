@@ -311,6 +311,7 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) initETLFromMsg(r *http.Request) error {
+	var xetl core.Xact
 	b, err := cos.ReadAll(r.Body)
 	if err != nil {
 		return err
@@ -325,9 +326,9 @@ func (t *target) initETLFromMsg(r *http.Request) error {
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		err = etl.InitSpec(msg, xid, etl.StartOpts{})
+		xetl, err = etl.InitSpec(msg, xid, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		err = etl.InitCode(msg, xid)
+		xetl, err = etl.InitCode(msg, xid)
 	default:
 		debug.Assert(false, initMsg.String())
 	}
@@ -337,12 +338,6 @@ func (t *target) initETLFromMsg(r *http.Request) error {
 	}
 
 	// setup proxy notification on abort
-	comm, err := etl.GetCommunicator(initMsg.Name())
-	if err != nil {
-		return err
-	}
-
-	xetl := comm.Xact()
 	notif := &xact.NotifXact{
 		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		Xact: xetl,

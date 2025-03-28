@@ -299,3 +299,17 @@ func FilesEqual(file1, file2 string) (bool, error) {
 	}
 	return bytes.Equal(f1, f2), nil
 }
+
+func ReaderEqual(r1, r2 io.Reader) bool {
+	buf1 := new(bytes.Buffer)
+	buf2 := new(bytes.Buffer)
+
+	_, err1 := buf1.ReadFrom(r1)
+	_, err2 := buf2.ReadFrom(r2)
+
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	return bytes.Equal(buf1.Bytes(), buf2.Bytes())
+}

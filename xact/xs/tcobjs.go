@@ -46,8 +46,9 @@ type (
 		}
 		copier
 		streamingX
-		chanFull atomic.Int64
-		owt      cmn.OWT
+		transform etl.Session // stateful etl Session
+		chanFull  atomic.Int64
+		owt       cmn.OWT
 	}
 	tcowi struct {
 		r   *XactTCObjs
@@ -100,11 +101,12 @@ func (p *tcoFactory) Start() error {
 
 	if p.kind == apc.ActETLObjects {
 		r.owt = cmn.OwtTransform
-		comm, err := etl.GetCommunicator(p.args.Msg.Transform.Name)
+		// TODO: when the xctn itself encounters unrecoverable error
+		// call r.transform.Finish() to cleanup communicator state
+		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(p.args.Msg.Transform.Name, r)
 		if err != nil {
 			return err
 		}
-		r.copier.getROC = comm.OfflineTransform
 	}
 
 	p.xctn = r

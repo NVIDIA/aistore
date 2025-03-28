@@ -147,7 +147,7 @@ var _ = Describe("CommunicatorTest", func() {
 					uri:  transformerServer.URL,
 					xctn: xctn,
 				}
-				comm = newCommunicator(nil, boot, nil)
+				comm = newCommunicator(nil, boot, nil).(Communicator)
 
 				switch testType {
 				case "inline":

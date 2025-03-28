@@ -366,8 +366,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 			current, exists := etls[another.Name]
 			if exists {
 				if !reflect.DeepEqual(*current, another) {
-					p.writeErrStatusf(w, r, http.StatusInternalServerError, "target %s returned different etl instance: %v vs %v", res.si.ID(), another, *current)
-					return
+					etls[another.Name].Stage = etl.Unknown.String()
 				}
 				continue
 			}

@@ -7,6 +7,7 @@ package tetl
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -364,6 +365,26 @@ func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bc
 	tlog.Logf("ETL[%s]: running %s => %s xaction %q\n",
 		msg.Transform.Name, bckFrom.Cname(""), bckTo.Cname(""), xid)
 	return xid
+}
+
+func ETLBucketWithCmp(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, cmp func(r1, r2 io.Reader) bool) {
+	xid := ETLBucketWithCleanup(t, bp, bckFrom, bckTo, msg)
+	err := WaitForFinished(bp, xid, apc.ActETLBck, 3*time.Minute)
+	tassert.CheckFatal(t, err)
+
+	tlog.Logf("ETL[%s]: comparing buckets, %s vs %s\n", msg.Transform.Name, bckFrom.Cname(""), bckTo.Cname(""))
+
+	objeList, err := api.ListObjects(bp, bckFrom, &apc.LsoMsg{}, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	for _, en := range objeList.Entries {
+		r1, _, err := api.GetObjectReader(bp, bckFrom, en.Name, &api.GetArgs{})
+		tassert.CheckFatal(t, err)
+		r2, _, err := api.GetObjectReader(bp, bckTo, en.Name, &api.GetArgs{})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, cmp(r1, r2), "object content mismatch: %s vs %s", bckFrom.Cname(en.Name), bckTo.Cname(en.Name))
+		tassert.CheckFatal(t, r1.Close())
+		tassert.CheckFatal(t, r2.Close())
+	}
 }
 
 func ETLCheckStage(t *testing.T, params api.BaseParams, etlName string, stage etl.Stage) {

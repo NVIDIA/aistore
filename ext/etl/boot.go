@@ -107,7 +107,7 @@ func (b *etlBootstrapper) createServiceSpec() {
 	b.errCtx.SvcName = b.svc.Name
 }
 
-func (b *etlBootstrapper) setupConnection() (err error) {
+func (b *etlBootstrapper) setupConnection(schema string) (err error) {
 	// Retrieve host IP of the pod.
 	var hostIP string
 	if hostIP, err = b._getHost(); err != nil {
@@ -132,7 +132,7 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 	}
 
 	// TODO -- FIXME: versus HTTPS deployment
-	b.uri = "http://" + b.podAddr
+	b.uri = schema + b.podAddr
 
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("%s: setup connection to %s [%+v]", b.msg, b.uri, b.errCtx)
@@ -228,11 +228,12 @@ func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 	return err
 }
 
-func (b *etlBootstrapper) setupXaction(xid string) {
+func (b *etlBootstrapper) setupXaction(xid string) core.Xact {
 	rns := xreg.RenewETL(&b.msg, xid)
 	debug.AssertNoErr(rns.Err)
 	b.xctn = rns.Entry.Get()
 	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
+	return b.xctn
 }
 
 func (b *etlBootstrapper) _updPodCommand() {

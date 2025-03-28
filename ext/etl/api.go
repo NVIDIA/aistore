@@ -66,6 +66,8 @@ const (
 	Hrev = "hrev://"
 	// Stdin/stdout communication.
 	HpushStdin = "io://"
+	// WebSocket communication.
+	WebSocket = "ws://"
 )
 
 // enum arg types (`argTypes`)
@@ -150,8 +152,8 @@ type (
 )
 
 var (
-	commTypes = []string{Hpush, Hpull, Hrev, HpushStdin}         // NOTE: must contain all
-	argTypes  = []string{ArgTypeDefault, ArgTypeURL, ArgTypeFQN} // ditto
+	commTypes = []string{Hpush, Hpull, Hrev, HpushStdin, WebSocket} // NOTE: must contain all
+	argTypes  = []string{ArgTypeDefault, ArgTypeURL, ArgTypeFQN}    // ditto
 )
 
 ////////////////

@@ -146,23 +146,24 @@ func (e *Aborter) ListenSmapChanged() {
 }
 
 // (common for both `InitCode` and `InitSpec` flows)
-func InitSpec(msg *InitSpecMsg, xid string, opts StartOpts) error {
+func InitSpec(msg *InitSpecMsg, xid string, opts StartOpts) (core.Xact, error) {
 	config := cmn.GCO.Get()
-	podName, svcName, err := start(msg, xid, opts, config)
-	if err == nil {
-		if cmn.Rom.FastV(4, cos.SmoduleETL) {
-			nlog.Infof("started etl[%s], msg %s, pod %s, svc %s", msg.Name(), msg, podName, svcName)
-		}
-		return nil
+	podName, svcName, xctn, err := start(msg, xid, opts, config)
+	if err != nil {
+		return nil, err
 	}
-	return err
+
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("started etl[%s], msg %s, pod %s, svc %s", msg.Name(), msg, podName, svcName)
+	}
+	return xctn, nil
 }
 
 // Given user message `InitCodeMsg`:
 // - make the corresponding assorted substitutions in the etl/runtime/podspec.yaml spec, and
 // - execute `InitSpec` with the modified podspec
 // See also: etl/runtime/podspec.yaml
-func InitCode(msg *InitCodeMsg, xid string) error {
+func InitCode(msg *InitCodeMsg, xid string) (core.Xact, error) {
 	var (
 		ftp      = fromToPairs(msg)
 		replacer = strings.NewReplacer(ftp...)
@@ -239,9 +240,9 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (podName, svcName string, err error) {
+func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
 	var (
-		comm   Communicator
+		comm   communicatorCommon
 		pw     *podWatcher
 		stage  Stage
 		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
@@ -250,7 +251,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 
 	// 1. Parse spec template and fill Pod object with necessary fields.
 	if err = boot.createPodSpec(); err != nil {
-		return podName, svcName, err
+		return podName, svcName, nil, err
 	}
 	boot.createServiceSpec()
 	podName, svcName = boot.pod.GetName(), boot.svc.GetName()
@@ -258,7 +259,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 	// 2. Attempt to restart or start fresh
 	comm, stage = mgr.getByName(msg.Name())
 	if stage == Running { // do nothing if already in Running stage
-		return podName, svcName, nil
+		return podName, svcName, nil, nil
 	}
 
 	if comm != nil {
@@ -272,15 +273,15 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		comm = newCommunicator(newAborter(msg.Name()), boot, pw)
 
 		if err := mgr.add(msg.Name(), comm); err != nil {
-			return podName, svcName, err
+			return podName, svcName, nil, err
 		}
 	}
 
 	debug.Assert(comm != nil && pw != nil && xid != "")
 	if err := pw.start(); err != nil {
-		return podName, svcName, err
+		return podName, svcName, nil, err
 	}
-	boot.setupXaction(xid)
+	xctn = boot.setupXaction(xid)
 	core.T.Sowner().Listeners().Reg(comm)
 
 	// 3. Cleanup previously started entities, if any.
@@ -301,7 +302,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		goto cleanup
 	}
 
-	if err = boot.setupConnection(); err != nil {
+	if err = comm.SetupConnection(); err != nil {
 		goto cleanup
 	}
 
@@ -315,7 +316,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (po
 		nlog.Infof("pod %q is running, %+v, %s", podName, msg, boot.errCtx)
 	}
 
-	return podName, svcName, nil
+	return podName, svcName, xctn, nil
 
 cleanup:
 	errCtx.PodStatus = pw.GetPodStatus()
@@ -330,7 +331,7 @@ cleanup:
 		nlog.Errorln(errV)
 	}
 	comm.Stop()
-	return podName, svcName, cmn.NewErrETL(errCtx, err.Error())
+	return podName, svcName, nil, cmn.NewErrETL(errCtx, err.Error())
 }
 
 func StopByXid(xid string, errCause error) error {
@@ -397,25 +398,44 @@ func StopAll() {
 	}
 }
 
-// GetCommunicator retrieves from registry by etl name
-// Returns an error if not found or not in the Running stage.
 func GetCommunicator(etlName string) (Communicator, error) {
-	c, stage := mgr.getByName(etlName)
-	if c == nil {
-		return nil, cos.NewErrNotFound(core.T, etlName)
+	cc, err := getComm(etlName)
+	if err != nil {
+		return nil, err
 	}
 
-	if stage != Running {
-		return c, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
+	comm, ok := cc.(Communicator)
+	if !ok {
+		return nil, cos.NewErrNotFound(core.T, etlName+" the communicator doesn't support inline transform")
+	}
+	return comm, nil
+}
+
+func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, error) {
+	cc, err := getComm(etlName)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return c, nil
+	switch comm := cc.(type) {
+	case Communicator:
+		return comm.OfflineTransform, nil, nil
+	case statefulCommunicator:
+		session, err := comm.createSession(xctn)
+		if err != nil {
+			return nil, nil, err
+		}
+		return session.Transform, session, nil
+	default:
+		debug.Assert(false, "unknown communicator type")
+		return nil, nil, cos.NewErrNotFound(core.T, etlName+" unknown communicator type")
+	}
 }
 
 func List() []Info { return mgr.list() }
 
 func PodLogs(transformID string) (logs Logs, err error) {
-	c, err := GetCommunicator(transformID)
+	c, err := getComm(transformID)
 	if err != nil {
 		return logs, err
 	}
@@ -434,7 +454,7 @@ func PodLogs(transformID string) (logs Logs, err error) {
 }
 
 func PodHealth(etlName string) (string, error) {
-	c, err := GetCommunicator(etlName)
+	c, err := getComm(etlName)
 	if err != nil {
 		return "", err
 	}
@@ -446,7 +466,7 @@ func PodHealth(etlName string) (string, error) {
 }
 
 func PodMetrics(etlName string) (*CPUMemUsed, error) {
-	c, err := GetCommunicator(etlName)
+	c, err := getComm(etlName)
 	if err != nil {
 		return nil, err
 	}

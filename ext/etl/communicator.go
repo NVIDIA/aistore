@@ -31,36 +31,42 @@ type (
 		OutBytes() int64
 	}
 
-	// Communicator is responsible for managing communications with local ETL container.
-	// It listens to cluster membership changes and terminates ETL container, if need be.
-	Communicator interface {
+	// communicatorCommon is responsible for managing communications with local ETL pod.
+	// It listens to cluster membership changes and terminates ETL pod, if need be.
+	communicatorCommon interface {
 		meta.Slistener
 
 		ETLName() string
-		Xact() core.Xact
 		PodName() string
 		SvcName() string
 
 		String() string
+
+		SetupConnection() error
+		Stop()
+		Restart(boot *etlBootstrapper)
+		GetPodWatcher() *podWatcher
+
+		Xact() core.Xact // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
+		CommStats        // only stats for `apc.ActETLInline` inline transform
+	}
+
+	// Communicator manages stateless communication to ETL pod through HTTP requests
+	Communicator interface {
+		communicatorCommon
 
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
 		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error)
 
-		// OfflineTransform is driven by `TCB` and `TCO` to provide offline transformation, as it were
+		// OfflineTransform is an instance of `core.GetROC` function, which is driven by `TCB` and `TCO` to provide offline transformation
 		// Implementations include:
 		// - pushComm
 		// - redirectComm
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
 		OfflineTransform(lom *core.LOM, latestVer, sync bool) core.ReadResp
-
-		Stop()
-		Restart(boot *etlBootstrapper)
-		GetPodWatcher() *podWatcher
-
-		CommStats
 	}
 
 	baseComm struct {
@@ -79,12 +85,6 @@ type (
 		baseComm
 		rp *httputil.ReverseProxy
 	}
-
-	// TODO: Generalize and move to `cos` package
-	cbWriter struct {
-		w       io.Writer
-		writeCb func(int)
-	}
 )
 
 // interface guard
@@ -92,15 +92,13 @@ var (
 	_ Communicator = (*pushComm)(nil)
 	_ Communicator = (*redirectComm)(nil)
 	_ Communicator = (*revProxyComm)(nil)
-
-	_ io.Writer = (*cbWriter)(nil)
 )
 
 //////////////
 // baseComm //
 //////////////
 
-func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) Communicator {
+func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) communicatorCommon {
 	switch boot.msg.CommTypeX {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
@@ -133,6 +131,10 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		}
 		rp.rp = revProxy
 		return rp
+	case WebSocket:
+		ws := &webSocketComm{sessions: make([]Session, 0, 4)}
+		ws.listener, ws.boot, ws.pw = listener, boot, pw
+		return ws
 	}
 
 	debug.Assert(false, "unknown comm-type '"+boot.msg.CommTypeX+"'")
@@ -156,6 +158,7 @@ func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
 func (c *baseComm) GetPodWatcher() *podWatcher    { return c.pw }
 func (c *baseComm) Restart(boot *etlBootstrapper) { c.boot = boot }
+func (c *baseComm) SetupConnection() error        { return c.boot.setupConnection("http://") }
 func (c *baseComm) Stop() {
 	// Note: xctn might have already been aborted and finished by pod watcher
 	if !c.boot.xctn.Finished() && !c.boot.xctn.IsAborted() {
@@ -405,19 +408,23 @@ func (rp *revProxyComm) OfflineTransform(lom *core.LOM, _, _ bool) core.ReadResp
 	}
 }
 
-//////////////
-// cbWriter //
-//////////////
-
-func (cw *cbWriter) Write(b []byte) (n int, err error) {
-	n, err = cw.w.Write(b)
-	cw.writeCb(n)
-	return
-}
-
 //
 // utils
 //
+
+// getComm retrieves the communicator from registry by etl name
+// Returns an error if not found or not in the Running stage.
+func getComm(etlName string) (communicatorCommon, error) {
+	comm, stage := mgr.getByName(etlName)
+	if comm == nil {
+		return nil, cos.NewErrNotFound(core.T, etlName)
+	}
+
+	if stage != Running {
+		return comm, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
+	}
+	return comm, nil
+}
 
 // prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
 // not removing apc.QparamETLName, for instance, would cause infinite loop.

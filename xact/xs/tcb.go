@@ -48,6 +48,7 @@ type (
 		nam   string
 		str   string
 		xact.BckJog
+		transform etl.Session // stateful etl Session
 		copier
 		wg     sync.WaitGroup // starting up
 		rxlast atomic.Int64   // finishing
@@ -76,7 +77,6 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *tcbFactory) Start() error {
 	var (
-		roc       core.GetROC
 		smap      = core.T.Sowner().Get()
 		nat       = smap.CountActiveTs()
 		config    = cmn.GCO.Get()
@@ -84,22 +84,24 @@ func (p *tcbFactory) Start() error {
 	)
 	debug.AssertNoErr(err)
 
+	p.xctn = newTCB(p, slab, config, smap, nat)
+
 	p.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
 		p.owt = cmn.OwtTransform
-		comm, err := etl.GetCommunicator(p.args.Msg.Transform.Name)
+		// TODO: when the xctn itself encounters unrecoverable error
+		// call p.xctn.transform.Finish() to cleanup communicator state
+		p.xctn.copier.getROC, p.xctn.transform, err = etl.GetOfflineTransform(p.args.Msg.Transform.Name, p.xctn)
 		if err != nil {
 			return err
 		}
-		roc = comm.OfflineTransform
 	}
-
-	p.xctn = newTCB(p, slab, config, smap, roc, nat)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}
+
 	p.xctn.refc.Store(int32(nat - 1))
 	p.xctn.wg.Add(1)
 
@@ -164,7 +166,7 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, roc core.GetROC, nat int) (r *XactTCB) {
+func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB) {
 	var (
 		args     = p.args
 		msg      = args.Msg
@@ -211,7 +213,6 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	}
 
 	r.copier.r = r
-	r.copier.getROC = roc
 
 	debug.Assert(args.BckFrom.Props != nil)
 	// (rgetstats)
