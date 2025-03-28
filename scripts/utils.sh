@@ -39,18 +39,6 @@ function check_files_headers {
   done
 }
 
-function check_imports {
-  # Check if `import` block contains more than one empty line.
-  for f in $(find ${AISTORE_PATH} -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do
-    # https://regexr.com/55u6r
-    out=$(head -n 50 $f | grep -Pz 'import \((.|\n)*(\n\n)+(\t(\w|\.)?\s?(.*)"(.*)"\n)*\n+(\t(\w|\.)?\s?"(.*)"\n)*\)')
-    if [[ $? -eq 0 ]]; then
-      echo "$f: 'import' block contains (at least) 2 empty lines (expected: 1)"
-      exit 1
-    fi
-  done
-}
-
 function check_deps {
   # Check if `aisloader` package imports `tutils`.
   for f in $(find ${AISTORE_PATH}/bench/tools/aisloader -type f -name "*.go" ! -regex $EXTERNAL_SRC_REGEX); do

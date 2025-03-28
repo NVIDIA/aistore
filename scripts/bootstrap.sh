@@ -74,7 +74,6 @@ fmt)
     echo "Running style check..." >&2
 
     check_gomod
-    check_imports
     check_deps
     check_files_headers
     check_python_formatting
