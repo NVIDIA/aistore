@@ -1,4 +1,4 @@
-// Package notifications provides interfaces for AIStore notifications
+// Package nl provides interfaces for AIStore notifications
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */

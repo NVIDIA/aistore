@@ -339,8 +339,8 @@ redo:
 		}
 		if cos.IsErrOOS(err) {
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
-			jg.xres.AddErr(errV, 0)
 			err = cmn.NewErrAborted(xname, "", errV)
+			jg.xres.Abort(err)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
 			nlog.Infoln("Warning:", errV)
