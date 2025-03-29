@@ -568,11 +568,10 @@ func getProcess(port string) (pid int, cmd string, args []string, err error) {
 }
 
 func WaitForPID(pid int) error {
-	const retryInterval = time.Second
-
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		return nil // already (TODO: confirm)
+		tlog.Logf("Warning: PID %d already terminated: %v\n", pid, err)
+		return nil
 	}
 
 	var (
@@ -580,27 +579,26 @@ func WaitForPID(pid int) error {
 		ctx    = context.Background()
 		done   = make(chan error)
 	)
-	tlog.Logf("Waiting for PID=%d to terminate\n", pid)
+	tlog.Logf("Waiting for PID %d to terminate\n", pid)
 
-	deadline := time.Minute / 2
-	ctx, cancel = context.WithTimeout(ctx, deadline)
+	const (
+		timeout = 4 * time.Second
+	)
+	ctx, cancel = context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	go func() {
-		_, erw := process.Wait() // NOTE: w/ no timeout
+		_, erw := process.Wait() // wait with no timeout
 		done <- erw
 	}()
-	time.Sleep(10 * time.Millisecond)
+
 	for {
 		select {
 		case <-done:
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-			break
 		}
-		time.Sleep(retryInterval)
 	}
 }
 
