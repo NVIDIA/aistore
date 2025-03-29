@@ -576,7 +576,7 @@ func ShutdownNode(bp BaseParams, actValue *apc.ActValRmNode) (id string, err err
 	return id, err
 }
 
-// Remove node node from the cluster immediately.
+// Remove node from the cluster immediately.
 // - NOTE: potential data loss, advanced usage only!
 // - NOTE: the node remains running (compare w/ shutdown) and can be re-joined at a later time
 // (see api.JoinCluster).

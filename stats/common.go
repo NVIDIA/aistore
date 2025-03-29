@@ -672,7 +672,7 @@ func (r *runner) write(sgl *memsys.SGL, target, idle bool) {
 		}
 		if isDiskMetric(n) {
 			if isDiskUtilMetric(n) && v.Value > minLogDiskUtil {
-				disks = true // not idle - all all
+				disks = true // not idle - all
 			}
 			continue
 		}

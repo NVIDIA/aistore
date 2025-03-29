@@ -571,7 +571,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "maximum number of objects to PUT")
 	f.UintVar(&p.numEpochs, "epochs", 0, "number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
 	f.BoolVar(&p.skipList, "skiplist", false, "when true, skip listing objects in a bucket before running 100% PUT workload")
-	f.StringVar(&p.fileList, "filelist", "", "local or locally accessible text file file containing object names (for subsequent reading)")
+	f.StringVar(&p.fileList, "filelist", "", "local or locally-accessible text file containing object names (for subsequent reading)")
 
 	//
 	// object naming

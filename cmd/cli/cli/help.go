@@ -208,7 +208,7 @@ func helpCmdHandler(c *cli.Context) error {
 
 // paginate long helps using `more` and, possibly,
 // color printout via `funcColorMap`
-func helpMorePrinter(_ io.Writer, templ string, data interface{}) {
+func helpMorePrinter(_ io.Writer, templ string, data any) {
 	buffer := bytes.NewBuffer(make([]byte, cos.KiB<<2))
 	buffer.Reset()
 

@@ -1242,7 +1242,7 @@ func primaryAndNextCrash(t *testing.T) {
 	// Cluster map is re-read to have a clone of original smap that the test
 	// can modify in any way it needs. Because original smap got must be preserved
 	smapNext := tools.GetClusterMap(t, proxyURL)
-	// get next next primary
+	// get next primary
 	firstPrimary := smapNext.Pmap[firstPrimaryID]
 	delete(smapNext.Pmap, firstPrimaryID)
 	finalPrimaryID, finalPrimaryURL, err := chooseNextProxy(smapNext)

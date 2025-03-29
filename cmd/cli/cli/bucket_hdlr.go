@@ -34,6 +34,8 @@ Usage examples:
 `
 
 // ais cp
+//
+//nolint:dupword // intentional
 const copyBucketUsage = "Copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),\n" +
 	indent1 + "\te.g.:\n" +
 	indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +

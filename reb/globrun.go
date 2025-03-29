@@ -322,7 +322,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 
 	offGFN()
 	if rargs.ecUsed {
-		// rebalance can open EC streams; it has has no authority, however, to close them - primary has
+		// rebalance can open EC streams; it has no authority, however, to close them - primary has
 		// that's why all we do here is decrement ref-count back to what it was before this run
 		ec.ECM.CloseStreams(true /*just refc*/)
 	}

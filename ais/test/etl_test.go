@@ -40,6 +40,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
+
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 	onexxh "github.com/OneOfOne/xxhash"
 )

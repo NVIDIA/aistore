@@ -288,7 +288,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	var (
 		mw          io.Writer
 		concatMD5   string // => ETag
-		actualCksum = &cos.CksumHash{}
+		actualCksum *cos.CksumHash
 	)
 	// .1 sort and check parts
 	sort.Slice(partList.Parts, func(i, j int) bool {

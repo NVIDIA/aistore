@@ -54,7 +54,7 @@ import (
 //
 // NOTE: All slices must be of the same size. So, the last slice can be padded
 // with zeros. In most cases, padding results in the total size of data
-// replicas being a bit bigger than than the size of the original object.
+// replicas being a bit bigger than the size of the original object.
 //
 // NOTE: Every slice and replica must have corresponding metadata file that is
 // located in the same mountpath as its slice/replica

@@ -1716,7 +1716,6 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	clear(lst.Entries)
 	lst.Entries = lst.Entries[:0]
 	lst.Entries = nil
-	lst = nil
 }
 
 func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
@@ -2634,7 +2633,7 @@ func (p *proxy) bmodPostMv(ctx *bmdModifier, clone *bucketMD) error {
 	)
 	if !present {
 		ctx.terminate = true
-		// Already removed via the the very first target calling here.
+		// Already removed via the very first target calling here.
 		return nil
 	}
 	if props.Renamed == "" {

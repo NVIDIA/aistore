@@ -229,9 +229,9 @@ func (c *getJogger) restoreReplicaFromMem(ctx *restoreCtx) error {
 			nlog.Errorf("%s failed to read from %s", core.T, node)
 			w.Free()
 			g.smm.Free(iReqBuf)
-			w = nil
 			continue
 		}
+
 		g.smm.Free(iReqBuf)
 		if w.Size() != 0 {
 			// A valid replica is found - break and do not free SGL

@@ -51,7 +51,7 @@ func init() {
 }
 
 var pool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return make(map[string]struct{}, 1000)
 	},
 }

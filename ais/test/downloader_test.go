@@ -592,7 +592,7 @@ func TestDownloadRemote(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			} else {
 				// this time downloaded a different bucket - test.srcBck remained empty
-				tassert.Errorf(t, status.ErrMsg != "", "expecting errors when when not finding listed objects")
+				tassert.Errorf(t, status.ErrMsg != "", "expecting errors when not finding listed objects")
 			}
 
 			tlog.Logln("starting remote download...")

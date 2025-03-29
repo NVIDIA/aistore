@@ -403,7 +403,6 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	clear(lst.Entries)
 	lst.Entries = lst.Entries[:0]
 	lst.Entries = nil
-	lst = nil
 }
 
 func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header) (lst *cmn.LsoRes, _ error) {

@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -680,7 +680,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, &args)
 
-	// Check if the the mountpaths are disabled after restart.
+	// Check if mountpaths are disabled after restart.
 	newMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckError(t, err)
 	tassert.Errorf(

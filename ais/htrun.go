@@ -1859,7 +1859,7 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 //
 // Here's how a node joins a AIStore cluster:
 //   - first, there's the primary proxy/gateway referenced by the current cluster map
-//     or - during the cluster deployment time - by the the configured "primary_url"
+//     or - during the cluster deployment time - by the configured "primary_url"
 //     (see /deploy/dev/local/aisnode_config.sh)
 //   - if that one fails, the new node goes ahead and tries the alternatives:
 //   - config.Proxy.PrimaryURL   ("primary_url")
@@ -1910,7 +1910,7 @@ func (h *htrun) join(htext htext, contactURLs ...string) (res *callResult, err e
 			}
 			if resPrev != nil {
 				freeCR(resPrev)
-				resPrev = nil //nolint:ineffassign // readability
+				resPrev = nil //nolint:ineffassign,wastedassign // readability
 			}
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
 			if res.err == nil {

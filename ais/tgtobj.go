@@ -1569,6 +1569,8 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 //
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
+//
+//nolint:dupword // intentional
 func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (res xs.CoiRes) {
 	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync)
 	if resp.Err != nil {

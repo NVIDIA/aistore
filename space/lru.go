@@ -2,7 +2,7 @@
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package space
 
@@ -329,7 +329,7 @@ func (j *lruJ) _visit(lom *core.LOM) (pushed bool) {
 		return
 	}
 	// do nothing if the heap's curSize >= totalSize and
-	// the file is more recent then the the heap's newest.
+	// the file is more recent then the heap's newest.
 	if j.curSize >= j.totalSize && lom.AtimeUnix() > j.newest {
 		return
 	}

@@ -1176,9 +1176,9 @@ func DiskStats(allds cos.AllDiskStats, tcdf *Tcdf, config *cmn.Config, refreshCa
 		c, err := mi.getCapacity(config, true /*refresh*/)
 
 		if err != nil {
-			nlog.Errorln(mi.String()+":", err)
-			a = "(" + err.Error() + ")" // unlikely
 			err = cmn.NewErrGetCap(err)
+			nlog.Errorln(mi.String(), err)
+			a = "(" + err.Error() + ")" // unlikely
 		} else {
 			a = mi._alert(config, c)
 

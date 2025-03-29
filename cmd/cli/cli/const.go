@@ -828,7 +828,7 @@ var (
 	// in fact, accurate then "object is cached". The latter comes with a certain implied sense
 	// that, if not accessed for a while, the object may suddenly disappear. This is, generally
 	// speaking, not true for AIStore where LRU eviction is per-bucket configurable with default
-	// settings inherited from the cluster config, etc. etc.
+	// settings inherited from the cluster config, etc.
 	// See also: apc.Flt* enum.
 	headObjPresentFlag = cli.BoolFlag{
 		Name: "check-cached",

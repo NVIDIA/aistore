@@ -631,7 +631,10 @@ func mpathAction(c *cli.Context, action string) error {
 	kvs, err := makePairs(c.Args())
 	if err != nil {
 		// check whether user typed target ID with no mountpath
-		first, tail, nodeID := c.Args().Get(0), c.Args().Tail(), ""
+		var (
+			nodeID      string
+			first, tail = c.Args().Get(0), c.Args().Tail()
+		)
 		if len(tail) == 0 {
 			nodeID = first
 		} else {

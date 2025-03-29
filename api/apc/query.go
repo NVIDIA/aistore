@@ -55,7 +55,7 @@ const (
 	// NOTE: non-empty value indicates api.GetBucketInfo; "true" value further requires "with remote obj-s"
 	QparamBinfoWithOrWithoutRemote = "bsumm_remote"
 
-	// "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
+	// "presence" in a given cluster shall not be confused with "existence" (possibly, remote).
 	// See also:
 	// - Flt* enum below
 	// - ListObjsMsg flags, docs/providers.md (for terminology)
@@ -92,7 +92,7 @@ const (
 	QparamArchregx = "archregx"
 
 	// "archmode", on the other hand, tells aistore whether to interpret "archregx" (above) as a
-	// a general-purpose regular expression or, alternatively, use it for a simple and fast string comparison;
+	// general-purpose regular expression or (alternativelyr) use it for simple and fast string comparison;
 	// the latter is further formalized as `MatchMode` enum in the cmn/archive package,
 	// with enumerated values including: "regexp", "prefix", "suffix", "substr", "wdskey".
 	//
