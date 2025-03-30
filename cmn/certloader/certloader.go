@@ -221,7 +221,7 @@ func (cl *certLoader) do(compare bool) (err error) {
 	if compare {
 		xcert := cl.xcert.Load()
 		debug.Assert(xcert != nil, "expecting X.509 loaded at startup: ", cl.certFile, ", ", cl.keyFile)
-		if finfo.ModTime() == xcert.modTime && finfo.Size() == xcert.size {
+		if mtime := finfo.ModTime(); mtime.Equal(xcert.modTime) && finfo.Size() == xcert.size {
 			return nil
 		}
 	}

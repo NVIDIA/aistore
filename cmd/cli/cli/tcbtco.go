@@ -290,7 +290,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("Invalid format --%s=%q. Usage examples: {jpg:txt}, \"{in1:out1,in2:out2}\"",
+			return fmt.Errorf("invalid format --%s=%q. Usage examples: {jpg:txt}, \"{in1:out1,in2:out2}\"",
 				etlExtFlag.GetName(), mapStr)
 		}
 		msg.Ext = extMap

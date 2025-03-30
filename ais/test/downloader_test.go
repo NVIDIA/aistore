@@ -720,7 +720,7 @@ func TestDownloadStatusError(t *testing.T) {
 	invalidAddressCausedError := resp.Errs[0].Name == "invalidURL" || resp.Errs[1].Name == "invalidURL"
 	notFoundFileCausedError := resp.Errs[0].Name == "notFoundFile" || resp.Errs[1].Name == "notFoundFile"
 
-	if !(invalidAddressCausedError && notFoundFileCausedError) {
+	if !invalidAddressCausedError || !notFoundFileCausedError {
 		t.Errorf("expected objects that cause errors to be (%s, %s), but got: (%s, %s)",
 			"invalidURL", "notFoundFile", resp.Errs[0].Name, resp.Errs[1].Name)
 	}

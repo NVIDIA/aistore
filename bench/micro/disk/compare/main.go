@@ -84,10 +84,10 @@ func main() {
 		device := fields[0]
 		if _, ok := devices[device]; ok {
 			for i := 1; i < len(fields); i++ {
-				name := metricNames[i-1]
-				if name == "%util" {
+				switch name := metricNames[i-1]; name {
+				case "%util":
 					pctUtil[device] = fields[i]
-				} else if name == "aqu-sz" || name == "avgqu-sz" {
+				case "aqu-sz", "avgqu-sz":
 					avgQuSz[device] = fields[i]
 				}
 			}

@@ -103,7 +103,7 @@ func (ma *MetricAgg) Throughput(end time.Time) int64 {
 	if ma.cnt == 0 {
 		return 0
 	}
-	if end == ma.start {
+	if end == ma.start { //nolint:staticcheck // "Two times can be equal even if they are in different locations."
 		return 0
 	}
 

@@ -1,4 +1,3 @@
-//nolint:dupl // copy-paste benign and can wait
 // Package integration_test.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
@@ -443,12 +442,13 @@ outer:
 			}
 
 			for _, file := range files {
-				if df.alg.Kind == "" || df.alg.Kind == dsort.Alphanumeric {
+				switch df.alg.Kind {
+				case "", dsort.Alphanumeric:
 					if lastName > file.Name() && canonicalName(lastName) != canonicalName(file.Name()) {
 						df.m.t.Fatalf("%s: names out of order (shard: %s, lastName: %s, curName: %s)",
 							df.job(), shardName, lastName, file.Name())
 					}
-				} else if df.alg.Kind == dsort.Shuffle {
+				case dsort.Shuffle:
 					if lastName > file.Name() {
 						inversions++
 					}
@@ -515,10 +515,7 @@ func (df *dsortFramework) checkOutputShardsWithEKM(ekm *shard.ExternalKeyMap) {
 	for tmpl, pool := range shardNamePools {
 		pt, _ := cos.NewParsedTemplate(tmpl)
 		pt.InitIter()
-		for {
-			if len(pool) == 0 {
-				break
-			}
+		for len(pool) > 0 {
 			shardName, hasNext := pt.Next()
 			if !hasNext {
 				df.m.t.Fatalf("Shard name template (%v) does not match the corresponding shard name pool, remaining names: %v", tmpl, pool)

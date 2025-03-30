@@ -778,9 +778,10 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 		var cnt, off int
 		res = out[from[0]:]
 		for off = range res {
-			if res[off] == '{' {
+			switch res[off] {
+			case '{':
 				cnt++
-			} else if res[off] == '}' {
+			case '}':
 				cnt--
 				if cnt == 0 {
 					res = out[from[0] : from[0]+off+1]

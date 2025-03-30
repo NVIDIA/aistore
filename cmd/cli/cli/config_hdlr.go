@@ -291,6 +291,7 @@ func setcfg(c *cli.Context, nvs cos.StrKVs) error {
 	return nil
 }
 
+//nolint:staticcheck // `localNodeCfgErr` with punctuation for usability
 func setNodeConfigHandler(c *cli.Context) error {
 	var (
 		config   cmn.Config

@@ -387,9 +387,10 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 
 	renamedBucketExists := false
 	for _, bck := range bcks {
-		if bck.Name == rtd.renamedBck.Name {
+		switch bck.Name {
+		case rtd.renamedBck.Name:
 			renamedBucketExists = true
-		} else if bck.Name == rtd.bck.Name {
+		case rtd.bck.Name:
 			t.Fatalf("original ais bucket %s still exists after rename", rtd.bck.String())
 		}
 	}

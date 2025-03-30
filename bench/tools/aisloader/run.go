@@ -432,12 +432,7 @@ func Start(version, buildtime string) (err error) {
 	}
 
 MainLoop:
-	for {
-		if runParams.putSizeUpperBound != 0 &&
-			accumulatedStats.put.TotalBytes() >= runParams.putSizeUpperBound {
-			break
-		}
-
+	for runParams.putSizeUpperBound == 0 || accumulatedStats.put.TotalBytes() < runParams.putSizeUpperBound {
 		if runParams.numEpochs > 0 { // if defined
 			if numGets.Load() > int64(runParams.numEpochs)*int64(bucketObjsNames.Len()) {
 				break

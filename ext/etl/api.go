@@ -236,7 +236,7 @@ func (m *InitMsgBase) validate(detail string) error {
 		err := fmt.Errorf("arg-type %q requires comm-type %q (%q is not supported yet)", m.ArgTypeX, Hpull, m.CommTypeX)
 		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
-	if m.ArgTypeX == ArgTypeFQN && !(m.CommTypeX == Hpull || m.CommTypeX == Hpush) {
+	if m.ArgTypeX == ArgTypeFQN && m.CommTypeX != Hpull && m.CommTypeX != Hpush {
 		err := fmt.Errorf("arg-type %q requires comm-type (%q or %q) - %q is not supported yet",
 			m.ArgTypeX, Hpull, Hpush, m.CommTypeX)
 		return cmn.NewErrETLf(errCtx, ferr, err, detail)

@@ -493,7 +493,7 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 		avoidingMPU bool // true if object size is not known or known to be <= bp.mpuThreshold
 		cloudBck    = lom.Bck().RemoteBck()
 		err         error
-		objectAttrs *cmn.ObjAttrs = lom.ObjAttrs()
+		objectAttrs = lom.ObjAttrs()
 		objectSize  int64
 	)
 

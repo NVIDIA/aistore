@@ -504,6 +504,7 @@ func (mi *Mountpath) _cdf(tcdf *Tcdf) *CDF {
 	return cdf
 }
 
+//nolint:staticcheck // making an exception for Warning
 func (mi *Mountpath) RescanDisks() (warn, err error) {
 	res := mfs.ios.RescanDisks(mi.Path, mi.Fs, mi.Disks) // TODO -- FIXME: comments inside
 	if res.Fatal != nil {

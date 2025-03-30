@@ -26,10 +26,10 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Install `golangci-lint`
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           # NOTE: See `lint-update-ci` target in Makefile.
-          version: v1.64.5
+          version: v2.0.2
           args: --timeout=30m
 
       - name: Lint

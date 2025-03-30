@@ -115,9 +115,10 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		case flagIsSet(c, templateFlag):
 			a.src.tmpl = parseStrFlag(c, templateFlag)
 			pt, err := cos.NewParsedTemplate(a.src.tmpl)
-			if err == nil {
+			switch err {
+			case nil:
 				a.pt = &pt
-			} else if err == cos.ErrEmptyTemplate {
+			case cos.ErrEmptyTemplate:
 				err = errors.New("template to select source files cannot be empty")
 			}
 			return err

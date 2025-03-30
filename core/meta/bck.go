@@ -198,7 +198,7 @@ func (b *Bck) init(bmd *BMD) error {
 // to support s3 clients:
 // find an already existing bucket by name (and nothing else)
 // returns an error when name cannot be unambiguously resolved to a single bucket
-func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, ecode int) {
+func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, ecode int, err error) {
 	bmd := bowner.Get()
 	all := bmd.getAllByName(bckName)
 	switch {
@@ -218,7 +218,7 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, err error, ecode i
 		err = fmt.Errorf("cannot unambiguously resolve bucket name %q to a single bucket (%v)", bckName, all)
 		ecode = http.StatusUnprocessableEntity
 	}
-	return bck, err, ecode
+	return bck, ecode, err
 }
 
 func (b *Bck) CksumConf() (conf *cmn.CksumConf) { return &b.Props.Cksum }

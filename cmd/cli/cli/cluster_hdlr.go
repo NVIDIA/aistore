@@ -402,6 +402,8 @@ func joinNodeHandler(c *cli.Context) (err error) {
 }
 
 // (compare w/ cluster-level clusterDecommissionHandler & clusterShutdownHandler)
+//
+//nolint:staticcheck // `fmterr` with punctuation for usability
 func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)

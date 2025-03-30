@@ -126,10 +126,10 @@ func (alg *SortFlag) Set(value string) error {
 	case "alpha", "alphanumeric":
 		alg.Kind = "alphanumeric"
 		if len(parts) > 1 {
-			switch {
-			case parts[1] == "inc":
+			switch parts[1] {
+			case "inc":
 				alg.Decreasing = false
-			case parts[1] == "dec":
+			case "dec":
 				alg.Decreasing = true
 			default:
 				return errors.New("invalid alphanumeric sort option, expected 'inc' or 'dec'")
@@ -327,7 +327,7 @@ func parseCliParams(cfg *Config) error {
 	}
 
 	if cfg.SrcBck.Name == "" || cfg.DstBck.Name == "" {
-		return errWithUsage(errors.New("Error: src_bck and dst_bck are required parameters.\n%s"))
+		return errWithUsage(errors.New("src_bck and dst_bck are required parameters.\n%s"))
 	}
 
 	if cfg.SrcBck, cfg.SrcPrefix, err = cmn.ParseBckObjectURI(cfg.SrcBck.Name, cmn.ParseURIOpts{DefaultProvider: apc.AIS}); err != nil {

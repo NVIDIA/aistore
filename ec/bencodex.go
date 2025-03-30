@@ -297,12 +297,12 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 	r.last.Store(mono.NanoTime())
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		r.LomAdd(lom) // TODO: instead, count restored slices, metafiles, possibly - objects
-	case err == ErrorECDisabled:
+	case ErrorECDisabled:
 		r.Abort(err)
-	case err == errSkipped:
+	case errSkipped:
 		// do nothing
 	default:
 		r.AddErr(err, 4, cos.SmoduleEC)

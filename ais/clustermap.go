@@ -255,6 +255,8 @@ func (m *smapX) isValid() bool {
 }
 
 // a stronger version of the above
+//
+//nolint:staticcheck // making an exception for Smap
 func (m *smapX) validate() error {
 	if m == nil {
 		return errors.New(clusterMap + " is <nil>")

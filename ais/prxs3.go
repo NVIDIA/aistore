@@ -695,7 +695,7 @@ func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 
 // GET /s3/<bucket-name>?lifecycle|cors|policy|acl
 func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket string) {
-	if _, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd); err != nil {
+	if _, ecode, err := meta.InitByNameOnly(bucket, p.owner.bmd); err != nil {
 		s3.WriteErr(w, r, err, ecode)
 		return
 	}
@@ -738,7 +738,7 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 //
 
 func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket string) *meta.Bck {
-	bck, err, ecode := meta.InitByNameOnly(bucket, p.owner.bmd)
+	bck, ecode, err := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, ecode)
 		return nil

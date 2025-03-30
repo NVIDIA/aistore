@@ -431,7 +431,7 @@ func _appendMpt(nparts []*s3.MptPart, buf []byte, mw io.Writer) (concatMD5 strin
 // 3. Remove all info from in-memory structs
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html
 func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
-	bck, err, ecode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bck, ecode, err := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, ecode)
 		return

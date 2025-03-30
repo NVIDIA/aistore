@@ -1,5 +1,11 @@
+version: "2"
+
 linters:
-  disable-all: true
+  default: standard  ## TODO: 'none|standard|all'; enable these 3 with rules
+  disable:
+    - errcheck
+    - gosec
+    # staticcheck
   enable:
     - asciicheck
     - bodyclose
@@ -8,137 +14,173 @@ linters:
     - depguard
     - dogsled
     - dupl
+    - dupword
     - durationcheck
-    - errcheck
+    # errcheck
     - fatcontext
-    # gci
     - gochecksumtype
     - gocritic
-    - gofmt
     - goheader
-    - goimports
     - gomoddirectives
     - goprintffuncname
-    - gosec
-    - gosimple
+    # gosec
     - govet
-    # iface
     - importas
     - ineffassign
     - intrange
     - misspell
-    # nakedret    ## (TODO run/review periodically)
+    # nakedret    ## TODO (wtp)
     - nilnesserr
     - nolintlint
     - perfsprint
     - prealloc
     - protogetter
     - reassign
-    # recvcheck
     - revive
     - staticcheck
     - testpackage
-    - typecheck
     - unconvert
     - unparam
     - unused
     - usetesting
+    - wastedassign
     - whitespace
 
 # See: https://golangci-lint.run/usage/linters/
-linters-settings:
-  ## dupl: ## (TODO run/review periodically)
-  ##   threshold: 100
-  revive:
-    ignore-generated-header: true
-    severity: warning
+  settings:
+    dupl:
+      threshold: 150 ## TODO (make it 100; skip test)
+
+    revive:
+      # ignore-generated-header: true
+      severity: warning
+      rules:
+        # name: import-shadowing ## (e.g., url)
+        # name: unhandled-error  ## TODO (wtp)
+        # name: line-length-limit
+        # name: dot-imports
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: early-return
+        - name: error-naming
+        - name: error-strings
+        # name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: modifies-value-receiver
+        # name: package-comments  TODO (wtp)
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: string-of-int
+        - name: superfluous-else
+        - name: time-naming
+        - name: var-naming
+        - name: var-declaration
+        - name: unconditional-recursion
+        - name: unexported-naming
+        - name: unexported-return
+        - name: unnecessary-stmt
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: unused-receiver
+        - name: waitgroup-by-value
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      disable-default-exclusions: false
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io.Copy(*bytes.Buffer)
+        - io.Copy(os.Stdout)
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment ## TODO (wtp)
+        - shadow         ## ditto
+
+    gocritic:
+      enabled-tags:
+        - performance
+        - style
+      disabled-checks:
+        - unnamedResult
+        - unnecessaryBlock
+
+    gosec:
+      excludes: ## integer overflow; weak rand
+        - G115
+        - G402
+        - G404
+
+    prealloc:
+      simple: true # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them
+      range-loops: true # Report preallocation suggestions on range loops, true by default
+      for-loops: true # Report preallocation suggestions on for loops, false by default
+
+    misspell:
+      # Correct spellings using locale preferences for US or UK.
+      # Default is to use a neutral variety of English.
+      # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+      locale: US
+
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: io/ioutil
+              desc: "replaced by io and os packages since Go 1.16: https://tip.golang.org/doc/go1.16#ioutil"
+            - pkg: 'math/rand$'
+              desc: "`math/rand` package has been deprecated use `math/rand/v2`"
+
+  # Defines a set of rules to ignore issues.
+  # It does not skip the analysis, and so does not ignore "typecheck" errors.
+  exclusions:
+    warn-unused: false ## TODO (wtp)
+    # Predefined exclusion rules.
+    # Default: []
+    presets:
+      # comments
+      # std-error-handling
+      # common-false-positives
+      - legacy
+
+    # Excluding configuration per-path, per-linter, per-text and per-source.
     rules:
-      # name: import-shadowing ## (e.g., url)
-      # name: unhandled-error  ## (TODO run/review periodically)
-      # name: line-length-limit
-      # name: dot-imports
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: early-return
-      - name: error-naming
-      - name: error-strings
-      - name: exported
-      - name: if-return
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: modifies-value-receiver
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: redefines-builtin-id
-      - name: string-of-int
-      - name: superfluous-else
-      - name: time-naming
-      - name: var-naming
-      - name: var-declaration
-      - name: unconditional-recursion
-      - name: unexported-naming
-      - name: unexported-return
-      - name: unnecessary-stmt
-      - name: unreachable-code
-      - name: unused-parameter
-      - name: unused-receiver
-      - name: waitgroup-by-value
-  gci:
-    skip-generated: true
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment # (TODO run/review periodically)
-      - shadow # (e.g., proxyURL)
-  errcheck:
-    check-blank: true
-    check-type-assertions: false
-  gocritic:
-    enabled-tags:
-      - performance
-      - style
-    disabled-checks:
-      - unnamedResult
-  gosec:
-    excludes: ## integer overflow; weak rand
-      - G115
-      - G402
-      - G404
-  prealloc:
-    simple: true # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them
-    range-loops: true # Report preallocation suggestions on range loops, true by default
-    for-loops: true # Report preallocation suggestions on for loops, false by default
-  misspell:
-    # Correct spellings using locale preferences for US or UK.
-    # Default is to use a neutral variety of English.
-    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
-    locale: US
-  depguard:
-    rules:
-      main:
-        deny:
-          - pkg: io/ioutil
-            desc: "replaced by io and os packages since Go 1.16: https://tip.golang.org/doc/go1.16#ioutil"
-          - pkg: 'math/rand$'
-            desc: "`math/rand` package has been deprecated use `math/rand/v2`"
+      # Exclude some linters from running on tests files.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - dupl
+          - gosec
 
-issues:
-  # use default exclude rules
-  exclude-use-default: true
+      # Exclude some `staticcheck` messages.
+      - linters:
+          - staticcheck
+        text: "QF1008:"
+      # linters:
+      #   - staticcheck
+      # text: "ST1005:"
 
-  # additional exclude rules
-  exclude-rules:
-    - linters: [errcheck]
-      text: "Error return value of" # ignores 'error return value of ... is unchecked'
-
-    - linters: [gocritic]
-      text: "block doesn't have definitions" # Sometimes blocks are useful for better readability.
-
-  # Set to 0 to disable limit
-  max-same-issues: 0
-  max-issues-per-linter: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+    goimports:
+      local-prefixes:
+        - github.com/NVIDIA/aistore
+  # exclusions:
+    # paths:
+      # test/testdata
 
 run:
   go: '1.24'

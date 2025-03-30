@@ -227,14 +227,14 @@ func _flattenSpec(spec *dsort.RequestSpec) (flat, config nvpairList) {
 			}
 			return nil, false
 		}
-		switch {
-		case tag == "input_bck.name":
+		switch tag {
+		case "input_bck.name":
 			src.Name = v
-		case tag == "input_bck.provider":
+		case "input_bck.provider":
 			src.Provider = v
-		case tag == "output_bck.name":
+		case "output_bck.name":
 			dst.Name = v
-		case tag == "output_bck.provider":
+		case "output_bck.provider":
 			dst.Provider = v
 		default:
 			// defaults
