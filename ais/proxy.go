@@ -954,7 +954,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
 		if keepMD {
-			if err := p.destroyBucketData(msg, bck); err != nil {
+			if err := p.evictRemoteKeepMD(msg, bck); err != nil {
 				p.writeErr(w, r, err)
 			}
 			return

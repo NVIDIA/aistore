@@ -198,6 +198,13 @@ var Table = map[string]Descriptor{
 		Startable:   false,
 		RefreshCap:  true,
 	},
+	apc.ActEvictRemoteBck: {
+		DisplayName: "evict-remote-bucket",
+		Scope:       ScopeB,
+		Access:      apc.AceObjDELETE,
+		Startable:   false,
+		RefreshCap:  true,
+	},
 	apc.ActDeleteObjects: {
 		DisplayName: "delete-objects",
 		Scope:       ScopeB,

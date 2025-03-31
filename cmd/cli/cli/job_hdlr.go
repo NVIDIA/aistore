@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -779,10 +780,36 @@ func stopJobHandler(c *cli.Context) error {
 		otherID         string
 		xactID          = xid
 		xname, xactKind string
+		multimatch      bool
 	)
 	if name == "" && xid != "" {
-		name, otherID = xid2Name(xid)
+		name, otherID, multimatch = xid2Name(xid)
 	}
+
+	if multimatch {
+		var (
+			prefix = xid
+			cnt    int
+		)
+		names := xact.ListDisplayNames(false /*only-startable*/)
+		sort.Strings(names)
+		for _, name = range names {
+			if !strings.HasPrefix(name, prefix) { // filter
+				continue
+			}
+			errV := stopXactionKindOrAll(c, name, name, bck)
+			if errV != nil {
+				actionWarn(c, errV.Error())
+				err = errV
+				cnt++
+				if cnt > 1 {
+					break
+				}
+			}
+		}
+		return err
+	}
+
 	if name != "" {
 		xactKind, xname = xact.GetKindName(name)
 		if xactKind == "" {
@@ -995,7 +1022,11 @@ func waitJobHandler(c *cli.Context) error {
 	}
 
 	if name == "" && xid != "" {
-		name, _ = xid2Name(xid) // TODO: add waitETL
+		var multimatch bool
+		name, _, multimatch = xid2Name(xid) // TODO: add waitETL
+		if multimatch {
+			return fmt.Errorf("cannot wait on %q prefix", xid)
+		}
 	}
 
 	return waitJob(c, name, xid, bck)
@@ -1314,8 +1345,14 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	return
 }
 
-// [best effort] try to disambiguate download/dsort/etl job ID vs xaction UUID
-func xid2Name(xid string) (name, otherID string) {
+// 1. support assorted system job prefixes via multi-match
+// 2. disambiguate download/dsort/etl job ID vs xaction UUID
+func xid2Name(xid string) (name, otherID string, multimatch bool) {
+	switch xid {
+	case "evict", "prefetch", "copy", "delete":
+		return "", "", true
+	}
+
 	switch {
 	case strings.HasPrefix(xid, dload.PrefixJobID):
 		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
@@ -1325,7 +1362,6 @@ func xid2Name(xid string) (name, otherID string) {
 		if _, err := api.MetricsDsort(apiBP, xid); err == nil {
 			name = cmdDsort
 		}
-	// NOTE: not to confuse ETL xaction ID with its name (`etl-name`)
 	case strings.HasPrefix(xid, etl.PrefixXactID):
 		if l := findETL("", xid); l != nil {
 			name = commandETL

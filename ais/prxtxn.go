@@ -911,9 +911,14 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 	return err
 }
 
-// erase bucket data from all targets (keep metadata)
-func (p *proxy) destroyBucketData(msg *apc.ActMsg, bck *meta.Bck) error {
-	query := bck.AddToQuery(url.Values{apc.QparamKeepRemote: []string{"true"}})
+const prefixEvictKmdID = "kmd-"
+
+// delete in-cluster bucket data, keep bucket metadata
+func (p *proxy) evictRemoteKeepMD(msg *apc.ActMsg, bck *meta.Bck) error {
+	query := bck.AddToQuery(url.Values{
+		apc.QparamKeepRemote: []string{"true"},
+		apc.QparamUUID:       []string{prefixEvictKmdID + cos.GenUUID()},
+	})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodDelete,

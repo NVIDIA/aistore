@@ -211,7 +211,15 @@ func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
 	if err = t.txns.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 		err = cmn.NewErrFailedTo(t, "commit", txn, err)
 	}
-	return
+
+	// start and immdiately finish xaction with a singular purpose:
+	// to have a record in xreg (via `ais show job`): name and timestamp only
+	// (compare with httpbckdelete/ActEvictRemoteBck)
+	if c.msg.Action == apc.ActEvictRemoteBck {
+		_ = xreg.RenewEvictDelete(c.uuid, apc.ActEvictRemoteBck, c.bck, nil)
+	}
+
+	return err
 }
 
 //
@@ -879,7 +887,7 @@ func (t *target) beginRm(c *txnSrv) error {
 }
 
 //
-// destroy local bucket / evict cloud bucket
+// destroy ais:// bucket | _completely_ evict remote bucket
 //
 
 func (t *target) destroyBucket(c *txnSrv) error {

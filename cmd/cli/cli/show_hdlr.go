@@ -29,19 +29,22 @@ import (
 	"github.com/urfave/cli"
 )
 
-const showJobUsage = "Show running and/or finished jobs\n" +
-	indent1 + "\t- 'show job tco-cysbohAGL'\t- show a given (multi-object copy/transform) job identified by its unique ID;\n" +
-	indent1 + "\t- 'show job copy-listrange'\t- show all running multi-object copies;\n" +
-	indent1 + "\t- 'show job copy-objects'\t- same as above (using display name);\n" +
-	indent1 + "\t- 'show job copy-objects --all'\t- show both running and already finished (or stopped) multi-object copies;\n" +
-	indent1 + "\t- 'show job list'\t- show all running list-objects jobs;\n" +
-	indent1 + "\t- 'show job ls'\t- same as above;\n" +
-	indent1 + "\t- 'show job ls --refresh 10'\t- same as above with periodic _refreshing_ every 10 seconds;\n" +
-	indent1 + "\t- 'show job ls --refresh 10 --count 4'\t- same as above but only for the first four 10-seconds intervals;\n" +
-	indent1 + "\t- 'show job prefetch-listrange'\t- show all running prefetch jobs;\n" +
-	indent1 + "\t- 'show job prefetch'\t- same as above;\n" +
-	indent1 + "\t- 'show job prefetch --refresh 1m'\t- show all running prefetch jobs at 1 minute intervals (until Ctrl-C);\n" +
-	indent1 + "\t- 'show job --all'\t- show absolutely all jobs, running and finished."
+const showJobUsage = "Show running and/or finished jobs,\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\t- show job tco-cysbohAGL\t- show a given (multi-object copy/transform) job identified by its unique ID;\n" +
+	indent1 + "\t- show job copy-listrange\t- show all running multi-object copies;\n" +
+	indent1 + "\t- show job copy-objects\t- same as above (using display name);\n" +
+	indent1 + "\t- show job copy\t- show all copying jobs including both bucket-to-bucket and multi-object;\n" +
+	indent1 + "\t- show job copy-objects --all\t- show both running and already finished (or stopped) multi-object copies;\n" +
+	indent1 + "\t- show job list\t- show all running list-objects jobs;\n" +
+	indent1 + "\t- show job ls\t- same as above;\n" +
+	indent1 + "\t- show job ls --refresh 10\t- same as above with periodic _refreshing_ every 10 seconds;\n" +
+	indent1 + "\t- show job ls --refresh 10 --count 4\t- same as above but only for the first four 10-seconds intervals;\n" +
+	indent1 + "\t- show job prefetch-listrange\t- show all running prefetch jobs;\n" +
+	indent1 + "\t- show job prefetch\t- same as above;\n" +
+	indent1 + "\t- show job prefetch --refresh 1m\t- show all running prefetch jobs at 1 minute intervals (until Ctrl-C);\n" +
+	indent1 + "\t- show job evict\t- all running bucket and/or data evicting jobs;\n" +
+	indent1 + "\t- show job --all\t- show absolutely all jobs, running and finished."
 
 type (
 	nodeSnaps struct {
@@ -225,7 +228,11 @@ var (
 // - be omitted, in part or in total, and may
 // - come in arbitrary order
 func showJobsHandler(c *cli.Context) error {
-	name, xid, daemonID, bck, err := jobArgs(c, 0, false /*ignore daemonID*/)
+	var (
+		multimatch                    bool
+		l                             int
+		name, xid, daemonID, bck, err = jobArgs(c, 0, false /*ignore daemonID*/)
+	)
 	if err != nil {
 		return err
 	}
@@ -233,10 +240,38 @@ func showJobsHandler(c *cli.Context) error {
 		return showRebalanceHandler(c)
 	}
 
+	if name == "" && xid != "" {
+		name, _, multimatch = xid2Name(xid)
+	}
+
 	setLongRunParams(c, 72)
 
-	var l int
-	l, err = showJobsDo(c, name, xid, daemonID, bck)
+	if multimatch {
+		var (
+			prefix = xid
+			cnt    int
+		)
+		names := xact.ListDisplayNames(false /*only-startable*/)
+		sort.Strings(names)
+		for _, name = range names {
+			if !strings.HasPrefix(name, prefix) { // filter
+				continue
+			}
+			ll, errV := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
+			if errV != nil {
+				actionWarn(c, errV.Error())
+				err = errV
+				cnt++
+				if cnt > 1 {
+					break
+				}
+			}
+			l += ll
+		}
+	} else {
+		l, err = showJobsDo(c, name, xid, daemonID, bck)
+	}
+
 	if err == nil && l == 0 && !flagIsSet(c, allJobsFlag) {
 		var (
 			what string
@@ -252,9 +287,6 @@ func showJobsHandler(c *cli.Context) error {
 }
 
 func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, error) {
-	if name == "" && xid != "" {
-		name, _ = xid2Name(xid)
-	}
 	if name != "" || xid != "" {
 		return _showJobs(c, name, xid, daemonID, bck, true /*caption*/)
 	}
@@ -267,7 +299,7 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		case cmdDsort:
 			return _showJobs(c, cmdDsort, xid, daemonID, bck, false)
 		case commandETL:
-			_, otherID := xid2Name(xid)
+			_, otherID, _ := xid2Name(xid)
 			return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, false)
 		}
 	}

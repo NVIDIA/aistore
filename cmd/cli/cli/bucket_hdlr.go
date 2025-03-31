@@ -85,7 +85,8 @@ var listAnyUsage = "List buckets, objects in buckets, and files in " + archExts 
 	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to the cluster's BMD."
 
 // ais bucket ... props
-const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
+const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
+	indent1 + "\te.g.:\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
 	indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
 	indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
@@ -97,14 +98,16 @@ const setBpropsUsage = "Update bucket properties; the command accepts both JSON-
 
 // ais evict
 const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
-	indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
-	indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
-	indent1 + "\t- 'evict gs:'\t- evict all GCP buckets from the cluster;\n" +
-	indent1 + "\t- 'evict gs://abc --prefix images/'\t- evict all gs://abc objects from the virtual subdirectory \"images\";\n" +
-	indent1 + "\t- 'evict gs://abc/images/'\t- same as above;\n" +
-	indent1 + "\t- 'evict gs://abc --template images/'\t- same as above;\n" +
-	indent1 + "\t- 'evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- evict the matching range (prefix + brace expansion);\n" +
-	indent1 + "\t- 'evict \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
+	indent1 + "\tselected objects in a given remote bucket or buckets,\n" +
+	indent1 + "\te.g.:\n" +
+	indent1 + "\t- evict gs://abc\t- evict entire bucket from aistore: remove all \"cached\" gs://abc objects _and_ bucket metadata;\n" +
+	indent1 + "\t- evict gs://abc --keep-md\t- same as above but keep bucket metadata;\n" +
+	indent1 + "\t- evict gs:\t- evict all GCP buckets from the cluster;\n" +
+	indent1 + "\t- evict gs://abc --prefix images/\t- evict all gs://abc objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- evict gs://abc/images/\t- same as above;\n" +
+	indent1 + "\t- evict gs://abc --template images/\t- same as above;\n" +
+	indent1 + "\t- evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"\t- evict the matching range (prefix + brace expansion);\n" +
+	indent1 + "\t- evict \"gs://abc/shard-{0000..9999}.tar.lz4\"\t- same as above (note the double quotes around the BUCKET/TEMPLATE argument)"
 
 // flags
 var (

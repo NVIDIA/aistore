@@ -391,20 +391,22 @@ Lists all dSort jobs if the `JOB_ID` argument is omitted.
 $ ais show job dsort --help
 
 NAME:
-   ais show job - Show running and/or finished jobs
-     - 'show job tco-cysbohAGL'              - show a given (multi-object copy/transform) job identified by its unique ID;
-     - 'show job copy-listrange'             - show all running multi-object copies;
-     - 'show job copy-objects'               - same as above (using display name);
-     - 'show job copy-objects --all'         - show both running and already finished (or stopped) multi-object copies;
-     - 'show job list'                       - show all running list-objects jobs;
-     - 'show job ls'                         - same as above;
-     - 'show job ls --refresh 10'            - same as above with periodic _refreshing_ every 10 seconds;
-     - 'show job ls --refresh 10 --count 4'  - same as above but only for the first four 10-seconds intervals;
-     - 'show job prefetch-listrange'         - show all running prefetch jobs;
-     - 'show job prefetch'                   - same as above;
-     - 'show job prefetch --refresh 1m'      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
-     - 'show job --all'                      - show absolutely all jobs, running and already finished
-   press <TAB-TAB> to select, '--help' for more options.
+   ais show job - Show running and/or finished jobs,
+     e.g.:
+     - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
+     - show job copy-listrange             - show all running multi-object copies;
+     - show job copy-objects               - same as above (using display name);
+     - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
+     - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
+     - show job list                       - show all running list-objects jobs;
+     - show job ls                         - same as above;
+     - show job ls --refresh 10            - same as above with periodic _refreshing_ every 10 seconds;
+     - show job ls --refresh 10 --count 4  - same as above but only for the first four 10-seconds intervals;
+     - show job prefetch-listrange         - show all running prefetch jobs;
+     - show job prefetch                   - same as above;
+     - show job prefetch --refresh 1m      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
+     - show job evict                      - all running bucket and/or data evicting jobs;
+     - show job --all                      - show absolutely all jobs, running and finished.
 
 USAGE:
    ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]

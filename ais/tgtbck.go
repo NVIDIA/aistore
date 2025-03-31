@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -370,14 +371,21 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			t.writeErrAct(w, r, apc.ActEvictRemoteBck) // (instead, expecting updated BMD from primary)
 			return
 		}
-		// arrived via p.destroyBucketData()
+		// arrived via p.evictRemoteKeepMD
+		// (compare with t.destroyBucket transaction)
 		var (
 			wg  = &sync.WaitGroup{}
 			nlp = newBckNLP(apireq.bck)
+			xid = apireq.query.Get(apc.QparamUUID)
 		)
 		nlp.Lock()
 		defer nlp.Unlock()
 		defer wg.Wait()
+
+		// start and immdiately finish xaction with a singular purpose:
+		// to have a record in xreg (via `ais show job`): name and timestamp only
+		debug.Assert(strings.HasPrefix(xid, prefixEvictKmdID), xid)
+		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, apireq.bck, nil)
 
 		core.LcacheClearBcks(wg, apireq.bck)
 		err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
