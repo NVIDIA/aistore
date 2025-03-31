@@ -291,6 +291,30 @@ test:short:python-integration:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
 
+test:long:python-extended:
+  <<: *test_long_def
+  variables:
+    AIS_ENDPOINT: "http://localhost:8080"
+    BUCKET: "aws://ais-ci-python"
+    PIP: "uv pip"
+  timeout: 35m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+  before_script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
+  script:
+    - cd python
+    - uv venv --python 3.13 .venv
+    - source .venv/bin/activate
+    - make python_sdk_extended_tests
+    - deactivate || true
+    - rm -rf .venv
+
 test:short:pytorch:
   <<: *test_short_def
   variables:

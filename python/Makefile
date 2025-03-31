@@ -53,11 +53,16 @@ python_sdk_tests: common_deps python_sdk_unit_tests python_sdk_integration_tests
 
 .PHONY: python_sdk_integration_tests
 python_sdk_integration_tests: common_deps
-	$(PYTEST) -v tests/integration/sdk -m "not etl and not authn"
+	$(PYTEST) -v tests/integration/sdk -m "not etl and not authn" --durations=0
 
 .PHONY: python_sdk_unit_tests
 python_sdk_unit_tests: common_deps
 	$(PYTEST) -v tests/unit/sdk
+
+# Run tests with `extended` marker with `AIS_STRESS_TEST` to control increased object count, size, etc.
+.PHONY: python_sdk_extended_tests
+python_sdk_extended_tests: common_deps
+	AIS_STRESS_TEST=true $(PYTEST) -v tests/integration/sdk -m "extended" --durations=0
 
 .PHONY: python_etl_tests
 python_etl_tests: common_deps

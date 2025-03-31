@@ -20,7 +20,7 @@ from tests.const import (
     PREFIX_NAME,
     SUFFIX_NAME,
 )
-from tests.integration import REMOTE_SET
+from tests.integration import REMOTE_SET, AWS_BUCKET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import random_string
 
@@ -36,8 +36,6 @@ class TestObjectGroupOps(ParallelTestBase):
         self.obj_names = self._create_objects(
             suffix=self.suffix, obj_size=self.file_size
         )
-        if REMOTE_SET:
-            self.s3_client = self._get_boto3_client()
 
     def test_delete(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
@@ -171,8 +169,8 @@ class TestObjectGroupOps(ParallelTestBase):
         self._copy_objects_test_helper(num_workers=3)
 
     @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
+        not AWS_BUCKET,
+        "AWS bucket is not set",
     )
     def test_copy_objects_latest_flag(self):
         obj_name = random_string()
@@ -215,8 +213,8 @@ class TestObjectGroupOps(ParallelTestBase):
             self.bucket.object(obj_name).get_reader().read_all()
 
     @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
+        not AWS_BUCKET,
+        "AWS bucket is not set",
     )
     def test_copy_objects_sync_flag(self):
         to_bck = self._create_bucket()
@@ -246,8 +244,8 @@ class TestObjectGroupOps(ParallelTestBase):
         self.assertEqual(len(self.bucket.list_all_objects(prefix=self.obj_prefix)), 0)
 
     @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
+        not AWS_BUCKET,
+        "AWS bucket is not set",
     )
     def test_prefetch_objects_latest_flag(self):
         obj_name = random_string()

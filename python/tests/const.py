@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
+from tests import IS_STRESS
 
 # SI and IEC Units
 KB = 10**3
@@ -22,8 +23,7 @@ ETL_NAME = "test-etl-name"
 OBJ_READ_TYPE_ALL = "read_all"
 OBJ_READ_TYPE_CHUNK = "chunk"
 OBJ_CONTENT = "test-content"
-OBJECT_COUNT = 10
-STRESS_TEST_OBJECT_COUNT = 500
+OBJECT_COUNT = 500 if IS_STRESS else 10
 
 # Timeout
 TEST_TIMEOUT = 30

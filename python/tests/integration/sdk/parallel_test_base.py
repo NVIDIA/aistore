@@ -41,6 +41,8 @@ class ParallelTestBase(unittest.TestCase):
             provider, bck_name = REMOTE_BUCKET.split("://")
             self.bucket = self.client.bucket(bck_name, provider=provider)
             self.provider = provider
+            if self.bucket.provider == Provider.AMAZON:
+                self.s3_client = self._create_boto3_client()
         else:
             self.provider = Provider.AIS
             self.bucket = self._create_bucket()
@@ -190,7 +192,8 @@ class ParallelTestBase(unittest.TestCase):
         if len(evicted_objs) > 0:
             self._validate_objects_cached(evicted_objs, False)
 
-    def _get_boto3_client(self):
+    @staticmethod
+    def _create_boto3_client():
         return boto3.client(
             "s3",
             region_name=AWS_REGION,

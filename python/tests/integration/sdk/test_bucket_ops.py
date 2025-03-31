@@ -1,10 +1,11 @@
 #
 # Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
+import random
 import unittest
 from pathlib import Path
 
-import boto3
+import pytest
 
 import requests
 
@@ -18,12 +19,16 @@ from aistore.sdk.enums import FLTPresence
 from aistore.sdk.provider import Provider
 
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
-from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-from tests.integration.boto3 import AWS_REGION
 
 from tests.utils import random_string, cleanup_local, cases
-from tests.const import OBJECT_COUNT, OBJ_CONTENT, PREFIX_NAME
-from tests.integration import REMOTE_SET
+from tests.const import (
+    OBJECT_COUNT,
+    OBJ_CONTENT,
+    PREFIX_NAME,
+    TEST_TIMEOUT,
+    SUFFIX_NAME,
+)
+from tests.integration import REMOTE_SET, AWS_BUCKET
 
 INNER_DIR = "directory"
 DATASET_DIR = "dataset"
@@ -132,30 +137,22 @@ class TestBucketOps(ParallelTestBase):
         self.assertEqual(new_prefix + expected_name, entries[0].name)
 
     @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
+        not AWS_BUCKET,
+        "AWS bucket is not set",
     )
     def test_get_latest_flag(self):
         obj_name = random_string()
         self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
 
-        s3_client = boto3.client(
-            "s3",
-            region_name=AWS_REGION,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            # aws_session_token=AWS_SESSION_TOKEN,
-        )
-
         # out-of-band PUT: first version
-        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=LOREM)
+        self.s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=LOREM)
 
         # cold GET, and check
         content = self.bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(LOREM, content.decode("utf-8"))
 
         # out-of-band PUT: 2nd version (overwrite)
-        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=DUIS)
+        self.s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=DUIS)
 
         # warm GET and check (expecting the first version's content)
         content = self.bucket.object(obj_name).get_reader().read_all()
@@ -166,7 +163,7 @@ class TestBucketOps(ParallelTestBase):
         self.assertEqual(DUIS, content.decode("utf-8"))
 
         # out-of-band DELETE
-        s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
+        self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
         # warm GET must be fine
         content = self.bucket.object(obj_name).get_reader().read_all()
@@ -175,6 +172,41 @@ class TestBucketOps(ParallelTestBase):
         # cold GET must result in Error
         with self.assertRaises(AISError):
             self.bucket.object(obj_name).get_reader(latest=True).read_all()
+
+    @unittest.skipIf(
+        not AWS_BUCKET,
+        "AWS bucket is not set",
+    )
+    @pytest.mark.extended
+    def test_copy_objects_sync_flag(self):
+        num_obj = OBJECT_COUNT
+        obj_names = self._create_objects(num_obj=num_obj, suffix=SUFFIX_NAME)
+        to_bck = self._create_bucket()
+
+        obj_group = self.bucket.objects(obj_names=obj_names)
+
+        # cache and verify
+        job_id = obj_group.prefetch()
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        self._verify_cached_objects(num_obj, range(num_obj))
+        # copy objs to dst bck
+        copy_job = self.bucket.copy(prefix_filter=self.obj_prefix, to_bck=to_bck)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertEqual(num_obj, len(to_bck.list_all_objects()))
+
+        # randomly delete 10% of the objects
+        num_to_del = int(num_obj * 0.1)
+
+        # out of band delete
+        for obj_name in random.sample(obj_names, num_to_del):
+            self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
+
+        # test --sync flag
+        copy_job = self.bucket.copy(
+            prefix_filter=self.obj_prefix, to_bck=to_bck, sync=True
+        )
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 3)
+        self.assertEqual(num_obj - num_to_del, len(to_bck.list_all_objects()))
 
     @unittest.skipIf(
         not REMOTE_SET,
