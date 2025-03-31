@@ -1,12 +1,12 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.client import Client
-from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import random_string
 
 
@@ -19,7 +19,7 @@ class TestObjectFileWriterOps(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.client = Client(CLUSTER_ENDPOINT)
+        cls.client = DEFAULT_TEST_CLIENT
         cls.bucket = cls.client.bucket(cls.BUCKET_NAME)
         cls.bucket.create()
         cls.object = cls.bucket.object(cls.OBJECT_NAME)

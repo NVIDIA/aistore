@@ -11,7 +11,7 @@ from itertools import cycle
 import pytest
 import xxhash
 
-from aistore.sdk import Client, Bucket
+from aistore.sdk import Bucket
 from aistore.sdk.etl import ETLConfig
 from aistore.sdk.errors import AISError
 from aistore.sdk.etl.etl_templates import MD5, ECHO, HASH
@@ -23,6 +23,7 @@ from aistore.sdk.etl.etl_const import (
 )
 
 from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import cases, create_and_put_object, random_string
 
 ETL_NAME_CODE = "etl-" + random_string(5)
@@ -37,7 +38,7 @@ class TestETLOps(unittest.TestCase):
     def setUp(self) -> None:
         self.bck_name = random_string()
         print("URL END PT ", CLUSTER_ENDPOINT)
-        self.client = Client(CLUSTER_ENDPOINT)
+        self.client = DEFAULT_TEST_CLIENT
 
         self.bucket = self.client.bucket(bck_name=self.bck_name).create()
         self.obj_name = "temp-obj1.jpg"

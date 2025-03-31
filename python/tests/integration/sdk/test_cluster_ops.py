@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
@@ -8,13 +8,13 @@ import unittest
 
 from aistore.sdk import Client
 from aistore.sdk.const import ACT_COPY_OBJECTS
-from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk import TEST_RETRY_CONFIG, DEFAULT_TEST_CLIENT
 from tests.utils import random_string
 
 
 class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.client = Client(CLUSTER_ENDPOINT)
+        self.client = DEFAULT_TEST_CLIENT
         self.cluster = self.client.cluster()
 
     def test_health_success(self):
@@ -22,7 +22,11 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_health_failure(self):
         # url not existing or URL down
-        self.assertFalse(Client("http://localhost:1234").cluster().is_ready())
+        self.assertFalse(
+            Client("http://localhost:1234", retry_config=TEST_RETRY_CONFIG)
+            .cluster()
+            .is_ready()
+        )
 
     def test_cluster_map(self):
         smap = self.cluster.get_info()

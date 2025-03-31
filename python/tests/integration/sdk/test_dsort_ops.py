@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+#
+
 import io
 import json
 import shutil
@@ -8,7 +12,6 @@ from pathlib import Path
 from typing import Literal
 import yaml
 
-from aistore import Client
 from aistore.sdk.dsort import (
     DsortFramework,
     DsortShardsGroup,
@@ -17,14 +20,14 @@ from aistore.sdk.dsort import (
 )
 from aistore.sdk.provider import Provider
 from aistore.sdk.multiobj import ObjectRange, ObjectNames
-from tests.integration import CLUSTER_ENDPOINT
 from tests.const import TEST_TIMEOUT
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import cases, random_string, create_random_tarballs
 
 
 class TestDsortOps(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = Client(CLUSTER_ENDPOINT)
+        self.client = DEFAULT_TEST_CLIENT
         self.temp_dir = Path("tmp")
         try:
             self.temp_dir.mkdir()

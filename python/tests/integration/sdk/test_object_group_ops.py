@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
 #
 import hashlib
 import unittest
@@ -21,12 +21,12 @@ from tests.const import (
     SUFFIX_NAME,
 )
 from tests.integration import REMOTE_SET
-from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import random_string
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
-class TestObjectGroupOps(RemoteEnabledTest):
+class TestObjectGroupOps(ParallelTestBase):
     def setUp(self) -> None:
         super().setUp()
         self.suffix = SUFFIX_NAME

@@ -5,9 +5,8 @@ Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 """
 
 from unittest import TestCase
-from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import random_string
-from aistore import Client
 from random import randint
 from aistore.pytorch import AISMapDataset, DynamicBatchSampler
 from torch.utils.data import DataLoader
@@ -28,7 +27,7 @@ class TestAISSampler(TestCase):
 
     def setUp(self) -> None:
         self.bck_name = random_string()
-        self.client = Client(CLUSTER_ENDPOINT)
+        self.client = DEFAULT_TEST_CLIENT
         self.bck = self.client.bucket(self.bck_name)
         self.bck.create()
 

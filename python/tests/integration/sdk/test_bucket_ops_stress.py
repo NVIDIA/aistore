@@ -5,11 +5,11 @@ import unittest
 import random
 
 from tests.integration import AWS_BUCKET
-from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.const import STRESS_TEST_OBJECT_COUNT, TEST_TIMEOUT, SUFFIX_NAME
 
 
-class TestBucketOpsStress(RemoteEnabledTest):
+class TestBucketOpsStress(ParallelTestBase):
     def setUp(self) -> None:
         super().setUp()
         if AWS_BUCKET:

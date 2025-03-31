@@ -5,7 +5,7 @@ Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 
 import unittest
 from pathlib import Path
-from aistore.sdk import Client, Bucket
+from aistore.sdk import Bucket
 from aistore.sdk.dataset.data_shard import DataShard
 from aistore.pytorch import (
     AISMapDataset,
@@ -14,6 +14,7 @@ from aistore.pytorch import (
     AISShardReader,
 )
 from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import (
     create_and_put_object,
     random_string,
@@ -30,7 +31,7 @@ class TestPytorchPlugin(unittest.TestCase):
 
     def setUp(self) -> None:
         self.bck_name = random_string()
-        self.client = Client(CLUSTER_ENDPOINT)
+        self.client = DEFAULT_TEST_CLIENT
         self.bck = self.client.bucket(self.bck_name)
         self.bck.create()
         self.local_test_files = (

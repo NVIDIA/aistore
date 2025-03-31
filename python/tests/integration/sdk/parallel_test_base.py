@@ -1,18 +1,16 @@
 #
-# Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
 #
-
 from typing import List
 import unittest
 import boto3
 
-from aistore import Client
 from aistore.sdk.provider import Provider
 from tests.integration import (
     REMOTE_SET,
     REMOTE_BUCKET,
-    CLUSTER_ENDPOINT,
 )
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import (
     random_string,
     create_and_put_object,
@@ -22,9 +20,9 @@ from tests.integration.boto3 import AWS_REGION
 from tests.const import TEST_TIMEOUT_LONG, OBJECT_COUNT, SUFFIX_NAME, SMALL_FILE_SIZE
 
 
-class RemoteEnabledTest(unittest.TestCase):
+class ParallelTestBase(unittest.TestCase):
     """
-    This class is intended to be used with all tests that work with remote buckets.
+    This class should be used with all tests that work with remote buckets or run in parallel against a common cluster.
     It provides helper methods for dealing with remote buckets and objects and tracking them for proper cleanup.
     This includes prefixing all objects with a unique value and deleting all objects after tests finish
         to avoid collisions with multiple instances using the same bucket.
@@ -34,7 +32,7 @@ class RemoteEnabledTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.client = Client(CLUSTER_ENDPOINT)
+        self.client = DEFAULT_TEST_CLIENT
         self.buckets = []
         self.obj_prefix = f"{self._testMethodName}-{random_string(6)}"
 

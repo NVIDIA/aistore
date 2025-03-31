@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -8,7 +8,7 @@ from aistore.sdk import Bucket
 from aistore.sdk.client import Client
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import create_and_put_object, random_string, case_matrix
 
 
@@ -22,7 +22,7 @@ class TestObjectFileReaderOps(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.client = Client(CLUSTER_ENDPOINT)
+        cls.client = DEFAULT_TEST_CLIENT
         cls.bucket = cls.client.bucket(cls.BUCKET_NAME).create()
 
         create_and_put_object(

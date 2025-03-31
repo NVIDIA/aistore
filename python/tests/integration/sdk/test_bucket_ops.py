@@ -17,7 +17,7 @@ from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 from aistore.sdk.enums import FLTPresence
 from aistore.sdk.provider import Provider
 
-from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
 
@@ -42,7 +42,7 @@ def _create_files(folder, file_dict):
 
 
 # pylint: disable=unused-variable, too-many-public-methods
-class TestBucketOps(RemoteEnabledTest):
+class TestBucketOps(ParallelTestBase):
     def setUp(self) -> None:
         super().setUp()
         self.local_test_files = (

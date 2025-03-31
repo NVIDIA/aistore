@@ -25,7 +25,8 @@ from tests.const import (
     OBJ_READ_TYPE_CHUNK,
     TEST_TIMEOUT,
 )
-from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
     random_string,
     cleanup_local,
@@ -39,13 +40,13 @@ from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
 def has_enough_targets():
     """Check if the cluster has at least two targets before running tests."""
     try:
-        return len(Client(CLUSTER_ENDPOINT).cluster().get_info().tmap) >= 2
+        return len(DEFAULT_TEST_CLIENT.cluster().get_info().tmap) >= 2
     except Exception:
         return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)
 
 
 # pylint: disable=unused-variable, too-many-public-methods
-class TestObjectOps(RemoteEnabledTest):
+class TestObjectOps(ParallelTestBase):
     def setUp(self) -> None:
         super().setUp()
         self.local_test_files = (

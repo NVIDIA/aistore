@@ -1,15 +1,15 @@
 #
-# Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.integration import REMOTE_SET
 from tests.const import TEST_TIMEOUT, OBJECT_COUNT
 
 
-class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
+class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
     def test_job_start_wait(self):
         job_id = self.client.job(job_kind="lru").start()
         self.client.job(job_id=job_id).wait()

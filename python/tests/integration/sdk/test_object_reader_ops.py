@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -8,8 +8,8 @@ from io import BytesIO
 from aistore.sdk import Bucket, Object
 from aistore.sdk.client import Client
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE, AIS_CHECKSUM_VALUE
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import create_and_put_object, random_string
-from tests.integration import CLUSTER_ENDPOINT
 
 
 class TestObjectReaderOps(unittest.TestCase):
@@ -20,7 +20,7 @@ class TestObjectReaderOps(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.client = Client(CLUSTER_ENDPOINT)
+        cls.client = DEFAULT_TEST_CLIENT
         bck_name = f"test-bck-{random_string(8)}"
         cls.bucket = cls.client.bucket(bck_name).create(exist_ok=True)
         object_name = "test-object"
