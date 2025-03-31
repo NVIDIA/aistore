@@ -6,6 +6,7 @@
 package xs
 
 import (
+	iofs "io/fs"
 	"path/filepath"
 	"sync"
 
@@ -86,10 +87,10 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	r.smap = core.T.Sowner().Get()
 	var (
 		err  error
-		opts = &fs.WalkOpts{Dir: dir, Callback: r.walk, Sorted: false}
+		opts = &fs.WalkOpts{Dir: dir, Callback: r.walk}
 	)
 	if r.p.args.Recursive {
-		err = fs.Walk(opts) // godirwalk
+		err = fs.Walk(opts)
 	} else {
 		err = fs.WalkDir(dir, r.walk) // Go filepath.WalkDir
 	}
@@ -99,7 +100,7 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
+func (r *XactDirPromote) walk(fqn string, de iofs.DirEntry, _ error) error {
 	if de.IsDir() {
 		return nil
 	}

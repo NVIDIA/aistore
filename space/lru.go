@@ -9,6 +9,7 @@ package space
 import (
 	"container/heap"
 	"fmt"
+	iofs "io/fs"
 	"sort"
 	"sync"
 	"time"
@@ -294,7 +295,6 @@ func (j *lruJ) jogBck() (size int64, err error) {
 		Bck:      j.bck,
 		CTs:      []string{fs.ObjectType},
 		Callback: j.walk,
-		Sorted:   false,
 	}
 	j.now = time.Now().UnixNano()
 	if err = fs.Walk(opts); err != nil {
@@ -341,7 +341,7 @@ func (j *lruJ) _visit(lom *core.LOM) (pushed bool) {
 	return true
 }
 
-func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
+func (j *lruJ) walk(fqn string, de iofs.DirEntry, _ error) error {
 	var parsed fs.ParsedFQN
 	if de.IsDir() {
 		return nil

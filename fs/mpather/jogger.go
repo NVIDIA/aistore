@@ -7,6 +7,7 @@ package mpather
 import (
 	"context"
 	"fmt"
+	iofs "io/fs"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -289,7 +290,6 @@ func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 		Mi:       j.mi,
 		CTs:      j.opts.CTs,
 		Callback: j.jog,
-		Sorted:   false,
 	}
 	opts.Bck.Copy(bck)
 
@@ -314,7 +314,7 @@ func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 	return false, nil
 }
 
-func (j *jogger) jog(fqn string, de fs.DirEntry) error {
+func (j *jogger) jog(fqn string, de iofs.DirEntry, _ error) error {
 	if j.objPrefix != "" && strings.HasPrefix(fqn, j.bdir) {
 		if de.IsDir() {
 			if !cmn.DirHasOrIsPrefix(fqn, j.objPrefix) {

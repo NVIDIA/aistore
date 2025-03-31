@@ -9,6 +9,7 @@ package space
 import (
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -371,7 +372,6 @@ func (j *clnJ) jogBck() (size int64, err error) {
 		Bck:      j.bck,
 		CTs:      []string{fs.WorkfileType, fs.ObjectType, fs.ECSliceType, fs.ECMetaType},
 		Callback: j.walk,
-		Sorted:   false,
 	}
 	if err = fs.Walk(opts); err != nil {
 		return
@@ -552,7 +552,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	}
 }
 
-func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
+func (j *clnJ) walk(fqn string, de iofs.DirEntry, _ error) error {
 	if de.IsDir() {
 		j._rmEmptyDir(fqn)
 		return nil

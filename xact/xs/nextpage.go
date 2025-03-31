@@ -8,6 +8,8 @@ package xs
 // core next-page and next-remote-page methods for object listing
 
 import (
+	iofs "io/fs"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -49,10 +51,10 @@ func (npg *npgCtx) nextPageA() error {
 	npg.page.UUID = npg.wi.msg.UUID
 	npg.idx = 0
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb, Sorted: true},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb},
 	}
 	opts.WalkOpts.Bck.Copy(npg.bck.Bucket())
-	opts.ValidateCb = func(fqn string, de fs.DirEntry) error {
+	opts.ValidateCb = func(fqn string, de iofs.DirEntry, _ error) error {
 		if de.IsDir() {
 			return npg.wi.processDir(fqn)
 		}
@@ -67,8 +69,8 @@ func (npg *npgCtx) nextPageA() error {
 	return err
 }
 
-func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
-	entry, err := npg.wi.callback(fqn, de)
+func (npg *npgCtx) cb(fqn string, de iofs.DirEntry, err error) error {
+	entry, err := npg.wi.callback(fqn, de, err)
 	if entry == nil && err == nil {
 		return nil
 	}

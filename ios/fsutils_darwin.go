@@ -6,13 +6,13 @@
 package ios
 
 import (
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/karrick/godirwalk"
 	"golang.org/x/sys/unix"
 )
 
@@ -21,21 +21,21 @@ func DirSizeOnDisk(originalDirPath string, withNonDirPrefix bool) (size uint64, 
 	if withNonDirPrefix {
 		dirPath, _ = filepath.Split(originalDirPath)
 	}
-	err = godirwalk.Walk(dirPath, &godirwalk.Options{Callback: func(osPathname string, entry *godirwalk.Dirent) error {
-		if !entry.IsDir() && !entry.IsRegular() {
+	err = filepath.WalkDir(dirPath, func(osPathname string, d iofs.DirEntry, _ error) error {
+		if !d.IsDir() && !d.Type().IsRegular() {
 			return nil
 		}
 		// If prefix is set we should skip all the names that do not have the prefix.
 		if withNonDirPrefix && !strings.HasPrefix(osPathname, originalDirPath) {
 			return nil
 		}
-		stat, err := os.Lstat(osPathname)
+		info, err := d.Info()
 		if err != nil {
 			return err
 		}
-		size += uint64(stat.Size())
+		size += uint64(info.Size())
 		return nil
-	}})
+	})
 	return
 }
 

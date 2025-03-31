@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -79,7 +80,6 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs 
 		CTs:      []string{fs.ECMetaType},
 		Callback: reb.walkEC,
 		Prefix:   rargs.prefix,
-		Sorted:   false,
 	}
 	opts.Bck.Copy(bck)
 	if err := fs.Walk(opts); err != nil {
@@ -282,7 +282,7 @@ func (reb *Reb) renameLocalCT(req *stageNtfn, ct *core.CT, md *ec.Metadata) (
 	return
 }
 
-func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
+func (reb *Reb) walkEC(fqn string, de iofs.DirEntry, _ error) error {
 	xctn := reb.xctn()
 	if err := xctn.AbortErr(); err != nil {
 		// notify `dir.Walk` to stop iterations

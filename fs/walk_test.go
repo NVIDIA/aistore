@@ -5,6 +5,7 @@
 package fs_test
 
 import (
+	iofs "io/fs"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -27,10 +28,9 @@ func TestWalkBck(t *testing.T) {
 		tests = []struct {
 			name     string
 			mpathCnt int
-			sorted   bool
 		}{
-			{name: "simple_sorted", mpathCnt: 1, sorted: true},
-			{name: "10mpaths_sorted", mpathCnt: 10, sorted: true},
+			{name: "simple_sorted", mpathCnt: 1},
+			{name: "10mpaths_sorted", mpathCnt: 10},
 		}
 	)
 
@@ -83,7 +83,7 @@ func TestWalkBck(t *testing.T) {
 				WalkOpts: fs.WalkOpts{
 					Bck: bck,
 					CTs: []string{fs.ObjectType},
-					Callback: func(fqn string, _ fs.DirEntry) error {
+					Callback: func(fqn string, _ iofs.DirEntry, _ error) error {
 						var parsed fs.ParsedFQN
 						err := parsed.Init(fqn)
 						tassert.CheckError(t, err)
@@ -91,13 +91,9 @@ func TestWalkBck(t *testing.T) {
 						fqns = append(fqns, fqn)
 						return nil
 					},
-					Sorted: test.sorted,
 				},
 			})
 			tassert.CheckFatal(t, err)
-
-			sorted := sort.IsSorted(sort.StringSlice(objs))
-			tassert.Fatalf(t, sorted == test.sorted, "expected the output to be sorted=%t", test.sorted)
 
 			sort.Strings(fqns)
 			sort.Strings(fileNames)
@@ -161,13 +157,12 @@ func TestWalkBckSkipDir(t *testing.T) {
 		WalkOpts: fs.WalkOpts{
 			Bck: bck,
 			CTs: []string{fs.ObjectType},
-			Callback: func(fqn string, _ fs.DirEntry) error {
+			Callback: func(fqn string, _ iofs.DirEntry, _ error) error {
 				fqns = append(fqns, fqn)
 				return nil
 			},
-			Sorted: true,
 		},
-		ValidateCb: func(fqn string, de fs.DirEntry) error {
+		ValidateCb: func(fqn string, de iofs.DirEntry, _ error) error {
 			var parsed fs.ParsedFQN
 			if de.IsDir() {
 				return nil

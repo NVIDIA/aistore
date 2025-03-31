@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"math/rand/v2"
 	"net/http"
 	"path/filepath"
@@ -923,7 +924,7 @@ func initMountpaths(t *testing.T, proxyURL string) {
 }
 
 func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
-	fsWalkFunc := func(path string, de fs.DirEntry) error {
+	fsWalkFunc := func(path string, de iofs.DirEntry, _ error) error {
 		if fqn != "" {
 			return filepath.SkipDir
 		}
@@ -947,7 +948,6 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 			Bck:      bck,
 			CTs:      []string{fs.ObjectType},
 			Callback: fsWalkFunc,
-			Sorted:   true, // false is unsupported and asserts
 		},
 	})
 	return fqn

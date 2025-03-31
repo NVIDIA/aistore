@@ -7,6 +7,7 @@ package fs
 import (
 	"container/heap"
 	"context"
+	iofs "io/fs"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -19,7 +20,7 @@ import (
 // for those (very few) clients that don't have their own custom implementation
 
 type WalkBckOpts struct {
-	ValidateCb walkFunc // should return filepath.SkipDir to skip directory without an error
+	ValidateCb iofs.WalkDirFunc // should return filepath.SkipDir to skip directory without an error
 	WalkOpts
 }
 
@@ -28,16 +29,16 @@ type (
 	joggerBck struct {
 		workCh   chan *wbe
 		mi       *Mountpath
-		validate walkFunc
+		validate iofs.WalkDirFunc
 		ctx      context.Context
 		opts     WalkOpts
 	}
 	wbe struct { // walk bck entry
-		dirEntry DirEntry
+		dirEntry iofs.DirEntry
 		fqn      string
 	}
 	wbeInfo struct {
-		dirEntry DirEntry
+		dirEntry iofs.DirEntry
 		fqn      string
 		objName  string
 		mpathIdx int
@@ -47,7 +48,7 @@ type (
 
 // lso and tests
 func WalkBck(opts *WalkBckOpts) error {
-	debug.Assert(opts.Mi == nil && opts.Sorted) // TODO: support `opts.Sorted == false`
+	debug.Assert(opts.Mi == nil)
 	var (
 		avail      = GetAvail()
 		l          = len(avail)
@@ -85,7 +86,7 @@ func WalkBck(opts *WalkBckOpts) error {
 		for h.Len() > 0 {
 			v := heap.Pop(h)
 			info := v.(wbeInfo)
-			if err := opts.Callback(info.fqn, info.dirEntry); err != nil {
+			if err := opts.Callback(info.fqn, info.dirEntry, nil); err != nil {
 				return err
 			}
 			if wbe, ok := <-joggers[info.mpathIdx].workCh; ok {
@@ -113,7 +114,7 @@ func (j *joggerBck) walk() (err error) {
 	return err
 }
 
-func (j *joggerBck) cb(fqn string, de DirEntry) error {
+func (j *joggerBck) cb(fqn string, de iofs.DirEntry, err error) error {
 	const tag = "fs-walk-bck-mpath"
 	select {
 	case <-j.ctx.Done():
@@ -122,7 +123,7 @@ func (j *joggerBck) cb(fqn string, de DirEntry) error {
 		break
 	}
 	if j.validate != nil {
-		if err := j.validate(fqn, de); err != nil {
+		if err := j.validate(fqn, de, err); err != nil {
 			// If err != filepath.SkipDir, the Walk will propagate the error to group.Go.
 			// Context will be canceled, which then will terminate all running goroutines.
 			return err

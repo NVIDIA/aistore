@@ -5,6 +5,8 @@
 package dload
 
 import (
+	iofs "io/fs"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -204,10 +206,10 @@ func (dr *DiffResolver) Abort(err error) { dr.err.Add(err) }
 func (dr *DiffResolver) walk(job jobif) {
 	defer dr.CloseSrc()
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Sorted: true},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}},
 	}
 	opts.WalkOpts.Bck.Copy(job.Bck())
-	opts.Callback = func(fqn string, _ fs.DirEntry) error { return dr.cb(fqn, job) }
+	opts.Callback = func(fqn string, _ iofs.DirEntry, _ error) error { return dr.cb(fqn, job) }
 
 	err := fs.WalkBck(opts)
 	if err != nil && !cmn.IsErrAborted(err) {

@@ -6,6 +6,7 @@
 package xs
 
 import (
+	iofs "io/fs"
 	"path/filepath"
 	"strings"
 
@@ -139,7 +140,10 @@ func checkRemoteMD(lom *core.LOM, en *cmn.LsoEnt) {
 }
 
 // Performs a number of syscalls to load object metadata.
-func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (en *cmn.LsoEnt, err error) {
+func (wi *walkInfo) callback(fqn string, de iofs.DirEntry, walkErr error) (en *cmn.LsoEnt, err error) {
+	if walkErr != nil {
+		return nil, walkErr
+	}
 	if de.IsDir() {
 		return
 	}

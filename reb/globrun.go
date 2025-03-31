@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -748,7 +749,6 @@ func (rj *rebJogger) jog(mi *fs.Mountpath) {
 		rj.opts.Mi = mi
 		rj.opts.CTs = []string{fs.ObjectType}
 		rj.opts.Callback = rj.visitObj
-		rj.opts.Sorted = false
 	}
 	// limited scope
 	if rj.rargs.bck != nil {
@@ -797,7 +797,7 @@ func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg
 	}
 }
 
-func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
+func (rj *rebJogger) visitObj(fqn string, de iofs.DirEntry, _ error) error {
 	if err := rj.xreb.AbortErr(); err != nil {
 		nlog.Infoln(rj.xreb.Name(), "rj-walk-visit aborted", err)
 		return err
