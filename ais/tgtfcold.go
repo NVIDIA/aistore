@@ -123,10 +123,12 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	}
 
 	written, err = cos.CopyBuffer(goi.w, reader, buf)
-	if err != nil {
-		errTx = goi.whingeTx(err, goi.lom.FQN)
+	errTx = goi.postTx(err, goi.lom.FQN, written, size)
+
+	if errTx != nil && errTx != errSendingResp {
+		goi._cleanup(revert, lmfh, buf, slab, err, "(transmit)")
+		return errTx
 	}
-	debug.Assertf(errTx != nil || written == size, "%s: transmit-size %d != %d expected", lom.Cname(), written, size)
 
 	cos.Close(lmfh)
 	slab.Free(buf)

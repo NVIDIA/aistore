@@ -1191,10 +1191,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 		lom   = goi.lom
 	)
 	written, err := cos.CopyBuffer(goi.w, r, buf)
-	if err != nil {
-		errTx = goi.whingeTx(err, fqn /*lbget*/)
+	errTx = goi.postTx(err, fqn /*lbget*/, written, size)
+
+	if errTx != nil && errTx != errSendingResp {
+		return errTx
 	}
-	debug.Assertf(errTx != nil || written == size, "%s: transmit-size %d != %d expected", lom.Cname(), written, size)
 
 	// apc.QparamIsGFNRequest: update GFN filter to skip _rebalancing_ this one
 	if goi.dpq.isGFN {
@@ -1203,7 +1204,8 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
 		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			fs.CleanPathErr(err)
-			nlog.Errorln(goi.t.String(), "GET post-transmission failure:", err)
+			goi.isIOErr = true
+			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
 			return err
 		}
 		lom.SetAtimeUnix(goi.atime)
@@ -1216,19 +1218,31 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 	return errTx
 }
 
-// failure to transmit: errSendingResp (and keep the object)
-func (goi *getOI) whingeTx(err error, fqn string) error {
+func (goi *getOI) postTx(err error, fqn string, written, size int64) error {
 	const act = "(transmit)"
 	cname := goi.lom.Cname()
-	if cos.IsRetriableConnErr(err) {
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-			nlog.WarningDepth(1, ftcg, act, cname, "err:", err)
+
+	// enforce transmit size
+	if err == nil {
+		if written != size {
+			goi.isIOErr = true
+			err = fmt.Errorf("%s %s: invalid size %d != %d", act, cname, written, size)
+			nlog.WarningDepth(1, err)
 		}
-	} else {
-		// NOTE: return `errSendingResp` notwithstanding
-		goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
-		nlog.ErrorDepth(1, ftcg, act, cname, "err:", err)
+		return err
 	}
+
+	// failure to transmit: return errSendingResp and keep the object
+	switch {
+	case cos.IsRetriableConnErr(err):
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.WarningDepth(1, act, cname, "err:", err)
+		}
+	default: // notwithstanding
+		goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
+		nlog.ErrorDepth(1, act, cname, "err:", err)
+	}
+
 	return errSendingResp
 }
 
