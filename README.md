@@ -216,10 +216,10 @@ Let others know your project is powered by high-performance AI storage:
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
   - [Start/stop maintenance mode, shutdown, decommission, and related operations](/docs/lifecycle_node.md)
-  - [Downloader](/docs/downloader.md)
-  - [On-disk layout](/docs/on_disk_layout.md)
   - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket)
   - [Out-of-band updates](/docs/out_of_band.md)
+  - [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
+  - [Using Rate Limits to Enhance Reliability and Performance](/docs/rate_limit.md)
 
 ## License
 

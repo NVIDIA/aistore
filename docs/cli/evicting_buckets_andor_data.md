@@ -135,10 +135,10 @@ vugtciop         HRdka7fd0       evict-listrange         s3://ais-aa     70     
 
 ## Summary
 
-| Use Case                                 | Command Example                                         | Keeps Bucket Metadata? |
-|------------------------------------------|----------------------------------------------------------|------------------|
-| Fully evict bucket (data + metadata)     | `ais evict BUCKET`                                 | ❌ No            |
-| Evict data only, retain bucket mount     | `ais evict BUCKET --keep-md` or `--k`              | ✅ Yes           |
-| Evict subset by prefix/template/list     | `ais evict BUCKET/prefix`<br>`--prefix`, `--template`, `--list` | ✅ Yes |
+| Use Case                             | Command Example                                                 | Keeps Bucket MD? |
+|--------------------------------------|-----------------------------------------------------------------|------------------|
+| Fully evict bucket (data + metadata) | `ais evict BUCKET`                                              | ❌ No            |
+| Evict data only, retain bucket MD    | `ais evict BUCKET --keep-md` or `--k`                           | ✅ Yes           |
+| Evict subset by prefix/template/list | `ais evict BUCKET/prefix`<br>`--prefix`, `--template`, `--list` | ✅ Yes           |
 
 Use `ais show job --all` to monitor and verify jobs.
