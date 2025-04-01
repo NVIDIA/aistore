@@ -123,9 +123,10 @@ func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	}
 
 	written, err = cos.CopyBuffer(goi.w, reader, buf)
-	errTx = goi.postTx(err, goi.lom.FQN, written, size)
-
-	if errTx != nil && errTx != errSendingResp {
+	if err != nil || written != size {
+		errTx = goi._txerr(err, goi.lom.FQN, written, size)
+	}
+	if errTx != nil && errTx != errGetTxBenign {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(transmit)")
 		return errTx
 	}
@@ -165,7 +166,7 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 	if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		goi.lom.Unlock(true)
 		nlog.InfoDepth(1, ftcg, "(load)", lom, err) // (unlikely)
-		return errSendingResp
+		return errGetTxBenign
 	}
 	debug.Assert(lom.Lsize() == fullSize)
 	goi.lom.Unlock(true)
@@ -185,6 +186,10 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 	if err == nil {
 		goi.lom.Unlock(true)
 		return
+	}
+
+	if isErrGetTxSevere(err) {
+		goi.isIOErr = true
 	}
 
 	lom := goi.lom
@@ -253,25 +258,33 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	cos.Close(res.R)
 
 	if err != nil {
-		// NOTE: cannot whingeTx(), have to revert/remove/cleanup
 		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")
-		return errSendingResp
+		return errGetTxBenign
 	}
-	debug.Assertf(written == res.Size, "%s: remote-size %d != %d written/transmitted", lom.Cname(), res.Size, written)
+	if written != res.Size {
+		errTx := goi._txerr(nil, lom.FQN, written, res.Size)
+		debug.Assert(isErrGetTxSevere(errTx), errTx)
+		goi._cleanup(revert, lmfh, buf, slab, errTx, "(rr/wl)")
+		return errTx
+	}
 
 	if lom.IsFeatureSet(feat.FsyncPUT) {
 		// fsync (flush)
 		if err = lmfh.Sync(); err != nil {
-			goi._cleanup(revert, lmfh, buf, slab, err, "(fsync)")
-			return errSendingResp // ditto
+			const act = "(fsync)"
+			errTx := newErrGetTxSevere(err, lom, act)
+			goi._cleanup(revert, lmfh, buf, slab, errTx, act)
+			return errTx
 		}
 	}
 
 	err = lmfh.Close()
 	lmfh = nil
 	if err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(fclose)")
-		return errSendingResp // ditto
+		const act = "(fclose)"
+		errTx := newErrGetTxSevere(err, lom, act)
+		goi._cleanup(revert, lmfh, buf, slab, errTx, act)
+		return errTx
 	}
 
 	// lom (main replica)
@@ -284,8 +297,10 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 		}
 	}
 	if err = lom.PersistMain(); err != nil {
-		goi._cleanup(revert, lmfh, buf, slab, err, "(persist)")
-		return errSendingResp
+		const act = "(persist)"
+		errTx := newErrGetTxSevere(err, lom, act)
+		goi._cleanup(revert, lmfh, buf, slab, errTx, act)
+		return errTx
 	}
 
 	slab.Free(buf)

@@ -1191,9 +1191,12 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 		lom   = goi.lom
 	)
 	written, err := cos.CopyBuffer(goi.w, r, buf)
-	errTx = goi.postTx(err, fqn /*lbget*/, written, size)
-
-	if errTx != nil && errTx != errSendingResp {
+	if err != nil || written != size {
+		errTx = goi._txerr(err, fqn /*lbget*/, written, size)
+	}
+	if errTx != nil && errTx != errGetTxBenign {
+		debug.Assert(isErrGetTxSevere(errTx), errTx)
+		lom.UncacheDel()
 		return errTx
 	}
 
@@ -1218,21 +1221,22 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 	return errTx
 }
 
-func (goi *getOI) postTx(err error, fqn string, written, size int64) error {
+func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 	const act = "(transmit)"
 	cname := goi.lom.Cname()
 
 	// enforce transmit size
-	if err == nil {
-		if written != size {
-			goi.isIOErr = true
-			err = fmt.Errorf("%s %s: invalid size %d != %d", act, cname, written, size)
-			nlog.WarningDepth(1, err)
+	if err == nil && written != size {
+		// [corruption?]
+		goi.isIOErr = true
+		errTx := &errGetTxSevere{
+			msg: fmt.Sprintf("%s %s: invalid size %d != %d", act, cname, written, size),
 		}
-		return err
+		nlog.WarningDepth(1, err)
+		return errTx
 	}
 
-	// failure to transmit: return errSendingResp and keep the object
+	// [failure to transmit] return errGetTxBenign and keep the object
 	switch {
 	case cos.IsRetriableConnErr(err):
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
@@ -1243,7 +1247,7 @@ func (goi *getOI) postTx(err error, fqn string, written, size int64) error {
 		nlog.ErrorDepth(1, act, cname, "err:", err)
 	}
 
-	return errSendingResp
+	return errGetTxBenign
 }
 
 func (goi *getOI) stats(written int64) {
@@ -1327,6 +1331,31 @@ func (goi *getOI) rngToHeader(resphdr http.Header, size int64) (hrng *htrange, e
 	resphdr.Set(cos.HdrContentRange, hrng.contentRange(size))
 	return
 }
+
+//
+// errGetTx* (benign and severe)
+//
+
+type (
+	errGetTxSevere struct {
+		msg string
+	}
+)
+
+func (e *errGetTxSevere) Error() string { return e.msg }
+
+func isErrGetTxSevere(err error) bool {
+	_, ok := err.(*errGetTxSevere)
+	return ok
+}
+
+func newErrGetTxSevere(err error, lom *core.LOM, tag string) error {
+	return &errGetTxSevere{fmt.Sprintf("failed to finalize GET response: %s %s [%v]", tag, lom.Cname(), err)}
+}
+
+var (
+	errGetTxBenign = errors.New("Warning: failed to transmit GET response") //nolint:staticcheck // making an exception for Warning
+)
 
 //
 // APPEND a file or multiple files:

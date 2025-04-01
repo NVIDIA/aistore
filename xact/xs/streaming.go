@@ -148,8 +148,10 @@ func (r *streamingX) String() (s string) {
 // limited pre-run abort
 func (r *streamingX) TxnAbort(err error) {
 	err = cmn.NewErrAborted(r.Name(), "txn-abort", err)
-	r.p.dm.Close(err)
-	r.p.dm.UnregRecv()
+	if r.p.dm != nil {
+		r.p.dm.Close(err)
+		r.p.dm.UnregRecv()
+	}
 	r.AddErr(err)
 	r.Base.Finish()
 }

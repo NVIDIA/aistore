@@ -193,7 +193,7 @@ func (lom *LOM) PersistMain() (err error) {
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never, write-delayed*/ {
 		lom.md.makeDirty()
 		lom.Recache()
-		return
+		return nil
 	}
 	// write-immediate (default)
 	buf := lom.pack()
@@ -205,7 +205,7 @@ func (lom *LOM) PersistMain() (err error) {
 		lom.Recache()
 	}
 	g.smm.Free(buf)
-	return
+	return err
 }
 
 // (caller must set atime; compare with the above)

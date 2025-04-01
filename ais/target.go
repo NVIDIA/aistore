@@ -781,7 +781,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 		xid, _, err := t.blobdl(args, nil /*oa*/)
 		if err != nil && xid != "" {
-			// (for the same reason as errSendingResp)
+			// (for the same reason as errGetTxBenign)
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
 			err = nil
 		}
@@ -845,7 +845,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 
 		// handle right here, return nil
-		if err != errSendingResp {
+		if err != errGetTxBenign && !isErrGetTxSevere(err) {
 			goi.lom.UncacheDel()
 			if dpq.isS3 {
 				s3.WriteErr(w, r, err, ecode)

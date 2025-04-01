@@ -160,8 +160,10 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // limited pre-run abort
 func (r *XactTCB) TxnAbort(err error) {
 	err = cmn.NewErrAborted(r.Name(), "tcb: txn-abort", err)
-	r.dm.Close(err)
-	r.dm.UnregRecv()
+	if r.dm != nil {
+		r.dm.Close(err)
+		r.dm.UnregRecv()
+	}
 	r.AddErr(err)
 	r.Base.Finish()
 }
