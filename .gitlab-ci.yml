@@ -544,8 +544,6 @@ test:long:ishard:
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
     - cd deploy/dev/k8s/kustomize
-    - dockerd > /var/log/dockerd.log 2>&1 &
-    - sleep 5  # wait for docker
     - ./utils/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
     - kubectl cluster-info  # wait for k8s
@@ -695,8 +693,6 @@ test:long:k8s:all:
   before_script:
     - make aisloader
     - cd deploy/dev/k8s/kustomize
-    - dockerd > /var/log/dockerd.log 2>&1 &
-    - sleep 5  # wait for docker
     - ./utils/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
     - kubectl cluster-info  # wait for k8s
