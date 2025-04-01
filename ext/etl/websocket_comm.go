@@ -8,7 +8,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
+
+	"github.com/NVIDIA/aistore/cmn/atomic"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -47,23 +50,28 @@ type (
 		txctn core.Xact // the undergoing tcb/tcobjs xaction
 		conn  *websocket.Conn
 
-		workCh   chan rwpair
-		writerCh chan *io.PipeWriter
+		// outbound messages of the original objects to send to ETL pod
+		workCh       chan rwpair
+		workChanFull atomic.Int64
+
+		// inbound messages of post-transformed objects from ETL pod
+		writerCh       chan *io.PipeWriter
+		writerChanFull atomic.Int64
 
 		// wait for read/write loop goroutines to exit when cleaning up
-		eg     *errgroup.Group
-		ctx    context.Context
-		cancel context.CancelFunc
+		eg  *errgroup.Group
+		ctx context.Context
 
-		finishCb func(Session) // to self-remove from `webSocketComm.jobs`
+		finishCb func(Session) // to self-remove from `webSocketComm.sessions`
 	}
 
 	rwpair struct {
-		r io.ReadCloser  // outbound messages the original objects to ETL pod
-		w *io.PipeWriter // inbound messages of post-transformed objects from ETL pod
+		r io.ReadCloser
+		w *io.PipeWriter
 	}
 )
 
+// interface guard
 var (
 	_ statefulCommunicator = (*webSocketComm)(nil)
 	_ Session              = (*wsConnCtx)(nil)
@@ -113,9 +121,9 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 		workCh:   make(chan rwpair, wockChSize),
 		writerCh: make(chan *io.PipeWriter, wockChSize),
 		ctx:      ctx,
-		cancel:   cancel,
 		eg:       group,
 		finishCb: func(session Session) {
+			cancel()
 			ws.m.Lock()
 			for i, s := range ws.sessions {
 				if session == s {
@@ -153,6 +161,15 @@ func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool) core.ReadR
 	pr, pw := io.Pipe()
 
 	wctx.workCh <- rwpair{srcResp.R, pw}
+	if l, c := len(wctx.workCh), cap(wctx.workCh); l > c/2 {
+		runtime.Gosched() // poor man's throttle
+		if l == c {
+			cnt := wctx.workChanFull.Inc()
+			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleETL)) {
+				nlog.Errorln(cos.ErrWorkChanFull, "outbound messages channel of session", wctx.name, "cnt", cnt)
+			}
+		}
+	}
 
 	return core.ReadResp{
 		R:      cos.NopOpener(pr),
@@ -167,7 +184,6 @@ func (wctx *wsConnCtx) Finish(errCause error) error {
 	if errCause != nil {
 		wctx.txctn.Abort(errCause)
 	}
-	wctx.cancel()
 	if err := wctx.eg.Wait(); err != nil {
 		nlog.Errorf("error shutting down webSocketComm goroutines: %v", err)
 	}
@@ -182,6 +198,9 @@ func (wctx *wsConnCtx) readLoop() error {
 		return wctx.conn.WriteMessage(websocket.PongMessage, []byte(msg))
 	})
 
+	buf, slab := core.T.PageMM().Alloc()
+	defer slab.Free(buf)
+
 	for {
 		select {
 		case <-wctx.ctx.Done():
@@ -195,21 +214,22 @@ func (wctx *wsConnCtx) readLoop() error {
 			}
 			writer := <-wctx.writerCh
 
-			// TODOs:
-			// - do not abort on soft error
-			// - use slab from `memsys` as copy buffer
-			if _, err := io.Copy(writer, r); err != nil {
-				writer.Close()
+			// TODO: do not abort on soft error
+			if _, err = cos.CopyBuffer(writer, r, buf); err != nil {
+				cos.Close(writer)
 				err = fmt.Errorf("error on copying message from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
 				return err
 			}
-			writer.Close()
+			cos.Close(writer)
 		}
 	}
 }
 
 func (wctx *wsConnCtx) writeLoop() error {
+	buf, slab := core.T.PageMM().Alloc()
+	defer slab.Free(buf)
+
 	for {
 		select {
 		case <-wctx.ctx.Done():
@@ -222,24 +242,30 @@ func (wctx *wsConnCtx) writeLoop() error {
 				return err
 			}
 
-			// TODOs:
-			// - do not abort on soft error
-			// - use slab from `memsys` as copy buffer
-			if _, err := io.Copy(writer, rw.r); err != nil {
-				rw.r.Close()
-				writer.Close()
+			// TODO: do not abort on soft error
+			if _, err := cos.CopyBuffer(writer, rw.r, buf); err != nil {
+				cos.Close(rw.r)
+				cos.Close(writer)
 				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
 				return err
 			}
+			cos.Close(rw.r)
 			// Leverages the fact that WebSocket preserves message order and boundaries.
 			// For each object sent to the ETL via `wctx.workCh`, we reserve a corresponding slot in `wctx.writerCh`
 			// for its writer. This guarantees that the correct writer is matched with the response when it arrives.
-			rw.r.Close()
 
-			// TODO: implement chanFull feature
 			wctx.writerCh <- rw.w
-			writer.Close()
+			if l, c := len(wctx.writerCh), cap(wctx.writerCh); l > c/2 {
+				runtime.Gosched() // poor man's throttle
+				if l == c {
+					cnt := wctx.writerChanFull.Inc()
+					if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleETL)) {
+						nlog.Errorln(cos.ErrWorkChanFull, "inbound messages channel of session", wctx.name, "cnt", cnt)
+					}
+				}
+			}
+			cos.Close(writer)
 		}
 	}
 }

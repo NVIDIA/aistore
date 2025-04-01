@@ -22,6 +22,7 @@ type SkipTestArgs struct {
 	MinTargets            int
 	MinProxies            int
 	MinMountpaths         int
+	MaxTargets            int
 	RequiresRemoteCluster bool
 	RequiresAuth          bool
 	RequiresTLS           bool
@@ -106,7 +107,7 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 		}
 	}
 
-	if args.MinTargets > 0 || args.MinMountpaths > 0 || args.MinProxies > 0 {
+	if args.MinTargets > 0 || args.MinMountpaths > 0 || args.MinProxies > 0 || args.MaxTargets > 0 {
 		smap = GetClusterMap(tb, GetPrimaryURL())
 	}
 
@@ -132,6 +133,13 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 		tassert.CheckFatal(tb, err)
 		if l := len(mpList.Available); l < args.MinMountpaths {
 			tb.Skipf("%s requires at least %d mountpaths (have %d)", tb.Name(), args.MinMountpaths, l)
+		}
+	}
+
+	if args.MaxTargets > 0 {
+		if smap.CountTargets() > args.MaxTargets {
+			tb.Skipf("%s requires at most %d targets (have %d)",
+				tb.Name(), args.MaxTargets, smap.CountTargets())
 		}
 	}
 }

@@ -305,8 +305,10 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 }
 
 func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string) {
+	if comm == etl.WebSocket {
+		tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1})
+	}
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
-
 	msg := &etl.InitSpecMsg{}
 	msg.EtlName = etlName
 	msg.CommTypeX = comm
