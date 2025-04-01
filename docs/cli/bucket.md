@@ -568,11 +568,13 @@ Listed: 4 names
 
 ## Evict remote bucket
 
-`ais bucket evict BUCKET`
+Evict a [remote bucket](/docs/bucket.md#remote-bucket).
 
-Evict a [remote bucket](/docs/bucket.md#remote-bucket). It also resets the properties of the bucket (if changed).
-All data from the remote bucket stored in the cluster will be removed, and AIS will stop keeping track of the remote bucket.
 Read more about this feature [here](/docs/bucket.md#evict-remote-bucket).
+
+Some of the supported functionality can be quickly demonstrated with the following examples:
+
+* [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
 
 ```console
 $ ais bucket evict aws://abc

@@ -147,8 +147,7 @@ $ ais bucket evict ...
 See also:
 
 * [CLI: Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
-* [api.CreateBucket() and api.SetBucketProps()](/api/bucket.go)
-* [RESTful API](http_api.md)
+* [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
 * [CLI: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 * [CLI documentation and many more examples](cli/bucket.md)
 

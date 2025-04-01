@@ -384,7 +384,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 
 		// start and immdiately finish xaction with a singular purpose:
 		// to have a record in xreg (via `ais show job`): name and timestamp only
-		debug.Assert(strings.HasPrefix(xid, prefixEvictKmdID), xid)
+		debug.Assert(strings.HasPrefix(xid, prefixEvictKpmdXid), xid)
 		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, apireq.bck, nil)
 
 		core.LcacheClearBcks(wg, apireq.bck)

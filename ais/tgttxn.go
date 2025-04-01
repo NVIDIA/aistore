@@ -216,7 +216,9 @@ func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
 	// to have a record in xreg (via `ais show job`): name and timestamp only
 	// (compare with httpbckdelete/ActEvictRemoteBck)
 	if c.msg.Action == apc.ActEvictRemoteBck {
-		_ = xreg.RenewEvictDelete(c.uuid, apc.ActEvictRemoteBck, c.bck, nil)
+		xid := c.uuid
+		debug.Assert(strings.HasPrefix(xid, prefixEvictRmmdXid), xid)
+		_ = xreg.RenewEvictDelete(xid, apc.ActEvictRemoteBck, c.bck, nil)
 	}
 
 	return err

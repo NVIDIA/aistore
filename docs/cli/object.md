@@ -53,7 +53,7 @@ ls           promote      concat       evict        mv           cat
 - [APPEND object](#append-object)
 - [Delete object](#delete-object)
   - [Disambiguating multi-object operation](#disambiguating-multi-object-operation)
-- [Evict object](#evict-object)
+- [Evict one remote bucket, multiple remote buckets, or selected objects in a given remote bucket or buckets](#evict-one-remote-bucket-multiple-remote-buckets-or-selected-objects-in-a-given-remote-bucket-or-buckets)
 - [Move object](#move-object)
 - [Concat objects](#concat-objects)
 - [Set custom properties](#set-custom-properties)
@@ -1565,9 +1565,11 @@ obj2.tgz deleted from aws://cloudbck bucket
 * NOTE: for each space-separated object name CLI sends a separate request.
 * For multi-object delete that operates on a `--list` or `--template`, please see: [Operations on Lists and Ranges (and entire buckets)](#operations-on-lists-and-ranges-and-entire-buckets) below.
 
-# Evict object
+# Evict one remote bucket, multiple remote buckets, or selected objects in a given remote bucket or buckets
 
-`ais evict` - Evict one remote bucket, multiple remote buckets, or selected objects in a given remote bucket or buckets.
+Some of the supported functionality can be quickly demonstrated with the following examples:
+
+* [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
 
 
 ```console
@@ -1591,7 +1593,7 @@ USAGE:
 
 OPTIONS:
    dry-run           Preview the results without really running the action
-   keep-md           Keep bucket metadata
+   keep-md,k         Keep bucket metadata
    list              Comma-separated list of object or file names, e.g.:
                      --list 'o1,o2,o3'
                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"

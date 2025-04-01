@@ -645,7 +645,7 @@ var (
 		Usage: "Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)",
 	}
 
-	keepMDFlag = cli.BoolFlag{Name: "keep-md,kmd", Usage: "Keep bucket metadata"}
+	keepMDFlag = cli.BoolFlag{Name: "keep-md,k", Usage: "Keep bucket metadata"}
 
 	copiesFlag = cli.IntFlag{Name: "copies", Usage: "Number of object replicas", Value: 1, Required: true}
 

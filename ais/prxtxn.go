@@ -241,7 +241,7 @@ func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *c
 	// 2. begin
 	var (
 		waitmsync = true // commit blocks behind metasync
-		c         = p.prepTxnClient(msg, bck, waitmsync)
+		c         = p.newTxnC(msg, bck, waitmsync)
 	)
 	if err := c.begin(bck); err != nil {
 		return err
@@ -306,7 +306,7 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *meta.Bck) (xid string, err err
 	// 2. begin
 	var (
 		waitmsync = true
-		c         = p.prepTxnClient(msg, bck, waitmsync)
+		c         = p.newTxnC(msg, bck, waitmsync)
 	)
 	if err = c.begin(bck); err != nil {
 		return
@@ -411,7 +411,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	nmsg.Value = nprops
 	var (
 		waitmsync = true
-		c         = p.prepTxnClient(&nmsg, bck, waitmsync)
+		c         = p.newTxnC(&nmsg, bck, waitmsync)
 	)
 	if err := c.begin(bck); err != nil {
 		return "", err
@@ -492,7 +492,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	// 2. begin
 	var (
 		waitmsync = true
-		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
+		c         = p.newTxnC(msg, bckFrom, waitmsync)
 	)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
@@ -593,7 +593,7 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 	// 2. begin
 	var (
 		waitmsync = !dryRun && !existsTo
-		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
+		c         = p.newTxnC(msg, bckFrom, waitmsync)
 	)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
@@ -763,7 +763,7 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 	// 2. begin
 	var (
 		waitmsync = true
-		c         = p.prepTxnClient(msg, bck, waitmsync)
+		c         = p.newTxnC(msg, bck, waitmsync)
 	)
 	if err = c.begin(bck); err != nil {
 		return
@@ -845,7 +845,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (x
 	var all []string // all xaction UUIDs
 
 	// begin
-	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
+	c := p.newTxnC(msg, bckFrom, false /*waitmsync*/)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 	if err = c.begin(bckFrom); err != nil {
 		return
@@ -860,9 +860,14 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (x
 
 func (p *proxy) beginRmTarget(si *meta.Snode, msg *apc.ActMsg) error {
 	debug.Assert(si.IsTarget(), si.StringEx())
-	c := p.prepTxnClient(msg, nil, false /*waitmsync*/)
+	c := p.newTxnC(msg, nil, false /*waitmsync*/)
 	return c.begin(si)
 }
+
+const (
+	prefixEvictKpmdXid = "kpmd-"
+	prefixEvictRmmdXid = "rmmd-"
+)
 
 // destroy bucket: { begin -- commit }
 func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
@@ -876,9 +881,10 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 	// 1. begin
 	var (
 		waitmsync = true
-		c         = p.prepTxnClient(actMsg, bck, waitmsync)
 		config    = cmn.GCO.Get()
+		c         = p.newTxnDestroyBck(actMsg, bck, config, waitmsync)
 	)
+
 	// NOTE: testing only: to avoid premature aborts when loopback devices get 100% utilized
 	// (under heavy writing)
 	if config.TestingEnv() {
@@ -911,13 +917,11 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 	return err
 }
 
-const prefixEvictKmdID = "kmd-"
-
 // delete in-cluster bucket data, keep bucket metadata
 func (p *proxy) evictRemoteKeepMD(msg *apc.ActMsg, bck *meta.Bck) error {
 	query := bck.AddToQuery(url.Values{
 		apc.QparamKeepRemote: []string{"true"},
-		apc.QparamUUID:       []string{prefixEvictKmdID + cos.GenUUID()},
+		apc.QparamUUID:       []string{prefixEvictKpmdXid + cos.GenUUID()}, // vs destroyBucket above
 	})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
@@ -948,7 +952,7 @@ func (p *proxy) promote(bck *meta.Bck, msg *apc.ActMsg, tsi *meta.Snode) (xid st
 		allAgree, noXact bool
 		singleT          bool
 	)
-	c := p.prepTxnClient(msg, bck, waitmsync)
+	c := p.newTxnC(msg, bck, waitmsync)
 	if c.smap.CountActiveTs() == 1 {
 		singleT = true
 	} else if tsi != nil {
@@ -1024,7 +1028,14 @@ func prmBegin(c *txnCln, bck *meta.Bck, singleT bool) (num int64, allAgree bool,
 // misc
 ///
 
-func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *txnCln {
+func (p *proxy) newTxnDestroyBck(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitmsync bool) *txnCln {
+	// (prefixEvictRmmdXid vs evictRemoteKeepMD)
+	c := &txnCln{p: p, uuid: prefixEvictRmmdXid + cos.GenUUID(), smap: p.owner.smap.get()}
+	c.init(msg, bck, config, waitmsync)
+	return c
+}
+
+func (p *proxy) newTxnC(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *txnCln {
 	c := &txnCln{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
 	c.init(msg, bck, cmn.GCO.Get(), waitmsync)
 	return c
