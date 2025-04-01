@@ -31,9 +31,8 @@ class TestPytorchPlugin(unittest.TestCase):
     """Integration tests for the PyTorch plugin"""
 
     def setUp(self) -> None:
-        self.bck_name = random_string()
         self.client = DEFAULT_TEST_CLIENT
-        self.bck = self.client.bucket(self.bck_name)
+        self.bck = self.client.bucket(random_string())
         self.bck.create()
         self.local_test_files = (
             Path().absolute().joinpath("pytorch-plugin-test-" + random_string(8))
@@ -51,8 +50,8 @@ class TestPytorchPlugin(unittest.TestCase):
         content_dict = {}
         for i in range(count):
             obj_name = f"temp/obj{i}"
-            content = create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=obj_name
+            _, content = create_and_put_object(
+                self.client, bck=self.bck.as_model(), obj_name=obj_name
             )
             content_dict[obj_name] = content
         return content_dict
@@ -162,7 +161,6 @@ class TestPytorchPlugin(unittest.TestCase):
 
     def test_multishard_stream(self):
         self.local_test_files.mkdir()
-        bucket = self.client.bucket(self.bck_name)
         # Create two shards and store them in the bucket
         shard1_content_dict = {
             "file1.txt": b"Content of file one",
@@ -172,7 +170,7 @@ class TestPytorchPlugin(unittest.TestCase):
         shard1_archive_name = "test_multishard_shard1.tar"
         shard1_archive_path = self.local_test_files.joinpath(shard1_archive_name)
         create_archive(shard1_archive_path, shard1_content_dict)
-        shard1_obj = bucket.object(obj_name=shard1_archive_name)
+        shard1_obj = self.bck.object(obj_name=shard1_archive_name)
         shard1_obj.get_writer().put_file(shard1_archive_path)
 
         shard2_content_dict = {
@@ -183,17 +181,17 @@ class TestPytorchPlugin(unittest.TestCase):
         shard2_archive_name = "test_multishard_shard2.tar"
         shard2_archive_path = self.local_test_files.joinpath(shard2_archive_name)
         create_archive(shard2_archive_path, shard2_content_dict)
-        shard2_obj = bucket.object(obj_name=shard2_archive_name)
+        shard2_obj = self.bck.object(obj_name=shard2_archive_name)
         shard2_obj.get_writer().put_file(shard2_archive_path)
 
         shard1 = DataShard(
             client_url=CLUSTER_ENDPOINT,
-            bucket_name=self.bck_name,
+            bucket_name=self.bck.name,
             prefix="test_multishard_shard1.tar",
         )
         shard2 = DataShard(
             client_url=CLUSTER_ENDPOINT,
-            bucket_name=self.bck_name,
+            bucket_name=self.bck.name,
             prefix="test_multishard_shard2.tar",
         )
         dataset = AISMultiShardStream(data_sources=[shard1, shard2])
@@ -206,12 +204,11 @@ class TestPytorchPlugin(unittest.TestCase):
 
     def test_shard_reader(self):
         self.local_test_files.mkdir()
-        bucket = self.client.bucket(self.bck_name)
 
         def prepare_shard(content_dict, name):
             path = self.local_test_files.joinpath(name)
             create_archive(path, content_dict)
-            obj = bucket.object(obj_name=name)
+            obj = self.bck.object(obj_name=name)
             obj.get_writer().put_file(path)
 
         shard1_data = {
@@ -261,13 +258,13 @@ class TestPytorchPlugin(unittest.TestCase):
         sample_names = ["sample_1", "sample_2", "sample_3", "sample_4"]
 
         shard_reader = AISShardReader(
-            bucket_list=[bucket], prefix_map={bucket: "shard1.tar"}
+            bucket_list=[self.bck], prefix_map={self.bck: "shard1.tar"}
         )
         for i, (basename, sample) in enumerate(shard_reader):
             self.assertEqual(basename, sample_names[i])
             self.assertEqual(sample, expected[i])
 
-        shard_reader = AISShardReader(bucket_list=[bucket])
+        shard_reader = AISShardReader(bucket_list=[self.bck])
         for i, (basename, sample) in enumerate(shard_reader):
             self.assertEqual(basename, sample_names[i])
             self.assertEqual(sample, expected[i])

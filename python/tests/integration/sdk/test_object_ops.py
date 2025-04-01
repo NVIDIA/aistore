@@ -28,8 +28,6 @@ from tests.const import (
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
-    random_string,
-    cleanup_local,
     cases,
     create_archive,
     string_to_dict,
@@ -47,17 +45,6 @@ def has_enough_targets():
 
 # pylint: disable=unused-variable, too-many-public-methods
 class TestObjectOps(ParallelTestBase):
-    def setUp(self) -> None:
-        super().setUp()
-        self.local_test_files = (
-            Path().absolute().joinpath("object-ops-test-" + random_string(8))
-        )
-
-    def tearDown(self) -> None:
-        super().tearDown()
-        # Cleanup local files at end
-        cleanup_local(str(self.local_test_files))
-
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
         reader = self.bucket.object(obj_name).get_reader(chunk_size=chunk_size)
@@ -80,19 +67,16 @@ class TestObjectOps(ParallelTestBase):
     def _put_objects(self, num_obj, obj_size=None):
         name_to_content = {}
         for i in range(num_obj):
-            obj_name, content = self._create_object_with_content(obj_size=obj_size)
-            name_to_content[obj_name] = content
+            obj, content = self._create_object_with_content(obj_size=obj_size)
+            name_to_content[obj.name] = content
         return name_to_content
 
     def test_put_content(self):
-        content = b"content for the object"
-        obj = self._create_object()
-        obj.get_writer().put_content(content)
+        obj, content = self._create_object_with_content()
         res = obj.get_reader()
         self.assertEqual(content, res.read_all())
 
     def test_put_file(self):
-        self.local_test_files.mkdir()
         content = b"content for the object"
         filename = self.local_test_files.joinpath("test_file")
         with open(filename, "wb") as writer:
@@ -105,7 +89,6 @@ class TestObjectOps(ParallelTestBase):
     def test_put_file_invalid(self):
         with self.assertRaises(ValueError):
             self.bucket.object("any").get_writer().put_file("non-existent-file")
-        self.local_test_files.mkdir()
         inner_dir = self.local_test_files.joinpath("inner_dir_not_file")
         inner_dir.mkdir()
         with self.assertRaises(ValueError):
@@ -122,9 +105,7 @@ class TestObjectOps(ParallelTestBase):
                 self._test_get_obj(option, obj_name, content)
 
     def test_append_content(self):
-        content = b"object head before append"
-        obj = self._create_object()
-        obj.get_writer().put_content(content)
+        obj, content = self._create_object_with_content()
 
         obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
         next_handle = ""
@@ -136,19 +117,16 @@ class TestObjectOps(ParallelTestBase):
         self.assertEqual(flushed, "")
 
     def test_get_object_appended_without_flush(self):
-        original_content = b"object head before append"
-        obj = self._create_object()
-        obj.get_writer().put_content(original_content)
+        obj, content = self._create_object_with_content()
 
         obj_partitions = [b"1111111111", b"222222222222222", b"333333333"]
         next_handle = ""
         for data in obj_partitions:
             next_handle = obj.get_writer().append_content(data, next_handle)
         res = obj.get_reader()
-        self.assertEqual(original_content, res.read_all())
+        self.assertEqual(content, res.read_all())
 
     def test_get_with_writer(self):
-        self.local_test_files.mkdir()
         filename = self.local_test_files.joinpath("test_get_with_writer.txt")
         objects = self._put_objects(10)
         all_content = b""
@@ -174,9 +152,7 @@ class TestObjectOps(ParallelTestBase):
             self.assertEqual(content[5:101], resp)
 
     def test_set_custom_props(self):
-        cont = b"test content"
-        obj = self._create_object()
-        obj.get_writer().put_content(cont)
+        obj, _ = self._create_object_with_content()
 
         obj.get_writer().set_custom_props(
             custom_metadata={"testkey1": "testval1", "testkey2": "testval2"}
@@ -239,9 +215,7 @@ class TestObjectOps(ParallelTestBase):
         Test the `Ais-Present` property of an object.
         This test ensures that the `present` property is correctly set for object.
         """
-        # Create an object
-        obj = self._create_object()
-        obj.get_writer().put_content(b"test content")
+        obj, _ = self._create_object_with_content()
 
         # Verify the object is present
         self.assertEqual(
@@ -279,7 +253,6 @@ class TestObjectOps(ParallelTestBase):
     # pylint: disable=too-many-locals
     def test_promote(self):
         self.bucket = self._create_bucket()
-        self.local_test_files.mkdir()
         top_folder = self.local_test_files.joinpath("promote_folder")
         top_item = "test_file_top"
         top_item_contents = "contents in the test file"
@@ -372,22 +345,20 @@ class TestObjectOps(ParallelTestBase):
         "Remote bucket is not set",
     )
     def test_blob_download(self):
-        obj_name, _ = self._create_object_with_content()
+        obj, _ = self._create_object_with_content()
 
-        evict_job_id = self.bucket.objects(obj_names=[obj_name]).evict()
+        evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
         self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertFalse(obj.props.present)
 
-        blob_download_job_id = self.bucket.object(obj_name).blob_download()
+        blob_download_job_id = obj.blob_download()
         self.assertNotEqual(blob_download_job_id, "")
         self.client.job(job_id=blob_download_job_id).wait_single_node(
             timeout=TEST_TIMEOUT
         )
-
-        objects = self.bucket.list_objects(props="name,cached", prefix=obj_name).entries
-        self._validate_objects_cached(objects, True)
+        self.assertTrue(obj.props.present)
 
     def test_get_archregex(self):
-        self.local_test_files.mkdir()
         archive_name = "test_archive.tar"
         archive_path = self.local_test_files.joinpath(archive_name)
         content_dict = {
@@ -405,8 +376,7 @@ class TestObjectOps(ParallelTestBase):
         objs = self.bucket.list_objects_iter(
             prefix=obj.name, props="name", flags=[ListObjectFlag.ARCH_DIR]
         )
-        obj_names = [obj.name for obj in objs]
-        self.assertEqual(len(obj_names), 7)
+        self.assertEqual(len(list(objs)), 7)
         archive_config = ArchiveConfig(archpath="file1.txt")
         extracted_content_archpath = obj.get_reader(
             archive_config=archive_config
@@ -493,10 +463,7 @@ class TestObjectOps(ParallelTestBase):
         successfully identify and connect to the correct target using `_retry_with_new_smap`.
         """
         self.bucket = self._create_bucket()
-        obj = self._create_object()
-
-        content = b"content for the object"
-        bck_name, obj_name = self.bucket.name, obj.name
+        obj, content = self._create_object_with_content()
 
         obj.get_writer().put_content(content)
         expected_content = obj.get_reader(direct=True).read_all()
@@ -510,8 +477,8 @@ class TestObjectOps(ParallelTestBase):
                 continue
             clnt = Client(target.public_net.direct_url)
             content = (
-                clnt.bucket(bck_name)
-                .object(obj_name)
+                clnt.bucket(self.bucket.name)
+                .object(obj.name)
                 .get_reader(direct=True)
                 .read_all()
             )

@@ -24,13 +24,12 @@ class TestObjectReaderOps(unittest.TestCase):
         bck_name = f"test-bck-{random_string(8)}"
         cls.bucket = cls.client.bucket(bck_name).create(exist_ok=True)
         object_name = "test-object"
-        cls.object_content = create_and_put_object(
+        cls.object, cls.object_content = create_and_put_object(
             client=cls.client,
-            bck_name=cls.bucket.name,
+            bck=cls.bucket.as_model(),
             obj_name=object_name,
             obj_size=cls.object_size,
         )
-        cls.object = cls.bucket.object(object_name)
         cls.object_reader = cls.object.get_reader()
 
     @classmethod

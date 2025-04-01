@@ -16,6 +16,7 @@ markers = [
     "etl: marks tests as using ETL, requiring a Kubernetes cluster",
     "authn: marks tests as using AuthN, requiring an AIStore cluster with AuthN enabled",
     "extended: tests beyond simple integration, including stress tests and cluster changes",
+    "nonparallel: tests that are specifically not able to run alongside certain others",
 ]
 
 [project]

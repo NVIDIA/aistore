@@ -35,21 +35,20 @@ ETL_NAME_SPEC_COMP = "etl-" + random_string(5)
 # pylint: disable=unused-variable
 class TestETLOps(unittest.TestCase):
     def setUp(self) -> None:
-        self.bck_name = random_string()
         print("URL END PT ", CLUSTER_ENDPOINT)
         self.client = DEFAULT_TEST_CLIENT
 
-        self.bucket = self.client.bucket(bck_name=self.bck_name).create()
+        self.bucket = self.client.bucket(bck_name=random_string()).create()
         self.obj_name = "temp-obj1.jpg"
         self.obj_size = 128
-        self.content = create_and_put_object(
+        _, self.content = create_and_put_object(
             client=self.client,
-            bck_name=self.bck_name,
+            bck=self.bucket.as_model(),
             obj_name=self.obj_name,
             obj_size=self.obj_size,
         )
         create_and_put_object(
-            client=self.client, bck_name=self.bck_name, obj_name="obj2.jpg"
+            client=self.client, bck=self.bucket.as_model(), obj_name="obj2.jpg"
         )
 
         self.current_etl_count = len(self.client.cluster().list_running_etls())
@@ -209,8 +208,8 @@ class TestETLOps(unittest.TestCase):
         content = {}
         for i in range(num_objs):
             obj_name = f"obj{ i }"
-            content[obj_name] = create_and_put_object(
-                client=self.client, bck_name=self.bck_name, obj_name=obj_name
+            _, content[obj_name] = create_and_put_object(
+                client=self.client, bck=self.bucket.as_model(), obj_name=obj_name
             )
 
         # code (hpush)
@@ -333,9 +332,9 @@ class TestETLOps(unittest.TestCase):
 
         for obj_size in obj_sizes:
             obj_name = f"obj-{obj_size}.jpg"
-            content = create_and_put_object(
+            _, content = create_and_put_object(
                 client=self.client,
-                bck_name=self.bck_name,
+                bck=self.bucket.as_model(),
                 obj_name=obj_name,
                 obj_size=obj_size,
             )
@@ -370,9 +369,9 @@ class TestETLOps(unittest.TestCase):
             bck = self.client.bucket(src_bck_name).create()
             for j in range(num_objects):
                 obj_name = f"obj{j}.jpg"
-                content[obj_name] = create_and_put_object(
+                _, content[obj_name] = create_and_put_object(
                     client=self.client,
-                    bck_name=src_bck_name,
+                    bck=bck.as_model(),
                     obj_name=obj_name,
                     obj_size=self.obj_size,
                 )

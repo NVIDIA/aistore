@@ -19,6 +19,7 @@ from tests.const import (
     TEST_TIMEOUT_LONG,
     PREFIX_NAME,
     SUFFIX_NAME,
+    SMALL_FILE_SIZE,
 )
 from tests.integration import REMOTE_SET, AWS_BUCKET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
@@ -84,6 +85,8 @@ class TestObjectGroupOps(ParallelTestBase):
         "Remote bucket is not set",
     )
     def test_prefetch_list(self):
+        # Use smaller size to help speed with lots of remote objects
+        self.file_size = SMALL_FILE_SIZE
         self._prefetch_objects_test_helper()
 
     @unittest.skipIf(
@@ -91,6 +94,7 @@ class TestObjectGroupOps(ParallelTestBase):
         "Remote bucket is not set",
     )
     def test_prefetch_list_with_num_workers(self):
+        self.file_size = SMALL_FILE_SIZE
         self._prefetch_objects_test_helper(num_workers=3)
 
     @unittest.skipIf(
@@ -121,6 +125,7 @@ class TestObjectGroupOps(ParallelTestBase):
         not REMOTE_SET,
         "Remote bucket is not set",
     )
+    @pytest.mark.nonparallel("checks job within timeframe")
     def test_prefetch_without_blob_download(self):
         obj_group = self.bucket.objects(obj_names=self.obj_names)
         self._evict_objects(obj_group)
@@ -216,21 +221,20 @@ class TestObjectGroupOps(ParallelTestBase):
         not AWS_BUCKET,
         "AWS bucket is not set",
     )
-    def test_copy_objects_sync_flag(self):
+    @pytest.mark.nonparallel("job uuid query does not work with multiple")
+    def test_object_group_copy_sync_flag(self):
         to_bck = self._create_bucket()
 
         # run copy with '--sync' on different dst, and make sure the object "disappears"
         # multi-obj --sync currently only supports templates
         # TODO: add test for multi-obj list --sync once api is ready
         template = self.obj_prefix + "{0..10}" + self.suffix
-        copy_job = self.bucket.objects(obj_template=template).copy(to_bck)
+        obj_group = self.bucket.objects(obj_template=template)
+        copy_job = obj_group.copy(to_bck)
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         self.assertEqual(
             len(to_bck.list_all_objects(prefix=self.obj_prefix)), OBJECT_COUNT
         )
-
-        prefetch_job = self.bucket.objects(obj_template=template).prefetch()
-        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # out of band delete all objects
         for obj_name in self.obj_names:

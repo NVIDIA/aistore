@@ -1,27 +1,24 @@
 #
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
-
-# Default provider is AIS, so all Cloud-related tests are skipped.
-
-import unittest
+import pytest
 
 from aistore.sdk import Client
 from aistore.sdk.const import ACT_COPY_OBJECTS
-from tests.integration.sdk import TEST_RETRY_CONFIG, DEFAULT_TEST_CLIENT
+from tests.integration.sdk import TEST_RETRY_CONFIG
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import random_string
 
 
-class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
+class TestClusterOps(ParallelTestBase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
-        self.client = DEFAULT_TEST_CLIENT
+        super().setUp()
         self.cluster = self.client.cluster()
 
     def test_health_success(self):
         self.assertTrue(self.cluster.is_ready())
 
     def test_health_failure(self):
-        # url not existing or URL down
         self.assertFalse(
             Client("http://localhost:1234", retry_config=TEST_RETRY_CONFIG)
             .cluster()
@@ -63,29 +60,22 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
             [job_3_id],
         )
 
+    @pytest.mark.nonparallel("does not work with existing copy-listrange jobs")
     def test_list_running_jobs(self):
         # First generate a multi-obj copy job that will stay "running" (but idle) long enough to query
-        bck_name = random_string()
-        new_bck_name = random_string()
+        bck = self._create_bucket()
+        dest_bck = self._create_bucket()
         obj_name = random_string()
-        bck = self.client.bucket(bck_name).create()
-        new_bck = self.client.bucket(new_bck_name).create()
-        try:
-            bck.object(obj_name).get_writer().put_content("any content")
-            idle_job = bck.objects(obj_names=[obj_name]).copy(to_bck=new_bck)
+        bck.object(obj_name).get_writer().put_content("any content")
+        idle_job = bck.objects(obj_names=[obj_name]).copy(to_bck=dest_bck)
 
-            expected_res = f"{ACT_COPY_OBJECTS}[{idle_job}]"
-            self.assertIn(expected_res, self.client.cluster().list_running_jobs())
-            self.assertIn(
-                expected_res,
-                self.cluster.list_running_jobs(job_kind=ACT_COPY_OBJECTS),
-            )
-            self.assertNotIn(
-                expected_res, self.cluster.list_running_jobs(job_kind="lru")
-            )
-        finally:
-            bck.delete()
-            new_bck.delete()
+        expected_res = f"{ACT_COPY_OBJECTS}[{idle_job}]"
+        self.assertIn(expected_res, self.client.cluster().list_running_jobs())
+        self.assertIn(
+            expected_res,
+            self.cluster.list_running_jobs(job_kind=ACT_COPY_OBJECTS),
+        )
+        self.assertNotIn(expected_res, self.cluster.list_running_jobs(job_kind="lru"))
 
     def test_get_performance(self):
         smap = self.cluster.get_info()

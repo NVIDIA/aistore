@@ -8,15 +8,16 @@ from itertools import product
 from pathlib import Path
 from unittest.mock import Mock
 
-from typing import Dict, List, Iterator
+from typing import Dict, List, Iterator, Tuple
 
 import requests
 from requests.exceptions import ChunkedEncodingError
 
-from aistore.sdk import Client
+from aistore.sdk import Client, Object
 from aistore.sdk.const import UTF_ENCODING
-from aistore.sdk.provider import Provider
 from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.types import BucketModel
+from tests.const import KB
 
 
 # pylint: disable=too-few-public-methods
@@ -87,7 +88,7 @@ class BadContentIterator(ContentIterator):
 
 
 # pylint: disable=unused-variable
-def random_string(length: int = 10):
+def random_string(length: int = 10) -> str:
     return "".join(random.choices(string.ascii_lowercase, k=length))
 
 
@@ -102,18 +103,15 @@ def string_to_dict(input_string: str) -> Dict:
 # pylint: disable=unused-variable
 def create_and_put_object(
     client: Client,
-    bck_name: str,
+    bck: BucketModel,
     obj_name: str,
-    provider: Provider = Provider.AIS,
     obj_size: int = 0,
-):
+) -> Tuple["Object", bytes]:
     obj_size = obj_size if obj_size else random.randrange(10, 20)
-    obj_body = "".join(random.choices(string.ascii_letters, k=obj_size))
-    content = obj_body.encode(UTF_ENCODING)
-    client.bucket(bck_name, provider=provider).object(
-        obj_name
-    ).get_writer().put_content(content)
-    return content
+    content = random_string(obj_size).encode(UTF_ENCODING)
+    obj = client.bucket(bck.name, provider=bck.provider).object(obj_name)
+    obj.get_writer().put_content(content)
+    return obj, content
 
 
 def cleanup_local(path: str):
@@ -121,23 +119,6 @@ def cleanup_local(path: str):
         shutil.rmtree(path)
     except FileNotFoundError:
         pass
-
-
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-def create_and_put_objects(
-    client, bucket, prefix, suffix, num_obj, obj_names, obj_size=None
-):
-    if not obj_names:
-        obj_names = [prefix + str(i) + suffix for i in range(num_obj)]
-    for obj_name in obj_names:
-        create_and_put_object(
-            client,
-            bck_name=bucket.name,
-            provider=bucket.provider,
-            obj_name=obj_name,
-            obj_size=obj_size,
-        )
-    return obj_names
 
 
 def cases(*args):
@@ -177,18 +158,13 @@ def create_archive(archive_name, content_dict):
 
 
 def create_random_tarballs(
-    num_files: int, num_extensions: int, min_shard_size: int, dest_dir: str
+    num_files: int, num_extensions: int, min_shard_size: int, dest_dir: Path
 ):
-    def generate_random_content(min_size: int = 1024, max_size: int = 10240) -> bytes:
-        size = random.randint(min_size, max_size)
-        return os.urandom(size)
-
-    def generate_files(num_files: int, num_extensions: int, dest_dir: str) -> List:
+    def generate_files(
+        num_files: int, num_extensions: int, dest_dir: Path
+    ) -> tuple[List[Path], List[str]]:
         files_list = []
         filenames_list = []
-
-        dest_dir_path = Path(dest_dir)
-        dest_dir_path.mkdir(parents=True, exist_ok=True)
 
         extension_list = [random_string(3) for _ in range(num_extensions)]
         for _ in range(num_files):
@@ -196,18 +172,19 @@ def create_random_tarballs(
             filenames_list.append(filename)
 
             for ext in extension_list:
-                file_path = dest_dir_path / f"{filename}.{ext}"
+                file_path = dest_dir.joinpath(f"{filename}.{ext}")
                 with open(file_path, "wb") as file:
-                    file.write(generate_random_content())
+                    file.write(os.urandom((random.randint(KB, 10 * KB))))
                 files_list.append(file_path)
 
         return files_list, extension_list
 
-    def create_tarballs(min_shard_size: int, dest_dir: str, files_list: List) -> None:
+    def create_tarballs(
+        min_shard_size: int, dest_dir: Path, files_list: List[Path]
+    ) -> int:
         num_input_shards = 0
         current_size = 0
-        dest_dir_path = Path(dest_dir).resolve()
-        current_tarball = dest_dir_path / f"input-shard-{num_input_shards}.tar"
+        current_tarball = dest_dir.joinpath(f"input-shard-{num_input_shards}.tar")
         total_size = 0
         file_count = 0
         tarball_info = []
@@ -221,7 +198,9 @@ def create_random_tarballs(
                     f"{current_tarball.name}\t{current_size}\t{file_count}"
                 )
                 num_input_shards += 1
-                current_tarball = dest_dir_path / f"input-shard-{num_input_shards}.tar"
+                current_tarball = dest_dir.joinpath(
+                    f"input-shard-{num_input_shards}.tar"
+                )
                 current_size = 0
                 file_count = 0
 
@@ -237,9 +216,9 @@ def create_random_tarballs(
         tarball_info.append(f"{current_tarball.name}\t{current_size}\t{file_count}")
         return num_input_shards
 
-    filename_list, extension_list = generate_files(num_files, num_extensions, dest_dir)
-    num_input_shards = create_tarballs(min_shard_size, dest_dir, filename_list)
-    filename_list = list(map(lambda filepath: filepath.stem, filename_list))
+    file_list, extension_list = generate_files(num_files, num_extensions, dest_dir)
+    num_input_shards = create_tarballs(min_shard_size, dest_dir, file_list)
+    filename_list = list(map(lambda filepath: filepath.stem, file_list))
     return filename_list, extension_list, num_input_shards
 
 

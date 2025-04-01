@@ -5,6 +5,7 @@ import random
 import unittest
 from pathlib import Path
 
+import pytest
 import requests
 
 from aistore.sdk import ListObjectFlag
@@ -18,13 +19,14 @@ from aistore.sdk.provider import Provider
 
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
-from tests.utils import random_string, cleanup_local, cases
+from tests.utils import random_string, cases
 from tests.const import (
     OBJECT_COUNT,
     OBJ_CONTENT,
     PREFIX_NAME,
     TEST_TIMEOUT,
     SUFFIX_NAME,
+    TEST_TIMEOUT_LONG,
 )
 from tests.integration import REMOTE_SET, AWS_BUCKET
 
@@ -46,18 +48,7 @@ def _create_files(folder, file_dict):
 
 # pylint: disable=unused-variable, too-many-public-methods
 class TestBucketOps(ParallelTestBase):
-    def setUp(self) -> None:
-        super().setUp()
-        self.local_test_files = (
-            Path().absolute().joinpath("bucket-ops-test-" + random_string(8))
-        )
-
-    def tearDown(self) -> None:
-        super().tearDown()
-        cleanup_local(str(self.local_test_files))
-
     def _create_put_files_structure(self, top_level_files, lower_level_files):
-        self.local_test_files.mkdir(exist_ok=True)
         _create_files(self.local_test_files, top_level_files)
         inner_dir = self.local_test_files.joinpath(INNER_DIR)
         inner_dir.mkdir()
@@ -70,7 +61,15 @@ class TestBucketOps(ParallelTestBase):
         self.assertIn(new_bck.name, bucket_names)
 
     @cases(
-        "*", ".", "", " ", "bucket/name", "bucket and name", "#name", "$name", "~name"
+        "*",
+        ".",
+        "",
+        " ",
+        "bucket/badname",
+        "bucket and name",
+        "#badname",
+        "$badname",
+        "~badname",
     )
     def test_create_bucket_invalid_name(self, testcase):
         with self.assertRaises(AISError):
@@ -94,15 +93,17 @@ class TestBucketOps(ParallelTestBase):
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
 
+    @pytest.mark.nonparallel("causes rebalance")
     def test_rename(self):
         from_bck = self._create_bucket()
         to_bck_name = from_bck.name + "-renamed"
+        self._register_for_post_test_cleanup([to_bck_name], is_bucket=True)
 
         job_id = from_bck.rename(to_bck_name=to_bck_name)
         self.assertNotEqual(job_id, "")
 
         # wait for rename to finish
-        self.client.job(job_id).wait()
+        self.client.job(job_id).wait(TEST_TIMEOUT_LONG)
 
         # new bucket should be created and accessible
         to_bck = self.client.bucket(to_bck_name)
@@ -111,10 +112,9 @@ class TestBucketOps(ParallelTestBase):
 
         # old bucket should be inaccessible
         try:
-            from_bck.head()
+            self.client.bucket(from_bck.name).head()
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
-        self._register_for_post_test_cleanup(names=[to_bck_name], is_bucket=True)
 
     def test_copy(self):
         from_bck = self._create_bucket()
@@ -175,10 +175,11 @@ class TestBucketOps(ParallelTestBase):
         not AWS_BUCKET,
         "AWS bucket is not set",
     )
-    def test_copy_objects_sync_flag(self):
+    @pytest.mark.nonparallel("job uuid query does not work with multiple")
+    def test_copy_sync_flag(self):
+        to_bck = self._create_bucket()
         num_obj = OBJECT_COUNT
         obj_names = self._create_objects(num_obj=num_obj, suffix=SUFFIX_NAME)
-        to_bck = self._create_bucket()
 
         obj_group = self.bucket.objects(obj_names=obj_names)
 
@@ -203,12 +204,15 @@ class TestBucketOps(ParallelTestBase):
             prefix_filter=self.obj_prefix, to_bck=to_bck, sync=True
         )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 3)
-        self.assertEqual(num_obj - num_to_del, len(to_bck.list_all_objects()))
+        self.assertEqual(
+            num_obj - num_to_del, len(to_bck.list_all_objects(prefix=self.obj_prefix))
+        )
 
     @unittest.skipIf(
         not REMOTE_SET,
         "Remote bucket is not set",
     )
+    @pytest.mark.nonparallel("full bucket eviction")
     def test_evict(self):
         self._create_objects()
         objects = self.bucket.list_objects(
@@ -238,7 +242,6 @@ class TestBucketOps(ParallelTestBase):
     def test_put_files_invalid(self):
         with self.assertRaises(ValueError):
             self.bucket.put_files("non-existent-dir")
-        self.local_test_files.mkdir()
         filename = self.local_test_files.joinpath("file_not_dir")
         with open(filename, "w", encoding=UTF_ENCODING):
             pass
@@ -294,7 +297,6 @@ class TestBucketOps(ParallelTestBase):
         self._verify_obj_res(expected_res)
 
     def test_put_files_filtered(self):
-        self.local_test_files.mkdir()
         included_filename = "prefix-file.txt"
         excluded_by_pattern = "extra_top_file.py"
         excluded_by_prefix = "non-prefix-file.txt"
@@ -356,8 +358,17 @@ class TestBucketOps(ParallelTestBase):
             obj_names.remove(obj.name)
         self.assertEqual(0, len(obj_names))
 
-    def test_list_object_flags(self):
+    def test_list_object_flags_combined(self):
         self._create_objects()
+        # Test a single flag
+        objects = self.bucket.list_all_objects(
+            flags=[ListObjectFlag.NAME_SIZE], prefix=self.obj_prefix
+        )
+        self.assertEqual(OBJECT_COUNT, len(objects))
+        for obj in objects:
+            self.assertTrue(obj.size > 0)
+
+        # Test a list of multiple flags
         objects = self.bucket.list_all_objects(
             flags=[ListObjectFlag.NAME_ONLY, ListObjectFlag.CACHED],
             prefix=self.obj_prefix,
@@ -365,13 +376,6 @@ class TestBucketOps(ParallelTestBase):
         self.assertEqual(OBJECT_COUNT, len(objects))
         for obj in objects:
             self.assertEqual(0, obj.size)
-
-        objects = self.bucket.list_all_objects(
-            flags=[ListObjectFlag.NAME_SIZE], prefix=self.obj_prefix
-        )
-        self.assertEqual(OBJECT_COUNT, len(objects))
-        for obj in objects:
-            self.assertTrue(obj.size > 0)
 
     def test_summary(self):
         summ_test_bck = self._create_bucket()
@@ -468,8 +472,8 @@ class TestBucketOps(ParallelTestBase):
         self.assertEqual(bck_info["provider"], Provider.AIS.value)
         self.assertEqual(bck_info["name"], bck.name)
 
+    @pytest.mark.nonparallel("temporarily writes to fixed local file")
     def test_write_dataset(self):
-        self.local_test_files.mkdir(exist_ok=True)
         dataset_directory = self.local_test_files.joinpath(DATASET_DIR)
         dataset_directory.mkdir(exist_ok=True)
         img_files = {
@@ -502,8 +506,8 @@ class TestBucketOps(ParallelTestBase):
         for shard in shards:
             self.assertIsNotNone(self.bucket.object(shard).head())
 
+    @pytest.mark.nonparallel("temporarily writes to fixed local file")
     def test_write_dataset_missing_attributes(self):
-        self.local_test_files.mkdir(exist_ok=True)
         dataset_directory = self.local_test_files.joinpath(DATASET_DIR)
         dataset_directory.mkdir(exist_ok=True)
         img_files = {

@@ -14,6 +14,7 @@ from tenacity import (
 from aistore.sdk.retry_config import RetryConfig, NETWORK_RETRY_EXCEPTIONS
 from aistore.sdk.utils import get_logger
 from aistore.client import Client
+from tests.const import TEST_TIMEOUT
 from tests.integration import CLUSTER_ENDPOINT
 
 test_retrying = Retrying(
@@ -24,4 +25,8 @@ test_retrying = Retrying(
     reraise=True,
 )
 TEST_RETRY_CONFIG = RetryConfig(RetryConfig.default().http_retry, test_retrying)
-DEFAULT_TEST_CLIENT = Client(CLUSTER_ENDPOINT, retry_config=TEST_RETRY_CONFIG)
+DEFAULT_TEST_CLIENT = Client(
+    CLUSTER_ENDPOINT,
+    retry_config=TEST_RETRY_CONFIG,
+    timeout=(5, TEST_TIMEOUT - 2),
+)

@@ -2,39 +2,21 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-import unittest
-
-from aistore.sdk import Bucket
-from aistore.sdk.client import Client
-from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from tests.integration.sdk import DEFAULT_TEST_CLIENT
-from tests.utils import create_and_put_object, random_string, case_matrix
+from tests.const import MB
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
+from tests.utils import random_string, case_matrix
+
+OBJECT_NAME = "test-object"
+BUCKET_NAME = f"test-bucket-{random_string(8)}"
+OBJECT_SIZE = 2 * MB
 
 
-class TestObjectFileReaderOps(unittest.TestCase):
-    OBJECT_NAME = "test-object"
-    BUCKET_NAME = f"test-bucket-{random_string(8)}"
-    OBJECT_SIZE = 5242880
-    client: Client = None
-    bucket: Bucket = None
-    object_reader: ObjectReader = None
-
-    @classmethod
-    def setUpClass(cls):
-        cls.client = DEFAULT_TEST_CLIENT
-        cls.bucket = cls.client.bucket(cls.BUCKET_NAME).create()
-
-        create_and_put_object(
-            cls.client, cls.BUCKET_NAME, cls.OBJECT_NAME, obj_size=cls.OBJECT_SIZE
-        )
-        cls.object_reader = cls.bucket.object(cls.OBJECT_NAME).get_reader(
-            byte_range="bytes=5-"
-        )
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.bucket.delete(missing_ok=True)
+class TestObjectFileReaderOps(ParallelTestBase):
+    def setUp(self) -> None:
+        super().setUp()
+        obj, _ = self._create_object_with_content(obj_size=OBJECT_SIZE)
+        self.object_reader = obj.get_reader(byte_range="bytes=5-")
 
     @case_matrix(
         [

@@ -1,11 +1,12 @@
 #
 # Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import List
+from pathlib import Path
+from typing import List, Tuple
 import unittest
 import boto3
 
-from aistore.sdk.provider import Provider
+from aistore.sdk import Object
 from tests.integration import (
     REMOTE_SET,
     REMOTE_BUCKET,
@@ -14,6 +15,7 @@ from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import (
     random_string,
     create_and_put_object,
+    cleanup_local,
 )
 from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 from tests.integration.boto3 import AWS_REGION
@@ -36,14 +38,13 @@ class ParallelTestBase(unittest.TestCase):
         self.buckets = []
         self.obj_prefix = f"{self._testMethodName}-{random_string(6)}"
         self._s3_client = None
+        self._local_test_files = None
 
         if REMOTE_SET:
             self.cloud_objects = []
             provider, bck_name = REMOTE_BUCKET.split("://")
             self.bucket = self.client.bucket(bck_name, provider=provider)
-            self.provider = provider
         else:
-            self.provider = Provider.AIS
             self.bucket = self._create_bucket()
 
     @property
@@ -56,6 +57,15 @@ class ParallelTestBase(unittest.TestCase):
                 aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
             )
         return self._s3_client
+
+    @property
+    def local_test_files(self):
+        if not self._local_test_files:
+            self._local_test_files = (
+                Path().absolute().joinpath("bucket-ops-test-" + random_string(8))
+            )
+            self._local_test_files.mkdir(exist_ok=True)
+        return self._local_test_files
 
     def tearDown(self) -> None:
         """
@@ -70,12 +80,14 @@ class ParallelTestBase(unittest.TestCase):
                 self.client.job(job_id).wait(timeout=TEST_TIMEOUT_LONG)
         for bck_name in self.buckets:
             self.client.bucket(bck_name).delete(missing_ok=True)
+        if self._local_test_files:
+            cleanup_local(str(self.local_test_files))
 
-    def _create_bucket(self):
+    def _create_bucket(self, prefix="test-bck"):
         """
         Create a bucket and store its name for later cleanup
         """
-        bck_name = f"test-bck-{random_string(8)}"
+        bck_name = f"{prefix}-{random_string(8)}"
         bck = self.client.bucket(bck_name)
         bck.create(exist_ok=True)
         self._register_for_post_test_cleanup(names=[bck_name], is_bucket=True)
@@ -106,7 +118,7 @@ class ParallelTestBase(unittest.TestCase):
         self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
         return obj
 
-    def _create_object_with_content(self, obj_size=None):
+    def _create_object_with_content(self, obj_size=None) -> Tuple["Object", bytes]:
         """
         Create an object with the given content and track for later cleanup
 
@@ -117,15 +129,14 @@ class ParallelTestBase(unittest.TestCase):
             Tuple of the object name and the content of the object created
         """
         obj_name = f"{self.obj_prefix}-{random_string(6)}"
-        content = create_and_put_object(
+        obj, content = create_and_put_object(
             client=self.client,
-            bck_name=self.bucket.name,
+            bck=self.bucket.as_model(),
             obj_name=obj_name,
-            provider=self.provider,
             obj_size=obj_size,
         )
         self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
-        return obj_name, content
+        return obj, content
 
     def _create_objects(
         self, num_obj=OBJECT_COUNT, suffix="", obj_size=SMALL_FILE_SIZE
@@ -140,8 +151,7 @@ class ParallelTestBase(unittest.TestCase):
         for obj_name in obj_names:
             create_and_put_object(
                 self.client,
-                bck_name=self.bucket.name,
-                provider=self.bucket.provider,
+                bck=self.bucket.as_model(),
                 obj_name=obj_name,
                 obj_size=obj_size,
             )
