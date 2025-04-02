@@ -115,6 +115,8 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [wait\_single\_node](#job.Job.wait_single_node)
     * [start](#job.Job.start)
     * [get\_within\_timeframe](#job.Job.get_within_timeframe)
+    * [get\_details](#job.Job.get_details)
+    * [get\_total\_time](#job.Job.get_total_time)
 * [multiobj.object\_group](#multiobj.object_group)
   * [ObjectGroup](#multiobj.object_group.ObjectGroup)
     * [client](#multiobj.object_group.ObjectGroup.client)
@@ -1585,10 +1587,13 @@ AIStore client for managing buckets, objects, and ETL jobs.
 - `client_cert` _Union[str, Tuple[str, str], None], optional_ - Path to a client certificate PEM file
   or a tuple (cert, key) for mTLS. If not provided, 'AIS_CRT' and 'AIS_CRT_KEY' environment
   variables will be used. Defaults to None.
-- `timeout` _Union[float, Tuple[float, float], None], optional_ - Request timeout in seconds.
-  Can be a single float (e.g., 5.0) for both connect/read timeouts, a tuple (e.g., (3.0, 10.0)),
-  or None to disable timeout.
-- `retry` _urllib3.Retry, optional_ - Retry configuration object from the urllib3 library. Defaults to None.
+- `timeout` _Union[float, Tuple[float, float], None], optional_ - Timeout for HTTP requests.
+  - Single float (e.g., `5.0`): Applies to both connection and read timeouts.
+  - Tuple (e.g., `(3.0, 20.0)`): First value is the connection timeout, second is the read timeout.
+  - `None`: Disables timeouts (not recommended). Defaults to `(3, 20)`.
+- `retry_config` _RetryConfig, optional_ - Defines retry behavior for HTTP and network failures.
+  If not provided, the default retry configuration (`RetryConfig.default()`) is used.
+- `retry` _urllib3.Retry, optional_ - [Deprecated] Retry configuration from urllib3. Use `retry_config` instead.
 - `token` _str, optional_ - Authorization token. If not provided, the 'AIS_AUTHN_TOKEN' environment variable
   will be used. Defaults to None.
 - `max_pool_size` _int, optional_ - Maximum number of connections per host in the connection pool.
@@ -1902,26 +1907,16 @@ Checks if cluster is ready or still setting up.
 ### get\_performance
 
 ```python
-def get_performance(get_throughput: bool = True,
-                    get_latency: bool = True,
-                    get_counters: bool = True) -> ClusterPerformance
+def get_performance() -> Dict
 ```
 
-Retrieves and calculates the performance metrics for each target node in the AIStore cluster.
-It compiles throughput, latency, and various operational counters from each target node,
-providing a comprehensive view of the cluster's overall performance
-
-**Arguments**:
-
-- `get_throughput` _bool, optional_ - get cluster throughput
-- `get_latency` _bool, optional_ - get cluster latency
-- `get_counters` _bool, optional_ - get cluster counters
-  
+Retrieves the raw performance and status data from each target node in the AIStore cluster.
 
 **Returns**:
 
-- `ClusterPerformance` - An object encapsulating the detailed performance metrics of the cluster,
-  including throughput, latency, and counters for each node
+- `Dict` - A dictionary where each key is the ID of a target node and each value is the
+  raw AIS performance/status JSON returned by that node (for more information,
+  see https://aistore.nvidia.com/docs/metrics-reference#target-metrics).
   
 
 **Raises**:
@@ -2151,6 +2146,36 @@ Retrieves jobs that started after a specified start_time and optionally ended be
 **Raises**:
 
 - `JobInfoNotFound` - Raised when no relevant job info is found.
+
+<a id="job.Job.get_details"></a>
+
+### get\_details
+
+```python
+def get_details() -> AggregatedJobSnapshots
+```
+
+Retrieve detailed job snapshot information across all targets.
+
+**Returns**:
+
+- `AggregatedJobSnapshots` - A snapshot containing detailed metrics for the job.
+
+<a id="job.Job.get_total_time"></a>
+
+### get\_total\_time
+
+```python
+def get_total_time() -> Optional[timedelta]
+```
+
+Calculates the total job duration as the difference between the earliest start time
+and the latest end time among all job snapshots. If any snapshot is missing an end_time,
+returns None to indicate the job is incomplete.
+
+**Returns**:
+
+- `Optional[timedelta]` - The total duration of the job, or None if incomplete.
 
 <a id="multiobj.object_group.ObjectGroup"></a>
 
