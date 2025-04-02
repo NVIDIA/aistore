@@ -1,11 +1,10 @@
 version: "2"
 
 linters:
-  default: standard  ## TODO: 'none|standard|all'; enable these 3 with rules
+  default: standard  ## TODO: 'none|standard|all'; enable
   disable:
     - errcheck
     - gosec
-    # staticcheck
   enable:
     - asciicheck
     - bodyclose

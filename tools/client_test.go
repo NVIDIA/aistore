@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tools_test
 
@@ -183,7 +183,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		mmsa, _ := memsys.NewMMSA("dev-tools", false)
+		mmsa := memsys.NewMMSA("dev-tools", false)
 		sgl := mmsa.NewSGL(cos.MiB)
 		defer func() {
 			mmsa.Terminate(false)

@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -135,7 +135,7 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []by
 		debug.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead",
 			fname, expected, cnt)
 	})
-	return
+	return cnt, availCnt
 }
 
 func CountPersisted(fname string) (cnt int) {

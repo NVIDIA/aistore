@@ -210,7 +210,7 @@ func (*hdl) getStats() RxStats { return nil }
 func (h *hdlExtra) getStats() (s RxStats) {
 	s = make(RxStats, 4)
 	h.sessions.Range(s.f)
-	return
+	return s
 }
 
 func (s RxStats) f(key, value any) bool {
@@ -264,7 +264,7 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 	}
 
 	it.handler.addOld(uid)
-	return
+	return err
 }
 
 func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
@@ -299,7 +299,7 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 			err = errCb
 		}
 	}
-	return
+	return err
 }
 
 func eofOK(err error) error {
@@ -310,24 +310,24 @@ func eofOK(err error) error {
 }
 
 // nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
-// returns hlen, which is header length - for transport.Obj (and formerly, message length for transport.Msg)
-func (it *iterator) nextProtoHdr(loghdr string) (hlen int, flags uint64, err error) {
-	var n int
-	n, err = it.Read(it.hbuf[:sizeProtoHdr])
+// returns:
+// - hlen: header length for transport.Obj (and formerly, message length for transport.Msg)
+// - flags: msgFl | pduFl | pduLastFl | pduStreamFl
+// - error
+func (it *iterator) nextProtoHdr(loghdr string) (int, uint64, error) {
+	n, err := it.Read(it.hbuf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
 		if err == nil {
 			err = fmt.Errorf("sbr3 %s: failed to receive proto hdr (n=%d)", loghdr, n)
 		}
-		return
+		return 0, 0, err
 	}
 	// extract and validate hlen
-	hlen, flags, err = extProtoHdr(it.hbuf, loghdr)
-	return
+	return extProtoHdr(it.hbuf, loghdr)
 }
 
-func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error) {
-	var n int
-	n, err = it.Read(it.hbuf[:hlen])
+func (it *iterator) nextObj(loghdr string, hlen int) (*objReader, error) {
+	n, err := it.Read(it.hbuf[:hlen])
 	if n < hlen {
 		if err == nil {
 			// [retry] insist on receiving the full length
@@ -348,18 +348,17 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 			}
 		}
 		if n < hlen {
-			err = fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d)", loghdr, n, hlen)
-			return
+			return nil, fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d)", loghdr, n, hlen)
 		}
 	}
 	hdr := ExtObjHeader(it.hbuf, hlen)
 	if hdr.isFin() {
-		err = io.EOF
-		return
+		return nil, io.EOF
 	}
-	obj = allocRecv()
+
+	obj := allocRecv()
 	obj.body, obj.hdr, obj.loghdr = it.body, hdr, loghdr
-	return
+	return obj, nil
 }
 
 ///////////////
@@ -389,7 +388,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	default:
 		err = fmt.Errorf("sbr7 %s: off %d, obj %s, err %w", obj.loghdr, obj.off, obj, err)
 	}
-	return
+	return n, err
 }
 
 func (obj *objReader) String() string {
@@ -408,7 +407,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	if pdu.woff == 0 {
 		err = pdu.readHdr(obj.loghdr)
 		if err != nil {
-			return
+			return 0, err
 		}
 	}
 	for !pdu.done {
@@ -425,7 +424,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	obj.off += int64(n)
 
 	if err != nil {
-		return
+		return n, err
 	}
 	if pdu.rlength() == 0 {
 		if pdu.last {
@@ -439,7 +438,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 			pdu.reset()
 		}
 	}
-	return
+	return n, err
 }
 
 //
@@ -453,7 +452,7 @@ func uniqueID(r *http.Request, sessID int64) uint64 {
 
 func UID2SessID(uid uint64) (xxh, sessID uint64) {
 	xxh, sessID = uid>>32, uid&math.MaxUint32
-	return
+	return xxh, sessID
 }
 
 // DrainAndFreeReader:

@@ -1,6 +1,6 @@
 // Package readers provides implementation for common reader types
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package readers_test
 
@@ -242,7 +242,7 @@ func TestRandReader(t *testing.T) {
 }
 
 func TestSGReader(t *testing.T) {
-	mmsa, _ := memsys.NewMMSA(mmName, false)
+	mmsa := memsys.NewMMSA(mmName, false)
 	defer mmsa.Terminate(false)
 	{
 		// Basic read
@@ -322,7 +322,7 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	mmsa, _ := memsys.NewMMSA(mmName, false)
+	mmsa := memsys.NewMMSA(mmName, false)
 	sgl := mmsa.NewSGL(cos.MiB)
 	defer func() {
 		sgl.Free()
@@ -368,7 +368,7 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	mmsa, _ := memsys.NewMMSA(mmName, false)
+	mmsa := memsys.NewMMSA(mmName, false)
 	sgl := mmsa.NewSGL(cos.MiB)
 	defer func() {
 		sgl.Free()

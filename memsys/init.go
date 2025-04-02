@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -56,8 +56,8 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	gmm.sibling = smm
 }
 
-func NewMMSA(name string, silent bool) (mem *MMSA, err error) {
-	mem = &MMSA{defBufSize: DefaultBufSize, slabIncStep: PageSlabIncStep, MinFree: minMemFreeTests}
+func NewMMSA(name string, silent bool) *MMSA {
+	mem := &MMSA{defBufSize: DefaultBufSize, slabIncStep: PageSlabIncStep, MinFree: minMemFreeTests}
 	if gmm == nil {
 		// (alt) gmm via alternative init path - prevent once.do below
 		mem.Name = name + ".gmm"
@@ -65,11 +65,11 @@ func NewMMSA(name string, silent bool) (mem *MMSA, err error) {
 	} else {
 		mem.Name = name + ".pmm" // additional
 	}
-	err = mem.Init(0)
+	mem.Init(0)
 	if !silent {
 		cos.Infoln(mem.Str(&mem.mem))
 	}
-	return
+	return mem
 }
 
 // system page-based memory-manager-slab-allocator (MMSA)
@@ -131,15 +131,14 @@ func (r *MMSA) RegWithHK() {
 }
 
 // initialize new MMSA instance
-func (r *MMSA) Init(maxUse int64) (err error) {
+func (r *MMSA) Init(maxUse int64) {
 	// 1. environment overrides defaults and MMSA{...} hard-codings
-	if err = r.env(); err != nil {
+	if err := r.env(); err != nil {
 		cos.Errorf("%v", err)
 	}
 
 	// 2. compute min-free (must remain free at all times) and low watermark
-	err = r.mem.Get()
-	if err != nil {
+	if err := r.mem.Get(); err != nil {
 		cos.Errorf("%v", err)
 	}
 	free := memFree(&r.mem)
@@ -170,7 +169,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 
 	// 3. validate min-free & low-wm
 	if free < min(r.MinFree*2, r.MinFree+minMemFree) {
-		err = fmt.Errorf("memsys: insufficient free memory %s (see %s for guidance)", r.Str(&r.mem), readme)
+		err := fmt.Errorf("memsys: insufficient free memory %s (see %s for guidance)", r.Str(&r.mem), readme)
 		cos.Errorf("%v", err)
 		r.lowWM = min(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""
@@ -210,7 +209,6 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		slab.pMinDepth = &r.optDepth
 		r.rings[i] = slab
 	}
-	return
 }
 
 // [tests only] terminate this MMSA instance, run GC

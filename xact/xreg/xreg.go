@@ -854,7 +854,7 @@ func (flt Flt) Matches(xctn core.Xact) (yes bool) {
 		if yes = xctn.ID() == flt.ID; yes {
 			debug.Assert(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
 		}
-		return
+		return yes
 	}
 	// kind?
 	if flt.Kind != "" {

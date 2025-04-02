@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp_test
 
@@ -192,7 +192,7 @@ func BenchmarkDecode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			mmsa, _ := memsys.NewMMSA("jsp.test", false)
+			mmsa := memsys.NewMMSA("jsp.test", false)
 			defer mmsa.Terminate(false)
 			sgl := mmsa.NewSGL(cos.MiB)
 
