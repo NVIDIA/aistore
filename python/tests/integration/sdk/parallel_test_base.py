@@ -35,17 +35,27 @@ class ParallelTestBase(unittest.TestCase):
         self.client = DEFAULT_TEST_CLIENT
         self.buckets = []
         self.obj_prefix = f"{self._testMethodName}-{random_string(6)}"
+        self._s3_client = None
 
         if REMOTE_SET:
             self.cloud_objects = []
             provider, bck_name = REMOTE_BUCKET.split("://")
             self.bucket = self.client.bucket(bck_name, provider=provider)
             self.provider = provider
-            if self.bucket.provider == Provider.AMAZON:
-                self.s3_client = self._create_boto3_client()
         else:
             self.provider = Provider.AIS
             self.bucket = self._create_bucket()
+
+    @property
+    def s3_client(self):
+        if not self._s3_client:
+            self._s3_client = boto3.client(
+                "s3",
+                region_name=AWS_REGION,
+                aws_access_key_id=AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            )
+        return self._s3_client
 
     def tearDown(self) -> None:
         """
@@ -191,12 +201,3 @@ class ParallelTestBase(unittest.TestCase):
             self._validate_objects_cached(cached_objs, True)
         if len(evicted_objs) > 0:
             self._validate_objects_cached(evicted_objs, False)
-
-    @staticmethod
-    def _create_boto3_client():
-        return boto3.client(
-            "s3",
-            region_name=AWS_REGION,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        )
