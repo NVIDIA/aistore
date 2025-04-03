@@ -300,7 +300,7 @@ ex:
 }
 
 func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
-	if hdr.Opcode == opcodeDone {
+	if hdr.Opcode == opdone {
 		r.pending.mtx.Lock()
 		wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 		if !ok {

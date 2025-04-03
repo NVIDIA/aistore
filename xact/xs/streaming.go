@@ -26,12 +26,6 @@ import (
 // multi-object on-demand (transactional) xactions - common logic
 //
 
-// sentinel values
-const (
-	opcodeDone = iota + 27182
-	opcodeAbrt
-)
-
 // TODO: derive from config.Timeout
 const (
 	waitRegRecv   = 4 * time.Second
@@ -164,9 +158,9 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 	o.Hdr.SID = core.T.SID()
 	o.Hdr.Opaque = []byte(uuid)
 	if err == nil {
-		o.Hdr.Opcode = opcodeDone
+		o.Hdr.Opcode = opdone
 	} else {
-		o.Hdr.Opcode = opcodeAbrt
+		o.Hdr.Opcode = opabrt
 		o.Hdr.ObjName = err.Error()
 	}
 	if tsi != nil {
