@@ -19,7 +19,6 @@ from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
 )
 from aistore.sdk.errors import AISRetryableError
-from aistore.sdk.utils import get_logger
 
 # Default Retry Exceptions
 NETWORK_RETRY_EXCEPTIONS = (
@@ -72,7 +71,7 @@ class RetryConfig:
                 wait=wait_exponential(multiplier=1, min=1, max=10),
                 stop=stop_after_delay(60),
                 retry=retry_if_exception_type(NETWORK_RETRY_EXCEPTIONS),
-                before_sleep=before_sleep_log(get_logger(__name__), logging.DEBUG),
+                before_sleep=before_sleep_log(logging.getLogger(), logging.DEBUG),
                 reraise=True,
             ),
         )
