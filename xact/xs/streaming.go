@@ -26,12 +26,13 @@ import (
 // multi-object on-demand (transactional) xactions - common logic
 //
 
-// TODO: derive from config.Timeout
 const (
+	// TODO -- FIXME: derive from config.Timeout
 	waitRegRecv   = 4 * time.Second
 	waitUnregRecv = 2 * waitRegRecv
 	waitUnregMax  = 2 * waitUnregRecv
 
+	// TODO -- FIXME: grow 2x upon chanFull
 	maxNumInParallel = 256
 )
 

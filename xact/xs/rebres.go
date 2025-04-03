@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -38,6 +38,7 @@ type (
 	}
 	Resilver struct {
 		xact.Base
+		Args *xreg.ResArgs
 	}
 )
 
@@ -146,7 +147,7 @@ func (*resFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 }
 
 func (p *resFactory) Start() error {
-	p.xctn = NewResilver(p.UUID(), p.Kind())
+	p.xctn = newResilver(p)
 	return nil
 }
 
@@ -154,10 +155,14 @@ func (*resFactory) Kind() string                                       { return 
 func (p *resFactory) Get() core.Xact                                   { return p.xctn }
 func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 
-func NewResilver(id, kind string) (xres *Resilver) {
+func newResilver(p *resFactory) (xres *Resilver) {
 	xres = &Resilver{}
-	xres.InitBase(id, kind, "" /*ctlmsg*/, nil)
-	return
+	xres.InitBase(p.UUID(), p.Kind(), "" /*ctlmsg*/, nil /*bck*/)
+
+	xres.Args = p.Args.Custom.(*xreg.ResArgs)
+	debug.Assert(xres.Args != nil)
+
+	return xres
 }
 
 func (*Resilver) Run(*sync.WaitGroup) { debug.Assert(false) }

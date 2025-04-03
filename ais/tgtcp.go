@@ -1017,7 +1017,14 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		nlog.Infoln(tname, "... and resilver")
 
 		// (##resilver)
-		go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
+		args := &res.Args{
+			UUID: newRMD.Resilver,
+			Custom: xreg.ResArgs{
+				Config:            cmn.GCO.Get(),
+				SkipGlobMisplaced: true,
+			},
+		}
+		go t.runResilver(args, nil /*wg*/)
 	}
 
 	t.owner.rmd.put(newRMD)

@@ -15,42 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-type (
-	TCBArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-		Msg     *apc.TCBMsg
-		Phase   string
-	}
-	TCObjsArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-		Msg     *apc.TCOMsg
-	}
-	DsortArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-	}
-	ECEncodeArgs struct {
-		Phase   string
-		Recover bool
-	}
-	BckRenameArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-		RebID   string
-		Phase   string
-	}
-	MNCArgs struct {
-		Tag    string
-		Copies int
-	}
-	LsoArgs struct {
-		Msg *apc.LsoMsg
-		Hdr http.Header
-	}
-)
-
 //////////////
 // registry //
 //////////////

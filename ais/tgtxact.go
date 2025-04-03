@@ -260,7 +260,14 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 			args.ID = cos.GenUUID()
 			xid = args.ID
 		}
-		go t.runResilver(res.Args{UUID: args.ID, Notif: notif}, wg)
+		resargs := &res.Args{
+			UUID:  args.ID,
+			Notif: notif,
+			Custom: xreg.ResArgs{
+				Config: cmn.GCO.Get(),
+			},
+		}
+		go t.runResilver(resargs, wg)
 		wg.Wait()
 	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(args.ID, bck)

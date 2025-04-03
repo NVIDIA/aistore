@@ -459,7 +459,7 @@ func (t *target) Run() error {
 
 	marked := xreg.GetResilverMarked()
 	if marked.Interrupted || daemon.resilver.required {
-		go t.goresilver(marked.Interrupted)
+		go t.goresilver(config, marked.Interrupted)
 	}
 
 	dsort.Tinit(db, config)
@@ -502,16 +502,16 @@ func (t *target) gojoin(config *cmn.Config) {
 	nlog.Infoln(t.String(), "is ready")
 }
 
-func (t *target) goresilver(interrupted bool) {
+func (t *target) goresilver(config *cmn.Config, interrupted bool) {
 	if interrupted {
 		nlog.Infoln("Resuming resilver...")
 	} else if daemon.resilver.required {
 		nlog.Infoln("Starting resilver, reason:", daemon.resilver.reason)
 	}
-	t.runResilver(res.Args{}, nil /*wg*/)
+	t.runResilver(&res.Args{Custom: xreg.ResArgs{Config: config}}, nil /*wg*/)
 }
 
-func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
+func (t *target) runResilver(args *res.Args, wg *sync.WaitGroup) {
 	// with no cluster-wide UUID it's a local run
 	if args.UUID == "" {
 		args.UUID = cos.GenUUID()
@@ -519,6 +519,11 @@ func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
+
+	debug.Assert(args.Custom.Config != nil)
+	smap := t.owner.smap.get()
+	args.Custom.Smap = &smap.Smap
+
 	if wg != nil {
 		wg.Done() // compare w/ xact.GoRunW(()
 	}

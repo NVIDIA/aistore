@@ -1,6 +1,6 @@
 // Package res provides local volume resilvering upon mountpath-attach and similar
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package res
 
@@ -37,17 +37,16 @@ type (
 		end   atomic.Int64
 	}
 	Args struct {
-		UUID              string
-		Notif             *xact.NotifXact
-		Rmi               *fs.Mountpath
-		Action            string
-		PostDD            func(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error)
-		SkipGlobMisplaced bool
-		SingleRmiJogger   bool
+		UUID            string
+		Notif           *xact.NotifXact
+		Rmi             *fs.Mountpath
+		Action          string
+		PostDD          func(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error)
+		Custom          xreg.ResArgs
+		SingleRmiJogger bool
 	}
 	joggerCtx struct {
-		xres   *xs.Resilver
-		config *cmn.Config
+		xres *xs.Resilver
 	}
 )
 
@@ -77,19 +76,24 @@ func (res *Res) _end() {
 	res.end.Store(mono.NanoTime())
 }
 
-func (res *Res) RunResilver(args Args, tstats cos.StatsUpdater) {
+func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
 	res._begin()
 	defer res._end()
+
 	if fatalErr, writeErr := fs.PersistMarker(fname.ResilverMarker); fatalErr != nil || writeErr != nil {
-		nlog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
+		nlog.Errorln("FATAL:", fatalErr, "WRITE:", writeErr)
 		return
 	}
+
 	avail, _ := fs.Get()
 	if len(avail) < 1 {
 		nlog.Errorln(cmn.ErrNoMountpaths)
 		return
 	}
-	xres := xreg.RenewResilver(args.UUID).(*xs.Resilver)
+
+	xctn := xreg.RenewResilver(args.UUID, &args.Custom)
+	xres, ok := xctn.(*xs.Resilver)
+	debug.Assert(ok)
 	if args.Notif != nil {
 		args.Notif.Xact = xres
 		xres.AddNotif(args.Notif)
@@ -99,25 +103,23 @@ func (res *Res) RunResilver(args Args, tstats cos.StatsUpdater) {
 	var (
 		jg        *mpather.Jgroup
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		config    = cmn.GCO.Get()
-		jctx      = &joggerCtx{xres: xres, config: config}
+		jctx      = &joggerCtx{xres: xres}
 
 		opts = &mpather.JgroupOpts{
-			CTs:                   []string{fs.ObjectType, fs.ECSliceType},
-			VisitObj:              jctx.visitObj,
-			VisitCT:               jctx.visitCT,
-			Slab:                  slab,
-			SkipGloballyMisplaced: args.SkipGlobMisplaced,
+			CTs:      []string{fs.ObjectType, fs.ECSliceType},
+			VisitObj: jctx.visitObj,
+			VisitCT:  jctx.visitCT,
+			Slab:     slab,
 		}
 	)
 	debug.AssertNoErr(err)
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
 	if args.SingleRmiJogger {
-		jg = mpather.NewJoggerGroup(opts, config, args.Rmi)
+		jg = mpather.NewJoggerGroup(opts, args.Custom.Config, args.Rmi)
 		nlog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
-		jg = mpather.NewJoggerGroup(opts, config, nil)
+		jg = mpather.NewJoggerGroup(opts, args.Custom.Config, nil)
 		if args.Rmi != nil {
 			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
 		} else {
@@ -229,7 +231,9 @@ func _moveECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (str
 // TODO: revisit EC bits and check for OOS preemptively
 // NOTE: not deleting extra copies - delegating to `storage cleanup`
 func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
-	const maxRetries = 3
+	const (
+		maxRetries = 3
+	)
 	var (
 		orig   = lom
 		hlom   *core.LOM
@@ -237,6 +241,17 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		size   int64
 		copied bool
 	)
+
+	if jg.xres.Args.SkipGlobMisplaced {
+		tsi, err := jg.xres.Args.Smap.HrwHash2T(lom.Digest())
+		if err != nil {
+			return err
+		}
+		if tsi.ID() != core.T.SID() {
+			return nil
+		}
+	}
+
 	if !lom.TryLock(true) { // NOTE: skipping busy
 		time.Sleep(time.Second >> 1)
 		if !lom.TryLock(true) {

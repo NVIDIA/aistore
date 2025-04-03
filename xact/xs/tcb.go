@@ -30,6 +30,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// TODO -- FIXME: unify/combine embedded sentinel, prune, and copier
+
 type (
 	tcbFactory struct {
 		xreg.RenewBase

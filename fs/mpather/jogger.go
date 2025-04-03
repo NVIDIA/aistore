@@ -37,20 +37,19 @@ const (
 
 type (
 	JgroupOpts struct {
-		onFinish              func()
-		VisitObj              func(lom *core.LOM, buf []byte) error
-		VisitCT               func(ct *core.CT, buf []byte) error
-		Slab                  *memsys.Slab
-		Bck                   cmn.Bck
-		Buckets               cmn.Bcks
-		Prefix                string
-		CTs                   []string
-		DoLoad                LoadType // if specified, lom.Load(lock type)
-		Parallel              int      // num parallel calls
-		IncludeCopy           bool     // visit copies (aka replicas)
-		PerBucket             bool     // num joggers = (num mountpaths) x (num buckets)
-		SkipGloballyMisplaced bool     // skip globally misplaced
-		Throttle              bool     // true: pace itself depending on disk utilization
+		onFinish    func()
+		VisitObj    func(lom *core.LOM, buf []byte) error
+		VisitCT     func(ct *core.CT, buf []byte) error
+		Slab        *memsys.Slab
+		Bck         cmn.Bck
+		Buckets     cmn.Bcks
+		Prefix      string
+		CTs         []string
+		DoLoad      LoadType // if specified, lom.Load(lock type)
+		Parallel    int      // num parallel calls
+		IncludeCopy bool     // visit copies (aka replicas)
+		PerBucket   bool     // num joggers = (num mountpaths) x (num buckets)
+		Throttle    bool     // true: pace itself depending on disk utilization
 	}
 
 	// Jgroup runs jogger per mountpath which walk the entire bucket and
@@ -79,7 +78,7 @@ type (
 	}
 
 	joggerSyncGroup struct {
-		sema   chan int // Positional number of a buffer to use by a goroutine.
+		sema   chan int // positional index of a buffer
 		group  *errgroup.Group
 		cancel context.CancelFunc
 	}
@@ -332,12 +331,12 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return err
 	}
 
-	var bufPosition int
 	if j.syncGroup == nil {
 		if err := j.visitFQN(fqn, j.getBuf(0)); err != nil {
 			return err
 		}
 	} else {
+		var bufPosition int
 		select {
 		case bufPosition = <-j.syncGroup.sema:
 			break
@@ -347,16 +346,17 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 
 		j.syncGroup.group.Go(func() error {
 			defer func() {
-				// NOTE: There is no need to select j.ctx.Done() as put to this chanel is immediate.
+				// no need to select j.ctx.Done() as send to this chanel is immediate
 				j.syncGroup.sema <- bufPosition
 			}()
 			return j.visitFQN(fqn, j.getBuf(bufPosition))
 		})
 	}
 
+	j.num++
+
 	// poor man's throttle; see "rate limit"
 	if j.opts.Throttle {
-		j.num++
 		if fs.IsThrottle(j.num) {
 			j.throttle()
 		} else {
@@ -370,17 +370,6 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
 	if err != nil {
 		return err
-	}
-
-	if j.opts.SkipGloballyMisplaced {
-		smap := core.T.Sowner().Get()
-		tsi, err := smap.HrwHash2T(ct.Digest())
-		if err != nil {
-			return err
-		}
-		if tsi.ID() != core.T.SID() {
-			return nil
-		}
 	}
 
 	switch ct.ContentType() {

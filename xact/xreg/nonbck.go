@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -22,8 +22,8 @@ func RenewRebalance(id int64, ctlmsg string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewResilver(id string) core.Xact {
-	e := dreg.nonbckXacts[apc.ActResilver].New(Args{UUID: id}, nil)
+func RenewResilver(id string, args *ResArgs) core.Xact {
+	e := dreg.nonbckXacts[apc.ActResilver].New(Args{UUID: id, Custom: args}, nil)
 	rns := dreg.renew(e, nil)
 	debug.Assert(!rns.IsRunning()) // NOTE: resilver is always preempted
 	return rns.Entry.Get()
