@@ -5,8 +5,6 @@ import random
 import unittest
 from pathlib import Path
 
-import pytest
-
 import requests
 
 from aistore.sdk import ListObjectFlag
@@ -177,7 +175,6 @@ class TestBucketOps(ParallelTestBase):
         not AWS_BUCKET,
         "AWS bucket is not set",
     )
-    @pytest.mark.extended
     def test_copy_objects_sync_flag(self):
         num_obj = OBJECT_COUNT
         obj_names = self._create_objects(num_obj=num_obj, suffix=SUFFIX_NAME)

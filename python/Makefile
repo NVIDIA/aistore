@@ -53,7 +53,7 @@ python_sdk_tests: common_deps python_sdk_unit_tests python_sdk_integration_tests
 
 .PHONY: python_sdk_integration_tests
 python_sdk_integration_tests: common_deps
-	$(PYTEST) -v tests/integration/sdk -m "not etl and not authn" --durations=0
+	$(PYTEST) -v tests/integration/sdk -m "not etl and not authn and not extended" --durations=0
 
 .PHONY: python_sdk_unit_tests
 python_sdk_unit_tests: common_deps
