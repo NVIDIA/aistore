@@ -160,7 +160,7 @@ const (
 	// EC: get, put
 
 	XactECGetTmpl      = xactECGetStatsHdr + XactECGetNoHdrTmpl
-	XactECGetNoHdrTmpl = "{{range $daemon := . }}" + xactECGetBody + "{{end}}"
+	XactECGetNoHdrTmpl = "{{range $nodeSnaps := . }}" + xactECGetBody + "{{end}}"
 
 	xactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t STATE\n"
 	xactECGetBody      = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactECGetStatsBody + "{{end}}"
