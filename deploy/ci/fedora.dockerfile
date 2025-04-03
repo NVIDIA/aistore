@@ -22,6 +22,7 @@ RUN dnf -y update && \
        tar \
        procps-ng \
        cargo \
+       which \
     && dnf clean all
 
 # Install Go
