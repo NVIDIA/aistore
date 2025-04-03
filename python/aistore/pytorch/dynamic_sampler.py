@@ -6,20 +6,20 @@ can be used to generate mini-batches that fit within a memory constraint
 so that there is a guarantee that each batch fits within memory
 while attempting to fit the maximum number of samples in each batch.
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
-import torch
-from typing import Iterator, List
-from aistore.pytorch.base_map_dataset import AISBaseMapDataset
 from logging import getLogger
-
+from typing import Iterator, List
+import torch
+from aistore.pytorch.base_map_dataset import AISBaseMapDataset
 
 # Default saturation of a batch needed to not be dropped with drop_last=True
 SATURATION_FACTOR = 0.8
 logger = getLogger(__name__)
 
 
+# pylint: disable=too-many-instance-attributes, too-many-arguments
 class DynamicBatchSampler(torch.utils.data.Sampler):
     """
 
@@ -32,11 +32,12 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
     Args:
         data_source (AISBaseMapDataset): Base AIS map-style dataset to sample from to create dynamic mini-batches.
         max_batch_size (float): Maximum size of mini-batch in bytes.
-        drop_last (bool, optional): If `True`, then will drop last batch if the batch is not atleast 80% of `max_batch_size`.
-            Defaults to `False`.
-        allow_oversized_samples (bool, optional): If `True`, then any sample that is larger than the `max_batch_size` will be processed
-            in its own min-batch by itself instead of being dropped. Defaults to `False`.
-        saturation_factor (float, optional): Saturation of a batch needed to not be dropped with `drop_last=True`. Default is `0.8`.
+        drop_last (bool, optional): If `True`, then will drop last batch if the batch is not atleast 80% of
+            `max_batch_size`. Defaults to `False`.
+        allow_oversized_samples (bool, optional): If `True`, then any sample that is larger than the `max_batch_size`
+            will be processed in its own min-batch by itself instead of being dropped. Defaults to `False`.
+        saturation_factor (float, optional): Saturation of a batch needed to not be dropped with `drop_last=True`.
+            Default is `0.8`.
         shuffle (bool, optional): Randomizes order of samples before calculating mini-batches. Default is `False`.
     """
 
@@ -55,10 +56,11 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
         self._samples_list = data_source.get_obj_list()
         self._drop_last = drop_last
         self._allow_oversized_samples = allow_oversized_samples
-        if not (0 <= saturation_factor <= 1):
-            raise ValueError(f"`saturation_factor` must be between 0 and 1")
+        if not 0 <= saturation_factor <= 1:
+            raise ValueError("`saturation_factor` must be between 0 and 1")
         self._saturation_factor = saturation_factor
         self._shuffle = shuffle
+        self._indices = None
 
     def __iter__(self) -> Iterator[List[int]]:
         """
@@ -78,31 +80,35 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
         while index < len(self._samples_list):
             sample = self._samples_list[index]
 
-            if sample.props.size == 0:
+            if sample.props_cached.size == 0:
                 logger.warning(
-                    f"Sample {sample.name} cannot be processed as it has a size of 0 bytes"
+                    "Sample %s cannot be processed as it has a size of 0 bytes",
+                    sample.name,
                 )
                 index = self._get_next_index(index)
                 continue
 
-            if sample.props.size > self._max_batch_size:
+            if sample.props_cached.size > self._max_batch_size:
                 if self._allow_oversized_samples is True:
                     yield [index]
                 else:
                     logger.warning(
-                        f"Sample {sample.name} cannot be processed as it is larger than the max batch size: {sample.props.size} bytes > {self._max_batch_size} bytes"
+                        "Sample %s cannot be processed as it is larger than the max batch size: %d bytes > %d bytes",
+                        sample.name,
+                        sample.props_cached.size,
+                        self._max_batch_size,
                     )
 
                 index = self._get_next_index(index)
                 continue
 
-            if total_mem + sample.props.size < self._max_batch_size:
+            if total_mem + sample.props_cached.size < self._max_batch_size:
                 batch.append(index)
                 index = self._get_next_index(index)
-                total_mem += sample.props.size
+                total_mem += sample.props_cached.size
             else:
 
-                if total_mem + sample.props.size == self._max_batch_size:
+                if total_mem + sample.props_cached.size == self._max_batch_size:
                     batch.append(index)
                     index = self._get_next_index(index)
 

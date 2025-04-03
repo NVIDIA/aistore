@@ -41,7 +41,15 @@ from aistore.sdk.const import (
     STATUS_ACCEPTED,
     STATUS_BAD_REQUEST,
     STATUS_OK,
+    AIS_BCK_NAME,
+    AIS_OBJ_NAME,
+    AIS_MIRROR_PATHS,
+    AIS_PRESENT,
+    AIS_BCK_PROVIDER,
+    AIS_LOCATION,
+    AIS_MIRROR_COPIES,
 )
+
 from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.errors import (
     InvalidBckProvider,
@@ -545,14 +553,39 @@ class TestBucket(unittest.TestCase):
 
     def test_object(self):
         obj_name = "testobject"
-        props = ObjectProps(CaseInsensitiveDict({"testkey": "testval"}))
+        props_dict = CaseInsensitiveDict(
+            {
+                AIS_BCK_NAME: "test-bck-name",
+                AIS_BCK_PROVIDER: "ais",
+                AIS_OBJ_NAME: obj_name,
+                AIS_LOCATION: "/sda/test-location",
+                AIS_MIRROR_PATHS: "path1,path2",
+                AIS_MIRROR_COPIES: "2",
+                AIS_PRESENT: "true",
+            }
+        )
+        props = ObjectProps(props_dict)
 
         new_obj = self.ais_bck.object(obj_name=obj_name, props=props)
-
         self.assertEqual(self.ais_bck.name, new_obj.bucket_name)
         self.assertEqual(self.ais_bck.provider, new_obj.bucket_provider)
         self.assertEqual(self.ais_bck.qparam, new_obj.query_params)
-        self.assertEqual(props, new_obj.props)
+
+        self.assertEqual(props, new_obj.props_cached)
+
+        # Mock response with a headers attribute
+        mock_response = Mock()
+        mock_response.headers = props_dict
+
+        # Set mock return value for HEAD request
+        self.mock_client.request.return_value = mock_response
+        self.assertEqual(props.present, new_obj.props.present)
+        self.assertEqual(props.access_time, new_obj.props.access_time)
+        self.assertEqual(props.location, new_obj.props.location)
+        self.assertEqual(props.bucket_name, new_obj.props.bucket_name)
+        self.assertEqual(props.bucket_provider, new_obj.props.bucket_provider)
+        self.assertEqual(props.mirror_copies, new_obj.props.mirror_copies)
+        self.assertEqual(props.mirror_paths, new_obj.props.mirror_paths)
 
     @patch("aistore.sdk.obj.object_writer.validate_file")
     @patch("aistore.sdk.bucket.validate_directory")

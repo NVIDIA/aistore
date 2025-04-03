@@ -233,6 +233,45 @@ class TestObjectOps(ParallelTestBase):
             )
             self.assertTrue(len(jobs_list) > 0)
 
+    @unittest.skipUnless(REMOTE_SET, "Remote bucket is not set")
+    def test_obj_present(self):
+        """
+        Test the `Ais-Present` property of an object.
+        This test ensures that the `present` property is correctly set for object.
+        """
+        # Create an object
+        obj = self._create_object()
+        obj.get_writer().put_content(b"test content")
+
+        # Verify the object is present
+        self.assertEqual(
+            True,
+            obj.props.present,
+            msg="The object should be present after putting content.",
+        )
+
+        # Evict the object
+        evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
+        self.client.job(job_id=evict_job_id).wait(timeout=TEST_TIMEOUT)
+
+        # Check the `Ais-Present` attribute after eviction
+        # Note: `Ais-Present` should be "false" after eviction
+        self.assertEqual(
+            False,
+            obj.props.present,
+            msg="The object should not be present after eviction.",
+        )
+
+        # Get the entire object
+        obj.get_reader().read_all()
+
+        # Verify the object is present
+        self.assertEqual(
+            True,
+            obj.props.present,
+            msg="The object should be present after reading entire content.",
+        )
+
     @unittest.skipIf(
         "localhost" not in CLUSTER_ENDPOINT and "127.0.0.1" not in CLUSTER_ENDPOINT,
         "Cannot test promote without access to AIS cluster file storage",

@@ -73,7 +73,8 @@ class TestObject(unittest.TestCase):
         self.assertEqual("ais", self.object.bucket_provider)
         self.assertEqual(self.bck_qparams, self.object.query_params)
         self.assertEqual(OBJ_NAME, self.object.name)
-        self.assertIsNone(self.object.props)
+        self.assertIsNone(self.object.props_cached)
+        self.assertIsInstance(self.object.props, ObjectProps)
 
     def test_head(self):
         self.object.head()
@@ -410,7 +411,7 @@ class TestObject(unittest.TestCase):
 
         self.mock_client.request.return_value = Mock(headers=headers)
 
-        self.assertEqual(self.object.props, None)
+        self.assertEqual(self.object.props_cached, None)
 
         self.object.head()
 

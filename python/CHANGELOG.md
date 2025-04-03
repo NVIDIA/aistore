@@ -9,8 +9,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ## Unreleased
 
 ### Added
+- `props_cached` returns cached properties without triggering a network call.
 
 ### Changed
+- `props` accessor ensures object properties are refreshed via HEAD request on every access.
 
 ### Removed
 

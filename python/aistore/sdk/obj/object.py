@@ -108,7 +108,31 @@ class Object:
 
     @property
     def props(self) -> ObjectProps:
-        """Properties of this object."""
+        """
+        Get the latest properties of the object.
+
+        This will make a HEAD request to the AIStore cluster to fetch up-to-date object headers
+        and refresh the internal `_props` cache. Use this when you want to ensure you're accessing
+        the most recent metadata for the object.
+
+        Returns:
+            ObjectProps: The latest object properties from the server.
+        """
+        self.head()
+        return self._props
+
+    @property
+    def props_cached(self) -> Optional[ObjectProps]:
+        """
+        Get the cached object properties (without making a network call).
+
+        This is useful when:
+        - You want to avoid a network request.
+        - You're sure the cached `_props` was already set via a previous call to `head()` or during object construction.
+
+        Returns:
+            ObjectProps or None: Cached object properties, or None if not set.
+        """
         return self._props
 
     def head(self) -> CaseInsensitiveDict:
