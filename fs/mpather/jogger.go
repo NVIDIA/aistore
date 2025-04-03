@@ -46,7 +46,6 @@ type (
 		Prefix      string
 		CTs         []string
 		DoLoad      LoadType // if specified, lom.Load(lock type)
-		Parallel    int      // num parallel calls
 		IncludeCopy bool     // visit copies (aka replicas)
 		PerBucket   bool     // num joggers = (num mountpaths) x (num buckets)
 		Throttle    bool     // true: pace itself depending on disk utilization
@@ -66,21 +65,14 @@ type (
 	// provided callback.
 	jogger struct {
 		ctx       context.Context
-		syncGroup *joggerSyncGroup
 		opts      *JgroupOpts
 		mi        *fs.Mountpath
 		bdir      string // mi.MakePath(bck)
 		objPrefix string // fully-qualified prefix, as in: join(bdir, opts.Prefix)
 		config    *cmn.Config
 		stopCh    cos.StopCh
-		bufs      [][]byte
+		buf       []byte
 		num       int64
-	}
-
-	joggerSyncGroup struct {
-		sema   chan int // positional index of a buffer
-		group  *errgroup.Group
-		cancel context.CancelFunc
 	}
 )
 
@@ -164,29 +156,11 @@ func (jg *Jgroup) markFinished() {
 }
 
 func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *cmn.Config) (j *jogger) {
-	var syncGroup *joggerSyncGroup
-	if opts.Parallel > 1 {
-		var (
-			group  *errgroup.Group
-			cancel context.CancelFunc
-		)
-		ctx, cancel = context.WithCancel(ctx)
-		group, ctx = errgroup.WithContext(ctx)
-		syncGroup = &joggerSyncGroup{
-			sema:   make(chan int, opts.Parallel),
-			group:  group,
-			cancel: cancel,
-		}
-		for i := range opts.Parallel {
-			syncGroup.sema <- i
-		}
-	}
 	j = &jogger{
-		ctx:       ctx,
-		opts:      opts,
-		mi:        mi,
-		config:    config,
-		syncGroup: syncGroup,
+		ctx:    ctx,
+		opts:   opts,
+		mi:     mi,
+		config: config,
 	}
 	if opts.Prefix != "" {
 		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjectType) // this mountpath's bucket dir that contains objects
@@ -210,14 +184,7 @@ func (j *jogger) run() (err error) {
 	}
 
 	if j.opts.Slab != nil {
-		if j.opts.Parallel <= 1 {
-			j.bufs = [][]byte{j.opts.Slab.Alloc()}
-		} else {
-			j.bufs = make([][]byte, j.opts.Parallel)
-			for i := range j.opts.Parallel {
-				j.bufs[i] = j.opts.Slab.Alloc()
-			}
-		}
+		j.buf = j.opts.Slab.Alloc()
 	}
 
 	// 3 running options
@@ -234,9 +201,7 @@ func (j *jogger) run() (err error) {
 ex:
 	// cleanup
 	if j.opts.Slab != nil {
-		for _, buf := range j.bufs {
-			j.opts.Slab.Free(buf)
-		}
+		j.opts.Slab.Free(j.buf)
 	}
 	j.opts.onFinish()
 	return err
@@ -293,15 +258,6 @@ func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 	opts.Bck.Copy(bck)
 
 	err = fs.Walk(opts)
-	if j.syncGroup != nil {
-		// If callbacks are executed in goroutines, fs.Walk can stop before the callbacks return.
-		// We have to wait for them and check if there was any error.
-		if err == nil {
-			err = j.syncGroup.waitForAsyncTasks()
-		} else {
-			j.syncGroup.abortAsyncTasks()
-		}
-	}
 
 	if err != nil {
 		if cmn.IsErrAborted(err) {
@@ -331,26 +287,8 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return err
 	}
 
-	if j.syncGroup == nil {
-		if err := j.visitFQN(fqn, j.getBuf(0)); err != nil {
-			return err
-		}
-	} else {
-		var bufPosition int
-		select {
-		case bufPosition = <-j.syncGroup.sema:
-			break
-		case <-j.ctx.Done():
-			return j.ctx.Err()
-		}
-
-		j.syncGroup.group.Go(func() error {
-			defer func() {
-				// no need to select j.ctx.Done() as send to this chanel is immediate
-				j.syncGroup.sema <- bufPosition
-			}()
-			return j.visitFQN(fqn, j.getBuf(bufPosition))
-		})
+	if err := j.visitFQN(fqn, j.buf); err != nil {
+		return err
 	}
 
 	j.num++
@@ -412,13 +350,6 @@ visit:
 
 func (j *jogger) visitCT(ct *core.CT, buf []byte) error { return j.opts.VisitCT(ct, buf) }
 
-func (j *jogger) getBuf(position int) []byte {
-	if j.bufs == nil {
-		return nil
-	}
-	return j.bufs[position]
-}
-
 func (j *jogger) checkStopped() error {
 	select {
 	case <-j.ctx.Done(): // Some other worker has exited with error and canceled context.
@@ -428,15 +359,6 @@ func (j *jogger) checkStopped() error {
 	default:
 		return nil
 	}
-}
-
-func (sg *joggerSyncGroup) waitForAsyncTasks() error {
-	return sg.group.Wait()
-}
-
-func (sg *joggerSyncGroup) abortAsyncTasks() error {
-	sg.cancel()
-	return sg.waitForAsyncTasks()
 }
 
 func (j *jogger) throttle() {

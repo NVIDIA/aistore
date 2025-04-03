@@ -43,7 +43,6 @@ func (rp *prune) init(config *cmn.Config) {
 		CTs:      []string{fs.ObjectType},
 		VisitObj: rp.do,
 		Prefix:   rp.prefix,
-		Parallel: 1, // TODO: tune-up
 		// DoLoad:  noLoad
 	}
 	rmopts.Bck.Copy(rp.bckTo.Bucket())

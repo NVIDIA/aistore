@@ -53,8 +53,6 @@ type (
 	}
 )
 
-const etlBucketParallelCnt = 2
-
 // interface guard
 var (
 	_ core.Xact      = (*XactTCB)(nil)
@@ -177,21 +175,15 @@ func (r *XactTCB) TxnAbort(err error) {
 
 func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB) {
 	var (
-		args     = p.args
-		msg      = args.Msg
-		parallel int
+		args = p.args
+		msg  = args.Msg
 	)
-	if p.kind == apc.ActETLBck {
-		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
-	}
-
 	r = &XactTCB{p: p}
 	mpopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.do,
 		Prefix:   msg.Prefix,
 		Slab:     slab,
-		Parallel: parallel,
 		DoLoad:   mpather.Load,
 		Throttle: false, // superseded by destination rate-limiting (v3.28)
 	}

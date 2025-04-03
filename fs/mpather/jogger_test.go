@@ -5,14 +5,10 @@
 package mpather_test
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
-	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -20,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -60,68 +55,6 @@ func TestJoggerGroup(t *testing.T) {
 
 	err := jg.Stop()
 	tassert.CheckFatal(t, err)
-}
-
-func TestJoggerGroupParallel(t *testing.T) {
-	var (
-		parallelOptions = []int{2, 8, 24}
-		objectsCnt      = 1000
-		mpathsCnt       = 3
-
-		desc = tools.ObjectsDesc{
-			CTs: []tools.ContentTypeDesc{
-				{Type: fs.ObjectType, ContentCnt: objectsCnt},
-			},
-			MountpathsCnt: mpathsCnt,
-			ObjectSize:    cos.KiB,
-		}
-		out     = tools.PrepareObjects(t, desc)
-		counter *atomic.Int32
-
-		mmsa = memsys.PageMM()
-	)
-	defer os.RemoveAll(out.Dir)
-
-	slab, err := mmsa.GetSlab(memsys.PageSize)
-	tassert.CheckFatal(t, err)
-
-	baseJgOpts := &mpather.JgroupOpts{
-		Bck:  out.Bck,
-		CTs:  []string{fs.ObjectType},
-		Slab: slab,
-		VisitObj: func(lom *core.LOM, buf []byte) error {
-			b := bytes.NewBuffer(buf[:0])
-			_, err = b.WriteString(lom.FQN)
-			tassert.CheckFatal(t, err)
-
-			if rand.IntN(objectsCnt/mpathsCnt)%20 == 0 {
-				// Sometimes sleep a while, to check if in this time some other goroutine does not populate the buffer.
-				time.Sleep(10 * time.Millisecond)
-			}
-			fqn := b.String()
-			// Checks that there are no concurrent writes on the same buffer.
-			tassert.Errorf(t, fqn == lom.FQN, "expected the correct FQN %q to be read, got %q", fqn, b.String())
-			counter.Inc()
-			return nil
-		},
-	}
-
-	for _, baseJgOpts.Parallel = range parallelOptions {
-		t.Run(fmt.Sprintf("TestJoggerGroupParallel/%d", baseJgOpts.Parallel), func(t *testing.T) {
-			counter = atomic.NewInt32(0)
-			jg := mpather.NewJoggerGroup(baseJgOpts, cmn.GCO.Get(), nil)
-			jg.Run()
-			<-jg.ListenFinished()
-
-			tassert.Errorf(
-				t, int(counter.Load()) == len(out.FQNs[fs.ObjectType]),
-				"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjectType]),
-			)
-
-			err := jg.Stop()
-			tassert.CheckFatal(t, err)
-		})
-	}
 }
 
 func TestJoggerGroupLoad(t *testing.T) {
