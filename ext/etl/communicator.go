@@ -66,7 +66,7 @@ type (
 		// - redirectComm
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
-		OfflineTransform(lom *core.LOM, latestVer, sync bool) core.ReadResp
+		OfflineTransform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp
 	}
 
 	baseComm struct {
@@ -169,7 +169,28 @@ func (c *baseComm) Stop() {
 	}
 }
 
-func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
+func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) core.ReadResp {
+	if err != nil {
+		return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
+	}
+	switch ecode {
+	case http.StatusOK:
+	case http.StatusAccepted:
+	case 0:
+		return core.ReadResp{R: r, OAH: oah, Ecode: http.StatusOK}
+	case http.StatusNoContent:
+		// already delivered to destination target, no additional action needed
+		if r != nil {
+			cos.Close(r)
+		}
+		return core.ReadResp{R: nil, OAH: oah, Ecode: http.StatusNoContent}
+	default:
+		nlog.Errorln("unexpected ecode from etl:", ecode, oah, err)
+	}
+	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: http.StatusNoContent}
+}
+
+func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, daddr string, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
 	var (
 		req  *http.Request
 		resp *http.Response
@@ -185,6 +206,10 @@ func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, timeou
 	}
 
 	req.ContentLength = srcSize
+	if daddr != "" {
+		// TODO: define and enforce trusted etl containers that can directly make requests to target at `daddr`
+		req.Header.Set(apc.HdrNodeURL, daddr)
+	}
 	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	if err != nil {
 		cancel()
@@ -213,14 +238,15 @@ func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, timeou
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string, latestVer, sync bool) (r cos.ReadCloseSizer, ecode int, err error) {
+func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string, latestVer, sync bool, daddr string) core.ReadResp {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
-		return nil, 0, err
+		return core.ReadResp{Err: err}
 	}
 	var (
 		u       string
 		srcSize int64
 		body    io.ReadCloser
+		oah     cos.OAH = lom
 	)
 
 	switch pc.boot.msg.ArgTypeX {
@@ -232,14 +258,15 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		u = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
 		srcResp := lom.GetROC(latestVer, sync)
 		if srcResp.Err != nil {
-			return nil, 0, srcResp.Err
+			return srcResp
 		}
 
 		body = srcResp.R
 		srcSize = srcResp.OAH.Lsize()
+		oah = srcResp.OAH
 	case ArgTypeFQN:
 		if ecode, err := lomLoad(lom, pc.boot.xctn.Kind()); err != nil {
-			return nil, ecode, err
+			return core.ReadResp{Err: err, Ecode: ecode}
 		}
 
 		body = http.NoBody
@@ -260,45 +287,38 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		u = cos.JoinQuery(u, q)
 	}
 
-	r, ecode, err = doWithTimeout(http.MethodPut, u, body, srcSize, timeout)
-
-	return r, ecode, err
+	r, ecode, err := doWithTimeout(http.MethodPut, u, body, srcSize, daddr, timeout)
+	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error) {
 	latestVer := r.URL.Query().Get(apc.QparamLatestVer)
-	resp, ecode, err := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, cos.IsParseBool(latestVer), false)
-	if err != nil {
-		return ecode, err
+	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, cos.IsParseBool(latestVer), false, "")
+	if resp.Err != nil {
+		return resp.Ecode, resp.Err
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpush, lom.Cname(), err)
+		nlog.Infoln(Hpush, lom.Cname(), resp.Err)
 	}
 
-	bufsz := resp.Size()
+	bufsz := resp.OAH.Lsize()
 	if bufsz < 0 {
 		bufsz = memsys.DefaultBufSize // TODO: track an average
 	}
 	buf, slab := core.T.PageMM().AllocSize(bufsz)
-	_, err = io.CopyBuffer(w, resp, buf)
+	_, err := io.CopyBuffer(w, resp.R, buf)
 
 	slab.Free(buf)
-	resp.Close()
+	resp.R.Close()
 	return 0, err
 }
 
-func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool) core.ReadResp {
-	clone := *lom
-	r, ecode, err := pc.doRequest(&clone, pc.boot.msg.Timeout.D(), "", latestVer, sync)
-	if err == nil && cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpush, clone.Cname(), err)
+func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp {
+	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), "", latestVer, sync, daddr)
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+		nlog.Infoln(Hpush, lom.Cname(), resp.Err, resp.Ecode)
 	}
-	return core.ReadResp{
-		R:     cos.NopOpener(r),
-		OAH:   &clone,
-		Err:   err,
-		Ecode: ecode,
-	}
+	return handleRespEcode(resp.Ecode, resp.OAH, resp.R, resp.Err)
 }
 
 //////////////////
@@ -348,7 +368,7 @@ func (rc *redirectComm) redirectURL(lom *core.LOM, latestVer bool) (u string) {
 	return u
 }
 
-func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool) core.ReadResp {
+func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr string) core.ReadResp {
 	clone := *lom
 	_, err := lomLoad(&clone, rc.boot.xctn.Kind())
 	if err != nil {
@@ -356,17 +376,13 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool) core.
 	}
 
 	etlURL := rc.redirectURL(&clone, latestVer)
-	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), rc.boot.msg.Timeout.D())
+	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), daddr, rc.boot.msg.Timeout.D())
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
 	}
-	return core.ReadResp{
-		R:     cos.NopOpener(r),
-		OAH:   &clone,
-		Err:   err,
-		Ecode: ecode,
-	}
+	clone.SetSize(r.Size())
+	return handleRespEcode(ecode, &clone, cos.NopOpener(r), err)
 }
 
 //////////////////
@@ -387,25 +403,20 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	return 0, nil
 }
 
-func (rp *revProxyComm) OfflineTransform(lom *core.LOM, _, _ bool) core.ReadResp {
+func (rp *revProxyComm) OfflineTransform(lom *core.LOM, _, _ bool, daddr string) core.ReadResp {
 	clone := *lom
 	_, err := lomLoad(&clone, rp.boot.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err}
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), rp.boot.msg.Timeout.D())
+	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), daddr, rp.boot.msg.Timeout.D())
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, clone.Cname(), err, ecode)
 	}
 
-	return core.ReadResp{
-		R:     cos.NopOpener(r),
-		OAH:   &clone,
-		Err:   err,
-		Ecode: ecode,
-	}
+	return handleRespEcode(ecode, &clone, cos.NopOpener(r), err)
 }
 
 //

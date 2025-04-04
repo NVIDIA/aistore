@@ -1087,8 +1087,8 @@ def not_transform_func(input_bytes):
 		onlyLong     bool
 		expectedErrs []string
 	}{
-		{etlName: "invalid-dependency", code: echo, deps: invalidDeps, runtime: runtime.Py310, expectedErrs: []string{"No matching distribution found for numpy==invalid.version.number"}},
-		{etlName: "invalid-module-import", code: invalidModuleImport, deps: "", runtime: runtime.Py311, expectedErrs: []string{"ModuleNotFoundError"}},
+		{etlName: "invalid-dependency", code: echo, deps: invalidDeps, runtime: runtime.Py310, onlyLong: true, expectedErrs: []string{"No matching distribution found for numpy==invalid.version.number"}},
+		{etlName: "invalid-module-import", code: invalidModuleImport, deps: "", runtime: runtime.Py311, onlyLong: true, expectedErrs: []string{"ModuleNotFoundError"}},
 		{etlName: "invalid-transform-function-body", code: invalidFuncBody, deps: "", runtime: runtime.Py310, onlyLong: true, expectedErrs: []string{"SyntaxError", "invalid_code_function_body..."}},
 		{etlName: "undefined-transform-function", code: undefinedTransformFunc, deps: "", runtime: runtime.Py312, onlyLong: true, expectedErrs: []string{"module 'function' has no attribute 'transform'"}},
 	}

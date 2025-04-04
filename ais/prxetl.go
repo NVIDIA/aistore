@@ -124,12 +124,6 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.owner.smap.Get().CountTargets() > 1 && initMsg.CommType() == etl.WebSocket {
-		err = cmn.NewErrNotImpl(initMsg.CommType(), "etl websocket communication type only supports single target")
-		p.writeErr(w, r, err, http.StatusNotImplemented)
-		return
-	}
-
 	// start initialization and add to cluster MD
 	if err := p.initETL(w, r, initMsg); err != nil {
 		p.writeErr(w, r, err)
@@ -163,11 +157,6 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLStop:
 		p.stopETL(w, r, etlMsg)
 	case apc.ETLStart:
-		if p.owner.smap.Get().CountTargets() > 1 && etlMsg.CommType() == etl.WebSocket {
-			err = cmn.NewErrNotImpl(etlMsg.CommType(), "etl websocket communication type only supports single target")
-			p.writeErr(w, r, err, http.StatusNotImplemented)
-			return
-		}
 		p.startETL(w, r, etlMsg)
 	default:
 		debug.Assert(false, "invalid operation: "+op)

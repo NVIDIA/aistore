@@ -16,14 +16,25 @@ import (
 )
 
 type (
-	GetROC   func(lom *LOM, latestVer, sync bool) ReadResp
+	// ReadResp represents the status, attributes, and reader of an object from the source provider
+	// - Ecode 200 (http.StatusOK): the object is successfully retrieved; content available in `R`.
+	// - Ecode 204 (http.StatusNoContent): object has already been delivered directly to `daddr`, R is nil.
+	// 	- ref: https://www.rfc-editor.org/rfc/rfc9110.html#name-204-no-content
 	ReadResp struct {
-		R      cos.ReadOpenCloser
+		R      cos.ReadOpenCloser // Reader for the object content, may be nil if already delivered
 		OAH    cos.OAH
 		Err    error
 		Ecode  int
 		Remote bool
 	}
+	// GetROC defines a function that retrieves an object based on the given `lom` and flags.
+	// If `daddr` are provided, the implementation may choose to deliver the object directly,
+	// in which case the returned ReadResp will have R = nil and Ecode = 204.
+	//
+	// Implementations include:
+	// - `core.DefaultGetROC`: fetches from local or remote backend
+	// - `etl.Communicator.OfflineTransform`: fetches transformed object from ETL pod
+	GetROC func(lom *LOM, latestVer, sync bool, daddr string) ReadResp
 
 	// returned by lom.CheckRemoteMD
 	CRMD struct {
@@ -127,7 +138,7 @@ remote:
 	return resp
 }
 
-func DefaultGetROC(lom *LOM, latestVer, sync bool) ReadResp {
+func DefaultGetROC(lom *LOM, latestVer, sync bool, _ string) ReadResp {
 	return lom.GetROC(latestVer, sync)
 }
 

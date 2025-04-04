@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"runtime"
 	"sync"
 
@@ -34,7 +35,7 @@ type (
 	// Session represents a per-xaction communication context created by the statefulCommunicator.
 	Session interface {
 		// Transform is an instance of `core.GetROC` function, which is driven by `TCB` and `TCO` to provide offline transformation
-		Transform(lom *core.LOM, latestVer, sync bool) core.ReadResp
+		Transform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp
 		// Finish cleans up the job's communication channel, and aborts the undergoing xaction (`TCB`/`TCO`) if errCause is provided
 		Finish(errCause error) error
 	}
@@ -156,8 +157,11 @@ func (ws *webSocketComm) Stop() {
 // wsConnCtx //
 ///////////////
 
-func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool) core.ReadResp {
+func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool, _ string) core.ReadResp {
 	srcResp := lom.GetROC(latestVer, sync)
+	if srcResp.Err != nil {
+		return srcResp
+	}
 	pr, pw := io.Pipe()
 
 	wctx.workCh <- rwpair{srcResp.R, pw}
@@ -175,7 +179,7 @@ func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool) core.ReadR
 		R:      cos.NopOpener(pr),
 		OAH:    srcResp.OAH, // TODO: estimate the post-transformed Lsize for stats
 		Err:    nil,
-		Ecode:  srcResp.Ecode,
+		Ecode:  http.StatusOK,
 		Remote: srcResp.Remote,
 	}
 }

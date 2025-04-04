@@ -21,17 +21,18 @@ import (
 
 type (
 	CoiParams struct {
-		Xact      core.Xact
-		Config    *cmn.Config
-		BckTo     *meta.Bck
-		ObjnameTo string
-		Buf       []byte
-		OWT       cmn.OWT
-		Finalize  bool // copies and EC (as in poi.finalize())
-		DryRun    bool
-		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
-		Sync      bool // ditto -  bucket's 'versioning.synchronize'
-		core.GetROC
+		Xact        core.Xact
+		Config      *cmn.Config
+		BckTo       *meta.Bck
+		ObjnameTo   string
+		Buf         []byte
+		OWT         cmn.OWT
+		Finalize    bool // copies and EC (as in poi.finalize())
+		DryRun      bool
+		LatestVer   bool    // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
+		Sync        bool    // ditto -  bucket's 'versioning.synchronize'
+		core.GetROC         // see core.GetROC at core/ldp.go
+		OAH         cos.OAH // object attributes after applying core.GetROC
 	}
 	CoiRes struct {
 		Err   error

@@ -331,12 +331,29 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 		coiParams.OWT = cmn.OwtPromote
 		coiParams.Xact = params.Xact
 		coiParams.Config = params.Config
+		coiParams.ObjnameTo = lom.ObjName
+		coiParams.OAH = lom
 	}
 	coi := (*coi)(coiParams)
-	res := coi.send(t, nil /*DM*/, lom, lom.ObjName, tsi)
+
+	// TODO: given we already have the lom, the following fstat might not be necessary
+	fh, err := cos.NewFileHandle(lom.FQN)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, err
+		}
+		return 0, cmn.NewErrFailedTo(t, "open", lom.Cname(), err)
+	}
+	fi, err := fh.Stat()
+	if err != nil {
+		fh.Close()
+		return 0, cmn.NewErrFailedTo(t, "fstat", lom.Cname(), err)
+	}
+
+	res := coi.send(t, nil /*DM*/, lom, fh, tsi)
 	xs.FreeCOI(coiParams)
 
-	return res.Lsize, res.Err
+	return fi.Size(), res.Err
 }
 
 func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode, uuid string) error {

@@ -1525,7 +1525,19 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 		return xs.CoiRes{Err: err}
 	}
 	if tsi.ID() != t.SID() {
-		return coi.send(t, dm, lom, coi.ObjnameTo, tsi)
+		var r cos.ReadOpenCloser
+		if coi.GetROC != nil {
+			// TODO -- FIXME: cleanly separate GetROC call paths for ETL (supports direct delivery) and non-ETL (requires t2t transfer)
+			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), apc.URLPathObjects.Join(coi.BckTo.Name, coi.ObjnameTo))
+			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, daddr)
+			// skip t2t send if encounter error during GetROC, or returns empty reader (etl delivered case)
+			if resp.Err != nil || resp.R == nil {
+				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
+			}
+			coi.OAH = resp.OAH
+			r = resp.R
+		}
+		return coi.send(t, dm, lom, r, tsi)
 	}
 
 	// dst is this target
@@ -1591,7 +1603,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 		return res
 	}
 
-	resp := coi.GetROC(lom, false, false)
+	resp := coi.GetROC(lom, false, false, "" /*daddr*/)
 	if resp.Err != nil {
 		return xs.CoiRes{Err: resp.Err}
 	}
@@ -1615,7 +1627,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 //
 //nolint:dupword // intentional
 func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (res xs.CoiRes) {
-	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync)
+	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, "" /*daddr*/)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
@@ -1701,11 +1713,14 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM) (res xs.CoiRes) {
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo string, tsi *meta.Snode) (res xs.CoiRes) {
+func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, reader cos.ReadOpenCloser, tsi *meta.Snode) (res xs.CoiRes) {
 	debug.Assert(coi.OWT > 0)
 	sargs := allocSnda()
 	{
-		sargs.objNameTo = objNameTo
+		sargs.objNameTo = coi.ObjnameTo
+		sargs.bckTo = coi.BckTo
+		sargs.reader = reader
+		sargs.objAttrs = coi.OAH
 		sargs.tsi = tsi
 		sargs.dm = dm
 
@@ -1725,39 +1740,8 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 		lom = lom.CloneMD(lom.FQN)
 	}
 
-	switch {
-	case coi.OWT == cmn.OwtPromote:
-		// 1. promote
-		debug.Assert(coi.GetROC == nil)
-		debug.Assert(sargs.owt == cmn.OwtPromote)
-
-		fh, err := cos.NewFileHandle(lom.FQN)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return xs.CoiRes{}
-			}
-			return xs.CoiRes{Err: cmn.NewErrFailedTo(t, "open", lom.Cname(), err)}
-		}
-		fi, err := fh.Stat()
-		if err != nil {
-			fh.Close()
-			return xs.CoiRes{Err: cmn.NewErrFailedTo(t, "fstat", lom.Cname(), err)}
-		}
-		res.Lsize = fi.Size()
-		sargs.reader, sargs.objAttrs = fh, lom
-	case coi.GetROC != nil:
-		// 2. transform (via tcb/tco)
-		// If the object is not present call t.Backend.GetObjReader
-		resp := coi.GetROC(lom, coi.LatestVer, coi.Sync)
-		if resp.Err != nil {
-			return xs.CoiRes{Err: resp.Err}
-		}
-		// returns cos.ContentLengthUnknown (-1) if post-transform size is unknown
-		res.Lsize = resp.OAH.Lsize()
-		res.RGET = resp.Remote
-		sargs.reader, sargs.objAttrs = resp.R, resp.OAH
-	default:
-		// 3. migrate/replicate in-cluster lom
+	if sargs.reader == nil {
+		// migrate/replicate in-cluster lom
 		lom.Lock(false)
 		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
@@ -1772,7 +1756,6 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 	}
 
 	// do
-	sargs.bckTo = coi.BckTo
 	if sargs.dm != nil {
 		res.Err = coi._dm(lom /*for attrs*/, sargs)
 	} else {

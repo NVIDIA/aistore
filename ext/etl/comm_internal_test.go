@@ -170,7 +170,7 @@ var _ = Describe("CommunicatorTest", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					expectedEtlTransformArgs = ""
-					resp := comm.OfflineTransform(lom, false, false)
+					resp := comm.OfflineTransform(lom, false, false, "")
 					Expect(resp.Err).NotTo(HaveOccurred())
 					defer resp.R.Close()
 

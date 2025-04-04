@@ -77,6 +77,7 @@ const (
 	HdrNodeUptime    = aisPrefix + "Node-Uptime"
 	HdrClusterUptime = aisPrefix + "Cluster-Uptime"
 
+	HdrNodeURL   = aisPrefix + "Node-Url"
 	HdrNodeFlags = aisPrefix + "Node-Flags"
 )
 
