@@ -27,18 +27,18 @@ func bcast(method, path string, urlParams url.Values, body []byte, smap *meta.Sm
 		wg        = &sync.WaitGroup{}
 	)
 outer:
-	for _, node := range smap.Tmap {
-		if smap.InMaintOrDecomm(node) {
+	for tid, tsi := range smap.Tmap {
+		if smap.InMaintOrDecomm(tid) {
 			continue
 		}
 		for _, ignoreNode := range ignore {
-			if ignoreNode.Eq(node) {
+			if ignoreNode.Eq(tsi) {
 				continue outer
 			}
 		}
 		reqArgs := cmn.HreqArgs{
 			Method: method,
-			Base:   node.URL(cmn.NetIntraControl),
+			Base:   tsi.URL(cmn.NetIntraControl),
 			Path:   path,
 			Query:  urlParams,
 			Body:   body,
@@ -48,7 +48,7 @@ outer:
 			responses[i] = call(args)
 			responses[i].si = si
 			wg.Done()
-		}(node, &reqArgs, idx)
+		}(tsi, &reqArgs, idx)
 		idx++
 	}
 	wg.Wait()

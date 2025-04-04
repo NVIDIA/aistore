@@ -788,13 +788,13 @@ func (m *Manager) phase3(maxSize int64) error {
 		sendOrder      = make(map[string]map[string]*shard.Shard, m.smap.CountActiveTs())
 		errCh          = make(chan error, m.smap.CountActiveTs())
 	)
-	for _, d := range m.smap.Tmap {
-		if m.smap.InMaintOrDecomm(d) {
+	for tid, tsi := range m.smap.Tmap {
+		if m.smap.InMaintOrDecomm(tid) {
 			continue
 		}
-		shardsToTarget[d] = nil
+		shardsToTarget[tsi] = nil
 		if m.dsorter.name() == MemType {
-			sendOrder[d.ID()] = make(map[string]*shard.Shard, 100)
+			sendOrder[tid] = make(map[string]*shard.Shard, 100)
 		}
 	}
 	if m.Pars.EKMFileURL != "" {

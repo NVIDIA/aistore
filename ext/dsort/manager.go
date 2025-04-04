@@ -112,7 +112,7 @@ type (
 		}
 		finishedAck struct {
 			mu sync.Mutex
-			m  map[string]struct{} // finished acks: tid -> ack
+			m  cos.StrSet // finished acks: tid -> ack
 		}
 		dsorter        dsorter
 		dsorterStarted sync.WaitGroup
@@ -227,12 +227,12 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	// Fill ack map with current daemons. Once the finished ack is received from
 	// another daemon we will remove it from the map until len(ack) == 0 (then
 	// we will know that all daemons have finished operation).
-	m.finishedAck.m = make(map[string]struct{}, targetCount)
-	for sid, si := range m.smap.Tmap {
-		if m.smap.InMaintOrDecomm(si) {
+	m.finishedAck.m = make(cos.StrSet, targetCount)
+	for tid := range m.smap.Tmap {
+		if m.smap.InMaintOrDecomm(tid) {
 			continue
 		}
-		m.finishedAck.m[sid] = struct{}{}
+		m.finishedAck.m.Add(tid)
 	}
 
 	m.setInProgressTo(true)
@@ -478,12 +478,16 @@ func (m *Manager) setRW() (err error) {
 // updateFinishedAck marks tid as finished. If all daemons ack then the
 // finalCleanup is dispatched in separate goroutine.
 func (m *Manager) updateFinishedAck(tid string) {
+	var l int
+
 	m.finishedAck.mu.Lock()
 	delete(m.finishedAck.m, tid)
-	if len(m.finishedAck.m) == 0 {
+	l = len(m.finishedAck.m)
+	m.finishedAck.mu.Unlock()
+
+	if l == 0 {
 		go m.finalCleanup()
 	}
-	m.finishedAck.mu.Unlock()
 }
 
 // incrementReceived increments number of received records batches. Also puts

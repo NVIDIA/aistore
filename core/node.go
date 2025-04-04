@@ -39,9 +39,9 @@ type (
 	}
 )
 
-func InMaintOrDecomm(smap *meta.Smap, tsi *meta.Snode, xact Xact) (err error) {
-	if smap.InMaintOrDecomm(tsi) {
-		err = cmn.NewErrXactTgtInMaint(xact.String(), tsi.StringEx())
+func InMaintOrDecomm(smap *meta.Smap, tsi *meta.Snode, xact Xact) error {
+	if smap.InMaintOrDecomm(tsi.ID()) {
+		return cmn.NewErrXactTgtInMaint(xact.String(), tsi.StringEx())
 	}
-	return err
+	return nil
 }

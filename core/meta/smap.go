@@ -633,8 +633,8 @@ func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 
 // given Snode, check (usually, the current) Smap that it is present _and_ InMaintOrDecomm
 // (see also GetActiveNode)
-func (m *Smap) InMaintOrDecomm(si *Snode) bool {
-	node := m.GetNode(si.ID())
+func (m *Smap) InMaintOrDecomm(sid string) bool {
+	node := m.GetNode(sid)
 	return node != nil && node.InMaintOrDecomm()
 }
 

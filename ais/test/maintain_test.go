@@ -261,8 +261,8 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 
 	// If any node is in maintenance cancel the state
 	var dcm *meta.Snode
-	for _, node := range smap.Tmap {
-		if smap.InMaintOrDecomm(node) {
+	for tid, node := range smap.Tmap {
+		if smap.InMaintOrDecomm(tid) {
 			dcm = node
 			break
 		}

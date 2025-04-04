@@ -1471,7 +1471,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 	var inMaint bool
-	if smap.InMaintOrDecomm(si) {
+	if smap.InMaintOrDecomm(si.ID()) {
 		// only (maintenance => decommission|shutdown) permitted
 		sname := si.StringEx()
 		switch msg.Action {

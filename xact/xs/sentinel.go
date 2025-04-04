@@ -51,8 +51,8 @@ func (s *sentinel) init(r core.Xact, dm *bundle.DataMover, smap *meta.Smap, nat1
 	s.dm = dm
 	s.pend.n.Store(int64(nat1))
 	s.pend.m = make(cos.StrSet, nat1)
-	for tid, tsi := range smap.Tmap {
-		if tid == core.T.SID() || smap.InMaintOrDecomm(tsi) {
+	for tid := range smap.Tmap {
+		if tid == core.T.SID() || smap.InMaintOrDecomm(tid) {
 			continue
 		}
 		s.pend.m.Add(tid)
