@@ -242,9 +242,14 @@ func (bctx *bctx) try() (bck *meta.Bck, _ error) {
 	case err == nil || err == errForwarded:
 		return bck, err
 	case cmn.IsErrBucketAlreadyExists(err):
-		// e.g., when (re)setting backend two times in a row
-		nlog.Infoln(bctx.p.String(), err, " - nothing to do")
-		return bck, nil
+		// a separate process may have created the bucket, re-init our in-memory bck obj
+		nlog.Infoln(bctx.p.String(), err, " - re-initializing bucket")
+		errN := bck.Init(bctx.p.owner.bmd)
+		if errN != nil {
+			nlog.Errorf("%s: nested bucket initialization err: %v, %v", bctx.p.String(), err, errN)
+			bctx.p.writeErr(bctx.w, bctx.r, errN)
+		}
+		return bck, errN
 	default:
 		if bctx.perms == apc.AceBckHEAD {
 			bctx.p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
