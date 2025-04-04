@@ -22,7 +22,9 @@ func (r *BckJog) Init(id, kind, ctlmsg string, bck *meta.Bck, opts *mpather.Jgro
 	r.Config = config
 }
 
-func (r *BckJog) Run() { r.joggers.Run() }
+func (r *BckJog) Run()             { r.joggers.Run() }
+func (r *BckJog) NumJoggers() int  { return r.joggers.NumJ() }
+func (r *BckJog) NumVisits() int64 { return r.joggers.NumVisits() }
 
 func (r *BckJog) Wait() error {
 	select {

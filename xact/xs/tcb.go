@@ -6,8 +6,10 @@
 package xs
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,15 +108,7 @@ func (p *tcbFactory) Start() error {
 	if err := p.newDM(config, p.UUID(), sizePDU); err != nil {
 		return err
 	}
-	r.sntl.init(r, r.dm, smap, nat-1)
-	if l := len(r.sntl.pend.m); l != nat-1 {
-		// (unlikely)
-		err := fmt.Errorf("%s: encountered membership changes during startup (%d, %d)", r.Name(), l, nat-1)
-		debug.AssertNoErr(err)
-		r.TxnAbort(err)
-		r.dm = nil
-		return err
-	}
+	r.sntl.init(r, r.dm, smap, nat)
 
 	return nil
 }
@@ -202,7 +196,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	r.BckJog.Init(p.UUID(), p.kind, sb.String() /*ctlmsg*/, args.BckTo, mpopts, config)
 
 	// xname
-	r._name(fromCname, toCname)
+	r._name(fromCname, toCname, r.BckJog.NumJoggers())
 
 	r.rate.init(args.BckFrom, args.BckTo, nat)
 
@@ -235,7 +229,14 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 }
 
 func (r *XactTCB) Run(wg *sync.WaitGroup) {
+	// make sure `nat` hasn't changed between Start and now (highly unlikely)
 	if r.dm != nil {
+		if err := r.sntl.checkSmap(nil); err != nil {
+			r.Abort(err)
+			wg.Done()
+			return
+		}
+
 		r.dm.SetXact(r)
 		r.dm.Open()
 	}
@@ -248,12 +249,15 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 
 	err := r.BckJog.Wait()
+	if err == nil {
+		err = r.AbortErr()
+	}
 
 	if r.dm != nil {
 		//
 		// broadcast (done | abort) and wait for others
 		//
-		r.sntl.bcast(r.AbortErr())
+		r.sntl.bcast(err)
 		q := r.Quiesce(r.Config.Timeout.MaxHostBusy.D(), r.qcb)
 		if q == core.QuiTimeout {
 			r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
@@ -272,8 +276,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	nwait := r.sntl.pend.n.Load()
 	if nwait > 0 {
-		r.sntl.rarelog(tot, r.Config.Timeout.MaxHostBusy.D(), r.ErrCnt())
-		return core.QuiActive
+		return r.sntl.qcb(tot, r.Config.Timeout.MaxHostBusy.D(), r.ErrCnt())
 	}
 	return core.QuiDone
 }
@@ -297,16 +300,32 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		return err
 	}
 
-	switch hdr.Opcode {
-	case opdone:
-		r.sntl.rxdone(hdr)
-		return nil
-	case opabrt:
-		r.sntl.rxabrt(hdr)
+	// control; // TODO -- FIXME: must become a shared code w/ tco
+	if hdr.Opcode != 0 {
+		switch hdr.Opcode {
+		case opdone:
+			r.sntl.rxdone(hdr)
+		case opabort:
+			r.sntl.rxabort(hdr)
+		case oprequest:
+			o := transport.AllocSend()
+			o.Hdr.Opcode = opresponse
+			b := make([]byte, cos.SizeofI64)
+			binary.BigEndian.PutUint64(b, uint64(r.BckJog.NumVisits())) // report progress
+			o.Hdr.Opaque = b
+			r.dm.Bcast(o, nil) // TODO: consider limiting this broadcast to only quiescing (waiting) targets
+		case opresponse:
+			r.sntl.rxprogress(hdr) // handle response: progress by others
+		default:
+			err := fmt.Errorf("invalid header opcode %d", hdr.Opcode)
+			debug.AssertNoErr(err)
+			r.Abort(err)
+			return err
+		}
 		return nil
 	}
 
-	debug.Assert(hdr.Opcode == 0)
+	// data
 	lom := core.AllocLOM(hdr.ObjName)
 	err = r._recv(hdr, objReader, lom)
 	core.FreeLOM(lom)
@@ -347,14 +366,17 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.p.args }
 
-func (r *XactTCB) _name(fromCname, toCname string) {
+func (r *XactTCB) _name(fromCname, toCname string, numJoggers int) {
 	var sb strings.Builder
 	sb.Grow(80)
 	sb.WriteString(r.Base.Cname())
+	sb.WriteString("-p") // as in: "parallelism"
+	sb.WriteString(strconv.Itoa(numJoggers))
 	sb.WriteByte('-')
 	sb.WriteString(fromCname)
 	sb.WriteString("=>")
 	sb.WriteString(toCname)
+
 	r.nam = sb.String()
 }
 

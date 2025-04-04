@@ -253,6 +253,9 @@ type (
 	ErrCreateHreq struct {
 		err error // original
 	}
+	ErrMembershipChanges struct {
+		info string
+	}
 )
 
 var (
@@ -1027,6 +1030,16 @@ func (e *ErrCreateHreq) Error() string {
 }
 
 func (e *ErrCreateHreq) Unwrap() (err error) { return e.err }
+
+// ErrMembershipChanges
+
+func NewErrMembershipChanges(info string) *ErrMembershipChanges {
+	return &ErrMembershipChanges{info}
+}
+
+func (e *ErrMembershipChanges) Error() string {
+	return fmt.Sprint("encountered membership changes [", e.info, "]")
+}
 
 //
 // more is-error helpers

@@ -72,7 +72,7 @@ type (
 		config    *cmn.Config
 		stopCh    cos.StopCh
 		buf       []byte
-		num       int64
+		numvis    atomic.Int64 // obj visits counter
 	}
 )
 
@@ -130,7 +130,14 @@ func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jg
 	return jg
 }
 
-func (jg *Jgroup) Num() int { return len(jg.joggers) }
+func (jg *Jgroup) NumJ() int { return len(jg.joggers) }
+
+func (jg *Jgroup) NumVisits() (n int64) {
+	for _, jogger := range jg.joggers {
+		n += jogger.numvis.Load()
+	}
+	return n
+}
 
 func (jg *Jgroup) Run() {
 	for _, jogger := range jg.joggers {
@@ -291,11 +298,11 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return err
 	}
 
-	j.num++
+	n := j.numvis.Inc()
 
 	// poor man's throttle; see "rate limit"
 	if j.opts.Throttle {
-		if fs.IsThrottle(j.num) {
+		if fs.IsThrottle(n) {
 			j.throttle()
 		} else {
 			runtime.Gosched()

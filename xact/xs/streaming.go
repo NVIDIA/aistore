@@ -161,7 +161,7 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 	if err == nil {
 		o.Hdr.Opcode = opdone
 	} else {
-		o.Hdr.Opcode = opabrt
+		o.Hdr.Opcode = opabort
 		o.Hdr.ObjName = err.Error()
 	}
 	if tsi != nil {

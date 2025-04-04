@@ -224,8 +224,8 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 			return core.QuiAborted
 		}
 		total += sleep
-		switch res := cb(total); res {
-		case core.QuiInactiveCB: // NOTE: used by callbacks, converts to one of the returned codes
+		switch qui := cb(total); qui {
+		case core.QuiInactiveCB: // used by callbacks, converts to one of the returned codes
 			idle += sleep
 		case core.QuiActive:
 			idle = 0                   // reset
@@ -238,6 +238,8 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 			return core.QuiDone
 		case core.QuiTimeout:
 			return core.QuiTimeout
+		case core.QuiAborted:
+			return core.QuiAborted
 		}
 	}
 	return core.Quiescent

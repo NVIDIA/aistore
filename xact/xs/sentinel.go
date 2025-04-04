@@ -5,6 +5,7 @@
 package xs
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -22,41 +24,43 @@ import (
 // TODO -- FIXME:
 // 1. embedded struct duplication: `prune`, `copier`, and `sentinel`
 //    (have overlapping and duplicated fields with parent and between themselves)
-// 2. progress feedback, whereby a running target periodically, or on demand, sends the number of objects visited so far
-//    (each jogger to inc its own count, report when asked)
-// 3. update xs/streaming.go to use the same mechanism (*****)
-// 4. separately, review xs/tcobjs.go throttling..
+// 2. tco to support progress (***)
 
 // sentinel values
 const (
 	opdone = iota + 27182
-	opabrt
+	opabort
+	oprequest
+	opresponse
 )
 
 type (
 	sentinel struct {
 		parent core.Xact
 		dm     *bundle.DataMover
+		nat    int
 		pend   struct {
-			i atomic.Int64
-			n atomic.Int64
-			m cos.StrSet
-			u sync.Mutex
+			i  atomic.Int64 // periodic log & progress
+			n  atomic.Int64 // num (still) running
+			m  cos.StrSet   // map [target => ] // TODO -- FIXME: (last-tm, numvis) pair
+			mu sync.Mutex
 		}
 	}
 )
 
-func (s *sentinel) init(r core.Xact, dm *bundle.DataMover, smap *meta.Smap, nat1 int) {
+func (s *sentinel) init(r core.Xact, dm *bundle.DataMover, smap *meta.Smap, nat int) {
 	s.parent = r
 	s.dm = dm
-	s.pend.n.Store(int64(nat1))
-	s.pend.m = make(cos.StrSet, nat1)
+	s.nat = nat
+	s.pend.n.Store(int64(nat - 1))
+	s.pend.m = make(cos.StrSet, nat-1)
 	for tid := range smap.Tmap {
 		if tid == core.T.SID() || smap.InMaintOrDecomm(tid) {
 			continue
 		}
 		s.pend.m.Add(tid)
 	}
+	debug.Assert(nat > 1)
 }
 
 func (s *sentinel) bcast(abortErr error) {
@@ -66,7 +70,7 @@ func (s *sentinel) bcast(abortErr error) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = opdone
 	if abortErr != nil {
-		o.Hdr.Opcode = opabrt
+		o.Hdr.Opcode = opabort
 		o.Hdr.Opaque = cos.UnsafeB(abortErr.Error()) // abort error via opaque
 	}
 
@@ -84,35 +88,70 @@ func (s *sentinel) bcast(abortErr error) {
 	}
 }
 
-func (s *sentinel) rarelog(tot, ival time.Duration, ecnt int) {
-	if i := int64(tot / ival); i > s.pend.i.Load() {
-		s.pend.i.Store(i)
-		nlog.Warningln(s.parent.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", s.pending(), "]")
+func (s *sentinel) qcb(tot, ival time.Duration, ecnt int) core.QuiRes {
+	i := int64(tot / ival)
+	if i <= s.pend.i.Load() {
+		return core.QuiActive
 	}
+	s.pend.i.Store(i)
+
+	// 1. log
+	pending := s.pending()
+	nlog.Warningln(s.parent.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", pending, "]")
+
+	// 2. check Smap; abort if membership changed
+	if err := s.checkSmap(pending); err != nil {
+		s.parent.Abort(err)
+		return core.QuiAborted
+	}
+
+	// 3. request progress // TODO -- FIXME: only when not having timely updates from all pending, etc.
+	o := transport.AllocSend()
+	o.Hdr.Opcode = oprequest
+
+	if err := s.dm.Bcast(o, nil); err != nil {
+		s.parent.Abort(err)
+		return core.QuiAborted
+	}
+
+	return core.QuiActive
+}
+
+func (s *sentinel) checkSmap(pending []string) error {
+	smap := core.T.Sowner().Get()
+	if nat := smap.CountActiveTs(); nat != s.nat {
+		return cmn.NewErrMembershipChanges(fmt.Sprint(s.parent.Name(), smap.String(), nat, s.nat))
+	}
+	for _, tid := range pending {
+		if smap.GetNode(tid) == nil || smap.InMaintOrDecomm(tid) {
+			return cmn.NewErrMembershipChanges(fmt.Sprint(s.parent.Name(), smap.String(), tid))
+		}
+	}
+	return nil
 }
 
 func (s *sentinel) pending() (out []string) {
-	s.pend.u.Lock()
+	s.pend.mu.Lock()
 	out = s.pend.m.ToSlice()
-	s.pend.u.Unlock()
+	s.pend.mu.Unlock()
 	return out
 }
 
 func (s *sentinel) rxdone(hdr *transport.ObjHdr) {
-	s.pend.u.Lock()
+	s.pend.mu.Lock()
 	l := len(s.pend.m)
 	delete(s.pend.m, hdr.SID)
 	if l == len(s.pend.m)+1 {
 		s.pend.n.Dec()
 	}
-	s.pend.u.Unlock()
+	s.pend.mu.Unlock()
 
 	if cmn.Rom.FastV(4, cos.SmoduleXs) {
 		nlog.InfoDepth(1, s.parent.Name(), "opcode 'done':", hdr.SID, s.pend.n.Load(), len(s.pend.m))
 	}
 }
 
-func (s *sentinel) rxabrt(hdr *transport.ObjHdr) {
+func (s *sentinel) rxabort(hdr *transport.ObjHdr) {
 	if s.parent.IsAborted() {
 		return
 	}
@@ -120,4 +159,10 @@ func (s *sentinel) rxabrt(hdr *transport.ObjHdr) {
 	err := fmt.Errorf("%s: %s aborted, err: %s", s.parent.Name(), meta.Tname(hdr.SID), msg)
 	s.parent.Abort(err)
 	nlog.WarningDepth(1, "opcode 'abrt':", err)
+}
+
+// TODO -- FIXME: niy
+func (s *sentinel) rxprogress(hdr *transport.ObjHdr) {
+	n := int64(binary.BigEndian.Uint64(hdr.Opaque))
+	nlog.Infof("%s: %s reported progress: %d", s.parent.Name(), meta.Tname(hdr.SID), n)
 }

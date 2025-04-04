@@ -121,9 +121,9 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
 	} else {
 		jg = mpather.NewJoggerGroup(opts, args.Custom.Config, nil)
 		if args.Rmi != nil {
-			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
+			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.NumJ())
 		} else {
-			nlog.Infof("%s, num %d", xres.Name(), jg.Num())
+			nlog.Infof("%s, num %d", xres.Name(), jg.NumJ())
 		}
 	}
 
