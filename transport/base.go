@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -149,7 +149,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.maxhdr, _ = g.mm.AllocSize(_sizeHdr(extra.Config, int64(extra.MaxHdrSize)))
 
 	s.sessST.Store(inactive) // initiate HTTP session upon the first arrival
-	return
+	return s
 }
 
 func (s *streamBase) _lid(sid, dstID string, extra *Extra) {

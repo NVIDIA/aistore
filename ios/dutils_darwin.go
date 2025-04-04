@@ -14,15 +14,15 @@ import (
 // TODO: NIY
 
 type (
-	blockDev     struct{}
-	BlockDevices []*blockDev
+	blockDev  struct{}
+	BlockDevs []*blockDev
 )
 
-func _lsblk(string, *blockDev) (BlockDevices, error) {
+func _lsblk(string, *blockDev) (BlockDevs, error) {
 	return nil, nil
 }
 
-func fs2disks(string, string, cos.MountpathLabel, BlockDevices, int, bool) (FsDisks, error) {
+func fs2disks(string, string, cos.MountpathLabel, BlockDevs, int, bool) (FsDisks, error) {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil || len(driveStats) == 0 {
 		return nil, err

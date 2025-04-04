@@ -192,8 +192,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 			return s.sendData(b)
 		}
 		if obj.Hdr.isFin() {
-			err = io.EOF
-			return
+			return 0, io.EOF
 		}
 		s.eoObj(nil)
 	case inPDU:
@@ -214,7 +213,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 				s.pdu.reset()
 			}
 		}
-		return
+		return n, err
 	case inHdr:
 		return s.sendHdr(b)
 	}
@@ -222,9 +221,9 @@ repeat:
 	select {
 	case obj, ok := <-s.workCh: // next object OR idle tick
 		if !ok {
-			err = fmt.Errorf("%s closed prior to stopping", s)
+			err := fmt.Errorf("%s closed prior to stopping", s)
 			nlog.Warningln(err)
-			return
+			return 0, err
 		}
 		s.sendoff.obj = *obj
 		obj = &s.sendoff.obj
@@ -242,8 +241,7 @@ repeat:
 		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
 			nlog.Infoln(s.String(), "stopped [", s.numCur, s.stats.Num.Load(), "]")
 		}
-		err = io.EOF
-		return
+		return 0, io.EOF
 	}
 }
 
@@ -460,5 +458,5 @@ ex:
 	if last && err == nil {
 		err = io.EOF
 	}
-	return
+	return n, err
 }

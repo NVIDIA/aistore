@@ -368,7 +368,7 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 // mountpath add/enable helpers - always call under mfs lock
 //
 
-func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevices) error {
+func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevs) error {
 	if err := mi._validate(avail, config); err != nil {
 		return err
 	}
@@ -416,7 +416,7 @@ func (mi *Mountpath) _validate(avail MPI, config *cmn.Config) error {
 	return nil
 }
 
-func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevices) error {
+func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevs) error {
 	fsdisks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config, blockDevs)
 	if err != nil {
 		return err
@@ -559,7 +559,7 @@ func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
 // MFS global
 //
 
-func New(fshc HC, num int) (blockDevs ios.BlockDevices) {
+func New(fshc HC, num int) (blockDevs ios.BlockDevs) {
 	mfs = &MFS{hc: fshc, fsIDs: make(map[cos.FsID]string, 10)}
 	mfs.ios, blockDevs = ios.New(num)
 	return blockDevs

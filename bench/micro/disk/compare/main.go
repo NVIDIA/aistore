@@ -157,24 +157,24 @@ func timeGetMs(d time.Duration) float64 {
 // Code for querying for disks
 
 type BlockDevice struct {
-	Name         string        `json:"name"`
-	BlockDevices []BlockDevice `json:"children"`
+	Name      string        `json:"name"`
+	BlockDevs []BlockDevice `json:"children"`
 }
 
 type LsBlk struct {
-	BlockDevices []BlockDevice `json:"blockdevices"`
+	BlockDevs []BlockDevice `json:"blockdevices"`
 }
 
 func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cos.StrSet) {
 	disks = make(cos.StrSet)
-	var lsBlkOutput LsBlk
-	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
+	var lsblkOut LsBlk
+	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsblkOut)
 	if err != nil {
 		nlog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
 		return
 	}
 
-	findDevs(lsBlkOutput.BlockDevices, disks)
+	findDevs(lsblkOut.BlockDevs, disks)
 
 	return disks
 }
@@ -183,7 +183,7 @@ func findDevs(devList []BlockDevice, disks cos.StrSet) {
 	for _, bd := range devList {
 		if !strings.HasPrefix(bd.Name, "loop") {
 			disks[bd.Name] = struct{}{}
-			findDevs(bd.BlockDevices, disks)
+			findDevs(bd.BlockDevs, disks)
 		}
 	}
 }

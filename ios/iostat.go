@@ -30,7 +30,7 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevices) (FsDisks, error)
+		AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (FsDisks, error)
 		RescanDisks(mpath, fs string, disks []string) RescanDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
 		DiskStats(m cos.AllDiskStats)
@@ -104,7 +104,7 @@ func (x *MpathUtil) Set(mpath string, util int64) {
 // ios //
 /////////
 
-func New(num int) (IOS, BlockDevices) {
+func New(num int) (IOS, BlockDevs) {
 	ios := &ios{
 		mpath2disks: make(map[string]FsDisks, num),
 		disk2mpath:  make(cos.StrKVs, num),
@@ -151,7 +151,7 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevices) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (fsdisks FsDisks, err error) {
 	var (
 		warn       string
 		testingEnv = config.TestingEnv()
@@ -512,7 +512,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 			ncache.mpathUtilRO.Set(mpath, u)
 			maxUtil = max(maxUtil, u)
 		}
-		return
+		return ncache, maxUtil, missingInfo
 	}
 
 	for mpath, disks := range ios.mpath2disks {
@@ -526,7 +526,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		ncache.mpathUtilRO.Set(mpath, u)
 		maxUtil = max(maxUtil, u)
 	}
-	return
+	return ncache, maxUtil, missingInfo
 }
 
 /////////////

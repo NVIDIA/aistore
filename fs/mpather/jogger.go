@@ -176,11 +176,12 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 
 func (j *jogger) String() string { return fmt.Sprintf("jogger [%s/%s]", j.mi, j.opts.Bck.String()) }
 
-func (j *jogger) run() (err error) {
-	if err = j.mi.CheckFS(); err != nil {
+func (j *jogger) run() error {
+	if err := j.mi.CheckFS(); err != nil {
 		nlog.Errorln(err)
 		core.T.FSHC(err, j.mi, "")
-		goto ex
+		j.opts.onFinish()
+		return err
 	}
 
 	if j.opts.Slab != nil {
@@ -188,6 +189,7 @@ func (j *jogger) run() (err error) {
 	}
 
 	// 3 running options
+	var err error
 	switch {
 	case len(j.opts.Buckets) > 0:
 		debug.Assert(j.opts.Bck.IsEmpty())
@@ -198,9 +200,7 @@ func (j *jogger) run() (err error) {
 		_, err = j.runBck(&j.opts.Bck)
 	}
 
-ex:
-	// cleanup
-	if j.opts.Slab != nil {
+	if j.buf != nil {
 		j.opts.Slab.Free(j.buf)
 	}
 	j.opts.onFinish()

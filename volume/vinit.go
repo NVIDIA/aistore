@@ -1,7 +1,7 @@
 // Package volume provides volume (a.k.a. pool of disks) abstraction and methods to configure, store,
 // and validate the corresponding metadata. AIS volume is built on top of mountpaths (fs package).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package volume
 
@@ -124,36 +124,30 @@ func newVMD(expectedSize int) *VMD {
 }
 
 // local config => fs.MPI
-func configInitMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices) (err error) {
+func configInitMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevs) error {
 	var (
 		fspaths  = config.FSP.Paths
 		avail    = make(fs.MPI, len(fspaths))
 		disabled = make(fs.MPI)
 	)
 	for path, label := range fspaths {
-		var mi *fs.Mountpath
-		if mi, err = fs.NewMountpath(path, cos.MountpathLabel(label)); err != nil {
-			goto rerr
+		mi, err := fs.NewMountpath(path, cos.MountpathLabel(label))
+		if err != nil {
+			return cmn.NewErrInvalidFSPathsConf(err)
 		}
-		if err = mi.AddEnabled(tid, avail, config, blockDevs); err != nil {
-			goto rerr
+		if err := mi.AddEnabled(tid, avail, config, blockDevs); err != nil {
+			return cmn.NewErrInvalidFSPathsConf(err)
 		}
 	}
 	if len(avail) == 0 {
-		err = cmn.ErrNoMountpaths
-		goto rerr
+		return cmn.NewErrInvalidFSPathsConf(cmn.ErrNoMountpaths)
 	}
 	fs.PutMPI(avail, disabled)
-	return
-
-rerr:
-	err = cmn.NewErrInvalidFSPathsConf(err)
-	return
+	return nil
 }
 
 // VMD => fs.MPI in two passes
-func initMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices, vmd *VMD, pass int, ignoreMissingMi bool) (maxVer *VMD,
-	haveOld bool, err error) {
+func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass int, ignore bool) (maxVer *VMD, haveOld bool, _ error) {
 	var (
 		avail    = make(fs.MPI, len(vmd.Mountpaths))
 		disabled = make(fs.MPI)
@@ -161,8 +155,7 @@ func initMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices, vmd *VM
 	debug.Assert(vmd.DaemonID == tid)
 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
-		var mi *fs.Mountpath
-		mi, err = fs.NewMountpath(mpath, fsMpathMD.Label)
+		mi, err := fs.NewMountpath(mpath, fsMpathMD.Label)
 		if !fsMpathMD.Enabled {
 			if pass == 2 {
 				mi.Fs = fsMpathMD.Fs
@@ -175,12 +168,11 @@ func initMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices, vmd *VM
 		// enabled
 		if err != nil {
 			err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
-			if pass == 1 || ignoreMissingMi {
-				nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMi)
-				err = nil
+			if pass == 1 || ignore {
+				nlog.Errorf("%v (pass=%d, ignore-missing-mountpath=%t)", err, pass, ignore)
 				continue
 			}
-			return
+			return nil, false, err
 		}
 		if mi.Path != mpath {
 			nlog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
@@ -196,16 +188,15 @@ func initMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices, vmd *VM
 		// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
 		if mi.FsType != fsMpathMD.FsType || mi.Fs != fsMpathMD.Fs || mi.FsID != fsMpathMD.FsID {
 			if mi.FsType != fsMpathMD.FsType || (mi.Fs != fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID) {
-				err = &fs.ErrStorageIntegrity{
+				err := &fs.ErrStorageIntegrity{
 					Code: fs.SieFsDiffers,
 					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FS, *fsMpathMD),
 				}
-				if pass == 1 || ignoreMissingMi {
-					nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMi)
-					err = nil
+				if pass == 1 || ignore {
+					nlog.Errorf("%v (pass=%d, ignore-missing-mountpath=%t)", err, pass, ignore)
 					continue
 				}
-				return
+				return nil, false, err
 			}
 			if mi.Fs == fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID {
 				nlog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v (pass %d)",
@@ -227,29 +218,31 @@ func initMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevices, vmd *VM
 				nlog.Warningf("%s: %v", mi, errLoad)
 			}
 		} else {
-			if err = mi.AddEnabled(tid, avail, config, blockDevs); err != nil {
-				return
+			if err := mi.AddEnabled(tid, avail, config, devs); err != nil {
+				return nil, false, err
 			}
 		}
 	}
 
 	if pass == 1 {
-		return
+		return maxVer, haveOld, nil
 	}
+
 	if len(avail) == 0 {
 		if len(disabled) == 0 {
-			err = cmn.ErrNoMountpaths
-			return
+			return nil, false, cmn.ErrNoMountpaths
 		}
-		nlog.Errorf("Warning: %v (avail=%d, disabled=%d)", err, len(avail), len(disabled))
+		nlog.Errorf("Warning: %v (avail=%d, disabled=%d)", cmn.ErrNoMountpaths, len(avail), len(disabled))
 	}
 	fs.PutMPI(avail, disabled)
+
 	// TODO: insufficient
 	if la, lc := len(avail), len(config.FSP.Paths); la != lc {
 		nlog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
-		nlog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
+		nlog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or use ignore-missing-mountpath")
 	}
-	return
+
+	return maxVer, haveOld, nil
 }
 
 // pre-loading to try to recover lost tid

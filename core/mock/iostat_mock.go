@@ -1,6 +1,6 @@
 // Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -21,7 +21,7 @@ func NewIOS() *IOS                              { return &IOS{} }
 func (m *IOS) GetAllMpathUtils() *ios.MpathUtil { return &m.Utils }
 func (m *IOS) GetMpathUtil(mpath string) int64  { return m.Utils.Get(mpath) }
 
-func (*IOS) AddMpath(string, string, cos.MountpathLabel, *cmn.Config, ios.BlockDevices) (ios.FsDisks, error) {
+func (*IOS) AddMpath(string, string, cos.MountpathLabel, *cmn.Config, ios.BlockDevs) (ios.FsDisks, error) {
 	return nil, nil
 }
 
