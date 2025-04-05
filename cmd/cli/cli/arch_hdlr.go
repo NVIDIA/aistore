@@ -524,12 +524,7 @@ func genShardsHandler(c *cli.Context) error {
 		}
 	}
 
-	mm, err := memsys.NewMMSA("cli-gen-shards", true /*silent*/)
-	if err != nil {
-		debug.AssertNoErr(err) // unlikely
-		return err
-	}
-
+	mm := memsys.NewMMSA("cli-gen-shards", true /*silent*/)
 	ext := mime
 	template := strings.TrimSuffix(objname, ext)
 	pt, err := cos.ParseBashTemplate(template)

@@ -3425,7 +3425,7 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 //
 
 func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) error {
-	if bck.Props == nil || !bck.Props.RateLimit.Frontend.Enabled {
+	if !bck.Props.RateLimit.Frontend.Enabled {
 		return nil
 	}
 	var (
