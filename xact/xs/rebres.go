@@ -37,8 +37,8 @@ type (
 		xact.Base
 	}
 	Resilver struct {
-		xact.Base
 		Args *xreg.ResArgs
+		xact.Base
 	}
 )
 

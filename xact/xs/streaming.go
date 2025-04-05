@@ -159,9 +159,9 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 	o.Hdr.SID = core.T.SID()
 	o.Hdr.Opaque = []byte(uuid)
 	if err == nil {
-		o.Hdr.Opcode = opdone
+		o.Hdr.Opcode = opDone
 	} else {
-		o.Hdr.Opcode = opabort
+		o.Hdr.Opcode = opAbort
 		o.Hdr.ObjName = err.Error()
 	}
 	if tsi != nil {

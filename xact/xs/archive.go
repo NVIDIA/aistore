@@ -377,7 +377,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == cos.UnsafeS(hdr.Opaque))
 
 	// NOTE: best-effort via ref-counting
-	if hdr.Opcode == opdone {
+	if hdr.Opcode == opDone {
 		refc := wi.refc.Dec()
 		debug.Assert(refc >= 0)
 		return nil

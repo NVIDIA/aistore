@@ -38,17 +38,17 @@ type (
 		streamingF
 	}
 	XactTCObjs struct {
-		args    *xreg.TCObjsArgs
-		workCh  chan *cmn.TCOMsg
-		pending struct {
+		copier
+		transform etl.Session // stateful etl Session
+		args      *xreg.TCObjsArgs
+		workCh    chan *cmn.TCOMsg
+		pending   struct {
 			m   map[string]*tcowi
 			mtx sync.RWMutex
 		}
-		copier
 		streamingX
-		transform etl.Session // stateful etl Session
-		chanFull  atomic.Int64
-		owt       cmn.OWT
+		chanFull atomic.Int64
+		owt      cmn.OWT
 	}
 	tcowi struct {
 		r   *XactTCObjs
@@ -300,7 +300,7 @@ ex:
 }
 
 func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
-	if hdr.Opcode == opdone {
+	if hdr.Opcode == opDone {
 		r.pending.mtx.Lock()
 		wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 		if !ok {
@@ -381,7 +381,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 //
 
 func (r *XactTCObjs) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) {
-	rp := prune{parent: r, smap: smap}
+	rp := prune{r: r, smap: smap}
 	rp.bckFrom, rp.bckTo = r.FromTo()
 
 	// tcb use case

@@ -721,7 +721,7 @@ func (r *LsoXact) Snap() (snap *core.Snap) {
 func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)))
 
-	if hdr.Opcode == opabort {
+	if hdr.Opcode == opAbort {
 		// TODO: consider r.Abort(err); today it'll idle for a while
 		// see:  streamingX.sendTerm
 		err = errors.New(hdr.ObjName)

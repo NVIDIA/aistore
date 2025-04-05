@@ -32,26 +32,22 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// TODO -- FIXME: unify/combine embedded sentinel, prune, and copier
-
 type (
 	tcbFactory struct {
 		xreg.RenewBase
-		xctn  *XactTCB
-		args  *xreg.TCBArgs
-		kind  string
-		phase string // (see "transition")
-		owt   cmn.OWT
+		xctn *XactTCB
+		kind string
 	}
 	XactTCB struct {
-		p     *tcbFactory
-		dm    *bundle.DataMover
-		sntl  sentinel
-		prune prune
-		nam   string
-		xact.BckJog
-		transform etl.Session // stateful etl Session
 		copier
+		transform etl.Session // stateful etl Session
+		args      *xreg.TCBArgs
+		dm        *bundle.DataMover
+		sntl      sentinel
+		nam       string
+		prune     prune
+		xact.BckJog
+		owt cmn.OWT
 	}
 )
 
@@ -66,8 +62,7 @@ var (
 ////////////////
 
 func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	custom := args.Custom.(*xreg.TCBArgs)
-	return &tcbFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, phase: custom.Phase, args: custom}
+	return &tcbFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind}
 }
 
 func (p *tcbFactory) Start() error {
@@ -81,11 +76,11 @@ func (p *tcbFactory) Start() error {
 
 	r := newTCB(p, slab, config, smap, nat)
 
-	p.owt = cmn.OwtCopy
+	r.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
 		// TODO upon abort: call r.transform.Finish() to cleanup communicator's state
-		p.owt = cmn.OwtTransform
-		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(p.args.Msg.Transform.Name, r)
+		r.owt = cmn.OwtTransform
+		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(r.args.Msg.Transform.Name, r)
 		if err != nil {
 			return err
 		}
@@ -105,30 +100,10 @@ func (p *tcbFactory) Start() error {
 	if p.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
-	if err := p.newDM(config, p.UUID(), sizePDU); err != nil {
+	if err := r.newDM(sizePDU); err != nil {
 		return err
 	}
 	r.sntl.init(r, r.dm, smap, nat)
-
-	return nil
-}
-
-func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
-	const trname = "tcb"
-	dmExtra := bundle.Extra{
-		RecvAck:     nil, // no ACKs
-		Config:      config,
-		Compression: config.TCB.Compression,
-		Multiplier:  config.TCB.SbundleMult,
-		SizePDU:     sizePDU,
-	}
-	// in re cmn.OwtPut: see comment inside _recv()
-	dm := bundle.NewDM(trname+"-"+uuid, p.xctn.recv, p.owt, dmExtra)
-	if err := dm.RegRecv(); err != nil {
-		return err
-	}
-	dm.SetXact(p.xctn)
-	p.xctn.dm = dm
 
 	return nil
 }
@@ -139,22 +114,37 @@ func (p *tcbFactory) Get() core.Xact { return p.xctn }
 func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*tcbFactory)
 	if p.UUID() != prev.UUID() {
-		err = cmn.NewErrXactUsePrev(prevEntry.Get().String())
-		return
+		return wpr, cmn.NewErrXactUsePrev(prevEntry.Get().String())
 	}
-	bckEq := prev.args.BckFrom.Equal(p.args.BckFrom, true /*same BID*/, true /*same backend*/)
+	bckEq := prev.xctn.args.BckFrom.Equal(p.xctn.args.BckFrom, true /*same BID*/, true /*same backend*/)
 	debug.Assert(bckEq)
-	debug.Assert(prev.phase == apc.ActBegin && p.phase == apc.ActCommit)
-	prev.args.Phase = apc.ActCommit // transition
-	wpr = xreg.WprUse
-	return
+	return xreg.WprUse, nil
 }
 
 /////////////
-// XactTCB //
+// XactTCB copies one bucket _into_ another with or without transformation
 /////////////
 
-// copies one bucket _into_ another with or without transformation.
+func (r *XactTCB) newDM(sizePDU int32) error {
+	const trname = "tcb"
+	config := r.BckJog.Config
+	dmExtra := bundle.Extra{
+		RecvAck:     nil, // no ACKs
+		Config:      config,
+		Compression: config.TCB.Compression,
+		Multiplier:  config.TCB.SbundleMult,
+		SizePDU:     sizePDU,
+	}
+	// in re cmn.OwtPut: see comment inside _recv()
+	dm := bundle.NewDM(trname+"-"+r.ID(), r.recv, r.owt, dmExtra)
+	if err := dm.RegRecv(); err != nil {
+		return err
+	}
+	dm.SetXact(r)
+	r.dm = dm
+
+	return nil
+}
 
 // limited pre-run abort
 func (r *XactTCB) TxnAbort(err error) {
@@ -169,10 +159,10 @@ func (r *XactTCB) TxnAbort(err error) {
 
 func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB) {
 	var (
-		args = p.args
+		args = p.Args.Custom.(*xreg.TCBArgs)
 		msg  = args.Msg
 	)
-	r = &XactTCB{p: p}
+	r = &XactTCB{args: args}
 	mpopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.do,
@@ -203,7 +193,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	if msg.Sync {
 		debug.Assert(msg.Prepend == "", msg.Prepend) // validated (cli, P)
 		{
-			r.prune.parent = r
+			r.prune.r = r
 			r.prune.smap = smap
 			r.prune.bckFrom = args.BckFrom
 			r.prune.bckTo = args.BckTo
@@ -243,7 +233,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
 	r.BckJog.Run()
-	if r.p.args.Msg.Sync {
+	if r.args.Msg.Sync {
 		r.prune.run() // the 2nd jgroup
 	}
 	nlog.Infoln(r.Name())
@@ -267,7 +257,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.dm.Close(err)
 		r.dm.UnregRecv()
 	}
-	if r.p.args.Msg.Sync {
+	if r.args.Msg.Sync {
 		r.prune.wait()
 	}
 	r.Finish()
@@ -282,9 +272,9 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
-	args := r.p.args // TCBArgs
+	args := r.args // TCBArgs
 	a := r.copier.prepare(lom, args.BckTo, args.Msg)
-	a.Config, a.Buf, a.OWT = r.Config, buf, r.p.owt
+	a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
 
 	err := r.copier.do(a, lom, r.dm)
 	if err == nil && args.Msg.Sync {
@@ -303,18 +293,18 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	// control; // TODO -- FIXME: must become a shared code w/ tco
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
-		case opdone:
+		case opDone:
 			r.sntl.rxdone(hdr)
-		case opabort:
+		case opAbort:
 			r.sntl.rxabort(hdr)
-		case oprequest:
+		case opRequest:
 			o := transport.AllocSend()
-			o.Hdr.Opcode = opresponse
+			o.Hdr.Opcode = opResponse
 			b := make([]byte, cos.SizeofI64)
 			binary.BigEndian.PutUint64(b, uint64(r.BckJog.NumVisits())) // report progress
 			o.Hdr.Opaque = b
 			r.dm.Bcast(o, nil) // TODO: consider limiting this broadcast to only quiescing (waiting) targets
-		case opresponse:
+		case opResponse:
 			r.sntl.rxprogress(hdr) // handle response: progress by others
 		default:
 			err := fmt.Errorf("invalid header opcode %d", hdr.Opcode)
@@ -346,7 +336,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Xact = r
 		params.Size = hdr.ObjAttrs.Size
-		params.OWT = r.p.owt
+		params.OWT = r.owt
 	}
 	if lom.AtimeUnix() == 0 {
 		// TODO: sender must be setting it, remove this `if` when fixed
@@ -364,7 +354,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	return nil
 }
 
-func (r *XactTCB) Args() *xreg.TCBArgs { return r.p.args }
+func (r *XactTCB) Args() *xreg.TCBArgs { return r.args }
 
 func (r *XactTCB) _name(fromCname, toCname string, numJoggers int) {
 	var sb strings.Builder
@@ -384,7 +374,7 @@ func (r *XactTCB) String() string { return r.nam }
 func (r *XactTCB) Name() string   { return r.nam }
 
 func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
-	return r.p.args.BckFrom, r.p.args.BckTo
+	return r.args.BckFrom, r.args.BckTo
 }
 
 func (r *XactTCB) Snap() (snap *core.Snap) {

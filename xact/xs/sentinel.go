@@ -28,28 +28,28 @@ import (
 
 // sentinel values
 const (
-	opdone = iota + 27182
-	opabort
-	oprequest
-	opresponse
+	opDone = iota + 27182
+	opAbort
+	opRequest
+	opResponse
 )
 
 type (
 	sentinel struct {
-		parent core.Xact
-		dm     *bundle.DataMover
-		nat    int
-		pend   struct {
+		r    core.Xact
+		dm   *bundle.DataMover
+		pend struct {
 			i  atomic.Int64 // periodic log & progress
-			n  atomic.Int64 // num (still) running
+			n  atomic.Int64 // num (still) running (<= `nat`)
 			m  cos.StrSet   // map [target => ] // TODO -- FIXME: (last-tm, numvis) pair
 			mu sync.Mutex
 		}
+		nat int
 	}
 )
 
 func (s *sentinel) init(r core.Xact, dm *bundle.DataMover, smap *meta.Smap, nat int) {
-	s.parent = r
+	s.r = r
 	s.dm = dm
 	s.nat = nat
 	s.pend.n.Store(int64(nat - 1))
@@ -68,9 +68,9 @@ func (s *sentinel) bcast(abortErr error) {
 		return
 	}
 	o := transport.AllocSend()
-	o.Hdr.Opcode = opdone
+	o.Hdr.Opcode = opDone
 	if abortErr != nil {
-		o.Hdr.Opcode = opabort
+		o.Hdr.Opcode = opAbort
 		o.Hdr.Opaque = cos.UnsafeB(abortErr.Error()) // abort error via opaque
 	}
 
@@ -78,12 +78,12 @@ func (s *sentinel) bcast(abortErr error) {
 
 	switch {
 	case abortErr != nil:
-		nlog.WarningDepth(1, s.parent.Name(), "aborted [", abortErr, err, "]")
+		nlog.WarningDepth(1, s.r.Name(), "aborted [", abortErr, err, "]")
 	case err != nil:
-		nlog.WarningDepth(1, s.parent.Name(), err)
+		nlog.WarningDepth(1, s.r.Name(), err)
 	default:
 		if cmn.Rom.FastV(4, cos.SmoduleXs) {
-			nlog.Infoln(s.parent.Name(), "done")
+			nlog.Infoln(s.r.Name(), "done")
 		}
 	}
 }
@@ -97,20 +97,20 @@ func (s *sentinel) qcb(tot, ival time.Duration, ecnt int) core.QuiRes {
 
 	// 1. log
 	pending := s.pending()
-	nlog.Warningln(s.parent.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", pending, "]")
+	nlog.Warningln(s.r.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", pending, "]")
 
 	// 2. check Smap; abort if membership changed
 	if err := s.checkSmap(pending); err != nil {
-		s.parent.Abort(err)
+		s.r.Abort(err)
 		return core.QuiAborted
 	}
 
 	// 3. request progress // TODO -- FIXME: only when not having timely updates from all pending, etc.
 	o := transport.AllocSend()
-	o.Hdr.Opcode = oprequest
+	o.Hdr.Opcode = opRequest
 
 	if err := s.dm.Bcast(o, nil); err != nil {
-		s.parent.Abort(err)
+		s.r.Abort(err)
 		return core.QuiAborted
 	}
 
@@ -120,11 +120,11 @@ func (s *sentinel) qcb(tot, ival time.Duration, ecnt int) core.QuiRes {
 func (s *sentinel) checkSmap(pending []string) error {
 	smap := core.T.Sowner().Get()
 	if nat := smap.CountActiveTs(); nat != s.nat {
-		return cmn.NewErrMembershipChanges(fmt.Sprint(s.parent.Name(), smap.String(), nat, s.nat))
+		return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), nat, s.nat))
 	}
 	for _, tid := range pending {
 		if smap.GetNode(tid) == nil || smap.InMaintOrDecomm(tid) {
-			return cmn.NewErrMembershipChanges(fmt.Sprint(s.parent.Name(), smap.String(), tid))
+			return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), tid))
 		}
 	}
 	return nil
@@ -147,22 +147,22 @@ func (s *sentinel) rxdone(hdr *transport.ObjHdr) {
 	s.pend.mu.Unlock()
 
 	if cmn.Rom.FastV(4, cos.SmoduleXs) {
-		nlog.InfoDepth(1, s.parent.Name(), "opcode 'done':", hdr.SID, s.pend.n.Load(), len(s.pend.m))
+		nlog.InfoDepth(1, s.r.Name(), "opcode 'done':", hdr.SID, s.pend.n.Load(), len(s.pend.m))
 	}
 }
 
 func (s *sentinel) rxabort(hdr *transport.ObjHdr) {
-	if s.parent.IsAborted() {
+	if s.r.IsAborted() {
 		return
 	}
 	msg := cos.UnsafeS(hdr.Opaque)
-	err := fmt.Errorf("%s: %s aborted, err: %s", s.parent.Name(), meta.Tname(hdr.SID), msg)
-	s.parent.Abort(err)
+	err := fmt.Errorf("%s: %s aborted, err: %s", s.r.Name(), meta.Tname(hdr.SID), msg)
+	s.r.Abort(err)
 	nlog.WarningDepth(1, "opcode 'abrt':", err)
 }
 
 // TODO -- FIXME: niy
 func (s *sentinel) rxprogress(hdr *transport.ObjHdr) {
 	n := int64(binary.BigEndian.Uint64(hdr.Opaque))
-	nlog.Infof("%s: %s reported progress: %d", s.parent.Name(), meta.Tname(hdr.SID), n)
+	nlog.Infof("%s: %s reported progress: %d", s.r.Name(), meta.Tname(hdr.SID), n)
 }
