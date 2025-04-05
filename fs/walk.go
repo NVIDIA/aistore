@@ -17,9 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/memsys"
-
-	"github.com/karrick/godirwalk"
 )
 
 const (
@@ -32,20 +29,13 @@ const (
 )
 
 type (
-	DirEntry interface {
-		IsDir() bool
-	}
-
-	walkFunc func(fqn string, de DirEntry) error
-
 	WalkOpts struct {
 		Mi       *Mountpath
-		Callback walkFunc
+		Callback iofs.WalkDirFunc
 		Bck      cmn.Bck
 		Dir      string
 		Prefix   string
 		CTs      []string
-		Sorted   bool
 	}
 
 	errCallbackWrapper struct {
@@ -53,58 +43,40 @@ type (
 	}
 
 	walkDirWrapper struct {
-		ucb func(string, DirEntry) error // user-provided callback
-		dir string                       // root pathname
+		ucb func(string, iofs.DirEntry, error) error // user-provided callback
+		dir string                                   // root pathname
 		errCallbackWrapper
 	}
 )
 
-// PathErrToAction is a default error callback for fast godirwalk.Walk.
+// PathErrToAction is a default error callback for fast filepath.WalkDir
 // The idea is that on any error that was produced during the walk we dispatch
 // this handler and act upon the error.
 //
 // By default it halts on bucket level errors because there is no option to
 // continue walking if there is a problem with a bucket. Also we count "soft"
 // errors and abort if we reach certain amount of them.
-func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.ErrorAction {
+func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) error {
 	if cmn.IsErrBucketLevel(err) {
-		return godirwalk.Halt
+		return err
 	}
 	if ew.counter.Load() > errThreshold {
-		return godirwalk.Halt
+		return err
 	}
 	if cmn.IsErrObjLevel(err) {
 		ew.counter.Inc()
-		return godirwalk.SkipNode
+		return nil
 	}
-	return godirwalk.Halt
+	return err
 }
 
-// godirwalk is used by default. To switch to standard filepath.Walk:
-// 1. Rewrite `callback` as follows:
-//
-//   func (opts *WalkOpts) callback(fqn string, de os.FileInfo, err error) error {
-//     if err != nil {
-//        if err := cmn.PathWalkErr(err); err != nil {
-//          return err
-//        }
-//        return nil
-//     }
-//     return opts.callback(fqn, de)
-//   }
-//
-// 2. Replace `Walk` body with one-liner:
-//   return filepath.Walk(fqn, opts.callback)
-//
-// No more changes required.
-//
-// NOTE: for standard filepath.Walk option 'Sorted' is ignored
-
-// interface guard
-var _ DirEntry = (*godirwalk.Dirent)(nil)
-
-func (opts *WalkOpts) callback(fqn string, de *godirwalk.Dirent) error {
-	return opts.Callback(fqn, de)
+func (opts *WalkOpts) callback(ew *errCallbackWrapper) iofs.WalkDirFunc {
+	return func(fqn string, de iofs.DirEntry, err error) error {
+		if err != nil {
+			return ew.PathErrToAction(fqn, err)
+		}
+		return opts.Callback(fqn, de, err)
+	}
 }
 
 func Walk(opts *WalkOpts) error {
@@ -135,15 +107,9 @@ func Walk(opts *WalkOpts) error {
 			return err
 		}
 	}
-	scratch, slab := memsys.PageMM().AllocSize(memsys.DefaultBufSize)
-	gOpts := &godirwalk.Options{
-		ErrorCallback: ew.PathErrToAction, // "halts the walk" or "skips the node" (detailed comment above)
-		Callback:      opts.callback,
-		Unsorted:      !opts.Sorted,
-		ScratchBuffer: scratch,
-	}
+
 	for _, fqn := range fqns {
-		err1 := godirwalk.Walk(fqn, gOpts)
+		err1 := filepath.WalkDir(fqn, opts.callback(ew))
 		if err1 == nil || os.IsNotExist(err1) {
 			continue
 		}
@@ -164,7 +130,6 @@ func Walk(opts *WalkOpts) error {
 		}
 		err = err1
 	}
-	slab.Free(scratch)
 	return err
 }
 
@@ -232,21 +197,21 @@ func AllMpathBcks(opts *WalkOpts) (bcks []cmn.Bck, err error) {
 }
 
 func mpathChildren(opts *WalkOpts) (children []string, err error) {
-	var (
-		fqn           = opts.Mi.MakePathBck(&opts.Bck)
-		scratch, slab = memsys.PageMM().AllocSize(memsys.DefaultBufSize)
-	)
-	children, err = godirwalk.ReadDirnames(fqn, scratch)
-	slab.Free(scratch)
+	fqn := opts.Mi.MakePathBck(&opts.Bck)
+	// os.ReadDir returns the entries in lexical order so additional
+	// sorting is not needed.
+	entries, err := os.ReadDir(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil
 		}
 		return
 	}
-	if opts.Sorted {
-		sort.Strings(children)
+	children = make([]string, 0, len(entries))
+	for _, entry := range entries {
+		children = append(children, entry.Name())
 	}
+	sort.Strings(children)
 	return
 }
 
@@ -256,7 +221,7 @@ func mpathChildren(opts *WalkOpts) (children []string, err error) {
 
 // NOTE: using Go filepath.WalkDir
 // pros: lexical deterministic order; cons: reads the entire directory
-func WalkDir(dir string, ucb func(string, DirEntry) error) error {
+func WalkDir(dir string, ucb func(string, iofs.DirEntry, error) error) error {
 	wd := &walkDirWrapper{dir: dir, ucb: ucb}
 	return filepath.WalkDir(dir, wd.wcb)
 }
@@ -264,8 +229,8 @@ func WalkDir(dir string, ucb func(string, DirEntry) error) error {
 // wraps around user callback to implement default error handling and skipping
 func (wd *walkDirWrapper) wcb(path string, de iofs.DirEntry, err error) error {
 	if err != nil {
-		// Walk and WalkDir share the same error-processing logic (hence, godirwalk enum)
-		if path != wd.dir && wd.PathErrToAction(path, err) != godirwalk.Halt {
+		// Walk and WalkDir share the same error-processing logic
+		if path != wd.dir && wd.PathErrToAction(path, err) != err {
 			err = nil
 		}
 		return err
@@ -277,5 +242,5 @@ func (wd *walkDirWrapper) wcb(path string, de iofs.DirEntry, err error) error {
 		return nil
 	}
 	// user callback
-	return wd.ucb(path, de)
+	return wd.ucb(path, de, err)
 }

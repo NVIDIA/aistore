@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"math/rand/v2"
 	"os"
 	"path"
@@ -133,7 +134,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 		oldest     = time.Now().Add(time.Hour)
 	)
 
-	cb := func(fqn string, de fs.DirEntry) error {
+	cb := func(fqn string, de iofs.DirEntry, _ error) error {
 		if de.IsDir() {
 			return nil
 		}
@@ -162,7 +163,6 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 			Bck:      bck,
 			CTs:      []string{fs.ECSliceType, fs.ECMetaType, fs.ObjectType},
 			Callback: cb,
-			Sorted:   true, // false is unsupported and asserts
 		},
 	})
 

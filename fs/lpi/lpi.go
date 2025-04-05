@@ -7,6 +7,7 @@ package lpi
 import (
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,8 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-
-	"github.com/karrick/godirwalk"
 )
 
 const (
@@ -101,21 +100,22 @@ func (lpi *Iter) Next(msg Msg, out Page) error {
 	}
 
 	// next page
-	err := godirwalk.Walk(lpi.root, &godirwalk.Options{
-		Unsorted:      false,
-		Callback:      lpi.Callback,
-		ErrorCallback: lpi.ErrorCallback,
-	})
+	err := filepath.WalkDir(lpi.root, lpi.Callback)
 	if err != nil && err != errStop {
-		return fmt.Errorf("error gowalk-ing: %v", err)
+		return fmt.Errorf("error walking: %v", err)
 	}
-
 	return nil
 }
 
-func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
+func (lpi *Iter) Callback(pathname string, d iofs.DirEntry, walkErr error) (err error) {
+	if walkErr != nil {
+		if walkErr != errStop {
+			nlog.Warningln("Error accessing", pathname, walkErr)
+		}
+		return walkErr // Halt traversal
+	}
 	switch {
-	case de.IsDir():
+	case d.IsDir():
 		// skip or SkipDir
 		debug.Assert(!cos.IsLastB(pathname, filepath.Separator), pathname)
 		if pathname == lpi.root {
@@ -213,11 +213,4 @@ rerr:
 		nlog.Warningln(lom.String(), "[", err, "]")
 	}
 	return nil
-}
-
-func (*Iter) ErrorCallback(pathname string, err error) godirwalk.ErrorAction {
-	if err != errStop {
-		nlog.Warningln("Error accessing", pathname, err)
-	}
-	return godirwalk.Halt
 }

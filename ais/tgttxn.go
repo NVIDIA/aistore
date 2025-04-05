@@ -7,6 +7,7 @@ package ais
 import (
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -1011,7 +1012,7 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 		cksum      *cos.CksumHash
 		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
 	)
-	cb := func(fqn string, de fs.DirEntry) (err error) {
+	cb := func(fqn string, de iofs.DirEntry, _ error) (err error) {
 		if de.IsDir() {
 			return
 		}
@@ -1031,7 +1032,7 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 		cksum = cos.NewCksumHash(cos.ChecksumCesXxh)
 	}
 	if prmMsg.Recursive {
-		opts := &fs.WalkOpts{Dir: dirFQN, Callback: cb, Sorted: true}
+		opts := &fs.WalkOpts{Dir: dirFQN, Callback: cb}
 		err = fs.Walk(opts)
 	} else {
 		err = fs.WalkDir(dirFQN, cb)

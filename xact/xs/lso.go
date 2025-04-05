@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -616,7 +617,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wi = newWalkInfo(msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	opts.ValidateCb = r.validateCb
@@ -629,7 +630,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wg.Done()
 }
 
-func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
+func (r *LsoXact) validateCb(fqn string, de iofs.DirEntry, _ error) error {
 	if !de.IsDir() {
 		return nil
 	}
@@ -658,8 +659,8 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 	return err
 }
 
-func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
-	entry, err := r.walk.wi.callback(fqn, de)
+func (r *LsoXact) cb(fqn string, de iofs.DirEntry, err error) error {
+	entry, err := r.walk.wi.callback(fqn, de, err)
 	if err != nil || entry == nil {
 		return err
 	}
