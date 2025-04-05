@@ -1520,7 +1520,8 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 
 	// 1: dst location
 	smap := t.owner.smap.Get()
-	tsi, err := smap.HrwName2T(coi.BckTo.MakeUname(coi.ObjnameTo))
+	uname := coi.BckTo.MakeUname(coi.ObjnameTo)
+	tsi, err := smap.HrwName2T(uname)
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}
@@ -1528,7 +1529,7 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 		var r cos.ReadOpenCloser
 		if coi.GetROC != nil {
 			// TODO -- FIXME: cleanly separate GetROC call paths for ETL (supports direct delivery) and non-ETL (requires t2t transfer)
-			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), apc.URLPathObjects.Join(coi.BckTo.Name, coi.ObjnameTo))
+			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), cos.UnsafeS(uname))
 			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, daddr)
 			// skip t2t send if encounter error during GetROC, or returns empty reader (etl delivered case)
 			if resp.Err != nil || resp.R == nil {

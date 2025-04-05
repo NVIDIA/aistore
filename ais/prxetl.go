@@ -220,9 +220,10 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 // broadcast (init ETL) request to all targets
 func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) error {
 	var (
-		err  error
-		args = allocBcArgs()
-		xid  = etl.PrefixXactID + cos.GenUUID()
+		err    error
+		args   = allocBcArgs()
+		xid    = etl.PrefixXactID + cos.GenUUID()
+		secret = cos.CryptoRandS(10)
 	)
 
 	// 1. add to etlMD
@@ -240,7 +241,10 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 			Method: http.MethodPut,
 			Path:   apc.URLPathETL.S,
 			Body:   cos.MustMarshal(msg),
-			Query:  url.Values{apc.QparamUUID: []string{xid}},
+			Query: url.Values{
+				apc.QparamUUID:      []string{xid},
+				apc.QparamETLSecret: []string{secret},
+			},
 		}
 		args.timeout = apc.LongTimeout
 	}

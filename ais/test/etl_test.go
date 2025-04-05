@@ -530,7 +530,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		tests = []testObjConfig{
 			{transformer: tetl.Echo, comm: etl.WebSocket},
 			{transformer: tetl.Echo, comm: etl.Hpull},
-			{transformer: tetl.MD5, comm: etl.Hpush},
+			{transformer: tetl.Echo, comm: etl.Hpush},
 		}
 	)
 

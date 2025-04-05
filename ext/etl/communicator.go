@@ -46,6 +46,7 @@ type (
 		Stop()
 		Restart(boot *etlBootstrapper)
 		GetPodWatcher() *podWatcher
+		GetSecret() string
 
 		Xact() core.Xact // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
 		CommStats        // only stats for `apc.ActETLInline` inline transform
@@ -156,9 +157,17 @@ func (c *baseComm) ObjCount() int64 { return c.boot.xctn.Objs() }
 func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
 func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
-func (c *baseComm) GetPodWatcher() *podWatcher    { return c.pw }
-func (c *baseComm) Restart(boot *etlBootstrapper) { c.boot = boot }
-func (c *baseComm) SetupConnection() error        { return c.boot.setupConnection("http://") }
+func (c *baseComm) GetPodWatcher() *podWatcher { return c.pw }
+func (c *baseComm) GetSecret() string          { return c.boot.secret }
+func (c *baseComm) SetupConnection() error     { return c.boot.setupConnection("http://") }
+
+func (c *baseComm) Restart(updBoot *etlBootstrapper) {
+	c.boot.uri = updBoot.uri
+	if updBoot.secret != "" {
+		c.boot.secret = updBoot.secret
+	}
+}
+
 func (c *baseComm) Stop() {
 	// Note: xctn might have already been aborted and finished by pod watcher
 	if !c.boot.xctn.Finished() && !c.boot.xctn.IsAborted() {

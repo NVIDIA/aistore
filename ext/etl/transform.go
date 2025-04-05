@@ -146,9 +146,9 @@ func (e *Aborter) ListenSmapChanged() {
 }
 
 // (common for both `InitCode` and `InitSpec` flows)
-func InitSpec(msg *InitSpecMsg, xid string, opts StartOpts) (core.Xact, error) {
+func InitSpec(msg *InitSpecMsg, xid, secret string, opts StartOpts) (core.Xact, error) {
 	config := cmn.GCO.Get()
-	podName, svcName, xctn, err := start(msg, xid, opts, config)
+	podName, svcName, xctn, err := start(msg, xid, secret, opts, config)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func InitSpec(msg *InitSpecMsg, xid string, opts StartOpts) (core.Xact, error) {
 // - make the corresponding assorted substitutions in the etl/runtime/podspec.yaml spec, and
 // - execute `InitSpec` with the modified podspec
 // See also: etl/runtime/podspec.yaml
-func InitCode(msg *InitCodeMsg, xid string) (core.Xact, error) {
+func InitCode(msg *InitCodeMsg, xid, secret string) (core.Xact, error) {
 	var (
 		ftp      = fromToPairs(msg)
 		replacer = strings.NewReplacer(ftp...)
@@ -178,6 +178,7 @@ func InitCode(msg *InitCodeMsg, xid string) (core.Xact, error) {
 	return InitSpec(
 		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
 		xid,
+		secret,
 		StartOpts{Env: map[string]string{
 			r.CodeEnvName(): string(msg.Code),
 			r.DepsEnvName(): string(msg.Deps),
@@ -240,13 +241,13 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
+func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
 	var (
 		comm   communicatorCommon
 		pw     *podWatcher
 		stage  Stage
 		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
-		boot   = &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env, msg: *msg}
+		boot   = &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env, msg: *msg, secret: secret}
 	)
 
 	// 1. Parse spec template and fill Pod object with necessary fields.

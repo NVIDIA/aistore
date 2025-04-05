@@ -32,6 +32,7 @@ type etlBootstrapper struct {
 	errCtx *cmn.ETLErrCtx
 	config *cmn.Config
 	msg    InitSpecMsg
+	secret string
 	env    map[string]string
 
 	// runtime
@@ -342,7 +343,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: core.T.Snode().URL(cmn.NetIntraData) + apc.URLPathETLObject.Join(reqSecret),
+			Value: core.T.Snode().URL(cmn.NetIntraData) + apc.URLPathETLObject.Join(b.msg.EtlName, b.secret),
 		})
 		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{

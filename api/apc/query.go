@@ -16,6 +16,7 @@ const (
 	// etl
 	QparamETLName          = "etl_name"
 	QparamETLTransformArgs = "etl_args"
+	QparamETLSecret        = "etl_secret" // secret generated during ETL init to validate directly target access from trusted ETL
 
 	QparamRegex      = "regex"       // dsort: list regex
 	QparamOnlyActive = "only_active" // dsort: list only active

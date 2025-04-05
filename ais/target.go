@@ -917,12 +917,6 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 	}
 
-	// load (maybe)
-	skipVC := lom.IsFeatureSet(feat.SkipVC) || apireq.dpq.skipVC
-	if !skipVC {
-		_ = lom.Load(true, false)
-	}
-
 	// do
 	var (
 		handle string
@@ -960,28 +954,39 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 		t.statsT.IncWith(stats.ErrAppendCount, vlabs)
 	default:
-		poi := allocPOI()
-		{
-			poi.atime = started
-			if apireq.dpq.ptime != "" {
-				if d := ptLatency(poi.atime, apireq.dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
-					t.statsT.Add(stats.PutRedirLatency, d)
-				}
-			}
-			poi.t = t
-			poi.lom = lom
-			poi.config = config
-			poi.skipVC = skipVC // feat.SkipVC || apc.QparamSkipVC
-			poi.restful = true
-			poi.t2t = t2tput
-		}
-		ecode, err = poi.do(w.Header(), r, apireq.dpq)
-		freePOI(poi)
+		ecode, err = t.putObject(w, r, apireq.dpq, lom, t2tput, config)
 	}
 	if err != nil {
 		t.FSHC(err, lom.Mountpath(), "") // TODO: removed from the place where happened, fqn missing...
 		t.writeErr(w, r, err, ecode)
 	}
+}
+
+// NOTE: lom bucket needs to be initialized before calling this method
+func (t *target) putObject(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM, t2t bool, config *cmn.Config) (ecode int, err error) {
+	skipVC := lom.IsFeatureSet(feat.SkipVC) || dpq.skipVC
+	if !skipVC {
+		_ = lom.Load(false, false)
+	}
+
+	poi := allocPOI()
+	{
+		poi.atime = time.Now().UnixNano()
+		if dpq.ptime != "" {
+			if d := ptLatency(poi.atime, dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
+				t.statsT.Add(stats.PutRedirLatency, d)
+			}
+		}
+		poi.t = t
+		poi.lom = lom
+		poi.config = config
+		poi.skipVC = skipVC // feat.SkipVC || apc.QparamSkipVC
+		poi.restful = true
+		poi.t2t = t2t
+	}
+	ecode, err = poi.do(w.Header(), r, dpq)
+	freePOI(poi)
+	return ecode, err
 }
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name

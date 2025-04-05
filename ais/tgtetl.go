@@ -48,18 +48,29 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/etl
 // init ETL spec/code
 func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 0, true)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 	// disallow to run when above high wm (let alone OOS)
 	cs := fs.Cap()
 	if err := cs.Err(); err != nil {
 		t.writeErr(w, r, err, http.StatusInsufficientStorage)
 		return
 	}
-	if _, err := t.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
-		t.writeErr(w, r, err)
+
+	// /v1/etl
+	if len(apiItems) == 0 {
+		if err := t.initETLFromMsg(r); err != nil {
+			t.writeErr(w, r, err)
+		}
 		return
 	}
-	if err := t.initETLFromMsg(r); err != nil {
-		t.writeErr(w, r, err)
+
+	// /v1/etl/_object/<secret>/<uname>
+	if apiItems[0] == apc.ETLObject {
+		t.putObjectETL(w, r)
 		return
 	}
 }
@@ -226,16 +237,17 @@ func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName stri
 	t.writeJSON(w, r, metricMsg, "metrics-etl")
 }
 
-func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *meta.Bck, objName string, err error) {
+func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (etlName, secret string, bck *meta.Bck, objName string, err error) {
 	var items []string
-	items, err = cmn.ParseURL(r.URL.EscapedPath(), apc.URLPathETLObject.L, 2, false)
+	items, err = cmn.ParseURL(r.URL.EscapedPath(), apc.URLPathETLObject.L, 3, false)
 	if err != nil {
 		return
 	}
-	secret = items[0]
+	etlName = items[0]
+	secret = items[1]
 	// Encoding is done in `transformerPath`.
 	var uname string
-	uname, err = url.PathUnescape(items[1])
+	uname, err = url.PathUnescape(items[2])
 	if err != nil {
 		return
 	}
@@ -253,20 +265,20 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 	return
 }
 
-// GET /v1/etl/_object/<secret>/<uname>
+// GET /v1/etl/_object/<etl-name>/<secret>/<uname>
 // Handles GET requests from ETL containers (K8s Pods).
 // Validates the secret that was injected into a Pod during its initialization
 // (see boot.go `_setPodEnv`).
 //
 // NOTE: this is an internal URL with "_object" in its path intended to avoid
-// conflicts with ETL name in `/v1/elts/<etl-name>/...`
+// conflicts with ETL name in `/v1/elt/<etl-name>/...`
 func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
-	secret, bck, objName, err := etlParseObjectReq(w, r)
+	etlName, secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := etl.CheckSecret(secret); err != nil {
+	if err := etl.ValidateSecret(etlName, secret); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -286,17 +298,61 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	dpqFree(dpq)
 }
 
-// HEAD /v1/etl/objects/<secret>/<uname>
-//
-// Handles HEAD requests from ETL containers (K8s Pods).
-// Validates the secret that was injected into a Pod during its initialization.
-func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
-	secret, bck, objName, err := etlParseObjectReq(w, r)
+// PUT /v1/etl/_object/<etl-name>/<secret>/<uname>
+// Handles PUT requests from ETL containers (K8s Pods).
+// Validates the secret that was injected into a Pod during its initialization
+// (see boot.go `_setPodEnv`).
+func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request) {
+	var config = cmn.GCO.Get()
+
+	etlName, secret, bck, objName, err := etlParseObjectReq(w, r)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := etl.CheckSecret(secret); err != nil {
+	if err := etl.ValidateSecret(etlName, secret); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+
+	lom := core.AllocLOM(objName)
+	if err := lom.InitBck(bck.Bucket()); err != nil {
+		if cmn.IsErrRemoteBckNotFound(err) {
+			t.BMDVersionFixup(r)
+			err = lom.InitBck(bck.Bucket())
+		}
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+
+	dpq := dpqAlloc()
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		dpqFree(dpq)
+		t.writeErr(w, r, err)
+		return
+	}
+	ecode, err := t.putObject(w, r, dpq, lom, true /*t2t*/, config)
+	core.FreeLOM(lom)
+	dpqFree(dpq)
+
+	if err != nil {
+		t.writeErr(w, r, err, ecode)
+	}
+}
+
+// HEAD /v1/etl/_object/<etl-name>/<secret>/<uname>
+//
+// Handles HEAD requests from ETL containers (K8s Pods).
+// Validates the secret that was injected into a Pod during its initialization.
+func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
+	etlName, secret, bck, objName, err := etlParseObjectReq(w, r)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if err := etl.ValidateSecret(etlName, secret); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -323,12 +379,13 @@ func (t *target) initETLFromMsg(r *http.Request) error {
 		return err
 	}
 	xid := r.URL.Query().Get(apc.QparamUUID)
+	secret := r.URL.Query().Get(apc.QparamETLSecret)
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		xetl, err = etl.InitSpec(msg, xid, etl.StartOpts{})
+		xetl, err = etl.InitSpec(msg, xid, secret, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		xetl, err = etl.InitCode(msg, xid)
+		xetl, err = etl.InitCode(msg, xid, secret)
 	default:
 		debug.Assert(false, initMsg.String())
 	}

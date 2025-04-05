@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -37,14 +36,10 @@ type (
 	}
 )
 
-var (
-	mgr       *manager
-	reqSecret string
-)
+var mgr *manager
 
 func init() {
 	mgr = &manager{m: make(map[string]*entity, 4)}
-	reqSecret = cos.CryptoRandS(10)
 }
 
 func (r *manager) add(name string, c communicatorCommon) (err error) {
@@ -122,9 +117,13 @@ func (r *manager) list() []Info {
 	return etls
 }
 
-func CheckSecret(secret string) error {
-	if secret != reqSecret {
-		return errors.New("unrecognized request source")
+func ValidateSecret(etlName, secret string) error {
+	mgr.mtx.RLock()
+	defer mgr.mtx.RUnlock()
+
+	if mgr.m[etlName].comm.GetSecret() == secret {
+		return nil
 	}
-	return nil
+
+	return errors.New("unrecognized request source")
 }
