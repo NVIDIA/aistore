@@ -278,7 +278,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 	}
 }
 
-func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
+func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any, buf []byte) int64 {
 	sgl, ok := value.(*memsys.SGL)
 	debug.Assert(ok)
 
@@ -294,13 +294,13 @@ func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value a
 		// Generally should not happen but it is not proven that it cannot.
 		// There is nothing wrong with just returning here though.
 		nlog.Errorln("failed to find", fullContentPath, recordObjExt, contentPath) // TODO: FastV
-		return
+		return 0
 	}
 
 	idx := record.find(recordObjExt)
 	if idx == -1 {
 		// Duplicated records are removed so we cannot assert here.
-		return
+		return 0
 	}
 	obj := record.Objects[idx]
 
@@ -321,7 +321,7 @@ func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value a
 
 		if _, err := cos.SaveReader(diskPath, sgl, buf, cos.ChecksumNone, -1); err != nil {
 			nlog.Errorln(err)
-			return
+			return 0
 		}
 	default:
 		debug.Assert(false, newStoreType)
@@ -329,9 +329,10 @@ func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value a
 
 	obj.StoreType = newStoreType
 	recm.contents.Delete(fullContentPath)
-	n = sgl.Size()
+	n := sgl.Size()
 	sgl.Free()
-	return
+
+	return n
 }
 
 func (recm *RecordManager) RecordContents() *sync.Map {

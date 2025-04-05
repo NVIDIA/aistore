@@ -41,7 +41,7 @@ func Save(filepath string, v any, opts Options, wto cos.WriterTo2) (err error) {
 		tmp  = filepath + ".tmp." + cos.GenTie()
 	)
 	if file, err = cos.CreateFile(tmp); err != nil {
-		return
+		return err
 	}
 	defer func() {
 		if err == nil {
@@ -60,14 +60,14 @@ func Save(filepath string, v any, opts Options, wto cos.WriterTo2) (err error) {
 	if err != nil {
 		nlog.Errorf("Failed to encode %s: %v", filepath, err)
 		cos.Close(file)
-		return
+		return err
 	}
 	if err = cos.FlushClose(file); err != nil {
 		nlog.Errorf("Failed to flush and close %s: %v", tmp, err)
-		return
+		return err
 	}
 	err = os.Rename(tmp, filepath)
-	return
+	return err
 }
 
 func LoadMeta(filepath string, meta Opts) (*cos.Cksum, error) {
@@ -83,12 +83,13 @@ func _tag(filepath string, v any) (tag string) {
 }
 
 func Load(filepath string, v any, opts Options) (checksum *cos.Cksum, err error) {
-	var file *os.File
-	file, err = os.Open(filepath)
+	var fh *os.File
+	fh, err = os.Open(filepath)
 	if err != nil {
 		return
 	}
-	checksum, err = Decode(file, v, opts, _tag(filepath, v))
+	checksum, err = Decode(fh, v, opts, _tag(filepath, v))
+	cos.Close(fh)
 	if err == nil {
 		return
 	}

@@ -64,7 +64,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 	parts := strings.SplitN(uri, apc.BckProviderSeparator, 2)
 	if len(parts) > 1 && parts[0] != "" {
 		if bck.Provider, err = NormalizeProvider(parts[0]); err != nil {
-			return
+			return bck, "", err
 		}
 		uri = parts[1]
 	} else if !opts.IsQuery {
@@ -108,5 +108,5 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 	if len(parts) > 1 {
 		objName = parts[1]
 	}
-	return
+	return bck, objName, nil
 }

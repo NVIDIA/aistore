@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	onexxh "github.com/OneOfOne/xxhash"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/pierrec/lz4/v4"
 )
 
@@ -25,12 +24,11 @@ const (
 	lz4BufferSize = lz4.Block64Kb
 )
 
-func Encode(ws cos.WriterAt, v any, opts Options) (err error) {
+func Encode(ws cos.WriterAt, v any, opts Options) error {
 	var (
-		h       hash.Hash
-		w       io.Writer = ws
-		encoder *jsoniter.Encoder
-		off     int
+		h   hash.Hash
+		w   io.Writer = ws
+		off int
 	)
 	if opts.Signature {
 		var (
@@ -75,54 +73,45 @@ func Encode(ws cos.WriterAt, v any, opts Options) (err error) {
 		w = io.MultiWriter(h, w)
 	}
 
-	encoder = cos.JSON.NewEncoder(w)
+	encoder := cos.JSON.NewEncoder(w)
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
 	}
-	if err = encoder.Encode(v); err != nil {
-		return
+	if err := encoder.Encode(v); err != nil {
+		return err
 	}
 	if opts.Checksum {
 		if _, err := ws.WriteAt(h.Sum(nil), int64(off)); err != nil {
 			return err
 		}
 	}
-	return
+
+	return nil
 }
 
-func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *cos.Cksum, err error) {
-	var (
-		r             io.Reader = reader
-		expectedCksum uint64
-		h             hash.Hash
-		jspVer        byte
-	)
-	defer cos.Close(reader)
+func Decode(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
 	if opts.Signature {
 		var (
 			prefix  [prefLen]byte
 			metaVer uint32
 		)
-		if _, err = r.Read(prefix[:]); err != nil {
-			return
+		if _, err := r.Read(prefix[:]); err != nil {
+			return nil, err
 		}
 		l := len(signature)
 		debug.Assert(l < cos.SizeofI64)
 		if signature != string(prefix[:l]) {
-			err = &ErrBadSignature{tag, string(prefix[:l]), signature}
-			return
+			return nil, &ErrBadSignature{tag, string(prefix[:l]), signature}
 		}
-		jspVer = prefix[l]
+		jspVer := prefix[l]
 		if jspVer != Metaver {
-			err = newErrVersion("jsp", uint32(jspVer), Metaver)
-			return
+			return nil, newErrVersion("jsp", uint32(jspVer), Metaver)
 		}
 		metaVer = binary.BigEndian.Uint32(prefix[cos.SizeofI64:])
 		if metaVer != opts.Metaver {
 			if opts.OldMetaverOk == 0 || metaVer > opts.Metaver || metaVer < opts.OldMetaverOk {
 				// _not_ backward compatible
-				err = newErrVersion(tag, metaVer, opts.Metaver)
-				return
+				return nil, newErrVersion(tag, metaVer, opts.Metaver)
 			}
 			// backward compatible
 			erw := newErrVersion(tag, metaVer, opts.Metaver, opts.OldMetaverOk)
@@ -132,40 +121,52 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		opts.Compress = flags&(1<<0) != 0
 		opts.Checksum = flags&(1<<1) != 0
 	}
+
 	if opts.Checksum {
-		var cksum [sizeXXHash64]byte
-		if _, err = r.Read(cksum[:]); err != nil {
-			return
-		}
-		expectedCksum = binary.BigEndian.Uint64(cksum[:])
+		return _decksum(r, v, opts, tag)
 	}
 	if opts.Compress {
 		r = lz4.NewReader(r)
 	}
-	if opts.Checksum {
-		h = onexxh.New64()
-		r = io.TeeReader(r, h)
+	if err := cos.JSON.NewDecoder(r).Decode(v); err != nil {
+		return nil, err
 	}
-	if err = cos.JSON.NewDecoder(r).Decode(v); err != nil {
-		return
-	}
-	if opts.Checksum {
-		// We have already parsed `v` but there is still the possibility that `\n` remains
-		// not read. Therefore, we read it to include it into the final checksum.
-		var b []byte
-		if b, err = cos.ReadAllN(r, cos.ContentLengthUnknown); err != nil {
-			return
-		}
-		// To be sure that this is exactly the case...
-		debug.Assert(len(b) == 0 || (len(b) == 1 && b[0] == '\n'), b)
 
-		actual := h.Sum(nil)
-		actualCksum := binary.BigEndian.Uint64(actual)
-		if expectedCksum != actualCksum {
-			err = cos.NewErrMetaCksum(expectedCksum, actualCksum, tag)
-			return
-		}
-		checksum = cos.NewCksum(cos.ChecksumOneXxh, hex.EncodeToString(actual))
+	return nil, nil
+}
+
+func _decksum(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
+	var cksum [sizeXXHash64]byte
+	if _, err := r.Read(cksum[:]); err != nil {
+		return nil, err
 	}
-	return
+
+	expectedCksum := binary.BigEndian.Uint64(cksum[:])
+	if opts.Compress {
+		r = lz4.NewReader(r)
+	}
+
+	var (
+		h  = onexxh.New64()
+		rr = io.TeeReader(r, h)
+	)
+	if err := cos.JSON.NewDecoder(rr).Decode(v); err != nil {
+		return nil, err
+	}
+
+	// We have already parsed `v` but there is still the possibility that `\n` remains
+	// not read. Read it to include into the final checksum.
+	b, err := cos.ReadAllN(rr, cos.ContentLengthUnknown)
+	if err != nil {
+		return nil, err
+	}
+	debug.Assert(len(b) == 0 || (len(b) == 1 && b[0] == '\n'), b)
+
+	actual := h.Sum(nil)
+	actualCksum := binary.BigEndian.Uint64(actual)
+	if expectedCksum != actualCksum {
+		return nil, cos.NewErrMetaCksum(expectedCksum, actualCksum, tag)
+	}
+
+	return cos.NewCksum(cos.ChecksumOneXxh, hex.EncodeToString(actual)), nil
 }

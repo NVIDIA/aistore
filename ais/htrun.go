@@ -1562,7 +1562,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	newConfig, msg = &globalConfig{}, &actMsgExt{}
 	confValue := payload[revsConfTag]
 	reader := bytes.NewBuffer(confValue)
-	if _, err1 := jsp.Decode(io.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
+	if _, err1 := jsp.Decode(reader, newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Config", cos.BHead(confValue), err1)
 		return
 	}
@@ -1592,7 +1592,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	newMD, msg = newEtlMD(), &actMsgExt{}
 	etlMDValue := payload[revsEtlMDTag]
 	reader := bytes.NewBuffer(etlMDValue)
-	if _, err1 := jsp.Decode(io.NopCloser(reader), newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
+	if _, err1 := jsp.Decode(reader, newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new EtlMD", cos.BHead(etlMDValue), err1)
 		return
 	}
@@ -1623,7 +1623,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 	newSmap, msg = &smapX{}, &actMsgExt{}
 	smapValue := payload[revsSmapTag]
 	reader := bytes.NewBuffer(smapValue)
-	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), act); err1 != nil {
+	if _, err1 := jsp.Decode(reader, newSmap, newSmap.JspOpts(), act); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Smap", cos.BHead(smapValue), err1)
 		return
 	}
@@ -1726,7 +1726,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	newBMD, msg = &bucketMD{}, &actMsgExt{}
 	bmdValue := payload[revsBMDTag]
 	reader := bytes.NewBuffer(bmdValue)
-	if _, err1 := jsp.Decode(io.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
+	if _, err1 := jsp.Decode(reader, newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new BMD", cos.BHead(bmdValue), err1)
 		return
 	}

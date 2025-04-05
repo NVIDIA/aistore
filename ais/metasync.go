@@ -719,9 +719,10 @@ func (payload msPayload) marshal(mm *memsys.MMSA) (sgl *memsys.SGL) {
 	return sgl
 }
 
-func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) (err error) {
-	_, err = jsp.Decode(reader, &payload, msjspOpts, tag)
-	return
+func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) error {
+	_, err := jsp.Decode(reader, &payload, msjspOpts, tag)
+	cos.Close(reader)
+	return err
 }
 
 //////////////
