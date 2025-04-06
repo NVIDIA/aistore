@@ -51,7 +51,7 @@ lint)
   echo "Running lint..." >&2
   if [[ -z ${TAGS} ]]; then
     # using build tags from .golangci.yml
-    golangci-lint --timeout=15m run $(list_all_go_dirs)
+    golangci-lint --timeout=15m --max-issues-per-linter=0 run $(list_all_go_dirs)
   else
     # using build tags from env
     golangci-lint --timeout=15m --build-tags="${TAGS}" run $(list_all_go_dirs)

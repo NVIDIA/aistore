@@ -255,7 +255,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	if !lom.TryLock(true) { // NOTE: skipping busy
 		time.Sleep(time.Second >> 1)
 		if !lom.TryLock(true) {
-			return
+			return nil
 		}
 	}
 	// cleanup
@@ -317,7 +317,7 @@ redo:
 					jg.xres.AddErr(errV, 0)
 				}
 			}
-			return
+			return errHrw
 		}
 		lom = hlom
 		copied = true
@@ -340,7 +340,7 @@ redo:
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
 					xname, orig, orig.Mountpath(), hmi, mi)
 				jg.xres.AddErr(errHrw, 0)
-				return
+				return errHrw
 			}
 			copied = false
 			lom, hlom = orig, nil

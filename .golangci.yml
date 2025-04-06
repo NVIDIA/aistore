@@ -156,6 +156,13 @@ linters:
           - errcheck
           - dupl
           - gosec
+          - nakedret
+      - path: bench/
+        linters:
+          - nakedret
+      - path: tools/
+        linters:
+          - nakedret
 
       # Exclude some `staticcheck` messages.
       - linters:

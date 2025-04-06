@@ -249,37 +249,39 @@ func (j *lruJ) jog(providers []string) (err error) {
 	return
 }
 
-func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
+func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) error {
 	if len(bcks) == 0 {
-		return
+		return nil
 	}
 	if len(bcks) > 1 {
 		j.sortBsize(bcks)
 	}
 	for _, bck := range bcks { // for each bucket under a given provider
-		var size int64
 		j.bck = bck
-		if j.allowDelObj, err = j.allow(); err != nil {
+		a, err := j.allow()
+		if err != nil {
 			nlog.Errorf("%s: %v - skipping %s (Hint: run 'ais storage cleanup' to cleanup)", j, err, bck.String())
-			err = nil
 			continue
 		}
-		j.allowDelObj = j.allowDelObj || force
-		if size, err = j.jogBck(); err != nil {
-			return
+		j.allowDelObj = a || force
+
+		size, err := j.jogBck()
+		if err != nil {
+			return err
 		}
 		if size < cos.KiB {
 			continue
 		}
+
 		// recompute size-to-evict
-		if err = j.evictSize(); err != nil {
-			return
+		if err := j.evictSize(); err != nil {
+			return err
 		}
 		if j.totalSize < cos.KiB {
-			return
+			return nil
 		}
 	}
-	return
+	return nil
 }
 
 func (j *lruJ) jogBck() (size int64, err error) {
@@ -389,14 +391,14 @@ func (j *lruJ) evict() (size int64, err error) {
 	return
 }
 
-func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
+func (j *lruJ) postRemove(prev, size int64) (capCheck int64, _ error) {
 	j.totalSize -= size
 	capCheck = prev + size
-	if err = j.yieldTerm(); err != nil {
-		return
+	if err := j.yieldTerm(); err != nil {
+		return capCheck, err
 	}
 	if capCheck < capCheckThresh {
-		return
+		return capCheck, nil
 	}
 	// init, recompute, and throttle - once per capCheckThresh
 	capCheck = 0
@@ -406,14 +408,15 @@ func (j *lruJ) postRemove(prev, size int64) (capCheck int64, err error) {
 	j.now = time.Now().UnixNano()
 	usedPct, ok := j.ini.GetFSUsedPercentage(j.mi.Path)
 	if ok && usedPct < j.config.Space.HighWM {
-		err = j._throttle(usedPct)
+		err := j._throttle(usedPct)
+		return capCheck, err
 	}
-	return
+	return capCheck, nil
 }
 
-func (j *lruJ) _throttle(usedPct int64) (err error) {
+func (j *lruJ) _throttle(usedPct int64) error {
 	if u := j.mi.GetUtil(); u >= 0 && u < j.config.Disk.DiskUtilLowWM {
-		return
+		return nil
 	}
 	var (
 		ratioCap  = cos.RatioPct(j.config.Space.HighWM, j.config.Space.LowWM, usedPct)
@@ -425,9 +428,9 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 			j.throttle = true
 		}
 		time.Sleep(fs.Throttle100ms)
-		err = j.yieldTerm()
+		return j.yieldTerm()
 	}
-	return
+	return nil
 }
 
 // remove local copies that "belong" to different LRU joggers (space accounting may be temporarily not precise)
@@ -445,20 +448,23 @@ func (j *lruJ) evictObj(lom *core.LOM) bool {
 	return true
 }
 
-func (j *lruJ) evictSize() (err error) {
-	lwm, hwm := j.config.Space.LowWM, j.config.Space.HighWM
+func (j *lruJ) evictSize() error {
 	blocks, bavail, bsize, err := j.ini.GetFSStats(j.mi.Path)
 	if err != nil {
 		return err
 	}
-	used := blocks - bavail
-	usedPct := used * 100 / blocks
+
+	var (
+		lwm, hwm = j.config.Space.LowWM, j.config.Space.HighWM
+		used     = blocks - bavail
+		usedPct  = used * 100 / blocks
+	)
 	if usedPct < uint64(hwm) {
-		return
+		return nil
 	}
 	lwmBlocks := blocks * uint64(lwm) / 100
 	j.totalSize = int64(used-lwmBlocks) * bsize
-	return
+	return nil
 }
 
 func (j *lruJ) yieldTerm() error {
@@ -499,16 +505,16 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 	}
 }
 
-func (j *lruJ) allow() (ok bool, err error) {
+func (j *lruJ) allow() (bool, error) {
 	var (
 		bowner = core.T.Bowner()
 		b      = meta.CloneBck(&j.bck)
 	)
-	if err = b.Init(bowner); err != nil {
-		return
+	if err := b.Init(bowner); err != nil {
+		return false, err
 	}
-	ok = b.Props.LRU.Enabled && b.Allow(apc.AceObjDELETE) == nil
-	return
+	ok := b.Props.LRU.Enabled && b.Allow(apc.AceObjDELETE) == nil
+	return ok, nil
 }
 
 //////////////

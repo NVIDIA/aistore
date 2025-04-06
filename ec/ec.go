@@ -482,7 +482,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 }
 
 // WriteReplicaAndMeta saves replica and its metafile
-func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
+func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	lom.Lock(false)
 	if args.Generation != 0 {
 		ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
@@ -493,38 +493,34 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 	}
 	lom.Unlock(false)
 
-	if err = writeObject(lom, args.Reader, lom.Lsize(true), args.Xact); err != nil {
-		return
+	// replica
+	if err := writeObject(lom, args.Reader, lom.Lsize(true), args.Xact); err != nil {
+		return err
 	}
 	if !args.Cksum.IsEmpty() && !lom.EqCksum(args.Cksum) {
-		err = cos.NewErrDataCksum(args.Cksum, lom.Checksum(), lom.Cname())
-		return
+		return cos.NewErrDataCksum(args.Cksum, lom.Checksum(), lom.Cname())
 	}
+
+	// meta
 	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 	ctMeta.Lock(true)
+	err := ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/)
+	if err == nil {
+		err = validateBckBID(ctMeta.Bucket(), args.BID)
+	}
+	ctMeta.Unlock(true)
+	if err == nil {
+		return nil
+	}
 
-	defer func() {
-		ctMeta.Unlock(true)
-		if err == nil {
-			return
-		}
-		if rmErr := lom.RemoveMain(); rmErr != nil {
-			nlog.Errorln("nested error: save replica -> remove replica:", rmErr)
-		}
-		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
-			nlog.Errorln("nested error: save replica -> remove metafile:", rmErr)
-		}
-	}()
-	if err = ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/); err != nil {
-		return
+	// cleanup
+	if rmErr := lom.RemoveMain(); rmErr != nil {
+		nlog.Errorln("nested error: save replica -> remove replica:", rmErr)
 	}
-	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
-		err = fmt.Errorf("replica-and-meta: %s metafile saved while bucket %s was being destroyed",
-			ctMeta.ObjectName(), ctMeta.Bucket())
-		return
+	if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
+		nlog.Errorln("nested error: save replica -> remove metafile:", rmErr)
 	}
-	err = validateBckBID(lom.Bucket(), args.BID)
-	return
+	return err
 }
 
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)

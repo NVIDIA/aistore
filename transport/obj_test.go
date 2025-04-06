@@ -794,7 +794,7 @@ func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 		hdr.ObjAttrs.SetCustomKey(s, "")
 		hdr.ObjAttrs.SetCksum(cos.ChecksumNone, "")
 	}
-	return
+	return hdr
 }
 
 ////////////////

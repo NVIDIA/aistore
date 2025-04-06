@@ -457,7 +457,8 @@ ex:
 	freeLsoEntries(r.page)
 	r.page = page.Entries
 	r.nextToken = page.ContinuationToken
-	return
+
+	return err
 }
 
 func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {

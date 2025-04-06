@@ -129,8 +129,9 @@ func (p *archFactory) Start() (err error) {
 		r.p.dm.SetXact(r)
 		r.p.dm.Open()
 	}
+
 	xact.GoRunW(r)
-	return
+	return nil
 }
 
 //////////////
@@ -430,7 +431,7 @@ func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
 	if r.IsAborted() {
 		wi.cleanup()
 		core.FreeLOM(wi.archlom)
-		return
+		return 0, nil
 	}
 
 	var size int64
@@ -450,8 +451,7 @@ func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
 	if err != nil {
 		wi.cleanup()
 		core.FreeLOM(wi.archlom)
-		ecode = http.StatusInternalServerError
-		return
+		return http.StatusInternalServerError, err
 	}
 	debug.Assert(wi.wfh == nil)
 
@@ -460,7 +460,7 @@ func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
 	core.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
 
-	return
+	return ecode, err
 }
 
 func (r *XactArch) Name() (s string) {

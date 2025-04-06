@@ -149,43 +149,43 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 func (md *Metadata) unpackLastVersion(unpacker *cos.ByteUnpack) (err error) {
 	var i16 uint16
 	if md.Generation, err = unpacker.ReadInt64(); err != nil {
-		return
+		return err
 	}
 	if md.Size, err = unpacker.ReadInt64(); err != nil {
-		return
+		return err
 	}
 	if i16, err = unpacker.ReadUint16(); err != nil {
-		return
+		return err
 	}
 	md.Data = int(i16)
 	if i16, err = unpacker.ReadUint16(); err != nil {
-		return
+		return err
 	}
 	md.Parity = int(i16)
 	if i16, err = unpacker.ReadUint16(); err != nil {
-		return
+		return err
 	}
 	md.SliceID = int(i16)
 	if md.IsCopy, err = unpacker.ReadBool(); err != nil {
-		return
+		return err
 	}
 	if md.FullReplica, err = unpacker.ReadString(); err != nil {
-		return
+		return err
 	}
 	if md.ObjCksum, err = unpacker.ReadString(); err != nil {
-		return
+		return err
 	}
 	if md.ObjVersion, err = unpacker.ReadString(); err != nil {
-		return
+		return err
 	}
 	if md.CksumType, err = unpacker.ReadString(); err != nil {
-		return
+		return err
 	}
 	if md.CksumValue, err = unpacker.ReadString(); err != nil {
-		return
+		return err
 	}
 	md.Daemons, err = unpacker.ReadMapStrUint16()
-	return
+	return err
 }
 
 func (md *Metadata) Pack(packer *cos.BytePack) {

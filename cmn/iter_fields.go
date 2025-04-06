@@ -208,14 +208,14 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 
 		dirty = dirty || dirtyField
 		if stop {
-			return
+			return dirty, stop, err
 		}
-
 		if err != nil {
 			return dirty, true, err
 		}
 	}
-	return
+
+	return dirty, stop, err
 }
 
 // CopyProps update dst with the values from src

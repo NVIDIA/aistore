@@ -2,7 +2,7 @@
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package space
 
@@ -306,7 +306,7 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 			rerr = err
 		}
 	}
-	return
+	return size, rerr
 }
 
 func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
@@ -351,7 +351,7 @@ func (j *clnJ) removeDeleted() (err error) {
 		j.ini.Xaction.AddErr(err)
 	}
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
-		return
+		return err
 	}
 
 	// last rm-deleted done: refresh cap now
@@ -362,10 +362,10 @@ func (j *clnJ) removeDeleted() (err error) {
 	} else {
 		nlog.Infoln(j.ini.Xaction.Name(), "post-rm('deleted'):", errCap)
 	}
-	return
+	return err
 }
 
-func (j *clnJ) jogBck() (size int64, err error) {
+func (j *clnJ) jogBck() (int64, error) {
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
@@ -373,11 +373,10 @@ func (j *clnJ) jogBck() (size int64, err error) {
 		Callback: j.walk,
 		Sorted:   false,
 	}
-	if err = fs.Walk(opts); err != nil {
-		return
+	if err := fs.Walk(opts); err != nil {
+		return 0, err
 	}
-	size, err = j.rmLeftovers()
-	return
+	return j.rmLeftovers()
 }
 
 func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
@@ -613,7 +612,7 @@ func (j *clnJ) _rmEmptyDir(fqn string) {
 	}
 }
 
-func (j *clnJ) rmLeftovers() (size int64, err error) {
+func (j *clnJ) rmLeftovers() (size int64, _ error) {
 	var (
 		fevicted, bevicted int64
 		xcln               = j.ini.Xaction
@@ -664,8 +663,8 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 					nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.Lsize(true /*not loaded*/))
 				}
-				if err = j.yieldTerm(); err != nil {
-					return
+				if err := j.yieldTerm(); err != nil {
+					return size, err
 				}
 			}
 		}
@@ -681,8 +680,8 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		if os.Remove(ct.FQN()) == nil {
 			fevicted++
 			bevicted += ct.Lsize()
-			if err = j.yieldTerm(); err != nil {
-				return
+			if err := j.yieldTerm(); err != nil {
+				return size, err
 			}
 		}
 	}
@@ -691,7 +690,8 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted)
 	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
 	xcln.ObjsAdd(int(fevicted), bevicted)
-	return
+
+	return size, nil
 }
 
 func (j *clnJ) yieldTerm() error {
