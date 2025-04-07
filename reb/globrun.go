@@ -61,7 +61,7 @@ type (
 	Reb struct {
 		smap      ratomic.Pointer[meta.Smap] // next smap (new that'll become current after rebalance)
 		xreb      ratomic.Pointer[xs.Rebalance]
-		dm        *bundle.DataMover
+		dm        *bundle.DM
 		filterGFN *prob.Filter
 		ecClient  *http.Client
 		stages    *nodeStages

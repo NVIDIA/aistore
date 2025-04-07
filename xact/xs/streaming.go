@@ -40,7 +40,7 @@ type (
 	streamingF struct {
 		xreg.RenewBase
 		xctn core.Xact
-		dm   *bundle.DataMover
+		dm   *bundle.DM
 		kind string
 	}
 	streamingX struct {

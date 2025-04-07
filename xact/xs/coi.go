@@ -42,7 +42,7 @@ type (
 	}
 
 	COI interface {
-		CopyObject(lom *core.LOM, dm *bundle.DataMover, coi *CoiParams) CoiRes
+		CopyObject(lom *core.LOM, dm *bundle.DM, coi *CoiParams) CoiRes
 	}
 )
 
@@ -112,7 +112,7 @@ func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg) *CoiP
 	return a
 }
 
-func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DataMover) error {
+func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) error {
 	var started int64
 	if tc.bp != nil {
 		started = mono.NanoTime()

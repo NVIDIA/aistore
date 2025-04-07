@@ -39,15 +39,17 @@ type (
 		kind string
 	}
 	XactTCB struct {
+		// sub-function
+		transform etl.Session
 		copier
-		transform etl.Session // stateful etl Session
-		args      *xreg.TCBArgs
-		dm        *bundle.DataMover
-		sntl      sentinel
-		nam       string
-		prune     prune
+		prune prune
+		sntl  sentinel
 		xact.BckJog
-		owt cmn.OWT
+		// args
+		args *xreg.TCBArgs
+		dm   *bundle.DM
+		nam  string
+		owt  cmn.OWT
 	}
 )
 
@@ -103,7 +105,7 @@ func (p *tcbFactory) Start() error {
 	if err := r.newDM(sizePDU); err != nil {
 		return err
 	}
-	r.sntl.init(r, r.dm, smap, nat)
+	r.sntl.init(r, smap, nat)
 
 	return nil
 }
@@ -244,11 +246,8 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 
 	if r.dm != nil {
-		//
-		// broadcast (done | abort) and wait for others
-		//
-		r.sntl.bcast(err)
-		q := r.Quiesce(r.Config.Timeout.MaxHostBusy.D(), r.qcb)
+		r.sntl.bcast(r.dm, err)          // broadcast (done | abort)
+		q := r.Quiesce(r.qival(), r.qcb) // when done: wait for others
 		if q == core.QuiTimeout {
 			r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
 		}
@@ -260,13 +259,20 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	if r.args.Msg.Sync {
 		r.prune.wait()
 	}
+
+	r.sntl.cleanup()
 	r.Finish()
+}
+
+func (r *XactTCB) qival() time.Duration {
+	return min(max(r.Config.Timeout.MaxHostBusy.D(), 10*time.Second), time.Minute)
 }
 
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	nwait := r.sntl.pend.n.Load()
 	if nwait > 0 {
-		return r.sntl.qcb(tot, r.Config.Timeout.MaxHostBusy.D(), r.ErrCnt())
+		progressTimeout := max(r.Config.Timeout.SendFile.D(), time.Minute)
+		return r.sntl.qcb(r.dm, tot, r.qival(), progressTimeout, r.ErrCnt())
 	}
 	return core.QuiDone
 }
@@ -294,9 +300,9 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
 		case opDone:
-			r.sntl.rxdone(hdr)
+			r.sntl.rxDone(hdr)
 		case opAbort:
-			r.sntl.rxabort(hdr)
+			r.sntl.rxAbort(hdr)
 		case opRequest:
 			o := transport.AllocSend()
 			o.Hdr.Opcode = opResponse
@@ -305,7 +311,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 			o.Hdr.Opaque = b
 			r.dm.Bcast(o, nil) // TODO: consider limiting this broadcast to only quiescing (waiting) targets
 		case opResponse:
-			r.sntl.rxprogress(hdr) // handle response: progress by others
+			r.sntl.rxProgress(hdr) // handle response: progress by others
 		default:
 			err := fmt.Errorf("invalid header opcode %d", hdr.Opcode)
 			debug.AssertNoErr(err)

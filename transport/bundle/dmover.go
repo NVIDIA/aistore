@@ -1,7 +1,7 @@
 // Package bundle provides multi-streaming transport with the functionality
 // to dynamically (un)register receive endpoints, establish long-lived flows, and more.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package bundle
 
@@ -22,6 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
+// Data Mover (DM): a _bundle_ of streams (this target => other target) with atomic reg, open, and broadcast help
+
 type (
 	bp struct {
 		client  transport.Client
@@ -30,7 +32,7 @@ type (
 		trname  string
 		net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 	}
-	DataMover struct {
+	DM struct {
 		data        bp // data
 		ack         bp // ACKs and control
 		xctn        core.Xact
@@ -63,9 +65,9 @@ type (
 // For DMs that do not create new objects (e.g, rebalance) `owt` should
 // be set to `OwtMigrateRepl`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
 
-func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DataMover {
+func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
 	debug.Assert(extra.Config != nil)
-	dm := &DataMover{config: extra.Config}
+	dm := &DM{config: extra.Config}
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
@@ -93,17 +95,17 @@ func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *D
 	return dm
 }
 
-func (dm *DataMover) useACKs() bool { return dm.ack.recv != nil }
-func (dm *DataMover) NetD() string  { return dm.data.net }
-func (dm *DataMover) NetC() string  { return dm.ack.net }
-func (dm *DataMover) OWT() cmn.OWT  { return dm.owt }
+func (dm *DM) useACKs() bool { return dm.ack.recv != nil }
+func (dm *DM) NetD() string  { return dm.data.net }
+func (dm *DM) NetC() string  { return dm.ack.net }
+func (dm *DM) OWT() cmn.OWT  { return dm.owt }
 
 // xaction that drives and utilizes this data mover
-func (dm *DataMover) SetXact(xctn core.Xact) { dm.xctn = xctn }
-func (dm *DataMover) GetXact() core.Xact     { return dm.xctn }
+func (dm *DM) SetXact(xctn core.Xact) { dm.xctn = xctn }
+func (dm *DM) GetXact() core.Xact     { return dm.xctn }
 
 // when config changes
-func (dm *DataMover) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DataMover {
+func (dm *DM) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
 	dm.config = extra.Config // always refresh
 	if extra.Compression == "" {
 		extra.Compression = apc.CompressNever
@@ -117,7 +119,7 @@ func (dm *DataMover) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT,
 }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
-func (dm *DataMover) RegRecv() error {
+func (dm *DM) RegRecv() error {
 	dm.stage.regmtx.Lock()
 	defer dm.stage.regmtx.Unlock()
 
@@ -143,7 +145,7 @@ func (dm *DataMover) RegRecv() error {
 	return nil
 }
 
-func (dm *DataMover) UnregRecv() {
+func (dm *DM) UnregRecv() {
 	if dm == nil {
 		return
 	}
@@ -173,11 +175,11 @@ func (dm *DataMover) UnregRecv() {
 	}
 }
 
-func (dm *DataMover) IsFree() bool {
+func (dm *DM) IsFree() bool {
 	return !dm.stage.regged.Load()
 }
 
-func (dm *DataMover) Open() {
+func (dm *DM) Open() {
 	dataArgs := Args{
 		Net:    dm.data.net,
 		Trname: dm.data.trname,
@@ -209,7 +211,7 @@ func (dm *DataMover) Open() {
 	nlog.Infoln(dm.String(), "is open")
 }
 
-func (dm *DataMover) String() string {
+func (dm *DM) String() string {
 	s := "pre-or-post-"
 	switch {
 	case dm.stage.opened.Load():
@@ -227,11 +229,11 @@ func (dm *DataMover) String() string {
 }
 
 // quiesce *local* Rx
-func (dm *DataMover) Quiesce(d time.Duration) core.QuiRes {
+func (dm *DM) Quiesce(d time.Duration) core.QuiRes {
 	return dm.xctn.Quiesce(d, dm.quicb)
 }
 
-func (dm *DataMover) Close(err error) {
+func (dm *DM) Close(err error) {
 	if dm == nil {
 		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
 			nlog.Warningln("Warning: DM is <nil>") // e.g., single-node cluster
@@ -253,7 +255,7 @@ func (dm *DataMover) Close(err error) {
 	nlog.Infoln(dm.String(), err)
 }
 
-func (dm *DataMover) Abort() {
+func (dm *DM) Abort() {
 	dm.data.streams.Abort()
 	if dm.useACKs() {
 		dm.ack.streams.Abort()
@@ -262,7 +264,7 @@ func (dm *DataMover) Abort() {
 	nlog.Warningln("dm.abort", dm.String())
 }
 
-func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) (err error) {
+func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) (err error) {
 	err = dm.data.streams.Send(obj, roc, tsi)
 	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
 		dm.xctn.OutObjsAdd(1, obj.Size())
@@ -270,15 +272,15 @@ func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.
 	return
 }
 
-func (dm *DataMover) ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
+func (dm *DM) ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
 	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr, Callback: cb}, nil, tsi)
 }
 
-func (dm *DataMover) Notif(hdr *transport.ObjHdr) error {
+func (dm *DM) Notif(hdr *transport.ObjHdr) error {
 	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr}, nil)
 }
 
-func (dm *DataMover) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
+func (dm *DM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 	return dm.data.streams.Send(obj, roc)
 }
 
@@ -286,7 +288,7 @@ func (dm *DataMover) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 // private
 //
 
-func (dm *DataMover) quicb(time.Duration /*total*/) core.QuiRes {
+func (dm *DM) quicb(time.Duration /*total*/) core.QuiRes {
 	switch {
 	case dm.xctn != nil && dm.xctn.IsAborted():
 		return core.QuiInactiveCB
@@ -297,7 +299,7 @@ func (dm *DataMover) quicb(time.Duration /*total*/) core.QuiRes {
 	}
 }
 
-func (dm *DataMover) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+func (dm *DM) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}
@@ -307,7 +309,7 @@ func (dm *DataMover) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err e
 	return dm.data.recv(hdr, reader, err)
 }
 
-func (dm *DataMover) wrapRecvACK(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+func (dm *DM) wrapRecvACK(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	dm.stage.laterx.Store(true)
 	return dm.ack.recv(hdr, reader, err)
 }

@@ -117,7 +117,7 @@ type (
 
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
-		dm        *bundle.DataMover
+		dm        *bundle.DM
 		objAttrs  cos.OAH
 		tsi       *meta.Snode
 		bckTo     *meta.Bck
@@ -1508,7 +1508,7 @@ func (a *apndOI) pack(workFQN string) string {
 //
 
 // main method
-func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRes) {
+func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	if coi.DryRun {
 		return coi._dryRun(lom, coi.ObjnameTo)
 	}
@@ -1571,7 +1571,7 @@ func (coi *coi) do(t *target, dm *bundle.DataMover, lom *core.LOM) (res xs.CoiRe
 	return res
 }
 
-func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DataMover) bool {
+func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DM) bool {
 	if coi.LatestVer || coi.Sync {
 		return false
 	}
@@ -1627,7 +1627,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 // further debated.
 //
 //nolint:dupword // intentional
-func (coi *coi) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (res xs.CoiRes) {
+func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM) (res xs.CoiRes) {
 	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, "" /*daddr*/)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
@@ -1714,7 +1714,7 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM) (res xs.CoiRes) {
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *coi) send(t *target, dm *bundle.DataMover, lom *core.LOM, reader cos.ReadOpenCloser, tsi *meta.Snode) (res xs.CoiRes) {
+func (coi *coi) send(t *target, dm *bundle.DM, lom *core.LOM, reader cos.ReadOpenCloser, tsi *meta.Snode) (res xs.CoiRes) {
 	debug.Assert(coi.OWT > 0)
 	sargs := allocSnda()
 	{

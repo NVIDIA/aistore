@@ -113,7 +113,7 @@ func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *core.LOM, dm *bundle.DataMover, params *xs.CoiParams) xs.CoiRes {
+func (t *target) CopyObject(lom *core.LOM, dm *bundle.DM, params *xs.CoiParams) xs.CoiRes {
 	coi := (*coi)(params)
 	return coi.do(t, dm, lom)
 }
