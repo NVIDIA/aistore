@@ -93,6 +93,13 @@ func (s *sentinel) bcast(dm *bundle.DM, abortErr error) {
 	}
 }
 
+func (s *sentinel) initLast(now int64) {
+	for tid := range s.pend.m {
+		apair := s.pend.m[tid]
+		apair.last.CAS(0, now)
+	}
+}
+
 func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, ecnt int) core.QuiRes {
 	i := int64(tot / ival)
 	if i <= s.pend.i.Load() {
@@ -102,15 +109,18 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 
 	// 1. log
 	s.pending()
-	nlog.Warningln(s.r.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", s.pend.p, "]")
+	if ecnt > 0 {
+		nlog.Warningln(s.r.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", s.pend.p, "]")
+	} else {
+		nlog.Warningln(s.r.Name(), "quiescing [", tot, s.pend.p, "]")
+	}
 	if len(s.pend.p) == 0 {
 		return core.QuiDone
 	}
 
 	// 2. check Smap; abort if membership changed
 	if err := s.checkSmap(s.pend.p); err != nil {
-		s.r.Abort(err)
-		return core.QuiAborted
+		return s._qabort(err)
 	}
 
 	// 3. check progress timeout
@@ -118,11 +128,10 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 	for tid := range s.pend.m {
 		apair := s.pend.m[tid]
 		if last := apair.last.Load(); last != apairDeleted {
+			debug.Assert(last != 0)
 			if since := time.Duration(now - last); since > progressTimeout {
 				err := fmt.Errorf("%s: timed out waiting for %s [ %v, %v, %v ]", s.r.Name(), meta.Tname(tid), since, tot, s.pend.p)
-				nlog.Errorln(err)
-				s.r.Abort(err)
-				return core.QuiAborted
+				return s._qabort(err)
 			}
 		}
 	}
@@ -132,11 +141,15 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 	o.Hdr.Opcode = opRequest
 
 	if err := dm.Bcast(o, nil); err != nil {
-		s.r.Abort(err)
-		return core.QuiAborted
+		return s._qabort(err)
 	}
-
 	return core.QuiActive
+}
+
+func (s *sentinel) _qabort(err error) core.QuiRes {
+	nlog.ErrorDepth(1, err)
+	s.r.Abort(err)
+	return core.QuiAborted
 }
 
 func (s *sentinel) checkSmap(pending []string) error {
@@ -167,6 +180,9 @@ func (s *sentinel) pending() {
 //
 
 func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
+	if s.r.IsAborted() || s.r.Finished() {
+		return
+	}
 	apair := s.pend.m[hdr.SID]
 	if apair == nil { // unlikely
 		debug.Assert(false, "missing apair ", hdr.SID)
@@ -177,18 +193,18 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 	}
 
 	if cmn.Rom.FastV(4, cos.SmoduleXs) {
-		nlog.InfoDepth(1, s.r.Name(), "opcode 'done':", hdr.SID, s.pend.n.Load(), len(s.pend.m))
+		nlog.InfoDepth(1, s.r.Name(), "recv 'done' from:", meta.Tname(hdr.SID), s.pend.n.Load())
 	}
 }
 
 func (s *sentinel) rxAbort(hdr *transport.ObjHdr) {
-	if s.r.IsAborted() {
+	if s.r.IsAborted() || s.r.Finished() {
 		return
 	}
 	msg := cos.UnsafeS(hdr.Opaque)
 	err := fmt.Errorf("%s: %s aborted, err: %s", s.r.Name(), meta.Tname(hdr.SID), msg)
 	s.r.Abort(err)
-	nlog.WarningDepth(1, "opcode 'abrt':", err)
+	nlog.WarningDepth(1, "recv 'abort':", err)
 }
 
 func (s *sentinel) rxProgress(hdr *transport.ObjHdr) {
@@ -200,10 +216,13 @@ func (s *sentinel) rxProgress(hdr *transport.ObjHdr) {
 		debug.Assert(false, "missing apair ", hdr.SID)
 		return
 	}
-	apair.last.Store(mono.NanoTime())
-	apair.progress.Store(numvis)
+	if prev := apair.progress.Swap(numvis); prev != numvis {
+		// target hdr.SID is making progress
+		debug.Assert(prev < numvis)
+		apair.last.Store(mono.NanoTime())
+	}
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infof("%s: %s reported progress: %d", s.r.Name(), meta.Tname(hdr.SID), numvis)
+		nlog.InfoDepth(1, s.r.Name(), "recv 'progress'", numvis, "from:", meta.Tname(hdr.SID), "pending:", s.pend.n.Load())
 	}
 }

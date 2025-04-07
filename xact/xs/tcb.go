@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -246,12 +247,16 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 
 	if r.dm != nil {
-		r.sntl.bcast(r.dm, err)          // broadcast (done | abort)
-		q := r.Quiesce(r.qival(), r.qcb) // when done: wait for others
-		if q == core.QuiTimeout {
-			r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
+		r.sntl.bcast(r.dm, err) // broadcast: done | abort
+		if !r.IsAborted() {
+			r.sntl.initLast(mono.NanoTime())
+			qui := r.Base.Quiesce(r.qival(), r.qcb) // when done: wait for others
+			if qui == core.QuiAborted {
+				err := r.AbortErr()
+				debug.Assert(err != nil)
+				r.sntl.bcast(r.dm, err) // broadcast: abort
+			}
 		}
-
 		// close
 		r.dm.Close(err)
 		r.dm.UnregRecv()
