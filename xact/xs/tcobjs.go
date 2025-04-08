@@ -30,6 +30,9 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// The flow: `BeginMsg`, `ContMsg`, and `doMsg`.
+// Single xaction to execute multiple list-range-prefix API calls for a given pair of (source, destination) buckets.
+
 const PrefixTcoID = "tco-"
 
 type (

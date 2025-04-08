@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -11,7 +11,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// copy & (offline) transform bucket to bucket
+// offline copy/transform: bucket-to-bucket and multi-object
+
+// NOTE: see cmn/api for cmn.TCOMsg that also contains source and destination buckets
+
+// TODO: `ContinueOnError` not implemented for the most part
+
 type (
 	CopyBckMsg struct {
 		Prepend   string `json:"prepend"`     // destination naming, as in: dest-obj-name = Prepend + source-obj-name
@@ -25,16 +30,33 @@ type (
 		Name    string       `json:"id,omitempty"`
 		Timeout cos.Duration `json:"request_timeout,omitempty"`
 	}
+
+	// bucket to bucket
 	TCBMsg struct {
-		// NOTE: objname extension ----------------------------------------------------------------------
+		// Objname Extension ----------------------------------------------------------------------
 		// - resulting object names will have this extension, if specified.
 		// - if source bucket has two (or more) objects with the same base name but different extension,
 		//   specifying this field might cause unintended override.
-		// - this field might not be any longer required - TODO review
+		// - this field might not be any longer required
 		Ext cos.StrKVs `json:"ext"`
 
 		Transform
 		CopyBckMsg
+
+		// user-defined number of concurrent workers:
+		// - 0 (default) - number of mountpaths
+		// - (-1)        - single thread, serial execution
+		NumWorkers int `json:"num-workers"`
+
+		ContinueOnError bool `json:"coer"`
+	}
+
+	// multi-object
+	// (cmn.TCOMsg = TCOMsg +  source and destination buckets)
+	TCOMsg struct {
+		TxnUUID string // (plstcx client; one control message)
+		TCBMsg
+		ListRange
 	}
 )
 

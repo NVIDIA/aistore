@@ -20,6 +20,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
+// In this source: bucket props and assorted control messages that contain buckets, including:
+// - BsummResult
+// - ArchiveBckMsg
+// - TCOMsg
+
 // Bprops - manageable, user-configurable, and inheritable (from cluster config).
 // Includes per-bucket user-configurable checksum, version, LRU, erasure-coding, and more.
 //

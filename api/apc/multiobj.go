@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -105,14 +105,4 @@ type ArchiveMsg struct {
 	InclSrcBname    bool `json:"isbn"`   // include source bucket name into the names of archived objects
 	AppendIfExists  bool `json:"aate"`   // adding a list or a range of objects to an existing archive
 	ContinueOnError bool `json:"coer"`   // on err, keep running arc xaction in a any given multi-object transaction
-}
-
-// multi-object copy & transform
-// [NOTE] see cmn/api for cmn.TCOMsg (that also contains ToBck); see also TCBMsg
-type TCOMsg struct {
-	TxnUUID string // (plstcx client, internal use)
-	TCBMsg
-	ListRange
-	NumWorkers      int  `json:"num-workers"` // user-defined num concurrent workers; 0 - number of mountpaths (default); (-1) none
-	ContinueOnError bool `json:"coer"`
 }
