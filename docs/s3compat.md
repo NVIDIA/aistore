@@ -29,6 +29,7 @@ For additional background, see:
 - [Quick example using `aws` CLI](#quick-example-using-aws-cli)
   - [PUT(object)](#putobject)
   - [GET(object)](#getobject)
+    - [Range Read](#range-read)
   - [HEAD(object)](#headobject)
 - [Presigned S3 requests](#presigned-s3-requests)
   - [1. Enable presigned S3 requests](#1-enable-presigned-s3-requests)
@@ -93,6 +94,38 @@ $ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --ke
     "ContentLength": 10689
 }
 $ diff -uN README.md /tmp/readme
+```
+
+#### Range Read
+
+1. If needed: create a bucket (while making sure its checksum is the conventional MD5), and PUT an object:
+
+```console
+$ ais create ais://abc
+$ ais bucket props set ais://abc checksum.type md5
+$ ais put README.md ais://abc
+```
+
+2. Next, read an arbitrary range using `aws` CLI:
+
+```console
+$ aws s3api --endpoint-url http://localhost:8080/s3 get-object --bucket abc --key README.md --range bytes=0-99 README-partial.md
+{
+    "ContentLength": 100,
+    "ETag": "\"2940e853a9b97580df19b76d10d3ea31\"",
+    "Metadata": {},
+    "ContentType": "application/octet-stream",
+    "AcceptRanges": "bytes",
+    "LastModified": "Tue, 08 Apr 2025 14:51:53 GMT",
+    "ContentRange": "bytes 0-99/17242"
+}
+```
+
+3. Finally, check the result:
+
+```console
+$ cat README-partial.md
+**AIStore is a lightweight object storage system with the capability to linearly scale out with each$
 ```
 
 ### HEAD(object)
