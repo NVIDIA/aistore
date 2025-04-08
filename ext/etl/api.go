@@ -25,8 +25,9 @@ import (
 const PrefixXactID = "etl-"
 
 const (
-	Spec = "spec"
-	Code = "code"
+	Spec    = "spec"
+	Code    = "code"
+	ArgType = "ARG_TYPE"
 )
 
 // consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
