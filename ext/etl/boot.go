@@ -112,13 +112,13 @@ func (b *etlBootstrapper) setupConnection(schema string) (err error) {
 	// Retrieve host IP of the pod.
 	var hostIP string
 	if hostIP, err = b._getHost(); err != nil {
-		return
+		return err
 	}
 
 	// Retrieve assigned port by the service.
 	var nodePort int
 	if nodePort, err = b._getPort(); err != nil {
-		return
+		return err
 	}
 
 	// the pod must be reachable via its tcp addr
@@ -128,13 +128,10 @@ func (b *etlBootstrapper) setupConnection(schema string) (err error) {
 		if cmn.Rom.FastV(4, cos.SmoduleETL) {
 			nlog.Warningf("%s: failed to dial %s [%+v, %s]", b.msg, b.podAddr, b.errCtx, b.uri)
 		}
-		err = cmn.NewErrETL(b.errCtx, err.Error(), ecode)
-		return
+		return cmn.NewErrETL(b.errCtx, err.Error(), ecode)
 	}
 
-	// TODO -- FIXME: versus HTTPS deployment
 	b.uri = schema + b.podAddr
-
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("%s: setup connection to %s [%+v]", b.msg, b.uri, b.errCtx)
 	}

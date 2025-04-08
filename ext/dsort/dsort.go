@@ -253,14 +253,14 @@ outer:
 	return group.Wait()
 }
 
-func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
+func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 	var (
 		metrics   = m.Metrics.Creation
 		shardName = s.Name
 		errCh     = make(chan error, 2)
 	)
-	if err = lom.InitBck(&m.Pars.OutputBck); err != nil {
-		return
+	if err := lom.InitBck(&m.Pars.OutputBck); err != nil {
+		return err
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
 
@@ -274,9 +274,9 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 	defer m.dsorter.postShardCreation(lom.Mountpath())
 
 	cs := fs.Cap()
-	if err = cs.Err(); err != nil {
+	if err := cs.Err(); err != nil {
 		m.abort(err)
-		return
+		return err
 	}
 
 	beforeCreation := time.Now()
@@ -324,7 +324,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 		debug.Assert(shardRW != nil, m.Pars.OutputExtension)
 	}
 
-	_, err = shardRW.Create(s, w, m.dsorter)
+	_, err := shardRW.Create(s, w, m.dsorter)
 	w.CloseWithError(err)
 	if err != nil {
 		r.CloseWithError(err)
@@ -350,9 +350,9 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 		return err
 	}
 
-	si, err := m.smap.HrwHash2T(lom.Digest())
-	if err != nil {
-		return err
+	si, errH := m.smap.HrwHash2T(lom.Digest())
+	if errH != nil {
+		return errH
 	}
 
 	// If the newly created shard belongs on a different target
@@ -372,9 +372,9 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 			goto exit
 		}
 
-		file, err := cos.NewFileHandle(lom.FQN)
-		if err != nil {
-			return err
+		file, errO := cos.NewFileHandle(lom.FQN)
+		if errO != nil {
+			return errO
 		}
 
 		o := transport.AllocSend()
@@ -392,8 +392,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 			streamWg.Done()
 		}
 		streamWg.Add(1)
-		err = m.streams.shards.Send(o, file, si)
-		if err != nil {
+		if err := m.streams.shards.Send(o, file, si); err != nil {
 			return err
 		}
 		streamWg.Wait()
@@ -428,7 +427,7 @@ exit:
 // repeats until len(targetOrder) == 1, in which case the single target in the
 // slice is the final target with the final, complete, sorted slice of Record
 // structs.
-func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (currentTargetIsFinal bool, err error) {
+func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (currentTargetIsFinal bool, _ error) {
 	var (
 		i           int
 		d           *meta.Snode
@@ -513,7 +512,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 			metrics.mu.Lock()
 			metrics.SentStats.updateTime(time.Since(beforeSend))
 			metrics.mu.Unlock()
-			return
+			return false, nil
 		}
 
 		beforeRecv := time.Now()
@@ -528,8 +527,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 			select {
 			case <-m.listenReceived():
 			case <-m.listenAborted():
-				err = m.newErrAborted()
-				return
+				return false, m.newErrAborted()
 			}
 		}
 		expectedReceived++
@@ -549,7 +547,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 		m.recm.MergeEnqueuedRecords()
 	}
 
-	err = sortRecords(m.recm.Records, m.Pars.Algorithm)
+	err := sortRecords(m.recm.Records, m.Pars.Algorithm)
 	m.dsorter.postRecordDistribution()
 	return true, err
 }

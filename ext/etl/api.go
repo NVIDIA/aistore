@@ -288,7 +288,7 @@ func (m *InitCodeMsg) Validate() error {
 	return nil
 }
 
-func (m *InitSpecMsg) Validate() (err error) {
+func (m *InitSpecMsg) Validate() error {
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 
 	// Check pod specification constraints.
@@ -297,8 +297,7 @@ func (m *InitSpecMsg) Validate() (err error) {
 		return err
 	}
 	if len(pod.Spec.Containers) != 1 {
-		err = cmn.NewErrETLf(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
-		return
+		return cmn.NewErrETLf(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
 	}
 	container := pod.Spec.Containers[0]
 	if len(container.Ports) != 1 {

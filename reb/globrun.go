@@ -568,7 +568,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 
 				if err := xreb.AbortErr(); err != nil {
 					nlog.Infoln(rargs.logHdr, "abort wait-ack:", err)
-					return
+					return 0
 				}
 			}
 			if cnt == 0 {
@@ -577,7 +577,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 			}
 			if err := xreb.AbortedAfter(sleep); err != nil {
 				nlog.Infoln(rargs.logHdr, "abort wait-ack:", err)
-				return
+				return 0
 			}
 
 			nlog.Warningln(rargs.logHdr, "waiting for", cnt, "ACKs")
@@ -587,7 +587,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 			nlog.Warningf("%s timed out waiting for %d ACK%s", rargs.logHdr, cnt, cos.Plural(cnt))
 		}
 		if xreb.IsAborted() {
-			return
+			return 0
 		}
 
 		// NOTE: requires locally migrated objects *not* to be removed at the src
@@ -600,7 +600,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		nlog.Infof("%s poll targets for: stage=(%s or %s***)", rargs.logHdr, stages[rebStageFin], stages[rebStageWaitAck])
 		errCnt = bcast(rargs, reb.waitAcksExtended)
 		if xreb.IsAborted() {
-			return
+			return errCnt
 		}
 
 		// 9. retransmit if needed
@@ -611,13 +611,13 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		nlog.Warningln(rargs.logHdr, "retransmitted", cnt, "keeping wack...")
 	}
 
-	return
+	return errCnt
 }
 
 func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 	xreb := rargs.xreb
 	if xreb.IsAborted() {
-		return
+		return 0
 	}
 	var (
 		rj = &rebJogger{
@@ -684,7 +684,8 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 			return 0
 		}
 	}
-	return
+
+	return cnt
 }
 
 func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
@@ -701,11 +702,11 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 	}
 
 	// prior to closing streams
-	ret := xreb.Quiesce(rargs.config.Transport.QuiesceTime.D(), qui.quicb)
+	que := xreb.Quiesce(rargs.config.Transport.QuiesceTime.D(), qui.quicb)
 	cnt = xreb.ErrCnt()
 
 	// cleanup markers
-	if ret != core.QuiAborted && ret != core.QuiTimeout {
+	if que != core.QuiAborted && que != core.QuiTimeout {
 		if errM := fs.RemoveMarker(fname.RebalanceMarker, tstats); errM == nil {
 			nlog.Infoln(rargs.logHdr, "removed marker ok")
 		}
@@ -727,12 +728,12 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 	reb.dm.UnregRecv()
 	xreb.Finish()
 	switch {
-	case ret != core.QuiAborted && ret != core.QuiTimeout && cnt == 0:
+	case que != core.QuiAborted && que != core.QuiTimeout && cnt == 0:
 		nlog.Infoln(rargs.logHdr, "done", xreb.String())
 	case cnt == 0:
-		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", ret, "]", xreb.String())
+		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "]", xreb.String())
 	default:
-		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", ret, "errs =", cnt, "]", xreb.String())
+		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "errs =", cnt, "]", xreb.String())
 	}
 }
 

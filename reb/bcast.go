@@ -141,10 +141,11 @@ func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		xreb       = rargs.xreb
 	)
 	debug.Assertf(reb.RebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.RebID(), xreb)
+
 	for curwt < maxwt {
 		if err := xreb.AbortedAfter(sleep); err != nil {
 			nlog.Infof("%s: abort wack (%v)", rargs.logHdr, err)
-			return
+			return false
 		}
 		if reb.stages.isInStage(tsi, rebStageFin) {
 			return true // tsi stage=<fin>
@@ -152,11 +153,11 @@ func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		// otherwise, inquire status and check the stage
 		curwt += sleep
 		if status, ok = reb.checkStage(tsi, rargs, rebStageFin); ok || status == nil {
-			return
+			return ok
 		}
 		if err := xreb.AbortErr(); err != nil {
 			nlog.Infof("%s: abort wack (%v)", rargs.logHdr, err)
-			return
+			return false
 		}
 		//
 		// tsi in rebStageWaitAck
@@ -171,14 +172,14 @@ func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		}
 		if !w4me {
 			nlog.Infof("%s: %s[%s] ok (not waiting for me)", rargs.logHdr, tsi.StringEx(), stages[status.Stage])
-			ok = true
-			return
+			return true // Ok
 		}
 		time.Sleep(sleepRetry)
 		curwt += sleepRetry
 	}
+
 	nlog.Errorf("%s: timed out waiting for %s to reach %s", rargs.logHdr, tsi.StringEx(), stages[rebStageFin])
-	return
+	return false
 }
 
 // calls tsi.reb.RebStatus() and handles conditions; may abort the current xreb
@@ -193,14 +194,14 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		tname      = tsi.StringEx()
 	)
 	if xreb == nil || xreb.IsAborted() {
-		return
+		return nil, false
 	}
 	debug.Assertf(reb.RebID() == xreb.RebID(), "%s (rebID=%d) vs %s", rargs.logHdr, reb.RebID(), xreb)
 	body, code, err := core.T.Health(tsi, apc.DefaultTimeout, query)
 	if err != nil {
 		if errAborted := xreb.AbortedAfter(sleepRetry); errAborted != nil {
 			nlog.Infoln(rargs.logHdr, "abort check status", errAborted)
-			return
+			return nil, false
 		}
 		body, code, err = core.T.Health(tsi, apc.DefaultTimeout, query) // retry once
 	}
@@ -208,7 +209,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		ctx := fmt.Sprintf("health(%s) failure: %v(%d)", tname, err, code)
 		err = cmn.NewErrAborted(xreb.Name(), ctx, err)
 		reb.abortAll(err)
-		return
+		return nil, false
 	}
 
 	status = &Status{}
@@ -216,7 +217,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	if err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, rargs.logHdr, "reb status from "+tname, cos.BHead(body), err)
 		reb.abortAll(err)
-		return
+		return nil, false
 	}
 	//
 	// enforce global RebID
@@ -225,10 +226,10 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	if status.RebID > reb.rebID.Load() {
 		err := cmn.NewErrAborted(xreb.Name(), rargs.logHdr, errors.New(tname+" runs newer "+otherXid))
 		reb.abortAll(err)
-		return
+		return status, false
 	}
 	if xreb.IsAborted() {
-		return
+		return status, false
 	}
 	// keep waiting
 	if status.RebID < reb.RebID() {
@@ -237,20 +238,19 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 			what = "transitioning(?) from"
 		}
 		nlog.Warningf("%s: %s[%s, v%d] %s older rebalance - keep waiting", rargs.logHdr, tname, otherXid, status.RebVersion, what)
-		return
+		return status, false
 	}
 	// other target aborted same ID (do not call `reb.abortAll` - no need)
 	if status.RebID == reb.RebID() && status.Aborted {
 		err := cmn.NewErrAborted(xreb.Name(), rargs.logHdr, fmt.Errorf("status 'aborted' from %s", tname))
 		xreb.Abort(err)
 		reb.lazydel.stop()
-		return
+		return status, false
 	}
 	if status.Stage >= desiredStage {
-		ok = true
-		return // Ok
+		return status, true // Ok
 	}
 
 	nlog.Infof("%s: %s[%s, v%d] not yet at the right stage %s", rargs.logHdr, tname, stages[status.Stage], status.RebVersion, stages[desiredStage])
-	return
+	return status, false
 }

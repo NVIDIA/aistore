@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -143,7 +143,7 @@ func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 				r.AddErr(err)
 			}
 		}
-		return
+		return err
 	}
 
 	if cmn.Rom.FastV(5, cos.SmoduleMirror) {
@@ -153,10 +153,11 @@ func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 	if cnt := r.Objs(); cnt%128 == 0 { // TODO: configurable
 		cs := fs.Cap()
 		if errCap := cs.Err(); errCap != nil {
-			r.Abort(err)
+			r.Abort(errCap)
+			err = errCap
 		}
 	}
-	return
+	return err
 }
 
 func (r *mncXact) String() string { return r._str }

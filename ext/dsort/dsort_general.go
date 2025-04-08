@@ -275,17 +275,15 @@ func (ds *dsorterGeneral) Load(w io.Writer, rec *shard.Record, obj *shard.Record
 	return ds.loadLocal(w, obj)
 }
 
-func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written int64, err error) {
+func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written int64, _ error) {
 	var (
 		slab      *memsys.Slab
 		buf       []byte
 		storeType = obj.StoreType
 	)
-
 	if storeType != shard.SGLStoreType { // SGL does not need buffer as it is buffer itself
 		buf, slab = g.mem.AllocSize(obj.Size)
 	}
-
 	defer func() {
 		if storeType != shard.SGLStoreType {
 			slab.Free(buf)
@@ -297,23 +295,22 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 
 	if ds.m.Pars.DryRun {
 		r := cos.NopReader(obj.MetadataSize + obj.Size)
-		written, err = io.CopyBuffer(w, r, buf)
-		return
+		return io.CopyBuffer(w, r, buf)
 	}
 
-	var n int64
 	switch storeType {
 	case shard.OffsetStoreType:
-		f, err := os.Open(fullContentPath) // TODO: it should be open always
-		if err != nil {
-			return written, errors.WithMessage(err, "(offset) open local content failed")
+		f, errO := os.Open(fullContentPath)
+		if errO != nil {
+			return written, errors.WithMessage(errO, "(offset) open local content failed")
 		}
 		defer cos.Close(f)
-		_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
-		if err != nil {
+		if _, err := f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart); err != nil {
 			return written, errors.WithMessage(err, "(offset) seek local content failed")
 		}
-		if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
+		n, err := io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf)
+		written += n
+		if err != nil {
 			return written, errors.WithMessage(err, "(offset) copy local content failed")
 		}
 	case shard.SGLStoreType:
@@ -325,25 +322,27 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 		defer sgl.Free()
 
 		// No need for `io.CopyBuffer` since SGL implements `io.WriterTo`.
-		if n, err = io.Copy(w, sgl); err != nil {
+		n, err := io.Copy(w, sgl)
+		written += n
+		if err != nil {
 			return written, errors.WithMessage(err, "(sgl) copy local content failed")
 		}
 	case shard.DiskStoreType:
-		f, err := os.Open(fullContentPath)
-		if err != nil {
-			return written, errors.WithMessage(err, "(disk) open local content failed")
+		f, errO := os.Open(fullContentPath)
+		if errO != nil {
+			return written, errors.WithMessage(errO, "(disk) open local content failed")
 		}
 		defer cos.Close(f)
-		if n, err = io.CopyBuffer(w, f, buf); err != nil {
+		n, err := io.CopyBuffer(w, f, buf)
+		written += n
+		if err != nil {
 			return written, errors.WithMessage(err, "(disk) copy local content failed")
 		}
 	default:
 		debug.Assert(false, storeType)
 	}
 
-	debug.Assert(n > 0)
-	written += n
-	return
+	return written, nil
 }
 
 func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
