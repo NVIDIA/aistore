@@ -54,6 +54,7 @@ type (
 	// a strict subset of core.Xact, includes only the methods
 	// lrit needs for itself
 	lrxact interface {
+		Abort(error) bool
 		IsAborted() bool
 		Finished() bool
 	}
@@ -98,6 +99,7 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 		l     = len(avail)
 	)
 	if l == 0 {
+		xctn.Abort(cmn.ErrNoMountpaths)
 		return cmn.ErrNoMountpaths
 	}
 	r.parent = xctn
@@ -146,7 +148,7 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 		r.workers = append(r.workers, &lrworker{r})
 	}
 
-	// work channel capacity: up to 4 pending work items per
+	// [burst] work channel capacity: up to 4 pending work items per
 	r.workCh = make(chan lrpair, min(numWorkers<<2, 512))
 	return nil
 }

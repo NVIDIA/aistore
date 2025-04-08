@@ -194,10 +194,6 @@ func (r *XactTCObjs) ContMsg(msg *cmn.TCOMsg) {
 }
 
 func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
-	var (
-		smap = core.T.Sowner().Get()
-		lrit = &lrit{}
-	)
 	debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
 
 	r.pending.mtx.Lock()
@@ -205,22 +201,25 @@ func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	r.pending.mtx.Unlock()
 	if !ok {
 		if r.ErrCnt() > 0 {
-			return true
+			return true // stop
 		}
 		nlog.Errorf("%s: expecting errors in %s, missing txn %q", core.T.String(), r.String(), msg.TxnUUID) // (unlikely)
 		return false
 	}
 
 	// this target must be active (ref: ignoreMaintenance)
+	smap := core.T.Sowner().Get()
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
 		r.Abort(err)
-		return true
+		return true // stop
 	}
 	nat := smap.CountActiveTs()
 	wi.refc.Store(int32(nat - 1))
 
+	lrit := &lrit{}
 	if err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt); err != nil {
-		return false
+		r.AddErr(err)
+		return !msg.ContinueOnError // stop?
 	}
 
 	// run
@@ -248,7 +247,10 @@ func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	}
 
 	lrit.wait()
-	if !r.IsAborted() && err != nil {
+	if r.IsAborted() {
+		return true // stop
+	}
+	if err != nil {
 		r.AddErr(err)
 	}
 	return false
