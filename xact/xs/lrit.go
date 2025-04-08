@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -72,11 +73,12 @@ type (
 		msg     *apc.ListRange
 		bck     *meta.Bck
 		pt      *cos.ParsedTemplate
-		workCh  chan lrpair // running concurrency
-		prefix  string
-		workers []*lrworker    // running concurrency
+		workCh  chan lrpair    // - (num-workers parallelism)
+		prefix  string         // as in: bucket/prefix
+		workers []*lrworker    // - (num-workers parallelism)
 		buf     []byte         // when (prealloc && no-workers)
-		wg      sync.WaitGroup // ditto
+		wg      sync.WaitGroup // - (num-workers parallelism)
+		numvis  atomic.Int64   // counter: num visited objects
 		lrp     int            // enum { lrpList, ... }
 	}
 )
@@ -346,6 +348,7 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 
 	if r.workers == nil {
 		wi.do(lom, r, r.buf)
+		r.numvis.Inc()
 		return true, nil
 	}
 
@@ -368,6 +371,7 @@ func (worker *lrworker) run(buf []byte, slab *memsys.Slab) {
 		if worker.lrit.parent.IsAborted() {
 			break
 		}
+		worker.lrit.numvis.Inc()
 	}
 	worker.lrit.wg.Done()
 	if buf != nil {

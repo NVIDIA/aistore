@@ -72,7 +72,7 @@ type (
 		config    *cmn.Config
 		stopCh    cos.StopCh
 		buf       []byte
-		numvis    atomic.Int64 // obj visits counter
+		numvis    atomic.Int64 // counter: num visited objects
 	}
 )
 

@@ -329,5 +329,5 @@ func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "special", amsg.Value, err)
 		return
 	}
-	xtco.Do(&tcomsg)
+	xtco.ContMsg(&tcomsg)
 }

@@ -683,7 +683,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg) (xid string, _ error) {
 		if err := t.txns.begin(txn); err != nil {
 			return xid, err
 		}
-		xtco.Begin(msg)
+		xtco.BeginMsg(msg)
 	case apc.ActAbort:
 		txn, err := t.txns.find(c.uuid)
 		if err == nil {
@@ -713,7 +713,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg) (xid string, _ error) {
 			done = true
 		}
 
-		txnTco.xtco.Do(txnTco.msg)
+		txnTco.xtco.ContMsg(txnTco.msg)
 		xid = txnTco.xtco.ID()
 		if !done {
 			t.txns.term(c.uuid, apc.ActCommit)

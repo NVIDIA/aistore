@@ -117,9 +117,7 @@ func (p *tcoFactory) Start() error {
 
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
-		// unlike apc.ActCopyObjects (where we know the size)
-		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
-		sizePDU = memsys.DefaultBufSize
+		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
 
 	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, r.owt, sizePDU); err != nil {
@@ -170,7 +168,7 @@ func (r *XactTCObjs) Snap() (snap *core.Snap) {
 	return
 }
 
-func (r *XactTCObjs) Begin(msg *cmn.TCOMsg) {
+func (r *XactTCObjs) BeginMsg(msg *cmn.TCOMsg) {
 	wi := &tcowi{r: r, msg: msg}
 	r.pending.mtx.Lock()
 
@@ -180,90 +178,7 @@ func (r *XactTCObjs) Begin(msg *cmn.TCOMsg) {
 	r.pending.mtx.Unlock()
 }
 
-func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
-	nlog.Infoln(r.Name())
-	wg.Done()
-
-	for {
-		select {
-		case msg := <-r.workCh:
-			var (
-				smap = core.T.Sowner().Get()
-				lrit = &lrit{}
-			)
-			debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
-			r.pending.mtx.Lock()
-			wi, ok := r.pending.m[msg.TxnUUID]
-			r.pending.mtx.Unlock()
-			if !ok {
-				if r.ErrCnt() > 0 {
-					goto fin
-				}
-				nlog.Errorf("%s: expecting errors in %s, missing txn %q", core.T.String(), r.String(), msg.TxnUUID) // (unlikely)
-				continue
-			}
-
-			// this target must be active (ref: ignoreMaintenance)
-			if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
-				nlog.Errorln(err)
-				goto fin
-			}
-			nat := smap.CountActiveTs()
-			wi.refc.Store(int32(nat - 1))
-
-			// run
-			var wg *sync.WaitGroup
-			err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt)
-			if err == nil {
-				// dynamic ctlmsg
-				{
-					var sb strings.Builder
-					sb.Grow(160)
-					msg.CopyBckMsg.Str(&sb, r.args.BckFrom.Cname(msg.Prefix), r.args.BckTo.Cname(msg.Prepend))
-					sb.WriteByte(' ')
-					msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
-					r.Base.SetCtlMsg(sb.String())
-				}
-				// run
-				if msg.Sync && lrit.lrp != lrpList {
-					wg = &sync.WaitGroup{}
-					wg.Add(1)
-					go func(pt *cos.ParsedTemplate) {
-						r.prune(lrit, smap, pt)
-						wg.Done()
-					}(lrit.pt.Clone())
-				}
-				err = lrit.run(wi, smap, true /*prealloc buf*/)
-			}
-			if wg != nil {
-				wg.Wait()
-			}
-
-			lrit.wait()
-
-			if r.IsAborted() || err != nil {
-				goto fin
-			}
-			r.sendTerm(wi.msg.TxnUUID, nil, nil)
-			r.DecPending()
-		case <-r.IdleTimer():
-			goto fin
-		case <-r.ChanAbort():
-			goto fin
-		}
-	}
-fin:
-	r.fin(true /*unreg Rx*/)
-	if r.ErrCnt() > 0 {
-		// (see "expecting errors" and cleanup)
-		r.pending.mtx.Lock()
-		clear(r.pending.m)
-		r.pending.mtx.Unlock()
-	}
-}
-
-// more work
-func (r *XactTCObjs) Do(msg *cmn.TCOMsg) {
+func (r *XactTCObjs) ContMsg(msg *cmn.TCOMsg) {
 	r.IncPending()
 	r.workCh <- msg
 
@@ -278,8 +193,97 @@ func (r *XactTCObjs) Do(msg *cmn.TCOMsg) {
 	}
 }
 
+func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
+	var (
+		smap = core.T.Sowner().Get()
+		lrit = &lrit{}
+	)
+	debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
+
+	r.pending.mtx.Lock()
+	wi, ok := r.pending.m[msg.TxnUUID]
+	r.pending.mtx.Unlock()
+	if !ok {
+		if r.ErrCnt() > 0 {
+			return true
+		}
+		nlog.Errorf("%s: expecting errors in %s, missing txn %q", core.T.String(), r.String(), msg.TxnUUID) // (unlikely)
+		return false
+	}
+
+	// this target must be active (ref: ignoreMaintenance)
+	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
+		r.Abort(err)
+		return true
+	}
+	nat := smap.CountActiveTs()
+	wi.refc.Store(int32(nat - 1))
+
+	if err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt); err != nil {
+		return false
+	}
+
+	// run
+	var wg *sync.WaitGroup
+	{
+		var sb strings.Builder
+		sb.Grow(160)
+		msg.CopyBckMsg.Str(&sb, r.args.BckFrom.Cname(msg.Prefix), r.args.BckTo.Cname(msg.Prepend))
+		sb.WriteByte(' ')
+		msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
+		r.Base.SetCtlMsg(sb.String())
+	}
+	// run
+	if msg.Sync && lrit.lrp != lrpList {
+		wg = &sync.WaitGroup{}
+		wg.Add(1)
+		go func(pt *cos.ParsedTemplate) {
+			r.prune(lrit, smap, pt)
+			wg.Done()
+		}(lrit.pt.Clone())
+	}
+	err := lrit.run(wi, smap, true /*prealloc buf*/)
+	if wg != nil {
+		wg.Wait()
+	}
+
+	lrit.wait()
+	if !r.IsAborted() && err != nil {
+		r.AddErr(err)
+	}
+	return false
+}
+
+func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
+	nlog.Infoln(r.Name())
+	wg.Done()
+outer:
+	for {
+		select {
+		case msg := <-r.workCh:
+			stop := r.doMsg(msg)
+			r.DecPending()
+			if stop {
+				break outer
+			}
+			r.sendTerm(msg.TxnUUID, nil, nil)
+		case <-r.IdleTimer():
+			break outer
+		case <-r.ChanAbort():
+			break outer
+		}
+	}
+	r.fin(true /*unreg Rx*/)
+	if r.ErrCnt() > 0 {
+		// (see "expecting errors" and cleanup)
+		r.pending.mtx.Lock()
+		clear(r.pending.m)
+		r.pending.mtx.Unlock()
+	}
+}
+
 //
-// Rx
+// receive
 //
 
 // NOTE: strict(est) error handling: abort on any of the errors below
