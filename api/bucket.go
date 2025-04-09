@@ -182,45 +182,38 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 	return err
 }
 
-// CopyBucket copies existing `bckFrom` bucket to the destination `bckTo` thus,
-// effectively, creating a copy of the `bckFrom`.
-//   - AIS will create `bckTo` on the fly but only if the destination bucket does not
-//     exist and _is_ provided by AIStore; 3rd party backend destination must exist -
-//     otherwise the copy operation won't be successful.
-//   - There are no limitations on copying buckets across Backend providers:
-//     you can copy AIS bucket to (or from) AWS bucket, and the latter to Google or Azure
-//     or OCI bucket, etc.
-//   - Copying multiple buckets to the same destination bucket is also permitted.
+// CopyBucket copies all or selected content of `bckFrom` into the destination `bckTo`.
 //
-// `fltPresence` applies exclusively to remote `bckFrom` and is ignored if the source is ais://
-// The value is enum { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
-// Namely:
-// * apc.FltExists        - copy all objects, including those that are not (present) in AIS
-// * apc.FltPresent 	  - copy the current `bckFrom` content in the cluster (default)
-// * apc.FltExistsOutside - copy only those remote objects that are not (present) in AIS
+//   - AIS will create `bckTo` on the fly, but only if it’s an AIS bucket; for 3rd-party
+//     backends, the destination bucket must already exist.
+//   - Buckets can be copied across different backends, e.g., AIS to/from AWS, GCP, Azure, etc.
+//   - Copying into the same destination from multiple sources is allowed.
 //
-// msg.Prefix, if specified, applies always and regardless.
+// ETLBucket is similar, but applies a transformation to each object before writing it
+// to the destination bucket. Specifically:
+//   - Visits all (matching) source objects
+//   - Reads and transforms each using the specified ETL (by ID)
+//   - Writes the result to `bckTo`
 //
-// Returns xaction ID if successful, an error otherwise. See also closely related api.ETLBucket
-func CopyBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.CopyBckMsg, fltPresence ...int) (string, error) {
+// `fltPresence`, if provided, applies only when `bckFrom` is remote (not ais://):
+//   * apc.FltExists        - copy all objects, including those not cached locally
+//   * apc.FltPresent       - copy only locally available objects (default)
+//   * apc.FltExistsOutside - copy only remote objects missing locally
+//
+// `msg.Prefix`, if specified, filters source objects by prefix (applies to both operations).
+//
+// `msg.NumWorkers` controls parallelism:
+//   *  0 (default) - one worker per mountpath
+//   * -1           - serial (single-threaded) execution
+//   * >0           - total number of concurrent workers per target node
+//
+// Returns xaction ID if successful, error otherwise.
+
+func CopyBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (string, error) {
 	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActCopyBck, Value: msg})
 	return tcb(bp, bckFrom, bckTo, jbody, fltPresence...)
 }
 
-// Transform src bucket => dst bucket, i.e.:
-// - visit all (matching) source objects; for each object:
-// - read it, transform using the specified (ID-ed) ETL, and write the result to dst bucket
-//
-// `fltPresence` applies exclusively to remote `bckFrom` (is ignored otherwise)
-// and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
-// Namely:
-// * apc.FltExists        - copy all objects, including those that are not (present) in AIS
-// * apc.FltPresent 	  - copy the current `bckFrom` content in the cluster (default)
-// * apc.FltExistsOutside - copy only those remote objects that are not (present) in AIS
-//
-// msg.Prefix, if specified, applies always and regardless.
-//
-// Returns xaction ID if successful, an error otherwise. See also: api.CopyBucket
 func ETLBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (string, error) {
 	jbody := cos.MustMarshal(apc.ActMsg{Action: apc.ActETLBck, Value: msg})
 	return tcb(bp, bckFrom, bckTo, jbody, fltPresence...)

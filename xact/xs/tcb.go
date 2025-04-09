@@ -39,6 +39,9 @@ type (
 		xctn *XactTCB
 		kind string
 	}
+	tcbworker struct {
+		r *XactTCB
+	}
 	XactTCB struct {
 		// sub-function
 		transform etl.Session
@@ -46,6 +49,10 @@ type (
 		prune prune
 		sntl  sentinel
 		xact.BckJog
+		// copying parallelism
+		workers []tcbworker
+		workCh  chan *core.LOM
+		wg      sync.WaitGroup
 		// args
 		args *xreg.TCBArgs
 		dm   *bundle.DM
@@ -77,7 +84,7 @@ func (p *tcbFactory) Start() error {
 	)
 	debug.AssertNoErr(err)
 
-	r := newTCB(p, slab, config, smap, nat)
+	r, numWorkers := newTCB(p, slab, config, smap, nat)
 
 	r.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
@@ -107,6 +114,15 @@ func (p *tcbFactory) Start() error {
 		return err
 	}
 	r.sntl.init(r, smap, nat)
+
+	// copying parallelism
+	if numWorkers > 0 {
+		r.workers = make([]tcbworker, 0, numWorkers)
+		for range numWorkers {
+			r.workers = append(r.workers, tcbworker{r})
+		}
+		r.workCh = make(chan *core.LOM, numWorkers) // TODO -- FIXME: provide for burst
+	}
 
 	return nil
 }
@@ -160,7 +176,7 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB) {
+func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB, numWorkers int) {
 	var (
 		args = p.Args.Custom.(*xreg.TCBArgs)
 		msg  = args.Msg
@@ -218,7 +234,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	}
 
 	p.xctn = r
-	return r
+	return r, msg.NumWorkers // TODO -- FIXME: factor in the current load vs num cores
 }
 
 func (r *XactTCB) Run(wg *sync.WaitGroup) {
@@ -234,6 +250,12 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.dm.Open()
 	}
 	wg.Done()
+
+	for _, worker := range r.workers {
+		buf, slab := core.T.PageMM().Alloc()
+		r.wg.Add(1)
+		go worker.run(buf, slab)
+	}
 
 	r.BckJog.Run()
 	if r.args.Msg.Sync {
@@ -265,6 +287,11 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.prune.wait()
 	}
 
+	if r.workers != nil {
+		close(r.workCh)
+		r.wg.Wait()
+	}
+
 	r.sntl.cleanup()
 	r.Finish()
 }
@@ -283,15 +310,20 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
-	args := r.args // TCBArgs
-	a := r.copier.prepare(lom, args.BckTo, args.Msg)
-	a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
+	if r.workers == nil {
+		args := r.args // TCBArgs
+		a := r.copier.prepare(lom, args.BckTo, args.Msg)
+		a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
 
-	err := r.copier.do(a, lom, r.dm)
-	if err == nil && args.Msg.Sync {
-		r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+		err := r.copier.do(a, lom, r.dm)
+		if err == nil && args.Msg.Sync {
+			r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+		}
+		return err
 	}
-	return err
+
+	r.workCh <- lom // TODO -- FIXME: where's this lom getting freed?
+	return nil
 }
 
 // NOTE: strict(est) error handling: abort on any of the errors below
@@ -396,4 +428,33 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return
+}
+
+///////////////
+// tcbworker //
+///////////////
+
+func (worker *tcbworker) run(buf []byte, slab *memsys.Slab) {
+	var (
+		r    = worker.r
+		args = r.args // TCBArgs
+	)
+	for {
+		lom, ok := <-r.workCh
+		if !ok {
+			break
+		}
+		a := r.copier.prepare(lom, args.BckTo, args.Msg)
+		a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
+		err := r.copier.do(a, lom, r.dm)
+		if err == nil {
+			if args.Msg.Sync {
+				r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+			}
+		} else {
+			r.AddErr(err)
+		}
+	}
+	r.wg.Done()
+	slab.Free(buf)
 }

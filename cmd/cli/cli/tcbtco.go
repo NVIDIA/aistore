@@ -154,7 +154,8 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 	return runTCO(c, bckFrom, bckTo, oltp.list, oltp.tmpl, etlName)
 }
 
-func _iniCopyBckMsg(c *cli.Context, msg *apc.CopyBckMsg) (err error) {
+func _iniTCBMsg(c *cli.Context, msg *apc.TCBMsg) error {
+	// CopyBckMsg part
 	{
 		msg.Prepend = parseStrFlag(c, copyPrependFlag)
 		msg.Prefix = parseStrFlag(c, verbObjPrefixFlag)
@@ -164,15 +165,21 @@ func _iniCopyBckMsg(c *cli.Context, msg *apc.CopyBckMsg) (err error) {
 		msg.Sync = flagIsSet(c, syncFlag)
 	}
 	if msg.Sync && msg.Prepend != "" {
-		err = fmt.Errorf("prepend option (%q) is incompatible with %s (the latter requires identical source/destination naming)",
+		return fmt.Errorf("prepend option (%q) is incompatible with %s (the latter requires identical source/destination naming)",
 			msg.Prepend, qflprn(progressFlag))
 	}
-	return err
+
+	// TCBMsg
+	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
+	if flagIsSet(c, numListRangeWorkersFlag) {
+		msg.NumWorkers = parseIntFlag(c, numListRangeWorkersFlag)
+	}
+	return nil
 }
 
 func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	var (
-		msg          apc.CopyBckMsg
+		msg          apc.TCBMsg
 		showProgress = flagIsSet(c, progressFlag)
 		from, to     = bckFrom.Cname(""), bckTo.Cname("")
 	)
@@ -182,7 +189,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 		showProgress = false
 	}
 	// copy: with/wo progress/wait
-	if err := _iniCopyBckMsg(c, &msg); err != nil {
+	if err := _iniTCBMsg(c, &msg); err != nil {
 		return err
 	}
 
@@ -271,7 +278,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	var msg = apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
 	}
-	if err := _iniCopyBckMsg(c, &msg.CopyBckMsg); err != nil {
+	if err := _iniTCBMsg(c, &msg); err != nil {
 		return err
 	}
 	if flagIsSet(c, etlExtFlag) {

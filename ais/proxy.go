@@ -1352,21 +1352,13 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			ecode       int
 			fltPresence = apc.FltPresent
 		)
-		switch msg.Action {
-		case apc.ActETLBck:
-			if err := cos.MorphMarshal(msg.Value, tcbmsg); err != nil {
-				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-				return
-			}
-			if err := tcbmsg.Validate(true); err != nil {
-				p.writeErr(w, r, err)
-				return
-			}
-		case apc.ActCopyBck:
-			if err = cos.MorphMarshal(msg.Value, &tcbmsg.CopyBckMsg); err != nil {
-				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-				return
-			}
+		if err := cos.MorphMarshal(msg.Value, tcbmsg); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+			return
+		}
+		if err := tcbmsg.Validate(msg.Action == apc.ActETLBck); err != nil {
+			p.writeErr(w, r, err)
+			return
 		}
 		if tcbmsg.Sync && tcbmsg.Prepend != "" {
 			p.writeErrf(w, r, errPrependSync, tcbmsg.Prepend)

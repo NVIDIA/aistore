@@ -39,7 +39,7 @@ type cprCtx struct {
 	sinceUpd time.Duration
 }
 
-func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.CopyBckMsg, fltPresence int) error {
+func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresence int) error {
 	actionNote(c, "to initialize progress bar, running 'bucket summary' on the source: "+bckFrom.Cname(""))
 
 	// 1. get from-bck summary

@@ -2439,7 +2439,7 @@ func TestCopyBucket(t *testing.T) {
 				var (
 					uuid string
 					err  error
-					cmsg = &apc.CopyBckMsg{Force: true}
+					cmsg = &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Force: true}}
 				)
 				if test.evictRemoteSrc {
 					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg, apc.FltExists)
@@ -2589,7 +2589,7 @@ func TestCopyBucketSync(t *testing.T) {
 	// 2. copy cliBck => dstBck
 	dstBck := cmn.Bck{Name: "dst-" + cos.GenTie(), Provider: apc.AIS}
 	tlog.Logf("first copy %s => %s\n", m.bck.Cname(""), dstBck.Cname(""))
-	xid, err := api.CopyBucket(baseParams, m.bck, dstBck, &apc.CopyBckMsg{})
+	xid, err := api.CopyBucket(baseParams, m.bck, dstBck, &apc.TCBMsg{})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, proxyURL, dstBck)
@@ -2628,7 +2628,7 @@ func TestCopyBucketSync(t *testing.T) {
 
 	// 5. copy --sync (and note that prior to this step destination has all m.num)
 	tlog.Logf("second copy %s => %s with '--sync' option\n", m.bck.Cname(""), dstBck.Cname(""))
-	xid, err = api.CopyBucket(baseParams, m.bck, dstBck, &apc.CopyBckMsg{Sync: true})
+	xid, err = api.CopyBucket(baseParams, m.bck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Sync: true}})
 	tassert.CheckFatal(t, err)
 	args.ID = xid
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -2688,7 +2688,7 @@ func TestCopyBucketSimple(t *testing.T) {
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 
-	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Force: true}})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, proxyURL, dstBck)
@@ -2721,7 +2721,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 	)
 
-	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prepend: cpyPrefix})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Prepend: cpyPrefix}})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, proxyURL, dstBck)
@@ -2746,7 +2746,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 		dstBck = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 	)
 
-	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: m.prefix})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Prefix: m.prefix}})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, proxyURL, dstBck)
@@ -2768,7 +2768,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.Duration) {
 	dstBck := cmn.Bck{Name: testBucketName + cos.GenTie(), Provider: apc.AIS}
 
-	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Force: true}})
 	tassert.CheckError(t, err)
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, m.proxyURL, dstBck)
@@ -2818,7 +2818,7 @@ func _isAbortedOrFinished(xid string, xs xact.MultiSnap) (aborted, finished bool
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + trand.String(5), Provider: apc.AIS}
 
-	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{DryRun: true}})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
 		tools.DestroyBucket(t, proxyURL, dstBck)
