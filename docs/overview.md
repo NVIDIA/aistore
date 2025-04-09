@@ -422,4 +422,6 @@ In v3.26, AIStore has removed the basename and pathname limitations.
 #define PATH_MAX 4096
 ```
 
-AIStore now supports object names of any length.
+Starting v3.26, AIStore supports object names of any length. See also:
+
+* [Examples using extremely long names](https://github.com/NVIDIA/aistore/blob/main/docs/long_names.md)
